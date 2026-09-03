@@ -54,6 +54,12 @@ Legenda: ✅ regge · ⚠️ regredito/parziale.
 
 **Esito A: 31/32 reggono, 1 regredito (2.6).** Erosione collaterale su 2.16 (4 nuove devDeps inutilizzate) e miglioramento oltre il traguardo sui file orfani (knip «Unused files»: sezione assente oggi → 0; era 1 al 2026-08-05).
 
+> ✅ **Aggiornamento 02–03/09**: la regressione **2.6 è stata chiusa** (P0-2: sito loggato
+> con `logger.debug(..., exc_info=True)` + test) e il gate anti-ricaduta è stato creato
+> (P0-3: `S110` nella `select` ruff di `pyproject.toml:81`). L'erosione 2.16 (istanbul) è
+> un **falso positivo** knip documentato nel report 08 (le 4 devDep sono usate da
+> `frontend/scripts/js-coverage-report.js`, fuori dagli entry pattern) — non rimuoverle.
+
 ---
 
 ## B. Le 42 voci residue: stato oggi
@@ -76,6 +82,24 @@ Metodo: `git --no-pager log --oneline --since=2026-08-06` (32 commit) più verif
 | 4.11 | `COVERAGE_PROCESS_START` per `spawn_worker.py` | ⏳ aperta | 0 hit per `COVERAGE_PROCESS_START` in `backend/`, `dev.py`, `scripts/`; il report 17 (:266) citava già il file come non seguito dalla coverage e nulla è cambiato |
 | 4.12 | Test per `build_history_sync_entry`, `_infer_country_from_issuer`, `_infer_sector` | ✅ **chiusa** | `test_scheduler_joblog_builders.py:214,239` (`build_history_sync_entry`); `test_borsa_italiana_errors.py:85-90` (`_infer_country_from_issuer`) e `:93-95` (`_infer_sector`) |
 
+> **Stato 03/09 (esecuzione P0/P1) sulla banda S4**:
+> - **4.1** ✅ (P1-16, WS-H): prova migrazione eseguita davvero — immagine pubblicata 1.0.1
+>   su volume popolato → nuova immagine, stesso volume: `002` (scalare→`["MIGRATION_MARKER"]`,
+>   `''`→NULL, array intatto) e `5b1333fa6b07` (`12:00`→`14:00` Europe/Rome) corrette; boot
+>   pulito, dashboard 200.
+> - **4.2** ⏳ (P1-6): mappatura casi limite `fifo_utils` → `FifoLotEngine` **documentata**
+>   nel piano (11 test testa a testa, 2 gap segnalati); rimozione differita a review utente.
+> - **4.4** ✅ (P0-5): il candidato 1 (bulk patch) è fixato (02/09, preload + `GROUP BY`);
+>   i due verbatim d'endpoint (03/09, Lane B). Gli altri candidati restano da verificare.
+> - **4.6** ✅ (P1-7, Lane C): entrambi rimossi (`uploadBrimFile`, `downloadFxBackup`).
+> - **4.7 + 4.8** ✅ (P1-9, Lane C): campionamento e pulizia eseguiti (tipi orfani rimossi;
+>   scoperti 2 file orfani ulteriori — `BaseDropdown`, `TransactionTypeBadge` — decisione
+>   utente nel piano).
+> - **4.9** ✅ (P1-18): misura del 03/09 — backend test 91 %, backend-da-E2E 29 %, JS 72,3 %
+>   statement. L'**incrocio coverage × knip** non risulta documentato a verbale (residuo).
+> - **4.11** ✅ (P1-13): sitecustomize + `COVERAGE_PROCESS_START` sui 5 path di spawn;
+>   `spawn_worker.py` ora all'87 % di copertura.
+
 ### B.2 — Banda S5 (13 voci residue dopo la chiusura fuori banda di 5.6)
 
 | # | Voce | Stato oggi | Evidenza |
@@ -93,6 +117,19 @@ Metodo: `git --no-pager log --oneline --since=2026-08-06` (32 commit) più verif
 | 5.12 | Le 3 funzioni di ciclo di vita degli store | ⏳ aperta | Dipende da 4.3 (mai misurata); le funzioni restano mai chiamate (v. 4.3) |
 | 5.13 | Le 11 property `*_cur` — adottare o rimuovere | ⏳ aperta | Presenti (`schemas/prices.py:168-183,280`); 0 chiamanti (`.close_cur` ecc.: 0 hit); le costruzioni inline `Currency(code=…)` persistono (`schemas/transactions.py:473,483`) — il *DRY orfano* è intatto |
 | 5.14 | `availableLanguages`, `currentLanguageFlag`, `currentLanguageName` | ⏳ aperta | Ancora esportate (`language.ts:105,110,116`); knip 2026-09-02 le elenca tutte e tre fra gli «Unused exports» |
+
+> **Stato 03/09 (esecuzione P0/P1) sulla banda S5**:
+> - **5.2** ✅ (P0-1, 02/09): chiusa con la variante decisa dall'utente — helper
+>   `get_effective_base_currency()` (per-utente → `default_currency` globale → EUR);
+>   `portfolio_engine.py`, `lots_analysis_service.py:582`, `portfolio_service.py:719`
+>   allineati + test. La chiave fantasma `base_currency` non è più letta.
+> - **5.8** ✅ (P1-15, 03/09): commento `# Intentionally unwired` applicato a `fx.py:389` —
+>   la decisione «tenere come punto di estensione» è ora registrata nel codice.
+> - **5.9** ✅ (P1-15, 03/09): decisione = **rimozione** — `list_plugin_classes` e l'alias
+>   `get_provider` tolti da `provider_registry.py`; test esterni migrati a
+>   `get_provider_instance`.
+> - **5.10** ✅ (P1-17, 03/09) — **terza via**: `get_version_info` **tenuta** (né esposta né
+>   rimossa) perché `dev.py:642` è un caller di produzione.
 
 ### B.3 — Banda S6 (14 voci)
 
@@ -113,6 +150,16 @@ Metodo: `git --no-pager log --oneline --since=2026-08-06` (32 commit) più verif
 | 6.13 | Scindere `asset_source.py` (4 800 righe) | ⏳ aperta (peggiorata) | Oggi **5 162 righe** (`wc -l`) — cresciuto di ~360 righe |
 | 6.14 | Helper condivisi dai `parse` BRIM (⛔ sconsigliata) | ⏳ aperta | Nessun helper condiviso nuovo (`_brim_io.py` preesiste al ciclo) |
 
+> **Stato 03/09 (esecuzione P0/P1) sulla banda S6**:
+> - **6.1** ✅ (P1-1, Lane A): gli ultimi 6 endpoint cablati (13 schemi nuovi; 2 binari →
+>   `response_class`; `api sync` + fix discriminatore `SchedulerLog`).
+> - **6.5** ✅ (P1-4/P1-17, 03/09): decisione presa — `get_asset_provider` **tenuto** (è API
+>   pubblica del manager, usata da 3 test); non più «orfana da decidere».
+> - **6.9** ✅ (P1-3, Lane B2): i 55 `TRY400` convertiti in `logger.exception`, 0 residui.
+>   ⚠️ `TRY400` **non** è entrato nel `select` ruff — senza gate la voce può ricrescere.
+> - Le altre S6 (6.2, 6.3, 6.4, 6.6, 6.7, 6.8, 6.10, 6.11, 6.12, 6.13, 6.14) restano aperte
+>   come da P4-8.
+
 ### B.4 — Le 4 lasciate aperte il 2026-08-05
 
 | # | Voce | Stato oggi | Evidenza |
@@ -121,6 +168,14 @@ Metodo: `git --no-pager log --oneline --since=2026-08-06` (32 commit) più verif
 | 2.2 | `get_global_setting(self.db, "base_currency", "EUR")` | ⏳ aperta | `portfolio_engine.py:1967` — identica, solo spostata di riga |
 | 3.8 | Rimuovere i test orfani col codice che coprono | 🟡 parziale | Il sotto-caso `merge_other_identifiers` è uscito dalla categoria (cablato, v. 5.1). Restano solo-test `compute_wac_iterative_multi_broker` e `AssetMetadataService`. Il runner ora «reports every test red» (commit `0c319f14`), ma una ripetizione completa dell'incrocio «42 simboli» non risulta documentata |
 | 3.9 | `git rm fifo_utils.py` (bloccata su 4.2) | ⏳ aperta | `backend/app/utils/financial/fifo_utils.py` presente (148 righe) con i suoi test; 4.2 non fatta → blocco invariato |
+
+> **Stato 03/09 (esecuzione P0/P1) sulle 4 lasciate aperte**:
+> - **2.2** ✅ (P0-1, 02/09): vedi nota S5 sopra — helper `get_effective_base_currency()`,
+>   chiamata rotta eliminata.
+> - **3.9** ⏳ (P1-6, 03/09): il blocco 4.2 è sciolto **sulla carta** — mappatura completa
+>   documentata nel piano (11 test testa a testa + equivalenze + gap #7 «P&L negativo» da
+>   coprire prima); la **rimozione è differita** a dopo la review utente. File ancora
+>   presente, registration runner già corretta.
 
 ---
 
@@ -141,6 +196,16 @@ Metodo: `git --no-pager log --oneline --since=2026-08-06` (32 commit) più verif
 | 22 chiavi i18n orfane `aiExport.dataset.*` | ⚠️ ancora presente, **cresciuto** | Conteggio riprodotto (python su `en.json` + grep dei letterali): **40 ID dataset distinti, 10 referenziati** (dal catalogo `shared.ts:69-…`, 19 entry `displayI18nKey`), **30 orfani** — erano 22 su 28. Nessun uso dinamico delle chiavi rilevato |
 | Endpoint `suggest_events` mai collegato | ⚠️ ancora presente | `transactions.py:257-258` (`POST /events/suggest`); client generato (`generated.ts:16718-16719`); 0 chiamanti in componenti/store frontend |
 | `LiveTicker.svelte` | ✅ risolto (rimosso) | File assente, 0 riferimenti; capacità viva inline in `assets/+page.svelte` e `assets/[id]/+page.svelte` via `livePriceService.ts` (scelta dell'utente: non ripristinare la striscia in dashboard) |
+
+> **Stato 03/09 (esecuzione P1) sui reperti del report 16**:
+> - **A3, A4, A5, A6** ✅ (P1-14, Lane D): helper condiviso `expectChartCanvas()` creato in
+>   `e2e/fixtures/charts.ts:25` e applicato a `brokers-detail.spec.ts`, `fx-detail.spec.ts`,
+>   `asset-data-editor.spec.ts`, `risk-analysis.spec.ts`. Unica eccezione documentata:
+>   `risk-contribution-bars` saltato (è HTML, non canvas).
+> - **«30 chiavi i18n orfane `aiExport.dataset.*`»** ⚠️ **REPERETO RITIRATO** (P1-8, Lane C):
+>   le ~30 chiavi **non erano orfane** — sono risolte dinamicamente dal catalogo backend
+>   (`displayI18nKey`); verificato in sede di rimozione e **tenute**. Rimosse invece le 24
+>   chiavi `importWizard.*` + `cannotLinkEventNoAsset` (25 × 4 lingue).
 
 ---
 
@@ -177,30 +242,77 @@ Verificate tutte e quattro, più la quinta ritirata:
 Ordinati per valore/urgenza. Stima: S < 1 h · M < mezza giornata · L ≥ 1 giorno / multi-sessione.
 
 1. **[S] Regressione S110 in `cache_utils.py:82`** — `except Exception: pass` (commit `c8cd0fb2`). Convertire in log (come gli 11 del 2026-08-05) o motivare con `noqa`. Evidenza: `ruff check --select S110 backend/app/` → 1 errore.
+   > ✅ **Fatto 02/09** (P0-2): convertito in `logger.debug(..., exc_info=True)` + test.
 2. **[S] Gate anti-regressione per i livelli «zero»** — S110 era a 0 e non c'è più; le dipendenze npm inutilizzate erano a 0 e sono 4 (`istanbul-*`, `package.json:41-44`). Aggiungere S110 alla `select` di ruff o un check in CI; rimuovere o cablare le 4 istanbul.
+   > ✅ **Fatto 02/09** (P0-3): `S110` aggiunto alla `select` ruff (`pyproject.toml:81`) + 8
+   > swallow onesti → `contextlib.suppress`. `TRY400` lasciato fuori gate (P1-3 ha fatto la
+   > conversione, non il gate). Le 4 istanbul: **falso positivo** knip (report 08 N1) —
+   > nessuna rimozione.
 3. **[S codice, decisione M] 2.2/5.2 — `portfolio_engine.py:1967`** — argomenti invertiti + chiave inesistente; allineare anche `lots_analysis_service.py:581`. Richiede la decisione `base_currency` vs `default_currency` (`schemas/settings.py:135` vs `db/models.py:351` colonna per-utente).
+   > ✅ **Fatto 02/09** (P0-1) — variante decisa dall'utente: helper
+   > `get_effective_base_currency()` (per-utente → globale → EUR), 3 call site allineati +
+   > test della catena e del ramo `target_currency=None`.
 4. **[S] 4.6 — rimuovere `uploadBrimFile` e `downloadFxBackup`** — orfani confermati oggi (0 chiamanti; knip conferma). La misura è fatta: resta la cancellazione.
+   > ✅ **Fatto 03/09** (P1-7, Lane C): entrambi rimossi (0 occorrenze residue).
 5. **[S] 5.14 — adottare o rimuovere i 3 helper lingua** (`language.ts:105,110,116`) — knip li conferma orfani; il selettore lingua ricalcola per conto proprio. *DRY orfano*: la risposta giusta è quasi certamente adottare.
 6. **[S] 5.11 — completare `txStoreGetPartner` / `txStoreGetMain`** (`txStore.svelte.ts:49,62`) — gli altri due accessori sono stati adottati dall'import wizard; decidere per questi due.
 7. **[S] 4.11 — `COVERAGE_PROCESS_START` per `spawn_worker.py`** — il file resta fuori dalla coverage (report 17:266, invariato).
+   > ✅ **Fatto 03/09** (P1-13, Lane D + fix coordinatore): sitecustomize
+   > (`backend/test_scripts/_coverage_sitecustomize/`) + `COVERAGE_PROCESS_START` sui 5 path
+   > di spawn; risolto in corsa il conflitto con lo sitecustomize Homebrew (chain-exec).
+   > `spawn_worker.py` ora misurato: 87 %.
 8. **[M] 4.4 — N+1 nel bulk patch** (`asset_source.py:4190-4284`, 7 query/elemento) — miglior rapporto valore/costo dell'audit, intatto dopo un mese.
+   > ✅ **Fatto 02/09** (P0-5): preload unico + conteggi `GROUP BY` (20 patch senza valuta →
+   > 1 SELECT; 3 con valuta → 4, pinnato in test). I due verbatim d'endpoint fixati il 03/09.
 9. **[M] 4.3 + 5.12 — misura crescita cache store** e decisione sulle 3 funzioni di ciclo di vita (mai chiamate).
 10. **[M] 4.7 + 4.8 — campionamento degli 86 «Unused exported types»** (knip 2026-09-02) contro `generated.ts` — può cancellare decine di voci o promuoverle a S6.
+    > ✅ **Fatto 03/09** (P1-9, Lane C): campionamento + pulizia eseguiti (22 re-export morti,
+    > tipi orfani componenti, fixture e2e; +2 file orfani scoperti → decisione utente).
 11. **[M] A3+A4+A5+A6 — generalizzare il pattern canvas** — promuovere un helper condiviso `expectChartCanvas()` in `e2e/fixtures/` e applicarlo a `brokers-detail.spec.ts` (`:321-327,550-566`), `fx-detail.spec.ts:44-51`, `asset-data-editor.spec.ts:41`, `portfolio/risk-analysis.spec.ts`. Include l'azione A3 residua.
+    > ✅ **Fatto 03/09** (P1-14, Lane D): `expectChartCanvas()` creato in
+    > `e2e/fixtures/charts.ts:25` e applicato alle 4 spec; `risk-contribution-bars` saltato
+    > perché HTML, non canvas (documentato).
 12. **[S] 30 chiavi i18n orfane `aiExport.dataset.*`** — pulizia dei 4 file lingua (cresciute da 22 a 30 ID: il catalogo V3 va tenuto sincronizzato con le traduzioni).
+    > ⚠️ **Fatto 03/09 con esito opposto** (P1-8, Lane C): in sede di rimozione si è scoperto
+    > che le ~30 chiavi `aiExport.dataset.*` **NON erano orfane** (risoluzione dinamica
+    > backend-driven via `displayI18nKey`) → **tenute**. La pulizia ha rimosso invece 25
+    > chiavi realmente morte (`importWizard.*` ×24 + `cannotLinkEventNoAsset`) × 4 lingue
+    > (2 523 → 2 498).
 13. **[M, decisione] 5.3 — `compute_wac_iterative_multi_broker`** (`portfolio_service.py:347`): completa, testata, cablata a nulla.
 14. **[M, decisione] 5.4 — `AssetMetadataService`** (`asset_source.py:4592`): diff campo-per-campo mai esposto.
 15. **[M, decisione] 5.5 — endpoint admin per `cache_utils`** — il modulo è cresciuto (stats/clear/close) ma resta senza superficie; unico modo di invalidare: riavvio.
 16. **[S, decisione] 5.7 — `require_email_verification`**: implementare o togliere dalla UI (`GlobalSettingsTab.svelte:50` promette ciò che il sistema non fa).
 17. **[S, decisione] 5.10 — `get_version_info`** (`utils/version.py:60`): esporre o rimuovere; la 1.1.0 è uscita senza deciderlo.
+    > ✅ **Fatto 03/09** (P1-17) — **terza via**: tenuta com'è (né esposta né rimossa) perché
+    > `dev.py:642` è un caller di produzione; il reperto «solo test» era incompleto.
 18. **[S] 5.8/5.9 — punti di estensione**: la documentazione di `ensure_rates_multi_source` è a metà (commento `fx.py:143-147`, ma solo test la chiamano); `get_provider`/`list_plugin_classes` (`provider_registry.py:89,233`) restano indecise.
+    > ✅ **Fatto 03/09** (P1-15, Lane B): commento `# Intentionally unwired` su `fx.py:389`;
+    > `get_provider` e `list_plugin_classes` **rimossi** (test esterni migrati a
+    > `get_provider_instance`).
 19. **[M] 6.1 — chiudere gli ultimi 6 endpoint senza `response_model`** (`system.py` ×1, `settings.py` ×3, `uploads.py` ×2), poi `./dev.py api sync`.
+    > ✅ **Fatto 03/09** (P1-1, Lane A): 6 endpoint cablati, 13 schemi creati; 2 binari →
+    > `response_class`; `api sync` + fix discriminatore `SchedulerLog` (enum +
+    > post-processor). Nota: le 8 classi orfane pre-scritte (report 01 A5 / 07 G2) **non**
+    > sono state riusate — restano da decidere.
 20. **[M] 4.2 + 3.9 — casi limite FIFO sull'engine, poi `git rm utils/financial/fifo_utils.py`** (148 righe + test dedicati). Ancora l'unica rimozione a rischio medio.
+    > ⏳ **Parziale 03/09** (P1-6, Lane B): mappatura completa documentata nel piano (11 test
+    > testa a testa + equivalenze; gap: test di P&L negativo da aggiungere prima). Rimozione
+    > **differita** a dopo review utente — il file resta.
 21. **[M, decisione] B1 — scorciatoia di cassa broker**: registrare la decisione (reintrodurre deposito/prelievo contestuale o confermare la via generica con `defaultBrokerId`).
 22. **[S, decisione] `suggest_events`** (`transactions.py:257`): cablare alla UI o rimuovere; mai collegato da `c3faae19`.
 23. **[L] S6 strutturali invariati**: 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9 (55 TRY400), 6.10 (24 `$:`), 6.11, 6.12, 6.13 (`asset_source.py` ora 5 162 righe), 6.14 (⛔ resta sconsigliata). Nessuna avviata; 6.5, 6.9, 6.10, 6.13 **peggiorate** nel mese.
+    > ⚠️ **Aggiornamento 03/09**: la **6.9 non è più in questo elenco** — chiusa con P1-3
+    > (55/55 TRY400 convertiti). Anche la 6.5 è decisa (`get_asset_provider` tenuto, P1-4/17).
+    > Restano aperte: 6.2, 6.3, 6.4, 6.6, 6.7, 6.8, 6.10, 6.11, 6.12, 6.13, 6.14.
 24. **[M] 4.1 — prova della migrazione `002` su DB 1.0.1 reale** — prerequisito di release ancora scoperto; nel frattempo è arrivata una terza migrazione (`5b1333fa6b07`).
+    > ✅ **Fatto 03/09** (P1-16, WS-H): prova superata con marker esatti — immagine 1.0.1
+    > pubblicata → nuova immagine su stesso volume popolato: `002` (scalare→`["MIGRATION_MARKER"]`,
+    > `''`→NULL, array intatto) e `5b` (`12:00` UTC→`14:00` Europe/Rome) corrette; boot pulito,
+    > dashboard 200.
 25. **[S] 4.9 — chiudere l'incrocio coverage × knip** — la coverage JS esiste; manca il confronto documentato con gli orfani knip.
+    > ⚠️ **Parziale 03/09** (P1-18): la misura di coverage c'è (backend test 91 %, E2E 29 %,
+    > JS 72,3 % statement) ma il **confronto documentato coverage × knip** non risulta nel
+    > verbale di chiusura — residuo aperto se lo si ritiene ancora utile dopo la pulizia P1-9.
 26. **[S] 1.5 — TRY003**: resta correttamente congelata finché `TRY` non entra in `select`; da non dimenticare quando/if si adotta.
 
 ---

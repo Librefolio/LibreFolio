@@ -92,15 +92,6 @@ def services_fx_conversion(verbose: bool = False, test_names: list = None) -> bo
     return run_command(cmd, "FX conversion service tests", verbose=verbose)
 
 
-def services_asset_metadata(verbose: bool = False, test_names: list = None) -> bool:
-    """Test AssetMetadataService static utility behavior."""
-    print_section("Services: Asset Metadata Service")
-    print_info("Testing: backend/app/services/asset_metadata.py")
-    print_info("Tests: parse/serialize, diff, patch semantics")
-    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_metadata.py", test_names)
-    return run_command(cmd, "Asset metadata service tests", verbose=verbose)
-
-
 def services_asset_source(verbose: bool = False, test_names: list = None) -> bool:
     """Test Asset Source service logic."""
     print_section("Services: Asset Source Logic")
@@ -460,12 +451,12 @@ def services_financial_utils(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Financial utils tests", verbose=verbose)
 
 
-def services_roi_fifo_utils(verbose: bool = False, test_names: list = None) -> bool:
+def services_roi_fifo_engine(verbose: bool = False, test_names: list = None) -> bool:
     """Test ROI, FIFO, and PortfolioService pure-math utilities."""
     print_section("Services: ROI / FIFO / Portfolio Utils")
-    print_info("Testing: backend/app/utils/financial/ (roi_utils, fifo_utils)")
-    print_info("Testing: backend/app/services/portfolio_service.py (compute_wac_iterative_multi_broker, get_report)")
-    print_info("Tests: TWRR/MWRR/SimpleROI + series, FIFO lots (fifo_utils, FifoLotEngine), price resolver, WAC multi-broker")
+    print_info("Testing: backend/app/utils/financial/ (roi_utils)")
+    print_info("Testing: backend/app/services/portfolio_service.py (compute_wac_iterative, get_report)")
+    print_info("Tests: TWRR/MWRR/SimpleROI + series, FIFO lots (FifoLotEngine), price resolver, WAC")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial/", test_names)
     return run_command(cmd, "ROI/FIFO/Portfolio service tests", verbose=verbose)
@@ -779,7 +770,6 @@ Note: No backend server required.
         prereq="Database created",
         exclusive_because="its assertions are about the oldest and newest EUR/USD row in the whole fx_rates table (backward fill, missing-rate boundary), and the service under test queries that table without a source filter, so a neighbour inserting any EUR/USD rate moves the boundary this unit measures",
     )
-    add_test(cat, "asset-metadata", services_asset_metadata, name="Asset Metadata", desc="Parse/serialize, diff, patch semantics")
     add_test(cat, "asset-source", services_asset_source, name="Asset Source", desc="Provider assignment, synthetic yield")
     add_test(cat, "asset-source-refresh", services_asset_source_refresh, name="Asset Source Refresh", desc="Bulk refresh orchestration smoke test")
     add_test(cat, "provider-registry", services_provider_registry, name="Provider Registry", desc="Registration, lookup, priority, fallback")
@@ -833,7 +823,7 @@ Note: No backend server required.
     add_test(cat, "brim-provider-base", services_brim_provider_base, name="BRIM Provider Base", desc="Abstract base default properties")
     add_test(cat, "brim-create-transaction", services_brim_create_transaction, name="BRIM Create Transaction", desc="_create_transaction + _loc_to_field")
     add_test(cat, "financial-utils", services_financial_utils, name="Financial Utils", desc="WAC pure math (compute_wac_from_txlist, determine_target_currency)")
-    add_test(cat, "roi-fifo-utils", services_roi_fifo_utils, name="ROI/FIFO/Portfolio Utils", desc="TWRR/MWRR/SimpleROI series, FIFO lots (fifo_utils + FifoLotEngine), WAC multi-broker, price resolver")
+    add_test(cat, "roi-fifo-utils", services_roi_fifo_engine, name="ROI/FIFO/Portfolio Utils", desc="TWRR/MWRR/SimpleROI series, FIFO lots (FifoLotEngine), WAC multi-broker, price resolver")
     add_test(
         cat,
         "lots-analysis-pure",

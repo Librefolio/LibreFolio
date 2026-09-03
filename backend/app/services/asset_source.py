@@ -94,7 +94,6 @@ from backend.app.schemas.assets import (
     FABulkAssetPatchResponse,
     FAClassificationParams,
     FAinfoResponse,
-    FAMetadataChangeDetail,
 )
 from backend.app.schemas.common import (
     Currency,
@@ -242,6 +241,13 @@ def _json_safe_details(details: Optional[dict]) -> Optional[dict]:
     Providers may put dates, Decimals or other non-primitives in ``details``;
     the probe DTO must serialize, so anything not natively JSON-safe is
     stringified. ``None`` and empty dicts stay ``None`` (field omitted).
+
+    Deliberately NOT :func:`backend.app.utils.json_utils.ensure_json_safe`:
+    that one is a *validator* — it rejects non-JSON producer output on contract
+    boundaries (signals, AI Export). Here the provider is a third-party plugin
+    and the probe must still return a localized error, so we *sanitize*
+    (stringify, one list level deep) instead of raising. See
+    ``backend/app/utils/json_utils.py`` module docstring (audit 08, report 03 §N-03-A).
     """
     if not details:
         return None
@@ -4615,158 +4621,6 @@ class AssetCRUDService:
             preview=preview,
             message=f"Asset {source_asset_id} merged into {target_asset_id}",
         )
-
-
-# ============================================================================
-# ASSET METADATA SERVICES MANAGER
-# ============================================================================
-
-
-class AssetMetadataService:
-    """
-    Static service for asset metadata operations.
-
-    All methods are static - no instance state required.
-    """
-
-    @staticmethod
-    def compute_metadata_diff(old: Optional[FAClassificationParams], new: Optional[FAClassificationParams]) -> list[FAMetadataChangeDetail]:
-        """
-        Compute diff between old and new metadata.
-
-        Tracks changes field-by-field for audit/display purposes.
-
-        Args:
-            old: Previous metadata state (or None)
-            new: New metadata state (or None)
-
-        Returns:
-            List of FAMetadataChangeDetail objects describing changes
-
-        Examples:
-            >>> old = FAClassificationParams(sector="Energy")
-            >>> new = FAClassificationParams(sector="Technology")
-            >>> changes = AssetMetadataService.compute_metadata_diff(old, new)
-            >>> len(changes)
-            2
-            >>> changes[0].field
-            'sector'
-        """
-        changes = []
-
-        # Convert to dicts for comparison
-        old_dict = old.model_dump(exclude_none=False) if old else {}
-        new_dict = new.model_dump(exclude_none=False) if new else {}
-
-        # Get all fields from both dicts
-        all_fields = set(old_dict.keys()) | set(new_dict.keys())
-
-        for field in all_fields:
-            old_value = old_dict.get(field)
-            new_value = new_dict.get(field)
-
-            # Check if changed
-            if old_value != new_value:
-                # Convert to JSON-serializable format for display
-                old_display = json.dumps(old_value, default=str) if old_value is not None else None
-                new_display = json.dumps(new_value, default=str) if new_value is not None else None
-
-                changes.append(FAMetadataChangeDetail(field=field, old_value=old_display, new_value=new_display))
-
-        return changes
-
-    @staticmethod
-    def apply_partial_update(current: Optional[FAClassificationParams], patch: FAClassificationParams) -> FAClassificationParams:
-        """
-        Apply PATCH request to current metadata.
-
-        PATCH Semantics:
-        - **Absent field** (not in patch dict) → ignored, keep current value
-        - **null in JSON** (None in Python) → clear field (set to None)
-        - **Value present** → update field
-        - **geographic_area** → full block replace (no partial merge)
-
-        Args:
-            current: Current metadata state (or None for new metadata)
-            patch: PATCH request with fields to update
-
-        Returns:
-            Updated FAClassificationParams
-
-        Raises:
-            ValueError: If validation fails (e.g., invalid geographic_area)
-
-        Examples:
-            >>> current = FAClassificationParams(sector="Technology")
-            >>> patch = FAClassificationParams(sector=None)  # Clear sector
-            >>> updated = AssetMetadataService.apply_partial_update(current, patch)
-            >>> updated.sector
-            None
-        """
-        # Start with current values (or empty dict)
-        current_dict = (
-            current.model_dump(exclude_none=False)
-            if current
-            else {
-                "short_description": None,
-                "geographic_area": None,
-                "sector_area": None,
-            }
-        )
-
-        # Get patch fields that were explicitly set (exclude unset fields)
-        # This distinguishes between "field not in request" vs "field=null in request"
-        patch_dict = patch.model_dump(exclude_unset=True)
-
-        # Apply patch: only update fields that are present in patch_dict
-        for field, value in patch_dict.items():
-            current_dict[field] = value
-
-        # Validate and return updated model
-        try:
-            return FAClassificationParams(**current_dict)
-        except Exception as e:
-            raise ValueError(f"Validation failed after applying PATCH: {e}") from e
-
-    @staticmethod
-    def merge_provider_metadata(current: Optional[FAClassificationParams], provider_data: dict) -> FAClassificationParams:
-        """
-        Merge provider-fetched metadata with current metadata.
-
-        Strategy:
-        - Provider data takes precedence over current values
-        - Only updates fields that provider returns (non-None)
-        - Current values preserved if provider doesn't return field
-
-        Args:
-            current: Current metadata state (or None)
-            provider_data: Raw metadata dict from provider
-
-        Returns:
-            Merged FAClassificationParams
-
-        Note:
-            Provider data is already validated by FAClassificationParams
-            when this is called (geo_normalization runs in field_validator)
-        """
-        # Start with current values
-        current_dict = (
-            current.model_dump(exclude_none=False)
-            if current
-            else {
-                "short_description": None,
-                "geographic_area": None,
-                "sector_area": None,
-            }
-        )
-
-        # Update with provider data (only non-None values)
-        for field in ["short_description", "geographic_area", "sector_area"]:
-            if field in provider_data and provider_data[field] is not None:
-                current_dict[field] = provider_data[field]
-
-        # Validate and return merged model
-        return FAClassificationParams(**current_dict)
 
 
 # ============================================================================

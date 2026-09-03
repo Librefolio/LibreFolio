@@ -48,6 +48,10 @@ non i contenitori.
 |---|---|---|---|---|
 | 15/15 categorie verdi | ✅ misurato | **ANCORA VALIDO come struttura; esito NON VERIFICABILE** | 7 categorie backend (`_suites.py:22`) + 8 frontend (`:23`) = 15; esito verde non riproducibile (vincolo no-test) | — |
 | Copertura combinata 90,66 % (36 891 stmt) | misura | **NON VERIFICABILE STATICAMENTE** | vincolo no-test; il dato resta l'ultima misura completa dichiarata | rieseguire a run corrente conclusa |
+
+> ✅ **Aggiornamento 03/09** (P1-18): la misura è stata rieseguita a run conclusa —
+> copertura backend da test **91 %** (con `spawn_worker` 87 % ora incluso), backend-da-E2E
+> 29 %, JS 72,3 % statement; run full seriale 14/15. Il dato 90,66 % è superato.
 | B1: `_ensure_db_populated` replicato in `api_test()` | fixato | **ANCORA VALIDO (forma evoluta)** | `_api_setup()` `_backend_api.py:562-577` (`db_populate(force=True)` + docstring-causa), wired `setup=_api_setup` a `:639`; il pattern frontend vive in `_frontend_common.py:159` (era `:46`) e in 10+ siti | — |
 | B1: `fixture_user_id()` con `scalar_one_or_none` + messaggio di rimedio | fixato | **ANCORA VALIDO** | `test_risk_api.py:49-65` (messaggio: «Seed them with: ./dev.py test db populate --force»), chiamato a `:338,:482` — boilerplate deduplicato come promesso | — |
 | B1: effetto collaterale — `test_broker_access_api.py:565` ora eseguito davvero | osservazione | **ANCORA VALIDO** | il test esiste (`:554`) e la guardia di skip (`:564-565`, «First user is not superuser») resta come rete per DB non puliti: corretto che ci sia — scatta solo a precondizione violata | — |
@@ -66,7 +70,12 @@ non i contenitori.
 | Da riprendere 🟠: rami errore parser BRIM (75–82 %) | aperto | **PARZIALE (struttura)** | `test_brim_parse_race.py` ampliato (+84 righe, `c1755d19`), `test_external/test_brim_providers.py` toccato; i 35 `C901` dei `parse` sono però **identici** all'audit (`ruff check --select C901` riprodotto oggi): il debito di complessità che li genera non è stato attaccato | Task 4 (M) |
 | Da riprendere 🟡: `fx_providers/snb.py` 59 %, modulo peggiore | aperto | **FATTO (struttura)** | `test_snb_errors.py` (`c1755d19`): 8 test sui rami di errore (`:146,:160,:175,:181,:192,:231,:254` — HTTP failure, base non-CHF, valuta non supportata, parsing mensile) | verifica numerica a prossima misura |
 | Da riprendere 🟡: `identifier_utils.py` 7 stmt, vittoria facile | aperto | **PARZIALE** | nessun test unitario dedicato (`grep` su `test_scripts/` → 0); però `merge_other_identifiers` è entrata in produzione via merge asset (`asset_source.py:4475`), quindi è esercitata indirettamente da `test_asset_merge_api.py` — i 7 stmt potrebbero essersi chiusi da soli | Task 2 (S): verificare alla prossima misura |
+
+> ✅ **Confermato 03/09** (P1-18): `identifier_utils.py` misurato all'**80 %** alla run del
+> 03/09 — la chiusura indiretta via merge asset si è verificata come ipotizzato.
 | Da riprendere ⚪: `cleanup_test_database()` zero chiamanti | segnalazione | **ANCORA VALIDO** | `test_db_config.py:51` (era `:50`), zero chiamanti (`grep` exit 1) | Task 1 (S) |
+
+> ✅ **Risolto 03/09** (P1-4, Lane B): funzione rimossa.
 | `front check` 0 errori · 0 warning | misura del 07/08 | **NON RIVERIFICATO** | typecheck non rieseguito: misurerebbe lo stato beta 02/09 non committato, non la veridicità del dato d'epoca | — |
 
 ---
@@ -131,6 +140,17 @@ registrazione è stata mantenuta (verifica nel report 12 della presente tornata)
 | 3 | Rilettura mirata delle 274 guardie `isVisible().catch(() => false)` residue: irrobustire solo quelle su elementi **obbligatori** (il criterio è già nel report 17; le spec WT mostrano il pattern da seguire) | `grep -c` su `frontend/e2e/**/*.spec.ts` | **M** |
 | 4 | Completare la copertura dei rami errore BRIM aggredendo la causa (35 `C901` identici a un mese fa): o split dei `parse` o ammissione esplicita del debito | `pyproject.toml:72-80` (C901 assente dal select); `ruff check --select C901 app/services/brim_providers` → 35 | **M/L** |
 | 5 | Rieseguire la suite completa a run corrente conclusa e aggiornare 90,66 % → dato nuovo, dichiarando le categorie (regola L1) | ultima misura completa: 2026-08-07 | **S** (esecuzione schedulata) |
+
+> **Stato 03/09 (esecuzione P0/P1)**:
+> - **#1** ✅ (P1-4, Lane B): `cleanup_test_database()` rimossa (0 chiamanti confermati).
+> - **#2** ✅ (P1-18): verifica fatta alla misura del 03/09 — `identifier_utils.py` all'**80 %**
+>   (esercitato indirettamente da `merge_assets` via `test_asset_merge_api.py`): i 7 stmt si
+>   sono chiusi da soli, come ipotizzato.
+> - **#5** ✅ (P1-18): run full seriale rieseguita il 03/09 → **14/15** (unico rosso = suite
+>   AI Export con i 3 contract red **preesistenti su HEAD**, non introdotti dal giro). Dati
+>   nuovi dichiarati per categoria: coverage backend da test **91 %** (era 90,66 % — e ora
+>   include `spawn_worker` all'87 %, prima invisibile grazie a P1-13), backend-da-E2E 29 %,
+>   JS 72,3 % statement.
 
 ---
 

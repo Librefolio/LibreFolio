@@ -18,6 +18,7 @@ from pydantic import (
 
 from backend.app.schemas.common import CurrencyCode, StrictModel
 from backend.app.schemas.signals import SignalTemporalClass
+from backend.app.utils.json_utils import ensure_json_safe
 
 _ID_PATTERN = r"^[a-z][a-z0-9_.-]*$"
 
@@ -32,26 +33,6 @@ def _normalize_broker_ids(values: list[int]) -> list[int]:
     if len(values) != len(set(values)):
         raise ValueError("broker_ids must contain unique values")
     return sorted(values)
-
-
-def _ensure_json_safe(value: Any, path: str = "value") -> Any:
-    if value is None or isinstance(value, (str, bool, int)):
-        return value
-    if isinstance(value, float):
-        if not math.isfinite(value):
-            raise ValueError(f"{path} contains a non-finite float")
-        return value
-    if isinstance(value, list):
-        for index, item in enumerate(value):
-            _ensure_json_safe(item, f"{path}[{index}]")
-        return value
-    if isinstance(value, dict):
-        for key, item in value.items():
-            if not isinstance(key, str):
-                raise ValueError(f"{path} contains a non-string key")
-            _ensure_json_safe(item, f"{path}.{key}")
-        return value
-    raise ValueError(f"{path} contains a non-JSON value of type {type(value).__name__}")
 
 
 # ``CurrencyCode`` is imported from backend.app.schemas.common (ISO 4217, uppercase-
@@ -453,7 +434,7 @@ class AiExportSectionEnvelope(AiExportModel):
     @field_validator("payload", mode="before")
     @classmethod
     def validate_payload(cls, value: Any) -> Any:
-        return _ensure_json_safe(value, "payload")
+        return ensure_json_safe(value, "payload")
 
 
 class AiExportAnalysisContract(AiExportModel):
@@ -639,19 +620,21 @@ __all__ = [
     "AiExportDetailLevel",
     "AiExportDomain",
     "AiExportEntityNotFoundProblem",
+    "AiExportEventSelectionManifest",
     "AiExportFxPairTargetReference",
     "AiExportFxSnapshotRequest",
     "AiExportHistoryCoverage",
+    "AiExportIndicatorSamplingPolicy",
     "AiExportManifestRole",
     "AiExportPeriod",
     "AiExportPeriodSemantics",
     "AiExportPortfolioSnapshotRequest",
     "AiExportPortfolioTargetReference",
+    "AiExportPriceSamplingPolicy",
     "AiExportProblem",
     "AiExportProblemBase",
     "AiExportProblemCode",
     "AiExportProblemResponse",
-    "AiExportPriceSamplingPolicy",
     "AiExportSectionEnvelope",
     "AiExportSelection",
     "AiExportSelectionKind",
@@ -661,10 +644,8 @@ __all__ = [
     "AiExportSnapshotResponse",
     "AiExportSnapshotSourceFailureProblem",
     "AiExportSnapshotStats",
-    "AiExportTechnicalSamplingManifest",
-    "AiExportIndicatorSamplingPolicy",
-    "AiExportEventSelectionManifest",
     "AiExportTargetReference",
+    "AiExportTechnicalSamplingManifest",
     "AiExportUnsupportedSelectionProblem",
     "AiExportVersionMismatchProblem",
 ]

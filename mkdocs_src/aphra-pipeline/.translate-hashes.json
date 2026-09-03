@@ -784,7 +784,7 @@
     "last_translated": "2026-06-30T15:11:29.707567+00:00"
   },
   "admin/cli_tools.en.md": {
-    "md5": "465e5a7a7ea6e27d8bbf2da89065559a",
+    "md5": "df1d3db07f49f214695b95ddaf30579e",
     "langs_done": [
       "es",
       "fr",
@@ -804,7 +804,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 61.3,
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
+        "stamped_at": "2026-09-03T14:13:42.471721+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -817,7 +817,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 60.2,
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
+        "stamped_at": "2026-09-03T14:13:42.471721+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -830,7 +830,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 60.4,
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
+        "stamped_at": "2026-09-03T14:13:42.471721+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -940,7 +940,7 @@
     }
   },
   "admin/service_exposure.en.md": {
-    "md5": "c9691a190814cfddac4561e7975772ca",
+    "md5": "f8c9f742de227e29ea66d3915955c1de",
     "langs_done": [
       "es",
       "fr",
@@ -959,7 +959,7 @@
         "structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. LINK_URLS: URL set differs.\n  Missing in translation: ['#enabling-funnel-and-acls-on-the-console']\n  Added in translation:   ['#abilitazione-di-funnel-e-acl-sulla-console']\n\nSOURCE_OUTLINE (for reference):\n  # 🌐 Exposing Securely\n    ## 🔒 Security and Risks of Traditional Port Forwarding\n    ## 🚀 What is Tailscale?\n    ## 🏁 Step 0: Installing Tailscale on Your Devices\n    ## 🛠️ The 4 Levels of Configuration and Exposure\n    ## 🏃 Level 1: Private Point-to-Point VPN Connection (Start)\n    ## 🥉 Level 2: Subnet Router Configuration (LAN Tunneling)\n      ### 1. Enable Subnet Routing on the Server OS\n      ### 2. Approve the Route in the Admin Console\n    ## 🔑 Enabling Funnel and ACLs on the Console\n      ### 1. Enable HTTPS and Funnel on the Control Panel\n    ## 🥈 Level 3: Public Exposure via Tailscale Funnel (No VPN on Client)\n      ### 1. Start the Funnel on the Server\n      ### 2. Approve and Wait for Propagation\n    ## 🥇 Level 4: Advanced Multi-Funnel Exposure via Docker (Sidecars)\n      ### 1. Folder and Script Preparation\n  # Create a folder for the Tailscale nodes and enter it\n  # Download the script from the official repository\n  # Make the script executable\n      ### 2. Docker Compose Configuration\n        #### Configuration Parameters Description\n      ### 3. Startup and Approval\n    ## 🔮 MagicDNS and Custom Domains\n      ### What is MagicDNS?\n      ### How to Use a Custom Domain with Tailscale\n        #### Method 1: Public DNS Mapped to Tailscale IP (Recommended for Private Network)\n        #### Method 2: Split DNS (With Internal DNS Server)\n    ## 🔗 Useful Links and Resources",
         "structural_issues": 1,
         "elapsed_s": 273.1,
-        "stamped_at": "2026-07-15T08:31:33.062752+00:00",
+        "stamped_at": "2026-09-03T13:47:22.264908+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -972,7 +972,7 @@
         "structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. LINK_URLS: URL set differs.\n  Missing in translation: ['#enabling-funnel-and-acls-on-the-console']\n  Added in translation:   ['#activation-de-funnel-et-des-acl-sur-la-console']\n\nSOURCE_OUTLINE (for reference):\n  # 🌐 Exposing Securely\n    ## 🔒 Security and Risks of Traditional Port Forwarding\n    ## 🚀 What is Tailscale?\n    ## 🏁 Step 0: Installing Tailscale on Your Devices\n    ## 🛠️ The 4 Levels of Configuration and Exposure\n    ## 🏃 Level 1: Private Point-to-Point VPN Connection (Start)\n    ## 🥉 Level 2: Subnet Router Configuration (LAN Tunneling)\n      ### 1. Enable Subnet Routing on the Server OS\n      ### 2. Approve the Route in the Admin Console\n    ## 🔑 Enabling Funnel and ACLs on the Console\n      ### 1. Enable HTTPS and Funnel on the Control Panel\n    ## 🥈 Level 3: Public Exposure via Tailscale Funnel (No VPN on Client)\n      ### 1. Start the Funnel on the Server\n      ### 2. Approve and Wait for Propagation\n    ## 🥇 Level 4: Advanced Multi-Funnel Exposure via Docker (Sidecars)\n      ### 1. Folder and Script Preparation\n  # Create a folder for the Tailscale nodes and enter it\n  # Download the script from the official repository\n  # Make the script executable\n      ### 2. Docker Compose Configuration\n        #### Configuration Parameters Description\n      ### 3. Startup and Approval\n    ## 🔮 MagicDNS and Custom Domains\n      ### What is MagicDNS?\n      ### How to Use a Custom Domain with Tailscale\n        #### Method 1: Public DNS Mapped to Tailscale IP (Recommended for Private Network)\n        #### Method 2: Split DNS (With Internal DNS Server)\n    ## 🔗 Useful Links and Resources",
         "structural_issues": 1,
         "elapsed_s": 267.1,
-        "stamped_at": "2026-07-15T08:31:33.062752+00:00",
+        "stamped_at": "2026-09-03T13:47:22.264908+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -985,7 +985,7 @@
         "structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. LINK_URLS: URL set differs.\n  Missing in translation: ['#enabling-funnel-and-acls-on-the-console']\n  Added in translation:   ['#habilitando-funnel-y-acls-en-la-consola']\n\nSOURCE_OUTLINE (for reference):\n  # 🌐 Exposing Securely\n    ## 🔒 Security and Risks of Traditional Port Forwarding\n    ## 🚀 What is Tailscale?\n    ## 🏁 Step 0: Installing Tailscale on Your Devices\n    ## 🛠️ The 4 Levels of Configuration and Exposure\n    ## 🏃 Level 1: Private Point-to-Point VPN Connection (Start)\n    ## 🥉 Level 2: Subnet Router Configuration (LAN Tunneling)\n      ### 1. Enable Subnet Routing on the Server OS\n      ### 2. Approve the Route in the Admin Console\n    ## 🔑 Enabling Funnel and ACLs on the Console\n      ### 1. Enable HTTPS and Funnel on the Control Panel\n    ## 🥈 Level 3: Public Exposure via Tailscale Funnel (No VPN on Client)\n      ### 1. Start the Funnel on the Server\n      ### 2. Approve and Wait for Propagation\n    ## 🥇 Level 4: Advanced Multi-Funnel Exposure via Docker (Sidecars)\n      ### 1. Folder and Script Preparation\n  # Create a folder for the Tailscale nodes and enter it\n  # Download the script from the official repository\n  # Make the script executable\n      ### 2. Docker Compose Configuration\n        #### Configuration Parameters Description\n      ### 3. Startup and Approval\n    ## 🔮 MagicDNS and Custom Domains\n      ### What is MagicDNS?\n      ### How to Use a Custom Domain with Tailscale\n        #### Method 1: Public DNS Mapped to Tailscale IP (Recommended for Private Network)\n        #### Method 2: Split DNS (With Internal DNS Server)\n    ## 🔗 Useful Links and Resources",
         "structural_issues": 1,
         "elapsed_s": 272.0,
-        "stamped_at": "2026-07-15T08:31:33.062752+00:00",
+        "stamped_at": "2026-09-03T13:47:22.264908+00:00",
         "stamped_by": "translate-stamp"
       }
     },
@@ -3546,20 +3546,34 @@
     }
   },
   "financial-theory/fundamentals/day-count.en.md": {
-    "md5": "aee76e161695c46a6016b72f60a40bd0",
+    "md5": "093c6649b103e3c5ece9866225e11e81",
     "langs_done": [
-      "it",
+      "es",
       "fr",
-      "es"
+      "it"
     ],
     "analysis": "[{\"name\": \"Day Count Convention\", \"keywords\": [\"day count convention definition financial interest calculation\"]}, {\"name\": \"interest accrues\", \"keywords\": [\"interest accrual definition finance\"]}, {\"name\": \"synthetic yield calculations\", \"keywords\": [\"synthetic yield financial portfolio calculation\"]}, {\"name\": \"asset source provider\", \"keywords\": [\"asset source provider software finance portfolio tracker\"]}, {\"name\": \"ACT/365\", \"keywords\": [\"actual 365 day count convention formula\"]}, {\"name\": \"ACT/360\", \"keywords\": [\"actual 360 day count convention money market\"]}, {\"name\": \"30/360\", \"keywords\": [\"30 360 bond basis day count convention formula\"]}, {\"name\": \"ACT/ACT\", \"keywords\": [\"actual actual day count convention treasury bonds\"]}, {\"name\": \"Bond Basis\", \"keywords\": [\"bond basis day count convention 30 360\"]}, {\"name\": \"money markets\", \"keywords\": [\"money market financial instrument short term\"]}, {\"name\": \"government bonds\", \"keywords\": [\"government bond definition finance\"]}, {\"name\": \"municipal bonds\", \"keywords\": [\"municipal bond US local government finance\"]}, {\"name\": \"US Treasury bonds\", \"keywords\": [\"US Treasury bond government debt\"]}, {\"name\": \"principal\", \"keywords\": [\"principal loan amount financial\"]}, {\"name\": \"€1M\", \"keywords\": [\"1 million euros symbol M abbreviation million\"]}, {\"name\": \"comma thousands separator currency\", \"keywords\": [\"€4,109.59 decimal comma formatting localization\"]}, {\"name\": \"leap years\", \"keywords\": [\"leap year 366 days calendar finance calculation\"]}]",
     "analysis_model": "deepseek/deepseek-v4-flash:free",
-    "langs": {},
+    "langs": {
+      "it": {
+        "stamped_at": "2026-09-03T14:13:42.471721+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "fr": {
+        "stamped_at": "2026-09-03T14:13:42.471721+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "es": {
+        "stamped_at": "2026-09-03T14:13:42.471721+00:00",
+        "stamped_by": "translate-stamp"
+      }
+    },
     "pending_langs": [
       "it",
       "fr",
       "es"
-    ]
+    ],
+    "last_translated": "2026-09-03T14:13:42.471721+00:00"
   },
   "community/faq.en.md": {
     "md5": "7f701f250a32d2d5790ef88950883687",
@@ -5517,7 +5531,7 @@
     }
   },
   "user/fx/providers/index.en.md": {
-    "md5": "0d527c49e51785d930e12f6be6ed4cdb",
+    "md5": "faa042c8a67a5fcd7b06b1e9037b05bf",
     "langs_done": [
       "es",
       "fr",
@@ -5537,7 +5551,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 145.1,
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
+        "stamped_at": "2026-09-03T13:50:47.645718+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -5550,7 +5564,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 150.6,
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
+        "stamped_at": "2026-09-03T13:50:47.645718+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -5563,7 +5577,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 193.4,
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
+        "stamped_at": "2026-09-03T13:50:47.645718+00:00",
         "stamped_by": "translate-stamp"
       }
     }

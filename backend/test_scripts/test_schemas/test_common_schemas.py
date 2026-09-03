@@ -11,7 +11,7 @@ Tests cover:
 - Arithmetic operations (add, sub, neg, abs)
 - Comparison operations
 - Error handling for different currencies
-- Serialization (to_dict, str, repr)
+- Serialization (str, repr)
 - Utility methods (zero, is_zero, is_positive, is_negative)
 - OldNew generic class
 - DateRangeModel validation
@@ -342,12 +342,6 @@ class TestSerialization:
         """Developer representation."""
         usd = Currency(code="USD", amount=Decimal("100.50"))
         assert repr(usd) == "Currency(code='USD', amount=Decimal('100.50'))"
-
-    def test_to_dict(self):
-        """Dict serialization."""
-        usd = Currency(code="USD", amount=Decimal("100.50"))
-        d = usd.to_dict()
-        assert d == {"currency": "USD", "amount": "100.50"}
 
     def test_hash(self):
         """Currency is hashable."""

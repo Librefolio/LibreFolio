@@ -100,6 +100,11 @@ Raccomandazione aggiornata: **rimuovere** le property puramente sintattiche
 
 ### G2 — 9 classi mai cablate: ANCORA VALIDO
 
+> ⚠️ **Parziale 03/09** (P1-1): gli endpoint scoperti sono stati cablati (con schemi
+> nuovi, non con queste classi) e `api sync` è stato eseguito; le 9 classi restano orfane
+> e la decisione collegare-o-rimuovere è ancora aperta (incluse le eccezioni legate a
+> P2-1: `AuthPasswordResetRequest`/`AuthErrorResponse`).
+
 | Classe | Audit | Oggi |
 |---|---|---|
 | `AuthPasswordResetRequest` | auth.py:34 | `auth.py:34` — nessun endpoint reset password (`grep` su `api/v1/auth.py` → 0 hit): schema in attesa di feature |
@@ -161,6 +166,17 @@ Nessun campo morto, nessuna duplicazione introdotta dalle modifiche beta in scop
 | T3 | Decidere `cache_utils`: endpoint admin `POST /admin/cache/clear` + `GET /admin/cache` (valore operativo reale: oggi l'unica invalidazione è il riavvio) oppure rimozione delle 3 funzioni | cache_utils.py:136,145,185 | **M** |
 | T4 | Consolidamento `settings_service` (221 righe) vs `global_settings_service` (102): un solo punto d'ingresso per le impostazioni | G5 | **L** |
 | T5 | Decidere `get_version_info`: esporla in un endpoint `/version` arricchito o rimuoverla tenendo `get_git_version` | version.py:60 | **S** |
+
+> **Stato 03/09 (esecuzione P0/P1)**:
+> - **T2** ⚠️ **Parziale** (P1-1, Lane A): i 6 endpoint residui senza `response_model`
+>   (`system.py` ×1, `settings.py` ×3, `uploads.py` ×2) sono stati cablati con **13 schemi
+>   nuovi** + `api sync` (con fix del discriminatore `SchedulerLog`). Ma la parte «riusa o
+>   rimuovi le classi già scritte» **non è stata eseguita**: le 9 classi di G2 restano
+>   orfane (verificato il 03/09: 0 referenze) e il re-export morto di `WACConversionInfo`
+>   (`transactions.py:37`, `# noqa: E402, F401`) **è ancora al suo posto**.
+> - **T5** ✅ (P1-17, 03/09) — **risoluzione diversa dalle due opzioni proposte**:
+>   `get_version_info` è stata **TENUTA** (né esposta né rimossa) perché `dev.py:642` è un
+>   caller di produzione — il reperto «solo test» era incompleto.
 
 ---
 

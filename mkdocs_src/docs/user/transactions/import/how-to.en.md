@@ -8,8 +8,8 @@ Learn how to use the Broker Report Import Module (BRIM) to import your transacti
 
 1. Export a transaction report from your broker (usually a CSV file — check your broker's help center).
 2. In LibreFolio, navigate to the **[Transactions](../index.md)** page.
-3. Click the **Import** button (:material-file-upload:) in the page header, or drag-and-drop your statement file directly into the transaction list.
-4. The **Import Wizard** opens.
+3. Click the **Import** button (:material-file-upload:) in the page header.
+4. The **Import Wizard** opens — you can drag-and-drop your statement file into its upload step.
 5. Review the preview — check that dates, amounts, and asset names look correct.
 6. Click **Import** to commit all transactions.
 
@@ -61,7 +61,7 @@ questions it deserves — and no others.
 
 ### 🧙 Step 1: Upload Report File
 
-This step accepts CSV, XLSX or PDF reports exported from your broker. You can select files manually or drag-and-drop them directly into the wizard.
+This step accepts CSV or XLSX reports exported from your broker. You can select files manually or drag-and-drop them directly into the wizard.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="brokers" data-name="import-wizard-step1" alt="Wizard Step 1: Upload" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">

@@ -64,6 +64,13 @@ verification."* Restano le due strade del vecchio report; la terza (lasciare tut
 
 ### A3 — ANCORA VALIDO, codice verbatim
 
+> ✅ **Risolto 02–03/09** (P0-5): il bulk patch è stato fixato il 02/09 (preload unico +
+> aggregati `GROUP BY`); i due N+1 verbatim di questa sezione sono stati fixati il 03/09
+> (Lane B): `portfolio_api.py` ora precarica gli asset con **una** `SELECT ... IN (...)`
+> (commento «P0-5b» nel codice) e `api/v1/fx.py` accumula delete/verifiche fuori dai loop
+> con `tuple_(...).in_(...)`. ⚠️ Fuori pista registrato nel piano: i siti FX erano in
+> `api/v1/fx.py`, non in `services/fx.py` come citato qui.
+
 `portfolio_api.py:44-49`: il loop e la `session.get` per-query sono identici a un mese fa.
 Con il batching proposto si passerebbe da N round-trip a 1.
 `fx.py`: l'endpoint `delete_routes_bulk` esegue `session.execute` per elemento a `:965`
@@ -71,6 +78,13 @@ Con il batching proposto si passerebbe da N round-trip a 1.
 (1 022 → 1 052 righe) e i numeri di riga del vecchio report (979/984) sono slittati.
 
 ### A4 — ANCORA VALIDO: 17 endpoint senza `response_model` su 110
+
+> ✅ **Risolto 03/09** (P1-1, Lane A): nel frattempo 11 dei 17 erano stati cablati dalle
+> ondate beta; i **6 residui** (`system.py` ×1, `settings.py` ×3, `uploads.py` ×2) sono
+> stati cablati con **13 schemi nuovi** creati ad hoc; i 2 endpoint binari di `uploads.py`
+> usano `response_class`. `api sync` eseguito + fix del discriminatore `SchedulerLog`
+> (`json_schema_extra enum` + post-processor). Verificato: `response_model=` presente su
+> `system.py:198`, `settings.py:144/201`, `uploads.py:154+`.
 
 Comando (AST, non regex — i decoratori multi-riga ingannano il grep):
 
@@ -98,6 +112,12 @@ stato cablato: il buco di tipizzazione verso il client Zodios resta.
 
 ### A5 — ANCORA VALIDO: 8 classi, 0 referenze
 
+> ⚠️ **Parziale 03/09** (P1-1): gli endpoint scoperti sono stati cablati con **schemi
+> nuovi**, quindi le 8 classi pre-scritte di questo reperto **restano orfane** (verificato
+> il 03/09: 0 referenze ciascuna fuori dalla definizione). La decisione
+> collegare-o-rimuovere resta aperta (`AuthPasswordResetRequest`/`AuthErrorResponse`
+> legate alla decisione P2-1 su `require_email_verification`).
+
 Comando per ciascuna classe:
 
 ```bash
@@ -114,6 +134,9 @@ Anche il frontend non le nomina (`grep -rn <nomi> frontend/src/` → 0 hit). Il 
 password resta solo da CLI: `scripts/user_cli.py:90` (`user_service.reset_password`).
 
 ### A8 — ANCORA VALIDO: TRY400 in api/v1 = 28 (era 27)
+
+> ✅ **Risolto 03/09** (P1-3, Lane B2): tutti i 55 `TRY400` del backend convertiti in
+> `logger.exception`, 0 residui (verificato: 0 `logger.error` residui in `api/v1/`).
 
 ```bash
 cd backend && pipenv run ruff check app/api/v1/ --extend-select TRY400 --statistics
@@ -133,21 +156,33 @@ Nessuna conversione fatta; un sito in più rispetto all'audit. Esempi vivi:
    sistema non fa.
 2. **A3a — Batching N+1 in `portfolio_api.py:49`** (S): `select(Asset).where(Asset.id.in_(...))`
    una volta, lookup in memoria nel loop. Rimedio già scritto nel vecchio report.
+   > ✅ **Fatto 03/09** (P0-5, Lane B): preload unico `Asset.id.in_(...)` + lookup in memoria.
 3. **A3b — Batching N+1 in `fx.py:965` e `:1014`** (S): accumulare gli statement di
    delete e la verifica delle rotte residue fuori dai loop.
+   > ✅ **Fatto 03/09** (P0-5, Lane B): delete e conteggi accumulati con `tuple_(...).in_(...)`
+   > fuori dai loop. ⚠️ i siti erano in `api/v1/fx.py`, non `services/fx.py`.
 4. **A4+A5 — Cablare i 17 endpoint agli schemi già scritti, poi `./dev.py api sync`** (M):
    chiude i due reperti insieme e ripristina la tipizzazione end-to-end del client Zodios.
    `AuthPasswordResetRequest` e `AuthErrorResponse` restano da decidere (implementare il
    reset via API / rimuovere lo schema).
+   > ⚠️ **Parziale 03/09** (P1-1, Lane A): i 6 endpoint residui cablati (13 schemi **nuovi**
+   > creati, 2 binari → `response_class`), `api sync` fatto. Le 8 classi pre-scritte di A5
+   > **non** sono state riusate e restano orfane — decisione aperta.
 5. **A8 — Convertire i 28 `TRY400` in `logger.exception`** (S): meccanico, nessun rischio.
+   > ✅ **Fatto 03/09** (P1-3, Lane B2): 55/55 convertiti su tutto il backend, 0 residui.
 6. **N1 — Avvolgere il ramo anteprima immagini di `serve_file` in `asyncio.to_thread`** (S):
    vedi sotto.
+   > ✅ **Fatto 02/09** (P0-4): helper sync `_resize_image` + `to_thread`, test spy.
 
 ---
 
 ## Nuovi rilievi
 
 ### N1 🟡 — Pillow bloccante nel ramo immagini di `serve_file` (`uploads.py:423-441`)
+
+> ✅ **Risolto 02/09** (P0-4): estratto l'helper sync `_resize_image` (`uploads.py:340`)
+> invocato via `await asyncio.to_thread(...)` (`:455`); ramo `ratio>=1` invariato; test
+> spy aggiunto. Rimedio applicato esattamente nella forma proposta qui sotto.
 
 Il fix di A7 ha corretto solo il ramo testuale. Il ramo `img_preview` dello **stesso**
 handler `async def serve_file` esegue nel corpo dell'handler:

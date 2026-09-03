@@ -444,7 +444,7 @@
                     {$t('transactions.wacPreview.txsUsed') ?? 'transactions used'})
                 </span>
             </button>
-            <DocsLink path="financial-theory/portfolio-theory/weighted-average-cost/" label={$t('transactions.wacPreview.docsTooltip') ?? 'Learn how WAC (Weighted Average Cost) is calculated'} size={11} />
+            <DocsLink path="financial-theory/technical-analysis/performance-metrics/weighted-average-cost/" label={$t('transactions.wacPreview.docsTooltip') ?? 'Learn how WAC (Weighted Average Cost) is calculated'} size={11} />
         </div>
     {:else if isAuto && !previewResult && !loading && !error}
         <!-- Auto mode: no result yet — hint to validate -->

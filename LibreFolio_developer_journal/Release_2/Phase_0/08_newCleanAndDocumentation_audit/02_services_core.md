@@ -71,6 +71,12 @@ Funzioni di punta (C901, soglia 10), verificate una per una:
 
 ### B1 — invariato, ancora latente
 
+> ✅ **Risolto 02/09** (P0-1): la chiamata rotta è stata sostituita dal nuovo helper
+> `settings_service.get_effective_base_currency()` (catena decisa dall'utente: per-utente →
+> default globale → EUR ultima spiaggia); import fissato; test aggiunti per la catena e per
+> il ramo `target_currency=None`. Verificato il 03/09: `portfolio_engine.py` importa e usa
+> l'helper; identico allineamento in `lots_analysis_service.py:582` e `portfolio_service.py:719`.
+
 `portfolio_engine.py:1966-1967`:
 
 ```python
@@ -89,6 +95,11 @@ dell'audit e un fix da una riga.**
 
 ### B2 — invariato
 
+> ✅ **Risolto 02/09** (P0-1, variante decisa dall'utente): **nessuna** delle due chiavi
+> candidate è stata adottata così com'era — introdotto `get_effective_base_currency()`
+> (per-utente → `default_currency` globale → EUR); i 3 call site convergono sull'helper.
+> La chiave fantasma `base_currency` non viene più letta.
+
 Le tre letture di `"base_currency"` (`lots_analysis_service.py:581`,
 `portfolio_service.py:719`, `portfolio_engine.py:1967`) non trovano alcuna chiave nei
 default (`schemas/settings.py:135` dichiara `default_currency`); il fallback `"EUR"`
@@ -103,6 +114,12 @@ produzione. Confermata la quasi-identità strutturale con la variante singola: d
 di filtro a `:116` (`broker_id ==`) contro `:370` (`broker_id.in_()`); entrambe C901=32.
 
 ### B4 — rimozione confermata, con due sopravvissuti
+
+> ✅ **Residuo risolto 03/09** (P1-4, Lane B): i due sopravvissuti test-only
+> (`_bulk_load_asset_prices`, `_get_quote_base_map`) sono stati **rimossi** insieme agli
+> altri orfani del giro (`_price_on_date`, alias `ValuationResult.unit_price`, 4
+> `aggregate_*`, `cleanup_test_database()`). `_daily_state_as_of` resta (codice vivo).
+> Verificato il 03/09: zero occorrenze residue dei nomi rimossi.
 
 La rimozione S1–S3 è reale: nessuna occorrenza residua dei 5 simboli, e il test runner
 li cerca ancora invano nelle stringhe descrittive (vedi N-02-B). Però:
@@ -120,6 +137,9 @@ li cerca ancora invano nelle stringhe descrittive (vedi N-02-B). Però:
 La raccomandazione (dispatch tabellare per verbo) è più attuale di prima.
 
 ### B7 — invariato
+
+> ✅ **Risolto 03/09** (P1-4, Lane B): i 4 `aggregate_*` mai usati sono stati **rimossi**
+> (strada «rimuovere», non «far usare a `build_data_quality_report`»).
 
 I quattro `aggregate_*` (`portfolio_engine.py:1678-1704`) restano fold banali consumati
 solo da `test_daily_state_builder.py:783-786`. `build_data_quality_report` (`:1706`) è
@@ -141,11 +161,29 @@ cresciuto a C901=18 e continua a calcolare per conto suo.
 | 8 | **B6**: pianificare la scomposizione di `execute_batch` (115, ~640 righe) in handler per verbo con dispatch tabellare | **L** |
 | 9 | **N-02-B**: pulire le stringhe stale del test runner (`scripts/test_runner/_backend_services.py:408,466,830,836`) che citano `get_session_ttl_sync` e `_build_history_series`, simboli rimossi in S1–S3 | **S** |
 
+> **Stato 03/09 (esecuzione P0/P1 del 02–03/09)**:
+> - **T1+T2** ✅ (P0-1, 02/09): risolti insieme con la variante decisa dall'utente —
+>   helper `get_effective_base_currency()` (per-utente → globale → EUR), 3 call site
+>   allineati, test della catena e del ramo `target_currency=None`.
+> - **T4** ✅ (P1-4, 03/09): `_bulk_load_asset_prices` e `_get_quote_base_map` rimossi.
+> - **T5** ⏳ **Parziale** (P1-6, 03/09): mappatura completa dei casi limite su
+>   `FifoLotEngine` documentata nel piano (11 test testa a testa + equivalenze + 2 gap
+>   segnalati); la **rimozione è differita** a dopo la review utente — file ancora presente.
+> - **T6** ✅ (P1-4, 03/09): i 4 `aggregate_*` rimossi (non adottati da
+>   `build_data_quality_report` — strada opposta alla prima opzione, stessa chiusura).
+> - **T7** ✅ (P1-4, 03/09): alias `ValuationResult.unit_price` rimosso, assert aggiornati.
+> - **T9** ✅ (P1-5, 03/09): stringhe stale del test runner pulite (verificato: 0
+>   occorrenze di `get_session_ttl_sync`/`_build_history_series` in `_backend_services.py`).
+> - T3 (B3) e T8 (B6) restano **aperti**: decisioni P2-2 / strutturale P4-2.
+
 ---
 
 ## Nuovi rilievi
 
 ### N-02-A — Un alias di compatibilità è sopravvissuto alla bonifica B8 (🟢)
+
+> ✅ **Risolto 03/09** (P1-4, Lane B): alias `ValuationResult.unit_price` rimosso, i 2
+> assert di test aggiornati a `effective_unit_price`.
 
 `portfolio_engine.py:145-149`: la property `ValuationResult.unit_price` dichiara
 *"Compatibility alias for callers that previously read the effective price"*. I
@@ -154,6 +192,9 @@ due assert di test (`test_daily_state_builder.py:595,631`). Stessa famiglia di B
 citato dall'audit: la bonifica alias va completata.
 
 ### N-02-B — Il test runner cita simboli rimossi (🟢, cosmetico)
+
+> ✅ **Risolto 03/09** (P1-5, Lane B): stringhe stale pulite in
+> `scripts/test_runner/_backend_services.py` (verificato: 0 occorrenze residue).
 
 `scripts/test_runner/_backend_services.py`:
 - `:408` docstring *"Test settings service: get_session_ttl_sync"* — simbolo rimosso in S1–S3;
@@ -164,6 +205,11 @@ Solo stringhe di stampa CLI, nessun impatto funzionale; ma sono esattamente il t
 riferimento fantasma che un audit futuro rincorrerebbe.
 
 ### Cross-ref fuori ambito — regressione S110
+
+> ✅ **Risolto 02/09** (P0-2): `cache_utils.py` ora logga
+> `logger.debug("Cache close failed during clear", exc_info=True)` + test del log.
+> E il gate è arrivato il 02/09 (P0-3): `S110` aggiunto alla `select` ruff di
+> `pyproject.toml` — la regressione di questa sezione non può più rientrare zitta.
 
 L'esecuzione S1–S3 dichiarava *"`S110` in `backend/app/` è ora 0"*. Oggi:
 

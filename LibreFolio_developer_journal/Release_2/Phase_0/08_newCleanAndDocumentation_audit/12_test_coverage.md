@@ -75,6 +75,11 @@ working tree) sono già registrati.
 | Intervento 5: test inferenze Borsa Italiana | 30 min | **FATTO** | vedi L6 | — |
 | Intervento 6: `COVERAGE_PROCESS_START` per `spawn_worker.py` | 45 min | **MAI FATTO** | 0 occorrenze di `COVERAGE_PROCESS_START` in repo; mitigato solo dalla regola scritta in SKILL.md | Task 5 (M) |
 | Intervento 7: `max-complexity` 25 + attacco ai `parse` BRIM | — | **MAI FATTO** | `pyproject.toml:72-80`: `C901` non è nel `select`, nessun `max-complexity` impostato. Riprodotto oggi: `pipenv run ruff check app/services/brim_providers --select C901` → **35 errori, identici all'audit** | Task 6 (M, decisione di policy) |
+
+> ✅ **Aggiornamento 03/09**: intervento 6 **fatto** (P1-13 — sitecustomize +
+> `COVERAGE_PROCESS_START` sui 5 path di spawn; `spawn_worker.py` ora misurato all'87 %);
+> intervento 7 **fatto nella metà config** (P1-2 — `C901` in select con soglia 10; i parse
+> BRIM marcati `noqa`/`TODO(P2-refactor)`, l'attacco ai 35 resta P4-3).
 | Intervento 8: misurare copertura frontend + incrocio con knip | 1 h | **FATTO (misura); incrocio con knip non documentato** | infrastruttura istanbul operativa (`d1622ee5`); nessun report di incrocio trovato nel journal | — |
 
 ---
@@ -131,6 +136,31 @@ test la nomina direttamente: la copertura, se c'è, è indiretta via
 | 5 | Configurare `COVERAGE_PROCESS_START` + `sitecustomize` per vedere `spawn_worker.py` (intervento 6, mai fatto) | 0 occorrenze; SKILL.md:220-222 documenta solo la cecità | **M** |
 | 6 | Policy complessità: o si abilita `C901` nel `select` con `max-complexity` (intervento 7, mai fatto) o si dichiara esplicitamente rinunciato — oggi la regola è solo on-demand e i 35 errori BRIM sono identici a un mese fa | `pyproject.toml:72-80`; `ruff check --select C901` su `brim_providers` → 35 | **M** (più L se si attaccano i parse) |
 | 7 | Alla prossima misura di copertura: verificare che `merge_other_identifiers` (ora in produzione) e `identifier_utils.py` intero escano dallo 0 % | `identifier_utils.py:51`, `asset_source.py:4475` | **S** (verifica, non scrittura) |
+
+> **Stato 03/09 (esecuzione P0/P1)**:
+> - **#1** ✅ (P1-4, Lane B): `DailyStateBuilder._price_on_date` rimosso (0 chiamanti
+>   confermati alla rimozione).
+> - **#2** ✅ (P1-15, Lane B) — risolto per **rimozione**: `list_plugin_classes` e l'alias
+>   `get_provider` tolti dal registry (test esterni migrati a `get_provider_instance`);
+>   `_get_plugin_code_attr`/`_reject_duplicate_codes`/`_fail_on_discovery_errors` restano
+>   (usate internamente dal discovery).
+> - **#3** ✅ (P1-4, Lane B): `cleanup_test_database()` rimossa (0 chiamanti).
+> - **#4** ⏳ **Terzo su tre chiuso a metà**: `ensure_rates_multi_source` ha ricevuto il
+>   commento `# Intentionally unwired` (P1-15, `fx.py:389`); le due decisioni di prodotto
+>   (`compute_wac_iterative_multi_broker` → P2-2, `AssetMetadataService` → P2-3) restano
+>   **aperte**.
+> - **#5** ✅ (P1-13, Lane D + fix coordinatore): `sitecustomize`
+>   (`backend/test_scripts/_coverage_sitecustomize/`) + `COVERAGE_PROCESS_START` cablati sui
+>   5 path di spawn (`scripts/test_runner/_common.py:37`, `_server.py:159`, …). Fuori pista
+>   risolto in corsa: conflitto con lo sitecustomize di Homebrew → chain-exec. Risultato
+>   misurato: `spawn_worker.py` ora coperto all'**87 %** (prima invisibile).
+> - **#6** ✅ (P1-2) — **risolto diversamente**: `C901` abilitato con `max-complexity = 10`
+>   (non 25; decisione utente), 199 siti triagiati (173 noqa giustificati, 26
+>   `TODO(P2-refactor)`). I 35 C901 BRIM sono fra i marcati — la riduzione resta aperta
+>   (P4-3), il gate ora impedisce il peggioramento.
+> - **#7** ✅ (P1-18, 03/09): misura rieseguita — `identifier_utils.py` all'**80 %**
+>   (esercitato da `merge_assets` via `test_asset_merge_api.py`, chiusura indiretta
+>   confermata); copertura backend test **91 %** complessiva.
 
 ---
 

@@ -2,7 +2,6 @@
 WAC (Weighted Average Cost) schemas for LibreFolio.
 
 Contains all schema classes related to WAC calculation:
-- WACConversionInfo: FX conversion details applied during WAC
 - WACQualifyingTX: A transaction that participated in iterative WAC
 - WACPreviewResultItem: Full result for preview/inline WAC (used in batch response)
 """
@@ -19,17 +18,6 @@ from backend.app.schemas.common import BackwardFillInfo, Currency, FxBackwardFil
 # =============================================================================
 # WAC (WEIGHTED AVERAGE COST) — FX-aware calculation results
 # =============================================================================
-
-
-class WACConversionInfo(StrictModel):
-    """Single FX conversion applied during WAC calculation."""
-
-    tx_id: int = Field(..., description="Transaction ID that needed conversion")
-    from_currency: str = Field(..., description="Original currency of the transaction")
-    to_currency: str = Field(..., description="Target currency for WAC")
-    rate: SafeDecimal = Field(..., description="FX rate applied")
-    rate_date: date_type = Field(..., description="Actual date of the FX rate used")
-    stale_days: int = Field(0, ge=0, description="Days between TX date and rate date (0 = fresh)")
 
 
 class WACQualifyingTX(StrictModel):

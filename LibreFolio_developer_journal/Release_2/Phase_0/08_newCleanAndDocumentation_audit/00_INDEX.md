@@ -142,6 +142,7 @@ Dettaglio: [mkdocs/01](mkdocs/01_user_e_flussi.md) · [mkdocs/02](mkdocs/02_admi
 | 17 | [Stabilizzazione suite](17_stabilizzazione.md) | B1/B2/B3 fix presenti e stabili; 0 orfani di registrazione (196 file, 68 spec) | spec beta rafforzate, nessuna tautologia nuova | 5 |
 | mk | [Area utente](mkdocs/01_user_e_flussi.md) | 15 reperti + 3 parziali; Blocco 1 in-scope regge | 1 decaduta (wizard ormai a 7 step); **12 nuove discrepanze** | 19+9 |
 | mk | [Admin/teoria/sito](mkdocs/02_admin_teoria_sito.md) | 19 reperti; 5 implementazioni Blocco 1 reggono | Block 3 sovrastimato (4 parziali + 1 falso); **6 nuove discrepanze** | 18 |
+| 50 | [Gap docs & gallery v1.0.1→HEAD](50_docs_gap_v101_gallery.md) | — (report nuovo, 03/09): delta di 98 commit vs docs utente/admin/developer + audit di `gallery.spec.ts` | Risk senza docs; signals pages ferme a 4 indicatori; 115/116 PNG gallery di era v1.0.0; 7 shot morti silenti; BaseDropdown ancora citato in select.md | solo-analisi |
 
 ---
 

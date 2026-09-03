@@ -29,7 +29,7 @@ LibreFolio automatically synchronizes exchange rates using official central bank
             <img src="https://data.snb.ch/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="SNB favicon">
             <span class="card-title" style="margin: 0;">Swiss National Bank (SNB)</span>
         </div>
-        <span class="card-desc">Stable daily Swiss Franc rates from the SNB, base currency CHF.</span>
+        <span class="card-desc">Stable monthly average Swiss Franc rates from the SNB, base currency CHF.</span>
     </a>
     <a href="../../../community/contribute/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
      <div style="display: flex; align-items: center; gap: 0.75rem;">
@@ -47,7 +47,7 @@ LibreFolio automatically synchronizes exchange rates using official central bank
 | <img src="https://www.ecb.europa.eu/favicon-32.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **ECB** (European Central Bank) | EUR 🇪🇺 | ~45 | Daily, ~16:00 CET | Not required | Primary provider for Euro-based pairs and major world currencies. |
 | <img src="https://fred.stlouisfed.org/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **FED** (Federal Reserve FRED) | USD 🇺🇸 | ~20 | Daily, US business days | Not required | Best fallback for US Dollar-based pairs. |
 | <img src="https://www.bankofengland.co.uk/favicon.svg?ver=2c06d" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **BOE** (Bank of England) | GBP 🇬🇧 | ~15 | Daily, UK business days | Not required | Good coverage for Sterling-based pairs. |
-| <img src="https://data.snb.ch/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **SNB** (Swiss National Bank) | CHF 🇨🇭 | ~10 | Daily, Swiss business days | Not required | Highly stable quotes for Swiss Franc pairs. |
+| <img src="https://data.snb.ch/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **SNB** (Swiss National Bank) | CHF 🇨🇭 | ~25 | Monthly averages (no daily data) | Not required | Highly stable quotes for Swiss Franc pairs. |
 
 ## 🎯 How Routing & Fallback Works
 

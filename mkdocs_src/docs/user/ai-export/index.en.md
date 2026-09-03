@@ -15,11 +15,11 @@ AI Export is available from:
 
 - the Dashboard toolbar for Portfolio tasks;
 - the Broker toolbar for Broker tasks;
-- the Signals header on Asset and FX detail pages.
+- the page toolbar on Asset and FX detail pages.
 
 The backend supplies valuations, performance, allocations, economic FIFO facts,
 FX exposure, and technical indicators. The public catalog intentionally exposes
-only **eight autonomous Export Data choices** and **thirteen task-oriented
+only **eight autonomous Export Data choices** and **eleven task-oriented
 Analyses**. Smaller backend datasets remain internal composition blocks.
 
 **Export Data** copies one selected factual snapshot without analysis
@@ -114,6 +114,14 @@ An Analysis can recommend **Additional LibreFolio Data** when another export wou
 materially improve the answer. The prompt gives the public export name, UI path,
 recommended period/detail, reason, and whether it is required or optional.
 
+!!! info "Drawdown is always full-history"
+
+    Wherever a Drawdown section appears in an export, it is computed over the
+    **full available history** — from the first stored price for an Asset, or
+    from the first transaction for a Portfolio or Broker — never relative to
+    the selected AI period. A short export window still carries the true
+    historical peak-to-trough.
+
 ## 🔗 Local References
 
 The prompt uses local references to join compact tables:
@@ -123,8 +131,10 @@ The prompt uses local references to join compact tables:
 - F# for FX pairs;
 - L# for FIFO lots.
 
-The Entity Directory resolves those references. The receiving model should use
-readable names in its answer; database IDs are not needed.
+The Entity Directory resolves the A#, B#, and F# references. L# lots are
+different: they are **embedded rows** inside the FIFO tables of the export
+itself, not directory entries — the model reads them in place. The receiving
+model should use readable names in its answer; database IDs are not needed.
 
 ## 🔒 Scope and Privacy
 

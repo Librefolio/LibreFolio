@@ -80,6 +80,10 @@ dell'audit (bulk in `asset_source.py`, oggi la zona di `:4091-4116` con
 
 ### K4 — S110: bonifica tenuta, ma una regressione nuova di zecca
 
+> ✅ **Risolto 02/09** (P0-2 + P0-3): sito loggato (`logger.debug(..., exc_info=True)` +
+> test) e processo chiuso — `S110` ora è nella `select` ruff di `pyproject.toml:81`,
+> quindi la prossima regressione fallisce il lint invece di entrare zitta.
+
 Dopo S1–S3 il conteggio era 0. Oggi:
 
 ```bash
@@ -96,6 +100,12 @@ ancora automatizzata (S110 non è nella config ruff di progetto, `pyproject.toml
 se lo fosse, questa regressione non sarebbe entrata.
 
 ### K5 — C901: 138 → 157, e il podio peggiora
+
+> ✅ **Gate creato 03/09** (P1-2) — **alla soglia 10, non 25** (decisione utente): tutte e
+> 199 le funzioni sopra soglia sono state lette e marcate — 173 flat con `# noqa: C901`
+> giustificato, 26 complex con `TODO(P2-refactor)` (lista nel piano, podio invariato:
+> `execute_batch` 115, `build` 97, `get_summary` 73…). La **riduzione** delle complessità
+> resta il debito aperto (P4-2/P4-3/…): il gate impedisce solo il peggioramento.
 
 ```bash
 cd backend && pipenv run ruff check app/ --extend-select C901 --output-format=json | python3 -c "..."
@@ -165,16 +175,33 @@ per via della bonifica.
 
 1. **Loggare il nuovo S110 in `cache_utils.py:82`** (S, una riga): `logger.debug(...,
    exc_info=True)` nel ramo "cache che non si chiude". Regressione del 2026-08-13.
+   > ✅ **Fatto 02/09** (P0-2): `logger.debug("Cache close failed during clear",
+   > exc_info=True)` + test del log debug. `S110` di nuovo a 0.
 2. **Valutare `S110` (ed eventualmente `TRY400`) nella config ruff di progetto** (S):
    `pyproject.toml:72-81` non include `S`; con la regola attiva la regressione 1 non
    sarebbe entrata. Stessa famiglia della decisione `TRY003` lasciata aperta (voce 1.5).
+   > ✅ **Fatto 02/09** (P0-3): `S110` aggiunto alla `select` ruff (`pyproject.toml:81`,
+   > gate puntuale) + 8 swallow onesti convertiti a `contextlib.suppress`. `TRY400` **non**
+   > è entrato in `select` — la conversione meccanica è stata fatta (task 5, P1-3) ma la
+   > regola resta fuori gate; `TRY003` resta congelata (P4-8).
 3. **Verificare i candidati N+1 in ordine di N atteso** (M): mai fatta. Partire da
    `asset_source.py` (bulk delete `:4091+`, bulk patch) e dagli endpoint
    `portfolio_api.py:49` / `fx.py:965,1014` (coperti dal report gemello 01).
+   > ⏳ **Parziale 02–03/09** (P0-5): i tre siti di testa sono fixati — bulk patch
+   > (`asset_source.py`, 02/09: preload + `GROUP BY`) e i due verbatim
+   > (`portfolio_api.py:49`, `api/v1/fx.py`, 03/09 Lane B). La verifica dei candidati
+   > restanti non è stata fatta.
 4. **Fissare `max-complexity = 25` in `pyproject.toml`** (S): rende il segnale C901
    utilizzabile (19 funzioni invece di 157); la voce 1.2 era nulla perché la config non
    esisteva — va *creata*, non alzata.
+   > ✅ **Fatto 03/09** (P1-2) — **a soglia 10, non 25** (decisione utente D-1):
+   > `[tool.ruff.lint.mccabe] max-complexity = 10` creato. 199 siti triagiati uno a uno:
+   > 173 flat con `# noqa: C901` giustificato, 26 complex marcati `TODO(P2-refactor)`
+   > (backlog refactor nel piano). Risultato collaterale: `ruff check backend/` e
+   > `dev.py lint` **tutti verdi per la prima volta** (i 37 preesistenti risolti nel corso).
 5. **Convertire i 55 `TRY400` in `logger.exception`** (M): mai fatto, cresciuto di 2.
+   > ✅ **Fatto 03/09** (P1-3, Lane B2): 55/55 convertiti, 0 residui (verificato: 0
+   > `logger.error` in `except` su `api/v1/`).
 6. **Migrare `BrokerSharingPanel.svelte` alle Runes** (M): 24 `$:` oggi, in crescita —
    più si attende, più costa.
 7. **Piano di attacco per la top-20 C901** (L): `execute_batch` (115) e `build` (97)
@@ -188,6 +215,8 @@ per via della bonifica.
   Async I/O sfuggita all'audit pur essendo presente dal 2026-01-20. Il claim "104 siti
   verificati, 1 violazione" andrebbe quindi letto come "104 siti verificati, 2
   violazioni di cui 1 non rilevata".
+  > ✅ **Risolto 02/09** (P0-4): helper sync `_resize_image` dietro `asyncio.to_thread` +
+  > test spy (dettaglio nel report 01, N1).
 - **N2**: la tabella K5 della fonte citava un file inesistente (`wac_service.py`,
   rimosso 2026-06-10). Reperto di forma, non di sostanza — le funzioni e le complessità
   erano e sono reali — ma conferma il monito del progetto: *un path citato non è un path

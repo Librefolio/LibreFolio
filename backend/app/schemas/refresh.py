@@ -235,7 +235,6 @@ class FXSyncBulkResponse(BaseBulkResponse[FXSyncPairResult]):
     - results: List[FXSyncPairResult]
     - success_count: int (pairs with status ok or partial)
     - errors: List[str] (operation-level errors)
-    - failed_count: computed property
 
     Additional fields:
     - date_range: requested date range

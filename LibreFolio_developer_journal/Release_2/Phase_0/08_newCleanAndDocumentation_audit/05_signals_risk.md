@@ -103,6 +103,9 @@ la tabella originale.
 **Eccezione — versioning**: `implementation_version = "1.0.0"` invariato
 (`drawdown.py:61`). La guida prescrive "Increment `implementation_version` when
 numerical behavior changes" (`mkdocs_src/docs/developer/architecture/patterns/signal_plugin_guide.md:586`).
+
+> ✅ **Risolto 02/09** (P1-11): bump a `"1.1.0"` applicato nella stessa giornata
+> (`drawdown.py:63`) — l'eccezione alla policy è durata poche ore.
 Con default `full_history=True` l'output numerico cambia per richieste senza parametri
 espliciti; il valore fluisce nei metadati dei risultati (`signal_service.py:585`
 `algorithm_version=...implementation_version`) e negli snapshot AI Export → export
@@ -119,9 +122,17 @@ plugin (`git log -S 'implementation_version = "'` → solo commit di introduzion
   non alla raccolta dei riferimenti") nella skill di audit/testing o nelle instructions.
   Evidenza: grep vuoto su `.github/skills|instructions|agents`; la trappola si è
   ripetuta identica in questa tornata (ai_export di nuovo a report separato).
+  > ✅ **Fatto 03/09** (P1-12, Lane D): regola registrata in
+  > `.github/skills/devpy-tools/testing-backend/SKILL.md:237-243` («Exclusion belongs in
+  > the report, not in reference collection», con il caso `resolve_ai_export_temporal_class`
+  > citato come esempio).
 - **T2 (S)** — Bump `implementation_version` di drawdown a `"1.1.0"` (policy
   `signal_plugin_guide.md:586`), oppure emendare la guida se il default-driven change
   è considerato coperto da `normalized_params`. Evidenza: `drawdown.py:61`.
+  > ✅ **Fatto 02/09** (P1-11): `implementation_version = "1.1.0"` bumpato nella tornata
+  > beta (verificato a `drawdown.py:63`). Resta da decidere — rinviata alle decisioni P2
+  > (piano D-3) — la seconda metà: metadati dei 4 `ComponentSpec` drawdown
+  > (`version=1`/`WINDOWED` vs payload full-history) prima del tag V1 (report 13, task 3).
 - **T3 (S)** — Allineare la documentazione storica: tabella complessità del report 05
   era un campione (mancavano `prepare_plan` 20, `validate_definition` base 21).
 - **T4 (M, posticipabile)** — Matrice dichiarativa per `validate_status_matrix`
@@ -136,6 +147,7 @@ plugin (`git log -S 'implementation_version = "'` → solo commit di introduzion
 
 - **N1 🟡 basso** — Versioning drawdown non bumpato (dettaglio sopra): prima violazione
   della policy di `implementation_version` dall'introduzione dei plugin.
+  > ✅ **Risolto 02/09** (P1-11): `implementation_version = "1.1.0"` (`drawdown.py:63`).
 - **N2 🟢** — `prepare_plan` 20 → 21 per il ramo full_history (`signal_service.py:273-274`).
   Variazione trivia, segnalata perché la funzione è già la #2 del sottosistema e cresce
   ad ogni feature di warm-up: il prossimo ramo la porterà verso la soglia di E1.

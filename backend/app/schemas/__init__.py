@@ -49,7 +49,6 @@ from backend.app.schemas.assets import (
     FAGeographicArea,
     FAHistoricalData,
     FAinfoResponse,
-    FAMetadataChangeDetail,
     FAMetadataRefreshResult,
     FASectorArea,
 )
@@ -253,7 +252,7 @@ from backend.app.schemas.transactions import (
     validate_tags_list,
 )
 
-__all__ = [
+__all__ = [  # noqa: RUF022 — grouped by domain with section comments; sorting would scatter related names
     # Common (base classes)
     "Currency",
     "BackwardFillInfo",
@@ -317,7 +316,6 @@ __all__ = [
     "FASectorArea",
     "FAClassificationParams",
     "FAAssetMetadataResponse",
-    "FAMetadataChangeDetail",
     "FAMetadataRefreshResult",
     "FABulkMetadataRefreshResponse",
     "FABulkAssetPatchResponse",

@@ -151,6 +151,12 @@ Unico rosso: `front-ai-export` — 3 test di contratto (`ai-export-contract.spec
 `broker_ids` nel payload) **pre-esistenti**: riprodotti identici su HEAD prima del batch →
 non regressioni di questa tornata; da triagiare a parte (deriva post-01/09).
 
+> ✅ **Chiusura definitiva (03/09)**: i 3 contract red sono stati triagiati e risolti — la
+> deriva era legittima (F2: la dashboard owned-only passa ora `broker_ids` esplicito al
+> contesto export; il contratto V1 lo prevede da sempre). I test asserivano l'assenza:
+> aggiornati ad asserire il contratto canonico (array non vuoto di interi positivi univoci
+> ordinati). Unit verde in fresh-run. La tornata 06 si considera **chiusa**.
+
 Note della tornata:
 - I rossi intermittenti visti solo sotto `--workers auto` (broker-detail lot fee, asset-merge
   AM-001, fx-csv-import editor) sono verdi in isolamento e in seriale → sensibilità al carico
@@ -158,3 +164,14 @@ Note della tornata:
 - `mode='duplicate'` di TransactionFormModal è attualmente **irraggiungibile da UI** (il clone
   passa dalla bulk workspace): la preservazione della data (T3) è testata a livello componente;
   valutare se ricollegare l'azione o rimuovere la modalità.
+
+### Coda di collaudo 03/09 (documentata nei piani)
+
+- **T3**: il primo fix colpì il percorso morto (`FormModal mode='duplicate'`); il collaudo
+  utente lo ha beccato → fix spostato nei 3 path clone reali della bulk modal
+  (nota in plan-phase00TransactionsUxPolish §Stato).
+- **E1**: banner "segnali non aggiornati" al primo giro → causa radice: dedup errori FX
+  quadratico in `get_prices_bulk` sotto full-history (spin CPU 100% → timeout axios 30s).
+  Fix O(1) + tetto 10 errori; ∞ → 2.6s (nota in plan-phase00EngineAccountingAndSignals §Stato).
+- **T1-b**: campo quantità parte vuoto con placeholder "0" grigio (post-collaudo).
+- **Segnali**: spinner sulla card mentre la richiesta è in volo (niente più flash rosso).

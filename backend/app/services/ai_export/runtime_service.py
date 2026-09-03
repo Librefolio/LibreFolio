@@ -837,6 +837,8 @@ class AiExportSnapshotService:
 
 
 __all__ = [
+    "CATALOG_VERSION",
+    "SCHEMA_VERSION",
     "AiExportBrokerAccessDeniedError",
     "AiExportEntityNotFoundError",
     "AiExportPreparedRequest",
@@ -846,6 +848,4 @@ __all__ = [
     "AiExportSnapshotSourceError",
     "AiExportUnsupportedSelectionError",
     "AiExportVersionMismatchError",
-    "CATALOG_VERSION",
-    "SCHEMA_VERSION",
 ]

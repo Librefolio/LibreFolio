@@ -43,7 +43,14 @@ The fastest way to import data from an unsupported source is to **paste this ent
 | Column | Required | Description |
 |--------|----------|-------------|
 | **`date`** | ✅ Always | Transaction date. Accepts `2023-12-31`, `31/12/2023`, etc. |
-| **`type`** | ✅ Always | One of: `BUY`, `SELL`, `DIVIDEND`, `INTEREST`, `DEPOSIT`, `WITHDRAWAL`, `FEE`, `TAX`, `TRANSFER`, `ADJUSTMENT`, `FX_CONVERSION`, `CASH_TRANSFER` |
+| **`type`** | ✅ Always | One of: `BUY`, `SELL`, `DIVIDEND`, `INTEREST`, `DEPOSIT`, `WITHDRAWAL`, `FEE`, `TAX`, `ADJUSTMENT` |
+
+!!! warning "TRANSFER, FX_CONVERSION and CASH_TRANSFER are rejected"
+
+    Paired-leg types (`TRANSFER`, `FX_CONVERSION`, `CASH_TRANSFER`) require two
+    transactions linked by `link_uuid`, which a flat CSV cannot express. The
+    parser raises `Unknown transaction type` (or an explicit pairing error) for
+    them. Use manual entry or a broker-specific plugin for paired movements.
 | **`quantity`** | Depends on type | Number of units. See [Sign Conventions](#sign-conventions). |
 | **`amount`** | Depends on type | Net cash impact. See [Sign Conventions](#sign-conventions). |
 | **`currency`** | Optional | ISO 4217 code (`EUR`, `USD`). Defaults to `EUR`. |
@@ -73,16 +80,13 @@ The fastest way to import data from an unsupported source is to **paste this ent
 | `WITHDRAWAL` | none | `−` | Cash leaving the broker account |
 | `FEE` | none | `−` | Commission or fee paid |
 | `TAX` | none | `−` | Tax or withholding paid |
-| `TRANSFER` | `+` or `−` depending on direction | none (must be empty) | Asset movement between brokers |
-| `ADJUSTMENT` | `+` or `−` | **must be empty** | Quantity-only correction (splits, gifts). **No cash movement.** |
-| `FX_CONVERSION` | none | `+` or `−` | Paired with another leg via `related_transaction_id` |
-| `CASH_TRANSFER` | none | `+` or `−` | Cash wire between brokers |
+| `ADJUSTMENT` | `+` or `−` | **must be empty** | Quantity-only correction (splits, gifts, inheritance seeding). **No cash movement.** |
 
 ---
 
 !!! warning "Inherited cost basis (WAC) is PER-UNIT"
 
-    A `TRANSFER` / `ADJUSTMENT` row that seeds an **inherited or transferred** position
+    An `ADJUSTMENT` row that seeds an **inherited or transferred** position
     (you owned it before, with a known purchase cost) carries a *frozen cost basis*. The
     generic CSV has no `cost_basis` column, so the import wizard **prompts you to fill it**
     ("Missing inherited per-unit cost basis (WAC)"). Enter the **cost per single unit**

@@ -72,6 +72,208 @@ Pulsante nel frontend (modale "nuova versione") che fa aggiornare e riavviare il
 
 ---
 
+## 📧 Server email — verifica account, inviti, recupero password (da P2-1)
+
+**Data aggiunta**: 3 Settembre 2026
+**Status**: 📋 FUTURO — non prioritario; nel frattempo l'opzione `require_email_verification` è marcata come placeholder (read-only + badge "coming soon") nella UI admin
+**Origine**: audit 08_newCleanAndDocumentation_audit (P2-1) + decisione utente 03/09/2026
+
+### Obiettivo
+
+Connettere LibreFolio a un server email (SMTP configurabile dalle impostazioni admin) e
+costruirci sopra tre funzioni:
+
+1. **Verifica email** — rende vera l'opzione `require_email_verification` (oggi placeholder:
+   la chiave esiste ma nessuna verifica avviene).
+2. **Link di invito** — un admin genera un invito via email; utile soprattutto quando la
+   registrazione libera dalla pagina di login è disattivata (l'utente si registra solo
+   tramite invito).
+3. **Recupero password via email** — reset self-service invece del reset manuale admin.
+
+### Note
+
+- Configurazione SMTP nelle impostazioni globali (host, porta, auth, mittente) con
+  test di connessione stile "Test Configuration" dei provider.
+- Il flusso invito/reset richiede token monouso a scadenza (tabella dedicata o
+  riuso del pattern dei settings con TTL).
+- Valutare dipendenza: `aiosmtplib` (async, non blocca l'event loop — regola Async I/O).
+- Fino a questo task, nessuna promessa UI sulla verifica email (P2-1 chiuso come placeholder).
+
+---
+
+## 🔀 `mode='duplicate'` del TransactionFormModal — ricollegare o rimuovere
+
+**Data aggiunta**: 3 Settembre 2026
+**Status**: 📋 DECISIONE APERTA — codice morto di fatto
+**Origine**: fix T3 (02/09) + collaudo 03/09; nota in `06_betaTestingReportAndFixing/INDEX.md` §7
+ e `plan-phase00TransactionsUxPolish.prompt.md` §Stato
+
+### Il punto
+
+`TransactionFormModal` ha una modalità `duplicate` (pre-compila il form come copia) ma
+**nessuna azione UI la raggiunge**: il "duplica" reale passa da `TransactionBulkModal`
+intent `clone` (workspace). La preservazione della data (T3) è quindi testata solo a
+livello componente per quel ramo.
+
+### Opzioni
+
+- **Ricollegare**: aggiungere un'azione "Duplica" (menu riga o form) che apre il FormModal
+  in `mode='duplicate'` per chi preferisce il singolo form alla bulk workspace.
+- **Rimuovere**: cancellare la modalità, il ramo di codice e i test dedicati, riducendo la
+  superficie del FormModal.
+
+### Note per chi riprende
+
+- I 3 path clone della bulk modal (`resolveInitialRows`, `cloneRow`, `createOpFromClone`)
+  sono quelli vivi — non confonderli con questa modalità.
+- Se si rimuove: eliminare anche l'opzione `resetDate` residua e i test del modo duplicate.
+
+---
+
+## 🧪 Test runner — residui della migrazione P8
+
+**Data aggiunta**: 3 Settembre 2026 · **Corretta** il 03/09 dopo verifica sistematica (verify-06)
+**Status**: 📋 FUTURO — ma **molto meno di quanto scritto altrove**: la verifica 03/09 ha trovato
+che il corpo del piano P8 segna già fatte le tappe 1, 2.2–2.4, 3.1–3.3, 4, 5.4, 6.3–6.4 (deliverable
+presenti: `_inventory.py`, `_scheduler.py`, `_executor.py`, flag `--workers`, reachability check) —
+header e INDEX non furono mai riallineati
+**Origine**: `LibreFolio_developer_journal/Release_2/Phase_0/06_betaTestingReportAndFixing/plan-phase00TestRunnerMigration.prompt.md`
+
+### Cosa resta davvero (dopo la verifica del 03/09)
+
+- **Tappe 5.1–5.3** — isolamento scritture per worker: **deliberatamente NON eseguite**
+  (premesse false, vedi piano :1041 e :1169+). Sono il vero residuo.
+- **Tappe 0.1–0.2** — fotografia dei timing: probabilmente obsolete, da rivalutare.
+- **Rossi intermittenti sotto `--workers auto`** (broker-detail lot fee, asset-merge AM-001,
+  fx-csv-import editor) — verdi in seriale: sensibilità al carico parallelo; candidati a
+  diventare la checklist d'ingresso quando si riprende 5.x.
+
+### Correzioni fatte il 03/09
+
+- Questa voce inizialmente elencava «tappe 1–6» come aperte: **era stale** (copiato dall'header
+  del piano, mai aggiornato dopo i commit del 13/08). Ora riflette la verifica sul codice.
+- INDEX 06 e header dei piani P7/P8 vanno riallineati quando si tocca quella cartella:
+  - P7 «Fase D aperta» → **fatta** (`scripts/coverage_js.py` + `test coverage-report --lang js`
+    operativo, usato il 03/09 per la misura 72,3%); INDEX §4 vs §5 si contraddicono.
+  - P8 header «tappe 1–6 aperte» → quasi tutto fatto (sopra).
+  - INDEX dice «`_reachability.py`» → implementato dentro `_cli.py` + `_inventory.py`.
+
+---
+
+## 🧹 P3-27 — Batch traduzioni IT/FR/ES (debito a due generazioni)
+
+**Data aggiunta**: 3 Settembre 2026
+**Status**: 📋 SOLO SU RICHIESTA ESPLICITA — la pipeline Aphra si avvia solo quando l'utente la chiede
+**Origine**: audit 08 mk1 N8 + mk2 T16; ondata docs P3 del 03/09
+
+### Debito accumulato al 03/09
+
+Pagine EN aggiornate/riscritte con traduzioni IT/FR/ES ora stale:
+- **Riscritture**: `user/brokers/sharing` (sharing moderno), `user/brokers/import`
+  (wizard 7 step), sezione Import di `user/getting-started`, `user/fx/providers/snb`
+  (medie mensili), sezioni nuove di `admin/docker_advanced` (cache build-time, backup WAL).
+- **Correzioni di fatti** (le traduzioni riportano ancora gli errori): transactions/index,
+  files/index, assets/index, transactions/import/how-to + index + etoro, fx/index +
+  fx/detail/chart + signals, assets/detail/chart + signals, ai-export/index|asset|fx,
+  dashboard/kpi-cards, financial-theory day-count/dividend.
+- Per il debito strutturale esatto: `pipenv run python dev.py mkdocs translate-validate`.
+
+### Regola
+
+Le correzioni puramente cosmetiche sono già state stampate (`translate-stamp`) e NON
+verranno ritradotte; tutte le pagine sopra invece DEVONO essere ritradotte alla prossima
+run `./dev.py mkdocs translate` perché i fatti sono cambiati.
+
+---
+
+## 🧮 Riduzione complessità cognitiva — i 26 `TODO(P2-refactor)` (da P1-2)
+
+**Data aggiunta**: 3 Settembre 2026
+**Status**: 📋 FUTURO — NON urgente: sono debolezza strutturale, non bug. Lavoro grosso, da pianificare a sé
+**Origine**: piano `LibreFolio_developer_journal/Release_2/Phase_0/08_newCleanAndDocumentation_audit/plan-phase00P1QuickWins.prompt.md` (task P1-2, tabella completa dei 26 con righe e note)
+
+### Contesto
+
+Il 03/09 è stato attivato il gate ruff **C901 a soglia 10** (`pyproject.toml`): misura la
+complessità ciclomatica — conta OGNI punto decisionale (if, ternari, operatori booleani).
+199 funzioni sopra soglia sono state triagiate una a una: **173 "flat packer"** (parser CSV,
+packer di payload: branch meccanici, nessuna logica annidata) hanno ricevuto
+`# noqa: C901 — <giustificazione>`; **26 con logica annidata vera** (if in loop in if, stato
+che si accumula) sono state marcate `# noqa: C901 — TODO(P2-refactor): <motivo>`.
+
+### Come trovarle
+
+```bash
+grep -rn "TODO(P2-refactor)" backend/ scripts/
+```
+
+La tabella completa con complessità e nota per funzione è nel piano P1 citato sopra
+(sezione "P1-2 — esito triage"). I gruppi:
+
+| Gruppo | Esempi (complessità) | Natura |
+|---|---|---|
+| Motori replay/pipeline | `execute_batch` (115), `portfolio_engine.build` (97), `get_summary` (73), `get_positions_contribution` (62) | Loop per-giorno/transazione con rami annidati per tipo evento/FX/edge case |
+| Orchestratori a fasi | `bulk_refresh_prices` (62), `sync_pairs_bulk` (54), `get_prices_bulk` (49), `calculate` (26) | 3-9 fasi con closure annidate che catturano stato |
+| Parser non banali | `broker_credit_agricole._parse_account_movements` (71), `brim_provider.detect_tx_duplicates` (21) | Parse multi-passo con closure di risoluzione annidate |
+| State machine di calcolo | `drawdown_episodes` (15), `calculate_mwrr_series` (15), `_crossings` (11) | Macchine a stati con recovery/retry |
+| Tooling interno (priorità bassa) | 3 in `scripts/test_runner/` | Logistica del runner, non prodotto |
+
+### Cosa fare quando si riprende
+
+- Approccio: **estrazione di helper per stadio** (stage functions a livello modulo), non
+  riscrittura. Ogni funzione ha già il motivo specifico nel commento noqa.
+- Il gate impedisce che ne nascano di nuove: queste 26 sono tutto il debito esistente.
+- Dopo ogni refactor: togliere il noqa e verificare `pipenv run ruff check backend/` verde.
+- Attenzione a `asset_source.py`: ha drift black preesistente — non riformattare tutto il file.
+
+---
+
+## 🔗 Suggerimento eventi collegabili nella bulk modal (da P2-6)
+
+**Data aggiunta**: 3 Settembre 2026
+**Status**: 📋 FUTURO — feature pronta al 70% (backend già fatto e testato); manca il frontend
+**Origine**: audit 08 (P2-6) + idea originale utente (luglio 2026) + indagine 03/09/2026
+
+### La feature voluta
+
+Nella **bulk modal** delle transazioni, in stile riga-notifica "promote": quando una riga
+(transazione) può essere collegata a un **evento** di un asset (dividendo, interesse…)
+entro un range temporale compatibile, compare una riga di notifica con i candidati;
+l'utente conferma il collegamento. Il range riusa il valore dello **slider delta-days**
+già presente nella bulk modal.
+
+### Cosa esiste già (da riusare, NON riscrivere)
+
+- **Backend pronto**: `POST /api/v1/transactions/suggest-events`
+  (`backend/app/api/v1/transactions.py` ~:257) → `suggest_events_bulk` in
+  `transaction_service.py` ~:558-621. Fa: mappa tipo transazione → tipo evento compatibile,
+  filtra per tolleranza ±N giorni, ordina per distanza, accetta batch (lista di transazioni).
+  Coperto da 8 test API (`backend/test_scripts/test_api/test_events_suggest.py`), mai cablato
+  al frontend dal commit `c3faae19` (luglio).
+- **UX di riferimento**: la riga-notifica "promote" nella bulk modal
+  (`TransactionBulkModal.svelte` ~:2994-3094) come template di presentazione.
+- **Pattern picker esistente**: `AssetEventPicker.svelte` + `EventCreateMiniModal.svelte`
+  nella sezione avanzata della modale di edit transazione.
+
+### ⚠️ Duplicazione da sanare nell'occasione
+
+`AssetEventPicker` (edit modal) **NON usa** `suggest_events`: interroga gli eventi con
+`query_events_bulk` (query generica per asset+range) e manca della mappa di compatibilità
+tipo-transazione→tipo-evento e dell'ordinamento per distanza che `suggest_events` ha.
+Chi riprende il lavoro deve **fattorizzare**: un unico motore di matching (quello di
+`suggest_events`) consumato sia dall'edit modal sia dalla nuova riga-notifica bulk.
+
+### Note di implementazione (dall'indagine)
+
+- Il collegamento si scrive su `asset_event_id` della transazione (poi re-validate).
+- Servono: utility frontend condivisa (batch + cache + debounce), componente banner,
+  chiavi i18n ×4, E2E `event-suggest-bulk.spec.ts`.
+- L'analisi completa (forme, rischi, piano in 4 fasi) è nel report dell'indagine del
+  03/09/2026 in questa sessione — recuperabile anche rieseguendo il confronto
+  `suggest_events` vs `AssetEventPicker`.
+
+---
+
 ## 📊 Risk Analysis — evoluzioni scenario catalog e replay
 
 **Data aggiunta**: 29 Luglio 2026

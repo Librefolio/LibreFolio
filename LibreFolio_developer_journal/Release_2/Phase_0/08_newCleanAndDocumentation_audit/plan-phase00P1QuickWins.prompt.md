@@ -27,7 +27,8 @@ WS-B lint hygiene       P1-3  55 TRY400 → logger.exception ✅ Lane B2 (03/09)
                               logica annidata → noqa TODO(P2-refactor) + lista refactor
 WS-C backend dead code  P1-4/P0-5b/P1-6 ✅ Lane B (03/09): orfani rimossi, N+1 fixati
                               (i siti fx erano in api/v1/fx.py, non services/fx.py),
-                              mappatura fifo_utils documentata sotto (rimozione differita)
+                              mappatura fifo_utils documentata sotto; ✅ Lane H3 (03/09):
+                              fifo_utils.py + test legacy rimossi dopo gap test P&L negativo
 WS-D frontend dead/i18n P1-7/P1-8/P1-9 ✅ Lane C (03/09): 10 orfani, 25 chiavi ×4 lingue
                               (2523→2498), 22 re-export + tipi orfani. Delta audit: ~30
                               aiExport.dataset NON orfane (risoluzione dinamica backend-driven).
@@ -191,6 +192,8 @@ Mappatura dei casi limite di `backend/app/utils/financial/fifo_utils.py` (148 ri
 `FifoLotEngine` (`backend/app/services/fifo_lot_engine.py`), prima di qualunque rimozione futura.
 Nessuna cancellazione in questo giro — solo mapping.
 
+> **Note implementazione** (Lane H3, 03/09): rimozione eseguita — vedi checklist in fondo.
+
 ### Equivalenze strutturali (dominio BUY/SELL puro, singolo broker)
 
 - **Ordinamento**: fifo_utils ordina per `(date, id)`; engine per `(date, phase, transaction_id, pair_id)`
@@ -228,8 +231,23 @@ ADJUSTMENT ± con cost_basis_override, SHORT, allocazione income/fee/tax, `analy
 
 ### Prima di una futura rimozione di fifo_utils.py restano da fare
 
-1. Aggiungere al suite engine un test esplicito di **P&L negativo** (gap #7).
-2. Verificare che **nessun caller** di `calculate_fifo_lots` esista in produzione (grep 03/09: solo
+1. ✅ Aggiungere al suite engine un test esplicito di **P&L negativo** (gap #7).
+2. ✅ Verificare che **nessun caller** di `calculate_fifo_lots` esista in produzione (grep 03/09: solo
    `test_fifo_utils.py` + registration runner `services_roi_fifo_utils` — già ok).
-3. Aggiornare la registration `services_roi_fifo_utils` in `scripts/test_runner/_backend_services.py`
+3. ✅ Aggiornare la registration `services_roi_fifo_utils` in `scripts/test_runner/_backend_services.py`
    (stringhe già corrette in questo giro; la unit resta perché copre l'intera cartella `test_financial/`).
+
+> **Note implementazione** (Lane H3, 03/09 — rimozione approvata dall'utente): checklist eseguita e
+> `fifo_utils.py` **rimosso**. (1) Aggiunto
+> `TestBasicLongShort::test_buy_then_full_sell_at_loss_records_negative_pnl` in
+> `test_fifo_lot_engine.py` (buy 10@100 → sell 10@80 ⇒ pnl −200 su lotto e closure; verde prima della
+> cancellazione). (2) Grep finale su `backend/app` + `scripts`: zero caller di
+> `calculate_fifo_lots`/`FIFOResult`/`FIFOTransactionInput` fuori dal modulo stesso; `__init__.py` di
+> `financial/` non lo re-esportava. (3) Stringhe della registration aggiornate (2
+> `print_info` + `desc` in `add_test`) e funzione rinominata `services_roi_fifo_utils` →
+> `services_roi_fifo_engine`; unit/id `roi-fifo-utils` **mantenuti** — coprono l'intera cartella
+> `test_financial/` e l'id è citato in
+> `mkdocs_src/docs/developer/frontend/data-quality-banner.md`. Cancellati
+> `backend/app/utils/financial/fifo_utils.py` e
+> `backend/test_scripts/test_services/test_financial/test_fifo_utils.py` (path reale sotto
+> `test_financial/`). Verifiche: ruff pulito, suite engine verde, import `backend.app.main` ok.

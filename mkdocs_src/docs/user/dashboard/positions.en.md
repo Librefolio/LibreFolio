@@ -21,15 +21,25 @@ Use the view toggle to switch between them, and the table/map toggle to change t
 
 #### 📋 Holdings View
 
-The **Holdings** view shows the current open-position snapshot.
+The **Holdings** view shows the current open-position snapshot. The table has 13 columns:
 
-| Metric | Description |
+| Column | Description |
 |:---|:---|
-| **Quantity** | Current shares, units, or coins held in your portfolio. |
-| **Market Price** | Live asset price retrieved from the connected data provider. |
-| **Market Value** | Total value at current market prices (\(\text{Price} \times \text{Quantity}\)). |
-| **Average Price (WAC)** | The Weighted Average Cost paid to acquire the current open position. |
-| **Weight** | Proportional share of this asset relative to the total portfolio value. |
+| **Asset** | Asset name with type icon — click to open the asset detail page. |
+| **Δ1** | Change in unrealized P&L versus yesterday, keeping today's quantity constant. |
+| **Δ1%** | The same daily change as a percentage of yesterday's position market value. |
+| **Unrealized P&L** | Open gain/loss: current value minus residual cost basis. |
+| **P&L %** | Unrealized P&L as a percentage of the residual cost basis. |
+| **Annualized** | Net annualized return (CAGR) of the still-open lots, from the first transaction to today — for comparison across positions held for different durations. |
+| **Value** | Total value at current market prices (\(\text{Price} \times \text{Quantity}\)). |
+| **Weight** | Proportional share of this position relative to the total portfolio value. |
+| **Qty** | Current shares, units, or coins held. |
+| **Brokers** | Broker account(s) holding the position. |
+| **Price** *(hidden by default)* | Current asset price from the connected data provider. |
+| **Avg. Cost** *(hidden by default)* | Average cost per unit of the currently open position (Weighted Average Cost). |
+| **Oldest open lot** *(hidden by default)* | Opening date of the oldest FIFO lot still open for this position. |
+
+Use the **eye icon** in the table toolbar to show or hide columns — your choices are remembered across sessions.
 
 #### 📈 Performance View
 

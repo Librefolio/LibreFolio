@@ -57,6 +57,9 @@ Stato oggi: **FATTO** (regge) · **PARZIALE** (fix incompleto o applicato altrov
 | B12 `./dev.py install` 4 step | ✅ Aggiornato (Block 3) | **FATTO** | `host_installation.en.md:94-97` elenca i 4 step (pipenv, root npm, frontend `npm ci`, Playwright) | Nessuna |
 | C1 "LRU" impreciso | Aperto (info) | **ANCORA VALIDO** | `configuration.en.md:25` ancora "LRU"; codice `uploads.py:54` commento "In-memory LRU cache", eviction per timestamp di scrittura `uploads.py:117-119` (`min(... key=[2])`, mai aggiornato da `get()`) | Ritoccare etichetta doc+commento |
 
+> ⚠️ **Parziale 03/09** (P1-17): etichetta corretta nelle 5 superfici doc (4 lingue +
+> `registries.md`); il commento sorgente in `uploads.py` (oggi `:63`) dice ancora «LRU».
+
 Campioni "verificati corretti" del 2026-08 riconfermati a campione: rotazione log settimanale/gzip
 (`logging_config.py:10`), healthcheck `GET /api/v1/system/health` 30s (`system.py:198`,
 `docker-compose.yml:55-57`), sintassi `user create/list/reset/promote/demote/init-settings`
@@ -107,6 +110,8 @@ giorni (`roi_utils.py:90`).
 | R2 FAQ crypto "Coming soon" | ✅ Aggiornato (Block 3) | **FATTO** | `faq.en.md:31` — "Crypto assets — Tracked as portfolio assets in the UI; not Forex…" | Nessuna |
 | R3 fallback `alfystar.github.io` | Aperto (editoriale) | **FATTO** (fix separato, c0814ee4 del 12/08) | `gallery-img-loader.js:29-31` — base iniettata da `config.site_url` via `overrides/main.html:19` (`window.LF_GALLERY_FALLBACK_BASE`), fallback letterale `https://librefolio.github.io/LibreFolio` = `site_url` (`mkdocs.yml:2`) | Nessuna |
 | R4 `fallbackUrl` obsoleto (codice morto) | Aperto (editoriale) | **ANCORA VALIDO** | `dashboard-check.js:15` ancora `'getting-started/installation/'` (`:78` assegnazione); nav reale `mkdocs.yml:621-622` (`user/getting-started.md`, `user/installation.md`); nessun `id="dashboard-link"` in `mkdocs_src/docs/` → ramo morto, impatto nullo latente | Aggiornare o rimuovere il ramo |
+
+> ✅ **Risolto 03/09** (P1-17): ramo morto rimosso (strada «rimozione»).
 | R5 "community-driven" | Aperto (info) | **ANCORA VALIDO** (info) | Framing invariato (`index.en.md:290,320`); `git log --format='%an'` su `brim_providers/` e `asset_source_providers/` → solo `Alfystar` | Nessuna (nota interpretativa) |
 
 Igiene sito riverificata (task C): **nav intatta** — script inline su `mkdocs.yml`: 287 voci
@@ -287,6 +292,15 @@ Nessuna modifica applicata da questo audit (sola verifica).
 | T16 | N6: eseguire il batch traduzioni accumulato (cli_tools, settings, benchmark defaults, sharing, e tutte le correzioni T1-T15) | drift verificato su `cli_tools.it/fr/es:24-25`, `settings.it/fr/es`, `linear/compound/sine-wave.it` | M |
 | T17 | 07 R4: aggiornare o rimuovere il ramo morto `fallbackUrl` in `dashboard-check.js` | `dashboard-check.js:15,78`; nessun `#dashboard-link` nel sito | S |
 | T18 | 05 C1 (info): ritoccare etichetta "LRU" in doc e commento sorgente | `configuration.en.md:25`, `uploads.py:54,117-119` | S |
+
+> **Stato 03/09 (esecuzione P1-17)**:
+> - **T17** ✅: ramo morto `fallbackUrl` **rimosso** (verificato: 0 occorrenze in
+>   `mkdocs_src/docs/` e `mkdocs_src/overrides/`).
+> - **T18** ⚠️ **Parziale**: etichetta «LRU» corretta nelle **5 superfici documentali** (4
+>   lingue di `configuration.*.md` + `registries.md`) — verificato: 0 occorrenze «LRU» nei
+>   docs. Il **commento sorgente** in `uploads.py` (oggi `:63`) recita ancora «In-memory
+>   LRU cache» (con nota TTL): residuo da ritoccare.
+> - T14 resta **aperto**: decisione di prodotto P2-1 (`require_email_verification`).
 
 Restano fuori come voci di prodotto (Blocco 1/2, tier S4-S6): 01 R-11, 02 F3, 02 F4, 02 F5,
 02 F6, 03 F1, 03 F4, 06A R-03, 06B B1, 06C F1, 07 R1 — tutte riconfermate valide oggi

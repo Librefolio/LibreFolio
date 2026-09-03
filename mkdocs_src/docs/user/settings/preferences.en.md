@@ -11,7 +11,6 @@ Every user can configure their own display preferences — changes apply only to
 | **Language** | Interface language (English, Italiano, Français, Español) |
 | **Base Currency** | Default display currency for portfolio values |
 | **Theme** | Light / Dark mode |
-| **Date Format** | DD/MM/YYYY, MM/DD/YYYY, or ISO YYYY-MM-DD |
 
 ---
 

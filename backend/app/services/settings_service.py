@@ -1,7 +1,19 @@
 """
 Settings service layer for LibreFolio.
 
-Handles user settings and global settings operations.
+Dual responsibility (P2-9 — user columns vs global key-value, the two services
+stay separate by design):
+
+- USER settings: CRUD over the typed columns of the per-user `UserSettings`
+  row (`language`, `base_currency`, `theme`, `avatar_url`).
+- GLOBAL settings: CRUD over the admin-managed `GlobalSetting` key-value rows
+  (registration, uploads, scheduler configuration, new-user defaults).
+
+`global_settings_service` complements this file with typed read helpers for
+global keys. Every known key — storage location, type, description — is
+declared once in `SETTINGS_REGISTRY` (backend.app.schemas.settings); reference
+registry constants (e.g. `SETTINGS_REGISTRY.global_.DEFAULT_CURRENCY.key`)
+instead of raw string literals.
 """
 
 from typing import Optional
@@ -14,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.db.models import GlobalSetting, UserSettings
 from backend.app.schemas.settings import (
     GLOBAL_SETTINGS_DEFAULTS,
+    SETTINGS_REGISTRY,
     GlobalSettingRead,
     UserSettingsRead,
     UserSettingsUpdate,
@@ -51,9 +64,9 @@ async def get_or_create_user_settings(user_id: int, session: AsyncSession) -> Us
     simultaneously right after login).
     """
     now = utcnow()
-    default_language = await get_setting_value(session, "default_language", "en")
-    default_currency = await get_setting_value(session, "default_currency", "EUR")
-    default_theme = await get_setting_value(session, "default_theme", "auto")
+    default_language = await get_setting_value(session, SETTINGS_REGISTRY.global_.DEFAULT_LANGUAGE.key, "en")
+    default_currency = await get_setting_value(session, SETTINGS_REGISTRY.global_.DEFAULT_CURRENCY.key, "EUR")
+    default_theme = await get_setting_value(session, SETTINGS_REGISTRY.global_.DEFAULT_THEME.key, "auto")
     stmt = (
         sqlite_insert(UserSettings)
         .values(
@@ -95,7 +108,7 @@ async def get_effective_base_currency(session: AsyncSession, user_id: int) -> st
     user_value = result.scalar_one_or_none()
     if user_value:
         return user_value
-    return await get_setting_value(session, "default_currency", "EUR")
+    return await get_setting_value(session, SETTINGS_REGISTRY.global_.DEFAULT_CURRENCY.key, "EUR")
 
 
 async def update_user_settings(user_id: int, updates: UserSettingsUpdate, session: AsyncSession) -> UserSettingsRead:
@@ -108,9 +121,9 @@ async def update_user_settings(user_id: int, updates: UserSettingsUpdate, sessio
         # Create with updates
         settings = UserSettings(
             user_id=user_id,
-            language=updates.language or await get_setting_value(session, "default_language", "en"),
-            base_currency=updates.base_currency or await get_setting_value(session, "default_currency", "EUR"),
-            theme=updates.theme or await get_setting_value(session, "default_theme", "auto"),
+            language=updates.language or await get_setting_value(session, SETTINGS_REGISTRY.global_.DEFAULT_LANGUAGE.key, "en"),
+            base_currency=updates.base_currency or await get_setting_value(session, SETTINGS_REGISTRY.global_.DEFAULT_CURRENCY.key, "EUR"),
+            theme=updates.theme or await get_setting_value(session, SETTINGS_REGISTRY.global_.DEFAULT_THEME.key, "auto"),
             avatar_url=updates.avatar_url,
             created_at=utcnow(),
             updated_at=utcnow(),

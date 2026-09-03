@@ -15,7 +15,7 @@
 import {describe, expect, it} from 'vitest';
 import type Cropper from 'cropperjs';
 
-import {blobToFile, createImageEditConfig, getCroppedImageFromCropper, getDefaultOutputFileName, IMAGE_PRESETS, isImageFile, isSupportedImageType, SUPPORTED_IMAGE_TYPES, type PresetName} from './imageCrop';
+import {blobToFile, getCroppedImageFromCropper, IMAGE_PRESETS, isImageFile, type PresetName} from './imageCrop';
 import en from '$lib/i18n/en.json';
 import itLocale from '$lib/i18n/it.json';
 import fr from '$lib/i18n/fr.json';
@@ -209,59 +209,6 @@ describe('getCroppedImageFromCropper', () => {
 });
 
 // =============================================================================
-//  createImageEditConfig
-// =============================================================================
-
-describe('createImageEditConfig', () => {
-    it('reads the crop rectangle off the selection and carries the rest through', () => {
-        const {cropper} = fakeCropper({selection: {x: 12, y: 34, width: 300, height: 150}});
-
-        expect(createImageEditConfig(cropper, 'photo.jpg', 640, 480, 'webp', 0.75, 90, -1, 1)).toEqual({
-            cropX: 12,
-            cropY: 34,
-            cropWidth: 300,
-            cropHeight: 150,
-            rotation: 90,
-            scaleX: -1,
-            scaleY: 1,
-            outputWidth: 640,
-            outputHeight: 480,
-            outputFormat: 'webp',
-            outputQuality: 0.75,
-            outputFileName: 'photo.jpg',
-        });
-    });
-
-    it('falls back to an unrotated, unflipped png at full size when only a name is given', () => {
-        const {cropper} = fakeCropper({selection: {x: 1, y: 2, width: 3, height: 4}});
-
-        expect(createImageEditConfig(cropper, 'photo.jpg')).toMatchObject({
-            rotation: 0,
-            scaleX: 1,
-            scaleY: 1,
-            outputWidth: null,
-            outputHeight: null,
-            outputFormat: 'png',
-            outputQuality: 0.9,
-        });
-    });
-
-    it('reports a zero rectangle when there is no selection', () => {
-        const {cropper} = fakeCropper({selection: null});
-
-        expect(createImageEditConfig(cropper, 'photo.jpg')).toMatchObject({cropX: 0, cropY: 0, cropWidth: 0, cropHeight: 0});
-    });
-
-    it('reports a zero rectangle when the selection has one', () => {
-        // A selection dragged to nothing and a missing selection are the same
-        // config — worth pinning, because `|| 0` conflates them on purpose.
-        const {cropper} = fakeCropper({selection: {x: 0, y: 0, width: 0, height: 0}});
-
-        expect(createImageEditConfig(cropper, 'photo.jpg')).toMatchObject({cropX: 0, cropY: 0, cropWidth: 0, cropHeight: 0});
-    });
-});
-
-// =============================================================================
 //  blobToFile
 // =============================================================================
 
@@ -320,61 +267,5 @@ describe('isImageFile', () => {
 
     it('does not accept a type that merely contains "image/"', () => {
         expect(isImageFile(new File(['x'], 'f', {type: 'application/x-image/png'}))).toBe(false);
-    });
-});
-
-describe('isSupportedImageType', () => {
-    it.each(SUPPORTED_IMAGE_TYPES)('accepts %s', (type) => {
-        expect(isSupportedImageType(type)).toBe(true);
-    });
-
-    it.each(['image/svg+xml', 'image/heic', 'image/avif', 'application/pdf', 'IMAGE/PNG', ''])('rejects %s', (type) => {
-        expect(isSupportedImageType(type)).toBe(false);
-    });
-
-    it('is stricter than isImageFile', () => {
-        // Every supported type is an image, but not every image is croppable —
-        // the two guards are not interchangeable.
-        for (const type of SUPPORTED_IMAGE_TYPES) expect(isImageFile(new File(['x'], 'f', {type}))).toBe(true);
-        expect(isImageFile(new File(['x'], 'f', {type: 'image/heic'}))).toBe(true);
-        expect(isSupportedImageType('image/heic')).toBe(false);
-    });
-});
-
-// =============================================================================
-//  getDefaultOutputFileName
-// =============================================================================
-
-describe('getDefaultOutputFileName', () => {
-    it.each([
-        ['png', 'png'],
-        ['webp', 'webp'],
-    ] as const)('keeps %s as its own extension', (format, ext) => {
-        expect(getDefaultOutputFileName('holiday.heic', format)).toBe(`holiday.${ext}`);
-    });
-
-    it('writes jpeg as jpg', () => {
-        expect(getDefaultOutputFileName('holiday.heic', 'jpeg')).toBe('holiday.jpg');
-    });
-
-    it('appends to a name that has no extension', () => {
-        expect(getDefaultOutputFileName('holiday', 'png')).toBe('holiday.png');
-    });
-
-    it('strips only the last extension', () => {
-        expect(getDefaultOutputFileName('scan.2024.03.tiff', 'png')).toBe('scan.2024.03.png');
-    });
-
-    it('agrees with blobToFile on the extension for the same format', () => {
-        // The two produce the file name at different moments — the modal offers
-        // one to the user before cropping, the other stamps the result. They
-        // must not disagree, or the saved file is named something the dialog
-        // never showed.
-        const mimeOf = {png: 'image/png', jpeg: 'image/jpeg', webp: 'image/webp'} as const;
-        for (const format of ['png', 'jpeg', 'webp'] as const) {
-            const suggested = getDefaultOutputFileName('holiday.heic', format);
-            const stamped = blobToFile(new Blob(['x'], {type: mimeOf[format]}), suggested).name;
-            expect(stamped).toBe(suggested);
-        }
     });
 });

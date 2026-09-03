@@ -93,8 +93,8 @@ class FAPricePoint(StrictModel):
     - Query results (backward_fill_info may be present)
 
     The API contract uses separate `close: Decimal` and `currency: str` fields
-    for JSON compatibility. Use `close_cur` property for internal operations
-    that need a Currency object.
+    for JSON compatibility. Build a `Currency(code=…, amount=…)` inline where
+    a Currency object is needed (project-wide style).
 
     **F.4 sentinel rules on upsert** (applied per-field, for ``open/high/low/volume``):
 
@@ -164,25 +164,6 @@ class FAPricePoint(StrictModel):
             raise ValueError("price/volume fields must be >= 0 (or -1 sentinel to clear)")
         return v
 
-    @property
-    def close_cur(self) -> Currency:
-        """Get close price as Currency object for internal calculations."""
-        return Currency(code=self.currency, amount=self.close)
-
-    @property
-    def open_cur(self) -> Optional[Currency]:
-        """Get open price as Currency object for internal calculations."""
-        return Currency(code=self.currency, amount=self.open) if self.open is not None else None
-
-    @property
-    def high_cur(self) -> Optional[Currency]:
-        """Get high price as Currency object for internal calculations."""
-        return Currency(code=self.currency, amount=self.high) if self.high is not None else None
-
-    @property
-    def low_cur(self) -> Optional[Currency]:
-        """Get low price as Currency object for internal calculations."""
-        return Currency(code=self.currency, amount=self.low) if self.low is not None else None
 
 
 class FAUpsert(StrictModel):
@@ -258,7 +239,8 @@ class FACurrentValue(StrictModel):
     """Current value of an asset.
 
     The API contract uses separate `value: Decimal` and `currency: str` fields
-    for JSON compatibility. Use `value_cur` property for internal operations.
+    for JSON compatibility. Build a `Currency(code=…, amount=…)` inline where
+    a Currency object is needed (project-wide style).
     """
 
     value: SafeDecimal
@@ -276,10 +258,6 @@ class FACurrentValue(StrictModel):
     def currency_validate(cls, v: str) -> str:
         return Currency.validate_code(v)
 
-    @property
-    def value_cur(self) -> Currency:
-        """Get value as Currency object for internal calculations."""
-        return Currency(code=self.currency, amount=self.value)
 
 
 class FAHistoricalData(StrictModel):
@@ -373,14 +351,6 @@ class FAEventUpsertResult(StrictModel):
 
 class FABulkEventUpsertResponse(BaseBulkResponse[FAEventUpsertResult]):
     """Response for bulk event upsert."""
-
-
-class FAEventDeleteResult(BaseDeleteResult):
-    """Result of deleting a single event by ID."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    event_id: int = Field(..., description="ID of the event that was deleted")
 
 
 class FAEventDeleteItemResult(StrictModel):

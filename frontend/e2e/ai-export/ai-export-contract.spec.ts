@@ -24,6 +24,24 @@ function expectIsoPeriod(payload: Record<string, unknown>): void {
     expect(String(period.start) < String(period.end)).toBe(true);
 }
 
+// V1 broker scope is optional on portfolio/asset/fx requests. The dashboard surface
+// always sends its explicit owned-broker set (beta F2: the export must aggregate the
+// same brokers the dashboard shows, never fall back to "every accessible broker"),
+// so portfolio payloads from the dashboard carry `broker_ids`. Assert the canonical
+// shape the backend enforces (NonEmptyBrokerIds: unique positive ints, min 1,
+// ascending) — never the literal IDs, which are shared-DB fixture data.
+function expectCanonicalBrokerIds(value: unknown): void {
+    expect(Array.isArray(value), 'broker_ids must be an array').toBe(true);
+    const ids = value as unknown[];
+    expect(ids.length, 'broker_ids must be non-empty').toBeGreaterThan(0);
+    for (const id of ids) {
+        expect(Number.isInteger(id), 'broker_ids entries must be integers').toBe(true);
+        expect(id as number, 'broker_ids entries must be positive').toBeGreaterThan(0);
+    }
+    expect(ids, 'broker_ids must be sorted ascending').toEqual([...(ids as number[])].sort((left, right) => left - right));
+    expect(new Set(ids).size, 'broker_ids must be unique').toBe(ids.length);
+}
+
 function expectUppercaseCurrency(value: unknown, field: string): void {
     expect(typeof value, `${field} must be a string`).toBe('string');
     expect(value, `${field} must be uppercase`).toBe(String(value).toUpperCase());
@@ -43,7 +61,7 @@ function expectDatasetRequest(payload: Record<string, unknown>, expected: Expect
     expectIsoPeriod(payload);
 
     if (expected.domain === 'portfolio') {
-        expect(payload).not.toHaveProperty('broker_ids');
+        expectCanonicalBrokerIds(payload.broker_ids);
         expect(payload).not.toHaveProperty('broker_id');
         expect(payload).not.toHaveProperty('asset_id');
         expect(payload).not.toHaveProperty('base_currency');
@@ -180,7 +198,7 @@ test.describe('AI Export request and clipboard contract', () => {
         });
         expect(payload.detail_level).toBe('compact');
         expect(payload.expected_catalog_version).toBe(PUBLIC_CONTRACT_VERSION);
-        expect(payload).not.toHaveProperty('broker_ids');
+        expectCanonicalBrokerIds(payload.broker_ids);
         expectUppercaseCurrency(payload.target_currency, 'target_currency');
         expectIsoPeriod(payload);
 
@@ -209,7 +227,7 @@ test.describe('AI Export request and clipboard contract', () => {
         });
         expect(payload.detail_level).toBe('compact');
         expect(payload.expected_catalog_version).toBe(PUBLIC_CONTRACT_VERSION);
-        expect(payload).not.toHaveProperty('broker_ids');
+        expectCanonicalBrokerIds(payload.broker_ids);
         expectUppercaseCurrency(payload.target_currency, 'target_currency');
         expectIsoPeriod(payload);
 

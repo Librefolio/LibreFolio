@@ -83,6 +83,19 @@ in I3 sopra); nessuna bandiera `isXLoaded` rinata (report 08, H1); nessun riferi
 | C4 | Rimuovere `transactions.errors.cannotLinkEventNoAsset` (4 lingue) o emettere il codice dal backend se la casistica è viva | N4 | **S** |
 | C5 | Sfoltire le fixture e2e orfane (5 `TEST_USER_*`, `chartRenders`, `waitForChartRerender`, `forAllLanguages`, `DEFAULT_LANGUAGE`, `pageUntilVisible`, `exists`, `API_BASE` fx-helpers) e 2 tipi e2e | N5 | **S** |
 
+> **Stato 03/09 (esecuzione P1, Lane C) — tutti e 5 i task eseguiti**:
+> - **C1+C2+C5** ✅ (P1-9): 22 ri-esportazioni morte sfoltite, tipi orfani dei componenti
+>   rimossi, fixture e2e orfane rimosse. **Scoperta in corsa**: 2 file completamente
+>   orfani ulteriori (`BaseDropdown.svelte`, `TransactionTypeBadge.svelte`) — decisione
+>   utente richiesta, tracciata nel piano (fuori pista del 03/09).
+> - **C3** ✅ (P1-8) — **con scarto di conteggio**: rimosse **25** chiavi × 4 lingue
+>   (totale 2 523 → 2 498), non 24: il giro ha coperto anche la chiave di C4.
+>   Verificato: `globalBrokerHint` e le altre assenti da `en.json`.
+> - **C4** ✅ (P1-8): `transactions.errors.cannotLinkEventNoAsset` rimossa dalle 4 lingue
+>   (strada «rimozione»: il codice backend non esiste). ⚠️ Le ~30 chiavi
+>   `aiExport.dataset.*` citate nel 99 come candidate **NON erano orfane** (risoluzione
+>   dinamica backend-driven dal catalogo) — tenute, non rimosse.
+
 ---
 
 ## Nuovi rilievi
@@ -108,6 +121,11 @@ resta alcun riferimento morto**:
 
 ### N2 — 22 ri-esportazioni morte in barrel vivi (la mezza adozione persiste)
 
+> ✅ **Risolto 03/09** (P1-9, Lane C): le 22 ri-esportazioni elencate sotto sono state
+> sfoltite (strada «il barrel smette di ri-esportare»; es. `components/table/index.ts` non
+> esporta più `DataTablePagination`/`SelectionBar` — verificato). La questione di policy
+> (regola scritta barrel vs path diretto) resta da codificare.
+
 knip 2026-09-02, sezione "Unused exports" — i simboli sono vivi come **file** (importati
 per percorso diretto), morti come **ri-esportazioni di barrel**:
 
@@ -130,6 +148,10 @@ scritta.
 
 ### N3 — 24 chiavi `importWizard.*` orfane × 4 lingue = 96 voci morte
 
+> ✅ **Risolto 03/09** (P1-8, Lane C) — **25 chiavi, non 24**: la pulizia ha rimosso le 24
+> elencate qui **più** `transactions.errors.cannotLinkEventNoAsset` (N4), ×4 lingue
+> (2 523 → 2 498 chiavi totali). Via `./dev.py i18n`, mai edit a mano.
+
 Residuo della riscrittura beta dell'ImportWizard. Verifica: 296 chiavi `importWizard.*`
 in `en.json`; cercato ogni FQN come stringa fissa in `src/` ed `e2e/`; esclusi i lookup
 dinamici confermati (`step*Title` via `STEP_DEFS`/`titleKey` a `ImportWizardModal.svelte:122-129,3551`;
@@ -151,6 +173,9 @@ status.tooltip.possibleDup, status.tooltip.likelyDup, status.tooltip.pendingDupl
 
 ### N4 — `transactions.errors.cannotLinkEventNoAsset`: chiave senza codice backend
 
+> ✅ **Risolto 03/09** (P1-8): chiave rimossa dalle 4 lingue (verificato: assente da
+> `en.json`). Confermata la strada «casistica morta», non «backend rinominato».
+
 Presente in tutte e 4 le lingue (es. `en.json:2156`), ma il codice
 `cannotLinkEventNoAsset` **non è emesso da alcun punto del backend** (`grep -rn
 "cannotLinkEvent" backend/` → 0) né referenziato staticamente dal frontend (il resolver è
@@ -160,6 +185,10 @@ backend (`grep` per codice su `backend/app/` → ≥1 occorrenza ciascuno); ques
 orfana vera. O il backend ha rinominato il codice, o la casistica è morta.
 
 ### N5 — Fixture e2e orfane
+
+> ✅ **Risolto 03/09** (P1-9, Lane C): le 5 fixture `TEST_USER_*`, gli helper
+> (`chartRenders`, `waitForChartRerender`, `forAllLanguages`, `DEFAULT_LANGUAGE`,
+> `pageUntilVisible`, `exists`, `API_BASE`) e i 2 tipi e2e sono stati rimossi.
 
 knip 2026-09-02: `TEST_USER_ALICE/BOB/CAROL/DAVE/EVE` (`e2e/fixtures/test-users.ts:26-50`
 — definiti e mai usati dagli spec), `chartRenders`/`waitForChartRerender`

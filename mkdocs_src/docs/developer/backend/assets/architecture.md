@@ -41,21 +41,12 @@ Central service that coordinates all asset-related operations:
 - **Current Price** *(new)*: Bulk live-price endpoint via `POST /assets/prices/current`. Calls each asset's provider `get_current_value()` with DB fallback. Used by the [LiveTicker](../../frontend/components/features/live-ticker.md) component.
 - **Event Sync**: Persist asset events from providers into the `asset_events` table, filtered by `provider_assignment_id` (manual events survive sync).
 - **Probe**: Dry-run provider config testing via `probe_provider_config()`.
-- **Metadata**: Delegate to `AssetMetadataService` for classification merging.
 
-### 3️⃣ `AssetMetadataService`
-
-Manages descriptive information about assets:
-
-- **Classification**: `sector_area` and `geographic_area` distributions.
-- **Merging**: Merges metadata from providers with existing user-defined data.
-- **Patching**: Supports partial updates to asset metadata.
-
-### 4️⃣ `AssetProviderRegistry`
+### 3️⃣ `AssetProviderRegistry`
 
 Uses the [Registry Pattern](../../architecture/patterns/registry_pattern.md) for auto-discovery of provider plugins.
 
-### 5️⃣ `AssetEvent` Table
+### 4️⃣ `AssetEvent` Table
 
 Stores asset-level events produced by providers or created manually by users. Events are distinct from portfolio transactions:
 

@@ -582,14 +582,6 @@ class FAAssetMetadataResponse(StrictModel):
     provider_code: Optional[str] = Field(None, description="Provider code if assigned (e.g. 'yfinance')")
 
 
-class FAMetadataChangeDetail(StrictModel):
-    """Single field change in metadata."""
-
-    field: str
-    old_value: Optional[str] = None
-    new_value: Optional[str] = None
-
-
 class FAMetadataRefreshResult(StrictModel):
     """
     Result of metadata refresh for single asset.
@@ -701,7 +693,6 @@ class FABulkAssetCreateResponse(BaseBulkResponse[FAAssetCreateResult]):
     # - success_count: int
     # - errors: List[str]
     # Computed properties:
-    # - failed_count: int (computed from len(results) - success_count)
     # - total_count: int
 
 
@@ -955,7 +946,7 @@ class FAAssetMergeResponse(StrictModel):
 
 
 # Export convenience
-__all__ = [
+__all__ = [  # noqa: RUF022 — grouped by domain with section comments; sorting would scatter related names
     # Enums
     "MaturationFrequency",
     "DayCountConvention",
@@ -978,7 +969,6 @@ __all__ = [
     "FASectorArea",
     "FAClassificationParams",
     "FAAssetMetadataResponse",
-    "FAMetadataChangeDetail",
     "FAMetadataRefreshResult",
     "FABulkMetadataRefreshResponse",
     # Asset CRUD schemas

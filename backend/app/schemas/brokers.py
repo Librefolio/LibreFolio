@@ -192,16 +192,6 @@ class BRSummary(BRReadItem):
         """List of currencies used in this broker's cash balances."""
         return [c.code for c in self.cash_balances]
 
-    @property
-    def total_cash_positions(self) -> int:
-        """Number of different currencies with cash balance."""
-        return len(self.cash_balances)
-
-    @property
-    def total_asset_positions(self) -> int:
-        """Number of different assets held."""
-        return len(self.holdings)
-
 
 # =============================================================================
 # BROKER UPDATE

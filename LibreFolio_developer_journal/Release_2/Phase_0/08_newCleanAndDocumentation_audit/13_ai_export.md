@@ -141,6 +141,10 @@ a 11 prima dell'audit — nessuna contraddizione.
    Evidenza: `drawdown_context.py:553,562,572,581` (`version=1`) e `:557,567,576,585`
    (`WINDOWED`). Opzioni: bump a `version=2`, o nota esplicita che V1 nasce già
    full-history; riesaminare se `WINDOWED` descrive ancora il payload. **S**.
+   > ⚠️ **Metà fatta** (P1-11): il bump `implementation_version` del **plugin** a `1.1.0`
+   > è stato applicato il 02/09 (`drawdown.py:63`); la decisione sui metadati dei 4
+   > `ComponentSpec` (`version=1`/`WINDOWED` vs payload full-history) è stata **rinviata
+   > alle decisioni P2** (piano P1, D-3) — resta aperta prima del tag V1.
 4. **`max-complexity` 10 → 25 in ruff** (K5/M5 del vecchio report) — archivierebbe i 17
    C901 tutti validatori senza perdere segnale. **S** (1 riga config). Opzionale.
 
@@ -148,6 +152,9 @@ a 11 prima dell'audit — nessuna contraddizione.
 
 1. **🟡 Versione/metadato drawdown non aggiornati al cambio semantico** — vedi Dettaglio.
    Bloccante solo in senso procedurale: decidere prima del tag della release.
+   > ⚠️ **Aggiornamento 02–03/09** (P1-11): bump `implementation_version` plugin fatto
+   > (`1.1.0`); la metà `ComponentSpec` (`version=1`/`WINDOWED`) resta da decidere —
+   > rinviata a P2 (piano P1, D-3).
 2. **🔵 Due metriche del vecchio report non riproducibili** ("56 file / 44 386 righe /
    2,42:1" e "59 file importano ai_export" contro i 23/25 944 misurabili al commit d'audit).
    Non cambia il giudizio (il rapporto resta il migliore del progetto anche sul perimetro

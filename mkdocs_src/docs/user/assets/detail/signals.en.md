@@ -52,20 +52,17 @@ Compare the current asset's performance against **another asset**. The compariso
 
 ## 🧠 AI Export
 
-The **AI Export** (:material-brain:) button in the page toolbar offers five Asset
+The **AI Export** (:material-brain:) button in the page toolbar offers two Asset
 tasks:
 
-- **Asset Snapshot**
-- **Asset Trend Analysis**
 - **Position Review**
-- **Recurring Investment Timing**
-- **Drawdown and Recovery**
+- **Asset Market Analysis**
 
 The backend builds the snapshot from asset identity and valuation, normalized
 price history, portfolio position context, and technical results from the shared
 signal service. The browser does not recalculate indicators. Tasks appear only
-when applicable to the asset and available data—for example, position or
-recurring-plan context must exist for the related analysis. See
+when applicable to the asset and available data—for example, Position Review
+requires an open position. See
 [Asset AI Export](../../ai-export/asset.md) or the
 [AI Export overview](../../ai-export/index.md).
 

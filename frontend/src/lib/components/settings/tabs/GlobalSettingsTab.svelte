@@ -6,7 +6,7 @@
     import {onDestroy, onMount} from 'svelte';
     import {debug} from '$lib/debug';
     import {BarChart3, ChevronDown, ChevronRight, CircleEllipsis, Clock, Lock, RefreshCw, Settings, Shield, ShieldOff, Unlock, Users} from 'lucide-svelte';
-    import {CurrencySearchSelect, type SelectOption, SimpleSelect} from '$lib/components/ui/select';
+    import {type SelectOption} from '$lib/components/ui/select';
     import type {GlobalSetting} from '$lib/types';
     import {globalSettings} from '$lib/stores/app/globalSettings';
     import LoadingSpinner from '$lib/components/ui/feedback/LoadingSpinner.svelte';
@@ -14,10 +14,14 @@
     import {notify} from '$lib/stores/app/notify.svelte';
     import SettingToggle from '$lib/components/settings/SettingToggle.svelte';
     import SettingNumber from '$lib/components/settings/SettingNumber.svelte';
+    import SettingSelect from '$lib/components/settings/SettingSelect.svelte';
+    import SettingCurrency from '$lib/components/settings/SettingCurrency.svelte';
+    import SettingTheme from '$lib/components/settings/SettingTheme.svelte';
     import SettingActions from '$lib/components/settings/SettingActions.svelte';
     import SettingBulkActions from '$lib/components/settings/SettingBulkActions.svelte';
     import SchedulerConfigModal from '$lib/components/settings/SchedulerConfigModal.svelte';
     import SchedulerLogModal from '$lib/components/settings/SchedulerLogModal.svelte';
+    import CachePanel from '$lib/components/settings/CachePanel.svelte';
 
     // Props
     export let canEdit: boolean = false;
@@ -56,6 +60,9 @@
     // Keys managed exclusively via SchedulerConfigModal — never shown as raw fields
     const SCHEDULER_HIDDEN_KEYS = new Set(['scheduler_current_price_frequency_minutes', 'scheduler_history_sync_times', 'scheduler_history_sync_days', 'scheduler_history_sync_horizon_days', 'scheduler_timezone']);
 
+    // Placeholder settings: rendered read-only with a "Coming soon" badge until the feature lands
+    const PLACEHOLDER_KEYS = new Set(['require_email_verification']);
+
     let settings: GlobalSetting[] = [];
     let editedValues: Record<string, string> = {};
     let isLocked = true;
@@ -76,13 +83,6 @@
         label: l.name,
         icon: l.flag,
     }));
-
-    // Theme options for dropdown
-    const themeOptions: SelectOption[] = [
-        {value: 'light', label: $_('settings.themeLight')},
-        {value: 'dark', label: $_('settings.themeDark')},
-        {value: 'auto', label: $_('settings.themeAuto')},
-    ];
 
     onMount(async () => {
         debug.log('GlobalSettingsTab', 'onMount');
@@ -241,7 +241,7 @@
 
     function resetAllToDefaults() {
         for (const key of Object.keys(editedValues)) {
-            if (SETTING_DEFAULTS[key] !== undefined) {
+            if (SETTING_DEFAULTS[key] !== undefined && !PLACEHOLDER_KEYS.has(key)) {
                 editedValues[key] = SETTING_DEFAULTS[key];
             }
         }
@@ -562,6 +562,8 @@
                                 isNonDefault={nonDefaultKeys.includes(setting.key)}
                                 {isLocked}
                                 {isSaving}
+                                disabled={PLACEHOLDER_KEYS.has(setting.key)}
+                                badge={PLACEHOLDER_KEYS.has(setting.key) ? $_('settings.comingSoon') : ''}
                                 onsave={() => saveSetting(setting.key)}
                                 onundo={() => undoSetting(setting.key)}
                                 onreset={() => resetSettingToDefault(setting.key)}
@@ -595,83 +597,81 @@
                             />
                         </div>
                     {:else}
-                        <!-- Language / Currency / Text (inline) -->
+                        <!-- Language / Currency / Theme use the shared wrappers (same controls as PreferencesTab); any other string setting keeps the generic text row -->
                         <div class="bg-gray-50 dark:bg-slate-800 rounded-lg p-4">
-                            <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                                <div class="flex-1 min-w-0">
-                                    <label for={setting.key} class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-200">
-                                        {#if category}
-                                            <svelte:component this={category.icon} size={16} class="mr-2 text-gray-500 dark:text-gray-400" />
-                                        {/if}
-                                        {getSettingLabel(setting.key)}
-                                    </label>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                        {getSettingHint(setting.key)}
-                                    </p>
-                                </div>
-                                <div class="flex items-center gap-2 sm:space-x-3 self-end sm:self-auto min-h-[32px]">
-                                    {#if setting.key === 'default_language'}
-                                        <SettingActions
-                                            isModified={changedKeys.includes(setting.key)}
-                                            isNonDefault={nonDefaultKeys.includes(setting.key)}
-                                            {isLocked}
-                                            {isSaving}
-                                            onsave={() => saveSetting(setting.key)}
-                                            onundo={() => undoSetting(setting.key)}
-                                            onreset={() => resetSettingToDefault(setting.key)}
-                                        />
-                                        <div class="w-40 sm:w-48">
-                                            <SimpleSelect
-                                                bind:value={editedValues[setting.key]}
-                                                options={languageOptions}
-                                                placeholder={$_('settings.selectLanguage')}
-                                                disabled={isLocked}
-                                                onchange={() => {
-                                                    editedValues = {...editedValues};
-                                                }}
-                                            />
-                                        </div>
-                                    {:else if setting.key === 'default_currency'}
-                                        <SettingActions
-                                            isModified={changedKeys.includes(setting.key)}
-                                            isNonDefault={nonDefaultKeys.includes(setting.key)}
-                                            {isLocked}
-                                            {isSaving}
-                                            onsave={() => saveSetting(setting.key)}
-                                            onundo={() => undoSetting(setting.key)}
-                                            onreset={() => resetSettingToDefault(setting.key)}
-                                        />
-                                        <div class="w-48 sm:w-64">
-                                            <CurrencySearchSelect
-                                                bind:value={editedValues[setting.key]}
-                                                placeholder={$_('settings.selectCurrency')}
-                                                disabled={isLocked}
-                                                onchange={() => {
-                                                    editedValues = {...editedValues};
-                                                }}
-                                            />
-                                        </div>
-                                    {:else if setting.key === 'default_theme'}
-                                        <SettingActions
-                                            isModified={changedKeys.includes(setting.key)}
-                                            isNonDefault={nonDefaultKeys.includes(setting.key)}
-                                            {isLocked}
-                                            {isSaving}
-                                            onsave={() => saveSetting(setting.key)}
-                                            onundo={() => undoSetting(setting.key)}
-                                            onreset={() => resetSettingToDefault(setting.key)}
-                                        />
-                                        <div class="w-40 sm:w-48">
-                                            <SimpleSelect
-                                                bind:value={editedValues[setting.key]}
-                                                options={themeOptions}
-                                                disabled={isLocked}
-                                                onchange={() => {
-                                                    editedValues = {...editedValues};
-                                                }}
-                                            />
-                                        </div>
-                                    {:else}
+                            {#if setting.key === 'default_language'}
+                                <SettingSelect
+                                    value={editedValues[setting.key]}
+                                    options={languageOptions}
+                                    label={getSettingLabel(setting.key)}
+                                    hint={getSettingHint(setting.key)}
+                                    icon={category?.icon ?? null}
+                                    isModified={changedKeys.includes(setting.key)}
+                                    isNonDefault={nonDefaultKeys.includes(setting.key)}
+                                    {isLocked}
+                                    {isSaving}
+                                    embedded
+                                    onsave={() => saveSetting(setting.key)}
+                                    onundo={() => undoSetting(setting.key)}
+                                    onreset={() => resetSettingToDefault(setting.key)}
+                                    onchange={(val) => {
+                                        editedValues[setting.key] = val;
+                                        editedValues = {...editedValues};
+                                    }}
+                                />
+                            {:else if setting.key === 'default_currency'}
+                                <SettingCurrency
+                                    value={editedValues[setting.key]}
+                                    label={getSettingLabel(setting.key)}
+                                    hint={getSettingHint(setting.key)}
+                                    icon={category?.icon ?? null}
+                                    isModified={changedKeys.includes(setting.key)}
+                                    isNonDefault={nonDefaultKeys.includes(setting.key)}
+                                    {isLocked}
+                                    {isSaving}
+                                    embedded
+                                    onsave={() => saveSetting(setting.key)}
+                                    onundo={() => undoSetting(setting.key)}
+                                    onreset={() => resetSettingToDefault(setting.key)}
+                                    onchange={(val) => {
+                                        editedValues[setting.key] = val;
+                                        editedValues = {...editedValues};
+                                    }}
+                                />
+                            {:else if setting.key === 'default_theme'}
+                                <SettingTheme
+                                    value={editedValues[setting.key] as 'light' | 'dark' | 'auto'}
+                                    label={getSettingLabel(setting.key)}
+                                    hint={getSettingHint(setting.key)}
+                                    icon={category?.icon ?? null}
+                                    isModified={changedKeys.includes(setting.key)}
+                                    isNonDefault={nonDefaultKeys.includes(setting.key)}
+                                    {isLocked}
+                                    {isSaving}
+                                    embedded
+                                    onsave={() => saveSetting(setting.key)}
+                                    onundo={() => undoSetting(setting.key)}
+                                    onreset={() => resetSettingToDefault(setting.key)}
+                                    onchange={(val) => {
+                                        editedValues[setting.key] = val;
+                                        editedValues = {...editedValues};
+                                    }}
+                                />
+                            {:else}
+                                <!-- Generic string setting: raw text input -->
+                                <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                                    <div class="flex-1 min-w-0">
+                                        <label for={setting.key} class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-200">
+                                            {#if category}
+                                                <svelte:component this={category.icon} size={16} class="mr-2 text-gray-500 dark:text-gray-400" />
+                                            {/if}
+                                            {getSettingLabel(setting.key)}
+                                        </label>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                            {getSettingHint(setting.key)}
+                                        </p>
+                                    </div>
+                                    <div class="flex items-center gap-2 sm:space-x-3 self-end sm:self-auto min-h-[32px]">
                                         <SettingActions
                                             isModified={changedKeys.includes(setting.key)}
                                             isNonDefault={nonDefaultKeys.includes(setting.key)}
@@ -693,9 +693,9 @@
                                             class="w-32 px-3 py-2 border rounded-lg text-sm
                                                 {isLocked ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'bg-white text-gray-900 focus:ring-2 focus:ring-libre-green focus:border-libre-green'}"
                                         />
-                                    {/if}
+                                    </div>
                                 </div>
-                            </div>
+                            {/if}
                             {#if setting.updated_at && typeof setting.updated_at === 'string'}
                                 <p class="text-xs text-gray-400 mt-2">
                                     Last updated: {new Date(setting.updated_at).toLocaleString()}
@@ -766,6 +766,9 @@
                             </button>
                         </div>
                     </div>
+
+                    <!-- Cache Panel (status for all users; clear actions admin-only via canEdit) -->
+                    <CachePanel {canEdit} />
                 {/if}
             </div>
         {/if}

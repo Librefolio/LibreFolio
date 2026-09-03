@@ -97,6 +97,9 @@ sviluppatori è allineata — il reperto D2 si riduce oggi alla sola decisione s
 
 ### Regressione S110 (fuori perimetro, segnalata)
 
+> ✅ **Risolto 02/09** (P0-2): swallow convertito in `logger.debug(..., exc_info=True)` +
+> test. Gate anti-ricaduta lo stesso giorno (P0-3): `S110` nella `select` ruff.
+
 `backend/app/utils/cache_utils.py:81-83` — `clear()` con `try: old.close() /
 except Exception: pass` (commento presente, nessun log). Nata il 13/08 in `c8cd0fb2`,
 **dopo** la bonifica S1–S3 che aveva dichiarato `S110 = 0` in `backend/app`
@@ -111,6 +114,9 @@ due `S110` di yahoo_finance risolti: silenzio senza `logger.debug`.
 - **T1 (S)** — Loggare l'`S110` di `cache_utils.py:82` (`logger.debug(..., exc_info=True)`),
   ripristinando l'invariante S110=0 dichiarata da S1–S3. Evidenza: `ruff check
   --extend-select S110 app/` → 1. Costo identico all'intervento 1 dell'audit (2 righe).
+  > ✅ **Fatto 02/09** (P0-2): `logger.debug("Cache close failed during clear",
+  > exc_info=True)` al posto del `pass` + test del log. E il 02/09 è arrivato anche il
+  > gate (P0-3): `S110` nella `select` ruff di `pyproject.toml` (puntuale).
 - **T2 (L, alto rischio — un provider alla volta)** — Estrazione helper condivisi BRIM,
   iniziando da `broker_credit_agricole.py` (`_parse_account_movements` 71 a :929,
   `_parse_securities` 32 a :522). Evidenza: comandi C901 sopra. La raccomandazione
@@ -118,6 +124,11 @@ due `S110` di yahoo_finance risolti: silenzio senza `logger.debug`.
   giusto (dedupe puntuale con bug trovati a conferma del valore).
 - **T3 (S)** — Decidere `list_plugin_classes` (`provider_registry.py:89`): rimozione
   banale (nessun chiamante) oppure commento "API di introspezione riservata". Backlog 5.9.
+  > ✅ **Fatto 03/09** (P1-15, Lane B): decisione = **rimozione** — `list_plugin_classes`
+  > **e** l'alias `get_provider` sono stati tolti dal registry; i test esterni che usavano
+  > l'alias dal 2025-11 sono migrati a `get_provider_instance` (verificato:
+  > `test_fx_providers.py`, `test_asset_providers.py`). Il commento `# Intentionally
+  > unwired` su `ensure_rates_multi_source` (fx.py:389) è arrivato nella stessa corsa.
 - **T4 (M)** — Ridurre `get_history_value` (`yahoo_finance.py:284`, complessità 31,
   invariata dall'audit). Backlog 6.6. Rischio medio: provider più usato e più instabile.
 - **T5 (S)** — Chiudere il debito di stile D5 (scheduled_investment 12, justetf 10)
@@ -136,6 +147,8 @@ due `S110` di yahoo_finance risolti: silenzio senza `logger.debug`.
   "nessun except silenzioso" non ha una guardia automatica (`S110` non è nel `select`
   del `pyproject.toml`, solo nello scan esteso) → senza enforcement CI, la regressione
   è entrata inosservata 20 giorni dopo la bonifica.
+  > ✅ **Entrambe le metà chiuse il 02/09**: sito loggato (P0-2) e guardia creata (P0-3 —
+  > `S110` in `select` a `pyproject.toml:81`).
 - **N3 🟢 (positivo)** — Resolver errori provider localizzati (beta 02/09, working tree):
   catena completa verificata — `schemas/provider.py:360` (`error_details`),
   `_json_safe_details` (`asset_source.py:239-255`) sui 3 path probe (`:1959`, `:1998`,

@@ -60,10 +60,11 @@ BINARY_FILE_RESPONSE: dict = {
 
 class PreviewCache:
     """
-    In-memory LRU cache for image preview thumbnails.
+    In-memory cache for image preview thumbnails.
 
     Size-limited (default 50MB, configurable via PREVIEW_CACHE_MAX_MB in .env).
-    TTL-based eviction (1 hour).
+    Eviction is TTL-based (1 hour) plus oldest-write eviction when over the size
+    limit — reads do NOT refresh timestamps, so this is not a strict LRU.
 
     NOTE: This cache is per-process. With multiple uvicorn workers,
     each worker maintains its own independent cache. For a single-worker

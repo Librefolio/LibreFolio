@@ -76,6 +76,12 @@ lo store direttamente. Decisione ancora da prendere.
 
 ### H3 — la cache cresce ancora senza limiti, e c'è una mezza novità
 
+> ⚠️ **Parziale 03/09**: la «mezza novità» è chiusa (P1-10 — `cachedProvidersHash` e
+> `invalidateCurrencyGraph` **rimossi** con docstring: grafo statico per sessione,
+> invalidazione impossibile). Il rischio madre — crescita senza limiti della cache store
+> (`removeAssetPriceStore` mai chiamato, nessuna LRU/TTL) — **resta aperto** (P4-7, misura
+> mai eseguita).
+
 Nessuna eviction è stata aggiunta: il rischio "memoria monotona in sessioni lunghe" è
 intatto. Novità in `currencyGraphStore.ts`: esiste ora `cachedProvidersHash` (scritto a
 `:96`, azzerato a `:137`) con commento *"(for invalidation)"* a `:35-36` — **ma l'hash
@@ -87,6 +93,10 @@ graph is stable for the session"* (`:130-133`): la decisione implicita è "non s
 allora la funzione + l'hash sono entrambi residui.
 
 ### Regressione lieve: nuovi orfani nati negli store e dintorni
+
+> ✅ **Risolto 03/09** (P1-7, Lane C): i 10 orfani elencati sotto sono stati rimossi
+> (`getResolvedStart/End`, `eventsSince/currentSeq/resetEvents`, `_debugStack`,
+> `debugAssert`, `isReleaseVersion/isDirtyVersion`, ri-export `date/time/number`).
 
 knip 2026-09-02 segnala orfani che il vecchio report non elencava (esso dettagliava 19
 dei 26 export store; questi potrebbero essere i 7 non dettagliati, ma senza l'output grezzo
@@ -101,6 +111,10 @@ archiviato non è dimostrabile — trattarli come **nuovi rilievi**):
   (`locale`, `t`, `_`, `i18nLoading` dallo stesso statement sono invece usati)
 
 ### Export duplicati (nuova categoria knip)
+
+> ✅ **Risolto 03/09** (P1-7): `zodiosApi|default` chiuso rimuovendo il default export;
+> convergenza su `getTransactionTypeIconUrl` (l'unico consumatore dell'altro nome è stato
+> aggiornato).
 
 - `zodiosApi|default` — `api/zodios-client.ts` (il default è il vecchio H5, confermato)
 - `getTypeIconUrl|getTransactionTypeIconUrl` — `stores/transactions/transactionTypeStore.ts:183,195`:
@@ -123,6 +137,25 @@ archiviato non è dimostrabile — trattarli come **nuovi rilievi**):
 | T7 | Tracciare la via viva dell'upload BRIM e rimuovere `uploadBrimFile` | `upload.ts:45` | **S** |
 | T8 | Campionare 10 dei 43 tipi orfani di `lib/types/` contro `api/generated.ts`: se duplicano lo schema generato → rimozione; la domanda aperta dell'audit è immutata | lista knip sezione "Unused exported types" | **S** (il campione), poi **M** se si rimuovono |
 | T9 | Rimuovere i nuovi orfani: `getResolvedStart/End`, `eventsSince/currentSeq/resetEvents`, `_debugStack`, `debugAssert`, `isReleaseVersion/isDirtyVersion`, ri-export `date/time/number`; convergere l'alias `getTransactionTypeIconUrl` | righe in "Dettaglio" sopra | **S** |
+
+> **Stato 03/09 (esecuzione P1, Lane C)**:
+> - **T3** ✅ (P1-10) — **risoluzione OPPOSTA alla prima opzione**: non il completamento
+>   del confronto hash ma la **RIMOZIONE** di `cachedProvidersHash` +
+>   `invalidateCurrencyGraph` (ipotesi utente confermata sul codice: il grafo dipende solo
+>   dalle capability dei provider registrate all'avvio → statico per sessione →
+>   invalidazione impossibile; macchinari morti cancellati + docstring che registra il
+>   perché). Verificato: 0 occorrenze residue in `currencyGraphStore.ts`.
+> - **T5** ⚠️ **Parziale** (P1-7): `export default` di `zodios-client.ts:210` e
+>   `downloadFxBackup` rimossi (0 occorrenze); la decisione su `ApiError` (adottare nella
+>   gestione errori o rimuovere) **resta aperta** — la classe c'è ancora
+>   (`zodios-client.ts:181`) e ricade nella famiglia di decisioni P2-7.
+> - **T7** ✅ (P1-7): `uploadBrimFile` rimosso (0 occorrenze); via viva dell'upload BRIM
+>   tracciata (`BrokerImportFilesModal.svelte` → `axiosInstance.post('/brokers/import/upload…')`).
+> - **T8** ✅ (P1-9): campionamento/pulizia eseguiti — 22 ri-export morti e tipi orfani
+>   rimossi (dettaglio per-barrel nel report 09, nota sotto C1/C2/C5).
+> - **T9** ✅ (P1-7): nuovi orfani rimossi (10 simboli) e alias convergente su
+>   `getTransactionTypeIconUrl`.
+> - T1, T4, T6 restano **aperti**: famiglia di decisioni P2-7.
 
 ---
 

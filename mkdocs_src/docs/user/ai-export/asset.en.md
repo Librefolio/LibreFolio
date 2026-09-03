@@ -5,7 +5,7 @@ for the asset currently open. LibreFolio never sends it to an AI service.
 
 ## 📍 Location
 
-Open an Asset detail page. In the **Signals** header, select **AI Export**. Your
+Open an Asset detail page. In the **page toolbar**, select **AI Export**. Your
 draft remains available for 10 minutes in the current login session and resets
 after logout or a new login.
 

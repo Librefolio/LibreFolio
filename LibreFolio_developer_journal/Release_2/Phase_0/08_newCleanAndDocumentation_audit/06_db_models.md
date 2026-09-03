@@ -53,6 +53,11 @@ sarebbero stati 0 (ARG001/N805/RUF022/RUF100 non sono in `select`).
 | F5 — 2 RUF022 + 2 RUF100 | 🟢 aperto | **PARZIALE / SUPERATO** | RUF022: ancora presenti, `db/__init__.py:29` e `db/base.py:32` (stesse righe). RUF100: **SUPERATO — l'affermazione originale era errata**: `PLC0415` è in `select` da `f1205b7e` (2026-04-17, pyproject.toml:80), quindi i `# noqa: PLC0415` a `models.py:52,558` erano e restano **funzionali** (verificato: con config progetto + RUF100, nessun rilievo). Non vanno rimossi | Task T4 (cosmetico) |
 | F6 — solo 2 migrazioni | 🟢 ok | **SUPERATO** (evoluzione corretta) | `ls backend/alembic/versions/` → `001_initial.py`, `002_identifier_other_json_list.py`, `5b1333fa6b07_scheduler_times_use_configured_timezone.py` (commit `c8bdbaea`, 2026-08-31). `down_revision = "002_identifier_other_json_list"` → catena incrementale corretta | nota naming (N1) |
 | Int.1 — verificare 002 su DB 1.0.1 popolato | raccomandato | **PARZIALE** | 002 è data-only e idempotente (guard `substr(...,1,1) != '['`, file:38); i DB di test si creano via `./dev.sh db:upgrade` (`scripts/test_runner/_backend_db.py:106`) quindi 001→002→5b1333fa6b07 sono esercitate a ogni run, ma **da vuote**; il caso "upgrade di DB 1.0.1 popolato" non ha un test dedicato | Task T5 |
+
+> ✅ **Aggiornamento 03/09** (P1-16, WS-H): il caso «upgrade di DB 1.0.1 popolato» è stato
+> **provato per davvero** — immagine pubblicata 1.0.1 → nuova immagine sullo stesso volume,
+> marker SQL pinnati (`'MIGRATION_MARKER'` → `["MIGRATION_MARKER"]`, `''` → NULL, array
+> intatto; `'12:00'` → `'14:00'` Europe/Rome). Vedi nota sotto la tabella Task.
 | Int.2 — usare `providers_used` in fx.py | raccomandato | **MAI FATTO** | `services/fx.py:990` e `:1098` ancora list comprehension inline | Task T1 |
 | Int.3 — esporre `is_chain` via API | raccomandato | **MAI FATTO** | `grep is_chain backend/app/schemas/fx.py backend/app/api/v1/fx.py` → 0 hit | Task T2 |
 | Int.4 — prefissi `_` listener | raccomandato | **FATTO** | vedi F3 | nessuna |
@@ -109,6 +114,19 @@ tutti e tre (più i due filtri MANUAL del frontend).
 | T2 | Esporre `is_chain` (o un `provider_code` già composto) nella risposta routes dell'API FX e rimuovere le 4 reimplementazioni frontend (:113, :670, :311, :675) — include la nuova duplicazione dell'etichetta `CHAIN:` | schemas/fx.py, api/v1/fx.py:718; frontend sopra | **M** |
 | T3 | *(dall'audit, ancora valido)* Verificare 002 su DB 1.0.1 popolato: scenario non coperto (i test creano da zero via `db:upgrade`, `_backend_db.py:106`) | 002 file:32-39 | **S** |
 | T4 | Decidere se rendere permanente l'ordinamento `__all__` (RUF022 a `db/__init__.py:29`, `db/base.py:32`) o ignorarlo esplicitamente; oggi la regola non è in config, quindi è solo debito latente | ruff esteso | **S** |
+
+> **Stato 03/09 (esecuzione P0/P1)**:
+> - **T3** ✅ (P1-16, WS-H): prova eseguita con **marker esatti** — container da immagine
+>   pubblicata `1.0.1` su volume popolato (17 asset, 11 utenti, 5 435 record, alembic
+>   `001_initial`) → riavvio su nuova immagine, stesso volume. Esito: `002` applicata
+>   (`identifier_other` scalare `'MIGRATION_MARKER'` → `["MIGRATION_MARKER"]` ✓, `''` →
+>   NULL ✓, array esistente invariato ✓) e `5b1333fa6b07` corretta (`'12:00'` UTC →
+>   `'14:00'` Europe/Rome, CEST di settembre ✓); boot pulito, dashboard 200. Prerequisito
+>   di release chiuso.
+> - **T4** ⚠️ **Parziale** (P1-17, 03/09): il giro «igiene minore» è marcato fatto nel 99,
+>   ma per RUF022 **nessuna modifica visibile** — né la regola in config né `noqa` sui due
+>   `__all__` (verificato il 03/09). Il debito latente resta tale: decisione non registrata
+>   nel codice.
 
 Non riesumare l'intervento "rimuovere i RUF100": era basato su un dato errato
 (PLC0415 abilitata da aprile); le `noqa` a `models.py:52,558` sono funzionali.

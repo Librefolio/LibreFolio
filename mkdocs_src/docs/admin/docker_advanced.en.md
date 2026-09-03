@@ -37,6 +37,26 @@ Host (build)                    Docker Image (runtime)
 └──────────────┘                └──────────────────────┘
 ```
 
+### 🌐 Build-Time Resource Cache (Fonts & JS)
+
+LibreFolio downloads a few external resources at build time and keeps a versioned local cache, so the shipped application works fully offline:
+
+- **Noto Color Emoji** font (from Google Fonts) → `frontend/static/fonts/noto-color-emoji/` — makes flag emojis render correctly on Windows.
+- **MathJax** (from a CDN) → `mkdocs_src/docs/javascripts/vendor/` — renders LaTeX formulas in the documentation.
+
+The cache is refreshed automatically by `./dev.py server`, `./dev.py front build`, and `./dev.py docker build`. You can also refresh it manually with `./dev.py cache js` (`--force` to re-download everything).
+
+!!! warning "A failed download fails the build — on purpose"
+
+    If a resource **cannot be downloaded and no cached copy exists yet**, the build stops instead of silently shipping a broken image (a past Docker image shipped for months with a 404 on the emoji font, so flags rendered as plain letters on Windows). Expect an error like:
+
+    ```text
+    ❌ Resource cache incomplete — the build would ship without these:
+       - noto-color-emoji: ...
+    ```
+
+    This means the **first build requires internet access** (or a pre-warmed cache). The failure is self-healing: once the network is back, just re-run the build and the cache fills in. The development server (`./dev.py server`) stays non-blocking instead — with a warm cache it works offline, otherwise it warns and falls back to the CDN.
+
 ## 📄 `docker-compose.yml`
 
 The `docker-compose.yml` file defines the service and persistent data directory.
@@ -170,10 +190,10 @@ All Docker operations are available through `dev.py`:
     If you are building the documentation and want complete screenshots in the gallery, run:
 
     ```bash
-    ./dev.py mkdocs --gallery
+    ./dev.py mkdocs gallery
     ```
 
-    This requires a fully installed environment (with `pipenv`) and a running server with populated test data. Be patient — gallery generation takes a few minutes.
+    This requires a fully installed environment (with `pipenv`) and Playwright browsers. The command starts its own test server and populates the test database automatically (use `--no-populate` to skip reseeding). Be patient — gallery generation takes a few minutes.
 
 ### 📡 `docker exec` — Running Commands Inside the Container
 
@@ -303,14 +323,31 @@ It is highly recommended to expose LibreFolio securely using **Tailscale** (reco
 
 ### 💾 3. Database Backup
 
-The database is stored in the `LibreFolio-data/` directory alongside `docker-compose.yml`. Back it up directly from the host filesystem:
+The database is stored in the `LibreFolio-data/` directory alongside `docker-compose.yml`. No `docker cp` needed — the data directory is a bind mount accessible from the host.
+
+!!! warning "Do not copy `app.db` from a running container"
+
+    LibreFolio runs SQLite in **WAL mode** (`PRAGMA journal_mode=WAL`): recent transactions live in the `app.db-wal` sidecar file, so a plain `cp` of `app.db` alone while the server is up can produce an inconsistent or stale backup. Use one of the two safe procedures below.
+
+**Option A — Stop the container, then copy** (simplest):
 
 ```bash
 #!/bin/bash
+docker compose stop librefolio
 cp ./LibreFolio-data/sqlite/app.db /path/to/backups/app.db-$(date +%F)
+docker compose start librefolio
 ```
 
-No `docker cp` needed — the data directory is a bind mount accessible from the host.
+**Option B — Online backup with the SQLite CLI** (no downtime, requires the `sqlite3` tool on the host):
+
+```bash
+#!/bin/bash
+sqlite3 ./LibreFolio-data/sqlite/app.db ".backup '/path/to/backups/app.db-$(date +%F)'"
+```
+
+SQLite's `.backup` command uses the online backup API, which is safe against a live WAL database.
+
+For the full list of what is worth backing up (uploaded files, original broker reports), see the [Filesystem Layout](filesystem.md) page.
 
 ### 🔑 4. Environment Variables
 

@@ -77,6 +77,14 @@ backend/app totale: 25 loop, 49 site → asset_source.py = 56 % loop, 71 % site
 
 ### C1 — il caso scolastico è intatto
 
+> ✅ **Risolto 02/09** (P0-5): preload unico `IN (...)` + conteggi aggregati `GROUP BY` +
+> lookup in memoria — 20 patch senza valuta → **1 SELECT**, 3 con valuta → **4** (pinnato
+> in test). Nella stessa tornata fixato anche il wedge FX quadratico scoperto nel collaudo
+> E1 (dedup O(1) + tetto 10). I due N+1 verbatim secondari (`portfolio_api.py:49`,
+> `api/v1/fx.py`) sono stati fixati il 03/09 (Lane B). Gli **altri** loop di questa
+> riproduzione (`bulk_upsert_prices`, `delete_events_bulk`, `bulk_assign_providers`, …)
+> restano da lavorare → Task 2 sotto.
+
 Il bulk patch (`patch_assets_bulk`, `asset_source.py:4169`) esegue ancora il
 `select(Asset).where(Asset.id == patch.asset_id)` dentro il ciclo (`:4191-4195`), seguito
 da altre 6 query per elemento (conteggi prezzi `:4252`, eventi manuali `:4255`, eventi
@@ -91,6 +99,11 @@ loop `:3769` (3 query + delete); vecchio `918` → `bulk_assign_providers` loop 
 
 ### C2 — invariato, e la raccomandazione a costo zero non è stata colta
 
+> ✅ **Risolto 03/09** (P1-15, Lane B): il commento `# Intentionally unwired: no
+> production caller invokes this function …` ora marca `fx.py:389`. Nella stessa corsa la
+> decisione `get_provider`/`list_plugin_classes` (report 04 T3): **entrambi rimossi**
+> dal registry, test esterni migrati a `get_provider_instance`.
+
 `ensure_rates_multi_source` (`fx.py:389`) resta codice per il futuro multi-base: nessun
 chiamante produzione, 10 call site di test. L'opzione 1 dell'audit ("una riga di commento
 `# Intentionally unwired`") non è stata applicata: la nota architetturale esiste
@@ -104,6 +117,10 @@ campo-per-campo mai cablato nel percorso di produzione. Il tipo di ritorno
 `list[FAMetadataChangeDetail]` continua a suggerire un'intenzione UI mai realizzata.
 
 ### C4 — invariato
+
+> ✅ **Deciso 03/09** (P1-4/P1-17): `get_asset_provider` è **tenuto** — riclassificato da
+> orfano ad API pubblica del manager (usata da 3 test). Nessuna rimozione né adozione
+> forzata nei chiamanti inline.
 
 `get_asset_provider` (`:1336`) resta duplicato degli accessi inline; i chiamanti di
 produzione continuano a non usarlo.
@@ -131,11 +148,29 @@ principale no.
 | 7 | **N-03-A**: valutare la convergenza dei tre helper "JSON-safe" (vedi sotto) | **S** |
 | 8 | **Dimensione**: `asset_source.py` a 5 162 righe — pianificare la scissione (provider management / prezzi / metadata / bulk ops) come intervento dedicato, più urgente di un mese fa | **L** |
 
+> **Stato 03/09 (esecuzione P0/P1)**:
+> - **T1** ✅ (P0-5, 02/09): N+1 del bulk patch eliminato (preload + `GROUP BY`; 20 patch
+>   senza valuta → 1 SELECT, pinnato in test).
+> - **T4** ✅ (P1-15, 03/09): commento `# Intentionally unwired` applicato a `fx.py:389`.
+> - **T7** ⚠️ **Parziale** (P1-17, 03/09): il giro «igiene minore» è chiuso nel 99, ma la
+>   **convergenza dei 3 helper JSON-safe non è stata applicata** — verificato sul codice:
+>   `_json_safe_details` (`asset_source.py:239`) e le due `_ensure_json_safe`
+>   (`schemas/signals.py:48`, `schemas/ai_export_runtime.py:37`) restano separate.
+>   Interpretazione: valutata e lasciata com'è; se non è così, il debito DRY è ancora aperto.
+> - T3 (C3, `AssetMetadataService`) resta **aperto**: decisione di prodotto P2-3.
+> - **T5** ✅ (P1-4/P1-17, 03/09): decisione presa — `get_asset_provider` **tenuto** (è API
+>   pubblica del manager, usata da 3 test; non più «da adottare o rimuovere»).
+
 ---
 
 ## Nuovi rilievi
 
 ### N-03-A — Terza variante di helper "JSON-safe" (🟢, DRY)
+
+> ⚠️ **Parziale 03/09** (P1-17): il giro d'igiene è marcato fatto nel 99, ma i tre helper
+> **restano non convergati** (verificato: `_json_safe_details` in `asset_source.py:239`,
+> `_ensure_json_safe` in `schemas/signals.py:48` e `schemas/ai_export_runtime.py:37`).
+> Nessuna modifica applicata a questo rilievo specifico.
 
 La tornata beta (resolver errori provider localizzati, working tree 02/09) ha introdotto
 `_json_safe_details` (`asset_source.py:239-255`), cablata correttamente nei tre probe

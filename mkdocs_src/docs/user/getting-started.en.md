@@ -50,62 +50,32 @@ In LibreFolio, the fastest way to get started is by importing your transaction h
 
 ### 📋 Steps
 
-1. **Upload Your Statement**: Navigate to the **[Transactions](transactions/index.md)** page from the sidebar menu. Click the **"Import"** button (:material-file-upload:) or **drag & drop** your broker statement file (CSV or PDF) directly onto the page.
+1. **Open the Import Wizard**: Navigate to the **[Transactions](transactions/index.md)** page from the sidebar menu and click the **"Import"** button (:material-file-upload:). You can also start from a broker's detail page — in that case the broker comes pre-selected.
+
+2. **Upload Your Statement**: Drop your broker's report file (`.csv`, `.xlsx` or `.xls`) into the wizard's first step — drag & drop works here — and assign it to a broker, creating the broker **on-the-fly** if it's new. This step is optional: reports uploaded in earlier sessions are already stored, and the next step lists them.
     <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-        <img class="gallery-img" data-category="brokers" data-name="import-wizard-step1" alt="Wizard Step 1: Upload" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+        <img class="gallery-img" data-category="brokers" data-name="import-wizard-step1" alt="Wizard Upload Step" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
     </div>
 
-2. **Parser Configuration**: The wizard will automatically detect the broker format. You can verify the settings (such as dates and delimiters) and configure fallback options if using a generic CSV report.
+3. **Select Files & Parse**: Pick exactly which stored reports to import. Each file gets its parser pre-selected from the broker's default import plugin (overridable per file — use **Generic CSV** for an unknown layout), then LibreFolio reads and validates every row. A consolidated summary shows what will actually be imported: transactions, distinct securities, validation issues, TODOs, warnings and likely duplicates.
     <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-        <img class="gallery-img" data-category="brokers" data-name="import-wizard-step2" alt="Wizard Step 2: Parser Configuration" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
-    </div>
-    
-    !!! tip "Reprocessing Existing Statements"
-    
-        You can also re-process any previously uploaded statement directly from the **[Files & Uploads](files/index.md#broker-reports)** page. This is particularly useful after an import plugin update or if you accidentally deleted some transactions and want to restore them.
-
-3. **Analysis & Parsing**: The system reads, validates, and parses the statement rows. You will see a progress bar indicating the parsing speed and status.
-    <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-        <img class="gallery-img" data-category="brokers" data-name="import-wizard-step3" alt="Wizard Step 3: Analysis" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+        <img class="gallery-img" data-category="brokers" data-name="import-wizard-step3" alt="Wizard Parse Step" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
     </div>
 
-4. **Broker & Asset Resolution**: If the report contains a broker account or assets (such as ETFs or stocks) that do not yet exist in your LibreFolio instance, the system flags them. You can search for existing ones or create them **on-the-fly** directly inside the wizard with pre-filled details. For more information, see the **[Import from Broker - Asset Mapping](transactions/import/index.md#asset-mapping)** guide.
+4. **Extra Steps, Only When Needed**: Depending on what your files contain, up to three more steps appear — **Unify assets** (the same security found under different names or codes), **Corrections** (rows the parser could not fully read), and **Duplicates** (the same movement present in two files imported together). A clean single-file report skips them all.
+
+5. **Review & Import**: Match each instrument to your asset library — or create it **on-the-fly** with details pre-filled from the statement — and check the per-row flags: duplicates (against your existing ledger, or exact copies pending in this import) arrive deselected, and rows dated before the broker's opening date are excluded automatically. For more information, see the **[Import from Broker - Asset Mapping](transactions/import/index.md#asset-mapping)** guide.
     <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-        <img class="gallery-img" data-category="brokers" data-name="import-wizard-step4-resolution" alt="Wizard Step 4: Resolution" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+        <img class="gallery-img" data-category="brokers" data-name="import-wizard-step4-resolution" alt="Wizard Review Step: Asset Resolution" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
     </div>
 
-5. **Duplicate Detection**: The wizard compares statement transactions against your existing ledger. It groups potential matches into two UI status badges based on 4 confidence levels:
-    <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-        <img class="gallery-img" data-category="brokers" data-name="import-wizard-duplicate" alt="Wizard Step 5: Duplicate Detection" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
-    </div>
-    
-    | UI Badge | Confidence Level | Criteria / Matching Rules |
-    | :--- | :--- | :--- |
-    | <span style="background-color: rgba(217, 119, 6, 0.15); color: #d97706; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 0.85em; white-space: nowrap;">⚠️ LIKELY</span> | `LIKELY_WITH_ASSET` | Basic fields and description match, and asset auto-resolved (highly confident duplicate). |
-    | <span style="background-color: rgba(217, 119, 6, 0.15); color: #d97706; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 0.85em; white-space: nowrap;">⚠️ LIKELY</span> | `LIKELY` | Basic fields and description match, but asset is not resolved. |
-    | <span style="background-color: rgba(37, 99, 235, 0.15); color: #2563eb; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 0.85em; white-space: nowrap;">ℹ️ POSSIBLE</span> | `POSSIBLE_WITH_ASSET` | Basic fields match, and asset is auto-resolved (but description differs or is empty). |
-    | <span style="background-color: rgba(37, 99, 235, 0.15); color: #2563eb; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 0.85em; white-space: nowrap;">ℹ️ POSSIBLE</span> | `POSSIBLE` | Basic fields (type, date, quantity, amount) match, but asset is not resolved. |
-    | <span style="background-color: rgba(16, 185, 129, 0.15); color: #10b981; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 0.85em; white-space: nowrap;">✅ UNIQUE</span> | — | The transaction has no matching records in the database and is classified as new (no duplicate detected). |
-    | <span style="background-color: rgba(239, 68, 68, 0.15); color: #ef4444; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 0.85em; white-space: nowrap;">❌ UNRESOLVED</span> | — | The broker or financial instrument was not matched to an existing entity in the database (requires resolution in Step 4 before importing). |
+6. **Save from the Bulk Editor**: Clicking **Import N transactions** hands the selected rows to the bulk editor as new rows — nothing is written yet. Give them one last look, then **Save All** to commit them to your portfolio.
 
-    For duplicate rules and configuration options, see the **[Import from Broker - Duplicate Detection](transactions/import/index.md#duplicate-detection)** section.
+!!! tip "No Need to Re-Upload"
 
-6. **Staging & Final Review**: Review the parsed transaction list. Once you verify everything is correct, click **Import** to save all transactions to your portfolio.
-    <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-        <img class="gallery-img" data-category="brokers" data-name="import-bulk-staging" alt="Wizard Step 6: Bulk Review" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
-    </div>
+    Reports you uploaded in earlier sessions are already listed in the wizard's **Select Files** step — just tick them again. You can also preview or delete stored reports from the **[Files & Uploads](files/index.md#broker-reports)** page.
 
-    The staging review table displays the following columns:
-
-    - **Date**: The execution date of the transaction.
-    - **Type**: The financial operation type (BUY, SELL, DIVIDEND, DEPOSIT, etc.).
-    - **Asset**: The matched asset from your library.
-    - **Quantity**: The number of units or shares traded.
-    - **Price**: The unit price of the asset.
-    - **Net Amount**: The total cash impact (positive or negative) on the account.
-    - **Fees/Taxes**: Broker commissions or transaction taxes included.
-
-    For advanced settings or validation errors in staging, refer to the **[Import from Broker](transactions/import/index.md)** page.
+For the full walkthrough see **[How to Import Transactions](transactions/import/how-to.md)**; for the supported brokers and file formats see **[Import from Broker](transactions/import/index.md)**.
 
 ---
 

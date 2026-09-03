@@ -538,8 +538,8 @@ __all__ = [
     "AssetPositionValuationSource",
     "AssetPositionsByBrokerPayload",
     "AssetPriceObservation",
-    "AssetProviderAssignmentInfo",
     "AssetProvenancePayload",
+    "AssetProviderAssignmentInfo",
     "AssetSectorWeight",
     "AssetValuationSourceSemantic",
 ]
