@@ -241,7 +241,7 @@ test.describe('Delete Validation Banner', () => {
         await goToTransactions(page);
     });
 
-    test('P4-validate: DeleteModal shows validate button and responds to click', async ({page}) => {
+    test('P4-validate: delete workspace shows validate button and responds to click', async ({page}) => {
         // Find a standalone (non-paired) row with a delete action available (via kebab menu)
         const rows = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]');
         const count = await rows.count();
@@ -268,21 +268,24 @@ test.describe('Delete Validation Banner', () => {
         }
         expect(targetRow, 'Deletable TX must exist — check populate_mock_data.py').toBeTruthy();
 
-        // Open delete modal via kebab menu
+        // T4: the dedicated DeleteModal is gone — the row's delete action opens
+        // the bulk workspace with the row pre-staged as a delete.
         await targetRow!.hover();
         const kebabBtn = targetRow!.getByTestId(/^row-actions-/);
         await kebabBtn.click();
         await page.getByTestId('context-menu-action-delete').click();
 
-        const modal = page.getByTestId('tx-delete-modal');
+        const modal = page.getByTestId('tx-bulk-modal');
         await expect(modal).toBeVisible({timeout: 5_000});
 
-        // Validate button should exist for non-blocked layouts
-        const validateBtn = modal.getByTestId('tx-delete-validate-now');
-        const hasValidateBtn = await validateBtn.isVisible({timeout: 2_000}).catch(() => false);
-        expect(hasValidateBtn, 'Validate button must be visible — check populate_mock_data.py').toBeTruthy();
+        // Validate button exists in the workspace footer
+        const validateBtn = modal.getByTestId('tx-bulk-validate-now');
+        await expect(validateBtn, 'Validate button must be visible — check populate_mock_data.py').toBeVisible({timeout: 3_000});
 
-        // Intercept the validate API call to confirm button triggers it
+        // Intercept the validate API call to confirm the button triggers it.
+        // A delete-only workspace does not auto-validate (the scheduler's
+        // `enabled` predicate skips delete-marked rows), so the only POST
+        // /validate that can follow the click is the click's own. Arm first.
         const validatePromise = page.waitForRequest((req) => req.url().includes('/validate') && req.method() === 'POST', {timeout: 5_000}).catch(() => null);
 
         await validateBtn.click();

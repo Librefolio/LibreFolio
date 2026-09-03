@@ -7,6 +7,7 @@
  * one-line wrappers that inject its `parseResults`, `brokers` and `assetResolutions`.
  */
 import {isFakeAssetId} from '$lib/utils/brim/isFakeAssetId';
+import {duplicateStatusAllowsAutoSelect} from './importDedup';
 import type {AssetResolution, MergedTx} from './importTypes';
 
 /** The minimum a parse result must expose to map a row back to its broker. */
@@ -52,4 +53,21 @@ export function isRowAssetResolved(t: MergedTx, assetResolutions: AssetResolutio
         return assetResolutions.find((r) => r.fakeAssetId === t.tx.asset_id)?.resolvedAssetId != null;
     }
     return true;
+}
+
+/**
+ * Whether the wizard's re-check pass may (re-)select a row for import (W7):
+ * not already selected, not before its broker's opening, its fake asset
+ * resolved, and its duplicate verdict allowing it.
+ *
+ * This single predicate is the whole gate `reselectImportableRows()` applies,
+ * and it runs from TWO triggers — `recheckOpenings` (broker-opening fixed) and
+ * `resolveAsset`/`clearResolution` (asset assigned) — because either fix alone
+ * may leave the other gate closed: a row that is before-opening AND unresolved
+ * stays deselected when the broker is fixed first, and only becomes importable
+ * when the asset lands. Extracted so that two-trigger contract is testable
+ * without mounting the wizard.
+ */
+export function shouldAutoSelectOnRecheck(t: MergedTx, parseResults: RowBrokerSource[], brokers: BrokerOpening[], assetResolutions: AssetResolution[]): boolean {
+    return !t.selected && !isBeforeOpening(t, parseResults, brokers) && isRowAssetResolved(t, assetResolutions) && duplicateStatusAllowsAutoSelect(t.duplicateStatus);
 }

@@ -131,6 +131,15 @@ def utils_ai_export_probe_helpers(verbose: bool = False, test_names: list = None
     return run_command(cmd, "AI Export probe helper tests", verbose=verbose)
 
 
+def utils_js_cache_fail_loud(verbose: bool = False, test_names: list = None) -> bool:
+    """Test update_js_cache fail-loud contract (I1)."""
+    print_section("Utils: JS Cache Fail-Loud")
+    print_info("Testing: scripts/update_js_cache.py")
+    print_info("Tests: hard failure (no cache) vs soft keep (cached), partial font subsets, exit codes")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_update_js_cache.py", test_names)
+    return run_command(cmd, "JS cache fail-loud tests", verbose=verbose)
+
+
 def utils_all(verbose: bool = False) -> bool:
     """Run all utility tests."""
     if _common.nothing_left_to_run("utils"):
@@ -185,5 +194,14 @@ Tests for utility modules and helper functions:
     add_test(cat, "roi-utils", utils_roi_utils, name="ROI Utils", desc="annualized_to_cumulative, calculate_mwrr/_series")
     add_test(cat, "translation-utils", utils_translation_utils, name="Translation Utils", desc="get_babel_locale + English fallback")
     add_test(cat, "ai-export-probe-helpers", utils_ai_export_probe_helpers, name="AI Export Probe Helpers", desc="Fast unit tests for probe orchestration, metrics, security, and audit helpers; never runs a real prompt probe")
+    add_test(
+        cat,
+        "js-cache-fail-loud",
+        utils_js_cache_fail_loud,
+        name="JS Cache Fail-Loud (I1)",
+        desc="update_js_cache: undownloadable+uncached resource or partial font subsets → hard failure → exit 1; cached copy → exit 0",
+        # tmp_path + monkeypatched network only: no DB, no server, no repo writes.
+        isolation="pure",
+    )
     add_test(cat, "all", utils_all, test_names=False, name="All Utils Tests", desc="Run all utility tests")
     registry["utils"] = cat

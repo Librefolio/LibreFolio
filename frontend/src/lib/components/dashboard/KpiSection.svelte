@@ -321,7 +321,9 @@
     <!-- Card 3 — Net Worth -->
     <div class="relative @container bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-5 flex flex-col gap-2 overflow-hidden" data-testid="kpi-net-worth">
         <div class="flex items-center justify-between">
-            <p class="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">{$_('dashboard.netWorth')}</p>
+            <Tooltip text={$_('dashboard.netWorthTooltip')} position="top">
+                <p class="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">{$_('dashboard.netWorth')}</p>
+            </Tooltip>
             <DocsLink path="user/dashboard/kpi-cards/#card-3-net-worth" label={$_('dashboard.netWorth')} size={14} />
         </div>
         {#if loading}

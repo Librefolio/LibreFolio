@@ -68,12 +68,21 @@
     // ("6.000000") — strip the noise on display while preserving any
     // user-typed precision once the field is dirty (we re-format only when
     // the *external* prop changes, not on every keystroke).
+    // T1-a: our own emission comes back formatted ("12," → emit "12." → prop
+    // "12."). If the buffer already normalizes to the same number, the change
+    // is ours — keep the user's raw text (separator, trailing zeros) intact.
     $effect(() => {
         const incomingAmountRaw = value?.amount ?? '';
         const incomingAmount = formatDecimalForDisplay(incomingAmountRaw);
         const incomingCode = value?.code ?? defaultCode;
         // untrack local state reads to avoid re-running on every keystroke
-        if (incomingAmount !== untrack(() => amountStr)) amountStr = incomingAmount;
+        const local = untrack(() => amountStr);
+        if (incomingAmount !== local) {
+            const localNum = Number(normalizeDecimalInput(local));
+            const incomingNum = Number(normalizeDecimalInput(incomingAmountRaw));
+            const sameNumber = local.trim() !== '' && incomingAmountRaw.trim() !== '' && Number.isFinite(localNum) && Number.isFinite(incomingNum) && localNum === incomingNum;
+            if (!sameNumber) amountStr = incomingAmount;
+        }
         if (incomingCode !== untrack(() => code)) code = incomingCode;
     });
 

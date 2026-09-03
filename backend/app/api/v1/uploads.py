@@ -11,6 +11,7 @@ Security:
 
 import asyncio
 import time
+from pathlib import Path
 from typing import Annotated, Optional
 
 import structlog
@@ -328,6 +329,32 @@ async def delete_file(
     )
 
 
+def _resize_image(file_path: Path, max_width: int, max_height: int) -> bytes | None:
+    """Sync Pillow resize (CPU+IO bound) — call via ``asyncio.to_thread``.
+
+    Returns the resized image bytes, or ``None`` when the source is already
+    smaller than requested (the caller then serves the file directly).
+    """
+    import io  # noqa: PLC0415 — local to keep the module import light
+
+    from PIL import Image  # noqa: PLC0415 — lazy import / avoid circular
+
+    img = Image.open(file_path)
+    orig_width, orig_height = img.size
+    ratio = min(max_width / orig_width, max_height / orig_height)
+    if ratio >= 1:
+        return None
+
+    new_width = int(orig_width * ratio)
+    new_height = int(orig_height * ratio)
+    img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+
+    output = io.BytesIO()
+    img_format = img.format or "PNG"
+    img.save(output, format=img_format, quality=85, optimize=True)
+    return output.getvalue()
+
+
 @router.get("/file/{file_id}")
 async def serve_file(
     file_id: str,
@@ -414,34 +441,19 @@ async def serve_file(
 
             return StreamingResponse(io.BytesIO(image_bytes), media_type=cached_mime, headers={"Cache-Control": "public, max-age=3600"})
 
-        # Generate resized image (synchronous - Pillow is fast for simple resizes)
+        # Generate resized image OFF the event loop (Pillow is sync CPU+IO —
+        # a big upload would otherwise stall every concurrent request).
         try:
-            import io  # noqa: PLC0415 — lazy import / avoid circular
+            image_bytes = await asyncio.to_thread(_resize_image, file_path, max_width, max_height)
 
-            from PIL import Image  # noqa: PLC0415 — avoid circular import
-
-            img = Image.open(file_path)
-
-            # Calculate resize dimensions (maintain aspect ratio, use most restrictive dimension)
-            orig_width, orig_height = img.size
-            ratio = min(max_width / orig_width, max_height / orig_height)
-
-            if ratio >= 1:
+            if image_bytes is None:
                 # Requested size >= original — serve file directly, no processing needed
                 return FileResponse(path=file_path, media_type=mime_type, headers={"Cache-Control": "public, max-age=3600"})
 
-            new_width = int(orig_width * ratio)
-            new_height = int(orig_height * ratio)
-            img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
-
-            # Save to bytes
-            output = io.BytesIO()
-            img_format = img.format or "PNG"
-            img.save(output, format=img_format, quality=85, optimize=True)
-            image_bytes = output.getvalue()
-
             # Store in cache
             preview_cache.put(file_id, size_key, image_bytes, mime_type)
+
+            import io  # noqa: PLC0415 — lazy import / avoid circular
 
             from fastapi.responses import StreamingResponse  # noqa: PLC0415 — lazy import / avoid circular
 

@@ -1127,7 +1127,8 @@
       "histogramScale": "Échelle Histogramme",
       "riskFreeAnnualRate": "Taux annuel sans risque",
       "comparisonAsset": "Actif de comparaison",
-      "window": "Fenêtre"
+      "window": "Fenêtre",
+      "fullHistory": "Historique complet"
     },
     "yAxisScale": "Échelle Axe Y",
     "yAxisScaleDesc": "Contrôle de la plage de l'axe primaire",
@@ -1430,7 +1431,8 @@
     "otherReconciliationResidual": "Autre / résidu de réconciliation",
     "annualizedReturn": "Annualisé",
     "annualizedReturnTooltip": "Rendement net annualisé (TCAC) de tous les lots encore ouverts de la position, de la première transaction à aujourd'hui — revenus moins frais inclus ; valorisé au coût en l'absence de prix. Pour comparer des positions détenues sur des durées différentes.",
-    "annualizedReturnPeriodTooltip": "Rendement net annualisé (TCAC) sur la fenêtre de détention de la position dans la période sélectionnée, pour comparer des périodes de durées différentes."
+    "annualizedReturnPeriodTooltip": "Rendement net annualisé (TCAC) sur la fenêtre de détention de la position dans la période sélectionnée, pour comparer des périodes de durées différentes.",
+    "netWorthTooltip": "Titres à valeur de marché + liquidités (+ valeur en transit). Inclut les liquidités — non comparable au seul contre-valeur titres d'un relevé bancaire."
   },
   "dataQuality": {
     "headerInfoOnly": "Note de qualité des données",
@@ -2051,7 +2053,8 @@
       "stateDel": "suppr.",
       "suggestLightbulb": "Afficher suggestion",
       "partnerInaccessible": "Partenaire sur courtier inaccessible",
-      "eventTooltipAmount": "Montant"
+      "eventTooltipAmount": "Montant",
+      "splitHint": "Pour supprimer un seul côté, utilisez d'abord Scinder pour dissocier la paire."
     },
     "commit": {
       "serverError": "Sauvegarde impossible — erreur serveur"
@@ -2118,7 +2121,6 @@
       "now": "Valider maintenant",
       "validating": "validation…",
       "ok": "valide",
-      "deleteOk": "suppression autorisée",
       "issuesHeader": "Des erreurs de validation ont été détectées",
       "balanceIssuesHeader": "Cette configuration génère des données incohérentes",
       "autoOff": "Auto-validation OFF ({n} lignes > {threshold}) — cliquez sur ⚡️Valider maintenant de soumettre",
@@ -2160,7 +2162,8 @@
       "wacFxUnavailable": "❌ Calcul CMP échoué.",
       "wacFxUnavailableSyncLink": "Synchroniser les taux FX",
       "wacFxUnavailableOrManual": "ou passez en mode manuel.",
-      "costBasisRequired": "❌ <b>{type}</b> avec quantité positive nécessite un coût de base. Utilisez le mode <b>Auto</b> (CMP) ou saisissez une valeur <b>manuelle</b>."
+      "costBasisRequired": "❌ <b>{type}</b> avec quantité positive nécessite un coût de base. Utilisez le mode <b>Auto</b> (CMP) ou saisissez une valeur <b>manuelle</b>.",
+      "pairDeleteIncomplete": "Transaction liée : supprimer cette ligne exige aussi la suppression de sa contrepartie (transaction n°{partnerId}). Si elle appartient à un broker que vous ne pouvez pas modifier, demandez à son propriétaire de la supprimer."
     },
     "pydantic": {
       "greaterThan": "La valeur doit être supérieure à {gt}",
@@ -2195,25 +2198,6 @@
       "assetRequired": "Veuillez sélectionner un actif",
       "quantityInvalid": "La quantité doit être un nombre valide",
       "cashRequired": "Le montant et la devise sont obligatoires"
-    },
-    "deleteModal": {
-      "titleStandalone": "Supprimer la transaction",
-      "titleLinked": "Supprimer la transaction liée",
-      "pairedIntro": "Les deux transactions de cette paire seront supprimées.",
-      "splitHint": "Pour supprimer un seul côté, utilisez d'abord Scinder pour dissocier la paire.",
-      "linkedInfo": "Cette transaction fait partie d'une paire liée.",
-      "notAccessible": "non accessible",
-      "blockedMessage": "Suppression impossible : accès Éditeur requis sur les deux courtiers pour supprimer une paire liée.",
-      "contactOwner": "Contactez le propriétaire de",
-      "forAccess": "pour l'accès.",
-      "deleteBoth": "Supprimer les deux",
-      "toastDeletedStandalone": "Transaction supprimée :",
-      "toastDeletedPaired": "Paire supprimée :",
-      "toastOnBroker": "chez",
-      "deleteAbortedTitle": "Suppression annulée",
-      "deleteAbortedDetail": "L'opération a été annulée car elle violerait les règles de solde :",
-      "failed": "Échec de la suppression",
-      "validateFailed": "Échec de la validation"
     },
     "picker": {
       "title": "Sélectionner des transactions à ajouter",
@@ -2359,7 +2343,8 @@
       "dPeriod": "Période de lissage appliquée à %K pour produire %D. Elle modifie uniquement %D.",
       "riskWindow": "Nombre d’observations préparées des rendements quotidiens dans chaque fenêtre glissante.",
       "riskFreeAnnualRate": "Taux annuel effectif sans risque utilisé uniquement pour calculer le Sharpe.",
-      "comparisonAsset": "Actif enregistré utilisé comme série de comparaison réelle pour le bêta."
+      "comparisonAsset": "Actif enregistré utilisé comme série de comparaison réelle pour le bêta.",
+      "riskFullHistory": "Mesure le drawdown par rapport au pic le plus haut de tout l'historique disponible, pas seulement la fenêtre visible. Désactivez pour une vue plus rapide relative à la fenêtre."
     },
     "units": {
       "days": "jours"
@@ -3111,5 +3096,16 @@
     "copied": "Copié !",
     "askAdminTitle": "Mise à jour disponible — contactez un administrateur",
     "emailCopied": "Email copiée dans le presse-papiers"
+  },
+  "providerErrors": {
+    "NO_DATA": "Aucune donnée disponible pour cet instrument chez le fournisseur.",
+    "NO_DATA_STALE": "La VL publiée est datée du {nav_date}, pas d'aujourd'hui — l'afficher comme actuelle fausserait le portefeuille.",
+    "NOT_FOUND": "Instrument introuvable chez le fournisseur.",
+    "FETCH_ERROR": "Le fournisseur est injoignable ou a renvoyé une erreur.",
+    "NOT_IMPLEMENTED": "Ce fournisseur ne prend pas en charge l'opération.",
+    "TIMEOUT": "Le fournisseur n'a pas répondu à temps.",
+    "MISSING_PARAMS": "La configuration du fournisseur ne contient pas les paramètres requis.",
+    "PARSE_ERROR": "La réponse du fournisseur n'a pas pu être analysée.",
+    "SCRAPE_ERROR": "La page du fournisseur n'a pas pu être lue."
   }
 }

@@ -56,6 +56,9 @@
         signalBackendError?: string | null;
         /** Retry backend catalog/result loading. */
         onretrySignalBackend?: () => void;
+        /** True while a backend signal request is in flight (forwarded to the
+         *  signals section — suppresses the transient red state on the cards). */
+        signalsLoading?: boolean;
         /** Pair-specific data for preview chart (used in pair mode). If omitted, uses synthetic demo data. */
         pairData?: LineDataPoint[];
         /** Map of pair slug → data points for resolving FxPairSignal data in preview */
@@ -79,6 +82,7 @@
         backendPreviewSignalResolver,
         backendPreviewLiveResolver,
         signalBackendError = null,
+        signalsLoading = false,
         onretrySignalBackend,
         pairData,
         pairsDataMap = {},
@@ -384,7 +388,7 @@
             </div>
 
             <!-- Signals Section (extracted component) -->
-            <ChartSignalsSection {availablePairs} {availableAssets} definitions={signalDefinitions} backendError={signalBackendError} onretrybackend={onretrySignalBackend} bind:signals />
+            <ChartSignalsSection {availablePairs} {availableAssets} definitions={signalDefinitions} backendError={signalBackendError} onretrybackend={onretrySignalBackend} {signalsLoading} bind:signals />
         </div>
 
         <!-- Footer -->

@@ -5,7 +5,8 @@
   - 'create'   → blank form, POST /transactions/commit with 1 item in creates
   - 'edit'     → pre-filled from items[0] (id immutable, type/broker locked),
                  POST /transactions/commit with 1 TXUpdateItem in updates
-  - 'duplicate'→ pre-filled, id stripped, link_uuid regenerated, date=today,
+  - 'duplicate'→ pre-filled (date preserved — it is the point of the
+                 correction workflow), id stripped, link_uuid regenerated,
                  commits as 'create'
   - 'view'     → readonly display (Save button hidden)
 
@@ -261,7 +262,10 @@
             asset_id: null,
             type: 'BUY',
             date: todayIso(),
-            quantity: '0',
+            // Empty on purpose (T1-b): a pre-filled "0" forces the user to
+            // cursor around it just to type decimals. Validation already
+            // rejects empty/zero until a real quantity is typed.
+            quantity: '',
             cash: null,
             tags: [],
             description: '',
@@ -275,7 +279,7 @@
         return {broker_id: 0, cash: null, date: todayIso()};
     }
 
-    function fromTx(tx: TXReadItem, opts: {regenerateLink?: boolean; resetDate?: boolean} = {}): FormDraft {
+    function fromTx(tx: TXReadItem, opts: {regenerateLink?: boolean} = {}): FormDraft {
         const txRule = getTypeRule(tx.type);
         // Auto-sign: show positive values for auto-negated types
         // Also normalize paired types (transfer_asset, transfer_cash) — the dual
@@ -292,7 +296,10 @@
             broker_id: tx.broker_id,
             asset_id: tx.asset_id ?? null,
             type: tx.type as TransactionTypeCode,
-            date: opts.resetDate ? todayIso() : tx.date,
+            // T3: the date is always preserved — duplicating is how users fix a
+            // misclassified historical row, and resetting to today destroyed
+            // exactly the field they needed to keep.
+            date: tx.date,
             quantity: qty,
             cash,
             tags: [...(tx.tags ?? [])],
@@ -383,7 +390,7 @@
                 // C1-fix: when items[0] is present (e.g. editing a 'new' draft
                 // from BulkModal), populate from it instead of starting blank.
                 if (row) {
-                    draft = fromTx(row, {resetDate: false});
+                    draft = fromTx(row);
                     // Injected partner for paired drafts
                     if (injected) {
                         partnerRow = injected;
@@ -419,7 +426,7 @@
                     costBasisMode = 'auto';
                 }
             } else if (m === 'duplicate' && row) {
-                draft = fromTx(row, {regenerateLink: row.related_transaction_id != null, resetDate: true});
+                draft = fromTx(row, {regenerateLink: row.related_transaction_id != null});
                 costBasisMode = draft.cost_basis_override ? 'manual' : 'auto';
             } else if ((m === 'edit' || m === 'view') && row) {
                 draft = fromTx(row);
@@ -1531,6 +1538,7 @@
                                 autocomplete="off"
                                 spellcheck="false"
                                 name="qty-{autocompleteNonce}"
+                                placeholder="0"
                                 class="qty-input w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg text-right font-mono tabular-nums disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-libre-green/30"
                                 style:border-color={qtyBorderColor || undefined}
                                 value={qtyDisplay}
@@ -1807,6 +1815,7 @@
                                     autocomplete="off"
                                     spellcheck="false"
                                     name="qty-{autocompleteNonce}"
+                                    placeholder="0"
                                     class="qty-input w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg text-right font-mono tabular-nums disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-libre-green/30"
                                     style:border-color={qtyBorderColor || undefined}
                                     value={qtyDisplay}
@@ -1851,6 +1860,7 @@
                                     autocomplete="off"
                                     spellcheck="false"
                                     name="qty-{autocompleteNonce}"
+                                    placeholder="0"
                                     class="qty-input w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg text-right font-mono tabular-nums disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-libre-green/30"
                                     style:border-color={qtyBorderColor || undefined}
                                     value={qtyDisplay}

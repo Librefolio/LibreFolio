@@ -38,6 +38,10 @@ from backend.app.services.risk.metrics import (
     sample_variance,
     underwater_drawdown,
 )
+from backend.app.services.signal_plugins.drawdown import (
+    DrawdownParams,
+    DrawdownPlugin,
+)
 from backend.app.services.signal_service import (
     SignalPreparedSeriesBundle,
     SignalService,
@@ -311,3 +315,91 @@ async def test_missing_comparison_bundle_reports_domain_unavailability():
 
     assert result.status == SignalStatus.UNAVAILABLE
     assert result.availability.reason_code == SignalAvailabilityReason.MISSING_COMPARISON_SERIES
+
+
+# =============================================================================
+# E1 — drawdown full_history: the running peak outlives the visible window
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_drawdown_measures_visible_range_against_pre_window_peak():
+    """THE E1 discriminating test.
+
+    The series' ABSOLUTE peak (200) sits at dates[0], BEFORE the requested
+    visible range (dates[3..6], see _context). With the full-history contract
+    the visible drawdown is measured against that historical peak — the first
+    visible point is -45%, not 0%. A window-relative implementation (peak =
+    max of the visible points = 120) would read -8.3% there instead, so the
+    exact values below discriminate the two.
+    """
+    dates = _dates(7)
+    prices = [200.0, 150.0, 100.0, 110.0, 105.0, 120.0, 115.0]
+    primary = _prepared_series(1, dates, prices)
+    bundle = SignalPreparedSeriesBundle(
+        primary_asset_id=1,
+        series_sets={None: _prepared_set(primary)},
+    )
+
+    result = (
+        await SignalService().compute(
+            [SignalRequest(instance_id="drawdown", signal_code="RISK_DRAWDOWN")],
+            _price_points(dates, prices),
+            _context(dates),
+            prepared_series_bundle=bundle,
+        )
+    )[0]
+
+    assert result.status == SignalStatus.OK
+    points = result.series[0].points
+    # Sliced to the visible range: dates[3..6], four points.
+    assert [point.date for point in points] == dates[3:]
+    # Each visible point measured against the 200 peak: 110/200-1, 105/200-1,
+    # 120/200-1, 115/200-1 — never reset to the window's own maximum.
+    assert [point.value for point in points] == pytest.approx([-45.0, -47.5, -40.0, -42.5])
+
+
+def test_drawdown_full_history_default_and_opt_out():
+    """DrawdownParams defaults to full_history=True; opting out keeps the
+    points-based warm-up (no full-history flag on the requirement/plan)."""
+    context = _context(_dates(7))
+
+    default_requirement = DrawdownPlugin.warmup_requirement(DrawdownParams(), context)
+    assert DrawdownParams().full_history is True
+    assert default_requirement.full_history is True
+    assert default_requirement.total_points == 2
+
+    opted_out = DrawdownPlugin.warmup_requirement(DrawdownParams(full_history=False), context)
+    assert opted_out.full_history is False
+
+    # Plan level: the opt-out means the fetch path stays on points-derived days.
+    service = SignalService()
+    plan_full = service.prepare_plan([SignalRequest(instance_id="dd", signal_code="RISK_DRAWDOWN")], context)
+    assert plan_full.requires_full_history is True
+    plan_windowed = service.prepare_plan(
+        [SignalRequest(instance_id="dd", signal_code="RISK_DRAWDOWN", params={"full_history": False})],
+        context,
+    )
+    assert plan_windowed.requires_full_history is False
+
+
+def test_prepare_plan_marks_full_history_when_any_computation_declares_it():
+    """A drawdown request in a mixed batch flips the plan-level flag; the fetch
+    path (asset_source.get_prices_bulk) reads exactly this flag to decide
+    between full-history load and points-derived warm-up days."""
+    context = _context(_dates(7))
+    plan = SignalService().prepare_plan(
+        [
+            SignalRequest(instance_id="drawdown", signal_code="RISK_DRAWDOWN"),
+            SignalRequest(instance_id="return", signal_code="RISK_ROLLING_RETURN", params={"window": 2}),
+        ],
+        context,
+    )
+    assert plan.requires_full_history is True
+
+    # Same batch without the drawdown → no full-history requirement.
+    plan_without = SignalService().prepare_plan(
+        [SignalRequest(instance_id="return", signal_code="RISK_ROLLING_RETURN", params={"window": 2})],
+        context,
+    )
+    assert plan_without.requires_full_history is False

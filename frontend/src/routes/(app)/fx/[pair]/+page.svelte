@@ -173,6 +173,7 @@
     let signalInstanceResults = $state<SignalInstanceResult[]>([]);
     let signalCatalogFailed = $state(false);
     let signalRequestFailed = $state(false);
+    let signalsLoading = $state(false);
     const signalResultState = new SignalResultState();
     let signalBackendError = $derived(signalCatalogFailed ? $t('chartSettings.signalCatalogUnavailable') : signalRequestFailed ? $t('chartSettings.signalResultsUnavailable') : null);
 
@@ -603,6 +604,7 @@
 
         loading = !hasCachedRange;
         signalRequestFailed = false;
+        signalsLoading = true;
         try {
             const response = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post([
                 {
@@ -648,6 +650,7 @@
             }
         } finally {
             loading = false;
+            signalsLoading = false;
         }
     }
 
@@ -1034,6 +1037,7 @@
                     signals={[...signals]}
                     definitions={signalDefinitions}
                     backendError={signalBackendError}
+                    {signalsLoading}
                     onretrybackend={retryBackendSignals}
                     availablePairs={allConfiguredSlugs}
                     availableAssets={allAssets}

@@ -13,6 +13,7 @@ import asyncio
 import json
 import sys
 import time
+import uuid
 from datetime import date, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
@@ -51,7 +52,7 @@ from backend.app.db.models import (
 )
 from backend.app.db.session import get_async_engine
 from backend.app.schemas import FAGeographicArea, FASectorArea, SignalVolumeKind
-from backend.app.schemas.assets import FAAssetCreateItem, FAClassificationParams
+from backend.app.schemas.assets import FAAssetCreateItem, FAAssetPatchItem, FAClassificationParams
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.prices import AssetBackwardFillInfo, FAAssetDelete, FAPricePoint, FAPriceQueryItem, FAUpsert
 from backend.app.schemas.provider import FAProviderAssignmentItem, FAProviderConfigBase, FAVolumeKind, ProbeOperation
@@ -2136,3 +2137,251 @@ class TestDeriveSignalSourceCapability:
         points = [_capable_point(1, "yfinance"), _capable_point(2, "MANUAL")]
         capability = AssetSourceManager.derive_signal_source_capability(points)
         assert capability.supports_meaningful_volume is False
+
+
+# ============================================================================
+# P0-5 (audit 08) — patch_assets_bulk: no N+1
+# ============================================================================
+
+
+class _QueryCounter:
+    """Counts statements issued while attached to the engine.
+
+    Attached immediately before the call under test and detached right after,
+    so the numbers describe *that* call, not ambient test traffic. Only SELECTs
+    are counted: one UPDATE per actually-changed row is the work itself, not
+    amplification — the N+1 being guarded against was SELECT-per-item.
+    """
+
+    def __init__(self):
+        self.selects = 0
+        self.statements: list[str] = []
+
+    def __call__(self, conn, cursor, statement, parameters, context, executemany):
+        self.statements.append(statement)
+        if statement.lstrip().upper().startswith("SELECT"):
+            self.selects += 1
+
+
+async def _p05_make_assets(count: int, tag: str) -> tuple[list[int], str]:
+    """Create `count` owned assets, returning (ids, uid).
+
+    The uid is uuid-based, never time-only: workers start in bursts and share
+    the clock, and `assets.display_name` carries a UNIQUE index — a
+    millisecond collision here previously failed a *later* patch at flush time.
+    """
+    uid = uuid.uuid4().hex[:8]
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        assets = [
+            Asset(
+                display_name=f"P05-{tag}-{uid}-{i}",
+                currency="EUR",
+                asset_type=AssetType.STOCK,
+                active=True,
+            )
+            for i in range(count)
+        ]
+        session.add_all(assets)
+        await session.commit()
+        for asset in assets:
+            await session.refresh(asset)
+        return [a.id for a in assets], uid
+
+
+async def _p05_patch_counting(patches: list[FAAssetPatchItem]) -> tuple[object, _QueryCounter]:
+    """Run patch_assets_bulk with a SELECT counter attached to the engine."""
+    from sqlalchemy import event  # noqa: PLC0415 — test-local, keeps the module import surface stable
+
+    engine = get_async_engine()
+    counter = _QueryCounter()
+    event.listen(engine.sync_engine, "before_cursor_execute", counter)
+    try:
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            response = await AssetCRUDService.patch_assets_bulk(patches, session)
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", counter)
+    return response, counter
+
+
+@pytest.mark.asyncio
+async def test_p05_patch_without_currency_change_issues_one_select_total():
+    """20 patched assets, no currency change → ONE SELECT (the bulk preload).
+
+    Before P0-5 this was one `Asset.get` per patch (20 SELECTs here); any
+    regression to per-item lookups makes this number climb linearly. The 20
+    UPDATEs (one per real rename) are the work itself and are deliberately not
+    counted — see _QueryCounter.
+    """
+    asset_ids, uid = await _p05_make_assets(20, "plain")
+    # The rename targets must be unique too: display_name is uniquely indexed,
+    # so reusing constant names would collide with the leftovers of any prior run.
+    patches = [FAAssetPatchItem(asset_id=asset_id, display_name=f"P05-renamed-{uid}-{idx}") for idx, asset_id in enumerate(asset_ids)]
+
+    response, counter = await _p05_patch_counting(patches)
+
+    assert response.success_count == 20
+    assert counter.selects == 1, f"expected the single bulk preload SELECT, got {counter.selects} SELECTs:\n" + "\n".join(counter.statements)
+
+
+@pytest.mark.asyncio
+async def test_p05_currency_change_guard_queries_stay_constant():
+    """3 currency-changing patches → 1 preload + 3 guard aggregates, constant in k.
+
+    The currency-change guard (Policy D) needs four datasets (prices, manual
+    events, provider events, linked tx). Before P0-5 each changing asset paid
+    up to 6 SELECTs of its own (3 → 1+18=19); now the aggregates are GROUP BY
+    batches shared by the whole request, so k=3 costs exactly 4 SELECTs.
+    """
+    asset_ids, _uid = await _p05_make_assets(3, "ccy")
+    patches = [FAAssetPatchItem(asset_id=asset_id, currency="USD") for asset_id in asset_ids]
+
+    response, counter = await _p05_patch_counting(patches)
+
+    # No market data on these assets → the guard does not block, patches apply.
+    assert response.success_count == 3
+    assert counter.selects == 4, f"expected 1 preload + 3 aggregate SELECTs, got {counter.selects}:\n" + "\n".join(counter.statements)
+
+
+@pytest.mark.asyncio
+async def test_p05_batched_guard_attributes_counts_to_the_right_asset():
+    """The batched aggregates must not cross-attribute counts between assets.
+
+    New risk introduced by the P0-5 batching itself: the per-asset numbers in
+    the block token now come from dicts keyed by asset_id filled by GROUP BY —
+    a keying mistake would show asset A's data in asset B's token. Two blocked
+    assets with *different* market-data footprints make the attribution
+    observable.
+    """
+    (asset_a, asset_b), tag = await _p05_make_assets(2, "attr")
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        # Asset A: 3 price rows across two days + 1 manual event.
+        session.add_all(
+            [
+                PriceHistory(asset_id=asset_a, date=date(2025, 1, 6), close=Decimal("100"), currency="EUR", source_plugin_key="p05"),
+                PriceHistory(asset_id=asset_a, date=date(2025, 1, 7), close=Decimal("101"), currency="EUR", source_plugin_key="p05"),
+                PriceHistory(asset_id=asset_a, date=date(2025, 1, 8), close=Decimal("102"), currency="EUR", source_plugin_key="p05"),
+                AssetEvent(asset_id=asset_a, date=date(2025, 1, 7), type=AssetEventType.DIVIDEND, value=Decimal("1.5"), currency="EUR", provider_assignment_id=None, notes=f"p05-{tag}"),
+            ]
+        )
+        # Asset B: a single price row, no events.
+        session.add(PriceHistory(asset_id=asset_b, date=date(2025, 2, 10), close=Decimal("55"), currency="EUR", source_plugin_key="p05"))
+        await session.commit()
+
+    response, _counter = await _p05_patch_counting(
+        [
+            FAAssetPatchItem(asset_id=asset_a, currency="USD"),
+            FAAssetPatchItem(asset_id=asset_b, currency="USD"),
+        ]
+    )
+
+    assert response.success_count == 0, "both assets own market data — both must be blocked"
+    tokens = {r.asset_id: r.message for r in response.results}
+    assert tokens[asset_a].startswith("CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA|"), tokens[asset_a]
+    assert tokens[asset_b].startswith("CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA|"), tokens[asset_b]
+
+    fields_a = dict(part.split("=", 1) for part in tokens[asset_a].split("|")[1:])
+    fields_b = dict(part.split("=", 1) for part in tokens[asset_b].split("|")[1:])
+
+    # Each token carries ITS OWN asset's footprint.
+    assert fields_a["prices"] == "3", tokens[asset_a]
+    assert fields_a["events_manual"] == "1", tokens[asset_a]
+    assert fields_a["events_provider"] == "0", tokens[asset_a]
+    assert fields_a["linked_tx"] == "0", tokens[asset_a]
+    assert fields_a["oldest"] == "2025-01-06" and fields_a["newest"] == "2025-01-08", tokens[asset_a]
+    assert fields_a["from"] == "EUR" and fields_a["to"] == "USD", tokens[asset_a]
+
+    assert fields_b["prices"] == "1", tokens[asset_b]
+    assert fields_b["events_manual"] == "0", tokens[asset_b]
+    assert fields_b["oldest"] == "2025-02-10" and fields_b["newest"] == "2025-02-10", tokens[asset_b]
+
+
+# ============================================================================
+# E1 regression (2026-09-02 live wedge) — FX conversion error dedup
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_fx_conversion_errors_dedup_once_per_job_capped_and_fast():
+    """Full-history FX-missing series must not wedge the request.
+
+    Root cause of the 2026-09-02 live wedge ("technical signals update failed"
+    banner, 100% CPU in the async handler): the conversion-error dedup ran
+    `err not in result.errors` PER POINT inside the loop — quadratic in the
+    number of failures — and a full-history (E1) asset on an FX-uncovered range
+    produces one *distinct* error per date, tens of thousands of them.
+
+    Fixed by deduping ONCE per job outside the loop (set membership) and
+    capping the payload at 10 errors + a summary row — the frontend only ever
+    surfaces `errors[0]`.
+
+    This test drives ~1500 uncovered points through get_prices_bulk and pins:
+      - the wall clock stays sane (generous 10s bound; the real contract is
+        "not quadratic", a wall-clock assert is only a coarse backstop);
+      - `result.errors` holds at most 10 conversion errors + 1 summary row;
+      - `errors[0]` is the first failure's message, intact;
+      - the summary row counts the suppressed remainder.
+
+    Coverage assumption: the series lives in year 2000, and FX rate lookup is
+    *backward*-fill (a rate covers only dates at/after its own). Mock seeding
+    starts ~3y back and runtime sync writes today's rates, so no realistic
+    neighbour can cover year 2000 for EUR/USD mid-test.
+    """
+    n_days = 1500
+    first_day = date(2000, 1, 3)
+
+    # Asset + 1500 consecutive daily price rows in USD (no FX coverage to EUR).
+    uid = uuid.uuid4().hex[:8]
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        asset = Asset(display_name=f"P0E1-wedge-{uid}", currency="USD", asset_type=AssetType.STOCK, active=True)
+        session.add(asset)
+        await session.commit()
+        await session.refresh(asset)
+        asset_id = asset.id
+        session.add_all(
+            PriceHistory(
+                asset_id=asset_id,
+                date=first_day + timedelta(days=i),
+                close=Decimal("100") + Decimal(i) / Decimal("100"),
+                currency="USD",
+                source_plugin_key="p0e1",
+            )
+            for i in range(n_days)
+        )
+        await session.commit()
+
+    last_day = first_day + timedelta(days=n_days - 1)
+    request = FAPriceQueryItem(
+        asset_id=asset_id,
+        date_range=DateRangeModel(start=first_day, end=last_day),
+        target_currency="EUR",
+    )
+
+    started = time.perf_counter()
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        results = await AssetSourceManager.get_prices_bulk([request], session)
+    elapsed = time.perf_counter() - started
+
+    try:
+        assert len(results) == 1
+        result = results[0]
+        assert len(result.prices) == n_days
+
+        assert elapsed < 10.0, f"get_prices_bulk took {elapsed:.1f}s for {n_days} uncovered points — the quadratic per-point dedup is back"
+
+        conv_errors = [e for e in result.errors if "FX rate" in e or "more FX conversion failures" in e]
+        assert len(conv_errors) == len(result.errors), f"unexpected non-conversion errors: {result.errors[:3]}"
+        assert len(conv_errors) == 11, f"expected 10 kept + 1 summary, got {len(conv_errors)}"
+
+        # errors[0] is the first failure, intact (the FE surfaces exactly this one).
+        assert conv_errors[0] == (f"Conversion 0: No FX rate found for EUR/USD on or before {first_day.isoformat()}. " "Please sync rates using POST /api/v1/fx/currencies/sync"), conv_errors[0]
+        # No duplicates survived the dedup.
+        assert len(set(conv_errors[:10])) == 10
+        # The summary row carries the suppressed remainder.
+        assert conv_errors[-1] == f"… and {n_days - 10} more FX conversion failures", conv_errors[-1]
+    finally:
+        # Restore what this test wrote (1500 rows + the asset).
+        async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+            await session.execute(delete(PriceHistory).where(PriceHistory.asset_id == asset_id))
+            await session.execute(delete(Asset).where(Asset.id == asset_id))
+            await session.commit()

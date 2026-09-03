@@ -1,12 +1,24 @@
 /**
  * Transaction Delete E2E Tests — Phase 07 · Part 4 · Round 6 · Plan B23
  *
- * Coverage vs Test Walk (plan-phase07-transaction-Part4_Round6_PlanB_TestWalkPhase2):
+ * T4 (2026-09): the dedicated TransactionDeleteModal no longer exists. A
+ * single-row delete now routes through the bulk workspace
+ * (`bulkIntent = {action: 'delete', txIds: [row.id]}`), which:
+ *   - pre-marks the staged row(s) for deletion (`tr.row-deleted`),
+ *   - auto-includes a linked partner when it is in the store
+ *     (resolveInitialRows) and collapses the pair into one row,
+ *   - shows the split hint (`tx-bulk-split-hint`) when a paired delete is
+ *     staged,
+ *   - surfaces a refused commit inline (`tx-bulk-error` + `tx-bulk-issues`),
+ *     including the backend linked-pair guard `pairDeleteIncomplete`
+ *     (localized via `transactions.errors.pairDeleteIncomplete`).
  *
- * Part A — TransactionDeleteModal:
- *   A1 (Layout A standalone)      → deleteStandalone*
- *   A2 (Layout B paired full)     → deletePaired*
- *   A3 (Layout B from receiver)   → (covered by A2 — modal always orders giver/receiver correctly)
+ * Coverage vs Test Walk (plan-phase07-transaction-Part4_Round6_PlanB_TestWalkPhase2),
+ * re-mapped onto the bulk workspace:
+ *
+ * Part A — single-row delete through the bulk workspace:
+ *   A1 (standalone open/cancel)   → deleteStandalone*
+ *   A2 (paired, collapsed + hint) → deletePaired*
  *   A4 (Layout C viewer blocked)  → deleteGuardViewer
  *   A5 (Layout C hidden blocked)  → deleteGuardHidden
  *   A6 (Bulk delete)              → bulkDelete*
@@ -36,6 +48,7 @@ import {TEST_USER} from '../fixtures/test-users';
 import {waitForSettled} from '../fixtures/app-events';
 import {appears} from '../fixtures/probe';
 import {maximisePageSize} from '../fixtures/paging';
+import {uniqueSuffix} from '../fixtures/unique';
 
 test.setTimeout(25_000);
 
@@ -73,6 +86,50 @@ async function clickDeleteOnRow(row: Locator) {
     await page.getByTestId('context-menu-action-delete').click();
 }
 
+/**
+ * T4: a single-row delete opens the bulk workspace (`tx-bulk-modal`) with the
+ * row already staged as a delete. Returns the modal, settled (the workspace
+ * validates on open; sampling it mid-validation is a race).
+ */
+async function openDeleteWorkspace(row: Locator): Promise<Locator> {
+    const page = row.page();
+    await clickDeleteOnRow(row);
+    const modal = page.getByTestId('tx-bulk-modal');
+    await expect(modal).toBeVisible({timeout: 5_000});
+    await waitForSettled(modal.getByTestId('tx-bulk-modal-root'));
+    return modal;
+}
+
+/** The rows staged in the open bulk workspace. */
+function bulkRows(page: Page): Locator {
+    return page.locator('[data-testid="tx-bulk-body"] tr[data-row-id]');
+}
+
+/** The staged rows that are marked for deletion. */
+function bulkDeletedRows(page: Page): Locator {
+    return page.locator('[data-testid="tx-bulk-body"] tr.row-deleted');
+}
+
+/**
+ * Commit the open bulk workspace and return the wire payload + committed flag.
+ * The commit endpoint (POST /transactions/commit) is the only write channel —
+ * there is no DELETE call to intercept anymore (T4).
+ */
+async function commitDeleteWorkspace(page: Page): Promise<{payload: {deletes?: number[]}; committed: boolean}> {
+    const commitBtn = page.getByTestId('tx-bulk-commit');
+    await expect(commitBtn).toBeEnabled({timeout: 8_000});
+
+    const requestPromise = page.waitForRequest((req) => req.url().includes('/transactions/commit') && req.method() === 'POST', {timeout: 15_000});
+    const responsePromise = page.waitForResponse((resp) => resp.url().includes('/transactions/commit') && resp.request().method() === 'POST', {timeout: 15_000});
+
+    await commitBtn.click();
+
+    const request = await requestPromise;
+    const payload = request.postDataJSON() as {deletes?: number[]};
+    const body = (await (await responsePromise).json()) as {committed?: boolean};
+    return {payload, committed: body.committed === true};
+}
+
 /** Count visible row actions by opening the kebab's context menu (hover first to reveal the kebab). */
 async function countVisibleActions(row: Locator): Promise<number> {
     const page = row.page();
@@ -88,52 +145,56 @@ async function countVisibleActions(row: Locator): Promise<number> {
 }
 
 // ---------------------------------------------------------------------------
-// Part A — TransactionDeleteModal
+// Part A — single-row delete through the bulk workspace (T4)
 // ---------------------------------------------------------------------------
 
-test.describe('TransactionDeleteModal', () => {
+test.describe('Single-row delete via bulk workspace (T4)', () => {
     test.beforeEach(async ({page}) => {
         await login(page, TEST_USER);
         await goToTransactions(page);
     });
 
-    // === A1: Layout A — Standalone delete ===
+    // === A1: standalone delete ===
 
-    test('A1: standalone delete — modal shows Layout A fields, cancel keeps row', async ({page}) => {
+    test('A1: standalone delete — workspace opens with the row pre-marked, cancel keeps row', async ({page}) => {
         const row = await findRow(page, 'delete-safe', 'Small deposit');
         expect(row, 'delete-safe DEPOSIT row not found — run ./dev.py db create-clean — check populate_mock_data.py').toBeTruthy();
 
-        // A1.1: Open DeleteModal
-        await clickDeleteOnRow(row!);
-        const modal = page.getByTestId('tx-delete-modal');
-        await expect(modal).toBeVisible({timeout: 5_000});
+        await openDeleteWorkspace(row!);
 
-        // A1.2-A1.8: Verify Layout A details table
-        const details = modal.getByTestId('tx-delete-details');
-        await expect(details).toBeVisible();
+        // Exactly the one row we picked is staged, and it is staged as a DELETE.
+        // (Row ids in the workspace are fresh client-side tempIds, so identity is
+        // asserted by count + status class, not by cross-referencing the tx id.)
+        await expect(bulkRows(page)).toHaveCount(1);
+        await expect(bulkDeletedRows(page)).toHaveCount(1);
+        // No linked partner on this row → no split hint.
+        await expect(page.getByTestId('tx-bulk-split-hint')).toHaveCount(0);
 
-        // Type icon present
-        await expect(details.locator('img').first()).toBeVisible();
-
-        // A1.9: Cancel keeps row
-        await modal.getByTestId('tx-delete-modal-cancel').click();
-        await expect(modal).not.toBeVisible();
+        // Cancel keeps the row. Nothing was edited in the workspace, so the
+        // discard-confirmation does not interpose.
+        await page.getByTestId('tx-bulk-cancel').click();
+        await expect(page.getByTestId('tx-bulk-modal')).not.toBeVisible({timeout: 5_000});
         const rowStill = await findRow(page, 'delete-safe', 'Small deposit');
         expect(rowStill).not.toBeNull();
     });
 
-    test('A1-confirm: standalone delete — confirm removes row', async ({page}) => {
+    test('A1-confirm: standalone delete — commit removes the row', async ({page}) => {
         // Use the delete-safe FEE (won't cause balance issues)
         const row = await findRow(page, 'delete-safe', 'Platform fee');
         expect(row, 'delete-safe FEE row not found — check populate_mock_data.py').toBeTruthy();
         const rowId = await row!.getAttribute('data-row-id');
 
-        await clickDeleteOnRow(row!);
-        const modal = page.getByTestId('tx-delete-modal');
-        await expect(modal).toBeVisible({timeout: 5_000});
+        await openDeleteWorkspace(row!);
+        await expect(bulkDeletedRows(page)).toHaveCount(1);
 
-        await modal.getByTestId('tx-delete-modal-confirm').click();
-        await expect(modal).not.toBeVisible({timeout: 5_000});
+        const {payload, committed} = await commitDeleteWorkspace(page);
+        expect(committed, 'the delete commit must not roll back').toBe(true);
+        // The wire carries exactly the transaction we picked — the DOM row id is
+        // `tx-<id>`, the payload speaks transaction ids.
+        const txId = Number(rowId!.replace(/^(?:tx|ghost)-/, ''));
+        expect(payload.deletes ?? []).toEqual([txId]);
+
+        await expect(page.getByTestId('tx-bulk-modal')).not.toBeVisible({timeout: 10_000});
 
         // Row gone. Asserting on findRow()'s result directly is asserting "not there
         // YET": it scans once and does not retry. Assert on the row's own id instead —
@@ -141,39 +202,31 @@ test.describe('TransactionDeleteModal', () => {
         await expect(page.locator(`[data-testid="tx-table"] tbody tr[data-row-id="${rowId}"]`)).toHaveCount(0);
     });
 
-    // === A2: Layout B — Paired full-access delete ===
+    // === A2: paired delete — partner auto-included, pair collapsed ===
 
-    test('A2: paired delete — Layout B shows From/To, split hint, cancel keeps', async ({page}) => {
+    test('A2: paired delete — one collapsed row staged as delete, split hint shown, cancel keeps both', async ({page}) => {
         const row = await findRow(page, 'delete-safe', 'ETH');
         expect(row, 'delete-safe TRANSFER ETH row not found — check populate_mock_data.py').toBeTruthy();
-        const rowId = await row!.getAttribute('data-row-id');
 
-        await clickDeleteOnRow(row!);
-        const modal = page.getByTestId('tx-delete-modal');
-        await expect(modal).toBeVisible({timeout: 5_000});
+        await openDeleteWorkspace(row!);
 
-        // Title: "Delete linked transaction"
-        await expect(modal).toContainText(/linked|collegat/i);
+        // The partner half is in the store (the page loads it), so the workspace
+        // auto-includes it and collapses the pair: ONE staged row, delete-marked.
+        await expect(bulkRows(page)).toHaveCount(1);
+        await expect(bulkDeletedRows(page)).toHaveCount(1);
 
-        // Paired details From/To
-        const paired = modal.getByTestId('tx-delete-paired-details');
-        await expect(paired).toBeVisible();
+        // A paired delete stages the split hint (transactions.bulk.splitHint,
+        // moved here from the deleted DeleteModal's keys).
+        await expect(page.getByTestId('tx-bulk-split-hint')).toBeVisible();
 
-        // Split hint
-        await expect(modal).toContainText(/split|scollegar/i);
-
-        // "Delete both" button
-        const confirmBtn = modal.getByTestId('tx-delete-modal-confirm');
-        await expect(confirmBtn).toContainText(/both|entramb/i);
-
-        // Cancel
-        await modal.getByTestId('tx-delete-modal-cancel').click();
-        await expect(modal).not.toBeVisible();
+        // Cancel keeps both halves.
+        await page.getByTestId('tx-bulk-cancel').click();
+        await expect(page.getByTestId('tx-bulk-modal')).not.toBeVisible({timeout: 5_000});
         const rowStill = await findRow(page, 'delete-safe', 'ETH');
         expect(rowStill).not.toBeNull();
     });
 
-    test('A2-confirm: paired delete — confirm removes both halves', async ({page}) => {
+    test('A2-confirm: paired delete — commit removes both halves', async ({page}) => {
         // Deliberately NOT the "delete-safe" pair A2 uses. This one is destructive, and
         // the mock ships a second pair for exactly that: tagged `delete-consume`, single
         // use, described without the "delete-safe" substring so the finders elsewhere
@@ -196,14 +249,19 @@ test.describe('TransactionDeleteModal', () => {
         expect(item?.related_transaction_id, 'A2-confirm is about a *paired* row; this one is not linked').toBeTruthy();
         const pairQuery = `ids=${item.id}&ids=${item.related_transaction_id}`;
 
-        await clickDeleteOnRow(row!);
-        const modal = page.getByTestId('tx-delete-modal');
-        await expect(modal).toBeVisible({timeout: 5_000});
+        await openDeleteWorkspace(row!);
 
-        await modal.getByTestId('tx-delete-modal-confirm').click();
-        await expect(modal).not.toBeVisible({timeout: 5_000});
+        // Both halves staged through one collapsed row: the commit payload must
+        // name BOTH transaction ids, or the backend pair guard
+        // (pairDeleteIncomplete) would refuse the batch.
+        const {payload, committed} = await commitDeleteWorkspace(page);
+        expect(committed, `the paired delete commit must not roll back (deletes=${JSON.stringify(payload.deletes ?? [])})`).toBe(true);
+        expect(new Set(payload.deletes ?? [])).toEqual(new Set([item.id, item.related_transaction_id]));
 
-        // Both halves gone — see the note above on why this asserts on the id.
+        await expect(page.getByTestId('tx-bulk-modal')).not.toBeVisible({timeout: 10_000});
+
+        // Both halves gone from the table — see the note above on why this asserts
+        // on the id.
         await expect(page.locator(`[data-testid="tx-table"] tbody tr[data-row-id="${rowId}"]`)).toHaveCount(0);
 
         // Asked of the server, about these two ids, instead of counting every row whose
@@ -252,28 +310,91 @@ test.describe('TransactionDeleteModal', () => {
         await page.keyboard.press('Escape');
     });
 
-    // === committed:false → error banner ===
+    // === committed:false → inline error banner ===
 
-    test('A1-error: delete failure shows error banner in modal', async ({page}) => {
-        // Delete a BUY that causes negative balance (MSFT BUY 10 - Asym-c TRANSFER 2 = 8; without BUY → -2)
-        const row = await findRow(page, 'Diversification into MSFT');
-        expect(row, 'MSFT BUY row not found — check populate_mock_data.py').toBeTruthy();
+    test('A1-error: refused delete keeps the workspace open and shows the issue inline', async ({page}) => {
+        // Own the data: a refusal needs a delete that makes a balance negative,
+        // and borrowing a mock row for that (the pre-T4 test used the shared MSFT
+        // BUY) reads a position every neighbour is allowed to change. Instead:
+        // a fresh broker (no shorting) + a fresh asset + an ADJUSTMENT pair
+        // (+5 then −5, net zero). Deleting the +5 alone drives the asset balance
+        // to −5, which the backend refuses — deterministically, whoever else runs.
+        const suffix = uniqueSuffix();
+        const brokerResp = await page.request.post('/api/v1/brokers', {data: [{name: `T4-delref-${suffix}`}]});
+        expect(brokerResp.ok(), `broker setup failed (HTTP ${brokerResp.status()})`).toBeTruthy();
+        const brokerId = (await brokerResp.json()).results[0].broker_id as number;
 
-        await clickDeleteOnRow(row!);
-        const modal = page.getByTestId('tx-delete-modal');
-        await expect(modal).toBeVisible({timeout: 5_000});
+        // POST /assets is bulk-only: a list in, per-item results out (201).
+        const assetResp = await page.request.post('/api/v1/assets', {
+            data: [{display_name: `T4-delref-asset-${suffix}`, asset_type: 'STOCK', currency: 'EUR'}],
+        });
+        expect(assetResp.status(), `asset setup failed (HTTP ${assetResp.status()})`).toBe(201);
+        const assetResults = (await assetResp.json()).results as Array<{asset_id: number; success: boolean; message?: string}>;
+        expect(assetResults[0]?.success, `asset setup refused: ${assetResults[0]?.message ?? 'unknown'}`).toBe(true);
+        const assetId = assetResults[0].asset_id;
 
-        await modal.getByTestId('tx-delete-modal-confirm').click();
+        const marker = `T4-delref-${suffix}`;
+        const createResp = await page.request.post('/api/v1/transactions/commit', {
+            data: {
+                creates: [
+                    // ADJUSTMENT with qty>0 requires an explicit cost basis.
+                    {broker_id: brokerId, asset_id: assetId, type: 'ADJUSTMENT', date: '2025-01-10', quantity: '5', cost_basis_override: {code: 'EUR', amount: '10'}, description: marker},
+                    // The counterpart's description must NOT contain the marker —
+                    // findRow matches by inclusion, and the row under test is the +5.
+                    {broker_id: brokerId, asset_id: assetId, type: 'ADJUSTMENT', date: '2025-01-11', quantity: '-5', description: `counterpart-${suffix}`},
+                ],
+            },
+        });
+        expect(createResp.ok(), `transaction setup failed (HTTP ${createResp.status()})`).toBeTruthy();
+        const createBody = await createResp.json();
+        expect(createBody.committed, `setup commit rolled back: ${JSON.stringify(createBody.issues ?? [])}`).toBe(true);
+        const createdIds = (createBody.results as Array<{ids?: number[]}>).flatMap((r) => r.ids ?? []);
+        expect(createdIds).toHaveLength(2);
 
-        // Modal stays open, error banner appears
-        await expect(modal).toBeVisible({timeout: 5_000});
-        const errorBanner = modal.getByTestId('tx-delete-modal-errors');
-        await expect(errorBanner).toBeVisible({timeout: 5_000});
-        await expect(errorBanner).toContainText(/negative|negativ/i);
+        try {
+            // Re-navigate with an id filter — navigating to the URL the page is
+            // already on is a client-side no-op that reloads nothing, and the two
+            // rows were created AFTER the page first loaded. The id filter makes
+            // the URL (and the fetched set) genuinely new.
+            await navigateTo(page, `/transactions?page_size=200&id_min=${createdIds[0]}&id_max=${createdIds[0]}`);
+            await waitForSettled(page.getByTestId('transactions-page'));
+            // Address the row by its own id, not by text: the broker and asset
+            // names carry the suffix too, so a text search matches the
+            // counterpart row as well (and date order would pick the −5 — whose
+            // deletion is legal — every time).
+            const row = page.locator(`[data-testid="tx-table"] tbody tr[data-row-id="tx-${createdIds[0]}"]`);
+            await expect(row, 'the +5 ADJUSTMENT this test just created is not in the table').toBeVisible({timeout: 8_000});
 
-        // Cancel closes
-        await modal.getByTestId('tx-delete-modal-cancel').click();
-        await expect(modal).not.toBeVisible();
+            const modal = await openDeleteWorkspace(row);
+            await expect(bulkDeletedRows(page)).toHaveCount(1);
+
+            // Commit → the server refuses (asset balance would go negative) → the
+            // workspace stays open and reports the issue inline. Assert the
+            // banner and that it carries at least one issue — never its text,
+            // which is localized.
+            const {payload, committed} = await commitDeleteWorkspace(page);
+            expect(payload.deletes ?? [], 'the wire must name the +5 row, not its counterpart').toEqual([createdIds[0]]);
+            expect(committed, 'a delete that would drive the asset balance negative must roll back').toBe(false);
+
+            await expect(modal).toBeVisible();
+            const banner = modal.getByTestId('tx-bulk-error');
+            await expect(banner).toBeVisible({timeout: 5_000});
+            // The refusal is a balance issue, and balance issues render in their
+            // own list inside the banner (no per-item testid — the banner is the
+            // testid anchor; the <li> proves an issue actually rendered).
+            await expect(banner.locator('ul li').first(), 'the refusal must be itemized inline, not just a bare banner').toBeVisible();
+
+            // Cancel closes (the staged delete is the *initial* state here, so no
+            // discard confirmation interposes).
+            await modal.getByTestId('tx-bulk-cancel').click();
+            await expect(modal).not.toBeVisible({timeout: 5_000});
+        } finally {
+            // Restore what this test wrote: both ADJUSTMENTs together net to zero,
+            // so the batch delete is legal. The empty broker and the asset stay —
+            // inert reference data with a unique name, as every API-level test
+            // leaves them.
+            await page.request.post('/api/v1/transactions/commit', {data: {deletes: createdIds}});
+        }
     });
 });
 

@@ -432,6 +432,44 @@ class TestPortfolioServiceGetHistory:
             assert point.nav_value == point.cash_value + point.market_value, f"NAV invariant violated at {point.date}: " f"nav={point.nav_value} != cash+market_value"
 
     @pytest.mark.asyncio
+    async def test_dividend_and_interest_move_nav_exactly_like_a_deposit(self, session, test_user, broker_with_access, test_asset):
+        """E2 (beta-feedback guard): a DIVIDEND and an INTEREST move nav exactly
+        like a DEPOSIT of the same amount — counted once, through cash.
+
+        The beta tester suspected income was double counted (once as cash, once
+        more somewhere else). With no BUY anywhere, market_value stays 0, so
+        every euro of income must appear in nav exactly once: nav deltas equal
+        the row amounts, and the nav == cash + market_value invariant holds on
+        every point.
+        """
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=date(2025, 6, 1), amount=Decimal("1000"), currency="EUR"),
+                Transaction(broker_id=broker.id, asset_id=test_asset.id, type=TransactionType.DIVIDEND, date=date(2025, 6, 2), amount=Decimal("200"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.INTEREST, date=date(2025, 6, 3), amount=Decimal("50"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+        service = PortfolioService(session)
+        result = await service.get_history(user_id=test_user.id)
+
+        points = {p.date: p for p in result}
+        for d in (date(2025, 6, 1), date(2025, 6, 2), date(2025, 6, 3)):
+            assert d in points, f"No history point for {d} in {sorted(points)}"
+
+        # Exact values are owned by this test: the user and broker are fresh
+        # fixtures, so no neighbour can have contributed to them.
+        assert points[date(2025, 6, 1)].nav_value.amount == Decimal("1000")
+        assert points[date(2025, 6, 2)].nav_value.amount == Decimal("1200"), "DIVIDEND must move nav by exactly its amount, like a deposit"
+        assert points[date(2025, 6, 3)].nav_value.amount == Decimal("1250"), "INTEREST must move nav by exactly its amount, like a deposit"
+
+        for point in result:
+            assert point.market_value.amount == Decimal("0"), f"no BUY happened — market value must stay 0 at {point.date}"
+            assert point.nav_value == point.cash_value + point.market_value, f"NAV invariant violated at {point.date}: nav={point.nav_value} != cash+market_value"
+
+    @pytest.mark.asyncio
     async def test_history_date_range_filter(self, session, test_user, broker_with_access):
         """date_from/date_to filter excludes out-of-range transactions."""
         broker, _ = broker_with_access

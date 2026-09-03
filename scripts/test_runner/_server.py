@@ -201,8 +201,8 @@ class SharedTestServer:
             self._signal_group(signal.SIGKILL)
             try:
                 self.proc.wait(timeout=5)
-            except Exception:
-                pass
+            except Exception as exc:  # noqa: S110 — process may already be gone after SIGKILL
+                _ = exc
         finally:
             self.proc = None
 

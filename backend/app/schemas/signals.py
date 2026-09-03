@@ -369,6 +369,12 @@ class SignalWarmupRequirement(SignalModel):
     stabilization_points: int = Field(..., ge=0, description="Additional pre-visible units required for numerical stabilization")
     total_points: int = Field(..., ge=0, description="Total input units requested before the visible range")
     normalized_tolerance: Optional[FiniteFloat] = Field(None, gt=0)
+    # E1: indicators with unlimited memory (e.g. underwater drawdown — the
+    # relevant peak may sit ANYWHERE in the past) cannot name a finite warm-up.
+    # When True the fetch path loads from the beginning of the available
+    # history instead of `total_points`-derived days, and the visible-range
+    # slicing still happens after the computation.
+    full_history: bool = Field(False, description="Load the entire available history before the visible range")
 
     @model_validator(mode="after")
     def validate_total(self) -> SignalWarmupRequirement:

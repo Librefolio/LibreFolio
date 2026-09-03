@@ -80,7 +80,7 @@ class NamedCache:
         try:
             old.close()
         except Exception:  # a cache that cannot be closed must not break a clear
-            pass
+            logger.debug("Cache close failed during clear", exc_info=True)
 
     def close(self) -> None:
         """Stop the timer wheel thread (call on shutdown)."""

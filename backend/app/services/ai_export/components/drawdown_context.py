@@ -11,6 +11,12 @@ from AI Export NAV buckets.
 
 Scope/basis rules (see the ``ai-adequacy-v1-drawdown-export`` design):
 
+- Drawdown is computed over the FULL available history (E1, 02/09): an export
+  for an AI must carry the true historical peak, never a window-relative one.
+  The requested start is ignored — ASSET scope loads from ``date.min`` (price
+  loads are sparse-safe), PORTFOLIO scope from the user's earliest accessible
+  transaction (the engine emits one history point per day in the range).
+
 - ``portfolio.drawdown_summary``: Risk ``PortfolioRiskScope`` with
   ``broker_ids=None`` (whole portfolio) in the ``BuildScope`` target currency;
   the Risk service resolves this to a TWRR / ``historical_twrr`` basis.
@@ -40,7 +46,7 @@ from enum import StrEnum
 from pydantic import Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.schemas.common import DateRangeModel, StrictModel
+from backend.app.schemas.common import DateRangeModel, OpenDateRangeModel, StrictModel
 from backend.app.schemas.portfolio import DataQualityStatus
 from backend.app.schemas.risk import (
     AssetRiskScope,
@@ -64,6 +70,7 @@ from backend.app.services.ai_export.components.technical_shared import (
 )
 from backend.app.services.ai_export.components.types import BuildScope, Domain, PeriodBehavior, ResourceKey
 from backend.app.services.ai_export.dependencies import BuildContext, ResourceLoadError
+from backend.app.services.date_sentinel import resolve_date_sentinels
 from backend.app.services.risk.metrics import drawdown_episodes
 from backend.app.services.risk.service import RiskService
 
@@ -297,15 +304,36 @@ async def _execute_drawdown(
     risk_scope: PortfolioRiskScope | AssetRiskScope,
     target_currency: str,
 ) -> DrawdownContextPayload:
-    request = RiskQueryRequest(
-        scope=risk_scope,
-        date_range=DateRangeModel(start=scope.period_start, end=scope.period_end),
-        target_currency=target_currency,
-        mode=RiskMode.HISTORICAL,
-        analytics=[RiskAnalyticRequest(instance_id=_DRAWDOWN_INSTANCE_ID, analytic_code=_DRAWDOWN_ANALYTIC_CODE)],
-    )
-
+    # E1 (02/09): AI Export always computes drawdown over the FULL available
+    # history — an export for an AI must carry the true historical peak, never
+    # a window-relative one. The start bound therefore ignores the build's
+    # period:
+    # - ASSET scope: date.min — price loads are sparse-safe (the prepared
+    #   series starts at the first actual price, gaps are backward-filled
+    #   only after a real seed).
+    # - PORTFOLIO scope (whole or broker subset): the user's earliest
+    #   accessible transaction — the portfolio engine emits one history point
+    #   per day in the range, so date.min would materialize millennia of
+    #   empty days.
     async def _loader(session: AsyncSession) -> RiskAnalyticResult:
+        if isinstance(risk_scope, AssetRiskScope):
+            start = Date.min
+        else:
+            resolved = await resolve_date_sentinels(
+                OpenDateRangeModel(start="min", end=scope.period_end),
+                scope.user_id,
+                session,
+                broker_ids=list(scope.broker_scope) or None,
+            )
+            inception = resolved.start if resolved is not None and isinstance(resolved.start, Date) else None
+            start = min(inception, scope.period_start) if inception is not None else scope.period_start
+        request = RiskQueryRequest(
+            scope=risk_scope,
+            date_range=DateRangeModel(start=start, end=scope.period_end),
+            target_currency=target_currency,
+            mode=RiskMode.HISTORICAL,
+            analytics=[RiskAnalyticRequest(instance_id=_DRAWDOWN_INSTANCE_ID, analytic_code=_DRAWDOWN_ANALYTIC_CODE)],
+        )
         response = await RiskService(session).execute(user_id=scope.user_id, request=request)
         if not response.items:
             raise DrawdownContextScopeError("Risk drawdown_summary returned no analytic result")

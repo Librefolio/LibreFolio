@@ -77,6 +77,27 @@ async def get_or_create_user_settings(user_id: int, session: AsyncSession) -> Us
     raise RuntimeError(f"user_settings for user_id={user_id} not found after upsert")
 
 
+async def get_effective_base_currency(session: AsyncSession, user_id: int) -> str:
+    """Effective base currency for a user.
+
+    Semantics (audit 08 P0-1, decision 2026-09-02 — per-user with global
+    fallback): the per-user `UserSettings.base_currency` wins whenever a
+    settings row exists. New rows are seeded FROM the admin-level global
+    `default_currency` at creation (see `get_or_create_user_settings`), so the
+    global default reaches users who never chose. No row at all → global
+    `default_currency` → "EUR".
+
+    Replaces the phantom `base_currency` global key, which was never
+    registered: every reader silently fell back to EUR regardless of the
+    configured default.
+    """
+    result = await session.execute(select(UserSettings.base_currency).where(UserSettings.user_id == user_id))
+    user_value = result.scalar_one_or_none()
+    if user_value:
+        return user_value
+    return await get_setting_value(session, "default_currency", "EUR")
+
+
 async def update_user_settings(user_id: int, updates: UserSettingsUpdate, session: AsyncSession) -> UserSettingsRead:
     """Update user settings. Creates if not exists."""
     # Get existing settings

@@ -13,6 +13,7 @@
  */
 import {expect, type Locator, type Page, test} from './fixtures/playwright';
 import {login, logout, navigateTo, openMobileMenu, setLanguage} from './fixtures/auth-helpers';
+import {waitForSettled} from './fixtures/app-events';
 import {type Language, SUPPORTED_LANGUAGES, TEST_ADMIN, TEST_EMPTY} from './fixtures/test-users';
 import {goToFxDetailPage, goToFxPage, openAddPairModal} from './fx/fx-helpers';
 import {goToAssetsPage, navigateToAssetByName} from './assets/assets-helpers';
@@ -1334,39 +1335,39 @@ test.describe('Gallery Screenshots', () => {
                     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
                     await freezeAnimations(page);
 
-                    // Find a linked pair TX (rebalance tag indicates TRANSFER pairs)
-                    const rows = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]');
-                    const rowCount = await rows.count();
-                    let found = false;
+                    // T4: the dedicated delete modal is gone — a single-row delete
+                    // opens the bulk workspace with the pair collapsed into one row
+                    // pre-marked for deletion, plus the split-hint banner. That IS
+                    // the shot; it is richer than the old modal (grid + banner).
+                    //
+                    // The mock ships a paired "delete-safe" ETH TRANSFER — find it
+                    // by its tag (tags are never translated, unlike the type name
+                    // the old text scan relied on). Hard assertions, no probe: this
+                    // shot is referenced by the docs, so a silent skip is doc rot.
+                    const pairRow = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]').filter({hasText: 'delete-safe'}).filter({hasText: 'ETH'}).first();
+                    await expect(pairRow, 'the delete-safe ETH pair must exist — check populate_mock_data.py').toBeVisible({timeout: 10_000});
 
-                    for (let i = 0; i < Math.min(rowCount, 50) && !found; i++) {
-                        const row = rows.nth(i);
-                        const text = (await row.textContent()) ?? '';
-                        // Look for a transfer or fx-conversion with known tag or description
-                        if (text.includes('rebalance') || text.includes('TRANSFER') || text.includes('Transfer')) {
-                            await row.hover();
-                            await page.waitForTimeout(150);
-                            const deleteBtn = row.locator('button.action-btn.danger');
-                            if (await deleteBtn.isVisible({timeout: 500}).catch(() => false)) {
-                                await deleteBtn.click();
-                                const deleteModal = page.getByTestId('tx-delete-modal');
-                                if (await deleteModal.isVisible({timeout: 3_000}).catch(() => false)) {
-                                    // Check if it's the linked layout (shows From/To)
-                                    const isLinked = await deleteModal
-                                        .locator('[data-testid="tx-delete-paired-details"]')
-                                        .isVisible({timeout: 1_000})
-                                        .catch(() => false);
-                                    if (isLinked) {
-                                        await page.waitForTimeout(300);
-                                        await screenshot(page, viewport, lang, theme, 'transactions', 'bulk-delete-pair-modal');
-                                        found = true;
-                                    }
-                                    await deleteModal.getByTestId('tx-delete-modal-cancel').click();
-                                    await page.waitForTimeout(200);
-                                }
-                            }
-                        }
-                    }
+                    await pairRow.hover();
+                    const kebabBtn = pairRow.getByTestId(/^row-actions-/);
+                    await expect(kebabBtn, 'the delete-safe pair must offer row actions (TEST_ADMIN owns both brokers)').toBeVisible({timeout: 3_000});
+                    await kebabBtn.click();
+                    await page.getByTestId('context-menu-action-delete').click();
+
+                    const bulkModal = page.getByTestId('tx-bulk-modal');
+                    await expect(bulkModal).toBeVisible({timeout: 5_000});
+                    // The pair is staged as ONE collapsed row, marked for deletion,
+                    // and the split hint explains the alternative. Both are the
+                    // contract this shot documents.
+                    await expect(bulkModal.locator('tbody tr.row-deleted')).toHaveCount(1);
+                    await expect(bulkModal.getByTestId('tx-bulk-split-hint')).toBeVisible();
+                    await waitForSettled(bulkModal.getByTestId('tx-bulk-modal-root'));
+                    await freezeAnimations(page);
+                    await screenshot(page, viewport, lang, theme, 'transactions', 'bulk-delete-pair-modal');
+
+                    // Close WITHOUT committing — the pair is shared mock data and
+                    // must survive for the real test suites (tx-delete reads it).
+                    await bulkModal.getByTestId('tx-bulk-cancel').click();
+                    await expect(bulkModal).not.toBeVisible({timeout: 5_000});
                 }
             }
         });

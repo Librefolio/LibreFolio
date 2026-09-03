@@ -98,7 +98,16 @@ test.describe('Transaction Linked Pair Tooltips', () => {
 
             await linkIcon.hover();
 
-            if (await tooltip.isVisible({timeout: 2_000}).catch(() => false)) {
+            // `isVisible()` answers about *this instant* — its timeout is ignored.
+            // With the 500ms hover-open delay (T2) "this instant" is always before
+            // the tooltip opens, so the probe answered false for every row and the
+            // loop never found anything. Wait for the open for real: a row whose
+            // tooltip never shows costs one timeout, a shown one costs the delay.
+            const opened = await tooltip
+                .waitFor({state: 'visible', timeout: 2_500})
+                .then(() => true)
+                .catch(() => false);
+            if (opened) {
                 const html = await tooltip.innerHTML();
                 if (html.includes('Hidden Admin Broker')) {
                     expect(html, 'Hidden broker tooltip should have SVG lock').toContain('<svg');

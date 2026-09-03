@@ -102,6 +102,9 @@ C'est une estimation approximative du rendement **d'aujourd'hui** — une vérif
 
 La carte **Valeur nette** affiche la valeur absolue de votre portefeuille à la fin de la période sélectionnée.
 
+!!! note "La Valeur nette inclut les liquidités"
+    Le montant est **titres à valeur de marché + solde liquide** (+ toute valeur en transit entre brokers). Comme il inclut les liquidités, il **n'est pas comparable** à la « contre-valeur titres » d'un relevé bancaire, qui exclut les liquidités — celles-ci y sont reportées séparément.
+
 ### The nombre en dessous de la Valeur nette
 
 En dessous de la valeur de la Valeur nette, vous trouverez votre **P&L total**, avec sa variation en pourcentage entre parenthèses — par ex. `+12 450,30 (+0,35%)`.

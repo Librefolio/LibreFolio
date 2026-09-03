@@ -200,6 +200,39 @@ test.describe('Transactions', () => {
     });
 
     // ===================================================================
+    // T1 (beta feedback) — decimal typing in the form
+    // ===================================================================
+    test.describe('Decimal typing (T1)', () => {
+        test('quantity field starts empty in create mode', async ({page}) => {
+            await openCreateFlow(page);
+            const qtyInput = page.getByTestId('tx-form-quantity');
+            await expect(qtyInput).toBeVisible({timeout: 3_000});
+            // T1-b: a pre-filled "0" forced the user to cursor around it just to
+            // type a decimal. The draft now starts empty.
+            await expect(qtyInput).toHaveValue('');
+        });
+
+        test('typing 1234,56 into cash keeps the comma mid-typing', async ({page}) => {
+            await openCreateFlow(page);
+            const cashWrap = page.getByTestId('tx-form-cash-wrap');
+            await expect(cashWrap).toBeVisible({timeout: 3_000});
+            const amountInput = cashWrap.locator('input[data-testid$="-amount"]').first();
+            await expect(amountInput).toBeVisible({timeout: 3_000});
+            await amountInput.click();
+
+            // pressSequentially fires one input event per character — the exact
+            // cadence the pre-T1 sync-down effect broke: the "1234," emission
+            // came back from the parent as the normalized "1234." prop and the
+            // buffer was rewritten to "1234", swallowing the separator and
+            // gluing the fraction onto the integer part.
+            await amountInput.pressSequentially('1234,');
+            await expect(amountInput).toHaveValue('1234,');
+            await amountInput.pressSequentially('56');
+            await expect(amountInput).toHaveValue('1234,56');
+        });
+    });
+
+    // ===================================================================
     // T2 — Double-click re-edit in BulkModal (C1 fix)
     // ===================================================================
     test.describe('Double-click re-edit (C1)', () => {

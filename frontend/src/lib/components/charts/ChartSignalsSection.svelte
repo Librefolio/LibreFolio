@@ -10,7 +10,7 @@
   Uses Svelte 5 runes.
 -->
 <script lang="ts">
-    import {ArrowLeftRight, BarChart3, Coins, ExternalLink, Info, RotateCw, Trash2, AlertTriangle} from 'lucide-svelte';
+    import {ArrowLeftRight, BarChart3, Coins, ExternalLink, Info, Loader2, RotateCw, Trash2, AlertTriangle} from 'lucide-svelte';
     import {_ as t} from '$lib/i18n';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
@@ -52,6 +52,11 @@
         backendError?: string | null;
         /** Retry callback for backend signal loading. */
         onretrybackend?: () => void;
+        /** True while a backend signal request is in flight. Suppresses the
+         *  transient per-card error state (a summary computed from data that
+         *  simply hasn't arrived yet) and shows a spinner instead — the red
+         *  flash between "requested" and "answered" was read as a failure. */
+        signalsLoading?: boolean;
         /** Available FX pairs for FxPairSignal (slug format: 'EUR-GBP') */
         availablePairs?: string[];
         /** Available assets for AssetComparisonSignal */
@@ -87,6 +92,7 @@
         definitions,
         backendError = null,
         onretrybackend,
+        signalsLoading = false,
         availablePairs = [],
         availableAssets = [],
         mainPairSlug = '',
@@ -166,6 +172,10 @@
     }
 
     function getSignalIssue(signal: SignalConfig): SignalIssue | null {
+        // While a request is in flight the summary is necessarily stale/empty —
+        // showing "no data" or a problem then is a false red flash. The card
+        // shows a spinner instead (see markup below).
+        if (signalsLoading) return null;
         const summary = signalSummaries.get(signal.id);
         if (summary?.problem) {
             return {
@@ -509,14 +519,18 @@
                                 {#if typeInfo?.docsPath}
                                     <DocsLink path={typeInfo.docsPath} label={signalDescText || signalName} math />
                                 {/if}
-                                {#if issue}
+                                {#if signalsLoading}
+                                    <span class="-my-2 flex h-9 w-9 shrink-0 items-center justify-center text-gray-400 sm:my-0 sm:h-4 sm:w-4" data-testid="signal-loading">
+                                        <Loader2 size={14} class="animate-spin" />
+                                    </span>
+                                {:else if issue}
                                     <Tooltip text={issue.message} position="top" maxWidth="min(34rem, calc(100vw - 16px))">
                                         {#if issue.severity === 'notice'}
-                                            <span class="-my-2 flex h-9 w-9 shrink-0 items-center justify-center text-gray-400 sm:my-0 sm:h-4 sm:w-4">
+                                            <span class="-my-2 flex h-9 w-9 shrink-0 items-center justify-center text-gray-400 sm:my-0 sm:h-4 sm:w-4" data-testid="signal-issue" data-severity="notice">
                                                 <Info size={14} class="cursor-help" />
                                             </span>
                                         {:else}
-                                            <span class="-my-2 flex h-9 w-9 shrink-0 items-center justify-center sm:my-0 sm:h-4 sm:w-4 {issue.severity === 'error' ? 'text-red-500' : 'text-amber-500'}">
+                                            <span class="-my-2 flex h-9 w-9 shrink-0 items-center justify-center sm:my-0 sm:h-4 sm:w-4 {issue.severity === 'error' ? 'text-red-500' : 'text-amber-500'}" data-testid="signal-issue" data-severity={issue.severity}>
                                                 <AlertTriangle size={14} class="cursor-help" />
                                             </span>
                                         {/if}

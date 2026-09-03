@@ -140,8 +140,8 @@ def _write_worker_logs(results: list) -> None:
             path = log_file_for(log_dir, "backend-parallel", f"worker{r['index']}")
             header = f"# worker {r['index']} | exit={r['returncode']} | {r['elapsed']:.1f}s\n" f"# units ({len(r['paths'])}):\n" + "".join(f"#   {p}\n" for p in r["paths"]) + "\n"
             path.write_text(header + (r["output"] or ""), encoding="utf-8", errors="replace")
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: S110 — per-worker log writing must not fail the run
+            _ = exc
 
 
 def run_groups(groups: list, verbose: bool = False, coverage: bool = False, timeout: int = 3600) -> dict:

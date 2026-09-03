@@ -2,7 +2,7 @@ import {describe, it, expect} from 'vitest';
 import {FAKE_ASSET_ID_BASE} from '$lib/utils/brim/isFakeAssetId';
 import type {AssetResolution, MergedTx} from './importTypes';
 import type {TransactionCreateItem} from '$lib/types';
-import {brokerIdForTx, beforeOpeningInfo, isBeforeOpening, isRowAssetResolved, type RowBrokerSource, type BrokerOpening} from './importRowState';
+import {brokerIdForTx, beforeOpeningInfo, isBeforeOpening, isRowAssetResolved, shouldAutoSelectOnRecheck, type RowBrokerSource, type BrokerOpening} from './importRowState';
 
 const FAKE = FAKE_ASSET_ID_BASE;
 
@@ -82,5 +82,42 @@ describe('isRowAssetResolved', () => {
     });
     it('is false for a fake asset with no resolution entry at all', () => {
         expect(isRowAssetResolved(mt({asset_id: FAKE}), [])).toBe(false);
+    });
+});
+
+describe('shouldAutoSelectOnRecheck (W7)', () => {
+    // The residual case from the beta: a row gated on before-opening whose asset
+    // is ALSO unresolved. Fixing the broker opening first must NOT select it
+    // (still unresolved); assigning the asset afterwards MUST — that second pass
+    // is the one the pre-W7 `resolveAsset` never ran.
+    const row = () => mt({sourceFileId: 'f1', date: '2020-03-01', asset_id: FAKE});
+    const results = [pr('f1', 1)];
+    const brokerClosed = [brk(1, '2024-06-01')]; // row (2020-03-01) is before-opening
+    const brokerFixed = [brk(1, '2019-01-01')]; // opening moved before the row
+
+    it('stays deselected while both gates are closed', () => {
+        expect(shouldAutoSelectOnRecheck(row(), results, brokerClosed, [resolution(FAKE, null)])).toBe(false);
+    });
+
+    it('stays deselected when only the broker opening is fixed (asset still unresolved)', () => {
+        expect(shouldAutoSelectOnRecheck(row(), results, brokerFixed, [resolution(FAKE, null)])).toBe(false);
+    });
+
+    it('stays deselected when only the asset is resolved (still before-opening)', () => {
+        expect(shouldAutoSelectOnRecheck(row(), results, brokerClosed, [resolution(FAKE, 100)])).toBe(false);
+    });
+
+    it('selects once both gates are open — the order the user fixed them in does not matter', () => {
+        expect(shouldAutoSelectOnRecheck(row(), results, brokerFixed, [resolution(FAKE, 100)])).toBe(true);
+    });
+
+    it('never re-selects a row the user already has selected', () => {
+        const selected = {...row(), selected: true};
+        expect(shouldAutoSelectOnRecheck(selected, results, brokerFixed, [resolution(FAKE, 100)])).toBe(false);
+    });
+
+    it('never selects a row whose duplicate verdict forbids it', () => {
+        const dup = {...row(), duplicateStatus: 'likely' as const};
+        expect(shouldAutoSelectOnRecheck(dup, results, brokerFixed, [resolution(FAKE, 100)])).toBe(false);
     });
 });

@@ -55,7 +55,7 @@ from backend.app.services.fifo_lot_engine import (
 )
 from backend.app.services.fx import convert_bulk
 from backend.app.services.price_resolver import build_asset_price_series
-from backend.app.services.settings_service import get_global_setting
+from backend.app.services.settings_service import get_effective_base_currency
 from backend.app.utils.financial.roi_utils import CashFlowInput, NAVSnapshot, calculate_simple_roi_series, calculate_twrr_series, cumulative_to_annualized
 from backend.app.utils.financial.valuation_utils import compute_holding_value, normalize_quote_base_quantity
 from backend.app.utils.financial.wac_utils import WACInputTX, compute_wac_from_txlist
@@ -181,7 +181,7 @@ class LotsAnalysisService:
         if not normalized_analyses:
             raise ValueError("requested_analyses must not be empty")
 
-        target_currency = target_currency or await self._get_base_currency()
+        target_currency = target_currency or await self._get_base_currency(user_id)
         actual_to = date_to or date_type.today()
         asset = await self.db.get(Asset, asset_id)
         if asset is None:
@@ -577,9 +577,9 @@ class LotsAnalysisService:
             asset_orphan_taxes=engine_result.asset_orphan_taxes,
         )
 
-    async def _get_base_currency(self) -> str:
-        setting = await get_global_setting("base_currency", self.db)
-        return setting.value if setting else "EUR"
+    async def _get_base_currency(self, user_id: int) -> str:
+        """Effective base currency: per-user setting, global default, EUR (P0-1)."""
+        return await get_effective_base_currency(self.db, user_id)
 
     async def _get_scope_broker_ids(self, user_id: int, broker_ids: list[int] | None) -> list[int]:
         stmt = select(BrokerUserAccess.broker_id).where(BrokerUserAccess.user_id == user_id)

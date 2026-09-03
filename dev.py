@@ -536,7 +536,10 @@ def cmd_fe_dev(args):
 def cmd_fe_build(args):
     """Build frontend for production."""
     # Ensure fonts/JS libs exist before SvelteKit prerender (validates app.html refs)
-    update_js_cache()
+    cache_result = update_js_cache(strict=True)
+    if cache_result != 0:
+        print_error("Resource cache incomplete - aborting frontend build")
+        return cache_result
 
     # Sync API types to ensure frontend types are aligned with backend
     print(Colors.success("Syncing API types before build..."))
@@ -1382,7 +1385,10 @@ def _docker_ensure_assets_built():
     from scripts.cli_base import check_frontend_needs_build
 
     # --- 1. JS library cache (fonts must exist before SvelteKit prerender) ----
-    update_js_cache()
+    cache_result = update_js_cache(strict=True)
+    if cache_result != 0:
+        print_error("Resource cache incomplete. Cannot build Docker image.")
+        return cache_result
 
     # --- 2. Frontend ----------------------------------------------------------
     if check_frontend_needs_build():
@@ -2065,16 +2071,27 @@ def copy_docs_assets():
     #         print_success(f"Copied promo video to mkdocs assets: {video_file.name}")
 
 
-def update_js_cache():
-    """Update JS library cache."""
+def update_js_cache(strict: bool = False):
+    """Update JS library cache.
+
+    I1 (02/09): the script exits non-zero when a resource is missing AND has no
+    usable cached copy. With ``strict=True`` (build paths) that failure is
+    returned to the caller so a broken build stops instead of shipping; the
+    dev-server path stays non-blocking (offline development with a warm cache
+    must keep working).
+    """
     result = run_command_live(
         [*pipenv_prefix(), "python", "scripts/update_js_cache.py"],
         cwd=PROJECT_ROOT
         )
     if result == 0:
         print_success("JS libraries cached")
-    else:
-        print_warning("JS cache update failed (will use CDN fallback)")
+        return 0
+    if strict:
+        print_error("JS cache update failed — a required resource is missing and not cached")
+        return result
+    print_warning("JS cache update failed (will use CDN fallback)")
+    return 0
 
 
 # =============================================================================

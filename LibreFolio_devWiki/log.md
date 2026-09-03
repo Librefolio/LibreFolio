@@ -2045,3 +2045,17 @@ migrazioni incrementali per non rompere le installazioni rilasciate. Una pagina
 che verifica la conformità al codice e sbaglia sulla regola più delicata è essa
 stessa deriva. Avviso in testa, non riscritta: serve come fotografia del maggio
 2025, non come verifica.
+
+## [2026-09-02] file | Drawdown full_history warmup (decision)
+
+Consolidamento beta P4/E1: il drawdown ha memoria illimitata — `full_history` param
+sul segnale (toggle UI, default on), AI Export sempre full; documentato perché il
+seed SQL del max pre-periodo è FX-unsafe (max(convertita) ≠ convertita(max)).
+Filed: [[decisions/drawdown-full-history-warmup]].
+
+## [2026-09-02] file | CompactCashCell decimal separator feedback loop (problem)
+
+T1: l'`$effect` di sync confrontava stringhe di display e sovrascriveva il buffer
+mid-typing (`12,` → `12`); fix = confronto numerico normalizzato. Include la trappola
+`isVisible({timeout})` che non attende (emersa con il tooltip delay T2).
+Filed: [[problems/compactcashcell-decimal-separator-feedback-loop]].

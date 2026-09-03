@@ -76,6 +76,7 @@
 
 | Page | Summary | Date | Tags |
 |------|---------|------|------|
+| [[decisions/drawdown-full-history-warmup]] | Drawdown has unlimited memory: `full_history` param (UI toggle) loads from `date.min`, AI Export always full; a SQL max-seed is FX-unsafe | 2026-09-02 | backend, signals, risk, drawdown, ai-export, warmup |
 | [[decisions/settings-write-path-contract]] | Confirm before applying, report per field, never stop at the first refusal — C1-C9 answered as one contract | 2026-08-30 | settings, frontend, ux, api-contract |
 | [[decisions/broker-last-owner-guard]] | Removal of the last owner is blocked while demotion to VIEWER is not; the obvious repair was rejected in favour of a dialogue | 2026-08-30 | brokers, sharing, permissions, ux |
 | [[decisions/ai-export-news-driver-analysis]] | Portfolio news-driver Analysis combines deterministic movements with cited dated research while qualifying causality and preserving unexplained moves | 2026-08-03 | ai-export, portfolio, news, citations, causality |
@@ -212,6 +213,7 @@
 
 | Page | Summary | Status | Tags |
 |------|---------|--------|------|
+| [[problems/compactcashcell-decimal-separator-feedback-loop]] | Sync-down `$effect` compared display strings, so the field's own echo erased `,` mid-typing; fix = numeric compare; plus the `isVisible({timeout})` probe trap with delayed tooltips | resolved | frontend, transactions, decimal, svelte5, ux, testing |
 | [[problems/svelte-template-branches-not-instrumented]] | Istanbul emits an empty `branchMap` for `{#if}` in Svelte markup; `.svelte` branch percentages are indicative only | accepted | frontend, coverage, svelte, measurement |
 | [[problems/coverage-percent-mixed-lines-and-branches]] | 92,33 → 90,10 was a change of formula, not a regression; the flat branch figure was the signal nobody read | resolved | testing, coverage, metrics, false-alarm |
 | [[problems/e2e-python-coverage-lost-above-two-workers]] | `.coveragerc` lacked `multiprocessing`; above 2 clients uvicorn forks and five coverage files are written empty, silently | resolved | testing, coverage, python, silent-failure |

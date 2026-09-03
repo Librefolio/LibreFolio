@@ -180,7 +180,7 @@
                         {#each txByType as [type, count]}
                             <div class="flex items-center gap-2 px-3 py-1.5 rounded bg-gray-100 dark:bg-slate-800">
                                 <img src={getTypeIconUrl(type)} alt={type} class="w-4 h-4" />
-                                <span class="text-xs font-medium text-gray-600 dark:text-gray-400 flex-1">{type}</span>
+                                <span class="text-xs font-medium text-gray-600 dark:text-gray-400 flex-1">{$t('transactions.types.' + type)}</span>
                                 <span class="text-sm font-semibold text-gray-900 dark:text-white">{count}</span>
                             </div>
                         {/each}
