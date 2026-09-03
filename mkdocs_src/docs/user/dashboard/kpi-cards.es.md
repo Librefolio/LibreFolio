@@ -102,6 +102,9 @@ Es una estimación aproximada del rendimiento de **hoy** — una comprobación r
 
 La tarjeta **Patrimonio Neto** muestra el valor absoluto de tu cartera al final del período seleccionado.
 
+!!! note "El Patrimonio Neto incluye la liquidez"
+    La cifra es **valores a precio de mercado + saldo líquido** (+ cualquier valor en tránsito entre brókers). Como incluye la liquidez, **no es comparable** con el «contravalor de valores» de un extracto bancario, que excluye el efectivo — la liquidez del banco se muestra por separado.
+
 ### The número debajo del Patrimonio Neto
 
 Debajo del valor del Patrimonio Neto encontrarás tu **P&L Total**, con su cambio porcentual entre paréntesis — ej. `+12,450.30 (+0.35%)`.

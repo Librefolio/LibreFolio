@@ -39,7 +39,7 @@ from backend.app.schemas.portfolio import (
 )
 from backend.app.services.fx import convert_bulk
 from backend.app.services.price_resolver import AssetPriceSeries, build_asset_price_series
-from backend.app.services.settings_service import get_global_setting
+from backend.app.services.settings_service import get_effective_base_currency
 from backend.app.utils.cache_utils import get_ttl_cache
 from backend.app.utils.financial.roi_utils import CashFlowInput, NAVSnapshot
 from backend.app.utils.financial.valuation_utils import compute_holding_value
@@ -1964,7 +1964,7 @@ class PortfolioCalculationEngine:
         """
         # ── 1. Resolve target currency ──
         if target_currency is None:
-            target_currency = await get_global_setting(self.db, "base_currency", "EUR")
+            target_currency = await get_effective_base_currency(self.db, user_id)
 
         # ── 2. Resolve scope ──
         all_access_stmt = select(BrokerUserAccess).where(BrokerUserAccess.user_id == user_id)

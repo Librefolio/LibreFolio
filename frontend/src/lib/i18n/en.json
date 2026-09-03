@@ -1127,7 +1127,8 @@
       "histogramScale": "Histogram Scale",
       "riskFreeAnnualRate": "Risk-free annual rate",
       "comparisonAsset": "Comparison asset",
-      "window": "Window"
+      "window": "Window",
+      "fullHistory": "Full history"
     },
     "yAxisScale": "Y-Axis Scale",
     "yAxisScaleDesc": "Primary axis range control",
@@ -1430,7 +1431,8 @@
     "otherReconciliationResidual": "Other / reconciliation residual",
     "annualizedReturn": "Annualized",
     "annualizedReturnTooltip": "Net annualized return (CAGR) of all still-open lots of this position, from the first transaction to today — including income minus fees; valued at cost when no market price. For comparison across positions held for different durations.",
-    "annualizedReturnPeriodTooltip": "Net annualized return (CAGR) over the position's holding window within the selected period, for comparison across periods of different durations."
+    "annualizedReturnPeriodTooltip": "Net annualized return (CAGR) over the position's holding window within the selected period, for comparison across periods of different durations.",
+    "netWorthTooltip": "Securities at market value + cash (+ value in transit). Includes liquidity — not comparable to the securities-only figure in a bank statement."
   },
   "dataQuality": {
     "headerInfoOnly": "Data quality note",
@@ -2051,7 +2053,8 @@
       "stateDel": "del",
       "suggestLightbulb": "Show suggestion",
       "partnerInaccessible": "Partner on inaccessible broker",
-      "eventTooltipAmount": "Amount"
+      "eventTooltipAmount": "Amount",
+      "splitHint": "To delete only one side, first use Split to unlink the pair."
     },
     "commit": {
       "serverError": "Save failed — server error"
@@ -2118,7 +2121,6 @@
       "now": "Validate now",
       "validating": "validating…",
       "ok": "valid",
-      "deleteOk": "removal allowed",
       "issuesHeader": "Validation errors were found",
       "balanceIssuesHeader": "This configuration causes data inconsistencies",
       "autoOff": "Auto-validate is OFF ({n} rows > {threshold}) — press ⚡️ Validate now before commit",
@@ -2160,7 +2162,8 @@
       "wacFxUnavailable": "❌ WAC calculation failed.",
       "wacFxUnavailableSyncLink": "Sync FX rates",
       "wacFxUnavailableOrManual": "or switch to manual mode.",
-      "costBasisRequired": "❌ <b>{type}</b> with positive quantity requires a cost basis. Use <b>Auto</b> mode (WAC) or enter a <b>manual</b> value."
+      "costBasisRequired": "❌ <b>{type}</b> with positive quantity requires a cost basis. Use <b>Auto</b> mode (WAC) or enter a <b>manual</b> value.",
+      "pairDeleteIncomplete": "Linked transaction: deleting this row also requires deleting its pair (transaction #{partnerId}). If the pair belongs to a broker you cannot edit, ask its owner to delete it."
     },
     "pydantic": {
       "greaterThan": "Value must be greater than {gt}",
@@ -2195,25 +2198,6 @@
       "assetRequired": "Please select an asset",
       "quantityInvalid": "Quantity must be a valid number",
       "cashRequired": "Cash amount and currency are required"
-    },
-    "deleteModal": {
-      "titleStandalone": "Delete transaction",
-      "titleLinked": "Delete linked transaction",
-      "pairedIntro": "Both transactions in this pair will be deleted.",
-      "splitHint": "To delete only one side, first use Split to unlink the pair.",
-      "linkedInfo": "This transaction is part of a linked pair.",
-      "notAccessible": "not accessible",
-      "blockedMessage": "Cannot delete: you need Editor access on both brokers to delete a linked pair.",
-      "contactOwner": "Contact the owner of",
-      "forAccess": "for access.",
-      "deleteBoth": "Delete both",
-      "toastDeletedStandalone": "Transaction deleted:",
-      "toastDeletedPaired": "Pair deleted:",
-      "toastOnBroker": "on",
-      "deleteAbortedTitle": "Deletion cancelled",
-      "deleteAbortedDetail": "The operation was rolled back because it would violate balance rules:",
-      "failed": "Delete failed",
-      "validateFailed": "Validation failed"
     },
     "picker": {
       "title": "Select transactions to add",
@@ -2359,7 +2343,8 @@
       "dPeriod": "Smoothing period applied to %K to produce %D. It changes %D only.",
       "riskWindow": "Number of prepared daily return observations in each rolling window.",
       "riskFreeAnnualRate": "Annual effective risk-free rate used only to calculate Sharpe.",
-      "comparisonAsset": "Persisted asset used as the real comparison series for beta."
+      "comparisonAsset": "Persisted asset used as the real comparison series for beta.",
+      "riskFullHistory": "Measure drawdown against the highest peak of the entire available history, not just the visible window. Disable for a faster, window-relative view."
     },
     "units": {
       "days": "days"
@@ -3111,5 +3096,16 @@
     "copied": "Copied!",
     "askAdminTitle": "Update available — contact an administrator",
     "emailCopied": "Email copied to clipboard"
+  },
+  "providerErrors": {
+    "NO_DATA": "No data available for this instrument on the provider.",
+    "NO_DATA_STALE": "The published NAV is dated {nav_date}, not today — showing it as current would misstate the portfolio.",
+    "NOT_FOUND": "Instrument not found on the provider.",
+    "FETCH_ERROR": "The provider could not be reached or returned an error.",
+    "NOT_IMPLEMENTED": "This provider does not support the operation.",
+    "TIMEOUT": "The provider did not respond in time.",
+    "MISSING_PARAMS": "The provider configuration is missing required parameters.",
+    "PARSE_ERROR": "The provider response could not be parsed.",
+    "SCRAPE_ERROR": "The provider page could not be read."
   }
 }

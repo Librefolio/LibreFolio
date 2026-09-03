@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import backend.app.services.ai_export.components.drawdown_context as drawdown_module
 from backend.app.db.session import get_async_engine
-from backend.app.schemas.common import Currency
+from backend.app.schemas.common import Currency, OpenDateRangeModel
 from backend.app.schemas.portfolio import DataQualityReport
 from backend.app.schemas.risk import (
     RiskAnalyticResult,
@@ -130,6 +130,33 @@ def _stub_risk_service(monkeypatch):
     yield
 
 
+class _FakeDateSentinels:
+    """Deterministic stand-in for ``resolve_date_sentinels`` (E1).
+
+    The component asks it for the user's earliest accessible transaction when
+    building a PORTFOLIO-scope risk request. The real resolver reads the shared
+    test DB by user_id — a row ANY other test writes for that user would move
+    the answer, so the double owns it. ``inception`` is per-test state, reset
+    by the autouse fixture; ``None`` models a user with no transactions.
+    """
+
+    inception: date | None = None
+    captured: list[dict] = []
+
+    @classmethod
+    async def resolve(cls, date_range, user_id, session, *, broker_ids=None):
+        cls.captured.append({"date_range": date_range, "user_id": user_id, "broker_ids": broker_ids})
+        return OpenDateRangeModel(start=cls.inception, end=date_range.end)
+
+
+@pytest.fixture(autouse=True)
+def _stub_date_sentinels(monkeypatch):
+    _FakeDateSentinels.inception = None
+    _FakeDateSentinels.captured = []
+    monkeypatch.setattr(drawdown_module, "resolve_date_sentinels", _FakeDateSentinels.resolve)
+    yield
+
+
 @pytest_asyncio.fixture
 async def session():
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as s:
@@ -203,6 +230,10 @@ def _market_snapshot_envelope(*, native_currency: str | None) -> SectionEnvelope
 class TestPortfolioDrawdown:
     @pytest.mark.asyncio
     async def test_portfolio_request_parameters_and_twrr_passthrough(self, session):
+        # E1: drawdown exports compute over the FULL available history. The
+        # user's earliest accessible transaction predates the build period, so
+        # the request start is that inception date, not period_start.
+        _FakeDateSentinels.inception = date(2019, 6, 15)
         _FakeRiskService.response_factory = lambda request: RiskQueryResponse.model_construct(items=[_ok_result(_drawdown_output(return_basis=RiskReturnBasis.TWRR, calculation_basis="historical_twrr"))])
         context = _context(session, _portfolio_scope(target="EUR"))
         payload = await _build_portfolio_drawdown(context, {})
@@ -216,12 +247,38 @@ class TestPortfolioDrawdown:
         assert request.target_currency == "EUR"
         assert request.mode == RiskMode.HISTORICAL
         assert [a.analytic_code for a in request.analytics] == ["drawdown_summary"]
-        assert request.date_range.start == PERIOD_START and request.date_range.end == PERIOD_END
+        # Full-history start (E1): the resolved inception, earlier than the period.
+        assert request.date_range.start == date(2019, 6, 15) and request.date_range.end == PERIOD_END
+        # The sentinel was resolved for the whole accessible portfolio (no broker filter).
+        assert _FakeDateSentinels.captured[0]["broker_ids"] is None
 
         assert payload.status == DrawdownContextStatus.OK
         assert payload.return_basis == "twrr"
         assert payload.calculation_basis == "historical_twrr"
         assert payload.calculation_currency == "EUR"
+
+    @pytest.mark.asyncio
+    async def test_portfolio_without_any_transaction_keeps_the_period_start(self, session):
+        """E1 residual branch: no accessible transactions → no inception → the
+        request covers the build period (never an unbounded empty range)."""
+        _FakeDateSentinels.inception = None
+        _FakeRiskService.response_factory = lambda request: RiskQueryResponse.model_construct(items=[_ok_result(_drawdown_output(return_basis=RiskReturnBasis.TWRR, calculation_basis="historical_twrr"))])
+        payload = await _build_portfolio_drawdown(_context(session, _portfolio_scope()), {})
+
+        request = _FakeRiskService.captured[0]["request"]
+        assert request.date_range.start == PERIOD_START and request.date_range.end == PERIOD_END
+        assert payload.status == DrawdownContextStatus.OK
+
+    @pytest.mark.asyncio
+    async def test_portfolio_inception_after_period_start_does_not_shrink_the_range(self, session):
+        """E1 guard: the start is min(inception, period_start) — an inception
+        *inside* the period must never narrow the requested export window."""
+        _FakeDateSentinels.inception = date(2024, 6, 1)  # inside the 2024 build period
+        _FakeRiskService.response_factory = lambda request: RiskQueryResponse.model_construct(items=[_ok_result(_drawdown_output(return_basis=RiskReturnBasis.TWRR, calculation_basis="historical_twrr"))])
+        await _build_portfolio_drawdown(_context(session, _portfolio_scope()), {})
+
+        request = _FakeRiskService.captured[0]["request"]
+        assert request.date_range.start == PERIOD_START and request.date_range.end == PERIOD_END
 
     @pytest.mark.asyncio
     async def test_ratio_semantics_are_verbatim_from_risk(self, session):
@@ -264,11 +321,16 @@ class TestPortfolioDrawdown:
 class TestBrokerDrawdown:
     @pytest.mark.asyncio
     async def test_broker_request_uses_exact_selected_broker_filter(self, session):
+        _FakeDateSentinels.inception = date(2020, 2, 3)
         _FakeRiskService.response_factory = lambda request: RiskQueryResponse.model_construct(items=[_ok_result(_drawdown_output(return_basis=RiskReturnBasis.TWRR, calculation_basis="historical_twrr"))])
         payload = await _build_broker_drawdown(_context(session, _broker_scope(broker_id=9)), {})
         request = _FakeRiskService.captured[0]["request"]
         assert request.scope.kind == RiskScopeKind.PORTFOLIO
         assert request.scope.broker_ids == [9]
+        # E1: full-history start from the broker-scoped inception…
+        assert request.date_range.start == date(2020, 2, 3)
+        # …and the sentinel resolution was itself scoped to that broker.
+        assert _FakeDateSentinels.captured[0]["broker_ids"] == [9]
         assert payload.status == DrawdownContextStatus.OK
         assert payload.return_basis == "twrr"
 
@@ -288,6 +350,11 @@ class TestAssetDrawdown:
         request = _FakeRiskService.captured[0]["request"]
         assert request.scope.kind == RiskScopeKind.ASSET
         assert request.scope.asset_id == 7
+        # E1: ASSET scope loads from date.min — price loads are sparse-safe, so
+        # the request asks for the whole history outright, and the transaction
+        # sentinel resolver is never consulted.
+        assert request.date_range.start == date.min
+        assert _FakeDateSentinels.captured == []
         # native price currency (USD), NOT the portfolio target currency (EUR)
         assert request.target_currency == "USD"
         assert payload.status == DrawdownContextStatus.OK

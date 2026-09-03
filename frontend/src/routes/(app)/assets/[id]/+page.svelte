@@ -192,6 +192,7 @@
     let signalInstanceResults = $state<SignalInstanceResult[]>([]);
     let signalCatalogFailed = $state(false);
     let signalRequestFailed = $state(false);
+    let signalsLoading = $state(false);
     const signalResultState = new SignalResultState();
     let signalBackendError = $derived(signalCatalogFailed ? $t('chartSettings.signalCatalogUnavailable') : signalRequestFailed ? $t('chartSettings.signalResultsUnavailable') : null);
 
@@ -1149,6 +1150,7 @@
         loading = !pricesFromCache;
         error = null;
         signalRequestFailed = false;
+        signalsLoading = requestPlan.requests.length > 0;
         try {
             const response = await zodiosApi.query_prices_bulk_api_v1_assets_prices_query_post([
                 {
@@ -1189,6 +1191,7 @@
             if (chartData.length === 0) error = e?.message || 'Failed to load prices';
         } finally {
             loading = false;
+            signalsLoading = false;
         }
     }
 
@@ -1940,6 +1943,7 @@
                         signals={[...signals]}
                         definitions={signalDefinitions}
                         backendError={signalBackendError}
+                        {signalsLoading}
                         onretrybackend={retryBackendSignals}
                         availablePairs={allConfiguredFxSlugs}
                         availableAssets={allAssets.filter((a) => a.id !== data.assetId)}

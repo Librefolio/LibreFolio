@@ -102,6 +102,9 @@ It's a rough estimate of **today's** return — a quick pulse check. It is not t
 
 The **Net Worth** card shows the absolute value of your portfolio at the end of the selected period.
 
+!!! note "Net Worth includes cash"
+    The figure is **securities at market value + cash balance** (+ any value in transit between brokers). Because it includes liquidity, it is **not comparable** with the "securities value" (controvalore titoli) shown by a bank statement, which excludes cash — a bank's cash balance is reported separately.
+
 ### The number below Net Worth
 
 Below the Net Worth value you'll find your **Total P&L**, with its percentage change in parentheses — e.g. `+12,450.30 (+0.35%)`.

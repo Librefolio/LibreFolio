@@ -279,19 +279,23 @@ W8 (schema warning)  ──▶ coordinare con P1/Step 6
 
 > 🔄 **Riallineato il 08/08/2026**, dopo i giri di beta testing su Crédit Agricole (P1 Fase A) e
 > il rifacimento UI del wizard. Verificato sul codice, non sulla memoria del piano.
+>
+> 🔄 **Riverificato il 02/09/2026** (probe su codice `dev_release2`): W9/W10 risultano fatti
+> (erano rimasti marcati "da iniziare"); W1/W3/W4 confermati aperti; W7 ri-analizzato in
+> profondità — quasi superato dalla ristrutturazione, resta un caso residuo (sotto).
 
 | ID | Rilievo | Complessità | Stato |
 |---|---|---|---|
-| W2 🔴 | Consolidamento asset cross-file | Media/Alta | ➡️ Passato a P3 (WS‑C, Step 4 «Unifica asset») |
-| W1 | Conteggi non deduplicati | Media | ⏳ Da iniziare — `parseAggregateStats` (`ImportWizardModal.svelte:225-243`) deriva ancora da `parseResults` |
-| W3 | Riepilogo non sottrae le rimozioni | Piccola/Media | ⏳ Da iniziare — stessa causa di W1, stessa fix |
-| W4 | Tipi transazione in inglese | Banale | ⏳ Da iniziare — `ParseDetailModal.svelte:183` è ancora `{type}` grezzo |
+| W2 🔴 | Consolidamento asset cross-file | Media/Alta | ✅ Fatto in P3 (WS‑C) — `applyAssetGrouping()` (`ImportWizardModal.svelte:672`) raggruppa per identità e riscrive `tx.asset_id` sui survivor |
+| W1 | Conteggi non deduplicati | Media | ✅ **Fatto 02/09** — `parseAggregateStats` deriva dallo stato consolidato: `uniqueAssets`/`unresolvedCount` da `assetResolutions` (post-`applyAssetGrouping`, una voce per gruppo d'identità), `totalTx` dalle righe **selezionate** di `mergedTransactions`; fallback ai grezzi solo mentre il parse è in corso |
+| W3 | Riepilogo non sottrae le rimozioni | Piccola/Media | ✅ **Fatto 02/09** — stessa fix di W1: i conteggi descrivono ciò che verrà importato (selezione corrente), non ciò che è stato letto |
+| W4 | Tipi transazione in inglese | Banale | ✅ **Fatto 02/09** — `ParseDetailModal.svelte:183` ora `$t('transactions.types.' + type)` |
 | W5 | `N TX` poco chiaro | Banale | ✅ **Fatto** — `importWizard.txCount` = «{n} transazioni in {k} file», colonna «Transazioni parsate». Resta il micro-refuso `importWizard.todoRow` = «TX #{n}» |
 | W6 | Annulla non resetta l'asset | Banale | ➡️ Assorbito da P3 (B‑02) — qui resta solo la verifica |
-| W7 | Auto-selezione dopo assegnazione | Piccola | 🔶 **Parziale** — `recheckOpenings()` (`:1663`) ora è invocata anche da `autoFixBrokerOpening` (`:1679`), dal bottone «ricontrolla» (`:4124`) e da `BrokerModal.onupdated` (`:4658`); **non** ancora da `resolveAsset` / `resolveAssetManual` / `clearResolution`. La derivazione a runes resta la fix preferita |
-| W8 | Livello INFO nei warning | Media | ✅ **Superato da P1 Fase A** — `BRIMNotice{severity: info\|warning, code, message, evidence, rows}` (`backend/app/schemas/brim.py:428-460`) con coercizione dalle stringhe legacy, `api sync` già fatto, resa in `BrimNoticeList.svelte`. Il campo `rows` copre la sinergia prevista con B7 |
-| W9 | Upload/parse in parallelo | Piccola | ⏳ Da iniziare — nessun `allSettled` nel wizard |
-| W10 | `asyncio.to_thread` sul parse | Piccola | ⏳ Da iniziare — `brokers.py:778` chiama ancora `brim_provider.parse_file(...)` sincrono dentro `async def` |
+| W7 | Auto-selezione dopo assegnazione | Piccola | ✅ **Fatto 02/09** — estratto `reselectImportableRows()` (passo puro, senza refetch broker) invocato da `recheckOpenings` E da `resolveAsset`/`clearResolution` (`resolveAssetManual` passa da `resolveAsset`): coperto il caso residuo (riga before-opening + asset assegnato DOPO la sistemazione del broker). Il resto era già superato dalla ristrutturazione (pre-selezione al merge senza attesa di risoluzione, gate `$derived` sull'import) |
+| W8 | Livello INFO nei warning | Media | ✅ **Superato da P1 Fase A** — `BRIMNotice{severity: info\|warning, code, message, evidence, rows}` (`backend/app/schemas/brim.py:420`) con coercizione dalle stringhe legacy, `api sync` già fatto, resa in `BrimNoticeList.svelte`. Il campo `rows` copre la sinergia prevista con B7 |
+| W9 | Upload/parse in parallelo | Piccola | ✅ **Fatto** (riverificato 02/09) — `mapWithConcurrency` in `uploadAllPendingFiles` (`:2718`) e `doParseAll` (`:3150`) |
+| W10 | `asyncio.to_thread` sul parse | Piccola | ✅ **Fatto** (riverificato 02/09) — superato: il parse gira in process pool via `parse_file_offloaded` da `brim_parse_pool` (`brokers.py:73,858`) |
 
 ### Nota sulla UI cambiata sotto questo piano
 

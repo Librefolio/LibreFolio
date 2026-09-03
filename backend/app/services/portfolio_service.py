@@ -62,7 +62,7 @@ from backend.app.schemas.portfolio import (
 )
 from backend.app.schemas.wac import WACMissingPairInfo, WACPreviewResultItem, WACQualifyingTX
 from backend.app.services.fx import convert_bulk
-from backend.app.services.settings_service import get_global_setting
+from backend.app.services.settings_service import get_effective_base_currency
 from backend.app.utils.cache_utils import get_ttl_cache
 from backend.app.utils.financial.roi_utils import (
     CashFlowInput,
@@ -714,10 +714,9 @@ class PortfolioService:
     # Private helpers
     # ------------------------------------------------------------------
 
-    async def _get_base_currency(self) -> str:
-        """Return the global base currency (default: EUR)."""
-        setting = await get_global_setting("base_currency", self.db)
-        return setting.value if setting else "EUR"
+    async def _get_base_currency(self, user_id: int) -> str:
+        """Effective base currency: per-user setting, global default, EUR (P0-1)."""
+        return await get_effective_base_currency(self.db, user_id)
 
     async def _get_user_broker_access(
         self,
@@ -966,7 +965,7 @@ class PortfolioService:
 
         today = date_type.today()
         valuation_date = date_to or today
-        base_currency = target_currency_override or await self._get_base_currency()
+        base_currency = target_currency_override or await self._get_base_currency(user_id)
 
         # ── 1. Run engine for aggregate values + performance ──
         if _precomputed_engine_result is not None:
@@ -1573,7 +1572,7 @@ class PortfolioService:
             PortfolioCalculationEngine,
         )
 
-        base_currency = target_currency_override or await self._get_base_currency()
+        base_currency = target_currency_override or await self._get_base_currency(user_id)
         if _precomputed_engine_result is not None:
             result = _precomputed_engine_result
         else:
@@ -1727,7 +1726,7 @@ class PortfolioService:
         """
         today = date_type.today()
         effective_end = date_to or today
-        base_currency = target_currency_override or await self._get_base_currency()
+        base_currency = target_currency_override or await self._get_base_currency(user_id)
 
         accesses = await self._get_user_broker_access(user_id, broker_ids)
         if not accesses:
@@ -2164,7 +2163,7 @@ class PortfolioService:
         )
 
         today = date_type.today()
-        base_currency = query.target_currency or await self._get_base_currency()
+        base_currency = query.target_currency or await self._get_base_currency(user_id)
         date_from = query.date_range.resolved_start() if query.date_range else None
         date_to = query.date_range.resolved_end() if query.date_range else None
 

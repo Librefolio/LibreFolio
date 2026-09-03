@@ -35,7 +35,7 @@ from decimal import Decimal
 from typing import AsyncGenerator, Dict, List, Literal, Optional
 
 import structlog
-from sqlalchemy import String, and_, cast, delete, func, or_, select, update
+from sqlalchemy import String, and_, case, cast, delete, func, or_, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -234,6 +234,26 @@ class AssetSourceError(Exception):
         self.message = message
         self.error_code = error_code
         self.details = details or {}
+
+
+def _json_safe_details(details: Optional[dict]) -> Optional[dict]:
+    """Make an AssetSourceError ``details`` dict safe for a JSON response (I3).
+
+    Providers may put dates, Decimals or other non-primitives in ``details``;
+    the probe DTO must serialize, so anything not natively JSON-safe is
+    stringified. ``None`` and empty dicts stay ``None`` (field omitted).
+    """
+    if not details:
+        return None
+    safe: dict = {}
+    for key, value in details.items():
+        if value is None or isinstance(value, (str, int, float, bool)):
+            safe[str(key)] = value
+        elif isinstance(value, (list, tuple)):
+            safe[str(key)] = [item if item is None or isinstance(item, (str, int, float, bool)) else str(item) for item in value]
+        else:
+            safe[str(key)] = str(value)
+    return safe
 
 
 # ============================================================================
@@ -1928,6 +1948,7 @@ class AssetSourceManager:
                 return ProbeCurrentPriceResult(
                     success=False,
                     error="Timeout after 15s",
+                    error_code="TIMEOUT",
                     execution_time_ms=(time.monotonic_ns() - op_start) // 1_000_000,
                 )
             except Exception as e:
@@ -1935,6 +1956,7 @@ class AssetSourceManager:
                     success=False,
                     error=str(e),
                     error_code=getattr(e, "error_code", None),
+                    error_details=_json_safe_details(getattr(e, "details", None)),
                     execution_time_ms=(time.monotonic_ns() - op_start) // 1_000_000,
                 )
 
@@ -1965,6 +1987,7 @@ class AssetSourceManager:
                 return ProbeHistoryResult(
                     success=False,
                     error="Timeout after 15s",
+                    error_code="TIMEOUT",
                     execution_time_ms=(time.monotonic_ns() - op_start) // 1_000_000,
                 )
             except Exception as e:
@@ -1972,6 +1995,7 @@ class AssetSourceManager:
                     success=False,
                     error=str(e),
                     error_code=getattr(e, "error_code", None),
+                    error_details=_json_safe_details(getattr(e, "details", None)),
                     execution_time_ms=(time.monotonic_ns() - op_start) // 1_000_000,
                 )
 
@@ -1992,12 +2016,15 @@ class AssetSourceManager:
                 return ProbeMetadataResult(
                     success=False,
                     error="Timeout after 15s",
+                    error_code="TIMEOUT",
                     execution_time_ms=(time.monotonic_ns() - op_start) // 1_000_000,
                 )
             except Exception as e:
                 return ProbeMetadataResult(
                     success=False,
                     error=str(e),
+                    error_code=getattr(e, "error_code", None),
+                    error_details=_json_safe_details(getattr(e, "details", None)),
                     execution_time_ms=(time.monotonic_ns() - op_start) // 1_000_000,
                 )
 
@@ -2166,10 +2193,17 @@ class AssetSourceManager:
                 context,
                 req.annotation_requests,
             )
-            warmup_days = max(
-                plan.max_history_points_before_visible,
-                plan.max_prepared_history_points_before_visible * _RISK_WARMUP_DAY_MULTIPLIER,
-            )
+            # E1: a full-history computation (e.g. underwater drawdown, whose
+            # relevant peak may predate the visible range by years) loads from
+            # the beginning of the available history; the min() cap below then
+            # resolves to exactly date.min. Point-derived warm-up otherwise.
+            if plan.requires_full_history:
+                warmup_days = (req.date_range.start - date_type.min).days
+            else:
+                warmup_days = max(
+                    plan.max_history_points_before_visible,
+                    plan.max_prepared_history_points_before_visible * _RISK_WARMUP_DAY_MULTIPLIER,
+                )
             warmup_days = min(
                 warmup_days,
                 (req.date_range.start - date_type.min).days,
@@ -2390,6 +2424,26 @@ class AssetSourceManager:
 
             converted, conv_errors = await convert_bulk(session, conversions, raise_on_error=False)
 
+            # Dedup conversion errors ONCE per job. The old per-point loop ran
+            # `err not in result.errors` for every failed point × every error —
+            # quadratic in the number of failures, and with a full-history load
+            # (E1) tens of thousands of distinct per-date errors made the pass
+            # spin the event loop for minutes (2026-09-02 live wedge).
+            # The list is also CAPPED: errors embed the failing date, so a
+            # long uncovered FX range would otherwise produce a multi-MB
+            # payload nobody reads (the frontend only ever surfaces [0]).
+            if conv_errors:
+                seen = set(result.errors)
+                deduped = []
+                for err in conv_errors:
+                    if err not in seen:
+                        seen.add(err)
+                        deduped.append(err)
+                MAX_CONV_ERRORS = 10
+                if len(deduped) > MAX_CONV_ERRORS:
+                    deduped = deduped[:MAX_CONV_ERRORS] + [f"… and {len(deduped) - MAX_CONV_ERRORS} more FX conversion failures"]
+                result.errors.extend(deduped)
+
             # Apply conversion results
             conv_idx = 0
             for pi in price_indices:
@@ -2424,10 +2478,6 @@ class AssetSourceManager:
                         source_plugin_key=original_point.source_plugin_key,
                         backward_fill_info=failed_bfi,
                     )
-                    # Surface the per-pair error once per result (dedup)
-                    for err in conv_errors:
-                        if err not in result.errors:
-                            result.errors.append(err)
                     conv_idx += 1
                     continue
 
@@ -4154,12 +4204,70 @@ class AssetCRUDService:
 
         results: list[FAAssetPatchResult] = []
 
+        # P0-5 (audit 08): no N+1. Preload every patched asset in ONE query and
+        # compute the currency-change guard data with per-asset aggregates.
+        # Before: 1 SELECT per patch + up to 6 per currency-changing patch.
+        # After: 1 SELECT + 3 constant aggregate queries.
+        patch_ids = [patch.asset_id for patch in patches]
+        asset_rows = (await session.execute(select(Asset).where(Asset.id.in_(patch_ids)))).scalars().all() if patch_ids else []
+        assets_by_id = {asset.id: asset for asset in asset_rows}
+
+        # Prepare each patch's payload once (pure CPU — same semantics as the
+        # old in-loop computation, including the explicit-None clearing rule for
+        # classification_params).
+        prepared: list[tuple[FAAssetPatchItem, dict]] = []
         for patch in patches:
+            patch_dict = patch.model_dump(mode="json", exclude={"asset_id"}, exclude_unset=True, exclude_none=True)
+            # Special handling for classification_params=None (clearing the field):
+            # only when the field was explicitly set on the patch object.
+            if "classification_params" not in patch_dict and patch.classification_params is None and "classification_params" in patch.model_fields_set:
+                patch_dict["classification_params"] = None
+            prepared.append((patch, patch_dict))
+
+        # Currency-change guard data (Policy D below), batched per asset.
+        currency_change_ids = [
+            patch.asset_id
+            for patch, patch_dict in prepared
+            if patch_dict.get("currency") and patch.asset_id in assets_by_id and patch_dict["currency"] != assets_by_id[patch.asset_id].currency
+        ]
+        price_agg: dict[int, tuple[int, object, object]] = {}
+        event_manual_agg: dict[int, int] = {}
+        event_provider_agg: dict[int, int] = {}
+        linked_tx_agg: dict[int, int] = {}
+        if currency_change_ids:
+            price_rows = (
+                await session.execute(
+                    select(PriceHistory.asset_id, func.count(), func.min(PriceHistory.date), func.max(PriceHistory.date)).where(PriceHistory.asset_id.in_(currency_change_ids)).group_by(PriceHistory.asset_id)
+                )
+            ).all()
+            price_agg = {row[0]: (int(row[1]), row[2], row[3]) for row in price_rows}
+
+            event_rows = (
+                await session.execute(
+                    select(
+                        AssetEvent.asset_id,
+                        func.sum(case((AssetEvent.provider_assignment_id.is_(None), 1), else_=0)),
+                        func.sum(case((AssetEvent.provider_assignment_id.is_not(None), 1), else_=0)),
+                    )
+                    .where(AssetEvent.asset_id.in_(currency_change_ids))
+                    .group_by(AssetEvent.asset_id)
+                )
+            ).all()
+            event_manual_agg = {row[0]: int(row[1] or 0) for row in event_rows}
+            event_provider_agg = {row[0]: int(row[2] or 0) for row in event_rows}
+
+            linked_rows = (
+                await session.execute(
+                    select(AssetEvent.asset_id, func.count(Transaction.id)).join(Transaction, Transaction.asset_event_id == AssetEvent.id).where(AssetEvent.asset_id.in_(currency_change_ids)).group_by(AssetEvent.asset_id)
+                )
+            ).all()
+            linked_tx_agg = {row[0]: int(row[1]) for row in linked_rows}
+
+        for patch, patch_dict in prepared:
             try:
-                # Fetch asset
-                stmt = select(Asset).where(Asset.id == patch.asset_id)
-                result = await session.execute(stmt)
-                asset: Asset = result.scalar_one_or_none()
+                # P0-5: the asset comes from the bulk preload above (identity map
+                # keeps sequential patches on the same id consistent).
+                asset = assets_by_id.get(patch.asset_id)
 
                 if not asset:
                     results.append(
@@ -4176,19 +4284,6 @@ class AssetCRUDService:
 
                 # Track updated fields
                 updated_fields: List[OldNew[str]] = []
-
-                # Update fields if present in patch (use model_dump to detect presence)
-                # Use exclude_unset=True to only include fields that were explicitly set
-                # Use exclude_none=True to exclude None values (except classification_params which we handle specially)
-                patch_dict = patch.model_dump(mode="json", exclude={"asset_id"}, exclude_unset=True, exclude_none=True)
-
-                # Special handling for classification_params=None (clearing the field)
-                # Check if it was explicitly set to None in the original patch object
-                if "classification_params" not in patch_dict and patch.classification_params is None:
-                    # Check if the field was explicitly set (not just default None)
-                    # We can use __pydantic_fields_set__ to check
-                    if "classification_params" in patch.model_fields_set:
-                        patch_dict["classification_params"] = None
 
                 # I.3 + R3-3 Policy D — guard against currency change on assets with
                 # any residual market data (prices, events, or transactions still
@@ -4215,42 +4310,14 @@ class AssetCRUDService:
                 if "currency" in patch_dict:
                     new_currency = patch_dict["currency"]
                     if new_currency and new_currency != asset.currency:
-                        price_count_res = await session.execute(select(func.count()).select_from(PriceHistory).where(PriceHistory.asset_id == patch.asset_id))
-                        price_count = int(price_count_res.scalar() or 0)
-
-                        event_manual_res = await session.execute(
-                            select(func.count())
-                            .select_from(AssetEvent)
-                            .where(
-                                AssetEvent.asset_id == patch.asset_id,
-                                AssetEvent.provider_assignment_id.is_(None),
-                            )
-                        )
-                        event_manual_count = int(event_manual_res.scalar() or 0)
-
-                        event_provider_res = await session.execute(
-                            select(func.count())
-                            .select_from(AssetEvent)
-                            .where(
-                                AssetEvent.asset_id == patch.asset_id,
-                                AssetEvent.provider_assignment_id.is_not(None),
-                            )
-                        )
-                        event_provider_count = int(event_provider_res.scalar() or 0)
-
-                        # Transactions linked (via asset_event_id) to any event of this asset.
-                        linked_tx_res = await session.execute(select(func.count()).select_from(Transaction).where(Transaction.asset_event_id.in_(select(AssetEvent.id).where(AssetEvent.asset_id == patch.asset_id))))
-                        linked_tx_count = int(linked_tx_res.scalar() or 0)
+                        # P0-5: all four counts + the price date range come from
+                        # the batched aggregates computed before the loop.
+                        price_count, oldest_date, newest_date = price_agg.get(patch.asset_id, (0, None, None))
+                        event_manual_count = event_manual_agg.get(patch.asset_id, 0)
+                        event_provider_count = event_provider_agg.get(patch.asset_id, 0)
+                        linked_tx_count = linked_tx_agg.get(patch.asset_id, 0)
 
                         if price_count > 0 or event_manual_count > 0 or event_provider_count > 0:
-                            oldest_date = None
-                            newest_date = None
-                            if price_count > 0:
-                                oldest_res = await session.execute(select(func.min(PriceHistory.date)).where(PriceHistory.asset_id == patch.asset_id))
-                                newest_res = await session.execute(select(func.max(PriceHistory.date)).where(PriceHistory.asset_id == patch.asset_id))
-                                oldest_date = oldest_res.scalar()
-                                newest_date = newest_res.scalar()
-
                             blocker_msg = (
                                 "CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA"
                                 f"|prices={price_count}"

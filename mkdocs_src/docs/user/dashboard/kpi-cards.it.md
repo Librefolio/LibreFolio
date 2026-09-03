@@ -102,6 +102,9 @@ Sotto l'Effetto Tempistica vedrai una piccola percentuale (es. `+0.35%`) — è 
 
 La scheda **Patrimonio Netto** mostra il valore assoluto del tuo portafoglio alla fine del periodo selezionato.
 
+!!! note "Il Patrimonio Netto include la liquidità"
+    La cifra è **titoli al valore di mercato + saldo liquido** (+ eventuale valore in transito tra broker). Poiché include la liquidità, **non è confrontabile** con il "controvalore titoli" di un estratto conto bancario, che esclude la cassa — la liquidità della banca è riportata separatamente.
+
 ### The numero sotto il Patrimonio Netto
 
 Sotto il valore del Patrimonio Netto troverai il tuo **P&L Totale**, con la sua variazione percentuale tra parentesi — es. `+12.450,30 (+0,35%)`.

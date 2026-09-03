@@ -85,11 +85,11 @@ che include la liquidità.
 |---|---|---|---|---|---|
 | **P1** | [`plan-phase00BrimCreditAgricoleTrades.prompt.md`](plan-phase00BrimCreditAgricoleTrades.prompt.md) | Plugin BRIM Crédit Agricole | B1–B8 | 🔴 Bloccante | **Fase A ✅ · 🛑 checkpoint di collaudo · Fase B ⏳** |
 | **P1‑bis** | [`plan-phase00ImportFlowStepRestructure.prompt.md`](plan-phase00ImportFlowStepRestructure.prompt.md) | **Ordine del flusso di import**: correzione prima del confronto duplicati | — | 🔴 Alta | ✅ **fatto** 2026‑08‑07 — endpoint `/brokers/import/duplicates`, macchina a stati per id con auto‑skip, step «Correzioni» e step «Duplicati» (cross‑file + collisioni DB). Test: 27 API · 463 provider · 18 E2E. *Slot libero per «Unifica asset» (WS‑C) fra `analyze` e `fix`* |
-| **P2** | [`plan-phase00ImportWizardUx.prompt.md`](plan-phase00ImportWizardUx.prompt.md) | Wizard di import | W1–W12 | 🟠 Alta | 🟢 **Parziale** — W5/W8/W9/W10 fatti (label N TX, severity BRIM, upload/parse paralleli, parse in process pool). Aperti: W1 (conteggio asset non deduplica cross-file), W3 (sommario non ricalcolato), W4 (tipi non tradotti). W7 parziale (call sites). W2/W6 → P3. *(verificato vs codice 02/09)* |
+| **P2** | [`plan-phase00ImportWizardUx.prompt.md`](plan-phase00ImportWizardUx.prompt.md) | Wizard di import | W1–W12 | 🟠 Alta | ✅ **Completo 02/09** — W1/W3/W4/W7 chiusi (codice + test); W2/W6 restano in P3 (fatti lì). Stato dettagliato nella tabella del piano |
 | **P3** | [`plan-phase00AssetIdentityAndIdentifiers.prompt.md`](plan-phase00AssetIdentityAndIdentifiers.prompt.md) | **Identità dell'asset**: unificazione, identificativi, ciclo di vita | A1–A5, **A6** ➕, **W2** *(da P2)*, **W6** *(assorbito da P2)* | 🔴 Alta (A1 grave) | **Onda 1 ✅ · Onda 2 ✅ codice completo (08/08) — resta il collaudo estetico + E2E (F‑01)** |
-| **P4** | [`plan-phase00EngineAccountingAndSignals.prompt.md`](plan-phase00EngineAccountingAndSignals.prompt.md) | Motore contabile e segnali | E1–E2 | 🟠 Media | 🟢 **Aperto** — E1 (drawdown warmup su 2 punti → fuorviante su zoom) non fatto; E2 formula verificata corretta, manca doc/tooltip/test. *(verificato 02/09)* |
-| **P5** | [`plan-phase00TransactionsUxPolish.prompt.md`](plan-phase00TransactionsUxPolish.prompt.md) | UX transazioni | T1–T4 | 🟠 Media | 🟢 **Aperto** — T1 parziale (effect loop), T2 (delay tooltip) no, T3 (data in duplicazione) no, T4 (delete→bulk modal) no. *(verificato 02/09)* |
-| **P6** | [`plan-phase00I18nAndDocsAssets.prompt.md`](plan-phase00I18nAndDocsAssets.prompt.md) | i18n, font, documentazione | I1–I4 | 🟡 Bassa | 🟢 **Parziale** — I2 (fallback gallery) fatto; I1 parziale (font in git ✅, no fail-loud); I3 (errori backend localizzati) no. *(verificato 02/09)* |
+| **P4** | [`plan-phase00EngineAccountingAndSignals.prompt.md`](plan-phase00EngineAccountingAndSignals.prompt.md) | Motore contabile e segnali | E1–E2 | 🟠 Media | ✅ **Completo 02/09** — E1: parametro `full_history` (default true, toggle UI, AI export sempre full anche nel path risk `drawdown_summary`); E2: nota doc ×4 + tooltip composizione + test di presidio |
+| **P5** | [`plan-phase00TransactionsUxPolish.prompt.md`](plan-phase00TransactionsUxPolish.prompt.md) | UX transazioni | T1–T4 | 🟠 Media | ✅ **Completo 02/09** — T1 (virgola importo + quantità vuota), T2 (showDelayMs), T3 (data in duplicazione), T4 (delete→bulk, `TransactionDeleteModal` e chiavi i18n morte rimossi). |
+| **P6** | [`plan-phase00I18nAndDocsAssets.prompt.md`](plan-phase00I18nAndDocsAssets.prompt.md) | i18n, font, documentazione | I1–I4 | 🟡 Bassa | ✅ **Completo 02/09** — I1 fail-loud in build Docker (no git versioning, per decisione utente); I2 fatto il 12/08; I3 ridotto: resolver `providerErrors.*` per i codici visibili |
 | **P7** | [`plan-phase00FrontendCoverage.prompt.md`](plan-phase00FrontendCoverage.prompt.md) | **Coverage JavaScript**: misurare il frontend, non solo il backend | — | 🟠 Media | ✅ Completo (12/08) — fasi 0/A/B/C/D/E/F/G. Resta solo la prima misura vera, da fare a test E2E finiti. *Nasce da P3: i difetti si nascondevano in codice frontend non misurato* |
 | **P8** | [`plan-phase00TestRunnerMigration.prompt.md`](plan-phase00TestRunnerMigration.prompt.md) | **Migrazione del test runner**: inventario, scheduler, classi di isolamento, `--workers N` | — | 🟠 Media | 🟢 Tappa 0.3/0.4 ✅ (13/08) — **bug di raggiungibilità corretto**: 6 azioni registrate che nessun `all` eseguiva (~273 test) tornano a girare, e `check-orphans` ora lo verifica. Tappe 1–6 ⏳. *Nasce da P7 (eredita la macchina di coverage) e dal volume di test E2E scritti per P1/P3* |
 
@@ -122,11 +122,11 @@ mentre lavoriamo — è un danno che cresce nel tempo.
 | — | Riconciliazione numerica Excel ↔ dashboard | ✅ Completato (06/08/2026) |
 | P1 | Plugin Crédit Agricole — compravendite | ✅ Completato (08/08/2026) · Fase A+B implementate, collaudate dall'utente e blindate a test (48 backend + 13 di contratto + 12 E2E) |
 | P1‑bis | Ordine del flusso di import (7 step condizionali) | ✅ Completato (07/08/2026) · E2E riallineato al flusso a 7 step (12 test) |
-| P2 | Wizard di import | 🟢 Parziale (W5/W8/W9/W10 fatti; W1/W3/W4 aperti, W7 parziale) — *verificato vs codice 02/09* |
+| P2 | Wizard di import | ✅ Completato 02/09 (test in chiusura) |
 | P3 | Identità dell'asset: unificazione, identificativi, ciclo di vita | ✅ Completato (08/08/2026) · UI approvata dall'utente; E2E scritti: 7 `tx-import-asset-identity` + 3 `asset-merge` + 7 API di fusione |
-| P4 | Motore contabile e segnali | 🟢 Aperto (E1 drawdown non fatto; E2 manca doc/tooltip) — *verificato 02/09* |
-| P5 | UX transazioni | 🟢 Aperto (T1 parziale; T2/T3/T4 no) — *verificato 02/09* |
-| P6 | i18n, font, documentazione | 🟢 Parziale (I2 fatto; I1 parziale; I3 no) — *verificato 02/09* |
+| P4 | Motore contabile e segnali | ✅ Completato 02/09 (test in chiusura) |
+| P5 | UX transazioni | ✅ Completato 02/09 (test in chiusura) |
+| P6 | i18n, font, documentazione | ✅ Completato 02/09 (I1 fail-loud, I2 dal 12/08, I3 ridotto) |
 | P7 | Coverage JavaScript (livelli A e B) | ✅ Fasi 0/A/B/C/E completate (12/08/2026) · `--coverage [py\|js\|all]`, 3 nuovi report JS, 64 spec migrati al barrel. Fase D (analizzatore buchi) aperta |
 | P8 | Migrazione del test runner (parallelizzazione) | 🟢 Tappa 0.3/0.4 (13/08/2026) · corretto il bug di raggiungibilità: 6 azioni registrate ma mai eseguite da un `all` (~273 test, tutti verdi) rimesse in circolo; nuovo `_reachability.py` + `check-orphans` esteso. Tappe 1–6 aperte |
 
@@ -141,3 +141,20 @@ pianificarne la fix — vedi [`01_tassonomia_findings.md`](01_tassonomia_finding
 |---|---|
 | "non posso riportare attivo un asset disattivato dal modifica" | Il toggle `active` **esiste** ed è sempre renderizzato — `AssetModal.svelte:1860-1873` |
 | "anche export AI è disattivo" | L'AI export **non filtra** per `Asset.active` — `runtime_service.py:586` |
+
+---
+
+## 7. Chiusura tornata 02/09 — esito test
+
+Run full seriale (`dev.py test all`, workers=1, fresh-run, 33min): **14/15 categorie verdi**.
+Unico rosso: `front-ai-export` — 3 test di contratto (`ai-export-contract.spec.ts:115,161,190`,
+`broker_ids` nel payload) **pre-esistenti**: riprodotti identici su HEAD prima del batch →
+non regressioni di questa tornata; da triagiare a parte (deriva post-01/09).
+
+Note della tornata:
+- I rossi intermittenti visti solo sotto `--workers auto` (broker-detail lot fee, asset-merge
+  AM-001, fx-csv-import editor) sono verdi in isolamento e in seriale → sensibilità al carico
+  parallelo, candidati per P8 (test runner), non per questi piani.
+- `mode='duplicate'` di TransactionFormModal è attualmente **irraggiungibile da UI** (il clone
+  passa dalla bulk workspace): la preservazione della data (T3) è testata a livello componente;
+  valutare se ricollegare l'azione o rimuovere la modalità.

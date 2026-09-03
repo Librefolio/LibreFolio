@@ -241,7 +241,7 @@
     /** Create 'create' PendingOp by cloning from a TXReadItem. */
     function createOpFromClone(tx: TXReadItem, linkUuid?: string | null): PendingOp {
         const fields = fieldsFromTx(tx);
-        fields.date = todayIso();
+        // T3: keep the source date — clone is the correction workflow, not "same op today".
         const rule = getTypeRule(tx.type);
         if (rule.quantityRule === 'zero') fields.quantity = '0';
         return {op: 'create', tempId: generateUUID(), fields, link_uuid: linkUuid ?? null};
@@ -369,11 +369,13 @@
                         }
                     }
                 }
-                const today = new Date().toISOString().slice(0, 10);
+                // T3 (02/09): the original date is PRESERVED on clone — duplication is
+                // how users fix a misclassified historical row, and resetting to
+                // today destroyed exactly the field they needed to keep.
                 // Generate shared link_uuid for paired clones
                 const sharedLinkUuid = resolved.length === 2 && resolved[0].type === resolved[1].type ? generateUUID() : null;
                 const cloned = resolved.map((r) => {
-                    const c = {...r, id: 0, date: today, related_transaction_id: null} as TXReadItem;
+                    const c = {...r, id: 0, related_transaction_id: null} as TXReadItem;
                     // Bug6-fix: reset quantity when the type requires qty=0 (e.g. INTEREST)
                     const rule = getTypeRule(r.type);
                     if (rule.quantityRule === 'zero') c.quantity = '0';
@@ -827,10 +829,11 @@
     function cloneRow(tempId: string) {
         const src = ops.find((d) => d.tempId === tempId);
         if (!src) return;
+        // T3: the source row's date is preserved (correction workflow) — not reset to today.
         const clone: PendingOp = {
             op: 'create',
             tempId: generateUUID(),
-            fields: {...src.fields, date: todayIso()},
+            fields: {...src.fields},
             link_uuid: getTypeRule(src.fields.type as TransactionTypeCode)?.requiresPair ? generateUUID() : null,
         };
         // Clone hidden partner if exists
@@ -839,7 +842,7 @@
             const partnerClone: PendingOp = {
                 op: 'create',
                 tempId: generateUUID(),
-                fields: {...srcPartner.fields, date: todayIso()},
+                fields: {...srcPartner.fields},
                 link_uuid: clone.link_uuid, // share link_uuid
                 pairedWith: clone.tempId,
             };
@@ -2952,7 +2955,7 @@
             {/if}
             {#if hasPairedDelete}
                 <InfoBanner variant="info">
-                    <p data-testid="tx-bulk-split-hint">ℹ️ {$t('transactions.deleteModal.splitHint')}</p>
+                    <p data-testid="tx-bulk-split-hint">ℹ️ {$t('transactions.bulk.splitHint')}</p>
                 </InfoBanner>
             {/if}
             {#if todoBlockerEntries.length > 0}

@@ -49,18 +49,19 @@ sviluppa** e visibile solo a chi installa.
 
 ### Fix
 
-| # | Intervento | Priorità |
-|---|---|---|
-| **A** | **Fallire rumorosamente**: `update_js_cache()` deve uscire con codice ≠ 0 se una risorsa manca e non è scaricabile | 🔴 Sempre |
-| **B** | **Versionare il font** in git, eliminando la dipendenza di rete a build time | 🟠 Consigliata |
-| **C** | Verifica post-build: l'immagine Docker non si costruisce se `frontend/build/fonts/` è vuota | 🟡 Difesa in profondità |
-
-> **A è irrinunciabile a prescindere da B**: senza di essa, qualunque altra risorsa scaricata a
-> build time potrà rompersi allo stesso modo, in silenzio.
+> 🔄 **Riscopato il 02/09/2026 (utente)**: il font **non** va versionato in git (potrebbe
+> cambiare nel tempo). Il lavoro richiesto è:
 >
-> **B è la soluzione strutturale**: un progetto self-hosted non dovrebbe richiedere accesso a
-> Google Fonts per costruirsi. Verificare la licenza di Noto Color Emoji (SIL OFL — la
-> ridistribuzione è consentita) e coordinare con la sezione licenze già impostata nel `CHANGELOG`.
+> | # | Intervento | Priorità |
+> |---|---|---|
+> | **A** | **Fallire rumorosamente**: `update_js_cache.py` esce con codice ≠ 0 se una risorsa manca **e** non esiste versione cached (cached presente → warning e prosegui: è il caso offline legittimo); `dev.py` propaga l'errore nei path di build Docker (`:539`, `:1385`) invece di declassarlo a warning (`:2068`) | 🔴 Sempre |
+> | ~~B~~ | ~~Versionare il font in git~~ | ❌ **Ritirata 02/09** |
+> | **C** | Il fallback CSS resta come rete ultima: la catena `'Noto Color Emoji' → 'Segoe UI Emoji' → sans-serif` in `app.css:87-89` non si tocca — serve se il font è irraggiungibile a runtime | ✅ Solo verifica |
+
+> ⚠️ **Correzione rispetto all'INDEX pre-02/09**: I1 non è mai stato iniziato — il font non è
+> in git (`.gitignore:84` invariato, `git ls-files` vuoto), lo script esce 0 anche se il
+> download fallisce, e `dev.py` declassa persino un exit≠0 a warning "will use CDN fallback".
+> La build fallisce parzialmente e dichiara successo: esattamente il difetto originario.
 
 **Complessità**: Piccola (A) / Media (B) · Solo build tooling
 
@@ -237,6 +238,22 @@ Oggi il backend non ha un meccanismo generale di i18n per i messaggi rivolti all
 > ⚠️ **Non tentare la conversione di tutti e 54 in un colpo solo.** Costruire il meccanismo,
 > convertire i pochi messaggi effettivamente visibili, e lasciare gli altri al fallback inglese.
 
+> 🔄 **Riscopato e approvato 02/09/2026 (utente)** — "in forma ridotta":
+>
+> - **BRIM è fuori scope per design**: i warning dei plugin di import seguono la lingua
+>   **del file** importato, non quella della UI (documentato in `broker_credit_agricole.py:9-13`).
+>   Un report italiano produce warning italiani a prescindere dalla lingua dell'interfaccia.
+> - **Resta in scope solo il caso asset-source**: il messaggio inglese grezzo è tuttora
+>   mostrato nella superficie "Test Configuration" del modale asset
+>   (`ProviderAssignmentSection.svelte:292,298` rendono `cp.error`/`h.error` raw).
+> - **Gli ingredienti sono già sul filo**: `error_code` + `details` sono nello schema
+>   (`schemas/provider.py:355-356`) e già usati dal frontend per classificare
+>   (`providerProbe.ts`). Manca solo il resolver di **testo**.
+> - **Deliverable ridotto**: un resolver frontend (modello `resolveValidationMessage.ts` /
+>   `translatedCode` di `RiskResultFrame.svelte`) che mappi i 4-5 codici davvero visibili
+>   (`NO_DATA` con `nav_date`, `NOT_IMPLEMENTED`, `FETCH_ERROR`, `RATE_LIMIT`…) a stringhe
+>   localizzate; tutto il resto cade sul messaggio raw come fallback.
+
 ### Sinergia forte con W8 (P2)
 
 `BRIMFieldTodo` usa **già** `reason_code` + `context` "*for i18n*" (`brim.py:400-402`), e **W8** di
@@ -256,9 +273,9 @@ Backend + frontend · Nessun cambio di schema DB
 ## Ordine di esecuzione
 
 ```
-I1-A (fallimento rumoroso)  ──▶ I1-B (font in git)  ──▶ I1-C (verifica immagine)
-I2-1 (URL fallback)         ──▶ I2-2 (gallery nel path Docker)
-I3   [dopo W8 di P2: contratto codice+parametri condiviso]
+I1-A (fail-loud in build Docker; I1-B ritirata 02/09; I1-C = solo verifica fallback CSS)
+I2 ✅ fatto il 12/08 (URL derivato da site_url; fix 2 scartato — vedi blocco I2)
+I3 ridotto [resolver frontend per i codici visibili; dopo W8: contratto codice+parametri già consolidato]
 ```
 
 I1 e I2 sono indipendenti e parallelizzabili. **I3 va per ultimo**, per riusare il contratto
@@ -289,8 +306,10 @@ definito da W8 invece di anticiparlo.
 
 ## Stato
 
+> 🔄 **Riverificato e riscopato il 02/09/2026** (decisioni utente).
+
 | ID | Rilievo | Complessità | Stato |
 |---|---|---|---|
-| I1 | Font bandiere assente nella build Docker | Piccola/Media | ⏳ Da iniziare |
-| I2 | Immagini docs: URL fallback errato + gallery non generata | Banale/Piccola | ⏳ Da iniziare |
-| I3 | Messaggi backend non localizzati | Media/Grande | ⏳ Da iniziare |
+| I1 | Font bandiere assente nella build Docker | Piccola | ✅ **Fatto 02/09** — scope utente: no versionamento git. `update_js_cache.py` ora raccoglie gli hard failure (risorsa non scaricabile E senza copia cached; subset font parziali inclusi) ed esce 1; `dev.py update_js_cache(strict=True)` propaga l'errore a `front build` e `_docker_ensure_assets_built` → la build Docker si ferma. Il path `server` resta non bloccante (sviluppo offline con cache calda). Catena fallback CSS invariata |
+| I2 | Immagini docs: URL fallback errato + gallery non generata | Banale/Piccola | ✅ **Fatto** (12/08, riverificato 02/09) — `overrides/main.html` inietta `window.LF_GALLERY_FALLBACK_BASE` da `config.site_url`; fix 2 (gallery nel path Docker) scartato per scelta documentata |
+| I3 | Messaggi backend non localizzati | Piccola (scope ridotto) | ✅ **Fatto 02/09** (scope ridotto approvato) — `BaseProbeOperationResult.error_details` (JSON-safe) + codice `TIMEOUT` sui probe; nuovo resolver frontend `resolveProviderError.ts` (modello `resolveValidationMessage.ts`) con chiavi `providerErrors.*` ×4 per i codici visibili (NO_DATA + variante stale-NAV con `nav_date`, NOT_FOUND, FETCH_ERROR, NOT_IMPLEMENTED, TIMEOUT, MISSING_PARAMS, PARSE_ERROR, SCRAPE_ERROR); integrato in `ProviderAssignmentSection`; fallback al messaggio raw per i codici non mappati. BRIM fuori scope (lingua del file, by design) |

@@ -74,7 +74,12 @@ test.describe('WAC Preview', () => {
         const amountInput = page.getByTestId('tx-form-cost-basis-input-amount');
         await amountInput.fill('42.50');
 
-        // The value should be present (number input normalizes trailing zero)
+        // T1-a: the raw buffer is preserved while the field is being edited (a
+        // typed "12," must not be rewritten mid-keystroke), so the trailing zero
+        // survives until commit. Formatting happens on blur — blur first, then
+        // assert the committed display form.
+        await amountInput.press('Tab');
+        await expect(amountInput).not.toBeFocused({timeout: 3_000});
         await expect(amountInput).toHaveValue('42.5');
     });
 

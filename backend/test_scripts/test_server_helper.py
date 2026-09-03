@@ -29,6 +29,7 @@ import signal
 import subprocess
 import threading
 import time
+from contextlib import suppress
 
 import httpx
 import uvicorn
@@ -165,7 +166,7 @@ class _TestingServerManager:
         """
         self_pid = os.getpid()
         held_by_self = False
-        try:
+        with suppress(Exception):  # zombie reaping is best-effort
             result = subprocess.run(
                 ["lsof", "-i", f":{port}", "-t"],
                 capture_output=True,
@@ -182,8 +183,6 @@ class _TestingServerManager:
                         print(f"  ✗ Killed zombie PID {pid}")
                     except (ProcessLookupError, PermissionError):
                         pass
-        except Exception:
-            pass
         return held_by_self
 
     def _run_server(self):

@@ -334,3 +334,206 @@ class TestUpdateUserSettings:
                 "theme": "auto",
                 "avatar_url": "https://example.com/update-avatar.png",
             }
+
+
+class TestGetEffectiveBaseCurrency:
+    """P0-1 (audit 08): get_effective_base_currency resolution chain.
+
+    per-user UserSettings.base_currency (row exists) → global default_currency
+    → "EUR". Replaces the phantom `base_currency` global key, which was never
+    registered — every reader silently got EUR regardless of configuration.
+    """
+
+    @staticmethod
+    async def _stash_global_currency(session):
+        """Snapshot the current global default_currency row (or its absence)."""
+        from backend.app.db.models import GlobalSetting  # noqa: PLC0415 — test setup — imports after db config
+
+        row = await session.get(GlobalSetting, "default_currency")
+        return (
+            {
+                "value": row.value,
+                "value_type": row.value_type,
+                "description": row.description,
+                "updated_at": row.updated_at,
+            }
+            if row
+            else None
+        )
+
+    @staticmethod
+    async def _restore_global_currency(session, snapshot):
+        from backend.app.db.models import GlobalSetting  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.utils.datetime_utils import utcnow  # noqa: PLC0415 — test setup — imports after db config
+
+        current = await session.get(GlobalSetting, "default_currency")
+        if snapshot is None:
+            if current:
+                await session.delete(current)
+        elif current:
+            current.value = snapshot["value"]
+            current.value_type = snapshot["value_type"]
+            current.description = snapshot["description"]
+            current.updated_at = snapshot["updated_at"]
+        else:
+            session.add(
+                GlobalSetting(
+                    key="default_currency",
+                    value=snapshot["value"],
+                    value_type=snapshot["value_type"],
+                    description=snapshot["description"],
+                    updated_at=snapshot["updated_at"] or utcnow(),
+                )
+            )
+        await session.commit()
+
+    @pytest.mark.asyncio
+    async def test_user_row_wins_over_a_different_global_default(self):
+        """(a) User row CHF + global USD → CHF: the per-user value must WIN,
+        not merely coincide with the global one."""
+        from sqlalchemy.ext.asyncio import AsyncSession  # noqa: PLC0415 — test setup — imports after db config
+
+        from backend.app.db.models import GlobalSetting  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.db.session import get_async_engine  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.schemas.settings import UserSettingsUpdate  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.services import user_service  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.services.settings_service import get_effective_base_currency, update_user_settings  # noqa: PLC0415
+        from backend.app.utils.datetime_utils import utcnow  # noqa: PLC0415 — test setup — imports after db config
+
+        unique_id = uuid.uuid4().hex[:8]
+        engine = get_async_engine()
+        async with AsyncSession(engine) as session:
+            snapshot = await self._stash_global_currency(session)
+            try:
+                # Force the global to differ from the user value.
+                row = await session.get(GlobalSetting, "default_currency")
+                if row:
+                    row.value = "USD"
+                    row.value_type = "str"
+                else:
+                    session.add(GlobalSetting(key="default_currency", value="USD", value_type="str", description=f"pytest-{unique_id}", updated_at=utcnow()))
+                await session.commit()
+
+                user, error = await user_service.create_user(
+                    session=session,
+                    username=f"effccy_user_{unique_id}",
+                    email=f"effccy_user_{unique_id}@example.com",
+                    password="TestPass123!",
+                )
+                assert error is None
+                user_id = user.id  # capture now: the session expires ORM attrs on commit
+                await update_user_settings(user_id, UserSettingsUpdate(base_currency="CHF"), session)
+
+                assert await get_effective_base_currency(session, user_id) == "CHF"
+            finally:
+                await self._restore_global_currency(session, snapshot)
+
+    @pytest.mark.asyncio
+    async def test_no_user_row_falls_back_to_global_default(self):
+        """(b) No settings row + global default_currency=USD → USD."""
+        from sqlalchemy.ext.asyncio import AsyncSession  # noqa: PLC0415 — test setup — imports after db config
+
+        from backend.app.db.models import GlobalSetting  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.db.session import get_async_engine  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.services import user_service  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.services.settings_service import get_effective_base_currency  # noqa: PLC0415
+        from backend.app.utils.datetime_utils import utcnow  # noqa: PLC0415 — test setup — imports after db config
+
+        unique_id = uuid.uuid4().hex[:8]
+        engine = get_async_engine()
+        async with AsyncSession(engine) as session:
+            snapshot = await self._stash_global_currency(session)
+            try:
+                row = await session.get(GlobalSetting, "default_currency")
+                if row:
+                    row.value = "USD"
+                    row.value_type = "str"
+                else:
+                    session.add(GlobalSetting(key="default_currency", value="USD", value_type="str", description=f"pytest-{unique_id}", updated_at=utcnow()))
+                await session.commit()
+
+                user, error = await user_service.create_user(
+                    session=session,
+                    username=f"effccy_glob_{unique_id}",
+                    email=f"effccy_glob_{unique_id}@example.com",
+                    password="TestPass123!",
+                )
+                assert error is None
+                # No update_user_settings call: the user has NO row.
+
+                assert await get_effective_base_currency(session, user.id) == "USD"
+            finally:
+                await self._restore_global_currency(session, snapshot)
+
+    @pytest.mark.asyncio
+    async def test_no_row_and_no_global_falls_back_to_eur(self):
+        """(c) No settings row and NO global default_currency row → EUR."""
+        from sqlalchemy.ext.asyncio import AsyncSession  # noqa: PLC0415 — test setup — imports after db config
+
+        from backend.app.db.models import GlobalSetting  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.db.session import get_async_engine  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.services import user_service  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.services.settings_service import get_effective_base_currency  # noqa: PLC0415
+
+        unique_id = uuid.uuid4().hex[:8]
+        engine = get_async_engine()
+        async with AsyncSession(engine) as session:
+            snapshot = await self._stash_global_currency(session)
+            try:
+                row = await session.get(GlobalSetting, "default_currency")
+                if row:
+                    await session.delete(row)
+                    await session.commit()
+
+                user, error = await user_service.create_user(
+                    session=session,
+                    username=f"effccy_none_{unique_id}",
+                    email=f"effccy_none_{unique_id}@example.com",
+                    password="TestPass123!",
+                )
+                assert error is None
+
+                assert await get_effective_base_currency(session, user.id) == "EUR"
+            finally:
+                await self._restore_global_currency(session, snapshot)
+
+
+class TestEngineBaseCurrencyBranch:
+    """P0-1 (audit 08): the `target_currency is None` branch of the engine.
+
+    Before the fix this branch called `get_global_setting` with three
+    positional arguments — a guaranteed TypeError — behind a phantom settings
+    key. A fresh user with a settings row and ZERO broker accesses takes the
+    early return right after the resolution, so the branch is exercised
+    end-to-end (real helper, real DB) with no engine fixture to build.
+    """
+
+    @pytest.mark.asyncio
+    async def test_calculate_without_target_currency_uses_the_user_base_currency(self):
+        from sqlalchemy.ext.asyncio import AsyncSession  # noqa: PLC0415 — test setup — imports after db config
+
+        from backend.app.db.session import get_async_engine  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.schemas.settings import UserSettingsUpdate  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.services import user_service  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.services.portfolio_engine import PortfolioCalculationEngine  # noqa: PLC0415
+        from backend.app.services.settings_service import update_user_settings  # noqa: PLC0415
+
+        unique_id = uuid.uuid4().hex[:8]
+        engine_session = get_async_engine()
+        async with AsyncSession(engine_session) as session:
+            user, error = await user_service.create_user(
+                session=session,
+                username=f"effccy_eng_{unique_id}",
+                email=f"effccy_eng_{unique_id}@example.com",
+                password="TestPass123!",
+            )
+            assert error is None
+            user_id = user.id  # capture now: the session expires ORM attrs on commit
+            await update_user_settings(user_id, UserSettingsUpdate(base_currency="CHF"), session)
+
+            # No broker access rows: calculate() resolves the currency, then
+            # returns early with an empty result — the branch is the assertion.
+            result = await PortfolioCalculationEngine(session).calculate(user_id=user_id)
+
+            assert result.target_currency == "CHF"
+            assert result.daily_states == []

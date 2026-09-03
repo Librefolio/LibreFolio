@@ -1127,7 +1127,8 @@
       "histogramScale": "Scala Istogramma",
       "riskFreeAnnualRate": "Tasso annuo privo di rischio",
       "comparisonAsset": "Asset di confronto",
-      "window": "Finestra"
+      "window": "Finestra",
+      "fullHistory": "Storia completa"
     },
     "yAxisScale": "Scala Asse Y",
     "yAxisScaleDesc": "Controllo intervallo asse primario",
@@ -1430,7 +1431,8 @@
     "otherReconciliationResidual": "Altro / residuo di riconciliazione",
     "annualizedReturn": "Annualizzato",
     "annualizedReturnTooltip": "Rendimento netto annualizzato (CAGR) di tutti i lotti ancora aperti della posizione, dalla prima transazione a oggi — inclusi proventi meno spese; valorizzato al costo se manca il prezzo. Per confrontare posizioni tenute per periodi diversi.",
-    "annualizedReturnPeriodTooltip": "Rendimento netto annualizzato (CAGR) sulla finestra di detenzione della posizione nel periodo selezionato, per confrontare periodi di durata diversa."
+    "annualizedReturnPeriodTooltip": "Rendimento netto annualizzato (CAGR) sulla finestra di detenzione della posizione nel periodo selezionato, per confrontare periodi di durata diversa.",
+    "netWorthTooltip": "Titoli al valore di mercato + liquidità (+ valore in transito). Include la liquidità — non confrontabile con il solo controvalore titoli di un estratto conto."
   },
   "dataQuality": {
     "headerInfoOnly": "Note sulla qualità dei dati",
@@ -2051,7 +2053,8 @@
       "stateDel": "elimina",
       "suggestLightbulb": "Mostra suggerimento",
       "partnerInaccessible": "Partner su broker inaccessibile",
-      "eventTooltipAmount": "Importo"
+      "eventTooltipAmount": "Importo",
+      "splitHint": "Per eliminare solo un lato, usa prima Dividi per scollegare la coppia."
     },
     "commit": {
       "serverError": "Salvataggio impossibile — errore del server"
@@ -2118,7 +2121,6 @@
       "now": "Verifica ora",
       "validating": "verifica in corso…",
       "ok": "valido",
-      "deleteOk": "rimozione ammessa",
       "issuesHeader": "Sono stati identificati degli errori nei campi",
       "balanceIssuesHeader": "Questa configurazione genera dati inconsistenti",
       "autoOff": "Auto-validazione OFF ({n} righe > {threshold}) — premi ⚡️Verifica ora prima del commit",
@@ -2160,7 +2162,8 @@
       "wacFxUnavailable": "❌ Calcolo PMC fallito.",
       "wacFxUnavailableSyncLink": "Sincronizza i tassi FX",
       "wacFxUnavailableOrManual": "o passa alla modalità manuale.",
-      "costBasisRequired": "❌ <b>{type}</b> con quantità positiva richiede un costo base. Usa la modalità <b>Auto</b> (PMC) oppure inserisci un valore <b>manuale</b>."
+      "costBasisRequired": "❌ <b>{type}</b> con quantità positiva richiede un costo base. Usa la modalità <b>Auto</b> (PMC) oppure inserisci un valore <b>manuale</b>.",
+      "pairDeleteIncomplete": "Transazione collegata: per eliminare questa riga devi eliminare anche la sua controparte (transazione #{partnerId}). Se la controparte è in un broker che non puoi modificare, chiedi al proprietario di eliminarla."
     },
     "pydantic": {
       "greaterThan": "Il valore deve essere maggiore di {gt}",
@@ -2195,25 +2198,6 @@
       "assetRequired": "Seleziona un asset",
       "quantityInvalid": "La quantità deve essere un numero valido",
       "cashRequired": "Importo e valuta sono obbligatori"
-    },
-    "deleteModal": {
-      "titleStandalone": "Elimina transazione",
-      "titleLinked": "Elimina transazione collegata",
-      "pairedIntro": "Entrambe le transazioni della coppia verranno eliminate.",
-      "splitHint": "Per eliminare solo un lato, usa prima Dividi per scollegare la coppia.",
-      "linkedInfo": "Questa transazione fa parte di una coppia collegata.",
-      "notAccessible": "non accessibile",
-      "blockedMessage": "Impossibile eliminare: serve accesso Editor su entrambi i broker per eliminare una coppia collegata.",
-      "contactOwner": "Contatta il proprietario di",
-      "forAccess": "per l'accesso.",
-      "deleteBoth": "Elimina entrambe",
-      "toastDeletedStandalone": "Transazione eliminata:",
-      "toastDeletedPaired": "Coppia eliminata:",
-      "toastOnBroker": "su",
-      "deleteAbortedTitle": "Eliminazione annullata",
-      "deleteAbortedDetail": "L'operazione è stata annullata perché violerebbe le regole di saldo:",
-      "failed": "Eliminazione fallita",
-      "validateFailed": "Validazione fallita"
     },
     "picker": {
       "title": "Seleziona transazioni da aggiungere",
@@ -2359,7 +2343,8 @@
       "dPeriod": "Periodo di smussamento applicato a %K per ottenere %D. Modifica solo %D.",
       "riskWindow": "Numero di osservazioni preparate dei rendimenti giornalieri in ogni finestra mobile.",
       "riskFreeAnnualRate": "Tasso annuo effettivo privo di rischio usato solo per calcolare lo Sharpe.",
-      "comparisonAsset": "Asset salvato usato come serie reale di confronto per il beta."
+      "comparisonAsset": "Asset salvato usato come serie reale di confronto per il beta.",
+      "riskFullHistory": "Misura il drawdown rispetto al picco più alto di tutta la storia disponibile, non solo della finestra visibile. Disattiva per una vista più veloce relativa alla finestra."
     },
     "units": {
       "days": "giorni"
@@ -3111,5 +3096,16 @@
     "copied": "Copiata!",
     "askAdminTitle": "Aggiornamento disponibile — contatta un amministratore",
     "emailCopied": "Email copiata negli appunti"
+  },
+  "providerErrors": {
+    "NO_DATA": "Nessun dato disponibile per questo strumento sul provider.",
+    "NO_DATA_STALE": "Il NAV pubblicato è datato {nav_date}, non oggi — mostrarlo come corrente falserebbe il portafoglio.",
+    "NOT_FOUND": "Strumento non trovato sul provider.",
+    "FETCH_ERROR": "Il provider non è raggiungibile o ha restituito un errore.",
+    "NOT_IMPLEMENTED": "Questo provider non supporta l'operazione.",
+    "TIMEOUT": "Il provider non ha risposto in tempo.",
+    "MISSING_PARAMS": "Alla configurazione del provider mancano parametri obbligatori.",
+    "PARSE_ERROR": "La risposta del provider non è stata interpretabile.",
+    "SCRAPE_ERROR": "La pagina del provider non è stata leggibile."
   }
 }

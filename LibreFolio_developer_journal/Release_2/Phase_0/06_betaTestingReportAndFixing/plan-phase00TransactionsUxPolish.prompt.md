@@ -17,7 +17,19 @@
 È il difetto più fastidioso del gruppo: **rende difficile inserire qualunque importo non intero**,
 cioè la maggioranza dei casi reali.
 
-### Il ciclo che lo causa
+> 🔬 **Probe live 02/09/2026** (server di test :6040, digitazione carattere per carattere,
+> chiusura senza salvare) + probe jsdom sul branch `dev_release2`:
+>
+> | Campo | Digitato | Osservato | Diagnosi |
+> |---|---|---|---|
+> | **Importo** (`CompactCashCell`) | `3`,`4`,`,`,`7` | `3`→`34`→`34`→`347` | **Virgola cancellata a metà digitazione** — causa radice sotto, ancora viva |
+> | **Quantità** | `1`,`2`,`,`,`5` | `10`→`120`→`12,0`→`12,50` | Il campo parte pre-riempito a `"0"` (`emptyDraft.quantity: '0'`, `TransactionFormModal.svelte:264`) → per inserire il separatore serve freccia-sinistra + separatore. La virgola in sé è accettata (raw preservato da `qtyDisplay`) |
+>
+> Il feedback dell'utente 02/09: *"sugli importi non si comporta male, ma sulla quantità devo
+> scrivere un numero e se voglio la virgola devo fare freccia sinistra e poi il punto"*.
+> Il probe mostra che **entrambi** i campi hanno un difetto, diverso per campo.
+
+### Il ciclo che causa la cancellazione (campo importo)
 
 ```
 utente digita "12,"
@@ -39,15 +51,16 @@ Ironia utile: la docstring di `formatDecimal.ts:20-22` **avverte esplicitamente*
 riformattare durante la digitazione (*"don't reformat mid-typing"*). L'anello di retroazione la
 invoca a ogni tasto, aggirando l'avvertimento.
 
-### Fix — tre strade, in ordine di robustezza
+### Fix — due interventi (aggiornato 02/09)
 
-| # | Strategia | Nota |
-|---|---|---|
-| **A** | Nell'effect confrontare i valori **normalizzati**, non le stringhe di display: se `"12."` e `"12"` sono lo stesso numero, non toccare il buffer locale | ✅ Preferita: minima e mirata alla causa |
-| B | Sospendere la sincronia discendente mentre il campo ha il **focus** | Efficace ma cambia il comportamento anche per aggiornamenti esterni legittimi |
-| C | Flag "dirty" locale finché l'utente sta scrivendo | Più stato da mantenere |
+**T1-a — importo** (strategia A del piano originario): nell'effect confrontare i valori
+**normalizzati**, non le stringhe di display: se `"12."` e `"12"` sono lo stesso numero, non
+toccare il buffer locale.
 
-→ **A**.
+**T1-b — quantità**: `emptyDraft.quantity` da `'0'` a `''` (la validazione richiede già la
+quantità, quindi il vuoto resta invalido finché non compilato; il reset a `'0'` per i tipi
+`quantityMode: 'forbidden'` a :667-669 resta). Così il campo parte vuoto e la digitazione è
+libera — niente più ginnastica col cursore.
 
 > ⚠️ Il componente è condiviso: la fix va verificata su **tutti** i punti d'uso del form
 > transazioni (`TransactionFormModal.svelte:1575, 1596, 1652, 1850-1851, 1895-1896`) e sulla bulk
@@ -172,6 +185,10 @@ riusando il `<TransactionBulkModal>` già montato a `:968`.
 > gestione delle transazioni **appaiate** con controparte non accessibile (i "Layout A/B/C" di
 > `handleDeleteRow`, `:673-712`) rispetto a `hasPairedDelete` (`:1978`) / `getPartnerOp` della bulk
 > modal. Se la parità non è piena, **rimandare la rimozione** e limitarsi al re-instradamento.
+>
+> 🗑️ **Requisito utente (02/09)**: se la parità passa, la rimozione è **parte del task** —
+> eliminare `TransactionDeleteModal.svelte` **e i suoi test** (unit + E2E che la coprono),
+> aggiornando di conseguenza la suite. Niente codice morto lasciato "per sicurezza".
 
 **Complessità**: Piccola/Media · Solo frontend
 
@@ -214,13 +231,17 @@ T4      [ultimo: richiede la verifica di parità sulle transazioni appaiate]
 
 > 🔄 **Riallineato il 08/08/2026**, dopo i giri di beta testing su Crédit Agricole. Verificato
 > sul codice.
+>
+> 🔬 **Riverificato il 02/09/2026** con probe live sul server di test :6040 e probe jsdom sul
+> branch: T1 è **due difetti distinti** (importo + quantità), entrambi riprodotti — vedi tabella
+> nel blocco T1. T2/T3/T4 confermati aperti riga per riga.
 
 | ID | Rilievo | Complessità | Stato |
 |---|---|---|---|
-| T1 🔴 | Decimali cancellati durante la digitazione | Piccola | 🔶 **Parziale** — la normalizzazione è stata riscritta (`utils/core/parseDecimalInput.ts`: primo separatore = decimale, nessuna cifra persa, `1.4,1` → `1.41`) e le frecce ora scalano tenendo premuto. **Resta la causa radice descritta sopra**: l'`$effect` di `CompactCashCell.svelte:71-78` confronta ancora le stringhe di *display*, non i valori normalizzati → strategia **A** ancora da applicare |
-| T2 | Tooltip senza ritardo in entrata | Piccola | ⏳ Da iniziare — `Tooltip.svelte` è tuttora «0ms delay on hover» |
-| T3 | Duplica non copia la data | Banale | ⏳ Da iniziare — `TransactionFormModal.svelte:8` documenta ancora `date=today` in modalità `duplicate` |
-| T4 | Delete singolo → bulk modal | Piccola/Media | ⏳ Da iniziare — `transactions/+page.svelte` usa ancora `TransactionDeleteModal` |
+| T1 🔴 | Decimali cancellati durante la digitazione | Piccola | ✅ **Fatto 02/09** — T1-a: l'`$effect` di `CompactCashCell` confronta ora i valori **normalizzati** (il ritorno della propria emissione `"12,"→"12."` non sovrascrive più il buffer); T1-b: `emptyDraft.quantity` da `'0'` a `''` (campo quantità parte vuoto) |
+| T2 | Tooltip senza ritardo in entrata | Piccola | ✅ **Fatto 02/09** — `Tooltip.svelte` prop `showDelayMs` (default 500ms): hover apre dopo il ritardo, uscita prima del ritardo annulla, click/tap/tastiera istantanei (`showDelayMs={0}` ripristina l'istantaneo) |
+| T3 | Duplica non copia la data | Banale | ✅ **Fatto 02/09** — NOTA da collaudo: il reset a oggi viveva nei path **clone** della bulk modal (quelli realmente raggiungibili), non nel `mode='duplicate'` del FormModal (percorso morto, vedi nota sotto). Rimosso in tutti e tre: `resolveInitialRows` (clone da lista), `cloneRow` (dentro il workspace), `createOpFromClone`. Il ramo FormModal resta comunque corretto dopo la pulizia di `resetDate` |
+| T4 | Delete singolo → bulk modal | Piccola/Media | ✅ **Fatto 02/09** — `handleDeleteRow` instrada su `bulkIntent {action:'delete'}`; la bulk auto-include il partner e la guardia backend `pairDeleteIncomplete` (ora localizzata ×4) copre il partner non accessibile. **Rimossi** `TransactionDeleteModal.svelte`, export barrel, helper morti in `+page.svelte` e le chiavi `transactions.deleteModal.*` (salvato `splitHint` → `transactions.bulk.splitHint`); test E2E aggiornati da test-author |
 
 ### Nota su ciò che è già arrivato per altra via
 
@@ -228,3 +249,5 @@ Durante il beta testing sono stati introdotti, fuori da questo piano ma nella st
 stepping universale con accelerazione su tutti gli input numerici (`actions/numericArrows.ts`),
 date scrivibili a mano nei due picker, e i vincoli di validità sui campi numerici. Non chiudono
 T1–T4, ma ne cambiano il contorno: le fix vanno provate **con** le frecce attive.
+
+> ⚠️ **Fuori pista (02/09, collaudo)**: il primo fix T3 colpì `TransactionFormModal.fromTx({resetDate})`, ma test-author ha scoperto che `mode='duplicate'` non è raggiungibile da nessuna azione UI — il "duplica" dell'utente passa da `TransactionBulkModal` intent `clone`. Il reset a oggi viveva in TRE punti della bulk (`resolveInitialRows`, `cloneRow`, `createOpFromClone`); rimosso ovunque dopo il collaudo utente che ha beccato il primo fix come inefficace. **Decisione di prodotto aperta**: la modalità `duplicate` del FormModal è codice morto di fatto — ricollegarla o rimuoverla.

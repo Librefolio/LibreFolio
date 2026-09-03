@@ -352,8 +352,12 @@ class BaseProbeOperationResult(StrictModel):
     """
 
     success: bool = Field(..., description="Whether the operation succeeded")
-    error: Optional[str] = Field(None, description="Error message if failed")
+    error: Optional[str] = Field(None, description="Error message if failed (English technical fallback)")
     error_code: Optional[str] = Field(None, description="Structured provider error code (e.g. 'NO_DATA', 'NOT_IMPLEMENTED', 'FETCH_ERROR') — lets the UI treat expected-empty results as a warning rather than a hard failure")
+    # I3: the parameters the message was built from (e.g. {"nav_date": ...}),
+    # so the frontend can render a LOCALIZED message from code + params instead
+    # of the raw English `error`. JSON-safe (non-primitives stringified).
+    error_details: Optional[dict] = Field(None, description="Structured error parameters for frontend i18n (e.g. nav_date for NO_DATA)")
     execution_time_ms: int = Field(..., description="Backend execution time in milliseconds")
 
 

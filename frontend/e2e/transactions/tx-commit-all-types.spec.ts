@@ -642,7 +642,10 @@ test.describe('Delete + Commit', () => {
         await expectTransactionGone(page, targetId, marker);
     });
 
-    test('delete via main table row action button → DeleteModal → confirm', async ({page}) => {
+    test('delete via main table row action button → bulk workspace pre-marked → commit', async ({page}) => {
+        // T4: the dedicated DeleteModal is gone — a single-row delete opens the
+        // bulk workspace with the row pre-marked for deletion, and the commit
+        // goes through POST /transactions/commit like every other write.
         const marker = ownedMarker('E2E-ROWDEL');
         await openCreateFlow(page);
         await selectType(page, 'DEPOSIT');
@@ -663,26 +666,15 @@ test.describe('Delete + Commit', () => {
         // Click the delete action via the row's kebab menu
         await clickKebabRowAction(targetRow, 'delete');
 
-        // TransactionDeleteModal should appear
-        const deleteModal = page.getByTestId('tx-delete-modal');
-        await expect(deleteModal).toBeVisible({timeout: 5_000});
+        // The bulk workspace opens with exactly this row staged as a delete.
+        const bulkModal = page.getByTestId('tx-bulk-modal');
+        await expect(bulkModal).toBeVisible({timeout: 5_000});
+        await expect(bulkModal.locator('tbody tr[data-row-id]'), 'the workspace must stage exactly the row we deleted').toHaveCount(1, {timeout: 5_000});
+        await expect(bulkModal.locator('tbody tr.row-deleted')).toHaveCount(1);
 
-        // Click confirm delete
-        const confirmBtn = deleteModal.getByTestId('tx-delete-modal-confirm');
-        await expect(confirmBtn).toBeVisible({timeout: 3_000});
-
-        // Intercept DELETE API call
-        const deletePromise = page.waitForResponse((resp) => resp.url().includes('/transactions') && resp.request().method() === 'DELETE', {timeout: 10_000}).catch(() => null);
-
-        await confirmBtn.click();
-
-        const resp = await deletePromise;
-        if (resp) {
-            expect(resp.status()).toBeLessThan(400);
-        }
-
-        // Modal should close
-        await expect(deleteModal).not.toBeVisible({timeout: 5_000});
+        // Commit through the workspace: the payload must carry our id in deletes.
+        const {payload} = await commitBulkModal(page);
+        expect(payload.deletes as number[]).toContain(targetId);
 
         await expectTransactionGone(page, targetId, marker);
     });

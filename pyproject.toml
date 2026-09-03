@@ -78,6 +78,7 @@ select = [
     "C4",     # flake8-comprehensions
     "UP",     # pyupgrade
     "PLC0415",  # import-outside-toplevel (imports inside functions)
+    "S110",   # try-except-pass (silent swallow) — audit 08/P0-3: punctual gate so fixed instances never come back
 ]
 ignore = [
     "E501",   # line too long (handled by black)

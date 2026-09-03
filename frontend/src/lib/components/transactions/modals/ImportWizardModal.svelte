@@ -69,7 +69,7 @@
     import {buildMergedTransactions, mergeCandidates, uniqueExactCandidateId} from '$lib/utils/transactions/importMerge';
     import {cmpSourceFromTx, cmpSourceFromExisting, compareTypeCellHtml, type CmpSource} from '$lib/utils/transactions/importCompare';
     import {createNamesFor, createOtherFor, duplicateCandidates, resolutionLabel as resolutionLabelPure} from '$lib/utils/transactions/importResolutionHelpers';
-    import {brokerIdForTx, beforeOpeningInfo, isBeforeOpening as isBeforeOpeningPure, isRowAssetResolved as isRowAssetResolvedPure} from '$lib/utils/transactions/importRowState';
+    import {brokerIdForTx, beforeOpeningInfo, isBeforeOpening as isBeforeOpeningPure, isRowAssetResolved as isRowAssetResolvedPure, shouldAutoSelectOnRecheck} from '$lib/utils/transactions/importRowState';
     import {groupPartitions as groupPartitionsPure, defaultKeeperIndices as defaultKeeperIndicesPure, resolverSelectionFor as resolverSelectionForPure, outlierIndexSet} from '$lib/utils/transactions/importDuplicateResolver';
 
     import type {TransactionCreateItem, BrimFile, BrimParseResponse, FilePreviewResponse} from '$lib/types';
@@ -252,11 +252,7 @@
     // Aggregate stats from done results
     let parseAggregateStats = $derived(() => {
         const doneResults = parseResults.filter((r) => r.status === 'done' && r.response);
-        const totalTx = doneResults.reduce((sum, r) => sum + (r.response!.transactions?.length ?? 0), 0);
         const doneFileCount = doneResults.length;
-        const allMappings = doneResults.flatMap((r) => r.response!.asset_mappings ?? []);
-        const uniqueAssetIds = new Set(allMappings.map((m) => m.fake_asset_id));
-        const unresolvedCount = allMappings.filter((m) => m.selected_asset_id == null).length;
         const totalWarnings = doneResults.reduce((sum, r) => sum + (r.response!.warnings?.length ?? 0), 0);
         const totalIssues = doneResults.reduce((sum, r) => sum + ((r.response!.validation_issues as unknown[] | undefined)?.length ?? 0), 0);
         const fieldTodos = doneResults.flatMap((r) => (r.response!.field_todos as {severity: string}[] | undefined) ?? []);
@@ -267,6 +263,23 @@
             if (!dup || Array.isArray(dup)) return sum;
             return sum + (dup.tx_likely_duplicates?.length ?? 0);
         }, 0);
+        // W1+W3: once the merge has run, transaction/asset counts come from the
+        // *consolidated* state — identity-grouped assets (a security parsed from
+        // two files is ONE entry) and the current selection (duplicate resolution
+        // and before-opening gates subtract their rows). The summary describes
+        // what will be imported, not what was read. While parsing is still
+        // running (the merge happens only at the end) fall back to the raw
+        // per-file numbers so the tiles fill in progressively.
+        if (mergedTransactions.length > 0) {
+            const totalTx = mergedTransactions.filter((t) => t.selected).length;
+            const uniqueAssets = assetResolutions.length;
+            const unresolvedCount = assetResolutions.filter((r) => r.resolvedAssetId == null).length;
+            return {totalTx, doneFileCount, uniqueAssets, unresolvedCount, totalWarnings, totalIssues, totalTodos, todoBlockers, likelyDuplicates: duplicates};
+        }
+        const totalTx = doneResults.reduce((sum, r) => sum + (r.response!.transactions?.length ?? 0), 0);
+        const allMappings = doneResults.flatMap((r) => r.response!.asset_mappings ?? []);
+        const uniqueAssetIds = new Set(allMappings.map((m) => m.fake_asset_id));
+        const unresolvedCount = allMappings.filter((m) => m.selected_asset_id == null).length;
         return {totalTx, doneFileCount, uniqueAssets: uniqueAssetIds.size, unresolvedCount, totalWarnings, totalIssues, totalTodos, todoBlockers, likelyDuplicates: duplicates};
     });
 
@@ -839,10 +852,14 @@
 
     function resolveAsset(fakeAssetId: number, realAssetId: number) {
         assetResolutions = assetResolutions.map((r) => (r.fakeAssetId === fakeAssetId ? {...r, resolvedAssetId: realAssetId} : r));
+        // W7: rows gated on before-opening while this asset was unresolved never
+        // got re-selected — re-run the importable pass now that they resolve.
+        reselectImportableRows();
     }
 
     function clearResolution(fakeAssetId: number) {
         assetResolutions = assetResolutions.map((r) => (r.fakeAssetId === fakeAssetId ? {...r, resolvedAssetId: null} : r));
+        reselectImportableRows();
     }
 
     /**
@@ -1558,11 +1575,26 @@
      */
     let recheckingOpenings = $state(false);
 
+    /**
+     * Re-select rows that are now importable: not before-opening, asset resolved,
+     * not already selected, and their duplicate verdict allows it (W7).
+     *
+     * Pure pass over current state — no broker refetch. Called both by
+     * `recheckOpenings` (broker-opening path) and by the asset-resolution
+     * points below: a row that was gated on before-opening AND had an
+     * unresolved asset stays deselected if the user fixes the broker first and
+     * assigns the asset afterwards, because `recheckOpenings` already ran while
+     * the row was still unresolved. Resolution must re-run the same pass.
+     */
+    function reselectImportableRows() {
+        mergedTransactions = mergedTransactions.map((t) => (shouldAutoSelectOnRecheck(t, parseResults, brokers, assetResolutions) ? {...t, selected: true} : t));
+    }
+
     async function recheckOpenings() {
         recheckingOpenings = true;
         try {
             await refreshEditableBrokers();
-            mergedTransactions = mergedTransactions.map((t) => (!isBeforeOpening(t) && isRowAssetResolved(t) && !t.selected && duplicateStatusAllowsAutoSelect(t.duplicateStatus) ? {...t, selected: true} : t));
+            reselectImportableRows();
         } finally {
             recheckingOpenings = false;
         }

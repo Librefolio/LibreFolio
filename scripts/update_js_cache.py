@@ -23,6 +23,7 @@ import re
 import shutil
 import sys
 import urllib.request
+from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Optional
@@ -31,6 +32,17 @@ from typing import Optional
 MAX_CACHED_VERSIONS = 4  # Keep last N versions of each library
 CACHE_MANIFEST_FILE = ".cache_manifest.json"
 CACHE_CHECK_INTERVAL_HOURS = 24  # Skip check if checked within this time
+
+# I1 (02/09): a resource that cannot be downloaded AND has no usable cached copy
+# must NOT degrade the build silently (the Docker image shipped with a 404 on
+# the emoji font for months — flags rendered as letters on Windows). Hard
+# failures are collected here and turn into a non-zero exit code so
+# `dev.py front build` / `docker build` stop instead of shipping a broken build.
+_HARD_FAILURES: list[str] = []
+
+
+def _hard_fail(name: str, reason: str) -> None:
+    _HARD_FAILURES.append(f"{name}: {reason}")
 
 # Libraries to cache
 # type="js"   → single file download
@@ -98,11 +110,9 @@ def load_manifest(vendor_dir: Path) -> dict:
     """Load cache manifest from vendor directory."""
     manifest_path = vendor_dir / CACHE_MANIFEST_FILE
     if manifest_path.exists():
-        try:
+        with suppress(Exception):  # corrupt manifest → treated as no cache
             with open(manifest_path) as f:
                 return json.load(f)
-        except Exception:
-            pass
     return {"libraries": {}, "versions": []}
 
 
@@ -191,6 +201,7 @@ def _download_font_resource(
             print("  ⚠️  CSS download failed, keeping cached version")
         else:
             print("  ❌ CSS download failed and no cached version exists")
+            _hard_fail(name, "CSS download failed, no cached version")
         return False
 
     css_text = css_bytes.decode("utf-8")
@@ -204,6 +215,8 @@ def _download_font_resource(
     subsets = _parse_google_fonts_css(css_text)
     if not subsets:
         print("  ⚠️  No subsets found in Google Fonts CSS")
+        if not file_exists:
+            _hard_fail(name, "no subsets parsed, no cached version")
         return False
 
     print(f"  📋 Found {len(subsets)} subsets")
@@ -223,12 +236,16 @@ def _download_font_resource(
     ]
 
     total_size = 0
+    failed_subsets = 0
     font_family = " ".join(w.capitalize() for w in name.split("-"))
     for i, subset in enumerate(subsets):
         local_filename = f"{prefix}.{i}.woff2"
         woff2_content = download_file(subset["src_url"])
         if woff2_content is None:
-            print(f"  ⚠️  Failed to download subset {i}, skipping")
+            # I1: a partially cached font renders SOME glyph ranges as fallback
+            # letters — the same silent degradation as a missing font. Loud.
+            print(f"  ❌ Failed to download subset {i}")
+            failed_subsets += 1
             continue
 
         woff2_path = target_dir / local_filename
@@ -249,6 +266,12 @@ def _download_font_resource(
             "}",
             "",
         ])
+
+    if failed_subsets:
+        # Do not write a partial CSS/manifest: the cached previous version (if
+        # any) stays authoritative, and the build learns this is broken.
+        _hard_fail(name, f"{failed_subsets}/{len(subsets)} font subsets failed to download")
+        return False
 
     # Write local CSS
     css_content = "\n".join(local_css_lines) + "\n"
@@ -324,6 +347,9 @@ def update_library(vendor_dir: Path, manifest: dict, name: str, config: dict, fo
     if content is None:
         if file_exists:
             print("  ⚠️  Download failed, keeping cached version")
+        else:
+            print("  ❌ Download failed and no cached version exists")
+            _hard_fail(name, "download failed, no cached version")
         return False
 
     # Calculate hash
@@ -412,6 +438,13 @@ def run_from_args(args) -> int:
     """Execute the command from parsed args."""
     try:
         update_all_libraries(force=getattr(args, 'force', False))
+        if _HARD_FAILURES:
+            # I1: a build missing a resource it cannot cache is a broken build.
+            print("-" * 60)
+            print("❌ Resource cache incomplete — the build would ship without these:")
+            for failure in _HARD_FAILURES:
+                print(f"   - {failure}")
+            return 1
         return 0
     except KeyboardInterrupt:
         print("\n⚠️  Interrupted")

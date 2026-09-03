@@ -107,6 +107,10 @@ Quantitative risk and allocation analytics, powered by [QuantLib](https://www.qu
 
 ### 🔄 Changed
 
+- **Signal cards show a spinner while their request is in flight** — no more red "cannot be calculated" flash between asking for an indicator and its answer; genuine problems still surface once the response lands.
+- **Tooltips open after a short hover rest** (500ms) instead of instantly — no more tooltip flashes while crossing the page. Click, tap and keyboard still open them immediately.
+- **Duplicating a transaction preserves the original date** in every clone path (list clone, in-workspace clone, paired clone) — duplication is how a misclassified historical row gets corrected, and resetting to today destroyed exactly the field being fixed.
+- **Single-row delete routes through the bulk workspace** (pre-marked for deletion), consistent with single-row edit and clone; the dedicated delete modal was removed. Deleting one side of a linked pair without its partner surfaces a localized explanation.
 - **Legacy valuation engine removed** — the unified resolver is the only valuation path. The `LIBREFOLIO_RESOLVER_VALUATION` transition flag, the `LAST_BUY_PRICE` / `LAST_SEED_COST` fallback tiers and the duplicate per-path price maps are gone.
 - **Legacy AI Export runtime removed** — the unreachable profile/assembler stack was deleted so the catalog, prompts and tests cannot drift apart. The final V1 prompt outputs were preserved during the cleanup.
 - Technical analysis moved from the frontend to the backend (see Signals platform above); frontend controls, rendering, axes and batching now consume backend results.
@@ -118,6 +122,27 @@ Quantitative risk and allocation analytics, powered by [QuantLib](https://www.qu
 - Documentation: the English MkDocs set was realigned with the shipped code, adding Price Resolution and Net Annualized Return pages, a duplicate-detection developer page, and user guides for the new brokers.
 
 ### 🐛 Fixed
+
+#### 🧹 Clean audit re-check — P0 fixes (2026-09-02)
+
+- **Configured base currency was ignored everywhere** — valuation paths read a `base_currency` global key that was never registered, silently falling back to EUR, and the engine's fallback branch called the settings helper with inverted arguments (a guaranteed `TypeError` had it ever run). The effective base currency is now the per-user setting, seeded from the admin-level default at first creation, EUR as last resort.
+- **Image previews blocked the API event loop** — Pillow resize in the file-serving endpoint now runs in a worker thread (`asyncio.to_thread`), so a large image no longer stalls every concurrent request.
+- **Bulk asset PATCH issued N+1 queries** — assets are now preloaded in one SELECT and the currency-change guard uses per-asset `GROUP BY` aggregates: a 50-asset bulk update drops from ~50+ queries to 4.
+- **Silent `except: pass` swallows** — a fixed one in the cache layer (`clear()` could not log a failed close) and a new punctual `S110` ruff gate so the class cannot return.
+
+#### 🧪 Second beta wave — consolidation (2026-09-02)
+
+- **Decimal separator erased while typing** — in the transaction form's amount field, typing `12,` was rewritten to `12` mid-keystroke (the field's own emission came back reformatted); the comparison is now numeric, so `12,` and trailing zeros survive until blur. The quantity field no longer starts pre-filled with `0`, which forced cursor gymnastics to type decimals.
+- **Import wizard summary counted raw parses, not the import** — the asset/transaction totals in the analysis summary are now derived from the consolidated state (identity-grouped assets, current selection), so duplicate resolution and before-opening rows update the numbers.
+- **Import wizard: transaction types in English** in the analysis summary — now translated.
+- **Import wizard: rows stayed deselected** when a broker's opening date was fixed before assigning their asset — the importable-row re-selection now also runs on asset assignment.
+- **Drawdown signal was window-relative** — the running peak started at the visible range. The signal now computes against the full available history by default (new `full_history` parameter, shown as a toggle in the signal settings), and AI Export drawdown sections always use the full history regardless of the export period.
+- **Charts could freeze the whole API on assets with long FX-uncovered history** — the currency-conversion pass deduplicated its errors inside the per-point loop (quadratic), so a full-history load with thousands of distinct missing-rate days spun the worker at 100% CPU for minutes and every concurrent request timed out (the "technical signals could not be updated" banner). Errors are now deduplicated once per job and capped with a summary line.
+- **Docker build shipped without the emoji font on download failure** — a failed Google Fonts fetch was logged and ignored, so the image went out with a broken font link (flags rendered as letters on Windows). The resource cache now fails the build when a resource is missing and not cached; partially downloaded fonts count as failures too.
+- **Provider test errors always in English** — the "Test Configuration" probe results now carry a structured error code plus parameters, and the frontend renders a localized message for the common cases (no data, stale fund NAV, not found, fetch/timeout/parse errors…), falling back to the raw message otherwise.
+- Documentation: the Net Worth KPI page now states explicitly that the figure includes cash and is not comparable to a bank statement's securities-only value (in all four languages), and the card carries a composition tooltip.
+
+#### Earlier in this cycle
 
 - **Inflated ROI on portfolios seeded in kind** — in-kind adjustments contributed to the capital baseline but not to the cash-only flow used as the ROI denominator, so transferred-in capital appeared as pure gain. ROI, TWRR, MWRR and the headline figures now all derive from the same flows.
 - **Fully-closed positions showed "—" for annualized return** — realized net return is now annualised over the position's real flight time, dust-aware for partial redemptions.

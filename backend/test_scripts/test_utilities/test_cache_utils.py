@@ -10,6 +10,7 @@ Tests cover:
 """
 
 import time
+from contextlib import suppress
 
 import pytest
 
@@ -34,18 +35,14 @@ def _clean_registry():
     """Clean the global cache registry before and after each test."""
     # Close any existing caches to stop timer wheel threads
     for c in list(_cache_registry.values()):
-        try:
+        with suppress(Exception):  # closing already-closed caches is fine
             c.close()
-        except Exception:
-            pass
     _cache_registry.clear()
     yield
     # Cleanup after test
     for c in list(_cache_registry.values()):
-        try:
+        with suppress(Exception):  # closing already-closed caches is fine
             c.close()
-        except Exception:
-            pass
     _cache_registry.clear()
 
 
@@ -87,6 +84,34 @@ class TestNamedCache:
         assert len(cache) >= 1  # at least 1 entry
         cache.clear()
         assert len(cache) == 0
+        cache.close()
+
+    def test_clear_survives_a_close_failure_and_logs_debug(self):
+        """Audit 08/P0-2: a cache whose close() raises must not break clear() —
+        and the failure is now logged at debug instead of swallowed by a bare
+        `except: pass` (the S110 gate keeps it that way)."""
+        from types import SimpleNamespace  # noqa: PLC0415 — test-local
+
+        from structlog.testing import capture_logs  # noqa: PLC0415 — test-local
+
+        cache = NamedCache("close-fail", maxsize=10, ttl=60)
+        cache.set("k", "v")
+
+        def _explode():
+            raise RuntimeError("close exploded")
+
+        # Replace the inner theine cache with one whose close() fails. clear()
+        # swaps in a fresh instance BEFORE closing the old one, so the object
+        # under test stays fully usable whatever happens to the stub.
+        cache._cache = SimpleNamespace(close=_explode)
+
+        with capture_logs() as logs:
+            cache.clear()  # must not raise
+
+        assert len(cache) == 0
+        cache.set("k2", "v2")  # the rebuilt cache works (get returns (value, hit))
+        assert cache.get("k2") == ("v2", True)
+        assert any(entry.get("event") == "Cache close failed during clear" and entry.get("log_level") == "debug" for entry in logs), f"expected the debug log, got {logs}"
         cache.close()
 
     def test_clear_keeps_the_cache_usable_after_it_filled_up(self):

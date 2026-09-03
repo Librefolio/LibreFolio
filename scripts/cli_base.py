@@ -385,8 +385,8 @@ def check_frontend_needs_build() -> bool:
             if f.exists() and f.stat().st_mtime > build_time:
                 return True
 
-    except Exception:
-        pass
+    except Exception as exc:  # noqa: S110 — staleness probe must never break a build check
+        _ = exc
 
     return False
 

@@ -71,6 +71,28 @@ visualizzazione. Due strade:
 risulta oneroso, ripiegare su B (che è comunque il modello concettualmente corretto: al calcolo
 serve *il picco*, non *tutti i prezzi*).
 
+> ✅ **Decisione 02/09/2026 (utente)**: la segnalazione originale nasceva da un fraintendimento
+> (il drawdown È rispetto al massimo storico), ma il warmup a 2 punti resta sbagliato.
+> Si va con la **A**, in forma di **parametro utente**:
+>
+> 1. `DrawdownParams` guadagna `full_history: bool = True` — visibile in UI come toggle
+>    (i parametri booleani sono già supportati: `SignalParamControl.svelte:86-87` renderizza
+>    una checkbox per `type === 'boolean'`).
+> 2. `SignalWarmupRequirement` guadagna un flag `full_history: bool = False`;
+>    `warmup_requirement()` lo imposta quando il parametro è attivo; `prepare_plan` lo propaga;
+>    `get_prices_bulk` (`asset_source.py:2169-2180`) usa il cap `date.min` come inizio finestra.
+>    `compute()` resta invariato; lo slicing a finestra visibile esiste già a valle
+>    (`signal_series_preparation.py`).
+> 3. **AI export forza sempre `full_history=true`** — i dataset con drawdown
+>    (`portfolio.drawdown_context`, `asset_drawdown_snapshot` nel catalogo) devono dare
+>    all'IA dati reali, mai la variante accorciata.
+>
+> **Perché non B (seed del max pre-periodo via query)**: il drawdown gira sulla serie
+> **convertita in valuta target**; un `MAX(close)` SQL sul prezzo grezzo è corretto solo a
+> parità di valuta (con FX variabile `max(convertita) ≠ convertita(max)`). Il vantaggio di B
+> evapora proprio nel caso multi-valuta. Costo di A a scala self-hosted: trascurabile
+> (~7.8k righe per 30 anni giornalieri, query unica già condivisa tra asset).
+
 ### Il test che manca
 
 `test_risk_signal_plugins.py:149,161-297` verifica la matematica su array costruiti a mano, e
@@ -166,7 +188,11 @@ comunicazione**, non di calcolo:
 
 ## Stato
 
+> 🔄 **Riverificato il 02/09/2026** sul codice `dev_release2`.
+
 | ID | Rilievo | Esito analisi | Stato |
 |---|---|---|---|
-| E1 | Drawdown relativo alla finestra | ✅ Confermato — warm-up insufficiente | ⏳ Da iniziare |
-| E2 | Doppio conteggio dividendi/interessi | ❌ **Smentito** — formula corretta e testata | ⏳ Solo doc + tooltip + test |
+| E1 | Drawdown relativo alla finestra | ✅ Confermato — warm-up insufficiente. **Nota 02/09**: la segnalazione originale era un fraintendimento del tester, ma il warmup restava sbagliato | ✅ **Fatto 02/09** — `DrawdownParams.full_history` (default true, toggle in UI via checkbox booleana già supportata, chiavi `chartSettings.params.fullHistory` + `signals.tooltips.riskFullHistory` ×4); flag `full_history` su `SignalWarmupRequirement` → `SignalExecutionPlan.requires_full_history` → `get_prices_bulk` carica da `date.min`. **AI export sempre full**: `_execute_drawdown` ignora il periodo del build (asset: `date.min`; portfolio/broker: prima transazione accessibile via `resolve_date_sentinels`) |
+| E2 | Doppio conteggio dividendi/interessi | ❌ **Smentito** — formula corretta e testata | ✅ **Fatto 02/09** — nota "include liquidità / non confrontabile col controvalore titoli" in `kpi-cards.*.md` ×4; tooltip di composizione sulla card Net Worth (`dashboard.netWorthTooltip` ×4); test di presidio DIVIDEND+INTEREST vs DEPOSIT in carico a test-author |
+
+> ⚠️ **Fuori pista (02/09, collaudo E1)**: il primo giro del segnale drawdown su dati reali mostrava il banner "segnali non aggiornati" con retry risolutivo. Causa radice trovata con probe su server di test: **non** E1 in sé, ma una dedup errori FX quadratico dentro il loop per punto in `get_prices_bulk` (`err not in result.errors` per ogni punto fallito × ogni errore). Sotto full-history, un asset con FX scoperto su storia lunga produce decine di migliaia di errori distinti → spin CPU 100% nel worker per minuti → axios 30s timeout → banner; il retry funzionava a cache calda. Fix: dedup O(1) una tantum per job + tetto 10 errori con riga riepilogo (il FE legge solo `errors[0]`). Riprodotto prima/dopo in-process: ∞ → 2.6s su asset con 46k prezzi.

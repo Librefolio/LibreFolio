@@ -2,7 +2,7 @@
   TransactionResultBanner — Unified banner for transaction validation/commit results.
 
   Covers: validate success (green), validate issues (amber), commit failures (red).
-  Used by: TransactionDeleteModal, TransactionBulkModal, TransactionFormModal.
+  Used by: TransactionBulkModal, TransactionFormModal.
 
   Features:
   - Emoji-only icons (no SVG lucide) — consistent with the design system

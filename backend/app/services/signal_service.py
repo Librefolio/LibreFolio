@@ -123,6 +123,10 @@ class SignalExecutionPlan:
     required_event_types: frozenset[str]
     comparison_asset_ids: frozenset[int]
     annotation_requests: tuple[SignalAnnotationRequest, ...]
+    # E1: at least one computation declared full-history warm-up (e.g.
+    # drawdown). The fetch path then loads from the start of the available
+    # history, not from a points-derived day count.
+    requires_full_history: bool = False
 
     @property
     def max_history_points_before_visible(self) -> int:
@@ -188,6 +192,7 @@ class SignalService:
         preflight_results: dict[str, SignalResult] = {}
         max_total_points = 0
         max_prepared_total_points = 0
+        requires_full_history = False
         required_price_fields: set[SignalPriceField] = set()
         requires_events = False
         required_event_types: set[str] = set()
@@ -265,6 +270,8 @@ class SignalService:
                     max_total_points,
                     requirement.total_points,
                 )
+                if requirement.full_history:
+                    requires_full_history = True
                 if plugin_class.input_requirements.uses_prepared_asset_series:
                     max_prepared_total_points = max(
                         max_prepared_total_points,
@@ -306,6 +313,7 @@ class SignalService:
             required_event_types=frozenset(required_event_types),
             comparison_asset_ids=frozenset(comparison_asset_ids),
             annotation_requests=annotation_models,
+            requires_full_history=requires_full_history,
         )
 
     async def execute(

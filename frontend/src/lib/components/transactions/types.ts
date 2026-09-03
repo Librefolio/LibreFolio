@@ -2,7 +2,7 @@
  * Shared transaction types — single source of truth for TXReadItem and related interfaces.
  *
  * Previously duplicated across: +page.svelte, TransactionsTable, TransactionBulkModal,
- * TransactionFormModal, TransactionDeleteModal, TransactionPickerModal.
+ * TransactionFormModal, TransactionPickerModal.
  *
  * Plan C — Phase 07 Part 4 Round 6 (post-completion polish).
  */

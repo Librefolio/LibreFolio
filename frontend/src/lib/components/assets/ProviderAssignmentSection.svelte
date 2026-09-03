@@ -23,6 +23,7 @@
     import {getCurrencyInfo, currencyStoreVersion, ensureCurrenciesLoaded} from '$lib/stores/reference/currencyStore';
     import {currentLanguage} from '$lib/stores/app/language';
     import {isSoftProbeFailure, summarizeProbeError, formatCurrencyForTooltip, buildProbeTooltipHtml} from './providerProbe';
+    import {resolveProviderError} from './resolveProviderError';
 
     import {numericArrows} from '$lib/actions/numericArrows';
     // =========================================================================
@@ -289,13 +290,16 @@
             if (response.current_price) {
                 const cp = response.current_price;
                 const ccyLabel = formatCurrencyForTooltip(cp.currency);
-                const detail = cp.success ? `${Number(cp.value).toFixed(2)} ${ccyLabel}${cp.as_of_date ? ` (${cp.as_of_date})` : ''}` : cp.error;
+                // I3: failures resolve code+details to a localized message; the
+                // raw English `error` stays as fallback for unmapped codes.
+                const cpError = cp.success ? null : resolveProviderError(cp, $t);
+                const detail = cp.success ? `${Number(cp.value).toFixed(2)} ${ccyLabel}${cp.as_of_date ? ` (${cp.as_of_date})` : ''}` : (cpError ?? undefined);
                 items.push({
                     success: cp.success,
                     status: cp.success ? 'success' : isSoftProbeFailure(cp.error, cp.error_code) ? 'warning' : 'error',
                     label: $t('common.currentPrice'),
                     detail,
-                    summary: cp.success ? detail : summarizeProbeError(cp.error),
+                    summary: cp.success ? detail : summarizeProbeError(cpError ?? undefined),
                     execution_time_ms: cp.execution_time_ms,
                     priceValue: cp.success ? cp.value : undefined,
                     priceCurrency: cp.success ? cp.currency : undefined,
@@ -307,13 +311,14 @@
             if (response.history) {
                 const h = response.history;
                 const ccyLabel = formatCurrencyForTooltip(displayCurrency || undefined);
-                const detail = h.success ? `${h.points_count} points${ccyLabel ? ` (${ccyLabel})` : ''}${h.date_range ? ` — ${h.date_range}` : ''}` : h.error;
+                const hError = h.success ? null : resolveProviderError(h, $t);
+                const detail = h.success ? `${h.points_count} points${ccyLabel ? ` (${ccyLabel})` : ''}${h.date_range ? ` — ${h.date_range}` : ''}` : (hError ?? undefined);
                 items.push({
                     success: h.success,
                     status: h.success ? 'success' : isSoftProbeFailure(h.error, h.error_code) ? 'warning' : 'error',
                     label: $t('assets.probe.history'),
                     detail,
-                    summary: h.success ? detail : summarizeProbeError(h.error),
+                    summary: h.success ? detail : summarizeProbeError(hError ?? undefined),
                     execution_time_ms: h.execution_time_ms,
                     samplePrices: h.success && h.sample_prices ? h.sample_prices : undefined,
                 });

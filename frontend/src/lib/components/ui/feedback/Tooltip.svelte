@@ -1,9 +1,13 @@
 <script lang="ts">
     /**
-     * Tooltip - Instant tooltip with click-outside dismiss
+     * Tooltip - hover-delayed tooltip with click-outside dismiss
      *
      * Features:
-     * - 0ms delay on hover; stays open indefinitely while the pointer remains
+     * - Delayed open on plain hover (`showDelayMs`, default 500ms — T2: the
+     *   pointer must rest on the trigger; instant hover tooltips flash under
+     *   the cursor while the user is just crossing the page). Click/tap and
+     *   keyboard open instantly instead — intent there is explicit, a delay
+     *   would only be latency. Stays open indefinitely while the pointer remains
      *   over the trigger OR the tooltip body itself (no fixed disappear timer
      *   while genuinely hovered — see bug note below)
      * - Also opens on click/tap ("pinned"): stays open indefinitely while
@@ -44,10 +48,13 @@
         wrapperClass?: string;
         /** Child owns native interaction semantics (for example, a button or link). */
         interactiveChild?: boolean;
+        /** Delay before a plain-hover open (T2). Click/tap/keyboard always open
+         *  instantly. Pass 0 to restore the pre-T2 instant hover. */
+        showDelayMs?: number;
         children?: Snippet;
     }
 
-    let {text = '', html = '', math = false, position = 'top', maxWidth = '400px', wrapperClass = '', interactiveChild = false, children}: Props = $props();
+    let {text = '', html = '', math = false, position = 'top', maxWidth = '400px', wrapperClass = '', interactiveChild = false, showDelayMs = 500, children}: Props = $props();
 
     let visible = $state(false);
     let tooltipElement: HTMLDivElement | undefined = $state(undefined);
@@ -94,11 +101,21 @@
     /** Single pending-hide timer, shared by both the pinned grace period and
      *  the plain-hover bridge delay — always cancelled on re-entry. */
     let pendingHideTimer: ReturnType<typeof setTimeout> | null = $state(null);
+    /** Pending hover-open timer (T2) — cancelled when the pointer leaves before
+     *  the delay elapses, and by any explicit open/close path. */
+    let pendingShowTimer: ReturnType<typeof setTimeout> | null = $state(null);
 
     function clearPendingHide() {
         if (pendingHideTimer) {
             clearTimeout(pendingHideTimer);
             pendingHideTimer = null;
+        }
+    }
+
+    function clearPendingShow() {
+        if (pendingShowTimer) {
+            clearTimeout(pendingShowTimer);
+            pendingShowTimer = null;
         }
     }
 
@@ -110,6 +127,7 @@
     }
 
     function show() {
+        clearPendingShow();
         visible = true;
         schedulePositionUpdate();
     }
@@ -118,6 +136,7 @@
         visible = false;
         pinned = false;
         clearPendingHide();
+        clearPendingShow();
         isTouchInteraction = false;
     }
 
@@ -136,22 +155,33 @@
         }
     }
 
-    /** Pointer entered trigger OR tooltip body — cancel any scheduled hide
-     *  and ensure it's shown (covers both plain hover and re-entry into a
-     *  pinned tooltip before its grace period elapses). */
+    /** Pointer entered trigger OR tooltip body — cancel any scheduled hide.
+     *  A closed tooltip opens after `showDelayMs` (T2): the pointer must rest,
+     *  so tooltips don't flash while the user crosses the page. Re-entry into
+     *  an already-open tooltip (trigger → body) is instant. */
     function handlePointerEnter() {
         if (isTouchInteraction) return;
         clearPendingHide();
-        if (!visible) show();
+        if (visible || pendingShowTimer) return;
+        if (showDelayMs <= 0) {
+            show();
+            return;
+        }
+        pendingShowTimer = setTimeout(() => {
+            pendingShowTimer = null;
+            show();
+        }, showDelayMs);
     }
 
     /** Pointer left trigger OR tooltip body. Pinned tooltips get a multi-
      *  second grace period (real dismiss only after contact stays lost);
      *  plain-hover tooltips get a near-instant bridge delay so moving the
      *  mouse across the small gap between trigger and tooltip doesn't close
-     *  it, while still closing promptly once genuinely done hovering. */
+     *  it, while still closing promptly once genuinely done hovering. A
+     *  pending hover-open (T2) is simply cancelled — the pointer is gone. */
     function handlePointerLeave() {
         if (isTouchInteraction) return;
+        clearPendingShow();
         scheduleHide(pinned ? PINNED_LEAVE_GRACE_MS : HOVER_LEAVE_BRIDGE_MS);
     }
 
@@ -212,6 +242,12 @@
                 }
             };
         }
+    });
+
+    // Clear pending timers on destroy so a removed tooltip can't fire later.
+    $effect(() => () => {
+        clearPendingShow();
+        clearPendingHide();
     });
 
     /**

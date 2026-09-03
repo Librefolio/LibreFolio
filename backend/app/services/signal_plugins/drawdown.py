@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.schemas.signals import (
     SignalAggregationProfile,
@@ -31,9 +31,26 @@ from backend.app.services.signal_plugins.base import SignalPlugin
 
 
 class DrawdownParams(BaseModel):
-    """Underwater drawdown has no configurable parameters."""
+    """Underwater drawdown parameters.
+
+    ``full_history`` (default True): compute against the running peak over the
+    ENTIRE available history, then slice to the visible window. Drawdown has
+    unlimited memory — the relevant peak may predate the visible range by
+    years, so a points-based warm-up is wrong by construction (E1). The flag is
+    user-visible in the chart signal settings; AI export paths always request
+    the full-history behavior.
+    """
 
     model_config = ConfigDict(extra="forbid")
+
+    full_history: bool = Field(
+        default=True,
+        json_schema_extra={
+            "x-i18n-key": "chartSettings.params.fullHistory",
+            "x-control-order": 1,
+            "x-tooltip-key": "signals.tooltips.riskFullHistory",
+        },
+    )
 
 
 @register_plugin(SignalPluginRegistry)
@@ -41,7 +58,9 @@ class DrawdownPlugin(SignalPlugin):
     """Render running drawdown from the canonical target-currency price series."""
 
     signal_code = "RISK_DRAWDOWN"
-    implementation_version = "1.0.0"
+    # 1.1.0 (2026-09-02): full_history default — numerical behavior changed
+    # (peak is now the all-time high, not the visible-window max).
+    implementation_version = "1.1.0"
     display_name_key = "signals.riskDrawdown.name"
     description_key = "signals.riskDrawdown.description"
     semantic_id = "underwater_drawdown"
@@ -87,12 +106,15 @@ class DrawdownPlugin(SignalPlugin):
         params: DrawdownParams,
         context: SignalExecutionContext,
     ) -> SignalWarmupRequirement:
-        del params, context
+        del context
         return SignalWarmupRequirement(
             minimum_points=2,
             stabilization_points=0,
             total_points=2,
             normalized_tolerance=1e-6,
+            # E1: with full_history the fetch path ignores total_points and loads
+            # from the start of the available history (see asset_source).
+            full_history=params.full_history,
         )
 
     def compute(

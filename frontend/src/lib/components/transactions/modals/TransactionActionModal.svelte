@@ -1,6 +1,6 @@
 <!--
   TransactionActionModal.svelte — Rich confirmation for split and promote actions.
-  Uses tabular layout (From/To columns) matching TransactionDeleteModal style.
+  Uses tabular layout (From/To columns).
   - mode='split': shows BEFORE (paired) → AFTER (2 standalone) preview
   - mode='promote': shows 2 standalone → paired target preview
   Plan D2 Bugfix 3 Step 4 — tabular redesign (2026-05-14).

@@ -2,23 +2,30 @@
  * Transaction Clone E2E Tests — Phase 07 · Plan C2 Step 8a
  *
  * Covers:
- * - Clone standalone TX → 1 row new, date=today
- * - Clone paired TX → 2 rows new (Da:/A:), date=today
+ * - Clone standalone TX → 1 row new, source date preserved (T3)
+ * - Clone paired TX → 2 rows new (Da:/A:), source date preserved (T3)
  * - Clone with quantityRule='zero' → qty=0
- * - Clone paired commit → pair created in DB
+ * - Clone paired commit → pair created in DB, both halves on the source date
+ * - cloneRow inside the workspace → source date preserved (T3)
  * - Clone from view-only broker → clone button not visible
+ *
+ * T3 (2026-09): cloning is the correction workflow — duplicating a
+ * misclassified historical row and editing the copy. Resetting the date to
+ * today destroyed exactly the field being corrected, so every clone path
+ * (resolveInitialRows / createOpFromClone / cloneRow) now preserves it.
  *
  * Prerequisites: backend test mode (port 6041), mock data populated.
  * Mock data contract: populate_mock_data.py creates INTEREST transactions,
  * asymmetric paired TRANSFERs, and linked pairs with "access-test" tag.
  */
-import {expect, test, type Page} from '../fixtures/playwright';
+import {expect, test, type Locator, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {waitForSettled} from '../fixtures/app-events';
 import {appears} from '../fixtures/probe';
 import {trackTransactionWrites, type TransactionWriteTracker} from '../fixtures/db-cleanup';
 import {todayIso} from '../fixtures/dates';
+import {uniqueSuffix} from '../fixtures/unique';
 
 test.setTimeout(25_000);
 
@@ -58,6 +65,33 @@ async function findRowId(page: Page, ...substrings: string[]): Promise<string | 
         }
     }
     return null;
+}
+
+/** Click a row's action via its kebab menu (row-actions-{id} → context-menu-action-{actionId}). */
+async function clickRowAction(row: Locator, actionId: string) {
+    const page = row.page();
+    await row.hover();
+    const kebabBtn = row.getByTestId(/^row-actions-/);
+    await expect(kebabBtn).toBeVisible({timeout: 2_000});
+    await kebabBtn.click();
+    const btn = page.getByTestId(`context-menu-action-${actionId}`);
+    await expect(btn).toBeVisible({timeout: 2_000});
+    await btn.click();
+}
+
+/**
+ * A clone source's date, read from the server. The DOM row id is not the
+ * transaction id (TransactionsTable prefixes `tx-` / `ghost-`), and asserting
+ * against a date scraped from row text would confuse "preserved" with
+ * "happened to render today" — the server answer is exact.
+ */
+async function readSourceDate(page: Page, rowId: string): Promise<string> {
+    const txId = Number(rowId.replace(/^(?:tx|ghost)-/, ''));
+    expect(Number.isInteger(txId), `row id ${rowId} does not carry a transaction id`).toBeTruthy();
+    const resp = await page.request.get(`/api/v1/transactions?ids=${txId}`);
+    expect(resp.ok(), `reading the clone source failed (HTTP ${resp.status()})`).toBeTruthy();
+    const [item] = (await resp.json()) as Array<{date: string}>;
+    return item.date;
 }
 
 /** Close any open modal (FormModal + BulkModal + confirm discard). */
@@ -101,11 +135,11 @@ test.describe('Transaction Clone', () => {
         await txWrites.cleanup();
     });
 
-    test('clone standalone → 1 row new, date=today', async ({page}) => {
+    test('clone standalone → 1 row new, source date preserved (T3)', async ({page}) => {
         // Find a standalone BUY/DEPOSIT on an editable broker (IB or Directa)
         const rows = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]');
         const count = await rows.count();
-        let standaloneRowId: string | null = null;
+        const candidates: string[] = [];
 
         for (let i = 0; i < count; i++) {
             const row = rows.nth(i);
@@ -120,11 +154,26 @@ test.describe('Transaction Clone', () => {
             const text = (await row.textContent()) ?? '';
             const editableBrokers = ['Interactive Brokers', 'Directa', 'Coinbase'];
             if (editableBrokers.some((b) => text.includes(b))) {
-                standaloneRowId = await row.getAttribute('data-row-id');
+                const rowId = await row.getAttribute('data-row-id');
+                if (rowId) candidates.push(rowId);
+            }
+        }
+        expect(candidates.length, 'Must find a standalone TX on editable broker').toBeGreaterThan(0);
+
+        // A source dated TODAY would make "preserved" indistinguishable from
+        // "reset to today" (a neighbour's just-committed row is dated today by
+        // construction) — skip those; the assertion must discriminate.
+        let standaloneRowId: string | null = null;
+        let sourceDate = '';
+        for (const rowId of candidates) {
+            const date = await readSourceDate(page, rowId);
+            if (date !== todayIso()) {
+                standaloneRowId = rowId;
+                sourceDate = date;
                 break;
             }
         }
-        expect(standaloneRowId, 'Must find a standalone TX on editable broker').toBeTruthy();
+        expect(standaloneRowId, 'No standalone editable row with a non-today date — check populate_mock_data.py').toBeTruthy();
 
         await selectRow(page, standaloneRowId!);
         const cloneBtn = page.locator('[data-testid="toolbar-action-clone"]');
@@ -134,7 +183,7 @@ test.describe('Transaction Clone', () => {
         // BulkModal opens
         await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
 
-        // Check the grid has 1 row with status "new" and date=today
+        // Check the grid has 1 row with status "new" and the SOURCE date
         const bulkRows = page.locator('[data-testid="tx-bulk-modal"] tbody tr[data-row-id]');
         await expect(bulkRows).toHaveCount(1, {timeout: 3_000});
 
@@ -142,19 +191,24 @@ test.describe('Transaction Clone', () => {
         const statusCell = bulkRows.first().locator('text=new');
         await expect(statusCell).toBeVisible({timeout: 2_000});
 
-        // Date = today
-        const today = todayIso();
+        // T3: the clone keeps the original date (the correction workflow), not today.
         const rowText = (await bulkRows.first().textContent()) ?? '';
-        expect(rowText).toContain(today);
+        expect(rowText).toContain(sourceDate);
+
+        // The single-clone auto-opens the FormModal — the same preserved date
+        // must be what the edit form shows (createOpFromClone + fromTx agree).
+        const formModal = page.getByTestId('tx-form-modal');
+        await expect(formModal).toBeVisible({timeout: 5_000});
+        await expect(page.getByTestId('tx-form-date-wrap').locator('input')).toHaveValue(sourceDate);
 
         await closeModals(page);
     });
 
-    test('clone paired → 2 rows new (Da:/A:), date=today', async ({page}) => {
+    test('clone paired → 2 rows new (Da:/A:), source date preserved (T3)', async ({page}) => {
         // Find a giver+receiver pair on editable brokers
         const allRows = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]');
         const total = await allRows.count();
-        let giverRowId: string | null = null;
+        const giverCandidates: string[] = [];
 
         for (let i = 0; i < total - 1; i++) {
             const nextCls = (await allRows.nth(i + 1).getAttribute('class')) ?? '';
@@ -162,12 +216,26 @@ test.describe('Transaction Clone', () => {
                 const giverText = (await allRows.nth(i).textContent()) ?? '';
                 const editableBrokers = ['Interactive Brokers', 'Directa', 'Coinbase'];
                 if (editableBrokers.some((b) => giverText.includes(b))) {
-                    giverRowId = await allRows.nth(i).getAttribute('data-row-id');
-                    break;
+                    const rowId = await allRows.nth(i).getAttribute('data-row-id');
+                    if (rowId) giverCandidates.push(rowId);
                 }
             }
         }
-        expect(giverRowId, 'Must find a paired giver row on editable broker').toBeTruthy();
+        expect(giverCandidates.length, 'Must find a paired giver row on editable broker').toBeGreaterThan(0);
+
+        // Skip today-dated pairs: preserved vs reset-to-today must stay
+        // distinguishable (see the standalone test above).
+        let giverRowId: string | null = null;
+        let sourceDate = '';
+        for (const rowId of giverCandidates) {
+            const date = await readSourceDate(page, rowId);
+            if (date !== todayIso()) {
+                giverRowId = rowId;
+                sourceDate = date;
+                break;
+            }
+        }
+        expect(giverRowId, 'No paired editable row with a non-today date — check populate_mock_data.py').toBeTruthy();
 
         // Select only the giver
         await selectRow(page, giverRowId!);
@@ -191,10 +259,9 @@ test.describe('Transaction Clone', () => {
             expect(text).toContain('new');
         }
 
-        // Date = today
-        const today = todayIso();
+        // T3: the clone keeps the pair's original date, not today.
         const firstText = (await bulkRows.first().textContent()) ?? '';
-        expect(firstText).toContain(today);
+        expect(firstText).toContain(sourceDate);
 
         await closeModals(page);
     });
@@ -259,6 +326,10 @@ test.describe('Transaction Clone', () => {
         }
         expect(giverRowId, 'Must find a paired giver row on editable brokers').toBeTruthy();
 
+        // T3: read the source date up front — the wire assertion below checks
+        // the clone payload against it.
+        const sourceDate = await readSourceDate(page, giverRowId!);
+
         await selectRow(page, giverRowId!);
         const cloneBtn = page.locator('[data-testid="toolbar-action-clone"]');
         await expect(cloneBtn).toBeVisible({timeout: 2_000});
@@ -291,10 +362,68 @@ test.describe('Transaction Clone', () => {
             expect(c.id === undefined || c.id === 0 || c.id === null).toBeTruthy();
         }
 
+        // T3: both halves are created on the SOURCE date, not reset to today.
+        for (const c of payload.creates) {
+            expect(c.date, 'clone must carry the source date on the wire').toBe(sourceDate);
+        }
+
         // The commit is still in flight when the payload assertions above finish.
         // Leaving the test here would hand the next one a half-written table, so wait
         // for the modal to close — which is the app saying the commit came back.
         await expect(page.getByTestId('tx-bulk-modal')).toBeHidden({timeout: 15_000});
+    });
+
+    test('clone inside the workspace (cloneRow) preserves the source date (T3)', async ({page}) => {
+        // Own the source row: a mock-table scan could land on a today-dated
+        // neighbour, where preserved and reset-to-today are indistinguishable.
+        // A row this test created, dated 2021, makes the assertion exact.
+        const suffix = uniqueSuffix();
+        const brokerResp = await page.request.post('/api/v1/brokers', {data: [{name: `T3-ws-${suffix}`}]});
+        expect(brokerResp.ok(), `broker setup failed (HTTP ${brokerResp.status()})`).toBeTruthy();
+        const brokerId = (await brokerResp.json()).results[0].broker_id as number;
+
+        const sourceDate = '2021-07-19';
+        const createResp = await page.request.post('/api/v1/transactions/commit', {
+            data: {creates: [{broker_id: brokerId, type: 'DEPOSIT', date: sourceDate, cash: {code: 'EUR', amount: '10'}, description: `T3-ws-${suffix}`}]},
+        });
+        const createBody = await createResp.json();
+        expect(createBody.committed, `setup rolled back: ${JSON.stringify(createBody.issues ?? [])}`).toBe(true);
+        const sourceId = createBody.results[0].ids[0] as number;
+
+        try {
+            // Id-filtered navigation: re-navigating to the URL the page is
+            // already on is a client-side no-op that would leave the freshly
+            // seeded row out of the table.
+            await navigateTo(page, `/transactions?page_size=200&id_min=${sourceId}&id_max=${sourceId}`);
+            await waitForSettled(page.getByTestId('transactions-page'));
+
+            await selectRow(page, `tx-${sourceId}`);
+            await page.getByTestId('toolbar-action-edit').click();
+            const bulkModal = page.getByTestId('tx-bulk-modal');
+            await expect(bulkModal).toBeVisible({timeout: 5_000});
+
+            // Single-row edit auto-opens the FormModal; close it to reach the grid.
+            const formModal = page.getByTestId('tx-form-modal');
+            if (await formModal.isVisible({timeout: 2_000}).catch(() => false)) {
+                await formModal.getByTestId('tx-form-cancel').click();
+                await expect(formModal).not.toBeVisible({timeout: 3_000});
+            }
+
+            // Clone the row INSIDE the workspace (cloneRow — the third T3 site).
+            const gridRow = bulkModal.locator('tbody tr[data-row-id]').first();
+            await clickRowAction(gridRow, 'clone');
+
+            const appended = bulkModal.locator('tbody tr.row-appended');
+            await expect(appended).toHaveCount(1, {timeout: 3_000});
+            const appendedText = (await appended.textContent()) ?? '';
+            expect(appendedText, 'the in-workspace clone must carry the source date').toContain(sourceDate);
+            expect(appendedText).not.toContain(todayIso());
+        } finally {
+            // Nothing was committed through the page — the API-seeded source is
+            // this test's only write; remove it. The broker stays (inert,
+            // uniquely named).
+            await page.request.post('/api/v1/transactions/commit', {data: {deletes: [sourceId]}});
+        }
     });
 
     test('clone from view-only broker → no edit/delete actions on row', async ({page}) => {
