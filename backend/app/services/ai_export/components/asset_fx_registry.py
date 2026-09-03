@@ -159,7 +159,7 @@ def _default_placeholders() -> Sequence[ComponentSpec]:
     return ALL_FOUNDATION_COMPONENTS
 
 
-def validate_replacements_against_placeholders(
+def validate_replacements_against_placeholders(  # noqa: C901 — flat spec-field comparison, early raises
     replacements: Sequence[ComponentSpec],
     *,
     placeholders: Sequence[ComponentSpec] | None = None,

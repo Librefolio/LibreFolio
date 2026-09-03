@@ -9,8 +9,6 @@ import {expect} from '../fixtures/playwright';
 import {navigateTo} from '../fixtures/auth-helpers';
 import {waitForSettled} from '../fixtures/app-events';
 
-export const API_BASE = '/api/v1';
-
 /**
  * Navigate to FX page and wait for content to load.
  */

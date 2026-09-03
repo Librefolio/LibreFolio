@@ -912,7 +912,7 @@ class AssetSourceManager:
     # PROVIDER ASSIGNMENT METHODS
     # ========================================================================
     @staticmethod
-    async def bulk_assign_providers(
+    async def bulk_assign_providers(  # noqa: C901 — per-item upsert loop; parametric-wipe gate is linear
         assignments: List[FAProviderAssignmentItem],
         session: AsyncSession,
     ) -> list[FAProviderAssignmentResult]:
@@ -1162,7 +1162,7 @@ class AssetSourceManager:
         return FABulkRemoveResponse(results=results, success_count=len(results), errors=[])
 
     @staticmethod
-    async def refresh_assets_from_provider(asset_ids: list[int], session: AsyncSession) -> FABulkMetadataRefreshResponse:
+    async def refresh_assets_from_provider(asset_ids: list[int], session: AsyncSession) -> FABulkMetadataRefreshResponse:  # noqa: C901 — per-asset guard chain with early continues
         """
         Refresh asset data from assigned providers (bulk operation).
 
@@ -1307,7 +1307,7 @@ class AssetSourceManager:
                 )
 
             except Exception as e:
-                logger.error(f"Error preparing refresh for asset {asset_id}: {e}")
+                logger.exception(f"Error preparing refresh for asset {asset_id}: {e}")
                 results.append(FAMetadataRefreshResult(asset_id=asset_id, success=False, message=f"Error: {e!s}"))
 
         # Apply all patches in bulk using AssetCRUDService
@@ -1352,7 +1352,7 @@ class AssetSourceManager:
     # ========================================================================
 
     @staticmethod
-    async def bulk_upsert_prices(data: List[FAUpsert], session: AsyncSession, source_plugin_key: str = "MANUAL") -> dict:
+    async def bulk_upsert_prices(data: List[FAUpsert], session: AsyncSession, source_plugin_key: str = "MANUAL") -> dict:  # noqa: C901 — chunked batch upsert, per-date sentinel merge
         """
         Bulk upsert prices manually (PRIMARY bulk method).
 
@@ -1742,7 +1742,7 @@ class AssetSourceManager:
     # ========================================================================
 
     @staticmethod
-    async def wipe_market_data_for_currency_change(
+    async def wipe_market_data_for_currency_change(  # noqa: C901 — sequential count-then-delete steps, guard ifs
         asset_id: int,
         session: AsyncSession,
         dry_run: bool = False,
@@ -1902,7 +1902,7 @@ class AssetSourceManager:
     # ========================================================================
 
     @staticmethod
-    async def probe_provider_config(
+    async def probe_provider_config(  # noqa: C901 — three parallel probe closures, duplicated try/except mapping
         config: FAProviderConfigBase,
         operations: list[ProbeOperation],
     ) -> FAProviderProbeResponse:
@@ -2158,7 +2158,7 @@ class AssetSourceManager:
         )
 
     @staticmethod
-    async def get_prices_bulk(
+    async def get_prices_bulk(  # noqa: C901 — TODO(P2-refactor): multi-pass query/FX/signal pipeline, extract passes
         requests: list,
         session: AsyncSession,
     ) -> list:
@@ -2710,7 +2710,7 @@ class AssetSourceManager:
     # ========================================================================
 
     @staticmethod
-    async def bulk_refresh_prices(
+    async def bulk_refresh_prices(  # noqa: C901 — TODO(P2-refactor): extract nested fetch/persist closures module-level
         requests: List[FARefreshItem],
         session: AsyncSession,
         concurrency: int = 5,
@@ -2877,7 +2877,7 @@ class AssetSourceManager:
         fetch_results: Dict[int, dict] = {}  # asset_id → {"prices": [...], "source": "..."}
         fetch_errors: Dict[int, str] = {}  # asset_id → error message
 
-        async def _fetch_single(asset_id: int, prep: dict):
+        async def _fetch_single(asset_id: int, prep: dict):  # noqa: C901 — TODO(P2-refactor): nested cache gap-analysis, split from fetch
             """Fetch prices from provider for a single asset (no DB access)."""
             prov = prep["prov"]
             identifier = prep["identifier"]
@@ -3056,7 +3056,7 @@ class AssetSourceManager:
 
             return new_count, changed_count, changed_items
 
-        async def _persist_single(asset_id: int) -> FARefreshResult:
+        async def _persist_single(asset_id: int) -> FARefreshResult:  # noqa: C901 — sequential guarded persist steps, per-step try/except
             """Upsert fetched prices and update assignment in an isolated session."""
             t_start_ns = time.monotonic_ns()
             prep = prepared_items[asset_id]
@@ -3293,7 +3293,7 @@ class AssetSourceManager:
     # ========================================================================
 
     @staticmethod
-    async def get_current_prices_bulk(
+    async def get_current_prices_bulk(  # noqa: C901 — per-asset provider→cache→DB fallback chain
         asset_ids: list[int],
         session: AsyncSession,
         concurrency: int = 5,
@@ -3907,7 +3907,7 @@ class AssetCRUDService:
                 logger.info(f"Asset created: id={asset.id}, display_name={item.display_name}")
 
             except Exception as e:
-                logger.error(f"Error creating asset {item.display_name}: {e}")
+                logger.exception(f"Error creating asset {item.display_name}: {e}")
                 results.append(
                     FAAssetCreateResult(
                         asset_id=None,
@@ -3921,7 +3921,7 @@ class AssetCRUDService:
         try:
             await session.commit()
         except Exception as e:
-            logger.error(f"Error committing asset creation: {e}")
+            logger.exception(f"Error committing asset creation: {e}")
             await session.rollback()
             # Mark all as failed
             for result in results:
@@ -3934,7 +3934,7 @@ class AssetCRUDService:
         return FABulkAssetCreateResponse(results=results, success_count=success_count, errors=[])
 
     @staticmethod
-    async def list_assets(filters: FAAinfoFiltersRequest, session: AsyncSession, user_id: int | None = None) -> List[FAinfoResponse]:
+    async def list_assets(filters: FAAinfoFiltersRequest, session: AsyncSession, user_id: int | None = None) -> List[FAinfoResponse]:  # noqa: C901 — flat filter-chain query builder
         """
         List assets with optional filters - enhanced for BRIM asset matching.
 
@@ -4165,13 +4165,13 @@ class AssetCRUDService:
                         message=message,
                     )
                 )
-                logger.error(f"Error deleting asset {asset_id}: {e}")
+                logger.exception(f"Error deleting asset {asset_id}: {e}")
 
         # Commit successful deletions
         try:
             await session.commit()
         except Exception as e:
-            logger.error(f"Error committing asset deletion: {e}")
+            logger.exception(f"Error committing asset deletion: {e}")
             await session.rollback()
 
         success_count = sum(1 for r in results if r.success)
@@ -4182,7 +4182,7 @@ class AssetCRUDService:
         )
 
     @staticmethod
-    async def patch_assets_bulk(patches: List[FAAssetPatchItem], session: AsyncSession) -> FABulkAssetPatchResponse:
+    async def patch_assets_bulk(patches: List[FAAssetPatchItem], session: AsyncSession) -> FABulkAssetPatchResponse:  # noqa: C901 — per-field patch mapping, classification shallow-merge branch
         """
         Patch multiple assets in bulk (partial success allowed).
 
@@ -4394,7 +4394,7 @@ class AssetCRUDService:
                 logger.info(f"Asset patched: id={patch.asset_id}, fields={updated_fields}")
 
             except Exception as e:
-                logger.error(f"Error patching asset {patch.asset_id}: {e}")
+                logger.exception(f"Error patching asset {patch.asset_id}: {e}")
                 results.append(
                     FAAssetPatchResult(
                         asset_id=patch.asset_id,
@@ -4412,7 +4412,7 @@ class AssetCRUDService:
         return FABulkAssetPatchResponse(results=results, success_count=success_count, errors=[])
 
     @staticmethod
-    async def merge_assets(
+    async def merge_assets(  # noqa: C901 — sequential 5-stage merge, per-stage collision branches
         source_asset_id: int,
         target_asset_id: int,
         session: AsyncSession,
@@ -4593,7 +4593,7 @@ class AssetCRUDService:
             raise
         except Exception as e:
             await session.rollback()
-            logger.error(f"Error merging asset {source_asset_id} into {target_asset_id}: {e}")
+            logger.exception(f"Error merging asset {source_asset_id} into {target_asset_id}: {e}")
             raise AssetSourceError(f"Merge failed: {e!s}", "MERGE_FAILED", {"source_asset_id": source_asset_id, "target_asset_id": target_asset_id}) from e
 
         logger.info(
@@ -4823,7 +4823,7 @@ class AssetSearchService:
         return candidates
 
     @staticmethod
-    async def _augment_with_link_finder(code: str, provider: "AssetSourceProvider", query: str, hints: Optional[list[str]] = None) -> list[dict]:
+    async def _augment_with_link_finder(code: str, provider: "AssetSourceProvider", query: str, hints: Optional[list[str]] = None) -> list[dict]:  # noqa: C901 — best-effort fallback pipeline, nested dedup loops
         """Last-resort fallback when a provider's on-site search yields nothing.
 
         Uses the external :mod:`web_link_finder` to turn a query into candidate
@@ -4931,7 +4931,7 @@ class AssetSearchService:
         )
 
     @staticmethod
-    async def search(query: str, provider_codes: Optional[list[str]] = None, hints: Optional[list[str]] = None) -> FAProviderSearchResponse:
+    async def search(query: str, provider_codes: Optional[list[str]] = None, hints: Optional[list[str]] = None) -> FAProviderSearchResponse:  # noqa: C901 — per-provider fan-out, error mapping + item packing
         """
         Search for assets across one or more providers in parallel.
 
@@ -5015,7 +5015,7 @@ class AssetSearchService:
                     logger.debug(f"Provider '{code}' does not support search")
                     return (code, [], None)
                 else:
-                    logger.error(f"Search error from provider '{code}': {e}")
+                    logger.exception(f"Search error from provider '{code}': {e}")
                     return (code, [], str(e))
 
         # Execute all searches in parallel
@@ -5075,7 +5075,7 @@ class AssetSearchService:
         )
 
     @staticmethod
-    async def search_stream(query: str, provider_codes: Optional[list[str]] = None, hints: Optional[list[str]] = None) -> AsyncGenerator[str]:  # pragma: no cover
+    async def search_stream(query: str, provider_codes: Optional[list[str]] = None, hints: Optional[list[str]] = None) -> AsyncGenerator[str]:  # pragma: no cover  # noqa: C901 — SSE fan-out, per-provider error mapping
         """
         Stream search results as SSE events, one event per provider completion.
 

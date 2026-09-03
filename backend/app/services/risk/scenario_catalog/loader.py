@@ -106,7 +106,7 @@ def _parse_scenario(path: Path, expected_kind: RiskScenarioKind):
     return definition
 
 
-def _built_in_entries(built_in_dir: Path) -> tuple[list[RiskScenarioCatalogEntry], list[RiskGeographyGroupDefinition]]:
+def _built_in_entries(built_in_dir: Path) -> tuple[list[RiskScenarioCatalogEntry], list[RiskGeographyGroupDefinition]]:  # noqa: C901 — per-file catalog load loops with error wrapping
     if not built_in_dir.is_dir():
         raise RiskScenarioCatalogLoadError(f"Built-in scenario catalog directory does not exist: {built_in_dir}")
 
@@ -183,7 +183,7 @@ def _host_entries(
                     message=str(exc),
                 )
                 warnings.append(warning)
-                logger.error(
+                logger.exception(
                     "Host risk scenario rejected",
                     source_file=relative,
                     error=str(exc),

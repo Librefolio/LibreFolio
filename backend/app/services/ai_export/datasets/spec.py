@@ -103,7 +103,7 @@ class DatasetSpec:
     scope_requirement_codes: tuple[str, ...] = ()
     visibility: CatalogVisibility = CatalogVisibility.INTERNAL
 
-    def __post_init__(self) -> None:
+    def __post_init__(self) -> None:  # noqa: C901 — flat field-validation chain
         if not _DATASET_ID_PATTERN.fullmatch(self.dataset_id):
             raise DatasetSpecError(f"dataset_id has invalid format: {self.dataset_id!r}")
         require_positive_int(self.version, "version", owner_id=self.dataset_id, error_cls=DatasetSpecError)

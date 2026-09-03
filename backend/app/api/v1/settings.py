@@ -13,11 +13,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.v1.auth import get_current_user
 from backend.app.db.models import User
-from backend.app.db.session import get_session_generator
+from backend.app.db.session import get_async_engine, get_session_generator
 from backend.app.schemas.settings import (
     GlobalSettingBulkUpdate,
     GlobalSettingRead,
+    GlobalSettingsInitializeResponse,
     GlobalSettingsListResponse,
+    SchedulerLogResponse,
+    SchedulerStateResponse,
     UserSettingsRead,
     UserSettingsUpdate,
 )
@@ -138,7 +141,7 @@ async def bulk_update_global_settings(
     return results
 
 
-@router.post("/global/initialize", status_code=status.HTTP_200_OK)
+@router.post("/global/initialize", status_code=status.HTTP_200_OK, response_model=GlobalSettingsInitializeResponse)
 async def initialize_global_settings_endpoint(
     admin: Annotated[User, Depends(require_admin)],
     session: AsyncSession = Depends(get_session_generator),
@@ -152,7 +155,7 @@ async def initialize_global_settings_endpoint(
     return {"message": f"Initialized {created} global settings"}
 
 
-@router.get("/scheduler/state")
+@router.get("/scheduler/state", response_model=SchedulerStateResponse)
 async def get_scheduler_state(
     admin: Annotated[User, Depends(require_admin)],
 ) -> dict:
@@ -165,8 +168,6 @@ async def get_scheduler_state(
     state = load_state()
 
     # Read scheduler timezone from GlobalSettings
-    from backend.app.db.session import get_async_engine
-
     engine = get_async_engine()
     async with AsyncSession(engine) as db_session:
         tz_value = await get_setting_value(db_session, "scheduler_timezone")
@@ -197,7 +198,7 @@ async def get_scheduler_state(
     }
 
 
-@router.get("/scheduler/log")
+@router.get("/scheduler/log", response_model=SchedulerLogResponse)
 async def get_scheduler_log(
     admin: Annotated[User, Depends(require_admin)],
     since: str | None = None,

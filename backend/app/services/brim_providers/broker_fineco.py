@@ -217,7 +217,7 @@ class FinecoBrokerProvider(BRIMProvider):
         except Exception:
             return False
 
-    def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:
+    def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:  # noqa: C901 — flat row loop: validation guards, maturity split and fee rules, no nested logic
         """
         Parse a Fineco CSV export file.
 

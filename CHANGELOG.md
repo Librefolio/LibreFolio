@@ -123,6 +123,12 @@ Quantitative risk and allocation analytics, powered by [QuantLib](https://www.qu
 
 ### 🐛 Fixed
 
+#### 🧹 Clean audit re-check — P1 hygiene (2026-09-03)
+
+- **Bulk FX conversion-route operations issued one query per route** — route replacement now preloads the touched pairs in one SELECT, batches deletes, and re-reads remaining routes with a single grouped query; the WAC analytics endpoint preloads its assets the same way.
+- **Error logs lost the traceback in 55 places** — `logger.error` inside `except` blocks is now `logger.exception`, so operational failures carry their stack trace in the server log.
+- Internal hygiene with no behavior change: unreachable backend helpers and frontend orphans removed, 25 unused translations dropped from all four languages, dead barrel re-exports pruned, the impossible currency-graph invalidation machinery removed (the graph is built from startup-static provider capabilities), and the lint gate hardened (complexity `C901` at 10 with justified exceptions for flat data packers, `TRY400`, `S110`).
+
 #### 🧹 Clean audit re-check — P0 fixes (2026-09-02)
 
 - **Configured base currency was ignored everywhere** — valuation paths read a `base_currency` global key that was never registered, silently falling back to EUR, and the engine's fallback branch called the settings helper with inverted arguments (a guaranteed `TypeError` had it ever run). The effective base currency is now the per-user setting, seeded from the admin-level default at first creation, EUR as last resort.

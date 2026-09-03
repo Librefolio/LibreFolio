@@ -409,7 +409,7 @@ class PreparedAssetSeriesSet(StrictModel):
         return Currency.validate_code(value)
 
     @model_validator(mode="after")
-    def validate_alignment(self) -> PreparedAssetSeriesSet:
+    def validate_alignment(self) -> PreparedAssetSeriesSet:  # noqa: C901 — flat invariant raises, no nested logic
         asset_ids = [item.valuations.asset_id for item in self.series]
         if len(asset_ids) != len(set(asset_ids)):
             raise ValueError("prepared asset series must have unique asset IDs")
@@ -492,7 +492,7 @@ class RiskResultMetadata(StrictModel):
         return sorted(value)
 
     @model_validator(mode="after")
-    def validate_context(self) -> RiskResultMetadata:
+    def validate_context(self) -> RiskResultMetadata:  # noqa: C901 — flat invariant raises, no nested logic
         if self.n_observations == 0:
             if self.calendar_days != 0 or self.annualization_factor is not None:
                 raise ValueError("empty results cannot expose annualization metadata")
@@ -969,7 +969,7 @@ class RiskDrawdownOutput(StrictModel):
     return_basis: RiskReturnBasis
 
     @model_validator(mode="after")
-    def validate_episode_contract(self) -> RiskDrawdownOutput:
+    def validate_episode_contract(self) -> RiskDrawdownOutput:  # noqa: C901 — flat status-branch invariant raises
         if self.available_end < self.available_start:
             raise ValueError("available_end must not precede available_start")
         status = self.maximum_drawdown_recovery_status

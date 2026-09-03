@@ -73,19 +73,3 @@ export async function downloadAssetBackup(assetId: number, kind: BackupKind, for
     const filename = extractFilename(response.headers?.['content-disposition'] as string | undefined, fallback);
     triggerBrowserDownload(response.data, filename);
 }
-
-/**
- * Download an FX-pair backup snapshot. The backend auto-normalises the
- * pair to its alphabetical storage order; the filename reflects the
- * stored pair, not the requested one.
- */
-export async function downloadFxBackup(base: string, quote: string, format: BackupFormat): Promise<void> {
-    const response = await axiosInstance.get<Blob>(`/api/v1/backup/fx/${base}/${quote}/rates`, {
-        params: {format},
-        responseType: 'blob',
-    });
-    const today = new Date().toISOString().slice(0, 10);
-    const fallback = `fx_${base.toLowerCase()}_${quote.toLowerCase()}_${today}.${format}`;
-    const filename = extractFilename(response.headers?.['content-disposition'] as string | undefined, fallback);
-    triggerBrowserDownload(response.data, filename);
-}

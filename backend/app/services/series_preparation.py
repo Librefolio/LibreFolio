@@ -175,7 +175,7 @@ def _unusable_reason(
     return DataQualityExclusionReason.MISSING_PRICE
 
 
-def prepare_asset_series_set(
+def prepare_asset_series_set(  # noqa: C901 — sequential pipeline stages with early-return special cases
     price_results: Sequence[FAPriceQueryResult],
     *,
     requested_range: DateRangeModel,

@@ -172,7 +172,7 @@ def _parse_google_fonts_css(css_text: str):
     return subsets
 
 
-def _download_font_resource(
+def _download_font_resource(  # noqa: C901 — flat download/manifest pipeline, no nested logic
     vendor_dir: Path, manifest: dict, name: str, config: dict, force: bool = False
 ) -> bool:
     """
@@ -302,7 +302,7 @@ def _download_font_resource(
     return True
 
 
-def update_library(vendor_dir: Path, manifest: dict, name: str, config: dict, force: bool = False) -> bool:
+def update_library(vendor_dir: Path, manifest: dict, name: str, config: dict, force: bool = False) -> bool:  # noqa: C901 — flat update pipeline with guard returns, no nested logic
     """
     Update a single library.
 

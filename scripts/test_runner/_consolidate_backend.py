@@ -229,7 +229,7 @@ def _run_group(category: str, paths: list, coverage: bool, verbose: bool) -> dic
     return {p: verdicts.get(p, False) for p in paths}
 
 
-def run_backend_consolidated(scope: str | None, coverage: bool, resume: bool = False, verbose: bool = False, skip: set | None = None) -> tuple:
+def run_backend_consolidated(scope: str | None, coverage: bool, resume: bool = False, verbose: bool = False, skip: set | None = None) -> tuple:  # noqa: C901 — flat per-category orchestration loops, guard ifs only
     """Run every consolidatable backend unit in scope, one invocation per category.
 
     Returns ``(ok, covered_actions, per_action_outcome)``.

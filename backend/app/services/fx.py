@@ -386,7 +386,17 @@ class RateNotFoundError(FXServiceError):
 # ============================================================================
 # MULTI-PROVIDER ORCHESTRATOR
 # ============================================================================
-async def ensure_rates_multi_source(
+# Intentionally unwired: no production caller invokes this function (verified
+# 2026-09-03 — only backend/test_scripts/test_db/test_fx_rates_persistence.py).
+# The live sync path is sync_pairs_bulk(), which walks the user's configured
+# conversion routes with provider fallback and the MANUAL sentinel. This older
+# single-provider orchestrator survives as the designated extension point for
+# future multi-base providers (see the ARCHITECTURAL NOTE on base_currencies
+# above): when a provider returning multiple base currencies lands, explicit
+# base_currency routing belongs here. The persistence tests double as the
+# contract spec for that future wiring — remove the function only together
+# with them.
+async def ensure_rates_multi_source(  # noqa: C901 — linear staged sync pipeline, per-item checks only
     session,  # AsyncSession
     date_range: tuple[date, date],
     currencies: list[str],
@@ -765,7 +775,7 @@ async def _count_actual_changes(
     return changed
 
 
-async def sync_pairs_bulk(
+async def sync_pairs_bulk(  # noqa: C901 — TODO(P2-refactor): 3-phase concurrent orchestrator with nested closures
     session,  # AsyncSession — used only for reading route config
     pairs: list[str],  # ["EUR-USD", "CHF-CNY"]
     date_range: tuple[FXProviderStartDate, date],
@@ -890,7 +900,7 @@ async def sync_pairs_bulk(
                     leg_events[leg_key].set()
 
         except Exception as e:
-            logger.error(f"Provider {provider_code} fetch failed: {e}")
+            logger.exception(f"Provider {provider_code} fetch failed: {e}")
             provider = FXProviderRegistry.get_provider_instance(provider_code)
             base_cur = provider.base_currency if provider else ""
             for target_cur in target_currencies:
@@ -907,7 +917,7 @@ async def sync_pairs_bulk(
 
     # ── Phase 3: Route coroutines — await Events, compute, upsert+commit ──
     # With fallback: try routes in priority order, skip to next if legs failed
-    async def _process_route(pair_slug: str) -> FXSyncPairResult:
+    async def _process_route(pair_slug: str) -> FXSyncPairResult:  # noqa: C901 — route fallback chain, per-route error/continue paths
         """Process a single pair: try routes in priority order, use first one with all legs available."""
         t_route_start = time.monotonic_ns()  # Per-route timer
         routes = pair_routes_map.get(pair_slug, [])
@@ -1212,7 +1222,7 @@ async def sync_pairs_bulk(
 # ============================================================================
 
 
-async def convert_bulk(
+async def convert_bulk(  # noqa: C901 — per-item conversion dispatch with backward-fill search
     session,  # AsyncSession
     conversions: list[tuple[Currency, str, date]],  # [(amount_currency, to_currency, date), ...]
     raise_on_error: bool = True,
@@ -1497,7 +1507,7 @@ async def upsert_rates_bulk(
     return results
 
 
-async def delete_rates_bulk(
+async def delete_rates_bulk(  # noqa: C901 — flat batch delete: normalize, count, chunked delete
     session,  # AsyncSession
     deletions: list[tuple[str, str, date, date | None]],  # [(from_currency, to_currency, start_date, end_date?), ...]
 ) -> list[tuple[bool, int, int, str | None]]:  # [(success, existing_count, deleted_count, message), ...]

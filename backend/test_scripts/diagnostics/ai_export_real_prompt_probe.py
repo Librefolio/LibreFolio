@@ -538,7 +538,7 @@ def measure_canonical_breakdown(snapshot: Mapping[str, object], catalog: Mapping
     }
 
 
-def measure_technical_diagnostics(snapshot: Mapping[str, object]) -> dict[str, object] | None:
+def measure_technical_diagnostics(snapshot: Mapping[str, object]) -> dict[str, object] | None:  # noqa: C901 — flat component-id dispatch extracting diagnostic fields
     sections = snapshot.get("sections")
     if not isinstance(sections, list):
         return None
@@ -727,7 +727,7 @@ def _split_pipe_row(line: str) -> list[str]:
     return cells
 
 
-def audit_public_tables(prompt: str) -> dict[str, object]:
+def audit_public_tables(prompt: str) -> dict[str, object]:  # noqa: C901 — flat audit passes over parsed prompt tables
     tables: list[tuple[list[str], list[list[str]]]] = []
     lines = prompt.splitlines()
     index = 0
@@ -811,7 +811,7 @@ def audit_public_tables(prompt: str) -> dict[str, object]:
     }
 
 
-def audit_snapshot_semantics(
+def audit_snapshot_semantics(  # noqa: C901 — flat battery of independent audit checks
     snapshot: Mapping[str, object],
     prompt: str,
     render_result: Mapping[str, object],
@@ -1726,7 +1726,7 @@ def _metric_entries(payload: object) -> list[dict[str, object]]:
     raise ValueError("Metrics payload must be a list or contain an entries list")
 
 
-def metric_change_reasons(
+def metric_change_reasons(  # noqa: C901 — flat reason-flag mapping
     metric: Mapping[str, object] | None,
     previous: Mapping[str, object] | None = None,
 ) -> list[str]:
@@ -2710,7 +2710,7 @@ def _included_ids(snapshot: Mapping[str, object]) -> tuple[list[str], list[str]]
     return dataset_ids, component_ids
 
 
-def _run_case(
+def _run_case(  # noqa: C901 — flat probe step driver
     *,
     run_id: str,
     user_alias: str,
@@ -3718,7 +3718,7 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def run_probe(args: argparse.Namespace) -> int:
+def run_probe(args: argparse.Namespace) -> int:  # noqa: C901 — sequential probe orchestration driver
     target_cases = tuple(parse_target_case(value) for value in args.target_case)
     public_catalog_v1_run = args.profile == PUBLIC_CATALOG_V1_PROFILE and not target_cases
     if len(target_cases) != len(set(target_cases)):

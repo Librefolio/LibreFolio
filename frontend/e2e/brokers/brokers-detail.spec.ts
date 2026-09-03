@@ -1,5 +1,6 @@
 import {expect, test, type Locator, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
+import {expectChartCanvas} from '../fixtures/charts';
 import {TEST_USER} from '../fixtures/test-users';
 import {appears} from '../fixtures/probe';
 
@@ -318,13 +319,13 @@ test.describe('Broker Detail Page', () => {
 
             await clickRowAction(page, row, 'analyze-lots');
             await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
-            await expect(page.getByTestId('lot-wac-price-chart')).toBeVisible({timeout: 5000});
+            await expectChartCanvas(page, 'lot-wac-price-chart');
 
             await page.getByTestId('lot-wac-toggle-percentage').click();
-            await expect(page.getByTestId('lot-wac-price-chart')).toBeVisible();
+            await expectChartCanvas(page, 'lot-wac-price-chart');
 
             await page.getByTestId('lot-wac-toggle-absolute').click();
-            await expect(page.getByTestId('lot-wac-price-chart')).toBeVisible();
+            await expectChartCanvas(page, 'lot-wac-price-chart');
         });
 
         test('clicking a Gantt segment overlay selects the lot and reflects in the unified table', async ({page}) => {
@@ -334,7 +335,7 @@ test.describe('Broker Detail Page', () => {
 
             await clickRowAction(page, row, 'analyze-lots');
             await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
-            await expect(page.getByTestId('lot-gantt-chart')).toBeVisible({timeout: 10000});
+            await expectChartCanvas(page, 'lot-gantt-chart', 10_000);
 
             // Invisible per-lane hit target, absolutely positioned over the ECharts custom
             // series bar (no fixed HTML column anymore — see LotGanttChart.svelte OverlayRect).
@@ -509,7 +510,7 @@ test.describe('Broker Detail Page', () => {
 
             await clickRowAction(page, row, 'analyze-lots');
             await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
-            await expect(page.getByTestId('lot-gantt-chart')).toBeVisible({timeout: 10000});
+            await expectChartCanvas(page, 'lot-gantt-chart', 10_000);
 
             const tableRow = page.locator('[data-testid="unified-lots-table"] tbody tr[data-row-id]').first();
             await expect(tableRow, 'the unified lots table must have at least one lot row').toBeVisible({timeout: 10_000});
@@ -519,9 +520,10 @@ test.describe('Broker Detail Page', () => {
             await page.getByTestId('context-menu-action-lot-view-gantt-action').click();
 
             // pulseLot() scrolls the Gantt into view and applies the pulse ring/glow to the
-            // matching lane highlight — the chart itself staying visible is the stable, low-risk
-            // assertion (the ring/glow is drawn inside the ECharts canvas, not a DOM class).
-            await expect(page.getByTestId('lot-gantt-chart')).toBeVisible();
+            // matching lane highlight — the chart staying rendered (canvas with real
+            // dimensions) is the stable, low-risk assertion (the ring/glow is drawn inside
+            // the ECharts canvas, not a DOM class).
+            await expectChartCanvas(page, 'lot-gantt-chart');
         });
 
         test('Value presentation toggle: two independent buttons (Aggregate/Per lot), Asset-Global-style tri-state — neither pressed shows both', async ({page}) => {
@@ -547,23 +549,23 @@ test.describe('Broker Detail Page', () => {
             // Default: only Aggregate pressed.
             await expect(aggregateToggle).toHaveAttribute('aria-pressed', 'true');
             await expect(individualToggle).toHaveAttribute('aria-pressed', 'false');
-            await expect(page.getByTestId('lot-comparison-echart')).toBeVisible();
+            await expectChartCanvas(page, 'lot-comparison-echart');
 
             // Press Per lot too -> both pressed -> still shows everything.
             await individualToggle.click();
             await expect(individualToggle).toHaveAttribute('aria-pressed', 'true');
-            await expect(page.getByTestId('lot-comparison-echart')).toBeVisible();
+            await expectChartCanvas(page, 'lot-comparison-echart');
 
             // Un-press Aggregate -> only Per lot pressed -> exclusive individual view.
             await aggregateToggle.click();
             await expect(aggregateToggle).toHaveAttribute('aria-pressed', 'false');
-            await expect(page.getByTestId('lot-comparison-echart')).toBeVisible();
+            await expectChartCanvas(page, 'lot-comparison-echart');
 
             // Un-press Per lot too -> neither pressed -> implicit "show both" (tri-state rule).
             await individualToggle.click();
             await expect(individualToggle).toHaveAttribute('aria-pressed', 'false');
             await expect(aggregateToggle).toHaveAttribute('aria-pressed', 'false');
-            await expect(page.getByTestId('lot-comparison-echart')).toBeVisible();
+            await expectChartCanvas(page, 'lot-comparison-echart');
         });
     });
 });

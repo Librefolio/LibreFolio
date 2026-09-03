@@ -36,27 +36,3 @@ export interface SelectOption {
     /** Tooltip text shown on hover over the badge */
     badgeTooltip?: string;
 }
-
-/**
- * Props shared by dropdown-based select components
- */
-export interface BaseDropdownProps {
-    /** Disable the dropdown */
-    disabled?: boolean;
-    /** Position of dropdown relative to trigger */
-    dropdownPosition?: 'top' | 'bottom' | 'auto';
-}
-
-/**
- * Props for SimpleSelect and SearchSelect
- */
-export interface SelectProps extends BaseDropdownProps {
-    /** Currently selected value */
-    value: string;
-    /** Available options */
-    options: SelectOption[];
-    /** Placeholder when no value selected */
-    placeholder?: string;
-    /** Show loading state */
-    loading?: boolean;
-}

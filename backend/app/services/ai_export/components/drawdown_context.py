@@ -194,7 +194,7 @@ class DrawdownContextPayload(StrictModel):
             self._validate_unavailable()
         return self
 
-    def _validate_success(self) -> None:
+    def _validate_success(self) -> None:  # noqa: C901 — flat status invariant raises
         if self.reason_code is not None or self.message is not None:
             raise ValueError("successful drawdown context must not carry reason_code/message")
         missing = [name for name in self._SUCCESS_REQUIRED_FIELDS if getattr(self, name) is None]

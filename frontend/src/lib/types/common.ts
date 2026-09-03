@@ -171,39 +171,3 @@ export interface DateRange {
     /** End date (inclusive), ISO 8601 format */
     end?: string;
 }
-
-/**
- * Pagination parameters for list endpoints.
- */
-export interface PaginationParams {
-    /** Number of items to skip */
-    offset?: number;
-    /** Maximum number of items to return */
-    limit?: number;
-}
-
-/**
- * Standard paginated response wrapper.
- */
-export interface PaginatedResponse<T> {
-    /** Array of items */
-    items: T[];
-    /** Total count of items (before pagination) */
-    total: number;
-    /** Current offset */
-    offset: number;
-    /** Current limit */
-    limit: number;
-}
-
-/**
- * Generic API error response.
- */
-export interface ApiErrorResponse {
-    /** Error message */
-    detail: string;
-    /** Optional error code */
-    code?: string;
-    /** Optional field-level errors */
-    errors?: Record<string, string[]>;
-}

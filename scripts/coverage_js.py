@@ -225,7 +225,7 @@ JS_CATEGORY_INFO = {
 }
 
 
-def classify_category_js(filepath: str, func_name: str, stmts: int) -> str:
+def classify_category_js(filepath: str, func_name: str, stmts: int) -> str:  # noqa: C901 — flat if/return classification chain, no nested logic
     """Classify a frontend function into a fine-grained category."""
     if filepath.startswith(("src/lib/workers/", "src/lib/types/")) or "debug" in filepath:
         return "JS_INFRA"

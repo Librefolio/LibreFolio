@@ -16,6 +16,7 @@
 
 import {expect, test} from '../fixtures/playwright';
 import {login} from '../fixtures/auth-helpers';
+import {expectChartCanvas} from '../fixtures/charts';
 import {TEST_USER} from '../fixtures/test-users';
 import {waitForChart} from '../fixtures/app-events';
 import {goToAssetsPage, navigateToAssetByName} from './assets-helpers';
@@ -38,8 +39,10 @@ test.describe('Asset Data Editor', () => {
     // ========================================================================
     async function openDataEditor(page: import('@playwright/test').Page) {
         await goToAssetWithPrices(page);
-        // Wait for chart to render — the edit button only appears when lineData.length > 0
-        await page.waitForSelector('canvas', {timeout: 10_000});
+        // Wait for chart to render — the edit button only appears when lineData.length > 0.
+        // Scoped to the asset chart on purpose: an unscoped waitForSelector('canvas')
+        // would be satisfied by any canvas on the page (report 16, finding A5).
+        await expectChartCanvas(page, 'asset-detail-chart', 10_000);
         await waitForChart(page, 20_000);
         // The edit data button is inside {:else if lineData.length > 0} — check it exists
         const editDataBtn = page.getByTestId('asset-detail-editdata-btn');

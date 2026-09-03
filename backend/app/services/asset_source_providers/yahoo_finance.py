@@ -281,7 +281,7 @@ class YahooFinanceProvider(AssetSourceProvider):
                 {"identifier": identifier, "error": str(e)},
             ) from e
 
-    async def get_history_value(
+    async def get_history_value(  # noqa: C901 — flat fetch→validate→map pipeline, guarded event parsing
         self,
         identifier: str,
         identifier_type: IdentifierType,
@@ -575,7 +575,7 @@ class YahooFinanceProvider(AssetSourceProvider):
         # Yahoo Finance doesn't require specific params
         # Identifier is passed as method argument
 
-    async def fetch_asset_metadata(
+    async def fetch_asset_metadata(  # noqa: C901 — flat field mapping with fallbacks
         self,
         identifier: str,
         identifier_type: IdentifierType,

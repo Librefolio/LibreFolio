@@ -174,7 +174,7 @@ class BuildScope:
     base_currency: str | None = None
     quote_currency: str | None = None
 
-    def __post_init__(self) -> None:
+    def __post_init__(self) -> None:  # noqa: C901 — flat invariant validation + per-domain dispatch
         if not isinstance(self.request_id, str) or not self.request_id.strip():
             raise BuildScopeError("request_id must be a non-empty string")
         object.__setattr__(self, "user_id", require_positive_int(self.user_id, "user_id", error_cls=BuildScopeError))

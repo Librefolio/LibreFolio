@@ -33,15 +33,6 @@ export async function appears(locator: Locator, timeout = 2_000): Promise<boolea
         .catch(() => false);
 }
 
-/** True as soon as `locator` matches at least one element; false if it never does. */
-export async function exists(locator: Locator, timeout = 2_000): Promise<boolean> {
-    return locator
-        .first()
-        .waitFor({state: 'attached', timeout})
-        .then(() => true)
-        .catch(() => false);
-}
-
 /**
  * The SearchSelect option list has closed.
  *

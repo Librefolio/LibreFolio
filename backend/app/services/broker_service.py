@@ -72,7 +72,7 @@ class BrokerService:
     # CREATE OPERATIONS
     # =========================================================================
 
-    async def create_bulk(self, items: List[BRCreateItem], user_id: int) -> BRBulkCreateResponse:
+    async def create_bulk(self, items: List[BRCreateItem], user_id: int) -> BRBulkCreateResponse:  # noqa: C901 — per-item loop with duplicate-name error variants, no nested logic
         """
         Create multiple brokers.
 
@@ -353,7 +353,7 @@ class BrokerService:
             item.user_role = role.value if role else None
         return item
 
-    async def get_summary(self, broker_id: int, user_id: int, as_user_id: Union[int, Literal["all"], None] = None) -> Optional[BRSummary]:
+    async def get_summary(self, broker_id: int, user_id: int, as_user_id: Union[int, Literal["all"], None] = None) -> Optional[BRSummary]:  # noqa: C901 — sequential fetch/assemble with guard returns + per-holding loop
         """
         Get broker with full summary including balances and holdings.
 
@@ -512,7 +512,7 @@ class BrokerService:
     # UPDATE OPERATIONS
     # =========================================================================
 
-    async def update_bulk(
+    async def update_bulk(  # noqa: C901 — per-item loop: sequential field mapping + error continues
         self,
         items: List[BRUpdateItem],
         broker_ids: List[int],
@@ -771,7 +771,7 @@ class BrokerService:
             for access, user, settings in rows
         ]
 
-    async def bulk_update_access(
+    async def bulk_update_access(  # noqa: C901 — sequential validation gates with early returns + diff-apply loops
         self,
         broker_id: int,
         desired_accesses: list,

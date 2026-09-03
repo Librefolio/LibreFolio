@@ -148,7 +148,7 @@ class BitvavoBrokerProvider(BRIMProvider):
         extracted_assets[asset_id] = BRIMExtractedAssetInfo(extracted_symbol=symbol, extracted_isin=None, extracted_name=f"{symbol} (Crypto)")
         return asset_id, next_fake_id - 1
 
-    def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:
+    def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:  # noqa: C901 — flat row-variant dispatch (if/elif over tx types), no nested decisions
         """Parse Bitvavo CSV export file."""
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []

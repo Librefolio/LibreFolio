@@ -214,6 +214,7 @@
 | Page | Summary | Status | Tags |
 |------|---------|--------|------|
 | [[problems/compactcashcell-decimal-separator-feedback-loop]] | Sync-down `$effect` compared display strings, so the field's own echo erased `,` mid-typing; fix = numeric compare; plus the `isVisible({timeout})` probe trap with delayed tooltips | resolved | frontend, transactions, decimal, svelte5, ux, testing |
+| [[problems/sitecustomize-shadows-homebrew-python]] | A project `sitecustomize.py` on PYTHONPATH shadows Homebrew Python's own (one per interpreter, first wins) → prefix fixup lost → `pipenv` unimportable → test backend bootstrap dead; fix = chain-exec the shadowed file + guarded coverage import | resolved | testing, coverage, macos, homebrew, python, environment |
 | [[problems/svelte-template-branches-not-instrumented]] | Istanbul emits an empty `branchMap` for `{#if}` in Svelte markup; `.svelte` branch percentages are indicative only | accepted | frontend, coverage, svelte, measurement |
 | [[problems/coverage-percent-mixed-lines-and-branches]] | 92,33 → 90,10 was a change of formula, not a regression; the flat branch figure was the signal nobody read | resolved | testing, coverage, metrics, false-alarm |
 | [[problems/e2e-python-coverage-lost-above-two-workers]] | `.coveragerc` lacked `multiprocessing`; above 2 clients uvicorn forks and five coverage files are written empty, silently | resolved | testing, coverage, python, silent-failure |

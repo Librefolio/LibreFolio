@@ -11,6 +11,7 @@
 
 import {expect, test} from '../fixtures/playwright';
 import {login} from '../fixtures/auth-helpers';
+import {expectChartCanvas} from '../fixtures/charts';
 import {TEST_USER} from '../fixtures/test-users';
 import {goToFxDetailPage} from './fx-helpers';
 
@@ -43,11 +44,8 @@ test.describe('FX Detail Page', () => {
     // ========================================================================
     test('chart is visible with canvas element', async ({page}) => {
         await goToFxDetailPage(page, 'EUR-USD');
-        const chartContainer = page.getByTestId('fx-detail-chart');
-        await expect(chartContainer).toBeVisible();
-        // ECharts renders into a canvas
-        const canvas = chartContainer.locator('canvas');
-        await expect(canvas.first()).toBeVisible({timeout: 5000});
+        // ECharts renders into a canvas — assert the drawn content, not just the frame
+        await expectChartCanvas(page, 'fx-detail-chart');
     });
 
     // ========================================================================

@@ -232,7 +232,7 @@ def build_signal_coverage(
     return coverage, valid_flags, internal_calendar_gaps
 
 
-def select_signal_computation_points(
+def select_signal_computation_points(  # noqa: C901 — TODO(P2-refactor): contiguous-run segmentation with nested conditions
     price_points: list[SignalPricePoint],
     valid_flags: list[bool],
     cadence: SignalCadence,
@@ -296,7 +296,7 @@ def select_signal_events(
     return [event for event in event_points if event.type in allowed]
 
 
-def resolve_signal_availability(
+def resolve_signal_availability(  # noqa: C901 — sequential availability gate checks, early returns only
     *,
     requirements: SignalInputRequirements,
     minimum_points: int,

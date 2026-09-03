@@ -16,7 +16,7 @@ import os
 import subprocess
 import time
 
-from ._common import Colors, print_error, print_info, print_success
+from ._common import Colors, apply_subprocess_coverage_env, print_error, print_info, print_success
 from ._inventory import PROJECT_ROOT
 
 PARTS_DIR = PROJECT_ROOT / ".coverage_data" / "parts"
@@ -36,6 +36,11 @@ def _worker_env(index: int, coverage: bool) -> dict:
         PARTS_DIR.mkdir(parents=True, exist_ok=True)
         env["COVERAGE_FILE"] = str(PARTS_DIR / f".coverage.w{index}")
         env["COVERAGE_RUN"] = "1"
+        # Spawn children (spawn_worker.py) start their own tracer and write
+        # `.coverage.w{index}.<host>.<pid>.<rand>` in PARTS_DIR — same prefix,
+        # so both pytest-cov's session-finish combine and combine_coverage()'s
+        # `.coverage.w*` glob collect them.
+        apply_subprocess_coverage_env(env)
     return env
 
 
@@ -144,7 +149,7 @@ def _write_worker_logs(results: list) -> None:
             _ = exc
 
 
-def run_groups(groups: list, verbose: bool = False, coverage: bool = False, timeout: int = 3600) -> dict:
+def run_groups(groups: list, verbose: bool = False, coverage: bool = False, timeout: int = 3600) -> dict:  # noqa: C901 — flat worker spawn/collect loops, no nested logic
     """Run each group in its own process; return per-group outcomes.
 
     Returns ``{"ok": bool, "results": [...], "wall": seconds}`` where each result

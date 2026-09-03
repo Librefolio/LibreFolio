@@ -2059,3 +2059,5 @@ T1: l'`$effect` di sync confrontava stringhe di display e sovrascriveva il buffe
 mid-typing (`12,` → `12`); fix = confronto numerico normalizzato. Include la trappola
 `isVisible({timeout})` che non attende (emersa con il tooltip delay T2).
 Filed: [[problems/compactcashcell-decimal-separator-feedback-loop]].
+
+2026-09-03 — P1 audit wave executed (all 18 tasks): C901 gate@10 (199 sites triaged: 173 flat noqa, 26 TODO-refactor), TRY400 55/55, dead code backend+frontend, i18n -25 keys, currency-graph dead machinery removed (user hypothesis confirmed), response_model ×6 + TS discriminator fix (enum extra + post-processor list), spawn-worker coverage via sitecustomize. Filed: [[problems/sitecustomize-shadows-homebrew-python]] (PYTHONPATH sitecustomize shadowing Homebrew's → pipenv broken; chain-exec fix). WS-H migration proof: published 1.0.1 image → current image on same volume, both data migrations verified correct.

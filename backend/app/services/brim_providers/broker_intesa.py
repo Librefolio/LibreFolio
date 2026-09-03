@@ -174,7 +174,7 @@ class IntesaSanpaoloBrokerProvider(BRIMProvider):
     # Movements list
     # ------------------------------------------------------------------
 
-    def _parse_movements(self, rows: List[List], broker_id: int) -> BRIMParseOutput:
+    def _parse_movements(self, rows: List[List], broker_id: int) -> BRIMParseOutput:  # noqa: C901 — flat row loop: validation guards and per-type sign rules, no nested logic
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []
         validation_issues: List[BRIMValidationIssue] = []
@@ -277,7 +277,7 @@ class IntesaSanpaoloBrokerProvider(BRIMProvider):
     # Portfolio snapshot (patrimonio) -> DEPOSIT + ADJUSTMENT seed
     # ------------------------------------------------------------------
 
-    def _parse_patrimonio(self, rows: List[List], broker_id: int) -> BRIMParseOutput:
+    def _parse_patrimonio(self, rows: List[List], broker_id: int) -> BRIMParseOutput:  # noqa: C901 — flat section/row scan with break sentinels, no nested decisions
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []
         validation_issues: List[BRIMValidationIssue] = []

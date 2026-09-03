@@ -282,7 +282,7 @@ class SignalPlugin(ABC):
             )
 
     @classmethod
-    def validate_definition(cls) -> None:
+    def validate_definition(cls) -> None:  # noqa: C901 — sequential declaration validation raises, no nested logic
         """Reject incomplete or unsafe plugin declarations at registration."""
         if cls is SignalPlugin or inspect.isabstract(cls):
             raise TypeError("SignalPluginRegistry accepts concrete SignalPlugin subclasses only")

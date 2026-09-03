@@ -314,7 +314,7 @@ class FXBulkDeleteResponse(BaseBulkDeleteResponse[FXDeleteResult]):
 # ============================================================================
 
 
-def validate_chain_steps(
+def validate_chain_steps(  # noqa: C901 — flat numbered rule-chain validation
     steps: list,  # list[FXRouteStep] or list[dict] with from/to keys
     base: str,
     quote: str,

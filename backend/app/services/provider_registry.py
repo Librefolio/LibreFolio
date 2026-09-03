@@ -86,12 +86,6 @@ class AbstractPluginRegistry:
             return plugin_class()
 
     @classmethod
-    def list_plugin_classes(cls) -> list[Type]:
-        """Return all registered classes in registration order."""
-        cls.auto_discover()
-        return list(cls._get_storage().values())
-
-    @classmethod
     def list_plugin_codes(cls) -> list[str]:
         """Return all registered codes in registration order."""
         cls.auto_discover()
@@ -134,7 +128,7 @@ class AbstractPluginRegistry:
                     message=str(e),
                 )
                 failures.append(failure)
-                logger.error("Error importing plugin module", module_name=module_name, error_type=failure.error_type, error=failure.message)
+                logger.exception("Error importing plugin module", module_name=module_name, error_type=failure.error_type, error=failure.message)
         cls._discovery_done = True
         cls._discovery_errors = tuple(failures)
         cls._raise_discovery_errors_if_needed()
@@ -228,10 +222,6 @@ class AbstractProviderRegistry(AbstractPluginRegistry):
             return getattr(provider_class(), cls._get_plugin_code_attr(), None)
         except Exception:
             return getattr(provider_class, cls._get_plugin_code_attr(), None)
-
-    @classmethod
-    def get_provider(cls, code: str):
-        return cls.get_plugin(code)
 
     @classmethod
     def get_provider_instance(cls, code: str, **kwargs):

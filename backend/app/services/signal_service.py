@@ -152,7 +152,7 @@ class SignalService:
         self.registry = registry
         self.annotation_service = annotation_service or SignalAnnotationService()
 
-    def prepare_plan(
+    def prepare_plan(  # noqa: C901 — per-request validation/dedup loop, branches are early-continue guards
         self,
         requests: Sequence[SignalRequest | dict[str, Any]],
         context: SignalExecutionContext,
@@ -415,7 +415,7 @@ class SignalService:
                     forced_unavailable_reason,
                 )
             except Exception as exc:
-                logger.error(
+                logger.exception(
                     "Signal orchestration failed",
                     signal_code=computation.plugin_class.signal_code,
                     error_type=type(exc).__name__,
@@ -625,7 +625,7 @@ class SignalService:
                 context,
             )
         except Exception as exc:
-            logger.error(
+            logger.exception(
                 "Signal annotation batch failed",
                 error_type=type(exc).__name__,
                 error=str(exc),
@@ -691,7 +691,7 @@ class SignalService:
             ]
             result_by_instance[target] = SignalResult.model_validate(data)
 
-    def _execute_planned_signal(
+    def _execute_planned_signal(  # noqa: C901 — sequential availability pipeline; branches build result/error variants
         self,
         planned: PlannedSignal,
         context: SignalExecutionContext,
@@ -974,7 +974,7 @@ class SignalService:
                 None,
             )
         except Exception as exc:
-            logger.error(
+            logger.exception(
                 "Signal plugin compute failed",
                 signal_code=plugin_class.signal_code,
                 error_type=type(exc).__name__,

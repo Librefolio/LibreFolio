@@ -29,7 +29,7 @@ import time
 import urllib.error
 import urllib.request
 
-from ._common import PROJECT_ROOT, Colors, print_error, print_info, print_success
+from ._common import PROJECT_ROOT, Colors, apply_subprocess_coverage_env, print_error, print_info, print_success
 
 #: Read by backend/test_scripts/test_server_helper.py — see shared_server_mode().
 SHARED_SERVER_ENV = "LIBREFOLIO_TEST_SHARED_SERVER"
@@ -155,6 +155,13 @@ class SharedTestServer:
         # reparented to init, still holding the port — which is exactly the
         # "zombie server" that --force was invented to clean up afterwards.
         # Owning the group lets us take the whole tree down properly instead.
+        # Under coverage the spawn workers (risk/quant/spawn_worker.py) started
+        # by uvicorn need COVERAGE_PROCESS_START + the sitecustomize PYTHONPATH
+        # entry to measure themselves; dev.py's coverage branch preserves the
+        # environment across the execvpe chain, and the children's
+        # `.coverage.<host>.<pid>.<rand>` files land in PROJECT_ROOT, where
+        # _finalize_coverage's `.coverage.*` glob collects them.
+        server_env = apply_subprocess_coverage_env(os.environ.copy()) if self.coverage else None
         self.proc = subprocess.Popen(
             self._command(),
             shell=True,
@@ -162,6 +169,7 @@ class SharedTestServer:
             stdout=None if self.verbose else subprocess.DEVNULL,
             stderr=None if self.verbose else subprocess.DEVNULL,
             start_new_session=True,
+            env=server_env,
         )
         self.started_here = True
 
@@ -179,7 +187,7 @@ class SharedTestServer:
         self.stop()
         return False
 
-    def stop(self) -> None:
+    def stop(self) -> None:  # noqa: C901 — flat shutdown pipeline, guard/error handling, no nested logic
         """SIGTERM the whole group and wait, so ``coverage run`` writes its data."""
         if not self.proc or not self.started_here:
             return

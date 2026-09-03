@@ -556,7 +556,7 @@ async def test_search_parallel_execution(test_server):
 # Test 13: End-to-End - Search → Create Asset → Assign Provider → Operations
 # ============================================================
 @pytest.mark.asyncio
-async def test_search_to_asset_e2e(test_server):
+async def test_search_to_asset_e2e(test_server):  # noqa: C901 — sequential E2E step driver
     """Test 13: End-to-End test - use search results to create assets and perform operations."""
     print_section("Test 13: End-to-End - Search → Create → Assign → Refresh")
 

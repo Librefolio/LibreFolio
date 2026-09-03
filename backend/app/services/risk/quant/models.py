@@ -33,7 +33,7 @@ class SimulationEngineRequest(BaseModel):
     diagnostics: bool = False
 
     @model_validator(mode="after")
-    def validate_dimensions(self) -> SimulationEngineRequest:
+    def validate_dimensions(self) -> SimulationEngineRequest:  # noqa: C901 — sequential field validation raises, no nested logic
         asset_count = len(self.asset_ids)
         if len(set(self.asset_ids)) != asset_count:
             raise ValueError("simulation asset_ids must be unique")

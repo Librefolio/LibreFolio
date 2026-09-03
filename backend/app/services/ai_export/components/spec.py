@@ -79,7 +79,7 @@ class ComponentSpec:
     schema_id: str | None = None
     schema_version: int = 1
 
-    def __post_init__(self) -> None:
+    def __post_init__(self) -> None:  # noqa: C901 — flat field-validation chain
         if not _COMPONENT_ID_PATTERN.fullmatch(self.component_id):
             raise ComponentSpecError(f"component_id has invalid format: {self.component_id!r}")
         require_positive_int(self.version, "version", owner_id=self.component_id, error_cls=ComponentSpecError)

@@ -4,7 +4,7 @@ Settings schemas for LibreFolio.
 Schemas for user settings and global settings management.
 """
 
-from typing import Literal, Optional
+from typing import Annotated, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -71,6 +71,125 @@ class GlobalSettingBulkUpdate(BaseModel):
 
 class GlobalSettingsListResponse(BaseListResponse[GlobalSettingRead]):
     """Response for listing all global settings."""
+
+
+class GlobalSettingsInitializeResponse(BaseModel):
+    """Response after initializing global settings with default values."""
+
+    message: str = Field(..., description="Human-readable summary of the operation")
+
+
+# ============================================================================
+# SCHEDULER (ADMIN)
+# ============================================================================
+
+
+class SchedulerJobStateInfo(BaseModel):
+    """Last-execution info for a single scheduler job."""
+
+    last_run_at: Optional[str] = Field(None, description="ISO-8601 datetime (with timezone) of the last run")
+    last_duration_s: Optional[float] = Field(None, description="Duration of the last run, in seconds")
+    last_status: Optional[str] = Field(None, description="Outcome of the last run: ok, partial, or error")
+    last_items_ok: int = Field(..., description="Items processed successfully in the last run")
+    last_items_err: int = Field(..., description="Items that failed in the last run")
+
+
+class SchedulerStateResponse(BaseModel):
+    """Scheduler state: last-run info for each job plus server/scheduler clocks."""
+
+    current_price: SchedulerJobStateInfo
+    history_sync: SchedulerJobStateInfo
+    server_tz: str = Field(..., description="Server timezone (always UTC)")
+    server_now_utc: str = Field(..., description="Current server UTC wall clock, HH:MM")
+    scheduler_timezone: str = Field(..., description="IANA timezone used to evaluate scheduler days/times")
+
+
+class SchedulerLogCurrentPriceItem(BaseModel):
+    """Per-asset result inside a current-price refresh log entry."""
+
+    asset_id: int
+    name: str
+    ok: bool
+    icon_url: Optional[str] = None
+    error: Optional[str] = None
+
+
+class SchedulerLogHistoryAssetItem(BaseModel):
+    """Per-asset result inside a history-sync log entry."""
+
+    asset_id: int
+    name: str
+    status: str
+    icon_url: Optional[str] = None
+    errors: Optional[list[str]] = None
+    provider: Optional[str] = None
+    prices_changed: Optional[int] = None
+    events_changed: Optional[int] = None
+    points_changed: Optional[int] = Field(None, description="Legacy field name used by log entries written before prices_changed/events_changed existed")
+
+
+class SchedulerLogHistoryFxItem(BaseModel):
+    """Per-FX-pair result inside a history-sync log entry."""
+
+    pair: str
+    status: str
+    base: Optional[str] = None
+    quote: Optional[str] = None
+    errors: Optional[list[str]] = None
+    provider: Optional[str] = None
+    points_changed: int
+
+
+class SchedulerLogCurrentPriceSummary(BaseModel):
+    """Aggregate counts for a current-price refresh run."""
+
+    ok: int
+    err: int
+
+
+class SchedulerLogHistorySyncSummary(BaseModel):
+    """Aggregate counts for a history-sync run."""
+
+    assets_ok: int
+    assets_err: int
+    fx_ok: int
+    fx_err: int
+
+
+class SchedulerLogCurrentPriceEntry(BaseModel):
+    """JSONL log entry for a current-price refresh run."""
+
+    ts: str = Field(..., description="ISO-8601 timestamp (with timezone)")
+    job: Literal["current_price"] = Field(json_schema_extra={"enum": ["current_price"]})
+    duration_s: float
+    status: str
+    summary: SchedulerLogCurrentPriceSummary
+    items: list[SchedulerLogCurrentPriceItem]
+
+
+class SchedulerLogHistorySyncEntry(BaseModel):
+    """JSONL log entry for a history-sync run."""
+
+    ts: str = Field(..., description="ISO-8601 timestamp (with timezone)")
+    job: Literal["history_sync"] = Field(json_schema_extra={"enum": ["history_sync"]})
+    duration_s: float
+    status: str
+    summary: SchedulerLogHistorySyncSummary
+    assets: list[SchedulerLogHistoryAssetItem]
+    fx: list[SchedulerLogHistoryFxItem]
+
+
+SchedulerLogEntry = Annotated[
+    SchedulerLogCurrentPriceEntry | SchedulerLogHistorySyncEntry,
+    Field(discriminator="job"),
+]
+"""Scheduler log entry, discriminated by the ``job`` field."""
+
+
+class SchedulerLogResponse(BaseModel):
+    """Scheduler job log entries, newest first."""
+
+    entries: list[SchedulerLogEntry]
 
 
 # ============================================================================

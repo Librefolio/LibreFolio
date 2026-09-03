@@ -329,7 +329,7 @@ def populate_brokers(session: Session):
     session.commit()
 
 
-def populate_broker_user_access(session: Session):
+def populate_broker_user_access(session: Session):  # noqa: C901 — sequential fixture seeding steps
     """
     Associate all brokers with test users.
 
@@ -2262,7 +2262,7 @@ def populate_asset_events(session: Session):
     print(f"\n  📊 Total: {len(events_data)} events created")
 
 
-def link_transactions_to_events(session: Session):
+def link_transactions_to_events(session: Session):  # noqa: C901 — sequential fixture linking with early returns
     """
     Link a few existing DIVIDEND/INTEREST transactions to their corresponding AssetEvent.
 
@@ -3011,7 +3011,7 @@ def clean_data_dirs():
             print(f"  ✅ Created {d.relative_to(data_dir)} (empty)")
 
 
-def upload_static_resources(session: Session):
+def upload_static_resources(session: Session):  # noqa: C901 — sequential fixture upload steps
     """Upload static resource files (avatars + preview samples) to custom-uploads."""
 
     print("\n📁 Uploading static resources...")
@@ -3374,7 +3374,7 @@ def populate_scheduler_mock_log() -> None:
     print(f"📋 Mock scheduler state → {state_path}")
 
 
-async def validate_portfolio_math_async() -> int:
+async def validate_portfolio_math_async() -> int:  # noqa: C901 — flat anomaly checks + reporting
     """Validate portfolio return sanity for the admin user's portfolio.
 
     Calls get_summary() and get_history() for e2e_test_admin across all brokers
@@ -3447,7 +3447,7 @@ async def validate_portfolio_math_async() -> int:
     return len(anomalies) + len(realism_violations)
 
 
-def main():
+def main():  # noqa: C901 — sequential populate step driver
     """Populate database with mock data for testing."""
     # Parse arguments
     parser = argparse.ArgumentParser(description="Populate database with mock data")

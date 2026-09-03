@@ -314,7 +314,7 @@ class FxExposureRow(StrictModel):
         return value
 
     @model_validator(mode="after")
-    def _check_consistency(self) -> Self:
+    def _check_consistency(self) -> Self:  # noqa: C901 — flat invariant raises, no nested logic
         is_engine_valuation = self.conversion.basis is FxExposureConversionBasis.ENGINE_VALUATION
         if is_engine_valuation and self.native_amount is not None:
             raise ValueError("ENGINE_VALUATION rows must not carry a native_amount (none is honestly derivable)")

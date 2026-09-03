@@ -155,14 +155,3 @@ export function resolveDateSentinel(value: string): string {
 export function isMaxSentinel(value: string): boolean {
     return value === 'min';
 }
-
-/**
- * Get start/end with sentinels resolved for non-sentinel APIs.
- */
-export function getResolvedStart(): string {
-    return resolveDateSentinel(_start);
-}
-
-export function getResolvedEnd(): string {
-    return resolveDateSentinel(_end);
-}

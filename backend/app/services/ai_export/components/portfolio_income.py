@@ -269,7 +269,7 @@ class IncomeTimelinePayload(StrictModel):
     rows_omitted_count: int = Field(default=0, ge=0)
 
     @model_validator(mode="after")
-    def _validate_status_invariants(self) -> IncomeTimelinePayload:
+    def _validate_status_invariants(self) -> IncomeTimelinePayload:  # noqa: C901 — flat status invariant raises
         if self.status is IncomeTimelineStatus.FAILED:
             if not self.reason_code or not self.message:
                 raise ValueError("failed income timeline requires reason_code and message")

@@ -275,7 +275,7 @@ def _playwright_log_unit(spec_files: list[str], test_names: list | None) -> str:
     return base
 
 
-def _run_playwright_body(
+def _run_playwright_body(  # noqa: C901 — flat command/env assembly + error handling, no nested logic
     spec_file: str | list[str] | None = None,
     ui: bool = False,
     headed: bool = False,
@@ -335,6 +335,10 @@ def _run_playwright_body(
                 env = os.environ.copy()
             if cov_py:
                 env['COVERAGE_BACKEND'] = '1'
+                # Playwright merges this env into its webServer (`dev.py server
+                # --coverage`), whose spawn workers then measure themselves —
+                # see _common.apply_subprocess_coverage_env.
+                _common.apply_subprocess_coverage_env(env)
             if cov_js:
                 env['COVERAGE_JS'] = '1'
             else:
@@ -354,7 +358,7 @@ def _run_playwright_body(
         return False
 
 
-def _list_front_tests(category: str, action: str = None) -> bool:
+def _list_front_tests(category: str, action: str = None) -> bool:  # noqa: C901 — flat spec-file report printing, no nested logic
     """
     List available test names from spec files for a front-* category.
     Parses .spec.ts files looking for test.describe() and test() calls.
@@ -437,7 +441,7 @@ BACKEND_TEST_PATHS = {
 }
 
 
-def _list_pytest_tests(category: str, action: str = None) -> bool:
+def _list_pytest_tests(category: str, action: str = None) -> bool:  # noqa: C901 — flat collect-output report printing, no nested logic
     """List available pytest test names for a backend category."""
     from ._registry import TEST_REGISTRY
 

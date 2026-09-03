@@ -206,7 +206,7 @@ def is_blank_row(row: Sequence[Any]) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def _coerce_number(value: Any, *, decimal_sep: str, thousands_sep: str) -> Optional[Decimal]:
+def _coerce_number(value: Any, *, decimal_sep: str, thousands_sep: str) -> Optional[Decimal]:  # noqa: C901 — flat type/normalization dispatch, early returns only
     if value is None or isinstance(value, bool):
         return None
     if isinstance(value, Decimal):

@@ -256,7 +256,7 @@ def summarize_drawdown(
     )
 
 
-def drawdown_episodes(
+def drawdown_episodes(  # noqa: C901 — TODO(P2-refactor): episode state machine with recovery branching
     returns: Sequence[float],
     *,
     dates: Sequence[date],
@@ -493,7 +493,7 @@ def risk_contributions_from_covariance(
     )
 
 
-def current_buy_and_hold_returns(
+def current_buy_and_hold_returns(  # noqa: C901 — sequential validation raises + wealth accumulation loop
     returns_by_asset: Mapping[int, Sequence[float]],
     weights: Mapping[int, float],
     *,

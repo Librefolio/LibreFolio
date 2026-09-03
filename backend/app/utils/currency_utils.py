@@ -150,7 +150,7 @@ SYMBOL_TO_ISO = {
 }
 
 
-def normalize_currency(input_str: str, language: str = "en") -> dict:
+def normalize_currency(input_str: str, language: str = "en") -> dict:  # noqa: C901 — sequential ISO/symbol/name match attempts with early returns
     """
     Normalize currency input to ISO 4217 code(s).
 

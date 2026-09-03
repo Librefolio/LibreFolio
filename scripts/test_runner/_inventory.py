@@ -104,7 +104,7 @@ class _FakeCompletedProcess:
 
 
 @contextlib.contextmanager
-def _collecting(sink):
+def _collecting(sink):  # noqa: C901 — TODO(P2-refactor): nested module×attr patch/restore loops, registry swaps
     """Run action functions with every launch point replaced by a collector.
 
     ``sink`` receives ``(engine, path)`` pairs for whatever would be launched.
@@ -273,7 +273,7 @@ def _local_helpers(content: str) -> list:
     return found
 
 
-def classify(engine: str, path: str, declared: str = None) -> str:
+def classify(engine: str, path: str, declared: str = None) -> str:  # noqa: C901 — flat guard-return marker scan over files/helpers
     """Assign an isolation class, defaulting to the strictest one.
 
     Classification is incremental by design: PURE is proven statically, and

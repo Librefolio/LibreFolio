@@ -75,7 +75,7 @@ def generate_epilog(category: str) -> str:
     return "\n".join(lines)
 
 
-def run_test_from_registry(category: str, action: str, verbose: bool = False, test_names: list = None, **kwargs) -> bool:
+def run_test_from_registry(category: str, action: str, verbose: bool = False, test_names: list = None, **kwargs) -> bool:  # noqa: C901 — flat category dispatch with early returns, no nested logic
     """Run a test from the registry."""
     import inspect
 
@@ -151,7 +151,7 @@ from ._inventory import BACKEND_SUITE_DIRS as _BACKEND_SUITE_DIRS
 DEFAULT_LOG_DIR = ".testLog"
 
 
-def _check_orphan_tests() -> int:
+def _check_orphan_tests() -> int:  # noqa: C901 — flat sequential scan/report sections, no nested logic
     """Find test files not registered in the test runner.
 
     Checks:
@@ -581,7 +581,7 @@ def dispatch_to_category(category: str, test_names, verbose: bool, args) -> int:
     return _dispatch_to_category_body(category, test_names, verbose, args)
 
 
-def _dispatch_to_category_body(category: str, test_names, verbose: bool, args) -> int:
+def _dispatch_to_category_body(category: str, test_names, verbose: bool, args) -> int:  # noqa: C901 — flat category elif dispatch, no nested logic
     success = False
 
     if category == "all":
@@ -739,7 +739,7 @@ def _coverage_capabilities(category: str | None) -> set:
     return {"py"}
 
 
-def _apply_coverage_mode(args, coverage, resume, cov_clean_be, cov_clean_fe) -> bool:
+def _apply_coverage_mode(args, coverage, resume, cov_clean_be, cov_clean_fe) -> bool:  # noqa: C901 — flat coverage-mode setup steps, no nested logic
     """Resolve the requested coverage languages and prime the runner globals.
 
     Returns False when the request cannot be honoured (e.g. ``--coverage js``
@@ -1084,7 +1084,7 @@ def _apply_parallel(args, verbose: bool) -> tuple:
     return ok, True
 
 
-def _dispatch_test_command_body(args):
+def _dispatch_test_command_body(args):  # noqa: C901 — flat sequential step driver, no nested logic
     if not args.category:
         # Handle --run-status without category
         if getattr(args, "run_status", False):
@@ -1201,7 +1201,7 @@ def _activate_log_dir(args) -> None:
     print_info(f"📂 Per-unit logs → {prepared}")
 
 
-def _main_body(parser, args):
+def _main_body(parser, args):  # noqa: C901 — flat sequential step driver, no nested logic
     """Actual main logic (wrapped by main() for optional log teeing)."""
     # Handle --run-status without category
     if getattr(args, "run_status", False):

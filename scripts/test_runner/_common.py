@@ -26,6 +26,31 @@ from scripts.cli_base import pipenv_prefix
 
 from ._run_cache import clear_suite, is_passed, load_cache, mark_failed, mark_passed
 
+#: Directory holding the ``sitecustomize.py`` that starts coverage inside
+#: ``multiprocessing`` **spawn** children (``risk/quant/spawn_worker.py``).
+#: Spawned interpreters inherit the environment but no tracer, so without this
+#: they measure nothing — see the file itself for the full rationale (P1-13).
+COVERAGE_SITECUSTOMIZE_DIR = PROJECT_ROOT / "backend" / "test_scripts" / "_coverage_sitecustomize"
+
+
+def apply_subprocess_coverage_env(env: dict) -> dict:
+    """Wire ``COVERAGE_PROCESS_START`` + ``PYTHONPATH`` into a child environment.
+
+    coverage.py's documented subprocess recipe: the child finds the repo
+    ``.coveragerc`` (which has ``parallel = true``), starts its own tracer via
+    the sitecustomize on the prepended PYTHONPATH entry, and writes
+    ``{COVERAGE_FILE|.coverage}.<host>.<pid>.<rand>`` next to the parent's data
+    file — where the existing combine steps already collect it. Call this for
+    every process the runner spawns *while coverage is on* (pytest workers, the
+    shared backend, Playwright → its webServer).
+    """
+    env["COVERAGE_PROCESS_START"] = str(PROJECT_ROOT / ".coveragerc")
+    site_dir = str(COVERAGE_SITECUSTOMIZE_DIR)
+    existing = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = site_dir if not existing else site_dir + os.pathsep + existing
+    return env
+
+
 # Global flag for coverage mode (set by main())
 # Holds the requested language: "py", "js", "all" — or False when disabled.
 _COVERAGE_MODE = False
@@ -199,7 +224,7 @@ def tee_output(log_path):
         log_fh.close()
 
 
-def _run_test_suite(
+def _run_test_suite(  # noqa: C901 — flat test-run loop + summary printing, no nested logic
     suite_name: str,
     tests: list[tuple[str, Callable]],
     verbose: bool = False,
@@ -300,7 +325,7 @@ def _run_test_suite(
         print_section("Combining Coverage Data")
         print_info("Merging coverage from test server subprocess...")
         try:
-            result = subprocess.run(["coverage", "combine", "--keep"], capture_output=True, text=True, cwd=Path(__file__).parent)
+            result = subprocess.run(["coverage", "combine", "--keep"], capture_output=True, text=True, cwd=PROJECT_ROOT)
             if result.returncode == 0:
                 print_success("Coverage data combined successfully")
             else:
@@ -440,7 +465,7 @@ def run_command(cmd: list[str], description: str, verbose: bool = False, timeout
         return _run_command_body(cmd, description, verbose, timeout)
 
 
-def _run_command_body(cmd: list[str], description: str, verbose: bool = False, timeout: int = 600) -> bool:
+def _run_command_body(cmd: list[str], description: str, verbose: bool = False, timeout: int = 600) -> bool:  # noqa: C901 — flat command/env flag plumbing + error handling, no nested logic
     """
     Run a command and return True if successful.
 
@@ -501,6 +526,10 @@ def _run_command_body(cmd: list[str], description: str, verbose: bool = False, t
                 env["DATABASE_URL"] = TEST_DATABASE_URL
                 if use_coverage:
                     env["COVERAGE_RUN"] = "1"
+                    # Let multiprocessing spawn children (spawn_worker.py) start
+                    # their own tracer; their data files land next to .coverage,
+                    # which pytest-cov combines at session finish.
+                    apply_subprocess_coverage_env(env)
         except Exception:
             env = None
         result = subprocess.run(cmd, cwd=PROJECT_ROOT, capture_output=not verbose, text=True, env=env, timeout=timeout)

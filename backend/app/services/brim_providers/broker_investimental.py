@@ -183,7 +183,7 @@ class InvestimentalBrokerProvider(BRIMProvider):
         except Exception:
             return False
 
-    def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:
+    def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:  # noqa: C901 — flat order-state filter chain and field mapping, no nested decisions
         """Parse Investimental CSV export file."""
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []

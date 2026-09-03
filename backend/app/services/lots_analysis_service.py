@@ -166,7 +166,7 @@ class LotsAnalysisService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
-    async def get_lots_analysis(
+    async def get_lots_analysis(  # noqa: C901 — TODO(P2-refactor): long orchestrator; extract per-analysis stage helpers
         self,
         user_id: int,
         asset_id: int,
@@ -707,7 +707,7 @@ class LotsAnalysisService:
             raise ValueError(f"Unknown lot ids requested: {missing}")
         return list(dict.fromkeys(selected_lot_ids))
 
-    def _collect_fx_needs(
+    def _collect_fx_needs(  # noqa: C901 — independent per-analysis fx-need collection blocks, no decision tree
         self,
         *,
         fx_resolver: _FxRateResolver,
@@ -912,7 +912,7 @@ class LotsAnalysisService:
             return []
         return [CumulativeWACHistoryPoint(date=point_date, wac=wac_amount, pool_qty=pool_qty) for point_date, wac_amount, pool_qty in self._compute_wac_series(txs, history_dates, target_currency)]
 
-    def _build_performance_history(
+    def _build_performance_history(  # noqa: C901 — cash-flow collection loops with sequential guard filters
         self,
         *,
         scope_broker_ids: Sequence[int],
@@ -1262,7 +1262,7 @@ class LotsAnalysisService:
             )
         return mapped
 
-    def _build_lot_summaries(
+    def _build_lot_summaries(  # noqa: C901 — flat per-lot field packing, valuation-variant if/elif
         self,
         *,
         engine_result: FifoEngineResult,
