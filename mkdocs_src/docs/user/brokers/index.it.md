@@ -4,6 +4,10 @@ Un **Broker** in LibreFolio rappresenta un conto di intermediazione — il luogo
 
 Tutte le transazioni, i report e i dati importati sono collegati a un broker. È necessario almeno un broker per iniziare a monitorare il tuo portafoglio.
 
+!!! note "I broker condivisi mostrano la tua quota"
+
+    In un broker di cui sei co-proprietario, il patrimonio netto mostrato sulla scheda del broker (e nella scheda Panoramica del broker) è **ridimensionato in base alla tua quota di proprietà** — un Proprietario al 50% vede la metà del valore del conto. Editor e Visualizzatori vedono sempre gli importi completi. Vedi [Condivisione del Broker](sharing.md).
+
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
  <img class="gallery-img" data-category="brokers" data-name="list" alt="Elenco Broker" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
@@ -13,7 +17,7 @@ Tutte le transazioni, i report e i dati importati sono collegati a un broker. È
 ## ➕ Creazione di un Broker
 
 1. Vai alla pagina **Broker** dalla barra laterale
-2. Clicca su **"Nuovo Broker"**
+2. Clicca su **"Aggiungi Broker"**
 3. Compila i dettagli: nome, valuta di base e, opzionalmente, un'icona
  <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
  <img class="gallery-img" data-category="brokers" data-name="edit-modal" alt="Modulo di modifica Broker" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -32,7 +36,7 @@ Una volta selezionato un broker dall'elenco, l'interfaccia è suddivisa in quatt
 
 1. **Panoramica**: Visualizzazione del patrimonio netto, metriche di rendimento, storico della crescita e grafici di allocazione limitati esclusivamente a questo conto broker (vedi **[Panoramica Dashboard](../dashboard/index.md)**).
 2. **Posizioni**: Elenco delle posizioni aperte, pesi degli asset e metriche di performance all'interno di questo broker, con accesso al pannello in linea di Analisi Lotti FIFO (vedi **[Posizioni Dashboard](../dashboard/positions.md)**).
-3. **Transazioni**: Il registro di tutte le attività finanziarie, incluse voci manuali, importazioni di estratti conto e cronologie (vedi **[Importazione Transazioni](import.md)**).
+3. **Transazioni**: Il registro di tutte le attività finanziarie, incluse voci manuali, importazioni di estratti conto e cronologie (vedi **[Transazioni del broker](import.md)**).
 4. **Info**: Metadati del broker, configurazioni di scoperto di cassa/vendita allo scoperto, Esportazione AI e controlli di condivisione in linea (vedi **[Configurazione & Info](info.md)** e **[Broker AI Export](../ai-export/broker.md)**).
 
 ---
@@ -66,7 +70,7 @@ La scheda **Posizioni** elenca tutti gli asset attivi attualmente detenuti press
 
 ## 📑 In Questa Sezione
 
-- 📥 **[Importazione Transazioni (BRIM)](import.md)** — Come registrare manualmente le transazioni, eseguire la procedura guidata di importazione BRIM CSV/Excel e visualizzare i log di importazione.
+- 📥 **[Transazioni del broker](import.md)** — Registra transazioni manualmente con ambito limitato a questo broker, avvia la procedura guidata di importazione bulk BRIM e gestisci i file dei report caricati.
 - ⚙️ **[Configurazione & Info](info.md)** — Impostazioni dei metadati (scoperti, vendite allo scoperto), generatore di prompt per Esportazione AI con ambito limitato e pannello di condivisione del broker in linea.
 - 🧠 **[Broker AI Export](../ai-export/broker.md)** — Task con ambito broker, copertura dati, campionamento esatto, disponibilità e privacy.
 - 🤝 **[Condivisione del Broker](sharing.md)** — Guida dettagliata sui permessi dei ruoli (Proprietario, Editor, Visualizzatore) e sulle impostazioni di percentuale degli asset.

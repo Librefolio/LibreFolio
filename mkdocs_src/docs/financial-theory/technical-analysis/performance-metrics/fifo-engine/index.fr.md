@@ -1,7 +1,5 @@
 # 🧬 FIFO Engine — Lot Lifecycle & Matching Model
 
-*[⬅️ Retour à l'aperçu des métriques de performance](../index.md)*
-
 ## 💡 Aperçu
 
 Alors que le [Prix Moyen Pondéré (PMP)](../weighted-average-cost.md) fusionne chaque acquisition d'une position en une moyenne continue, le moteur FIFO de LibreFolio conserve la trace de **lots individuels** — un par lot d'acquisition — tout au long de leur cycle de vie : ouverture, clôtures partielles, transferts entre courtiers, divisions et clôture définitive.
@@ -124,11 +122,11 @@ Le résultat global est ensuite marqué **complet** ou **dégradé** dans son en
 
 ---
 
-- 🧭 **[Résolution des Prix](../portfolio-engine/price-resolution.md)**
-
 ## 🔗 Liens connexes
 
 - 🔬 **[Analyse des Lots FIFO](fifo-lot-analysis.md)** — Métriques dérivées de ce moteur : Rendement Ouvert/Total par lot, mise à l'échelle qbq, allocation des revenus, exemple pratique
+- 🧭 **[Résolution des Prix](../portfolio-engine/price-resolution.md)** — Niveaux de valorisation utilisés par le service des lots
 - ⚙️ **[Moteur de Portefeuille](../index.md)** — Le moteur complémentaire basé sur l'agrégat/PMP, et comment les deux sont liés
 - 📊 **[Prix Moyen Pondéré (PMP)](../weighted-average-cost.md)** — Coût de base consolidé au niveau de la position
 - 🧬 **[Moteur de Lot FIFO (Manuel du Développeur)](../../../../developer/backend/transactions/fifo_lot_engine.md)** — Plongée approfondie dans l'implémentation : classes, répartition des événements, contraintes au niveau du code
+- 📈 **[Aperçu des Métriques de Performance](../index.md)** — Toutes les métriques de performance en un coup d'œil

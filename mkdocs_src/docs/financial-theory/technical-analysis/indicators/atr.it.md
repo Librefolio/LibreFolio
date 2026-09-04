@@ -14,15 +14,15 @@ Un semplice intervallo massimo-meno-minimo ignora i movimenti overnight o i gap;
 
 1. **Intervallo Vero** — il più grande di tre candidati, che cattura i gap oltre all'intervallo intraday:
 
- $$
- TR_t = \max\big(H_t - L_t,\; \left| H_t - C_{t-1} \right|,\; \left| L_t - C_{t-1} \right|\big)
- $$
+    $$
+    TR_t = \max\big(H_t - L_t,\; \left| H_t - C_{t-1} \right|,\; \left| L_t - C_{t-1} \right|\big)
+    $$
 
 2. **Intervallo Medio Vero** — una media mobile smussata (SMMA di Wilder) dell'Intervallo Vero:
 
- $$
- ATR_t = SMMA_N(TR)
- $$
+    $$
+    ATR_t = SMMA_N(TR)
+    $$
 
 ---
 

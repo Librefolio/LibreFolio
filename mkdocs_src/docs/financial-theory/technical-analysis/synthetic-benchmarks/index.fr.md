@@ -1,6 +1,6 @@
 # 🎯 Benchmarks Synthétiques
 
-LibreFolio peut superposer des **courbes de benchmark synthétiques** sur n'importe quel graphique. Contrairement aux indicateurs techniques (qui sont calculés *à partir* des données de marché), les benchmarks synthétiques sont générés mathématiquement et servent de **lignes de référence visuelles** — « et si le prix avait suivi cette trajectoire idéale ? »
+LibreFolio peut superposer des **courbes de benchmark synthétiques** sur n'importe quel graphique. Contrairement aux indicateurs techniques (qui sont calculés *à partir* des données de marché), les benchmarks synthétiques sont générés mathématiquement, calculés localement dans le navigateur, et servent de **lignes de référence visuelles** — « et si le prix avait suivi cette trajectoire idéale ? »
 
 Ils sont précieux pour :
 

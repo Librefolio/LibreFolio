@@ -1,7 +1,5 @@
 # ⏱️ TWRR (Rendimento Ponderato nel Tempo)
 
-*[⬅️ Torna alla Panoramica delle Metriche di Performance](../index.md)*
-
 ## 💡 Cos'è?
 Il TWRR (dall'inglese *Time-Weighted Rate of Return*) misura la **performance "pura"** dei tuoi asset e della tua strategia d'investimento (Il Mercato), ignorando completamente il tempismo (timing) e l'entità dei tuoi depositi o prelievi.
 

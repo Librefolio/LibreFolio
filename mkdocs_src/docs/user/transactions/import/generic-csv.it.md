@@ -39,15 +39,22 @@ Queste sono le colonne riconosciute da LibreFolio in un file CSV Generico. I nom
 |---------|--------------|-----------------|-------------|
 | **`date`** | ✅ Sempre | `data`, `settlement_date`, `value_date`, `trade_date`, `fecha`, `datum`, `transaction_date`, `exec_date` | Data della transazione |
 | **`type`** | ✅ Sempre | `tipo`, `transaction_type`, `operation`, `operazione`, `action`, `azione`, `trans_type`, `op_type` | Tipo transazione — vedi valori sotto |
-| **`quantity`** | Richiesta per BUY/SELL/TRANSFER/ADJUSTMENT | `quantità`, `qty`, `shares`, `azioni`, `units`, `unità`, `amount_shares`, `num_shares` | Numero di unità. **Negativa per SELL, positiva per BUY.** |
-| **`amount`** | Richiesta per la maggior parte dei tipi | `importo`, `value`, `cash`, `cash_amount`, `total`, `totale`, `net_amount`, `gross_amount`, `price` | Impatto sulla liquidità. **Negativo quando esce denaro, positivo quando entra.** Vuoto per TRANSFER e ADJUSTMENT. |
+| **`quantity`** | Richiesta per BUY/SELL/ADJUSTMENT | `quantità`, `qty`, `shares`, `azioni`, `units`, `unità`, `amount_shares`, `num_shares` | Numero di unità. **Negativa per SELL, positiva per BUY.** |
+| **`amount`** | Richiesta per la maggior parte dei tipi | `importo`, `value`, `cash`, `cash_amount`, `total`, `totale`, `net_amount`, `gross_amount`, `price` | Impatto sulla liquidità. **Negativo quando esce denaro, positivo quando entra.** Vuoto per ADJUSTMENT. |
 | **`currency`** | Opzionale (default EUR) | `valuta`, `ccy`, `curr`, `currency_code`, `divisa`, `währung` | Codice valuta ISO 4217 |
-| **`asset`** | Richiesta per BUY/SELL/DIVIDEND/TRANSFER/ADJUSTMENT | `symbol`, `ticker`, `isin`, `asset_id`, `instrument`, `strumento`, `security`, `titolo`, `name`, `nome` | Ticker, ISIN, o nome consistente per asset non quotati |
+| **`asset`** | Richiesta per BUY/SELL/DIVIDEND/ADJUSTMENT | `symbol`, `ticker`, `isin`, `asset_id`, `instrument`, `strumento`, `security`, `titolo`, `name`, `nome` | Ticker, ISIN, o nome consistente per asset non quotati |
 | **`description`** | Opzionale | `descrizione`, `notes`, `memo`, `note`, `details`, `dettagli`, `comment`, `commento` | Testo libero |
 
-### Valid validi per `type`
+### Valori validi per `type`
 
-`BUY` · `SELL` · `DIVIDEND` · `INTEREST` · `DEPOSIT` · `WITHDRAWAL` · `FEE` · `TAX` · `TRANSFER` · `ADJUSTMENT` · `FX_CONVERSION` · `CASH_TRANSFER`
+`BUY` · `SELL` · `DIVIDEND` · `INTEREST` · `DEPOSIT` · `WITHDRAWAL` · `FEE` · `TAX` · `ADJUSTMENT`
+
+!!! warning "Non supportati: TRANSFER, FX_CONVERSION, CASH_TRANSFER"
+
+    Questi tipi richiedono **gambe abbinate** (due transazioni collegate), che un CSV
+    generico non può esprimere — le righe con questi tipi vengono rifiutate durante il
+    parsing. Inseriscile manualmente dalla pagina Transazioni, oppure usa un plugin
+    specifico del broker che genera le coppie.
 
 ---
 

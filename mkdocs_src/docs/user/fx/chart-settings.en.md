@@ -27,6 +27,11 @@ The modal opens from the list pages, in two flavors:
 
 The modal always shows a **preview chart** with an Abs/% toggle, so you see the effect of every change before applying it:
 
+
+<div class="screenshot-container" style="max-width: 620px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="assets" data-name="chart-settings" alt="Chart settings modal with the live preview">
+</div>
+
 - 🌐 **Global mode** — the preview draws a synthetic demo curve. Backend indicators cannot run in the browser, so the modal asks the server to compute them live on that curve: what you see matches what real charts will render.
 - 🎯 **Local mode** — the preview uses the card's **real price data**. Backend indicators show the last applied configuration; a banner reminds you to Apply to refresh them.
 

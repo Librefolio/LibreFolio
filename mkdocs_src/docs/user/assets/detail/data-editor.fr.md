@@ -36,19 +36,24 @@ L'onglet Prix affiche tous les points de données de prix pour l'actif. Colonnes
 | **Plus bas** | | Prix le plus bas de la journée |
 | **Volume** | | Volume d'échange |
 
-### CSV d'importation CSV
+### Format d'Importation CSV
 
+L'importation CSV accepte les séparateurs `;` et `,`, et l'éditeur détecte automatiquement le séparateur à partir de la première ligne non vide.
+
+Prix :
 ```
-date;currency;close
-2024-01-15;USD;145.50
-2024-01-16;USD;146.10
+date;close
+2024-01-15;145.50
+2024-01-16;146.10
 ```
 
-Format étendu avec colonnes optionnelles :
+Prix étendus avec colonnes optionnelles :
 ```
-date;currency;close;open;high;low;volume
-2024-01-15;USD;145.50;144.00;146.20;143.80;1500000
+date;close;open;high;low;volume
+2024-01-15;145.50;144.00;146.20;143.80;1500000
 ```
+
+L'éditeur de détail de l'actif utilise des formats CSV distincts pour les prix et les événements : les prix supportent `date`, `close` et les colonnes optionnelles `open`, `high`, `low`, `volume` ; les événements supportent `date`, `type`, `amount` et l'optionnelle `notes`. La colonne `currency` est héritée de l'actif et ne fait pas partie de la charge utile de l'éditeur.
 
 ---
 
@@ -68,12 +73,13 @@ L'onglet Événements affiche tous les [événements d'actifs](../../../financia
 
     Les événements générés par un fournisseur (ex: Investissement programmé) sont marqués comme **auto** et apparaissent comme des lignes en lecture seule. Ils peuvent être supprimés mais pas modifiés. Les événements manuels sont entièrement modifiables.
 
-### CSV d'importation CSV
+### Format d'Importation CSV
 
+Événements :
 ```
-date;currency;type;amount;notes
-2024-03-15;USD;DIVIDEND;1.25;Q1 payout
-2024-06-01;;SPLIT;2;2:1 split
+date;type;amount;notes
+2024-03-15;DIVIDEND;1.25;Q1 payout
+2024-06-01;SPLIT;2;2:1 split
 ```
 
 ---

@@ -14,23 +14,23 @@ Une EMA à période fixe est un compromis : suffisamment rapide pour suivre les 
 
 1. **Ratio d'Efficacité** sur la fenêtre de rétrospection $N$ — distance nette parcourue divisée par la longueur totale du chemin parcouru :
 
- $$
- ER_t = \frac{\left| C_t - C_{t-N} \right|}{\sum_{i=0}^{N-1} \left| C_{t-i} - C_{t-i-1} \right|}
- $$
+    $$
+    ER_t = \frac{\left| C_t - C_{t-N} \right|}{\sum_{i=0}^{N-1} \left| C_{t-i} - C_{t-i-1} \right|}
+    $$
 
  $ER_t \in [0, 1]$ : il vaut $1$ pour une tendance parfaitement droite et près de $0$ pour du bruit pur.
 
 2. **Constante de lissage adaptative**, interpolant entre une constante EMA rapide et une constante EMA lente :
 
- $$
- SC_t = \left[ ER_t \cdot (\alpha_{rapide} - \alpha_{lent}) + \alpha_{lent} \right]^2
- $$
+    $$
+    SC_t = \left[ ER_t \cdot (\alpha_{rapide} - \alpha_{lent}) + \alpha_{lent} \right]^2
+    $$
 
 3. **Récurrence**, de forme identique à l'EMA mais avec un coefficient variant dans le temps :
 
- $$
- KAMA_t = KAMA_{t-1} + SC_t \cdot (C_t - KAMA_{t-1})
- $$
+    $$
+    KAMA_t = KAMA_{t-1} + SC_t \cdot (C_t - KAMA_{t-1})
+    $$
 
 ---
 

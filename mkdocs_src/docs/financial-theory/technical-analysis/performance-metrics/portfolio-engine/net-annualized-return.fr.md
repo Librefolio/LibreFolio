@@ -1,7 +1,5 @@
 # 📈 Rendement Annualisé Net
 
-*[⬅️ Retour au Moteur de Portefeuille](index.md)*
-
 ## 💡 Objectif
 
 LibreFolio affiche le rendement annualisé uniquement lorsque la fenêtre d'observation est suffisamment longue pour rendre la capitalisation pertinente. La conversion utilisée est :
@@ -143,3 +141,4 @@ où $t_{\mathrm{fin\ du\ lot}}$ est la date de clôture pour les lots entièreme
 - 📉 [ROI Simple](roi.md) — contexte du rendement principal et au niveau de la position
 - 📊 [PnL Périodique](period-pnl.md) — décomposition périodique
 - 🔬 [Analyse des Lots FIFO](../fifo-engine/fifo-lot-analysis.md) — métriques nettes par lot
+- ⚙️ [Portfolio Engine](index.md) — modèle mathématique complet

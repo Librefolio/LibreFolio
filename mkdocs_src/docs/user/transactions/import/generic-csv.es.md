@@ -39,15 +39,22 @@ Estas son las columnas reconocidas por LibreFolio en un archivo CSV Genérico. L
 |---------|--------------|-----------------|-------------|
 | **`date`** | ✅ Siempre | `data`, `settlement_date`, `value_date`, `trade_date`, `fecha`, `datum`, `transaction_date`, `exec_date` | Fecha de la transacción |
 | **`type`** | ✅ Siempre | `tipo`, `transaction_type`, `operation`, `operazione`, `action`, `azione`, `trans_type`, `op_type` | Tipo de transacción — ver valores abajo |
-| **`quantity`** | Requerida para BUY/SELL/TRANSFER/ADJUSTMENT | `quantità`, `qty`, `shares`, `azioni`, `units`, `unità`, `amount_shares`, `num_shares` | Número de unidades. **Negativo para SELL, positivo para BUY.** |
-| **`amount`** | Requerida para la mayoría de tipos | `importo`, `value`, `cash`, `cash_amount`, `total`, `totale`, `net_amount`, `gross_amount`, `price` | Impacto en efectivo. **Negativo cuando el dinero sale, positivo cuando entra.** Vacío para TRANSFER y ADJUSTMENT. |
+| **`quantity`** | Requerida para BUY/SELL/ADJUSTMENT | `quantità`, `qty`, `shares`, `azioni`, `units`, `unità`, `amount_shares`, `num_shares` | Número de unidades. **Negativo para SELL, positivo para BUY.** |
+| **`amount`** | Requerida para la mayoría de tipos | `importo`, `value`, `cash`, `cash_amount`, `total`, `totale`, `net_amount`, `gross_amount`, `price` | Impacto en efectivo. **Negativo cuando el dinero sale, positivo cuando entra.** Vacío para ADJUSTMENT. |
 | **`currency`** | Opcional (EUR por defecto) | `valuta`, `ccy`, `curr`, `currency_code`, `divisa`, `währung` | Código de divisa ISO 4217 |
-| **`asset`** | Requerida para BUY/SELL/DIVIDEND/TRANSFER/ADJUSTMENT | `symbol`, `ticker`, `isin`, `asset_id`, `instrument`, `strumento`, `security`, `titolo`, `name`, `nome` | Ticker, ISIN, o nombre consistente para activos no cotizados |
+| **`asset`** | Requerida para BUY/SELL/DIVIDEND/ADJUSTMENT | `symbol`, `ticker`, `isin`, `asset_id`, `instrument`, `strumento`, `security`, `titolo`, `name`, `nome` | Ticker, ISIN, o nombre consistente para activos no cotizados |
 | **`description`** | Opcional | `descrizione`, `notes`, `memo`, `note`, `details`, `dettagli`, `comment`, `commento` | Texto libre |
 
-### Valid válidos para `type`
+### Valores válidos para `type`
 
-`BUY` · `SELL` · `DIVIDEND` · `INTEREST` · `DEPOSIT` · `WITHDRAWAL` · `FEE` · `TAX` · `TRANSFER` · `ADJUSTMENT` · `FX_CONVERSION` · `CASH_TRANSFER`
+`BUY` · `SELL` · `DIVIDEND` · `INTEREST` · `DEPOSIT` · `WITHDRAWAL` · `FEE` · `TAX` · `ADJUSTMENT`
+
+!!! warning "No soportados: TRANSFER, FX_CONVERSION, CASH_TRANSFER"
+
+    Estos tipos requieren **tramos emparejados** (dos transacciones vinculadas), que un
+    CSV genérico no puede expresar — las filas con estos tipos se rechazan durante el
+    análisis. Introdúzcalos manualmente desde la página de Transacciones, o use un
+    plugin específico del bróker que genere los pares.
 
 ---
 

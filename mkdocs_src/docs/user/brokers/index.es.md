@@ -4,6 +4,10 @@ Un **bróker** en LibreFolio representa una cuenta de corretaje — el lugar don
 
 Todas las transacciones, informes y datos de importación están vinculados a un bróker. Necesitas al menos un bróker para empezar a rastrear tu cartera.
 
+!!! note "Los brókeres compartidos muestran tu participación"
+
+    En un bróker que coposees, el patrimonio neto mostrado en la tarjeta del bróker (y en la pestaña Descripción general del bróker) se **escala según tu porcentaje de propiedad** — un Propietario al 50% ve la mitad del valor de la cuenta. Los Editores y Visores siempre ven los importes completos. Consulta [Uso compartido del bróker](sharing.md).
+
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
  <img class="gallery-img" data-category="brokers" data-name="list" alt="Lista de brókeres" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
@@ -13,7 +17,7 @@ Todas las transacciones, informes y datos de importación están vinculados a un
 ## ➕ Creando un bróker
 
 1. Navega a la página de **Brókeres** desde la barra lateral
-2. Haz clic en **"Nuevo bróker"**
+2. Haz clic en **"Agregar Bróker"**
 3. Completa los detalles: nombre, moneda base y, opcionalmente, un ícono
  <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
  <img class="gallery-img" data-category="brokers" data-name="edit-modal" alt="Formulario de edición del bróker" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -31,7 +35,7 @@ Una vez que seleccionas un bróker de la lista, la interfaz se divide en cuatro 
 
 1. **Descripción general**: Visualización del patrimonio neto, métricas de rendimiento, historial de crecimiento y gráficos de asignación limitados exclusivamente a esta cuenta de corretaje (ver **[Descripción general del panel de control](../dashboard/index.md)**).
 2. **Posiciones**: Lista de posiciones abiertas, ponderaciones de activos y métricas de rendimiento dentro de este bróker, con acceso al panel en línea de Análisis de Lotes FIFO (ver **[Posiciones del panel de control](../dashboard/positions.md)**).
-3. **Transacciones**: El registro de todas las actividades financieras, incluyendo entradas manuales, importaciones de estados de cuenta e historiales (ver **[Importar transacciones](import.md)**).
+3. **Transacciones**: El registro de todas las actividades financieras, incluyendo entradas manuales, importaciones de estados de cuenta e historiales (ver **[Transacciones del bróker](import.md)**).
 4. **Información**: Metadatos del bróker, configuraciones de sobregiro/venta en corto, Exportación de IA y controles de uso compartido en línea (ver **[Configuración e información](info.md)** y **[Broker AI Export](../ai-export/broker.md)**).
 
 ---
@@ -65,7 +69,7 @@ La pestaña **Posiciones** enumera todos los activos activos actualmente manteni
 
 ## 📑 En Esta Sección
 
-- 📥 **[Importar transacciones (BRIM)](import.md)** — Cómo registrar transacciones manualmente, ejecutar el asistente de importación BRIM CSV/Excel y ver registros de importación.
+- 📥 **[Transacciones del bróker](import.md)** — Registra transacciones manualmente con alcance limitado a este bróker, inicia el asistente de importación masiva BRIM y gestiona los archivos de informes subidos.
 - ⚙️ **[Configuración e información](info.md)** — Ajustes de metadatos (sobregiros, ventas en corto), generador de indicaciones de Exportación de IA limitadas y el panel de uso compartido de bróker en línea.
 - 🤝 **[Uso compartido del bróker](sharing.md)** — Guía detallada sobre permisos de roles (Propietario, Editor, Visor) y configuraciones de porcentaje de activos.
 - 🧠 **[Broker AI Export](../ai-export/broker.md)** — Tareas con alcance de broker, cobertura de datos, muestreo exacto, disponibilidad y privacidad.

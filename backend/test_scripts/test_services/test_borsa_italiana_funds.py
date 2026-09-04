@@ -71,10 +71,12 @@ async def test_resolve_url_fund_page(monkeypatch):
 async def test_resolve_url_bond_scheda_page(monkeypatch):
     """A stock/bond/ETF scheda URL resolves to the canonical IT+EN set via the ISIN (and MIC) in the URL."""
     monkeypatch.setattr(borsa_italiana, "estrai_codice_da_url", lambda url: None, raising=False)
+    # Site-search rediscovery finds nothing: the URL tail alone supplies the MIC.
+    monkeypatch.setattr(borsa_italiana, "cerca", lambda q, lingua=None, sessione=None: [], raising=False)
     captured: dict = {}
 
-    def fake_ottieni_scheda(isin, mic=None, lingua="en", sessione=None):
-        captured["isin"], captured["mic"] = isin, mic
+    def fake_ottieni_scheda(isin, mic=None, lingua="en", sessione=None, platform=None):
+        captured["isin"], captured["mic"], captured["platform"] = isin, mic, platform
         return SimpleNamespace(isin=isin, nome="Btp Tf 0,6% Ag31 Eur", valuta="EUR", tipo="obbligazione")
 
     monkeypatch.setattr(borsa_italiana, "ottieni_scheda", fake_ottieni_scheda, raising=False)
@@ -83,16 +85,52 @@ async def test_resolve_url_bond_scheda_page(monkeypatch):
 
     assert isinstance(items, list) and len(items) == 2
     # ISIN + market segment (MIC) are read straight from the URL tail
-    assert captured == {"isin": "IT0005436693", "mic": "MOTX"}
+    assert captured == {"isin": "IT0005436693", "mic": "MOTX", "platform": None}
     it_item, en_item = items[0], items[1]
     assert it_item["identifier"] == "IT0005436693"
     assert it_item["identifier_type"] == IdentifierType.ISIN
     assert it_item["type"] == "BOND"
     assert it_item["currency"] == "EUR"
-    assert it_item["provider_params"] == {"language": "it"}
+    # the MIC is propagated into provider_params so the saved asset stays routable
+    assert it_item["provider_params"] == {"language": "it", "mic": "MOTX"}
     assert "🇮🇹" in it_item["display_name"]
     assert en_item["provider_params"]["language"] == "en"
     assert "🇬🇧" in en_item["display_name"]
+
+
+@pytest.mark.asyncio
+async def test_resolve_url_eurotlx_scheda_page(monkeypatch):
+    """An EuroTLX canonical URL carries no platform in the URL tail: resolve_url rediscovers
+    the authoritative mic/platform via the site search (exact-ISIN hit) and threads them
+    into the scheda fetch and the emitted provider_params."""
+    monkeypatch.setattr(borsa_italiana, "estrai_codice_da_url", lambda url: None, raising=False)
+    isin = "US912810TU25"
+    link = f"https://www.borsaitaliana.it/borsa/search/scheda.html?code={isin}&mic=ETLX&platform=TLX&lang=it"
+
+    def fake_cerca(query, lingua=None, sessione=None):
+        return [SimpleNamespace(isin=isin, nome="United States Treasury 4% Nv34", tipo="Obbligazione EuroTLX", link=link)]
+
+    captured: dict = {}
+
+    def fake_ottieni_scheda(isin_arg, mic=None, lingua="en", sessione=None, platform=None):
+        captured["isin"], captured["mic"], captured["platform"] = isin_arg, mic, platform
+        return SimpleNamespace(isin=isin_arg, nome="United States Treasury 4% Nv34", valuta="USD", tipo="obbligazione eurotlx")
+
+    monkeypatch.setattr(borsa_italiana, "cerca", fake_cerca, raising=False)
+    monkeypatch.setattr(borsa_italiana, "ottieni_scheda", fake_ottieni_scheda, raising=False)
+
+    items = await BorsaItalianaProvider().resolve_url("https://www.borsaitaliana.it/borsa/obbligazioni/eurotlx/scheda/US912810TU25-ETLX.html")
+
+    # the scheda fetch received the rediscovered market params (platform included)
+    assert captured == {"isin": isin, "mic": "ETLX", "platform": "TLX"}
+    assert isinstance(items, list) and len(items) == 2
+    for item in items:
+        assert item["identifier"] == isin
+        assert item["type"] == "BOND"
+        # currency comes from the scheda (EuroTLX hosts FX-denominated bonds)
+        assert item["currency"] == "USD"
+        assert item["provider_params"]["mic"] == "ETLX"
+        assert item["provider_params"]["platform"] == "TLX"
 
 
 @pytest.mark.asyncio

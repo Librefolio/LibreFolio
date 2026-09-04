@@ -1,7 +1,5 @@
 # 💸 Capitale Depositato, PnL Totale e Pool di Liquidità
 
-*[⬅️ Torna a Panoramica Metriche di Performance](../index.md)*
-
 ## 💡 Panoramica del Concetto
 
 **Capitale Depositato** = capitale esterno netto cumulativo versato dall'inizio:
@@ -112,3 +110,4 @@ La serie di input ROI/TWRR/MWRR è derivata dalle variazioni giorno per giorno d
 - 💼 [NAV](nav.md) — l'altro termine nel Total PnL
 - 📊 [Period PnL](period-pnl.md) — versione a finestra temporale
 - ⚙️ [Portfolio Engine](index.md) — modello matematico completo
+- 📈 [Panoramica delle Metriche di Performance](../index.md) — tutte le metriche di performance a colpo d'occhio

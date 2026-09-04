@@ -14,21 +14,21 @@ El RSI simple puede permanecer en la zona de 40–60 durante largos períodos si
 
 1. **Serie RSI base** (ver [RSI](rsi.md)), utilizando la retrospectiva configurada $N$:
 
- $$
- RSI_t = 100 - \frac{100}{1+RS_t}
- $$
+    $$
+    RSI_t = 100 - \frac{100}{1+RS_t}
+    $$
 
 2. **Transformación estocástica** aplicada al propio RSI: dónde se sitúa actualmente en relación con su propio rango máximo/mínimo de $N$ períodos:
 
- $$
- \%K_t = 100 \cdot \frac{RSI_t - \min_{0 \le i < N} RSI_{t-i}}{\max_{0 \le i < N} RSI_{t-i} - \min_{0 \le i < N} RSI_{t-i}}
- $$
+    $$
+    \%K_t = 100 \cdot \frac{RSI_t - \min_{0 \le i < N} RSI_{t-i}}{\max_{0 \le i < N} RSI_{t-i} - \min_{0 \le i < N} RSI_{t-i}}
+    $$
 
 3. **%D** — un promedio móvil corto de %K que suaviza la línea estocástica bruta:
 
- $$
- \%D_t = SMA_{d}(\%K)
- $$
+    $$
+    \%D_t = SMA_{d}(\%K)
+    $$
 
 ---
 

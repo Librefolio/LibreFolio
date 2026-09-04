@@ -1,7 +1,5 @@
 # 💼 Valeur Netative Inventaire (NAV) / Patrimoine Net
 
-*[⬅️ Retour à la Vue d'Ensemble des Métriques de Performance](../index.md)*
-
 ## 💡 Qu'est-ce que le NAV ?
 
 La **Valeur Netative Inventaire (NAV)** est la valorisation totale de marché de votre portefeuille à un instant $t$. Elle répond à la question : *"Combien vaut le portefeuille en ce moment ?"*

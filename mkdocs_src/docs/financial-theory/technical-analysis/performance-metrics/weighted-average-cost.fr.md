@@ -136,7 +136,7 @@ $$
 
 Lorsqu'un portefeuille contient des acquisitions dans différentes devises, LibreFolio :
 
-1. Détermine la **devise cible** (la plus fréquente parmi les acquisitions)
+1. Détermine la **devise cible** à partir de la surcharge de la requête lorsqu'elle est fournie ; sinon utilise la devise de l'acquisition la plus récente (déterministe), avec repli sur la devise de l'actif
 2. Convertit tous les coûts unitaires dans la devise cible en utilisant les taux de change historiques
 3. Calcule le PMP dans la devise cible unifiée
 
@@ -165,7 +165,7 @@ $$
 
 Le moteur calcule le PMP en ligne pendant la boucle quotidienne des transactions — aucune requête séparée à la base de données n'est nécessaire. Cela atteint un coût amorti O(1) par transaction au lieu du coût O(N) de réinterroger l'historique complet.
 
-### 📅 des transactions le même jour
+### 📅 Ordre des transactions le même jour
 
 À l'intérieur d'une même date, **les ajouts sont traités avant les réductions** :
 

@@ -15,12 +15,12 @@ L'Export IA est disponible depuis :
 
 - la barre d'outils du Tableau de bord pour les tâches de portefeuille ;
 - la barre d'outils du Courtier pour les tâches de courtier ;
-- l'en-tête Signaux sur les pages de détail Actif et FX.
+- la barre d'outils de la page sur les pages de détail Actif et FX.
 
 Le backend fournit les valorisations, la performance, les allocations, les
 données économiques FIFO, l'exposition FX et les indicateurs techniques. Le
 catalogue public n'expose volontairement que **huit choix autonomes d'Export de
-données** et **treize Analyses orientées vers les tâches**. Les jeux de données
+données** et **onze Analyses orientées vers les tâches**. Les jeux de données
 backend plus petits restent des blocs de composition internes.
 
 **Export de données** copie un instantané factuel sélectionné sans instructions
@@ -64,7 +64,7 @@ dans `localStorage`.
 | --------------- | ---------------------------------------- | --------------------------------- |
 | Tableau de bord | **Aperçu et historique du portefeuille** | **Historique des actifs du portefeuille** |
 | Courtier | **Aperçu et historique du courtier** | **Historique des actifs du courtier** |
-| Actif | **Position et historique de l'actif** | **Historique de marché de l'actif** |
+| Actif | **Position et historique de marché (complet)** | **Historique de marché uniquement (sans positions)** |
 | FX | **Marché FX et exposition** | **Historique du marché FX** |
 
 Les instantanés généraux combinent les données économiques actuelles avec une
@@ -123,6 +123,14 @@ lorsqu'un autre export améliorerait sensiblement la réponse. Le prompt indique
 le nom public de l'export, le chemin dans l'interface, la période/le détail
 recommandés, la raison et si ces données sont requises ou facultatives.
 
+!!! info "Le Drawdown porte toujours sur tout l'historique"
+
+    Partout où une section Drawdown apparaît dans un export, elle est calculée sur
+    **tout l'historique disponible** — depuis le premier prix enregistré pour un
+    Actif, ou depuis la première transaction pour un Portefeuille ou un Courtier —
+    jamais par rapport à la période IA sélectionnée. Une courte fenêtre d'export
+    contient tout de même le véritable sommet-creux historique.
+
 ## 🔗 Références locales
 
 Le prompt utilise des références locales pour relier les tableaux compacts :
@@ -132,9 +140,11 @@ Le prompt utilise des références locales pour relier les tableaux compacts :
 - F# pour les paires FX ;
 - L# pour les lots FIFO.
 
-Le Répertoire d'entités résout ces références. Le modèle destinataire doit
-utiliser des noms lisibles dans sa réponse ; les identifiants de base de données
-ne sont pas nécessaires.
+Le Répertoire d'entités résout les références A#, B# et F#. Les lots L# sont
+différents : ce sont des **lignes intégrées** dans les tableaux FIFO de l'export
+lui-même, pas des entrées du répertoire — le modèle les lit sur place. Le modèle
+destinataire doit utiliser des noms lisibles dans sa réponse ; les identifiants de
+base de données ne sont pas nécessaires.
 
 ## 🔒 Portée et confidentialité
 

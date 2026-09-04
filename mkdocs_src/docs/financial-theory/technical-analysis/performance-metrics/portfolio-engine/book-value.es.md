@@ -1,7 +1,5 @@
 # 📖 Valor Contable (Book Value)
 
-*[⬅️ Volver a la descripción general de métricas de rendimiento](../index.md)*
-
 ## 💡 ¿Qué es el valor contable?
 
 El **valor contable (Book Value)** representa el coste contable histórico de su cartera: cuánto capital ha desplegado a coste, más las reservas de efectivo. No fluctúa con los precios del mercado e distinto de la [Resolución de Precios](price-resolution.md).
@@ -61,3 +59,4 @@ $$
 - 💼 [NAV](nav.md) — equivalente de valor de mercado
 - 🧭 [Resolución de Precios](price-resolution.md) — marcas de mercado/trade usadas por el NAV, no por el valor contable
 - 📈 [Period PnL](period-pnl.md) — combinación de ganancias/pérdidas realizadas y no realizadas
+- 📈 [Descripción General de Métricas de Rendimiento](../index.md) — todas las métricas de rendimiento de un vistazo

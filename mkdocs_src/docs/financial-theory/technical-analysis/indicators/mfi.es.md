@@ -14,24 +14,24 @@ Un aumento de precio con un volumen alto produce un flujo de dinero positivo muc
 
 1. **Precio Típico** y **Flujo de Dinero Bruto** para cada barra:
 
- $$
- TP_t = \frac{H_t + L_t + C_t}{3}, \qquad
- RMF_t = TP_t \cdot V_t
- $$
+    $$
+    TP_t = \frac{H_t + L_t + C_t}{3}, \qquad
+    RMF_t = TP_t \cdot V_t
+    $$
 
 2. **Flujo positivo/negativo**, dividido por la dirección del precio típico en comparación con la barra anterior:
 
- $$
- PMF_t = RMF_t \text{ si } TP_t > TP_{t-1} \text{ de lo contrario } 0, \qquad
- NMF_t = RMF_t \text{ si } TP_t < TP_{t-1} \text{ de lo contrario } 0
- $$
+    $$
+    PMF_t = RMF_t \text{ si } TP_t > TP_{t-1} \text{ de lo contrario } 0, \qquad
+    NMF_t = RMF_t \text{ si } TP_t < TP_{t-1} \text{ de lo contrario } 0
+    $$
 
 3. **Relación de Flujo de Dinero** en la ventana, y su normalización en el **MFI**:
 
- $$
- MFR_t = \frac{\sum_{i=0}^{N-1} PMF_{t-i}}{\sum_{i=0}^{N-1} NMF_{t-i}}, \qquad
- MFI_t = 100 - \frac{100}{1+MFR_t}
- $$
+    $$
+    MFR_t = \frac{\sum_{i=0}^{N-1} PMF_{t-i}}{\sum_{i=0}^{N-1} NMF_{t-i}}, \qquad
+    MFI_t = 100 - \frac{100}{1+MFR_t}
+    $$
 
 ---
 

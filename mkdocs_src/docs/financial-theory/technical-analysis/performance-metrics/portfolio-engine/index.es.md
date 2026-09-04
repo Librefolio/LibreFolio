@@ -1,7 +1,5 @@
 # ⚙️ Motor de Cartera — Modelo Matemático
 
-*[⬅️ Volver a la Descripción General de Métricas de Rendimiento](../index.md)*
-
 ## 💡 Descripción General
 
 Esta página define formalmente el modelo matemático que sustenta el motor de cálculo de cartera de LibreFolio. Todas las demás páginas de métricas ([NAV](nav.md), [Book Value](book-value.md), [Period P&L](period-pnl.md), [PMP](../weighted-average-cost.md), [Deposited Capital](deposited-capital.md)) hacen referencia a esta página para sus reglas de cómputo precisas.
@@ -240,3 +238,4 @@ Computadas **después** de los estados diarios, como una pasada separada:
 - 📊 [Period P&L](period-pnl.md) — ganancias/pérdidas en una ventana temporal con contribución
 - 💸 [Deposited Capital](deposited-capital.md) — detalles sobre los 3 pools y ejemplos prácticos
 - 📈 [PMC](../weighted-average-cost.md) — método de coste iterativo
+- 📈 [Descripción General de Métricas de Rendimiento](../index.md) — todas las métricas de rendimiento de un vistazo

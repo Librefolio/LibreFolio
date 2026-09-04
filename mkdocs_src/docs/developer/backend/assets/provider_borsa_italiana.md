@@ -11,6 +11,17 @@ The Borsa Italiana provider fetches financial data from [borsaitaliana.it](https
 3. **`provider_params`**:
     - `language` — optional (`"en"` or `"it"`, default `"en"`). Controls the language of asset names, metadata descriptions, and the provider URL.
     - `codice_fondo` — optional Borsa internal fund code (e.g. `2FADB602822`). When present, current/historical value use the **fund NAV path** instead of the market API.
+    - `mic` — optional market MIC (e.g. `ETLX` for EuroTLX, `MOTX` for MOT). Auto-filled from the search result's own link; routes the instrument page (`get_asset_url`) and metadata to the right market.
+    - `platform` — optional trading platform (e.g. `TLX` for EuroTLX). Required by some markets so the universal `search/scheda.html` URL redirects to the real market page.
+
+### 🧭 Market routing (mic / platform)
+
+Borsa Italiana lists the same instrument families across several markets (MTA, MOT, ExtraMOT, ETFplus, SeDeX, MIV, EuroTLX, GEM). Most resolve through the universal `search/scheda.html?code={ISIN}` URL, **but EuroTLX does not** — it requires `mic=ETLX&platform=TLX` or the URL stays on a dead generic page. The provider takes `mic`/`platform` from the **site's own search `link`** (never a hardcoded map), stores them in `provider_params`, and reuses them everywhere:
+
+- **Search results** carry `provider_params: {language, mic, platform?}` — so the URL and pricing are correct *by construction* for any market, present or future.
+- **Dead-result filter**: a non-fund result with no parseable `mic` in its link is **skipped** (never emit a result whose URL would be the unresolved `/search/` page). Indices (`Indice`/`Index`) are excluded — they are benchmarks, not purchasable instruments.
+- **History auto-discovery** (library ≥ 0.3.0): the chart API only knows XMIL/ETLX; if an ISIN is unknown to XMIL and no exchange is passed, the library discovers the MIC via the site search and retries. This self-heals legacy assets saved before `mic` was propagated.
+- **`UNSUPPORTED_PAGE`**: when even mic/platform can't resolve a parseable market page (a family we don't handle yet), the provider raises `UNSUPPORTED_PAGE` with a message inviting the user to open a GitHub issue — instead of a cryptic parse error.
 
 ### 💱 Currency
 
@@ -121,6 +132,8 @@ The provider exposes optional parameters via `params_schema`:
 |-----|------|---------|---------|-------------|
 | `language` | `select` | `en` (🇬🇧 English), `it` (🇮🇹 Italiano) | `en` | Language for names and metadata |
 | `codice_fondo` | `text` | — | — | Borsa internal fund code (e.g. `2FADB602822`); when set, current/history use the fund NAV path |
+| `mic` | `text` | — | — | Market MIC (auto-filled from search, e.g. `ETLX` for EuroTLX); routes the instrument page and metadata |
+| `platform` | `text` | — | — | Trading platform (auto-filled from search, e.g. `TLX` for EuroTLX); needed by some markets to resolve the page |
 
 Uses `option_labels` for human-readable display in the frontend dropdown.
 
@@ -128,10 +141,13 @@ Uses `option_labels` for human-readable display in the frontend dropdown.
 
 | Library Exception | Mapped Error Code | Meaning |
 |---|---|---|
+| `StrumentoNonRisolto` | `UNSUPPORTED_PAGE` | Instrument found but its market page can't be resolved/read (unhandled market family) — user is invited to open a GitHub issue |
 | `StrumentoNonTrovato` | `NOT_FOUND` | ISIN not recognized |
-| `DatiNonDisponibili` | `NO_DATA` | No data available (market closed, delisted) |
+| `DatiNonDisponibili` | `NO_DATA` | No data available (market closed, delisted, or empty window for an illiquid instrument) |
 | `RicercaNonDisponibile` | `FETCH_ERROR` | Search endpoint down |
 | `BorsaItalianaErrore` | `FETCH_ERROR` | Generic library error |
+
+Note (library ≥ 0.3.0): an **empty history window** (e.g. an illiquid ExtraMOT bond over 1M) now maps to `NO_DATA`, never `NOT_FOUND` — the library distinguishes "unknown instrument" from "known but no trades in the window" via a MAX-period probe.
 
 ### Dependencies
 
@@ -147,8 +163,9 @@ Transitive: `httpx`, `beautifulsoup4`, `lxml`.
 
 | Identifier | `provider_params` | Description |
 |---|---|---|
-| `IT0003128367` | — | ENEL S.p.A. (stock) |
+| `IT0003128367` | — | ENEL S.p.A. (stock, MTA) |
 | `LU2178929613` | `{codice_fondo: "2FADB602822"}` | Eurizon Next 2.0 Alloc. Divers. 40 P (fund, NAV by code) |
+| `US912810TU25` | `{mic: "ETLX", platform: "TLX"}` | US T-Bond 4.375% Aug43 (EuroTLX bond, USD-denominated, issuer → USA) |
 
 Search test query: `"ENEL"` (listed) / `"EURIZON NEXT 2.0 DIVERSIFICATO 40 P"` (fund by report name).
 `resolve_url` test: `https://www.borsaitaliana.it/borsa/fondi/dettaglio/2FADB602822.html` → IT + EN fund search-items with ISIN `LU2178929613` + `codice_fondo`.

@@ -56,11 +56,19 @@ En haut à droite du tableau de bord, plusieurs contrôles vous permettent de pe
 
     Lorsque vous filtrez sur un seul courtier, les transferts de liquidités *vers d'autres courtiers* deviennent des flux externes pour ce périmètre. Cela affecte le calcul du [Capital déposé](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md) et du [P&L](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md).
 
+!!! note "Le partage influence ces chiffres"
+
+    Le tableau de bord n'agrège que les courtiers **auxquels vous avez accès**, et chaque montant provenant d'un courtier que vous détenez en copropriété est **ajusté selon votre part de propriété** : un Propriétaire avec une part de 50 % voit la moitié de la valeur, des revenus et du P&L de ce courtier comptabilisés dans les totaux (une part de 0 % est valide et ne contribue pas). Les Éditeurs et les Lecteurs — qui portent toujours une part de 0 % par règle — voient à la place les montants **complets** du courtier. Voir [Partage de Courtier](../brokers/sharing.md) pour les détails.
+
 ---
 
 ## 🌡️ Bannière de qualité des données
 
-Si des cours ou des taux de change sont manquants à la date de fin, une bannière apparaît en haut pour expliquer quels actifs n'ont pas pu être valorisés. Les actifs sans fournisseur de cours (saisis manuellement, comme les projets de crowdfunding immobilier) sont valorisés en permanence au coût d'achat — cela est intentionnel et ne génère pas d'avertissement.
+Si des cours ou des taux de change sont manquants à la date de fin, une bannière apparaît en haut pour expliquer quels actifs n'ont pas pu être valorisés.
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="dashboard" data-name="data-quality-banner" alt="Bannière de qualité des données du tableau de bord avec liens par actif">
+</div>
+ Les actifs sans fournisseur de cours (saisis manuellement, comme les projets de crowdfunding immobilier) sont valorisés en permanence au coût d'achat — cela est intentionnel et ne génère pas d'avertissement.
 
 ---
 

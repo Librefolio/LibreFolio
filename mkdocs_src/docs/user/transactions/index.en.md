@@ -29,6 +29,13 @@ Here is a summary of the operations and tools available directly within the tran
 | **Broker Import** | Click **Import** to upload a broker statement and import your history automatically. | [Import from Broker](import/index.md) |
 | **Sorting & Filtering** | Click any column header to sort the list. Use the search bar to filter by asset name, type, or notes. | |
 | **Deleting & Bulk Actions** | Right-click any row to open the Context Menu for quick actions. Deleting a single row and checking multiple rows for bulk deletion both open the same **bulk workspace**, where rows are staged for deletion before you confirm; a linked partner (FX trade or transfer leg) is automatically staged together with the row you picked. | |
+
+Duplicating works the same way: **Clone** from the context menu stages a copy in the bulk workspace — keeping the **original date** (cloning is how a misclassified historical row gets corrected, so the date must survive) — where you adjust and save it.
+
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="transactions" data-name="clone-flow" alt="Bulk workspace with a cloned transaction row">
+</div>
+
 | **Composite & Promotion** | Link single operations (like two cash legs) into a **Composite Transaction** via **Promotion** to enable advanced tracking and portfolio analytics, or split a composite transaction back into single operations. | [Transaction Form](form.md#composite-transactions) |
 
 ---

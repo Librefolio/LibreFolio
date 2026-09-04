@@ -14,15 +14,15 @@ Un simple calcul haut-moins-bas ignore les mouvements de nuit ou les gaps ; l'AT
 
 1. **Plage Réelle (True Range)** — la plus grande des trois valeurs candidates, capturant les gaps ainsi que la plage intrajournalière :
 
- $$
- TR_t = \max\big(H_t - L_t,\; \left| H_t - C_{t-1} \right|,\; \left| L_t - C_{t-1} \right|\big)
- $$
+    $$
+    TR_t = \max\big(H_t - L_t,\; \left| H_t - C_{t-1} \right|,\; \left| L_t - C_{t-1} \right|\big)
+    $$
 
 2. **Average True Range (Moyenne de la Plage Réelle)** — une moyenne mobile lissée (SMMA de Wilder) de la Plage Réelle :
 
- $$
- ATR_t = SMMA_N(TR)
- $$
+    $$
+    ATR_t = SMMA_N(TR)
+    $$
 
 ---
 

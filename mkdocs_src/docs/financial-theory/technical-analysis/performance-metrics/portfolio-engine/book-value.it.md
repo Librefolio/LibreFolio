@@ -1,7 +1,5 @@
 # 📖 Book Value
 
-*[⬅️ Torna a Panoramica Metriche di Performance](../index.md)*
-
 ## 💡 Cos'è il Book Value?
 
 Il **Book Value** rappresenta il costo contabile storico del tuo portafoglio — quanto capitale hai investito al costo, più le riserve di liquidità. Non fluttua in base ai prezzi di mercato e distinto da [Risoluzione Prezzi](price-resolution.md).
@@ -61,3 +59,4 @@ $$
 - 💼 [NAV](nav.md) — corrispettivo basato sul valore di mercato
 - 🧭 [Risoluzione Prezzi](price-resolution.md) — quotazioni di mercato/trade usate dal NAV, non dal book value
 - 📈 [Period PnL](period-pnl.md) — combinazione di realizzato + non realizzato
+- 📈 [Panoramica delle Metriche di Performance](../index.md) — tutte le metriche di performance a colpo d'occhio

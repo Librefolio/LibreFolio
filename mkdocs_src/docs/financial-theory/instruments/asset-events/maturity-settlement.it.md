@@ -69,6 +69,14 @@ Una volta che un evento di regolamento alla scadenza viene registrato in LibreFo
 - L'importo del regolamento rappresenta l'**ultimo valore della serie**
 - L'asset può rimanere nel sistema per analisi storiche, ma non riceverà nuovi dati di prezzo
 
+!!! note "Eccezione: interessi di mora dopo la scadenza"
+
+    Gli asset valorizzati dal provider **Scheduled Investment** possono essere configurati con
+    il **Late Interest**: dopo la fine dell'ultimo periodo programmato, si applica prima un
+    periodo di grazia configurabile (in giorni), poi un tasso di penale continua a maturare oltre
+    la scadenza fino al regolamento. In quel caso la serie di prezzi non si ferma alla
+    scadenza — vedi [provider Scheduled Investment](../../../user/assets/providers/scheduled-investment.md#late-interest).
+
 ---
 
 ## 🧮 Come LibreFolio Gestisce il Regolamento alla Scadenza

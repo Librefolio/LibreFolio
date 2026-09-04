@@ -337,6 +337,22 @@
       "othersHint": "Con transacciones que no son tuyas",
       "analysis": "Observados",
       "analysisHint": "Guardados pero sin transacciones — bajo observación"
+    },
+    "providerParams": {
+      "borsa_italiana": {
+        "label": {
+          "language": "Idioma",
+          "codice_fondo": "Código interno del fondo",
+          "mic": "MIC del mercado",
+          "platform": "Plataforma"
+        },
+        "description": {
+          "language": "Idioma de los nombres y metadatos del instrumento.",
+          "codice_fondo": "Código interno del fondo Borsa Italiana (ej. 2FADB602822). Autocompletado para fondos comunes; habilita la valoración por NAV. Dejar vacío para acciones/bonos/ETF.",
+          "mic": "MIC del mercado (ej. ETLX para EuroTLX, MOTX para MOT). Autocompletado desde la búsqueda; dirige la página del instrumento y los metadatos al mercado correcto.",
+          "platform": "Plataforma de negociación (ej. TLX para EuroTLX). Autocompletada desde la búsqueda; requerida por algunos mercados para resolver la página del instrumento."
+        }
+      }
     }
   },
   "auth": {
@@ -3092,6 +3108,7 @@
     "TIMEOUT": "El proveedor no respondió a tiempo.",
     "MISSING_PARAMS": "A la configuración del proveedor le faltan parámetros obligatorios.",
     "PARSE_ERROR": "No se pudo interpretar la respuesta del proveedor.",
-    "SCRAPE_ERROR": "No se pudo leer la página del proveedor."
+    "SCRAPE_ERROR": "No se pudo leer la página del proveedor.",
+    "UNSUPPORTED_PAGE": "El proveedor encontró este instrumento pero su página de mercado aún no se puede leer. Abre un issue en GitHub (Librefolio/LibreFolio) indicando este ISIN para que se añada el soporte."
   }
 }

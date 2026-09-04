@@ -6,7 +6,7 @@ prompt de análisis enfocado. LibreFolio nunca envía la exportación a un servi
 ## 📍 Ubicación
 
 Abra **panel de control** y seleccione **Exportación de IA** en la barra de herramientas superior, junto a
-**Actualizar/Sincronizar**. El borrador permanece disponible durante 10 minutos en la sesión actual
+**Actualizar**. El borrador permanece disponible durante 10 minutos en la sesión actual
 y se restablece después de cerrar sesión o iniciar una nueva sesión.
 
 ## 🎯 Análisis de cartera

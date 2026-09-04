@@ -1,12 +1,12 @@
-# 📥 Transactions du broker
+# 📥 Transactions du courtier
 
-L'onglet **Transactions** est le centre de contrôle pour modifier le registre du courtier. Il répertorie toutes les opérations financières enregistrées (achats, ventes, dividendes, dépôts, retraits, transferts et conversions de devise) limitées à ce courtier.
+L'onglet **Transactions** est le centre de contrôle pour modifier le registre du courtier. Il répertorie toutes les opérations financières enregistrées (achats, ventes, dividendes, dépôts, retraits, transferts et conversions FX) rattachées à ce courtier.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="brokers" data-name="transactions-tab" alt="Onglet Transactions du courtier">
+ <img class="gallery-img" data-category="brokers" data-name="transactions-tab" alt="Broker Transactions Tab">
 </div>
 
-Depuis cet onglet, vous pouvez effectuer des transactions manuelles ou lancer des importations groupées de relevés.
+Depuis cet onglet, vous pouvez enregistrer des transactions manuellement ou lancer des importations groupées de relevés.
 
 ---
 
@@ -14,60 +14,41 @@ Depuis cet onglet, vous pouvez effectuer des transactions manuelles ou lancer de
 
 Cliquez sur le bouton **Ajouter une transaction** (icône `Plus`) pour ouvrir l'assistant modal de transaction unique. Cela vous permet d'enregistrer manuellement :
 
-- **Achat / Vente** : Négocier des actifs, en spécifiant la date, le prix, la quantité et la devise.
-- **Dividende / Revenu** : Revenus perçus provenant des actifs détenus.
-- **Dépôt / Retrait** : Entrées ou sorties de trésorerie externes vers/depuis le solde de trésorerie du courtier.
-- **Transfert** : Transfert de trésorerie ou d'actifs entre courtiers (par exemple, approvisionnement du compte depuis un courtier bancaire).
-- **Conversion de devise** : Échanges de devises à l'intérieur du compte du courtier.
+- **Achat / Vente** : Négocier des actifs, en précisant la date, le prix, la quantité et la devise.
+- **Dividende / Revenu** : Revenus perçus sur les actifs détenus.
+- **Dépôt / Retrait** : Entrées ou sorties externes de liquidités vers ou depuis le solde de trésorerie du courtier.
+- **Transfert** : Transfert de liquidités ou d'actifs entre courtiers (par exemple, approvisionner le compte depuis un courtier bancaire).
+- **Conversion FX** : Échanges de devises dans le compte du courtier.
 
 Pour une explication détaillée des champs de transaction et des règles de validation, consultez le guide **[Formulaire de transaction](../transactions/form.md)**.
 
 ---
 
-## 🧙 BRIM : Module d'importation des relevés de courtier
+## 🧙 Import groupé (BRIM)
 
-Le bouton **Importer** (icône `Télécharger`) lance l'assistant **BRIM**. Ce module vous permet d'importer en masse les relevés exportés de votre courtier (formats CSV ou Excel), d'exécuter des validations de cohérence automatiques et de mapper les tickers aux actifs locaux avant la validation finale.
+Le bouton **Importer** (icône `Upload`) lance l'assistant **BRIM** (Broker Report Import Module), qui importe en masse les relevés exportés de votre courtier : il analyse les fichiers, valide chaque ligne, unifie les titres trouvés, détecte les doublons et vous permet de tout passer en revue avant que quoi que ce soit ne soit écrit. Les lignes approuvées arrivent dans l'**éditeur groupé**, où un **Tout enregistrer** final les consigne dans le registre.
 
-### 🖼️ Le flux d'importation
+Le même assistant est également disponible depuis la page globale **[Transactions](../transactions/index.md)**. Pour la procédure complète, consultez les guides dédiés :
 
-<div class="lf-screenshot-carousel" data-carousel="carousel-broker-import" data-carousel-interval="6000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
- <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="import-modal" data-title="📥 Fenêtre modale d'importation rapide" alt="Fenêtre modale d'importation">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step1" data-title="🧙 Assistant — Étape 1 : Importation" alt="Assistant d'importation Étape 1">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step2" data-title="⚙️ Assistant — Étape 2 : Configuration de l'analyseur" alt="Assistant d'importation Étape 2">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step3" data-title="🧠 Assistant — Étape 3 : Analyse" alt="Assistant d'importation Étape 3">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step4-resolution" data-title="🔍 Assistant — Étape 4 : Résolution d'actifs" alt="Résolution d'actifs de l'assistant d'importation">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-duplicate" data-title="⚠️ Détection des doublons" alt="Détection des doublons de l'assistant d'importation">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-bulk-staging" data-title="📦 Zone de préparation en masse" alt="Zone de préparation en masse de l'importation">
-</div>
-
-L'assistant progresse à travers les étapes suivantes :
-
-1. **Sélectionner le fichier et l'analyseur** : Choisissez le fichier de relevé et sélectionnez la configuration d'analyseur appropriée (par exemple, Interactive Brokers, Degiro, Directa, Charles Schwab, CSV générique, etc.).
-2. **Vérifier les en-têtes et le mappage** : Affiche les en-têtes CSV pour confirmer que l'analyseur s'aligne correctement avec les colonnes.
-3. **Analyse des opérations** : Traite le fichier et affiche une grille de prévisualisation des actions analysées (Achats, Ventes, Dividendes, etc.).
- * **Badges** : Les opérations sont étiquetées comme `UNIQUE` (nouvelle transaction), `DUPLICATE` (existe déjà dans la base de données) ou `UNRESOLVED` (nécessite un mapping ticker/ISIN).
- * **Notes TODO** : Met en évidence les champs nécessitant une attention ou les éléments qui n'ont pas pu être analysés automatiquement.
-4. **Résolution d'actifs** : Si le relevé contient des tickers ou ISIN qui n'existent pas dans votre registre d'actifs local, BRIM affiche une étape de mappage. Vous pouvez :
- * Mapper le ticker à un actif existant.
- * Créer un nouvel actif directement depuis cet écran, pré-rempli avec les détails extraits du relevé.
-5.  **Filtre de date d'ouverture** : Si une ligne analysée est strictement antérieure à la date d'ouverture du courtier, l'assistant la marque **Avant ouverture**, désactive sa case à cocher et la maintient hors de l'importation. Les lignes se trouvant le jour de l'ouverture sont autorisées. Utilisez **Modifier la date du courtier** et réactualisez si nécessaire.
-6.  **Zone de préparation en masse et validation** : Passez en revue la liste de contrôle préparée des transactions propres et uniques. Décochez les opérations que vous souhaitez exclure, puis cliquez sur **Valider** pour écrire les enregistrements dans le registre de votre portefeuille.
+- 📥 **[Import depuis le courtier (BRIM)](../transactions/import/index.md)** — courtiers pris en charge, formats et notes par plugin.
+- 🧙 **[Comment importer des transactions](../transactions/import/how-to.md)** — l'assistant, étape par étape.
 
 ---
 
-## ⚠️ Avertissements sur les actifs
+## 🧩 Votre courtier est introuvable ?
 
-Certains plugins associent des avertissements d'information aux actifs extraits. Par exemple, Intesa Sanpaolo et Crédit Agricole peuvent avertir qu'un titre peut être échu/remboursé et difficile à trouver en ligne. La modale de création d'actif regroupe ces avertissements dans des bannières ambrées ; ils sont informatifs et ne modifient pas l'importation des transactions.
+Si votre courtier n'a pas encore de plugin d'importation, vous pouvez aider :
+
+- **Demander un plugin** — ouvrez une [demande de plugin](https://github.com/Librefolio/LibreFolio/issues/new?template=plugin_request.yml) sur GitHub, en joignant un échantillon anonymisé du fichier d'exportation du courtier afin que le format puisse être compris. (L'étape Corrections de l'assistant comporte également une bannière « ouvrir une issue » pour signaler les lignes qui semblent incorrectes.)
+- **Écrire un plugin** — le [Guide des plugins BRIM](../../developer/architecture/patterns/brim_plugin_guide.md) guide les développeurs à travers le contrat de fournisseur ; consultez [Contribuer](../../community/contribute.md) pour la démarche générale.
 
 ---
 
-## 📑 Historique des importations
+## 🗂️ Rapports téléversés
 
-Cliquez sur le bouton **Afficher l'historique des importations** (icône `FileText`) pour voir un registre complet des tâches d'importation précédentes. Il affiche :
+Cliquez sur le bouton **Rapports téléversés** (icône `FileText`) pour gérer les fichiers de rapports BRIM stockés pour ce courtier. La fenêtre modale vous permet de :
 
-- Le nom du fichier importé et sa taille.
-- Les lignes traitées et le total des transactions validées.
-- L'horodatage de l'importation.
-- L'utilisateur qui a effectué l'importation.
-
-
+- Examiner les rapports téléversés (nom, date de téléversement, taille, statut), avec un **aperçu** rapide du contenu de chaque fichier.
+- **Téléverser** de nouveaux rapports directement — ils sont automatiquement attribués à ce courtier et deviennent disponibles à l'étape Sélection des fichiers de l'assistant.
+- **Supprimer** les rapports dont vous n'avez plus besoin.
+- Accéder à la page complète **[Fichiers et téléversements](../files/index.md#broker-reports)**, pré-filtrée sur ce courtier.

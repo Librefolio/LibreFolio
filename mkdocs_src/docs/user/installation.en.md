@@ -167,7 +167,7 @@ However, for maximum simplicity and security without opening ports on your route
 
 ---
 
-## 🏷️ Image Variants: Full and Light
+## 🏷️ Image Variants: Full and Light {: #image-variants-full-and-light }
 
 The official image is published in two variants:
 

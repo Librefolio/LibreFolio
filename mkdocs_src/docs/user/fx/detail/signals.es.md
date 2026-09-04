@@ -1,78 +1,106 @@
 # 📈 Señales
 
-El panel de Señales permite superponer **indicadores técnicos** en el gráfico de FX. Estos se calculan en tiempo real a partir de los datos del tipo de cambio y ayudan a identificar tendencias, cambios de momentum y patrones de volatilidad.
+El panel de señales te permite superponer **indicadores técnicos**, **series de comparación** y **curvas benchmark** en el gráfico FX. Los indicadores se calculan en el servidor mediante la **plataforma de plugins de señales** del backend de LibreFolio a partir del historial de tipos almacenado del par — el navegador solo renderiza los resultados.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="fx" data-name="detail-signals" alt="Panel de Señales de FX" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+ <img class="gallery-img" data-category="fx" data-name="detail-signals" alt="FX Signals Panel" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ---
 
-## 📊 Indicadores Disponibles
+## 🧮 Señales disponibles
 
-### 📉 [EMA — Media Móvil Exponencial](../../../financial-theory/technical-analysis/indicators/ema.md)
+Las señales se organizan en **tres categorías**, cada una con su propio menú desplegable en la parte superior del panel: **Indicadores técnicos**, **Comparación de datos** y **Benchmarks sintéticos**.
 
-Suaviza el ruido de la tasa diaria para revelar la **tendencia subyacente**. En FX, que una EMA cruce por encima de la línea del tipo de cambio a menudo sugiere un debilitamiento de la moneda base (o un fortalecimiento de la moneda de cotización). Período configurable: más corto = más reactivo, más largo = más suave.
+### 📉 Indicadores técnicos — 9 plugins compatibles con FX
 
-### 📊 [MACD — Convergencia/Divergencia de la Media Móvil](../../../financial-theory/technical-analysis/indicators/macd.md)
+De los 22 plugins de indicadores del backend, **9 se ejecutan sobre los tipos de cierre FX**. Las matemáticas de cada indicador residen en la sección de Teoría financiera — sigue los enlaces de abajo, o haz clic en el icono 📖 de cualquier tarjeta de señal para ir directamente a su página de teoría.
 
-Mide el **momentum** calculando la diferencia entre una EMA rápida y una lenta. Un MACD positivo significa que la EMA rápida está por encima de la EMA lenta (alcista), un MACD negativo significa lo contrario (bajista). Útil en FX para detectar reversiones de tendencia y cambios de momentum.
+| Familia | Indicadores |
+|---|---|
+| 📈 **Tendencia** (3) | [EMA](../../../financial-theory/technical-analysis/indicators/ema.md) · [SMA](../../../financial-theory/technical-analysis/indicators/sma.md) · [KAMA](../../../financial-theory/technical-analysis/indicators/kama.md) |
+| ⚡ **Momentum** (5) | [RSI](../../../financial-theory/technical-analysis/indicators/rsi.md) · [MACD](../../../financial-theory/technical-analysis/indicators/macd.md) · [ROC](../../../financial-theory/technical-analysis/indicators/roc.md) · [RSI estocástico](../../../financial-theory/technical-analysis/indicators/stochastic-rsi.md) · [PPO](../../../financial-theory/technical-analysis/indicators/ppo.md) |
+| 🌊 **Volatilidad** (1) | [Bandas de Bollinger](../../../financial-theory/technical-analysis/indicators/bollinger-bands.md) |
 
-- 📈 **Línea MACD**: Diferencia entre la EMA rápida y la lenta
-- 〰️ **Línea de Señal**: EMA de la propia línea MACD (momentum suavizado)
-- 📊 **Histograma**: Diferencia visual entre las líneas MACD y de Señal
+!!! info "¿Por qué solo 9?"
 
-### 💪 [RSI — Índice de Fuerza Relativa](../../../financial-theory/technical-analysis/indicators/rsi.md)
+    Los tipos FX tienen un único valor por día — no hay máximo, mínimo ni volumen. Los
+    13 plugins restantes necesitan esos campos adicionales (o calculan métricas de riesgo
+    de cartera) y están disponibles, en cambio, en los [gráficos de activos](../../assets/detail/signals.md).
+    El inventario completo se encuentra en
+    [Indicadores técnicos — Teoría financiera](../../../financial-theory/technical-analysis/indicators/index.md).
 
-Un **oscilador** (0–100) que mide la velocidad y la magnitud de los cambios de precio. En FX, los valores por encima de 70 pueden sugerir que el par de divisas está sobrecomprado, y por debajo de 30 sugieren que está sobrevendido. Útil para detectar posibles reversiones.
+### 💱 Comparación de datos
 
-### 📏 [Bandas de Bollinger](../../../financial-theory/technical-analysis/indicators/bollinger-bands.md)
+Superposiciones calculadas en el navegador que normalizan otra serie sobre el mismo gráfico:
 
-Una **envolvente de volatilidad** alrededor del precio. Las bandas se ensanchan durante periodos volátiles y se contraen durante periodos de calma. En FX, que una tasa toque la banda superior puede señalar condiciones de sobrecompra, mientras que tocar la banda inferior puede señalar sobreventa.
+- 💱 **Par FX** — superpone otro par configurado (p. ej., comparar EUR/USD con GBP/USD); los pares ya seleccionados por otra señal se marcan con 📌, y el par de la página actual lleva 👑
+- ↔️ **Comparación de activos** — superpone el rendimiento de un activo junto al tipo de cambio
 
-- 〰️ **Banda Media**: Media Móvil Simple (SMA)
-- 🔺 **Banda Superior**: SMA + 2 desviaciones estándar
-- 🔻 **Banda Inferior**: SMA − 2 desviaciones estándar
+### 📐 Benchmarks sintéticos
+
+**Curvas de referencia matemáticas** calculadas en el navegador y generadas puramente a partir de parámetros — no se necesitan datos de mercado: [Crecimiento lineal](../../../financial-theory/technical-analysis/synthetic-benchmarks/linear.md), [Crecimiento compuesto](../../../financial-theory/technical-analysis/synthetic-benchmarks/compound.md) y [Onda sinusoidal](../../../financial-theory/technical-analysis/synthetic-benchmarks/sine-wave.md).
 
 ---
 
-## 🛠️ Cómo Usarlo
+## 🔍 Encontrar un indicador
 
-1. Haga clic en el **interruptor** de Señales (📈) en la barra de herramientas del gráfico
+El menú desplegable de indicadores es un **árbol plegable agrupado por familia** (tendencia, momentum, volatilidad), con un cuadro de búsqueda en la parte superior — escribe para filtrar entre todas las familias a la vez; las flechas, `→`/`←` y `Enter` navegan por el árbol.
+
+*Próximamente: captura de pantalla del árbol de indicadores agrupado abierto en el panel de señales FX.*
+
+---
+
+## 🎛️ Tarjetas de señal
+
+Cada señal añadida se convierte en una tarjeta que muestra:
+
+- 📖 Un **icono de documentación** que enlaza con la página de Teoría financiera del indicador
+- 🎚️ **Parámetros integrados** (período, período de señal, …) — algunos elementos de información emergente contienen fórmulas LaTeX renderizadas con KaTeX
+- 🏷️ Una **insignia de datos** con el número de puntos del historial de tipos (📈) cargados
+- 🗑️ Botón de eliminar; arrastra las tarjetas para reordenar las superposiciones
+
+Un pequeño **spinner** aparece en cada tarjeta mientras la petición al backend está en curso. Tras la carga, un icono de color informa de los **diagnósticos** por señal — pasa el cursor sobre él para ver los detalles: ℹ️ aviso (gris) y ⚠️ advertencia (ámbar) cuando la señal se calculó con salvedades (huecos de datos, calentamiento incompleto, datos que comienzan después del rango del gráfico), 🔴 error (rojo) cuando no se pudo calcular en absoluto (historial insuficiente, campos faltantes). Si una tarjeta informa de datos faltantes, sincronizar el par suele rellenar el hueco.
+
+---
+
+## 🛠️ Cómo usar
+
+1. Haz clic en el interruptor **Señales** (📈) en la barra de herramientas del gráfico
 2. El panel de señales se abre debajo del gráfico
-3. Añada indicadores desde los menús desplegables categorizados (Indicadores Técnicos, Comparación de Datos, benchmarks Sintéticos)
-4. Los parámetros de cada indicador se pueden ajustar en línea
-5. Las señales se renderizan como capas superpuestas directamente en el gráfico
+3. Añade señales desde los tres menús desplegables de categoría (Indicadores técnicos, Comparación de datos, Benchmarks sintéticos)
+4. Ajusta los parámetros de cada señal directamente en su tarjeta
+5. Las señales se renderizan como superposiciones directamente en el gráfico
 
 ---
 
-## 🧠 Exportación de IA
+## 🧠 Exportación con IA
 
-El botón **Exportación de IA** (:material-brain:) de la barra de herramientas de
-la página ofrece tres tareas de FX:
+El botón **Exportación con IA** (:material-brain:) de la barra de herramientas de la página ofrece dos tareas
+FX:
 
-- **Análisis de tendencia cambiaria**
-- **Impacto de la exposición cambiaria**
-- **Contexto temporal de conversión de divisas**
+- **Análisis de par FX**
+- **Impacto de la exposición FX**
 
-La instantánea del backend usa el par de divisas canónico de la página, el rango
-seleccionado, la moneda objetivo, el historial de tipos y los resultados técnicos
-del servicio de señales compartido. Para Impacto de la exposición cambiaria, la
-exposición se limita a las monedas de efectivo y a las monedas de negociación o
-valoración de posiciones vinculables directamente al par; no realiza
-**look-through** de fondos o emisores para deducir exposición oculta. Consulta la [Exportación AI FX](../../ai-export/fx.md) o la [guía de exportación AI](../../ai-export/index.md).
+La instantánea del backend utiliza el par de divisas canónico de la página, el rango seleccionado,
+la divisa objetivo, el historial de tipos y los resultados compartidos de señales técnicas. Para el
+Impacto de la exposición FX, la exposición se limita a las divisas de efectivo y a las divisas de
+negociación de posiciones o de valoración directamente vinculables al par; **no** examina
+fondos ni emisores para inferir una exposición cambiaria oculta. Consulta
+[Exportación con IA FX](../../ai-export/fx.md) o la
+[descripción general de la Exportación con IA](../../ai-export/index.md).
 
 ---
 
-## 📚 Profundización: Teoría Financiera
+## 📚 A fondo: Teoría financiera
 
 Para un tratamiento matemático exhaustivo de cada indicador — incluyendo fórmulas, equivalentes de procesamiento de señales e interpretación práctica:
 
-:material-book-open-variant: **[Indicadores Técnicos — Teoría Financiera](../../../financial-theory/technical-analysis/indicators/index.md)**
+:material-book-open-variant: **[Indicadores técnicos — Teoría financiera](../../../financial-theory/technical-analysis/indicators/index.md)**
 
 Esta página de referencia cubre:
 
-- 🔢 Las **fórmulas matemáticas** detrás de cada indicador
-- 🎛️ Equivalentes de **procesamiento de señales** (EMA = filtro IIR, SMA = filtro FIR, etc.)
-- ⚡ La intuición de **"rápido vs lento"** en términos de frecuencias de corte de filtro
+- 🔢 Las **fórmulas matemáticas** que hay detrás de cada indicador
+- 🎛️ Los equivalentes de **procesamiento de señales** (EMA = filtro IIR, SMA = filtro FIR, etc.)
+- ⚡ La intuición de **"rápido vs lento"** en términos de frecuencias de corte del filtro
 - 📈 **Ejemplos prácticos** de detección de cruces e identificación de tendencias

@@ -1,7 +1,5 @@
 # 📊 Gráficos
 
-*[⬅️ Volver a la Descripción General del Panel](index.md)*
-
 La sección de gráficos se encuentra debajo de las tarjetas KPI y te proporciona una **vista histórica y estructural** de tu cartera durante el período de tiempo seleccionado.
 
 ---
@@ -122,3 +120,7 @@ El panel de asignación muestra cómo está distribuida tu cartera en el momento
 - 💼 **[NAV / Patrimonio Neto](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)**
 - 💸 **[Capital Depositado y PyG Total](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)**
 - 📈 **[TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md)** · **[MWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)** · **[Efecto del Momento de las Aportaciones](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/timing-effect.md)**
+
+---
+
+*[⬅️ Volver a la Descripción General del Panel](index.md)*

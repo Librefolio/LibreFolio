@@ -14,22 +14,22 @@ Le CCI a été conçu pour signaler le début de nouveaux cycles : des lectures 
 
 1. **Prix Typique** pour chaque barre :
 
- $$
- TP_t = \frac{H_t + L_t + C_t}{3}
- $$
+    $$
+    TP_t = \frac{H_t + L_t + C_t}{3}
+    $$
 
 2. **Moyenne mobile simple** du prix typique, et son **écart absolu moyen** :
 
- $$
- \overline{TP}_t = SMA_N(TP), \qquad
- MD_t = \frac{1}{N}\sum_{i=0}^{N-1} \left| TP_{t-i} - \overline{TP}_t \right|
- $$
+    $$
+    \overline{TP}_t = SMA_N(TP), \qquad
+    MD_t = \frac{1}{N}\sum_{i=0}^{N-1} \left| TP_{t-i} - \overline{TP}_t \right|
+    $$
 
 3. **CCI**, mis à l'échelle par la constante conventionnelle $0.015$ de sorte qu'environ 70 à 80 % des valeurs se situent dans $\pm 100$ :
 
- $$
- CCI_t = \frac{TP_t - \overline{TP}_t}{0.015 \cdot MD_t}
- $$
+    $$
+    CCI_t = \frac{TP_t - \overline{TP}_t}{0.015 \cdot MD_t}
+    $$
 
 ---
 

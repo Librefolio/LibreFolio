@@ -5,7 +5,7 @@
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="create-wizard-modal" data-title="🧙 Import Wizard Auto-Creation Form" alt="Create Asset from Wizard">
 </div>
 
-## 🚀 Asset Creation Flows
+## 🚀 Asset Creation Flows {: #asset-creation-flows }
 
 In LibreFolio, you can create new assets in two different ways:
 
@@ -61,7 +61,7 @@ history contains one NAV point at its real date.
 
 Each asset can have one pricing provider assigned. See [Providers](providers/index.md) for details on available providers and their configuration.
 
-## 🛠️ Editing an Asset
+## 🛠️ Editing an Asset {: #editing-an-asset }
 
 Click the **Edit** (✏️) button on the [detail page](detail/index.md) to open the asset modal with all fields pre-populated. All fields are editable, including provider configuration and distributions.
 
@@ -77,7 +77,7 @@ breakdown) arrive with none. You can always set or correct both distributions by
 asset modal: they feed the dashboard's **allocation charts** (geography and sector rings, now and
 over time) and the AI Export concentration context.
 
-In the asset modal ([create](#-asset-creation-flows) or [edit](#%EF%B8%8F-editing-an-asset)) open
+In the asset modal ([create](#asset-creation-flows) or [edit](#editing-an-asset)) open
 the **Classification** area:
 
 1. **Geographic distribution** — one row per country/area, with its weight in percent.
