@@ -1,7 +1,5 @@
 # ⚙️ Moteur de Portefeuille — Modèle Mathématique
 
-*[⬅️ Retour à l'aperçu des métriques de performance](../index.md)*
-
 ## 💡 Aperçu
 
 Cette page définit formellement le modèle mathématique sous-jacent au moteur de calcul de portefeuille de LibreFolio. Toutes les autres pages de métriques ([NAV](nav.md), [Valeur Comptable](book-value.md), [P&L de Période](period-pnl.md), [PMP](../weighted-average-cost.md), [Capital Déposé](deposited-capital.md)) se réfèrent à cette page pour leurs règles de calcul précises.
@@ -240,3 +238,4 @@ Calculées **après** les états quotidiens, lors d'une passe séparée :
 - 📊 [Period P&L](period-pnl.md) — gains/pertes sur une fenêtre temporelle avec contribution
 - 💸 [Deposited Capital](deposited-capital.md) — détails sur les 3 pools et exemples pratiques
 - 📈 [PMP](../weighted-average-cost.md) — méthode de coût itérative
+- 📈 [Aperçu des Métriques de Performance](../index.md) — toutes les métriques de performance en un coup d'œil

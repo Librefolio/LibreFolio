@@ -136,7 +136,7 @@ $$
 
 Quando un portafoglio contiene acquisizioni in valute diverse, LibreFolio:
 
-1. Determina la **valuta target** (la più frequente tra le acquisizioni)
+1. Determina la **valuta target** dall'override della richiesta quando fornito; altrimenti usa la valuta dell'acquisizione più recente (deterministico), con fallback sulla valuta dell'asset
 2. Converte tutti i costi unitari nella valuta target utilizzando i tassi di cambio storici
 3. Calcola il PMC nella valuta target unificata
 
@@ -165,7 +165,7 @@ $$
 
 Il motore calcola il PMC inline durante il ciclo giornaliero delle transazioni — nessuna query separata al database necessaria. Ciò raggiunge un costo ammortizzato O(1) per transazione invece del costo O(N) di rieseguire query sull'intera cronologia.
 
-### 📅 delle transazioni nello stesso giorno
+### 📅 Ordinamento delle transazioni nello stesso giorno
 
 All'interno della stessa data, **gli aumenti vengono elaborati prima delle riduzioni**:
 

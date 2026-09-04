@@ -5,7 +5,7 @@ para el activo actualmente abierto. LibreFolio nunca lo envía a un servicio de 
 
 ## 📍 Ubicación
 
-Abra una página de detalle de Activo. En el encabezado **Señales**, seleccione **Exportación IA**. Su
+Abra una página de detalle de Activo. En la **barra de herramientas de la página**, seleccione **Exportación IA**. Su
 borrador permanece disponible durante 10 minutos en la sesión actual y se restablece
 tras cerrar sesión o iniciar una nueva.
 
@@ -35,10 +35,10 @@ por el backend. El navegador no recalcula indicadores.
 
 Dos exportaciones de datos públicas están disponibles:
 
-- **Posición e Historial del Activo** — posiciones por Bróker, costo, valor, P&L,
+- **Posición e Historial de Mercado (completo)** — posiciones por Bróker, costo, valor, P&L,
  semántica del período registrado en cero, lotes económicos con comisiones/impuestos asignados, historial
  de mercado compacto, Drawdown y procedencia;
-- **Historial de Mercado del Activo** — segmentos de cierre observados, rendimientos, indicadores, estados,
+- **Solo Historial de Mercado (sin posiciones)** — segmentos de cierre observados, rendimientos, indicadores, estados,
  eventos, Drawdown y cobertura.
 
 ## 📏 Detalle y Muestreo

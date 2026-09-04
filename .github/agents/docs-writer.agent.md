@@ -42,6 +42,46 @@ delivered. Before documenting behavior, open the code and check.
    in your report instead of faking it.
 6. **Never git commit.** Propose, don't commit.
 
+## Translation debt triage (run BEFORE the user launches the Aphra pipeline)
+
+When a docs phase ends with a translation batch pending, the pipeline should not pay
+full price for pages whose debt is a couple of lines. The standard flow:
+
+1. **Inventory** the debt with THREE complementary detectors (each catches what the
+   others miss):
+   ```bash
+   ./dev.py mkdocs translate-validate --hide-localized   # structural drift (headings, admonitions, links…)
+   ./dev.py mkdocs translate-diff --issues-only          # per-file issue list
+   ./dev.py mkdocs translate --dry-run                   # hash-based: ANY content change since the last stamp
+   ```
+   The dry-run list is the one that catches **semantic drift** — pages whose structure
+   still matches (so validate stays silent) but whose prose is stale (e.g. a page
+   rewritten same-headings but with the facts changed).
+2. For every file in the union, get **what actually changed** from git:
+   `git log --since=<last stamp date> -p -- <page>.en.md` (or a targeted `git diff`
+   against the stamped MD5's commit). This is the evidence for the classification —
+   never classify from issue counts alone.
+3. **Classify every flagged file** into two buckets:
+   - **Small** — a few rows/lines/occurrences of drift (a renamed label, an added row,
+     a fixed URL). You fix these yourself with targeted edits in ALL FOUR languages
+     (this is the sanctioned exception to the EN-only rule: small surgical syncs,
+     not prose writing).
+   - **Large** — new sections, rewrites, **or semantic drift** (structure intact but
+     prose stale — the git diff shows sentences whose meaning changed). These stay
+     for the pipeline.
+4. **Small bucket**: apply the edits, then stamp each file so the pipeline skips it:
+   ```bash
+   ./dev.py mkdocs translate-stamp --file <page>.en.md
+   ```
+   Stamp only when the four versions genuinely agree after your edit — a wrong stamp
+   freezes drift in place.
+5. **Report the split** to the user: what you fixed+stamped, what awaits the pipeline
+   (with a per-file reason), so the pipeline run is reviewed with the full picture.
+
+Only after this triage does the user launch `./dev.py mkdocs translate …`, and
+afterwards you run `translate-validate` + `translate-diff --issues-only` again to fix
+residual structural discrepancies and stamp what's clean.
+
 ## Translation-stamp rule (punctual changes)
 
 When you make a small, targeted fix to a page that **has translations** (a command

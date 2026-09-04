@@ -19,6 +19,10 @@ The **About** tab shows:
 The **Plugin diagnostics** collapsible reports the health of the four plugin registries — **asset providers**, **FX providers**, **broker importers**, and **signal indicators**.
 
 Each registry is either marked **all loaded** (green) or lists the **plugins that failed to import** (red), with the file name and the underlying error. If a provider, importer, or indicator you expected is missing from the rest of the application, this panel tells you why — a plugin that fails to load at startup is simply not registered.
+<div class="screenshot-container" style="max-width: 620px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="settings" data-name="about-plugin-diagnostics" alt="Plugin diagnostics collapsible in the About tab">
+</div>
+
 
 ---
 
@@ -32,9 +36,17 @@ The in-app **changelog modal** renders the bundled `CHANGELOG.md`. You can reach
 - One **foldable panel per release** — only the most recent release starts open; sections and sub-sections fold too.
 - A **version index** of chips across the top: clicking a version unfolds it and scrolls straight to it.
 - A **search box** that descends into the folds: matching sections auto-open, and the clickable result chips jump to the exact spot.
+<div class="screenshot-container" style="max-width: 620px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="settings" data-name="changelog-modal-search" alt="Changelog modal search opening the matching folds">
+</div>
+
 - **Expand-all / collapse-all** buttons, and a link to the changelog file on GitHub.
 
-*(Screenshot `settings/changelog-modal` is not in the gallery yet.)*
+
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="settings" data-name="changelog-modal" alt="Changelog modal with foldable releases and search">
+</div>
+
 
 ### 🔄 Checking for updates
 

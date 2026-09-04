@@ -1,7 +1,5 @@
 # ⚙️ Portfolio Engine — Modello Matematico
 
-*[⬅️ Torna a Panoramica Metriche di Performance](../index.md)*
-
 ## 💡 Panoramica
 
 Questa pagina definisce formalmente il modello matematico alla base del motore di calcolo del portafoglio di LibreFolio. Tutte le altre pagine relative alle metriche ([NAV](nav.md), [Book Value](book-value.md), [Period P&L](period-pnl.md), [PMC](../weighted-average-cost.md), [Deposited Capital](deposited-capital.md)) fanno riferimento a questa pagina per le loro precise regole di computazione.
@@ -240,3 +238,4 @@ Calcolate **dopo** gli stati giornalieri, come passaggio separato:
 - 📊 [Period P&L](period-pnl.md) — guadagni/perdite in una finestra temporale con contributo
 - 💸 [Deposited Capital](deposited-capital.md) — dettagli sui 3 pool ed esempi pratici
 - 📈 [WAC](../weighted-average-cost.md) — metodo di costo iterativo
+- 📈 [Panoramica delle Metriche di Performance](../index.md) — tutte le metriche di performance a colpo d'occhio

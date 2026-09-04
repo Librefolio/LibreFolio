@@ -6,7 +6,7 @@ mai questi dati a un servizio di intelligenza artificiale.
 
 ## 📍 Posizione
 
-Apri una pagina di dettaglio FX. Nell'intestazione **Signals**, seleziona
+Apri una pagina di dettaglio FX. Nella **barra degli strumenti della pagina**, seleziona
 **AI Export**. La bozza rimane disponibile per 10 minuti nella sessione di
 accesso corrente e viene azzerata dopo il logout o un nuovo accesso.
 

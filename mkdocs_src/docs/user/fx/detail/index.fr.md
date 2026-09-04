@@ -14,7 +14,7 @@ La vue principale — un graphique complet propulsé par ECharts avec zoom, dép
 
 ### 📊 [Signaux](signals.md)
 
-Superposez des indicateurs techniques (EMA, MACD, RSI, Bandes de Bollinger) sur le graphique. Chaque signal est calculé en temps réel à partir des données de taux et peut être activé ou désactivé indépendamment.
+Superposez des indicateurs techniques sur le graphique — 9 plugins calculés par le backend sont disponibles pour les paires FX (voir [Signaux](signals.md) pour la liste et les détails par signal). Chaque signal est calculé à partir des données de taux et peut être activé ou désactivé indépendamment.
 
 ### 📐 [Mesures](measures.md)
 

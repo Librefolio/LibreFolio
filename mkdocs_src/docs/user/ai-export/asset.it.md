@@ -5,7 +5,7 @@ per l'asset attualmente aperto. LibreFolio non invia mai tali contenuti a un ser
 
 ## 📍 Posizione
 
-Apri una pagina di dettaglio dell'Asset. Nell'intestazione **Segnali**, seleziona **AI Export**. La bozza
+Apri una pagina di dettaglio dell'Asset. Nella **barra degli strumenti della pagina**, seleziona **AI Export**. La bozza
 rimane disponibile per 10 minuti nella sessione di accesso corrente e si azzera
 dopo il logout o un nuovo accesso.
 
@@ -35,10 +35,10 @@ Il browser non ricalcola gli indicatori.
 
 Sono disponibili due esportazioni pubbliche di dati:
 
-- **Posizione e Cronologia dell'Asset** — posizioni per Broker, costo, valore, P&L,
+- **Posizione e Cronologia di Mercato (completa)** — posizioni per Broker, costo, valore, P&L,
  semantica dei periodi a zero registrato, lotti economici con commissioni/imposte allocate,
  cronologia di mercato compatta, Drawdown e provenienza;
-- **Cronologia di Mercato dell'Asset** — bucket di chiusura osservati, rendimenti, indicatori, stati,
+- **Solo Cronologia di Mercato (senza posizioni)** — bucket di chiusura osservati, rendimenti, indicatori, stati,
  eventi, Drawdown e copertura.
 
 ## 📏 Dettaglio e Campionamento

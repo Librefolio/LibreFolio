@@ -1,7 +1,5 @@
 # 🧬 Motor FIFO — Ciclo de Vida de Lotes y Modelo de Emparejamiento
 
-*[⬅️ Volver a la Descripción General de Métricas de Rendimiento](../index.md)*
-
 ## 💡 Descripción General
 
 Mientras que el [Precio Medio Ponderado (PMP)](../weighted-average-cost.md) fusiona cada adquisición de una posición en un promedio continuo, el motor FIFO de LibreFolio realiza un seguimiento de **lotes individuales** — uno por lote de adquisición — a lo largo de todo su ciclo de vida: apertura, cierres parciales, transferencias entre brókeres, divisiones y cierre total final.
@@ -125,8 +123,9 @@ El resultado general se marca entonces como **completo** o **degradado** en su c
 
 ## 🔗 Relacionados
 
-- 🧭 **[Resolución de Precios](../portfolio-engine/price-resolution.md)** — Niveles de valoración usados por el servicio de lotes
 - 🔬 **[Análisis de Lotes FIFO](fifo-lot-analysis.md)** — Métricas derivadas de este motor: Retorno Abierto/Total por lote, escalado qbq, asignación de ingresos, ejemplo práctico
+- 🧭 **[Resolución de Precios](../portfolio-engine/price-resolution.md)** — Niveles de valoración usados por el servicio de lotes
 - ⚙️ **[Motor de Cartera](../index.md)** — El motor agregado/complementario basado en PMP, y cómo se relacionan ambos
 - 📊 **[Precio Medio Ponderado (PMP)](../weighted-average-cost.md)** — Costo base combinado a nivel de posición
 - 🧬 **[Motor de Lotes FIFO (Manual del Desarrollador)](../../../../developer/backend/transactions/fifo_lot_engine.md)** — Inmersión profunda en la implementación: clases, despacho de eventos, restricciones a nivel de código
+- 📈 **[Descripción General de Métricas de Rendimiento](../index.md)** — Todas las métricas de rendimiento de un vistazo

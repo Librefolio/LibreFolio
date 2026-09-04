@@ -20,7 +20,7 @@ Ogni coppia di valute viene visualizzata con i seguenti dettagli:
 - 📈 Il **tasso di cambio più recente** e il trend del prezzo
 - 🏛️ Il **provider di dati attivo** (ECB, FED, BOE, SNB o MANUAL)
 - 📊 Un **grafico sparkline** che mostra l'andamento del tasso negli ultimi 30 giorni
-- 🖱️ **Menu Contestuale**: Fai clic con il tasto destro su qualsiasi riga nel layout a tabella per azioni rapide (Modifica, Sincronizza, Elimina)
+- 🖱️ **Menu Contestuale**: Fai clic con il tasto destro su qualsiasi riga nel layout a tabella per azioni rapide (Inverti direzione, Sincronizza, Ricarica, Elimina)
 
 Puoi **filtrare** per valuta per trovare rapidamente una coppia specifica:
 

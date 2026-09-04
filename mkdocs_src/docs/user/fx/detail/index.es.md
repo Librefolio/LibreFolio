@@ -14,7 +14,7 @@ La vista principal: un gráfico completo impulsado por ECharts con zoom, desplaz
 
 ### 📊 [Señales](signals.md)
 
-Superponga indicadores técnicos (EMA, MACD, RSI, Bollinger Bands) en el gráfico. Cada señal se calcula en tiempo real a partir de los datos del tipo de cambio y se puede activar o desactivar de forma independiente.
+Superponga indicadores técnicos en el gráfico — hay 9 plugins calculados por el backend disponibles para los pares FX (consulte [Señales](signals.md) para la lista y los detalles por señal). Cada señal se calcula a partir de los datos del tipo de cambio y se puede activar o desactivar de forma independiente.
 
 ### 📐 [Measures](measures.md)
 

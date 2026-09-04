@@ -1,7 +1,5 @@
 # 📈 Rendimiento Neto Anualizado
 
-*[⬅️ Volver al Motor de Cartera](index.md)*
-
 ## 💡 Propósito
 
 LibreFolio reporta el rendimiento anualizado solo cuando la ventana observada es suficientemente larga para que la capitalización compuesta sea significativa. La conversión compartida es:
@@ -143,3 +141,4 @@ donde $t_{\mathrm{fin\ lote}}$ es la fecha de cierre para lotes completamente ce
 - 📉 [ROI Simple](roi.md) — contexto de rendimiento del titular y a nivel de posición
 - 📊 [PyG del Período](period-pnl.md) — descomposición del período
 - 🔬 [Análisis de Lotes FIFO](../fifo-engine/fifo-lot-analysis.md) — métricas netas por lote
+- ⚙️ [Portfolio Engine](index.md) — modelo matemático completo

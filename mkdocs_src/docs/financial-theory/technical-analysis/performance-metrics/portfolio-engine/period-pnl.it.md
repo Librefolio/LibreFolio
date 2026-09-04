@@ -1,7 +1,5 @@
 # 📊 PnL di Periodo (Profitto e Perdita)
 
-*[⬅️ Torna alla Panoramica delle Metriche di Performance](../index.md)*
-
 ## 💡 Cos'è il PnL di Periodo?
 
 L'importo monetario assoluto del guadagno o della perdita generato dal tuo portafoglio nell'intervallo $[t_0, t_1]$, rettificato per i flussi di cassa esterni.
@@ -77,3 +75,4 @@ $$
 - 💼 [NAV](nav.md) — punto finale di ogni formula PnL
 - 💸 [Capitale Depositato](deposited-capital.md) — PnL totale dall'inizio
 - ⚙️ [Portfolio Engine](index.md) — modello matematico completo
+- 📈 [Panoramica delle Metriche di Performance](../index.md) — tutte le metriche di performance a colpo d'occhio

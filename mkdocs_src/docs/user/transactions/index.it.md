@@ -15,7 +15,7 @@ Ogni conto broker in LibreFolio ha il proprio registro delle transazioni dedicat
 Gestire le tue transazioni è semplice:
 
 * 📝 **Inserimento Manuale e Modifica**: Apri il **[Modulo Transazione](form.md)** interattivo per aggiungere, modificare o regolare manualmente le singole operazioni.
-* 📥 **Importazione Broker Super-Facile**: Non è necessario digitare tutto a mano! LibreFolio ti permette di caricare esportazioni CSV o PDF dal tuo broker e di mapparle e importarle automaticamente in pochi secondi. Scopri di più nella guida **[Importazione da Broker](import/index.md)**.
+* 📥 **Importazione Broker Super-Facile**: Non è necessario digitare tutto a mano! LibreFolio ti permette di caricare esportazioni CSV o XLSX dal tuo broker e di mapparle e importarle automaticamente in pochi secondi. Scopri di più nella guida **[Importazione da Broker](import/index.md)**.
 
 ---
 
@@ -25,10 +25,17 @@ Gestire le tue transazioni è semplice:
 
 | Funzionalità | Descrizione | Riferimento |
 |---------|-------------|-----------|
-| **Aggiungi e Modifica** | Clicca su **+ Nuova Transazione** per aprire il modulo, oppure clicca su qualsiasi riga esistente per modificarne i dettagli. | [Modulo Transazione](form.md) |
-| **Importazione Broker** | Trascina e rilascia il file dell'estratto conto del tuo broker per importare automaticamente la tua cronologia. | [Importazione da Broker](import/index.md) |
+| **Aggiungi e Modifica** | Clicca su **Aggiungi Transazione** per aprire il modulo, oppure clicca su qualsiasi riga esistente per modificarne i dettagli. | [Modulo Transazione](form.md) |
+| **Importazione Broker** | Clicca su **Importa** per caricare un estratto conto del broker e importare automaticamente la tua cronologia. | [Importazione da Broker](import/index.md) |
 | **Ordinamento e Filtro** | Clicca su qualsiasi intestazione di colonna per ordinare la lista. Usa la barra di ricerca per filtrare per nome dell'asset, tipo o note. | |
-| **Eliminazione e Azioni in blocco** | Clicca con il tasto destro su qualsiasi riga per aprire il Menu Contestuale per azioni rapide, clicca l'icona del cestino per eliminare, o seleziona più righe per eseguire eliminazioni multiple. | |
+| **Eliminazione e Azioni in blocco** | Clicca con il tasto destro su qualsiasi riga per aprire il Menu Contestuale per azioni rapide. L'eliminazione di una singola riga e la selezione di più righe per l'eliminazione multipla aprono entrambe lo stesso **workspace di blocco**, dove le righe vengono preparate per l'eliminazione prima della conferma; un partner collegato (operazione FX o gamba di trasferimento) viene preparato automaticamente insieme alla riga scelta. | |
+
+La duplicazione funziona allo stesso modo: **Clona** dal menu contestuale prepara una copia nel workspace di blocco — mantenendo la **data originale** (la clonazione è il modo in cui una riga storica mal classificata viene corretta, quindi la data deve sopravvivere) — dove la modifichi e la salvi.
+
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="transactions" data-name="clone-flow" alt="Bulk workspace with a cloned transaction row">
+</div>
+
 | **Transazioni Composte e Promozione** | Collega due operazioni singole in una **Transazione Composta** tramite la **Promozione** per consentire tracciamenti e analisi più sofisticate, o suddividi (split) una transazione composta in operazioni singole. | [Modulo Transazione](form.md#composite-transactions) |
 
 ---

@@ -1,7 +1,5 @@
 # 📉 ROI simple (Retour sur Investissement)
 
-*[⬅️ Retour à l'aperçu des indicateurs de performance](../index.md)*
-
 ## 💡 Qu'est-ce que c'est ?
 
 Le ROI simple mesure la valeur générée par rapport au capital investi. Dans le moteur de portefeuille actuel, le dénominateur du capital investi est la **base de capital** issue de `cumulative_external_cash_flow`, et non les seuls dépôts en espèces.

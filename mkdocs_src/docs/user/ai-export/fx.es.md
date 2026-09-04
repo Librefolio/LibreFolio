@@ -6,7 +6,7 @@ lo envía a un servicio de AI.
 
 ## 📍 Ubicación
 
-Abre una página de detalle de FX. En el encabezado **Señales**, selecciona **Exportación AI**. Tu
+Abre una página de detalle de FX. En la **barra de herramientas de la página**, selecciona **Exportación AI**. Tu
 borrador permanece disponible durante 10 minutos en la sesión actual y se restablece
 después de cerrar sesión o de un nuevo inicio de sesión.
 

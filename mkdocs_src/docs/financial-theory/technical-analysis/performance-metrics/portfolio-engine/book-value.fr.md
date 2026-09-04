@@ -1,7 +1,5 @@
 # 📖 Valeur Comptable
 
-*[⬅️ Retour à l'aperçu des mesures de performance](../index.md)*
-
 ## 💡 Qu'est-ce que la Valeur Comptable ?
 
 La **Valeur Comptable** représente le coût comptable historique de votre portefeuille — le montant de capital déployé au prix d'achat, plus les réserves de trésorerie. Elle ne fluctue pas selon les prix du marché e distinct de la [Résolution des Prix](price-resolution.md).
@@ -61,3 +59,4 @@ $$
 - 💼 [NAV](nav.md) — l'équivalent en valeur de marché
 - 🧭 [Résolution des Prix](price-resolution.md) — cours de marché/trade utilisés par le NAV, pas par la valeur comptable
 - 📈 [Period PnL](period-pnl.md) — combinaison des gains réalisés et non réalisés
+- 📈 [Aperçu des Métriques de Performance](../index.md) — toutes les métriques de performance en un coup d'œil

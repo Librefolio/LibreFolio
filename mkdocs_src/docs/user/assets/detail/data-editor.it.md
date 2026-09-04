@@ -36,19 +36,24 @@ La scheda Prezzi mostra tutti i punti dati dei prezzi per l'asset. Colonne:
 | **Minimo** | | Prezzo più basso della giornata |
 | **Volume** | | Volume di trading |
 
-### CSV Importazione CSV
+### Formato di Importazione CSV
 
+L'importazione CSV accetta sia i separatori `;` che `,`, e l'editor rileva automaticamente il separatore dalla prima riga non vuota.
+
+Prezzi:
 ```
-date;currency;close
-2024-01-15;USD;145.50
-2024-01-16;USD;146.10
+date;close
+2024-01-15;145.50
+2024-01-16;146.10
 ```
 
-Formato esteso con colonne opzionali:
+Prezzi estesi con colonne opzionali:
 ```
-date;currency;close;open;high;low;volume
-2024-01-15;USD;145.50;144.00;146.20;143.80;1500000
+date;close;open;high;low;volume
+2024-01-15;145.50;144.00;146.20;143.80;1500000
 ```
+
+L'editor del dettaglio asset usa formati CSV separati per prezzi ed eventi: i prezzi supportano `date`, `close` e gli opzionali `open`, `high`, `low`, `volume`; gli eventi supportano `date`, `type`, `amount` e l'opzionale `notes`. La colonna `currency` è ereditata dall'asset e non fa parte del payload dell'editor.
 
 ---
 
@@ -68,12 +73,13 @@ La scheda Eventi mostra tutti gli [eventi dell'asset](../../../financial-theory/
 
     Gli eventi generati da un provider (es. Investimento Programmato) sono contrassegnati come **auto** e appaiono come righe di sola lettura. Possono essere eliminati ma non modificati. Gli eventi manuali sono completamente modificabili.
 
-### CSV Importazione CSV
+### Formato di Importazione CSV
 
+Eventi:
 ```
-date;currency;type;amount;notes
-2024-03-15;USD;DIVIDEND;1.25;Q1 payout
-2024-06-01;;SPLIT;2;2:1 split
+date;type;amount;notes
+2024-03-15;DIVIDEND;1.25;Q1 payout
+2024-06-01;SPLIT;2;2:1 split
 ```
 
 ---

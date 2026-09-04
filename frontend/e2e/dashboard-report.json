@@ -24,7 +24,7 @@
   "summary": {
     "net_worth": {
       "code": "EUR",
-      "amount": "50000"
+      "amount": "50000.00000000000000000000000"
     },
     "total_invested": {
       "code": "EUR",
@@ -51,7 +51,7 @@
     },
     "broker_nav_value": {
       "code": "EUR",
-      "amount": "50000"
+      "amount": "50000.00000000000000000000000"
     },
     "in_transit_market_value": null,
     "open_cost_basis": {
@@ -133,7 +133,7 @@
     },
     "period_other_result": {
       "code": "EUR",
-      "amount": "0.00000000"
+      "amount": "0.0000000000000000000000000000000000000000000000000000"
     },
     "twrr_percent": "0.140041",
     "mwrr_annualized_percent": "0.143456",
@@ -418,7 +418,7 @@
         "valuation_reference_currency": "EUR",
         "valuation_split_adjusted": false,
         "missing_fx_pair": null,
-        "gain_loss": "0.00000000",
+        "gain_loss": "0.0000000000000000000000000000000000000000",
         "gain_loss_percent": "0",
         "annualized_return": "0.000000",
         "price_change_1d": null,
@@ -563,7 +563,7 @@
         "valuation_reference_currency": "EUR",
         "valuation_split_adjusted": false,
         "missing_fx_pair": null,
-        "gain_loss": "0.00000000",
+        "gain_loss": "0.0000000000000000000000000000000000000000",
         "gain_loss_percent": "0",
         "annualized_return": "0.075365",
         "price_change_1d": null,
@@ -1511,7 +1511,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -1571,7 +1571,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -1631,7 +1631,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -1691,7 +1691,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -1751,7 +1751,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -1811,7 +1811,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -1871,7 +1871,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -1931,7 +1931,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -1991,7 +1991,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -2051,7 +2051,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -2111,7 +2111,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -2171,7 +2171,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -2231,7 +2231,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -2651,7 +2651,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -2711,7 +2711,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -2771,7 +2771,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -2831,7 +2831,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -2891,7 +2891,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -2951,7 +2951,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -3011,7 +3011,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -3071,7 +3071,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -3131,7 +3131,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -3191,7 +3191,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -3251,7 +3251,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -3311,7 +3311,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -3371,7 +3371,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -3431,7 +3431,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -3491,7 +3491,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -3551,7 +3551,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -3611,7 +3611,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -3671,7 +3671,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -3731,7 +3731,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -3791,7 +3791,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -3851,7 +3851,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -3911,7 +3911,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -4811,7 +4811,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -4871,7 +4871,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -4931,7 +4931,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -4991,7 +4991,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -5051,7 +5051,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -5111,7 +5111,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -5171,7 +5171,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -5231,7 +5231,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -5291,7 +5291,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -7631,7 +7631,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -7691,7 +7691,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -7751,7 +7751,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -7811,7 +7811,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -7871,7 +7871,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -9551,7 +9551,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -9611,7 +9611,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -9671,7 +9671,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -11951,7 +11951,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -12011,7 +12011,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -12071,7 +12071,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -12131,7 +12131,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -12191,7 +12191,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -12251,7 +12251,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -12307,7 +12307,7 @@
       },
       "cash_from_contributed_capital": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.000000000000000000000000000000000000000000000000000000000000000000000"
       },
       "cash_from_generated_returns": {
         "code": "EUR",
@@ -12367,7 +12367,7 @@
       },
       "cash_from_contributed_capital": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.000000000000000000000000000000000000000000000000000000000000000000000"
       },
       "cash_from_generated_returns": {
         "code": "EUR",
@@ -12427,7 +12427,7 @@
       },
       "cash_from_contributed_capital": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.000000000000000000000000000000000000000000000000000000000000000000000"
       },
       "cash_from_generated_returns": {
         "code": "EUR",
@@ -12487,7 +12487,7 @@
       },
       "cash_from_contributed_capital": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.000000000000000000000000000000000000000000000000000000000000000000000"
       },
       "cash_from_generated_returns": {
         "code": "EUR",
@@ -12547,7 +12547,7 @@
       },
       "cash_from_contributed_capital": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.000000000000000000000000000000000000000000000000000000000000000000000"
       },
       "cash_from_generated_returns": {
         "code": "EUR",
@@ -12607,7 +12607,7 @@
       },
       "cash_from_contributed_capital": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.000000000000000000000000000000000000000000000000000000000000000000000"
       },
       "cash_from_generated_returns": {
         "code": "EUR",
@@ -12667,7 +12667,7 @@
       },
       "cash_from_contributed_capital": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.000000000000000000000000000000000000000000000000000000000000000000000"
       },
       "cash_from_generated_returns": {
         "code": "EUR",
@@ -12731,7 +12731,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.000000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -12791,7 +12791,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.000000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -12851,7 +12851,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.000000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -12911,7 +12911,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.000000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -12971,7 +12971,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.000000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -13031,7 +13031,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.000000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -13091,7 +13091,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.000000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -13151,7 +13151,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.000000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -13211,7 +13211,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.000000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -17351,7 +17351,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -17411,7 +17411,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -17471,7 +17471,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -17531,7 +17531,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -17591,7 +17591,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -17651,7 +17651,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -17711,7 +17711,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -18731,7 +18731,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -18791,7 +18791,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -18851,7 +18851,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -18911,7 +18911,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -18971,7 +18971,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -19031,7 +19031,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -19091,7 +19091,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -19151,7 +19151,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -19211,7 +19211,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -19271,7 +19271,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -19331,7 +19331,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -19391,7 +19391,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -19451,7 +19451,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -19511,7 +19511,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -19571,7 +19571,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -19631,7 +19631,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -19691,7 +19691,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -19751,7 +19751,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -19811,7 +19811,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -19871,7 +19871,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -19931,7 +19931,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -19991,7 +19991,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -20051,7 +20051,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -20111,7 +20111,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -20171,7 +20171,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -20231,7 +20231,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -20291,7 +20291,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -20351,7 +20351,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -20411,7 +20411,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -20771,7 +20771,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -20831,7 +20831,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -20891,7 +20891,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -20951,7 +20951,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -21011,7 +21011,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -21071,7 +21071,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -21131,7 +21131,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -21191,7 +21191,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -21251,7 +21251,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -21311,7 +21311,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -21371,7 +21371,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -21431,7 +21431,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -21491,7 +21491,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -21551,7 +21551,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -21611,7 +21611,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -21671,7 +21671,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.0000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -22451,7 +22451,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -22511,7 +22511,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -22571,7 +22571,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",
@@ -22598,14 +22598,14 @@
       },
       "broker_nav_value": {
         "code": "EUR",
-        "amount": "50000"
+        "amount": "50000.00000000000000000000000"
       },
       "in_transit_cash_value": null,
       "in_transit_asset_market_value": null,
       "in_transit_market_value": null,
       "nav_value": {
         "code": "EUR",
-        "amount": "50000"
+        "amount": "50000.00000000000000000000000"
       },
       "open_cost_basis": {
         "code": "EUR",
@@ -22631,7 +22631,7 @@
       },
       "cash_from_generated_returns": {
         "code": "EUR",
-        "amount": "0.00000000"
+        "amount": "0.00000000000000000000000000000000000000000000000000000"
       },
       "total_pnl": {
         "code": "EUR",

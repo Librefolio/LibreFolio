@@ -92,8 +92,9 @@ pipenv run ./dev.py install
 Sotto il cofano, questo comando:
 
 1. Inizializzerà l'ambiente virtuale Python e installerà i pacchetti tramite `pipenv`.
-2. Installerà le dipendenze frontend SvelteKit tramite `npm`.
-3. Installerà i binari del browser Playwright (utilizzati per la generazione di report PDF e i test E2E).
+2. Installerà gli strumenti di progetto radice tramite `npm install`.
+3. Installerà le dipendenze frontend SvelteKit tramite `npm ci`.
+4. Installerà i binari del browser Playwright (utilizzati per la generazione di report PDF e i test E2E).
 
 ### ⚙️ 3. Configura l'Ambiente
 
