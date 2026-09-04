@@ -123,6 +123,14 @@ Quantitative risk and allocation analytics, powered by [QuantLib](https://www.qu
 
 ### 🐛 Fixed
 
+#### 📈 Borsa Italiana — non-XMIL markets (EuroTLX) + OHLC integrity (2026-09-04)
+
+- **EuroTLX instruments now resolve end-to-end** — instruments quoted on EuroTLX (e.g. a US T-Bond such as ISIN `US912810TU25`) were found by search but the generated page link landed on a dead generic URL and price/history/metadata all failed. The provider now carries the market `mic`/`platform` from the site's own search result into `provider_params` (never a hardcoded map), so the instrument page, current price, history and metadata all work for every market — present and future. History for FX-denominated bonds now reports the real currency (e.g. USD) instead of a hardcoded EUR.
+- **Government bonds get the right classification** — Italian BTPs, US T-Bonds and other sovereign paper now get sector = Financials (100%) and the issuer's country in the geographic area (e.g. *United States of America* → USA).
+- **Dead search results are never offered** — instruments the search can't route to a real market page (and non-purchasable indices) are filtered out instead of producing a result that fails on click; when a market page genuinely can't be read yet, the provider raises a clear `UNSUPPORTED_PAGE` error inviting you to open a GitHub issue with the ISIN.
+- **Sync no longer rejected valid bond prices** — Borsa Italiana reports the official daily fixing as the close even when it falls outside the day's traded low/high range (normal for thinly-traded bonds); the upsert validator rejected those points as "impossible OHLC". A new global guard on the provider base class now widens the candle's low/high bounds to contain the open/close for **every** provider, so no real price is ever dropped — each repair is logged at debug level.
+- **Provider config fields are tidier** — the per-asset provider parameters now show a short inline label with the longer explanation moved into an ⓘ tooltip, and the user manual documents how to set `mic`/`platform`/`codice_fondo` by hand (in all four languages).
+
 #### 🧹 Clean audit re-check — P2/P3 + docs wave (2026-09-03/04)
 
 - **New admin cache panel** — Global Settings now shows every named cache (size, TTL) to all signed-in users, with admin-only "Clear" per cache and "Clear all", each behind a confirmation that warns the next fetch will be as slow as a restart.

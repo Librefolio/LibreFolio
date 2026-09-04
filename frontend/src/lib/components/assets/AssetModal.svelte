@@ -307,6 +307,8 @@
 
     // Track if search result was selected (for auto-assign banner)
     let searchResultSelected = $state(false);
+    /** True once the user explicitly picks a currency in the form (manual intent). */
+    let currencyUserSet = $state(false);
 
     // Dirty tracking — snapshot of initial form to detect unsaved changes
     let initialSnapshot = $state('');
@@ -560,6 +562,9 @@
         moreInfoExpanded = identifierRows.length > 0;
         providerExpanded = !!data.provider_code;
         searchResultSelected = false;
+        // Edit mode: the stored currency is a real prior value, not a blank default —
+        // treat it as user-set so the provider probe flags a genuine mismatch.
+        currencyUserSet = true;
         autoFilledFields = new Set();
         conflictFields = new Map();
         formError = null;
@@ -596,6 +601,7 @@
         moreInfoExpanded = false;
         providerExpanded = false;
         searchResultSelected = false;
+        currencyUserSet = false;
         autoFilledFields = new Set();
         conflictFields = new Map();
         formError = null;
@@ -978,7 +984,21 @@
                 } else if (currentVal === providerVal) {
                     autoFilledFields = new Set([...autoFilledFields, field]);
                 } else {
-                    differences.push({field, label, type: 'string', currentValue: currentVal, providerValue: providerVal, selected: true});
+                    // Name/casing noise: the on-site search title and the metadata page title
+                    // differ only in case (e.g. "T-bond" vs "T-Bond") — same instrument, not a
+                    // real difference. Skip instead of showing a false diff.
+                    const isCaseOnly = currentVal.trim().toLowerCase() === providerVal.trim().toLowerCase();
+                    // Currency not explicitly chosen: on a fresh asset the search may leave the
+                    // currency unset, so the form still shows the base-currency default (e.g. EUR)
+                    // while the provider knows the real one (e.g. a USD-denominated EuroTLX bond).
+                    // The user never picked that value — auto-fill it rather than flag a fake diff.
+                    const isUnsetCurrencyDefault = field === 'currency' && !currencyUserSet;
+                    if (isCaseOnly || isUnsetCurrencyDefault) {
+                        setFieldValue(field, providerVal);
+                        autoFilledFields = new Set([...autoFilledFields, field]);
+                    } else {
+                        differences.push({field, label, type: 'string', currentValue: currentVal, providerValue: providerVal, selected: true});
+                    }
                 }
             }
 
@@ -1719,7 +1739,10 @@
                             <CurrencySearchSelect
                                 value={currency}
                                 onchange={(v) => {
-                                    if (v) currency = v;
+                                    if (v) {
+                                        currency = v;
+                                        currencyUserSet = true;
+                                    }
                                 }}
                                 maxVisibleItems={6}
                                 compact={true}

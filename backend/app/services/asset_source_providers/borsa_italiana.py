@@ -230,6 +230,9 @@ _TIPOLOGIA_TO_SECTOR: dict[str, str] = {
     "corporate": "Financials",
     "corporate bonds": "Financials",
     "supranational bonds": "Financials",
+    # EuroTLX government paper (t-bonds, bund, ...); surfaced in the IT page
+    "t-bonds": "Financials",
+    "government": "Financials",
     # Italian
     "titoli di stato italiani": "Financials",
     "titoli di stato": "Financials",
@@ -377,6 +380,8 @@ class BorsaItalianaProvider(AssetSourceProvider):
 
     @property
     def params_schema(self) -> list[dict]:
+        # `label` is the short inline caption; `description` is the long help text
+        # shown in the field's tooltip (kept out of the label to avoid a wall of text).
         return [
             {
                 "key": "language",
@@ -385,25 +390,29 @@ class BorsaItalianaProvider(AssetSourceProvider):
                 "options": list(self.SUPPORTED_LANGUAGES),
                 "option_labels": {"en": "🇬🇧 English", "it": "🇮🇹 Italiano"},
                 "default": "en",
+                "label": "Language",
                 "description": "Language for asset names and metadata.",
             },
             {
                 "key": "codice_fondo",
                 "type": "string",
                 "required": False,
-                "description": "Internal Borsa Italiana fund code (auto-filled for mutual funds; enables NAV pricing when the fund is not on the XMIL market API).",
+                "label": "Fund internal code",
+                "description": "Internal Borsa Italiana fund code (e.g. 2FADB602822). Auto-filled for mutual funds; enables NAV pricing when the fund is not on the XMIL market API. Leave empty for stocks/bonds/ETFs.",
             },
             {
                 "key": "mic",
                 "type": "string",
                 "required": False,
-                "description": "Market MIC (auto-filled from search, e.g. ETLX for EuroTLX; routes the instrument page and metadata to the right market).",
+                "label": "Market MIC",
+                "description": "Market MIC (e.g. ETLX for EuroTLX, MOTX for MOT). Auto-filled from the search result; routes the instrument page and metadata to the right market.",
             },
             {
                 "key": "platform",
                 "type": "string",
                 "required": False,
-                "description": "Trading platform (auto-filled from search, e.g. TLX for EuroTLX; required by some markets to resolve the instrument page).",
+                "label": "Platform",
+                "description": "Trading platform (e.g. TLX for EuroTLX). Auto-filled from the search result; required by some markets to resolve the instrument page.",
             },
         ]
 

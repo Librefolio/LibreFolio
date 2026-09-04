@@ -337,6 +337,22 @@
       "othersHint": "With transactions you do not own",
       "analysis": "Watched",
       "analysisHint": "Saved but with no transactions — kept on the radar"
+    },
+    "providerParams": {
+      "borsa_italiana": {
+        "label": {
+          "language": "Language",
+          "codice_fondo": "Fund internal code",
+          "mic": "Market MIC",
+          "platform": "Platform"
+        },
+        "description": {
+          "language": "Language for asset names and metadata.",
+          "codice_fondo": "Internal Borsa Italiana fund code (e.g. 2FADB602822). Auto-filled for mutual funds; enables NAV pricing. Leave empty for stocks/bonds/ETFs.",
+          "mic": "Market MIC (e.g. ETLX for EuroTLX, MOTX for MOT). Auto-filled from the search result; routes the instrument page and metadata to the right market.",
+          "platform": "Trading platform (e.g. TLX for EuroTLX). Auto-filled from the search result; required by some markets to resolve the instrument page."
+        }
+      }
     }
   },
   "auth": {

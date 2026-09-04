@@ -5305,7 +5305,7 @@
     }
   },
   "user/assets/providers/borsa-italiana.en.md": {
-    "md5": "15391682cd1ac047effe51de51658f07",
+    "md5": "7b04f097f559e0319b59ca3bceefddbf",
     "langs_done": [
       "es",
       "fr",
@@ -5325,7 +5325,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 131.8,
-        "stamped_at": "2026-08-04T09:28:07.101981+00:00",
+        "stamped_at": "2026-09-04T22:15:25.904931+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -5333,7 +5333,7 @@
         "models": {},
         "failed": true,
         "failure_reason": "Unexpected error: No result for request 7c23c5f6-a2f6-4dcc-9f8a-df2b8cf79a16",
-        "stamped_at": "2026-08-04T09:28:07.101981+00:00",
+        "stamped_at": "2026-09-04T22:15:25.904931+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -5346,7 +5346,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 160.3,
-        "stamped_at": "2026-08-04T09:28:07.101981+00:00",
+        "stamped_at": "2026-09-04T22:15:25.904931+00:00",
         "stamped_by": "translate-stamp"
       }
     }
