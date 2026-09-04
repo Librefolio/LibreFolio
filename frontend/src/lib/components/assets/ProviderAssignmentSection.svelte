@@ -34,6 +34,9 @@
         key: string;
         type: string;
         required: boolean;
+        /** Short inline caption shown next to the field (falls back to description, then key) */
+        label?: string;
+        /** Long help text shown in the field's info tooltip */
         description: string;
         options?: string[];
         option_labels?: Record<string, string>;
@@ -99,6 +102,20 @@
     let testResults: TestResult[] = $state([]);
     let totalExecutionMs = $state(0);
     let paramsValues: Record<string, any> = $state({});
+
+    /**
+     * Localized provider-param text. The backend ships labels/descriptions in English
+     * inside params_schema; when a translation exists for the current provider+key we
+     * prefer it, otherwise we fall back to the backend text. Missing keys fall through
+     * cleanly (svelte-i18n returns the key itself, which we detect and ignore).
+     */
+    function paramText(field: ParamField, kind: 'label' | 'description'): string {
+        const backend = (kind === 'label' ? field.label : field.description) ?? '';
+        const code = selectedProvider?.code;
+        if (!code) return backend;
+        const translated = $t(`assets.providerParams.${code}.${kind}.${field.key}`);
+        return translated !== `assets.providerParams.${code}.${kind}.${field.key}` ? translated : backend;
+    }
 
     // =========================================================================
     // Derived
@@ -458,9 +475,14 @@
             <div class="space-y-2 pl-3 border-l-2 border-gray-200 dark:border-slate-600">
                 {#each genericFields as field}
                     <div>
-                        <label for="param-{field.key}" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                            {field.description || field.key}
+                        <label for="param-{field.key}" class="flex items-center gap-1 text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                            <span>{paramText(field, 'label') || field.key}</span>
                             {#if field.required}<span class="text-red-500">*</span>{/if}
+                            {#if paramText(field, 'description') && paramText(field, 'description') !== paramText(field, 'label')}
+                                <Tooltip text={paramText(field, 'description')} maxWidth="320px">
+                                    <CircleHelp size={13} class="text-gray-400 dark:text-gray-500 hover:text-blue-500 dark:hover:text-blue-400 cursor-help shrink-0" />
+                                </Tooltip>
+                            {/if}
                         </label>
                         {#if field.type === 'select' && field.options}
                             <SimpleSelect

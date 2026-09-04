@@ -316,6 +316,39 @@ async def test_history_currency_from_library(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_history_ohlc_guard_widens_fixing_outside_trade_range(monkeypatch):
+    """EuroTLX reports the official daily fixing as `close` even when it falls outside
+    the day's traded [low, high] (illiquid bonds). The base-class OHLC guard must widen
+    the candle bounds around close instead of letting the core reject the point.
+
+    Regression for the production failure: 'rejected N date(s) with impossible OHLC
+    (close outside [low, high])' on US912810TU25 sync."""
+    today = date.today()
+    punti = [
+        # close (fixing) ABOVE the traded high — the exact 2026-06-08 case
+        _punto(today - timedelta(days=2), apertura=Decimal("92.87"), massimo=Decimal("92.87"), minimo=Decimal("92.87"), chiusura=Decimal("92.90"), ultimo=Decimal("92.87")),
+        # close (fixing) BELOW the traded low
+        _punto(today - timedelta(days=1), apertura=Decimal("93.59"), massimo=Decimal("93.59"), minimo=Decimal("92.92"), chiusura=Decimal("92.81"), ultimo=Decimal("92.92")),
+        # an already-consistent candle must pass through untouched
+        _punto(today, apertura=Decimal("93"), massimo=Decimal("94"), minimo=Decimal("92"), chiusura=Decimal("93.5"), ultimo=Decimal("93.5")),
+    ]
+    monkeypatch.setattr(bi, "ottieni_storico", lambda ident, periodo=None, sessione=None: _storico(punti, valuta="USD"), raising=False)
+
+    result = await _provider().get_history_value("US912810TU25", IdentifierType.ISIN, None, today - timedelta(days=5), today)
+
+    # No point may violate low <= close <= high after the guard
+    for p in result.prices:
+        if p.low is not None and p.high is not None:
+            assert p.low <= p.close <= p.high, f"{p.date}: close={p.close} outside [{p.low},{p.high}]"
+    r0, r1, r2 = result.prices
+    # close (the fixing) is preserved verbatim; only the bounds widen
+    assert r0.close == Decimal("92.90") and r0.high == Decimal("92.90") and r0.low == Decimal("92.87")
+    assert r1.close == Decimal("92.81") and r1.low == Decimal("92.81") and r1.high == Decimal("93.59")
+    # consistent candle untouched
+    assert r2.open == Decimal("93") and r2.high == Decimal("94") and r2.low == Decimal("92") and r2.close == Decimal("93.5")
+
+
+@pytest.mark.asyncio
 async def test_history_unresolved_page_maps_to_unsupported(monkeypatch):
     """Same StrumentoNonRisolto → UNSUPPORTED_PAGE mapping as get_current_value."""
 

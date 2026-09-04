@@ -12,7 +12,11 @@
 | **Precios históricos** | OHLCV diario para instrumentos cotizados; un punto NAV en la fecha real del NAV para fondos |
 | **Metadatos del instrumento** | ISIN, segmento de mercado, divisa e identificadores alternativos cuando están disponibles |
 
-Los activos negociados en Borsa Italiana incluyen acciones italianas (segmento MTA/MIL), ETF (ETFplus), bonos (MOT) y fondos de inversión/SICAV.
+Los activos negociados en Borsa Italiana incluyen acciones italianas (segmento MTA/MIL), ETF (ETFplus), bonos (MOT, ExtraMOT y EuroTLX), certificados (SeDeX), fondos cerrados (MIV) y fondos de inversión/SICAV.
+
+!!! note "Sector y área geográfica para los bonos soberanos"
+
+    Los bonos soberanos (BTP italianos, T-Bonds estadounidenses y otros emisores soberanos) se clasifican automáticamente: **sector = Financieros (100 %)**, y el país del emisor como área geográfica (p. ej. *Estados Unidos de América* → **USA**).
 
 ---
 
@@ -33,6 +37,33 @@ No se requiere clave de API ni registro: el proveedor extrae datos públicos del
 !!! tip "La Búsqueda Inteligente puede usar enlaces de Borsa"
 
     Si la búsqueda normal no encuentra un fondo, pega o busca con la URL de la página del fondo/detalle de Borsa Italiana. La búsqueda inteligente de LibreFolio puede resolver las páginas Borsa compatibles, adjuntar los `provider_params` correctos y hacer que el fondo sea cotizable por su código interno.
+
+### 🎛️ Parámetros del proveedor
+
+Estos parámetros se configuran por ti al añadir el activo mediante la **Búsqueda Inteligente**. Para verlos o modificarlos a mano, abre el activo y despliega el panel **⚙️ Provider Config** — útil cuando la página de mercado de un instrumento no se resuelve, o para un activo guardado antes de que existieran estos parámetros.
+
+| Campo | Clave | Cómo configurarlo |
+|-------|-------|-------------------|
+| **Language** (Idioma) | `language` | Elige `en` (English) o `it` (Italiano) en el menú — selecciona el idioma del nombre y los metadatos del activo descargados de Borsa Italiana. |
+| **Fund internal code** (Código interno del fondo) | `codice_fondo` | **Solo fondos de inversión.** Abre la página del fondo en [borsaitaliana.it](https://www.borsaitaliana.it/borsa/fondi/ricerca.html), busca el fondo y lee el código en la URL de su página de detalle: `/borsa/fondi/dettaglio/<código>.html` → el código es la parte anterior a `.html` (p. ej. `2FADB602822`). Déjalo vacío para acciones, bonos y ETF. |
+| **Market MIC** (MIC de mercado) | `mic` | El código del mercado en el que cotiza el instrumento. Encuéntralo abriendo la página del instrumento en borsaitaliana.it y mirando la URL: `…/scheda/<ISIN>-<MIC>.html` → el sufijo tras el ISIN es el MIC (p. ej. `US912810TU25-ETLX` → `ETLX`). Consulta la tabla siguiente para los valores comunes. |
+| **Platform** (Plataforma) | `platform` | La plataforma de negociación. Solo algunos mercados la necesitan — EuroTLX exige `TLX`; déjala vacía para los demás. |
+
+**Códigos de mercado comunes** — los valores a escribir al configurar un instrumento a mano:
+
+| Mercado | `mic` | `platform` |
+|---------|-------|------------|
+| MTA (acciones italianas) | `MTAA` | — |
+| MOT (bonos) | `MOTX` | — |
+| ExtraMOT | `XMOT` | — |
+| ETFplus | `ETFP` | — |
+| EuroTLX | `ETLX` | `TLX` |
+| SeDeX (certificados) | `SEDX` | — |
+| MIV (fondos cerrados) | `MIVX` | — |
+
+!!! example "Configurar a mano un bono EuroTLX"
+
+    Un bono del Tesoro de EE. UU. cotizado en EuroTLX (p. ej. ISIN `US912810TU25`) no se resuelve desde la URL simple del ISIN. En borsaitaliana.it, la URL de su página termina en `…/obbligazioni/eurotlx/scheda/US912810TU25-ETLX.html`, así que su MIC es `ETLX`. En **⚙️ Provider Config** establece **Market MIC** en `ETLX` y **Platform** en `TLX`: el enlace a la página del instrumento, el precio actual y el historial funcionarán con normalidad. El historial de los bonos denominados en divisa extranjera puede expresarse en esa divisa (p. ej. USD).
 
 ---
 

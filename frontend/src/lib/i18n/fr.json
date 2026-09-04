@@ -337,6 +337,22 @@
       "othersHint": "Avec des transactions qui ne sont pas les vôtres",
       "analysis": "Surveillés",
       "analysisHint": "Enregistrés mais sans transactions — gardés à l'œil"
+    },
+    "providerParams": {
+      "borsa_italiana": {
+        "label": {
+          "language": "Langue",
+          "codice_fondo": "Code interne du fonds",
+          "mic": "MIC du marché",
+          "platform": "Plateforme"
+        },
+        "description": {
+          "language": "Langue des noms et métadonnées de l'instrument.",
+          "codice_fondo": "Code interne du fonds Borsa Italiana (ex. 2FADB602822). Rempli automatiquement pour les fonds communs; active la valorisation par NAV. Laisser vide pour actions/obligations/ETF.",
+          "mic": "MIC du marché (ex. ETLX pour EuroTLX, MOTX pour MOT). Rempli automatiquement depuis la recherche; dirige la page de l'instrument et les métadonnées vers le bon marché.",
+          "platform": "Plateforme de négociation (ex. TLX pour EuroTLX). Remplie automatiquement depuis la recherche; requise par certains marchés pour résoudre la page de l'instrument."
+        }
+      }
     }
   },
   "auth": {

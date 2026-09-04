@@ -24,6 +24,7 @@ Design principles:
 """
 
 import asyncio
+import functools
 import hashlib
 import json
 import time
@@ -267,6 +268,58 @@ def _json_safe_details(details: Optional[dict]) -> Optional[dict]:
 # ============================================================================
 
 
+def _repair_ohlc_point(point: FAPricePoint) -> tuple[FAPricePoint, bool]:
+    """Widen a point's [low, high] bounds to contain open and close.
+
+    Returns ``(point, changed)``. ``close`` and the traded range are never altered —
+    only ``low``/``high`` are extended when they would otherwise exclude a real price
+    (e.g. an official fixing reported outside the day's traded range). Points already
+    consistent are returned unchanged with ``changed=False``.
+    """
+    low, high = point.low, point.high
+    if low is None or high is None:
+        return point, False
+    candidates = [v for v in (point.open, point.close) if v is not None]
+    if not candidates:
+        return point, False
+    new_low = min([low, *candidates])
+    new_high = max([high, *candidates])
+    if new_low == low and new_high == high:
+        return point, False
+    return point.model_copy(update={"low": new_low, "high": new_high}), True
+
+
+def _wrap_history_ohlc_guard(func):
+    """Post-execution guard: repair impossible-OHLC points from any provider.
+
+    Applied to every concrete ``get_history_value`` via ``__init_subclass__`` so no
+    plugin has to remember to call it. Repairs are logged at DEBUG with the count of
+    adjusted points — the source values are never dropped, only the candle bounds widened.
+    """
+
+    @functools.wraps(func)
+    async def wrapper(*args, **kwargs) -> FAHistoricalData:
+        result = await func(*args, **kwargs)
+        prices = getattr(result, "prices", None)
+        if not prices:
+            return result
+        repaired: list[FAPricePoint] = []
+        n_changed = 0
+        for p in prices:
+            np_, changed = _repair_ohlc_point(p)
+            repaired.append(np_)
+            n_changed += int(changed)
+        if n_changed:
+            provider = args[0] if args else None
+            pcode = getattr(provider, "provider_code", provider.__class__.__name__ if provider is not None else "?")
+            logger.debug(f"OHLC guard: widened [low, high] to contain open/close on {n_changed}/{len(prices)} point(s) from provider '{pcode}'")
+            result = result.model_copy(update={"prices": repaired})
+        return result
+
+    wrapper._ohlc_guarded = True  # type: ignore[attr-defined]
+    return wrapper
+
+
 class AssetSourceProvider(ABC):
     """
     Abstract base class for asset pricing providers (plugins).
@@ -332,6 +385,22 @@ class AssetSourceProvider(ABC):
 
     Providers auto-register via @register_provider(AssetProviderRegistry) decorator.
     """
+
+    def __init_subclass__(cls, **kwargs):
+        """Wrap each concrete ``get_history_value`` with a post-execution OHLC guard.
+
+        Some sources (e.g. Borsa Italiana EuroTLX) report the official daily fixing
+        as ``close`` even when it falls outside the day's traded ``[low, high]``
+        range — legitimate data, but it violates the core upsert integrity rule
+        (``low ≤ close ≤ high``) and would be rejected. Wrapping here — at class
+        definition, transparently for every present and future plugin — widens the
+        candle bounds around ``open``/``close`` instead of dropping real prices.
+        """
+        super().__init_subclass__(**kwargs)
+        impl = cls.__dict__.get("get_history_value")
+        if impl is None or getattr(impl, "_ohlc_guarded", False):
+            return
+        cls.get_history_value = _wrap_history_ohlc_guard(impl)
 
     @property
     @abstractmethod
@@ -4231,21 +4300,13 @@ class AssetCRUDService:
             prepared.append((patch, patch_dict))
 
         # Currency-change guard data (Policy D below), batched per asset.
-        currency_change_ids = [
-            patch.asset_id
-            for patch, patch_dict in prepared
-            if patch_dict.get("currency") and patch.asset_id in assets_by_id and patch_dict["currency"] != assets_by_id[patch.asset_id].currency
-        ]
+        currency_change_ids = [patch.asset_id for patch, patch_dict in prepared if patch_dict.get("currency") and patch.asset_id in assets_by_id and patch_dict["currency"] != assets_by_id[patch.asset_id].currency]
         price_agg: dict[int, tuple[int, object, object]] = {}
         event_manual_agg: dict[int, int] = {}
         event_provider_agg: dict[int, int] = {}
         linked_tx_agg: dict[int, int] = {}
         if currency_change_ids:
-            price_rows = (
-                await session.execute(
-                    select(PriceHistory.asset_id, func.count(), func.min(PriceHistory.date), func.max(PriceHistory.date)).where(PriceHistory.asset_id.in_(currency_change_ids)).group_by(PriceHistory.asset_id)
-                )
-            ).all()
+            price_rows = (await session.execute(select(PriceHistory.asset_id, func.count(), func.min(PriceHistory.date), func.max(PriceHistory.date)).where(PriceHistory.asset_id.in_(currency_change_ids)).group_by(PriceHistory.asset_id))).all()
             price_agg = {row[0]: (int(row[1]), row[2], row[3]) for row in price_rows}
 
             event_rows = (
@@ -4262,11 +4323,7 @@ class AssetCRUDService:
             event_manual_agg = {row[0]: int(row[1] or 0) for row in event_rows}
             event_provider_agg = {row[0]: int(row[2] or 0) for row in event_rows}
 
-            linked_rows = (
-                await session.execute(
-                    select(AssetEvent.asset_id, func.count(Transaction.id)).join(Transaction, Transaction.asset_event_id == AssetEvent.id).where(AssetEvent.asset_id.in_(currency_change_ids)).group_by(AssetEvent.asset_id)
-                )
-            ).all()
+            linked_rows = (await session.execute(select(AssetEvent.asset_id, func.count(Transaction.id)).join(Transaction, Transaction.asset_event_id == AssetEvent.id).where(AssetEvent.asset_id.in_(currency_change_ids)).group_by(AssetEvent.asset_id))).all()
             linked_tx_agg = {row[0]: int(row[1]) for row in linked_rows}
 
         for patch, patch_dict in prepared:
