@@ -336,6 +336,26 @@ check for that state, not infer it.** The alternative — demanding exclusive
 access — is a real option, but it costs the whole suite parallelism and has to
 be justified in writing.
 
+### 8. A captured fixture that fails the schema is a STOP, not an edit
+
+Some fixtures are **real snapshots captured by a human from a real system**
+(`e2e/dashboard-report.json` is one — a user's actual dashboard report). When one
+stops validating against the current schema (zodios rejects it, the page renders
+zeroed data):
+
+- **Never** patch, trim or "sanitize" the snapshot to make it pass — deleting the
+  offending blocks fabricates a system state that never occurred, and every
+  screenshot/assertion on top becomes fiction while staying green.
+- **Stop and ask the user** for a fresh capture; if the snapshot is regenerable
+  from the populated test backend, regenerate it whole — same shape, fresh data.
+- A fresh capture of `dashboard-report.json` (a real user snapshot) must be
+  **renormalized before commit**: `./dev.py mkdocs normalize-dashboard-fixture`
+  (net worth → 50 000, everything monetary scaled coherently; `--dry-run` first).
+  If schema drift makes the script fail its invariants, update the script — same
+  logic — until it passes.
+- Until then, a loud failure beats a silently wrong capture.
+- Synthetic mocks authored inside the spec are exempt — they are yours to change.
+
 ## Parallelism
 
 `fullyParallel` is **`true`**, and the unit of parallelism is the *test*, not the

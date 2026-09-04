@@ -37,6 +37,48 @@ async function clickRowAction(page: Page, scope: Page | Locator, actionId: strin
     await page.getByTestId(`context-menu-action-${actionId}`).click();
 }
 
+/**
+ * Open the grouped SignalTreeSelect (indicators category), expand a family group and
+ * pick an option. Options render only while their group is expanded (or the search box
+ * is filled); open() auto-expands the FIRST family, so the group click is conditional.
+ * Assert-loud on purpose: the indicator select appears only after the backend signal
+ * catalog has loaded, so a missing button is a real failure, not a skip.
+ */
+async function selectIndicatorFromTree(page: Page, groupKey: string, optionValue: string): Promise<void> {
+    const selectButton = page.getByTestId('signals-indicator-select-button');
+    await expect(selectButton).toBeVisible({timeout: 15_000});
+    await selectButton.click();
+    // open() auto-expands the FIRST family group — click only when this one is collapsed
+    const group = page.getByTestId(`signal-tree-group-${groupKey}`);
+    await expect(group).toBeVisible({timeout: 3_000});
+    if ((await group.getAttribute('aria-expanded')) !== 'true') {
+        await group.click();
+        await expect(group).toHaveAttribute('aria-expanded', 'true', {timeout: 3_000});
+    }
+    const option = page.getByTestId(`signal-tree-option-${optionValue}`);
+    await expect(option).toBeVisible({timeout: 3_000});
+    await option.click();
+}
+
+/** Wait until every configured signal card has finished its backend computation. */
+async function waitForSignalCardsSettled(page: Page, timeout = 30_000): Promise<void> {
+    await expect(page.getByTestId('asset-detail-signals-panel').getByTestId('signal-loading')).toHaveCount(0, {timeout});
+}
+
+/**
+ * Forget persisted chart settings (signal configs live in user-scoped localStorage).
+ * Call at the START of a combo, before navigation: the next full page load re-hydrates
+ * an empty store, so each lang/theme iteration starts with no signals configured and
+ * cards never accumulate across combos.
+ */
+async function resetChartSettings(page: Page): Promise<void> {
+    await page.evaluate(() => {
+        for (const key of Object.keys(localStorage)) {
+            if (key.endsWith('_chartSettingsStore')) localStorage.removeItem(key);
+        }
+    });
+}
+
 function ensureDir(dir: string) {
     if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, {recursive: true});
@@ -191,6 +233,55 @@ test.describe('Gallery Screenshots', () => {
                 await expect(page.getByTestId('login-modal')).toBeVisible({timeout: 3000});
             });
         });
+
+        test('update available modal (mocked release) - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            // Deterministic mock: seed the 24h-throttled update-check cache with a fake
+            // newer release BEFORE the app boots. The admin layout probe
+            // (checkForNewerRelease) then reads the fresh cache instead of fetching GitHub,
+            // and prompts. addInitScript re-runs on every full page load, so each reload
+            // re-seeds a fresh cache and the modal reappears.
+            await page.addInitScript(() => {
+                localStorage.setItem(
+                    'librefolio-update-check',
+                    JSON.stringify({
+                        checkedAt: Date.now(),
+                        latest: {
+                            version: '99.9.0',
+                            url: 'https://github.com/Librefolio/LibreFolio/releases/tag/v99.9.0',
+                            name: 'v99.9.0',
+                        },
+                    }),
+                );
+            });
+
+            await login(page, TEST_ADMIN);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    // The modal backdrop blocks the header selectors, so language/theme are
+                    // seeded into localStorage (read by i18n + theme boot) instead of clicked.
+                    await page.evaluate(
+                        ([l, t]) => {
+                            localStorage.setItem('librefolio-locale', l);
+                            localStorage.setItem('librefolio-theme', t);
+                        },
+                        [lang, theme] as [string, string],
+                    );
+                    // Full reload → layout auth check → cached probe → prompt (once per load)
+                    await page.reload();
+                    await page.waitForSelector('html[data-i18n-ready="true"]', {timeout: 15_000});
+                    const modal = page.getByTestId('update-available-modal');
+                    await expect(modal).toBeVisible({timeout: 20_000});
+                    await expect(page.locator('html')).toHaveAttribute('lang', lang);
+                    await expect(page.locator('html')).toHaveClass(new RegExp(`\\b${theme}\\b`));
+                    await freezeAnimations(page);
+                    await page.waitForTimeout(300);
+                    await screenshot(page, viewport, lang, theme, 'auth', 'update-available-modal');
+                }
+            }
+        });
     });
 
     function parseLocalDateString(s: string): Date {
@@ -254,12 +345,22 @@ test.describe('Gallery Screenshots', () => {
         return shift(obj);
     }
 
+    /**
+     * The captured dashboard-report.json is a REAL user snapshot. If it stops validating
+     * against the current report schema (zodios rejects the whole response and the
+     * dashboard renders zeroed KPIs), do NOT patch or delete blocks to make it pass —
+     * the snapshot must be RE-CAPTURED from a real backend by the user (see the comment
+     * in the docs/testing guides). A loud failure beats a silently wrong screenshot.
+     */
+
     async function setupDashboardMockReport(page: Page) {
         const mockDataPath = path.join(__dirname, 'dashboard-report.json');
         if (fs.existsSync(mockDataPath)) {
             try {
                 const rawMockData = JSON.parse(fs.readFileSync(mockDataPath, 'utf8'));
                 const adjustedMockData = shiftDatesToToday(rawMockData);
+                // NOTE: no sanitizing — if the snapshot no longer validates, the shots
+                // must fail loudly until the fixture is re-captured from a real backend.
                 await page.route('**/api/v1/portfolio/report', async (route) => {
                     const postData = route.request().postDataJSON?.() as {include_positions_contribution?: boolean} | undefined;
                     if (postData?.include_positions_contribution) {
@@ -695,6 +796,81 @@ test.describe('Gallery Screenshots', () => {
                 await screenshot(page, viewport, lang, theme, 'dashboard', 'empty-state');
             });
         });
+
+        test('dashboard data-quality banner (mocked issues) - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            // The populated DB produces no data-quality issues deterministically, so inject
+            // two synthetic ones into the mocked portfolio report (same route the other
+            // dashboard shots mock). One warning with CTA + one info row.
+            const mockDataPath = path.join(__dirname, 'dashboard-report.json');
+            const rawMockData = JSON.parse(fs.readFileSync(mockDataPath, 'utf8'));
+            const adjustedMockData = shiftDatesToToday(rawMockData);
+            adjustedMockData.summary = {
+                ...adjustedMockData.summary,
+                data_quality: {
+                    data_quality_status: 'partial',
+                    issues: [
+                        {
+                            domain: 'portfolio',
+                            code: 'STALE_PRICE',
+                            severity: 'warning',
+                            message_i18n_key: 'dataQuality.stalePrice',
+                            message_params: {count: 2},
+                            count: 2,
+                            affected_asset_ids: [1, 2],
+                            affected_asset_names: ['Apple Inc.', 'Microsoft Corp.'],
+                            cta_action: 'navigate_asset',
+                            cta_target: '1',
+                            group_key: 'stale_price',
+                        },
+                        {
+                            domain: 'portfolio',
+                            code: 'MISSING_FX_MARKET',
+                            severity: 'info',
+                            message_i18n_key: 'dataQuality.missingFx',
+                            message_params: {count: 1},
+                            count: 1,
+                            affected_fx_pairs: ['USD-CHF'],
+                            cta_action: 'add_fx_pair',
+                            cta_target: 'USD-CHF',
+                            group_key: 'missing_fx_market',
+                        },
+                    ],
+                },
+            };
+            await page.route('**/api/v1/portfolio/report', async (route) => {
+                const postData = route.request().postDataJSON?.() as {include_positions_contribution?: boolean} | undefined;
+                if (postData?.include_positions_contribution) {
+                    const liveResponse = await route.fetch();
+                    const liveData = await liveResponse.json();
+                    await route.fulfill({
+                        status: liveResponse.status(),
+                        contentType: 'application/json',
+                        body: JSON.stringify({
+                            ...adjustedMockData,
+                            positions_contribution: liveData.positions_contribution ?? null,
+                        }),
+                    });
+                    return;
+                }
+                await route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify(adjustedMockData)});
+            });
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                await page.goto('/dashboard');
+                await page.waitForLoadState('networkidle', {timeout: 20_000});
+                await freezeAnimations(page);
+
+                const bannerToggle = page.getByTestId('data-quality-toggle');
+                await expect(bannerToggle).toBeVisible({timeout: 10_000});
+                // Collapsed by default — expand to show the issue chips + CTAs
+                await bannerToggle.click();
+                await page.waitForTimeout(300);
+                await freezeAnimations(page);
+                await screenshot(page, viewport, lang, theme, 'dashboard', 'data-quality-banner');
+            });
+        });
     });
 
     test.describe('Settings', () => {
@@ -890,6 +1066,131 @@ test.describe('Gallery Screenshots', () => {
                         await page.keyboard.press('Escape');
                         await page.waitForTimeout(200);
                     }
+                }
+            }
+        });
+
+        test('changelog modal - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+            const isMobile = testInfo.project.name === 'mobile';
+            await login(page, TEST_ADMIN);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await navigateTo(page, '/dashboard');
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+
+                    // Sidebar version chip opens the bundled changelog (mobile: inside the burger menu)
+                    if (isMobile) {
+                        await openMobileMenu(page);
+                    }
+                    await page.getByTestId('sidebar-version').click();
+                    const modal = page.getByTestId('changelog-modal');
+                    await expect(modal).toBeVisible({timeout: 8_000});
+                    // Chapters render from the bundled CHANGELOG — wait for one to exist
+                    await expect(page.locator('[data-testid^="changelog-chapter-"]').first()).toBeVisible({timeout: 8_000});
+                    await freezeAnimations(page);
+                    await page.waitForTimeout(300);
+                    await screenshot(page, viewport, lang, theme, 'settings', 'changelog-modal');
+
+                    // Second shot: search narrows the index, one fold opened by a hit
+                    await page.getByTestId('changelog-search').fill('Added');
+                    const hits = page.getByTestId('changelog-search-results');
+                    await expect(hits).toBeVisible({timeout: 5_000});
+                    await hits.locator('[data-testid^="changelog-hit-"]').first().click();
+                    await page.waitForTimeout(400); // scroll-into-view after the fold opens
+                    await freezeAnimations(page);
+                    await screenshot(page, viewport, lang, theme, 'settings', 'changelog-modal-search');
+
+                    await page.keyboard.press('Escape');
+                    await page.waitForTimeout(200);
+                }
+            }
+        });
+
+        test('cache panel - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+            await login(page, TEST_ADMIN);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await navigateTo(page, '/settings');
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await page.getByTestId('settings-page').waitFor({state: 'visible', timeout: 10_000});
+                    await page.getByTestId('settings-tab-admin').click();
+                    await page.getByTestId('global-settings-tab').waitFor({state: 'visible', timeout: 10_000});
+                    await page
+                        .locator('[data-testid="global-settings-tab"] [role="status"]')
+                        .waitFor({state: 'hidden', timeout: 15_000})
+                        .catch(() => {});
+
+                    // Unlock as admin so the Clear actions are rendered too
+                    const lockToggle = page.getByTestId('settings-lock-toggle');
+                    if (await lockToggle.isVisible({timeout: 3_000}).catch(() => false)) {
+                        const isLocked = await page
+                            .getByTestId('scheduler-config-btn')
+                            .isDisabled()
+                            .catch(() => false);
+                        if (isLocked) {
+                            await lockToggle.click();
+                            await page.waitForTimeout(200);
+                        }
+                    }
+
+                    // Narrow to the Memory category when the category sidebar is rendered (desktop)
+                    const memoryCategory = page.getByTestId('global-settings-category-memory');
+                    if (await memoryCategory.isVisible({timeout: 1_000}).catch(() => false)) {
+                        await memoryCategory.click();
+                        await page.waitForTimeout(300);
+                    }
+
+                    const cachePanel = page.getByTestId('cache-panel');
+                    await expect(cachePanel).toBeVisible({timeout: 10_000});
+                    // Wait out the cache-status fetch (spinner → table or empty state)
+                    await cachePanel
+                        .locator('[role="status"]')
+                        .waitFor({state: 'hidden', timeout: 15_000})
+                        .catch(() => {});
+                    await cachePanel.scrollIntoViewIfNeeded();
+                    await freezeAnimations(page);
+                    await page.waitForTimeout(300);
+                    await screenshot(page, viewport, lang, theme, 'settings', 'cache-panel');
+                    // No re-lock needed: the next combo re-navigates and the tab remounts locked.
+                }
+            }
+        });
+
+        test('about plugin diagnostics - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+            await login(page, TEST_ADMIN);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await navigateTo(page, '/settings');
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await page.getByTestId('settings-page').waitFor({state: 'visible', timeout: 10_000});
+                    await page.getByTestId('settings-tab-about').click();
+                    await page.getByTestId('about-tab').waitFor({state: 'visible', timeout: 10_000});
+                    await page
+                        .locator('[data-testid="about-tab"] [role="status"]')
+                        .waitFor({state: 'hidden', timeout: 15_000})
+                        .catch(() => {});
+
+                    // Expand the Plugin diagnostics collapsible (4 registries: asset/fx/brim/signals)
+                    const diagnostics = page.getByTestId('about-plugin-diagnostics');
+                    await expect(diagnostics).toBeVisible({timeout: 8_000});
+                    if ((await diagnostics.getAttribute('open')) === null) {
+                        await diagnostics.locator('summary').click();
+                        await expect(diagnostics).toHaveAttribute('open', '', {timeout: 3_000});
+                    }
+                    await diagnostics.scrollIntoViewIfNeeded();
+                    await freezeAnimations(page);
+                    await page.waitForTimeout(300);
+                    await screenshot(page, viewport, lang, theme, 'settings', 'about-plugin-diagnostics');
                 }
             }
         });
@@ -1174,37 +1475,30 @@ test.describe('Gallery Screenshots', () => {
                     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
                     await freezeAnimations(page);
 
-                    // Open BulkModal by hovering the first row and clicking edit
-                    const firstRow = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]').first();
-                    await expect(firstRow).toBeVisible({timeout: 5_000});
-                    await firstRow.hover();
+                    // Open BulkModal via the row kebab (row actions are kebab-only since 05712844).
+                    // Deterministic post-populate: admin owns every row → edit is always offered.
+                    const txTable = page.getByTestId('tx-table');
+                    await expect(txTable.locator('tbody tr[data-row-id]').first()).toBeVisible({timeout: 5_000});
+                    await clickRowAction(page, txTable, 'edit');
+                    // BulkModal opens with the FormModal auto-opened on top (single-row edit intent)
+                    const bulkModal = page.locator('[data-testid="tx-bulk-modal-root"]');
+                    await expect(bulkModal).toBeVisible({timeout: 8_000});
+                    // Close the nested FormModal first
+                    const formClose = page.getByTestId('tx-form-close');
+                    await expect(formClose).toBeVisible({timeout: 3_000});
+                    await formClose.click();
+                    await expect(page.getByTestId('tx-form-modal')).not.toBeVisible({timeout: 3_000});
+                    // Open the TransactionPickerModal
+                    const pickerBtn = page.getByTestId('tx-bulk-picker');
+                    await expect(pickerBtn).toBeVisible({timeout: 5_000});
+                    await pickerBtn.click();
+                    const pickerModal = page.getByTestId('tx-picker-modal');
+                    await expect(pickerModal).toBeVisible({timeout: 5_000});
+                    await waitForNetworkSettled(page);
+                    await page.waitForTimeout(300);
+                    await screenshot(page, viewport, lang, theme, 'transactions', 'picker-modal');
+                    await page.keyboard.press('Escape');
                     await page.waitForTimeout(200);
-                    const editAction = firstRow.locator('button[data-action-id="edit"]');
-                    if (await editAction.isVisible({timeout: 2_000}).catch(() => false)) {
-                        await editAction.click();
-                        // BulkModal or FormModal opens — wait for BulkModal
-                        const bulkModal = page.locator('[data-testid="tx-bulk-modal-root"]');
-                        if (await bulkModal.isVisible({timeout: 5_000}).catch(() => false)) {
-                            // Close any nested FormModal first
-                            const formClose = page.getByTestId('tx-form-close');
-                            if (await formClose.isVisible({timeout: 1_000}).catch(() => false)) {
-                                await formClose.click();
-                                await page.waitForTimeout(200);
-                            }
-                            // Open the TransactionPickerModal
-                            const pickerBtn = page.getByTestId('tx-bulk-picker');
-                            if (await pickerBtn.isVisible({timeout: 3_000}).catch(() => false)) {
-                                await pickerBtn.click();
-                                const pickerModal = page.getByTestId('tx-picker-modal');
-                                await expect(pickerModal).toBeVisible({timeout: 5_000});
-                                await waitForNetworkSettled(page);
-                                await page.waitForTimeout(300);
-                                await screenshot(page, viewport, lang, theme, 'transactions', 'picker-modal');
-                                await page.keyboard.press('Escape');
-                                await page.waitForTimeout(200);
-                            }
-                        }
-                    }
                     // Close any open modals
                     await page.keyboard.press('Escape');
                     await page.waitForTimeout(200);
@@ -1223,27 +1517,83 @@ test.describe('Gallery Screenshots', () => {
                     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
                     await freezeAnimations(page);
 
-                    // Find a paired TX row that has a split action
+                    // Find a paired TX row that has a split action. Row actions are kebab-only
+                    // since 05712844: open each row's kebab and keep the first offering
+                    // `context-menu-action-split` (paired rows only — rule: scan candidates,
+                    // don't infer).
                     const rows = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]');
                     const rowCount = await rows.count();
                     let found = false;
                     for (let i = 0; i < Math.min(rowCount, 30) && !found; i++) {
-                        const row = rows.nth(i);
-                        await row.hover();
-                        await page.waitForTimeout(150);
-                        const splitBtn = row.locator('button[data-action-id="split"]');
-                        if (await splitBtn.isVisible({timeout: 500}).catch(() => false)) {
-                            await splitBtn.click();
+                        const kebab = page
+                            .getByTestId('tx-table')
+                            .getByTestId(/^row-actions-/)
+                            .nth(i);
+                        if (!(await kebab.isVisible({timeout: 1_000}).catch(() => false))) continue;
+                        await kebab.scrollIntoViewIfNeeded();
+                        await kebab.click();
+                        const splitAction = page.getByTestId('context-menu-action-split');
+                        if (await splitAction.isVisible({timeout: 500}).catch(() => false)) {
+                            await splitAction.click();
                             const actionModal = page.getByTestId('tx-action-modal');
-                            if (await actionModal.isVisible({timeout: 3_000}).catch(() => false)) {
-                                await page.waitForTimeout(300);
-                                await screenshot(page, viewport, lang, theme, 'transactions', 'action-modal');
-                                await page.getByTestId('tx-action-modal-cancel').click();
-                                await page.waitForTimeout(200);
-                                found = true;
-                            }
+                            await expect(actionModal).toBeVisible({timeout: 5_000});
+                            await page.waitForTimeout(300);
+                            await screenshot(page, viewport, lang, theme, 'transactions', 'action-modal');
+                            await page.getByTestId('tx-action-modal-cancel').click();
+                            await page.waitForTimeout(200);
+                            found = true;
+                        } else {
+                            // Not a paired row — close the menu before trying the next one
+                            await page.keyboard.press('Escape');
+                            await page.waitForTimeout(150);
                         }
                     }
+                    if (!found) throw new Error('action-modal: no paired row with a split action found in the first 30 rows');
+                }
+            }
+        });
+
+        test('transaction clone flow - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await navigateTo(page, '/transactions');
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
+                    await freezeAnimations(page);
+
+                    // Clone the first row via its kebab — the BulkModal opens in clone intent
+                    // with the duplicated row staged (and the form auto-opened on top).
+                    // Deterministic post-populate: admin can edit every broker → clone offered.
+                    const txTable = page.getByTestId('tx-table');
+                    await expect(txTable.locator('tbody tr[data-row-id]').first()).toBeVisible({timeout: 5_000});
+                    await clickRowAction(page, txTable, 'clone');
+
+                    const bulkModal = page.locator('[data-testid="tx-bulk-modal-root"]');
+                    await expect(bulkModal).toBeVisible({timeout: 8_000});
+                    // The pre-filled form auto-opens only for a single-row clone; cloning a
+                    // paired row stages both legs instead (no form). Close it when present.
+                    const formClose = page.getByTestId('tx-form-close');
+                    if (await formClose.isVisible({timeout: 3_000}).catch(() => false)) {
+                        await formClose.click();
+                        await expect(page.getByTestId('tx-form-modal')).not.toBeVisible({timeout: 3_000});
+                    }
+                    await waitForNetworkSettled(page);
+                    await page.waitForTimeout(300);
+                    await screenshot(page, viewport, lang, theme, 'transactions', 'clone-flow');
+
+                    // Close BulkModal (discard the staged clone)
+                    await page.keyboard.press('Escape');
+                    await page.waitForTimeout(300);
+                    const confirmDiscard = page.getByTestId('confirm-modal-confirm');
+                    if (await confirmDiscard.isVisible({timeout: 500}).catch(() => false)) {
+                        await confirmDiscard.click();
+                        await page.waitForTimeout(200);
+                    }
+                    await page.keyboard.press('Escape');
+                    await page.waitForTimeout(200);
                 }
             }
         });
@@ -1712,6 +2062,12 @@ test.describe('Gallery Screenshots', () => {
 
                             // Continue to step 4
                             await page.getByTestId('import-wizard-continue').click();
+                            // Handle parse warnings overlay (intercepts step3 → step4 transition)
+                            const warningConfirm = page.getByTestId('import-wizard-warning-confirm');
+                            if (await warningConfirm.isVisible({timeout: 3_000}).catch(() => false)) {
+                                await warningConfirm.click();
+                                await page.waitForTimeout(300);
+                            }
                             await page.getByTestId('import-wizard-step4').waitFor({state: 'visible', timeout: 10_000});
                             await page.waitForTimeout(500);
                             await freezeAnimations(page);
@@ -1821,26 +2177,21 @@ test.describe('Gallery Screenshots', () => {
                     await waitForNetworkSettled(page);
                     await freezeAnimations(page);
 
-                    // Open BulkModal via edit action on the first row
-                    const firstRow = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]').first();
-                    await firstRow.hover();
-                    await page.waitForTimeout(200);
-                    const editAction = firstRow.locator('button[data-action-id="edit"]');
-                    if (await editAction.isVisible({timeout: 2_000}).catch(() => false)) {
-                        await editAction.click();
-                        // BulkModal opens
-                        const bulkModal = page.locator('[data-testid="tx-bulk-modal-root"]');
-                        if (await bulkModal.isVisible({timeout: 6_000}).catch(() => false)) {
-                            // Close any auto-opened FormModal
-                            const formClose = page.getByTestId('tx-form-close');
-                            if (await formClose.isVisible({timeout: 1_000}).catch(() => false)) {
-                                await formClose.click();
-                                await page.waitForTimeout(200);
-                            }
-                            await page.waitForTimeout(300);
-                            await screenshot(page, viewport, lang, theme, 'brokers', 'import-bulk-staging');
-                        }
-                    }
+                    // Open BulkModal via the row kebab edit action (kebab-only since 05712844).
+                    // Deterministic post-populate: admin owns every row → edit is always offered.
+                    const txTable = page.getByTestId('tx-table');
+                    await expect(txTable.locator('tbody tr[data-row-id]').first()).toBeVisible({timeout: 5_000});
+                    await clickRowAction(page, txTable, 'edit');
+                    // BulkModal opens with the FormModal auto-opened on top (single-row edit intent)
+                    const bulkModal = page.locator('[data-testid="tx-bulk-modal-root"]');
+                    await expect(bulkModal).toBeVisible({timeout: 8_000});
+                    // Close the auto-opened FormModal to reveal the staging grid
+                    const formClose = page.getByTestId('tx-form-close');
+                    await expect(formClose).toBeVisible({timeout: 3_000});
+                    await formClose.click();
+                    await expect(page.getByTestId('tx-form-modal')).not.toBeVisible({timeout: 3_000});
+                    await page.waitForTimeout(300);
+                    await screenshot(page, viewport, lang, theme, 'brokers', 'import-bulk-staging');
 
                     // Close BulkModal
                     await page.keyboard.press('Escape');
@@ -1852,6 +2203,166 @@ test.describe('Gallery Screenshots', () => {
                     }
                     await page.keyboard.press('Escape');
                     await page.waitForTimeout(200);
+                }
+            }
+        });
+
+        test('import wizard conditional steps (assets / fix / duplicates / n-way compare) - all languages and themes', async ({page}, testInfo) => {
+            // Heaviest wizard test: two real uploads + backend parse + four step walkthrough × 8 combos.
+            test.setTimeout(600_000); // 10 minutes
+            const viewport = getViewport(testInfo);
+            const TITOLI_CSV = path.join(__dirname, 'assets', 'demo_credit_agricole_titoli.csv');
+            const CONTO_CSV = path.join(__dirname, 'assets', 'demo_credit_agricole_conto.csv');
+
+            // Track this test's own uploads via the upload responses, so cleanup deletes
+            // exactly those files (never a parallel worker's same-named copies).
+            const uploadedFileIds = new Set<string>();
+            page.on('response', (response) => {
+                if (!response.url().includes('/api/v1/brokers/import/upload')) return;
+                if (!response.ok()) return;
+                response
+                    .json()
+                    .then((body) => {
+                        const id = (body as {file_id?: string})?.file_id;
+                        if (id) uploadedFileIds.add(id);
+                    })
+                    .catch(() => {});
+            });
+            const cleanupUploadedFiles = async () => {
+                for (const id of uploadedFileIds) {
+                    await page.request.delete(`/api/v1/brokers/import/files/${id}`).catch(() => {});
+                }
+                uploadedFileIds.clear();
+            };
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await navigateTo(page, '/transactions');
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
+
+                    try {
+                        // ── Step 1: upload the two Credit Agricole demo files ──
+                        await page.getByTestId('tx-import-button').click();
+                        await page.getByTestId('import-wizard-stepper').waitFor({state: 'visible', timeout: 8_000});
+                        const step1 = page.getByTestId('import-wizard-step1');
+                        await step1.waitFor({state: 'visible', timeout: 5_000});
+                        const dropzoneMore = page.getByTestId('import-wizard-upload-more');
+                        if (await dropzoneMore.isVisible({timeout: 1_000}).catch(() => false)) {
+                            await dropzoneMore.click();
+                        }
+                        await step1.locator('[data-testid="file-input"]').setInputFiles([TITOLI_CSV, CONTO_CSV]);
+                        // Both pending rows rendered
+                        await expect(step1.locator('tbody tr[data-row-id]')).toHaveCount(2, {timeout: 5_000});
+
+                        // Assign the global broker (both files to the same broker — duplicates
+                        // arbitration is per-broker). Prefer Interactive Brokers (has an icon in
+                        // the populated DB); fall back to the first editable broker.
+                        await page.getByTestId('import-wizard-step1-broker-select').locator('[role="combobox"]').click();
+                        const listbox = page.locator('[role="listbox"]').first();
+                        await expect(listbox).toBeVisible({timeout: 5_000});
+                        await expect(listbox).toHaveAttribute('aria-busy', 'false', {timeout: 8_000});
+                        const ibOption = listbox.locator('[data-testid^="search-select-option-"]').filter({hasText: 'Interactive Brokers'}).first();
+                        if (await ibOption.isVisible({timeout: 1_000}).catch(() => false)) {
+                            await ibOption.click();
+                        } else {
+                            await listbox.locator('[data-testid^="search-select-option-"]').first().click();
+                        }
+
+                        // Upload on Next — uploaded files arrive pre-selected in step 2 (T7)
+                        await expect(page.getByTestId('import-wizard-next')).toBeEnabled({timeout: 5_000});
+                        await page.getByTestId('import-wizard-next').click();
+                        const step2 = page.getByTestId('import-wizard-step2');
+                        await step2.waitFor({state: 'visible', timeout: 10_000});
+                        await expect(step2).toHaveAttribute('data-busy', 'false', {timeout: 20_000});
+
+                        // ── Step 2 → 3: parse both files (plugin auto-picked: broker_credit_agricole) ──
+                        const parseBtn = page.getByTestId('import-wizard-parse');
+                        await expect(parseBtn).toBeEnabled({timeout: 10_000});
+                        await parseBtn.click();
+                        await page.getByTestId('import-wizard-step3').waitFor({state: 'visible', timeout: 15_000});
+                        await expect(page.getByTestId('import-wizard-continue')).toBeEnabled({timeout: 60_000});
+                        await page.getByTestId('import-wizard-continue').click();
+                        // Parse-warnings overlay intercepts the step3 → next transition
+                        const warningConfirm = page.getByTestId('import-wizard-warning-confirm');
+                        if (await warningConfirm.isVisible({timeout: 3_000}).catch(() => false)) {
+                            await warningConfirm.click();
+                            await page.waitForTimeout(300);
+                        }
+
+                        // ── Assets step: proposed (AMUNDI name-suffix) + confirmed (BTP) groups ──
+                        const assetsStep = page.getByTestId('import-wizard-step-assets');
+                        await expect(assetsStep).toBeVisible({timeout: 15_000});
+                        await expect(assetsStep.getByTestId('asset-group-step')).toBeVisible({timeout: 10_000});
+                        await freezeAnimations(page);
+                        await page.waitForTimeout(300);
+                        await screenshot(page, viewport, lang, theme, 'brokers', 'import-wizard-assets-step');
+                        await page.getByTestId('import-wizard-assets-continue').click();
+
+                        // ── Fix step: bundled-amount warning + unresolved-asset blocker ──
+                        const fixStep = page.getByTestId('import-wizard-step-fix');
+                        await expect(fixStep).toBeVisible({timeout: 15_000});
+                        await expect(fixStep.getByTestId('fix-step-row').first()).toBeVisible({timeout: 10_000});
+                        await freezeAnimations(page);
+                        await page.waitForTimeout(300);
+                        await screenshot(page, viewport, lang, theme, 'brokers', 'import-wizard-fix-step');
+                        // Settle every flagged row (keep the plugin's fallback) to unlock Continue
+                        await fixStep.getByTestId('fix-step-accept-all').click();
+                        await expect(page.getByTestId('import-wizard-fix-continue')).toBeEnabled({timeout: 10_000});
+                        await page.getByTestId('import-wizard-fix-continue').click();
+
+                        // ── Duplicates step: cross-file coupon pair (probable/partial tier) ──
+                        const dupStep = page.getByTestId('import-wizard-step-duplicates');
+                        await expect(dupStep).toBeVisible({timeout: 20_000});
+                        await expect(dupStep.getByTestId('import-wizard-duplicate-resolver')).toBeVisible({timeout: 10_000});
+                        // Probable-tier groups start expanded; expand the resolver when all tiers are 'sure'
+                        const resolverToggle = dupStep.getByTestId('import-wizard-duplicate-resolver-toggle');
+                        if (
+                            !(await dupStep
+                                .getByTestId('import-wizard-file-priority')
+                                .isVisible({timeout: 500})
+                                .catch(() => false))
+                        ) {
+                            await resolverToggle.click();
+                            await expect(dupStep.getByTestId('import-wizard-file-priority')).toBeVisible({timeout: 3_000});
+                        }
+                        // Open the first tier panel so its groups are listed in the shot
+                        const tierToggle = dupStep.locator('[data-testid^="import-wizard-resolver-tier-toggle-"]').first();
+                        await expect(tierToggle).toBeVisible({timeout: 5_000});
+                        await tierToggle.click();
+                        await expect(dupStep.getByTestId('import-wizard-duplicate-group').first()).toBeVisible({timeout: 3_000});
+                        await freezeAnimations(page);
+                        await page.waitForTimeout(300);
+                        await screenshot(page, viewport, lang, theme, 'brokers', 'import-wizard-duplicates-step');
+
+                        // ── N-way compare modal from a duplicate group ──
+                        // The compare action lives inside the expanded group's body
+                        await dupStep.getByTestId('import-wizard-duplicate-group').first().locator('button').first().click();
+                        const compareBtn = dupStep.locator('[data-testid^="import-wizard-resolver-compare-"]').first();
+                        await expect(compareBtn).toBeVisible({timeout: 5_000});
+                        await compareBtn.click();
+                        const compareModal = page.getByTestId('import-wizard-compare-modal');
+                        await expect(compareModal).toBeVisible({timeout: 5_000});
+                        await expect(compareModal.getByTestId('import-wizard-compare-table')).toBeVisible({timeout: 5_000});
+                        await freezeAnimations(page);
+                        await page.waitForTimeout(300);
+                        await screenshot(page, viewport, lang, theme, 'brokers', 'import-nway-compare');
+                        await page.getByTestId('import-wizard-compare-close').click();
+                        await expect(compareModal).not.toBeVisible({timeout: 3_000});
+                    } finally {
+                        // Close the wizard (confirming the discard) and remove this combo's uploads
+                        await page.keyboard.press('Escape');
+                        await page.waitForTimeout(300);
+                        const confirmDiscard = page.getByTestId('confirm-modal-confirm');
+                        if (await confirmDiscard.isVisible({timeout: 500}).catch(() => false)) {
+                            await confirmDiscard.click();
+                            await page.waitForTimeout(200);
+                        }
+                        await page.keyboard.press('Escape');
+                        await page.waitForTimeout(200);
+                        await cleanupUploadedFiles();
+                    }
                 }
             }
         });
@@ -2561,6 +3072,7 @@ test.describe('Gallery Screenshots', () => {
 
             for (const lang of SUPPORTED_LANGUAGES) {
                 for (const theme of THEMES) {
+                    await resetChartSettings(page); // each combo starts with no signals configured
                     await goToAssetsPage(page);
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
@@ -2572,29 +3084,20 @@ test.describe('Gallery Screenshots', () => {
                     await page.waitForSelector('canvas', {timeout: 5000}).catch(() => null);
                     await page.waitForTimeout(1000);
 
-                    // Open signals panel and add EMA indicator
+                    // Open signals panel and add EMA indicator via the grouped SignalTreeSelect
                     const signalsToggle = page.getByTestId('asset-detail-signals-toggle');
-                    if (await signalsToggle.isVisible({timeout: 2000}).catch(() => false)) {
-                        await signalsToggle.click();
-                        await page.waitForTimeout(500);
+                    await expect(signalsToggle).toBeVisible({timeout: 5_000});
+                    await signalsToggle.click();
+                    await page.waitForTimeout(500);
 
-                        // Select EMA from the indicator dropdown
-                        const indicatorSelect = page.getByTestId('signals-indicator-select-button');
-                        if (await indicatorSelect.isVisible({timeout: 2000}).catch(() => false)) {
-                            await indicatorSelect.click();
-                            await page.waitForTimeout(300);
-                            const emaOption = page.locator('[role="option"]').filter({hasText: /EMA/i}).first();
-                            if (await emaOption.isVisible({timeout: 1000}).catch(() => false)) {
-                                await emaOption.click();
-                                await page.waitForTimeout(1500); // Wait for EMA to render on chart
-                                // Scroll the chart into center of viewport
-                                await page.getByTestId('asset-detail-chart').evaluate((el) => el.scrollIntoView({block: 'center'}));
-                                await page.waitForTimeout(300);
-                                await freezeAnimations(page);
-                                await screenshot(page, viewport, lang, theme, 'assets', 'detail-signals-ema');
-                            }
-                        }
-                    }
+                    await selectIndicatorFromTree(page, 'trend', 'ema');
+                    await waitForSignalCardsSettled(page);
+                    await page.waitForTimeout(500); // Let the chart redraw the overlay
+                    // Scroll the chart into center of viewport
+                    await page.getByTestId('asset-detail-chart').evaluate((el) => el.scrollIntoView({block: 'center'}));
+                    await page.waitForTimeout(300);
+                    await freezeAnimations(page);
+                    await screenshot(page, viewport, lang, theme, 'assets', 'detail-signals-ema');
                 }
             }
         });
@@ -2604,6 +3107,7 @@ test.describe('Gallery Screenshots', () => {
 
             for (const lang of SUPPORTED_LANGUAGES) {
                 for (const theme of THEMES) {
+                    await resetChartSettings(page); // each combo starts with no signals configured
                     await goToAssetsPage(page);
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
@@ -2616,26 +3120,18 @@ test.describe('Gallery Screenshots', () => {
                     await page.waitForTimeout(1000);
 
                     const signalsToggle = page.getByTestId('asset-detail-signals-toggle');
-                    if (await signalsToggle.isVisible({timeout: 2000}).catch(() => false)) {
-                        await signalsToggle.click();
-                        await page.waitForTimeout(500);
+                    await expect(signalsToggle).toBeVisible({timeout: 5_000});
+                    await signalsToggle.click();
+                    await page.waitForTimeout(500);
 
-                        const indicatorSelect = page.getByTestId('signals-indicator-select-button');
-                        if (await indicatorSelect.isVisible({timeout: 2000}).catch(() => false)) {
-                            await indicatorSelect.click();
-                            await page.waitForTimeout(300);
-                            const rsiOption = page.locator('[role="option"]').filter({hasText: /RSI/i}).first();
-                            if (await rsiOption.isVisible({timeout: 1000}).catch(() => false)) {
-                                await rsiOption.click();
-                                await page.waitForTimeout(1500);
-                                // Scroll the chart into center of viewport (not just into view)
-                                await page.getByTestId('asset-detail-chart').evaluate((el) => el.scrollIntoView({block: 'center'}));
-                                await page.waitForTimeout(300);
-                                await freezeAnimations(page);
-                                await screenshot(page, viewport, lang, theme, 'assets', 'detail-signals-rsi');
-                            }
-                        }
-                    }
+                    await selectIndicatorFromTree(page, 'momentum', 'rsi');
+                    await waitForSignalCardsSettled(page);
+                    await page.waitForTimeout(500);
+                    // Scroll the chart into center of viewport (not just into view)
+                    await page.getByTestId('asset-detail-chart').evaluate((el) => el.scrollIntoView({block: 'center'}));
+                    await page.waitForTimeout(300);
+                    await freezeAnimations(page);
+                    await screenshot(page, viewport, lang, theme, 'assets', 'detail-signals-rsi');
                 }
             }
         });
@@ -2645,6 +3141,7 @@ test.describe('Gallery Screenshots', () => {
 
             for (const lang of SUPPORTED_LANGUAGES) {
                 for (const theme of THEMES) {
+                    await resetChartSettings(page); // each combo starts with no signals configured
                     await goToAssetsPage(page);
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
@@ -2657,26 +3154,18 @@ test.describe('Gallery Screenshots', () => {
                     await page.waitForTimeout(1000);
 
                     const signalsToggle = page.getByTestId('asset-detail-signals-toggle');
-                    if (await signalsToggle.isVisible({timeout: 2000}).catch(() => false)) {
-                        await signalsToggle.click();
-                        await page.waitForTimeout(500);
+                    await expect(signalsToggle).toBeVisible({timeout: 5_000});
+                    await signalsToggle.click();
+                    await page.waitForTimeout(500);
 
-                        const indicatorSelect = page.getByTestId('signals-indicator-select-button');
-                        if (await indicatorSelect.isVisible({timeout: 2000}).catch(() => false)) {
-                            await indicatorSelect.click();
-                            await page.waitForTimeout(300);
-                            const macdOption = page.locator('[role="option"]').filter({hasText: /MACD/i}).first();
-                            if (await macdOption.isVisible({timeout: 1000}).catch(() => false)) {
-                                await macdOption.click();
-                                await page.waitForTimeout(1500);
-                                // Scroll the chart into center of viewport
-                                await page.getByTestId('asset-detail-chart').evaluate((el) => el.scrollIntoView({block: 'center'}));
-                                await page.waitForTimeout(300);
-                                await freezeAnimations(page);
-                                await screenshot(page, viewport, lang, theme, 'assets', 'detail-signals-macd');
-                            }
-                        }
-                    }
+                    await selectIndicatorFromTree(page, 'momentum', 'macd');
+                    await waitForSignalCardsSettled(page);
+                    await page.waitForTimeout(500);
+                    // Scroll the chart into center of viewport
+                    await page.getByTestId('asset-detail-chart').evaluate((el) => el.scrollIntoView({block: 'center'}));
+                    await page.waitForTimeout(300);
+                    await freezeAnimations(page);
+                    await screenshot(page, viewport, lang, theme, 'assets', 'detail-signals-macd');
                 }
             }
         });
@@ -2686,6 +3175,7 @@ test.describe('Gallery Screenshots', () => {
 
             for (const lang of SUPPORTED_LANGUAGES) {
                 for (const theme of THEMES) {
+                    await resetChartSettings(page); // each combo starts with no signals configured
                     await goToAssetsPage(page);
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
@@ -2698,28 +3188,196 @@ test.describe('Gallery Screenshots', () => {
                     await page.waitForTimeout(1000);
 
                     const signalsToggle = page.getByTestId('asset-detail-signals-toggle');
-                    if (await signalsToggle.isVisible({timeout: 2000}).catch(() => false)) {
-                        await signalsToggle.click();
-                        await page.waitForTimeout(500);
+                    await expect(signalsToggle).toBeVisible({timeout: 5_000});
+                    await signalsToggle.click();
+                    await page.waitForTimeout(500);
 
-                        const indicatorSelect = page.getByTestId('signals-indicator-select-button');
-                        if (await indicatorSelect.isVisible({timeout: 2000}).catch(() => false)) {
-                            await indicatorSelect.click();
-                            await page.waitForTimeout(300);
-                            const bollingerOption = page
-                                .locator('[role="option"]')
-                                .filter({hasText: /Bollinger/i})
-                                .first();
-                            if (await bollingerOption.isVisible({timeout: 1000}).catch(() => false)) {
-                                await bollingerOption.click();
-                                await page.waitForTimeout(1500);
-                                await page.getByTestId('asset-detail-chart').evaluate((el) => el.scrollIntoView({block: 'center'}));
-                                await page.waitForTimeout(300);
-                                await freezeAnimations(page);
-                                await screenshot(page, viewport, lang, theme, 'assets', 'detail-signals-bollinger');
-                            }
+                    await selectIndicatorFromTree(page, 'volatility', 'bollinger');
+                    await waitForSignalCardsSettled(page);
+                    await page.waitForTimeout(500);
+                    await page.getByTestId('asset-detail-chart').evaluate((el) => el.scrollIntoView({block: 'center'}));
+                    await page.waitForTimeout(300);
+                    await freezeAnimations(page);
+                    await screenshot(page, viewport, lang, theme, 'assets', 'detail-signals-bollinger');
+                }
+            }
+        });
+
+        test('Asset detail signals tree select open - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await resetChartSettings(page); // each combo starts with no signals configured
+                    await goToAssetsPage(page);
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+
+                    await navigateToAssetByName(page, GALLERY_ASSET);
+                    await selectOneYearDateRange(page);
+                    await page.waitForLoadState('networkidle', {timeout: 10_000}).catch(() => {});
+
+                    const signalsToggle = page.getByTestId('asset-detail-signals-toggle');
+                    await expect(signalsToggle).toBeVisible({timeout: 5_000});
+                    await signalsToggle.click();
+                    await page.waitForTimeout(500);
+
+                    // Open the grouped indicator dropdown: family groups with count badges +
+                    // search box. The first family (trend) opens expanded on open — the shot
+                    // shows both an expanded family with options and the collapsed others.
+                    const selectButton = page.getByTestId('signals-indicator-select-button');
+                    await expect(selectButton).toBeVisible({timeout: 15_000});
+                    await selectButton.scrollIntoViewIfNeeded();
+                    await selectButton.click();
+                    const trendGroup = page.getByTestId('signal-tree-group-trend');
+                    await expect(trendGroup).toBeVisible({timeout: 3_000});
+                    await expect(trendGroup).toHaveAttribute('aria-expanded', 'true', {timeout: 3_000});
+                    await expect(page.getByTestId('signal-tree-option-sma')).toBeVisible({timeout: 3_000});
+                    await freezeAnimations(page);
+                    await page.waitForTimeout(200);
+                    await screenshot(page, viewport, lang, theme, 'assets', 'detail-signals-tree');
+                    // Close the dropdown without selecting
+                    await page.keyboard.press('Escape');
+                    await page.waitForTimeout(200);
+                }
+            }
+        });
+
+        test('Asset detail signals drawdown - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await resetChartSettings(page); // each combo starts with no signals configured
+                    await goToAssetsPage(page);
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+
+                    await navigateToAssetByName(page, GALLERY_ASSET);
+                    await selectOneYearDateRange(page);
+                    await page.waitForLoadState('networkidle', {timeout: 10_000}).catch(() => {});
+
+                    const signalsToggle = page.getByTestId('asset-detail-signals-toggle');
+                    await expect(signalsToggle).toBeVisible({timeout: 5_000});
+                    await signalsToggle.click();
+                    await page.waitForTimeout(500);
+
+                    // Underwater Drawdown card with its Full history toggle (risk family)
+                    await selectIndicatorFromTree(page, 'risk', 'risk-drawdown');
+                    await waitForSignalCardsSettled(page, 45_000); // full-history load is heavier
+                    const fullHistoryParam = page.getByTestId('signal-param-full_history');
+                    await expect(fullHistoryParam).toBeVisible({timeout: 5_000});
+                    await fullHistoryParam.scrollIntoViewIfNeeded();
+                    await page.waitForTimeout(300);
+                    await freezeAnimations(page);
+                    await screenshot(page, viewport, lang, theme, 'assets', 'detail-signals-drawdown');
+                }
+            }
+        });
+
+        test('Asset chart settings modal - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await goToAssetsPage(page);
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+                    await page.waitForTimeout(1000);
+
+                    // Global-scope chart settings from the Assets list toolbar (live preview)
+                    const settingsBtn = page.getByTestId('assets-chart-settings-button');
+                    await settingsBtn.scrollIntoViewIfNeeded();
+                    await expect(settingsBtn).toBeVisible({timeout: 3_000});
+                    await settingsBtn.click();
+                    const settingsModal = page.getByTestId('chart-settings-modal');
+                    await expect(settingsModal).toBeVisible({timeout: 5_000});
+                    // Wait for the live preview chart to paint
+                    await settingsModal
+                        .locator('canvas')
+                        .first()
+                        .waitFor({state: 'visible', timeout: 8_000})
+                        .catch(() => {});
+                    await page.waitForTimeout(500);
+                    await freezeAnimations(page);
+                    await screenshot(page, viewport, lang, theme, 'assets', 'chart-settings');
+                    await page.keyboard.press('Escape');
+                    await page.waitForTimeout(200);
+                }
+            }
+        });
+
+        test('Asset detail event popover - all languages and themes', async ({page}, testInfo) => {
+            // Mocked chart + bounded hover sweep × 8 combos — above the default budget under load.
+            test.setTimeout(360_000); // 6 minutes
+            const viewport = getViewport(testInfo);
+
+            // The chart canvas gives markers no DOM handle, so make the geometry known:
+            // mock the bulk price query with a gentle linear ramp and a single DIVIDEND at
+            // the exact mid date → the marker sits at the grid's centre, and a small hover
+            // sweep around the canvas centre hits it deterministically.
+            const today = new Date();
+            const dayMs = 24 * 60 * 60 * 1000;
+            const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            const days = 240; // ~8 months of daily points — comfortably "daily" resolution
+            const dates: string[] = [];
+            for (let i = days - 1; i >= 0; i--) dates.push(fmt(new Date(today.getTime() - i * dayMs)));
+            const midDate = dates[Math.floor(dates.length / 2)];
+            await page.route('**/api/v1/assets/prices/query', async (route) => {
+                // The assets LIST also bulk-queries prices (per-card sparklines) before we
+                // reach the detail page — answer every requested item, not just Apple's.
+                const postData = route.request().postDataJSON?.() as Array<{asset_id?: number; target_currency?: string; include_events?: boolean}> | undefined;
+                const items = (postData ?? []).map((item) => {
+                    const currency = item?.target_currency ?? 'USD';
+                    return {
+                        asset_id: item?.asset_id ?? 0,
+                        prices: dates.map((d, i) => ({date: d, close: (100 + i * 0.2).toFixed(4), currency})),
+                        events: item?.include_events ? [{date: midDate, type: 'DIVIDEND', value: {code: currency, amount: '2.5000'}, notes: 'Gallery demo dividend', id: 1, is_auto: false}] : [],
+                        errors: [],
+                        signals: [],
+                    };
+                });
+                await route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify({items})});
+            });
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await goToAssetsPage(page);
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+
+                    await navigateToAssetByName(page, GALLERY_ASSET);
+                    await selectMaxDateRange(page);
+                    await page.waitForLoadState('networkidle', {timeout: 10_000}).catch(() => {});
+                    await page.waitForSelector('canvas', {timeout: 8_000});
+
+                    const chartCard = page.getByTestId('asset-detail-chart');
+                    await chartCard.evaluate((el) => el.scrollIntoView({block: 'center'}));
+                    await page.waitForTimeout(500);
+                    const canvas = chartCard.locator('canvas').first();
+                    const box = await canvas.boundingBox();
+                    if (!box) throw new Error('detail-events: chart canvas has no bounding box');
+
+                    // Sweep a small spiral around the canvas centre until the event tooltip
+                    // (item trigger on the scatter marker) appears.
+                    const tooltip = chartCard.getByText('💰');
+                    for (const dy of [0, -20, 20, -40, 40]) {
+                        for (let dx = -80; dx <= 80; dx += 10) {
+                            await page.mouse.move(box.x + box.width / 2 + dx, box.y + box.height / 2 + dy);
+                            await page.waitForTimeout(80);
+                            if (await tooltip.isVisible().catch(() => false)) break;
                         }
+                        if (await tooltip.isVisible().catch(() => false)) break;
                     }
+                    await expect(tooltip).toBeVisible({timeout: 2_000});
+                    await freezeAnimations(page);
+                    await screenshot(page, viewport, lang, theme, 'assets', 'detail-events');
+                    // Move away to dismiss the tooltip for the next iteration
+                    await page.mouse.move(box.x + 5, box.y + box.height - 5);
+                    await page.waitForTimeout(150);
                 }
             }
         });

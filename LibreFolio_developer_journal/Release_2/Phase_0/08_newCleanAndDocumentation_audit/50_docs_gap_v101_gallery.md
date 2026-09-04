@@ -443,3 +443,12 @@ of an `<img>` tag.
 Regeneration of existing shots needed by these pages (already stale per Part A):
 `settings/global-settings` (cache panel + email-verification "coming soon" badge now
 visible), `settings/about` (plugin-diagnostics collapsible now present).
+
+---
+
+## Aggiunte emerse durante la stesura (04/09)
+
+| Shot proposto | Cosa mostra | Dove va | Nota |
+|---|---|---|---|
+| `assets/distribution-editor-sector` | Editor distribuzione settoriale aperto nel modal asset (righe peso %, totale verde a 100%) | `user/assets/create-edit.md` §Manual Geographic & Sector Distributions | Lane gallery: dopo il task corrente, task singolo |
+| `assets/distribution-editor-geographic` | Idem per la distribuzione geografica | stessa sezione | idem |

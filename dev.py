@@ -805,6 +805,12 @@ def cmd_mkdocs_deploy(args):
     return run_pipenv(["mkdocs", "gh-deploy", "--force", "-f", "mkdocs_src/mkdocs.yml"])
 
 
+def cmd_mkdocs_normalize_dashboard_fixture(args):
+    """Rescale the gallery dashboard fixture to a 50K net worth (privacy normalization)."""
+    from scripts.normalize_dashboard_fixture import normalize_file  # noqa: PLC0415 — CLI-only import
+
+    return normalize_file(Path(args.path), getattr(args, "dry_run", False))
+
 
 def cmd_mkdocs_gallery(args):
     """Generate gallery screenshots for documentation using Playwright."""
@@ -2295,6 +2301,13 @@ Examples:
     mk_p.add_argument("--force", action="store_true",
                       help="Kill zombie processes blocking the test port instead of failing")
     mk_p.set_defaults(func=cmd_mkdocs_gallery)
+
+    mk_p = mk_sub.add_parser("normalize-dashboard-fixture", help="Rescale the gallery dashboard snapshot to a 50K net worth (anonymization)")
+    mk_p.add_argument("path", nargs="?", default="frontend/e2e/dashboard-report.json",
+                      help="Fixture path (default: the gallery dashboard snapshot)")
+    mk_p.add_argument("--dry-run", action="store_true",
+                      help="Report what would change without writing")
+    mk_p.set_defaults(func=cmd_mkdocs_normalize_dashboard_fixture)
 
     mk_p = mk_sub.add_parser("video", help="Manage promotional video assets (sync, start, build, review)")
     mk_p.add_argument("action", choices=["sync", "start", "build", "review"], help="Action to perform")

@@ -1,5 +1,13 @@
 # 🧙 How to Import Transactions
 
+<style>
+/* Corrections plugin table: plugin column keeps icon+name on one line */
+.md-typeset details.warning table th:first-child,
+.md-typeset details.warning table td:first-child { min-width: 9rem; white-space: nowrap; }
+.md-typeset details.warning .md-typeset__table table td { vertical-align: middle; }
+</style>
+
+
 Learn how to use the Broker Report Import Module (BRIM) to import your transactions step-by-step.
 
 ---
@@ -140,6 +148,16 @@ At the end of parsing, the table displays a summary of the processing for each f
     **When you will see it.** When your report contains lines the plugin recorded but could not
     read completely: a trade whose instrument or quantity the file simply does not carry, or a
     fee or tax it could not attach to any security. Reports that parse cleanly skip this step.
+
+    This step exists only if the broker's plugin **flags rows for review** — a plugin that
+    never emits these flags will never open it. The plugins that currently do:
+
+    | Plugin | Flags it can raise |
+    |--------|--------------------|
+    | <img src="https://www.credit-agricole.it/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> [Crédit Agricole](credit_agricole.md) | Bundled trade+fees lines (offered for **splitting**), cash rows that could not be linked to an instrument, duplicate-relevant blockers |
+
+
+    As more plugins learn to flag rows, they will be listed here.
 
     **Why it exists.** A purchase the plugin could only record as a cash withdrawal — because the
     file gave it neither a quantity nor an instrument — would be compared against cash

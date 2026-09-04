@@ -44,6 +44,21 @@ Generate automatic screenshots for documentation (light/dark × desktop/mobile �
 ./dev.py mkdocs gallery --test-port 8099         # Custom port
 ```
 
+### Dashboard fixture (privacy normalization)
+
+The gallery's dashboard shots replay `frontend/e2e/dashboard-report.json` — a REAL user
+capture. When a fresh capture lands (or before committing a new one), renormalize it:
+
+```bash
+./dev.py mkdocs normalize-dashboard-fixture            # rescale to 50K net worth
+./dev.py mkdocs normalize-dashboard-fixture --dry-run  # preview, no write
+```
+
+The script (`scripts/normalize_dashboard_fixture.py`) scales every monetary figure by
+the ratio to 50,000 (currency objects and money-named plain numbers), leaves percents /
+quantities / ids / dates untouched, and **fails loudly** if its invariant checks break
+(schema drift) — then update the script, same logic, until it passes.
+
 ### Gallery Pipeline
 1. Populates test DB with deterministic data (`--with-static --with-reports`)
 2. Ensures E2E test users exist

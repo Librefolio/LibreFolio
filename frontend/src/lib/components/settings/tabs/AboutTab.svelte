@@ -84,6 +84,17 @@
         failedIconUrls = new Set(failedIconUrls).add(url);
     }
 
+    /** Letter-tile fallback: skip the `broker_`/`broker-` prefix and take the
+     *  initials of the remaining words (broker_credit_agricole → "CA"). */
+    function codeInitials(code: string): string {
+        const words = code
+            .replace(/^broker[_-]/, '')
+            .split(/[_-]+/)
+            .filter(Boolean);
+        const letters = (words.length > 1 ? words.map((w) => w[0]) : [code.slice(0, 1), code.slice(1, 2)]).join('');
+        return letters.toUpperCase();
+    }
+
     // Client-side diagnostic fields (no backend round-trip needed) — useful for UI bug reports.
     let viewportWidth = 0;
     let viewportHeight = 0;
@@ -410,7 +421,7 @@ Generated: ${new Date().toISOString()}
                                     <img src={p.icon_url} alt={p.name} class="w-8 h-8 rounded object-contain shrink-0 bg-gray-50 p-0.5" onerror={() => p.icon_url && markIconFailed(p.icon_url)} />
                                 {:else}
                                     <div class="w-8 h-8 rounded bg-libre-green/10 text-libre-green flex items-center justify-center text-xs font-bold shrink-0">
-                                        {p.code.slice(0, 2).toUpperCase()}
+                                        {codeInitials(p.code)}
                                     </div>
                                 {/if}
                                 <div class="min-w-0">
@@ -476,7 +487,7 @@ Generated: ${new Date().toISOString()}
                                     <img src={p.icon_url} alt={p.name} class="w-8 h-8 rounded object-contain shrink-0 bg-gray-50 p-0.5" onerror={() => p.icon_url && markIconFailed(p.icon_url)} />
                                 {:else}
                                     <div class="w-8 h-8 rounded bg-amber-500/10 text-amber-600 flex items-center justify-center text-xs font-bold shrink-0">
-                                        {p.code.slice(0, 2).toUpperCase()}
+                                        {codeInitials(p.code)}
                                     </div>
                                 {/if}
                                 <div class="min-w-0">

@@ -1209,6 +1209,15 @@ async def sync_pairs_bulk(  # noqa: C901 — TODO(P2-refactor): 3-phase concurre
     success_count = sum(1 for r in result_list if r.status in (SyncStatus.OK, SyncStatus.PARTIAL, SyncStatus.SKIPPED))
     total_changed = sum(r.points_changed for r in result_list)
 
+    if total_changed > 0:
+        # Fresh FX rates change every converted valuation: portfolio reports and engine
+        # blobs cached before this sync would keep showing the old data-quality banner
+        # (and stale totals) for their whole TTL (30 min / 24 h).
+        from backend.app.utils.cache_utils import clear_cache  # noqa: PLC0415 — avoids a utils→services import cycle at module load
+
+        clear_cache("portfolio_layer2")
+        clear_cache("portfolio_blob")
+
     return FXSyncBulkResponse(
         results=result_list,
         success_count=success_count,
@@ -1504,6 +1513,13 @@ async def upsert_rates_bulk(
 
     # Single commit for all upserts
     await session.commit()
+
+    # Manual rates change valuations exactly like a provider sync — drop the cached
+    # portfolio layers so the next report recomputes (same invalidation as sync_pairs_bulk).
+    from backend.app.utils.cache_utils import clear_cache  # noqa: PLC0415 — avoids a utils→services import cycle at module load
+
+    clear_cache("portfolio_layer2")
+    clear_cache("portfolio_blob")
     return results
 
 

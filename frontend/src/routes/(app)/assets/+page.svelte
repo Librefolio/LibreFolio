@@ -1409,6 +1409,7 @@
             <button
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                 onclick={handleGlobalSettings}
+                data-testid="assets-chart-settings-button"
             >
                 <Settings size={14} />
                 {#if showActionLabels}<span>{$t('sharedResource.settings')}</span>{/if}

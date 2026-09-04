@@ -235,7 +235,31 @@ test.describe.configure({mode: 'serial'});
 "It's easier" is not a reason. `exclusive_because` **is** the declaration, not a comment
 beside a flag.
 
-### 12. A unique name must actually be unique
+### 12. A captured fixture that fails the schema is a STOP, not an edit
+
+Some fixtures are **real snapshots captured by a human from a real system** (e.g.
+`frontend/e2e/dashboard-report.json` — a user's actual dashboard report). When such a
+fixture stops validating against the current schema (zodios rejects it, the page renders
+zeroed data):
+
+- **Never** patch, trim or "sanitize" the snapshot to make it pass. Deleting the
+  offending blocks fabricates a system state that never occurred, and the screenshots/
+  assertions built on it become fiction — while staying green.
+- **Stop and ask the user** for a fresh capture (or ask whether the schema changed on
+  purpose and the fixture owner should re-record it). If the snapshot can be
+  regenerated deterministically from the populated test backend, regenerate it — same
+  shape, fresh data — otherwise it is the user's call.
+- When a fresh capture of `dashboard-report.json` lands (it's a REAL user snapshot):
+  **renormalize it before commit** with `./dev.py mkdocs normalize-dashboard-fixture`
+  (scales every monetary figure so net worth = 50 000, keeping quantities, percents and
+  ids invariant; verify with `--dry-run` first). If the report schema changed and the
+  script fails its invariant checks, update the script — same logic — until it passes.
+- Until the fresh capture lands, prefer the test **failing loudly** over passing on
+  fabricated input.
+- Synthetic mocks you author yourself (in-spec objects) are exempt — they are yours to
+  change. The rule covers captured real-world snapshots.
+
+### 13. A unique name must actually be unique
 
 ```ts
 const suffix = Date.now().toString().slice(-6);   // ✘ four workers, one millisecond
@@ -247,7 +271,7 @@ Workers start in bursts. This is not theory: it produced
 read as a product bug for an afternoon. A suffix must mix time **with worker identity and
 randomness**, never time alone.
 
-### 13. On a toggle, assert the end state — never click blind
+### 14. On a toggle, assert the end state — never click blind
 
 ```ts
 // ✘ closes the section for every asset that opens it by itself
@@ -262,14 +286,14 @@ await expect(panel).toBeVisible();
 opens itself when the asset has identifiers. A helper that clicks unconditionally works
 on the fixtures it was written against and inverts everywhere else.
 
-### 14. `waitForSettled` needs the container to publish `data-busy`
+### 15. `waitForSettled` needs the container to publish `data-busy`
 
 It waits for a `[data-busy]` **descendant** to attach. Point it at a container that never
 publishes the flag and it burns the whole timeout, then fails — 11 tests died at ~23s
 each this way. Check the component first; if the flag is missing, **adding it is the fix**
 (see rule 4), not switching to a different wait.
 
-### 15. A counter barrier samples before the action
+### 16. A counter barrier samples before the action
 
 ```ts
 // ✘ proves *a* run happened, not that it covered your change
@@ -284,7 +308,7 @@ await expect.poll(() => validateRuns(page)).toBeGreaterThan(before);
 A monotonic counter is strictly better than a boolean flag, but only if read as a
 **delta**. `!= '0'` is the same bet as a sleep, wearing a counter's clothes.
 
-### 16. An absence assertion needs a presence barrier — and often the wrong matcher
+### 17. An absence assertion needs a presence barrier — and often the wrong matcher
 
 ```ts
 // ✘ also passes when the PDF viewer has not mounted yet, *and* counts hidden nodes
@@ -314,7 +338,7 @@ is not visible" also becomes true the day the whole toolbar disappears.
 Before writing a negative assertion, ask what makes the *positive* observable, assert
 that first, and check whether you are asking about existence or about visibility.
 
-### 17. A cached call is not an observable event
+### 18. A cached call is not an observable event
 
 ```ts
 // ✘ the request only happens on a cache miss; on a hit this waits forever
@@ -334,7 +358,7 @@ on what the page already fetched, and under load the ordering changes. Waiting o
 network is right only when the request **is** the subject (proving a refresh really reaches
 the server); when it is scaffolding, wait for the state.
 
-### 18. A helper ends on the post-condition it promises
+### 19. A helper ends on the post-condition it promises
 
 The commonest sleep in this suite was the last line of a helper: `await cancel.click();
 await page.waitForTimeout(300);`. That sleep is the helper hedging on behalf of a caller
@@ -353,7 +377,7 @@ faster, and it fails at the helper instead of three assertions later:
 Reaching a container is not the same as the container being usable: `import-wizard-step2`
 is visible before its broker files have loaded, which is why it publishes `data-busy`.
 
-### 19. Shared testid prefixes need a closing barrier
+### 20. Shared testid prefixes need a closing barrier
 
 Every `SearchSelect` in the app renders its options as `search-select-option-*`. Two
 selects filled back-to-back therefore have overlapping option sets in the DOM for as long
