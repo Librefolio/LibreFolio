@@ -120,7 +120,11 @@ counts alone: classify from the actual git diff of the EN page.
   leave for the pipeline.
 
 Split report goes to the user before the pipeline run; after it, re-run the two
-commands and fix residual discrepancies, stamping what's clean.
+commands and fix residual discrepancies, stamping what's clean. **Then build and read
+the log** (`./dev.py mkdocs build`): strict mode surfaces broken in-page anchors and
+links the validators miss — zero new WARNING/ERROR lines is the bar before the round
+is done. When a page is linked cross-language, prefer shared explicit anchors
+(`{: #name }` on the heading in all four languages) over localized slugs.
 
 ### Manual Edits → Stamp (avoid re-translation)
 

@@ -165,7 +165,7 @@ Tuttavia, per la massima semplicità e sicurezza senza dover aprire porte sul tu
 
 ---
 
-## 🏷️ Varianti dell'Immagine: Full e Light
+## 🏷️ Varianti dell'Immagine: Full e Light {: #image-variants-full-and-light }
 
 L'immagine ufficiale è pubblicata in due varianti:
 

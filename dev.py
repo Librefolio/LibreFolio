@@ -957,6 +957,15 @@ def cmd_mkdocs_gallery(args):
     # Always disable the scheduler during gallery runs — prevents live data updates
     # from changing charts/numbers between screenshots.
     gallery_env["LIBREFOLIO_NO_SCHEDULER"] = "1"
+    if not no_populate:
+        # We already populated (and created users) above — tell Playwright's
+        # global-setup to stand down. Without this flag it re-runs
+        # `populate --force` under the freshly started backend, wiping and
+        # rewriting the DB while the first browser workers are already logging
+        # in (the first ~17 tests raced exactly that on 04/09).
+        # Note: global-setup step 3 (initGlobalSettings via API) still runs —
+        # the flag only stands down the DB populate + user creation.
+        gallery_env["LF_SETUP_DONE"] = "1"
     if test_port:
         gallery_env["TEST_PORT"] = str(test_port)
 

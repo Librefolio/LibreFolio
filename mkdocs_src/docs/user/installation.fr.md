@@ -165,7 +165,7 @@ Cependant, pour une simplicité et une sécurité maximales sans ouvrir de ports
 
 ---
 
-## 🏷️ Variantes de l'Image : Full et Light
+## 🏷️ Variantes de l'Image : Full et Light {: #image-variants-full-and-light }
 
 L'image officielle est publiée en deux variantes :
 

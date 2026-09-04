@@ -82,6 +82,16 @@ Only after this triage does the user launch `./dev.py mkdocs translate …`, and
 afterwards you run `translate-validate` + `translate-diff --issues-only` again to fix
 residual structural discrepancies and stamp what's clean.
 
+**Then always run the build and READ THE LOG**: `./dev.py mkdocs build` (strict) catches
+things the validators structurally miss — broken in-page anchors (e.g. a link to
+`#image-variants-…` whose heading was reworded in one language), unresolvable links,
+admonition body issues. Zero new WARNING/ERROR lines is the bar (an upstream
+Material-for-MkDocs announcement banner is not ours). Fix what it flags before
+declaring the round done. Prefer **shared explicit anchors** (`{: #anchor-name }` on the
+heading in every language, same convention as `{#updating}`) over translated slugs when
+a page is linked cross-language — localized slugs are the recurring false-positive and
+breakage source.
+
 ## Translation-stamp rule (punctual changes)
 
 When you make a small, targeted fix to a page that **has translations** (a command

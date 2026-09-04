@@ -319,7 +319,7 @@ and a shared `htmlcov-backend/` would be written by every worker at once.
 - `--workers auto` resolves to half the cores, because a development machine is not dedicated to tests
   and timing-sensitive tests degrade under load.
 - On a **frontend** category the same flag sets Playwright's browser workers and, derived from it,
-  the number of uvicorn processes behind them (see *[`--workers` reaches Playwright too](#--workers-reaches-playwright-too)*).
+  the number of uvicorn processes behind them (see *[`--workers` reaches Playwright too](#-workers-reaches-playwright-too)*).
 
 The flag belongs to `./dev.py test`, so it goes **before** the category:
 
