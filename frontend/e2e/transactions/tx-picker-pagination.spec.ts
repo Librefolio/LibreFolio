@@ -10,9 +10,12 @@
  * Prerequisites: backend test mode (port 6041), mock data populated.
  * At least 20+ transactions in the DB for pagination to trigger.
  */
-import {expect, test, type Page} from '@playwright/test';
+import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
+import {waitForSettled} from '../fixtures/app-events';
+import {appears} from '../fixtures/probe';
+import {maximisePageSize} from '../fixtures/paging';
 
 test.setTimeout(25_000);
 
@@ -23,7 +26,9 @@ test.setTimeout(25_000);
 async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions?page_size=200');
     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 8_000});
-    await page.waitForTimeout(500);
+    // The table being VISIBLE is not the table being LOADED: it renders empty
+    // and fills in. The page publishes data-busy, so wait on that instead.
+    await waitForSettled(page.getByTestId('transactions-page'));
 }
 
 /** Select 2 editable rows and open the BulkModal via edit toolbar. Throws if fails. */
@@ -59,7 +64,8 @@ async function openPicker(page: Page): Promise<void> {
 
     const picker = page.getByTestId('tx-picker-modal');
     await expect(picker).toBeVisible({timeout: 5_000});
-    await page.waitForTimeout(500);
+    // The modal frame appears before its rows do, and every caller here works on rows.
+    await expect(picker.locator('tbody tr[data-row-id]').first()).toBeVisible({timeout: 10_000});
 }
 
 // ---------------------------------------------------------------------------
@@ -91,10 +97,13 @@ test.describe('PickerModal Pagination', () => {
         await expect(nextBtn).toBeVisible({timeout: 2_000});
         await expect(nextBtn).toBeEnabled();
         await nextBtn.click();
-        await page.waitForTimeout(400);
 
-        // First row on page 2 should be different
-        const firstRowPage2 = await picker.locator('tbody tr[data-row-id]').first().getAttribute('data-row-id');
+        // "The first row changed" IS the claim of this test, so it is also the only
+        // honest barrier for it. Reading the attribute after a fixed sleep both
+        // raced the re-render and asserted something weaker (merely truthy).
+        const firstRow = picker.locator('tbody tr[data-row-id]').first();
+        await expect.poll(() => firstRow.getAttribute('data-row-id'), {timeout: 5_000}).not.toBe(firstRowPage1);
+        const firstRowPage2 = await firstRow.getAttribute('data-row-id');
         expect(firstRowPage2).toBeTruthy();
         expect(firstRowPage2).not.toEqual(firstRowPage1);
     });
@@ -118,17 +127,14 @@ test.describe('PickerModal Pagination', () => {
         await expect(pageSizeBtn).toBeVisible({timeout: 2_000});
 
         await pageSizeBtn.click();
-        await page.waitForTimeout(300);
 
         // Select option "50" from the dropdown
         const option50 = paginationContainer.locator('.dropdown-option').filter({hasText: '50'}).first();
         await expect(option50).toBeVisible({timeout: 2_000});
         await option50.click();
-        await page.waitForTimeout(400);
 
         // Should now have more rows visible (or same if total < 50)
-        const rowsAfter = await picker.locator('tbody tr[data-row-id]').count();
-        expect(rowsAfter).toBeGreaterThanOrEqual(rowsPage1);
+        await expect.poll(() => picker.locator('tbody tr[data-row-id]').count(), {timeout: 5_000}).toBeGreaterThanOrEqual(rowsPage1);
     });
 
     test('P2-reopen: PickerModal resets selection on reopen', async ({page}) => {
@@ -142,7 +148,6 @@ test.describe('PickerModal Pagination', () => {
         await expect(firstCheckbox).toBeVisible({timeout: 2_000});
 
         await firstCheckbox.click();
-        await page.waitForTimeout(200);
 
         // Verify Add button is enabled (something selected)
         const addBtn = picker.getByTestId('tx-picker-add');
@@ -155,7 +160,7 @@ test.describe('PickerModal Pagination', () => {
             const nextBtn = paginationContainer.getByTestId('pagination-next');
             if (await nextBtn.isEnabled({timeout: 1_000}).catch(() => false)) {
                 await nextBtn.click();
-                await page.waitForTimeout(400);
+                await expect(picker.locator('tbody tr[data-row-id]').first()).toBeVisible({timeout: 5_000});
             }
         }
 
@@ -168,7 +173,13 @@ test.describe('PickerModal Pagination', () => {
         const searchAddBtn = bulkModal.getByTestId('tx-bulk-picker');
         await searchAddBtn.click();
         await expect(picker).toBeVisible({timeout: 5_000});
-        await page.waitForTimeout(500);
+
+        // `toBeDisabled` on its own is satisfied the instant the button exists, so it
+        // would have passed before the picker finished re-rendering — the 500ms sleep
+        // was the only thing making the check mean anything. Waiting for a row to be
+        // there first turns it into a real check: the list is up, and *then* nothing
+        // is selected.
+        await expect(picker.locator('tbody tr[data-row-id] .checkbox-btn').first()).toBeVisible({timeout: 5_000});
 
         // Selection should be reset (Add button disabled)
         await expect(picker.getByTestId('tx-picker-add')).toBeDisabled();
@@ -191,27 +202,32 @@ test.describe('PickerModal Tooltip', () => {
 
         const picker = page.getByTestId('tx-picker-modal');
 
-        // Find disabled row icons
+        // Find disabled row icons. The picker paginates at 20 over the whole
+        // dataset — asking page 1 is asking "did we get lucky?", not "do they
+        // exist?".
+        await maximisePageSize(page, picker);
         const disabledIcons = picker.locator('.disabled-select-icon');
-        const disabledCount = await disabledIcons.count();
-        expect(disabledCount, 'VIEWER broker rows must exist — check populate_mock_data.py').toBeGreaterThan(0);
+        await expect(disabledIcons.first(), 'VIEWER broker rows must exist — check populate_mock_data.py').toBeVisible({timeout: 5_000});
 
-        // Hover on the first disabled icon to trigger tooltip
+        // Dismiss any pinned tooltip before hovering. A click on a trigger pins
+        // its tooltip for PINNED_LEAVE_GRACE_MS = 30 s (Tooltip.svelte:72,119),
+        // so moving the pointer away is not enough — only a click outside is
+        // (handleClickOutside, :179). Tooltips are portaled to document.body,
+        // so they cannot be scoped to the modal either.
+        await page.evaluate(() => document.body.click());
+        await expect.poll(async () => page.getByTestId('tooltip-content').count(), {timeout: 5_000}).toBe(0);
         await disabledIcons.first().hover();
-        await page.waitForTimeout(500);
 
         // Tooltip content should contain HTML with icons
         const tooltipContent = page.getByTestId('tooltip-content');
-        const isTooltipVisible = await tooltipContent.isVisible({timeout: 2_000}).catch(() => false);
-        if (isTooltipVisible) {
-            const html = (await tooltipContent.innerHTML()) ?? '';
-            // Should contain <strong> (broker name rendered as HTML)
-            expect(html).toContain('<strong>');
-            // Should contain SVG role icons
-            expect(html).toContain('<svg');
-            // Should contain "required" or locale equivalent
-            expect(html.toLowerCase()).toMatch(/required|richiesto|requis|requerido/);
-        }
+        await expect(tooltipContent).toBeVisible({timeout: 5_000});
+        const html = (await tooltipContent.innerHTML()) ?? '';
+        // Should contain <strong> (broker name rendered as HTML)
+        expect(html).toContain('<strong>');
+        // Should contain SVG role icons
+        expect(html).toContain('<svg');
+        // Should contain "required" or locale equivalent
+        expect(html.toLowerCase()).toMatch(/required|richiesto|requis|requerido/);
     });
 });
 
@@ -225,7 +241,7 @@ test.describe('Delete Validation Banner', () => {
         await goToTransactions(page);
     });
 
-    test('P4-validate: DeleteModal shows validate button and responds to click', async ({page}) => {
+    test('P4-validate: delete workspace shows validate button and responds to click', async ({page}) => {
         // Find a standalone (non-paired) row with a delete action available (via kebab menu)
         const rows = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]');
         const count = await rows.count();
@@ -237,9 +253,8 @@ test.describe('Delete Validation Banner', () => {
             if (classes.includes('receiver') || classes.includes('ghost')) continue;
 
             await row.hover();
-            await page.waitForTimeout(200);
             const kebabBtn = row.getByTestId(/^row-actions-/);
-            if (!(await kebabBtn.isVisible({timeout: 800}).catch(() => false))) continue;
+            if (!(await appears(kebabBtn, 800))) continue;
             await kebabBtn.click();
             const hasDelete = await page
                 .getByTestId('context-menu-action-delete')
@@ -253,21 +268,24 @@ test.describe('Delete Validation Banner', () => {
         }
         expect(targetRow, 'Deletable TX must exist — check populate_mock_data.py').toBeTruthy();
 
-        // Open delete modal via kebab menu
+        // T4: the dedicated DeleteModal is gone — the row's delete action opens
+        // the bulk workspace with the row pre-staged as a delete.
         await targetRow!.hover();
         const kebabBtn = targetRow!.getByTestId(/^row-actions-/);
         await kebabBtn.click();
         await page.getByTestId('context-menu-action-delete').click();
 
-        const modal = page.getByTestId('tx-delete-modal');
+        const modal = page.getByTestId('tx-bulk-modal');
         await expect(modal).toBeVisible({timeout: 5_000});
 
-        // Validate button should exist for non-blocked layouts
-        const validateBtn = modal.getByTestId('tx-delete-validate-now');
-        const hasValidateBtn = await validateBtn.isVisible({timeout: 2_000}).catch(() => false);
-        expect(hasValidateBtn, 'Validate button must be visible — check populate_mock_data.py').toBeTruthy();
+        // Validate button exists in the workspace footer
+        const validateBtn = modal.getByTestId('tx-bulk-validate-now');
+        await expect(validateBtn, 'Validate button must be visible — check populate_mock_data.py').toBeVisible({timeout: 3_000});
 
-        // Intercept the validate API call to confirm button triggers it
+        // Intercept the validate API call to confirm the button triggers it.
+        // A delete-only workspace does not auto-validate (the scheduler's
+        // `enabled` predicate skips delete-marked rows), so the only POST
+        // /validate that can follow the click is the click's own. Arm first.
         const validatePromise = page.waitForRequest((req) => req.url().includes('/validate') && req.method() === 'POST', {timeout: 5_000}).catch(() => null);
 
         await validateBtn.click();

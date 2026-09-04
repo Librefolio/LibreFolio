@@ -10,7 +10,38 @@
 > A non-empty diff means the source has changed since it was ingested.
 > Significant changes → consider re-ingesting the source.
 >
+> **Two hash kinds.** A bare hash is a **commit** hash and the command above works
+> directly. A hash marked `(blob)` is a **content** hash of a file that is in the
+> working tree but not yet committed — drift is checked by recomputing it:
+> ```bash
+> git hash-object {source-path}     # differs from the recorded blob → the source changed
+> ```
+> Once those files are committed, the blob hashes can be replaced with the commit
+> hash and the `git diff` form applies again.
+>
 > For untracked files (external articles, PDFs in raw/): hash = `untracked`, no drift check possible.
+
+## 2026-09-01 — the 14 session-state sources were brought into the repository
+
+The 2026-08-31 consolidation ingest read 14 plan/history files that lived only in
+`~/.copilot/session-state/8e82a6ff-.../files/` — outside the repository, outside git,
+and inside a directory that is deleted when the session is. Nine `sources/` pages
+derive from them, and **drift detection was structurally impossible**: there was
+nothing to diff against, and the sources could vanish without the wiki noticing.
+
+They now live in
+[`LibreFolio_developer_journal/Release_2/Phase_0/07_coverageAndConsolidationCampaign/`](../../LibreFolio_developer_journal/Release_2/Phase_0/07_coverageAndConsolidationCampaign/),
+with an `INDEX.md` that carries the warning these sources need most: **a plan is not
+a chronicle.** Several of them describe an architecture in the future tense —
+proposed module names, a proposed `actions/` package — that was then read as a record
+of what shipped. That misreading is precisely what put three invented paths into the
+wiki (see the 2026-09-01 lint-repair entry in `log.md`). The `INDEX.md` states it at
+the top so the next reader meets it before the plans.
+
+A 15th file, `draft-runner-changes.md`, is present in that directory but **was never
+ingested** and has no registry row — it is background, not a source.
+
+Their rows below now carry repository paths and `(blob)` content hashes.
 
 | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/PlanD-D1D2/README.md` | `8f363d79` | 2026-06-30 | [[sources/phase07-pland-split-promote]] |
 | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/PlanD-D1D2/plan-PlanD1_BackendBatchSuggest.prompt.md` | `8f363d79` | 2026-06-30 | [[sources/phase07-pland-split-promote]], [[decisions/batch-only-split-promote]] |
@@ -178,3 +209,27 @@
 | `LibreFolio_developer_journal/RoadmapV4_UI/fifo-engine/v4-fee_tax_integration/{feasibility-analysis.md, feasibility-analysis-v2.md, feasibility-analysis-v3.md, feasibility-analysis-v4.md, feasibility-analysis-v4-review.md}` (superseded drafts) | `32c902e0` | 2026-07-21 | [[sources/fifo-v4-fee-tax-integration]] |
 | `LibreFolio_developer_journal/RoadmapV4_UI/fifo-engine/v4-fee_tax_integration/{high-level-analysis.md, high-level-analysis-v2.md, hig-level-analysis-v3.md}` (superseded drafts) | `32c902e0` | 2026-07-21 | [[sources/fifo-v4-fee-tax-integration]] |
 | `LibreFolio_developer_journal/RoadmapV4_UI/fifo-engine/{REPORT-fifo-lots-transfer-mismatch.md, fifo-engine-current-state.md, fifo-segment-model-analysis.md, portfolio-engine-cache-analysis.md}` (parent background, partly superseded — see source page) | `981a6a5b` | 2026-07-16 | [[sources/fifo-v4-fee-tax-integration]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/README.md` | `untracked` | 2026-07-27 | [[sources/phase00-ai-export-backend-snapshot]], [[decisions/ai-export-contextual-ui-memory]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/plan-phase00AiExportBackendSnapshotImplementation.prompt.md` | `untracked` | 2026-07-27 | [[sources/phase00-ai-export-backend-snapshot]], [[decisions/ai-export-versioned-snapshot-boundary]], [[decisions/ai-export-contextual-ui-memory]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/contract-phase00AiExportTaskProfiles.md` | `untracked` | 2026-07-26 | [[sources/phase00-ai-export-backend-snapshot]], [[decisions/ai-export-versioned-snapshot-boundary]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/report-phase00AiExportMigrationEquivalence.md` | `untracked` | 2026-07-26 | [[sources/phase00-ai-export-backend-snapshot]], [[decisions/ai-export-versioned-snapshot-boundary]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/07_coverageAndConsolidationCampaign/difetti-aperti-corsia-impostazioni.md` | `3db264af5fb0` (blob) | 2026-08-31 | [[sources/settings-lane-and-sixteen-defects]], [[decisions/settings-write-path-contract]], [[decisions/broker-last-owner-guard]], [[concepts/characterisation-test-latch]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/07_coverageAndConsolidationCampaign/plan-storico-corsia-impostazioni-COMPLETO.md` | `b471cf160c66` (blob) | 2026-08-31 | [[sources/settings-lane-and-sixteen-defects]], [[decisions/settings-write-path-contract]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/07_coverageAndConsolidationCampaign/plan-storico-undici-difetti-COMPLETO.md` | `8ed90ecabce3` (blob) | 2026-08-31 | [[sources/settings-lane-and-sixteen-defects]], [[concepts/characterisation-test-latch]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/07_coverageAndConsolidationCampaign/plan-storico-scheduler-e-fx-COMPLETO.md` | `fcfdd3fad935` (blob) | 2026-08-31 | [[sources/settings-lane-and-sixteen-defects]], [[decisions/scheduler-converts-at-decision]], [[concepts/absence-sentinel-vs-nullable-type]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/07_coverageAndConsolidationCampaign/plan-p8-runner-migration.md` | `526b70d13af8` (blob) | 2026-08-31 | [[sources/p8-runner-parallel-architecture]], [[concepts/test-isolation-classes]], [[concepts/derived-test-inventory]], [[concepts/run-cache-and-campaign-semantics]], [[problems/registered-but-unreachable-test-actions]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/07_coverageAndConsolidationCampaign/plan-p7-js-coverage.md` | `9404cdddee06` (blob) | 2026-08-31 | [[sources/p7-js-coverage-instrumentation]], [[problems/svelte-template-branches-not-instrumented]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/07_coverageAndConsolidationCampaign/plan-p9-test-semantics-COMPLETO.md` | `2d60850698a9` (blob) | 2026-08-31 | [[sources/p9-test-semantics]], [[problems/namedcache-clear-leaves-admission-filter]], [[concepts/load-only-red-is-a-product-defect]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/07_coverageAndConsolidationCampaign/plan-tappe-7-11-parallelismo-COMPLETO.md` | `5b2e4dfcc4cf` (blob) | 2026-08-31 | [[sources/frontend-parallelism-tappe-7-11]], [[concepts/playwright-run-consolidation]], [[concepts/transaction-hygiene-fixture]], [[problems/env-var-injection-point-duplicated]], [[problems/commit-reported-success-on-rolled-back-batch]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/07_coverageAndConsolidationCampaign/tappa9-desleep.md` | `3326f0f6b995` (blob) | 2026-08-31 | [[sources/frontend-parallelism-tappe-7-11]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/07_coverageAndConsolidationCampaign/plan-storico-coverage-campaign.md` | `ca787f450faa` (blob) | 2026-08-31 | [[sources/coverage-campaign-2026-08]], [[concepts/coverage-rate-vs-volume]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/07_coverageAndConsolidationCampaign/plan-storico-coverage-campaign-2.md` | `a0ac043ccd7a` (blob) | 2026-08-31 | [[sources/coverage-campaign-2026-08]], [[problems/coverage-percent-mixed-lines-and-branches]], [[problems/e2e-python-coverage-lost-above-two-workers]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/07_coverageAndConsolidationCampaign/plan-storico-fase012.md` | `dc981afd1248` (blob) | 2026-08-31 | [[sources/coverage-fase012-and-branch-lanes]], [[problems/utc-today-vs-user-calendar]], [[concepts/coverage-rate-vs-volume]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/07_coverageAndConsolidationCampaign/plan-storico-corsie-sync-e-logica.md` | `43391a417c8c` (blob) | 2026-08-31 | [[sources/coverage-fase012-and-branch-lanes]], [[problems/svelte-template-branches-not-instrumented]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/07_coverageAndConsolidationCampaign/coda-beta-parametrici-forkserver.md` | `1365b7df88ae` (blob) | 2026-08-31 | [[sources/coda-beta-parametric-forkserver]], [[concepts/discard-the-answer-not-the-question]], [[problems/conftest-autouse-write-breaks-pure-class]], [[problems/brim-file-store-rename-race]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/06_betaTestingReportAndFixing/00_20260805_betaTester_report.md` | `571bcde0` | 2026-08-31 | [[sources/beta-testing-2026-08-05]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/06_betaTestingReportAndFixing/01_tassonomia_findings.md` | `571bcde0` | 2026-08-31 | [[sources/beta-testing-2026-08-05]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/06_betaTestingReportAndFixing/02_riconciliazione_credit_agricole.md` | `571bcde0` | 2026-08-31 | [[sources/beta-testing-2026-08-05]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/06_betaTestingReportAndFixing/INDEX.md` | `6eac0225` | 2026-08-31 | [[sources/beta-testing-2026-08-05]] |
+| `.github/agents/test-author.agent.md` (§ "When a test fails", ~538-552) | `d1622ee5` | 2026-08-31 | [[concepts/load-only-red-is-a-product-defect]] |
+| `.github/skills/devpy-tools/testing-frontend/SKILL.md` (~313) | `d1622ee5` | 2026-08-31 | [[concepts/load-only-red-is-a-product-defect]] |

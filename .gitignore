@@ -38,6 +38,7 @@ backend/data/**
 # Testing
 .pytest_cache/
 scripts/test_runner/.run_cache.json
+scripts/test_runner/.campaign.json
 
 # OS
 .DS_Store
@@ -85,13 +86,14 @@ frontend/static/fonts/
 # Coverage reports
 htmlcov/
 htmlcov-backend/
-htmlcov-frontend/
+htmlcov-backend-e2e/
 .coverage
 .coverage.*
 coverage.xml
 *.cover
 .hypothesis/
 .coverage_data/
+frontend/coverage-js/
 
 # Development stuff
 _backup_docs/
@@ -107,3 +109,8 @@ LibreFolio_devWiki/corpus/.graphify_*
 
 # Stray debug artifacts (e.g. saved error pages from failed chart/screenshot runs)
 chart-error-page.html
+/LibreFolio_developer_journal/Release_2/**/02_aiExport/real_prompt_probe/
+/LibreFolio_developer_journal/Release_2/**/02_aiExport/targeted_partial_fx_probe/
+
+# Per-unit test logs (default --log-dir)
+.testLog/

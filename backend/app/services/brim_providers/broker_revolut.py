@@ -336,7 +336,7 @@ class RevolutBrokerProvider(BRIMProvider):
         except Exception as e:
             raise BRIMParseError(f"Error parsing file: {e}") from e
 
-    def _parse_invest(self, reader: csv.DictReader, broker_id: int) -> BRIMParseOutput:
+    def _parse_invest(self, reader: csv.DictReader, broker_id: int) -> BRIMParseOutput:  # noqa: C901 — flat row loop: validation guards and per-type field mapping, no nested logic
         """Parse Revolut Invest rows."""
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []
@@ -455,7 +455,7 @@ class RevolutBrokerProvider(BRIMProvider):
             extracted_assets=extracted_assets_typed,
         )
 
-    def _parse_crypto(self, reader: csv.DictReader, broker_id: int) -> BRIMParseOutput:
+    def _parse_crypto(self, reader: csv.DictReader, broker_id: int) -> BRIMParseOutput:  # noqa: C901 — flat row loop: validation guards and per-type sign rules, no nested logic
         """Parse Revolut Crypto rows."""
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []

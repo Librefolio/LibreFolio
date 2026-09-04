@@ -3,8 +3,189 @@
 import subprocess
 
 from . import _common
-from ._common import PROJECT_ROOT, Colors, _run_test_suite, print_error, print_section, print_success
-from ._frontend_common import _ensure_frontend_build, _ensure_test_users, _run_playwright
+from ._common import Colors, _get_category_tests_for_all, _run_test_suite, print_error, print_section, print_success
+from ._frontend_common import _ensure_frontend_build, _ensure_test_users, _run_playwright, reset_setup_scope
+
+
+def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run core store + shared input/select primitive unit tests (Vitest)."""
+    print(f"\n{Colors.BLUE}Running: Core store Vitest unit tests{Colors.NC}")
+    result = subprocess.run(
+        [
+            "npx",
+            "vitest",
+            "run",
+            "src/lib/stores/core/entityStore.test.ts",
+            "src/lib/components/ui/select/optionFilter.test.ts",
+            "src/lib/utils/__tests__/dateArrowStep.test.ts",
+            "src/lib/utils/__tests__/dateOnly.test.ts",
+            "src/lib/utils/__tests__/parseDecimalInput.test.ts",
+            "src/lib/utils/__tests__/parseTypedDate.test.ts",
+            "src/lib/utils/__tests__/requestConcurrency.test.ts",
+            "src/lib/utils/__tests__/urlFilters.test.ts",
+            "src/lib/utils/__tests__/trySave.test.ts",
+            "src/lib/charts/__tests__/loadComparisonData.test.ts",
+            "src/lib/utils/sync/__tests__/syncToastHelpers.test.ts",
+            "src/lib/utils/core/__tests__/formatDecimal.test.ts",
+            "src/lib/utils/core/__tests__/escapeHtml.test.ts",
+            "src/lib/utils/core/__tests__/translateOr.test.ts",
+            "src/lib/utils/core/__tests__/formatPercent.test.ts",
+            "src/lib/utils/core/__tests__/positionKey.test.ts",
+            "src/lib/utils/core/__tests__/finiteNumber.test.ts",
+            "src/lib/utils/core/__tests__/formatAxisDate.test.ts",
+            "src/lib/utils/core/__tests__/resizeWatcher.test.ts",
+            "src/lib/utils/core/__tests__/clickOutside.test.ts",
+            "src/lib/utils/core/__tests__/formatDateTime.test.ts",
+            "src/lib/utils/core/__tests__/clearTimer.test.ts",
+            "src/lib/utils/__tests__/text.test.ts",
+            "src/lib/types/__tests__/safeAccessors.test.ts",
+            "src/lib/utils/transactions/importDedup.test.ts",
+            "src/lib/utils/transactions/importMerge.test.ts",
+            "src/lib/utils/transactions/importCompare.test.ts",
+            "src/lib/utils/transactions/resolveValidationMessage.test.ts",
+            "src/lib/utils/transactions/resolveBrimNotice.test.ts",
+            "src/lib/utils/transactions/eventTypes.test.ts",
+            "src/lib/utils/transactions/signHintColor.test.ts",
+            "src/lib/utils/transactions/importResolutionHelpers.test.ts",
+            "src/lib/utils/transactions/importRowState.test.ts",
+            "src/lib/utils/transactions/importDuplicateResolver.test.ts",
+            "src/lib/utils/transactions/txFormFields.test.ts",
+            "src/lib/components/charts/echartsTooltipHelpers.test.ts",
+            "src/lib/components/charts/echartsAnimationConfig.test.ts",
+            "src/lib/components/charts/echartsZoomPan.test.ts",
+            "src/lib/components/charts/geographyMapHelpers.test.ts",
+            "src/lib/components/charts/priceChartHelpers.test.ts",
+            "src/lib/components/charts/candlestickChartHelpers.test.ts",
+            "src/lib/components/charts/chartSignalsHelpers.test.ts",
+            "src/lib/components/risk/riskAnalysisHelpers.test.ts",
+            "src/lib/components/assets/providerProbe.test.ts",
+            "src/lib/components/assets/resolveProviderError.test.ts",
+            "src/lib/components/assets/assetIdentifiers.test.ts",
+            "src/lib/components/assets/currencyBlocker.test.ts",
+            "src/lib/components/assets/assetPayload.test.ts",
+            "src/lib/components/assets/assetFormState.test.ts",
+            "src/lib/components/assets/scheduleSerialization.test.ts",
+            "src/lib/components/table/dataTableLogic.test.ts",
+            "src/lib/components/transactions/shared/resolveFormItems.test.ts",
+            "src/lib/utils/files/imageCrop.test.ts",
+            "src/lib/utils/currency/fxConversionHelper.test.ts",
+            "src/lib/components/brokers/lots/lotChartShared.test.ts",
+            "src/lib/components/brokers/lots/lotWacPriceChartHelpers.test.ts",
+            "src/lib/components/brokers/lots/lotComparisonChartHelpers.test.ts",
+            "src/lib/components/brokers/lots/lotGanttChartHelpers.test.ts",
+            "src/lib/components/brokers/lots/lotStateVisual.test.ts",
+            "src/lib/components/brokers/lots/unifiedLotsTableHelpers.test.ts",
+            "src/lib/components/brokers/lots/lotCustodyModalHelpers.test.ts",
+            "src/lib/components/brokers/lots/lotsAnalysisHelpers.test.ts",
+            "src/lib/components/brokers/lots/lotDataQualityHelpers.test.ts",
+            "src/lib/stores/chartSettingsStore.test.ts",
+            "src/lib/stores/chartSettingsStoreSsr.test.ts",
+            "src/lib/stores/reference/brokerStore.test.ts",
+            "src/lib/features/changelog/changelog.test.ts",
+            "src/lib/features/update-check/updateCheck.test.ts",
+            "src/lib/charts/signals/__tests__/registry.test.ts",
+            "src/lib/charts/signals/__tests__/syntheticSignals.test.ts",
+            "src/lib/charts/signals/__tests__/comparisonSignals.test.ts",
+            "src/lib/charts/signals/__tests__/measureSignal.test.ts",
+            "src/lib/charts/signals/__tests__/signalProblemSeverity.test.ts",
+            "src/lib/charts/signals/__tests__/catalogPartitions.test.ts",
+            "src/lib/charts/signals/__tests__/backendRendererSegments.test.ts",
+        ],
+        cwd="frontend",
+        capture_output=not verbose,
+    )
+    if result.returncode == 0:
+        print_success("Core store Vitest unit tests - PASSED")
+        return True
+
+    print_error(f"Core store Vitest unit tests - FAILED (exit code: {result.returncode})")
+    if not verbose:
+        print(result.stdout.decode() if result.stdout else "")
+        print(result.stderr.decode() if result.stderr else "")
+    return False
+
+
+def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run Svelte component unit tests (Vitest + jsdom).
+
+    Kept separate from ``core-unit`` on purpose. These mount real ``.svelte``
+    components in a simulated DOM, so they need the jsdom environment and the
+    testing-library harness, and they cover a surface — the UI primitives — that
+    E2E reaches only incidentally, if at all. Splitting them also means the two
+    families can be run, timed and parallelised independently.
+    """
+    print(f"\n{Colors.BLUE}Running: Svelte component unit tests (jsdom){Colors.NC}")
+    result = subprocess.run(
+        [
+            "npx",
+            "vitest",
+            "run",
+            "src/lib/components/ui/date/CalendarMonth.test.ts",
+            "src/lib/components/ui/date/SingleDatePicker.test.ts",
+            "src/lib/components/ui/date/DateRangePicker.test.ts",
+            "src/lib/components/ui/input/TagInput.test.ts",
+            "src/lib/components/ui/select/SimpleSelect.test.ts",
+            "src/lib/components/ui/select/SearchSelect.test.ts",
+            "src/lib/components/ui/select/FxProviderSelect.test.ts",
+            "src/lib/components/ui/data-editor/DataEditor.test.ts",
+            "src/lib/components/ui/media/AssetPickerModal.test.ts",
+            "src/lib/components/ui/media/ImageEditModal.test.ts",
+            "src/lib/components/ui/modals/SyncModalBase.test.ts",
+            "src/lib/components/ui/modals/SyncResultRow.test.ts",
+            "src/lib/components/ui/modals/PageSyncModal.test.ts",
+            "src/lib/components/table/DataTableColumnFilter.test.ts",
+            "src/lib/components/table/DataTable.test.ts",
+            "src/lib/components/table/DataTablePagination.test.ts",
+            "src/lib/components/assets/ScheduledInvestmentEditor.test.ts",
+            "src/lib/components/assets/AssetModal.test.ts",
+            "src/lib/components/assets/AssetSearchAutocomplete.test.ts",
+            "src/lib/components/assets/AssetCurrencyChangeModal.test.ts",
+            "src/lib/components/assets/ProviderComparisonModal.test.ts",
+            "src/lib/components/assets/CellDateRange.test.ts",
+            "src/lib/components/assets/ProviderAssignmentSection.test.ts",
+            "src/lib/components/assets/AssetSyncModal.test.ts",
+            "src/lib/components/fx/FxSyncModal.test.ts",
+            "src/lib/components/fx/FxMissingRate.test.ts",
+            "src/lib/components/files/FilePreviewModal.test.ts",
+            "src/lib/components/transactions/modals/ImportWizardModal.test.ts",
+            "src/lib/components/transactions/modals/TransactionCompareModal.test.ts",
+            "src/lib/components/transactions/modals/TransactionFormModal.test.ts",
+            "src/lib/components/ui/display/CompactCashCell.test.ts",
+            "src/lib/components/charts/ChartSignalsSection.test.ts",
+            "src/lib/components/charts/MeasurePanel.test.ts",
+            "src/lib/components/auth/RegisterCard.test.ts",
+            "src/lib/components/auth/DonationPopupModal.test.ts",
+            "src/lib/components/brokers/BrokerSharingPanel.test.ts",
+            "src/lib/components/assets/AssetTable.test.ts",
+            "src/lib/components/dashboard/KpiSection.test.ts",
+            "src/lib/components/dashboard/ExposureTable.test.ts",
+            "src/lib/components/dashboard/ContributionTable.test.ts",
+            "src/lib/components/table/DataTableHeaderTooltip.test.ts",
+            "src/lib/components/transactions/import/FixFlaggedStep.test.ts",
+            "src/lib/components/layout/ChangelogModal.test.ts",
+            "src/lib/components/auth/UpdateAvailableModal.test.ts",
+            "src/lib/components/settings/SettingControls.test.ts",
+            "src/lib/components/settings/SettingsLayout.test.ts",
+            "src/lib/components/settings/PasswordChangeModal.test.ts",
+            "src/lib/components/settings/SchedulerConfigModal.test.ts",
+            "src/lib/components/settings/SchedulerLogModal.test.ts",
+            "src/lib/components/settings/tabs/PreferencesTab.test.ts",
+            "src/lib/components/settings/tabs/ProfileTab.test.ts",
+            "src/lib/components/settings/tabs/AboutTab.test.ts",
+            "src/lib/components/settings/tabs/GlobalSettingsTab.test.ts",
+        ],
+        cwd="frontend",
+        capture_output=not verbose,
+    )
+    if result.returncode == 0:
+        print_success("Svelte component unit tests - PASSED")
+        return True
+
+    print_error(f"Svelte component unit tests - FAILED (exit code: {result.returncode})")
+    if not verbose:
+        print(result.stdout.decode() if result.stdout else "")
+        print(result.stderr.decode() if result.stderr else "")
+    return False
 
 
 def front_auth(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -29,6 +210,14 @@ def front_files(verbose: bool = False, ui: bool = False, headed: bool = False, d
     if not _ensure_frontend_build(): return False
     if not _ensure_test_users(): return False
     return _run_playwright("files.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_files_destructive(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run files destructive-route E2E tests (single/bulk delete, failure, BRIM)."""
+    print_section("Frontend Files Destructive Tests")
+    if not _ensure_frontend_build(): return False
+    if not _ensure_test_users(): return False
+    return _run_playwright("files-destructive.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_select(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -75,12 +264,14 @@ def front_utility_all(verbose: bool = False, ui: bool = False, headed: bool = Fa
     """Run all frontend utility/component E2E tests."""
     from ._common import print_header
     print_header("Frontend Utility Tests (Playwright)")
+    if _common.nothing_left_to_run("front-utility"):
+        return _common.consolidated_verdict("front-utility")
+    reset_setup_scope()
     if not _ensure_frontend_build(): return False
     if not _ensure_test_users(): return False
-    specs = ["auth.spec.ts", "settings.spec.ts", "files.spec.ts", "select-components.spec.ts", "image-crop.spec.ts", "settings/scheduler.spec.ts", "tooltip-component.spec.ts"]
     return _run_test_suite(
         suite_name="Frontend Utility Tests",
-        tests=[(spec.replace('.spec.ts', '').title(), lambda s=spec: _run_playwright(s, ui=ui, headed=headed, debug=debug, coverage=coverage)) for spec in specs],
+        tests=_get_category_tests_for_all("front-utility", verbose, ui=ui, headed=headed, debug=debug, coverage=coverage),
         verbose=verbose,
         header_msg=None,
         summary_title="Frontend Utility Test Summary",
@@ -96,8 +287,11 @@ def populate_registry(registry: dict) -> None:
         help_text="Frontend utility & component E2E tests (auth, settings, files, select, image-crop)",
         description="""Frontend Utility & Component Tests\n\nOptions: --ui, --headed, --debug""")
     add_test(cat, "auth", front_auth, name="Auth Tests", desc="Login, register, logout, language change", prereq="Test users created", tests="auth.spec.ts")
+    add_test(cat, "core-unit", front_utility_unit, test_names=False, name="Core Store Unit Tests", desc="entityStore, option filter, date/decimal parsing, request concurrency, HTML escaping for hand-built markup, safe accessors for widened API unions, import-wizard dedup/merge/compare pure logic, URL filter round trip for DataTable deep links, trySave error seam (FastAPI detail ladder, pydantic issue unpacking and formatting, toast/prefix/pre-handler), comparison-overlay loader (query shape, resolved series injected back into the signal, currency filter, refused conversions), sync toast variants for asset/FX results, chart helpers (echarts tooltip/animation/zoom-pan, geography map, price-chart & candlestick series/scale arithmetic, signal-problem formatting), chart-settings store (per-account hydration, scoped global vs per-item overrides, sanitising, debounced persistence, SSR silence), signal registry (palette assignment, config creation, round trip), local signal maths (linear/compound/sine benchmarks, measure ruler, asset & FX comparison overlays), signal catalog partition rules and backend renderer slice capping, transaction form-item resolution (paired orientation, hidden-broker sentinel, injected lookups) and image-crop presets/MIME/file-naming with the cropper contract faked, FX tooltip data assembly where a zero rate is the absence sentinel and not a quote, brokerStore.getOwnedBrokers roles×shares matrix (F2 dashboard scope), changelog chapter parsing incl. the canonical-Unreleased known gap, and the update-check probe (version compare, 24h throttle, dismissal memory, never-throw fetch)", tests="src/lib/stores/core/entityStore.test.ts")
+    add_test(cat, "component-unit", front_component_unit, test_names=False, name="Svelte Component Unit Tests", desc="UI primitives mounted in jsdom: CalendarMonth grid/states, SingleDatePicker typed/calendar seam, TagInput keyboard model, SimpleSelect keyboard/unavailable states, FxProviderSelect route picker, DataTableColumnFilter filter modes, DataTable sorting/paging/selection/row actions, ScheduledInvestmentEditor schedule payload round trip, ImportWizardModal shell/open-gating/close, TransactionCompareModal outlier judgement and diff highlighting, TransactionFormModal draft seeding (create-mode empty quantity T1-b, duplicate-mode date preservation T3), CompactCashCell decimal typing through the parent prop loop (T1-a), SyncModalBase run/timeout/retry/session engine with SyncResultRow the one result line the three sync modals share, MeasurePanel measure add/preview/summary table, RegisterCard sign-up validation gate and server-error ladder, DonationPopupModal deliberate absence of every escape hatch, BrokerSharingPanel role ladder and last-owner guard, the five Setting* controls plus SettingsLayout bulk bar, PasswordChangeModal validation and post-success window, SchedulerConfigModal day/time/timezone payload, SchedulerLogModal run outcomes, PreferencesTab theme/language/currency save payloads and the un-rolled-back optimistic apply, ProfileTab edit lock with its discard dialog plus the per-field save/undo/revert ladder, AboutTab system facts, copy-for-issue payload and plugin discovery status, GlobalSettingsTab admin lock, value_type dispatch, 403 ladder and bulk save, FX card/table/editor rendering an absent rate as absent rather than as 0.0000, plus the beta-feedback batch: AssetTable txCount scope badge palette (F15), KpiSection absolute-vs-period ROI separation (F5), ExposureTable/ContributionTable analyzed-row tint (F9), DataTable header tooltips opening upward via a Tooltip probe (F10), the import wizard's report-issue banner (F11), ChangelogModal chapter rendering, clickable search hits and the header update-check delegation (F12/F14) and UpdateAvailableModal show/later/skip (F12/F14)", tests="src/lib/components/ui/date/CalendarMonth.test.ts")
     add_test(cat, "settings", front_settings, name="Settings Tests", desc="User preferences, global settings (admin)", prereq="Login working", tests="settings.spec.ts")
     add_test(cat, "files", front_files, name="Files Tests", desc="Files page, tabs, URL filters", prereq="Login working", tests="files.spec.ts")
+    add_test(cat, "files-destructive", front_files_destructive, name="Files Destructive Tests", desc="Single + bulk file delete, confirm/cancel, delete failure, BRIM delete + empty state (disposable rows, self-restoring)", prereq="Login working", tests="files-destructive.spec.ts")
     add_test(cat, "select", front_select, name="Select Components Tests", desc="SimpleSelect, SearchSelect, keyboard nav", prereq="Login working", tests="select-components.spec.ts")
     add_test(cat, "image-crop", front_image_crop, name="Image Crop & Media Tests", desc="ImageEditModal, AssetPicker, FileGrid, avatar", prereq="Login working", tests="image-crop.spec.ts")
     add_test(cat, "utilities", front_utilities, name="Utilities API E2E", desc="Currencies, countries, sectors API", prereq="Login working", tests="utilities.spec.ts")

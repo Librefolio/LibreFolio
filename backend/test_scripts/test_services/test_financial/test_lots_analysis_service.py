@@ -15,7 +15,7 @@ from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
-from sqlalchemy import event
+from sqlalchemy import delete, event
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetType, Broker, BrokerUserAccess, FxRate, PriceHistory, Transaction, TransactionType, User
@@ -23,6 +23,28 @@ from backend.app.db.session import get_async_engine
 from backend.app.schemas.portfolio import IssueCode
 from backend.app.services.lots_analysis_service import get_lots_analysis
 from backend.app.utils.datetime_utils import utcnow
+
+
+async def _own_fx_rate(session, *, on: date, base: str, quote: str, rate: Decimal) -> None:
+    """Insert an FX rate this test owns, without depending on the table's prior state.
+
+    ``fx_rates`` is global -- no ``user_id`` -- and unique on ``(date, base, quote)``.
+    Two things follow, and both have bitten this file:
+
+    * a plain ``session.add`` fails with ``UNIQUE constraint failed`` whenever a
+      neighbour (the mock ECB seed, an FX sync test, another unit) already
+      committed that exact key. The test then reds for a reason it did not cause;
+    * asserting on a rate this test did not write is asserting on someone else's
+      data.
+
+    Deleting the key first makes the test independent of what came before. The
+    delete runs inside the same transaction as the insert, and the ``session``
+    fixture rolls that transaction back, so a neighbour's row is restored intact
+    -- nothing is destroyed, the test just guarantees its own starting point.
+    """
+    await session.execute(delete(FxRate).where(FxRate.date == on, FxRate.base == base, FxRate.quote == quote))
+    session.add(FxRate(date=on, base=base, quote=quote, rate=rate, source="TEST"))
+    await session.flush()
 
 
 def _points_by_date(points):
@@ -152,11 +174,13 @@ async def test_buy_sell_summary_converts_to_target_currency(session, test_user, 
                 currency="EUR",
                 source_plugin_key="TEST",
             ),
-            FxRate(date=date(2025, 1, 10), base="EUR", quote="USD", rate=Decimal("1.2"), source="TEST"),
-            FxRate(date=date(2025, 2, 1), base="EUR", quote="USD", rate=Decimal("1.3"), source="TEST"),
         ]
     )
     await session.flush()
+    # This test owns EUR/USD on 10 Jan and 1 Feb 2025. See _own_fx_rate: the pair
+    # is global, so the rows are claimed rather than assumed absent.
+    await _own_fx_rate(session, on=date(2025, 1, 10), base="EUR", quote="USD", rate=Decimal("1.2"))
+    await _own_fx_rate(session, on=date(2025, 2, 1), base="EUR", quote="USD", rate=Decimal("1.3"))
 
     result = await get_lots_analysis(
         session=session,
@@ -188,6 +212,132 @@ async def test_buy_sell_summary_converts_to_target_currency(session, test_user, 
     assert lot.total_value == Decimal("1690")
     assert lot.pnl == Decimal("490")
     assert lot.states == ["LONG", "PARTIALLY_CLOSED"]
+    assert lot.closing_date is None
+
+
+@pytest.mark.asyncio
+async def test_closing_date_set_only_for_fully_closed_lot(session, test_user, asset, broker):
+    """closing_date must be the max LotClosure.close_date when open_quantity == 0, else None."""
+    session.add_all(
+        [
+            Transaction(
+                broker_id=broker.id,
+                asset_id=asset.id,
+                type=TransactionType.BUY,
+                date=date(2025, 1, 10),
+                quantity=Decimal("10"),
+                amount=Decimal("-1000"),
+                currency="EUR",
+            ),
+            Transaction(
+                broker_id=broker.id,
+                asset_id=asset.id,
+                type=TransactionType.SELL,
+                date=date(2025, 2, 1),
+                quantity=Decimal("-6"),
+                amount=Decimal("780"),
+                currency="EUR",
+            ),
+            Transaction(
+                broker_id=broker.id,
+                asset_id=asset.id,
+                type=TransactionType.SELL,
+                date=date(2025, 3, 15),
+                quantity=Decimal("-4"),
+                amount=Decimal("560"),
+                currency="EUR",
+            ),
+            PriceHistory(
+                asset_id=asset.id,
+                date=date(2025, 1, 10),
+                close=Decimal("100"),
+                currency="EUR",
+                source_plugin_key="TEST",
+            ),
+        ]
+    )
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date(2025, 3, 15),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["LOT_SUMMARY"],
+    )
+
+    assert result.lots is not None
+    assert len(result.lots) == 1
+    lot = result.lots[0]
+    assert lot.open_quantity == Decimal("0")
+    assert lot.closing_date == date(2025, 3, 15)
+
+
+@pytest.mark.asyncio
+async def test_full_history_keeps_prior_price_seed_for_first_chart_day(session, test_user, asset, broker):
+    session.add_all(
+        [
+            Transaction(
+                broker_id=broker.id,
+                asset_id=asset.id,
+                type=TransactionType.BUY,
+                date=date(2025, 1, 10),
+                quantity=Decimal("10"),
+                amount=Decimal("-1000"),
+                currency="EUR",
+            ),
+            PriceHistory(
+                asset_id=asset.id,
+                date=date(2025, 1, 9),
+                close=Decimal("95"),
+                currency="EUR",
+                source_plugin_key="TEST",
+            ),
+            PriceHistory(
+                asset_id=asset.id,
+                date=date(2025, 1, 11),
+                close=Decimal("105"),
+                currency="EUR",
+                source_plugin_key="TEST",
+            ),
+        ]
+    )
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date(2025, 1, 11),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["LOT_SUMMARY", "VALUE_HISTORY", "PRICE_HISTORY"],
+    )
+
+    assert result.lots is not None
+    assert len(result.lots) == 1
+    # Single valuation brain: the unified resolver now drives *valuation* exactly like the chart
+    # line. On the BUY day there is no real quote, so the same-day trade (1000 / 10 = 100) wins over
+    # the carried 01-09 seed (95) -> open value = 10 * 100 = 1000 (was 950 under the legacy
+    # market-only map; lots-analysis and the portfolio engine now agree).
+    assert result.value_history is not None
+    value_points = _points_by_lot_date(result.value_history)
+    assert value_points[(result.lots[0].lot_id, date(2025, 1, 10))].open_value == Decimal("1000")
+    # The estimated market *line*, however, shows the most-recent observation: on the BUY day the
+    # trade (1000 / 10 = 100) is newer than the 01-09 seed -> 100, flagged estimate; on 01-11 the
+    # real quote (105) is the newest observation -> 105, not an estimate.
+    assert result.price_history is not None
+    price_points = _points_by_lot_date(result.price_history)
+    assert price_points[(result.lots[0].lot_id, date(2025, 1, 10))].market_price == Decimal("100")
+    assert price_points[(result.lots[0].lot_id, date(2025, 1, 10))].estimated is True
+    assert price_points[(result.lots[0].lot_id, date(2025, 1, 11))].market_price == Decimal("105")
+    assert price_points[(result.lots[0].lot_id, date(2025, 1, 11))].estimated is False
 
 
 @pytest.mark.asyncio
@@ -811,12 +961,15 @@ async def test_performance_history_missing_price_yields_none_without_exception(s
 
     assert result.performance_history is not None
     points = _points_by_date(result.performance_history)
-    assert points[date(2025, 1, 10)].roi is None
+    # The resolver marks the BUY day from its own trade (1000 / 10 = 100), so performance starts on
+    # 01-10 with NAV == invested -> roi 0 (was None under the legacy market-only map, which had no
+    # mark until the first real quote). The 01-12 quote (120) lifts NAV to 1200 -> roi 0.2.
+    assert points[date(2025, 1, 10)].roi == Decimal("0")
     assert points[date(2025, 1, 10)].twrr is None
-    assert points[date(2025, 1, 11)].roi is None
-    assert points[date(2025, 1, 11)].twrr is None
+    assert points[date(2025, 1, 11)].roi == Decimal("0")
+    assert points[date(2025, 1, 11)].twrr == Decimal("0")
     assert points[date(2025, 1, 12)].roi == Decimal("0.2")
-    assert points[date(2025, 1, 12)].twrr is None
+    assert points[date(2025, 1, 12)].twrr == Decimal("0.2")
 
 
 @pytest.mark.asyncio
@@ -998,13 +1151,16 @@ async def test_dividend_in_foreign_currency_converted_to_target(session, test_us
     session.add_all(
         [
             Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2025, 1, 10), quantity=Decimal("10"), amount=Decimal("-1000"), currency="EUR"),
-            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.DIVIDEND, date=date(2025, 2, 1), quantity=Decimal("0"), amount=Decimal("120"), currency="USD"),
+            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.DIVIDEND, date=date(2025, 3, 5), quantity=Decimal("0"), amount=Decimal("120"), currency="USD"),
             PriceHistory(asset_id=asset.id, date=date(2025, 1, 10), close=Decimal("100"), currency="EUR", source_plugin_key="TEST"),
-            PriceHistory(asset_id=asset.id, date=date(2025, 2, 1), close=Decimal("100"), currency="EUR", source_plugin_key="TEST"),
-            FxRate(date=date(2025, 2, 1), base="EUR", quote="USD", rate=Decimal("1.25"), source="TEST"),
+            PriceHistory(asset_id=asset.id, date=date(2025, 3, 5), close=Decimal("100"), currency="EUR", source_plugin_key="TEST"),
         ]
     )
     await session.flush()
+    # 5 Mar 2025, not 1 Feb: test_buy_sell_summary_converts_to_target_currency owns
+    # EUR/USD on 1 Feb, and two tests writing the same unique key raced whenever the
+    # suite ran them close together.
+    await _own_fx_rate(session, on=date(2025, 3, 5), base="EUR", quote="USD", rate=Decimal("1.25"))
 
     result = await get_lots_analysis(
         session=session,
@@ -1012,7 +1168,7 @@ async def test_dividend_in_foreign_currency_converted_to_target(session, test_us
         asset_id=asset.id,
         broker_ids=[broker.id],
         date_from=None,
-        date_to=date(2025, 2, 1),
+        date_to=date(2025, 3, 5),
         target_currency="EUR",
         selected_lot_ids=None,
         requested_analyses=["LOT_SUMMARY"],
@@ -1024,7 +1180,9 @@ async def test_dividend_in_foreign_currency_converted_to_target(session, test_us
 
 @pytest.mark.asyncio
 async def test_estimated_at_cost_when_no_price_history(session, test_user, asset, broker):
-    """No price history -> open value estimated at cost, market_pnl 0, income still accrues, DQ issue raised."""
+    """No asset-system price -> the resolver values the open portion at the last observed *trade*
+    mark (the BUY at 15/unit), so value_source is MARKET_PRICE (observation-based) with market_pnl 0
+    while price == cost; income still accrues and the no-quote DQ issue is still raised."""
     session.add_all(
         [
             Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2025, 1, 10), quantity=Decimal("1000"), amount=Decimal("-15000"), currency="EUR"),
@@ -1047,7 +1205,7 @@ async def test_estimated_at_cost_when_no_price_history(session, test_user, asset
 
     assert result.lots is not None and len(result.lots) == 1
     lot = result.lots[0]
-    assert lot.value_source == "ESTIMATED_AT_COST"
+    assert lot.value_source == "MARKET_PRICE"
     assert lot.open_value == Decimal("15000")
     assert lot.market_pnl == Decimal("0")
     assert lot.asset_income == Decimal("1250")
@@ -1098,9 +1256,21 @@ async def test_closed_lot_history_continues_flat_without_close_market_price(sess
     assert value_points[(lot.lot_id, date(2025, 1, 12))].proceeds == Decimal("1300")
     assert value_points[(lot.lot_id, date(2025, 1, 12))].pnl == Decimal("300")
     assert return_points[(lot.lot_id, date(2025, 1, 12))].total_return == Decimal("0.3")
-    assert return_points[(lot.lot_id, date(2025, 1, 13))].relative_return is None
-    assert return_points[(lot.lot_id, date(2025, 1, 14))].relative_return is None
-    assert result.price_history == []
+    # Between the close (01-12) and the post-close quote (01-15), the resolver carries the last trade
+    # mark (SELL unit 130) forward, so the lot's price line has an observation and relative_return is
+    # the mark vs the opening reference (130 / 100 - 1 = 0.3) rather than None. This mirrors the
+    # chart price line and the portfolio engine (single valuation brain), not the legacy market-only gap.
+    assert return_points[(lot.lot_id, date(2025, 1, 13))].relative_return == Decimal("0.3")
+    assert return_points[(lot.lot_id, date(2025, 1, 14))].relative_return == Decimal("0.3")
+    # No real quote exists during the lot's lifetime (the only price, 01-15, is after the close), so
+    # the market line is estimated from the lot's own trades: BUY unit 100 carried, stepping to the
+    # SELL unit 130 on the close date. The post-close real quote falls outside the closed lot window.
+    price_points = _points_by_lot_date(result.price_history)
+    assert price_points[(lot.lot_id, date(2025, 1, 10))].market_price == Decimal("100")
+    assert price_points[(lot.lot_id, date(2025, 1, 10))].estimated is True
+    assert price_points[(lot.lot_id, date(2025, 1, 12))].market_price == Decimal("130")
+    assert price_points[(lot.lot_id, date(2025, 1, 12))].estimated is True
+    assert (lot.lot_id, date(2025, 1, 15)) not in price_points
 
 
 @pytest.mark.asyncio
@@ -1486,3 +1656,111 @@ async def test_bond_relative_return_scaled_when_opening_has_no_market_price(sess
     return_points = _points_by_lot_date(result.return_history)
     latest_return = return_points[(lot.lot_id, date(2025, 1, 15))]
     assert latest_return.relative_return is not None and latest_return.relative_return == Decimal("-0.02")
+
+
+@pytest.mark.asyncio
+async def test_price_history_estimates_market_line_from_last_known_trade(session, test_user, asset, broker):
+    # Price-less asset (no PriceHistory rows): the chart's market-price line is estimated from the
+    # last-known trade (BUY cost, then SELL proceeds) carried forward, stepping up at the sale.
+    session.add_all(
+        [
+            Transaction(
+                broker_id=broker.id,
+                asset_id=asset.id,
+                type=TransactionType.BUY,
+                date=date(2025, 1, 10),
+                quantity=Decimal("10"),
+                amount=Decimal("-1000"),
+                currency="EUR",
+            ),
+            Transaction(
+                broker_id=broker.id,
+                asset_id=asset.id,
+                type=TransactionType.SELL,
+                date=date(2025, 2, 1),
+                quantity=Decimal("-4"),
+                amount=Decimal("520"),
+                currency="EUR",
+            ),
+        ]
+    )
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date(2025, 2, 10),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["PRICE_HISTORY"],
+    )
+
+    assert result.price_history is not None and len(result.price_history) > 0
+    points = _points_by_date(result.price_history)
+    # Before the sale: carried BUY unit price (1000 / 10 = 100), flagged as an estimate.
+    assert points[date(2025, 1, 15)].market_price == Decimal("100")
+    assert points[date(2025, 1, 15)].estimated is True
+    # After the sale: steps up to the SELL unit price (520 / 4 = 130), still an estimate.
+    assert points[date(2025, 2, 5)].market_price == Decimal("130")
+    assert points[date(2025, 2, 5)].estimated is True
+
+
+@pytest.mark.asyncio
+async def test_price_history_real_quote_wins_but_trade_fills_later_gap(session, test_user, asset, broker):
+    # A single real quote at opening, no later quotes: the real price is carried forward (not an
+    # estimate) while it is the most recent observation; once a later SELL happens, the trade price
+    # becomes the most recent observation and fills the gap, flagged as an estimate.
+    session.add_all(
+        [
+            Transaction(
+                broker_id=broker.id,
+                asset_id=asset.id,
+                type=TransactionType.BUY,
+                date=date(2025, 1, 10),
+                quantity=Decimal("10"),
+                amount=Decimal("-1000"),
+                currency="EUR",
+            ),
+            Transaction(
+                broker_id=broker.id,
+                asset_id=asset.id,
+                type=TransactionType.SELL,
+                date=date(2025, 2, 1),
+                quantity=Decimal("-4"),
+                amount=Decimal("520"),
+                currency="EUR",
+            ),
+            PriceHistory(
+                asset_id=asset.id,
+                date=date(2025, 1, 10),
+                close=Decimal("100"),
+                currency="EUR",
+                source_plugin_key="TEST",
+            ),
+        ]
+    )
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date(2025, 2, 5),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["PRICE_HISTORY"],
+    )
+
+    assert result.price_history is not None and len(result.price_history) > 0
+    points = _points_by_date(result.price_history)
+    # Gap after the only real quote, before the sale: carried real price, NOT an estimate.
+    assert points[date(2025, 1, 20)].market_price == Decimal("100")
+    assert points[date(2025, 1, 20)].estimated is False
+    # After the sale: the trade is the most recent observation -> fills with 130, flagged estimate.
+    assert points[date(2025, 2, 3)].market_price == Decimal("130")
+    assert points[date(2025, 2, 3)].estimated is True

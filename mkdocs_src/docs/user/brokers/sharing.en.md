@@ -10,17 +10,21 @@ LibreFolio allows you to share access to your brokerage accounts with other user
 
 ## 📋 How to Share
 
-1. Navigate to a broker's detail page
-2. Click the **Share** button (:material-share-variant:) in the header
-3. The **Sharing Modal** opens
-4. **Search** for the user by username
-5. **Select a role** (Viewer, Editor, or Owner)
-6. **Set the share percentage** (drag slider or type value)
-7. Click **Save** to apply changes
+Only an **Owner** of the broker can manage access. You can open the sharing panel in two ways:
+
+- **From the broker list**: click the **Share** icon (:material-share-variant:) on the broker's card — the **Sharing Modal** opens.
+- **From the broker detail page**: click the **Share** button in the header — you land on the **Info** tab, which hosts the sharing panel.
+
+Then:
+
+1. **Search** for the user by username
+2. **Select a role** (Viewer, Editor, or Owner)
+3. **Set the ownership percentage** — only for the *Owner* role (drag the slider or type a value; Viewers and Editors always carry 0%)
+4. Click **Save** to apply changes
 
 !!! warning "Only Owners can manage access"
 
-    You must be an **Owner** of the broker to add, remove, or modify other users' access.
+    You must be an **Owner** of the broker to add, remove, or modify other users' access. Non-owners see the same panel in read-only mode.
 
 ---
 
@@ -41,22 +45,22 @@ When you share a broker, you assign a **role** that determines what the other us
 
 - 👁️ **Viewer**: Read-only access. Ideal for accountants or family members who just need to see data.
 - ✏️ **Editor**: Can manage day-to-day operations (transactions, imports) but cannot delete the broker or change access.
-- 👑 **Owner**: Full control. Can do everything, including adding/removing other users.
+- 👑 **Owner**: Full control. Can do everything, including adding/removing other users. A broker can have **more than one Owner** — see the share percentage below.
 
 ---
 
 ## 📊 Share Percentage
 
-Each user with access to a broker has a **share percentage** (0% to 100%). This represents how much of the broker's portfolio value belongs to that user.
+Each **Owner** of a broker has a **share percentage** (0% to 100%). This represents how much of the broker's portfolio value belongs to that owner. Viewers and Editors always carry 0% — the schema rejects any non-zero share for them.
 
 !!! example "Joint Account"
 
-    You and your spouse share a brokerage account 50/50:
+    You and your spouse co-own a brokerage account 50/50. Both of you are Owners:
 
     - You (Owner): **50%**
-    - Spouse (Editor): **50%**
+    - Spouse (Owner): **50%**
 
-    When computing total portfolio value, the system counts 50% of this broker's value for each of you.
+    Each of you sees 50% of this broker's value counted in your own dashboard.
 
 !!! example "Financial Advisor"
 
@@ -65,7 +69,24 @@ Each user with access to a broker has a **share percentage** (0% to 100%). This 
     - You (Owner): **100%**
     - Advisor (Viewer): **0%**
 
-The sum of all share percentages for a broker **must not exceed 100%**, but it can be less (e.g., a co-owned account where the co-owner is not in the system).
+The sum of all share percentages for a broker **must not exceed 100%**, but it can be less (e.g., a co-owned account where the co-owner is not in the system). The panel shows the **Allocated** and **Available** totals while you edit.
+
+!!! note "Portfolio Aggregation"
+
+    The share percentage is **already applied** to your portfolio aggregation: the Dashboard and portfolio-level statistics scale every amount of a shared broker by your ownership share. An Owner with 50% sees half of that broker's value, income, and P&L counted in their totals. Viewers and Editors, whose share is always 0% by rule, see the broker's **full** amounts instead — the share only scales what you *own*.
+
+---
+
+## 🚪 Leaving a Shared Broker (Self-Service)
+
+You never need an Owner's intervention to get out of a broker you have access to. In the sharing panel, the **Your access** section lets you:
+
+- **Leave broker** — removes your own access immediately. The broker disappears from your lists.
+- **Switch to viewer** — an Editor can demote themselves to Viewer; an Owner can promote them again later.
+
+!!! danger "Last Owner: leaving deletes the broker"
+
+    If you are the **only Owner** left, the leave action becomes **Leave and delete broker**: leaving *permanently deletes the broker together with all its transactions and imported report files*. This cannot be undone. If that is not what you want, assign another user as Owner first, then leave.
 
 ---
 
@@ -73,11 +94,7 @@ The sum of all share percentages for a broker **must not exceed 100%**, but it c
 
 | Scenario | Suggested Setup |
 |----------|----------------|
-| **Spouse / Partner** | Editor or co-Owner, 50% share each |
+| **Spouse / Partner** | Two Owners, 50% share each |
 | **Financial Advisor** | Viewer, 0% share |
 | **Accountant** | Viewer, 0% share |
-| **Family member** | Viewer or Editor, custom share % |
-
-!!! note "Portfolio Aggregation"
-
-    The share percentage is designed for future portfolio aggregation features. When these are implemented, each user's dashboard will show their proportional share of all brokers they have access to.
+| **Family member** | Viewer or Editor, 0% share |

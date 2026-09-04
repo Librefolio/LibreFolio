@@ -11,11 +11,13 @@
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {BarChart3, Copy, ExternalLink, Eye} from 'lucide-svelte';
     import type {z} from 'zod';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {safeDecimal, safeNumber} from '$lib/types';
+    import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
+    import {filterStates, findBroker, formatLotQuantity as formatQuantity, primaryState, ratioOrNull, sameIdSet, secondaryStates, sumNumeric, weightedAverage} from './unifiedLotsTableHelpers';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type LotCustodySummarySchema = z.infer<typeof schemas.LotCustodySummarySchema>;
-    type NumericLike = string | number | (string | number | null)[] | null | undefined;
-    type BrokerIdLike = number | (number | null)[] | null | undefined;
     type LotState = 'OPEN' | 'PARTIALLY_CLOSED' | 'CLOSED' | 'DISTRIBUTED' | 'IN_TRANSIT' | 'DEGRADED';
     type PrimaryLotState = 'OPEN' | 'PARTIALLY_CLOSED' | 'CLOSED' | 'DEGRADED';
 
@@ -53,6 +55,7 @@
         assetIncome: number | null;
         totalPnl: number | null;
         totalReturn: number | null;
+        annualizedReturn: number | null;
         allocatedFees: number | null;
         allocatedTaxes: number | null;
         netTotalPnl: number | null;
@@ -62,7 +65,6 @@
     }
 
     const PRIMARY_STATE_ORDER: PrimaryLotState[] = ['OPEN', 'PARTIALLY_CLOSED', 'CLOSED', 'DEGRADED'];
-    const SECONDARY_STATE_ORDER: LotState[] = ['DISTRIBUTED', 'IN_TRANSIT', 'DEGRADED'];
     const STATUS_FILTER_VALUES: LotState[] = ['OPEN', 'PARTIALLY_CLOSED', 'CLOSED', 'DISTRIBUTED', 'IN_TRANSIT', 'DEGRADED'];
     const IN_TRANSIT_FILTER_VALUE = '__IN_TRANSIT__';
 
@@ -82,39 +84,8 @@
         return translated === key ? fallback : translated;
     }
 
-    function escapeHtml(value: string): string {
-        return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-    }
-
-    function firstScalar<T>(value: T | (T | null)[] | null | undefined): T | null {
-        if (Array.isArray(value)) {
-            return (value.find((item) => item != null) as T | undefined) ?? null;
-        }
-        return value ?? null;
-    }
-
-    function safeNum(value: NumericLike): number | null {
-        const scalar = firstScalar(value);
-        if (scalar == null) return null;
-        const parsed = Number.parseFloat(String(scalar));
-        return Number.isFinite(parsed) ? parsed : null;
-    }
-
-    function safeBrokerId(value: BrokerIdLike): number | null {
-        const scalar = firstScalar(value);
-        if (scalar == null) return null;
-        return typeof scalar === 'number' && Number.isFinite(scalar) ? scalar : null;
-    }
-
-    function formatQuantity(value: number | null): string {
-        return value == null ? '—' : value.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 6});
-    }
-
-    function formatPercent(value: number | null): string {
-        if (value == null) return '—';
-        const sign = value > 0 ? '+' : '';
-        return `${sign}${(value * 100).toFixed(2)}%`;
-    }
+    /** These come from the API as fractions, hence scale 100. */
+    const formatPercent = (value: number | null): string => sharedFormatPercent(value, {scale: 100});
 
     function stateLabel(state: LotState): string {
         switch (state) {
@@ -147,22 +118,6 @@
         };
     }
 
-    function primaryState(stateList: readonly string[]): PrimaryLotState {
-        if (stateList.includes('PARTIALLY_CLOSED')) return 'PARTIALLY_CLOSED';
-        if (stateList.includes('OPEN')) return 'OPEN';
-        if (stateList.includes('CLOSED')) return 'CLOSED';
-        return 'DEGRADED';
-    }
-
-    function secondaryStates(stateList: readonly string[]): LotState[] {
-        return SECONDARY_STATE_ORDER.filter((state) => stateList.includes(state));
-    }
-
-    function filterStates(stateList: readonly string[]): LotState[] {
-        const normalized = [primaryState(stateList), ...secondaryStates(stateList)];
-        return Array.from(new Set(normalized));
-    }
-
     function brokerStyle(brokerId: number): string {
         const color = getBrokerColor(brokerId, brokers);
         return `--broker-bg:${color.bg};--broker-text:${color.text};--broker-dark-bg:${color.darkBg};--broker-dark-text:${color.darkText};--broker-vivid:${color.vivid};--broker-vivid-light:${color.vividLight};`;
@@ -172,10 +127,7 @@
         return 'lot-row-tinted';
     }
 
-    function getBroker(brokerId: number | null | undefined): BrokerLike | null {
-        if (brokerId == null) return null;
-        return brokers.find((broker) => broker.id === brokerId) ?? null;
-    }
+    const getBroker = (brokerId: number | null | undefined): BrokerLike | null => findBroker(brokerId, brokers);
 
     function getBrokerName(brokerId: number | null | undefined): string {
         if (brokerId == null) return label('brokers.lots.inTransit', 'In transit');
@@ -269,9 +221,9 @@
     function buildCustodyTooltip(row: DisplayRow): string {
         if (row.custodySlices.length === 0) return '';
         const lines = row.custodySlices.map((slice) => {
-            const brokerId = safeBrokerId(slice.broker_id);
+            const brokerId = safeNumber(slice.broker_id);
             const name = slice.custody_type === 'IN_TRANSIT' && brokerId == null ? label('brokers.lots.inTransit', 'In transit') : getBrokerName(brokerId);
-            return `<div class="flex items-center justify-between gap-3"><span>${escapeHtml(name)}</span><span class="font-medium tabular-nums">${escapeHtml(formatQuantity(safeNum(slice.quantity)))}</span></div>`;
+            return `<div class="flex items-center justify-between gap-3"><span>${escapeHtml(name)}</span><span class="font-medium tabular-nums">${escapeHtml(formatQuantity(safeDecimal(slice.quantity)))}</span></div>`;
         });
         return `<div class="space-y-1"><div class="font-semibold">${escapeHtml(label('brokers.lots.custody', 'Custody'))}</div>${lines.join('')}</div>`;
     }
@@ -280,7 +232,7 @@
         const custody = row.custodySlices;
         if (custody.length === 0) return '—';
 
-        const brokerIds = Array.from(new Set(custody.map((slice) => safeBrokerId(slice.broker_id)).filter((brokerId): brokerId is number => brokerId != null)));
+        const brokerIds = Array.from(new Set(custody.map((slice) => safeNumber(slice.broker_id)).filter((brokerId): brokerId is number => brokerId != null)));
         const hasInTransit = custody.some((slice) => slice.custody_type === 'IN_TRANSIT');
         const tooltip = buildCustodyTooltip(row);
 
@@ -312,26 +264,20 @@
         };
     }
 
-    function sameIdSet(left: readonly string[], right: readonly string[]): boolean {
-        if (left.length !== right.length) return false;
-        const rightSet = new Set(right);
-        return left.every((value) => rightSet.has(value));
-    }
-
     let rows = $derived.by<DisplayRow[]>(() =>
         lots.map((lot) => {
             const rawStates = lot.states ?? [];
             const states = rawStates.filter((state): state is LotState => STATUS_FILTER_VALUES.includes(state as LotState));
             const currentCustody = lot.current_custody ?? [];
             const openingBrokerName = getBrokerName(lot.opening_broker_id);
-            const openingUnitPrice = safeNum(lot.opening_unit_price);
-            const quantityOpen = safeNum(lot.open_quantity);
-            const quantityOriginal = safeNum(lot.original_quantity);
-            const openingValue = safeNum(lot.original_cost);
+            const openingUnitPrice = safeDecimal(lot.opening_unit_price);
+            const quantityOpen = safeDecimal(lot.open_quantity);
+            const quantityOriginal = safeDecimal(lot.original_quantity);
+            const openingValue = safeDecimal(lot.original_cost);
             const brokerFilterValues = Array.from(
                 new Set(
                     (currentCustody.length > 0 ? currentCustody : [{broker_id: lot.opening_broker_id, custody_type: 'BROKER', quantity: lot.open_quantity}]).flatMap((slice) => {
-                        const brokerId = safeBrokerId(slice.broker_id);
+                        const brokerId = safeNumber(slice.broker_id);
                         const values: string[] = [];
                         if (brokerId != null) values.push(String(brokerId));
                         if (slice.custody_type === 'IN_TRANSIT') values.push(IN_TRANSIT_FILTER_VALUE);
@@ -354,7 +300,7 @@
                 custodySlices: currentCustody,
                 custodySearchText: currentCustody
                     .map((slice) => {
-                        const brokerId = safeBrokerId(slice.broker_id);
+                        const brokerId = safeNumber(slice.broker_id);
                         return slice.custody_type === 'IN_TRANSIT' && brokerId == null ? label('brokers.lots.inTransit', 'In transit') : getBrokerName(brokerId);
                     })
                     .join(' '),
@@ -362,16 +308,17 @@
                 quantityOpen,
                 quantityOriginal,
                 openingValue,
-                currentValue: safeNum(lot.open_value),
-                assetIncome: safeNum(lot.asset_income),
-                totalPnl: safeNum(lot.total_pnl),
-                totalReturn: safeNum(lot.total_return),
-                allocatedFees: safeNum(lot.allocated_fees),
-                allocatedTaxes: safeNum(lot.allocated_taxes),
-                netTotalPnl: safeNum(lot.net_total_pnl),
-                netTotalReturn: safeNum(lot.net_total_return),
+                currentValue: safeDecimal(lot.open_value),
+                assetIncome: safeDecimal(lot.asset_income),
+                totalPnl: safeDecimal(lot.total_pnl),
+                totalReturn: safeDecimal(lot.total_return),
+                annualizedReturn: safeDecimal(lot.annualized_return),
+                allocatedFees: safeDecimal(lot.allocated_fees),
+                allocatedTaxes: safeDecimal(lot.allocated_taxes),
+                netTotalPnl: safeDecimal(lot.net_total_pnl),
+                netTotalReturn: safeDecimal(lot.net_total_return),
                 netMetricsStatus: lot.net_metrics_status === 'UNAVAILABLE' ? 'UNAVAILABLE' : 'AVAILABLE',
-                relativeReturn: safeNum(lot.relative_return),
+                relativeReturn: safeDecimal(lot.relative_return),
             };
             return row;
         }),
@@ -437,38 +384,12 @@
     let hasPositiveAssetIncome = $derived.by(() => rows.some((row) => (row.assetIncome ?? 0) > 0));
     let hasNetCosts = $derived.by(() => rows.some((row) => (row.allocatedFees ?? 0) !== 0 || (row.allocatedTaxes ?? 0) !== 0));
 
-    function sumNumeric(footerRows: readonly DisplayRow[], getValue: (row: DisplayRow) => number | null): number | null {
-        let total = 0;
-        let count = 0;
-        for (const row of footerRows) {
-            const value = getValue(row);
-            if (value == null || !Number.isFinite(value)) continue;
-            total += value;
-            count += 1;
-        }
-        return count > 0 ? total : null;
-    }
-
-    function weightedAverage(footerRows: readonly DisplayRow[], getValue: (row: DisplayRow) => number | null, getWeight: (row: DisplayRow) => number | null): number | null {
-        let numerator = 0;
-        let denominator = 0;
-        for (const row of footerRows) {
-            const value = getValue(row);
-            const weight = getWeight(row);
-            if (value == null || weight == null || !Number.isFinite(value) || !Number.isFinite(weight) || weight === 0) continue;
-            const absWeight = Math.abs(weight);
-            numerator += value * absWeight;
-            denominator += absWeight;
-        }
-        return denominator > 0 ? numerator / denominator : null;
-    }
-
     function buildFooterCells(footerRows: DisplayRow[]): Record<string, FooterCellContent> {
         const totalPnl = sumNumeric(footerRows, (row) => row.totalPnl);
         const openingValueSum = sumNumeric(footerRows, (row) => row.openingValue);
-        const totalReturn = totalPnl != null && openingValueSum != null && openingValueSum !== 0 ? totalPnl / openingValueSum : null;
+        const totalReturn = ratioOrNull(totalPnl, openingValueSum);
         const netTotalPnl = sumNumeric(footerRows, (row) => row.netTotalPnl);
-        const netTotalReturn = netTotalPnl != null && openingValueSum != null && openingValueSum !== 0 ? netTotalPnl / openingValueSum : null;
+        const netTotalReturn = ratioOrNull(netTotalPnl, openingValueSum);
 
         return {
             'opening-date': label('brokers.lots.footerTotals', label('assets.distribution.total', 'Totals')),
@@ -532,6 +453,19 @@
             sortable: true,
             filterable: false,
             getValue: (row) => row.totalReturn ?? Number.NEGATIVE_INFINITY,
+        },
+        {
+            id: 'annualized-return',
+            header: () => label('brokers.lots.annualizedReturn', 'Annualized'),
+            headerTooltip: () => label('brokers.lots.annualizedReturnTooltip', 'Total return annualized (CAGR) over the lot holding window, for comparison across lots held for different durations.'),
+            cell: (row) => signedPercentCell(row.annualizedReturn),
+            type: 'number',
+            align: 'right',
+            width: 150,
+            minWidth: 130,
+            sortable: true,
+            filterable: false,
+            getValue: (row) => row.annualizedReturn ?? Number.NEGATIVE_INFINITY,
         },
         {
             id: 'asset-income',

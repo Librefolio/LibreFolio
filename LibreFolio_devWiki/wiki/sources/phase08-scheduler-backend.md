@@ -41,7 +41,7 @@ Phase 08 implemented an embedded market data scheduler daemon in the FastAPI bac
 | Step 1+2 plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-08-subplan/plan-phase08Step1-2-backend.prompt.md` |
 | Test checkpoint | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-08-subplan/plan-test-checkpoint-phase07-08.md` |
 | Phase 08 README | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-08-subplan/README.md` |
-| Scheduler daemon | `backend/app/services/scheduler.py` |
+| Scheduler daemon | `backend/app/services/scheduler/scheduler.py` |
 | Leader election | `backend/app/services/scheduler/leader.py` |
 | Settings schema | `backend/app/schemas/settings.py` |
 | Scheduler API | `backend/app/api/v1/settings.py` |

@@ -52,7 +52,7 @@ same release.
 ## Related
 - [[problems/transaction-update-bypassed-sign-validation]]
 - [[entities/portfolio-engine]]
-- [[fifo-v4-engine-architecture]]
+- [[decisions/fifo-v4-engine-architecture]]
 - [[sources/fifo-v4-fee-tax-integration]]
 
 ## Source files

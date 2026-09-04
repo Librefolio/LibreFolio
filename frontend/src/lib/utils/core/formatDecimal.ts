@@ -17,6 +17,11 @@
  *   currency display). When `minFrac > 0` and the value has fewer
  *   significant fractional digits, pad with zeros until `minFrac`.
  *
+ * The result is **idempotent**: `f(f(x)) === f(x)`. Callers rely on it to tell
+ * "the user edited the value" from "the value made a round trip through the
+ * input unchanged" — truncation must therefore never leave a trailing zero
+ * behind (`191.5059166043` → `191.5059166`, not `191.50591660`).
+ *
  * Important: these helpers operate on the *display* value only — the raw
  * string the user typed must be preserved by the caller during editing
  * (don't reformat mid-typing).
@@ -44,9 +49,13 @@ export function formatDecimalForDisplay(value: string | number | null | undefine
     const [intPartRaw, fracPartRaw = ''] = unsigned.split('.');
     const intPart = intPartRaw === '' ? '0' : intPartRaw;
 
-    // Strip trailing zeros from fractional part, then truncate to maxFrac.
-    let frac = fracPartRaw.replace(/0+$/, '');
+    // Truncate to maxFrac first, then strip trailing zeros: stripping before
+    // truncating would let the cut itself expose a fresh trailing zero
+    // ("191.5059166043" → "191.50591660"), which breaks idempotence and makes a
+    // plain round trip through an input look like a user edit.
+    let frac = fracPartRaw;
     if (frac.length > maxFrac) frac = frac.slice(0, maxFrac);
+    frac = frac.replace(/0+$/, '');
     // Pad up to minFrac (only if we actually have any fraction OR the caller
     // wants a forced minimum like 2 for currency).
     if (frac.length < minFrac && minFrac > 0) {

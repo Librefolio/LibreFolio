@@ -6,6 +6,7 @@ export type TransactionFilterMap = {
     broker_ids?: number[];
     asset_id?: number;
     asset_ids?: number[];
+    without_asset?: boolean;
     types?: string[];
     date_start?: string;
     date_end?: string;
@@ -27,6 +28,7 @@ export function parseTransactionFilters(searchParams: URLSearchParams): Transact
     out.asset_id = getOptionalNumberParam(searchParams, 'asset_id');
     out.broker_ids = getCsvNumberParam(searchParams, 'broker_ids');
     out.asset_ids = getCsvNumberParam(searchParams, 'asset_ids');
+    out.without_asset = searchParams.get('without_asset') === 'true' || undefined;
     out.types = getCsvStringParam(searchParams, 'types');
     out.date_start = getOptionalQueryParam(searchParams, 'date_start');
     out.date_end = getOptionalQueryParam(searchParams, 'date_end');
@@ -67,6 +69,7 @@ export function buildTransactionsFiltersUrl(filters: TransactionFilterMap): stri
     setCsvParam(params, 'broker_ids', filters.broker_ids);
     setOptionalNumberParam(params, 'asset_id', filters.asset_id);
     setCsvParam(params, 'asset_ids', filters.asset_ids);
+    setOptionalQueryParam(params, 'without_asset', filters.without_asset ? 'true' : undefined);
     setCsvParam(params, 'types', filters.types);
     setOptionalQueryParam(params, 'date_start', filters.date_start);
     setOptionalQueryParam(params, 'date_end', filters.date_end);
@@ -91,8 +94,11 @@ export function toTransactionColumnFilters(filters: TransactionFilterMap): Recor
     if (filters.tags?.length) out.tags = {type: 'multi-enum', selected: filters.tags};
     if (filters.broker_id != null) out.broker_id = {type: 'enum', selected: [String(filters.broker_id)]};
     else if (filters.broker_ids?.length) out.broker_id = {type: 'enum', selected: filters.broker_ids.map(String)};
-    if (filters.asset_id != null) out.asset_id = {type: 'enum', selected: [String(filters.asset_id)]};
-    else if (filters.asset_ids?.length) out.asset_id = {type: 'enum', selected: filters.asset_ids.map(String)};
+    const assetSelections: string[] = [];
+    if (filters.without_asset) assetSelections.push('__null__');
+    if (filters.asset_id != null) assetSelections.push(String(filters.asset_id));
+    else if (filters.asset_ids?.length) assetSelections.push(...filters.asset_ids.map(String));
+    if (assetSelections.length) out.asset_id = {type: 'enum', selected: assetSelections};
     if (filters.date_start || filters.date_end) out.date = {type: 'date', from: filters.date_start, to: filters.date_end};
     if (filters.cash?.length) out.cash = {type: 'currency-stack', items: filters.cash.map((i) => ({...i}))};
     if (filters.id_min != null || filters.id_max != null) out.id = {type: 'number', min: filters.id_min, max: filters.id_max};
@@ -109,6 +115,7 @@ export function applyTransactionColumnFilters(filters: TransactionFilterMap, rec
     next.broker_ids = undefined;
     next.asset_id = undefined;
     next.asset_ids = undefined;
+    next.without_asset = undefined;
     next.date_start = undefined;
     next.date_end = undefined;
     next.cash = undefined;
@@ -130,13 +137,13 @@ export function applyTransactionColumnFilters(filters: TransactionFilterMap, rec
                 next.broker_ids = v.selected.map(Number);
             }
         } else if (k === 'asset_id' && v.type === 'enum') {
-            if (v.selected.length === 1) {
-                next.asset_id = Number(v.selected[0]);
-                next.asset_ids = undefined;
-            } else if (v.selected.length > 1) {
-                next.asset_id = undefined;
-                next.asset_ids = v.selected.map(Number);
-            }
+            const numericAssetIds = v.selected
+                .filter((value) => value !== '__null__')
+                .map(Number)
+                .filter(Number.isFinite);
+            next.without_asset = v.selected.includes('__null__') || undefined;
+            if (numericAssetIds.length === 1 && !next.without_asset) next.asset_id = numericAssetIds[0];
+            else if (numericAssetIds.length > 0) next.asset_ids = numericAssetIds;
         } else if (k === 'date' && v.type === 'date') {
             next.date_start = v.from || undefined;
             next.date_end = v.to || undefined;
@@ -153,7 +160,7 @@ export function applyTransactionColumnFilters(filters: TransactionFilterMap, rec
     const sameTypes = JSON.stringify(filters.types ?? null) === JSON.stringify(next.types ?? null);
     const sameTags = JSON.stringify(filters.tags ?? null) === JSON.stringify(next.tags ?? null);
     const sameBroker = (filters.broker_id ?? null) === (next.broker_id ?? null) && JSON.stringify(filters.broker_ids ?? null) === JSON.stringify(next.broker_ids ?? null);
-    const sameAsset = (filters.asset_id ?? null) === (next.asset_id ?? null) && JSON.stringify(filters.asset_ids ?? null) === JSON.stringify(next.asset_ids ?? null);
+    const sameAsset = (filters.asset_id ?? null) === (next.asset_id ?? null) && JSON.stringify(filters.asset_ids ?? null) === JSON.stringify(next.asset_ids ?? null) && (filters.without_asset ?? false) === (next.without_asset ?? false);
     const sameDate = (filters.date_start ?? null) === (next.date_start ?? null) && (filters.date_end ?? null) === (next.date_end ?? null);
     const sameCash = JSON.stringify(filters.cash ?? null) === JSON.stringify(next.cash ?? null);
     const sameId = (filters.id_min ?? null) === (next.id_min ?? null) && (filters.id_max ?? null) === (next.id_max ?? null);

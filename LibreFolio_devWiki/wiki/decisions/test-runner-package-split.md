@@ -11,7 +11,7 @@ related: [entities/devpy-cli, concepts/backend-test-isolation, concepts/e2e-data
 
 ## Context
 
-`scripts/test_runner.py` had grown to **4841 lines in a single file**. It defined every test category, every test action (~115 total across 12 categories), the CLI parsers, the registry data structure, coverage helpers, suite runners, and shared utilities — all in one place.
+`scripts/test_runner/` had grown to **4841 lines in a single file**. It defined every test category, every test action (~115 total across 12 categories), the CLI parsers, the registry data structure, coverage helpers, suite runners, and shared utilities — all in one place.
 
 Pain points:
 - **Navigation**: impossible to jump to a specific test category without excessive scrolling.
@@ -103,6 +103,34 @@ Only 3 touches required:
 ### Fixes included in this refactoring
 - **`_build_pytest_cmd` consistency**: 4 functions were manually building pytest commands with `[*pipenv_prefix(), "python", "-m", "pytest", ...]` instead of using the shared `_build_pytest_cmd()` helper. All now use the helper.
 - **`front-transaction` category**: new category added as part of this split. Maps to `frontend/e2e/transactions/transactions.spec.ts`. Run with `./dev.py test front-transaction transactions --ui`.
+
+
+## History — 2026-08 (figures corrected 2026-09-01)
+
+The split described above (18 modules, 12 categories, ~115 actions) has grown to
+**30 modules, 15 categories, 250 `add_test()` call sites**, plus a scheduling
+layer. The flat `_backend_*` / `_frontend_*` layout **has not changed**.
+
+> **Correction, 2026-09-01.** This paragraph previously read "31 modules, 15
+> categories, 219 actions" and claimed the flat layout "was reorganised around an
+> `actions/` package". Counted against the tree: **30** modules, **250** `add_test()`
+> call sites, and **there is no `actions/` package** — that reorganisation was
+> proposed and never happened. The scheduling layer is real
+> (`_scheduler.py`, `_executor.py`, `_inventory.py`); the repackaging is not.
+
+The decision recorded here — *split by domain, assemble through a registry* —
+was not reversed; it was the precondition for the next layer:
+
+- [[concepts/derived-test-inventory]] — everything the runner needs is computed
+  from the registry without executing a test.
+- [[concepts/test-isolation-classes]] — `PURE` / `READ` / `WRITE_SCOPED` /
+  `WRITE_GLOBAL`, consumed by `_scheduler.py`.
+- [[concepts/run-cache-and-campaign-semantics]] — `--fresh-run` vs `--resume`.
+- [[sources/p8-runner-parallel-architecture]] — the migration plan.
+- [[entities/test-runner]] — the current-state description of the package.
+
+The module table below therefore describes the 2026-06 state, not the current
+one. It is left intact because the *rationale* is what this page is for.
 
 ## Source files
 

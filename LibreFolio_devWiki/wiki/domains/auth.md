@@ -61,5 +61,5 @@ No planned features in this domain. The auth foundation is intentionally minimal
 | Auth API endpoints | `backend/app/api/v1/auth.py` |
 | Auth service | `backend/app/services/auth_service.py` |
 | User service | `backend/app/services/user_service.py` |
-| Auth store (frontend) | `frontend/src/lib/stores/auth.ts` |
+| Auth store (frontend) | `frontend/src/lib/stores/app/auth.ts` |
 | DB model (User, UserRole) | `backend/app/db/models.py` |

@@ -73,6 +73,3 @@ export interface GapRow {
     dayCount: number;
     expanded: boolean;
 }
-
-/** Union type for table rendering */
-export type TableRow = (DataRow & {type: 'data'}) | GapRow;

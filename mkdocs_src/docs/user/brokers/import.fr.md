@@ -28,7 +28,7 @@ Pour une explication détaillée des champs de transaction et des règles de val
 
 Le bouton **Importer** (icône `Télécharger`) lance l'assistant **BRIM**. Ce module vous permet d'importer en masse les relevés exportés de votre courtier (formats CSV ou Excel), d'exécuter des validations de cohérence automatiques et de mapper les tickers aux actifs locaux avant la validation finale.
 
-### Le flux d'importation
+### 🖼️ Le flux d'importation
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-broker-import" data-carousel-interval="6000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="import-modal" data-title="📥 Fenêtre modale d'importation rapide" alt="Fenêtre modale d'importation">
@@ -50,7 +50,14 @@ L'assistant progresse à travers les étapes suivantes :
 4. **Résolution d'actifs** : Si le relevé contient des tickers ou ISIN qui n'existent pas dans votre registre d'actifs local, BRIM affiche une étape de mappage. Vous pouvez :
  * Mapper le ticker à un actif existant.
  * Créer un nouvel actif directement depuis cet écran, pré-rempli avec les détails extraits du relevé.
-5. **Zone de préparation en masse et validation** : Passez en revue la liste de contrôle préparée des transactions propres et uniques. Décochez les opérations que vous souhaitez exclure, puis cliquez sur **Valider** pour écrire les enregistrements dans le registre de votre portefeuille.
+5.  **Filtre de date d'ouverture** : Si une ligne analysée est strictement antérieure à la date d'ouverture du courtier, l'assistant la marque **Avant ouverture**, désactive sa case à cocher et la maintient hors de l'importation. Les lignes se trouvant le jour de l'ouverture sont autorisées. Utilisez **Modifier la date du courtier** et réactualisez si nécessaire.
+6.  **Zone de préparation en masse et validation** : Passez en revue la liste de contrôle préparée des transactions propres et uniques. Décochez les opérations que vous souhaitez exclure, puis cliquez sur **Valider** pour écrire les enregistrements dans le registre de votre portefeuille.
+
+---
+
+## ⚠️ Avertissements sur les actifs
+
+Certains plugins associent des avertissements d'information aux actifs extraits. Par exemple, Intesa Sanpaolo et Crédit Agricole peuvent avertir qu'un titre peut être échu/remboursé et difficile à trouver en ligne. La modale de création d'actif regroupe ces avertissements dans des bannières ambrées ; ils sont informatifs et ne modifient pas l'importation des transactions.
 
 ---
 
@@ -62,3 +69,5 @@ Cliquez sur le bouton **Afficher l'historique des importations** (icône `FileTe
 - Les lignes traitées et le total des transactions validées.
 - L'horodatage de l'importation.
 - L'utilisateur qui a effectué l'importation.
+
+

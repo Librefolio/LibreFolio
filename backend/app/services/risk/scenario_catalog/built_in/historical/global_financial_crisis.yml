@@ -1,0 +1,26 @@
+schema_version: 1
+id: global_financial_crisis
+kind: historical_replay
+tags: [crisis, equity, global]
+name:
+  en: Global Financial Crisis
+  it: Crisi finanziaria globale
+  fr: Crise financière mondiale
+  es: Crisis financiera global
+description:
+  en: Peak-to-trough market phase surrounding the 2007-2009 global financial crisis.
+  it: Fase di mercato dal massimo al minimo durante la crisi finanziaria globale del 2007-2009.
+  fr: Phase de marché du sommet au creux pendant la crise financière mondiale de 2007-2009.
+  es: Fase de mercado de máximo a mínimo durante la crisis financiera global de 2007-2009.
+defaults:
+  start: 2007-10-09
+  end: 2009-03-09
+  missing_history_policy: manual_proxy_or_exclude
+  composition_policy: current_buy_and_hold
+editable:
+  dates: true
+  missing_history_policy: true
+  proxies: true
+  exclusions: true
+limits:
+  minimum_calendar_days: 1

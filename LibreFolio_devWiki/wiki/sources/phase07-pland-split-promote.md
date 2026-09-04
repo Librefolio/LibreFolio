@@ -46,6 +46,6 @@ This source group covers the archived sub-plan bundle for split and promote oper
 | Payload centralization | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/PlanD-D1D2/plan-CentralizePayloadCommit.prompt.md` |
 | Transaction schemas | `backend/app/schemas/transactions.py` |
 | Transaction service | `backend/app/services/transaction_service.py` |
-| Payload helpers (FE) | `frontend/src/lib/utils/txPayloadHelpers.ts` |
-| Commit API (FE) | `frontend/src/lib/utils/txCommitApi.ts` |
+| Payload helpers (FE) | `frontend/src/lib/utils/transactions/txPayloadHelpers.ts` |
+| Commit API (FE) | `frontend/src/lib/utils/transactions/txCommitApi.ts` |
 | BulkModal | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |

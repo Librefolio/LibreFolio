@@ -256,7 +256,7 @@
                 <div class="url-section">
                     <label class="url-label" for="asset-url-input">{$_('uploads.imageUrl') || 'Image URL'}</label>
                     <div style="display:flex; gap:0.5rem; align-items:center;">
-                        <input type="url" id="asset-url-input" class="url-input" style="flex:1;" bind:value={urlInput} placeholder="https://example.com/image.png" />
+                        <input type="url" id="asset-url-input" data-testid="asset-picker-url-input" class="url-input" style="flex:1;" bind:value={urlInput} placeholder="https://example.com/image.png" />
                         {#if urlInput}
                             <button
                                 type="button"
@@ -345,7 +345,7 @@
 
         <!-- Footer -->
         <div class="picker-footer">
-            <button class="btn btn-secondary" on:click={close} type="button">
+            <button class="btn btn-secondary" data-testid="asset-picker-cancel" on:click={close} type="button">
                 {$_('common.cancel') || 'Cancel'}
             </button>
             <button class="btn btn-primary" data-testid="asset-picker-confirm" disabled={(activeTab === 'url' && !urlValid && !(initialUrl && !urlInput)) || (activeTab === 'existing' && !selectedFile)} on:click={confirmSelection} type="button">

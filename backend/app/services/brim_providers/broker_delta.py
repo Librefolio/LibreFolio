@@ -31,7 +31,7 @@ import structlog
 
 from backend.app.db.models import TransactionType
 from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMValidationIssue
-from backend.app.schemas.common import Currency
+from backend.app.schemas.common import Currency, is_fiat_currency
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.provider_registry import BRIMProviderRegistry, register_provider
@@ -104,14 +104,6 @@ def _parse_delta_asset(value: str) -> Dict[str, Optional[str]]:
     return {"symbol": value.upper(), "name": None}
 
 
-def _is_fiat_currency(value: str) -> bool:
-    try:
-        Currency.validate_code(value)
-    except ValueError:
-        return False
-    return True
-
-
 @register_provider(BRIMProviderRegistry)
 class DeltaBrokerProvider(BRIMProvider):
     """Delta CSV export import plugin."""
@@ -164,7 +156,7 @@ class DeltaBrokerProvider(BRIMProvider):
         except Exception:
             return False
 
-    def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:
+    def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:  # noqa: C901 — flat row-variant dispatch (if/elif over ways), no nested decisions
         """Parse Delta CSV export file."""
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []
@@ -199,7 +191,7 @@ class DeltaBrokerProvider(BRIMProvider):
             fee_symbol = fee_asset["symbol"]
             if not fee_symbol:
                 return
-            if _is_fiat_currency(fee_symbol):
+            if is_fiat_currency(fee_symbol):
                 self._create_transaction(
                     row_num=row_num,
                     transactions=transactions,
@@ -275,7 +267,7 @@ class DeltaBrokerProvider(BRIMProvider):
                             warnings.append(f"Row {row_num}: invalid {way} base asset/amount, skipping")
                             continue
                         asset_id = get_asset_id(base_symbol, base_asset["name"], base_type)
-                        if quote_symbol and _is_fiat_currency(quote_symbol) and quote_amount is not None and quote_amount > 0:
+                        if quote_symbol and is_fiat_currency(quote_symbol) and quote_amount is not None and quote_amount > 0:
                             tx_type = TransactionType.BUY if way == "BUY" else TransactionType.SELL
                             quantity = abs(base_amount) if way == "BUY" else -abs(base_amount)
                             cash_amount = -abs(quote_amount) if way == "BUY" else abs(quote_amount)
@@ -318,7 +310,7 @@ class DeltaBrokerProvider(BRIMProvider):
                             skipped_invalid_rows += 1
                             warnings.append(f"Row {row_num}: invalid {way} base asset/amount, skipping")
                             continue
-                        if base_type == "FIAT" or _is_fiat_currency(base_symbol):
+                        if base_type == "FIAT" or is_fiat_currency(base_symbol):
                             tx_type = TransactionType.DEPOSIT if way == "DEPOSIT" else TransactionType.WITHDRAWAL
                             cash_amount = abs(base_amount) if way == "DEPOSIT" else -abs(base_amount)
                             self._create_transaction(
@@ -356,7 +348,7 @@ class DeltaBrokerProvider(BRIMProvider):
                             create_fee(row_num, tx_date, fee_amount, row.get(COL_FEE_CURRENCY, ""), asset_id, context)
 
                     elif way == "DIVIDEND":
-                        if not base_symbol or quote_amount is None or quote_amount <= 0 or not quote_symbol or not _is_fiat_currency(quote_symbol):
+                        if not base_symbol or quote_amount is None or quote_amount <= 0 or not quote_symbol or not is_fiat_currency(quote_symbol):
                             skipped_invalid_rows += 1
                             warnings.append(f"Row {row_num}: invalid dividend, skipping")
                             continue

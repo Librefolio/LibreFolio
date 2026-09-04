@@ -4,7 +4,7 @@ Settings API endpoints.
 Endpoints for managing user and global settings.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated
 
 import structlog
@@ -13,17 +13,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.v1.auth import get_current_user
 from backend.app.db.models import User
-from backend.app.db.session import get_session_generator
+from backend.app.db.session import get_async_engine, get_session_generator
 from backend.app.schemas.settings import (
+    SETTINGS_REGISTRY,
+    CacheClearResponse,
+    CacheStatusEntry,
+    CacheStatusResponse,
     GlobalSettingBulkUpdate,
     GlobalSettingRead,
+    GlobalSettingsInitializeResponse,
     GlobalSettingsListResponse,
+    SchedulerLogResponse,
+    SchedulerStateResponse,
     UserSettingsRead,
     UserSettingsUpdate,
 )
+from backend.app.services.global_settings_service import get_setting_value
 from backend.app.services.scheduler import read_job_log
 from backend.app.services.scheduler.state import load_state
-from backend.app.services.global_settings_service import get_setting_value
 from backend.app.services.settings_service import (
     get_all_global_settings,
     get_global_setting,
@@ -32,6 +39,7 @@ from backend.app.services.settings_service import (
     update_global_setting,
     update_user_settings,
 )
+from backend.app.utils.cache_utils import clear_all_caches, clear_cache, list_caches
 
 logger = structlog.get_logger(__name__)
 
@@ -138,7 +146,7 @@ async def bulk_update_global_settings(
     return results
 
 
-@router.post("/global/initialize", status_code=status.HTTP_200_OK)
+@router.post("/global/initialize", status_code=status.HTTP_200_OK, response_model=GlobalSettingsInitializeResponse)
 async def initialize_global_settings_endpoint(
     admin: Annotated[User, Depends(require_admin)],
     session: AsyncSession = Depends(get_session_generator),
@@ -152,7 +160,7 @@ async def initialize_global_settings_endpoint(
     return {"message": f"Initialized {created} global settings"}
 
 
-@router.get("/scheduler/state")
+@router.get("/scheduler/state", response_model=SchedulerStateResponse)
 async def get_scheduler_state(
     admin: Annotated[User, Depends(require_admin)],
 ) -> dict:
@@ -165,15 +173,13 @@ async def get_scheduler_state(
     state = load_state()
 
     # Read scheduler timezone from GlobalSettings
-    from backend.app.db.session import get_async_engine
-
     engine = get_async_engine()
     async with AsyncSession(engine) as db_session:
-        tz_value = await get_setting_value(db_session, "scheduler_timezone")
+        tz_value = await get_setting_value(db_session, SETTINGS_REGISTRY.global_.SCHEDULER_TIMEZONE.key)
     scheduler_tz = str(tz_value) if tz_value else "UTC"
 
     # UTC wall clock (HH:MM)
-    now_utc = datetime.now(timezone.utc)
+    now_utc = datetime.now(UTC)
     server_now_utc = now_utc.strftime("%H:%M")
 
     return {
@@ -197,7 +203,7 @@ async def get_scheduler_state(
     }
 
 
-@router.get("/scheduler/log")
+@router.get("/scheduler/log", response_model=SchedulerLogResponse)
 async def get_scheduler_log(
     admin: Annotated[User, Depends(require_admin)],
     since: str | None = None,
@@ -214,3 +220,69 @@ async def get_scheduler_log(
     """
     entries = read_job_log(since=since)
     return {"entries": entries}
+
+
+# ============================================================================
+# CACHE ADMIN ENDPOINTS
+# ============================================================================
+
+
+@router.get("/cache/status", response_model=CacheStatusResponse)
+async def get_cache_status(
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> CacheStatusResponse:
+    """
+    List all registered caches with their current stats.
+
+    Readable by any authenticated user (user decision 03/09: "il leggere è per tutti").
+    """
+    items = [
+        CacheStatusEntry(
+            name=stats["name"],
+            current_size=stats["current_size"],
+            maxsize=stats["maxsize"],
+            ttl_seconds=stats["ttl"],
+        )
+        for stats in list_caches()
+    ]
+    return CacheStatusResponse(items=items)
+
+
+@router.post("/cache/clear-all", response_model=CacheClearResponse)
+async def clear_all_caches_endpoint(
+    admin: Annotated[User, Depends(require_admin)],
+) -> CacheClearResponse:
+    """
+    Clear ALL registered caches. Admin only.
+
+    After a clear, the next fetch of the affected data will hit the providers
+    again — expect slowdowns comparable to a server restart.
+    """
+    count = clear_all_caches()
+    logger.info("All caches cleared via API", admin_user_id=admin.id, admin_username=admin.username, cleared_count=count)
+    return CacheClearResponse(
+        cleared_count=count,
+        name=None,
+        message=f"Cleared {count} caches",
+    )
+
+
+@router.post("/cache/clear/{name}", response_model=CacheClearResponse)
+async def clear_cache_endpoint(
+    name: str,
+    admin: Annotated[User, Depends(require_admin)],
+) -> CacheClearResponse:
+    """
+    Clear a single named cache. Admin only.
+
+    After a clear, the next fetch of the affected data will hit the providers
+    again — expect slowdowns comparable to a server restart.
+    """
+    if not clear_cache(name):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Cache '{name}' not found")
+    logger.info("Cache cleared via API", admin_user_id=admin.id, admin_username=admin.username, cache_name=name)
+    return CacheClearResponse(
+        cleared_count=1,
+        name=name,
+        message=f"Cache '{name}' cleared",
+    )

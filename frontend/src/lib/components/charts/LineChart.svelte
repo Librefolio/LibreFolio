@@ -17,9 +17,11 @@
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {attachChartReady} from '$lib/utils/chartReady';
     import {t} from '$lib/i18n';
     import type {RenderedSignal} from '$lib/charts/signals';
-    import {buildBandSeries, buildBarSeries, buildMainSeries, COLORS, updateArrowRotations} from './lineChartHelpers';
+    import {buildBandSeries, buildBarSeries, buildMainSeries, buildSignalReferencePrimitives, COLORS, hexToRgba, updateArrowRotations} from './lineChartHelpers';
+    import {assignOverlaySignalAxes, buildSecondaryYAxes, computeRightMargin} from './chartCoreHelpers';
     import {scheduleFirstRenderStabilityFix, tooltipPositionSide} from './echartsTooltipHelpers';
     import {aggregateLineSeries, computeDensity, downsampleRenderedSignal, mapDateToBucket, type ChartResolution} from './timeSeriesAggregation';
     import {truncateName} from '$lib/utils/text';
@@ -31,6 +33,8 @@
     export interface LineDataPoint {
         date: string;
         value: number;
+        /** True when the point exists but its numeric value is unavailable; rendered as an ECharts null gap. */
+        missing?: boolean;
         staleDays?: number;
         fxStaleDays?: number;
         originalCurrency?: string;
@@ -44,6 +48,13 @@
         low?: number | null;
         close?: number | null;
         volume?: number | null;
+        /** Logical aggregation bucket boundaries. */
+        bucketStart?: string;
+        bucketEnd?: string;
+        /** Real observation date selected as the bucket representative. */
+        representativeDate?: string;
+        /** Number of finite source points observed in this bucket. */
+        sourcePointCount?: number;
     }
 
     interface Props {
@@ -306,13 +317,14 @@
 
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+            attachChartReady(chartInstance, chartContainer, 'line');
             needsInitialLayoutStabilityPass = true;
 
             if (onPointClick) {
                 chartInstance.on('click', 'series.line', (params: any) => {
                     if (params.dataIndex !== undefined && currentRenderedData[params.dataIndex]) {
                         const point = currentRenderedData[params.dataIndex];
-                        onPointClick!(point.date, point.value);
+                        if (!point.missing) onPointClick!(point.date, point.value);
                     }
                 });
             }
@@ -344,8 +356,14 @@
             renderedData = getCompactAggregatedData(resolution);
 
             if (resolution !== 'daily') {
-                const bucketedDates = renderedData.map((point) => point.date);
-                activeOverlaySignals = overlaySignals.map((signal) => downsampleRenderedSignal(signal, resolution, bucketedDates)).filter((signal) => signal.data.length > 0);
+                activeOverlaySignals = overlaySignals.map((signal) => downsampleRenderedSignal(signal, resolution, renderedData)).filter((signal) => signal.data.length > 0);
+            }
+        }
+        activeOverlaySignals = assignOverlaySignalAxes(activeOverlaySignals);
+        const overlayPointMeta = new Map<string, LineDataPoint>();
+        for (const signal of activeOverlaySignals) {
+            for (const point of signal.data) {
+                overlayPointMeta.set(`${signal.label}|${point.date}`, point);
             }
         }
 
@@ -356,7 +374,8 @@
 
         // Determine if we need baseline coloring (green above baseline, red below)
         const useBaselineColoring = colorByBaseline && !compact;
-        const baselineValue = isPercentage ? 0 : (renderedData[0]?.value ?? 0);
+        const firstValue = renderedData.find((point) => !point.missing)?.value ?? 0;
+        const baselineValue = isPercentage ? 0 : firstValue;
 
         // Build per-point stale data array
         const staleDaysArr = renderedData.map((d) => d.staleDays ?? 0);
@@ -368,7 +387,7 @@
 
         // ── Unified main series: handles baseline coloring + stale gradient together ──
         {
-            const values = renderedData.map((d) => d.value);
+            const values = renderedData.map((d) => (d.missing ? null : d.value));
             const lineW = compact ? 1.5 : 2;
             const mainSeriesList = buildMainSeries(values, staleDaysArr, baseColor, greenColor, redColor, isDark, areaFill, lineW, mainSeriesName, useBaselineColoring, baselineValue, showGradient);
             series.push(...mainSeriesList);
@@ -432,7 +451,7 @@
                     type: 'line',
                     name: signal.label,
                     data: signalSeriesData,
-                    connectNulls: true,
+                    connectNulls: signal.connectNulls ?? true,
                     smooth: false,
                     symbol: 'none',
                     showSymbol: false,
@@ -442,14 +461,25 @@
                         color: signal.color,
                         width: signal.lineWidth,
                         type: signal.lineType,
+                        opacity: signal.opacity ?? 1,
                     },
                     itemStyle: {
                         color: signal.color,
+                        opacity: signal.opacity ?? 1,
                     },
+                    ...(sType === 'area'
+                        ? {
+                              areaStyle: {
+                                  color: hexToRgba(signal.color, signal.fillOpacity ?? 0.2),
+                                  origin: 0,
+                              },
+                          }
+                        : {}),
                     emphasis: {
                         focus: 'none',
                     },
-                    z: 1, // below main series
+                    z: sType === 'area' ? 0 : 1, // below main series
+                    ...buildSignalReferencePrimitives(signal, isDark),
                 };
 
                 // Endpoint markers at start/end of signal data
@@ -529,14 +559,7 @@
 
         // Grid configuration
         const showYAxis = !compact || showMiniAxis;
-        // Check which overlay axes are active (have at least one signal with data).
-        // In compact mode the axes are hidden but still auto-scaled so overlay
-        // lines render at the correct proportions — no fixed min/max fallback.
-        const hasSecondaryAxis = activeOverlaySignals.some((s) => (s.yAxisIndex ?? 0) === 1 && s.data.length > 0);
-        const hasTertiaryAxis = activeOverlaySignals.some((s) => (s.yAxisIndex ?? 0) === 2 && s.data.length > 0);
-
-        // Count how many extra axes need right-side space (only visible in non-compact)
-        const extraAxesCount = (hasSecondaryAxis ? 1 : 0) + (hasTertiaryAxis ? 1 : 0);
+        const {axes: secondaryAxes, extraAxesCount} = buildSecondaryYAxes(activeOverlaySignals, isDark, 0, !compact);
 
         const gridConfig = compact
             ? {
@@ -548,7 +571,7 @@
               }
             : {
                   top: 20,
-                  right: extraAxesCount > 1 ? 115 : extraAxesCount === 1 ? 60 : 12,
+                  right: computeRightMargin(extraAxesCount),
                   bottom: 25,
                   left: 10,
                   containLabel: true,
@@ -629,71 +652,7 @@
                         scale: !isInclude0,
                     };
                 })(),
-                // Axis 1 — Secondary (right side, independent scale for RSI 0-100)
-                // Always declared to prevent ECharts coord resolution crashes when
-                // axis count changes between renders. When no series use it, it's
-                // hidden with fixed bounds so coord resolution never fails.
-                // In compact mode: hidden but auto-scaled so overlay lines render correctly.
-                {
-                    type: 'value',
-                    name: hasSecondaryAxis && !compact ? 'RSI' : '',
-                    nameLocation: 'start',
-                    nameGap: 5,
-                    nameTextStyle: {
-                        color: isDark ? '#94a3b8' : '#9ca3af',
-                        fontSize: 9,
-                        fontWeight: 'bold',
-                        align: 'center',
-                    },
-                    show: hasSecondaryAxis && !compact,
-                    position: 'right',
-                    // Always auto-scale when signals are present (no fixed min/max)
-                    min: hasSecondaryAxis ? undefined : 0,
-                    max: hasSecondaryAxis ? undefined : 100,
-                    axisLine: {show: hasSecondaryAxis && !compact, lineStyle: {color: isDark ? '#64748b' : '#9ca3af'}},
-                    axisTick: {show: hasSecondaryAxis && !compact},
-                    axisLabel: {
-                        show: hasSecondaryAxis && !compact,
-                        color: isDark ? '#94a3b8' : '#9ca3af',
-                        fontSize: 10,
-                        formatter: (v: number) => v.toFixed(0),
-                    },
-                    splitLine: {show: false},
-                    scale: hasSecondaryAxis,
-                },
-                // Axis 2 — Tertiary (right side with offset, independent scale for MACD)
-                // Always declared so ECharts never crashes on yAxisIndex=2 references.
-                // In compact mode: hidden but auto-scaled so overlay lines render correctly.
-                {
-                    type: 'value',
-                    name: hasTertiaryAxis && !compact ? 'MACD' : '',
-                    nameLocation: 'start',
-                    nameGap: 5,
-                    nameTextStyle: {
-                        color: isDark ? '#a78bfa' : '#7c3aed',
-                        fontSize: 9,
-                        fontWeight: 'bold',
-                        align: 'center',
-                    },
-                    show: hasTertiaryAxis && !compact,
-                    position: 'right',
-                    offset: hasSecondaryAxis && hasTertiaryAxis ? 55 : 0,
-                    min: hasTertiaryAxis ? undefined : 0,
-                    max: hasTertiaryAxis ? undefined : 1,
-                    axisLine: {show: hasTertiaryAxis && !compact, lineStyle: {color: isDark ? '#8b5cf6' : '#7c3aed'}},
-                    axisTick: {show: hasTertiaryAxis && !compact},
-                    axisLabel: {
-                        show: hasTertiaryAxis && !compact,
-                        color: isDark ? '#a78bfa' : '#7c3aed',
-                        fontSize: 10,
-                        formatter: (v: number) => {
-                            if (Math.abs(v) >= 1) return v.toFixed(2);
-                            return v.toFixed(4).replace(/\.?0+$/, '');
-                        },
-                    },
-                    splitLine: {show: false},
-                    scale: hasTertiaryAxis,
-                },
+                ...secondaryAxes,
             ],
             tooltip: compact
                 ? undefined
@@ -722,8 +681,13 @@
 
                           // Build yAxisIndex lookup for overlay signals by name
                           const signalAxisMap = new Map<string, number>();
+                          const signalAxisLabelMap = new Map<number, string>();
                           for (const sig of activeOverlaySignals) {
-                              signalAxisMap.set(sig.label, sig.yAxisIndex ?? 0);
+                              const axisIndex = sig.yAxisIndex ?? 0;
+                              signalAxisMap.set(sig.label, axisIndex);
+                              if (axisIndex > 0 && !signalAxisLabelMap.has(axisIndex)) {
+                                  signalAxisLabelMap.set(axisIndex, sig.axisLabel ?? `AXIS ${axisIndex}`);
+                              }
                           }
 
                           // Track already-shown series names to deduplicate segmented baseline entries
@@ -752,8 +716,13 @@
                               const axisIdx = signalAxisMap.get(p.seriesName) ?? 0;
                               // Signals on non-primary axes have their own scale — show without % suffix
                               const valueSuffix = axisIdx === 0 ? suffix : '';
-                              const axisNote = axisIdx === 1 ? ` <span style="font-size:10px;color:#94a3b8">[RSI]</span>` : axisIdx === 2 ? ` <span style="font-size:10px;color:#a78bfa">[MACD]</span>` : '';
+                              const axisLabel = signalAxisLabelMap.get(axisIdx);
+                              const axisNote = axisLabel ? ` <span style="font-size:10px;color:#94a3b8">[${axisLabel}]</span>` : '';
                               html += `<br/>${colorDot}${truncateName(String(p.seriesName ?? ''))}: ${Number(value).toFixed(4)}${valueSuffix}${axisNote}`;
+                              const representativePoint = overlayPointMeta.get(`${p.seriesName}|${date}`);
+                              if (representativePoint?.representativeDate && representativePoint.representativeDate !== date) {
+                                  html += ` <span style="font-size:10px;color:#94a3b8">(${$t('chart.tooltip.valueAt', {values: {date: representativePoint.representativeDate}})})</span>`;
+                              }
 
                               // For band signals, also show upper/lower in the tooltip
                               const bandSignal = activeOverlaySignals.find((s) => s.label === p.seriesName && (s.seriesType ?? 'line') === 'band' && s.bandData);

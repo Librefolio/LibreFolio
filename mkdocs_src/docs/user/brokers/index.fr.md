@@ -32,7 +32,7 @@ Une fois que vous sélectionnez un courtier dans la liste, l'interface est divis
 1. **Aperçu** : Affichage de la valeur nette, des mesures de rendement, de l'historique de croissance et des graphiques d'allocation limité uniquement à ce compte de courtage (voir **[Aperçu du Tableau de Bord](../dashboard/index.md)**).
 2. **Positions** : Liste des positions ouvertes, pondérations des actifs et mesures de performance au sein de ce courtier, avec accès au panneau d'analyse des lots FIFO intégré (voir **[Positions du Tableau de Bord](../dashboard/positions.md)**).
 3. **Transactions** : Le journal de toutes les activités financières, y compris les saisies manuelles, les importations de relevés et les historiques (voir **[Importation de Transactions](import.md)**).
-4. **Infos** : Métadonnées du courtier, configurations de découvert/vente à découvert, exportation AI et contrôles de partage intégrés (voir **[Configuration & Infos](info.md)**).
+4. **Infos** : Métadonnées du courtier, configurations de découvert/vente à découvert, exportation AI et contrôles de partage intégrés (voir **[Configuration & Infos](info.md)** et **[Broker AI Export](../ai-export/broker.md)**).
 
 ---
 
@@ -68,3 +68,5 @@ L'onglet **Positions** liste tous les actifs actuellement détenus auprès de ce
 - 📥 **[Importation de Transactions (BRIM)](import.md)** — Comment enregistrer manuellement des transactions, exécuter l'assistant d'importation CSV/Excel BRIM et afficher les journaux d'importation.
 - ⚙️ **[Configuration & Infos](info.md)** — Paramètres de métadonnées (découverts, vente à découvert), générateur d'invite d'exportation AI limité et panneau de partage de courtier intégré.
 - 🤝 **[Partage de Courtier](sharing.md)** — Guide détaillé sur les autorisations de rôles (Propriétaire, Éditeur, Lecteur) et les paramètres de pourcentage d'actifs.
+- 🧠 **[Broker AI Export](../ai-export/broker.md)** — Tâches avec portée broker, couverture des données, échantillonnage exact, disponibilité et confidentialité.
+

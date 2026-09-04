@@ -44,9 +44,13 @@ En la parte superior derecha del panel de control, tienes varios controles para 
 - **Rango de tiempo**: predefinidos desde 1 semana hasta Todo el tiempo (MAX), o un rango personalizado a través del selector de fechas.
 - **Filtro de bróker**: filtra todas las métricas a uno o más brókeres específicos.
 - **Moneda objetivo**: convierte dinámicamente todos los activos y saldos de efectivo a una única moneda seleccionada para una vista agregada.
-- **Exportación IA** (:material-brain:) — Haz clic en este botón para copiar al portapapeles un resumen en texto del estado actual de tu cartera, optimizado para pegar en LLMs (ej., Gemini). Puedes elegir entre:
- - **Exportación Completa**: Incluye todos los valores KPI, posiciones, ponderaciones y asignaciones.
- - **Solo Datos**: Una representación compacta en JSON/texto de tus posiciones y saldos.
+- **Exportación de IA** (:material-brain:) — abre una exportación al portapapeles.
+  Elige **Instantánea de datos** para copiar solo datos factuales, o una **tarea
+  de análisis** que incluye automáticamente sus instrucciones y su contrato de
+  respuesta; después, selecciona el **nivel de detalle** (Compacto, Estándar o
+  Completo). La instantánea del backend sigue el filtro de bróker activo, el
+  rango de fechas y la moneda objetivo; LibreFolio no contacta con servicios de
+  IA. Consulta [Exportación AI de Cartera](../ai-export/portfolio.md) o la [guía de Exportación de IA](../ai-export/index.md).
 
 !!! tip "El ámbito importa"
 
@@ -65,6 +69,7 @@ Si faltan precios o tipos de cambio en la fecha de finalización, aparece un ban
 - 💰 **[Tarjetas KPI](kpi-cards.md)** — Valor Neto, PyG del Período y Rendimientos explicados
 - 📊 **[Gráficos](charts.md)** — Gráfico de Crecimiento y Panel de Asignación explicados
 - 🔍 **[Posiciones y Análisis](positions.md)** — Posiciones abiertas, vistas de tabla vs. mapa y análisis detallado de lotes fiscales FIFO.
+
 
 ## 🔗 Teoría relacionada
 

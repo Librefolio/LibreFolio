@@ -3,6 +3,7 @@ title: "E2E data-testid Rule"
 category: concept
 tags: [testing, frontend, playwright, e2e, i18n]
 related_features: [F-067, F-008]
+related: [concepts/assert-on-identity-not-prose, problems/i18n-key-assertion-false-green]
 ---
 
 # Concept: E2E data-testid Rule
@@ -181,3 +182,11 @@ Does **not** apply to:
 | Asset helpers | `frontend/e2e/assets/assets-helpers.ts` |
 | Playwright config | `frontend/playwright.config.ts` |
 | Source KB file | `LibreFolio_developer_journal/knowledge_base/07_testing_frontend.md` |
+
+## See also
+
+- [[concepts/assert-on-identity-not-prose]] — the general form of this rule, which
+  covers unit tests too. A `data-testid` is one kind of identity; an i18n key and a
+  `data-error-key` are others.
+- [[problems/i18n-key-assertion-false-green]] — what it costs when the rule is
+  followed in appearance only.

@@ -23,7 +23,7 @@ To export your transaction history from Charles Schwab:
 
 !!! warning "Do Not Modify Headers"
 
-    Schwab CSV files have a specific layout with metadata lines at the bottom (usually starting with "Transactions Total"). The BRIM parser automatically detects and skips these metadata lines. Do not manually trim the bottom lines of the CSV.
+    Schwab CSV files include summary/metadata rows near the end. The BRIM parser ignores rows that do not map to transactions and may emit warnings for unknown actions or invalid rows. Do not manually edit the export.
 
 ## 📝 Notes
 

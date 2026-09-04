@@ -6,7 +6,7 @@
  * asset by id without firing its own request.
  *
  * Loads the FULL set of accessible assets via `GET /assets/query` (no filter),
- * matching the existing pattern used by `/assets/+page.svelte` and `LiveTicker`.
+ * matching the existing pattern used by `/assets/+page.svelte`.
  *
  * Cross-client edits are NOT proactively synced (no WS/SSE). Mitigations:
  * - `mergeAssets(items)`: opportunistic ingress called wherever fresh asset data
@@ -29,6 +29,7 @@
 import {zodiosApi} from '$lib/api';
 import {createEntityStore} from '../core/entityStore';
 import {derived} from 'svelte/store';
+import {registerClientSessionReset} from '$lib/stores/app/clientSession';
 
 // ============================================================================
 // TYPES
@@ -48,13 +49,17 @@ export interface AssetInfo {
     active: boolean;
     user_url?: string | null;
     has_metadata?: boolean;
+    /** F15 usage counters — drive the "your/others/under analysis" panels. */
+    tx_count?: number;
+    /** F15 — transactions in brokers the current user owns (share > 0). */
+    tx_count_own?: number;
     identifier_isin?: string | null;
     identifier_ticker?: string | null;
     identifier_cusip?: string | null;
     identifier_sedol?: string | null;
     identifier_figi?: string | null;
     identifier_uuid?: string | null;
-    identifier_other?: string | null;
+    identifier_other?: string[] | null;
 }
 
 // ============================================================================
@@ -86,13 +91,17 @@ function normalize(raw: Record<string, unknown>): AssetInfo {
     copyDirect('active');
     copyFlat('user_url');
     copyDirect('has_metadata');
+    copyDirect('tx_count');
+    copyDirect('tx_count_own');
     copyFlat('identifier_isin');
     copyFlat('identifier_ticker');
     copyFlat('identifier_cusip');
     copyFlat('identifier_sedol');
     copyFlat('identifier_figi');
     copyFlat('identifier_uuid');
-    copyFlat('identifier_other');
+    // identifier_other is a genuine JSON list — copy it as-is (never flatten to [0],
+    // which would silently drop every soft identifier past the first).
+    copyDirect('identifier_other');
     return out as unknown as AssetInfo;
 }
 
@@ -126,6 +135,11 @@ export const ensureAssetsLoaded = store.ensureLoaded;
 /** Force reload — discards the cache and re-fetches. Use behind a manual ↻ button. */
 export const refreshAllAssets = store.refreshAll;
 
+/** Clear the cached entity list when the authenticated account changes. */
+export const resetAssetStore = store.reset;
+
+registerClientSessionReset('assetStore', resetAssetStore);
+
 /**
  * Sync lookup. Returns null if the cache hasn't loaded the id yet.
  * Components that need to react to load completion should subscribe to
@@ -135,9 +149,6 @@ export const getAssetInfo = store.get;
 
 /** All cached assets, in insertion order. Re-derives on every call. */
 export const getAllAssets = store.getAll;
-
-/** Whether the store has been populated at least once. */
-export const isAssetsLoaded = store.isLoaded;
 
 /**
  * Opportunistic ingress: upsert fresh asset data into the cache.

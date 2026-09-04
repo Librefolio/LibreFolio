@@ -4,8 +4,10 @@
  * Uses POST /api/v1/portfolio/report to run the engine once and get
  * summary + history + allocation_history + data_quality in a single call.
  *
- * Cache key = `broker_ids (sorted) | dateFrom | dateTo | targetCurrency`
- * Calling `invalidate()` clears the cache (used by [↻ Sync] and CRUD mutations).
+ * Cache key = `user | broker_ids (sorted) | dateFrom | dateTo | targetCurrency`.
+ * Calling `invalidate()` clears the cache (used by auth transitions, [↻ Sync],
+ * and portfolio-affecting API mutations). There is no time-based frontend TTL:
+ * entries live for the current authenticated session unless invalidated.
  *
  * Architecture: Svelte 5 module-level $state() runes.
  *
@@ -13,6 +15,8 @@
  */
 
 import {zodiosApi} from '$lib/api';
+import {getClientSessionGeneration, getClientSessionUserId, isClientSessionCurrent, registerClientSessionReset} from '$lib/stores/app/clientSession';
+import {registerPortfolioMutationListener} from './portfolioMutation';
 
 // ============================================================================
 // TYPES — derived from unified /report endpoint response
@@ -70,18 +74,14 @@ export type PositionsContribution = Extract<NonNullable<RawContrib>, {positions?
 
 type CacheKey = string;
 
-interface CacheEntry<T> {
-    data: T;
-    timestamp: number;
-}
-
 // ============================================================================
 // MODULE-LEVEL REACTIVE STATE (Svelte 5 runes)
 // ============================================================================
 
-let reportCache = $state(new Map<CacheKey, CacheEntry<PortfolioReport>>());
+let reportCache = $state(new Map<CacheKey, PortfolioReport>());
 
-const reportInflight = new Map<CacheKey, Promise<PortfolioReport>>();
+const reportInflight = new Map<CacheKey, Promise<PortfolioReport | null>>();
+let cacheGeneration = 0;
 
 let _isLoading = $state(false);
 let _error = $state<string | null>(null);
@@ -91,7 +91,7 @@ let _error = $state<string | null>(null);
 // ============================================================================
 
 function makeCacheKey(brokerIds?: number[], dateFrom?: string, dateTo?: string, targetCurrency?: string): CacheKey {
-    return [brokerIds ? [...brokerIds].sort().join(',') : 'all', dateFrom ?? '', dateTo ?? '', targetCurrency ?? ''].join('|');
+    return [getClientSessionUserId() ?? 'anonymous', brokerIds ? [...brokerIds].sort().join(',') : 'all', dateFrom ?? '', dateTo ?? '', targetCurrency ?? ''].join('|');
 }
 
 // ============================================================================
@@ -129,10 +129,12 @@ export function portfolioError(): string | null {
  */
 export async function fetchReport(brokerIds?: number[], dateFrom?: string, dateTo?: string, targetCurrency?: string, force = false, includeContribution = false, includeBreakdown = false, includeHistory = true, includeAllocationHistory = true): Promise<PortfolioReport | null> {
     const key = makeCacheKey(brokerIds, dateFrom, dateTo, targetCurrency) + (includeContribution ? '|contrib' : '') + (includeBreakdown ? '|breakdown' : '') + (includeHistory ? '' : '|nohist') + (includeAllocationHistory ? '' : '|noalloc');
+    const requestSessionGeneration = getClientSessionGeneration();
+    const requestCacheGeneration = cacheGeneration;
 
     if (!force) {
         const cached = reportCache.get(key);
-        if (cached) return cached.data;
+        if (cached) return cached;
     }
 
     // Deduplicate concurrent callers for the same key
@@ -161,13 +163,20 @@ export async function fetchReport(brokerIds?: number[], dateFrom?: string, dateT
             if (targetCurrency) body.target_currency = targetCurrency;
 
             const data = await zodiosApi.get_portfolio_report_api_v1_portfolio_report_post(body);
-            reportCache = new Map(reportCache).set(key, {data, timestamp: Date.now()});
+            if (!isClientSessionCurrent(requestSessionGeneration) || requestCacheGeneration !== cacheGeneration) {
+                return null;
+            }
+            reportCache = new Map(reportCache).set(key, data);
             return data;
         } catch (err) {
-            _error = err instanceof Error ? err.message : 'Failed to fetch portfolio report';
+            if (isClientSessionCurrent(requestSessionGeneration) && requestCacheGeneration === cacheGeneration) {
+                _error = err instanceof Error ? err.message : 'Failed to fetch portfolio report';
+            }
             throw err;
         } finally {
-            reportInflight.delete(key);
+            if (isClientSessionCurrent(requestSessionGeneration) && requestCacheGeneration === cacheGeneration) {
+                reportInflight.delete(key);
+            }
             if (reportInflight.size === 0) _isLoading = false;
         }
     })();
@@ -187,5 +196,12 @@ export const fetchHistory = (brokerIds?: number[], dateFrom?: string, dateTo?: s
  * Call this after any transaction CRUD mutation or when the user clicks [↻ Sync].
  */
 export function invalidate(): void {
+    cacheGeneration += 1;
     reportCache = new Map();
+    reportInflight.clear();
+    _isLoading = false;
+    _error = null;
 }
+
+registerClientSessionReset('portfolioStore', invalidate);
+registerPortfolioMutationListener('portfolioStore', invalidate);

@@ -218,6 +218,7 @@
             <div class="flex justify-end gap-2 pt-2">
                 <button
                     type="button"
+                    data-testid="boundary-modal-cancel"
                     onclick={handleCancel}
                     class="px-4 py-2 text-sm rounded-lg border border-gray-200 dark:border-slate-600
                            text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
@@ -226,6 +227,7 @@
                 </button>
                 <button
                     type="button"
+                    data-testid="boundary-modal-confirm"
                     onclick={handleConfirm}
                     disabled={!isValid}
                     class="px-4 py-2 text-sm rounded-lg font-medium transition-colors disabled:opacity-50

@@ -230,7 +230,7 @@ def _cache_key(schedule: FAScheduledInvestmentSchedule) -> str:
     return hashlib.md5(canonical.encode()).hexdigest()
 
 
-def _generate_schedule_values(
+def _generate_schedule_values(  # noqa: C901 — TODO(P2-refactor): day-by-day accrual engine, extract per-day step helpers
     schedule: FAScheduledInvestmentSchedule,
 ) -> tuple[dict[date_type, Decimal], list[FAAssetEventPoint]]:
     """
@@ -400,7 +400,7 @@ def _generate_schedule_values(
     return result
 
 
-def _compute_value_at(
+def _compute_value_at(  # noqa: C901 — TODO(P2-refactor): duplicate day-walk, share walker with _generate_schedule_values
     schedule: FAScheduledInvestmentSchedule,
     target_date: date_type,
 ) -> Decimal | None:
@@ -651,6 +651,12 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
         return "Scheduled Investment Calculator"
 
     @property
+    def supports_meaningful_volume(self) -> bool:
+        """Parametrically generated synthetic series (fixed-income
+        schedules) — there is no trading activity and no volume concept."""
+        return False
+
+    @property
     def provider_kind(self) -> FAProviderKind:
         """
         Parametric generation provider (#R3-4): the price series is produced
@@ -786,7 +792,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                 details={"error": str(e)},
             ) from e
 
-    async def get_history_value(
+    async def get_history_value(  # noqa: C901 — flat segment assembly (cached/late/settlement), guarded emission
         self,
         identifier: str,
         identifier_type: IdentifierType,

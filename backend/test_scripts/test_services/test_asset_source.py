@@ -13,6 +13,7 @@ import asyncio
 import json
 import sys
 import time
+import uuid
 from datetime import date, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
@@ -50,11 +51,11 @@ from backend.app.db.models import (
     User,
 )
 from backend.app.db.session import get_async_engine
-from backend.app.schemas import FAGeographicArea, FASectorArea
-from backend.app.schemas.assets import FAAssetCreateItem, FAClassificationParams
+from backend.app.schemas import FAGeographicArea, FASectorArea, SignalVolumeKind
+from backend.app.schemas.assets import FAAssetCreateItem, FAAssetPatchItem, FAClassificationParams
 from backend.app.schemas.common import DateRangeModel
-from backend.app.schemas.prices import FAAssetDelete, FAPricePoint, FAPriceQueryItem, FAUpsert
-from backend.app.schemas.provider import FAProviderAssignmentItem, FAProviderConfigBase, ProbeOperation
+from backend.app.schemas.prices import AssetBackwardFillInfo, FAAssetDelete, FAPricePoint, FAPriceQueryItem, FAUpsert
+from backend.app.schemas.provider import FAProviderAssignmentItem, FAProviderConfigBase, FAVolumeKind, ProbeOperation
 from backend.app.schemas.refresh import FARefreshItem, FXSyncPairRequest
 from backend.app.services import asset_source as asset_source_module
 from backend.app.services.asset_source import (
@@ -751,6 +752,130 @@ async def test_bulk_upsert_prices(asset_ids: list[int]):
 
 
 @pytest.mark.asyncio
+async def test_bulk_upsert_prices_spans_chunk_boundaries():
+    """A batch larger than PRICE_UPSERT_CHUNK_SIZE must behave exactly like one transaction.
+
+    bulk_upsert_prices commits in bounded slices so SQLite's single write lock is never
+    held for the whole history (a 45k-point sync used to hold it ~10s, past the 5s
+    busy_timeout, so every concurrent writer died with "database is locked"). Slicing is
+    only safe because each date consults its own stored row and nothing else — this test
+    pins that: every row lands, and the F.4 "preserve" sentinel still sees the value
+    written by a previous call on dates that fall in different slices.
+    """
+    chunk = asset_source_module.PRICE_UPSERT_CHUNK_SIZE
+    total = chunk * 2 + 137  # three slices, last one deliberately partial
+    timestamp = int(time.time() * 1000)
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        asset = Asset(
+            display_name=f"ChunkedUpsert Test {timestamp}",
+            currency="USD",
+            asset_type=AssetType.STOCK,
+            active=True,
+        )
+        session.add(asset)
+        await session.commit()
+        await session.refresh(asset)
+
+        start = date(2000, 1, 1)
+        first = [
+            FAPricePoint(
+                date=start + timedelta(days=i),
+                close=Decimal("10") + Decimal(i),
+                open=Decimal("7") + Decimal(i),
+                currency="USD",
+            )
+            for i in range(total)
+        ]
+
+        result = await AssetSourceManager.bulk_upsert_prices([FAUpsert(asset_id=asset.id, prices=first)], session)
+        assert result["inserted_count"] == total, f"Expected {total} rows, got {result['inserted_count']}"
+
+        stored = (await session.execute(select(func.count()).select_from(PriceHistory).where(PriceHistory.asset_id == asset.id))).scalar_one()
+        assert stored == total, f"Expected {total} rows in DB, got {stored}"
+
+        # Second pass: close only, open omitted (F.4 preserve). Probe one date per slice,
+        # including both sides of each boundary, so a slice that forgot to re-read the
+        # existing rows would show up as a lost `open`.
+        probes = [0, chunk - 1, chunk, chunk * 2 - 1, chunk * 2, total - 1]
+        second = [
+            FAPricePoint(
+                date=start + timedelta(days=i),
+                close=Decimal("999") + Decimal(i),
+                currency="USD",
+            )
+            for i in probes
+        ]
+        await AssetSourceManager.bulk_upsert_prices([FAUpsert(asset_id=asset.id, prices=second)], session)
+
+        for i in probes:
+            row = (await session.execute(select(PriceHistory).where(PriceHistory.asset_id == asset.id).where(PriceHistory.date == start + timedelta(days=i)))).scalar_one()
+            assert row.close == Decimal("999") + Decimal(i), f"day {i}: close not updated"
+            assert row.open == Decimal("7") + Decimal(i), f"day {i}: open lost across chunk boundary"
+
+        stored = (await session.execute(select(func.count()).select_from(PriceHistory).where(PriceHistory.asset_id == asset.id))).scalar_one()
+        assert stored == total, f"Re-upsert changed the row count: {stored} != {total}"
+
+        print_success(f"✓ {total} prices upserted across {-(-total // chunk)} slices with merge semantics intact")
+
+
+@pytest.mark.asyncio
+async def test_manual_reupsert_stamps_fetched_at_and_keeps_row_id():
+    """A manual edit of an existing price must move fetched_at, or it stays invisible.
+
+    The portfolio cache key is COUNT + MAX(fetched_at) (``_compute_price_fingerprint``,
+    portfolio_engine.py). Re-writing a date that already exists leaves COUNT alone, so
+    fetched_at is the only thing left to tell the cache to recompute — a manual write
+    that skipped it would be swallowed by a stale blob and the user's own edit would not
+    show. This used to hold only by accident: the code asked for ``fetched_at=None`` on
+    MANUAL rows and the model's ``default_factory`` quietly overwrote it at flush. The
+    Core upsert has no such safety net, so the property is asserted here instead.
+
+    Also pins the upsert shape: the row id survives, which DELETE + INSERT never did.
+    """
+    timestamp = int(time.time() * 1000)
+    day = date(2001, 3, 14)
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        asset = Asset(
+            display_name=f"FetchedAt Test {timestamp}",
+            currency="USD",
+            asset_type=AssetType.STOCK,
+            active=True,
+        )
+        session.add(asset)
+        await session.commit()
+        await session.refresh(asset)
+
+        asset_id = asset.id
+
+        async def _write(close: str) -> tuple:
+            await AssetSourceManager.bulk_upsert_prices(
+                [FAUpsert(asset_id=asset_id, prices=[FAPricePoint(date=day, close=Decimal(close), currency="USD")])],
+                session,
+                source_plugin_key="MANUAL",
+            )
+            # Read columns, not the entity: an ORM read would hand back the identity-map
+            # copy from before the Core write and the second call would compare a row to
+            # itself.
+            return (await session.execute(select(PriceHistory.id, PriceHistory.close, PriceHistory.fetched_at).where(PriceHistory.asset_id == asset_id).where(PriceHistory.date == day))).one()
+
+        first_id, _, first_stamp = await _write("100")
+        assert first_stamp is not None, "fetched_at must never be NULL — the column forbids it"
+
+        second_id, second_close, second_stamp = await _write("250")
+
+        assert second_close == Decimal("250"), "manual re-write did not update the close"
+        assert second_id == first_id, "row id was recycled: this is an upsert, not DELETE + INSERT"
+        assert second_stamp > first_stamp, "fetched_at did not move — the portfolio cache would keep serving a stale blob"
+
+        stored = (await session.execute(select(func.count()).select_from(PriceHistory).where(PriceHistory.asset_id == asset_id))).scalar_one()
+        assert stored == 1, f"re-upsert duplicated the row: {stored}"
+
+        print_success("✓ manual re-upsert bumps fetched_at, keeps the row id, adds no row")
+
+
+@pytest.mark.asyncio
 async def test_get_prices_with_backfill(asset_ids: list[int]):
     """Test get_prices_bulk() with backward-fill logic."""
     print_section("Test 10: Get Prices with Backward-Fill")
@@ -1113,6 +1238,27 @@ def fx_asset_ids():
 
     asset_id = asyncio.run(_setup())
     yield asset_id
+
+    # Committed rows on a shared table must be undone by whoever committed them.
+    # fx_rates is keyed (date, base, quote), so leaving 2025-02-0x EUR/USD behind
+    # makes any later test that seeds the same key fail on a UNIQUE violation —
+    # which is exactly what happened once the suite ran consolidated in one
+    # process instead of one process per action.
+    async def _teardown():
+        async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+            await session.execute(delete(PriceHistory).where(PriceHistory.asset_id == asset_id))
+            await session.execute(
+                delete(FxRate).where(
+                    FxRate.base == "EUR",
+                    FxRate.quote == "USD",
+                    FxRate.source == "TEST",
+                    FxRate.date.in_([date(2025, 2, 1), date(2025, 2, 2), date(2025, 2, 5)]),
+                )
+            )
+            await session.execute(delete(Asset).where(Asset.id == asset_id))
+            await session.commit()
+
+    asyncio.run(_teardown())
 
 
 @pytest.mark.asyncio
@@ -1880,3 +2026,362 @@ async def test_asset_search_service_search_handles_cache_and_errors(monkeypatch)
     assert second.providers_with_errors == []
     assert second.results[0].display_name == "Provider result alpha"
     print_success("✓ Search cache and per-provider error handling both covered")
+
+
+# ============================================================================
+# SIGNAL SOURCE CAPABILITY DERIVATION (workstream B)
+# ============================================================================
+
+
+def _capable_point(day: int, source: str, backward_filled: bool = False) -> FAPricePoint:
+    """Build a minimal FAPricePoint for capability-derivation tests."""
+    return FAPricePoint(
+        date=date(2025, 6, day),
+        close=Decimal("10"),
+        volume=Decimal("100"),
+        source_plugin_key=source,
+        backward_fill_info=(AssetBackwardFillInfo(actual_rate_date=date(2025, 6, 1), days_back=day - 1) if backward_filled else None),
+    )
+
+
+class TestDeriveSignalSourceCapability:
+    """Unit tests for AssetSourceManager.derive_signal_source_capability (item 5)."""
+
+    def test_empty_series_is_unknown_and_unsupported(self):
+        capability = AssetSourceManager.derive_signal_source_capability([])
+        assert capability.supports_meaningful_volume is False
+        assert capability.volume_kind == SignalVolumeKind.UNKNOWN
+
+    def test_all_backward_filled_series_is_unsupported(self, monkeypatch):
+        """Backward-filled points must never count as observed evidence."""
+        monkeypatch.setattr(
+            AssetProviderRegistry,
+            "get_provider_instance",
+            classmethod(lambda cls, code, **kwargs: SimpleNamespace(supports_meaningful_volume=True, volume_kind=FAVolumeKind.TRADED_SHARES)),
+        )
+        points = [_capable_point(1, "yfinance", backward_filled=True)]
+        capability = AssetSourceManager.derive_signal_source_capability(points)
+        assert capability.supports_meaningful_volume is False
+
+    def test_single_registered_capable_source_is_supported(self, monkeypatch):
+        monkeypatch.setattr(
+            AssetProviderRegistry,
+            "get_provider_instance",
+            classmethod(lambda cls, code, **kwargs: SimpleNamespace(supports_meaningful_volume=True, volume_kind=FAVolumeKind.TRADED_SHARES)),
+        )
+        points = [_capable_point(1, "yfinance"), _capable_point(2, "yfinance")]
+        capability = AssetSourceManager.derive_signal_source_capability(points)
+        assert capability.supports_meaningful_volume is True
+        assert capability.volume_kind == SignalVolumeKind.TRADED_SHARES
+
+    def test_unregistered_source_fails_closed(self, monkeypatch):
+        monkeypatch.setattr(AssetProviderRegistry, "get_provider_instance", classmethod(lambda cls, code, **kwargs: None))
+        points = [_capable_point(1, "MANUAL")]
+        capability = AssetSourceManager.derive_signal_source_capability(points)
+        assert capability.supports_meaningful_volume is False
+        assert capability.volume_kind == SignalVolumeKind.UNKNOWN
+
+    @pytest.mark.parametrize("sentinel_key", ["MANUAL", "provider:unknown"])
+    def test_known_sentinel_keys_fail_closed_against_real_registry(self, sentinel_key):
+        """Binding architecture-review requirement: capability reduction must
+        fail closed for the exact literal sentinel keys the codebase actually
+        writes — ``"MANUAL"`` (default bulk_upsert_prices source, see
+        AssetSourceManager.bulk_upsert_prices) and ``"provider:unknown"``
+        (refresh_assets_from_provider fallback when item.source is empty).
+        Exercised against the REAL, unmocked AssetProviderRegistry: neither
+        key is ever registered, so this must fail closed without needing to
+        simulate an unresolvable provider.
+        """
+        assert AssetProviderRegistry.get_provider_instance(sentinel_key) is None
+        points = [_capable_point(1, sentinel_key)]
+        capability = AssetSourceManager.derive_signal_source_capability(points)
+        assert capability.supports_meaningful_volume is False
+        assert capability.volume_kind == SignalVolumeKind.UNKNOWN
+
+    def test_mixed_sources_with_disagreeing_capability_fail_closed(self, monkeypatch):
+        providers = {
+            "yfinance": SimpleNamespace(supports_meaningful_volume=True, volume_kind=FAVolumeKind.TRADED_SHARES),
+            "justetf": SimpleNamespace(supports_meaningful_volume=False, volume_kind=FAVolumeKind.UNKNOWN),
+        }
+        monkeypatch.setattr(AssetProviderRegistry, "get_provider_instance", classmethod(lambda cls, code, **kwargs: providers.get(code)))
+        points = [_capable_point(1, "yfinance"), _capable_point(2, "justetf")]
+        capability = AssetSourceManager.derive_signal_source_capability(points)
+        assert capability.supports_meaningful_volume is False
+
+    def test_mixed_incompatible_real_registered_sources_fail_closed(self):
+        """Same scenario as above, but against the REAL, unmocked registry
+        using two genuinely registered providers with disagreeing declared
+        capability (yfinance=True vs justetf=False) — proves the fail-closed
+        rule holds against actual provider declarations, not just mocks."""
+        points = [_capable_point(1, "yfinance"), _capable_point(2, "justetf")]
+        capability = AssetSourceManager.derive_signal_source_capability(points)
+        assert capability.supports_meaningful_volume is False
+        assert capability.volume_kind == SignalVolumeKind.UNKNOWN
+
+    def test_mixed_sources_with_agreeing_capability_are_supported(self, monkeypatch):
+        providers = {
+            "yfinance": SimpleNamespace(supports_meaningful_volume=True, volume_kind=FAVolumeKind.TRADED_SHARES),
+            "borsa_italiana": SimpleNamespace(supports_meaningful_volume=True, volume_kind=FAVolumeKind.TRADED_SHARES),
+        }
+        monkeypatch.setattr(AssetProviderRegistry, "get_provider_instance", classmethod(lambda cls, code, **kwargs: providers.get(code)))
+        points = [_capable_point(1, "yfinance"), _capable_point(2, "borsa_italiana")]
+        capability = AssetSourceManager.derive_signal_source_capability(points)
+        assert capability.supports_meaningful_volume is True
+        assert capability.volume_kind == SignalVolumeKind.TRADED_SHARES
+
+    def test_one_unregistered_source_among_many_fails_closed(self, monkeypatch):
+        """Even a single unresolvable source_plugin_key among otherwise-capable
+        sources must fail closed (no partial trust)."""
+        providers = {"yfinance": SimpleNamespace(supports_meaningful_volume=True, volume_kind=FAVolumeKind.TRADED_SHARES)}
+        monkeypatch.setattr(AssetProviderRegistry, "get_provider_instance", classmethod(lambda cls, code, **kwargs: providers.get(code)))
+        points = [_capable_point(1, "yfinance"), _capable_point(2, "MANUAL")]
+        capability = AssetSourceManager.derive_signal_source_capability(points)
+        assert capability.supports_meaningful_volume is False
+
+
+# ============================================================================
+# P0-5 (audit 08) — patch_assets_bulk: no N+1
+# ============================================================================
+
+
+class _QueryCounter:
+    """Counts statements issued while attached to the engine.
+
+    Attached immediately before the call under test and detached right after,
+    so the numbers describe *that* call, not ambient test traffic. Only SELECTs
+    are counted: one UPDATE per actually-changed row is the work itself, not
+    amplification — the N+1 being guarded against was SELECT-per-item.
+    """
+
+    def __init__(self):
+        self.selects = 0
+        self.statements: list[str] = []
+
+    def __call__(self, conn, cursor, statement, parameters, context, executemany):
+        self.statements.append(statement)
+        if statement.lstrip().upper().startswith("SELECT"):
+            self.selects += 1
+
+
+async def _p05_make_assets(count: int, tag: str) -> tuple[list[int], str]:
+    """Create `count` owned assets, returning (ids, uid).
+
+    The uid is uuid-based, never time-only: workers start in bursts and share
+    the clock, and `assets.display_name` carries a UNIQUE index — a
+    millisecond collision here previously failed a *later* patch at flush time.
+    """
+    uid = uuid.uuid4().hex[:8]
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        assets = [
+            Asset(
+                display_name=f"P05-{tag}-{uid}-{i}",
+                currency="EUR",
+                asset_type=AssetType.STOCK,
+                active=True,
+            )
+            for i in range(count)
+        ]
+        session.add_all(assets)
+        await session.commit()
+        for asset in assets:
+            await session.refresh(asset)
+        return [a.id for a in assets], uid
+
+
+async def _p05_patch_counting(patches: list[FAAssetPatchItem]) -> tuple[object, _QueryCounter]:
+    """Run patch_assets_bulk with a SELECT counter attached to the engine."""
+    from sqlalchemy import event  # noqa: PLC0415 — test-local, keeps the module import surface stable
+
+    engine = get_async_engine()
+    counter = _QueryCounter()
+    event.listen(engine.sync_engine, "before_cursor_execute", counter)
+    try:
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            response = await AssetCRUDService.patch_assets_bulk(patches, session)
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", counter)
+    return response, counter
+
+
+@pytest.mark.asyncio
+async def test_p05_patch_without_currency_change_issues_one_select_total():
+    """20 patched assets, no currency change → ONE SELECT (the bulk preload).
+
+    Before P0-5 this was one `Asset.get` per patch (20 SELECTs here); any
+    regression to per-item lookups makes this number climb linearly. The 20
+    UPDATEs (one per real rename) are the work itself and are deliberately not
+    counted — see _QueryCounter.
+    """
+    asset_ids, uid = await _p05_make_assets(20, "plain")
+    # The rename targets must be unique too: display_name is uniquely indexed,
+    # so reusing constant names would collide with the leftovers of any prior run.
+    patches = [FAAssetPatchItem(asset_id=asset_id, display_name=f"P05-renamed-{uid}-{idx}") for idx, asset_id in enumerate(asset_ids)]
+
+    response, counter = await _p05_patch_counting(patches)
+
+    assert response.success_count == 20
+    assert counter.selects == 1, f"expected the single bulk preload SELECT, got {counter.selects} SELECTs:\n" + "\n".join(counter.statements)
+
+
+@pytest.mark.asyncio
+async def test_p05_currency_change_guard_queries_stay_constant():
+    """3 currency-changing patches → 1 preload + 3 guard aggregates, constant in k.
+
+    The currency-change guard (Policy D) needs four datasets (prices, manual
+    events, provider events, linked tx). Before P0-5 each changing asset paid
+    up to 6 SELECTs of its own (3 → 1+18=19); now the aggregates are GROUP BY
+    batches shared by the whole request, so k=3 costs exactly 4 SELECTs.
+    """
+    asset_ids, _uid = await _p05_make_assets(3, "ccy")
+    patches = [FAAssetPatchItem(asset_id=asset_id, currency="USD") for asset_id in asset_ids]
+
+    response, counter = await _p05_patch_counting(patches)
+
+    # No market data on these assets → the guard does not block, patches apply.
+    assert response.success_count == 3
+    assert counter.selects == 4, f"expected 1 preload + 3 aggregate SELECTs, got {counter.selects}:\n" + "\n".join(counter.statements)
+
+
+@pytest.mark.asyncio
+async def test_p05_batched_guard_attributes_counts_to_the_right_asset():
+    """The batched aggregates must not cross-attribute counts between assets.
+
+    New risk introduced by the P0-5 batching itself: the per-asset numbers in
+    the block token now come from dicts keyed by asset_id filled by GROUP BY —
+    a keying mistake would show asset A's data in asset B's token. Two blocked
+    assets with *different* market-data footprints make the attribution
+    observable.
+    """
+    (asset_a, asset_b), tag = await _p05_make_assets(2, "attr")
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        # Asset A: 3 price rows across two days + 1 manual event.
+        session.add_all(
+            [
+                PriceHistory(asset_id=asset_a, date=date(2025, 1, 6), close=Decimal("100"), currency="EUR", source_plugin_key="p05"),
+                PriceHistory(asset_id=asset_a, date=date(2025, 1, 7), close=Decimal("101"), currency="EUR", source_plugin_key="p05"),
+                PriceHistory(asset_id=asset_a, date=date(2025, 1, 8), close=Decimal("102"), currency="EUR", source_plugin_key="p05"),
+                AssetEvent(asset_id=asset_a, date=date(2025, 1, 7), type=AssetEventType.DIVIDEND, value=Decimal("1.5"), currency="EUR", provider_assignment_id=None, notes=f"p05-{tag}"),
+            ]
+        )
+        # Asset B: a single price row, no events.
+        session.add(PriceHistory(asset_id=asset_b, date=date(2025, 2, 10), close=Decimal("55"), currency="EUR", source_plugin_key="p05"))
+        await session.commit()
+
+    response, _counter = await _p05_patch_counting(
+        [
+            FAAssetPatchItem(asset_id=asset_a, currency="USD"),
+            FAAssetPatchItem(asset_id=asset_b, currency="USD"),
+        ]
+    )
+
+    assert response.success_count == 0, "both assets own market data — both must be blocked"
+    tokens = {r.asset_id: r.message for r in response.results}
+    assert tokens[asset_a].startswith("CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA|"), tokens[asset_a]
+    assert tokens[asset_b].startswith("CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA|"), tokens[asset_b]
+
+    fields_a = dict(part.split("=", 1) for part in tokens[asset_a].split("|")[1:])
+    fields_b = dict(part.split("=", 1) for part in tokens[asset_b].split("|")[1:])
+
+    # Each token carries ITS OWN asset's footprint.
+    assert fields_a["prices"] == "3", tokens[asset_a]
+    assert fields_a["events_manual"] == "1", tokens[asset_a]
+    assert fields_a["events_provider"] == "0", tokens[asset_a]
+    assert fields_a["linked_tx"] == "0", tokens[asset_a]
+    assert fields_a["oldest"] == "2025-01-06" and fields_a["newest"] == "2025-01-08", tokens[asset_a]
+    assert fields_a["from"] == "EUR" and fields_a["to"] == "USD", tokens[asset_a]
+
+    assert fields_b["prices"] == "1", tokens[asset_b]
+    assert fields_b["events_manual"] == "0", tokens[asset_b]
+    assert fields_b["oldest"] == "2025-02-10" and fields_b["newest"] == "2025-02-10", tokens[asset_b]
+
+
+# ============================================================================
+# E1 regression (2026-09-02 live wedge) — FX conversion error dedup
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_fx_conversion_errors_dedup_once_per_job_capped_and_fast():
+    """Full-history FX-missing series must not wedge the request.
+
+    Root cause of the 2026-09-02 live wedge ("technical signals update failed"
+    banner, 100% CPU in the async handler): the conversion-error dedup ran
+    `err not in result.errors` PER POINT inside the loop — quadratic in the
+    number of failures — and a full-history (E1) asset on an FX-uncovered range
+    produces one *distinct* error per date, tens of thousands of them.
+
+    Fixed by deduping ONCE per job outside the loop (set membership) and
+    capping the payload at 10 errors + a summary row — the frontend only ever
+    surfaces `errors[0]`.
+
+    This test drives ~1500 uncovered points through get_prices_bulk and pins:
+      - the wall clock stays sane (generous 10s bound; the real contract is
+        "not quadratic", a wall-clock assert is only a coarse backstop);
+      - `result.errors` holds at most 10 conversion errors + 1 summary row;
+      - `errors[0]` is the first failure's message, intact;
+      - the summary row counts the suppressed remainder.
+
+    Coverage assumption: the series lives in year 2000, and FX rate lookup is
+    *backward*-fill (a rate covers only dates at/after its own). Mock seeding
+    starts ~3y back and runtime sync writes today's rates, so no realistic
+    neighbour can cover year 2000 for EUR/USD mid-test.
+    """
+    n_days = 1500
+    first_day = date(2000, 1, 3)
+
+    # Asset + 1500 consecutive daily price rows in USD (no FX coverage to EUR).
+    uid = uuid.uuid4().hex[:8]
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        asset = Asset(display_name=f"P0E1-wedge-{uid}", currency="USD", asset_type=AssetType.STOCK, active=True)
+        session.add(asset)
+        await session.commit()
+        await session.refresh(asset)
+        asset_id = asset.id
+        session.add_all(
+            PriceHistory(
+                asset_id=asset_id,
+                date=first_day + timedelta(days=i),
+                close=Decimal("100") + Decimal(i) / Decimal("100"),
+                currency="USD",
+                source_plugin_key="p0e1",
+            )
+            for i in range(n_days)
+        )
+        await session.commit()
+
+    last_day = first_day + timedelta(days=n_days - 1)
+    request = FAPriceQueryItem(
+        asset_id=asset_id,
+        date_range=DateRangeModel(start=first_day, end=last_day),
+        target_currency="EUR",
+    )
+
+    started = time.perf_counter()
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        results = await AssetSourceManager.get_prices_bulk([request], session)
+    elapsed = time.perf_counter() - started
+
+    try:
+        assert len(results) == 1
+        result = results[0]
+        assert len(result.prices) == n_days
+
+        assert elapsed < 10.0, f"get_prices_bulk took {elapsed:.1f}s for {n_days} uncovered points — the quadratic per-point dedup is back"
+
+        conv_errors = [e for e in result.errors if "FX rate" in e or "more FX conversion failures" in e]
+        assert len(conv_errors) == len(result.errors), f"unexpected non-conversion errors: {result.errors[:3]}"
+        assert len(conv_errors) == 11, f"expected 10 kept + 1 summary, got {len(conv_errors)}"
+
+        # errors[0] is the first failure, intact (the FE surfaces exactly this one).
+        assert conv_errors[0] == (f"Conversion 0: No FX rate found for EUR/USD on or before {first_day.isoformat()}. " "Please sync rates using POST /api/v1/fx/currencies/sync"), conv_errors[0]
+        # No duplicates survived the dedup.
+        assert len(set(conv_errors[:10])) == 10
+        # The summary row carries the suppressed remainder.
+        assert conv_errors[-1] == f"… and {n_days - 10} more FX conversion failures", conv_errors[-1]
+    finally:
+        # Restore what this test wrote (1500 rows + the asset).
+        async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+            await session.execute(delete(PriceHistory).where(PriceHistory.asset_id == asset_id))
+            await session.execute(delete(Asset).where(Asset.id == asset_id))
+            await session.commit()

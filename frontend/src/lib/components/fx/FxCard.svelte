@@ -10,7 +10,7 @@
     import {currentLanguage} from '$lib/stores/app/language';
     import {ArrowLeftRight, Percent, RefreshCw, RotateCw, Settings, Trash2} from 'lucide-svelte';
     import PriceChartCompact from '$lib/components/charts/PriceChartCompact.svelte';
-    import type {FxDataPoint} from '$lib/stores/fxStoreRegistry';
+    import {displayFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {isCardInverted, setCardInverted} from '$lib/stores/fx/fxCardInversionStore';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
@@ -50,9 +50,10 @@
         onrefresh?: (info: {slug: string}) => void;
         onsync?: (info: {slug: string; base: string; quote: string}) => void;
         onsettings?: (info: {slug: string}) => void;
+        oninversionchange?: (info: {slug: string; inverted: boolean}) => void;
     }
 
-    let {base, quote, slug, data = [], loading = false, dateStart, dateEnd, manualOnly = false, globalViewMode = 'absolute', chartSettings, renderSignals, ondelete, onrefresh, onsync, onsettings}: Props = $props();
+    let {base, quote, slug, data = [], loading = false, dateStart, dateEnd, manualOnly = false, globalViewMode = 'absolute', chartSettings, renderSignals, ondelete, onrefresh, onsync, onsettings, oninversionchange}: Props = $props();
 
     // =========================================================================
     // State
@@ -88,40 +89,44 @@
     let lastRate = $derived.by(() => {
         if (data.length === 0) return null;
         const last = data[data.length - 1];
-        return inverted && last.rate !== 0 ? 1 / last.rate : last.rate;
+        return displayFxRate(last.rate, inverted);
     });
 
     let deltaPercent = $derived.by(() => {
         if (data.length < 2) return null;
         const rawFirst = data[0].rate;
         const rawLast = data[data.length - 1].rate;
-        if (rawFirst === 0 || rawLast === 0) return null;
+        if (rawFirst === null || rawLast === null || rawFirst === 0 || rawLast === 0) return null;
         const first = inverted ? 1 / rawFirst : rawFirst;
         const last = inverted ? 1 / rawLast : rawLast;
         return ((last - first) / first) * 100;
     });
 
     let chartData = $derived.by((): LineDataPoint[] => {
-        const absolute = data.map(
-            (d): LineDataPoint => ({
+        const absolute = data.map((d): LineDataPoint => {
+            const rate = displayFxRate(d.rate, inverted);
+            return {
                 date: d.date,
-                value: inverted && d.rate !== 0 ? 1 / d.rate : d.rate,
+                value: rate ?? 0,
+                missing: rate === null,
                 staleDays: d.backwardFillInfo?.daysBack ?? 0,
-            }),
-        );
+            };
+        });
         if (cardViewMode === 'absolute' || absolute.length === 0) return absolute;
         return normalizeToPercentage(absolute);
     });
 
     /** Absolute data for signal rendering (before % conversion) */
     let absoluteData = $derived.by((): LineDataPoint[] =>
-        data.map(
-            (d): LineDataPoint => ({
+        data.map((d): LineDataPoint => {
+            const rate = displayFxRate(d.rate, inverted);
+            return {
                 date: d.date,
-                value: inverted && d.rate !== 0 ? 1 / d.rate : d.rate,
+                value: rate ?? 0,
+                missing: rate === null,
                 staleDays: d.backwardFillInfo?.daysBack ?? 0,
-            }),
-        ),
+            };
+        }),
     );
 
     /** Overlay signals — re-rendered reactively when cardViewMode or inverted changes */
@@ -185,6 +190,7 @@
                         stop(e);
                         inverted = !inverted;
                         setCardInverted(slug, inverted);
+                        oninversionchange?.({slug, inverted});
                     }}
                     title={$t('common.swapDirection')}
                 >
@@ -227,7 +233,7 @@
         {:else if loading}
             <div class="text-lg text-gray-400 dark:text-gray-500">...</div>
         {:else}
-            <div class="text-lg text-gray-400 dark:text-gray-500">—</div>
+            <div class="text-lg text-gray-400 dark:text-gray-500" data-fx-rate-state="missing" data-testid="fx-card-rate-missing">{$t('fx.rateNotAvailable')}</div>
         {/if}
     </div>
 

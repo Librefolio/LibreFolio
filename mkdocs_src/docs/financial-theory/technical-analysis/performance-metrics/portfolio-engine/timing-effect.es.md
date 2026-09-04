@@ -28,7 +28,7 @@ Al comparar el [MWRR Acumulado](mwrr.md#cumulative-mwrr) (que incluye el momento
 
 ## 🔢 Ejemplos Numéricos
 
-### Ejemplo 1: Efecto Timing Positivo (Flujos Favorables)
+### 📈 1: Efecto Timing Positivo (Flujos Favorables)
 * **TWRR Acumulado (Rendimiento de la Estrategia):** $+20\%$
 * **MWRR Acumulado (Rendimiento del Inversor):** $+28\%$
 
@@ -38,7 +38,7 @@ $$
 
 * **Interpretación:** La estrategia de activos subyacentes generó un rendimiento del $+20\%$. Sin embargo, debido a que aportó una cantidad significativa de capital a la cartera antes de que el mercado subiera, su rendimiento personal ponderado por dinero aumentó al $+28\%$. El momento y el tamaño de sus aportaciones aportaron **$+8$ puntos porcentuales** de rendimiento adicional.
 
-### Ejemplo 2: Efecto Timing Negativo (Flujos Desfavorables)
+### 📉 2: Efecto Timing Negativo (Flujos Desfavorables)
 * **TWRR Acumulado (Rendimiento de la Estrategia):** $+20\%$
 * **MWRR Acumulado (Rendimiento del Inversor):** $+12\%$
 
@@ -52,12 +52,12 @@ $$
 
 ## ⚖️ Qué Captura y Qué No Captura
 
-### Qué Captura
+### 🎯 Captura
 - **Impacto del momento de depósitos/retiros:** Si aportó capital durante los mínimos del mercado (comprando barato) o máximos (comprando caro).
 - **Impacto del tamaño de los flujos:** Los flujos de efectivo más grandes tienen una mayor ponderación y un mayor impacto en el MWRR, lo que refleja el Efecto Timing.
 - **La "Brecha del Inversor" (Investor Gap):** la distancia entre el rendimiento de la estrategia y el rendimiento realmente obtenido por el inversor, debido al momento y dimensión de los flujos de efectivo.
 
-### Qué No Captura
+### 🚫 No Captura
 - **Beneficio monetario absoluto:** Puede existir un Efecto Timing positivo de $+5$ pp incluso si la cartera está en pérdidas netas (por ejemplo, si el TWRR es del $-20\%$ y el MWRR del $-15\%$). Use el [P&L del Periodo](period-pnl.md) para evaluar las ganancias monetarias.
 - **Riesgo y volatilidad:** No indica el perfil de riesgo ni la volatilidad de los activos.
 - **Impacto desagregado de impuestos/costes:** el Efecto Timing no desglosa impuestos y costes; los posibles costes e impuestos pueden mostrarse por separado en el P&L del periodo.

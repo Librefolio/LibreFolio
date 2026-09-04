@@ -15,7 +15,7 @@ Le fournisseur d'Investissement à échéancier (Scheduled Investment) est conç
 - **Type d'identifiant** : `AUTO_GENERATED`
 - **Paramètres** : Configurés via l'**Éditeur de calendrier d'intérêts** (composant UI personnalisé)
 
-### Champs requis
+### Required requis
 
 | Champ | Description |
 |-------|-------------|

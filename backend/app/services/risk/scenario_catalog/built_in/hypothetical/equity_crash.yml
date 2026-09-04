@@ -1,0 +1,31 @@
+schema_version: 1
+id: equity_crash
+kind: hypothetical_shock
+tags: [equity, global]
+name:
+  en: Equity crash
+  it: Crollo azionario
+  fr: Krach actions
+  es: Caída bursátil
+description:
+  en: Editable asset-class shocks centered on listed equity exposure.
+  it: Shock modificabili per classe di asset concentrati sull'esposizione azionaria quotata.
+  fr: Chocs modifiables par classe d'actifs centrés sur l'exposition aux actions cotées.
+  es: Choques editables por clase de activo centrados en la exposición a renta variable cotizada.
+allowed_dimensions: [asset_class]
+defaults:
+  dimension: asset_class
+  bucket_shocks:
+    STOCK: -0.35
+    ETF: -0.25
+    FUND: -0.25
+    INDEX: -0.35
+    OTHER: 0.0
+editable:
+  dimension: false
+  bucket_shocks: true
+  manual_overrides: true
+limits:
+  minimum_shock: -1.0
+  maximum_shock: 1.0
+  maximum_buckets: 100

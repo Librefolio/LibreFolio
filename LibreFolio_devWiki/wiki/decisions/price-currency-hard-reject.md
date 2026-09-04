@@ -105,5 +105,5 @@ This is an intentional asymmetry with `price_history.currency`.
 | DB model (price_history.currency) | `backend/app/db/models.py` |
 | Asset detail page (requiredFxPairs) | `frontend/src/routes/(app)/assets/[id]/+page.svelte` |
 | Asset currency change modal | `frontend/src/lib/components/assets/AssetCurrencyChangeModal.svelte` |
-| Test (mismatch hard 400) | `backend/test_scripts/test_services/test_prices_currency_coherence.py` |
+| Test (mismatch hard 400) | `backend/test_scripts/test_api/test_prices_currency_coherence.py` |
 | Test (currency change 409) | `backend/test_scripts/test_api/test_asset_currency_change.py` |

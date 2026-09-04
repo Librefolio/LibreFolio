@@ -41,6 +41,7 @@ from backend.app.schemas.assets import (
     FASectorArea,
 )
 from backend.app.schemas.common import Currency as CurrencyAmount
+from backend.app.schemas.provider import FAVolumeKind
 from backend.app.services.asset_source import AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
 from backend.app.services.provider_registry import AssetProviderRegistry, register_provider
 from backend.app.utils.sector_fin_utils import validate_sector
@@ -154,6 +155,16 @@ class YahooFinanceProvider(AssetSourceProvider):
     @property
     def provider_name(self) -> str:
         return "Yahoo Finance"
+
+    @property
+    def supports_meaningful_volume(self) -> bool:
+        """Yahoo Finance reports real exchange-traded share volume (the
+        `Volume` column from the underlying OHLCV history)."""
+        return True
+
+    @property
+    def volume_kind(self) -> FAVolumeKind:
+        return FAVolumeKind.TRADED_SHARES
 
     @property
     def accepted_identifier_types(self) -> list:
@@ -270,7 +281,7 @@ class YahooFinanceProvider(AssetSourceProvider):
                 {"identifier": identifier, "error": str(e)},
             ) from e
 
-    async def get_history_value(
+    async def get_history_value(  # noqa: C901 — flat fetch→validate→map pipeline, guarded event parsing
         self,
         identifier: str,
         identifier_type: IdentifierType,
@@ -344,7 +355,7 @@ class YahooFinanceProvider(AssetSourceProvider):
                 if info:
                     currency = info.get("currency", "USD") or "USD"
             except Exception:
-                pass
+                logger.exception("Failed to fetch yfinance currency metadata; falling back to USD", identifier=identifier)
             # Dividends & splits (may trigger additional requests)
             try:
                 dividends = t.dividends
@@ -563,9 +574,8 @@ class YahooFinanceProvider(AssetSourceProvider):
         """
         # Yahoo Finance doesn't require specific params
         # Identifier is passed as method argument
-        pass
 
-    async def fetch_asset_metadata(
+    async def fetch_asset_metadata(  # noqa: C901 — flat field mapping with fallbacks
         self,
         identifier: str,
         identifier_type: IdentifierType,
@@ -617,7 +627,7 @@ class YahooFinanceProvider(AssetSourceProvider):
                 if isin_val and isin_val != "-" and len(isin_val) == 12:
                     identifier_isin = isin_val
             except Exception:
-                pass
+                logger.exception("Failed to fetch yfinance ISIN metadata", identifier=identifier)
 
             if not info:
                 logger.warning(f"No info data returned from yfinance for {identifier}")

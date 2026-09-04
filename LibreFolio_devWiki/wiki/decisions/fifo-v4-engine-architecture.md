@@ -63,8 +63,8 @@ fee/income share.
 ## Related
 - [[entities/fifo-lot-engine]]
 - [[entities/lots-analysis-service]]
-- [[fifo-v4-cost-allocation-ladder]]
-- [[fifo-v4-income-eligibility-d1]]
+- [[decisions/fifo-v4-cost-allocation-ladder]]
+- [[decisions/fifo-v4-income-eligibility-d1]]
 - [[sources/fifo-v4-fee-tax-integration]]
 
 ## Source files

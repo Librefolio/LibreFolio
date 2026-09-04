@@ -61,14 +61,14 @@ Dove $P$ è il prezzo per azione e $Q$ è la quantità di azioni.
 
 ## 📊 Perché le Società Effettuano Split
 
-### Frazionamenti (Forward split)
+### Forward (Forward split)
 
 - **Accessibilità**: Un prezzo per azione più basso rende il titolo più accessibile agli investitori retail
 - **Liquidità**: Un maggior numero di azioni in circolazione può aumentare il volume di scambi
 - **Psicologia**: Un prezzo nominale più basso può attrarre più acquirenti
 - **Opzioni**: Un prezzo per azione più basso riduce il capitale necessario per i contratti di opzioni (100 azioni per contratto)
 
-### Raggruppamenti (Reverse split)
+### Reverse (Reverse split)
 
 - **Conformità alla quotazione**: I mercati richiedono prezzi minimi per azione (ad esempio, $1.00 su NASDAQ)
 - **Percezione istituzionale**: Alcuni fondi hanno requisiti minimi di prezzo

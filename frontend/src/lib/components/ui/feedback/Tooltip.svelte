@@ -1,9 +1,13 @@
 <script lang="ts">
     /**
-     * Tooltip - Instant tooltip with click-outside dismiss
+     * Tooltip - hover-delayed tooltip with click-outside dismiss
      *
      * Features:
-     * - 0ms delay on hover; stays open indefinitely while the pointer remains
+     * - Delayed open on plain hover (`showDelayMs`, default 500ms — T2: the
+     *   pointer must rest on the trigger; instant hover tooltips flash under
+     *   the cursor while the user is just crossing the page). Click/tap and
+     *   keyboard open instantly instead — intent there is explicit, a delay
+     *   would only be latency. Stays open indefinitely while the pointer remains
      *   over the trigger OR the tooltip body itself (no fixed disappear timer
      *   while genuinely hovered — see bug note below)
      * - Also opens on click/tap ("pinned"): stays open indefinitely while
@@ -29,8 +33,8 @@
      * Svelte 5 runes.
      */
     import type {Snippet} from 'svelte';
-    import katex from 'katex';
-    import 'katex/dist/katex.min.css';
+    import {escapeHtml, renderInlineMath} from '$lib/utils/inlineMath';
+    import {isOutsideClick} from '$lib/utils/core/clickOutside';
 
     interface Props {
         text?: string;
@@ -42,10 +46,15 @@
         maxWidth?: string;
         /** Extra classes for the trigger wrapper (e.g. `min-w-0` to allow shrinking/truncating inside a flex row) */
         wrapperClass?: string;
+        /** Child owns native interaction semantics (for example, a button or link). */
+        interactiveChild?: boolean;
+        /** Delay before a plain-hover open (T2). Click/tap/keyboard always open
+         *  instantly. Pass 0 to restore the pre-T2 instant hover. */
+        showDelayMs?: number;
         children?: Snippet;
     }
 
-    let {text = '', html = '', math = false, position = 'top', maxWidth = '400px', wrapperClass = '', children}: Props = $props();
+    let {text = '', html = '', math = false, position = 'top', maxWidth = '400px', wrapperClass = '', interactiveChild = false, showDelayMs = 500, children}: Props = $props();
 
     let visible = $state(false);
     let tooltipElement: HTMLDivElement | undefined = $state(undefined);
@@ -54,6 +63,7 @@
     // Fixed position coordinates (viewport-relative)
     let fixedTop = $state(0);
     let fixedLeft = $state(0);
+    let pendingPositionFrame: number | null = null;
 
     /** True once opened via click/tap ("pinned") rather than plain hover.
      *  Pinned tooltips stay open indefinitely while the pointer remains over
@@ -67,20 +77,45 @@
 
     /** Grace period after a *pinned* tooltip loses contact (mouse leaves both
      *  trigger and tooltip, or a touch ends) before it auto-dismisses. */
-    const PINNED_LEAVE_GRACE_MS = 5000;
+    const PINNED_LEAVE_GRACE_MS = 30000;
     /** Near-instant delay for plain hover — bridges the gap between trigger
      *  and tooltip elements when the pointer moves from one to the other,
      *  without introducing a perceptible "stays open" timer. */
     const HOVER_LEAVE_BRIDGE_MS = 150;
 
+    /** True once the dismissal listeners are actually attached.
+     *
+     *  They are attached by an `$effect`, which runs *after* the tooltip is in
+     *  the DOM — so between "visible" and "dismissable" there is a window where
+     *  a click outside hits nobody. A user does not notice: they cannot click
+     *  faster than a frame. A test can, and did: `tooltip-component.spec.ts`
+     *  clicked as soon as the element was visible and failed roughly one run in
+     *  four under load, because a missed dismissal does not merely delay the
+     *  close — it leaves the tooltip pinned for `PINNED_LEAVE_GRACE_MS`, thirty
+     *  seconds.
+     *
+     *  Published as `data-dismissable` so the state can be waited on instead of
+     *  guessed at. */
+    let listenersAttached = $state(false);
+
     /** Single pending-hide timer, shared by both the pinned grace period and
      *  the plain-hover bridge delay — always cancelled on re-entry. */
     let pendingHideTimer: ReturnType<typeof setTimeout> | null = $state(null);
+    /** Pending hover-open timer (T2) — cancelled when the pointer leaves before
+     *  the delay elapses, and by any explicit open/close path. */
+    let pendingShowTimer: ReturnType<typeof setTimeout> | null = $state(null);
 
     function clearPendingHide() {
         if (pendingHideTimer) {
             clearTimeout(pendingHideTimer);
             pendingHideTimer = null;
+        }
+    }
+
+    function clearPendingShow() {
+        if (pendingShowTimer) {
+            clearTimeout(pendingShowTimer);
+            pendingShowTimer = null;
         }
     }
 
@@ -92,15 +127,16 @@
     }
 
     function show() {
+        clearPendingShow();
         visible = true;
-        // Defer position calculation to next frame (tooltip must be in DOM first)
-        requestAnimationFrame(calculateFixedPosition);
+        schedulePositionUpdate();
     }
 
     function hide() {
         visible = false;
         pinned = false;
         clearPendingHide();
+        clearPendingShow();
         isTouchInteraction = false;
     }
 
@@ -119,22 +155,33 @@
         }
     }
 
-    /** Pointer entered trigger OR tooltip body — cancel any scheduled hide
-     *  and ensure it's shown (covers both plain hover and re-entry into a
-     *  pinned tooltip before its grace period elapses). */
+    /** Pointer entered trigger OR tooltip body — cancel any scheduled hide.
+     *  A closed tooltip opens after `showDelayMs` (T2): the pointer must rest,
+     *  so tooltips don't flash while the user crosses the page. Re-entry into
+     *  an already-open tooltip (trigger → body) is instant. */
     function handlePointerEnter() {
         if (isTouchInteraction) return;
         clearPendingHide();
-        if (!visible) show();
+        if (visible || pendingShowTimer) return;
+        if (showDelayMs <= 0) {
+            show();
+            return;
+        }
+        pendingShowTimer = setTimeout(() => {
+            pendingShowTimer = null;
+            show();
+        }, showDelayMs);
     }
 
     /** Pointer left trigger OR tooltip body. Pinned tooltips get a multi-
      *  second grace period (real dismiss only after contact stays lost);
      *  plain-hover tooltips get a near-instant bridge delay so moving the
      *  mouse across the small gap between trigger and tooltip doesn't close
-     *  it, while still closing promptly once genuinely done hovering. */
+     *  it, while still closing promptly once genuinely done hovering. A
+     *  pending hover-open (T2) is simply cancelled — the pointer is gone. */
     function handlePointerLeave() {
         if (isTouchInteraction) return;
+        clearPendingShow();
         scheduleHide(pinned ? PINNED_LEAVE_GRACE_MS : HOVER_LEAVE_BRIDGE_MS);
     }
 
@@ -176,7 +223,7 @@
     }
 
     function handleClickOutside(event: MouseEvent) {
-        if (visible && triggerElement && !triggerElement.contains(event.target as Node) && !tooltipElement?.contains(event.target as Node)) {
+        if (visible && isOutsideClick(event.target, (el) => !triggerElement || triggerElement.contains(el) || (tooltipElement?.contains(el) ?? false))) {
             hide();
         }
     }
@@ -195,6 +242,12 @@
                 }
             };
         }
+    });
+
+    // Clear pending timers on destroy so a removed tooltip can't fire later.
+    $effect(() => () => {
+        clearPendingShow();
+        clearPendingHide();
     });
 
     /**
@@ -266,23 +319,12 @@
         fixedLeft = left;
     }
 
-    /**
-     * Replace $...$ inline LaTeX delimiters with KaTeX-rendered HTML.
-     * Uses non-greedy matching to handle multiple formulas in one string.
-     */
-    function renderMathInline(content: string): string {
-        return content.replace(/\$([^$]+)\$/g, (_, formula) => {
-            try {
-                return katex.renderToString(formula, {throwOnError: false, displayMode: false});
-            } catch {
-                return formula;
-            }
+    function schedulePositionUpdate() {
+        if (pendingPositionFrame !== null) cancelAnimationFrame(pendingPositionFrame);
+        pendingPositionFrame = requestAnimationFrame(() => {
+            pendingPositionFrame = null;
+            calculateFixedPosition();
         });
-    }
-
-    /** Escape HTML entities for safe rendering when using plain text */
-    function escapeHtml(str: string): string {
-        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
     /**
@@ -292,28 +334,32 @@
     let renderedContent = $derived.by(() => {
         let content = html || escapeHtml(text);
         if (math) {
-            content = renderMathInline(content);
+            content = renderInlineMath(content);
         }
         return content;
     });
 
-    // Register/unregister click-outside listener + scroll-dismiss
+    // Keep fixed coordinates aligned while nested panels or the page scroll.
     $effect(() => {
         if (visible) {
             document.addEventListener('click', handleClickOutside);
             document.addEventListener('touchstart', handleTouchOutside);
-            document.addEventListener('scroll', handleScrollDismiss, {capture: true, passive: true});
+            document.addEventListener('scroll', schedulePositionUpdate, {capture: true, passive: true});
+            window.addEventListener('resize', schedulePositionUpdate);
+            listenersAttached = true;
             return () => {
+                listenersAttached = false;
                 document.removeEventListener('click', handleClickOutside);
                 document.removeEventListener('touchstart', handleTouchOutside);
-                document.removeEventListener('scroll', handleScrollDismiss, true);
+                document.removeEventListener('scroll', schedulePositionUpdate, true);
+                window.removeEventListener('resize', schedulePositionUpdate);
+                if (pendingPositionFrame !== null) {
+                    cancelAnimationFrame(pendingPositionFrame);
+                    pendingPositionFrame = null;
+                }
             };
         }
     });
-
-    function handleScrollDismiss() {
-        if (visible) hide();
-    }
 
     function handleTouchOutside(event: TouchEvent) {
         if (visible && triggerElement && !triggerElement.contains(event.target as Node)) {
@@ -322,29 +368,57 @@
     }
 </script>
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div
-    bind:this={triggerElement}
-    class="tooltip-wrapper {wrapperClass}"
-    onclick={(e) => {
-        if (!isTouchInteraction) toggle(e);
-    }}
-    onkeydown={handleKeydown}
-    onmouseenter={handlePointerEnter}
-    onmouseleave={handlePointerLeave}
-    ontouchstart={handleTouchStart}
-    ontouchend={handleTouchEnd}
-    role="button"
-    tabindex="0"
->
-    {#if children}
-        {@render children()}
-    {/if}
-</div>
+{#if interactiveChild}
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+        bind:this={triggerElement}
+        class="tooltip-wrapper {wrapperClass}"
+        onclick={(e) => {
+            if (!isTouchInteraction) toggle(e);
+        }}
+        onmouseenter={handlePointerEnter}
+        onmouseleave={handlePointerLeave}
+        ontouchstart={handleTouchStart}
+        ontouchend={handleTouchEnd}
+    >
+        {#if children}
+            {@render children()}
+        {/if}
+    </div>
+{:else}
+    <div
+        bind:this={triggerElement}
+        class="tooltip-wrapper {wrapperClass}"
+        onclick={(e) => {
+            if (!isTouchInteraction) toggle(e);
+        }}
+        onkeydown={handleKeydown}
+        onmouseenter={handlePointerEnter}
+        onmouseleave={handlePointerLeave}
+        ontouchstart={handleTouchStart}
+        ontouchend={handleTouchEnd}
+        role="button"
+        tabindex="0"
+    >
+        {#if children}
+            {@render children()}
+        {/if}
+    </div>
+{/if}
 
 {#if visible}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div bind:this={tooltipElement} class="tooltip-fixed" style="max-width: min({maxWidth}, calc(100vw - 20px)); top: {fixedTop}px; left: {fixedLeft}px;" role="tooltip" data-testid="tooltip-content" onmouseenter={handlePointerEnter} onmouseleave={handlePointerLeave}>
+    <div
+        bind:this={tooltipElement}
+        class="tooltip-fixed"
+        style="max-width: min({maxWidth}, calc(100vw - 20px)); top: {fixedTop}px; left: {fixedLeft}px;"
+        role="tooltip"
+        data-testid="tooltip-content"
+        data-dismissable={listenersAttached ? 'true' : 'false'}
+        onmouseenter={handlePointerEnter}
+        onmouseleave={handlePointerLeave}
+    >
         {#if math || html}
             {@html renderedContent}
         {:else}
@@ -385,6 +459,15 @@
         overflow-y: auto;
         cursor: default;
         user-select: text;
+    }
+
+    @media (max-width: 640px) {
+        .tooltip-fixed {
+            min-width: min(18rem, calc(100vw - 20px));
+            padding: 0.75rem 0.875rem;
+            font-size: 0.875rem;
+            line-height: 1.35rem;
+        }
     }
 
     /* Dark mode tooltip */

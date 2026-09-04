@@ -153,7 +153,7 @@ Lorsqu'un portefeuille contient des acquisitions dans différentes devises, Libr
 
 !!! warning "Le PMP n'est jamais utilisé pour l'évaluation des actifs"
 
-    Le PMP est une construction comptable pour le coût de base. La chaîne d'évaluation pour la valeur de marché utilise : `MARKET_PRICE → LAST_BUY_PRICE → MISSING`. Voir [NAV](portfolio-engine/nav.md).
+    Le PMP est une construction comptable pour le coût de base. La chaîne d'évaluation pour la valeur de marché utilise : `MARKET_PRICE → LAST_BUY_PRICE → MISSING`. Consultez [Résolution des Prix](portfolio-engine/price-resolution.md).
 
 ## ⚙️ Implémentation : Portée au niveau de la position
 
@@ -165,7 +165,7 @@ $$
 
 Le moteur calcule le PMP en ligne pendant la boucle quotidienne des transactions — aucune requête séparée à la base de données n'est nécessaire. Cela atteint un coût amorti O(1) par transaction au lieu du coût O(N) de réinterroger l'historique complet.
 
-### Ordre des transactions le même jour
+### 📅 des transactions le même jour
 
 À l'intérieur d'une même date, **les ajouts sont traités avant les réductions** :
 

@@ -2,76 +2,233 @@ from __future__ import annotations
 
 import importlib
 import importlib.util
+import sys
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Dict, List, Type
 
 from backend.app.config import PROJECT_ROOT
 from backend.app.logging_config import get_logger
+from backend.app.services.risk.base import RiskAnalytic
+from backend.app.services.signal_plugins.base import SignalPlugin
 
 logger = get_logger(__name__)
 
 
-class AbstractProviderRegistry:
-    """Abstract base class for provider registries.
+class PluginRegistryError(RuntimeError):
+    """Base error for plugin registry failures."""
 
-    Each subclass automatically gets its own _providers dictionary.
-    """
+
+class DuplicatePluginCodeError(PluginRegistryError):
+    """Raised when two distinct plugins claim the same registry code."""
+
+
+@dataclass(frozen=True)
+class PluginDiscoveryFailure:
+    module_name: str
+    error_type: str
+    message: str
+
+
+class PluginDiscoveryError(PluginRegistryError):
+    """Aggregate error raised when strict plugin discovery imports fail."""
+
+    def __init__(self, failures: tuple[PluginDiscoveryFailure, ...]):
+        self.failures = failures
+        details = "; ".join(f"{failure.module_name}: {failure.error_type}: {failure.message}" for failure in failures)
+        super().__init__(f"Plugin discovery failed: {details}")
+
+
+class AbstractPluginRegistry:
+    """Filesystem-discovered class registry with per-subclass isolated state."""
 
     def __init_subclass__(cls, **kwargs):
-        """Ensure each subclass has its own _providers dict and discovery tracking."""
+        """Give each concrete registry isolated entries and discovery state."""
         super().__init_subclass__(**kwargs)
-        cls._providers = {}
+        setattr(cls, cls._get_storage_attribute(), {})
         cls._discovery_done = False
+        cls._discovery_errors = ()
 
     @classmethod
-    def register(cls, provider_class: Type) -> None:
-        """Register a provider class.
-
-        The provider_class must expose a `provider_code` attribute.
-        We instantiate the class to read the provider_code (handles properties).
-        """
-        try:
-            # Instantiate to read properties correctly
-            instance = provider_class()
-            code = getattr(instance, cls._get_provider_code_attr(), None)
-        except Exception:
-            # Fallback: try reading as class attribute
-            code = getattr(provider_class, cls._get_provider_code_attr(), None)
-
-        if not code:
-            raise ValueError("Provider class must define a provider_code attribute")
-        cls._providers[code] = provider_class
+    def register(cls, plugin_class: Type) -> None:
+        """Validate and register one plugin class."""
+        cls._validate_plugin_class(plugin_class)
+        code = cls._get_registration_code(plugin_class)
+        if not isinstance(code, str) or not code.strip():
+            raise ValueError(f"Plugin class must define a non-empty {cls._get_plugin_code_attr()} attribute")
+        code = code.strip()
+        storage = cls._get_storage()
+        existing = storage.get(code)
+        if existing is not None and existing is not plugin_class:
+            same_definition = existing.__module__ == plugin_class.__module__ and existing.__qualname__ == plugin_class.__qualname__
+            if same_definition:
+                storage[code] = plugin_class
+                return
+            if cls._reject_duplicate_codes():
+                raise DuplicatePluginCodeError(f"Duplicate plugin code '{code}' in {existing.__module__}.{existing.__qualname__} and {plugin_class.__module__}.{plugin_class.__qualname__}")
+        storage[code] = plugin_class
 
     @classmethod
-    def get_provider(cls, code: str):
-        """Get provider class by code. Triggers auto-discovery if not done yet."""
+    def get_plugin(cls, code: str):
+        """Return a registered class by code after auto-discovery."""
         cls.auto_discover()
-        return cls._providers.get(code)
+        return cls._get_storage().get(cls._normalize_lookup_code(code))
+
+    @classmethod
+    def get_plugin_instance(cls, code: str, **kwargs):
+        """Instantiate a registered plugin, retrying no-arg construction."""
+        plugin_class = cls.get_plugin(code)
+        if not plugin_class:
+            return None
+        try:
+            return plugin_class(**kwargs)
+        except TypeError:
+            return plugin_class()
+
+    @classmethod
+    def list_plugin_codes(cls) -> list[str]:
+        """Return all registered codes in registration order."""
+        cls.auto_discover()
+        return list(cls._get_storage())
+
+    @classmethod
+    def auto_discover(cls) -> None:
+        """Import plugin modules from the registry folder exactly once."""
+        if cls._discovery_done:
+            cls._raise_discovery_errors_if_needed()
+            return
+        target_dir = cls._get_plugin_directory()
+
+        if not target_dir.exists():
+            cls._discovery_done = True
+            return
+
+        failures: list[PluginDiscoveryFailure] = []
+        for py in sorted(target_dir.glob("*.py")):
+            if py.name == "__init__.py" or py.name.startswith("_") or py.stem in cls._ignored_module_stems() or not py.is_file():
+                continue
+            module_name = f"{cls._get_module_namespace()}.{py.stem}"
+            try:
+                if module_name in sys.modules:
+                    continue
+                spec = importlib.util.spec_from_file_location(module_name, str(py))
+                if spec is None or spec.loader is None:
+                    raise ImportError(f"Unable to create module spec for {py}")
+                module = importlib.util.module_from_spec(spec)
+                sys.modules[module_name] = module
+                try:
+                    spec.loader.exec_module(module)
+                except Exception:
+                    sys.modules.pop(module_name, None)
+                    raise
+            except Exception as e:
+                failure = PluginDiscoveryFailure(
+                    module_name=module_name,
+                    error_type=type(e).__name__,
+                    message=str(e),
+                )
+                failures.append(failure)
+                logger.exception("Error importing plugin module", module_name=module_name, error_type=failure.error_type, error=failure.message)
+        cls._discovery_done = True
+        cls._discovery_errors = tuple(failures)
+        cls._raise_discovery_errors_if_needed()
+
+    @classmethod
+    def get_discovery_errors(cls) -> tuple[PluginDiscoveryFailure, ...]:
+        """Return explicit module import failures from the last discovery."""
+        try:
+            cls.auto_discover()
+        except PluginDiscoveryError:
+            pass
+        return cls._discovery_errors
+
+    @classmethod
+    def _get_storage(cls) -> Dict[str, Type]:
+        return getattr(cls, cls._get_storage_attribute())
+
+    @classmethod
+    def _raise_discovery_errors_if_needed(cls) -> None:
+        if cls._discovery_errors and cls._fail_on_discovery_errors():
+            raise PluginDiscoveryError(cls._discovery_errors)
+
+    @classmethod
+    def _get_registration_code(cls, plugin_class: Type) -> object:
+        return getattr(plugin_class, cls._get_plugin_code_attr(), None)
+
+    @classmethod
+    def _normalize_lookup_code(cls, code: str) -> str:
+        return code
+
+    @classmethod
+    def _validate_plugin_class(cls, plugin_class: Type) -> None:
+        if not isinstance(plugin_class, type):
+            raise TypeError("Registry entries must be classes")
+
+    @classmethod
+    def _get_storage_attribute(cls) -> str:
+        return "_plugins"
+
+    @classmethod
+    def _get_plugin_directory(cls) -> Path:
+        return PROJECT_ROOT / "backend" / "app" / "services" / cls._get_plugin_folder()
+
+    @classmethod
+    def _get_module_namespace(cls) -> str:
+        return f"backend.app.services.{cls._get_plugin_folder()}"
+
+    @classmethod
+    def _get_plugin_folder(cls) -> str:
+        raise NotImplementedError
+
+    @classmethod
+    def _get_plugin_code_attr(cls) -> str:
+        return "plugin_code"
+
+    @classmethod
+    def _reject_duplicate_codes(cls) -> bool:
+        return False
+
+    @classmethod
+    def _fail_on_discovery_errors(cls) -> bool:
+        return False
+
+    @classmethod
+    def _ignored_module_stems(cls) -> frozenset[str]:
+        return frozenset()
+
+
+class AbstractProviderRegistry(AbstractPluginRegistry):
+    """Compatibility specialization for existing provider registries."""
+
+    @classmethod
+    def _get_storage_attribute(cls) -> str:
+        return "_providers"
+
+    @classmethod
+    def _get_plugin_folder(cls) -> str:
+        return cls._get_provider_folder()
+
+    @classmethod
+    def _get_provider_folder(cls) -> str:
+        raise NotImplementedError
+
+    @classmethod
+    def _get_plugin_code_attr(cls) -> str:
+        return "provider_code"
+
+    @classmethod
+    def _get_registration_code(cls, provider_class: Type) -> object:
+        try:
+            return getattr(provider_class(), cls._get_plugin_code_attr(), None)
+        except Exception:
+            return getattr(provider_class, cls._get_plugin_code_attr(), None)
 
     @classmethod
     def get_provider_instance(cls, code: str, **kwargs):
-        """Return an instantiated provider object for given provider code.
-
-        kwargs are forwarded to provider constructor if it accepts them.
-        Returns None if provider not found.
-        """
-        prov_cls = cls.get_provider(code)
-        if not prov_cls:
-            return None
-        try:
-            return prov_cls(**kwargs)
-        except TypeError:
-            # Provider doesn't accept kwargs; instantiate without args
-            return prov_cls()
+        return cls.get_plugin_instance(code, **kwargs)
 
     @classmethod
     def list_providers(cls) -> List[Dict[str, str]]:
-        """
-        List all registered providers with their metadata.
-        Triggers auto-discovery if not done yet.
-        Returns:
-            List of dicts with 'code' and 'name' keys
-        """
-
         providers = []
         cls.auto_discover()
         for code, provider_class in cls._providers.items():
@@ -80,54 +237,15 @@ class AbstractProviderRegistry:
                 name = getattr(instance, "provider_name", None) or getattr(instance, "name", code)
                 providers.append({"code": code, "name": name})
             except Exception:
-                # Fallback if instantiation fails
                 providers.append({"code": code, "name": code})
         return providers
 
     @classmethod
-    def auto_discover(cls) -> None:
-        """Import all modules in the provider folder to trigger registration.
-
-        This implementation scans the filesystem directly and loads each .py
-        module with importlib.util to avoid executing the package's __init__.py
-        which may import other modules and cause circular imports.
-        """
-        if cls._discovery_done:
-            return
-        folder = cls._get_provider_folder()
-        # Resolve to absolute path: project_root/backend/app/services/<folder>
-        target_dir = PROJECT_ROOT / "backend" / "app" / "services" / folder
-
-        if not target_dir.exists():
-            return
-
-        for py in target_dir.glob("*.py"):
-            if py.name == "__init__.py" or not py.is_file():
-                continue
-            module_name = f"backend.app.services.{folder}.{py.stem}"
-            try:
-                spec = importlib.util.spec_from_file_location(module_name, str(py))
-                if spec and spec.loader:
-                    mod = importlib.util.module_from_spec(spec)
-                    spec.loader.exec_module(mod)
-            except Exception as e:
-                # Log error but don't stop discovery on single-module errors
-                logger.error("Error importing provider module", module_name=module_name, error=str(e))
-                continue
-        cls._discovery_done = True
-
-    @classmethod
     def shutdown_all_providers(cls) -> None:  # pragma: no cover
-        """Invoke ``shutdown()`` on every registered provider instance.
-
-        Called during application lifespan teardown.  Errors on individual
-        providers are logged but do **not** stop the iteration.
-        """
         cls.auto_discover()
         for code, provider_class in cls._providers.items():
             try:
-                instance = provider_class()
-                instance.shutdown()
+                provider_class().shutdown()
             except Exception as e:
                 logger.warning(
                     "Error during provider shutdown",
@@ -135,15 +253,6 @@ class AbstractProviderRegistry:
                     registry=cls.__name__,
                     error=str(e),
                 )
-
-    # --- methods to specialize in subclasses ---
-    @classmethod
-    def _get_provider_folder(cls) -> str:
-        raise NotImplementedError
-
-    @classmethod
-    def _get_provider_code_attr(cls) -> str:
-        return "provider_code"
 
 
 # Specializations
@@ -157,6 +266,88 @@ class AssetProviderRegistry(AbstractProviderRegistry):
     @classmethod
     def _get_provider_folder(cls) -> str:
         return "asset_source_providers"
+
+
+class SignalPluginRegistry(AbstractPluginRegistry):
+    """Strict registry for autonomous technical signal plugins."""
+
+    @classmethod
+    def _get_plugin_folder(cls) -> str:
+        return "signal_plugins"
+
+    @classmethod
+    def _get_plugin_code_attr(cls) -> str:
+        return "signal_code"
+
+    @classmethod
+    def _normalize_lookup_code(cls, code: str) -> str:
+        return code.strip().upper()
+
+    @classmethod
+    def _reject_duplicate_codes(cls) -> bool:
+        return True
+
+    @classmethod
+    def _fail_on_discovery_errors(cls) -> bool:
+        return True
+
+    @classmethod
+    def _ignored_module_stems(cls) -> frozenset[str]:
+        return frozenset({"base"})
+
+    @classmethod
+    def _validate_plugin_class(cls, plugin_class: Type) -> None:
+        super()._validate_plugin_class(plugin_class)
+        if not issubclass(plugin_class, SignalPlugin):
+            raise TypeError("SignalPluginRegistry entries must extend SignalPlugin")
+        plugin_class.validate_definition()
+
+    @classmethod
+    def list_definitions(cls):
+        """Return stable static catalog definitions sorted by signal code."""
+        cls.auto_discover()
+        return [plugin_class.catalog_definition() for _code, plugin_class in sorted(cls._plugins.items())]
+
+
+class RiskAnalyticRegistry(AbstractPluginRegistry):
+    """Strict registry for multi-asset risk analytics."""
+
+    @classmethod
+    def _get_plugin_folder(cls) -> str:
+        return "risk_plugins"
+
+    @classmethod
+    def _get_plugin_code_attr(cls) -> str:
+        return "analytic_code"
+
+    @classmethod
+    def _normalize_lookup_code(cls, code: str) -> str:
+        return code.strip().lower()
+
+    @classmethod
+    def _reject_duplicate_codes(cls) -> bool:
+        return True
+
+    @classmethod
+    def _fail_on_discovery_errors(cls) -> bool:
+        return True
+
+    @classmethod
+    def _ignored_module_stems(cls) -> frozenset[str]:
+        return frozenset({"base"})
+
+    @classmethod
+    def _validate_plugin_class(cls, plugin_class: Type) -> None:
+        super()._validate_plugin_class(plugin_class)
+        if not issubclass(plugin_class, RiskAnalytic):
+            raise TypeError("RiskAnalyticRegistry entries must extend RiskAnalytic")
+        plugin_class.validate_definition()
+
+    @classmethod
+    def list_definitions(cls):
+        """Return stable static catalog definitions sorted by analytic code."""
+        cls.auto_discover()
+        return [plugin_class.catalog_definition() for _code, plugin_class in sorted(cls._plugins.items())]
 
 
 class BRIMProviderRegistry(AbstractProviderRegistry):
@@ -257,7 +448,7 @@ class BRIMProviderRegistry(AbstractProviderRegistry):
                 instance = plugin_cls()
                 result.append(instance.to_plugin_info())
             except Exception:
-                pass
+                logger.exception("Failed to build plugin info", plugin_class=f"{plugin_cls.__module__}.{plugin_cls.__qualname__}")
         return result
 
 
@@ -279,3 +470,29 @@ def register_provider(registry_class: Type[AbstractProviderRegistry]):
         return provider_class
 
     return decorator
+
+
+def register_plugin(registry_class: Type[AbstractPluginRegistry]):
+    """Decorator factory for non-provider plugin registries."""
+
+    def decorator(plugin_class: Type):
+        registry_class.register(plugin_class)
+        return plugin_class
+
+    return decorator
+
+
+__all__ = [
+    "AbstractPluginRegistry",
+    "AbstractProviderRegistry",
+    "AssetProviderRegistry",
+    "BRIMProviderRegistry",
+    "DuplicatePluginCodeError",
+    "FXProviderRegistry",
+    "PluginDiscoveryError",
+    "PluginDiscoveryFailure",
+    "PluginRegistryError",
+    "SignalPluginRegistry",
+    "register_plugin",
+    "register_provider",
+]

@@ -89,12 +89,12 @@ all-or-nothing pool; FX resolver inside the engine (Option C) → FX resolved in
 
 | Role | Path |
 |------|------|
-| Post-implementation review (authoritative) | `RoadmapV4_UI/fifo-engine/v4-fee_tax_integration/post-implementation-review-v5.md` |
-| Implementation recap (authoritative) | `RoadmapV4_UI/fifo-engine/v4-fee_tax_integration/implementation-recap-v5.md` |
-| Review checklist (authoritative) | `RoadmapV4_UI/fifo-engine/v4-fee_tax_integration/review-checklist-v5.md` |
-| High-level design (authoritative) | `RoadmapV4_UI/fifo-engine/v4-fee_tax_integration/hig-level-analysis-v5.md` |
-| Feasibility / final pivots (authoritative) | `RoadmapV4_UI/fifo-engine/v4-fee_tax_integration/feasibility-analysis-v4.1.md` |
-| Detailed executable plan (authoritative) | `RoadmapV4_UI/fifo-engine/v4-fee_tax_integration/implementation-plan-v5.md` |
+| Post-implementation review (authoritative) | `LibreFolio_developer_journal/RoadmapV4_UI/fifo-engine/v4-fee_tax_integration/post-implementation-review-v5.md` |
+| Implementation recap (authoritative) | `LibreFolio_developer_journal/RoadmapV4_UI/fifo-engine/v4-fee_tax_integration/implementation-recap-v5.md` |
+| Review checklist (authoritative) | `LibreFolio_developer_journal/RoadmapV4_UI/fifo-engine/v4-fee_tax_integration/review-checklist-v5.md` |
+| High-level design (authoritative) | `LibreFolio_developer_journal/RoadmapV4_UI/fifo-engine/v4-fee_tax_integration/hig-level-analysis-v5.md` |
+| Feasibility / final pivots (authoritative) | `LibreFolio_developer_journal/RoadmapV4_UI/fifo-engine/v4-fee_tax_integration/feasibility-analysis-v4.1.md` |
+| Detailed executable plan (authoritative) | `LibreFolio_developer_journal/RoadmapV4_UI/fifo-engine/v4-fee_tax_integration/implementation-plan-v5.md` |
 | Superseded feasibility drafts | `RoadmapV4_UI/fifo-engine/v4-fee_tax_integration/feasibility-analysis{,-v2,-v3,-v4,-v4-review}.md` |
 | Superseded high-level drafts | `RoadmapV4_UI/fifo-engine/v4-fee_tax_integration/{high-level-analysis,high-level-analysis-v2,hig-level-analysis-v3}.md` |
 | Parent background (partly superseded, see above) | `RoadmapV4_UI/fifo-engine/{REPORT-fifo-lots-transfer-mismatch,fifo-engine-current-state,fifo-segment-model-analysis,portfolio-engine-cache-analysis}.md` |

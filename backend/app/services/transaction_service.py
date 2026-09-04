@@ -25,7 +25,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 from pydantic import ValidationError
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetType, Broker, BrokerUserAccess, Transaction, TransactionType, UserRole
@@ -88,8 +88,6 @@ class BalanceValidationError(Exception):
 
 class LinkedTransactionError(Exception):
     """Raised when linked transaction operations fail."""
-
-    pass
 
 
 from dataclasses import dataclass
@@ -306,7 +304,7 @@ class TransactionService:
     # READ OPERATIONS
     # =========================================================================
 
-    async def query(self, params: TXQueryParams, user_id: Optional[int] = None) -> List[TXReadItem]:
+    async def query(self, params: TXQueryParams, user_id: Optional[int] = None) -> List[TXReadItem]:  # noqa: C901 — flat query-builder chain, one branch per filter
         """
         Query transactions with filters.
 
@@ -405,6 +403,10 @@ class TransactionService:
         stmt = select(Transaction).where(Transaction.broker_id == broker_id)
         result = await self.session.execute(stmt)
         txs = result.scalars().all()
+        tx_ids = [tx.id for tx in txs if tx.id is not None]
+
+        if tx_ids:
+            await self.session.execute(update(Transaction).where(Transaction.related_transaction_id.in_(tx_ids)).values(related_transaction_id=None))
 
         count = 0
         for tx in txs:
@@ -417,7 +419,7 @@ class TransactionService:
     # BALANCE VALIDATION
     # =========================================================================
 
-    async def _validate_broker_balances(
+    async def _validate_broker_balances(  # noqa: C901 — day-by-day balance replay, per-tx accumulate + raises
         self,
         broker_id: int,
         from_date: Optional[date_type] = None,
@@ -625,7 +627,7 @@ class TransactionService:
     # TRANSFER PROMOTION (Block H.4)
     # =========================================================================
 
-    async def promote_transfer(
+    async def promote_transfer(  # noqa: C901 — sequential validation gates + per-type payload build
         self,
         req: TXTransferPromoteRequest,
         user_id: Optional[int] = None,
@@ -817,7 +819,7 @@ class TransactionService:
         return None
 
     @staticmethod
-    def _check_promote_constraints(tx_a: Transaction, tx_b: Transaction, constraints: list) -> bool:
+    def _check_promote_constraints(tx_a: Transaction, tx_b: Transaction, constraints: list) -> bool:  # noqa: C901 — flat field×relation matcher, early returns
         """Check if two transactions satisfy promote field constraints."""
         for c in constraints:
             assert isinstance(c, PairFieldConstraint)
@@ -850,7 +852,7 @@ class TransactionService:
                         return False
         return True
 
-    async def promote_suggest_bulk(
+    async def promote_suggest_bulk(  # noqa: C901 — nested rule/candidate matching loops, no decision trees
         self,
         inputs: List,
         tolerance_days: int,
@@ -932,7 +934,7 @@ class TransactionService:
     # UNIFIED BATCH PIPELINE (replaces separate create/update/delete bulk)
     # =========================================================================
 
-    async def execute_batch(
+    async def execute_batch(  # noqa: C901 — TODO(P2-refactor): 8-stage batch pipeline, split per-operation stages
         self,
         creates_raw: List[dict],
         updates_raw: List[dict],
@@ -1547,6 +1549,20 @@ class TransactionService:
 
         # 8. Decision
         success_count = sum(1 for r in results if r.status == "success")
+        if commit and issues:
+            # A commit was asked for and the batch is about to be rolled back.
+            # Leaving per-item status at "success" tells the caller the opposite
+            # of what happened — and a client that trusts it (reading `ids` as
+            # if the rows existed) acts on phantom rows.
+            #
+            # Deliberately NOT applied to dry-runs (`commit=False`): there the
+            # caller never asked to persist anything, so "success" means "this
+            # item would apply cleanly", which is the whole answer `/validate`
+            # exists to give. The bulk editor relies on it to mark the batch's
+            # own rows as pending (TransactionBulkModal.svelte:1146).
+            for r in results:
+                if r.status == "success":
+                    r.status = "simulated"
         if issues:
             return TXBatchResponse(committed=False, issues=issues, results=results, success_count=success_count, wac_results=wac_results)
         elif not commit:
@@ -1560,7 +1576,7 @@ class TransactionService:
     # WAC AUTO-COMPUTATION (inline in validate/commit)
     # =========================================================================
 
-    async def _compute_wac_for_auto_items(
+    async def _compute_wac_for_auto_items(  # noqa: C901 — per-item WAC dispatch loop, sequential checks
         self,
         parsed_creates: list[tuple[int, TXCreateItem]],
         parsed_updates: list[tuple[int, TXUpdateItem]],

@@ -2,6 +2,7 @@
 Backend service tests: FX conversion, asset source, provider registry, transactions, etc.
 """
 
+from scripts.cli_base import pipenv_prefix
 
 from . import _common
 from ._backend_db import db_create
@@ -20,6 +21,64 @@ from ._common import (
     run_command,
 )
 
+AI_EXPORT_SERVICE_TEST_PATHS = (
+    "backend/test_scripts/test_services/test_ai_export_component_runtime.py",
+    "backend/test_scripts/test_services/test_ai_export_components_asset.py",
+    "backend/test_scripts/test_services/test_ai_export_components_asset_fx_integration.py",
+    "backend/test_scripts/test_services/test_ai_export_components_broker_adequacy.py",
+    "backend/test_scripts/test_services/test_ai_export_components_drawdown_context.py",
+    "backend/test_scripts/test_services/test_ai_export_components_fx.py",
+    "backend/test_scripts/test_services/test_ai_export_components_portfolio_broker_financial.py",
+    "backend/test_scripts/test_services/test_ai_export_components_portfolio_broker_integration.py",
+    "backend/test_scripts/test_services/test_ai_export_components_portfolio_income.py",
+    "backend/test_scripts/test_services/test_ai_export_components_technical.py",
+    "backend/test_scripts/test_services/test_ai_export_composer.py",
+    "backend/test_scripts/test_services/test_ai_export_dataset_analysis_catalogs.py",
+    "backend/test_scripts/test_services/test_ai_export_runtime_service.py",
+    "backend/test_scripts/test_services/test_ai_export_telemetry.py",
+    "backend/test_scripts/test_services/test_ai_export_temporal.py",
+)
+
+# Pure-calculation AI Export contracts: value-object invariants and observed-math
+# helpers only. Kept apart from AI_EXPORT_SERVICE_TEST_PATHS (which builds against
+# the shared DB) so the unit can honestly declare PURE isolation and run beside
+# anything.
+AI_EXPORT_PURE_TEST_PATHS = (
+    "backend/test_scripts/test_services/test_ai_export_fx_payload_invariants.py",
+    "backend/test_scripts/test_services/test_ai_export_fx_timing_invariants.py",
+    "backend/test_scripts/test_services/test_ai_export_int_validation.py",
+    "backend/test_scripts/test_services/test_ai_export_technical_payload_invariants.py",
+    "backend/test_scripts/test_services/test_ai_export_technical_shared_pure.py",
+    "backend/test_scripts/test_services/test_ai_export_temporal_aggregator_invariants.py",
+)
+
+# Provider error paths: what the four price/FX providers do when the source
+# misbehaves. Every HTTP client is doubled, so these never leave the machine —
+# which is also the only way the assertions can be exact rather than "something
+# arrived". No session and no server either, hence PURE and its own unit: folding
+# them into a DB-backed unit would demote them to that unit's isolation class and
+# waste the parallelism on tests that touch nothing.
+PROVIDER_ERROR_TEST_PATHS = (
+    "backend/test_scripts/test_services/test_borsa_italiana_errors.py",
+    "backend/test_scripts/test_services/test_justetf_errors.py",
+    "backend/test_scripts/test_services/test_snb_errors.py",
+    "backend/test_scripts/test_services/test_yahoo_finance_errors.py",
+)
+
+RISK_SERVICE_TEST_PATHS = (
+    "backend/test_scripts/test_services/test_quantlib_smoke.py",
+    "backend/test_scripts/test_services/test_series_preparation.py",
+    "backend/test_scripts/test_services/test_risk_metrics.py",
+    "backend/test_scripts/test_services/test_risk_registry.py",
+    "backend/test_scripts/test_services/test_risk_signal_plugins.py",
+    "backend/test_scripts/test_services/test_risk_service.py",
+    "backend/test_scripts/test_services/test_risk_scenario_catalog.py",
+    "backend/test_scripts/test_services/test_risk_analytics.py",
+    "backend/test_scripts/test_services/test_risk_simulation.py",
+    "backend/test_scripts/test_services/test_risk_optimization.py",
+    "backend/test_scripts/test_services/test_risk_spawn_worker.py",
+)
+
 
 def services_fx_conversion(verbose: bool = False, test_names: list = None) -> bool:
     """Test FX conversion service logic."""
@@ -31,15 +90,6 @@ def services_fx_conversion(verbose: bool = False, test_names: list = None) -> bo
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_fx_conversion.py", test_names)
     return run_command(cmd, "FX conversion service tests", verbose=verbose)
-
-
-def services_asset_metadata(verbose: bool = False, test_names: list = None) -> bool:
-    """Test AssetMetadataService static utility behavior."""
-    print_section("Services: Asset Metadata Service")
-    print_info("Testing: backend/app/services/asset_metadata.py")
-    print_info("Tests: parse/serialize, diff, patch semantics")
-    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_metadata.py", test_names)
-    return run_command(cmd, "Asset metadata service tests", verbose=verbose)
 
 
 def services_asset_source(verbose: bool = False, test_names: list = None) -> bool:
@@ -67,6 +117,153 @@ def services_provider_registry(verbose: bool = False, test_names: list = None) -
     print_info("Testing: backend/app/services/provider_registry.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_provider_registry.py", test_names)
     return run_command(cmd, "Provider registry tests", verbose=verbose)
+
+
+def services_quantlib_runtime(verbose: bool = False, test_names: list = None) -> bool:
+    """Smoke test the pinned QuantLib runtime and deterministic path generation."""
+    print_section("Services: QuantLib Runtime")
+    print_info("Testing: QuantLib version, required APIs and seeded path reproducibility")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_quantlib_smoke.py", test_names)
+    return run_command(cmd, "QuantLib runtime smoke tests", verbose=verbose)
+
+
+def services_risk_simulation(verbose: bool = False, test_names: list = None) -> bool:
+    """Test serializable stochastic simulation contracts and numerical engine."""
+    print_section("Services: Risk Simulation")
+    print_info("Testing: contracts, sampling, seed, moments, chunking and cache")
+    cmd = _build_pytest_cmd(
+        "backend/test_scripts/test_services/test_risk_simulation.py",
+        test_names,
+    )
+    return run_command(cmd, "Risk simulation tests", verbose=verbose)
+
+
+def services_risk_optimization(verbose: bool = False, test_names: list = None) -> bool:
+    """Test Riskfolio strategies, estimators, constraints and cache."""
+    print_section("Services: Risk Optimization")
+    print_info("Testing: objectives, risk contribution, frontier, sensitivity and cache")
+    cmd = _build_pytest_cmd(
+        "backend/test_scripts/test_services/test_risk_optimization.py",
+        test_names,
+    )
+    return run_command(cmd, "Risk optimization tests", verbose=verbose)
+
+
+def services_risk_workers(verbose: bool = False, test_names: list = None) -> bool:
+    """Test spawned quantitative worker lifecycle and failure isolation."""
+    print_section("Services: Risk Workers")
+    print_info("Testing: lazy spawn, queues, timeout, recycle and cancellation")
+    cmd = _build_pytest_cmd(
+        "backend/test_scripts/test_services/test_risk_spawn_worker.py",
+        test_names,
+    )
+    return run_command(cmd, "Risk worker tests", verbose=verbose)
+
+
+def services_risk_all(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the complete risk-analysis service test set."""
+    print_section("Services: Risk Analysis")
+    print_info("Testing canonical series, analytics, QuantLib, Riskfolio and workers")
+    cmd = [*pipenv_prefix(), "python", "-m", "pytest", *RISK_SERVICE_TEST_PATHS, "-v"]
+    if test_names:
+        cmd.extend(["-k", " or ".join(test_names)])
+    return run_command(cmd, "Risk analysis service tests", verbose=verbose)
+
+
+def services_series_preparation(verbose: bool = False, test_names: list = None) -> bool:
+    """Test canonical target-currency valuation and return preparation."""
+    print_section("Services: Canonical Series Preparation")
+    print_info("Testing: joint calendar, FX/price provenance, annualization and fingerprints")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_series_preparation.py", test_names)
+    return run_command(cmd, "Canonical series preparation tests", verbose=verbose)
+
+
+def services_signal_registry(verbose: bool = False, test_names: list = None) -> bool:
+    """Test SignalPlugin base, strict registry and discovery."""
+    print_section("Services: Signal Plugin Registry")
+    print_info("Testing: library-agnostic SignalPlugin + strict discovery")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_signal_registry.py", test_names)
+    return run_command(cmd, "Signal plugin registry tests", verbose=verbose)
+
+
+def services_signal_runtime(verbose: bool = False, test_names: list = None) -> bool:
+    """Test composite-stack fail-fast and startup integration."""
+    print_section("Services: Signal Runtime")
+    print_info("Testing: pandas-ta-classic + TA-Lib fail-fast")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_signal_runtime.py", test_names)
+    return run_command(cmd, "Signal runtime tests", verbose=verbose)
+
+
+def services_signal_contracts(verbose: bool = False, test_names: list = None) -> bool:
+    """Test auto-discovered test-only signal plugin fixtures."""
+    print_section("Services: Signal Plugin Contracts")
+    print_info("Testing: line, band/composite, warm-up, failure and event fixtures")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_signal_contracts.py", test_names)
+    return run_command(cmd, "Signal plugin contract tests", verbose=verbose)
+
+
+def services_signal_service(verbose: bool = False, test_names: list = None) -> bool:
+    """Test SignalService planning, availability, execution and slicing."""
+    print_section("Services: Signal Service")
+    print_info("Testing: dedup, warm-up, coverage, gaps, events, isolation and output validation")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_signal_service.py", test_names)
+    return run_command(cmd, "Signal service tests", verbose=verbose)
+
+
+def services_signal_annotations(verbose: bool = False, test_names: list = None) -> bool:
+    """Test cross/threshold annotation primitives."""
+    print_section("Services: Signal Annotations")
+    print_info("Testing: extended-range crossing, gaps, observed-only, dedup and sampling")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_signal_annotations.py", test_names)
+    return run_command(cmd, "Signal annotation tests", verbose=verbose)
+
+
+def services_signal_plugins_core(verbose: bool = False, test_names: list = None) -> bool:
+    """Test EMA, RSI, MACD and Bollinger production plugins."""
+    print_section("Services: Core Signal Plugins")
+    print_info("Testing: TA-Lib delegation, numerical parity, warm-up and canonical output")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_signal_plugins_core.py", test_names)
+    return run_command(cmd, "Core signal plugin tests", verbose=verbose)
+
+
+def services_signal_plugins_close_only(verbose: bool = False, test_names: list = None) -> bool:
+    """Test SMA, ROC, StochRSI, KAMA and PPO plugins."""
+    print_section("Services: Close-only Signal Plugins")
+    print_info("Testing: TA-Lib delegation, warm-up, composite output and Asset/FX parity")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_signal_plugins_close_only.py", test_names)
+    return run_command(cmd, "Close-only signal plugin tests", verbose=verbose)
+
+
+def services_signal_plugins_ohlc(verbose: bool = False, test_names: list = None) -> bool:
+    """Test ATR, ADX, NATR, Aroon, Donchian and CCI plugins."""
+    print_section("Services: OHLC Signal Plugins")
+    print_info("Testing: strict input coverage, TA-Lib delegation, Donchian native path and warm-up")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_signal_plugins_ohlc.py", test_names)
+    return run_command(cmd, "OHLC signal plugin tests", verbose=verbose)
+
+
+def services_signal_plugins_volume(verbose: bool = False, test_names: list = None) -> bool:
+    """Test OBV and MFI plugins."""
+    print_section("Services: Volume Signal Plugins")
+    print_info("Testing: zero/missing volume, OBV rebasing, MFI levels and TA-Lib delegation")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_signal_plugins_volume.py", test_names)
+    return run_command(cmd, "Volume signal plugin tests", verbose=verbose)
+
+
+def services_signal_plugin_matrix(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the uniform 17-plugin regression matrix."""
+    print_section("Services: Full Signal Plugin Matrix")
+    print_info("Testing: all 17 plugins, domains, fields, gaps, boundaries and isolation")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_signal_plugin_matrix.py", test_names)
+    return run_command(cmd, "Full signal plugin matrix", verbose=verbose)
+
+
+def services_asset_signals(verbose: bool = False, test_names: list = None) -> bool:
+    """Test AssetSourceManager signal integration."""
+    print_section("Services: Asset Signals")
+    print_info("Testing: extended bulk load, FX-before-compute, signal-only payload and isolation")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_signals.py", test_names)
+    return run_command(cmd, "Asset signal service tests", verbose=verbose)
 
 
 def services_provider_contracts(verbose: bool = False, test_names: list = None) -> bool:
@@ -104,6 +301,17 @@ def services_transaction(verbose: bool = False, test_names: list = None) -> bool
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_transaction_service.py", test_names)
 
     return run_command(cmd, "Transaction service tests", verbose=verbose)
+
+
+def services_brim_parse_pool(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that parsing off-loads to a process pool and degrades safely."""
+    print_section("Services: BRIM Parse Pool")
+    print_info("Testing: backend/app/services/brim_parse_pool.py")
+    print_info("Tests: real parse through the pool, pickle round-trip, thread fallback")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_parse_pool.py", test_names)
+
+    return run_command(cmd, "BRIM parse pool tests", verbose=verbose)
 
 
 def services_broker(verbose: bool = False, test_names: list = None) -> bool:
@@ -177,8 +385,18 @@ def services_brim_parse_error(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "BRIM parse error tests", verbose=verbose)
 
 
+def services_brim_parse_race(verbose: bool = False, test_names: list = None) -> bool:
+    """Test parse resilience when the file is renamed underfoot."""
+    print_section("Services: BRIM Parse Race")
+    print_info("Testing: backend/app/services/brim_provider.py (uploaded → parsed rename race)")
+    print_info("Tests: retry after the rename, no retry on a genuine read error, path resolution on stale metadata")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_parse_race.py", test_names)
+    return run_command(cmd, "BRIM parse race tests", verbose=verbose)
+
+
 def services_settings(verbose: bool = False, test_names: list = None) -> bool:
-    """Test settings service: get_session_ttl_sync."""
+    """Test settings service: user settings CRUD, get_effective_base_currency."""
     print_section("Services: Settings Service")
     print_info("Testing: backend/app/services/settings_service.py")
 
@@ -233,15 +451,33 @@ def services_financial_utils(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Financial utils tests", verbose=verbose)
 
 
-def services_roi_fifo_utils(verbose: bool = False, test_names: list = None) -> bool:
+def services_roi_fifo_engine(verbose: bool = False, test_names: list = None) -> bool:
     """Test ROI, FIFO, and PortfolioService pure-math utilities."""
     print_section("Services: ROI / FIFO / Portfolio Utils")
-    print_info("Testing: backend/app/utils/financial/ (roi_utils, fifo_utils)")
-    print_info("Testing: backend/app/services/portfolio_service.py (_build_history_series)")
-    print_info("Tests: TWRR, MWRR warm-start series, SimpleROI series, FIFO lots, history series")
+    print_info("Testing: backend/app/utils/financial/ (roi_utils)")
+    print_info("Testing: backend/app/services/portfolio_service.py (compute_wac_iterative, get_report)")
+    print_info("Tests: TWRR/MWRR/SimpleROI + series, FIFO lots (FifoLotEngine), price resolver, WAC")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial/", test_names)
     return run_command(cmd, "ROI/FIFO/Portfolio service tests", verbose=verbose)
+
+
+def services_lots_analysis_pure(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the pure LotsAnalysisService builders (no DB, no server, no network)."""
+    print_section("Services: Lots Analysis Pure Builders")
+    print_info("Testing: backend/app/services/lots_analysis_service.py (sync, argument-driven helpers)")
+    print_info("Tests: SHORT lots, estimated_mode, price-series gaps, ADJUSTMENT cost basis, transfer scope")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_lots_analysis_pure.py", test_names)
+    return run_command(cmd, "Lots Analysis pure builder tests", verbose=verbose)
+
+
+def services_asset_source_guards(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the AssetSourceManager integrity guards and event FX conversion tests."""
+    print_section("Services: Asset Source Guards")
+    print_info("Testing: backend/app/services/asset_source.py (bulk_upsert_prices, get_prices_bulk, list_assets)")
+    print_info("Tests: OHLC rejection policy, close-only bound widening, identifier filters, event FX pass")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_source_upsert_guards.py", test_names)
+    return run_command(cmd, "Asset Source guard tests", verbose=verbose)
 
 
 def services_portfolio_engine_vnext(verbose: bool = False, test_names: list = None) -> bool:
@@ -374,6 +610,25 @@ def services_scheduler_joblog_misc(verbose: bool = False, test_names: list = Non
     return run_command(cmd, "Scheduler job log tests", verbose=verbose)
 
 
+def services_scheduler_jobs(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the two scheduler job bodies end to end, with the bulk calls doubled."""
+    print_section("Services: Scheduler Job Bodies")
+    print_info("Testing: backend/app/services/scheduler/jobs.py")
+    print_info("Tests: _classify_job_status, run_current_price_refresh, run_history_sync")
+    print_info("get_current_prices_bulk / bulk_refresh_prices / sync_pairs_bulk doubled — no provider calls, no price writes")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_jobs.py", test_names)
+    return run_command(cmd, "Scheduler job body tests", verbose=verbose)
+
+
+def services_scheduler_joblog_builders(verbose: bool = False, test_names: list = None) -> bool:
+    """Test scheduler job log entry builders and the append/rotate/read round trip."""
+    print_section("Services: Scheduler Job Log Builders")
+    print_info("Testing: backend/app/services/scheduler/joblog.py")
+    print_info("Tests: append/rotate/read round trip, build_current_price_entry, build_history_sync_entry, StrEnum guard")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_joblog_builders.py", test_names)
+    return run_command(cmd, "Scheduler job log builder tests", verbose=verbose)
+
+
 def services_scheduler_settings_misc(verbose: bool = False, test_names: list = None) -> bool:
     """Test scheduler settings local-time-to-UTC conversion."""
     print_section("Services: Scheduler Settings TZ Conversion")
@@ -382,18 +637,87 @@ def services_scheduler_settings_misc(verbose: bool = False, test_names: list = N
     return run_command(cmd, "Scheduler settings TZ conversion tests", verbose=verbose)
 
 
-def services_all(verbose: bool = False) -> bool:
-    """Run all backend service tests."""
-    print_header("LibreFolio Backend Services Tests")
-    print_info("Testing business logic and service layer")
-    print_info("No backend server required")
+def services_ai_export(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the complete component-based AI Export service test set."""
+    print_section("Services: AI Export")
+    print_info("Testing the component runtime, datasets, analyses, temporal policy, and serialization")
+    cmd = [*pipenv_prefix(), "python", "-m", "pytest", *AI_EXPORT_SERVICE_TEST_PATHS, "-v"]
+    if test_names:
+        cmd.extend(["-k", " or ".join(test_names)])
+    return run_command(cmd, "AI Export service tests", verbose=verbose)
 
+
+def services_ai_export_pure(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the pure AI Export calculation contracts (no DB, no server, no network)."""
+    print_section("Services: AI Export Pure Contracts")
+    print_info("Testing payload invariants, temporal aggregators, observed FX math, and shared technical helpers")
+    cmd = [*pipenv_prefix(), "python", "-m", "pytest", *AI_EXPORT_PURE_TEST_PATHS, "-v"]
+    if test_names:
+        cmd.extend(["-k", " or ".join(test_names)])
+    return run_command(cmd, "AI Export pure contract tests", verbose=verbose)
+
+
+def services_provider_errors(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the provider error-path contracts (no DB, no server, no network)."""
+    print_section("Services: Provider Error Paths")
+    print_info("Testing what happens when a price provider misbehaves: empty response, HTML instead of JSON,")
+    print_info("missing field, unexpected date format, timeout, unknown ticker")
+    cmd = [*pipenv_prefix(), "python", "-m", "pytest", *PROVIDER_ERROR_TEST_PATHS, "-v"]
+    if test_names:
+        cmd.extend(["-k", " or ".join(test_names)])
+    return run_command(cmd, "Provider error-path tests", verbose=verbose)
+
+
+def services_borsa_italiana_search(verbose: bool = False, test_names: list = None) -> bool:
+    """Test Borsa Italiana provider search (single-fetch, IT+EN variants, ISIN hit)."""
+    print_section("Services: Borsa Italiana Search")
+    print_info("Testing: backend/app/services/asset_source_providers/borsa_italiana.py (search)")
+    print_info("External engine mocked — no live Borsa Italiana calls")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_borsa_italiana_search.py", test_names)
+    return run_command(cmd, "Borsa Italiana search tests", verbose=verbose)
+
+
+def services_borsa_italiana_funds(verbose: bool = False, test_names: list = None) -> bool:
+    """Test Borsa Italiana mutual-fund NAV path + resolve_url capability."""
+    print_section("Services: Borsa Italiana Funds")
+    print_info("Testing: fund detail-page NAV via provider_params.codice_fondo")
+    print_info("Scraping library mocked — no live Borsa Italiana calls")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_borsa_italiana_funds.py", test_names)
+    return run_command(cmd, "Borsa Italiana funds tests", verbose=verbose)
+
+
+def services_web_link_finder(verbose: bool = False, test_names: list = None) -> bool:
+    """Test web_link_finder unit behaviour + search orchestration augmentation."""
+    print_section("Services: Web Link Finder")
+    print_info("Testing: backend/app/services/web_link_finder.py")
+    print_info("External engine mocked — no live ddgs/network call")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_web_link_finder.py", test_names)
+    return run_command(cmd, "Web link finder tests", verbose=verbose)
+
+
+def _services_setup() -> bool:
+    """Start this category from a clean, empty database."""
     print_info("\n⚙️  Creating clean test database for services tests...")
     if not db_create(verbose=False):
         print_error("Failed to create clean test database")
         print_warning("Services tests may fail due to dirty database state")
-    else:
-        print_success("Clean test database created\n")
+        return False
+    print_success("Clean test database created\n")
+    return True
+
+
+def services_all(verbose: bool = False) -> bool:
+    """Run all backend service tests."""
+    if _common.nothing_left_to_run("services"):
+        return _common.consolidated_verdict("services")
+    print_header("LibreFolio Backend Services Tests")
+    print_info("Testing business logic and service layer")
+    print_info("No backend server required")
+
+    _common.run_category_setup("services")
 
     return _run_test_suite(
         suite_name="Backend Services Tests",
@@ -402,8 +726,8 @@ def services_all(verbose: bool = False) -> bool:
         header_msg=None,
         summary_title="Backend Services Test Summary",
         success_msg="All backend services tests passed! 🎉",
-            resume=_common._RESUME_MODE,
-        )
+        resume=_common._RESUME_MODE,
+    )
 
 
 def populate_registry(registry: dict) -> None:
@@ -421,12 +745,51 @@ Tests for business logic and service layer:
   • Broker service (CRUD, summaries)
 
 Note: No backend server required.
-""")
-    add_test(cat, "fx-conversion", services_fx_conversion, name="FX Conversion", desc="Currency conversion algorithms", prereq="Database created")
-    add_test(cat, "asset-metadata", services_asset_metadata, name="Asset Metadata", desc="Parse/serialize, diff, patch semantics")
+""",
+        setup=_services_setup,
+        setup_exclusive=True,
+        # Earned: all 85 units ran concurrently across 4 workers on the empty
+        # database this category's setup builds — 2m42 → 1m16, zero reds. They
+        # never talk to a server; each opens its own session and creates the rows
+        # it then reads back.
+        #
+        # That last sentence is the load-bearing claim, and it is a claim about
+        # every unit, so any unit that breaks it must opt out with
+        # `exclusive_because`. Three did, and only 8 workers exposed them: an
+        # autouse fixture that truncates a whole shared table is not "its own
+        # rows", and a unit that reads rows it seeded once per *module* loses
+        # them to a neighbour that truncates once per *test*.
+        default_isolation="write-scoped",
+    )
+    add_test(
+        cat,
+        "fx-conversion",
+        services_fx_conversion,
+        name="FX Conversion",
+        desc="Currency conversion algorithms",
+        prereq="Database created",
+        exclusive_because="its assertions are about the oldest and newest EUR/USD row in the whole fx_rates table (backward fill, missing-rate boundary), and the service under test queries that table without a source filter, so a neighbour inserting any EUR/USD rate moves the boundary this unit measures",
+    )
     add_test(cat, "asset-source", services_asset_source, name="Asset Source", desc="Provider assignment, synthetic yield")
     add_test(cat, "asset-source-refresh", services_asset_source_refresh, name="Asset Source Refresh", desc="Bulk refresh orchestration smoke test")
     add_test(cat, "provider-registry", services_provider_registry, name="Provider Registry", desc="Registration, lookup, priority, fallback")
+    add_test(cat, "quantlib-runtime", services_quantlib_runtime, name="QuantLib Runtime", desc="Pinned version, required APIs and seeded path reproducibility")
+    add_test(cat, "risk-simulation", services_risk_simulation, name="Risk Simulation", desc="Serializable contracts, sampling, moments, chunking and cache")
+    add_test(cat, "risk-optimization", services_risk_optimization, name="Risk Optimization", desc="Riskfolio objectives, estimators, constraints, frontier and cache")
+    add_test(cat, "risk-workers", services_risk_workers, name="Risk Workers", desc="Spawn lifecycle, queue bounds, timeout, recycle and cancellation")
+    add_test(cat, "risk-all", services_risk_all, name="Risk Analysis", desc="Complete canonical-series, analytic, QuantLib, Riskfolio and worker suite")
+    add_test(cat, "series-preparation", services_series_preparation, name="Canonical Series", desc="Converted valuations, joint calendar, returns, annualization and FX fingerprint")
+    add_test(cat, "signal-registry", services_signal_registry, name="Signal Registry", desc="SignalPlugin contract, strict discovery and duplicate rejection")
+    add_test(cat, "signal-runtime", services_signal_runtime, name="Signal Runtime", desc="Composite-stack fail-fast and startup integration")
+    add_test(cat, "signal-contracts", services_signal_contracts, name="Signal Contracts", desc="Auto-discovered test-only line, band/composite, warm-up, failure and event fixtures")
+    add_test(cat, "signal-service", services_signal_service, name="Signal Service", desc="Planning, dedup, availability, one-thread batch, output validation and slicing")
+    add_test(cat, "signal-annotations", services_signal_annotations, name="Signal Annotations", desc="Line crossover, threshold crossing, observed-only, dedup and sampling")
+    add_test(cat, "signal-plugins-core", services_signal_plugins_core, name="Core Signal Plugins", desc="EMA, RSI, MACD and Bollinger TA-Lib delegation and numerical regression")
+    add_test(cat, "signal-plugins-close-only", services_signal_plugins_close_only, name="Close-only Signal Plugins", desc="SMA, ROC, StochRSI, KAMA and PPO delegation, warm-up and Asset/FX parity")
+    add_test(cat, "signal-plugins-ohlc", services_signal_plugins_ohlc, name="OHLC Signal Plugins", desc="ATR, ADX, NATR, Aroon, Donchian and CCI strict input and numerical regression")
+    add_test(cat, "signal-plugins-volume", services_signal_plugins_volume, name="Volume Signal Plugins", desc="OBV rebasing and MFI zero/missing volume, levels and TA-Lib delegation")
+    add_test(cat, "signal-plugin-matrix", services_signal_plugin_matrix, name="Full Signal Plugin Matrix", desc="Uniform 22-plugin domains, fields, gaps, boundaries and isolation gate")
+    add_test(cat, "asset-signals", services_asset_signals, name="Asset Signals", desc="Extended bulk load, FX-before-compute, signal-only response and isolation")
     add_test(cat, "provider-contracts", services_provider_contracts, name="Provider Contracts", desc="ABC compliance for ALL registered providers")
     add_test(cat, "synthetic-yield", services_synthetic_yield, name="Synthetic Yield", desc="SCHEDULED_YIELD asset valuation")
     add_test(cat, "synthetic-yield-integration", services_synthetic_yield_integration, name="Synthetic Yield Integration", desc="E2E scenarios (P2P, bond, mixed)")
@@ -434,17 +797,58 @@ Note: No backend server required.
     add_test(cat, "broker", services_broker, name="Broker Service", desc="CRUD, initial deposits, summaries")
     add_test(cat, "user-profile", services_user_profile, name="User Profile", desc="Username/email update, validation")
     add_test(cat, "edge-cases", services_edge_cases, name="Transaction Edge Cases", desc="Decimal precision, currency validation, date edge cases")
-    add_test(cat, "global-settings", services_global_settings, name="Global Settings", desc="Type conversion, DB reads, TTL getters")
-    add_test(cat, "fx-core", services_fx_core, name="FX Core Helpers", desc="normalize_rate, upsert/delete bulk, changes")
+    add_test(
+        cat,
+        "global-settings",
+        services_global_settings,
+        name="Global Settings",
+        desc="Type conversion, DB reads, TTL getters",
+        exclusive_because="an autouse fixture truncates global_settings before every test; that table holds enable_registration, which conftest seeds once per process, so a concurrent unit loses it mid-run and fails far from the cause",
+    )
+    add_test(
+        cat,
+        "fx-core",
+        services_fx_core,
+        name="FX Core Helpers",
+        desc="normalize_rate, upsert/delete bulk, changes",
+        exclusive_because="an autouse fixture truncates fx_rates before every test, so any concurrent unit reading rates loses them mid-test",
+    )
     add_test(cat, "static-uploads", services_static_uploads, name="Static Uploads", desc="File save/list/get/delete, security")
     add_test(cat, "brim-parse-error", services_brim_parse_error, name="BRIM Parse Error", desc="Exception class tests")
-    add_test(cat, "settings", services_settings, name="Settings Service", desc="get_session_ttl_sync")
+    add_test(cat, "brim-parse-pool", services_brim_parse_pool, name="BRIM Parse Pool", desc="Process-pool off-loading, pickle round-trip, thread fallback")
+    add_test(cat, "brim-parse-race", services_brim_parse_race, name="BRIM Parse Race", desc="Parse survives the uploaded→parsed rename; genuine read errors still fail")
+    add_test(cat, "settings", services_settings, name="Settings Service", desc="User settings CRUD, get_effective_base_currency")
     add_test(cat, "current-price-bootstrap", services_current_price_bootstrap, name="Current Price Bootstrap", desc="OHLC widening helper (F.2/F.3)")
     add_test(cat, "scheduled-investment-param-change", services_scheduled_investment_param_change, name="Scheduled Investment Param Change", desc="Symmetric wipe on provider_params change")
     add_test(cat, "brim-provider-base", services_brim_provider_base, name="BRIM Provider Base", desc="Abstract base default properties")
     add_test(cat, "brim-create-transaction", services_brim_create_transaction, name="BRIM Create Transaction", desc="_create_transaction + _loc_to_field")
     add_test(cat, "financial-utils", services_financial_utils, name="Financial Utils", desc="WAC pure math (compute_wac_from_txlist, determine_target_currency)")
-    add_test(cat, "roi-fifo-utils", services_roi_fifo_utils, name="ROI/FIFO/Portfolio Utils", desc="TWRR, MWRR warm-start, SimpleROI series, FIFO lots, _build_history_series")
+    add_test(cat, "roi-fifo-utils", services_roi_fifo_engine, name="ROI/FIFO/Portfolio Utils", desc="TWRR/MWRR/SimpleROI series, FIFO lots (FifoLotEngine), WAC multi-broker, price resolver")
+    add_test(
+        cat,
+        "lots-analysis-pure",
+        services_lots_analysis_pure,
+        name="Lots Analysis Pure Builders",
+        desc="SHORT lots, estimated_mode, price gaps, ADJUSTMENT cost basis, transfer scope, FX resolver",
+        # PURE: every helper under test is a sync method that takes all of its
+        # inputs as arguments and never touches self.db, so the service is built
+        # with db=None. The two async cases stub convert_bulk instead of opening a
+        # session. Kept out of the DB-backed lots units on purpose: folding it in
+        # would declass it to the category default (write-scoped).
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "asset-source-guards",
+        services_asset_source_guards,
+        name="Asset Source Guards",
+        desc="bulk_upsert_prices OHLC policy, close-only widening, identifier filters, event FX conversion",
+        # WRITE_GLOBAL: Asset, PriceHistory and AssetEvent carry no user_id, so the
+        # asset this unit creates and every price/event row written against it are
+        # visible to all concurrent tests. Rows are uniquely named and dropped in
+        # teardown, but the tables themselves are shared surfaces.
+        isolation="write-global",
+    )
     add_test(cat, "portfolio-engine", services_portfolio_engine_vnext, name="Portfolio Engine vNext", desc="Inline WAC, last_buy_price, 3-pool, position states, accumulators, pre-frame/frame")
     add_test(cat, "asset-sync-counts", services_asset_sync_counts, name="Asset Sync Counts", desc="Asset sync count tracking")
     add_test(cat, "brim-versioning", services_brim_versioning, name="BRIM Versioning", desc="Provider version detection and compatibility")
@@ -453,13 +857,54 @@ Note: No backend server required.
     add_test(cat, "scheduler-due", services_scheduler_due, name="Scheduler Due-Check", desc="due_current_price + due_history_sync edge cases")
     add_test(cat, "scheduler-leader", services_scheduler_leader, name="Scheduler Leader Election", desc="Mock psutil, multi-worker, Docker PID1, --reload, exception safe")
     add_test(cat, "scheduler-loop", services_scheduler_loop, name="Scheduler Loop Integration", desc="due_* + state roundtrip, no real loop")
+    add_test(
+        cat,
+        "scheduler-jobs",
+        services_scheduler_jobs,
+        name="Scheduler Job Bodies",
+        desc="_classify_job_status, run_current_price_refresh, run_history_sync (bulk calls doubled)",
+        # READ, not write-global: the three bulk entry points that rewrite prices for
+        # every active asset and every FX route are replaced by doubles, so only the
+        # two SELECTs reach the shared DB. The job log is redirected to a per-test
+        # sandbox dir, and jobs.py mutates the SchedulerState object it is handed
+        # without ever calling save_state(), so nothing global is written.
+        isolation="read",
+    )
     add_test(cat, "config-misc", services_config_misc, name="Config Helpers", desc="get_data_dir test-mode/env-override branches")
     add_test(cat, "donation-popup", services_donation_popup, name="Donation Popup", desc="Trigger decision logic (50-login/7-day/60-day rules), hidden env var, counter updates")
     add_test(cat, "date-sentinel", services_date_sentinel, name="Date Sentinel", desc="resolve_date_sentinels min/max/passthrough, broker filter")
     add_test(cat, "file-preview", services_file_preview, name="File Preview", desc="CSV/Excel/text preview detection helpers")
-    add_test(cat, "fx-sync-service", services_fx_sync, name="FX Sync Orchestration", desc="_is_date_within_sync_range, _process_route/_compute_multi_step")
+    add_test(
+        cat,
+        "fx-sync-service",
+        services_fx_sync,
+        name="FX Sync Orchestration",
+        desc="_is_date_within_sync_range, _process_route/_compute_multi_step",
+        exclusive_because="an autouse fixture truncates fx_rates and fx_conversion_routes before every test, so any concurrent unit reading rates or routes loses them mid-test",
+    )
     add_test(cat, "provider-registry-misc", services_provider_registry_misc, name="Provider Registry Helpers", desc="auto_discover, register, get_provider_instance, BRIM plugin detection")
     add_test(cat, "scheduler-joblog-misc", services_scheduler_joblog_misc, name="Scheduler Job Log Helpers", desc="read_entries, _rotate_if_needed")
+    add_test(cat, "scheduler-joblog-builders", services_scheduler_joblog_builders, name="Scheduler Job Log Builders", desc="append/rotate/read round trip, entry builders, SyncStatus StrEnum guard")
     add_test(cat, "scheduler-settings-misc", services_scheduler_settings_misc, name="Scheduler Settings TZ Conversion", desc="_local_times_to_utc")
+    add_test(cat, "ai-export", services_ai_export, name="AI Export", desc="Component runtime, datasets, analyses, financial/technical builders, and temporal policy")
+    add_test(
+        cat,
+        "ai-export-pure",
+        services_ai_export_pure,
+        name="AI Export Pure Contracts",
+        desc="Payload/aggregate invariants, observed FX math, shared technical helpers",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "provider-errors",
+        services_provider_errors,
+        name="Provider Error Paths",
+        desc="justETF, Borsa Italiana, Yahoo Finance and SNB when the source misbehaves (every client doubled)",
+        isolation="pure",
+    )
+    add_test(cat, "borsa-italiana-search", services_borsa_italiana_search, name="Borsa Italiana Search", desc="Single-fetch search, IT+EN variants, ISIN direct hit (engine mocked)")
+    add_test(cat, "borsa-italiana-funds", services_borsa_italiana_funds, name="Borsa Italiana Funds", desc="Mutual-fund NAV via codice_fondo detail page + resolve_url (scraper mocked)")
+    add_test(cat, "web-link-finder", services_web_link_finder, name="Web Link Finder", desc="find_candidate_urls + search orchestration augmentation (ddgs mocked)")
     add_test(cat, "all", services_all, test_names=False, name="All Services Tests", desc="Run all service tests")
     registry["services"] = cat

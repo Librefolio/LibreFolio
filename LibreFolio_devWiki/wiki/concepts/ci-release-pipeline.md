@@ -44,6 +44,15 @@ The LibreFolio release pipeline is a GitHub Actions workflow (`.github/workflows
 - Published releases: `:latest` + `:vX.Y.Z` (semantic version from release tag)
 - Ensures production images are always tied to a named release
 
+### Release Tag Convention (in-app update prompt)
+The F14 "new version" prompt reads GitHub's `releases/latest` and compares `tag_name`
+numerically against the running version:
+- Tag must be SemVer `vX.Y.Z` (leading `v` tolerated); a non-numeric tag compares as `0.0.0` and silently never prompts.
+- Drafts and prereleases are never returned by `releases/latest` — the prompt only fires for **stable** releases.
+- The release *name* is free-form (display only); the comparison is per-segment numeric.
+- GHCR image tags follow the same SemVer tag (plus `latest` and the `-light` variants), keeping the prompt and the published images aligned.
+- Full rules: `mkdocs_src/docs/developer/docs/release-pipeline.md` → "Release Tag Convention"; changelog structure rules in `.github/copilot-instructions.md` → "Changelog Rules".
+
 ### Reproducible Frontend Builds
 - `package-lock.json` committed to repo
 - CI uses `npm ci` (not `npm install`) — installs exactly from lockfile

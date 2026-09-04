@@ -44,13 +44,21 @@ At the top right of the dashboard, you have several controls to customize your v
 - **Time range** — presets from 1 week to All-Time (MAX), or a custom range via the date picker.
 - **Broker filter** — filter all metrics to one or more specific brokers.
 - **Target currency** — converts all assets and cash balances dynamically into a single selected currency for aggregate viewing.
-- **AI Export** (:material-brain:) — Click this button to copy a text-based summary of your current portfolio state to the clipboard, optimized for pasting into LLMs (e.g., Gemini). You can choose between:
-    - **Full Export**: Includes all KPI values, positions, weights, and allocations.
-    - **Data Only**: A compact JSON/text representation of your holdings and balances.
+- **AI Export** (:material-brain:) — opens a clipboard export. Choose **Data
+  Snapshot** for factual data only, or an **analysis task** that automatically
+  includes its instructions and response contract, then select the **detail
+  level** (Compact, Standard, or Full). The backend snapshot follows the active
+  broker filter, date range, and target currency; LibreFolio does not contact an
+  AI service. See [Portfolio AI Export](../ai-export/portfolio.md) or the
+  [AI Export overview](../ai-export/index.md).
 
 !!! tip "Scope matters"
 
     When you filter to a single broker, cash transfers *to other brokers* become external flows for that scope. This affects [Deposited Capital](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md) and [P&L](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md) calculations.
+
+!!! note "Sharing affects these numbers"
+
+    The dashboard aggregates only the brokers **you have access to**, and every amount from a broker you co-own is **scaled by your ownership share**: an Owner with a 50% share sees half of that broker's value, income, and P&L counted in the totals (a 0% share is valid and contributes nothing). Editors and Viewers — who always carry a 0% share by rule — see the broker's **full** amounts instead. See [Broker Sharing](../brokers/sharing.md) for details.
 
 ---
 

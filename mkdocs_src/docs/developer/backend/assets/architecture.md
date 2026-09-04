@@ -19,6 +19,8 @@ Abstract base class for all asset pricing plugins. Each provider auto-registers 
 | `validate_params()` | ✅ | no-op | Validate provider-specific configuration |
 | `params_schema` | — | `[]` | Schema for dynamic form generation in the frontend |
 | `get_asset_url()` | — | `None` | URL to the provider's page for this asset |
+| `resolvable_url_domains` | — | `[]` | Domains accepted by `resolve_url`; non-empty means `supports_url_resolution = True` |
+| `resolve_url(url)` | — | `None` | Interactive-search hook: provider page URL → one search-item dict, list of dicts, or `None` |
 | `accepted_identifier_types` | — | `[TICKER, ISIN]` | Input types accepted by this provider |
 | `supports_history` | — | `True` | `False` for current-price-only providers |
 | `search()` | — | raises `NOT_SUPPORTED` | Search for assets by name/ticker/ISIN |
@@ -39,21 +41,12 @@ Central service that coordinates all asset-related operations:
 - **Current Price** *(new)*: Bulk live-price endpoint via `POST /assets/prices/current`. Calls each asset's provider `get_current_value()` with DB fallback. Used by the [LiveTicker](../../frontend/components/features/live-ticker.md) component.
 - **Event Sync**: Persist asset events from providers into the `asset_events` table, filtered by `provider_assignment_id` (manual events survive sync).
 - **Probe**: Dry-run provider config testing via `probe_provider_config()`.
-- **Metadata**: Delegate to `AssetMetadataService` for classification merging.
 
-### 3️⃣ `AssetMetadataService`
-
-Manages descriptive information about assets:
-
-- **Classification**: `sector_area` and `geographic_area` distributions.
-- **Merging**: Merges metadata from providers with existing user-defined data.
-- **Patching**: Supports partial updates to asset metadata.
-
-### 4️⃣ `AssetProviderRegistry`
+### 3️⃣ `AssetProviderRegistry`
 
 Uses the [Registry Pattern](../../architecture/patterns/registry_pattern.md) for auto-discovery of provider plugins.
 
-### 5️⃣ `AssetEvent` Table
+### 4️⃣ `AssetEvent` Table
 
 Stores asset-level events produced by providers or created manually by users. Events are distinct from portfolio transactions:
 
@@ -149,6 +142,29 @@ Each operation returns `success`, `execution_time_ms`, and operation-specific da
 
 ---
 
+## 🔎 Interactive Search Stack
+
+`GET /assets/provider/search` and `GET /assets/provider/search/stream` use a three-layer stack:
+
+1. **On-site provider search** — `provider.search(query)` runs first.
+2. **`web_link_finder`** — only if on-site search returns 0 items, the provider opts into
+   `resolvable_url_domains`, and the finder is enabled. It uses the `ddgs` library by default to
+   find provider-domain candidate URLs.
+3. **`resolve_url`** — each candidate URL is resolved into one search-item dict, a list of dicts, or
+   `None`. Lists are flattened and de-duplicated by `(identifier, language)`.
+
+The identifier post-filter keeps only resolved items whose identifier matches a known hint/query
+term when such a match exists. This is how a broad external result set is narrowed to an exact ISIN
+from a broker report.
+
+!!! warning "Interactive only"
+
+    The link-finder and `resolve_url` run only during interactive search. Price sync, current-price
+    fetches, and historical fetches never call external search; they use stored identifiers and
+    `provider_params` only.
+
+---
+
 ## 📊 Backward Fill Logic
 
 Financial markets are closed on weekends and holidays. To provide a continuous price series for charts, LibreFolio uses a **backward-fill** strategy.
@@ -190,11 +206,19 @@ If a price is requested for a date where no data exists (e.g., Sunday), the syst
 | `POST /api/v1/assets/prices/query` | POST | Bulk price query (DB-only, backward-fill) |
 | `POST /api/v1/assets/prices/sync` | POST | Bulk refresh prices from provider |
 
+!!! tip "Interactive search internals"
+
+    The two `provider/search` endpoints are the entry point of a three-layer stack (on-site
+    search → `ddgs` web link-finder → `resolve_url`). See
+    **[Asset Search & Link-Finder](search_link_finder.md)** for the orchestration, the `hints`
+    two-stage query, and the identifier post-filter.
+
 ---
 
 ## 🔗 Related Documentation
 
 - 📊 [Assets & Pricing ER Diagram](../../architecture/database/assets_pricing.md) — Database schema
+- 🔎 [Asset Search & Link-Finder](search_link_finder.md) — Three-layer interactive search (`ddgs` metasearch last resort)
 - 📅 [Asset Events](events.md) — Event types, dedup strategy, auto-generation
 - 🔌 [System Providers](system_providers.md) — CSS Scraper & Scheduled Investment
 - 📦 [Providers Overview](system_providers.md) — All available providers

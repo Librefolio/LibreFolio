@@ -82,6 +82,7 @@ plugins:
             Getting Started: Per Iniziare
             Installation (Docker): Installazione (Docker)
             Install as App (PWA): Installa come App (PWA)
+            "🧠 AI Export": "🧠 Esportazione AI"
             "🏦 Brokers": "🏦 Broker"
             Broker Sharing: Condivisione Broker
             Broker Transactions: Transazioni del broker
@@ -144,6 +145,7 @@ plugins:
             Directa SIM: Directa SIM
             Charles Schwab: Charles Schwab
             Revolut: Revolut
+            Fineco: Fineco
             Coinbase: Coinbase
             Freetrade: Freetrade
             Finpension: Finpension
@@ -152,6 +154,7 @@ plugins:
             "📊 Dashboard": "📊 Dashboard"
             Positions & Analysis: Posizioni & Analisi
             "⚙️ Settings": "⚙️ Impostazioni"
+            Profile: Profilo
             User Preferences: Preferenze Utente
             About: Informazioni
             "🛠️ Admin Manual": "🛠️ Manuale Admin"
@@ -190,10 +193,27 @@ plugins:
             "🔢 Composite": "🔢 Composite"
             "📉 Technical Analysis": "📉 Analisi Tecnica"
             "📐 Indicators": "📐 Indicatori"
+            "📈 Trend": "📈 Trend"
+            "⚡ Momentum": "⚡ Momentum"
+            "🌊 Volatility": "🌊 Volatilità"
+            "📊 Volume": "📊 Volume"
             EMA: EMA
+            "SMA — Simple Moving Average": "SMA — Media Mobile Semplice"
+            "KAMA — Kaufman Adaptive Moving Average": "KAMA — Media Mobile Adattiva di Kaufman"
+            "ADX — Average Directional Index": "ADX — Indice Direzionale Medio"
+            Aroon: Aroon
             MACD: MACD
             RSI: RSI
+            "ROC — Rate of Change": "ROC — Tasso di Variazione"
+            "Stochastic RSI": "RSI Stocastico"
+            "PPO — Percentage Price Oscillator": "PPO — Oscillatore Percentuale del Prezzo"
+            "CCI — Commodity Channel Index": "CCI — Indice del Canale delle Commodity"
             Bollinger Bands: Bande di Bollinger
+            "ATR — Average True Range": "ATR — Intervallo Reale Medio"
+            "NATR — Normalized ATR": "NATR — ATR Normalizzato"
+            Donchian Channels: Canali di Donchian
+            "OBV — On-Balance Volume": "OBV — Volume Bilanciato"
+            "MFI — Money Flow Index": "MFI — Indice del Flusso di Denaro"
             "🧪 Synthetic Benchmarks": "🧪 Benchmark Sintetici"
             Linear Growth: Crescita Lineare
             Compound Growth: Crescita Composta
@@ -238,6 +258,7 @@ plugins:
             Getting Started: Premiers Pas
             Installation (Docker): Installation (Docker)
             Install as App (PWA): Installer comme App (PWA)
+            "🧠 AI Export": "🧠 Export IA"
             "🏦 Brokers": "🏦 Courtiers"
             Broker Sharing: Partage de Courtier
             Broker Transactions: Transactions du broker
@@ -299,6 +320,7 @@ plugins:
             Directa SIM: Directa SIM
             Charles Schwab: Charles Schwab
             Revolut: Revolut
+            Fineco: Fineco
             Coinbase: Coinbase
             Freetrade: Freetrade
             Finpension: Finpension
@@ -307,6 +329,7 @@ plugins:
             "📊 Dashboard": "📊 Tableau de Bord"
             Positions & Analysis: Positions & Analyse
             "⚙️ Settings": "⚙️ Paramètres"
+            Profile: Profil
             User Preferences: Préférences Utilisateur
             About: À propos
             Borsa Italiana: Borsa Italiana
@@ -346,10 +369,27 @@ plugins:
             "🔢 Composite": "🔢 Composites"
             "📉 Technical Analysis": "📉 Analyse Technique"
             "📐 Indicators": "📐 Indicateurs"
+            "📈 Trend": "📈 Tendance"
+            "⚡ Momentum": "⚡ Momentum"
+            "🌊 Volatility": "🌊 Volatilité"
+            "📊 Volume": "📊 Volume"
             EMA: EMA
+            "SMA — Simple Moving Average": "SMA — Moyenne Mobile Simple"
+            "KAMA — Kaufman Adaptive Moving Average": "KAMA — Moyenne Mobile Adaptative de Kaufman"
+            "ADX — Average Directional Index": "ADX — Indice Directionnel Moyen"
+            Aroon: Aroon
             MACD: MACD
             RSI: RSI
+            "ROC — Rate of Change": "ROC — Taux de Variation"
+            "Stochastic RSI": "RSI Stochastique"
+            "PPO — Percentage Price Oscillator": "PPO — Oscillateur de Prix en Pourcentage"
+            "CCI — Commodity Channel Index": "CCI — Indice du Canal des Matières Premières"
             Bollinger Bands: Bandes de Bollinger
+            "ATR — Average True Range": "ATR — Plage Réelle Moyenne"
+            "NATR — Normalized ATR": "NATR — ATR Normalisé"
+            Donchian Channels: Canaux de Donchian
+            "OBV — On-Balance Volume": "OBV — Volume Cumulé"
+            "MFI — Money Flow Index": "MFI — Indice de Flux Monétaire"
             "🧪 Synthetic Benchmarks": "🧪 Benchmarks Synthétiques"
             Linear Growth: Croissance Linéaire
             Compound Growth: Croissance Composée
@@ -394,6 +434,7 @@ plugins:
             Getting Started: Primeros Pasos
             Installation (Docker): Instalación (Docker)
             Install as App (PWA): Instalar como App (PWA)
+            "🧠 AI Export": "🧠 Exportación de IA"
             "🏦 Brokers": "🏦 Brokers"
             Broker Sharing: Compartir Broker
             Broker Transactions: Transacciones del bróker
@@ -455,6 +496,7 @@ plugins:
             Directa SIM: Directa SIM
             Charles Schwab: Charles Schwab
             Revolut: Revolut
+            Fineco: Fineco
             Coinbase: Coinbase
             Freetrade: Freetrade
             Finpension: Finpension
@@ -463,6 +505,7 @@ plugins:
             "📊 Dashboard": "📊 Panel Principal"
             Positions & Analysis: Posiciones y Análisis
             "⚙️ Settings": "⚙️ Configuración"
+            Profile: Perfil
             User Preferences: Preferencias de Usuario
             About: Acerca de
             Borsa Italiana: Borsa Italiana
@@ -502,10 +545,27 @@ plugins:
             "🔢 Composite": "🔢 Compuestas"
             "📉 Technical Analysis": "📉 Análisis Técnico"
             "📐 Indicators": "📐 Indicadores"
+            "📈 Trend": "📈 Tendencia"
+            "⚡ Momentum": "⚡ Momentum"
+            "🌊 Volatility": "🌊 Volatilidad"
+            "📊 Volume": "📊 Volumen"
             EMA: EMA
+            "SMA — Simple Moving Average": "SMA — Media Móvil Simple"
+            "KAMA — Kaufman Adaptive Moving Average": "KAMA — Media Móvil Adaptativa de Kaufman"
+            "ADX — Average Directional Index": "ADX — Índice Direccional Medio"
+            Aroon: Aroon
             MACD: MACD
             RSI: RSI
+            "ROC — Rate of Change": "ROC — Tasa de Cambio"
+            "Stochastic RSI": "RSI Estocástico"
+            "PPO — Percentage Price Oscillator": "PPO — Oscilador Porcentual del Precio"
+            "CCI — Commodity Channel Index": "CCI — Índice del Canal de Materias Primas"
             Bollinger Bands: Bandas de Bollinger
+            "ATR — Average True Range": "ATR — Rango Verdadero Medio"
+            "NATR — Normalized ATR": "NATR — ATR Normalizado"
+            Donchian Channels: Canales de Donchian
+            "OBV — On-Balance Volume": "OBV — Volumen en Balance"
+            "MFI — Money Flow Index": "MFI — Índice de Flujo de Dinero"
             "🧪 Synthetic Benchmarks": "🧪 Benchmarks Sintéticos"
             Linear Growth: Crecimiento Lineal
             Compound Growth: Crecimiento Compuesto
@@ -598,6 +658,9 @@ nav:
                   - Investimental: user/transactions/import/investimental.md
               - 🏦 Banks & Neobrokers:
                   - Revolut: user/transactions/import/revolut.md
+                  - Fineco: user/transactions/import/fineco.md
+                  - Intesa Sanpaolo: user/transactions/import/intesa.md
+                  - Crédit Agricole: user/transactions/import/credit_agricole.md
                   - BUX: user/transactions/import/bux.md
                   - Rabobank: user/transactions/import/rabobank.md
               - 🪙 Crypto:
@@ -647,10 +710,17 @@ nav:
               - Data Editor: user/fx/detail/data-editor.md
               - Provider Config: user/fx/detail/provider.md
           - Chart Settings: user/fx/chart-settings.md
+      - 🧠 AI Export:
+          - Overview: user/ai-export/index.md
+          - Portfolio: user/ai-export/portfolio.md
+          - Broker: user/ai-export/broker.md
+          - Asset: user/ai-export/asset.md
+          - FX: user/ai-export/fx.md
       - 📁 Files:
           - Overview: user/files/index.md
       - ⚙️ Settings:
           - Overview: user/settings/index.md
+          - Profile: user/settings/profile.md
           - User Preferences: user/settings/preferences.md
           - About: user/settings/about.md
       - 🧩 Misc:
@@ -705,10 +775,31 @@ nav:
           - Overview: financial-theory/technical-analysis/index.md
           - 📐 Indicators:
               - Overview: financial-theory/technical-analysis/indicators/index.md
-              - EMA: financial-theory/technical-analysis/indicators/ema.md
-              - MACD: financial-theory/technical-analysis/indicators/macd.md
-              - RSI: financial-theory/technical-analysis/indicators/rsi.md
-              - Bollinger Bands: financial-theory/technical-analysis/indicators/bollinger-bands.md
+              - 📈 Trend:
+                  - Overview: financial-theory/technical-analysis/indicators/trend.md
+                  - EMA: financial-theory/technical-analysis/indicators/ema.md
+                  - "SMA — Simple Moving Average": financial-theory/technical-analysis/indicators/sma.md
+                  - "KAMA — Kaufman Adaptive Moving Average": financial-theory/technical-analysis/indicators/kama.md
+                  - "ADX — Average Directional Index": financial-theory/technical-analysis/indicators/adx.md
+                  - Aroon: financial-theory/technical-analysis/indicators/aroon.md
+              - ⚡ Momentum:
+                  - Overview: financial-theory/technical-analysis/indicators/momentum.md
+                  - RSI: financial-theory/technical-analysis/indicators/rsi.md
+                  - MACD: financial-theory/technical-analysis/indicators/macd.md
+                  - "ROC — Rate of Change": financial-theory/technical-analysis/indicators/roc.md
+                  - Stochastic RSI: financial-theory/technical-analysis/indicators/stochastic-rsi.md
+                  - "PPO — Percentage Price Oscillator": financial-theory/technical-analysis/indicators/ppo.md
+                  - "CCI — Commodity Channel Index": financial-theory/technical-analysis/indicators/cci.md
+              - 🌊 Volatility:
+                  - Overview: financial-theory/technical-analysis/indicators/volatility.md
+                  - Bollinger Bands: financial-theory/technical-analysis/indicators/bollinger-bands.md
+                  - "ATR — Average True Range": financial-theory/technical-analysis/indicators/atr.md
+                  - "NATR — Normalized ATR": financial-theory/technical-analysis/indicators/natr.md
+                  - Donchian Channels: financial-theory/technical-analysis/indicators/donchian-channels.md
+              - 📊 Volume:
+                  - Overview: financial-theory/technical-analysis/indicators/volume.md
+                  - "OBV — On-Balance Volume": financial-theory/technical-analysis/indicators/obv.md
+                  - "MFI — Money Flow Index": financial-theory/technical-analysis/indicators/mfi.md
           - 🧪 Synthetic Benchmarks:
               - Overview: financial-theory/technical-analysis/synthetic-benchmarks/index.md
               - Linear Growth: financial-theory/technical-analysis/synthetic-benchmarks/linear.md
@@ -718,6 +809,7 @@ nav:
               - Overview: financial-theory/technical-analysis/performance-metrics/index.md
               - ⚙️ Portfolio Engine:
                   - Overview: financial-theory/technical-analysis/performance-metrics/portfolio-engine/index.md
+                  - Price Resolution: financial-theory/technical-analysis/performance-metrics/portfolio-engine/price-resolution.md
                   - NAV / Net Worth: financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md
                   - Book Value: financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md
                   - Period P&L: financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md
@@ -726,6 +818,7 @@ nav:
                   - ROI: financial-theory/technical-analysis/performance-metrics/portfolio-engine/roi.md
                   - TWRR: financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md
                   - MWRR: financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md
+                  - Net Annualized Return: financial-theory/technical-analysis/performance-metrics/portfolio-engine/net-annualized-return.md
               - 🔬 FIFO Engine:
                   - Overview: financial-theory/technical-analysis/performance-metrics/fifo-engine/index.md
                   - FIFO Lot Analysis: financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md
@@ -748,6 +841,7 @@ nav:
   - 💻 Developer Manual:
       - System Overview: developer/index.md
       - Developer Workflow: developer/dev_workflow.md
+      - Lint Gates & Code Policy: developer/lint_gates.md
       - 🏛️ Architecture:
           - System Overview: developer/architecture/overview.md
           - 🧩 Technologies & Patterns:
@@ -757,12 +851,19 @@ nav:
                   - BRIM Plugin Guide: developer/architecture/patterns/brim_plugin_guide.md
                   - Asset Plugin Guide: developer/architecture/patterns/asset_plugin_guide.md
                   - FX Plugin Guide: developer/architecture/patterns/fx_plugin_guide.md
+                  - Signal Plugin Guide: developer/architecture/patterns/signal_plugin_guide.md
+              - 🧠 AI Export:
+                  - Overview: developer/architecture/patterns/ai_export_snapshot.md
+                  - Composition & Prompt: developer/architecture/patterns/ai_export_composition.md
+                  - Technical Sampling: developer/architecture/patterns/ai_export_sampling.md
+                  - Probe Workflow & Review: developer/architecture/patterns/ai_export_probe_workflow.md
               - Database Migrations (Alembic): developer/architecture/patterns/alembic.md
           - ⚙️ Core Systems:
               - Security & Authentication: developer/architecture/security.md
               - Users & Roles: developer/architecture/users_and_brokers.md
               - Access Control (RBAC): developer/architecture/access_control.md
               - Settings System: developer/architecture/settings.md
+              - Cache Registry & Admin: developer/architecture/settings_cache.md
           - 🗄️ Database Schema:
               - Overview: developer/architecture/database/index.md
               - Users & Access: developer/architecture/database/users_access.md
@@ -779,6 +880,7 @@ nav:
               - "WAC & Cost Basis": developer/backend/transactions/wac.md
               - "FIFO Lot Engine": developer/backend/transactions/fifo_lot_engine.md
               - "Lots Analysis Service": developer/backend/transactions/lots_analysis_service.md
+              - "Price Resolver": developer/backend/transactions/price_resolver.md
               - "Split & Promote": developer/backend/transactions/split_promote.md
               - Balance Validation: developer/backend/transactions/balance_validation.md
               - 📥 Import (BRIM):
@@ -787,6 +889,7 @@ nav:
                   - Providers List: developer/backend/brim/providers_list.md
           - "📈 Assets (Pricing)":
               - Architecture: developer/backend/assets/architecture.md
+              - Search & Link-Finder: developer/backend/assets/search_link_finder.md
               - 🔌 Providers:
                   - Overview Providers: developer/backend/assets/system_providers.md
                   - Yahoo Finance Tech: developer/backend/assets/provider_yahoo_finance.md
@@ -835,6 +938,8 @@ nav:
                       - File Upload & Media: developer/frontend/components/core-ui/file-upload.md
                       - Select & Dropdowns: developer/frontend/components/core-ui/select.md
                   - Transaction Form: developer/frontend/components/features/transaction-form.md
+                  - Import Wizard: developer/frontend/components/features/import-wizard.md
+                  - Asset Identity: developer/frontend/components/features/asset-identity.md
                   - Authentication: developer/frontend/components/features/auth.md
                   - Settings: developer/frontend/components/features/settings.md
                   - Live Ticker: developer/frontend/components/features/live-ticker.md
@@ -852,6 +957,7 @@ nav:
       - 🧪 Test Walkthrough:
           - Overview: developer/test-walkthrough/index.md
           - Runner Architecture: developer/test-walkthrough/runner_architecture.md
+          - Coverage Model: developer/test-walkthrough/coverage-model.md
           - 🐍 Backend Tests:
               - External: developer/test-walkthrough/external.md
               - Database: developer/test-walkthrough/db.md

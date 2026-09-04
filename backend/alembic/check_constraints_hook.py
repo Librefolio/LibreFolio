@@ -193,7 +193,7 @@ def add_check_constraint_to_table(table_name: str, constraint_name: str, constra
     return False
 
 
-def check_and_add_missing_constraints(auto_fix: bool = False, log_level: LogLevel = LogLevel.DEBUG) -> Tuple[bool, List[str]]:
+def check_and_add_missing_constraints(auto_fix: bool = False, log_level: LogLevel = LogLevel.DEBUG) -> Tuple[bool, List[str]]:  # noqa: C901 — flat sequential checker + report printing
     """
     Check if all CHECK constraints from models exist in database.
 

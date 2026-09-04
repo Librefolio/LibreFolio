@@ -64,6 +64,6 @@ This is the standard XIRR/MWRR formula: initial investment (negative) + intermed
 
 | Role | Path |
 |------|------|
-| ROI utilities | `backend/app/utils/roi_utils.py` |
+| ROI utilities | `backend/app/utils/financial/roi_utils.py` |
 | Portfolio service | `backend/app/services/portfolio_service.py` |
 | MWRR analysis | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/portfolio_engine/mwrr_analysis_report.md` |

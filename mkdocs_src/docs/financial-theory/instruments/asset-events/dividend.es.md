@@ -71,7 +71,7 @@ En LibreFolio, un evento `DIVIDEND` (y la transacción de cartera correspondient
 - **Importe**: El pago en efectivo por acción
 - **Moneda**: La moneda del pago (ej. USD, EUR)
 
-### La diferencia contable: Dividendo frente a Interés
+### The diferencia contable: Dividendo frente a Interés
 Es fundamental distinguir entre una transacción de **Dividendo** y una de **Interés** a nivel de base de datos:
 
 1. **Dividendo (basado en capital)**: En el seguimiento de cartera de partida doble, un dividendo representa una entrada de efectivo (`cash.amount > 0`) generada por la tenencia de acciones de un activo de capital específico. El número de acciones poseídas en la fecha ex es constante; no se añaden ni eliminan acciones durante este pago en efectivo. Por lo tanto, la transacción de la base de datos requiere `quantity = 0` para evitar el doble conteo o la inflación del saldo de acciones. Cualquier información sobre el número de acciones que generaron el pago se trata como *informativa* y se almacena habitualmente en el campo de descripción.

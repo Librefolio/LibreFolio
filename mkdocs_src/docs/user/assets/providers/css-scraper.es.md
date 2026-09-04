@@ -24,7 +24,7 @@ El proveedor CSS Scraper le permite extraer datos de precios de cualquier págin
 
 ## 🔎 Cómo encontrar el selector CSS
 
-### Paso a paso (Chrome)
+### Step a paso (Chrome)
 
 1. Abra la página con el precio en Chrome
 2. Haga **clic con el botón derecho** sobre el valor del precio
@@ -34,7 +34,7 @@ El proveedor CSS Scraper le permite extraer datos de precios de cualquier págin
 6. Seleccione **Copiar** → **Copiar selector**
 7. Péguelo en el campo `current_css_selector`
 
-### Paso a paso (Firefox)
+### Step a paso (Firefox)
 
 1. Abra la página con el precio en Firefox
 2. Haga **clic con el botón derecho** sobre el valor del precio
@@ -83,5 +83,5 @@ La página tardó demasiado en responder. Intente aumentar el parámetro `timeou
 ### "Parse error"
 El texto del precio no pudo analizarse como un número. Verifique la configuración de `decimal_format`: si la página muestra `100,39`, use `eu`; si muestra `100.39`, use `us`.
 
-### El precio muestra 0 o un valor incorrecto
+### Price precio muestra 0 o un valor incorrecto
 Es posible que el selector coincida con un elemento diferente. Intente usar un selector más específico. Use DevTools para verificar exactamente con qué elemento coincide su selector.

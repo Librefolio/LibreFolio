@@ -19,7 +19,7 @@ Le graphique de croissance montre l'évolution de la valeur de votre portefeuill
  </div>
 </div>
 
-### Mode ABS — valeurs absolues
+### ABS ABS — valeurs absolues
 
 Le graphique utilise une **combinaison d'aires empilées et de lignes superposées** :
 
@@ -33,7 +33,7 @@ Le graphique utilise une **combinaison d'aires empilées et de lignes superposé
 
 **L'écart entre la ligne VNI et la ligne Capital déposé = P&L total** — tous les gains jamais générés, y compris les plus-values latentes, les gains réalisés, les intérêts et les dividendes, moins les frais et taxes.
 
-#### Analyse détaillée de l'infobulle
+#### Tooltip détaillée de l'infobulle
 
 Lorsque vous survolez le graphique, l'infobulle affiche :
 
@@ -93,7 +93,7 @@ Le panneau d'allocation montre comment votre portefeuille est distribué à l'in
  </div>
 </div>
 
-### Trois dimensions
+### Three dimensions
 
 | Dimension | Ce qu'elle montre |
 |-----------|------------------|
@@ -101,12 +101,12 @@ Le panneau d'allocation montre comment votre portefeuille est distribué à l'in
 | **Secteur** | Secteur industriel : 💻 Technologies, 🏦 Finance, 💊 Santé, etc. |
 | **Géographie** | Pays ou région de la cotation principale de chaque actif |
 
-### Onglets Actuel vs. Historique
+### Now Actuel vs. Historique
 
 - **Actuel** — Graphique en anneau de l'allocation actuelle à `date_to`. Survolez une section pour voir le pourcentage exact et la valeur absolue.
 - **Historique** — Graphique en aires empilées à 100 % montrant comment l'allocation a évolué dans le temps. Utile pour visualiser le rééquilibrage du portefeuille sur plusieurs mois ou années.
 
-### Liquidités
+### Cash 
 
 **Les liquidités** (votre solde de courtage) apparaissent toujours comme la part **Liquidités** dans les vues Type et Secteur. Dans la carte géographique, les liquidités ne sont attribuées à aucun pays et n'apparaissent pas.
 

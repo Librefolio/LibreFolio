@@ -293,7 +293,14 @@
             // ``toast: false`` because ``error`` is rendered inline.
             const createResult = await trySave(() => zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post([...mainItems, ...intermediateItems]), {toast: false, fallback: $_('fx.addPair.createFailed')});
             if (createResult.status === 'error') {
-                error = createResult.message;
+                // A 409 is the concurrent-write conflict, and it is the one case
+                // where the backend's own sentence must not reach the screen:
+                // `extractErrorMessage` returns `detail` verbatim, and for a long
+                // time that meant the user read a driver traceback with the INSERT
+                // statement and its bound parameters in it. The conflict is also
+                // the only failure here the user can do something about, so it is
+                // the one that deserves a translated sentence telling them to.
+                error = createResult.status_code === 409 ? $_('fx.addPair.createConflict') : createResult.message;
                 saving = false;
                 return;
             }

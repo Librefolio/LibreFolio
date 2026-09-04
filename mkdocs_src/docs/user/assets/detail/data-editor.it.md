@@ -36,7 +36,7 @@ La scheda Prezzi mostra tutti i punti dati dei prezzi per l'asset. Colonne:
 | **Minimo** | | Prezzo più basso della giornata |
 | **Volume** | | Volume di trading |
 
-### Formato Importazione CSV
+### CSV Importazione CSV
 
 ```
 date;currency;close
@@ -68,7 +68,7 @@ La scheda Eventi mostra tutti gli [eventi dell'asset](../../../financial-theory/
 
     Gli eventi generati da un provider (es. Investimento Programmato) sono contrassegnati come **auto** e appaiono come righe di sola lettura. Possono essere eliminati ma non modificati. Gli eventi manuali sono completamente modificabili.
 
-### Formato Importazione CSV
+### CSV Importazione CSV
 
 ```
 date;currency;type;amount;notes

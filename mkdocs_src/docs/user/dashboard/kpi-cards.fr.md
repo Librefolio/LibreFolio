@@ -24,7 +24,7 @@ Le chiffre principal est calculé à l'aide de la formule suivante :
 
 Un nombre positif signifie que vous avez gagné de l'argent grâce à l'activité d'investissement. Un nombre négatif signifie que vous avez perdu de l'argent, net des mouvements de capitaux.
 
-### Le nombre en dessous du chiffre principal
+### The nombre en dessous du chiffre principal
 
 Juste en dessous de la valeur du P&L de la période, une ligne plus petite affiche quelque chose comme `+45,20 (+3,10%)`.
 
@@ -35,7 +35,7 @@ Juste en dessous de la valeur du P&L de la période, une ligne plus petite affic
 
 Cette ligne n'apparaît que lorsque l'historique comporte au moins deux points quotidiens.
 
-### Les lignes de détail
+### The lignes de détail
 
 | Ligne | Ce qu'elle mesure |
 |-----|-----------------|
@@ -60,7 +60,7 @@ Cette ligne n'apparaît que lorsque l'historique comporte au moins deux points q
 
 La carte **Rendements** présente des mesures de *taux de rendement* — des pourcentages qui vous permettent de comparer la performance indépendamment de la taille du portefeuille.
 
-### Effet de cadencement
+### Timing de cadencement
 
 L'**Effet de cadencement** en haut de la carte mesure si vos décisions de dépôt/retrait ont *ajouté* ou *retiré* de la valeur par rapport à une stratégie passive d'achat-conservation :
 
@@ -69,7 +69,7 @@ L'**Effet de cadencement** en haut de la carte mesure si vos décisions de dép�
 - **Favorable (positif)** ✅ : vous avez eu tendance à déposer quand les prix étaient bas, augmentant ainsi votre rendement personnel au-dessus de ce que les actifs seuls ont gagné.
 - **Défavorable (négatif)** ❌ : vous avez eu tendance à déposer aux sommets ou à manquer les creux, tirant votre rendement en dessous de la performance pure des actifs.
 
-### Le nombre en dessous de l'Effet de cadencement
+### The nombre en dessous de l'Effet de cadencement
 
 En dessous de l'Effet de cadencement, vous verrez un petit pourcentage (par ex. `+0,35%`) — c'est la variation de votre **P&L total** d'**hier à aujourd'hui**, exprimée en part de la valeur nette d'hier :
 
@@ -77,7 +77,7 @@ En dessous de l'Effet de cadencement, vous verrez un petit pourcentage (par ex. 
 
 C'est une estimation approximative du rendement **d'aujourd'hui** — une vérification rapide du pouls. Ce n'est ni le ROI, ni le TRP, ni le MRP affichés dans les lignes ci-dessous, qui restent ancrés à la période sélectionnée complète.
 
-### Les quatre mesures de rendement
+### The quatre mesures de rendement
 
 | Mesure | Question à laquelle elle répond |
 |--------|---------------------|
@@ -102,7 +102,10 @@ C'est une estimation approximative du rendement **d'aujourd'hui** — une vérif
 
 La carte **Valeur nette** affiche la valeur absolue de votre portefeuille à la fin de la période sélectionnée.
 
-### Le nombre en dessous de la Valeur nette
+!!! note "La Valeur nette inclut les liquidités"
+    Le montant est **titres à valeur de marché + solde liquide** (+ toute valeur en transit entre brokers). Comme il inclut les liquidités, il **n'est pas comparable** à la « contre-valeur titres » d'un relevé bancaire, qui exclut les liquidités — celles-ci y sont reportées séparément.
+
+### The nombre en dessous de la Valeur nette
 
 En dessous de la valeur de la Valeur nette, vous trouverez votre **P&L total**, avec sa variation en pourcentage entre parenthèses — par ex. `+12 450,30 (+0,35%)`.
 
@@ -115,7 +118,7 @@ Remarque : « Capital net investi depuis l'origine » est ici la somme de **tous
 
 🔗 **Théorie** : [Capital déposé, P&L total et Pools de trésorerie](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)
 
-### Ce que signifient les lignes
+### What que signifient les lignes
 
 | Ligne | Définition |
 |-----|-----------|
@@ -124,7 +127,7 @@ Remarque : « Capital net investi depuis l'origine » est ici la somme de **tous
 | **Trésorerie** | Solde liquide détenu sur les comptes de courtage |
 | **[Capital déposé](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)** | Capital externe net contribué à ce périmètre |
 
-### La barre de Capital déposé
+### The barre de Capital déposé
 
 La barre horizontale en dessous des lignes visualise :
 

@@ -71,7 +71,7 @@ Dans LibreFolio, un événement `DIVIDEND` (et la transaction de portefeuille co
 - **Amount** : Le paiement en espèces par action
 - **Currency** : La devise du paiement (ex: USD, EUR)
 
-### La différence comptable : Dividende vs Intérêt
+### The différence comptable : Dividende vs Intérêt
 Il est crucial de distinguer une transaction de **Dividende** d'une transaction d'**Intérêt** au niveau de la base de données :
 
 1. **Dividende (basé sur des actifs en actions)** : Dans le suivi de portefeuille en partie double, un dividende représente un flux de trésorerie entrant (`cash.amount > 0`) généré par la détention d'actions d'un actif spécifique. Le nombre d'actions détenues à la date de détachement reste constant — aucune action n'est ajoutée ou supprimée lors de ce versement en espèces. Ainsi, la transaction dans la base de données nécessite `quantity = 0` pour éviter un double comptage ou une inflation de votre solde d'actions. Toute information sur le nombre d'actions ayant généré le versement est traitée comme *informative* et est généralement stockée dans le champ de description.

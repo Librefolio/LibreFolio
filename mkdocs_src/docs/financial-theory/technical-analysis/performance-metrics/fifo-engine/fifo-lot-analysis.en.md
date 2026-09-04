@@ -46,12 +46,15 @@ In practice:
 
 - if a market quote exists at the lot's opening date, that opening quote becomes `reference_unit_price`
 - if the lot opened before the first available market quote, the system falls back to the lot's own opening cost, scaled to market quote units
+- `reference_price_source` records whether the reference was `exact`, `fallback`, or `unavailable`
 
 This metric excludes dividends, interest, and realized sale proceeds. It answers: _"How much has market price moved since this lot was opened?"_
 
 !!! tip "Reference price fallback"
 
     When no opening-day market quote exists, LibreFolio uses the lot's acquisition price as the reference base, scaled to the asset's quote convention. This avoids misleading percentage returns on instruments quoted per 100 nominal units.
+
+    The fallback is $\text{OpeningUnitPrice}\times qbq$. For `qbq = 100`, a bond bought at `0.992` compares against the market quote axis as `99.20`, not `0.992`.
 
 <div class="screenshot-container">
     <img class="gallery-img" data-category="dashboard" data-name="fifo-lots-wac-chart" alt="WAC / Market Price chart — one bubble per lot, colored by opening broker, sized by opening value, plotted against the market price line">
@@ -160,7 +163,7 @@ Without this scaling, bond returns and valuations can be off by orders of magnit
 
 ---
 
-## 🛟 Estimated-at-Cost
+## 🛟 Estimated-at-Cost {: #estimated-at-cost }
 
 If no live market price is available for an asset, LibreFolio does **not** fail the analysis. Instead, it temporarily values the still-open portion of the lot at cost:
 
@@ -178,10 +181,15 @@ Practical implication:
 - already realized proceeds still remain visible
 - allocated dividends or interest still remain visible
 - **unrealized volatility is temporarily understated**
+- `value_source = ESTIMATED_AT_COST`
+- `market_pnl = 0`
+- data-quality issue code: `CURRENT_PRICE_ASSUMED_AT_COST`
 
 !!! info "Interpretation"
 
     Estimated-at-cost is conservative operational fallback. It means: _"We know what you paid, but we do not currently know what market would pay."_
+
+The corresponding data-quality warning is an **as-of valuation-date** statement. It is not a historical union of every day where an asset was ever valued at cost.
 
 ---
 
@@ -236,7 +244,7 @@ The lot detail modal's **Asset Income** row is exactly $\text{Income}_i$ from th
 Asset-linked `FEE` and `TAX` are allocated to lots with a **deterministic operation-matching ladder**, then
 subtracted to produce **net** figures alongside the gross ones.
 
-### Deterministic cost allocation
+### 🧭 Deterministic cost allocation
 
 A cost pool (same broker, same day, same type) is matched to the first non-empty target in this order:
 
@@ -255,7 +263,7 @@ matching itself. Amounts are converted to the target currency and stored as posi
     no eligible lot (e.g. a fee booked after the position is fully closed) becomes **asset-level orphan cost**
     rather than being dropped or forced onto an unrelated lot.
 
-### Gross vs net
+### ⚖️ Gross vs net
 
 With costs attributed per lot, LibreFolio reports both gross and net performance:
 
@@ -270,6 +278,15 @@ $$
 where $\text{TotalPnL}_i$ already **includes** income (market P&L + realized P&L + asset income). The per-lot
 value-history series instead reports a *capital-only* net P&L, $\text{pnl}_i - \text{Fees}_i - \text{Taxes}_i$,
 which **excludes** income — each net line mirrors its own gross counterpart minus costs.
+
+Annualized lot return uses the **net** return, not the gross one:
+
+$$
+\mathrm{AnnualizedReturn}_i =
+\left(1+\mathrm{NetTotalReturn}_i\right)^{365/d_i}-1
+$$
+
+with $d_i$ from opening date to closing date for closed lots, or to the analysis end date for open lots. Windows below 30 days return no annualized value; see [Net Annualized Return](../portfolio-engine/net-annualized-return.md).
 
 !!! example "Canonical numbers"
 
@@ -379,6 +396,8 @@ This lot-level view helps explain **where** return came from. Higher-level metri
 - **ROI** focuses on gain relative to invested capital
 - **TWRR** neutralizes external cash-flow timing
 - FIFO lot analysis explains contribution and path **inside** a position
+
+Price lookup is deliberately outside the FIFO engine itself. The engine produces lots and closures; `LotsAnalysisService` applies the unified resolver ([Price Resolution](../portfolio-engine/price-resolution.md)) and estimated-at-cost fallback when deriving valuation metrics.
 
 <div class="screenshot-container">
     <img class="gallery-img" data-category="dashboard" data-name="fifo-lots-table" alt="Unified Lots Table — one row per lot with opening date, total return, current value, custody and status, the exact per-lot rows the aggregate formulas above sum over">

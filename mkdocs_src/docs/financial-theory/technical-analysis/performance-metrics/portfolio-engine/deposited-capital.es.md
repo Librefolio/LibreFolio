@@ -7,7 +7,9 @@
 **Capital Depositado** = capital externo neto acumulado aportado desde el inicio:
 
 $$
-\mathrm{DepCap}(t) = \sum_{\tau \leq t} D(\tau) - \sum_{\tau \leq t} W(\tau)
+\mathrm{CapitalBaseline}(t) =
+\sum_{\tau \leq t}\mathrm{ExternalCashFlow}(\tau)
+  + \sum_{\tau \leq t}\mathrm{InKindCapital}(\tau)
 $$
 
 **PnL Total** = todo el valor generado por encima de las contribuciones externas:
@@ -25,6 +27,8 @@ $$
 | DEPÓSITO / RETIRO (sin vincular) | ✅ Sí |
 | TRANSFERENCIA DE EFECTIVO vinculado-externo | ✅ Sí |
 | TRANSFERENCIA DE EFECTIVO vinculado-interno | ❌ No |
+| AJUSTE / TRANSFERENCIA con `cost_basis_override`, sin `asset_id` | ✅ Sí, ajuste de capital externo |
+| AJUSTE vinculado a DIVISION | ❌ No, solo redimensionamiento de cantidad |
 | COMPRA, VENTA, DIVIDENDO, INTERÉS, COMISIÓN, IMPUESTO | ❌ No |
 
 ---
@@ -55,7 +59,7 @@ $$
 
 ## 📝 Ejemplos Prácticos
 
-### A — Depósito → Compra → Venta con Ganancia
+### 🧾 — Depósito → Compra → Venta con Ganancia
 
 | Paso | Tx | $K$ | $R$ | Cash |
 |------|----|-----|-----|------|
@@ -65,7 +69,7 @@ $$
 
 TotalPnL = 1.200 − 1.000 = **+€200** ✓
 
-### B — Dividendo y luego Retirada
+### 💸 — Dividendo y luego Retirada
 
 | Paso | Tx | $K$ | $R$ | $W$ | Cash |
 |------|----|-----|-----|-----|------|
@@ -77,7 +81,7 @@ TotalPnL = 1.200 − 1.000 = **+€200** ✓
 
 Después del paso 5: Cash=30, K=0, R=30 ✓ (rendimientos restaurados desde W)
 
-### C — Reversión de Venta Total
+### 🧪 — Reversión de Venta Total
 
 | Paso | Tx | $K$ | $R$ | Cash |
 |------|----|-----|-----|------|
@@ -95,6 +99,9 @@ El modelo de 3 pools se ejecuta en un **único ciclo por transacción** (basado 
 1. Leer PMP antes de la mutación del pool
 2. Actualizar K/R/W según las reglas del tipo de transacción
 3. Luego reducir el pool PMP (para las VENTAS)
+
+
+La serie de entradas ROI/TWRR/MWRR se deriva de los cambios día a día en `cumulative_external_cash_flow`, la línea base de capital. No se deriva del campo `external_cash_flow` (solo efectivo).
 
 🔗 Ver **[Portfolio Engine — §6](index.md#6-three-pool-cash-model-per-broker-k_b-r_b-w)** para todas las reglas formales.
 

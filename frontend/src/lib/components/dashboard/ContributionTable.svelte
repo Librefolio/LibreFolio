@@ -17,10 +17,13 @@
     import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
     import {getAssetInfo} from '$lib/stores/reference/assetStore';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+    import {makePositionKey} from '$lib/utils/core/positionKey';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {attachOverflowMarqueeToDescendants} from '$lib/actions/scrollOnOverflow';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {safeDecimal, safeNumber, safeString} from '$lib/types';
 
     type NumericLike = string | (string | null)[] | null;
     type PositionStatus = 'open_at_period_end' | 'closed_by_period_end';
@@ -45,9 +48,11 @@
         period_fees_taxes?: NumericLike;
         period_pnl?: NumericLike;
         period_pnl_percent?: NumericLike;
+        annualized_return?: NumericLike;
         start_value?: NumericLike;
         end_value?: NumericLike;
         is_fully_sold?: boolean;
+        oldest_open_lot_date?: NumericLike;
     }
 
     interface Props {
@@ -57,9 +62,11 @@
         displayCurrency?: string;
         brokers?: ReadonlyArray<BrokerLike>;
         onAnalyze?: (assetId: number) => void;
+        /** Asset whose lot-analysis panel is open — its row stays tinted (F9). */
+        analyzedAssetId?: number | null;
     }
 
-    let {positions = [], holdings = [], displayCurrency = 'EUR', brokers = [], onAnalyze}: Props = $props();
+    let {positions = [], holdings = [], displayCurrency = 'EUR', brokers = [], onAnalyze, analyzedAssetId = null}: Props = $props();
 
     let tableRef: DataTable<DisplayRow> | undefined = $state(undefined);
     let tableWrapperEl: HTMLDivElement | undefined = $state(undefined);
@@ -74,22 +81,6 @@
 
     export function getTableRef() {
         return tableRef;
-    }
-
-    function safeNum(v: NumericLike | undefined): number | null {
-        const s = Array.isArray(v) ? (v[0] ?? null) : v;
-        if (s == null) return null;
-        const n = parseFloat(s);
-        return isNaN(n) ? null : n;
-    }
-
-    function safeInt(v: number | (number | null)[] | null | undefined): number | null {
-        if (v == null) return null;
-        return Array.isArray(v) ? (v[0] ?? null) : v;
-    }
-
-    function makeHoldingLookupKey(assetId: number, brokerId: number | null): string {
-        return `${assetId}-${brokerId ?? 0}`;
     }
 
     function statusFromSoldFlag(isFullySold: boolean): PositionStatus {
@@ -113,6 +104,7 @@
         brokerName: string;
         broker: BrokerLike | null;
         pnl: number | null;
+        annualizedReturn: number | null;
         unrealizedDelta: number | null;
         realizedSales: number | null;
         income: number | null;
@@ -125,16 +117,17 @@
         statusLabel: string;
         isFullySold: boolean;
         assetId: number;
+        oldestOpenLotDate: string | null;
     }
 
     let displayRows = $derived.by<DisplayRow[]>(() => {
         const brokerMap = new Map(brokers.map((broker) => [broker.id, broker]));
         const holdingsByKey = new Map(
             holdings.map((holding) => [
-                makeHoldingLookupKey(holding.asset_id, safeInt(holding.broker_id)),
+                makePositionKey(holding.asset_id, safeNumber(holding.broker_id)),
                 {
-                    gainLossChange1d: safeNum(holding.gain_loss_change_1d),
-                    gainLossChange1dPercent: safeNum(holding.gain_loss_change_1d_percent),
+                    gainLossChange1d: safeDecimal(holding.gain_loss_change_1d),
+                    gainLossChange1dPercent: safeDecimal(holding.gain_loss_change_1d_percent),
                 },
             ]),
         );
@@ -142,7 +135,7 @@
             .map((p) => {
                 const isFullySold = p.is_fully_sold ?? false;
                 const status = statusFromSoldFlag(isFullySold);
-                const holdingMatch = holdingsByKey.get(makeHoldingLookupKey(p.asset_id, p.broker_id)) ?? null;
+                const holdingMatch = holdingsByKey.get(makePositionKey(p.asset_id, p.broker_id)) ?? null;
                 return {
                     key: `pos-${p.broker_id}-${p.asset_id}`,
                     assetName: p.asset_name,
@@ -150,27 +143,25 @@
                     brokerId: p.broker_id,
                     brokerName: p.broker_name,
                     broker: brokerMap.get(p.broker_id) ?? null,
-                    pnl: safeNum(p.period_pnl),
-                    unrealizedDelta: safeNum(p.period_unrealized_delta),
-                    realizedSales: safeNum(p.period_realized_gain_loss),
-                    income: safeNum(p.period_income),
-                    costs: safeNum(p.period_fees_taxes),
-                    startValue: safeNum(p.start_value),
-                    endValue: safeNum(p.end_value),
+                    pnl: safeDecimal(p.period_pnl),
+                    annualizedReturn: safeDecimal(p.annualized_return),
+                    unrealizedDelta: safeDecimal(p.period_unrealized_delta),
+                    realizedSales: safeDecimal(p.period_realized_gain_loss),
+                    income: safeDecimal(p.period_income),
+                    costs: safeDecimal(p.period_fees_taxes),
+                    startValue: safeDecimal(p.start_value),
+                    endValue: safeDecimal(p.end_value),
                     gainLossChange1d: holdingMatch?.gainLossChange1d ?? null,
                     gainLossChange1dPercent: holdingMatch?.gainLossChange1dPercent ?? null,
                     status,
                     statusLabel: statusLabel(status),
                     isFullySold,
                     assetId: p.asset_id,
+                    oldestOpenLotDate: safeString(p.oldest_open_lot_date),
                 };
             })
             .sort((a, b) => Math.abs(b.pnl ?? 0) - Math.abs(a.pnl ?? 0));
     });
-
-    function escapeHtml(s: string): string {
-        return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    }
 
     function signedAmountCell(value: number | null) {
         if (value == null) return '—';
@@ -213,7 +204,7 @@
     }
 
     function getRowClass(row: DisplayRow): string {
-        return row.isFullySold ? 'italic' : '';
+        return `${row.isFullySold ? 'italic' : ''} ${row.assetId === analyzedAssetId ? 'row-analyzed' : ''}`.trim();
     }
 
     /** Desktop double-click / mobile long-press → asset detail page. The plain `goto()`
@@ -307,6 +298,19 @@
                 align: 'right',
                 getValue: (row) => row.pnl ?? 0,
                 cell: (row) => signedAmountCell(row.pnl),
+            },
+            {
+                id: 'annualized-return',
+                header: () => label('dashboard.annualizedReturn', 'Annualized'),
+                headerTooltip: () => label('dashboard.annualizedReturnPeriodTooltip', 'Period return annualized (CAGR) over the selected period length, for comparison across periods of different durations.'),
+                type: 'number',
+                width: 130,
+                minWidth: 110,
+                sortable: true,
+                filterable: false,
+                align: 'right',
+                getValue: (row) => row.annualizedReturn ?? 0,
+                cell: (row) => percentChangeCell(row.annualizedReturn),
             },
             {
                 id: 'unrealized-delta',
@@ -406,6 +410,20 @@
                 cell: (row) => amountCell(row.endValue),
             },
             {
+                id: 'oldest-open-lot',
+                header: () => label('dashboard.oldestOpenLotDate', 'Oldest open lot'),
+                headerTooltip: () => label('dashboard.oldestOpenLotDateTooltip', 'Opening date of the oldest FIFO lot still open for this position.'),
+                type: 'date',
+                width: 150,
+                minWidth: 130,
+                sortable: true,
+                filterable: false,
+                align: 'right',
+                hiddenByDefault: true,
+                getValue: (row) => row.oldestOpenLotDate ?? '',
+                cell: (row) => (row.oldestOpenLotDate ? {type: 'date' as const, value: row.oldestOpenLotDate, format: 'date' as const} : '—'),
+            },
+            {
                 id: 'status',
                 header: () => label('dashboard.status', 'Status'),
                 type: 'enum',
@@ -436,7 +454,8 @@
         enableSelection={false}
         selectionMode="none"
         enableActions={true}
-        enablePagination={false}
+        enablePagination={true}
+        defaultPageSize={25}
         enableColumnVisibility={true}
         enableColumnFilters={true}
         enableSorting={true}

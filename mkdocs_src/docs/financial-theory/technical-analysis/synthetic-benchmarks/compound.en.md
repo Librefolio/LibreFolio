@@ -65,7 +65,7 @@ This is mathematically equivalent to the closed-form $y_0(1+r)^t$ but replaces $
 
 | Parameter | Key | Default | Description |
 |---|---|---|---|
-| Annual Rate | `annualRate` | 7 | Compound growth rate in percent per year. |
+| Annual Rate | `annualRate` | 8 | Compound growth rate in percent per year. |
 | Offset | `offset` | 0 | Vertical shift as % of base value. |
 
 ---

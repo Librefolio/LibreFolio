@@ -15,6 +15,7 @@
     import {t} from '$lib/i18n';
     import {formatBytes} from '$lib/utils/files/upload';
     import {getUserStorageKey} from '$lib/utils/storage';
+    import {decimalArrowStep, normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
     import {Ban, Check, ChevronDown, ChevronsUpDown, ChevronUp, ExternalLink, Filter, ImageIcon, Info} from 'lucide-svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import DataTablePagination from './DataTablePagination.svelte';
@@ -23,7 +24,8 @@
     import ContextMenu from '$lib/components/ui/ContextMenu.svelte';
     import type {ContextMenuItem} from '$lib/components/ui/ContextMenu.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
-    import type {BulkAction, CellContent, ColumnDef, ColumnWidthsState, EnumOption, FilterValue, FooterCellContent, FooterCells, PaginationState, RowAction, RowActions, SelectionState, SortState, VisibilityState} from './types';
+    import type {BulkAction, ColumnDef, ColumnWidthsState, FilterValue, FooterCellContent, FooterCells, PaginationState, RowAction, RowActions, SelectionState, SortState, VisibilityState} from './types';
+    import {compareRowsByColumn, formatCellDate, getColumnMinMax, getCurrencyMinMaxByCode, getCurrencyOptions, getEnumOptionsWithCounts, getMultiEnumOptions, getMultiEnumOptionsWithCounts, matchesColumnFilter} from './dataTableLogic';
 
     interface Props {
         data: T[];
@@ -353,55 +355,7 @@
             const column = columns.find((c) => c.id === columnId);
             if (!column) continue;
 
-            result = result.filter((row) => {
-                const getValue = column.getValue ?? column.cell;
-                const cellValue = getValue(row);
-                const rawValue = typeof cellValue === 'object' && cellValue !== null && 'type' in cellValue ? String(cellValue) : cellValue;
-
-                if (filterValue.type === 'text') {
-                    const str = String(rawValue).toLowerCase();
-                    const search = filterValue.value.toLowerCase();
-                    switch (filterValue.matchMode) {
-                        case 'contains':
-                            return str.includes(search);
-                        case 'startsWith':
-                            return str.startsWith(search);
-                        case 'endsWith':
-                            return str.endsWith(search);
-                        case 'equals':
-                            return str === search;
-                    }
-                } else if (filterValue.type === 'number') {
-                    const num = Number(rawValue);
-                    if (filterValue.min !== undefined && num < filterValue.min) return false;
-                    if (filterValue.max !== undefined && num > filterValue.max) return false;
-                    return true;
-                } else if (filterValue.type === 'size') {
-                    // Size filter - rawValue should be bytes (from SizeCell)
-                    const bytes = typeof rawValue === 'object' && rawValue !== null && 'type' in rawValue && (rawValue as unknown as {type: string}).type === 'size' ? (rawValue as unknown as {bytes: number}).bytes : Number(rawValue);
-                    if (filterValue.minBytes !== undefined && bytes < filterValue.minBytes) return false;
-                    if (filterValue.maxBytes !== undefined && bytes > filterValue.maxBytes) return false;
-                    return true;
-                } else if (filterValue.type === 'date') {
-                    const dateStr = typeof rawValue === 'object' && rawValue !== null && 'type' in rawValue && (rawValue as unknown as {type: string}).type === 'date' ? String((rawValue as unknown as {value: Date | string}).value) : String(rawValue);
-                    const date = new Date(dateStr);
-                    if (filterValue.from && date < new Date(filterValue.from)) return false;
-                    if (filterValue.to && date > new Date(filterValue.to)) return false;
-                    return true;
-                } else if (filterValue.type === 'enum') {
-                    return filterValue.selected.includes(String(rawValue));
-                } else if (filterValue.type === 'multi-enum') {
-                    if (filterValue.selected.length === 0) return true;
-                    const rowVals = column.getMultiValue ? column.getMultiValue(row) : Array.isArray(rawValue) ? (rawValue as unknown[]).map((v) => String(v)) : String(rawValue ?? '').split(',');
-                    return filterValue.selected.some((sel) => rowVals.includes(sel));
-                } else if (filterValue.type === 'currency-stack') {
-                    if (filterValue.items.length === 0) return true;
-                    const cv = column.getCurrencyValue ? column.getCurrencyValue(row) : null;
-                    if (!cv) return false;
-                    return filterValue.items.some((it) => it.code === cv.code && (it.min === undefined || cv.amount >= it.min) && (it.max === undefined || cv.amount <= it.max));
-                }
-                return true;
-            });
+            result = result.filter((row) => matchesColumnFilter(column, row, filterValue));
         }
 
         return result;
@@ -414,26 +368,7 @@
         const column = columns.find((c) => c.id === sortState!.columnId);
         if (!column) return filteredData;
 
-        return [...filteredData].sort((a, b) => {
-            const getValue = column.getValue ?? column.cell;
-            const aVal = getValue(a);
-            const bVal = getValue(b);
-
-            // Extract raw value if it's a CellContent object
-            const aRaw = typeof aVal === 'object' && aVal !== null && 'type' in aVal ? extractRawValue(aVal as CellContent) : aVal;
-            const bRaw = typeof bVal === 'object' && bVal !== null && 'type' in bVal ? extractRawValue(bVal as CellContent) : bVal;
-
-            let comparison = 0;
-            if (typeof aRaw === 'number' && typeof bRaw === 'number') {
-                comparison = aRaw - bRaw;
-            } else if (aRaw instanceof Date && bRaw instanceof Date) {
-                comparison = aRaw.getTime() - bRaw.getTime();
-            } else {
-                comparison = String(aRaw).localeCompare(String(bRaw));
-            }
-
-            return sortState!.direction === 'asc' ? comparison : -comparison;
-        });
+        return [...filteredData].sort((a, b) => compareRowsByColumn(column, a, b, sortState!.direction));
     });
 
     // Paginated data
@@ -471,190 +406,9 @@
 
     // ============ Helper Functions ============
 
-    function extractRawValue(cell: CellContent): unknown {
-        if (typeof cell !== 'object' || cell === null) return cell;
-        if (!('type' in cell)) return cell;
-
-        switch (cell.type) {
-            case 'icon-text':
-                return cell.text;
-            case 'badge':
-                return cell.text;
-            case 'date':
-                return new Date(cell.value);
-            case 'size':
-                return cell.bytes;
-            case 'link':
-                return cell.text;
-            case 'editable-number':
-                return cell.value;
-            case 'editable-text':
-                return cell.value;
-            case 'editable-select':
-                return cell.value;
-            case 'editable-checkbox':
-                return cell.value;
-            case 'html':
-                // Strip HTML tags for sorting
-                return cell.html.replace(/<[^>]*>/g, '');
-            default:
-                return String(cell);
-        }
-    }
-
-    // Calculate min/max values for a column (used for number/size filters)
-    function getColumnMinMax(column: ColumnDef<T>): {min: number; max: number} {
-        let min = Infinity;
-        let max = -Infinity;
-
-        for (const row of boundaryData) {
-            const getValue = column.getValue ?? column.cell;
-            const cellValue = getValue(row);
-            let numValue: number;
-
-            if (typeof cellValue === 'object' && cellValue !== null && 'type' in cellValue) {
-                const typed = cellValue as unknown as {type: string; bytes?: number};
-                if (typed.type === 'size' && typeof typed.bytes === 'number') {
-                    numValue = typed.bytes;
-                } else {
-                    numValue = Number(extractRawValue(cellValue as CellContent));
-                }
-            } else {
-                numValue = Number(cellValue);
-            }
-
-            if (!isNaN(numValue) && isFinite(numValue)) {
-                min = Math.min(min, numValue);
-                max = Math.max(max, numValue);
-            }
-        }
-
-        // If no valid values, use sensible defaults
-        if (min === Infinity) min = 0;
-        if (max === -Infinity) max = min + 1;
-
-        // Ensure min < max
-        if (min >= max) max = min + 1;
-
-        return {min, max};
-    }
-
-    /**
-     * Compute the option set for a `multi-enum` filter column from the data
-     * loaded in this table. Sorted alphabetically. Used when the column does
-     * NOT declare a static `enumOptions` (typical for tags or other open sets
-     * derived from rows).
-     */
-    function getMultiEnumOptions(column: ColumnDef<T>): EnumOption[] {
-        const all = new Set<string>();
-        for (const row of data) {
-            const vals = column.getMultiValue ? column.getMultiValue(row) : [];
-            for (const v of vals) if (v != null && v !== '') all.add(String(v));
-        }
-        return [...all].sort((a, b) => a.localeCompare(b)).map((v) => ({value: v, label: v}));
-    }
-
-    /**
-     * Enrich parent-provided enumOptions for multi-enum columns with counts
-     * from the current data. Uses column.enumOptions as the stable option list.
-     */
-    function getMultiEnumOptionsWithCounts(column: ColumnDef<T>): EnumOption[] {
-        const opts = column.enumOptions ?? [];
-        if (opts.length === 0) return opts;
-        const counts = new Map<string, number>();
-        for (const row of data) {
-            const vals = column.getMultiValue ? column.getMultiValue(row) : [];
-            for (const v of vals) counts.set(v, (counts.get(v) ?? 0) + 1);
-        }
-        return opts.map((o) => ({...o, count: counts.get(o.value) ?? 0}));
-    }
-
-    /**
-     * Enrich enum options with count of matching rows in `data` and filter out
-     * options that have zero rows. This ensures the filter dropdown only shows
-     * types/values that actually exist in the current dataset.
-     */
-    function getEnumOptionsWithCounts(column: ColumnDef<T>): EnumOption[] {
-        const opts = column.enumOptions ?? [];
-        if (opts.length === 0) return opts;
-        const counts = new Map<string, number>();
-        for (const row of data) {
-            const v = column.getValue ? String(column.getValue(row) ?? '') : '';
-            counts.set(v, (counts.get(v) ?? 0) + 1);
-        }
-        return opts.map((o) => ({...o, count: counts.get(o.value) ?? 0}));
-    }
-
-    /**
-     * Compute the available currency-codes for a `currency-stack` filter
-     * column from the data. Used to seed the CurrencySearchSelect dropdown
-     * inside the filter popover.
-     */
-    function getCurrencyOptions(column: ColumnDef<T>): string[] {
-        if (!column.getCurrencyValue) return [];
-        const all = new Set<string>();
-        for (const row of data) {
-            const cv = column.getCurrencyValue(row);
-            if (cv?.code) all.add(cv.code);
-        }
-        return [...all].sort();
-    }
-
-    /**
-     * For `currency-stack` columns: compute per-currency min/max amount from
-     * the dataset. Used by the filter popover to drive a relevant range
-     * editor (slider + inputs) for each currency the user picks — instead
-     * of a single global range that's meaningless when amounts spread
-     * across mixed currencies (e.g. EUR cash deposits vs USD trades).
-     */
-    function getCurrencyMinMaxByCode(column: ColumnDef<T>): Map<string, {min: number; max: number}> {
-        const out = new Map<string, {min: number; max: number}>();
-        if (!column.getCurrencyValue) return out;
-        for (const row of boundaryData) {
-            const cv = column.getCurrencyValue(row);
-            if (!cv || !cv.code || !Number.isFinite(cv.amount)) continue;
-            const cur = out.get(cv.code);
-            if (!cur) {
-                out.set(cv.code, {min: cv.amount, max: cv.amount});
-            } else {
-                if (cv.amount < cur.min) cur.min = cv.amount;
-                if (cv.amount > cur.max) cur.max = cv.amount;
-            }
-        }
-        // Defensive: ensure min < max so the slider remains usable on single-row currencies.
-        for (const v of out.values()) {
-            if (v.min >= v.max) v.max = v.min + 1;
-        }
-        return out;
-    }
-
     /** Empty currency min/max map — extracted to avoid generic syntax `<string, …>` in
      *  Svelte template `{@const}` blocks where `<` is parsed as an HTML tag. */
     const EMPTY_CURRENCY_MIN_MAX: Map<string, {min: number; max: number}> = new Map();
-
-    function formatDate(value: Date | string, format?: string): string {
-        const date = value instanceof Date ? value : new Date(value);
-        if (format === 'time') {
-            return date.toLocaleTimeString();
-        } else if (format === 'datetime') {
-            return date.toLocaleString(undefined, {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-            });
-        } else if (format === 'relative') {
-            const now = new Date();
-            const diff = now.getTime() - date.getTime();
-            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-            if (days === 0) return $t('date.today') || 'Today';
-            if (days === 1) return $t('date.yesterday') || 'Yesterday';
-            if (days < 7) return `${days}d ago`;
-            return date.toLocaleDateString();
-        }
-        return date.toLocaleDateString(undefined, {year: 'numeric', month: 'short', day: 'numeric'});
-    }
 
     function getColumnLabel(col: ColumnDef<T>): string {
         return typeof col.header === 'function' ? col.header() : col.header;
@@ -820,6 +574,10 @@
             icon: action.icon,
             variant: action.variant,
             disabled: action.disabled?.(row) ?? false,
+            title: typeof action.title === 'function' ? action.title(row) : action.title,
+            testid: typeof action.testid === 'function' ? action.testid(row) : action.testid,
+            iconClass: action.iconClass?.(row),
+            labelClass: typeof action.labelClass === 'function' ? action.labelClass(row) : action.labelClass,
         }));
     }
 
@@ -1124,6 +882,11 @@
     export function toggleRowSelectionById(rowId: string) {
         toggleRowSelection(rowId);
     }
+
+    /** Row IDs currently rendered on the active page (after filters, sort, and pagination). */
+    export function getPageRowIds(): string[] {
+        return paginatedData.map((row) => getRowId(row));
+    }
 </script>
 
 <div class="datatable-container" bind:this={containerEl}>
@@ -1142,7 +905,9 @@
                     {#if effectiveSelectionMode === 'multi'}
                         <th class="th-fixed th-select" style="width: {selectionColumnWidth};">
                             <div class="flex items-center justify-center gap-1">
-                                <button type="button" class="checkbox-btn" onclick={toggleAllPageRows}>
+                                <!-- data-state publishes the tri-state of the header checkbox so it can be
+                                     observed without reading the icon's CSS class. -->
+                                <button type="button" class="checkbox-btn" data-testid="dt-select-all" data-state={isAllPageSelected ? 'checked' : isSomePageSelected ? 'partial' : 'unchecked'} onclick={toggleAllPageRows}>
                                     {#if isAllPageSelected}
                                         <Check size={16} class="check-icon checked" />
                                     {:else if isSomePageSelected}
@@ -1155,6 +920,8 @@
                                     type="button"
                                     class="filter-btn"
                                     class:active={showSelectedOnly}
+                                    data-testid="dt-show-selected-only"
+                                    data-state={showSelectedOnly ? 'on' : 'off'}
                                     onclick={() => {
                                         showSelectedOnly = !showSelectedOnly;
                                     }}
@@ -1173,6 +940,8 @@
                         {@const hasFilter = columnFilters[column.id] !== undefined}
                         <th
                             class="th-data"
+                            data-testid="dt-header-{column.id}"
+                            data-sort={sortDir ?? 'none'}
                             class:sortable={column.sortable !== false && enableSorting}
                             class:th-fixed={column.pinned != null}
                             class:th-pinned-right={column.pinned === 'right'}
@@ -1181,8 +950,8 @@
                             <div class="header-content" style={column.align === 'center' ? 'justify-content:center' : column.align === 'right' ? 'justify-content:flex-end' : ''}>
                                 {#if getColumnTooltip(column)}
                                     {@const tooltipText = getColumnTooltip(column) ?? ''}
-                                    <Tooltip text={tooltipText} position="bottom">
-                                        <button type="button" class="header-sort-btn" onclick={() => toggleSort(column.id)} disabled={column.sortable === false || !enableSorting}>
+                                    <Tooltip text={tooltipText} position="top">
+                                        <button type="button" class="header-sort-btn" data-testid="dt-sort-{column.id}" onclick={() => toggleSort(column.id)} disabled={column.sortable === false || !enableSorting}>
                                             {#if getColumnHeaderHtml(column)}
                                                 <span class="header-text">{@html getColumnHeaderHtml(column)}</span>
                                             {:else}
@@ -1202,7 +971,7 @@
                                         </button>
                                     </Tooltip>
                                 {:else}
-                                    <button type="button" class="header-sort-btn" onclick={() => toggleSort(column.id)} disabled={column.sortable === false || !enableSorting}>
+                                    <button type="button" class="header-sort-btn" data-testid="dt-sort-{column.id}" onclick={() => toggleSort(column.id)} disabled={column.sortable === false || !enableSorting}>
                                         {#if getColumnHeaderHtml(column)}
                                             <span class="header-text">{@html getColumnHeaderHtml(column)}</span>
                                         {:else}
@@ -1226,7 +995,7 @@
                                 {#if getColumnTooltip(column) && getColumnTooltipUrl(column)}
                                     {@const tooltipText = getColumnTooltip(column) ?? ''}
                                     {@const tooltipUrl = getColumnTooltipUrl(column)}
-                                    <Tooltip text={tooltipText} position="bottom" math={tooltipText.includes('$')}>
+                                    <Tooltip text={tooltipText} position="top" math={tooltipText.includes('$')}>
                                         <a href={tooltipUrl} target="_blank" rel="noopener noreferrer" class="header-tooltip-icon header-tooltip-link" onclick={(e) => e.stopPropagation()}>
                                             <Info size={12} />
                                         </a>
@@ -1248,11 +1017,17 @@
 
                                 <!-- Filter popover -->
                                 {#if openFilterColumnId === column.id}
-                                    {@const minMax = column.type === 'number' || column.type === 'size' ? getColumnMinMax(column) : {min: 0, max: 100}}
+                                    {@const minMax = column.type === 'number' || column.type === 'size' ? getColumnMinMax(column, boundaryData) : {min: 0, max: 100}}
                                     {@const dynamicEnumOptions =
-                                        column.type === 'multi-enum' ? (column.enumOptions && column.enumOptions.length > 0 ? getMultiEnumOptionsWithCounts(column) : getMultiEnumOptions(column)) : column.type === 'enum' ? getEnumOptionsWithCounts(column) : (column.enumOptions ?? [])}
-                                    {@const currencyOptions = column.type === 'currency-stack' ? (column.currencyOptions ?? getCurrencyOptions(column)) : []}
-                                    {@const currencyMinMaxByCode = column.type === 'currency-stack' ? getCurrencyMinMaxByCode(column) : EMPTY_CURRENCY_MIN_MAX}
+                                        column.type === 'multi-enum'
+                                            ? column.enumOptions && column.enumOptions.length > 0
+                                                ? getMultiEnumOptionsWithCounts(column, data)
+                                                : getMultiEnumOptions(column, data)
+                                            : column.type === 'enum'
+                                              ? getEnumOptionsWithCounts(column, data)
+                                              : (column.enumOptions ?? [])}
+                                    {@const currencyOptions = column.type === 'currency-stack' ? (column.currencyOptions ?? getCurrencyOptions(column, data)) : []}
+                                    {@const currencyMinMaxByCode = column.type === 'currency-stack' ? getCurrencyMinMaxByCode(column, boundaryData) : EMPTY_CURRENCY_MIN_MAX}
                                     <DataTableColumnFilter
                                         type={column.type}
                                         enumOptions={dynamicEnumOptions}
@@ -1282,14 +1057,14 @@
             <tbody>
                 {#if isLoading}
                     <tr>
-                        <td colspan={visibleColumns.length + (effectiveSelectionMode === 'multi' ? 1 : 0) + (showActionsColumn ? 1 : 0)} class="td-loading">
+                        <td colspan={visibleColumns.length + (effectiveSelectionMode === 'multi' ? 1 : 0) + (showActionsColumn ? 1 : 0)} class="td-loading" data-testid="dt-loading">
                             <div class="loading-spinner"></div>
                             <span>{$t('common.loading') || 'Loading...'}</span>
                         </td>
                     </tr>
                 {:else if paginatedData.length === 0}
                     <tr>
-                        <td colspan={visibleColumns.length + (effectiveSelectionMode === 'multi' ? 1 : 0) + (showActionsColumn ? 1 : 0)} class="td-empty">
+                        <td colspan={visibleColumns.length + (effectiveSelectionMode === 'multi' ? 1 : 0) + (showActionsColumn ? 1 : 0)} class="td-empty" data-testid="dt-empty">
                             {emptyMessage || $t('common.noData') || 'No data available'}
                         </td>
                     </tr>
@@ -1300,6 +1075,8 @@
                         {@const visibleRowActions = getVisibleRowActions(row)}
                         <tr
                             data-row-id={rowId}
+                            data-selected={isSelected ? 'true' : 'false'}
+                            data-highlighted={rowId === highlightedRowId ? 'true' : 'false'}
                             class="{isSelected ? 'selected' : ''} {effectiveSelectionMode === 'single' || onRowClick ? 'clickable' : ''} {rowId === highlightedRowId ? 'highlighted' : ''} {getRowClass?.(row) ?? ''}"
                             style={getRowStyle?.(row) ?? ''}
                             onclick={() => {
@@ -1347,6 +1124,8 @@
                                             <button
                                                 type="button"
                                                 class="checkbox-btn"
+                                                data-testid="dt-row-checkbox-{rowId}"
+                                                data-state={isSelected ? 'checked' : 'unchecked'}
                                                 onclick={(e) => {
                                                     e.stopPropagation();
                                                     toggleRowSelection(rowId);
@@ -1389,9 +1168,9 @@
                                                 <span>{cellContent.text}</span>
                                             </div>
                                         {:else if cellContent.type === 'badge'}
-                                            <span class="cell-badge {cellContent.variant}" class:custom-style={cellContent.customStyle} style={cellContent.customStyle || undefined}>{cellContent.text}</span>
+                                            <span class="cell-badge {cellContent.variant}" class:custom-style={cellContent.customStyle} style={cellContent.customStyle || undefined} data-badge-variant={cellContent.variant}>{cellContent.text}</span>
                                         {:else if cellContent.type === 'date'}
-                                            {formatDate(cellContent.value, cellContent.format)}
+                                            {formatCellDate(cellContent.value, cellContent.format, {today: $t('date.today') || 'Today', yesterday: $t('date.yesterday') || 'Yesterday'})}
                                         {:else if cellContent.type === 'size'}
                                             {formatBytes(cellContent.bytes)}
                                         {:else if cellContent.type === 'link'}
@@ -1422,44 +1201,59 @@
                                                 {/if}
                                             </div>
                                         {:else if cellContent.type === 'editable-number'}
+                                            <!-- type="text" + manual normalisation: a native number input is
+                                                 parsed against the browser locale, so "5,9" typed on an Italian
+                                                 keyboard arrives here as an empty string and the digits vanish
+                                                 as the user types. -->
                                             <input
-                                                type="number"
+                                                type="text"
+                                                inputmode="decimal"
+                                                autocomplete="off"
                                                 class="cell-editable-number"
                                                 value={cellContent.value ?? ''}
-                                                step={cellContent.step ?? 1}
-                                                min={cellContent.min}
-                                                max={cellContent.max}
                                                 placeholder={cellContent.placeholder ?? ''}
                                                 oninput={(e) => {
-                                                    const raw = e.currentTarget.value;
-                                                    if (raw === '') {
+                                                    const typed = e.currentTarget.value;
+                                                    if (typed === '') {
                                                         cellContent.onchange(null);
                                                         return;
                                                     }
-                                                    let num = Number(raw);
+                                                    // Half-typed decimals ("5," / "5.") are left alone: committing
+                                                    // them would push a reformatted value back into the input and
+                                                    // eat the separator the user just pressed.
+                                                    if (typed.includes(',') || typed.endsWith('.')) return;
+                                                    let num = Number(normalizeDecimalInput(typed));
+                                                    if (!Number.isFinite(num)) return;
                                                     if (cellContent.min !== undefined && num < cellContent.min) num = cellContent.min;
                                                     if (cellContent.max !== undefined && num > cellContent.max) num = cellContent.max;
                                                     cellContent.onchange(num);
                                                 }}
                                                 onblur={(e) => {
-                                                    const raw = e.currentTarget.value;
+                                                    const raw = normalizeDecimalInput(e.currentTarget.value);
                                                     if (raw === '') {
                                                         cellContent.onchange(null);
                                                         return;
                                                     }
                                                     let num = Number(raw);
-                                                    if (cellContent.min !== undefined && num < cellContent.min) {
-                                                        num = cellContent.min;
-                                                        e.currentTarget.value = String(num);
-                                                    }
-                                                    if (cellContent.max !== undefined && num > cellContent.max) {
-                                                        num = cellContent.max;
-                                                        e.currentTarget.value = String(num);
-                                                    }
+                                                    if (!Number.isFinite(num)) return;
+                                                    if (cellContent.min !== undefined && num < cellContent.min) num = cellContent.min;
+                                                    if (cellContent.max !== undefined && num > cellContent.max) num = cellContent.max;
+                                                    e.currentTarget.value = String(num);
                                                     cellContent.onchange(num);
                                                 }}
                                                 onkeydown={(e) => {
-                                                    if (e.key === 'Enter') e.currentTarget.blur();
+                                                    if (e.key === 'Enter') {
+                                                        e.currentTarget.blur();
+                                                        return;
+                                                    }
+                                                    const stepped = decimalArrowStep(e, e.currentTarget.value, typeof cellContent.step === 'number' ? cellContent.step : 1);
+                                                    if (stepped === null) return;
+                                                    let num = Number(stepped);
+                                                    if (!Number.isFinite(num)) return;
+                                                    if (cellContent.min !== undefined && num < cellContent.min) num = cellContent.min;
+                                                    if (cellContent.max !== undefined && num > cellContent.max) num = cellContent.max;
+                                                    e.currentTarget.value = String(num);
+                                                    cellContent.onchange(num);
                                                 }}
                                                 onclick={(e) => e.stopPropagation()}
                                             />
@@ -1488,12 +1282,15 @@
                                             <div class="cell-checkbox-wrapper flex justify-center" onclick={(e) => e.stopPropagation()}>
                                                 <button
                                                     type="button"
-                                                    onclick={() => cellContent.onchange(!cellContent.value)}
+                                                    onclick={() => {
+                                                        if (!cellContent.disabled) cellContent.onchange(!cellContent.value);
+                                                    }}
                                                     aria-label="Toggle"
                                                     class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors
                                                            {cellContent.value ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-slate-600'}
-                                                           cursor-pointer"
+                                                           {cellContent.disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}"
                                                     aria-pressed={cellContent.value}
+                                                    disabled={cellContent.disabled}
                                                 >
                                                     <span
                                                         class="inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform
@@ -1508,6 +1305,7 @@
                                                         <button
                                                             type="button"
                                                             class="cursor-pointer"
+                                                            data-testid={cellContent.testId}
                                                             onclick={(event) => {
                                                                 event.stopPropagation();
                                                                 cellContent.onClick?.();
@@ -1523,6 +1321,7 @@
                                                 <button
                                                     type="button"
                                                     class="cursor-pointer"
+                                                    data-testid={cellContent.testId}
                                                     onclick={(event) => {
                                                         event.stopPropagation();
                                                         cellContent.onClick?.();
@@ -1573,7 +1372,13 @@
                         {/if}
                         {#each visibleColumns as column}
                             {@const footerContent = computedFooterCells[column.id] ?? ''}
-                            <td class="td-data td-footer" class:td-fixed={column.pinned != null} class:td-pinned-right={column.pinned === 'right'} style="{column.pinned === 'left' ? 'left: 0;' : column.pinned === 'right' ? 'right: 0;' : ''}{column.align ? ` text-align: ${column.align};` : ''}">
+                            <td
+                                class="td-data td-footer"
+                                data-testid="dt-footer-{column.id}"
+                                class:td-fixed={column.pinned != null}
+                                class:td-pinned-right={column.pinned === 'right'}
+                                style="{column.pinned === 'left' ? 'left: 0;' : column.pinned === 'right' ? 'right: 0;' : ''}{column.align ? ` text-align: ${column.align};` : ''}"
+                            >
                                 {#if typeof footerContent === 'string' || typeof footerContent === 'number'}
                                     {footerContent}
                                 {:else if footerContent && typeof footerContent === 'object' && 'type' in footerContent && footerContent.type === 'html'}
@@ -1991,6 +1796,24 @@
 
     :global(tr.highlighted) td {
         border-bottom-color: #e9d5ff;
+    }
+
+    /* Row whose lot-analysis panel is currently open (F9) — steady emerald
+       tint, no pulse (persistent state, not a navigation flash) */
+    tbody :global(tr.row-analyzed) {
+        background: #ecfdf5;
+    }
+
+    tbody :global(tr.row-analyzed):hover {
+        background: #d1fae5;
+    }
+
+    :global(.dark) tbody :global(tr.row-analyzed) {
+        background: rgba(16, 185, 129, 0.15);
+    }
+
+    :global(.dark) tbody :global(tr.row-analyzed):hover {
+        background: rgba(16, 185, 129, 0.25);
     }
 
     :global(.dark) :global(tr.highlighted) td {

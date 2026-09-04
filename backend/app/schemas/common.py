@@ -25,7 +25,7 @@ from functools import lru_cache
 from typing import Annotated, Any, List, Literal, Optional, Union
 
 import pycountry
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator, model_validator
 from pydantic.functional_serializers import PlainSerializer
 
 from backend.app.utils.datetime_utils import parse_ISO_date
@@ -96,6 +96,33 @@ def _validate_currency_code_cached(code: str) -> str:
 
     # Invalid currency
     raise ValueError(f"Invalid currency code: '{code}'. Must be ISO 4217 currency.")
+
+
+# =============================================================================
+# STRICT MODEL BASE
+# =============================================================================
+
+
+class StrictModel(BaseModel):
+    """A `BaseModel` that refuses fields it does not declare.
+
+    ``ConfigDict(extra="forbid")`` was repeated **316 times** across the schema
+    layer and the AI Export payloads — the single most duplicated line in the
+    backend. It is not decoration: forbidding unknown fields is what turns a
+    renamed or misspelled key into a loud 422 instead of a value that silently
+    goes nowhere, and every one of those 316 classes wanted it.
+
+    Repeating it is how it eventually gets forgotten on the one model where it
+    mattered most, and nothing says so. Inheriting it means a new model is strict
+    by default and has to *opt out* on purpose, which is the right way round.
+
+    Pydantic merges `model_config` down the inheritance chain, so a subclass that
+    genuinely needs something else can still declare its own — the handful that
+    do (``from_attributes``, ``frozen``, ``str_strip_whitespace``) keep working
+    unchanged.
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
 
 # =============================================================================
@@ -260,10 +287,6 @@ class Currency(BaseModel):
         """Hash for use in sets/dicts."""
         return hash((self.code, self.amount))
 
-    def to_dict(self) -> dict:
-        """Serialize to dict for JSON responses."""
-        return {"currency": self.code, "amount": format(self.amount, "f")}  # Decimal → fixed-point string
-
     @classmethod
     def zero(cls, code: str) -> Currency:
         """Create a zero-valued Currency."""
@@ -280,6 +303,63 @@ class Currency(BaseModel):
     def is_negative(self) -> bool:
         """Check if amount is negative."""
         return self.amount < Decimal("0")
+
+
+def is_fiat_currency(value: Any) -> bool:
+    """Return True when ``value`` is a valid ISO 4217 currency code.
+
+    Non-raising twin of :meth:`Currency.validate_code`, which already normalises
+    (``upper().strip()``) and rejects the empty string. Anything that is not a
+    valid code -- a crypto ticker like ``BTC``, an empty cell, ``None``, a number
+    a CSV parser failed to coerce -- answers ``False`` instead of raising,
+    because callers use this to *classify* a symbol, not to validate input.
+
+    Single source of truth for the "is this fiat?" question. It lives beside
+    ``Currency`` because that class already owns ISO 4217 validation and its LRU
+    cache; a second normalisation elsewhere is exactly how the four BRIM copies
+    of this helper started to drift apart.
+    """
+    if not isinstance(value, str):
+        return False
+    try:
+        Currency.validate_code(value)
+    except ValueError:
+        return False
+    return True
+
+
+CurrencyCode = Annotated[str, BeforeValidator(Currency.validate_code)]
+"""Use instead of a bare ``str`` for a currency-**code** field that must be a valid
+ISO 4217 code.
+
+``Currency.validate_code`` already normalises (``upper().strip()``) and checks the
+code against the ISO 4217 registry (via pycountry), raising ``ValueError`` on
+anything else -- a crypto ticker like ``BTC``, an internal placeholder, an empty
+string. This annotated type carries that one rule so a field opts in *by type*
+instead of every class repeating its own ``@field_validator`` (nineteen payloads
+did, fifteen forgot).
+
+It does **not** change the wire shape: the field stays a JSON string. A value that
+is already a valid uppercase code (``"EUR"``) is returned byte-for-byte unchanged,
+so ``model_dump()`` of any existing payload is identical; only an *invalid* code --
+which no correct payload should ever carry -- is now rejected at construction
+instead of leaking out to the model that reads it.
+
+Mirrors ``SafeDecimal`` just above: one rule, written once, inherited by type. Uses
+``BeforeValidator`` (not ``AfterValidator``) so it sees the raw input and matches the
+definition already used across ``ai_export_runtime`` verbatim, which now imports this
+one instead of keeping a divergent copy.
+
+Import::
+
+    from backend.app.schemas.common import CurrencyCode
+
+Usage::
+
+    class MyPayload(StrictModel):
+        target_currency: CurrencyCode
+        currency: CurrencyCode | None = None  # None passes through; only real codes are checked
+"""
 
 
 class BackwardFillInfo(BaseModel):
@@ -322,9 +402,6 @@ class BackwardFillInfo(BaseModel):
     def _parse_actual_rate_date(cls, v):
         return parse_ISO_date(v)
 
-    def actual_rate_date_str(self) -> str:
-        """Return the actual_rate_date as ISO string (YYYY-MM-DD)."""
-        return self.actual_rate_date.isoformat()
 
 
 class FxBackwardFillInfo(BaseModel):
@@ -398,7 +475,7 @@ class DateRangeModel(BaseModel):
     def validate_end_after_start(self) -> DateRangeModel:
         """Ensure end >= start when end is provided."""
         if self.end is not None and self.end < self.start:
-            raise ValueError(f"end date ({self.end}) must be >= start date ({self.end})")
+            raise ValueError(f"end date ({self.end}) must be >= start date ({self.start})")
         return self
 
 
@@ -450,6 +527,38 @@ class OpenDateRangeModel(BaseModel):
         if self.end is None or isinstance(self.end, str):
             return None
         return self.end
+
+
+class PeriodBoundedModel(StrictModel):
+    """A `StrictModel` mixin for payloads with a flat inclusive ``[period_start, period_end]``.
+
+    Fourteen AI Export payloads declare ``period_start`` and ``period_end`` as two
+    flat ``date`` fields, and not one of them checked that the end is not before
+    the start -- so a payload could be exported with an *inverted* period and the
+    only thing that could notice would be the model reading it.
+
+    ``DateRangeModel`` has enforced ``end >= start`` forever, but it nests the two
+    bounds under ``{"start": ..., "end": ...}``. These payloads are versioned and
+    the two flat keys are part of their wire shape, so swapping them for a nested
+    range would not be a refactor -- it would break the contract. This mixin keeps
+    the two fields **flat** and adds the one validator, so a payload opts in by
+    inheriting instead of repeating the rule fourteen times.
+
+    Inheriting the fields moves them to the front of the serialised key order
+    (Pydantic emits base-class fields first), which is invisible to every JSON
+    consumer -- the object is byte-for-byte the same *set* of keys and values, as
+    ``model_dump()`` (order-insensitive) confirms.
+    """
+
+    period_start: date_type
+    period_end: date_type
+
+    @model_validator(mode="after")
+    def validate_period_end_after_start(self) -> PeriodBoundedModel:
+        """Ensure ``period_end`` is not before ``period_start``."""
+        if self.period_end < self.period_start:
+            raise ValueError(f"period_end ({self.period_end}) must be >= period_start ({self.period_start})")
+        return self
 
 
 class BaseDeleteResult(BaseModel):
@@ -568,13 +677,11 @@ class BaseBulkResponse[TResult: BaseModel](BaseModel):
     Standard fields:
     - results: List of per-item operation results
     - success_count: Number of successful operations
-    - failed_count: Number of failed operations (derived from len(results) - success_count)
     - errors: Optional list of error messages (operation-level errors, not per-item)
 
     Design Notes:
     - Generic class parameterized by TResult (the result item type)
     - Subclasses inherit this structure and specify their result type
-    - failed_count is NOT stored, computed from results length
     - errors field is for operation-level errors (e.g., "timeout", "provider unavailable")
     - Per-item errors should be in the result items themselves
 
@@ -582,7 +689,6 @@ class BaseBulkResponse[TResult: BaseModel](BaseModel):
         ```python
         class FABulkAssetCreateResponse(BaseBulkResponse[FAAssetCreateResult]):
             # Inherits: results, success_count, errors
-            # failed_count is computed property
             pass
 
         class FXBulkUpsertResponse(BaseBulkResponse[FXUpsertResult]):
@@ -597,11 +703,6 @@ class BaseBulkResponse[TResult: BaseModel](BaseModel):
     results: List[TResult] = Field(..., description="Per-item operation results")
     success_count: int = Field(..., ge=0, description="Number of successful operations")
     errors: List[str] = Field(default_factory=list, description="Operation-level errors (not per-item)")
-
-    @property
-    def failed_count(self) -> int:
-        """Computed property: number of failed operations."""
-        return len(self.results) - self.success_count
 
     @property
     def total_count(self) -> int:
@@ -626,7 +727,6 @@ class BaseBulkDeleteResponse[TResult: BaseModel](BaseBulkResponse[TResult]):
     - total_deleted: int - Total number of records deleted across all items
 
     Computed properties (from BaseBulkResponse):
-    - failed_count: int - Number of failed deletions
     - total_count: int - Total number of items processed
 
     Design Notes:

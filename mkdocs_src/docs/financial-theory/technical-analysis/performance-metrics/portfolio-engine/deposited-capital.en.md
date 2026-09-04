@@ -1,30 +1,34 @@
 # 💸 Deposited Capital, Total PnL and Cash Pools
 
-*[⬅️ Back to Performance Metrics Overview](../index.md)*
-
 ## 💡 Concept Overview
 
-**Deposited Capital** = cumulative net external capital contributed since inception:
+**Capital Baseline** = cumulative economic capital contributed since inception:
 
 $$
-\mathrm{DepCap}(t) = \sum_{\tau \leq t} D(\tau) - \sum_{\tau \leq t} W(\tau)
+\mathrm{CapitalBaseline}(t)=
+\sum_{\tau \leq t}\mathrm{ExternalCashFlow}(\tau)
++ \sum_{\tau \leq t}\mathrm{InKindCapital}(\tau)
 $$
 
 **Total PnL** = all value generated above external contributions:
 
 $$
-\boxed{\mathrm{TotalPnL}(t) = \mathrm{NAV}(t) - \mathrm{DepCap}(t)}
+\boxed{\mathrm{TotalPnL}(t) = \mathrm{NAV}(t) - \mathrm{CapitalBaseline}(t)}
 $$
+
+`InKindCapital` covers priced ADJUSTMENT / TRANSFER rows carrying `cost_basis_override` with no `asset_event_id` (not split rows). These rows inject book value without cash, so they must increase invested capital.
 
 ---
 
 ## 🎯 What Counts
 
-| Transaction | Effect on DepCap |
+| Transaction | Effect on capital baseline |
 |------------|-----------------|
 | DEPOSIT / WITHDRAWAL (unlinked) | ✅ Yes |
 | CASH\_TRANSFER linked-external | ✅ Yes |
 | CASH\_TRANSFER linked-internal | ❌ No |
+| ADJUSTMENT / TRANSFER with `cost_basis_override`, no `asset_event_id` | ✅ Yes, in-kind capital |
+| SPLIT-linked ADJUSTMENT | ❌ No, quantity rescale only |
 | BUY, SELL, DIVIDEND, INTEREST, FEE, TAX | ❌ No |
 
 ---
@@ -45,7 +49,7 @@ $$
 
 !!! info "Key properties"
 
-    - $\mathrm{DepCap}$ = historical sum of all flows. $\sum K_b$ = how much current cash is external capital. They diverge after BUY/SELL.
+    - $\mathrm{CapitalBaseline}$ = historical sum of cash and in-kind capital flows. $\sum K_b$ = how much current cash is external capital. They diverge after BUY/SELL.
     - A BUY on broker $b_1$ only consumes $R_{b_1}$, never $R_{b_2}$.
     - Cash transfers between brokers move $R$ and $K$ from source to destination without touching $W$.
 
@@ -55,7 +59,7 @@ $$
 
 ## 📝 Worked Examples
 
-### A — Deposit → Buy → Sell in Gain
+### 🧾 A — Deposit → Buy → Sell in Gain
 
 | Step | Tx | $K$ | $R$ | Cash |
 |------|----|-----|-----|------|
@@ -65,7 +69,7 @@ $$
 
 TotalPnL = 1,200 − 1,000 = **+€200** ✓
 
-### B — Dividend then Withdrawal
+### 💸 B — Dividend then Withdrawal
 
 | Step | Tx | $K$ | $R$ | $W$ | Cash |
 |------|----|-----|-----|-----|------|
@@ -77,7 +81,7 @@ TotalPnL = 1,200 − 1,000 = **+€200** ✓
 
 After step 5: Cash=30, K=0, R=30 ✓ (returns restored from W)
 
-### C — Full Sell Regression
+### 🧪 C — Full Sell Regression
 
 | Step | Tx | $K$ | $R$ | Cash |
 |------|----|-----|-----|------|
@@ -96,6 +100,8 @@ The 3-pool model runs in a **single per-transaction loop** (event-driven, not da
 2. Update K/R/W per transaction type rules
 3. Then reduce WAC pool (for SELLs)
 
+The ROI/TWRR/MWRR input series is derived from day-over-day changes in `cumulative_external_cash_flow`, the capital baseline. It is not derived from the cash-only `external_cash_flow` field.
+
 🔗 See **[Portfolio Engine — §6](index.md#6-three-pool-cash-model-per-broker-k_b-r_b-w)** for all formal rules.
 
 ---
@@ -105,3 +111,4 @@ The 3-pool model runs in a **single per-transaction loop** (event-driven, not da
 - 💼 [NAV](nav.md) — the other term in Total PnL
 - 📊 [Period PnL](period-pnl.md) — windowed version
 - ⚙️ [Portfolio Engine](index.md) — full mathematical model
+- 📈 [Performance Metrics Overview](../index.md) — all performance metrics at a glance

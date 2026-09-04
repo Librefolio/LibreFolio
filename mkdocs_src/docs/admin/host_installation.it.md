@@ -105,9 +105,11 @@ cp .env.example .env
 
 Le impostazioni predefinite funzionano immediatamente. Di seguito sono riportate le variabili chiave:
 
-* **`PORT`**: Porta di bind del server (predefinita: `6040`).
-* **`LIBREFOLIO_DATA_DIR`**: Percorso della directory in cui sono memorizzati il database, i caricamenti e i log (predefinito: `./backend/data/prod`).
-* **`LOG_LEVEL`**: Livello di dettaglio dei log (predefinito: `INFO`).
+| Variabile | Predefinito | Descrizione |
+| --- | --- | --- |
+| `PORT` | `6040` | Porta di bind del server. |
+| `LIBREFOLIO_DATA_DIR` | `./backend/data/prod` | Percorso della directory in cui sono memorizzati il database, i caricamenti e i log. |
+| `LOG_LEVEL` | `INFO` | Livello di dettaglio dei log. |
 
 Per una descrizione completa di tutte le variabili d'ambiente supportate, consulta la [Guida alle Variabili d'Ambiente](configuration.md).
 
@@ -121,7 +123,7 @@ pipenv run ./dev.py server
 
 Il server sarà disponibile all'indirizzo `http://localhost:6040`.
 
-#### Opzioni del Comando Server
+#### Server del Comando Server
 
 | Flag | Descrizione |
 |------|-------------|

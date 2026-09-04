@@ -42,7 +42,7 @@ def _rotate_if_needed(path: Path) -> None:
         pass
 
 
-def read_entries(since: str | None = None) -> list[dict[str, Any]]:
+def read_entries(since: str | None = None) -> list[dict[str, Any]]:  # noqa: C901 — log parsing loop with per-line error skips
     """Read log entries in reverse chronological order (newest first).
 
     Args:

@@ -2,17 +2,19 @@
 
 This section documents the reusable dropdown and select components in `lib/components/ui/select/`.
 
-All select components are built on `BaseDropdown`, which provides the shared logic for open/close state, click-outside dismissal, keyboard navigation, and dynamic positioning.
+There is **no shared base component**: `SimpleSelect` and `SearchSelect` each self-contain their
+open/close state, click-outside dismissal, keyboard navigation, and dropdown positioning
+(`position: fixed`, so the dropdown is never clipped by `overflow` parents). The shared logic
+that exists lives in plain TypeScript — `optionFilter.ts` (searchable-step/filter helpers) and
+`types.ts` (`SelectOption`). Every specialized select composes one of the two generic ones.
 
 ## 🏗️ Component Hierarchy
 
 ```mermaid
 graph TD
-    BD["<b>BaseDropdown</b><br/><small>Open/close · Click-outside · Keyboard nav<br/>Positioning (top/bottom/auto)</small>"]
+    SS["<b>SimpleSelect</b><br/><small>Fixed option list · Checkmark active<br/>Custom rendering via snippets</small>"]
 
-    BD --> SS["<b>SimpleSelect</b><br/><small>+ Option list · Checkmark active<br/>+ Custom rendering via snippets</small>"]
-
-    BD --> SrS["<b>SearchSelect</b><br/><small>+ Fuzzy search · Max visible items<br/>+ Inline search mode · Loading state</small>"]
+    SrS["<b>SearchSelect</b><br/><small>+ Fuzzy search · Max visible items<br/>+ Inline search mode · Loading state</small>"]
 
     SrS --> CSS["<b>CurrencySearchSelect</b><br/><small>+ Flag emoji · ISO code + name<br/>📡 <code>/utilities/currencies</code></small>"]
 
@@ -22,35 +24,27 @@ graph TD
 
     SrS --> BSS["<b>BrokerSearchSelect</b><br/><small>+ BrokerIcon · Inline search<br/>📡 <code>/brokers</code></small>"]
 
-    style BD fill:#e3f2fd,stroke:#1565c0
+    SrS --> MORE["<b>More specialized selects</b><br/><small>Asset · Country · Sector · User<br/>(same <code>SearchSelect</code> composition)</small>"]
+
     style SS fill:#e8f5e9,stroke:#2e7d32
     style SrS fill:#e8f5e9,stroke:#2e7d32
     style CSS fill:#fff3e0,stroke:#e65100
     style FPS fill:#fff3e0,stroke:#e65100
     style IPS fill:#fff3e0,stroke:#e65100
     style BSS fill:#fff3e0,stroke:#e65100
+    style MORE fill:#fff3e0,stroke:#e65100
 ```
 
-Each level adds features on top of the previous:
+Two generic layers, then domain-specific wrappers:
 
-- 🔵 **BaseDropdown** — Pure dropdown logic (headless)
-- 🟢 **SimpleSelect / SearchSelect** — Generic selects with rendering
-- 🟠 **Specialized selects** — Domain-specific with API data loading
+- 🟢 **SimpleSelect / SearchSelect** — generic, self-contained selects with rendering
+- 🟠 **Specialized selects** — domain-specific with API data loading
 
----
+!!! note "BaseDropdown is gone"
 
-## 📦 BaseDropdown
-
-The foundation for all dropdown components. A headless component that manages:
-
-- **Open/close** state via click or keyboard (`Enter`, `Space`, `Escape`)
-- **Click-outside** dismissal
-- **Dropdown positioning** — `top`, `bottom`, or `auto` (detects available space)
-- **Keyboard navigation** — `ArrowUp`/`ArrowDown` through items, `Enter` to select
-
-Uses **Svelte 5 Snippets** (`trigger` and `content`) for fully customizable rendering.
-
-**Used by**: `SimpleSelect`, `SearchSelect`, and all specialized selects.
+    `BaseDropdown.svelte` was deleted (03/09) as an orphaned abstraction — the two generic
+    selects now own their open/close and positioning logic directly. Docs or code that present
+    BaseDropdown as the foundation of this hierarchy are stale.
 
 ---
 

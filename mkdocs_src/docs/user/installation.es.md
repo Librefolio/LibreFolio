@@ -165,6 +165,29 @@ Sin embargo, para la máxima simplicidad y seguridad sin abrir puertos en su enr
 
 ---
 
+## 🏷️ Variantes de la Imagen: Full y Light
+
+La imagen oficial se publica en dos variantes:
+
+- 🗂️ **`latest`** (full) — incluye toda la documentación con capturas de pantalla e imágenes, para un uso completamente sin conexión.
+- 🪶 **`latest-light`** — la misma aplicación, pero **sin las imágenes de la documentación**, lo que hace la imagen varios cientos de MB más ligera. Todas las páginas de texto de la documentación siguen incluidas: al abrir una página que contiene capturas de pantalla, las imágenes se cargan bajo demanda desde el sitio de documentación en línea.
+
+Cada etiqueta de versión también tiene su equivalente light (por ejemplo, `ghcr.io/librefolio/librefolio:v0.10.0-light`).
+
+!!! warning "La variante light necesita internet para las imágenes de la documentación"
+
+    Con la imagen `-light`, ver las capturas de pantalla e imágenes dentro de la documentación integrada (menú Ayuda) requiere una **conexión a internet**, porque se descargan del sitio de documentación en línea. Todo lo demás — toda la aplicación y todos los textos de la documentación — funciona completamente sin conexión.
+
+Para usar la variante light, sustituya la etiqueta de la imagen en su `docker-compose.yml`:
+
+```yaml
+services:
+  librefolio:
+    image: ghcr.io/librefolio/librefolio:latest-light
+```
+
+---
+
 ## ⚙️ Opciones de configuración
 
 Todos los ajustes de LibreFolio (como puertos, moneda base y claves de seguridad de la sesión) se gestionan mediante variables de entorno en el archivo `.env`.
@@ -181,7 +204,7 @@ Para obtener instrucciones detalladas sobre qué guardar y cómo realizar copias
 
 ---
 
-## 🔄 Actualizar LibreFolio
+## 🔄 Actualizar LibreFolio {#updating}
 
 ### ⚠️ Advertencia: Estado Alpha
 LibreFolio se encuentra actualmente en desarrollo **Alpha**. Esto significa que entre versiones puede haber cambios estructurales o migraciones de base de datos que podrían impedir el inicio de la nueva versión, lo que requiere intervención manual o restaurar una versión anterior.

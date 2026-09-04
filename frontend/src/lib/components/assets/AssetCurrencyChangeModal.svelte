@@ -167,7 +167,7 @@
 </script>
 
 {#if open && blocker}
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="currency-change-title">
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="currency-change-title" data-testid="currency-change-modal">
         <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl border-2 border-red-300 dark:border-red-700 max-w-lg w-full mx-4 overflow-hidden">
             <!-- Header -->
             <div class="flex items-center gap-3 px-5 py-4 bg-red-50 dark:bg-red-900/30 border-b border-red-200 dark:border-red-800">
@@ -175,7 +175,7 @@
                 <h2 id="currency-change-title" class="text-base font-semibold text-red-700 dark:text-red-300">
                     {$t('assetDetail.currencyChange.title', {values: {from: blocker.from, to: blocker.to}})}
                 </h2>
-                <button type="button" class="ml-auto p-1 rounded text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors disabled:opacity-50" onclick={handleCancel} disabled={inProgress} aria-label={$t('common.cancel')}>
+                <button type="button" class="ml-auto p-1 rounded text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors disabled:opacity-50" onclick={handleCancel} disabled={inProgress} aria-label={$t('common.cancel')} data-testid="currency-change-close-x">
                     <X size={18} />
                 </button>
             </div>
@@ -192,17 +192,17 @@
                 <!-- What will be wiped / disconnected (R3-3 Policy D) -->
                 <ul class="text-xs text-slate-700 dark:text-slate-300 bg-red-50/60 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-md p-3 space-y-1 list-disc list-inside">
                     {#if blocker.prices > 0}
-                        <li>{$t('assetDetail.currencyChange.summaryPrices', {values: {count: blocker.prices, oldest: blocker.oldest, newest: blocker.newest}})}</li>
+                        <li data-testid="currency-change-summary-prices">{$t('assetDetail.currencyChange.summaryPrices', {values: {count: blocker.prices, oldest: blocker.oldest, newest: blocker.newest}})}</li>
                     {/if}
                     {#if blocker.eventsManual + blocker.eventsProvider > 0}
-                        <li>
+                        <li data-testid="currency-change-summary-events">
                             {$t('assetDetail.currencyChange.summaryEvents', {
                                 values: {manual: blocker.eventsManual, provider: blocker.eventsProvider},
                             })}
                         </li>
                     {/if}
                     {#if blocker.linkedTx > 0}
-                        <li class="font-medium text-red-700 dark:text-red-300">
+                        <li class="font-medium text-red-700 dark:text-red-300" data-testid="currency-change-summary-linkedtx">
                             {$t('assetDetail.currencyChange.summaryLinkedTx', {values: {count: blocker.linkedTx}})}
                         </li>
                     {/if}
@@ -230,6 +230,7 @@
                                 class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors"
                                 onclick={() => exportBackup('prices', 'csv')}
                                 disabled={inProgress}
+                                data-testid="currency-change-export-prices-csv"
                             >
                                 <Download size={13} />
                                 {$t('assetDetail.currencyChange.exportPricesCsv')}
@@ -239,6 +240,7 @@
                                 class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors"
                                 onclick={() => exportBackup('prices', 'json')}
                                 disabled={inProgress}
+                                data-testid="currency-change-export-prices-json"
                             >
                                 <Download size={13} />
                                 {$t('assetDetail.currencyChange.exportPricesJson')}
@@ -250,6 +252,7 @@
                                 class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors"
                                 onclick={() => exportBackup('events', 'csv')}
                                 disabled={inProgress}
+                                data-testid="currency-change-export-events-csv"
                             >
                                 <Download size={13} />
                                 {$t('assetDetail.currencyChange.exportEventsCsv')}
@@ -259,6 +262,7 @@
                                 class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors"
                                 onclick={() => exportBackup('events', 'json')}
                                 disabled={inProgress}
+                                data-testid="currency-change-export-events-json"
                             >
                                 <Download size={13} />
                                 {$t('assetDetail.currencyChange.exportEventsJson')}
@@ -282,7 +286,13 @@
                         {/if}
                     </span>
                 {/if}
-                <button type="button" class="px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 rounded hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors disabled:opacity-50" onclick={handleCancel} disabled={inProgress}>
+                <button
+                    type="button"
+                    class="px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 rounded hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors disabled:opacity-50"
+                    onclick={handleCancel}
+                    disabled={inProgress}
+                    data-testid="currency-change-cancel"
+                >
                     {$t('common.cancel')}
                 </button>
                 <button type="button" class="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed" onclick={handleConfirm} disabled={inProgress} data-testid="currency-change-confirm">

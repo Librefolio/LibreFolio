@@ -69,6 +69,6 @@ Eliminated 30-line `linkUuidMap` workaround (3 branches: create with link_uuid, 
 
 | Role | Path |
 |------|------|
-| BulkModal (cloneRow, collapsePairedOps) | `frontend/src/lib/components/transactions/TransactionBulkModal.svelte` |
+| BulkModal (cloneRow, collapsePairedOps) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
 | PendingOp type definition | `frontend/src/lib/components/transactions/types.ts` |
 | E2E commit all types | `frontend/e2e/transactions/tx-commit-all-types.spec.ts` |

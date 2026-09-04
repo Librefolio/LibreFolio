@@ -16,8 +16,9 @@
  *   - "Test KRW Stock" (KRW) with BUY in EUR → no EUR/KRW pair → triggers missing pairs
  *   - Apple (USD) with BUY in EUR on Directa → cross-FX scenario with EUR/USD pair
  */
-import {expect, test, type Page} from '@playwright/test';
+import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
+import {waitForSettled, validateRuns, waitForValidateRun} from '../fixtures/app-events';
 import {TEST_USER} from '../fixtures/test-users';
 
 test.setTimeout(25_000);
@@ -31,7 +32,16 @@ async function goToTransactions(page: Page) {
     await Promise.race([page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000}), page.getByTestId('tx-loading').waitFor({state: 'hidden', timeout: 10_000})]).catch(() => {
         /* either is fine */
     });
-    await page.waitForTimeout(500);
+    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
+}
+
+/**
+ * A SearchSelect has no "I committed" event, but its option list is torn down
+ * when a choice lands, and the field cascade the choice triggers re-renders
+ * before that. Waiting for the list to go is therefore a real barrier.
+ */
+async function optionListClosed(page: Page) {
+    await expect(page.locator('[data-testid^="search-select-option-"]')).toHaveCount(0, {timeout: 5_000});
 }
 
 async function openNewTransactionForm(page: Page) {
@@ -42,26 +52,25 @@ async function openNewTransactionForm(page: Page) {
 async function selectType(page: Page, type: string) {
     const typeSelect = page.getByTestId('tx-form-type');
     await typeSelect.locator('button, [role="combobox"]').first().click();
-    await page.waitForTimeout(300);
     await page.getByTestId(`search-select-option-${type}`).click();
-    await page.waitForTimeout(300);
+    await optionListClosed(page);
 }
 
 async function selectAsset(page: Page, assetName: string) {
     const assetWrap = page.getByTestId('tx-form-asset-wrap');
     await assetWrap.locator('button, [role="combobox"]').first().click();
-    await page.waitForTimeout(300);
     // Type to filter
     const input = page.locator('[data-testid="tx-form-asset-wrap"] input[type="text"], [data-testid="tx-form-asset-wrap"] input[role="combobox"]').first();
     if (await input.isVisible({timeout: 1_000}).catch(() => false)) {
         await input.fill(assetName);
-        await page.waitForTimeout(500);
+        // The list is debounced; the named entry arriving *is* the settle.
+        await expect(page.locator('[data-testid^="search-select-option-"]', {hasText: assetName}).first()).toBeVisible({timeout: 5_000});
     }
     // Click first matching option
     const option = page.locator(`[data-testid^="search-select-option-"]`).first();
     await expect(option).toBeVisible({timeout: 3_000});
     await option.click();
-    await page.waitForTimeout(300);
+    await optionListClosed(page);
 }
 
 async function pickBrokerInPanel(page: Page, panelTestid: string, brokerName: string) {
@@ -69,31 +78,33 @@ async function pickBrokerInPanel(page: Page, panelTestid: string, brokerName: st
     const trigger = panel.locator('[role="combobox"]').first();
     await expect(trigger).toBeVisible({timeout: 3_000});
     await trigger.click();
-    await page.waitForTimeout(500);
     const option = page.locator('[data-testid^="search-select-option-"]', {hasText: brokerName});
     await expect(option.first()).toBeVisible({timeout: 3_000});
     await option.first().click();
-    await page.waitForTimeout(500);
+    await optionListClosed(page);
 }
 
 /** Set up a TRANSFER form with a cross-FX scenario (KRW asset, EUR broker) */
 async function setupMissingFxScenario(page: Page) {
     await openNewTransactionForm(page);
     await selectType(page, 'TRANSFER');
-    await page.waitForTimeout(500);
     await pickBrokerInPanel(page, 'tx-form-dual-from', 'Directa SIM');
     await pickBrokerInPanel(page, 'tx-form-dual-to', 'Interactive Brokers');
     await selectAsset(page, 'KRW');
+    const root = page.getByTestId('tx-form-modal-root');
     const qtyInput = page.getByTestId('tx-form-quantity');
     await expect(qtyInput).toBeVisible({timeout: 2_000});
+    const before = await validateRuns(root);
     await qtyInput.fill('5');
-    // Wait for validate to fire (debounce 500ms + processing)
-    await page.waitForTimeout(3000);
-    // If validate-now is visible, click it to force
+    await qtyInput.blur();
+    // The verdict is what this scenario is about, so wait for the run that
+    // carries it rather than for the debounce to have probably elapsed.
+    await waitForValidateRun(root, before);
     const validateBtn = page.getByTestId('tx-form-validate-now');
     if (await validateBtn.isVisible({timeout: 1_000}).catch(() => false)) {
+        const forced = await validateRuns(root);
         await validateBtn.click();
-        await page.waitForTimeout(2000);
+        await waitForValidateRun(root, forced);
     }
 }
 
@@ -101,14 +112,16 @@ async function setupMissingFxScenario(page: Page) {
 async function setupCrossFxScenario(page: Page) {
     await openNewTransactionForm(page);
     await selectType(page, 'TRANSFER');
-    await page.waitForTimeout(500);
     await pickBrokerInPanel(page, 'tx-form-dual-from', 'Interactive Brokers');
     await pickBrokerInPanel(page, 'tx-form-dual-to', 'Directa SIM');
     await selectAsset(page, 'Apple');
+    const root = page.getByTestId('tx-form-modal-root');
     const qtyInput = page.getByTestId('tx-form-quantity');
     await expect(qtyInput).toBeVisible({timeout: 2_000});
+    const before = await validateRuns(root);
     await qtyInput.fill('2');
-    await page.waitForTimeout(1500);
+    await qtyInput.blur();
+    await waitForValidateRun(root, before);
 }
 
 // ---------------------------------------------------------------------------
@@ -179,8 +192,6 @@ test.describe('WAC FX — Sync Modal & Cross-Currency', () => {
             return;
         }
 
-        await page.waitForTimeout(500);
-
         // FxSyncModal should be visible
         const syncModal = page.locator('[data-testid="fx-sync-modal"]');
         await expect(syncModal).toBeVisible({timeout: 5_000});
@@ -202,7 +213,6 @@ test.describe('WAC FX — Sync Modal & Cross-Currency', () => {
         }
 
         await syncBtn.click();
-        await page.waitForTimeout(500);
 
         const syncModal = page.locator('[data-testid="fx-sync-modal"]');
         await expect(syncModal).toBeVisible({timeout: 5_000});
@@ -226,12 +236,12 @@ test.describe('WAC FX — Sync Modal & Cross-Currency', () => {
         await expect(syncModal).toBeVisible({timeout: 5_000});
 
         // Click the sync/start button inside the modal
-        const startBtn = syncModal
-            .locator('button')
-            .filter({hasText: /sync|start|avvia/i})
-            .first();
+        const startBtn = syncModal.getByTestId('sync-modal-start');
         if (await startBtn.isVisible({timeout: 3_000}).catch(() => false)) {
             await startBtn.click();
+            // Deliberate: this proves the modal does *not* close on its own. A
+            // retrying assertion would confirm it instantly and never open the
+            // window in which an auto-close could happen.
             await page.waitForTimeout(3_000);
 
             // Modal should still be visible (not auto-closed)
@@ -275,8 +285,10 @@ test.describe('WAC FX — Sync Modal & Cross-Currency', () => {
         // Click validate now if available
         const validateBtn = page.getByTestId('tx-form-validate-now');
         if (await validateBtn.isVisible({timeout: 2_000}).catch(() => false)) {
+            const root = page.getByTestId('tx-form-modal-root');
+            const before = await validateRuns(root);
             await validateBtn.click();
-            await page.waitForTimeout(2_000);
+            await waitForValidateRun(root, before);
         }
 
         // Expand qualifying table
@@ -306,8 +318,10 @@ test.describe('WAC FX — Sync Modal & Cross-Currency', () => {
         // Trigger validate
         const validateBtn = page.getByTestId('tx-form-validate-now');
         if (await validateBtn.isVisible({timeout: 2_000}).catch(() => false)) {
+            const root = page.getByTestId('tx-form-modal-root');
+            const before = await validateRuns(root);
             await validateBtn.click();
-            await page.waitForTimeout(2_000);
+            await waitForValidateRun(root, before);
         }
 
         // Expand qualifying table
@@ -321,7 +335,6 @@ test.describe('WAC FX — Sync Modal & Cross-Currency', () => {
             const tooltipTrigger = table.locator('[title], [data-tooltip]').first();
             if (await tooltipTrigger.isVisible({timeout: 2_000}).catch(() => false)) {
                 await tooltipTrigger.hover();
-                await page.waitForTimeout(500);
 
                 // Tooltip should contain "FX:" prefix and "=" sign
                 const tooltip = page.locator('[role="tooltip"], .tooltip, [data-testid*="tooltip"]').first();
@@ -344,8 +357,10 @@ test.describe('WAC FX — Sync Modal & Cross-Currency', () => {
         // Trigger validate
         const validateBtn = page.getByTestId('tx-form-validate-now');
         if (await validateBtn.isVisible({timeout: 2_000}).catch(() => false)) {
+            const root = page.getByTestId('tx-form-modal-root');
+            const before = await validateRuns(root);
             await validateBtn.click();
-            await page.waitForTimeout(2_000);
+            await waitForValidateRun(root, before);
         }
 
         // If stale FX is detected, the banner should appear

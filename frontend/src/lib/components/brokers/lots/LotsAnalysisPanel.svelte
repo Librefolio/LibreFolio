@@ -8,7 +8,7 @@
 
   Fetch strategy (two tiers, per plan v2 §13 "il frontend non effettua autonomamente ...
   calcoli WAC"):
-  - Main fetch (asset/broker/date-range change): LOT_SUMMARY + GANTT_TOPOLOGY +
+  - Main fetch (asset/broker change): LOT_SUMMARY + GANTT_TOPOLOGY +
     EVENT_HISTORY + PRICE_HISTORY + BROKER_WAC_HISTORY + CUMULATIVE_WAC_HISTORY, with
     NO selected_lot_ids (service defaults to "all lots" — see
     LotsAnalysisService._resolve_selected_lot_ids). EVENT_HISTORY (superset of the old
@@ -43,7 +43,9 @@
     import LotCustodyModal from './LotCustodyModal.svelte';
     import LotComparisonChart from './LotComparisonChart.svelte';
     import type {LotIncomeEvent} from './LotComparisonChart.svelte';
-    import DataQualityBanner, {type DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
+    import {type DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
+    import LotDataQualityBanner from './LotDataQualityBanner.svelte';
+    import {asArray, asObject, collectInvolvedLotIds, filterVisibleLots, lotIsOpenish, normalizeQuoteBaseQuantity} from './lotsAnalysisHelpers';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type GanttSegmentSchema = z.infer<typeof schemas.GanttSegmentSchema>;
@@ -60,23 +62,10 @@
      * Optional[List[X]] response field: `(X[] | null) | (X[] | null)[]`
      * (openapi-zod-client artifact, pre-existing, unrelated to this feature —
      * see fifo-lot-engine-v2-implementation-log.md §3.1). The API never
-     * actually returns the doubled-array branch. `value` is typed `unknown`
-     * and T is always passed explicitly at the call site (`asArray<Foo>(...)`)
-     * to avoid fighting TS's structural inference over that redundant union.
+     * actually returns the doubled-array branch. `asArray`/`asObject` (in
+     * ./lotsAnalysisHelpers) unwrap it; T is always passed explicitly at the
+     * call site (`asArray<Foo>(...)`).
      */
-    function asArray<T>(value: unknown): T[] {
-        if (!value || !Array.isArray(value)) return [];
-        if (value.length > 0 && Array.isArray(value[0])) {
-            return (value as unknown[][]).flatMap((item) => (item ?? []) as T[]);
-        }
-        return value as T[];
-    }
-
-    /** Same generator artifact as asArray(), for single-object Optional[X] fields. */
-    function asObject<T>(value: unknown): T | null {
-        if (!value) return null;
-        return Array.isArray(value) ? ((value[0] ?? null) as T | null) : (value as T);
-    }
 
     interface Props {
         open: boolean;
@@ -84,14 +73,11 @@
         brokerIds: number[];
         brokers: ReadonlyArray<BrokerLike>;
         currency: string;
-        dateFrom: string;
-        dateTo: string;
-        isAllPeriod: boolean;
         assetName?: string | null;
         onClose: () => void;
     }
 
-    let {open, assetId, brokerIds, brokers, currency, dateFrom, dateTo, isAllPeriod, assetName = null, onClose}: Props = $props();
+    let {open, assetId, brokerIds, brokers, currency, assetName = null, onClose}: Props = $props();
 
     let loading = $state(false);
     let error = $state<string | null>(null);
@@ -122,6 +108,7 @@
 
     let ganttRef: LotGanttChart | undefined = $state(undefined);
     let tableRef: UnifiedLotsTable | undefined = $state(undefined);
+    let wacRef: LotWacPriceChart | undefined = $state(undefined);
 
     let fetchVersion = 0;
     let selectionFetchVersion = 0;
@@ -137,15 +124,14 @@
 
     /** Vita e custodia view (plan v3 §8): the compact hierarchical Gantt (Timeline). */
 
-    function lotIsOpenish(lot: LotSummarySchema): boolean {
-        return Number.parseFloat(lot.open_quantity) > 0 || (lot.states ?? []).includes('OPEN');
-    }
+    let visibleLots = $derived.by((): LotSummarySchema[] => filterVisibleLots(lots, lotStateFilter));
 
-    let visibleLots = $derived.by((): LotSummarySchema[] => {
-        const bothSame = lotStateFilter.open === lotStateFilter.closed;
-        const showOpen = bothSame || lotStateFilter.open;
-        const showClosed = bothSame || lotStateFilter.closed;
-        return lots.filter((lot) => (lotIsOpenish(lot) ? showOpen : showClosed));
+    /** lot_id → opening_date for the currently visible lots, so the data-quality banner can turn each
+     * issue's message_params.lot_id into a labelled, clickable chip (→ pulses that lot's bubble). */
+    let visibleLotDates = $derived.by((): Map<number, string> => {
+        const map = new Map<number, string>();
+        for (const lot of visibleLots) map.set(lot.lot_id, lot.opening_date);
+        return map;
     });
 
     let selectedLots = $derived.by((): LotSummarySchema[] => {
@@ -162,10 +148,7 @@
 
     let effectiveSelectedLots = $derived.by((): LotSummarySchema[] => (selectedLotIds.length > 0 ? selectedLots : visibleLots));
 
-    let xAxisRange = $derived.by((): DateRange | null => {
-        if (!isAllPeriod) return {min: dateFrom, max: dateTo};
-        return computedRange;
-    });
+    let xAxisRange = $derived(computedRange);
 
     function handleZoomChange(start: number, end: number) {
         sharedZoomStart = start;
@@ -180,7 +163,6 @@
             const body = {
                 asset_id: currentAssetId,
                 broker_ids: currentBrokerIds.length > 0 ? currentBrokerIds : undefined,
-                date_range: isAllPeriod ? undefined : {start: dateFrom, end: dateTo},
                 target_currency: currency,
                 requested_analyses: ['LOT_SUMMARY', 'GANTT_TOPOLOGY', 'EVENT_HISTORY', 'PRICE_HISTORY', 'BROKER_WAC_HISTORY', 'CUMULATIVE_WAC_HISTORY', 'INCOME_EVENTS'] as const,
             };
@@ -197,8 +179,7 @@
             priceHistory = asArray<LotPriceHistoryPoint>(response.price_history);
             brokerWacHistory = asArray<BrokerWACHistoryPoint>(response.broker_wac_history);
             cumulativeWacHistory = asArray<CumulativeWACHistoryPoint>(response.cumulative_wac_history);
-            const rawQbq = Number(response.quote_base_quantity);
-            quoteBaseQuantity = Number.isFinite(rawQbq) && rawQbq > 0 ? rawQbq : 1;
+            quoteBaseQuantity = normalizeQuoteBaseQuantity(response.quote_base_quantity);
             incomeEvents = asArray<{type: 'DIVIDEND' | 'INTEREST'; date: string; broker_id?: number | null; amount: string; lot_ids?: number[]}>(response.income_events).map((event) => ({
                 type: event.type,
                 date: event.date,
@@ -248,7 +229,6 @@
             const body = {
                 asset_id: currentAssetId,
                 broker_ids: currentBrokerIds.length > 0 ? currentBrokerIds : undefined,
-                date_range: isAllPeriod ? undefined : {start: dateFrom, end: dateTo},
                 target_currency: currency,
                 selected_lot_ids: ids,
                 requested_analyses: ['VALUE_HISTORY', 'RETURN_HISTORY'] as const,
@@ -374,10 +354,7 @@
      * -> every lot/fragment touched by the same (or paired) transaction. Selects them and pulses the
      * first involved lane in the Gantt. */
     function handleEventDoubleClick(event: LotTimelineEventSchema) {
-        const txId = event.transaction_id;
-        const relatedId = event.related_transaction_id ?? null;
-        const involved = lotEvents.filter((row) => row.transaction_id === txId || (relatedId != null && row.transaction_id === relatedId) || (row.related_transaction_id != null && row.related_transaction_id === txId));
-        const lotIds = Array.from(new Set<number>([event.lot_id, ...involved.map((row) => row.lot_id)]));
+        const lotIds = collectInvolvedLotIds(lotEvents, event);
         if (lotIds.length === 0) return;
         selectedLotIds = lotIds;
         void (async () => {
@@ -387,9 +364,10 @@
         })();
     }
 
-    function handleDataQualityAction(_action: string, _target: string | null, _issue: DataQualityIssue) {
-        // No CTA navigation defined yet for FIFO lots issues (reference-price fallback etc.
-        // are informational-only) — placeholder kept so DataQualityBanner's contract is honored.
+    /** Click on an affected-lot chip in the data-quality banner → pulse that lot's bubble in the price
+     * chart so the user can locate the flagged lot (mirrors the gantt/table pulseLot precedent). */
+    function handleLotWarningClick(lotId: number) {
+        wacRef?.pulseLot(lotId);
     }
 </script>
 
@@ -421,7 +399,7 @@
 
         <div class="p-4 space-y-4">
             {#if dataQualityIssues.length > 0}
-                <DataQualityBanner issues={dataQualityIssues} mode="flat" onaction={handleDataQualityAction} />
+                <LotDataQualityBanner issues={dataQualityIssues} lotDates={visibleLotDates} onLotClick={handleLotWarningClick} />
             {/if}
 
             {#if calculationStatus === 'FAILED'}
@@ -445,6 +423,7 @@
                 </div>
             {:else}
                 <LotWacPriceChart
+                    bind:this={wacRef}
                     lots={visibleLots}
                     {selectedLotIds}
                     {brokerWacHistory}

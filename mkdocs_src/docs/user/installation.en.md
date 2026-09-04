@@ -87,6 +87,8 @@ cd librefolio
     curl -L https://raw.githubusercontent.com/Librefolio/LibreFolio/main/.env.example -o .env
     ```
 
+This installs the official GHCR image-based production stack and stores persistent data in `./LibreFolio-data` beside `docker-compose.yml`.
+
 ✍️ Alternatively, you can manually create a file named `docker-compose.yml` and paste the following code inside:
 
 ```yaml
@@ -98,7 +100,7 @@ services:
     ports:
       - "6040:6040"
     volumes:
-      - ./librefolio-data:/app/backend/data/prod-docker
+      - ./LibreFolio-data:/app/backend/data/prod-docker
     env_file: .env
     environment:
       - LIBREFOLIO_DATA_DIR=/app/backend/data/prod-docker
@@ -165,6 +167,29 @@ However, for maximum simplicity and security without opening ports on your route
 
 ---
 
+## 🏷️ Image Variants: Full and Light
+
+The official image is published in two variants:
+
+- 🗂️ **`latest`** (full) — includes the entire documentation with screenshots and images, for fully offline use.
+- 🪶 **`latest-light`** — the same application, but **without the documentation images**, making the image several hundred MB lighter. All documentation text pages are still included: when you open a page that contains screenshots, the images are loaded on demand from the online documentation site.
+
+Every version tag also has a light counterpart (for example, `ghcr.io/librefolio/librefolio:v1.1.0-light`).
+
+!!! warning "The light variant needs internet for documentation images"
+
+    With the `-light` image, viewing screenshots and images inside the built-in documentation (Help menu) requires an **internet connection**, because they are fetched from the online documentation site. Everything else — the whole application and all documentation text — works fully offline.
+
+To use the light variant, replace the image tag in your `docker-compose.yml`:
+
+```yaml
+services:
+  librefolio:
+    image: ghcr.io/librefolio/librefolio:latest-light
+```
+
+---
+
 ## ⚙️ Configuration Options
 
 All LibreFolio settings (such as ports, base currency, and session security keys) are managed via environment variables in the `.env` file.
@@ -181,13 +206,13 @@ For detailed instructions on what to save and how to perform consistent backups,
 
 ---
 
-## 🔄 Updating LibreFolio
+## 🔄 Updating LibreFolio {#updating}
 
-### ⚠️ Warning: Alpha Status
-LibreFolio is currently in **Alpha** development. This means that between versions there could be structural changes or database migrations that might prevent the new version from starting, requiring manual intervention or restoring a previous version.
+### ⚠️ Warning: Beta Status
+LibreFolio is currently in **Beta** (version 1.1.0). Database migrations run automatically at container start and are designed to preserve existing installs, but between versions there can still be structural changes — some subsystems (such as Risk Analysis) are explicitly marked as beta. Having a [backup](#data-backup) before updating is always a good idea.
 
 - By using the `:latest` tag in the `docker-compose.yml` file, you will immediately receive the latest features but expose yourself to potential incompatibilities during automatic updates.
-- If you prefer stability and absolute control, we recommend pinning the image by replacing `:latest` with a specific version tag (for example, `ghcr.io/librefolio/librefolio:v0.10.0`).
+- If you prefer stability and absolute control, we recommend pinning the image by replacing `:latest` with a specific version tag (for example, `ghcr.io/librefolio/librefolio:v1.1.0`).
 
 ### 🛠️ 1. Manual Update
 

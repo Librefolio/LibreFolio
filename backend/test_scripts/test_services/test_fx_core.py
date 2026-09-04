@@ -41,14 +41,32 @@ from backend.test_scripts.test_utils import print_section, print_success
 # ============================================================================
 
 
+# The pair this file owns.
+#
+# It used to work on EUR/USD and start each test by emptying the entire `fx_rates`
+# table — a DELETE with no WHERE, committed, from an autouse fixture. That took the
+# mock's ECB series and any rate a concurrent test had just synced with it, and a
+# committed DELETE is not something a neighbour's rollback can put back.
+#
+# The purge could not simply be narrowed, because it was load bearing: "no existing
+# data -> all rates are new -> count = 2" is only true of EUR/USD if somebody has
+# just demolished it. So the pair moved instead. BGN/ISK and CHF/ISK are used nowhere else
+# in the codebase as FX pairs — not by populate_mock_data, not by any other test — which
+# makes "no existing data" true by construction rather than by destruction.
+FX_CORE_BASE = "BGN"
+FX_CORE_BASE_ALT = "CHF"
+# Everything this file writes uses ISK as the quote, so one WHERE covers all of it.
+FX_CORE_QUOTE = "ISK"
+
+
 @pytest.fixture(autouse=True)
 def _clean_fx_rates():
-    """Ensure FxRate table is empty before each test."""
+    """Clear this file's own pair before each test, and nobody else's."""
 
     async def _purge():
         engine = get_async_engine()
         async with AsyncSession(engine) as session:
-            await session.execute(delete(FxRate))
+            await session.execute(delete(FxRate).where(FxRate.quote == FX_CORE_QUOTE))
             await session.commit()
 
     asyncio.run(_purge())
@@ -110,8 +128,8 @@ class TestUpsertRatesBulk:
         async with AsyncSession(engine) as session:
             today = date.today()
             rates = [
-                (today, "EUR", "USD", Decimal("1.0800"), "TEST"),
-                (today, "CHF", "EUR", Decimal("1.0600"), "TEST"),
+                (today, FX_CORE_BASE, FX_CORE_QUOTE, Decimal("1.0800"), "TEST"),
+                (today, FX_CORE_BASE_ALT, FX_CORE_QUOTE, Decimal("1.0600"), "TEST"),
             ]
             results = await upsert_rates_bulk(session, rates)
             assert len(results) == 2
@@ -126,11 +144,11 @@ class TestUpsertRatesBulk:
         engine = get_async_engine()
         async with AsyncSession(engine) as session:
             today = date.today()
-            rates_v1 = [(today, "EUR", "USD", Decimal("1.0800"), "TEST")]
+            rates_v1 = [(today, FX_CORE_BASE, FX_CORE_QUOTE, Decimal("1.0800"), "TEST")]
             await upsert_rates_bulk(session, rates_v1)
 
         async with AsyncSession(engine) as session:
-            rates_v2 = [(today, "EUR", "USD", Decimal("1.0900"), "TEST_v2")]
+            rates_v2 = [(today, FX_CORE_BASE, FX_CORE_QUOTE, Decimal("1.0900"), "TEST_v2")]
             results = await upsert_rates_bulk(session, rates_v2)
             assert len(results) == 1
             success, action = results[0]
@@ -162,7 +180,7 @@ class TestUpsertRatesBulk:
         engine = get_async_engine()
         async with AsyncSession(engine) as session:
             with pytest.raises(ValueError, match="Rate must be positive"):
-                await upsert_rates_bulk(session, [(date.today(), "EUR", "USD", Decimal("-1"), "TEST")])
+                await upsert_rates_bulk(session, [(date.today(), FX_CORE_BASE, FX_CORE_QUOTE, Decimal("-1"), "TEST")])
             print_success("ValueError raised for negative rate")
 
     async def test_auto_normalize_order(self):
@@ -172,7 +190,7 @@ class TestUpsertRatesBulk:
         async with AsyncSession(engine) as session:
             today = date.today()
             # USD > CHF → should be stored as CHF/USD inverted
-            rates = [(today, "USD", "CHF", Decimal("1.1111"), "TEST")]
+            rates = [(today, FX_CORE_BASE_ALT, FX_CORE_QUOTE, Decimal("1.1111"), "TEST")]
             results = await upsert_rates_bulk(session, rates)
             assert results[0] == (True, "inserted")
             print_success("Auto-normalized and inserted correctly")
@@ -190,7 +208,7 @@ class TestDeleteRatesBulk:
     async def _seed(self, session, pairs_dates):
         """Helper: insert rates for given (base, quote, date) tuples."""
         for b, q, d in pairs_dates:
-            rate = FxRate(date=d, base=b, quote=q, rate=Decimal("1.0000"), source="SEED")
+            rate = FxRate(date=d, base=b, quote=q, rate=Decimal("1.0000"), source="TEST")
             session.add(rate)
         await session.commit()
 
@@ -200,10 +218,10 @@ class TestDeleteRatesBulk:
         engine = get_async_engine()
         today = date.today()
         async with AsyncSession(engine) as session:
-            await self._seed(session, [("EUR", "USD", today)])
+            await self._seed(session, [(FX_CORE_BASE, FX_CORE_QUOTE, today)])
 
         async with AsyncSession(engine) as session:
-            results = await delete_rates_bulk(session, [("EUR", "USD", today, None)])
+            results = await delete_rates_bulk(session, [(FX_CORE_BASE, FX_CORE_QUOTE, today, None)])
             assert len(results) == 1
             success, existing, deleted, msg = results[0]
             assert success is True
@@ -217,10 +235,10 @@ class TestDeleteRatesBulk:
         base_date = date.today() - timedelta(days=10)
         dates = [base_date + timedelta(days=i) for i in range(5)]
         async with AsyncSession(engine) as session:
-            await self._seed(session, [("EUR", "USD", d) for d in dates])
+            await self._seed(session, [(FX_CORE_BASE, FX_CORE_QUOTE, d) for d in dates])
 
         async with AsyncSession(engine) as session:
-            results = await delete_rates_bulk(session, [("EUR", "USD", dates[0], dates[-1])])
+            results = await delete_rates_bulk(session, [(FX_CORE_BASE, FX_CORE_QUOTE, dates[0], dates[-1])])
             success, existing, deleted, msg = results[0]
             assert success is True
             assert deleted == 5
@@ -263,8 +281,8 @@ class TestCountActualChanges:
         today = date.today()
         async with AsyncSession(engine) as session:
             computed = [
-                (today, "EUR", "USD", truncate_fx_rate(Decimal("1.0800"))),
-                (today - timedelta(days=1), "EUR", "USD", truncate_fx_rate(Decimal("1.0790"))),
+                (today, FX_CORE_BASE, FX_CORE_QUOTE, truncate_fx_rate(Decimal("1.0800"))),
+                (today - timedelta(days=1), FX_CORE_BASE, FX_CORE_QUOTE, truncate_fx_rate(Decimal("1.0790"))),
             ]
             count = await _count_actual_changes(session, computed)
             assert count == 2
@@ -278,11 +296,11 @@ class TestCountActualChanges:
         rate_val = truncate_fx_rate(Decimal("1.0800"))
 
         async with AsyncSession(engine) as session:
-            session.add(FxRate(date=today, base="EUR", quote="USD", rate=rate_val, source="TEST"))
+            session.add(FxRate(date=today, base=FX_CORE_BASE, quote=FX_CORE_QUOTE, rate=rate_val, source="TEST"))
             await session.commit()
 
         async with AsyncSession(engine) as session:
-            computed = [(today, "EUR", "USD", rate_val)]
+            computed = [(today, FX_CORE_BASE, FX_CORE_QUOTE, rate_val)]
             count = await _count_actual_changes(session, computed)
             assert count == 0
             print_success(f"Same values → count = {count}")
@@ -300,16 +318,16 @@ class TestCountActualChanges:
 
         async with AsyncSession(engine) as session:
             # d1: existing with same value (no change)
-            session.add(FxRate(date=d1, base="EUR", quote="USD", rate=rate_same, source="TEST"))
+            session.add(FxRate(date=d1, base=FX_CORE_BASE, quote=FX_CORE_QUOTE, rate=rate_same, source="TEST"))
             # d2: existing with different value (change)
-            session.add(FxRate(date=d2, base="EUR", quote="USD", rate=rate_changed_old, source="TEST"))
+            session.add(FxRate(date=d2, base=FX_CORE_BASE, quote=FX_CORE_QUOTE, rate=rate_changed_old, source="TEST"))
             await session.commit()
 
         async with AsyncSession(engine) as session:
             computed = [
-                (d1, "EUR", "USD", rate_same),  # same → no change
-                (d2, "EUR", "USD", rate_changed_new),  # changed → +1
-                (d3, "EUR", "USD", truncate_fx_rate(Decimal("1.0750"))),  # new → +1
+                (d1, FX_CORE_BASE, FX_CORE_QUOTE, rate_same),  # same → no change
+                (d2, FX_CORE_BASE, FX_CORE_QUOTE, rate_changed_new),  # changed → +1
+                (d3, FX_CORE_BASE, FX_CORE_QUOTE, truncate_fx_rate(Decimal("1.0750"))),  # new → +1
             ]
             count = await _count_actual_changes(session, computed)
             assert count == 2  # 1 changed + 1 new
@@ -370,10 +388,10 @@ class TestUpsertRatesBulkEdgeCases:
         rate_val = Decimal("1.0800")
 
         async with AsyncSession(engine) as session:
-            await upsert_rates_bulk(session, [(today, "EUR", "USD", rate_val, "TEST")])
+            await upsert_rates_bulk(session, [(today, FX_CORE_BASE, FX_CORE_QUOTE, rate_val, "TEST")])
 
         async with AsyncSession(engine) as session:
-            results = await upsert_rates_bulk(session, [(today, "EUR", "USD", rate_val, "TEST")])
+            results = await upsert_rates_bulk(session, [(today, FX_CORE_BASE, FX_CORE_QUOTE, rate_val, "TEST")])
             assert len(results) == 1
             success, action = results[0]
             assert success is True

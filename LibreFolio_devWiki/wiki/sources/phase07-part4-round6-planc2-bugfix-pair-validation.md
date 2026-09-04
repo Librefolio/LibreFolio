@@ -71,10 +71,10 @@ These are outside Phase 07 scope but landed in the same commit batch:
 |------|------|
 | Transaction service (pair validation) | `backend/app/services/transaction_service.py` |
 | Mock data | `backend/test_scripts/test_db/populate_mock_data.py` |
-| BulkModal (clone fix) | `frontend/src/lib/components/transactions/TransactionBulkModal.svelte` |
-| FormModal (mismatched desc) | `frontend/src/lib/components/transactions/TransactionFormModal.svelte` |
+| BulkModal (clone fix) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
+| FormModal (mismatched desc) | `frontend/src/lib/components/transactions/modals/TransactionFormModal.svelte` |
 | TransactionsTable (hideActions) | `frontend/src/lib/components/transactions/TransactionsTable.svelte` |
-| PickerModal | `frontend/src/lib/components/transactions/TransactionPickerModal.svelte` |
+| PickerModal | `frontend/src/lib/components/transactions/modals/TransactionPickerModal.svelte` |
 | Page (+toast) | `frontend/src/routes/(app)/transactions/+page.svelte` |
 | E2E clone | `frontend/e2e/transactions/tx-clone.spec.ts` |
 | E2E bulk ops | `frontend/e2e/transactions/tx-bulk-operations.spec.ts` |
