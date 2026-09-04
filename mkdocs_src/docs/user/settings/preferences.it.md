@@ -1,48 +1,40 @@
-# 👤 Preferenze Utente
+# 🎛️ Preferenze Utente
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <img class="gallery-img" data-category="settings" data-name="user-preferences" alt="Preferenze Utente">
+ <img class="gallery-img" data-category="settings" data-name="user-preferences" alt="User Preferences">
 </div>
 
-Ogni utente può configurare le proprie preferenze di visualizzazione — le modifiche si applicano solo al tuo account:
+La scheda **Preferenze** controlla **come l'app appare e si comporta per te** — le modifiche si applicano solo al tuo account. La tua identità (nome utente, email, avatar, password) è invece gestita nella scheda **[Profilo](profile.md)**.
 
-| Impostazione | Descrizione |
-|---------|-------------|
-| **Lingua** | Lingua dell'interfaccia (English, Italiano, Français, Español) |
-| **Valuta di Base** | Valuta di visualizzazione predefinita per i valori del portafoglio |
-| **Tema** | Modalità Chiara / Scura |
-| **Formato Data** | GG/MM/AAAA, MM/GG/AAAA, o ISO AAAA-MM-GG |
+| Impostazione | Categoria | Descrizione |
+|---------|----------|-------------|
+| **Lingua** | 🌍 Visualizzazione | Lingua dell'interfaccia — 🇬🇧 English, 🇮🇹 Italiano, 🇫🇷 Français, 🇪🇸 Español. Si applica immediatamente |
+| **Valuta di base** | 💰 Valuta | Valuta di visualizzazione predefinita per i valori del portafoglio |
+| **Tema** | 🎨 Aspetto | ☀️ Chiaro / 🌙 Scuro / 🖥️ Auto (segue il sistema operativo) |
+
+<style>
+/* Keep the first two columns on one line (long setting names would wrap otherwise) */
+article table:first-of-type th:nth-child(-n + 2),
+article table:first-of-type td:nth-child(-n + 2) {
+ white-space: nowrap;
+ min-width: 11rem;
+}
+</style>
+
+Usa la **barra laterale delle categorie** a sinistra per filtrare le impostazioni visibili.
+
+## 💾 Salva, Annulla, Ripristina
+
+Ogni campo tiene traccia del proprio stato:
+
+- Un campo modificato mostra i pulsanti **salva** e **annulla**; l'intestazione offre **salva tutto** / **annulla tutto** per azioni in blocco.
+- I campi il cui valore differisce dal **valore predefinito dell'istanza** (impostato dall'amministratore in [Impostazioni Globali](../../admin/settings.md)) vengono evidenziati come non predefiniti; il pulsante **ripristina** riporta quel campo al valore predefinito dell'istanza, mentre **ripristina tutto** riporta tutti i campi al valore predefinito in un'unica volta.
 
 ---
 
-## 👤 Profilo
+## 🔗 Voci correlate
 
-<div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <img class="gallery-img" data-category="settings" data-name="profile" alt="Profilo">
-</div>
-
-Dalla scheda **Profilo** puoi aggiornare il tuo nome visualizzato e l'avatar. L'avatar viene utilizzato in tutta l'app ovunque venga mostrata la tua identità (ad esempio, condivisione broker, commenti).
-
----
-
-## 🔐 Cambia Password
-
-<div class="screenshot-container" style="max-width: 500px; margin: 1rem auto;">
- <img class="gallery-img" data-category="settings" data-name="password-modal" alt="Cambia Password">
-</div>
-
-La finestra modale **Cambia Password** richiede:
-
-1. La tua **password attuale** (per motivi di verifica)
-2. Una **nuova password** (minimo 8 caratteri, almeno un numero)
-3. **Conferma** della nuova password
-
-Dopo la conferma, la sessione rimane attiva — non è necessario effettuare nuovamente l'accesso.
-
----
-
-## 🔗 Correlati
-
-- ⚙️ **[Panoramica delle impostazioni](index.md)** — Riepilogo delle impostazioni generali
-- 🛡️ **[Impostazioni Globali](../../admin/settings.md)** — Opzioni amministratore e scheduler
-- ℹ️ **[Informazioni](about.md)** — Informazioni sulla versione e licenza
+- 👤 **[Profilo](profile.md)** — Nome utente, email, avatar, password, eliminazione account
+- ⚙️ **[Panoramica delle Impostazioni](index.md)** — Riepilogo delle impostazioni generali
+- ℹ️ **[Informazioni](about.md)** — Informazioni sulla versione, plugin e changelog
+- 🛡️ **[Impostazioni Globali](../../admin/settings.md)** — Opzioni di amministrazione e pianificazione

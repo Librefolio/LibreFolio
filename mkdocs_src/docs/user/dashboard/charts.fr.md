@@ -1,7 +1,5 @@
 # 📊 Graphiques
 
-*[⬅️ Retour à la vue d'ensemble du tableau de bord](index.md)*
-
 La section des graphiques se situe sous les cartes KPI et vous offre une **vue historique et structurelle** de votre portefeuille sur la période sélectionnée.
 
 ---
@@ -122,3 +120,7 @@ Le panneau d'allocation montre comment votre portefeuille est distribué à l'in
 - 💼 **[VNI / Valeur nette](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)**
 - 💸 **[Capital déposé et P&L total](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)**
 - 📈 **[TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md)** · **[MWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)** · **[Effet de timing](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/timing-effect.md)**
+
+---
+
+*[⬅️ Retour à la vue d'ensemble du tableau de bord](index.md)*

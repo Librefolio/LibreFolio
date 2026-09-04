@@ -1,8 +1,10 @@
 # 💰 Cartes KPI
 
-*[⬅️ Retour à l'aperçu du tableau de bord](index.md)*
-
 Les trois cartes KPI en haut du tableau de bord vous offrent un diagnostic rapide de votre portefeuille. Toutes les valeurs respectent la **période et le périmètre de courtier** sélectionnés en haut de la page.
+
+!!! note "Le partage affecte ces chiffres"
+
+    Tous les montants sont agrégés sur les courtiers auxquels vous avez accès, et chaque courtier en copropriété contribue proportionnellement à votre **part de propriété** (ex. un Owner à 50 % voit la moitié de la valeur et du P&L de ce courtier). Les Editors et Viewers, dont la part est toujours de 0 % par règle, voient les montants complets du courtier. Voir [Partage de courtier](../brokers/sharing.md).
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1.5rem auto 2rem auto;">
  <img class="gallery-img" data-category="dashboard" data-name="kpi-top" alt="Aperçu des cartes KPI">
@@ -24,18 +26,18 @@ Le chiffre principal est calculé à l'aide de la formule suivante :
 
 Un nombre positif signifie que vous avez gagné de l'argent grâce à l'activité d'investissement. Un nombre négatif signifie que vous avez perdu de l'argent, net des mouvements de capitaux.
 
-### The nombre en dessous du chiffre principal
+### Le nombre sous le chiffre principal
 
 Juste en dessous de la valeur du P&L de la période, une ligne plus petite affiche quelque chose comme `+45,20 (+3,10%)`.
 
 - Le montant est la variation **jour après jour** (aujourd'hui vs. hier) de votre **P&L total** — votre gain/perte cumulé de tous les temps, pas seulement pour la période sélectionnée.
-- Le pourcentage l'exprime en part du P&L de la période **d'hier** — il vous indique à quel point le mouvement d'aujourd'hui a « pesé » sur le résultat de la période que vous visualisez actuellement.
+- Le pourcentage l'exprime en part du **P&L total d'hier** — il vous indique combien le mouvement d'aujourd'hui a « pesé » par rapport à votre résultat cumulé de tous les temps.
 
 \[\text{Variation quotidienne} = \text{P&L total}_{\text{aujourd'hui}} - \text{P&L total}_{\text{hier}}\]
 
 Cette ligne n'apparaît que lorsque l'historique comporte au moins deux points quotidiens.
 
-### The lignes de détail
+### Les lignes de détail
 
 | Ligne | Ce qu'elle mesure |
 |-----|-----------------|
@@ -60,7 +62,7 @@ Cette ligne n'apparaît que lorsque l'historique comporte au moins deux points q
 
 La carte **Rendements** présente des mesures de *taux de rendement* — des pourcentages qui vous permettent de comparer la performance indépendamment de la taille du portefeuille.
 
-### Timing de cadencement
+### Effet de cadencement
 
 L'**Effet de cadencement** en haut de la carte mesure si vos décisions de dépôt/retrait ont *ajouté* ou *retiré* de la valeur par rapport à une stratégie passive d'achat-conservation :
 
@@ -69,7 +71,7 @@ L'**Effet de cadencement** en haut de la carte mesure si vos décisions de dép�
 - **Favorable (positif)** ✅ : vous avez eu tendance à déposer quand les prix étaient bas, augmentant ainsi votre rendement personnel au-dessus de ce que les actifs seuls ont gagné.
 - **Défavorable (négatif)** ❌ : vous avez eu tendance à déposer aux sommets ou à manquer les creux, tirant votre rendement en dessous de la performance pure des actifs.
 
-### The nombre en dessous de l'Effet de cadencement
+### Le nombre sous l'Effet de cadencement
 
 En dessous de l'Effet de cadencement, vous verrez un petit pourcentage (par ex. `+0,35%`) — c'est la variation de votre **P&L total** d'**hier à aujourd'hui**, exprimée en part de la valeur nette d'hier :
 
@@ -77,7 +79,7 @@ En dessous de l'Effet de cadencement, vous verrez un petit pourcentage (par ex. 
 
 C'est une estimation approximative du rendement **d'aujourd'hui** — une vérification rapide du pouls. Ce n'est ni le ROI, ni le TRP, ni le MRP affichés dans les lignes ci-dessous, qui restent ancrés à la période sélectionnée complète.
 
-### The quatre mesures de rendement
+### Les quatre mesures de rendement
 
 | Mesure | Question à laquelle elle répond |
 |--------|---------------------|
@@ -103,14 +105,15 @@ C'est une estimation approximative du rendement **d'aujourd'hui** — une vérif
 La carte **Valeur nette** affiche la valeur absolue de votre portefeuille à la fin de la période sélectionnée.
 
 !!! note "La Valeur nette inclut les liquidités"
+
     Le montant est **titres à valeur de marché + solde liquide** (+ toute valeur en transit entre brokers). Comme il inclut les liquidités, il **n'est pas comparable** à la « contre-valeur titres » d'un relevé bancaire, qui exclut les liquidités — celles-ci y sont reportées séparément.
 
-### The nombre en dessous de la Valeur nette
+### Le nombre sous la Valeur nette
 
-En dessous de la valeur de la Valeur nette, vous trouverez votre **P&L total**, avec sa variation en pourcentage entre parenthèses — par ex. `+12 450,30 (+0,35%)`.
+En dessous de la valeur de la Valeur nette, vous trouverez votre **P&L total**, avec votre rendement absolu entre parenthèses — par ex. `+12 450,30 (+24,85 %)`.
 
 - Le montant est votre **P&L total** — le gain ou la perte cumulé(e) depuis le début, sur l'ensemble de l'historique de ce périmètre (pas seulement la période actuelle).
-- Le pourcentage entre parenthèses exprime la variation **jour après jour** (aujourd'hui vs. hier) de ce P&L total, en part du P&L total **d'hier**.
+- Le pourcentage entre parenthèses est le **ROI absolu (depuis l'origine)** : P&L total ÷ capital net investi depuis l'origine. Ce n'est *pas* une variation jour après jour — pour ce contrôle quotidien, voyez les petites lignes des [Carte 1](#card-1-period-pl) et [Carte 2](#card-2-returns).
 
 \[\text{P&L total} = \text{Valeur nette} - \text{Capital net investi depuis l'origine}\]
 
@@ -118,7 +121,7 @@ Remarque : « Capital net investi depuis l'origine » est ici la somme de **tous
 
 🔗 **Théorie** : [Capital déposé, P&L total et Pools de trésorerie](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)
 
-### What que signifient les lignes
+### Ce que signifient les lignes
 
 | Ligne | Définition |
 |-----|-----------|
@@ -127,7 +130,7 @@ Remarque : « Capital net investi depuis l'origine » est ici la somme de **tous
 | **Trésorerie** | Solde liquide détenu sur les comptes de courtage |
 | **[Capital déposé](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)** | Capital externe net contribué à ce périmètre |
 
-### The barre de Capital déposé
+### La barre de Capital déposé
 
 La barre horizontale en dessous des lignes visualise :
 
@@ -152,3 +155,7 @@ Le chiffre principal indique le solde net (déposé − retiré).
 - 📈 **[TRP](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md)**
 - 📈 **[MRP](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)**
 - ⏱️ **[Effet de cadencement](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/timing-effect.md)**
+
+---
+
+*[⬅️ Retour à l'aperçu du tableau de bord](index.md)*

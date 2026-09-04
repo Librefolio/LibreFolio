@@ -1,26 +1,31 @@
 # <img src="https://data.snb.ch/favicon.ico" alt=""> Banco Nacional Suizo (SNB)
 
-El proveedor **Banco Nacional Suizo (SNB)** publica diariamente los tipos de cambio para el franco suizo (CHF). Es sumamente estable y preciso, lo que lo convierte en una fuente valiosa para activos basados en CHF.
+El proveedor **Banco Nacional Suizo (SNB)** publica **promedios mensuales** de tipos de cambio para el franco suizo (CHF), obtenidos del SNB Data Portal, de acceso público. Es una fuente estable y autorizada para activos basados en CHF.
+
+!!! warning "Solo datos mensuales — no hay tipos de cambio diarios"
+
+    El SNB **no** ofrece un conjunto de datos de tipos de cambio diarios: cada valor es el **promedio de un mes calendario**, con fecha del **día 1 de ese mes**. En las cadenas de conversión, un tipo de cambio solo se calcula en fechas en las que **todos** los proveedores involucrados tienen datos, por lo que encadenar a través del SNB produce un punto por mes. Si necesitas tipos de cambio de CHF día a día, usa otro proveedor (p. ej. ECB o FED) para el par.
 
 ## 📊 Capacidades
 
-- ✅ **Precio Actual**: Tipo de referencia actualizado diariamente
-- ✅ **Historial**: Tipos diarios históricos
-- ❌ **Búsqueda**: Sin búsqueda de activos (solo tipos de cambio)
+- ✅ **Precio actual**: Último promedio mensual disponible
+- ✅ **Historial**: Promedios mensuales históricos
+- ❌ **Búsqueda**: Sin búsqueda de activos (solo tipos FX)
 
 ## 🔧 Especificaciones
 
-- **Moneda Base**: CHF 🇨🇭
-- **Frecuencia de Actualización**: Diariamente en días laborables suizos
-- **API Key**: No es necesaria (API pública del SNB Data Portal)
+- **Moneda base**: CHF 🇨🇭
+- **Frecuencia de actualización**: Mensual — los nuevos promedios se publican alrededor del segundo día hábil del mes siguiente
+- **Clave API**: No requerida (API pública del SNB Data Portal)
 
-## 💰 Monedas compatibles
+## 💰 Monedas admitidas
 
-El SNB proporciona tipos de cambio para una lista selecta de monedas principales:
+El SNB cubre alrededor de **25 monedas** frente al CHF; LibreFolio carga dinámicamente la lista exacta desde el SNB Data Portal. Incluye:
 
-- **Monedas compatibles**: USD 🇺🇸, EUR 🇪🇺, GBP 🇬🇧, JPY 🇯🇵, CAD 🇨🇦, AUD 🇦🇺, SEK 🇸🇪, NOK 🇳🇴, DKK 🇩🇰, CNY 🇨🇳
+- **Principales**: USD 🇺🇸, EUR 🇪🇺, GBP 🇬🇧, JPY 🇯🇵, CNY 🇨🇳
+- **Globales**: CAD 🇨🇦, AUD 🇦🇺 y otras monedas del mundo
 
-## 📝 Notas Importantes
+## 📝 Notas importantes
 
-- **Cotización de divisas en múltiples unidades**: El SNB cotiza algunas monedas por cada **100 unidades** (por ejemplo, el yen japonés, la corona sueca, la corona noruega, la corona danesa) en lugar de 1 unidad. Por ejemplo, el tipo se muestra como `100 JPY = 0.58 CHF`. **LibreFolio detecta y normaliza automáticamente estos tipos** a valores por unidad para garantizar que sus transacciones se calculen correctamente.
-- **Festivos**: Los tipos no se publican en los días festivos bancarios suizos ni los fines de semana.
+- **Cotización de monedas por unidades múltiples**: El SNB cotiza algunas monedas por **100 unidades** en lugar de 1 unidad (p. ej. `100 JPY = x CHF`). **LibreFolio detecta y normaliza automáticamente estos tipos de cambio** a valores por unidad para garantizar que tus transacciones se calculen correctamente.
+- **Un punto por mes**: los tipos de cambio tienen fecha del día 1 de cada mes. Las conversiones en fechas entre dos puntos mensuales utilizan el tipo de cambio más reciente disponible (backward-fill).

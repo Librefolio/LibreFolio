@@ -1,7 +1,5 @@
 # 🧭 Risoluzione dei Prezzi
 
-*[⬅️ Torna a Portfolio Engine](index.md)*
-
 ## 💡 Scopo
 
 LibreFolio utilizza un unico risolutore unificato come fonte primaria di valutazione per posizioni aperte, NAV, valutazione dei lotti, linee di prezzo nei grafici e flag di qualità dei dati. Il risolutore risponde a una domanda quotidiana:
