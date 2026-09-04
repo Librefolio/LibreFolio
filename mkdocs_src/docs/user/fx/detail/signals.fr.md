@@ -46,6 +46,25 @@ Une **enveloppe de volatilité** autour du prix. Les bandes s'élargissent penda
 
 ---
 
+## 🧠 Export IA
+
+Le bouton **Export IA** (:material-brain:) dans la barre d'outils de la page
+propose trois tâches FX :
+
+- **Analyse de la tendance de change**
+- **Impact de l'exposition de change**
+- **Contexte temporel de conversion de devises**
+
+L'instantané du backend utilise la paire de devises canonique de la page, la
+période sélectionnée, la devise cible, l'historique des taux et les résultats
+techniques du service de signaux partagé. Pour Impact de l'exposition de change,
+l'exposition se limite aux devises de trésorerie et aux devises de négociation
+ou de valorisation des positions directement rattachables à la paire ; aucun
+**look-through** des fonds ou des émetteurs n'est effectué pour déduire une
+exposition cachée. Consultez l'[Exportation AI FX](../../ai-export/fx.md) ou le [guide d'exportation AI](../../ai-export/index.md).
+
+---
+
 ## 📚 Approfondissement : Théorie Financière
 
 Pour un traitement mathématique complet de chaque indicateur — incluant les formules, les équivalents en traitement du signal et l'interprétation pratique :

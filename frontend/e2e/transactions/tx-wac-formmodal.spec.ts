@@ -18,11 +18,12 @@
  * Mock data contract: e2e_test_user has OWNER/EDITOR on Interactive Brokers + Directa SIM.
  * Apple (AAPL) is a known asset with price history and existing BUY transactions.
  */
-import {expect, test, type Page, type Request} from '@playwright/test';
+import {expect, test, type Page, type Request} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
+import {waitForSettled, waitForValidateRun} from '../fixtures/app-events';
 import {TEST_USER} from '../fixtures/test-users';
 
-test.setTimeout(30_000);
+test.setTimeout(60_000);
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -39,7 +40,7 @@ const ASSET_NAME = 'Apple';
 async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions?page_size=200');
     await Promise.race([page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000}), page.getByTestId('tx-loading').waitFor({state: 'hidden', timeout: 10_000})]).catch(() => {});
-    await page.waitForTimeout(500);
+    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
 }
 
 async function openCreateFlow(page: Page) {
@@ -47,22 +48,29 @@ async function openCreateFlow(page: Page) {
     await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
 }
 
+/**
+ * A SearchSelect has no "I committed" event, but its option list is torn down
+ * when a choice lands, and the field cascade the choice triggers re-renders
+ * before that. Waiting for the list to go is therefore a real barrier.
+ */
+async function optionListClosed(page: Page) {
+    await expect(page.locator('[data-testid^="search-select-option-"]')).toHaveCount(0, {timeout: 5_000});
+}
+
 async function selectType(page: Page, typeCode: string) {
     const typeButton = page.getByTestId('tx-form-type');
     await typeButton.click();
-    await page.waitForTimeout(300);
     await page.getByTestId(`search-select-option-${typeCode}`).click();
-    await page.waitForTimeout(300);
+    await optionListClosed(page);
 }
 
 async function pickFirstBroker(page: Page) {
     const brokerWrap = page.getByTestId('tx-form-broker-wrap');
     await brokerWrap.locator('button, [role="combobox"]').first().click();
-    await page.waitForTimeout(300);
     const option = page.locator('[data-testid^="search-select-option-"]', {hasText: BROKER_FROM});
     await expect(option.first()).toBeVisible({timeout: 3_000});
     await option.first().click();
-    await page.waitForTimeout(300);
+    await optionListClosed(page);
 }
 
 async function pickBrokerInPanel(page: Page, panelTestid: string, brokerName: string) {
@@ -70,42 +78,43 @@ async function pickBrokerInPanel(page: Page, panelTestid: string, brokerName: st
     const trigger = panel.locator('[role="combobox"]').first();
     await expect(trigger).toBeVisible({timeout: 3_000});
     await trigger.click();
-    await page.waitForTimeout(500);
     const option = page.locator('[data-testid^="search-select-option-"]', {hasText: brokerName});
     await expect(option.first()).toBeVisible({timeout: 3_000});
     await option.first().click();
-    await page.waitForTimeout(500);
+    await optionListClosed(page);
 }
 
 async function pickAssetByName(page: Page, name: string) {
     const assetWrap = page.getByTestId('tx-form-asset-wrap');
     await assetWrap.locator('button, [role="combobox"]').first().click();
-    await page.waitForTimeout(300);
     const searchInput = page.locator('[data-testid="tx-form-asset-wrap"] input[type="text"], [data-testid="tx-form-asset-wrap"] input[role="combobox"]').first();
     if (await searchInput.isVisible({timeout: 1_000}).catch(() => false)) {
         await searchInput.fill(name);
-        await page.waitForTimeout(500);
+        // The list is debounced; the named entry arriving *is* the settle.
+        await expect(page.locator('[data-testid^="search-select-option-"]', {hasText: name}).first()).toBeVisible({timeout: 5_000});
     }
     const option = page.locator('[data-testid^="search-select-option-"]').first();
     await expect(option).toBeVisible({timeout: 3_000});
     await option.click();
-    await page.waitForTimeout(300);
+    await optionListClosed(page);
 }
 
 async function fillQuantity(page: Page, qty: string) {
     const qtyInput = page.getByTestId('tx-form-quantity');
     await expect(qtyInput).toBeVisible({timeout: 2_000});
     await qtyInput.fill(qty);
-    await page.waitForTimeout(200);
+    await qtyInput.blur();
+    await expect(qtyInput).not.toHaveValue('');
 }
 
 async function fillCash(page: Page, amount: string) {
     const cashWrap = page.getByTestId('tx-form-cash-wrap');
     await expect(cashWrap).toBeVisible({timeout: 2_000});
-    const cashInput = cashWrap.locator('input[type="number"]').first();
+    const cashInput = cashWrap.locator('input[data-testid$="-amount"]').first();
     await expect(cashInput).toBeVisible({timeout: 1_000});
     await cashInput.fill(amount);
-    await page.waitForTimeout(200);
+    await cashInput.blur();
+    await expect(cashInput).not.toHaveValue('');
 }
 
 async function applyFormModal(page: Page) {
@@ -118,7 +127,20 @@ async function applyFormModal(page: Page) {
 
 /** Wait for WAC cell to resolve (not showing "…" placeholder). */
 async function waitForWacResolved(page: Page) {
-    await page.locator('[data-testid="tx-bulk-cost-basis-auto"]').filter({hasNotText: '…'}).first().waitFor({state: 'visible', timeout: 8_000});
+    const root = page.getByTestId('tx-bulk-modal-root');
+    // `data-busy` alone is not enough: before the debounce arms nothing is
+    // queued and nothing is in flight, so the modal looks settled while the
+    // cell still holds its placeholder. `data-validate-runs` is monotonic —
+    // "at least one run completed" is a state, safe to read late.
+    await expect(root).not.toHaveAttribute('data-validate-runs', '0', {timeout: 25_000});
+    await waitForSettled(root, 25_000);
+    // Presenza e stato separati: in modalità auto la cella esiste sempre e
+    // pubblica 'pending' | 'ready' | 'empty'. Il selettore composto li faceva
+    // collassare in «element(s) not found», che non distingue «ancora lento»
+    // da «questa riga un WAC non ce l'ha».
+    const autoCell = page.locator('[data-testid="tx-bulk-cost-basis-auto"]').first();
+    await expect(autoCell).toBeVisible({timeout: 20_000});
+    await expect(autoCell).toHaveAttribute('data-state', 'ready', {timeout: 20_000});
 }
 
 /** Double-click on a row in the BulkModal grid to open FormModal for editing it. */
@@ -217,12 +239,18 @@ test.describe('FormModal WAC Payload Tests', () => {
         await fillCash(page, '1000');
         await applyFormModal(page);
         await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
+        // The BUY's apply schedules a validate of its own. `captureValidatePayload`
+        // below returns the *next* validate request, whoever caused it — so if the
+        // BUY's is still queued when the listener registers, the test inspects a
+        // payload containing only the BUY and reports "no TRANSFER receiver".
+        // That is the failure seen under load, and it fails fast (3.5 s) precisely
+        // because the wrong request arrives early. Let the first run finish.
+        await waitForValidateRun(page.getByTestId('tx-bulk-modal-root'), 0);
 
         // Now add a TRANSFER row; intercept the validate that fires after apply
         await page.getByTestId('tx-bulk-add-row').click();
         await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
         await selectType(page, 'TRANSFER');
-        await page.waitForTimeout(500);
         await pickBrokerInPanel(page, 'tx-form-dual-from', BROKER_FROM);
         await pickBrokerInPanel(page, 'tx-form-dual-to', BROKER_TO);
         await pickAssetByName(page, ASSET_NAME);
@@ -243,7 +271,7 @@ test.describe('FormModal WAC Payload Tests', () => {
         await waitForWacResolved(page);
 
         // WAC auto cell should show a calculated value
-        const autoCell = page.locator('[data-testid="tx-bulk-cost-basis-auto"]').filter({hasNotText: '…'}).first();
+        const autoCell = page.locator('[data-testid="tx-bulk-cost-basis-auto"][data-state="ready"]').first();
         const cellText = await autoCell.textContent();
         expect(cellText).toMatch(/💡\s*[\d.,]+/);
     });
@@ -304,7 +332,6 @@ test.describe('FormModal WAC Payload Tests', () => {
         await page.getByTestId('tx-bulk-add-row').click();
         await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
         await selectType(page, 'TRANSFER');
-        await page.waitForTimeout(500);
         await pickBrokerInPanel(page, 'tx-form-dual-from', BROKER_FROM);
         await pickBrokerInPanel(page, 'tx-form-dual-to', BROKER_TO);
         await pickAssetByName(page, ASSET_NAME);
@@ -336,12 +363,11 @@ test.describe('FormModal WAC Payload Tests', () => {
         // Select and open in BulkModal (Edit)
         const row = page.locator(`[data-testid="tx-table"] tbody tr[data-row-id="${giverRowId}"]`);
         await row.locator('.checkbox-btn').first().click();
-        await page.waitForTimeout(300);
         const editBtn = page.locator('[data-testid="toolbar-action-edit"]');
         await expect(editBtn).toBeVisible({timeout: 2_000});
         await editBtn.click();
         await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
-        await page.waitForTimeout(1000);
+        await waitForSettled(page.getByTestId('tx-bulk-modal-root'));
 
         // DB-saved cost_basis → cell should show manual value (not "—")
         const manualCell = page.locator('[data-testid="tx-bulk-cost-basis-manual"]').first();
@@ -362,7 +388,6 @@ test.describe('FormModal WAC Payload Tests', () => {
         await page.getByTestId('tx-bulk-add-row').click();
         await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
         await selectType(page, 'TRANSFER');
-        await page.waitForTimeout(500);
         await pickBrokerInPanel(page, 'tx-form-dual-from', BROKER_FROM);
         await pickBrokerInPanel(page, 'tx-form-dual-to', BROKER_TO);
         await pickAssetByName(page, ASSET_NAME);
@@ -380,14 +405,15 @@ test.describe('FormModal WAC Payload Tests', () => {
         const manualToggle = page.getByTestId('tx-form-cost-basis-toggle-manual');
         if (await manualToggle.isVisible({timeout: 2_000}).catch(() => false)) {
             await manualToggle.click();
-            await page.waitForTimeout(300);
+            await expect(manualToggle).toHaveAttribute('aria-pressed', 'true');
         }
 
         // Fill manual cost basis amount
         const amountInput = page.getByTestId('tx-form-cost-basis-input-amount');
         await expect(amountInput).toBeVisible({timeout: 2_000});
         await amountInput.fill('250');
-        await page.waitForTimeout(200);
+        await amountInput.blur();
+        await expect(amountInput).not.toHaveValue('');
 
         // Save and intercept validate payload
         const payload = await captureValidatePayload(page, async () => {
@@ -405,7 +431,7 @@ test.describe('FormModal WAC Payload Tests', () => {
         expect(cbo!.amount).toContain('250');
 
         // BulkModal cell should now show manual value
-        await page.waitForTimeout(1000);
+        await waitForSettled(page.getByTestId('tx-bulk-modal-root'));
         const manualCell = page.locator('[data-testid="tx-bulk-cost-basis-manual"]').first();
         await expect(manualCell).toBeVisible({timeout: 5_000});
         const text = await manualCell.textContent();
@@ -458,8 +484,7 @@ test.describe('FormModal WAC Payload Tests', () => {
         await applyFormModal(page);
         await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
 
-        // Wait for auto-validate to complete
-        await page.waitForTimeout(2000);
+        await waitForSettled(page.getByTestId('tx-bulk-modal-root'));
 
         // Step 2: Re-edit and switch to manual with value 50
         const rows = page.locator('[data-testid="tx-bulk-modal"] tbody tr[data-row-id]');
@@ -470,13 +495,13 @@ test.describe('FormModal WAC Payload Tests', () => {
         const manualToggle = page.getByTestId('tx-form-cost-basis-toggle-manual');
         await expect(manualToggle).toBeVisible({timeout: 3_000});
         await manualToggle.click();
-        await page.waitForTimeout(300);
+        await expect(manualToggle).toHaveAttribute('aria-pressed', 'true');
 
         const amountInput = page.getByTestId('tx-form-cost-basis-input-amount');
         await expect(amountInput).toBeVisible({timeout: 2_000});
         await amountInput.fill('50');
         await applyFormModal(page);
-        await page.waitForTimeout(1000);
+        await waitForSettled(page.getByTestId('tx-bulk-modal-root'));
 
         // Step 3: Re-edit again — should show manual mode with value 50
         const rows2 = page.locator('[data-testid="tx-bulk-modal"] tbody tr[data-row-id]');

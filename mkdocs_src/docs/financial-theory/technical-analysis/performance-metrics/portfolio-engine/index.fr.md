@@ -33,9 +33,14 @@ p_{\text{buy}}(a, t) & \text{si le dernier BUY de } V(u) \text{ existe} \\
 \end{cases}
 $$
 
-- $p_{\text{mkt}}$ = comblement vers l'arrière (backward-fill) depuis PriceHistory (dernière clôture avec date $\leq t$)
-- $p_{\text{buy}}$ = prix unitaire du BUY le plus récent de $a$ parmi tous les courtiers de $V(u)$, avec date $\leq t$
-- Le PMP n'est **jamais** utilisé comme prix d'évaluation
+- Le resolver unifié est l'unique cerveau de valorisation : `MARKET → TRADE_AVG → CARRIED → MISSING`.
+- `CARRIED` est la dernière observation projetée en avant (LOCF). Il porte les métadonnées d'obsolescence `days_back`.
+- `estimated=True` signifie une origine TRADE. Une cotation MARKET périmée est stale, pas estimated.
+- Les marks restent en devise native ; chaque consommateur convertit en $C^*$ à la date de valorisation $t$.
+- Le FX du coût de base reste fixé à la date de transaction.
+- Le PMP n'est **jamais** utilisé comme prix de valorisation.
+
+Voir [Résolution des Prix](price-resolution.md) pour le contrat du resolver et la sémantique de la qualité des données.
 
 ---
 
@@ -119,7 +124,7 @@ Trois pools accumulateurs suivent la provenance du cash. $K$ et $R$ sont mainten
 
     Un BUY sur le courtier $b_1$ ne peut consommer que $R_{b_1}$, jamais $R_{b_2}$. Le cash ne se déplace pas par magie entre les courtiers — seuls les transferts explicites déplacent les soldes des pools.
 
-### Règles de mise à jour (par transaction sur le courtier $b$, chronologique)
+### 🔁 de mise à jour (par transaction sur le courtier $b$, chronologique)
 
 | Icône & Type | Formules de Mise à Jour | Logique & Description |
 |:---:|---|---|
@@ -133,7 +138,7 @@ Trois pools accumulateurs suivent la provenance du cash. $K$ et $R$ sont mainten
 
 Si les dates de départ et d'arrivée diffèrent, le transfert est "en transit" : soustrait de $s$ au jour du départ, ajouté à $d$ au jour de l'arrivée. Entre ces dates, $\sum K_b + \sum R_b < \mathrm{Cash}_{\text{like}}$ du montant en transit — géré par une réconciliation proportionnelle.
 
-### Agrégation pour la sortie
+### 🧮 pour la sortie
 
 $$
 \mathrm{CashFromCapital}(t) = \sum_{b \in S} K_b(t)
@@ -143,7 +148,7 @@ $$
 \mathrm{CashFromReturns}(t) = \sum_{b \in S} R_b(t)
 $$
 
-### Invariant de réconciliation
+### ⚖️ de réconciliation
 
 $$
 \mathrm{Cash}_{\text{like}}(t) \approx \sum_{b \in S} K_b(t) + \sum_{b \in S} R_b(t)
@@ -162,18 +167,23 @@ $$
 $$
 
 $$
-\mathrm{PnL}(a,b) = \Delta\mathrm{UGL}(a,b) + \mathrm{Realized}(a,b) + \mathrm{Income}(a,b) - \mathrm{Fees}(a,b)
+\mathrm{PnL}(a,b) = \Delta\mathrm{UGL}(a,b) + \mathrm{Realized}(a,b) + \mathrm{Income}(a,b) - \mathrm{FeesTaxes}(a,b)
 $$
 
-Ensemble des positions de contribution :
+Ensemble des positions contributives :
 
 $$
-\mathcal{P} = \mathcal{P}(t_0) \cup \mathcal{P}(t_1) \cup \mathrm{keys}(\text{Realized}) \cup \mathrm{keys}(\text{Income}) \cup \mathrm{keys}(\text{Fees})
+\mathcal{P} = \text{positions avec activité ACHAT/VENTE/AJUSTEMENT/TRANSFERT ou quantité limite}
 $$
 
-Les éléments non alloués (frais/revenus sans `asset_id`) sont groupés par courtier.
+Le P&L de période au niveau du portefeuille expose également un résidu :
 
----
+$$
+\mathrm{Other} = \mathrm{PnL}_{period} - \Delta\mathrm{UGL} - \mathrm{Realized} - \mathrm{Income} + \mathrm{FeesTaxes}
+$$
+
+Les frais/revenus non alloués sans `asset_id` sont regroupés par courtier en tant qu'autres effets de période.
+
 
 ## 📐 8. Gain/Perte Réalisé
 
@@ -214,13 +224,19 @@ Calculées **après** les états quotidiens, lors d'une passe séparée :
 | MWRR | XIRR résolvant $\sum \frac{CF_i}{(1+r)^{d_i/365}} = 0$ | [MWRR](mwrr.md) |
 | ROI Simple | $(\mathrm{NAV} - \text{NetInvested}) / \text{NetInvested}$ | [ROI](roi.md) |
 | Effet de Timing | $\text{MWRR}_{\text{cum}} - \text{TWRR}_{\text{cum}}$ | [Effet de Timing](timing-effect.md) |
+| Net Annualized Return | $(1+r_{\mathrm{net}})^{365/d}-1$ | [Net Annualized Return](net-annualized-return.md) |
+
+---
+
 
 ---
 
 ## 🔗 Liens connexes
 
-- 💼 [NAV](nav.md) — évaluation instantanée
-- 📖 [Valeur Comptable](book-value.md) — agrégat de la base de coût
-- 📊 [P&L de Période](period-pnl.md) — gain/perte sur fenêtre avec contribution
-- 💸 [Capital Déposé](deposited-capital.md) — détails des 3-pools et exemples concrets
+- 💼 [NAV](nav.md) — valorisation instantanée (snapshot)
+- 🧭 [Résolution des Prix](price-resolution.md) — resolver unifié de valorisation
+- 📈 [Net Annualized Return](net-annualized-return.md) — définitions CAGR pour positions, période et FIFO
+- 📖 [Book Value](book-value.md) — agrégat du coût de base
+- 📊 [Period P&L](period-pnl.md) — gains/pertes sur une fenêtre temporelle avec contribution
+- 💸 [Deposited Capital](deposited-capital.md) — détails sur les 3 pools et exemples pratiques
 - 📈 [PMP](../weighted-average-cost.md) — méthode de coût itérative

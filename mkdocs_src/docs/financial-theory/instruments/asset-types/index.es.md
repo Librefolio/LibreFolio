@@ -14,7 +14,7 @@ LibreFolio admite una amplia gama de clases de activos para cubrir una cartera d
 | ![](../../../static/icons/asset-types/fund.png){: width="32" } | **Fondo Mutuo** | `FUND` | Fondos de inversión gestionados profesionalmente. | [📖](mutual-fund.md) |
 | ![](../../../static/icons/asset-types/hold.png){: width="32" } | **Materias Primas** | `HOLD` | Activos físicos como Oro, Plata o Diamantes mantenidos para su valor a largo plazo. | [📖](commodities.md) |
 | ![](../../../static/icons/asset-types/other.png){: width="32" } | **Otros** | `OTHER` | Cualquier otra clase de activo (ej. Arte, Capital Privado, Coleccionables). | [📖](other.md) |
-| ![](../../../static/icons/asset-types/other.png){: width="32" } | **Índice y Benchmark** | `—` | Índices de mercado (S&amp;P 500, MSCI World) utilizados como benchmarks de referencia — no negociables directamente. | [📖](index-benchmark.md) |
+| ![](../../../static/icons/asset-types/index.png){: width="32" } | **Índice y Benchmark** | `—` | Índices de mercado (S&amp;P 500, MSCI World) utilizados como benchmarks de referencia — no negociables directamente. | [📖](index-benchmark.md) |
 
 ---
 

@@ -127,7 +127,7 @@ class InvestEngineBrokerProvider(BRIMProvider):
         except Exception:
             return False
 
-    def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:
+    def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:  # noqa: C901 — flat row loop: validation guards and per-type sign rules, no nested logic
         """Parse InvestEngine CSV export file."""
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []

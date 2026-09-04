@@ -19,15 +19,23 @@ request/response schemas, and even execute requests directly from your browser.
 
 FastAPI generates the API routes dynamically at startup based on the Python function definitions. This ensures that the documentation is always perfectly in sync with the code.
 
-The API is structured into routers, each handling a specific domain:
+The API is structured into routers, each handling a specific domain (all mounted under `/api/v1` by `backend/app/api/v1/router.py`):
 
 - `/auth`: Authentication (login, token refresh).
 - `/users`: User management.
-- `/assets`: Asset management (CRUD, price history).
+- `/settings`: User settings, admin-managed global settings, scheduler state/logs, and the cache admin routes (`/settings/cache/status`, `/settings/cache/clear/{name}`, `/settings/cache/clear-all` — see [Cache Registry & Admin](../architecture/settings_cache.md)).
+- `/system`: Server info and plugin diagnostics (`/system/plugin-diagnostics`).
+- `/uploads`: File uploads and media serving.
+- `/assets`: Asset management (CRUD, price history) — includes `/prices`, `/provider` (search, live quotes), `/events`.
 - `/transactions`: Transaction management.
+- `/brokers`: Broker management and sharing — includes `/import` (BRIM broker report import).
+- `/backup`: Backup & export.
 - `/portfolio`: Portfolio analysis and metrics.
-- `/fx`: Foreign exchange operations.
-- `/brim`: Broker report import.
+- `/fx`: Foreign exchange operations — includes `/fx/providers` and `/fx/currencies`.
+- `/signals`: Domain-agnostic signal preview (`POST /signals/preview`).
+- `/risk`: Risk analysis (beta) — analytics catalog, queries, scenario catalog.
+- `/ai-export`: Versioned AI Export datasets and analyses.
+- `/utilities`: Reference data (ISO currencies, etc.).
 
 ## 📋 Pydantic Schemas
 

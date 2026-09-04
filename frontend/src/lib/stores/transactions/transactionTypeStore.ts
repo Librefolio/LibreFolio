@@ -180,7 +180,7 @@ export function getCostBasisRule(type: string, side: 'from' | 'to' | 'self'): Co
 }
 
 /** Icon URL for a transaction type. */
-export function getTypeIconUrl(type: string | null | undefined): string {
+export function getTransactionTypeIconUrl(type: string | null | undefined): string {
     const code = (type ?? '').toUpperCase();
     if (_cache) {
         const st = _cache.transaction_types.find((t) => t.code === code);
@@ -190,9 +190,6 @@ export function getTypeIconUrl(type: string | null | undefined): string {
     const slug = code.toLowerCase().replace(/_/g, '-');
     return `/icons/transactions/${slug}.png`;
 }
-
-/** Alias matching the old transactionTypes.ts export name. */
-export const getTransactionTypeIconUrl = getTypeIconUrl;
 
 /** Languages with a built mkdocs site (besides default `en`). */
 const DOC_LANGS = new Set(['it', 'fr', 'es']);
@@ -292,7 +289,7 @@ export function buildTransactionTypeOptions(t: (key: string) => string): Array<{
     return TX_TYPES.map((tt) => ({
         value: tt,
         label: t(`transactions.types.${tt}`) || tt,
-        icon: getTypeIconUrl(tt),
+        icon: getTransactionTypeIconUrl(tt),
     }));
 }
 

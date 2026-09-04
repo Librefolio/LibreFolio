@@ -169,10 +169,10 @@ Merge related operations (e.g. two partial fills of the same order) into a singl
 
 ### 🗑️ Delete Linked Pair
 
-When deleting a transaction that is part of a linked pair (FX trade, transfer), you can choose to remove just one leg or both.
+Deleting a transaction that is part of a linked pair (FX trade, transfer) opens the **bulk delete workspace**: the pair is staged as one collapsed row pre-marked for deletion, and a split hint lets you remove just one leg instead of both.
 
 <div class="screenshot-container">
-    <img class="gallery-img" data-category="transactions" data-name="bulk-delete-pair-modal" alt="Delete Linked Pair Modal">
+    <img class="gallery-img" data-category="transactions" data-name="bulk-delete-pair-modal" alt="Bulk delete workspace with a linked pair marked for deletion">
 </div>
 
 ---

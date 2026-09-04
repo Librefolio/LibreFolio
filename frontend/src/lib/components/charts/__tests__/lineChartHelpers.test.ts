@@ -31,6 +31,40 @@ describe('buildMainSeries', () => {
         expect(result[0].itemStyle.color).toBe(hexToRgba(GREEN, 1));
     });
 
+    it('keeps legacy output unchanged when no point is missing', () => {
+        const values = [1.2, 1.25, 1.3];
+        const staleDays = values.map(() => 0);
+        const result = buildMainSeries(values, staleDays, BASE_COLOR, GREEN, RED, false, false, 2, 'Value', false, 0, false);
+
+        expect(result).toEqual([
+            {
+                type: 'line',
+                name: 'Value',
+                data: [1.2, 1.25, 1.3],
+                smooth: false,
+                symbol: 'none',
+                showSymbol: false,
+                sampling: 'lttb',
+                yAxisIndex: 0,
+                lineStyle: {width: 2, color: hexToRgba(BASE_COLOR, 1)},
+                itemStyle: {color: hexToRgba(BASE_COLOR, 1)},
+                emphasis: {focus: 'none'},
+                z: 2,
+            },
+        ]);
+    });
+
+    it('renders null values as explicit gaps instead of connecting across missing rates', () => {
+        const values = [1.2, null, 1.3];
+        const staleDays = values.map(() => 0);
+        const result = buildMainSeries(values, staleDays, BASE_COLOR, GREEN, RED, false, false, 2, 'Value', false, 0, false);
+
+        expect(result).toHaveLength(2);
+        expect(result.every((series) => !('connectNulls' in series))).toBe(true);
+        expect(result[0].data).toEqual([1.2, null, null]);
+        expect(result[1].data).toEqual([null, null, 1.3]);
+    });
+
     it('caps series count for a pathologically choppy baseline-crossing series (perf guard)', () => {
         // Alternating short runs (2-3 points each) crossing the baseline hundreds of
         // times — simulates decades of volatile daily prices. Without the Step 2b

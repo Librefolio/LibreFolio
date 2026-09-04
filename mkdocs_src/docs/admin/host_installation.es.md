@@ -105,9 +105,11 @@ cp .env.example .env
 
 Los ajustes predeterminados funcionan de inmediato. A continuación se presentan las variables clave:
 
-* **`PORT`**: Puerto de escucha del servidor (por defecto: `6040`).
-* **`LIBREFOLIO_DATA_DIR`**: Ruta del directorio donde se almacenan la base de datos, las subidas y los logs (por defecto: `./backend/data/prod`).
-* **`LOG_LEVEL`**: Nivel de detalle de los logs (por defecto: `INFO`).
+| Variable | Predeterminado | Descripción |
+| --- | --- | --- |
+| `PORT` | `6040` | Puerto de escucha del servidor. |
+| `LIBREFOLIO_DATA_DIR` | `./backend/data/prod` | Ruta del directorio donde se almacenan la base de datos, las subidas y los logs. |
+| `LOG_LEVEL` | `INFO` | Nivel de detalle de los logs. |
 
 Para una descripción completa de todas las variables de entorno soportadas, consulte la [Guía de Variables de Entorno](configuration.md).
 
@@ -121,7 +123,7 @@ pipenv run ./dev.py server
 
 El servidor estará disponible en `http://localhost:6040`.
 
-#### Opciones del Comando del Servidor
+#### Server del Comando del Servidor
 
 | Bandera | Descripción |
 |------|-------------|

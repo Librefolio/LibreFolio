@@ -76,12 +76,32 @@ export interface TrySaveOptions {
  * Priority:
  *   1. Axios response → ``err.response.data.detail`` (FastAPI).
  *      - string → used as-is.
- *      - object with ``.message`` → used.
- *      - array (Pydantic validation errors) → first ``msg`` field.
+ *      - array (Pydantic validation errors) → summarised by
+ *        ``formatValidationIssues``.
+ *      - object with ``.message`` / ``.error`` / ``.detail`` → used.
  *   2. ``err.response.statusText`` + status code.
  *   3. ``err.message`` (native Error).
  *   4. ``String(err)``.
+ *
+ * Whatever rung answers, the result is discarded in favour of ``fallback`` when
+ * it turns out to say nothing — see ``isUninformative``.
  */
+/**
+ * Text that technically exists and tells the user nothing.
+ *
+ * Three shapes reach the last rung of the ladder below, and all three are worse
+ * than the caller's own sentence: an empty string (a thrown `[]`), a bare error
+ * class name (`new Error('')` stringifies to `"Error"`, and so do its
+ * subclasses), and the default object stringification (`"[object Object]"`,
+ * which is what an axios error with no `detail` and no `statusText` produces).
+ */
+const UNINFORMATIVE = /^(\[object \w+\]|\w*(Error|Exception))$/;
+
+function isUninformative(msg: string): boolean {
+    const trimmed = msg.trim();
+    return trimmed === '' || UNINFORMATIVE.test(trimmed);
+}
+
 export function extractErrorMessage(err: unknown, fallback: string = 'Operation failed'): string {
     if (!err) return fallback;
     // Axios-style error
@@ -94,11 +114,6 @@ export function extractErrorMessage(err: unknown, fallback: string = 'Operation 
             // Use the centralized extractor so callers get loc-aware summaries.
             const issues = extractValidationIssues(err);
             if (issues.length > 0) return formatValidationIssues(issues);
-            const first = detail[0];
-            if (first && typeof first === 'object') {
-                const msg = first.msg ?? first.message;
-                if (msg) return typeof msg === 'string' ? msg : String(msg);
-            }
         }
         if (typeof detail === 'object') {
             const msg = detail.message ?? detail.error ?? detail.detail;
@@ -108,12 +123,23 @@ export function extractErrorMessage(err: unknown, fallback: string = 'Operation 
     const status = anyErr?.response?.status;
     const statusText = anyErr?.response?.statusText;
     if (status && statusText) return `HTTP ${status} — ${statusText}`;
-    if (anyErr?.message && typeof anyErr.message === 'string') return anyErr.message;
-    try {
-        return String(err);
-    } catch {
-        return fallback;
+    let last: string;
+    if (anyErr?.message && typeof anyErr.message === 'string') {
+        last = anyErr.message;
+    } else {
+        try {
+            last = String(err);
+        } catch {
+            return fallback;
+        }
     }
+    // The point of `fallback` is to be the caller's own translated sentence, and
+    // for a long time it was nearly unreachable: the ladder ends at `String(err)`,
+    // which always produces *something*, so a thrown `Error('')` reached the user
+    // as the word "Error" while twelve call sites held a perfectly good message
+    // in four languages. A word that names a class is not a report of what went
+    // wrong.
+    return isUninformative(last) ? fallback : last;
 }
 
 /**

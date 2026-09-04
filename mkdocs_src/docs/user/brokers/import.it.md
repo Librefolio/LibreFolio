@@ -28,7 +28,7 @@ Per una spiegazione dettagliata dei campi della transazione e delle regole di va
 
 Il pulsante **Importa** (icona `Upload`) avvia la procedura guidata **BRIM**. Questo modulo ti consente di importare in massa gli estratti conto esportati dal tuo broker (formati CSV o Excel), eseguire validazioni automatiche di integrità e mappare i ticker agli asset locali prima del commit finale.
 
-### Il Flusso di Importazione
+### 🖼️ Il Flusso di Importazione
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-broker-import" data-carousel-interval="6000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="import-modal" data-title="📥 Quick Import Modal" alt="Import Modal">
@@ -50,7 +50,14 @@ La procedura guidata procede attraverso i seguenti passaggi:
 4. **Risoluzione Asset**: Se l'estratto conto contiene ticker o ISIN che non esistono nel tuo registro asset locale, BRIM mostra un passaggio di mappatura. Puoi:
  * Mappare il ticker a un asset esistente.
  * Creare un nuovo asset direttamente da questa schermata, precompilato con i dettagli estratti dall'estratto conto.
-5. **Staging Massivo & Commit**: Rivedi l'elenco di staging delle transazioni pulite e uniche. Deseleziona le operazioni che desideri escludere, quindi fai clic su **Commit** per scrivere i record nel registro del tuo portafoglio.
+5.  **Filtro Data Apertura**: Se una riga analizzata è antecedente alla data di apertura del broker, la procedura guidata la contrassegna come **Antecedente apertura**, disabilita la relativa casella di controllo e la esclude dall'importazione. Le righe alla data di apertura sono consentite. Usa **Modifica data broker** e ricontrolla/aggiorna se necessario.
+6.  **Staging Massivo & Commit**: Rivedi l'elenco di staging delle transazioni pulite e uniche. Deseleziona le operazioni che desideri escludere, quindi fai clic su **Commit** per scrivere i record nel registro del tuo portafoglio.
+
+---
+
+## ⚠️ Avvisi Asset
+
+Alcuni plugin collegano avvisi informativi agli asset estratti. Ad esempio, Intesa Sanpaolo e Crédit Agricole possono avvisare che un titolo potrebbe essere scaduto/rimborsato e difficile da trovare online. La finestra modale di creazione asset raggruppa questi avvisi in banner ambra; sono informativi e non modificano l'importazione delle transazioni.
 
 ---
 
@@ -62,3 +69,5 @@ Fai clic sul pulsante **Mostra Cronologia Importazioni** (icona `FileText`) per 
 - Righe elaborate e numero totale di transazioni sottoposte a commit.
 - Timestamp del caricamento.
 - Utente che ha eseguito l'importazione.
+
+

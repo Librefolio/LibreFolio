@@ -9,6 +9,7 @@
  */
 
 import {canEditBroker, canEditPaired} from '$lib/stores/reference/brokerStore';
+import {registerClientSessionReset} from '$lib/stores/app/clientSession';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -44,21 +45,8 @@ export function txStoreGet(id: number): TXReadItem | undefined {
     return _map.get(id);
 }
 
-/** Get the linked partner of a transaction (via related_transaction_id). */
-export function txStoreGetPartner(id: number): TXReadItem | undefined {
-    const tx = _map.get(id);
-    if (!tx?.related_transaction_id) return undefined;
-    return _map.get(tx.related_transaction_id);
-}
-
 /** Get all transactions as an array. */
 export function txStoreGetAll(): TXReadItem[] {
-    return [..._map.values()];
-}
-
-/** Get all "main" rows (those not exclusively partner-only).
- *  In practice this returns everything since main+partners are merged. */
-export function txStoreGetMain(): TXReadItem[] {
     return [..._map.values()];
 }
 
@@ -89,6 +77,8 @@ export function txStoreInvalidate(): void {
     _map = new Map();
     _version++;
 }
+
+registerClientSessionReset('txStore', txStoreInvalidate);
 
 /** Reactive version number — use in `$derived`/`$effect` to track changes. */
 export function txStoreGetVersion(): number {

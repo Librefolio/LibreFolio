@@ -87,7 +87,15 @@ Si le relevé contient des symboles boursiers ou des ISIN qui ne sont pas dans v
  <img class="gallery-img" data-category="brokers" data-name="import-wizard-step4-resolution" alt="Assistant - Étape 4 : Résolution des actifs" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-#### ⚠️ Détection des doublons
+#### ⛔ Date d'ouverture du courtier
+
+Si le courtier cible a une date d'ouverture définie, l'assistant signale les lignes dont la date est **strictement antérieure** avec le statut `Avant l'ouverture`. Ces lignes sont désélectionnées et ne peuvent pas être importées ; une ligne le jour de l'ouverture reste valide. Utilisez **Modifier la date du courtier** puis réessayez/actualisez si la date est incorrecte.
+
+#### ⚠️ Avertissements sur les actifs
+
+Certains plugins associent des avertissements d'information aux actifs extraits. Par exemple, Intesa Sanpaolo et Crédit Agricole peuvent avertir qu'un titre peut être échu ou remboursé. Ces avertissements apparaissent sous forme de bannières orange lorsque vous créez/associez l'actif ; ils ne bloquent pas l'importation.
+
+#### ⚠️ Détection des Doublons
 
 Le système compare les entrées analysées avec votre base de données pour trouver des doublons potentiels en fonction du type, de la date, du montant, de la quantité et de la description.
 

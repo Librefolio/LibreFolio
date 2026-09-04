@@ -1,0 +1,94 @@
+{
+  "evaluation_date": "2026-07-27",
+  "seed": 123456,
+  "scramble_seed": 654321,
+  "sequence_dimension": 8,
+  "risk_free_rate": 0.03,
+  "dividend_rate": 0.0,
+  "multi_asset": {
+    "spots": [
+      100.0,
+      80.0
+    ],
+    "volatilities": [
+      0.2,
+      0.3
+    ],
+    "correlation": [
+      [
+        1.0,
+        0.35
+      ],
+      [
+        0.35,
+        1.0
+      ]
+    ],
+    "horizon_days": 30,
+    "steps": 30
+  },
+  "riskfolio_returns": {
+    "A": [
+      0.01,
+      -0.006,
+      0.012,
+      0.004,
+      -0.008,
+      0.015,
+      0.002,
+      -0.004,
+      0.009,
+      0.006,
+      -0.003,
+      0.011
+    ],
+    "B": [
+      0.004,
+      0.003,
+      -0.002,
+      0.005,
+      0.001,
+      0.006,
+      0.002,
+      0.0,
+      0.004,
+      0.003,
+      0.001,
+      0.005
+    ],
+    "C": [
+      -0.003,
+      0.008,
+      0.005,
+      -0.004,
+      0.01,
+      -0.002,
+      0.007,
+      0.009,
+      -0.001,
+      0.006,
+      0.008,
+      -0.005
+    ]
+  },
+  "quantlib_capabilities": [
+    "GeneralizedBlackScholesProcess",
+    "BlackScholesMertonProcess",
+    "HestonProcess",
+    "Merton76Process",
+    "VarianceGammaProcess",
+    "MersenneTwisterUniformRng",
+    "SobolRsg",
+    "Burley2020SobolRsg",
+    "InvCumulativeSobolGaussianRsg",
+    "InvCumulativeBurley2020SobolGaussianRsg",
+    "GaussianPathGenerator",
+    "GaussianMultiPathGenerator",
+    "GaussianSobolPathGenerator",
+    "GaussianSobolMultiPathGenerator",
+    "FlatForward",
+    "FixedRateBond",
+    "ZeroCouponBond",
+    "BondFunctions"
+  ]
+}

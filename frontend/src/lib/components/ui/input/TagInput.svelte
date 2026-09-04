@@ -5,7 +5,7 @@
     <TagInput value={tags} availableTags={allTags} onchange={(v) => tags = v} />
 
   Features:
-  - Type text → Enter/Space/Comma → creates chip
+  - Type text → Enter/Comma/Semicolon/Tab → creates chip (space is allowed inside a value)
   - Click × on chip → removes
   - Dropdown with filtered available tags
   - Arrow Up/Down navigate suggestions, Enter selects highlighted
@@ -106,23 +106,24 @@
             e.preventDefault();
             if (!dropdownOpen) dropdownOpen = true;
             highlightedIndex = Math.min(highlightedIndex + 1, suggestions.length - 1);
-            // Scroll into view
-            const el = document.querySelector(`[data-testid="tag-suggestion-idx-${highlightedIndex}"]`);
-            el?.scrollIntoView({block: 'nearest'});
+            scrollHighlightIntoView();
         } else if (e.key === 'ArrowUp') {
             e.preventDefault();
             highlightedIndex = Math.max(highlightedIndex - 1, -1);
-            if (highlightedIndex >= 0) {
-                const el = document.querySelector(`[data-testid="tag-suggestion-idx-${highlightedIndex}"]`);
-                el?.scrollIntoView({block: 'nearest'});
-            }
-        } else if (e.key === 'Enter' || e.key === ',' || e.key === ' ') {
+            if (highlightedIndex >= 0) scrollHighlightIntoView();
+        } else if (e.key === 'Enter' || e.key === ',' || e.key === ';' || e.key === 'Tab') {
+            const hasHighlight = highlightedIndex >= 0 && highlightedIndex < suggestions.length;
+            const hasBuffer = inputBuffer.trim().length > 0;
+            // Tab must preserve default focus navigation when there is nothing to commit.
+            // Space is intentionally NOT a separator: identifier/tag values may contain spaces
+            // (tags are stored comma-separated, identifier_other as a JSON list).
+            if (e.key === 'Tab' && !hasHighlight && !hasBuffer) return;
             e.preventDefault();
-            if (highlightedIndex >= 0 && highlightedIndex < suggestions.length) {
+            if (hasHighlight) {
                 addTag(suggestions[highlightedIndex]);
                 inputBuffer = '';
                 highlightedIndex = -1;
-            } else if (inputBuffer.trim()) {
+            } else if (hasBuffer) {
                 addTag(inputBuffer);
                 inputBuffer = '';
             }
@@ -134,6 +135,22 @@
             // No tag focused → remove last tag (original behavior)
             removeTag(value.length - 1);
         }
+    }
+
+    /**
+     * Keep the highlighted suggestion visible while navigating with the arrows.
+     *
+     * The lookup used to be `[data-testid="tag-suggestion-idx-${i}"]`, a testid the
+     * template has never rendered — it names suggestions by their *value*. The query
+     * therefore always returned null and the scroll never happened: with more than a
+     * screenful of suggestions, arrowing down walked the highlight out of view and
+     * the user was navigating a list they could no longer see. Indexing by
+     * `data-idx` is what makes the position addressable without making the testid
+     * depend on the tag's text.
+     */
+    function scrollHighlightIntoView() {
+        const el = document.querySelector(`[data-testid="tag-input-dropdown"] [data-idx="${highlightedIndex}"]`);
+        el?.scrollIntoView({block: 'nearest'});
     }
 
     function handleSuggestionClick(tag: string) {
@@ -231,6 +248,7 @@
                         handleSuggestionClick(suggestion);
                     }}
                     data-testid={`tag-suggestion-${suggestion}`}
+                    data-idx={idx}
                     aria-selected={idx === highlightedIndex}
                     role="option"
                 >

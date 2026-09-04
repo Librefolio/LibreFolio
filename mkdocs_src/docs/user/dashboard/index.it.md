@@ -44,9 +44,13 @@ Nella parte superiore destra della dashboard, hai diversi controlli per personal
 - **Intervallo temporale** — predefiniti da 1 settimana a Tutto il periodo (MAX), o un intervallo personalizzato tramite il selettore di date.
 - **Filtro broker** — filtra tutte le metriche per uno o più broker specifici.
 - **Valuta di destinazione** — converte dinamicamente tutti gli asset e i saldi di liquidità in un'unica valuta selezionata per una visione aggregata.
-- **Esportazione AI** (:material-brain:) — Clicca questo pulsante per copiare negli appunti un riepilogo testuale dello stato attuale del tuo portafoglio, ottimizzato per essere incollato in LLM (es. Gemini). Puoi scegliere tra:
- - **Esportazione Completa**: Include tutti i valori KPI, le posizioni, i pesi e le allocazioni.
- - **Solo Dati**: Una rappresentazione JSON/testuale compatta delle tue partecipazioni e dei saldi.
+- **Esportazione AI** (:material-brain:) — apre un'esportazione negli appunti.
+  Scegli **Fotografia dati** per copiare solo dati fattuali, oppure un **task di
+  analisi** che include automaticamente istruzioni e contratto di risposta, poi
+  seleziona il **livello di dettaglio** (Compatto, Standard o Completo).
+  L'istantanea del backend segue filtro broker attivo, intervallo di date e
+  valuta di destinazione; LibreFolio non contatta servizi AI. Consulta la
+  [Esportazione AI Portafoglio](../ai-export/portfolio.md) o la [guida Esportazione AI](../ai-export/index.md).
 
 !!! tip "L'ambito è importante"
 
@@ -65,6 +69,7 @@ Se mancano prezzi o tassi di cambio alla data di fine, appare un banner nella pa
 - 💰 **[Schede KPI](kpi-cards.md)** — Spiegazione di Patrimonio Netto, P&L di periodo e Rendimenti
 - 📊 **[Grafici](charts.md)** — Spiegazione del Grafico di Crescita e del Pannello di Allocazione
 - 🔍 **[Posizioni e Analisi](positions.md)** — Posizioni aperte, viste tabella vs. mappa e analisi dettagliata dei lotti fiscali FIFO.
+
 
 ## 🔗 Teoria correlata
 

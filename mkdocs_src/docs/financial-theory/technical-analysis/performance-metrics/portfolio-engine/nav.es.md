@@ -1,10 +1,10 @@
-# 💼 Valor Liquidativo (NAV) / Patrimonio Neto
+# 💼 Valor Liquidativo Neto (NAV) / Patrimonio Neto
 
 *[⬅️ Volver a la Descripción General de Métricas de Rendimiento](../index.md)*
 
 ## 💡 ¿Qué es el NAV?
 
-**Valor Liquidativo (NAV)** es la valoración total de mercado de tu cartera en un momento $t$. Responde a: *"¿Cuánto vale la cartera ahora mismo?"*
+El **Valor Liquidativo Neto (NAV)** es la valoración total de mercado de su cartera en un punto en el tiempo $t$. Responde a: *"¿Cuánto vale la cartera en este momento?"*
 
 ---
 
@@ -14,28 +14,37 @@ $$
 \boxed{\mathrm{NAV}(t) = \mathrm{MV}(t) + \mathrm{Cash}(t) + \mathrm{InTransit}(t)}
 $$
 
-Donde $\mathrm{MV}(t) = \sum_{(a,b) \in S} q(a,b,t) \cdot p(a,t) \cdot \mathrm{fx}(\mathrm{ccy}_p, C^*, t)$
+Donde:
 
-🔗 Consulta **[Portfolio Engine — §5 Aggregation](index.md#5-portfolio-aggregation)** para la derivación completa.
+$$
+\mathrm{MV}(t)=
+\sum_{(a,b)\in S}
+\frac{q(a,b,t)}{qbq(a)}
+\cdot \operatorname{mark}(a,t)
+\cdot \mathrm{fx}(\mathrm{ccy}_{mark}, C^*, t)
+$$
+
+🔗 Ver **[Portfolio Engine — §5 Aggregation](index.md#5-portfolio-aggregation)** para la derivación completa.
 
 ---
 
 ## 🔗 Cadena de Precios de Valoración {: #valuation-price-chain }
 
-El precio $p(a,t)$ sigue una jerarquía estricta:
+La marca $\operatorname{mark}(a,t)$ proviene del resolver unificado:
 
-1. **Precio de mercado** — PriceHistory con relleno hacia atrás (último $\leq t$)
-2. **Último precio de compra** — precio unitario de COMPRA más reciente de $V(u)$ (todos los brókers visibles)
-3. **Falta** — posición excluida del NAV
+1. **MARKET** — cotización de cierre de mercado del mismo día.
+2. **TRADE_AVG** — observación promedio COMPRA/VENTA/AJUSTE del mismo día.
+3. **CARRIED** — última observación anterior a $t$, proyectada hacia adelante (LOCF).
+4. **MISSING** — sin observación en o antes de la fecha $t$.
 
-El **PMP** *nunca* se usa para valoración. Consulta **[Portfolio Engine — §2](index.md#2-valuation-price)**.
+Las marcas permanecen en moneda nativa hasta la valoración; la conversión FX ocurre en $t$. El PMC **nunca** se utiliza para la valoración. Ver [Resolución de Precios](price-resolution.md).
 
 ---
 
 ## 📝 Ejemplo
 
-| Componente | Cantidad |
-|------------|----------|
+| Componente | Monto |
+|------------|-------|
 | Valor de Mercado de Activos | €32,759 |
 | Saldo de Efectivo | €631 |
 | En Tránsito | €0 |
@@ -48,8 +57,8 @@ $$
 
 ## ⚖️ Distinciones Clave
 
-- **NAV vs [Valor Contable](book-value.md)**: NAV = valor de mercado; valor contable = costo de adquisición. Diferencia = ganancias no realizadas.
-- **NAV vs [PnL del Período](period-pnl.md)**: NAV = instantánea; PnL del Período = cambio ajustado por flujo a lo largo del tiempo.
+- **NAV vs [Book Value](book-value.md)**: NAV = valor de mercado; Book = coste de adquisición. Diferencia = ganancias no realizadas.
+- **NAV vs [Period PnL](period-pnl.md)**: NAV = instantánea; Period PnL = cambio ajustado por flujos en el tiempo.
 
 ---
 
@@ -57,6 +66,10 @@ $$
 
 | Fuente de Valoración | Confianza |
 |----------------------|-----------|
-| `MARKET_PRICE` | Completa — PriceHistory disponible |
-| `LAST_BUY_PRICE` | Parcial — usando precio de transacción |
-| `MISSING` | Ninguna — excluida del NAV |
+| `MARKET_PRICE` | Completa — cotización real, exacta o proyectada |
+| `LAST_TRADE_PRICE` | Parcial — marca del resolver de origen transacción |
+| `MISSING` | Ninguna — excluido del NAV |
+
+`estimated=True` solo se aplica a marcas de origen TRADE. Una cotización MARKET obsoleta es stale pero no estimated.
+
+Las valoraciones de origen transacción de más de 14 días activan la advertencia "activos valorados al coste / sin precio de mercado durante más de dos semanas" en la fecha de valoración.

@@ -28,7 +28,7 @@ import structlog
 
 from backend.app.db.models import TransactionType
 from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMValidationIssue
-from backend.app.schemas.common import Currency
+from backend.app.schemas.common import Currency, is_fiat_currency
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.provider_registry import BRIMProviderRegistry, register_provider
@@ -84,18 +84,6 @@ def _parse_decimal(value: str) -> Optional[Decimal]:
         return Decimal(value)
     except InvalidOperation:
         return None
-
-
-def _is_fiat_currency(code: str) -> bool:
-    """Return True when code can be represented by Currency (ISO 4217)."""
-    code = code.strip().upper()
-    if not code:
-        return False
-    try:
-        Currency(code=code, amount=Decimal("0"))
-        return True
-    except Exception:
-        return False
 
 
 @register_provider(BRIMProviderRegistry)
@@ -160,7 +148,7 @@ class BitvavoBrokerProvider(BRIMProvider):
         extracted_assets[asset_id] = BRIMExtractedAssetInfo(extracted_symbol=symbol, extracted_isin=None, extracted_name=f"{symbol} (Crypto)")
         return asset_id, next_fake_id - 1
 
-    def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:
+    def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:  # noqa: C901 — flat row-variant dispatch (if/elif over tx types), no nested decisions
         """Parse Bitvavo CSV export file."""
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []
@@ -228,7 +216,7 @@ class BitvavoBrokerProvider(BRIMProvider):
                         if not symbol:
                             warnings.append(f"Row {row_num}: {tx_type_raw} missing currency, skipping")
                             continue
-                        if _is_fiat_currency(symbol):
+                        if is_fiat_currency(symbol):
                             tx_type = TransactionType.DEPOSIT if tx_type_raw == "deposit" else TransactionType.WITHDRAWAL
                             cash_amount_for_type = abs(quantity) if tx_type == TransactionType.DEPOSIT else -abs(quantity)
                             if cash_amount_for_type == 0:
@@ -298,7 +286,7 @@ class BitvavoBrokerProvider(BRIMProvider):
                     fee_amount = _parse_decimal(row.get(COL_FEE_AMOUNT, ""))
                     fee_currency = row.get(COL_FEE_CURRENCY, "").strip().upper()
                     if fee_amount and fee_amount > 0 and fee_currency:
-                        if _is_fiat_currency(fee_currency):
+                        if is_fiat_currency(fee_currency):
                             self._create_transaction(
                                 row_num=row_num,
                                 transactions=transactions,

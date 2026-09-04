@@ -8,12 +8,12 @@ L'analisi tecnica studia i **pattern di prezzo e le dinamiche di mercato** per i
 
 ### 📉 [Indicatori](indicators/index.md)
 
-Indicatori overlay che estraggono informazioni su trend, momentum o volatilità dai dati di prezzo. LibreFolio implementa quattro indicatori principali, ciascuno spiegato sia da una prospettiva **finanziaria** che di **elaborazione dei segnali**:
+Indicatori overlay che estraggono informazioni su trend, momentum, volatilità o volume dai dati di mercato. LibreFolio implementa **17 indicatori backend**, ciascuno spiegato sia da una prospettiva **finanziaria** che di **elaborazione dei segnali**:
 
-- **[EMA](indicators/ema.md)** — Media Mobile Esponenziale (tracciamento del trend)
-- **[MACD](indicators/macd.md)** — Moving Average Convergence Divergence (momentum)
-- **[RSI](indicators/rsi.md)** — Indice di Forza Relativa (ipercomprato/ipervenduto)
-- **[Bande di Bollinger](indicators/bollinger-bands.md)** — Involucro di volatilità adattivo
+- 📈 **[Trend](indicators/trend.md)** — EMA, SMA, KAMA, ADX, Aroon
+- ⚡ **[Momentum](indicators/momentum.md)** — RSI, MACD, ROC, Stochastic RSI, PPO, CCI
+- 🌊 **[Volatilità](indicators/volatility.md)** — Bande di Bollinger, ATR, NATR, Canali di Donchian
+- 📊 **[Volume](indicators/volume.md)** — OBV, MFI
 
 ### 🎯 [Benchmark Sintetici](synthetic-benchmarks/index.md)
 

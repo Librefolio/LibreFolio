@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 import uuid
 from abc import ABC, abstractmethod
 from datetime import datetime
@@ -39,9 +40,9 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import structlog
 from pydantic import ValidationError
-from sqlalchemy import and_, select
+from sqlalchemy import String, and_, cast, or_, select
 
-from backend.app.db.models import Transaction
+from backend.app.db.models import Asset, Transaction
 from backend.app.schemas.assets import FAAinfoFiltersRequest
 from backend.app.schemas.brim import (
     BRIMAssetCandidate,
@@ -127,7 +128,6 @@ class BRIMProvider(ABC):
 
         Examples: 'broker_generic_csv', 'directa_csv', 'degiro_xlsx'
         """
-        pass
 
     @property
     @abstractmethod
@@ -137,7 +137,6 @@ class BRIMProvider(ABC):
 
         Examples: 'Generic CSV', 'Directa CSV Export', 'Degiro XLSX'
         """
-        pass
 
     @property
     @abstractmethod
@@ -147,7 +146,6 @@ class BRIMProvider(ABC):
 
         Should explain what file formats are supported and any limitations.
         """
-        pass
 
     @property
     def supported_extensions(self) -> List[str]:  # pragma: no cover
@@ -271,7 +269,6 @@ class BRIMProvider(ABC):
         Returns:
             True if this plugin can likely parse the file
         """
-        pass
 
     @abstractmethod
     def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:
@@ -306,7 +303,6 @@ class BRIMProvider(ABC):
         Raises:
             BRIMParseError: If file cannot be parsed
         """
-        pass
 
     @property
     def docs_url(self) -> Optional[str]:
@@ -460,7 +456,6 @@ class BRIMProvider(ABC):
 
         Default: no-op.
         """
-        pass
 
     @staticmethod
     def detect_csv_delimiter(file_path: Path, lines_to_read: int = 15) -> str:
@@ -494,6 +489,29 @@ from backend.app.config import get_data_dir
 def get_broker_reports_dir() -> Path:
     """Get the broker reports directory based on current environment (prod/test)."""
     return get_data_dir() / "broker_reports"
+
+
+def _write_metadata_atomic(meta_path: Path, metadata: Dict[str, Any]) -> None:
+    """
+    Write a BRIM metadata file atomically.
+
+    ``Path.write_text`` truncates first and writes after, so a concurrent reader
+    can observe an empty or half-written file, and a crash in between leaves the
+    metadata permanently corrupt. Writing to a sibling temp file and renaming it
+    makes the swap atomic on POSIX: a reader sees either the old content or the
+    new one, never a mixture.
+
+    This does not make read-modify-write sequences safe against each other — two
+    writers still race for last-writer-wins — but it removes the failure mode
+    where the loser leaves unparseable JSON behind.
+    """
+    tmp_path = meta_path.with_suffix(meta_path.suffix + f".tmp.{uuid.uuid4().hex}")
+    try:
+        tmp_path.write_text(json.dumps(metadata, indent=2))
+        tmp_path.replace(meta_path)
+    finally:
+        if tmp_path.exists():
+            tmp_path.unlink(missing_ok=True)
 
 
 def _ensure_dirs(broker_id: Optional[int] = None) -> None:
@@ -588,7 +606,7 @@ def save_uploaded_file(
 
     # Write metadata JSON
     meta_path = uploaded_dir / f"{file_id}.json"
-    meta_path.write_text(json.dumps(metadata, indent=2))
+    _write_metadata_atomic(meta_path, metadata)
 
     logger.info(
         "Saved uploaded file",
@@ -687,7 +705,7 @@ def _find_metadata_path(file_id: str) -> Optional[Path]:
     return None
 
 
-def list_files(
+def list_files(  # noqa: C901 — flat directory scan over status/broker folders, no decision logic
     status: Optional[BRIMFileStatus] = None,
     broker_ids: Optional[List[int]] = None,
 ) -> List[BRIMFileInfo]:
@@ -805,7 +823,51 @@ def get_file_path(file_id: str) -> Optional[Path]:
         if fallback_path.exists():
             return fallback_path
 
+    # Last resort: scan every status folder, the way _find_metadata_path already
+    # does for the sidecar. The two are not always in agreement: _move_file
+    # renames the data file first and rewrites the metadata after, so a reader
+    # arriving in between computes the *old* folder for a file that already
+    # lives in the new one. Deriving the address from the status is only a
+    # shortcut; the file itself is the fact.
+    return _find_data_path(file_id, ext)
+
+
+def _find_data_path(file_id: str, ext: str) -> Optional[Path]:
+    """Locate a file's data by scanning every status folder and ``broker_*`` subdir."""
+    broker_reports_dir = get_broker_reports_dir()
+    for status in BRIMFileStatus:
+        status_folder = broker_reports_dir / status.value
+
+        candidate = status_folder / f"{file_id}{ext}"
+        if candidate.exists():
+            return candidate
+
+        for broker_dir in status_folder.glob("broker_*"):
+            if broker_dir.is_dir():
+                candidate = broker_dir / f"{file_id}{ext}"
+                if candidate.exists():
+                    return candidate
     return None
+
+
+def _relocated_path(file_id: str, file_path: Path) -> Optional[Path]:
+    """Return where a file went when a concurrent parse moved it, else ``None``.
+
+    Parsing a report transitions it ``uploaded → parsed``, which physically renames
+    the file. A path resolved a moment earlier is then stale, and every read through
+    it fails for a reason that has nothing to do with the file's contents — the
+    plugin reports "cannot read" about a file it reads perfectly well.
+
+    ``None`` means the caller's failure was genuine and must be propagated: either
+    the original path still exists (so the file never moved), or re-resolution finds
+    nothing new. Only a *demonstrated* move earns a retry.
+    """
+    if file_path.exists():
+        return None
+    moved_path = get_file_path(file_id)
+    if moved_path is None or moved_path == file_path:
+        return None
+    return moved_path
 
 
 def delete_file(file_id: str) -> bool:
@@ -928,7 +990,7 @@ def save_parse_result(
         if plugin is not None:
             plugin_version = plugin.plugin_version
             metadata["parsed_plugin_version"] = plugin_version
-    meta_path.write_text(json.dumps(metadata, indent=2))
+    _write_metadata_atomic(meta_path, metadata)
 
     logger.info(
         "Saved parse result to metadata",
@@ -1008,7 +1070,7 @@ def _move_file(file_id: str, target_status: BRIMFileStatus, error_message: Optio
         metadata["processed_at"] = utcnow().isoformat()
         if error_message:
             metadata["error_message"] = error_message
-        dst_meta.write_text(json.dumps(metadata, indent=2))
+        _write_metadata_atomic(dst_meta, metadata)
         src_meta.unlink()
 
     logger.info(
@@ -1065,14 +1127,28 @@ def parse_file(file_id: str, plugin_code: str, broker_id: int) -> BRIMParseOutpu
     if not plugin:
         raise ValueError(f"Plugin not found: {plugin_code}")
 
-    # Verify plugin can parse this file
+    # Verify plugin can parse this file. The guard reads the file, so it loses
+    # the same race as the parse below and needs the same re-resolution: a stale
+    # path makes can_parse() answer False, which would be reported to the user as
+    # "this plugin cannot read your file" about a file the plugin reads fine.
     if not plugin.can_parse(file_path):
-        raise ValueError(f"Plugin '{plugin_code}' cannot parse file '{file_path.name}'")
+        moved_path = _relocated_path(file_id, file_path)
+        if moved_path is None or not plugin.can_parse(moved_path):
+            raise ValueError(f"Plugin '{plugin_code}' cannot parse file '{file_path.name}'")
+        logger.info("File moved before parse check, retrying at new location", file_id=file_id, new_path=str(moved_path))
+        file_path = moved_path
 
     # Parse file
     logger.info("Parsing file with plugin", file_id=file_id, plugin_code=plugin_code, broker_id=broker_id)
 
-    output: BRIMParseOutput = plugin.parse(file_path, broker_id)
+    try:
+        output: BRIMParseOutput = plugin.parse(file_path, broker_id)
+    except Exception:
+        moved_path = _relocated_path(file_id, file_path)
+        if moved_path is None:
+            raise
+        logger.info("File moved during parse, retrying at new location", file_id=file_id, new_path=str(moved_path))
+        output = plugin.parse(moved_path, broker_id)
 
     logger.info(
         "File parsed successfully",
@@ -1091,7 +1167,7 @@ def parse_file(file_id: str, plugin_code: str, broker_id: int) -> BRIMParseOutpu
 # =============================================================================
 
 
-async def search_asset_candidates(
+async def search_asset_candidates(  # noqa: C901 — flat priority fallback chain, sequential guards only
     session,
     extracted_symbol: Optional[str],
     extracted_isin: Optional[str],
@@ -1104,9 +1180,21 @@ async def search_asset_candidates(
     Returns candidates with confidence levels and auto-selects if exactly 1 match.
 
     Priority:
-    1. ISIN exact match → EXACT confidence (Asset.identifier_isin)
-    2. Symbol exact match → MEDIUM confidence (Asset.identifier_ticker)
-    3. Name partial match → LOW confidence (display_name search)
+    1. ISIN exact match on ``Asset.identifier_isin`` → EXACT confidence
+    2. ISIN found in the ``Asset.identifier_other`` JSON list → HIGH confidence
+    3. Symbol exact match on ``Asset.identifier_ticker`` → MEDIUM confidence
+    4. Name partial match (identifier, then ``display_name``) → LOW confidence
+    5. Name found in the ``Asset.identifier_other`` JSON list → LOW confidence
+
+    Steps 1 and 2 run **together** and their results are merged (deduplicated by
+    ``asset_id``, strongest confidence wins). An ISIN stored in ``identifier_other``
+    is a deliberate user assertion — typically the non-tradeable "CUM" ISIN of an
+    Italian BTP, kept alongside the quoted one — so it must outrank any name
+    similarity. Previously it was evaluated last and only when nothing else had
+    matched, meaning a vaguely plausible name hit silently shadowed it.
+
+    Running both also surfaces duplicates: if the same ISIN is primary on one asset
+    and alternate on another, the user sees **both** candidates and can merge them.
 
     Args:
         session: AsyncSession for database queries
@@ -1119,37 +1207,33 @@ async def search_asset_candidates(
         - If exactly 1 candidate: auto_selected_id = that asset's ID
         - Otherwise: auto_selected_id = None
     """
-    candidates = []
+    candidates: List[BRIMAssetCandidate] = []
+    by_id: dict = {}
 
-    # Priority 1: ISIN exact match (EXACT confidence)
+    def _add(asset, confidence: BRIMMatchConfidence) -> None:
+        """Append a candidate, keeping the strongest confidence per asset."""
+        _add_candidate(candidates, by_id, asset, confidence)
+
+    # Priority 1: ISIN exact match on the primary column (EXACT confidence).
     if extracted_isin:
         results = await AssetCRUDService.list_assets(filters=FAAinfoFiltersRequest(isin=extracted_isin), session=session)
         for asset in results:
-            candidates.append(
-                BRIMAssetCandidate(
-                    asset_id=asset.id,
-                    symbol=asset.identifier_ticker,
-                    isin=asset.identifier_isin,
-                    name=asset.display_name,
-                    match_confidence=BRIMMatchConfidence.EXACT,
-                )
-            )
+            _add(asset, BRIMMatchConfidence.EXACT)
 
-    # Priority 2: Symbol exact match (MEDIUM confidence)
+    # Priority 2: ISIN stored among the alternate identifiers (HIGH confidence).
+    # Deliberately NOT guarded by `if not candidates` — see the docstring.
+    if extracted_isin:
+        results = await AssetCRUDService.list_assets(filters=FAAinfoFiltersRequest(identifier_other=extracted_isin), session=session)
+        for asset in results:
+            _add(asset, BRIMMatchConfidence.HIGH)
+
+    # Priority 3: Symbol exact match (MEDIUM confidence)
     if extracted_symbol and not candidates:
         results = await AssetCRUDService.list_assets(filters=FAAinfoFiltersRequest(ticker=extracted_symbol), session=session)
         for asset in results:
-            candidates.append(
-                BRIMAssetCandidate(
-                    asset_id=asset.id,
-                    symbol=asset.identifier_ticker,
-                    isin=asset.identifier_isin,
-                    name=asset.display_name,
-                    match_confidence=BRIMMatchConfidence.MEDIUM,
-                )
-            )
+            _add(asset, BRIMMatchConfidence.MEDIUM)
 
-    # Priority 3: Name partial match (LOW confidence)
+    # Priority 4: Name partial match (LOW confidence)
     if extracted_name and not candidates:
         # Try identifier partial match first
         results = await AssetCRUDService.list_assets(filters=FAAinfoFiltersRequest(identifier_contains=extracted_name), session=session)
@@ -1157,15 +1241,15 @@ async def search_asset_candidates(
             # Fall back to display_name search
             results = await AssetCRUDService.list_assets(filters=FAAinfoFiltersRequest(search=extracted_name), session=session)
         for asset in results:
-            candidates.append(
-                BRIMAssetCandidate(
-                    asset_id=asset.id,
-                    symbol=asset.identifier_ticker,
-                    isin=asset.identifier_isin,
-                    name=asset.display_name,
-                    match_confidence=BRIMMatchConfidence.LOW,
-                )
-            )
+            _add(asset, BRIMMatchConfidence.LOW)
+
+    # Priority 5: Soft broker label match against identifier_other (LOW confidence).
+    # Catches assets whose soft label (e.g. "BTP 1/12/2026 1.25%") was saved on a
+    # previous import. Still a last resort: a name is far weaker evidence than an ISIN.
+    if extracted_name and not candidates:
+        results = await AssetCRUDService.list_assets(filters=FAAinfoFiltersRequest(identifier_other=extracted_name), session=session)
+        for asset in results:
+            _add(asset, BRIMMatchConfidence.LOW)
 
     # Auto-select if exactly 1 candidate found
     auto_selected = candidates[0].asset_id if len(candidates) == 1 else None
@@ -1174,11 +1258,217 @@ async def search_asset_candidates(
 
 
 # =============================================================================
-# DUPLICATE DETECTION
+# BULK CANDIDATE SEARCH
 # =============================================================================
 
 
-async def detect_tx_duplicates(
+# Strongest first — used to decide whether a later, weaker match may override.
+_CONFIDENCE_RANK = {
+    BRIMMatchConfidence.EXACT: 0,
+    BRIMMatchConfidence.HIGH: 1,
+    BRIMMatchConfidence.MEDIUM: 2,
+    BRIMMatchConfidence.LOW: 3,
+}
+
+
+def _add_candidate(candidates: List, by_id: dict, asset, confidence: BRIMMatchConfidence) -> None:
+    """Append a candidate, keeping the strongest confidence per asset."""
+    existing = by_id.get(asset.id)
+    if existing is not None:
+        if _CONFIDENCE_RANK[confidence] < _CONFIDENCE_RANK[existing.match_confidence]:
+            existing.match_confidence = confidence
+        return
+    candidate = BRIMAssetCandidate(
+        asset_id=asset.id,
+        symbol=asset.identifier_ticker,
+        isin=asset.identifier_isin,
+        name=asset.display_name,
+        match_confidence=confidence,
+    )
+    by_id[asset.id] = candidate
+    candidates.append(candidate)
+
+
+def _like_to_regex(pattern: str) -> re.Pattern[str]:
+    """
+    Reproduce SQL ``LIKE`` semantics in Python, wildcards included.
+
+    Needed because the bulk path fetches once and classifies in memory: if the two
+    paths disagreed on what "matches" means, the same file would produce different
+    candidates depending on which function ran. Bond names are exactly where this
+    bites — ``BTP Valore 3,35%`` contains a ``%``, which SQL reads as *anything*.
+    """
+    out = ["^"]
+    for ch in pattern:
+        if ch == "%":
+            out.append(".*")
+        elif ch == "_":
+            out.append(".")
+        else:
+            out.append(re.escape(ch))
+    out.append("$")
+    return re.compile("".join(out), re.IGNORECASE | re.DOTALL)
+
+
+def _other_as_text(value: Optional[List[str]]) -> str:
+    """
+    Render ``identifier_other`` the way ``cast(col, String)`` sees it in SQL.
+
+    The column is a JSON list, and the SQL filter substring-matches its serialised
+    text. Codes and labels never straddle the separators, so reproducing the JSON
+    dump is enough to keep the two paths in agreement.
+    """
+    if not value:
+        return ""
+    return json.dumps(value)
+
+
+def _contains(haystack: Optional[str], needle: str) -> bool:
+    """SQL ``ilike('%needle%')`` — wildcards inside *needle* are honoured."""
+    if not haystack:
+        return False
+    return _like_to_regex(f"%{needle}%").match(haystack) is not None
+
+
+async def search_asset_candidates_bulk(  # noqa: C901 — flat priority chain over in-memory universe; mirrors search_asset_candidates
+    session,
+    extractions: List[Tuple[Optional[str], Optional[str], Optional[str]]],
+) -> Dict[Tuple[Optional[str], Optional[str], Optional[str]], Tuple[List, Optional[int]]]:
+    """
+    Candidate search for many extracted assets in **one** database round-trip.
+
+    ``search_asset_candidates`` issues up to five queries per extracted asset. A
+    Crédit Agricole report with thirty instruments therefore spent a hundred-odd
+    sequential round-trips inside a single request, one waiting for the previous —
+    latency that is entirely structural, not work.
+
+    Here the superset of possibly-relevant assets is fetched once with the union of
+    every condition, and the *same* five-step priority is then applied in memory,
+    per extraction. The classification logic is duplicated on purpose rather than
+    approximated: ``test_brim_bulk_candidates.py`` asserts the two functions agree
+    row by row, which is what makes the duplication safe to keep.
+
+    Args:
+        session: AsyncSession for the single query.
+        extractions: ``(symbol, isin, name)`` triples, duplicates allowed.
+
+    Returns:
+        Mapping from each distinct triple to ``(candidates, auto_selected_id)``.
+    """
+    unique: List[Tuple[Optional[str], Optional[str], Optional[str]]] = []
+    seen: set = set()
+    for triple in extractions:
+        if triple in seen:
+            continue
+        seen.add(triple)
+        unique.append(triple)
+
+    if not unique:
+        return {}
+
+    # One query, the union of every condition the per-asset path would have issued.
+    conditions = []
+    for symbol, isin, name in unique:
+        if isin:
+            conditions.append(Asset.identifier_isin == isin.upper())
+            conditions.append(cast(Asset.identifier_other, String).like(f"%{isin}%"))
+        if symbol:
+            conditions.append(Asset.identifier_ticker == symbol.upper())
+        if name:
+            pattern = f"%{name}%"
+            conditions.append(
+                or_(
+                    Asset.identifier_isin.ilike(pattern),
+                    Asset.identifier_ticker.ilike(pattern),
+                    Asset.identifier_cusip.ilike(pattern),
+                    Asset.identifier_sedol.ilike(pattern),
+                    Asset.identifier_figi.ilike(pattern),
+                    Asset.identifier_uuid.ilike(pattern),
+                    cast(Asset.identifier_other, String).like(pattern),
+                )
+            )
+            conditions.append(Asset.display_name.ilike(pattern))
+
+    # Same ordering as the per-asset path, so the candidate lists come out identical.
+    result = await session.execute(select(Asset).where(or_(*conditions)).order_by(Asset.display_name.asc()))
+    universe = list(result.scalars().unique().all())
+
+    out: Dict[Tuple[Optional[str], Optional[str], Optional[str]], Tuple[List, Optional[int]]] = {}
+
+    for symbol, isin, name in unique:
+        candidates: List[BRIMAssetCandidate] = []
+        by_id: dict = {}
+
+        def _add(asset, confidence: BRIMMatchConfidence, _c=candidates, _b=by_id) -> None:
+            _add_candidate(_c, _b, asset, confidence)
+
+        # Priority 1 + 2: the ISIN, primary column then alternates. Run together and
+        # merged, exactly as in the per-asset path — see its docstring for why.
+        if isin:
+            for asset in universe:
+                if (asset.identifier_isin or "") == isin.upper():
+                    _add(asset, BRIMMatchConfidence.EXACT)
+            for asset in universe:
+                if _contains(_other_as_text(asset.identifier_other), isin):
+                    _add(asset, BRIMMatchConfidence.HIGH)
+
+        # Priority 3: ticker.
+        if symbol and not candidates:
+            for asset in universe:
+                if (asset.identifier_ticker or "") == symbol.upper():
+                    _add(asset, BRIMMatchConfidence.MEDIUM)
+
+        # Priority 4: the name, across identifiers first and display name second.
+        if name and not candidates:
+            hits = [
+                a
+                for a in universe
+                if _contains(a.identifier_isin, name)
+                or _contains(a.identifier_ticker, name)
+                or _contains(a.identifier_cusip, name)
+                or _contains(a.identifier_sedol, name)
+                or _contains(a.identifier_figi, name)
+                or _contains(a.identifier_uuid, name)
+                or _contains(_other_as_text(a.identifier_other), name)
+            ]
+            if not hits:
+                hits = [a for a in universe if _contains(a.display_name, name)]
+            for asset in hits:
+                _add(asset, BRIMMatchConfidence.LOW)
+
+        # Priority 5: the soft broker label saved on a previous import.
+        if name and not candidates:
+            for asset in universe:
+                if _contains(_other_as_text(asset.identifier_other), name):
+                    _add(asset, BRIMMatchConfidence.LOW)
+
+        out[(symbol, isin, name)] = (candidates, candidates[0].asset_id if len(candidates) == 1 else None)
+
+    return out
+
+
+# =============================================================================
+# DUPLICATE DETECTION
+# =============================================================================
+
+_WHITESPACE_RE = re.compile(r"\s+")
+
+
+def _description_key(description: Optional[str]) -> str:
+    """
+    Comparison key for a transaction description.
+
+    Bank exports wrap and re-wrap the same text, so the identical movement can come
+    back as "DT EMISS." in one file and "DTEMISS." in another. Comparing raw strings
+    demotes such a pair to a *possible* duplicate and asks the user to arbitrate a
+    difference that is not there. Whitespace and case carry no meaning here.
+    """
+    if not description:
+        return ""
+    return _WHITESPACE_RE.sub("", description).upper()
+
+
+async def detect_tx_duplicates(  # noqa: C901 — TODO(P2-refactor): extract per-tx match evaluation from loop
     transactions: List[TXCreateItem],
     broker_id: int,
     session,
@@ -1249,9 +1539,12 @@ async def detect_tx_duplicates(
             Transaction.date == tx.date,
         ]
 
-        # If asset is resolved, filter by asset_id for more precise matching
+        # If asset is resolved, filter by asset_id for more precise matching. Rows with no
+        # asset at all stay in scope: the same movement imported before a plugin learned to
+        # attach its instrument sits in the DB unallocated, and excluding it would hand the
+        # user that very row back as "new" on every single re-import.
         if asset_is_resolved and real_asset_id is not None:
-            conditions.append(Transaction.asset_id == real_asset_id)
+            conditions.append(or_(Transaction.asset_id == real_asset_id, Transaction.asset_id.is_(None)))
 
         stmt = select(Transaction).where(and_(*conditions))
         result = await session.execute(stmt)
@@ -1280,12 +1573,12 @@ async def detect_tx_duplicates(
             # Determine match level based on:
             # 1. Whether asset is resolved (more confident)
             # 2. Whether description matches (even more confident)
-            tx_desc = tx.description or ""
-            existing_desc = existing.description or ""
-            desc_matches = tx_desc and existing_desc and tx_desc.strip() == existing_desc.strip()
+            tx_desc = _description_key(tx.description)
+            existing_desc = _description_key(existing.description)
+            desc_matches = bool(tx_desc) and tx_desc == existing_desc
 
-            if asset_is_resolved:
-                # Asset resolved - use WITH_ASSET levels
+            if asset_is_resolved and existing.asset_id is not None:
+                # Asset resolved on both sides - use WITH_ASSET levels
                 if desc_matches:
                     match_level = BRIMDuplicateLevel.LIKELY_WITH_ASSET
                 else:

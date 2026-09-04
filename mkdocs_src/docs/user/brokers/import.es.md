@@ -28,7 +28,7 @@ Para una explicación detallada de los campos de transacción y las reglas de va
 
 El botón **Importar** (icono `Upload`) inicia el asistente **BRIM**. Este módulo le permite importar los extractos exportados de su bróker (formatos CSV o Excel) de forma masiva, ejecutar validaciones automáticas de cordura y mapear tickers a activos locales antes de la confirmación final.
 
-### El Flujo de Importación
+### 🖼️ El Flujo de Importación
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-broker-import" data-carousel-interval="6000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="import-modal" data-title="📥 Modal de Importación Rápida" alt="Modal de Importación">
@@ -50,7 +50,14 @@ El asistente avanza a través de los siguientes pasos:
 4. **Resolución de Activos**: Si el extracto contiene tickers o ISINs que no existen en su registro de activos local, BRIM muestra un paso de mapeo. Puede:
  * Mapear el ticker a un activo existente.
  * Crear un nuevo activo directamente desde esta pantalla, prellenado con los detalles extraídos del extracto.
-5. **Preparación Masiva y Confirmación**: Revise la lista de verificación preparada de transacciones limpias y únicas. Desmarque cualquier operación que desee excluir, luego haga clic en **Confirmar** para escribir los registros en su libro de contabilidad de cartera.
+5.  **Filtro Fecha de Apertura**: Si una fila analizada es estrictamente anterior a la fecha de apertura del bróker, el asistente la marca **Antes de la apertura**, desactiva su casilla de verificación y la excluye de la importación. Se permiten las filas en la fecha de apertura. Use **Editar fecha del bróker** y vuelva a comprobar/actualizar si es necesario.
+6.  **Preparación Masiva y Confirmación**: Revise la lista de verificación preparada de transacciones limpias y únicas. Desmarque cualquier operación que desee excluir, luego haga clic en **Confirmar** para escribir los registros en su libro de contabilidad de cartera.
+
+---
+
+## ⚠️ Avisos de activos
+
+Algunos plugins adjuntan avisos informativos a los activos extraídos. Por ejemplo, Intesa Sanpaolo y Crédit Agricole pueden advertir que un valor puede haber vencido/sido amortizado y ser difícil de encontrar en línea. El modal de creación de activos agrupa estos avisos en banners de color ámbar; son informativos y no cambian la importación de transacciones.
 
 ---
 
@@ -62,3 +69,5 @@ Haga clic en el botón **Mostrar Historial de Importaciones** (icono `FileText`)
 - Filas procesadas y transacciones totales confirmadas.
 - Marca de tiempo de carga.
 - Usuario que realizó la importación.
+
+

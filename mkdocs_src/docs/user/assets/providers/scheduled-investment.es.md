@@ -15,7 +15,7 @@ El proveedor de Inversión Programada está diseñado para instrumentos de renta
 - **Tipo de Identificador**: `AUTO_GENERATED`
 - **Parámetros**: Configurados a través del **Editor de Calendario de Intereses** (componente de UI personalizado)
 
-### Campos Obligatorios
+### Required Obligatorios
 
 | Campo | Descripción |
 |-------|-------------|

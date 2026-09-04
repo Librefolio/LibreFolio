@@ -20,15 +20,18 @@
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {attachChartReady} from '$lib/utils/chartReady';
     import {_ as t} from '$lib/i18n';
     import type {RenderedSignal} from '$lib/charts/signals';
     import type {LineDataPoint} from './LineChart.svelte';
     import {COLORS, hexToRgba, updateArrowRotations} from './lineChartHelpers';
     import {signalLabelToHtml} from '$lib/charts/signalLabel';
-    import {buildPriceYAxis, buildSecondaryYAxes, buildOverlaySignalSeries, buildDataZoom, computeRightMargin, getChartColors} from './chartCoreHelpers';
+    import {assignOverlaySignalAxes, buildPriceYAxis, buildSecondaryYAxes, buildOverlaySignalSeries, buildDataZoom, computeRightMargin, getChartColors} from './chartCoreHelpers';
     import {scheduleFirstRenderStabilityFix, tooltipPositionSide} from './echartsTooltipHelpers';
     import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from './echartsDataZoomTouchPan';
-    import {downsampleRenderedSignal, mapDateToBucket, type ChartResolution} from './timeSeriesAggregation';
+    import {downsampleRenderedSignal, type ChartResolution} from './timeSeriesAggregation';
+    import {formatMonthLabel, getBucketInfo} from './priceChartHelpers';
+    import {buildCandleSeriesData, computePercentageBase, formatCandlePrice, formatVolume, hasRenderableVolume, isBullishBar, parseCandleTooltipValue} from './candlestickChartHelpers';
     import {truncateName} from '$lib/utils/text';
 
     // =========================================================================
@@ -166,28 +169,6 @@
         chartInstance = null;
     }
 
-    function formatMonthLabel(date: string): string {
-        return new Intl.DateTimeFormat(undefined, {
-            month: 'long',
-            year: 'numeric',
-            timeZone: 'UTC',
-        }).format(new Date(`${date}T00:00:00Z`));
-    }
-
-    function getBucketInfo(point: LineDataPoint): {bucketStart: string; bucketEnd: string} {
-        if (resolution === 'daily') {
-            return {
-                bucketStart: point.date,
-                bucketEnd: point.date,
-            };
-        }
-
-        return {
-            bucketStart: typeof (point as any).bucketStart === 'string' ? (point as any).bucketStart : mapDateToBucket(point.date, resolution).bucketStart,
-            bucketEnd: typeof (point as any).bucketEnd === 'string' ? (point as any).bucketEnd : point.date,
-        };
-    }
-
     function buildTooltipHeader(date: string, bucketInfo?: {bucketStart: string; bucketEnd: string}): string {
         if (resolution === 'daily') {
             return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${(isDarkProp ?? document.documentElement.classList.contains('dark')) ? '#e2e8f0' : '#1f2937'}">${date}</div>`;
@@ -231,6 +212,7 @@
 
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+            attachChartReady(chartInstance, chartContainer, 'candlestick');
             needsInitialLayoutStabilityPass = true;
             dataZoomTouchPanHandle = attachDataZoomTouchPan(chartInstance, chartContainer);
             chartInstance.on('dataZoom', () => {
@@ -306,46 +288,32 @@
         const labelColor = dark ? '#94a3b8' : '#6b7280';
 
         const dates = data.map((d) => d.date);
-        const bucketInfoByDate = new Map(dates.map((date, index) => [date, getBucketInfo(data[index])]));
+        const bucketInfoByDate = new Map(dates.map((date, index) => [date, getBucketInfo(data[index], resolution)]));
 
         // ── Percentage mode: transform prices relative to first data point ──
         const isPercentage = viewMode === 'percentage';
-        const baseValue = isPercentage && data.length > 0 ? (data[0].open ?? data[0].value) : 1;
-        const pct = (v: number) => (isPercentage && baseValue !== 0 ? ((v - baseValue) / baseValue) * 100 : v);
+        const baseValue = computePercentageBase(data, isPercentage);
 
         // ── Candlestick series data: ECharts format = [open, close, low, high] ──
         // DB values have priority; synthesize only fields that are null/undefined.
         // Synthesis: open = prev close, high = max(open, close), low = min(open, close)
-        const candleData: (number[] | null)[] = data.map((d, i) => {
-            const c = d.close ?? d.value;
-            if (c == null) return null;
-            const prevClose = i > 0 ? (data[i - 1].close ?? data[i - 1].value) : c;
-            const o = d.open ?? prevClose;
-            const h = d.high ?? Math.max(o, c);
-            const l = d.low ?? Math.min(o, c);
-            return [pct(o), pct(c), pct(l), pct(h)];
-        });
+        const candleData: (number[] | null)[] = buildCandleSeriesData(data, isPercentage, baseValue);
 
         // ── Volume series data ──
-        const hasAnyVolume = data.some((d) => d.volume != null && d.volume > 0);
+        const hasAnyVolume = hasRenderableVolume(data);
         const actualShowVolume = showVolume && hasAnyVolume;
 
-        const volumeData: any[] = data.map((d) => {
-            const vol = d.volume ?? 0;
-            const c = d.close ?? d.value;
-            const o = d.open ?? c;
-            const bullish = c >= o;
-            return {
-                value: vol,
-                itemStyle: {
-                    color: bullish ? hexToRgba(greenColor, 0.55) : hexToRgba(redColor, 0.55),
-                },
-            };
-        });
+        const volumeData: any[] = data.map((d) => ({
+            value: d.volume ?? 0,
+            itemStyle: {
+                color: isBullishBar(d) ? hexToRgba(greenColor, 0.55) : hexToRgba(redColor, 0.55),
+            },
+        }));
 
         // ── Overlay signals ──
-        const resolvedOverlaySignals = resolution === 'daily' ? overlaySignals : overlaySignals.map((signal) => downsampleRenderedSignal(signal, resolution, dates)).filter((signal) => signal.data.length > 0);
-        const {axes: secondaryAxes, extraAxesCount} = buildSecondaryYAxes(resolvedOverlaySignals, dark, 0);
+        const downsampledOverlaySignals = resolution === 'daily' ? overlaySignals : overlaySignals.map((signal) => downsampleRenderedSignal(signal, resolution, data)).filter((signal) => signal.data.length > 0);
+        const resolvedOverlaySignals = assignOverlaySignalAxes(downsampledOverlaySignals);
+        const {axes: secondaryAxes, extraAxesCount, nextAxisIndex: volumeYAxisIndex} = buildSecondaryYAxes(resolvedOverlaySignals, dark, 0);
 
         const series: any[] = [];
 
@@ -372,7 +340,7 @@
                 name: 'Volume',
                 data: volumeData,
                 xAxisIndex: 1,
-                yAxisIndex: 3,
+                yAxisIndex: volumeYAxisIndex,
                 barMaxWidth: 12,
             });
         }
@@ -442,12 +410,7 @@
         }
 
         // ── Tooltip ──
-        const fmtPrice = (v: number) => {
-            if (isPercentage) return `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`;
-            if (Math.abs(v) >= 100) return v.toFixed(2);
-            if (Math.abs(v) >= 1) return v.toFixed(4);
-            return v.toFixed(6).replace(/0+$/, '').replace(/\.$/, '.0');
-        };
+        const fmtPrice = (v: number) => formatCandlePrice(v, isPercentage);
 
         // Build header label (asset name + icon + currency)
         const tooltipHeaderHtml = (() => {
@@ -479,7 +442,7 @@
             for (const p of arr) {
                 if (p.seriesName === 'Volume') {
                     const vol: number = p.value ?? 0;
-                    const volFmt = vol >= 1_000_000 ? `${(vol / 1_000_000).toFixed(2)}M` : vol >= 1_000 ? `${(vol / 1_000).toFixed(1)}K` : vol.toFixed(0);
+                    const volFmt = formatVolume(vol);
                     html += `<div style="color:${dark ? '#94a3b8' : '#6b7280'};font-size:11px;margin-top:3px">Vol: ${volFmt}</div>`;
                     continue;
                 }
@@ -490,8 +453,7 @@
                     // whiskerBoxCommon.js addOrdinal/unshift) — value is [index, open, close, low, high]
                     // (5 items), not [open, close, low, high] (4 items). Always take the last 4 so this
                     // works regardless of whether the index got prepended.
-                    const [open, close, low, high] = (p.value as number[]).slice(-4);
-                    const bullish = close >= open;
+                    const {open, close, low, high, bullish} = parseCandleTooltipValue(p.value as number[]);
                     const clr = bullish ? greenColor : redColor;
                     const dimClr = dark ? '#94a3b8' : '#6b7280';
                     html += `<div style="display:grid;grid-template-columns:auto 1fr;gap:0 6px;font-size:11px;margin-top:2px">`;

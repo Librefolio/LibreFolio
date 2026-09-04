@@ -18,6 +18,7 @@
     import {ensureAssetProvidersCached, getAssetProviderIconUrl, getFxProviderIconUrl, parseProviderChain, PROVIDER_COLORS, DEFAULT_PROVIDER_COLOR} from '$lib/utils/providerHelpers';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {ChevronDown, ChevronRight, CheckCircle, XCircle, ClipboardList, X} from 'lucide-svelte';
+    import {clearTimer} from '$lib/utils/core/clearTimer';
 
     // =========================================================================
     // Types matching backend JSONL format
@@ -291,10 +292,7 @@
     }
 
     function handleTouchEnd() {
-        if (longPressTimer) {
-            clearTimeout(longPressTimer);
-            longPressTimer = null;
-        }
+        longPressTimer = clearTimer(longPressTimer);
     }
 </script>
 
@@ -318,19 +316,19 @@
     <div class="px-6 py-4 space-y-3">
         <!-- Filters -->
         <div class="flex items-center gap-3 flex-wrap">
-            <SimpleSelect value={filterJob} options={jobSelectOptions} compact testId="scheduler-log-filter-job" onchange={(v) => (filterJob = v)} />
-            <SimpleSelect value={filterStatus} options={statusSelectOptions} compact testId="scheduler-log-filter-status" onchange={(v) => (filterStatus = v)} />
-            <SimpleSelect value={filterTime} options={timeSelectOptions} compact testId="scheduler-log-filter-time" onchange={(v) => (filterTime = v)} />
+            <SimpleSelect value={filterJob} options={jobSelectOptions} compact testId="scheduler-log-filter-job" optionTestId={(o) => `scheduler-log-filter-job-option-${o.value}`} onchange={(v) => (filterJob = v)} />
+            <SimpleSelect value={filterStatus} options={statusSelectOptions} compact testId="scheduler-log-filter-status" optionTestId={(o) => `scheduler-log-filter-status-option-${o.value}`} onchange={(v) => (filterStatus = v)} />
+            <SimpleSelect value={filterTime} options={timeSelectOptions} compact testId="scheduler-log-filter-time" optionTestId={(o) => `scheduler-log-filter-time-option-${o.value}`} onchange={(v) => (filterTime = v)} />
         </div>
 
         <!-- Entries -->
-        <div class="space-y-2 max-h-[60vh] overflow-y-auto pr-1" data-testid="scheduler-log-entries">
+        <div class="space-y-2 max-h-[60vh] overflow-y-auto pr-1" data-testid="scheduler-log-entries" data-busy={loading ? 'true' : 'false'}>
             {#if loading && entries.length === 0}
                 <div class="flex justify-center py-8">
                     <span class="w-6 h-6 border-2 border-gray-300 border-t-libre-green rounded-full animate-spin"></span>
                 </div>
             {:else if filteredEntries.length === 0}
-                <p class="text-center text-sm text-gray-500 dark:text-gray-400 py-8">
+                <p class="text-center text-sm text-gray-500 dark:text-gray-400 py-8" data-testid="scheduler-log-empty">
                     {$_('settings.global.scheduler.log.noEntries')}
                 </p>
             {:else}
@@ -338,7 +336,7 @@
                     {@const expanded = isExpanded(entry)}
                     {@const detail = hasDetail(entry)}
 
-                    <div class="border border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden" data-testid="scheduler-log-entry">
+                    <div class="border border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden" data-testid="scheduler-log-entry" data-job={entry.job} data-status={entry.status} data-expanded={expanded ? 'true' : 'false'} data-has-detail={detail ? 'true' : 'false'}>
                         <!-- Entry header (clickable if has detail) -->
                         {#if detail}
                             <button type="button" class="w-full flex items-center gap-3 px-4 py-3 bg-gray-50 dark:bg-slate-800 cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors text-left" onclick={() => toggleEntry(entry)}>
@@ -417,7 +415,9 @@
                                                             <span class="font-medium text-gray-700 dark:text-gray-300">{item.name}</span>
                                                         </td>
                                                         <td class="py-1">
-                                                            {#if !item.ok && item.error}
+                                                            {#if item.ok}
+                                                                <span class="text-green-600 dark:text-green-400">✓</span>
+                                                            {:else if item.error}
                                                                 <Tooltip text={item.error} position="top" maxWidth="500px">
                                                                     <!-- svelte-ignore a11y_no_static_element_interactions -->
                                                                     <span class="text-red-500 truncate max-w-[250px] cursor-help inline-block" ondblclick={() => copyErrorToClipboard(item.error ?? '')} ontouchstart={() => handleTouchStart(item.error ?? '')} ontouchend={handleTouchEnd}
@@ -425,7 +425,7 @@
                                                                     >
                                                                 </Tooltip>
                                                             {:else}
-                                                                <span class="text-green-600 dark:text-green-400">✓</span>
+                                                                <span class="text-red-500">—</span>
                                                             {/if}
                                                         </td>
                                                     </tr>

@@ -1,6 +1,6 @@
 # 🎯 Synthetic Benchmarks
 
-LibreFolio can overlay **synthetic benchmark curves** on any chart. Unlike technical indicators (which are computed *from* market data), synthetic benchmarks are generated mathematically and serve as **visual reference lines** — "what if the price had followed this ideal trajectory?"
+LibreFolio can overlay **synthetic benchmark curves** on any chart. Unlike technical indicators (which are computed *from* market data), synthetic benchmarks are generated mathematically, computed locally in the browser, and serve as **visual reference lines** — "what if the price had followed this ideal trajectory?"
 
 They are invaluable for:
 
@@ -25,5 +25,4 @@ They are invaluable for:
 - 📉 **[Technical Indicators](../indicators/index.md)** — Data-driven chart overlays
 - 📈 **[Returns & Growth Rates](../../fundamentals/returns.md)** — Understanding growth measurement
 - 💰 **[Taxation](../../fundamentals/taxation.md)** — How tax affects compounding
-
 

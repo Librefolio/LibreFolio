@@ -16,6 +16,7 @@
     "syncPrices": "Sincronizza prezzi",
     "recalculate": "Ricalcola",
     "syncDisabledManual": "Sincronizzazione disabilitata — nessun provider configurato",
+    "syncDisabledInactive": "Sincronizzazione non disponibile — l'asset è inattivo",
     "fxPairMissing": "Coppia FX {base}/{quote} non configurata — conversione non disponibile",
     "fxPairCreatedSynced": "Coppia FX creata e sincronizzata",
     "pageSyncDescription": "Sincronizza prezzi degli asset e tassi di cambio per questa pagina.",
@@ -64,18 +65,7 @@
     "openFxPair": "Apri dettaglio coppia FX",
     "editorTipDesktop": "Doppio clic sul grafico per saltare a quella data",
     "editorTipMobile": "Pressione prolungata sul grafico per saltare a quella data",
-    "aiExportMenu": {
-      "asset_snapshot": {
-        "label": "Fotografia dell'asset",
-        "description": "Fotografia attuale di questo asset."
-      },
-      "asset_classify": {
-        "label": "Classifica stato asset",
-        "description": "Cercami informazioni su questo asset online e dimmi come sta: punti di forza, rischi, cosa monitorare."
-      }
-    },
-    "aiExport": "Export AI",
-    "aiExportBuilding": "Preparazione export…"
+    "aiExport": "Export AI"
   },
   "assets": {
     "create": "Nuovo asset",
@@ -84,7 +74,10 @@
     "allTypes": "Tutti i tipi",
     "showActive": "Attivi",
     "table": {
-      "lastPrice": "Ultimo Prezzo"
+      "lastPrice": "Ultimo Prezzo",
+      "quoteBaseQuantity": "Unità/prezzo",
+      "txCount": "Mov.",
+      "txCountTooltip": "Transazioni che usano questo asset. Verde: in broker di cui sei owner. Blu: solo in broker di altri utenti. Grigio: nessuna — asset salvato ma mai usato."
     },
     "empty": {
       "noAssets": "Nessun asset",
@@ -110,6 +103,33 @@
       "resultDeleted": "eliminato",
       "resultHasTransactions": "ha transazioni esistenti"
     },
+    "merge": {
+      "title": "Unisci asset",
+      "subtitle": "Due voci dello stesso strumento diventano una. Non si perde nulla: ciò che non è principale resta come identificativo alternativo.",
+      "chooseTarget": "Quale asset vuoi tenere?",
+      "chooseTargetHint": "L'altro viene eliminato e la sua storia si sposta qui. Si possono scegliere anche gli asset inattivi.",
+      "targetPlaceholder": "Scegli un asset…",
+      "noTargets": "Non c'è nessun altro asset con cui unire.",
+      "whatMoves": "Cosa viene spostato",
+      "movesNothing": "Questo asset non ha storia da spostare.",
+      "moved": {
+        "transactions": "Transazioni",
+        "prices": "Prezzi",
+        "pricesDiscarded": "Prezzi scartati (l'asset che resta ha già quel giorno)",
+        "events": "Eventi",
+        "eventsDiscarded": "Eventi duplicati scartati",
+        "relinked": "Transazioni ricollegate all'evento che resta",
+        "providerMoved": "Provider di prezzo spostato",
+        "providerDropped": "Provider di prezzo scartato (l'asset che resta ne ha già uno)"
+      },
+      "identifiersKept": "Identificativi tenuti come alternativi",
+      "identifiersKeptHint": "Continueranno a riconoscere questo asset nei prossimi import.",
+      "destructiveWarning": "\"{name}\" verrà eliminato. L'operazione non è reversibile.",
+      "confirmButton": "Unisci ed elimina",
+      "toastOk": "{source} unito a {target}",
+      "errorGeneric": "Unione non riuscita",
+      "action": "Unisci con…"
+    },
     "types": {
       "STOCK": "Azione",
       "ETF": "ETF",
@@ -134,6 +154,22 @@
       "duplicateName": "Esiste già un asset con questo nome",
       "duplicateNameWarning": "Esiste già un asset chiamato \"{name}\"",
       "duplicateNameTooltip": "Un asset con questo nome esiste già. Potresti voler modificare quello esistente invece di crearne uno nuovo.",
+      "reuseExisting": {
+        "title": "Trovato un asset con lo stesso nome",
+        "message": "Esiste già un asset chiamato \"{name}\". Potrebbe essere lo stesso strumento con un nome diverso. Vuoi usarlo e aggiungere le chiavi di ricerca dell'import ai suoi identificatori?",
+        "useAndAdd": "Usalo e aggiungi la chiave",
+        "useOnly": "Usalo senza aggiungere",
+        "changeName": "No, cambio il nome",
+        "messagePlain": "Esiste già un asset chiamato \"{name}\". Potrebbe essere lo stesso strumento con un nome diverso.",
+        "use": "Usalo"
+      },
+      "importNotices": {
+        "intro": "Potrebbe trattarsi di un titolo vecchio, scaduto o rimborsato e non più quotato: la ricerca online potrebbe non trovarlo. In tal caso crea un asset semplice inserendo i dati a mano; puoi impostarlo come inattivo dal toggle nel footer.",
+        "kind": {
+          "maturity_suspected": "Possibile titolo scaduto o rimborsato",
+          "generic": "Avviso di import"
+        }
+      },
       "providerIncomplete": "Hai cambiato il provider ma non hai inserito l'identifier. Compila l'identifier (o spunta \"Nessun provider\") prima di salvare.",
       "createSuccess": "\"{name}\" creato con successo",
       "saveSuccess": "\"{name}\" aggiornato con successo",
@@ -142,10 +178,16 @@
       "scheduledRegenTitle": "Rigenerare i Prezzi?",
       "scheduledRegenMessage": "La modifica di questi parametri cancellerà lo storico dei prezzi esistente e lo rigenererà con la nuova pianificazione. Questa azione non può essere annullata. Continuare?",
       "scheduledRegenConfirm": "Rigenera",
+      "parametricSwitchTitle": "Eliminare la serie generata?",
+      "parametricSwitchMessage": "Lo storico prezzi di questo asset è stato generato da {from}. Passando a {to} viene eliminato: {prices} punto/i prezzo e {events} evento/i generato/i saranno rimossi, e {to} ricostruirà lo storico da zero. Gli eventi manuali restano. L'operazione non è reversibile. Continuare?",
+      "parametricSwitchConfirm": "Cambia provider",
       "saveFailed": "Salvataggio asset fallito",
       "quoteBaseQuantity": "Unità per singolo prezzo",
       "quoteBaseTooltip": "Specifica a quanti titoli o quote fa riferimento il prezzo di mercato. Per ETF o azioni è tipicamente 1, le obbligazioni tendenzialmente sono quotate su base 100.",
-      "activeTooltip": "Se attivo, l'asset sarà aggiornato automaticamente dallo scheduler e visibile nelle selezioni. Disabilitalo per nasconderlo se non lo possiedi più o non vuoi continuare a scaricarne i prezzi."
+      "bondQuoteBaseHint": "Le obbligazioni sono di solito quotate ogni 100 di nominale (es. BTP): verifica questo valore — tipicamente è 100.",
+      "activeTooltip": "Se attivo, l'asset sarà aggiornato automaticamente dallo scheduler e visibile nelle selezioni. Disabilitalo per nasconderlo se non lo possiedi più o non vuoi continuare a scaricarne i prezzi.",
+      "quoteBaseMin": "Deve essere almeno 1",
+      "quoteBaseInteger": "Solo numeri interi"
     },
     "provider": {
       "assignment": "Assegnazione Provider",
@@ -218,7 +260,30 @@
       "askProviderHint": "Recupera identificativi dal provider assegnato",
       "addIdentifier": "Aggiungi identificativo",
       "deleteSelected": "Elimina identificatori selezionati",
-      "deleteConfirmMessage": "Eliminare {n} identificatori?"
+      "deleteConfirmMessage": "Eliminare {n} identificatori?",
+      "otherLabel": "Altri identificatori",
+      "otherPlaceholder": "Scrivi un codice o nome, poi Invio o virgola",
+      "otherSeparatorsHint": "Aggiungi un identificatore alla volta — premi Invio, virgola (,), punto e virgola (;) o Tab per confermarlo. Gli spazi restano nel valore.",
+      "primaryChooser": {
+        "title": "Quale {type} è il principale per «{asset}»?",
+        "titleGeneric": "Quale identificativo è il principale per «{asset}»?",
+        "hint": "Gli altri restano come identificativi alternativi e serviranno a riconoscere l'asset nei prossimi import.",
+        "originProvider": "dal provider",
+        "originReport": "dal report",
+        "originStored": "già salvato",
+        "keepAlternates": "Restano come alternativi:",
+        "confirm": "Conferma",
+        "cancel": "Annulla",
+        "skip": "Non salvare",
+        "providerGeneric": "Il provider",
+        "typeGeneric": "identificativo",
+        "preambleReport": "{provider} riporta per questo titolo un {type} diverso da quello letto nei report.",
+        "preambleStored": "{provider} riporta per questo titolo un {type} diverso da quello già salvato.",
+        "issuanceNote": "Alcuni titoli comprati all'emissione hanno un codice dedicato che dà diritto a un premio se li tieni fino alla scadenza: proprio perché non devono essere scambiati, su quel codice non esiste un prezzo di mercato. Per venderli si convertono nel titolo negoziabile, che ha un ISIN diverso. Tieni come principale quello **negoziabile**: è l'unico quotato. L'altro resta fra gli alternativi e continuerà a far riconoscere il titolo nei prossimi import.",
+        "discardTitle": "Esci senza scegliere?",
+        "discardMessage": "Non hai indicato quale codice è il principale. L'asset resta con l'identificativo di partenza e il codice del provider non verrà aggiunto fra gli alternativi: al prossimo import il titolo potrebbe non essere riconosciuto.",
+        "discardConfirm": "Esci senza scegliere"
+      }
     },
     "confirm": {
       "saveWithoutTest": "Salvare senza test?",
@@ -230,7 +295,9 @@
     },
     "search": {
       "placeholder": "Cerca per nome, ticker, ISIN...",
-      "searching": "Ricerca in corso..."
+      "searching": "Ricerca in corso...",
+      "timeout": "Ricerca scaduta. Riprova.",
+      "rankHint": "Posizione nella ricerca web (metaricerca su più motori) — il primo risultato è la corrispondenza più probabile"
     },
     "comparison": {
       "title": "Confronto Dati Provider",
@@ -262,7 +329,15 @@
     "status": {
       "archived": "Archiviato"
     },
-    "lastPrice": "Ultimo Prezzo"
+    "lastPrice": "Ultimo Prezzo",
+    "panels": {
+      "own": "I tuoi asset",
+      "ownHint": "Con transazioni in broker di cui sei owner",
+      "others": "Asset degli altri utenti",
+      "othersHint": "Con transazioni non tue",
+      "analysis": "Osservati",
+      "analysisHint": "Salvati ma senza transazioni — tenuti d'occhio"
+    }
   },
   "auth": {
     "login": "Accedi",
@@ -281,6 +356,7 @@
     "usernameOrEmail": "Nome utente o Email",
     "accountCreated": "Account creato con successo! Effettua l'accesso.",
     "registrationFailed": "Registrazione fallita. Riprova.",
+    "registrationDisabled": "La registrazione di nuovi utenti è al momento disabilitata dall'amministratore.",
     "passwordRecovery": "Recupero Password",
     "emailRecoveryNotAvailable": "Il recupero via email non è ancora disponibile. Utilizza il terminale del server per reimpostare la password.",
     "serverTerminalInstructions": "Esegui questo comando sul server:",
@@ -318,21 +394,13 @@
     "step3Title": "Analizza",
     "step4Title": "Revisione",
     "globalBroker": "Broker per i caricamenti",
-    "globalBrokerHint": "I nuovi file saranno assegnati a questo broker",
-    "uploadHint": "Trascina qui i file o clicca per caricare",
-    "uploadMultiHint": "File multipli supportati (.csv, .xlsx)",
     "brokerRequired": "Broker obbligatorio",
-    "selectFiles": "Seleziona file da analizzare",
     "selectedCount": "{n} file selezionati da {b} broker",
-    "filterBrokers": "Filtra broker",
-    "onlyUnparsed": "Solo non analizzati",
-    "pluginDefault": "Auto-rileva",
     "pluginLabel": "Plugin",
     "next": "Avanti: Seleziona File",
     "parse": "Analizza ({n})",
     "noFiles": "Nessun file",
     "noFilesHint": "Carica report nel Passo 1, o seleziona file esistenti sotto",
-    "noBrokers": "Nessun broker con accesso di modifica",
     "preSelectedHint": "I file del Passo 1 sono pre-selezionati",
     "fileStatus": {
       "uploaded": "Caricato",
@@ -346,21 +414,16 @@
     "warningConfirmOk": "Continua comunque",
     "ready": "Pronto",
     "uploadMore": "Carica altri file",
-    "bulkDeleteConfirm": "Rimuovere {n} file selezionati?",
     "pluginRequired": "Tutti i file selezionati devono avere un plugin assegnato prima dell'analisi",
     "allConfigured": "Tutti i file configurati",
     "selectPlugin": "Seleziona plugin…",
-    "uploadError": "Caricamento fallito: {msg}",
     "extensionError": "Tipo file non supportato: {ext}. Accettati: .csv, .xlsx, .xls",
     "parsing": "Analisi file in corso…",
     "parseError": "Analisi fallita",
-    "parseResult": "Risultato Analisi",
-    "transactionsCount": "{n} transazioni analizzate",
     "unresolvedCount": "{n} asset non risolti",
     "warningsCount": "{n} avvisi",
     "importedCount": "{n} transazioni importate nell'editor",
     "resolveAssets": "Risolvi Asset",
-    "review": "Revisione e Importa",
     "parsingProgress": "Analisi… {done}/{total}",
     "parseComplete": "Tutti i file analizzati",
     "parseCompleteWithErrors": "Completato con errori",
@@ -376,7 +439,7 @@
     "txByType": "Transazioni per Tipo",
     "assetResolved": "Auto-risolto",
     "assetUnresolved": "Da risolvere",
-    "duplicatesSection": "Duplicati",
+    "duplicatesSection": "Stato transazioni",
     "uniqueTx": "{n} unici",
     "possibleDuplicates": "{n} possibili",
     "warningsSection": "Avvisi",
@@ -385,15 +448,12 @@
     "validationIssueCount": "{n} problemi di validazione",
     "noValidationIssues": "Nessun problema di validazione",
     "manualFieldsRequired": "Campi da completare manualmente",
-    "fieldTodos": "Campo TODO",
+    "manualFieldsToVerify": "Campi da verificare",
     "fieldTodoCount": "{n} campi richiedono input",
-    "fieldTodoBlocker": "Bloccante",
-    "fieldTodoWarning": "Avviso",
     "noFieldTodos": "Nessun campo richiede input manuale",
-    "todoRow": "TX #{n}",
+    "todoRow": "Riga #{n}",
     "noAssets": "Nessuna mappatura asset",
     "noDuplicates": "Nessun duplicato rilevato",
-    "fileParseError": "Errore analisi: {msg}",
     "viewAll": "Vedi tutto",
     "summary": "Riepilogo analisi — Tutti i file",
     "filePending": "In attesa",
@@ -408,8 +468,6 @@
       "warningCount": "Avvisi del parser (righe saltate, dati ambigui)"
     },
     "allResolved": "Tutti risolti",
-    "resolveHint": "Abbina ogni asset non riconosciuto a uno esistente o creane uno nuovo.",
-    "suggested": "Corrispondenze suggerite",
     "searchAll": "Cerca nei tuoi asset…",
     "createNew": "Crea nuovo asset",
     "confidence": {
@@ -418,43 +476,221 @@
       "medium": "Media",
       "low": "Bassa"
     },
-    "likelyDuplicate": "Probabile duplicato",
-    "possibleDuplicate": "Possibile duplicato",
+    "beforeOpeningCount": "prima dell'apertura",
+    "recheckOpenings": "Ricontrolla aperture",
+    "recheckOpeningsTip": "Ricontrolla le date di apertura dei broker e riseleziona le righe diventate importabili.",
+    "selectVisible": "Seleziona in vista",
+    "selectVisibleTip": "Seleziona le righe selezionabili nella pagina corrente (non tocca le altre pagine).",
+    "createAsset": {
+      "identifiedNames": "Nomi/identificatori individuati:"
+    },
     "todoBlockerCommitHint": "Completa tutti i campi obbligatori prima di salvare",
+    "todoWarningVerifyHint": "{n, plural, one {# campo auto-derivato da verificare prima di salvare} other {# campi auto-derivati da verificare prima di salvare}}",
+    "todoWarningConfirmTitle": "Verificare i campi auto-derivati?",
+    "todoWarningConfirmMessage": "{n} riga/e hanno un valore auto-derivato non ancora verificato (es. la quantità nominale dei titoli scaduti). Rivedili, oppure salva comunque se i valori derivati sono corretti.",
+    "todoWarningConfirmItemsLabel": "{n} campo/i da verificare",
+    "todoWarningConfirmProceed": "Salva comunque",
+    "todoWarningConfirmReview": "Rivedi",
     "sourceFile": "File",
     "importToEditor": "Importa {n} transazioni",
     "importDisabledUnresolved": "Risolvi tutti gli asset selezionati prima di importare",
     "importDisabledEmpty": "Seleziona almeno una transazione",
-    "likelyDupIncluded": "probabili duplicati inclusi",
     "status": {
       "unique": "✓ Unico",
       "possibleDup": "ℹ Possibile dup",
       "likelyDup": "⚠ Probabile dup",
       "unresolved": "✗ Non risolto",
+      "beforeOpening": "Prima dell'apertura",
+      "editBrokerDate": "Modifica data broker",
       "tooltip": {
         "unresolvedReason": "Asset non trovato nel database.",
         "unresolvedAction": "Usa il pannello di risoluzione sopra per selezionare l'asset corrispondente o crearne uno nuovo.",
-        "possibleDup": "È stata trovata una transazione simile in questo broker (stessa data, tipo e importo, descrizione diversa). Verifica se è già stata importata prima di procedere.",
-        "likelyDup": "Esiste già una transazione identica in questo broker (stessa data, tipo, importo e descrizione). Probabilmente è già stata importata — deselezionala per evitare duplicati."
-      }
+        "beforeOpening": "Datata prima della data di apertura di questo broker — non importabile.",
+        "pendingDuplicate": "Questa transazione corrisponde completamente (stessi dati e descrizione) a un'altra transazione già in sospeso nell'editor o in questa importazione. Deselezionata per default; riselezionala solo se vuoi mantenerle entrambe.",
+        "possiblePendingDuplicate": "Questa transazione corrisponde a un'altra transazione già in sospeso nell'editor o in questa importazione, ma la descrizione differisce. Resta selezionata per verifica."
+      },
+      "pendingDuplicate": "⧉ Duplicato nel lotto",
+      "possiblePendingDuplicate": "≈ Possibile duplicato nel lotto"
     },
     "addIdentifier": {
       "title": "Aggiungere l'identificativo all'asset?",
-      "titleConflict": "Sostituire l'identificativo dell'asset?",
       "body": "{asset} non ha {value} ({type}) come identificativo. Vuoi aggiungerlo così che le importazioni future vengano abbinate automaticamente?",
-      "bodyConflict": "{asset} ha già {existing} come {type}, ma il file importato usa {value}. Vuoi sostituirlo?",
+      "alsoKeys": "Verranno aggiunte anche le chiavi di ricerca del report: {keys}",
       "confirm": "Assegna + aggiorna",
-      "confirmConflict": "Sostituisci + aggiorna",
       "skip": "Solo assegna",
       "success": "Identificativo aggiunto con successo",
       "error": "Impossibile aggiungere l'identificativo"
     },
-    "compareTitle": "Confronto con esistente #{id}",
+    "reuseExisting": {
+      "success": "Chiave di ricerca aggiunta agli identificatori dell'asset esistente",
+      "error": "Impossibile aggiornare gli identificatori dell'asset esistente"
+    },
     "confidenceTip": {
       "exact": "Corrispondenza esatta: simbolo e tipo asset coincidono",
       "high": "Alta confidenza: forte corrispondenza di simbolo o ISIN",
       "medium": "Media confidenza: solo simbolo (tipo non verificato)",
       "low": "Bassa confidenza: corrispondenza parziale o solo per nome"
+    },
+    "brokerOpeningMsg": "{count} transazione/i datata/e prima dell'apertura del broker ({openedAt}). Più vecchia: {minDate}.",
+    "autoFixOpening": "Imposta apertura a {date}",
+    "autoFixOpeningTip": "Imposta la data di apertura del broker alla sua transazione più vecchia, così le righe diventano importabili.",
+    "autoFixFailed": "Impossibile aggiornare la data di apertura del broker.",
+    "duplicatesSelected": "{n} duplicati selezionati",
+    "resolver": {
+      "pendingEditor": "editor in sospeso",
+      "title": "Risolutore duplicati del lotto",
+      "subtitle": "{n} gruppo/i di duplicati trovati tra i file.",
+      "filePriority": "Priorità file",
+      "memberCount": "{n} righe",
+      "groupHelp": "Seleziona ogni riga da mantenere. I gruppi non modificati seguono la priorità dei file.",
+      "resetDefault": "Ripristina default",
+      "defaultKeeper": "mantenuta di default",
+      "priorityPanelHint": "Imposta una priorità di selezione per la risoluzione dei duplicati: i file più in alto forniscono la copia mantenuta di default.",
+      "recalcDefaults": "Ricalcola per priorità",
+      "keepColumn": "Tieni",
+      "duplicateBadge": "duplicato",
+      "similarityTotal": "Sovrapposizione totale",
+      "similarityPartial": "Parziale",
+      "similarityTooltip": "Totale: ogni riga ha una corrispondenza tra i file. Parziale: almeno una riga non ha un gemello esatto — rivedi prima di importare.",
+      "statusAllAuto": "Tutto auto-risolto",
+      "statusToVerify": "{n} da verificare",
+      "tierTotalTitle": "Sovrapposizione totale",
+      "tierPartialTitle": "Sovrapposizione parziale",
+      "groupCount": "{n} gruppi"
+    },
+    "duplicatesSelectedTip": "Conta solo le righe duplicate ancora selezionate (verranno importate). I duplicati esatti nel lotto sono già deselezionati e non contati qui.",
+    "deselectReasons": {
+      "title": "Alcune righe sono deselezionate:",
+      "beforeOpening": "{n} datate prima dell'apertura del broker (non importabili)",
+      "pendingDuplicate": "{n} duplicati esatti di transazioni già in sospeso",
+      "dbDuplicate": "{n} duplicati di transazioni già nel database"
+    },
+    "compareModal": {
+      "title": "Confronto duplicati ({n})",
+      "field": "Campo",
+      "keep": "Tieni",
+      "keepAll": "Tutte",
+      "dbColumn": "DB #{id}",
+      "hint": "I campi evidenziati differiscono tra le transazioni.",
+      "openHint": "Clicca per confrontare affiancati",
+      "openAction": "Confronta",
+      "keptCount": "Ne tieni {n} su {total}"
+    },
+    "noticeConfirmTitle": "Note dall'importazione",
+    "noticeConfirmMessage": "{n, plural, one {L'importazione ha lasciato # nota che spiega una scelta fatta. Leggila prima di continuare.} other {L'importazione ha lasciato # note che spiegano le scelte fatte. Leggile prima di continuare.}}",
+    "todoBlockerVerifyHint": "{n, plural, one {# riga non è stata compresa del tutto dall'importazione e va rivista prima di salvare.} other {# righe non sono state comprese del tutto dall'importazione e vanno riviste prima di salvare.}}",
+    "parseErrorsTitle": "Non è stato possibile analizzare {n} file",
+    "brimNotice": {
+      "ca_succession_transfer_in": "Sono stati identificati dei titoli trasferiti da un altro dossier ({n} righe).\nSono stati registrati come transazioni di tipo «Rettifica» perché non hanno un movimento di cassa associato: si suppone quindi che fossero già tuoi presso un altro broker.\nIn caso affermativo, e se quel broker è tracciato su LibreFolio, importando l'altra metà della transazione il sistema proporrà di collegare le due e di trasformarle in un «Trasferimento titoli».\nDi seguito le righe in dettaglio:"
+    },
+    "evidenceRowsTitle": "Righe del file",
+    "evidenceRowCount": "{n} righe",
+    "noticeSectionInfo": "Note informative",
+    "noticeSectionWarning": "Da verificare",
+    "manualFieldsTooltip": "Le transazioni riportate qui sotto potrebbero essere sbagliate: l'importazione non è riuscita a ricavare da sola tutti i campi. Ti verrà chiesto di correggerle prima di salvare l'importazione.",
+    "stepFixTitle": "Correzioni",
+    "stepAssetsTitle": "Unifica asset",
+    "duplicateAssetHint": "Due asset in archivio corrispondono a questo titolo: probabilmente è un duplicato.",
+    "duplicateAssetMerge": "Unisci",
+    "stepDuplicatesTitle": "Duplicati",
+    "fixStep": {
+      "intro": "Queste righe sono state registrate, ma dal file non arrivano abbastanza informazioni per esserne certi. Sistemale adesso: il controllo duplicati che segue confronta ogni riga con il tuo database, e una riga registrata con il tipo sbagliato viene confrontata con le cose sbagliate.",
+      "pending": "{n, plural, one {# riga ancora da sistemare} other {# righe ancora da sistemare}}",
+      "settled": "{n, plural, one {# sistemata} other {# sistemate}}",
+      "allDone": "Niente altro da correggere",
+      "allDoneDetail": "{n, plural, =0 {Niente da correggere.} one {# riga sistemata. Puoi proseguire.} other {# righe sistemate. Puoi proseguire.}}",
+      "apply": "Applica correzione",
+      "acceptAsIs": "Tieni com'è",
+      "acceptAsIsHint": "Tenerla com'è è una scelta consapevole: la riga viene importata come l'ha registrata l'importatore.",
+      "badgeCorrected": "Corretta",
+      "badgeKept": "Mantenuta",
+      "applyAgain": "Aggiorna",
+      "acceptAll": "{n, plural, one {Mantieni la riga rimasta com'è} other {Mantieni le # righe rimaste come sono}}",
+      "acceptAllHint": "Accetta la lettura del plugin per tutte le righe ancora in attesa. Puoi comunque cambiarle dopo.",
+      "assetPlaceholder": "Scegli asset",
+      "groupTrades": "Movimenti di cassa che potrebbero essere operazioni",
+      "groupTradesHint": "Registrati come versamento o prelievo perché dal file non arrivano quantità e strumento. Se erano un acquisto o una vendita, correggili adesso.",
+      "groupSplits": "Importi che comprendono più cose",
+      "groupSplitsHint": "Il file dà un solo importo per operazioni che ne contengono più di una: prezzo del titolo, rateo cedolare, commissioni. Se hai il controvalore netto puoi scorporarlo qui; altrimenti tieni la riga com'è.",
+      "groupCharges": "Spese e imposte senza strumento",
+      "groupChargesHint": "Spese o imposte su operazioni in titoli che il file non collega a nessuno strumento. Assegnale al titolo giusto, oppure tienile così se riguardano il conto.",
+      "assetNone": "Nessun asset (spesa del broker)",
+      "reset": "Ripristina",
+      "resetHint": "Riporta la riga com’era stata letta dal file, annullando la risposta data qui.",
+      "resetAll": "Ripristina tutte ({n})",
+      "resetAllHint": "Riporta tutte le righe già sistemate com’erano state lette dal file.",
+      "splitTitle": "Vuoi separare il prezzo dagli oneri?",
+      "splitRowAmountLabel": "Importo della riga",
+      "splitNominalLabel": "Valore nominale",
+      "splitNominalSource": "(riga {row})",
+      "splitNominalHint": "Il valore nominale è il capitale del titolo, cioè quanto la banca rimborsa a scadenza: non è quanto hai pagato. L’ho letto dalla cedola dello stesso titolo.",
+      "splitTotalLabel": "Totale della riga",
+      "splitLegsLabel": "Voci da scorporare",
+      "splitLegsHint": "Aggiungi una voce per ogni onere che leggi sulla nota informativa. Quello che resta è il prezzo del titolo: la somma torna sempre all'importo della riga.",
+      "splitAddLine": "Aggiungi una voce",
+      "splitRemoveLine": "Togli questa voce",
+      "splitErrorExceeds": "Le voci messe insieme superano i {total} della riga: non resterebbe nulla per il titolo.",
+      "splitErrorNonpositive": "Ogni voce deve avere un importo maggiore di zero.",
+      "splitKind": {
+        "fee": "Commissioni",
+        "tax": "Imposte e bolli",
+        "accrued": "Rateo cedolare"
+      },
+      "reportIssueHint": "Se una riga continua a sembrarti sbagliata, potrebbe essere un bug dell'importazione e non un dato errato:",
+      "reportIssueLink": "apri una issue su GitHub"
+    },
+    "duplicatesStepIntro": "Alcune righe compaiono in più di uno dei file che stai importando: scegli quale copia tenere. Il confronto con il tuo database è già stato rifatto sulle righe corrette e arriva pronto alla revisione.",
+    "duplicateRecheckFailed": "Non è stato possibile ricontrollare i duplicati ({error}). Il risultato mostrato è quello calcolato prima delle tue correzioni.",
+    "evidenceOpenFile": "Riga {n} nel file",
+    "evidenceOpenFileHint": "Apri l'anteprima del file su questa riga, per vedere anche quelle vicine.",
+    "inspectAsset": "Ispeziona / modifica",
+    "inspectAssetHint": "Apre lo strumento selezionato per verificarne valuta, identificatori e fonte prezzi.",
+    "assetUnify": {
+      "intro": "Lo stesso titolo può comparire in più file con nomi o codici diversi. Qui decidi quanti strumenti distinti ci sono davvero: le scelte successive si faranno su questo elenco.",
+      "stateConfirmed": "unificato",
+      "stateProposed": "da confermare",
+      "confirm": "Conferma",
+      "split": "Separa",
+      "mergeWith": "Unisci con…",
+      "extract": "Estrai dal gruppo",
+      "noTargets": "Nessun altro titolo",
+      "actions": "Azioni",
+      "inspect": "Modifica asset",
+      "noIsin": "senza ISIN",
+      "txCount": "{count} transazioni",
+      "reasonIsin": "stesso ISIN",
+      "reasonTicker": "stesso ticker",
+      "reasonName": "stesso nome",
+      "reasonNameSuffix": "stesso nome, cambia solo il suffisso (es. CUM/EX)",
+      "reasonNameNoIsin": "nomi molto simili, uno dei due senza ISIN",
+      "empty": "Nessun titolo estratto dai file.",
+      "reset": "Ripristina unione automatica",
+      "resetHint": "Annulla tutte le unioni, separazioni e scelte di codice principale fatte qui e torna alla proposta automatica.",
+      "openProposals": "{n} gruppi da confermare",
+      "allSettled": "{n} titoli distinti",
+      "kindIsin": "ISIN",
+      "kindSymbol": "Ticker",
+      "kindName": "Nome",
+      "electPrimary": "Usa questo come {kind} principale",
+      "legendConfirmed": "unificato",
+      "legendProposed": "da confermare",
+      "legendSingle": "da solo",
+      "legendPrimary": "identificativo principale",
+      "idsHint": "La ⭐ segna l’identificativo principale: clicca un altro badge per cambiarlo.",
+      "primaryIsCode": "{kind} principale — è il codice con cui il titolo verrà quotato e ritrovato",
+      "primaryIsName": "Nome principale — è il nome con cui il titolo comparirà in LibreFolio",
+      "rename": "Rinomina questo titolo",
+      "fromDb": "in archivio",
+      "fromDbHint": "Questo titolo è già in archivio: il nome è quello salvato. Usa la matita in alto per modificarlo.",
+      "linkAll": "{reason} · tutte le {n} estrazioni",
+      "linkSome": "{reason} · {members}",
+      "linkScore": "somiglianza {score}%"
+    },
+    "assetPicker": {
+      "sectionImport": "In questo import",
+      "sectionArchive": "In archivio",
+      "create": "Crea un nuovo asset",
+      "createNamed": "Crea «{name}»"
     }
   },
   "brokers": {
@@ -490,12 +726,6 @@
     "duplicateCurrencies": "Rilevate valute duplicate",
     "cashBalances": "Saldi di Cassa",
     "noCashBalances": "Nessuna posizione di cassa",
-    "holdings": "Posizioni",
-    "noHoldings": "Nessuna posizione in asset",
-    "noTransactions": "Nessuna transazione",
-    "viewAllTransactions": "Visualizza Tutte le Transazioni",
-    "deposit": "Deposito",
-    "withdraw": "Prelievo",
     "confirmDelete": "Sei sicuro di voler eliminare questo broker?",
     "confirmDeleteWithTransactions": "Questo broker ha {n} transazioni. L'eliminazione forzata rimuoverà tutte le transazioni. Continuare?",
     "forceDelete": "Elimina Forzatamente",
@@ -515,6 +745,8 @@
     "loadFailed": "Errore nel caricamento del broker",
     "importFiles": "File di Importazione",
     "showImportHistory": "Report Caricati",
+    "viewInTransactions": "Vedi in Transazioni",
+    "viewInTransactionsHint": "Apri la pagina Transazioni filtrata per questo broker e i filtri attuali",
     "noImportFiles": "Nessun file di importazione",
     "uploadHint": "Carica report del broker per importare le transazioni",
     "manageFiles": "Gestisci tutti i file",
@@ -544,7 +776,21 @@
       "ownerDesc": "Controllo totale + % possesso",
       "editorDesc": "Può modificare transazioni",
       "viewerDesc": "Sola lettura",
-      "lastOwnerWarning": "Non è possibile rimuovere l'ultimo proprietario."
+      "loadFailedBlocking": "Impossibile caricare le impostazioni di condivisione attuali. Il salvataggio è disabilitato finché un nuovo tentativo non riesce.",
+      "saveRequiresLoadedAccess": "Carica le impostazioni di condivisione attuali prima di salvare. Usa Riprova.",
+      "lastOwnerRemovalWarning": "Non puoi rimuovere l’ultimo owner. Promuovi prima un altro owner, oppure elimina il broker dalla lista broker; se ha transazioni, usa l’eliminazione forzata per eliminare anche quelle.",
+      "lastOwnerDemotionWarning": "Non puoi retrocedere l’ultimo owner. Promuovi prima un altro owner.",
+      "yourAccess": "Il tuo accesso",
+      "leaveBroker": "Abbandona il broker",
+      "leaveConfirm": "Rimuovere il tuo accesso a questo broker? Non lo vedrai più nelle tue liste.",
+      "demoteToViewer": "Passa a visualizzatore",
+      "demoteConfirm": "Retrocederti a visualizzatore? Non potrai più modificare i dati di questo broker. Un owner può promuoverti di nuovo.",
+      "leaveAndDelete": "Abbandona ed elimina il broker",
+      "leaveLastOwnerWarning": "Sei l'unico owner: abbandonando eliminerai questo broker con tutti i suoi report e le sue transazioni. L'operazione è irreversibile.",
+      "leaveDone": "Hai abbandonato il broker",
+      "leaveDeletedBroker": "Broker eliminato: eri l'ultimo owner",
+      "selfDemoteDone": "Ora sei un visualizzatore",
+      "leaveLastOwnerHint": "Se non è ciò che vuoi, assegna prima un altro utente come owner e poi abbandona."
     },
     "lots": {
       "buyDate": "Data Acquisto",
@@ -747,9 +993,16 @@
       "aggregateReturn": "Rendimento aggregato",
       "estimatedCurrentValue": "Valore corrente stimato",
       "yAxisAuto": "Auto",
-      "yAxisFromZero": "Da 0"
+      "yAxisFromZero": "Da 0",
+      "annualizedReturn": "Annualizzato",
+      "annualizedReturnTooltip": "Rendimento netto annualizzato (CAGR) del singolo lotto sulla sua durata di detenzione, al netto di proventi e spese, per confrontare lotti tenuti per periodi diversi."
     },
-    "createdInSystem": "Creato nel Sistema"
+    "createdInSystem": "Creato nel Sistema",
+    "deleteBlockedTitle": "Impossibile eliminare il broker",
+    "deleteBlockedMessage": "Impossibile eliminare: questo broker ha {count} transazione/i.",
+    "forceCascadeDelete": "Elimina broker e transazioni",
+    "goToTransactions": "Vai alle transazioni",
+    "deleteFailed": "Impossibile eliminare il broker"
   },
   "chart": {
     "tooltip": {
@@ -813,17 +1066,6 @@
       "compound": "Crescita Composta",
       "sine": "Onda Sinusoidale",
       "fxPair": "Coppia FX",
-      "ema": "EMA",
-      "macd": "MACD",
-      "rsi": "RSI",
-      "bollinger": "Bande di Bollinger",
-      "emaFull": "Media Mobile Esponenziale",
-      "macdFull": "Convergenza Divergenza Medie Mobili",
-      "rsiFull": "Indice di Forza Relativa",
-      "emaDesc": "$EMA_t = \\alpha \\cdot P_t + (1-\\alpha) \\cdot EMA_{t-1}$",
-      "macdDesc": "$MACD = EMA_{fast} - EMA_{slow}$",
-      "rsiDesc": "$RSI = 100 - \\frac{100}{1 + RS}$",
-      "bollingerDesc": "$\\mu \\pm k\\sigma$  (default $k = 2$)",
       "linearDesc": "$y(t) = y_0 \\cdot (1 + r \\cdot t)$",
       "compoundDesc": "$y(t) = y_0 \\cdot (1 + r)^t$",
       "sineDesc": "$y(t) = A \\sin(2\\pi t / T) + y_0$",
@@ -831,10 +1073,6 @@
       "compoundAbbr": "C.Comp",
       "sineAbbr": "Onda Sin",
       "fxPairAbbr": "Coppia FX",
-      "emaAbbr": "EMA",
-      "macdAbbr": "MACD",
-      "rsiAbbr": "RSI",
-      "bollingerAbbr": "Boll",
       "assetComparison": "Confronto Asset",
       "assetComparisonFull": "Sovrapposizione prezzo asset",
       "assetComparisonAbbr": "Asset",
@@ -854,7 +1092,11 @@
       "multiplier": "Moltiplicatore",
       "overbought": "Ipercomprato",
       "oversold": "Ipervenduto",
-      "histogramScale": "Scala Istogramma"
+      "histogramScale": "Scala Istogramma",
+      "riskFreeAnnualRate": "Tasso annuo privo di rischio",
+      "comparisonAsset": "Asset di confronto",
+      "window": "Finestra",
+      "fullHistory": "Storia completa"
     },
     "yAxisScale": "Scala Asse Y",
     "yAxisScaleDesc": "Controllo intervallo asse primario",
@@ -877,7 +1119,26 @@
     },
     "macdLineColor": "Colore Linea MACD",
     "noDataAvailable": "Nessun dato disponibile. Prova a sincronizzare questo asset/coppia.",
-    "conversionFailed": "Conversione valuta fallita — dati non mostrati (coppia FX non configurata)"
+    "conversionFailed": "Conversione valuta fallita — dati non mostrati (coppia FX non configurata)",
+    "backendPreviewRealTarget": "L'anteprima degli indicatori tecnici è disponibile su un asset o una coppia valutaria reale.",
+    "backendPreviewApply": "L'anteprima degli indicatori backend mostra le ultime impostazioni applicate. Applica le modifiche per aggiornarla.",
+    "backendPreviewUnavailable": "L'anteprima degli indicatori backend appare dopo il caricamento dei risultati per questo asset o coppia.",
+    "signalCatalogUnavailable": "Il catalogo dei segnali tecnici non è disponibile. Confronti e benchmark locali restano disponibili.",
+    "signalResultsUnavailable": "Non è stato possibile aggiornare i segnali tecnici. I dati dei prezzi restano disponibili.",
+    "signalProblems": {
+      "missingInputFields": "Mancano i campi prezzo richiesti: {fields}. Le date presenti non bastano; sincronizza con un provider che fornisca questi valori OHLCV.",
+      "incompleteInputCoverage": "I campi prezzo richiesti sono incompleti: {fields}. Punti utilizzabili: {available}/{requested}.",
+      "insufficientHistory": "Storico utilizzabile insufficiente per questi parametri: {available} punti disponibili, {required} necessari.",
+      "incompleteWarmup": "Il segnale è utilizzabile ma non completamente stabilizzato: disponibili {used}/{required} punti di warm-up.",
+      "dataGaps": "Lo storico richiesto contiene lacune: mancano {missing} punti su {requested} (copertura {coverage}%).",
+      "missingEvents": "Mancano gli eventi richiesti: {events}.",
+      "incompatibleDomain": "Questo indicatore non è compatibile con questo grafico.",
+      "calculationFailed": "Calcolo del segnale non riuscito: {message}",
+      "resultMissing": "Il backend non ha restituito un risultato per questo segnale. Riprova la richiesta dei segnali.",
+      "partialResult": "Questo segnale è disponibile solo parzialmente con i dati attuali.",
+      "unavailable": "Questo segnale non può essere calcolato con i dati disponibili.",
+      "partialContiguousSegment": "Segnale calcolato sul segmento contiguo completo {start}–{end}. Esclusi {excluded} punti caricati perché date o campi richiesti erano incompleti. Input completo: {available}/{requested} ({coverage}%, warm-up incluso). Sequenza massima mancante: {consecutive} punti."
+    }
   },
   "common": {
     "addMeasure": "Aggiungi misura",
@@ -1106,16 +1367,13 @@
     "losses": "Perdite",
     "seeAllPositions": "Vedi tutte →",
     "aiExport": "Export AI",
-    "aiExportFailed": "Errore nella copia negli appunti",
-    "aiExportEmpty": "Nessun dato portafoglio da esportare",
-    "aiExportBuilding": "Preparazione export…",
     "costsTooltip": "Commissioni e tasse registrate nel periodo selezionato.",
     "periodPnlTooltip": "Guadagno o perdita totale attribuibile solo al periodo selezionato (variazione non realizzata + realizzato + reddito − costi). Può differire dal guadagno totale della posizione.",
     "unrealizedPnlPercent": "P&L %",
     "pnlChange1d": "Δ1",
     "pnlChange1dTooltip": "Variazione del P&L latente rispetto a ieri, mantenendo costante la quantità odierna.",
     "pnlChange1dPercent": "Δ1%",
-    "pnlChange1dPercentTooltip": "Δ P&L rispetto a ieri espresso in percentuale del P&L latente di ieri.",
+    "pnlChange1dPercentTooltip": "Variazione giornaliera del P&L latente in percentuale del valore di mercato della posizione di ieri. Per una posizione long con quantità invariata coincide con il rendimento giornaliero del prezzo.",
     "quantity": "Qtà",
     "price": "Prezzo",
     "pmc": "PMC",
@@ -1134,36 +1392,15 @@
     "categoryOther": "Altro",
     "unrealizedPnlPercentTooltip": "P&L non realizzato in percentuale sul costo residuo (P&L non realizzato / costo residuo).",
     "pmcTooltip": "Prezzo medio di carico per unità della posizione attualmente aperta.",
+    "oldestOpenLotDate": "Lotto aperto più vecchio",
+    "oldestOpenLotDateTooltip": "Data di apertura del lotto FIFO più vecchio ancora aperto per questa posizione.",
     "unallocatedIncome": "Reddito non allocato",
     "unallocatedCosts": "Costi non allocati",
     "otherReconciliationResidual": "Altro / residuo di riconciliazione",
-    "aiExportMenu": {
-      "snapshot": {
-        "label": "Fotografia del portafoglio",
-        "description": "Fotografia attuale dei tuoi asset."
-      },
-      "pac_planning": {
-        "label": "Pianificazione PAC",
-        "description": "Fammi domande sulle mie idee, cerca strumenti online e proponimi un'allocazione PAC."
-      },
-      "rebalancing": {
-        "label": "Ribilanciamento portafoglio",
-        "description": "Fammi domande sulla distribuzione che voglio e proponimi come ribilanciare il portafoglio."
-      },
-      "market_trend": {
-        "label": "Andamento di mercato",
-        "description": "Spiegami cosa muove i miei asset, incrociando i dati tecnici con le notizie online."
-      },
-      "income_review": {
-        "label": "Rendita e flussi di cassa",
-        "description": "Riepilogami il reddito da dividendi e interessi, poi chiedimi se preferisco reinvestirlo."
-      },
-      "describe_portfolio": {
-        "label": "Descrivi il portafoglio",
-        "description": "Raccontami il mio portafoglio."
-      }
-    },
-    "aiExportCopiedGeneric": "{label} copiato negli appunti"
+    "annualizedReturn": "Annualizzato",
+    "annualizedReturnTooltip": "Rendimento netto annualizzato (CAGR) di tutti i lotti ancora aperti della posizione, dalla prima transazione a oggi — inclusi proventi meno spese; valorizzato al costo se manca il prezzo. Per confrontare posizioni tenute per periodi diversi.",
+    "annualizedReturnPeriodTooltip": "Rendimento netto annualizzato (CAGR) sulla finestra di detenzione della posizione nel periodo selezionato, per confrontare periodi di durata diversa.",
+    "netWorthTooltip": "Titoli al valore di mercato + liquidità (+ valore in transito). Include la liquidità — non confrontabile con il solo controvalore titoli di un estratto conto."
   },
   "dataQuality": {
     "headerInfoOnly": "Note sulla qualità dei dati",
@@ -1172,6 +1409,8 @@
     "missingPrice": "{count} asset senza prezzo di mercato — esclusi dal NAV",
     "transactionImplied": "{count} asset valorizzati ancora al costo — nessun prezzo di mercato disponibile da oltre 2 settimane (al {as_of_date})",
     "currentPriceAssumedAtCost": "Prezzo corrente non disponibile — valore aperto stimato al costo, P&L di mercato escluso",
+    "currentPriceAssumedAtCostRange": "Nessun prezzo di mercato disponibile tra {date_from} e {date_to} — valore aperto stimato al costo, P&L di mercato escluso",
+    "affectedLots": "Lotti interessati:",
     "stalePrice": "{count} asset con prezzi obsoleti",
     "missingFx": "Mancano tassi FX per {count} coppia/e — i totali potrebbero essere incompleti",
     "navIncomplete": "NAV incompleto per {count} giorno/i tra {date_from} e {date_to}",
@@ -1268,7 +1507,9 @@
       "yearsShort": "A"
     },
     "today": "Oggi",
-    "resolvingStart": "Ricerca…"
+    "resolvingStart": "Ricerca…",
+    "openCalendar": "Apri il calendario",
+    "formatHint": "Scrivi la data oppure scegliela dal calendario. Formati accettati: 2026-08-07, 2026/8/7, 7-8-2026, 7.8.2026 — l’anno va scritto per esteso."
   },
   "error": {
     "pageNotFound": "Pagina Non Trovata",
@@ -1323,6 +1564,7 @@
       "createIntermediatePairsHint": "Ogni passaggio delle catene selezionate verrà salvato come coppia autonoma con il suo provider, così da poterle sincronizzare indipendentemente.",
       "titleEdit": "Modifica Provider Coppia",
       "createFailed": "Creazione coppia FX fallita",
+      "createConflict": "Qualcun altro ha modificato questa rotta di conversione nello stesso momento. Non è stato salvato nulla: riprova.",
       "alreadyExists": "Questa coppia esiste già — sincronizza o modificala dalla pagina FX."
     },
     "sync": {
@@ -1364,7 +1606,7 @@
       "toastFailed": "Impossibile eliminare {pair}",
       "resultDeleted": "eliminata ({n} tassi)"
     },
-    "removeProvider": "Rimuovi provider"
+    "rateNotAvailable": "Tasso non disponibile"
   },
   "fxDetail": {
     "editRates": "Modifica tassi",
@@ -1379,18 +1621,7 @@
     "syncDisabledManual": "Sync disabilitato — nessun provider configurato. Aggiungere un provider o inserire i tassi manualmente.",
     "editorTipDesktop": "Doppio clic sul grafico per saltare a quella data",
     "editorTipMobile": "Pressione prolungata sul grafico per saltare a quella data",
-    "aiExportMenu": {
-      "fx_snapshot": {
-        "label": "Fotografia del cambio",
-        "description": "Fotografia attuale del tasso di questa coppia valutaria, in entrambe le direzioni."
-      },
-      "fx_trend": {
-        "label": "Spiega il trend del cambio",
-        "description": "Cerca questa coppia valutaria online e spiegami perché il cambio si sta muovendo nella direzione attuale."
-      }
-    },
-    "aiExport": "Export AI",
-    "aiExportBuilding": "Preparazione export…"
+    "aiExport": "Export AI"
   },
   "help": {
     "helpAndSupport": "Aiuto e Supporto",
@@ -1434,6 +1665,7 @@
   "prices": {
     "sync": {
       "noResponse": "nessuna risposta",
+      "noReport": "Il server non ha riportato nulla su questo elemento",
       "partialSuffix": "parziale",
       "skippedSuffix": "saltato",
       "failedDefault": "fallito",
@@ -1532,8 +1764,9 @@
     "discardChangesConfirm": "Hai modifiche non salvate. Vuoi scartare tutte le modifiche?",
     "globalSettingCategories": {
       "session": "Sessione",
-      "sync": "Scheduler e Upload",
-      "defaults": "Valori Predefiniti"
+      "sync": "Job di aggiornamento",
+      "defaults": "Valori Predefiniti",
+      "memory": "Memoria"
     },
     "globalSettingNames": {
       "session_ttl_hours": "Durata Sessione",
@@ -1628,7 +1861,8 @@
           "configSummary": "Ogni {freq}min · {times} · {days}"
         },
         "timezone": "Fuso orario",
-        "timezoneHint": "Gli orari sottostanti sono visualizzati in questo fuso orario. Salvati in UTC."
+        "timezoneChangeWarning": "Cambiare fuso mantiene invariati questi orari e giorni, ma cambia l'istante effettivo di esecuzione in UTC.",
+        "timezoneHintLocal": "Gli orari e i giorni qui sotto sono interpretati in questo fuso orario."
       }
     },
     "devicePixelRatioHint": "Rapporto tra i pixel fisici del dispositivo e i pixel CSS. 1x = schermo standard, 2x+ = schermo Retina/HiDPI.",
@@ -1639,8 +1873,39 @@
     "deploymentModeDocker": "Docker",
     "deploymentModeLocal": "Locale",
     "lock": "Blocca",
-    "selectLanguage": "Seleziona lingua",
-    "unlock": "Sblocca"
+    "unlock": "Sblocca",
+    "pluginDiagnostics": "Diagnostica plugin",
+    "pluginDiagnosticsAllLoaded": "Tutti caricati",
+    "installedSignals": "Segnali installati",
+    "pluginSystemAsset": "Asset",
+    "pluginSystemFx": "FX",
+    "pluginSystemBrim": "BRIM",
+    "pluginSystemSignals": "Segnali",
+    "preferencesSaveFailed": "Impossibile salvare le preferenze",
+    "preferencesSavePartial": "Alcune preferenze non sono state salvate",
+    "profileSaveFailed": "Impossibile salvare le modifiche al profilo",
+    "profileSavePartial": "Alcune modifiche al profilo non sono state salvate",
+    "savedFields": "Salvati",
+    "failedFields": "Non salvati",
+    "comingSoon": "In arrivo",
+    "cache": {
+      "title": "Stato della cache",
+      "description": "Cache in memoria dei dati dei provider. Svuotare forza un nuovo recupero dalla sorgente.",
+      "refresh": "Aggiorna",
+      "colName": "Cache",
+      "colSize": "Dim. / Max",
+      "colTtl": "TTL",
+      "clear": "Svuota",
+      "clearAll": "Svuota tutto",
+      "empty": "Nessuna cache registrata",
+      "loadFailed": "Caricamento dello stato della cache fallito",
+      "cleared": "Cache {name} svuotata",
+      "clearedAll": "{count} cache svuotate",
+      "clearFailed": "Svuotamento della cache fallito",
+      "confirmClearTitle": "Svuotare la cache {name}?",
+      "confirmClearAllTitle": "Svuotare tutte le cache?",
+      "confirmWarning": "Dopo lo svuotamento, il prossimo recupero di questi dati subirà rallentamenti paragonabili a un riavvio del server."
+    }
   },
   "sharedResource": {
     "syncAll": "Sinc. Tutto",
@@ -1662,11 +1927,6 @@
     },
     "confirmBulkAction": "Sei sicuro di voler eseguire questa azione su",
     "filterLabel": "Filtro"
-  },
-  "ticker": {
-    "noAssets": "Nessun asset monitorato",
-    "loading": "Caricamento prezzi…",
-    "errorFetching": "Errore nel caricamento prezzi"
   },
   "transactions": {
     "title": "Transazioni",
@@ -1780,7 +2040,8 @@
       "stateDel": "elimina",
       "suggestLightbulb": "Mostra suggerimento",
       "partnerInaccessible": "Partner su broker inaccessibile",
-      "eventTooltipAmount": "Importo"
+      "eventTooltipAmount": "Importo",
+      "splitHint": "Per eliminare solo un lato, usa prima Dividi per scollegare la coppia."
     },
     "commit": {
       "serverError": "Salvataggio impossibile — errore del server"
@@ -1843,29 +2104,10 @@
       "promoteSubtitle": "Seleziona la transazione di destinazione",
       "target": "Destinazione"
     },
-    "bulkDelete": {
-      "title": "Elimina transazioni",
-      "intro": "Le transazioni collegate (trasferimenti, cambi valuta) devono essere eliminate insieme.",
-      "confirmSimple": "Eliminare {n} transazione/i?",
-      "confirmSimpleDesc": "Questa azione non può essere annullata.",
-      "applyToAll": "Applica a tutte le righe collegate",
-      "removeAll": "Rimuovi dalla selezione",
-      "extendAll": "Elimina anche il partner",
-      "colSelected": "Selezionata",
-      "colPartner": "Partner",
-      "colAction": "Azione",
-      "extendRow": "Elimina anche #{id}",
-      "noConflict": "Le altre {n} riga/e non hanno partner collegati — saranno eliminate normalmente.",
-      "summary": "Batch finale: {total} da eliminare (pulite: {clean} · estese: {extended} + {partners} partner · rimosse: {removed})",
-      "confirm": "Elimina {n}",
-      "deleting": "Eliminazione…",
-      "rolledBack": "Eliminazione annullata — nessuna modifica effettuata."
-    },
     "validate": {
       "now": "Verifica ora",
       "validating": "verifica in corso…",
       "ok": "valido",
-      "deleteOk": "rimozione ammessa",
       "issuesHeader": "Sono stati identificati degli errori nei campi",
       "balanceIssuesHeader": "Questa configurazione genera dati inconsistenti",
       "autoOff": "Auto-validazione OFF ({n} righe > {threshold}) — premi ⚡️Verifica ora prima del commit",
@@ -1898,7 +2140,6 @@
       "linkUuidPairCount": "Il gruppo di collegamento ha {count} elementi (previsti 2)",
       "pairTypeMismatch": "La coppia collegata deve avere lo stesso tipo (trovati {typeA} e {typeB})",
       "pairSameBroker": "Il trasferimento richiede broker diversi (entrambi su {brokerName})",
-      "cannotLinkEventNoAsset": "Impossibile collegare un evento senza un asset selezionato",
       "typeCannotSplit": "Questo tipo di transazione non può essere separato",
       "splitIdsMismatch": "Le due transazioni non sono una coppia collegata",
       "promoteRefNotFound": "Transazione referenziata per la promozione non trovata",
@@ -1907,7 +2148,8 @@
       "wacFxUnavailable": "❌ Calcolo PMC fallito.",
       "wacFxUnavailableSyncLink": "Sincronizza i tassi FX",
       "wacFxUnavailableOrManual": "o passa alla modalità manuale.",
-      "costBasisRequired": "❌ <b>{type}</b> con quantità positiva richiede un costo base. Usa la modalità <b>Auto</b> (PMC) oppure inserisci un valore <b>manuale</b>."
+      "costBasisRequired": "❌ <b>{type}</b> con quantità positiva richiede un costo base. Usa la modalità <b>Auto</b> (PMC) oppure inserisci un valore <b>manuale</b>.",
+      "pairDeleteIncomplete": "Transazione collegata: per eliminare questa riga devi eliminare anche la sua controparte (transazione #{partnerId}). Se la controparte è in un broker che non puoi modificare, chiedi al proprietario di eliminarla."
     },
     "pydantic": {
       "greaterThan": "Il valore deve essere maggiore di {gt}",
@@ -1942,25 +2184,6 @@
       "assetRequired": "Seleziona un asset",
       "quantityInvalid": "La quantità deve essere un numero valido",
       "cashRequired": "Importo e valuta sono obbligatori"
-    },
-    "deleteModal": {
-      "titleStandalone": "Elimina transazione",
-      "titleLinked": "Elimina transazione collegata",
-      "pairedIntro": "Entrambe le transazioni della coppia verranno eliminate.",
-      "splitHint": "Per eliminare solo un lato, usa prima Dividi per scollegare la coppia.",
-      "linkedInfo": "Questa transazione fa parte di una coppia collegata.",
-      "notAccessible": "non accessibile",
-      "blockedMessage": "Impossibile eliminare: serve accesso Editor su entrambi i broker per eliminare una coppia collegata.",
-      "contactOwner": "Contatta il proprietario di",
-      "forAccess": "per l'accesso.",
-      "deleteBoth": "Elimina entrambe",
-      "toastDeletedStandalone": "Transazione eliminata:",
-      "toastDeletedPaired": "Coppia eliminata:",
-      "toastOnBroker": "su",
-      "deleteAbortedTitle": "Eliminazione annullata",
-      "deleteAbortedDetail": "L'operazione è stata annullata perché violerebbe le regole di saldo:",
-      "failed": "Eliminazione fallita",
-      "validateFailed": "Validazione fallita"
     },
     "picker": {
       "title": "Seleziona transazioni da aggiungere",
@@ -2059,7 +2282,8 @@
     },
     "size": "Dimensione",
     "zoomIn": "Zoom avanti",
-    "zoomOut": "Zoom indietro"
+    "zoomOut": "Zoom indietro",
+    "previewAutofitHint": "Doppio clic sull’intestazione di una colonna per adattarne la larghezza"
   },
   "donationPopup": {
     "title": "LibreFolio cresce grazie agli utenti come te!",
@@ -2075,5 +2299,799 @@
     "deleteFailed": "Impossibile eliminare il file",
     "loadFailed": "Impossibile caricare i file",
     "uploadFailed": "Impossibile caricare il file"
+  },
+  "signals": {
+    "groups": {
+      "trend": "Trend",
+      "momentum": "Momentum",
+      "volatility": "Volatilità",
+      "volume": "Volume",
+      "risk": "Rischio"
+    },
+    "dataUsed": "Dati",
+    "dataFields": {
+      "open": "Apertura",
+      "high": "Massimo",
+      "low": "Minimo",
+      "close": "Chiusura",
+      "volume": "Volume"
+    },
+    "selector": {
+      "searchPlaceholder": "Cerca indicatori",
+      "noMatches": "Nessun indicatore corrispondente"
+    },
+    "dataShownPerIndicator": "I dati richiesti sono indicati per ogni indicatore",
+    "params": {
+      "dPeriod": "Periodo %D"
+    },
+    "tooltips": {
+      "stochRsiPeriod": "Periodo RSI e finestra stocastica. Modifica %K e quindi anche la linea %D derivata.",
+      "dPeriod": "Periodo di smussamento applicato a %K per ottenere %D. Modifica solo %D.",
+      "riskWindow": "Numero di osservazioni preparate dei rendimenti giornalieri in ogni finestra mobile.",
+      "riskFreeAnnualRate": "Tasso annuo effettivo privo di rischio usato solo per calcolare lo Sharpe.",
+      "comparisonAsset": "Asset salvato usato come serie reale di confronto per il beta.",
+      "riskFullHistory": "Misura il drawdown rispetto al picco più alto di tutta la storia disponibile, non solo della finestra visibile. Disattiva per una vista più veloce relativa alla finestra."
+    },
+    "units": {
+      "days": "giorni"
+    },
+    "visual": {
+      "components": "Componenti",
+      "zones": "Zone",
+      "zonesFor": "Zone {component}",
+      "affects": "Agisce su"
+    },
+    "reference": {
+      "zero": "Zero"
+    },
+    "regions": {
+      "oversoldDescription": "Estremo inferiore sotto la soglia configurata.",
+      "neutralDescription": "Intervallo centrale tra le soglie configurate.",
+      "overboughtDescription": "Estremo superiore sopra la soglia configurata."
+    },
+    "ema": {
+      "name": "EMA",
+      "description": "Trend pesato sui prezzi recenti",
+      "output": "EMA"
+    },
+    "sma": {
+      "name": "SMA",
+      "description": "Media semplice delle chiusure",
+      "output": "SMA"
+    },
+    "rsi": {
+      "name": "RSI",
+      "description": "Pressione di acquisto e vendita",
+      "output": "RSI",
+      "oversold": "Ipervenduto",
+      "overbought": "Ipercomprato",
+      "oversoldRegion": "Ipervenduto",
+      "neutralRegion": "Neutrale",
+      "overboughtRegion": "Ipercomprato"
+    },
+    "macd": {
+      "name": "MACD",
+      "description": "Momentum tra medie mobili",
+      "line": "MACD",
+      "lineDescription": "EMA veloce meno EMA lenta.",
+      "signal": "Linea segnale",
+      "signalDescription": "Smussamento EMA della linea MACD.",
+      "histogram": "Istogramma",
+      "histogramDescription": "Distanza tra MACD e linea segnale."
+    },
+    "bollinger": {
+      "name": "Bande di Bollinger",
+      "description": "Volatilità attorno alla media mobile",
+      "bands": "Bande"
+    },
+    "roc": {
+      "name": "ROC",
+      "description": "Velocità della variazione prezzo",
+      "output": "ROC"
+    },
+    "stochRsi": {
+      "name": "RSI Stocastico",
+      "description": "Posizione RSI nel suo intervallo",
+      "k": "%K",
+      "kDescription": "Linea veloce dello RSI Stocastico.",
+      "d": "%D",
+      "dDescription": "Linea segnale smussata derivata da %K.",
+      "oversold": "Ipervenduto",
+      "overbought": "Ipercomprato",
+      "oversoldRegion": "Ipervenduto",
+      "neutralRegion": "Neutrale",
+      "overboughtRegion": "Ipercomprato"
+    },
+    "kama": {
+      "name": "KAMA",
+      "description": "Trend adattivo al rumore di mercato",
+      "output": "KAMA"
+    },
+    "ppo": {
+      "name": "PPO",
+      "description": "Momentum percentuale tra medie",
+      "line": "PPO",
+      "lineDescription": "Differenza percentuale tra media veloce e lenta.",
+      "signal": "Linea segnale",
+      "signalDescription": "Smussamento EMA della linea PPO.",
+      "histogram": "Istogramma",
+      "histogramDescription": "Distanza tra PPO e linea segnale."
+    },
+    "atr": {
+      "name": "ATR",
+      "description": "Volatilità assoluta del prezzo",
+      "output": "ATR"
+    },
+    "adx": {
+      "name": "ADX",
+      "description": "Forza del trend",
+      "adx": "ADX",
+      "adxDescription": "Forza del trend, indipendente dalla direzione.",
+      "plusDi": "+DI",
+      "plusDiDescription": "Pressione direzionale positiva.",
+      "minusDi": "−DI",
+      "minusDiDescription": "Pressione direzionale negativa."
+    },
+    "natr": {
+      "name": "NATR",
+      "description": "Volatilità percentuale del prezzo",
+      "output": "NATR"
+    },
+    "aroon": {
+      "name": "Aroon",
+      "description": "Recenza di massimi e minimi",
+      "up": "Aroon Up",
+      "upDescription": "Quanto recentemente si è verificato il massimo del periodo.",
+      "down": "Aroon Down",
+      "downDescription": "Quanto recentemente si è verificato il minimo del periodo.",
+      "oscillator": "Oscillatore Aroon",
+      "oscillatorDescription": "Differenza tra Aroon Up e Aroon Down."
+    },
+    "donchian": {
+      "name": "Canali di Donchian",
+      "description": "Canale massimo-minimo del periodo",
+      "channels": "Canali"
+    },
+    "cci": {
+      "name": "CCI",
+      "description": "Scostamento dal prezzo medio",
+      "output": "CCI",
+      "oversold": "Ipervenduto",
+      "overbought": "Ipercomprato",
+      "oversoldRegion": "Ipervenduto",
+      "neutralRegion": "Neutrale",
+      "overboughtRegion": "Ipercomprato"
+    },
+    "obv": {
+      "name": "OBV",
+      "description": "Pressione prezzo-volume",
+      "output": "OBV"
+    },
+    "mfi": {
+      "name": "MFI",
+      "description": "Momentum ponderato per volume",
+      "output": "MFI",
+      "oversold": "Ipervenduto",
+      "overbought": "Ipercomprato",
+      "oversoldRegion": "Ipervenduto",
+      "neutralRegion": "Neutrale",
+      "overboughtRegion": "Ipercomprato"
+    },
+    "comparisonAsset": {
+      "placeholder": "Seleziona asset di confronto",
+      "loadError": "Impossibile caricare gli asset."
+    },
+    "riskDrawdown": {
+      "name": "Drawdown dal massimo",
+      "description": "Misura il calo percentuale da ciascun massimo progressivo del prezzo.",
+      "output": "Drawdown",
+      "outputDescription": "Calo del prezzo dal massimo progressivo, esclusi i flussi; mai superiore a zero.",
+      "referencePeak": "Massimo"
+    },
+    "riskRollingVolatility": {
+      "name": "Volatilità mobile",
+      "description": "Volatilità campionaria annualizzata su una finestra mobile di rendimenti giornalieri del solo prezzo.",
+      "output": "Volatilità",
+      "outputDescription": "Deviazione standard campionaria annualizzata, in punti percentuali."
+    },
+    "riskRollingReturn": {
+      "name": "Rendimento mobile",
+      "description": "Rendimento composto del solo prezzo su una finestra mobile.",
+      "output": "Rendimento",
+      "outputDescription": "Rendimento composto del periodo di detenzione, in punti percentuali."
+    },
+    "riskRollingSharpe": {
+      "name": "Indice di Sharpe mobile",
+      "description": "Rendimento eccedente annualizzato per unità di volatilità campionaria su una finestra mobile.",
+      "output": "Indice di Sharpe",
+      "outputDescription": "Rendimento medio giornaliero eccedente annualizzato diviso per la volatilità campionaria."
+    },
+    "riskRollingBeta": {
+      "name": "Beta mobile",
+      "description": "Sensibilità mobile a un asset reale di confronto su un calendario congiunto dei rendimenti.",
+      "output": "Beta",
+      "outputDescription": "Covarianza campionaria divisa per la varianza campionaria dell’asset di confronto.",
+      "referenceOne": "Sensibilità uno a uno"
+    }
+  },
+  "aiExport": {
+    "panelLabel": "Opzioni AI Export",
+    "category": "Tipo di esportazione",
+    "exportData": "Esporta dati",
+    "requestAnalysis": "Richiedi analisi",
+    "exportDataHelp": "Copia soltanto i fatti LibreFolio selezionati, senza domanda né istruzioni di risposta per l’AI.",
+    "requestAnalysisHelp": "Copia i dati necessari insieme a una domanda precisa, regole di verifica e struttura della risposta.",
+    "selection": "Dataset o analisi",
+    "detailLevel": "Livello di dettaglio",
+    "detailLevelHelp": {
+      "compact": "Stesso universo dati, con bucket temporali fino a 30 giorni.",
+      "standard": "Stesso universo dati, con bucket temporali fino a 14 giorni.",
+      "full": "Stesso universo dati, con bucket temporali fino a 7 giorni."
+    },
+    "details": {
+      "compact": "Compatto",
+      "standard": "Standard",
+      "full": "Completo"
+    },
+    "period": "Periodo AI",
+    "periodHelp": "Periodo di esportazione indipendente che termina alla data dello snapshot.",
+    "periodCustom": "Personalizzato",
+    "userNotes": "Note per l’AI",
+    "userNotesPlaceholder": "Aggiungi contesto o domande facoltative…",
+    "payloadStats": "Dimensione prompt finale",
+    "payloadStatsHelp": "Stima del testo che verrà effettivamente copiato negli appunti.",
+    "tokenSeverity": {
+      "normal": "La dimensione del prompt è nella norma.",
+      "warning": "Prompt grande: alcuni strumenti AI potrebbero troncarlo.",
+      "large": "Prompt molto grande: potrebbe superare i limiti dello strumento AI."
+    },
+    "copy": "Copia AI Export",
+    "preparing": "Preparazione esportazione…",
+    "copyAnyway": "Copia comunque",
+    "useCompact": "Usa Compatto",
+    "copied": "AI Export copiato negli appunti:\n• {tokens} (💾 {bytes})\n• dettaglio: {detail}",
+    "privacyNotice": "Livello di dettaglio: {detail}. L’esportazione può contenere dati finanziari sensibili: rivedila prima di condividerla.",
+    "catalogUnavailable": "AI Export non è disponibile. Aggiorna e riprova.",
+    "contractMismatch": "AI Export non è sincronizzato col server. Aggiorna e riprova.",
+    "selectionNotApplicable": "Questa selezione non è applicabile ai dati correnti.",
+    "entityNotFound": "I dati finanziari richiesti non sono disponibili.",
+    "sourceUnavailable": "Una fonte dati necessaria non è disponibile. Riprova più tardi.",
+    "validationFailed": "I dati AI Export non sono validi. Aggiorna e riprova.",
+    "networkFailed": "Impossibile raggiungere il server. Controlla la connessione e riprova.",
+    "clipboardUnavailable": "Accesso agli appunti non disponibile. Controlla i permessi del browser.",
+    "genericFailed": "AI Export non riuscito. Riprova.",
+    "analysis": {
+      "portfolio": {
+        "pac_planning": {
+          "display": "Pianificazione PAC",
+          "description": "Pianifica investimenti ricorrenti condizionali usando dati del portafoglio, contesto di mercato, vincoli e decisioni utente mancanti."
+        },
+        "rebalancing": {
+          "display": "Ribilanciamento portafoglio",
+          "description": "Confronta la composizione attuale con i target forniti dall'utente e inquadra percorsi condizionali di ribilanciamento."
+        },
+        "performance_market_drivers": {
+          "display": "Performance e cause di mercato",
+          "description": "Spiega la performance del portafoglio e ricerca cause di mercato datate per ogni Asset detenuto."
+        },
+        "fiscal_lots": {
+          "display": "Strategie per compensare minusvalenze",
+          "description": "Valuta come usare minusvalenze disponibili o in scadenza contro plusvalenze potenzialmente compensabili, partendo dai lotti FIFO economici e chiarendo cassetto fiscale, paese, regime, scadenze e regole applicabili."
+        }
+      },
+      "broker": {
+        "review": {
+          "display": "Revisione broker",
+          "description": "Esamina posizioni, liquidità, concentrazione, performance, costi, FIFO economico e contesto di mercato compatto."
+        },
+        "performance_market_drivers": {
+          "display": "Performance e cause di mercato",
+          "description": "Spiega la performance del Broker selezionato e ricerca cause di mercato datate per ogni Asset detenuto."
+        },
+        "fiscal_lots": {
+          "display": "Strategie per compensare minusvalenze",
+          "description": "Valuta come usare minusvalenze disponibili o in scadenza contro plusvalenze potenzialmente compensabili, partendo dai lotti FIFO economici del Broker e chiarendo cassetto fiscale, paese, regime, scadenze e regole applicabili."
+        }
+      },
+      "asset": {
+        "position_review": {
+          "display": "Revisione posizione",
+          "description": "Esamina valore, costo, P&L, perimetro Broker, lotti economici e contesto di mercato mirato della posizione."
+        },
+        "market_analysis": {
+          "display": "Analisi dell'Asset",
+          "description": "Analizza storico prezzi, rendimenti, trend, momentum, volatilità, Drawdown, eventi e copertura."
+        }
+      },
+      "fx": {
+        "exposure_impact": {
+          "display": "Impatto esposizione FX",
+          "description": "Descrive i collegamenti diretti di liquidità e posizioni con la coppia valutaria usando contesto di mercato e limiti espliciti."
+        },
+        "pair_analysis": {
+          "display": "Analisi della coppia FX",
+          "description": "Analizza direzione, rendimenti, trend, momentum, volatilità, eventi, copertura e contesto macro datato della coppia."
+        }
+      }
+    },
+    "additionalData": {
+      "heading": "Altri dati LibreFolio",
+      "intro": "Richiedi questi export soltanto quando migliorano materialmente l'analisi.",
+      "none": "Non è consigliato alcun export LibreFolio aggiuntivo.",
+      "what": "Che cosa contiene",
+      "why": "Perché può essere utile",
+      "necessityLabel": "Necessità",
+      "path": "Percorso LibreFolio",
+      "recommended": "Parametri consigliati",
+      "steps": {
+        "openLibreFolio": "Apri LibreFolio",
+        "page": "Pagina",
+        "feature": "Funzione",
+        "exportType": "Tipo di export",
+        "dataset": "Dataset",
+        "period": "Periodo",
+        "detail": "Dettaglio"
+      },
+      "period": {
+        "3m": "3 mesi",
+        "6m": "6 mesi",
+        "1y": "1 anno",
+        "maximum_available": "Periodo massimo disponibile"
+      },
+      "necessity": {
+        "required": "Obbligatorio",
+        "optional": "Facoltativo"
+      },
+      "reason": {
+        "deeperTechnical": "Usalo quando servono realmente la history tecnica completa e tutti i Signal disponibili.",
+        "fifoDetail": "Usalo quando identità, anzianità, custody, trasferimenti o dettaglio FIFO realizzato incidono sulla domanda.",
+        "performanceContext": "Usalo quando servono performance del periodo, flussi, redditi, costi, imposte o riconciliazione.",
+        "positionContext": "Usalo quando contano posizione reale, costo, valore, P&L, scope Broker o ruolo FIFO dell'Asset.",
+        "directExposure": "Usalo quando è rilevante l'esposizione diretta di cassa o posizione alla coppia FX."
+      }
+    },
+    "tokenUnit": "token",
+    "dataset": {
+      "portfolio": {
+        "overview_and_history": {
+          "display": "Portafoglio e andamento",
+          "description": "Composizione, posizioni, liquidità, performance, flussi, redditi, costi registrati, sintesi FIFO economica, contesto di mercato compatto per Asset, Drawdown e provenienza."
+        },
+        "asset_history": {
+          "display": "Storico Asset del portafoglio",
+          "description": "Prezzi, rendimenti, indicatori, stati, eventi, ampiezza, copertura e provenienza dettagliati per Asset."
+        },
+        "overview": {
+          "display": "Panoramica portafoglio",
+          "description": "Riepilogo, tutte le posizioni, allocazioni, liquidità, semantica e provenienza."
+        },
+        "performance_flows": {
+          "display": "Performance e flussi portafoglio",
+          "description": "Performance, contributori, flussi, redditi, commissioni, tasse e riconciliazione."
+        },
+        "technical_summary": {
+          "display": "Sintesi tecnica portafoglio",
+          "description": "Copertura tecnica, breadth aggregata e sintesi degli eventi recenti senza la cronologia completa per Asset."
+        },
+        "asset_snapshot": {
+          "display": "Sintesi Asset del portafoglio",
+          "description": "Piccola sintesi uniforme per Asset con rendimenti recenti, trend, momentum, volatilità e ultimo evento."
+        },
+        "asset_comparison": {
+          "display": "Confronto Asset del portafoglio",
+          "description": "Confronto di mercato uniforme per Asset con copertura, breadth ed eventi strutturali selezionati."
+        },
+        "drawdown_context": {
+          "display": "Contesto di Drawdown del Portafoglio",
+          "description": "Drawdown corrente e massimo rispetto al picco, deterministico, con date dell'episodio, stato di recupero, base di calcolo e copertura per l'intero portafoglio (TWRR)."
+        },
+        "income_evidence": {
+          "display": "Prove di reddito portafoglio",
+          "description": "Cronologia datata dei redditi registrati con copertura di conversione per valuta; nessuna previsione di cedole o ratei futuri."
+        },
+        "technical": {
+          "display": "Dati tecnici portafoglio",
+          "description": "Prezzi, rendimenti, indicatori, ampiezza, stati ed eventi per tutte le posizioni idonee."
+        },
+        "fifo": {
+          "display": "Lotti FIFO portafoglio",
+          "description": "Riepilogo FIFO, tutti i lotti aperti/parziali e quelli chiusi nel periodo AI."
+        },
+        "all_data": {
+          "display": "Tutti i dati portafoglio",
+          "description": "Unione deduplicata di tutti i dataset applicabili al portafoglio."
+        }
+      },
+      "broker": {
+        "overview_and_history": {
+          "display": "Broker e andamento",
+          "description": "Posizioni, liquidità, concentrazione, performance, flussi, costi, sintesi FIFO economica, contesto di mercato compatto per Asset, Drawdown e provenienza del Broker."
+        },
+        "asset_history": {
+          "display": "Storico Asset del Broker",
+          "description": "Prezzi, rendimenti, indicatori, stati, eventi, ampiezza, copertura e provenienza dettagliati per gli Asset del Broker."
+        },
+        "overview": {
+          "display": "Panoramica broker",
+          "description": "Riepilogo broker, tutte le posizioni, allocazione, concentrazione e provenienza."
+        },
+        "performance_flows": {
+          "display": "Performance e flussi broker",
+          "description": "Performance, contributori, flussi, redditi, costi e riconciliazione."
+        },
+        "technical_summary": {
+          "display": "Sintesi tecnica Broker",
+          "description": "Solo copertura tecnica e breadth aggregata nello scope del Broker."
+        },
+        "asset_comparison": {
+          "display": "Confronto Asset del Broker",
+          "description": "Confronto uniforme degli Asset del Broker con contesto di mercato, breadth ed eventi strutturali."
+        },
+        "drawdown_context": {
+          "display": "Contesto di Drawdown del Broker",
+          "description": "Drawdown corrente e massimo rispetto al picco, deterministico, con date dell'episodio, stato di recupero, base di calcolo e copertura per lo scope del broker selezionato (TWRR)."
+        },
+        "concentration_evidence": {
+          "display": "Prove di concentrazione broker",
+          "description": "Concentrazione per posizione, tipo di attività, settore, area geografica e valuta, con confronto opzionale sull’intero portafoglio; copertura e liquidità sconosciute sono dichiarate, non presunte."
+        },
+        "cost_efficiency_evidence": {
+          "display": "Prove di efficienza costi broker",
+          "description": "Stato delle commissioni registrate con denominatori di turnover e attività corretti per la quota e disponibilità dei rapporti; i dati mancanti restano non disponibili, mai zero."
+        },
+        "technical": {
+          "display": "Dati tecnici broker",
+          "description": "Indicatori, ampiezza, stati ed eventi limitati al broker."
+        },
+        "fifo": {
+          "display": "Lotti FIFO broker",
+          "description": "Tutti i lotti FIFO applicabili nel broker selezionato."
+        },
+        "all_data": {
+          "display": "Tutti i dati broker",
+          "description": "Unione deduplicata di tutti i dataset applicabili al broker."
+        }
+      },
+      "asset": {
+        "position_and_history": {
+          "display": "Posizione e andamento (completo)",
+          "description": "Le tue posizioni su questo asset — costo, valore, P&L, performance, lotti economici — più contesto di mercato compatto, Drawdown e provenienza. L'export completo."
+        },
+        "market_history": {
+          "display": "Solo andamento di mercato (senza posizioni)",
+          "description": "Prezzi, rendimenti, indicatori, stati, eventi, Drawdown, copertura e provenienza — solo dati di mercato, senza posizioni. L'export leggero."
+        },
+        "overview": {
+          "display": "Panoramica asset",
+          "description": "Identità, snapshot di mercato corrente, ambito posizione e provenienza."
+        },
+        "position_performance": {
+          "display": "Performance posizione asset",
+          "description": "Posizioni per broker, costo, valore, P&L, performance e dettagli lotti applicabili."
+        },
+        "position_context": {
+          "display": "Contesto posizione Asset",
+          "description": "Contesto di mercato mirato della posizione con history limitata, stati tecnici, volatilità ed eventi recenti."
+        },
+        "drawdown_context": {
+          "display": "Contesto di Drawdown dello Strumento",
+          "description": "Drawdown corrente e massimo rispetto al picco, deterministico, con date dell'episodio, stato di recupero e copertura, calcolato nella valuta di prezzo nativa dello strumento (base solo prezzo)."
+        },
+        "market_technical": {
+          "display": "Dati di mercato e tecnici asset",
+          "description": "Bucket OHLC/rendimento, indicatori, stati ed eventi."
+        },
+        "all_data": {
+          "display": "Tutti i dati asset",
+          "description": "Unione deduplicata di tutti i dataset applicabili all’asset."
+        }
+      },
+      "fx": {
+        "market_and_exposure": {
+          "display": "Cambio, andamento ed esposizione",
+          "description": "Dati correnti della coppia, contesto compatto di mercato e timing, esposizione diretta e provenienza."
+        },
+        "market_history": {
+          "display": "Storico e dati tecnici del cambio",
+          "description": "OHLC del tasso, rendimenti, volatilità, indicatori, stati, eventi, copertura e provenienza della conversione."
+        },
+        "overview": {
+          "display": "Panoramica coppia FX",
+          "description": "Identità coppia, tasso corrente, percorso di conversione e provenienza."
+        },
+        "market_context": {
+          "display": "Contesto di mercato FX",
+          "description": "Contesto mirato di tasso, rendimento, volatilità, trend, eventi e copertura della storia sorgente."
+        },
+        "conversion_timing_context": {
+          "display": "Contesto tempistica conversione FX",
+          "description": "Contesto di tempistica non predittivo: posizione nell’intervallo osservato, rendimenti osservati e volatilità realizzata, copertura o obsolescenza della fonte; importo, scadenza, spread e commissioni non sono inclusi e non si effettuano previsioni."
+        },
+        "market_technical": {
+          "display": "Dati di mercato e tecnici FX",
+          "description": "OHLC tasso, rendimenti, volatilità, indicatori, stati ed eventi."
+        },
+        "direct_exposure": {
+          "display": "Esposizione FX diretta",
+          "description": "Collegamenti diretti base/quote a liquidità e posizioni con provenienza conversioni."
+        },
+        "all_data": {
+          "display": "Tutti i dati FX",
+          "description": "Unione deduplicata di tutti i dataset FX applicabili."
+        }
+      }
+    }
+  },
+  "risk": {
+    "analytics": {
+      "comparison": {
+        "name": "Confronto",
+        "description": "Confronta performance e rischio con un asset reale."
+      },
+      "correlation": {
+        "name": "Correlazione",
+        "description": "Matrice di correlazione Pearson sui rendimenti in valuta target."
+      },
+      "historicalVar": {
+        "name": "VaR / CVaR storico",
+        "description": "Stime storiche delle perdite al livello di confidenza e orizzonte selezionati."
+      },
+      "historicalKpi": {
+        "name": "Metriche di rischio storiche",
+        "description": "Volatilità storica, drawdown, Sharpe e Sortino dai rendimenti canonici dello scope selezionato."
+      },
+      "riskContribution": {
+        "name": "Contributo al rischio",
+        "description": "Contributi alla volatilità per asset sulla composizione corrente."
+      },
+      "stress": {
+        "name": "Stress test",
+        "description": "Applica shock ipotetici o replica un periodo storico."
+      },
+      "simulation": {
+        "name": "Simulazione",
+        "description": "Simula i percentili dei rendimenti GBM condizionati usando stime storiche di drift e covarianza."
+      },
+      "portfolioOptimization": {
+        "name": "Allocazione di portafoglio",
+        "description": "Costruisce una composizione ipotetica degli asset dal campione, dalla strategia, dagli stimatori e dai vincoli selezionati."
+      },
+      "drawdownSummary": {
+        "name": "Riepilogo drawdown",
+        "description": "Episodi di drawdown corrente e massimo rispetto al picco, datati e con stato di recupero, dai rendimenti canonici dello scope selezionato."
+      }
+    },
+    "params": {
+      "confidenceLevel": "Livello di confidenza",
+      "horizonDays": "Orizzonte (giorni)",
+      "minCoverage": "Copertura minima",
+      "minObservations": "Osservazioni minime",
+      "targetAnnualReturn": "Rendimento annuo obiettivo",
+      "process": "Processo stocastico",
+      "sampling": "Strategia di campionamento",
+      "paths": "Percorsi simulati",
+      "randomSeed": "Seed casuale",
+      "sobolStartIndex": "Indice iniziale Sobol",
+      "optimizationStrategy": "Strategia",
+      "covarianceEstimator": "Stimatore di covarianza",
+      "riskFreeRate": "Tasso privo di rischio",
+      "minWeight": "Peso minimo",
+      "maxWeight": "Peso massimo",
+      "includeFrontier": "Includi frontiera",
+      "frontierPoints": "Punti della frontiera",
+      "includeSensitivity": "Includi sensibilità",
+      "optimizationSolver": "Solver"
+    },
+    "title": "Rischio",
+    "dashboardTitle": "Rischio portafoglio",
+    "brokerTitle": "Rischio broker",
+    "assetTitle": "Rischio asset",
+    "internalSubset": "Rischio interno del sottoinsieme broker",
+    "dashboardFullPortfolio": "Il rischio usa l'intero portafoglio; il filtro broker della dashboard non viene applicato.",
+    "assetRollingHint": "Il rischio rolling resta disponibile nei Segnali; questo pannello copre confronto, scenari, VaR e simulazione.",
+    "states": {
+      "partial": "Parziale",
+      "empty": "Nessun risultato",
+      "unavailable": "Non disponibile per i dati selezionati",
+      "failed": "Calcolo non riuscito",
+      "warning": "Il risultato include un avviso",
+      "loadFailed": "Impossibile caricare i dati di rischio.",
+      "noAssets": "Seleziona almeno un asset."
+    },
+    "metadata": {
+      "title": "Dettagli calcolo",
+      "observations": "Osservazioni",
+      "coverage": "Copertura",
+      "annualization": "Fattore di annualizzazione",
+      "returnBasis": "Base rendimento",
+      "method": "Metodo"
+    },
+    "returnBasis": {
+      "price_only": "Solo prezzo",
+      "twrr": "TWRR portafoglio"
+    },
+    "valueStatus": {
+      "ok": "Disponibile",
+      "insufficient": "Storico insufficiente",
+      "undefined": "Non definito"
+    },
+    "quality": {
+      "status": "Qualità dati",
+      "ok": "OK",
+      "carried_forward": "Dati mantenuti",
+      "partial": "Parziale",
+      "carriedPrices": "Punti prezzo mantenuti",
+      "carriedFx": "Punti FX mantenuti"
+    },
+    "assetSet": {
+      "assetsTab": "Asset",
+      "correlationTab": "Correlazione",
+      "addAsset": "Aggiungi asset alla matrice",
+      "maxAssets": "Raggiunto il limite API di 100 asset."
+    },
+    "metrics": {
+      "volatility": "Volatilità",
+      "maxDrawdown": "Drawdown massimo",
+      "drawdownDuration": "Durata drawdown",
+      "sharpe": "Sharpe",
+      "sortino": "Sortino",
+      "portfolioVolatility": "Volatilità portafoglio",
+      "cashWeight": "Peso liquidità",
+      "var": "Value at Risk",
+      "cvar": "VaR condizionale",
+      "activeReturn": "Rendimento attivo",
+      "trackingError": "Tracking error",
+      "informationRatio": "Information ratio",
+      "correlation": "Correlazione",
+      "beta": "Beta",
+      "scenarioReturn": "Rendimento scenario",
+      "impactAmount": "Impatto monetario",
+      "shock": "Shock",
+      "contribution": "Contributo",
+      "terminalMean": "Rendimento medio finale",
+      "terminalVolatility": "Volatilità finale",
+      "probabilityOfLoss": "Probabilità di perdita"
+    },
+    "comparison": {
+      "comparisonAsset": "Asset di confronto",
+      "results": "Risultati confronto"
+    },
+    "actions": {
+      "compare": "Confronta",
+      "runScenario": "Esegui scenario",
+      "simulate": "Simula",
+      "runReplay": "Esegui replay"
+    },
+    "stress": {
+      "uniformShock": "Shock uniforme sugli asset",
+      "results": "Risultati stress",
+      "preset": "Preset",
+      "dimension": "Dimensione",
+      "showAllBuckets": "Mostra tutti i bucket",
+      "dimensions": {
+        "asset_class": "Classe asset",
+        "sector": "Settore",
+        "geography": "Geografia"
+      },
+      "auditTitle": "Audit delle esposizioni applicate",
+      "missingMetadataOther": "Per questo asset non erano disponibili dati di settore o geografia. È stato trattato come Other al 100%.",
+      "exposureBucket": "Bucket di esposizione",
+      "exposure": "Esposizione",
+      "appliedBucket": "Bucket applicato",
+      "rule": "Regola",
+      "europeanUnion": "Unione Europea",
+      "rules": {
+        "direct": "Diretta",
+        "country": "Paese specifico",
+        "geography_group": "Gruppo geografico",
+        "other": "Fallback Other",
+        "missing_metadata_other": "Metadata mancanti → Other",
+        "unconfigured_zero": "Non configurato → shock zero"
+      }
+    },
+    "simulation": {
+      "simulated": "Bande percentili simulate",
+      "assumptions": "{paths} percorsi su {days} giorni; composizione buy-and-hold corrente, senza costi, flussi, inflazione o ribilanciamento.",
+      "evolution": "Evoluzione",
+      "terminalDistribution": "Distribuzione finale",
+      "p05": "P5 finale",
+      "p50": "P50 finale",
+      "p95": "P95 finale"
+    },
+    "errors": {
+      "analytic_not_found": "Analitica non disponibile.",
+      "incompatible_scope": "Questa analitica non supporta lo scope selezionato.",
+      "incompatible_mode": "Questa analitica non supporta la modalità selezionata.",
+      "invalid_parameters": "Parametri di calcolo non validi.",
+      "insufficient_history": "Storico insufficiente per questo calcolo.",
+      "undefined_metric": "La metrica non è definita per questi dati.",
+      "data_unavailable": "I dati sorgente richiesti non sono disponibili.",
+      "execution_failed": "Il calcolo backend non è riuscito."
+    },
+    "warnings": {
+      "sharpe_undefined": "Sharpe non definito perché la volatilità è zero.",
+      "sortino_undefined": "Sortino non definito perché la deviazione negativa è zero.",
+      "insufficient_pair_history": "Alcune coppie di correlazione hanno uno storico comune insufficiente.",
+      "flat_series": "Alcuni valori non sono definiti perché una serie è piatta.",
+      "low_pair_coverage": "Alcune coppie di correlazione hanno copertura bassa.",
+      "comparison_beta_undefined": "Beta non definito perché l'asset di confronto ha varianza zero.",
+      "comparison_correlation_undefined": "Correlazione non definita perché una serie ha varianza zero."
+    },
+    "assetDetail": {
+      "overviewTab": "Panoramica",
+      "riskScenariosTab": "Rischio e scenari",
+      "summaryTitle": "Sintesi del rischio",
+      "summaryDescription": "Rischio osservato, downside, confronto con un asset reale e scenari per questo asset.",
+      "rollingMetric": "Metrica rolling configurata",
+      "noRollingMetric": "Nessun segnale di rischio rolling è configurato per questo asset.",
+      "configureSignals": "Configura i segnali avanzati in Panoramica"
+    },
+    "replay": {
+      "title": "Replay storico",
+      "compositionNotice": "Applica i rendimenti storici osservati alla composizione corrente; non ricostruisce il possesso passato.",
+      "preset": "Preset periodo",
+      "start": "Data iniziale",
+      "end": "Data finale",
+      "proxy": "Proxy storico manuale",
+      "exclude": "Escludi questo asset dal replay",
+      "results": "Risultati replay storico",
+      "proxyCount": "Proxy manuali usati",
+      "excludedCount": "Asset esclusi",
+      "treatment": {
+        "omitted_from_replay": "Omesso dal replay",
+        "zero_return_residual": "Mantenuto come residuo a rendimento zero"
+      },
+      "missingHistoryPolicy": "Policy storia mancante",
+      "compositionPolicy": "Policy di composizione",
+      "proxySeriesUsage": "Uso della serie proxy",
+      "missingHistoryPolicies": {
+        "manual_proxy_or_exclude": "Proxy manuale o esclusione"
+      },
+      "compositionPolicies": {
+        "current_buy_and_hold": "Buy and hold corrente"
+      },
+      "proxySeriesUsages": {
+        "returns_only": "Solo rendimenti storici"
+      }
+    },
+    "betaBanner": {
+      "title": "L'Analisi del rischio è in beta.",
+      "description": "Calcoli, risultati e interfaccia possono cambiare prima del rilascio stabile."
+    }
+  },
+  "updateCheck": {
+    "title": "Nuova versione disponibile",
+    "message": "LibreFolio {latest} è stato rilasciato.",
+    "guideLink": "Come aggiornare",
+    "releaseLink": "Note di rilascio su GitHub",
+    "laterButton": "Ricordamelo dopo",
+    "skipVersion": "Salta questa versione"
+  },
+  "changelog": {
+    "title": "Note di rilascio",
+    "viewRemote": "Vedi su GitHub",
+    "empty": "Nessun changelog incluso in questa build.",
+    "searchPlaceholder": "Cerca nelle note di rilascio…",
+    "expandAll": "Espandi tutto",
+    "collapseAll": "Comprimi tutto",
+    "checkNow": "Verifica aggiornamenti",
+    "upToDate": "Stai usando l'ultima versione.",
+    "askAdmin": "Esiste una versione più recente. Chiedi a un amministratore di aggiornare:",
+    "searchResults": "Risultati:",
+    "copyEmail": "Copia email",
+    "copied": "Copiata!",
+    "askAdminTitle": "Aggiornamento disponibile — contatta un amministratore",
+    "emailCopied": "Email copiata negli appunti"
+  },
+  "providerErrors": {
+    "NO_DATA": "Nessun dato disponibile per questo strumento sul provider.",
+    "NO_DATA_STALE": "Il NAV pubblicato è datato {nav_date}, non oggi — mostrarlo come corrente falserebbe il portafoglio.",
+    "NOT_FOUND": "Strumento non trovato sul provider.",
+    "FETCH_ERROR": "Il provider non è raggiungibile o ha restituito un errore.",
+    "NOT_IMPLEMENTED": "Questo provider non supporta l'operazione.",
+    "TIMEOUT": "Il provider non ha risposto in tempo.",
+    "MISSING_PARAMS": "Alla configurazione del provider mancano parametri obbligatori.",
+    "PARSE_ERROR": "La risposta del provider non è stata interpretabile.",
+    "SCRAPE_ERROR": "La pagina del provider non è stata leggibile."
   }
 }

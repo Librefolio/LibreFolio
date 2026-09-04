@@ -34,24 +34,6 @@ export async function uploadFile(file: File, description?: string): Promise<stri
 }
 
 /**
- * Upload a BRIM (Broker Report Import) file to a specific broker.
- *
- * @param file - The File to upload
- * @param brokerId - Target broker ID
- * @param pluginName - BRIM plugin name (e.g. "directa", "degiro")
- * @returns The upload response data
- * @throws Error if upload fails
- */
-export async function uploadBrimFile(file: File, brokerId: number, pluginName: string): Promise<unknown> {
-    const formData = new FormData();
-    formData.append('file', file);
-
-    const response = await axiosInstance.post(`/api/v1/brokers/import/${brokerId}/${pluginName}`, formData);
-
-    return response.data;
-}
-
-/**
  * Format byte sizes into human-readable strings with i18n-translated units.
  *
  * Uses svelte-i18n translation keys: common.bytes, common.kilobytes, common.megabytes, common.gigabytes.

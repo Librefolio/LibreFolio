@@ -15,7 +15,7 @@ Il provider Scheduled Investment è progettato per strumenti a reddito fisso in 
 - **Tipo di Identificatore**: `AUTO_GENERATED`
 - **Parametri**: Configurati tramite l'**Interest Schedule Editor** (componente UI personalizzato)
 
-### Campi Obbligatori
+### Required Obbligatori
 
 | Campo | Descrizione |
 |-------|-------------|

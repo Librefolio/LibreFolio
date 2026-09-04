@@ -70,5 +70,5 @@ The position grows but the average cost doesn't change. This is the correct PMC 
 | Backend WAC pending schema | `backend/app/schemas/transactions.py` |
 | Backend math engine | `backend/app/utils/financial_utils.py` |
 | Backend WAC iterative | `backend/app/services/transaction_service.py` |
-| Frontend BulkModal | `frontend/src/lib/components/transactions/TransactionBulkModal.svelte` |
+| Frontend BulkModal | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
 | E2E WAC tests | `frontend/e2e/transactions/tx-wac-bulk.spec.ts` |

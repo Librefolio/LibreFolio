@@ -14,9 +14,9 @@ from datetime import date as date_type
 from enum import StrEnum
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, Field, computed_field, field_validator
 
-from backend.app.schemas.common import Currency, OpenDateRangeModel, SafeDecimal
+from backend.app.schemas.common import Currency, OpenDateRangeModel, SafeDecimal, StrictModel
 from backend.app.schemas.wac import WACMissingPairInfo
 
 # =============================================================================
@@ -24,28 +24,22 @@ from backend.app.schemas.wac import WACMissingPairInfo
 # =============================================================================
 
 
-class WACAnalyticsQuery(BaseModel):
+class WACAnalyticsQuery(StrictModel):
     """Single query for WAC time series."""
-
-    model_config = ConfigDict(extra="forbid")
 
     broker_id: int = Field(..., description="Broker to compute WAC for")
     asset_id: int = Field(..., description="Asset to compute WAC for")
     date_range: Optional[OpenDateRangeModel] = Field(None, description="Date range filter. None = entire history.")
 
 
-class WACAnalyticsRequest(BaseModel):
+class WACAnalyticsRequest(StrictModel):
     """Request body for POST /portfolio/wac."""
-
-    model_config = ConfigDict(extra="forbid")
 
     queries: List[WACAnalyticsQuery] = Field(..., min_length=1, max_length=20, description="WAC queries (max 20)")
 
 
-class WACSeriesPoint(BaseModel):
+class WACSeriesPoint(StrictModel):
     """Single point in WAC time series (where WAC changes)."""
-
-    model_config = ConfigDict(extra="forbid")
 
     date: date_type
     wac: SafeDecimal = Field(..., description="WAC per unit after this transaction")
@@ -53,10 +47,8 @@ class WACSeriesPoint(BaseModel):
     effect: str = Field(..., description="Effect on pool: add, reduce, add_zero_cost, add_at_wac")
 
 
-class WACAnalyticsResultItem(BaseModel):
+class WACAnalyticsResultItem(StrictModel):
     """WAC series result for a single (broker, asset) query."""
-
-    model_config = ConfigDict(extra="forbid")
 
     broker_id: int
     asset_id: int
@@ -65,10 +57,8 @@ class WACAnalyticsResultItem(BaseModel):
     missing_fx_pairs: List[WACMissingPairInfo] = Field(default_factory=list, description="FX pairs that could not be resolved, with dates")
 
 
-class WACAnalyticsResponse(BaseModel):
+class WACAnalyticsResponse(StrictModel):
     """Response for POST /portfolio/wac."""
-
-    model_config = ConfigDict(extra="forbid")
 
     results: List[WACAnalyticsResultItem]
 
@@ -78,27 +68,7 @@ class WACAnalyticsResponse(BaseModel):
 # =============================================================================
 
 
-class PortfolioSummaryQuery(BaseModel):
-    """Request body for POST /portfolio/summary."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    broker_ids: Optional[List[int]] = Field(None, description="Optional broker filter")
-    include_breakdown: bool = Field(False, description="Include per-broker breakdown in by_broker")
-    target_currency: Optional[str] = Field(None, description="Override base currency (ISO 4217, e.g. USD)")
-
-
-class PortfolioHistoryQuery(BaseModel):
-    """Request body for POST /portfolio/history."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    broker_ids: Optional[List[int]] = Field(None, description="Optional broker filter")
-    date_range: Optional[OpenDateRangeModel] = Field(None, description="Inclusive date range. None = full history.")
-    target_currency: Optional[str] = Field(None, description="Override base currency (ISO 4217, e.g. USD)")
-
-
-class AllocationItem(BaseModel):
+class AllocationItem(StrictModel):
     """Single allocation slice (by type, sector, or geography)."""
 
     name: str = Field(..., description="Category name, e.g. 'ETF', 'Technology', 'US', 'Unknown'")
@@ -115,8 +85,6 @@ class AllocationItem(BaseModel):
 class MissingPriceAsset(BaseModel):
     """Asset excluded from NAV because no PriceHistory was available."""
 
-    model_config = ConfigDict(extra="forbid")
-
     asset_id: int
     symbol: Optional[str] = None
     name: str
@@ -128,15 +96,38 @@ class MissingPriceAsset(BaseModel):
     currency: str
 
 
-class StalePriceAsset(BaseModel):
+class StalePriceAsset(StrictModel):
     """Asset whose latest price is older than the staleness threshold."""
-
-    model_config = ConfigDict(extra="forbid")
 
     asset_id: int
     name: str
     last_price_date: date_type
     stale_days: int
+
+
+class DataQualityStatus(StrEnum):
+    """Overall source-data quality for a derived result."""
+
+    OK = "ok"
+    CARRIED_FORWARD = "carried_forward"
+    PARTIAL = "partial"
+
+
+class DataQualityExclusionReason(StrEnum):
+    """Why an asset cannot participate in a source-data calculation."""
+
+    MISSING_PRICE = "missing_price"
+    MISSING_FX = "missing_fx"
+    INVALID_CURRENCY = "invalid_currency"
+
+
+class DataQualityExcludedAsset(StrictModel):
+    """Asset excluded before metric-specific eligibility is evaluated."""
+
+    asset_id: int
+    reason: DataQualityExclusionReason
+    symbol: Optional[str] = None
+    name: Optional[str] = None
 
 
 # =============================================================================
@@ -196,7 +187,7 @@ class IssueCode(StrEnum):
     ASSET_COST_NO_ELIGIBLE_LOTS = "ASSET_COST_NO_ELIGIBLE_LOTS"
 
 
-class DataQualityIssue(BaseModel):
+class DataQualityIssue(StrictModel):
     """A single data quality issue rendered in the UI as a banner item.
 
     Fields populated depend on the issue type:
@@ -204,8 +195,6 @@ class DataQualityIssue(BaseModel):
       affected_fx_pairs (MISSING_FX_MARKET, MISSING_FX_RATES), count + dates in message_params (NAV_INCOMPLETE, MISSING_FX_RATES).
     - Asset/FX issues: affected_fx_pairs (FX_PAIR_*), affected_asset_names (context).
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     domain: IssueDomain
     code: IssueCode
@@ -221,10 +210,8 @@ class DataQualityIssue(BaseModel):
     group_key: Optional[str] = None
 
 
-class DataQualityReport(BaseModel):
+class DataQualityReport(StrictModel):
     """Aggregated data quality information for a portfolio calculation."""
-
-    model_config = ConfigDict(extra="forbid")
 
     issues: List[DataQualityIssue] = Field(default_factory=list)
     missing_price_assets: List[MissingPriceAsset] = Field(default_factory=list)
@@ -233,9 +220,26 @@ class DataQualityReport(BaseModel):
     incomplete_nav_dates: List[date_type] = Field(default_factory=list)
     incomplete_book_value_dates: List[date_type] = Field(default_factory=list)
     incomplete_allocation_dates: List[date_type] = Field(default_factory=list)
+    incomplete_valuation_dates: List[date_type] = Field(default_factory=list)
+    carried_forward_price_points: int = Field(0, ge=0)
+    carried_forward_fx_points: int = Field(0, ge=0)
+    carried_forward_price_asset_ids: List[int] = Field(default_factory=list)
+    carried_forward_fx_pairs: List[str] = Field(default_factory=list)
+    unresolved_fx_pairs: List[str] = Field(default_factory=list)
+    unusable_assets: List[DataQualityExcludedAsset] = Field(default_factory=list)
     in_transit_cost_basis_warnings: List[str] = Field(default_factory=list)
     share_mismatch_warnings: List[str] = Field(default_factory=list)
     warnings: List[str] = Field(default_factory=list)
+
+    @computed_field
+    @property
+    def data_quality_status(self) -> DataQualityStatus:
+        """Derive status so legacy producers cannot emit contradictory values."""
+        if self.missing_price_assets or self.missing_fx_pairs or self.incomplete_nav_dates or self.incomplete_book_value_dates or self.incomplete_allocation_dates or self.incomplete_valuation_dates or self.unresolved_fx_pairs or self.unusable_assets:
+            return DataQualityStatus.PARTIAL
+        if self.stale_prices or self.carried_forward_price_points or self.carried_forward_fx_points:
+            return DataQualityStatus.CARRIED_FORWARD
+        return DataQualityStatus.OK
 
 
 # =============================================================================
@@ -243,37 +247,14 @@ class DataQualityReport(BaseModel):
 # =============================================================================
 
 
-class AllocationHistoryPoint(BaseModel):
+class AllocationHistoryPoint(StrictModel):
     """Single point in the allocation history time series."""
-
-    model_config = ConfigDict(extra="forbid")
 
     date: date_type
     components: List[AllocationItem]
 
 
-class AllocationHistoryQuery(BaseModel):
-    """Request body for POST /portfolio/allocation-history."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    broker_ids: Optional[List[int]] = Field(None, description="Optional broker filter")
-    date_range: Optional[OpenDateRangeModel] = Field(None, description="Date range filter. None = full history.")
-    target_currency: Optional[str] = Field(None, description="Override base currency (ISO 4217)")
-    dimension: str = Field("type", pattern="^(type|sector|geography)$", description="Allocation dimension")
-
-
-class AllocationHistoryResponse(BaseModel):
-    """Response for POST /portfolio/allocation-history."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    dimension: str
-    series: List[AllocationHistoryPoint]
-    data_quality: Optional[DataQualityReport] = None
-
-
-class PortfolioHolding(BaseModel):
+class PortfolioHolding(StrictModel):
     """Single open holding snapshot at report end date."""
 
     asset_id: int
@@ -284,21 +265,34 @@ class PortfolioHolding(BaseModel):
     broker_name: Optional[str] = Field(None, description="Broker display name")
     quantity: SafeDecimal
     wac_per_unit: Optional[SafeDecimal] = Field(None, description="None if FX rate missing")
-    current_price: Optional[SafeDecimal] = Field(None, description="Snapshot price at report end date. None if FX rate missing")
+    current_price: Optional[SafeDecimal] = Field(None, description="Effective current-unit price converted to report currency. None if FX rate missing")
     current_value: Optional[SafeDecimal] = Field(None, description="Snapshot position value at report end date")
+    valuation_source: Optional[Literal["MARKET_PRICE", "LAST_TRADE_PRICE", "MISSING"]] = Field(
+        None,
+        description="Source selected by the valuation hierarchy",
+    )
+    valuation_effective_unit_price: Optional[SafeDecimal] = Field(None, description="Native-currency unit price actually used for current_value")
+    valuation_effective_currency: Optional[str] = Field(None, description="Native currency of valuation_effective_unit_price")
+    valuation_reference_date: Optional[date_type] = Field(None, description="Original date of the selected market or transaction reference")
+    valuation_reference_unit_price: Optional[SafeDecimal] = Field(None, description="Original source unit price before split adjustment or target-currency conversion")
+    valuation_reference_currency: Optional[str] = Field(None, description="Native currency of valuation_reference_unit_price")
+    valuation_split_adjusted: bool = Field(False, description="Whether intervening split events restated the transaction reference for current units")
+    missing_fx_pair: Optional[str] = Field(None, description="Required source/target FX pair when valuation conversion is unavailable")
     gain_loss: Optional[SafeDecimal] = Field(None, description="Unrealized P&L at report end date: current_value - cost_basis")
     gain_loss_percent: Optional[SafeDecimal] = None
+    annualized_return: Optional[SafeDecimal] = Field(
+        None, description="Net annualized return (CAGR) of the still-open position over first-transaction -> report-end window: (1 + (unrealized + income - fees)/cost_basis)^(365/days)-1. Value-at-cost when market price missing (income-only). Fraction. None if <30 days / no cost basis."
+    )
     price_change_1d: Optional[SafeDecimal] = Field(None, description="Percentage price change vs previous day relative to report end date")
     gain_loss_change_1d: Optional[SafeDecimal] = Field(None, description="Change in unrealized P&L vs previous day using current quantity and base-currency prices")
-    gain_loss_change_1d_percent: Optional[SafeDecimal] = Field(None, description="gain_loss_change_1d as percentage of previous day's unrealized P&L; None if prior unrealized P&L is ~0")
+    gain_loss_change_1d_percent: Optional[SafeDecimal] = Field(None, description="Daily unrealized P&L change as percentage of the previous day's absolute position market value; None if prior value is ~0")
     allocation_percent: Optional[SafeDecimal] = Field(None, description="Weight vs total market value (excludes cash)")
     nav_weight_percent: Optional[SafeDecimal] = Field(None, description="Weight vs NAV at report end date (includes cash): current_value / NAV * 100")
+    oldest_open_lot_date: Optional[date_type] = Field(None, description="Opening date of the oldest FIFO lot still open at report end for this (asset, broker); None if fully closed")
 
 
 class AssetPeriodContribution(BaseModel):
     """Per-asset period P&L contribution for dashboard Performance view."""
-
-    model_config = ConfigDict(extra="forbid")
 
     asset_id: int
     asset_name: str
@@ -312,15 +306,17 @@ class AssetPeriodContribution(BaseModel):
     period_fees_taxes: Optional[SafeDecimal] = Field(None, description="FEE/TAX attributed to this asset in period (positive value)")
     period_pnl: Optional[SafeDecimal] = Field(None, description="Total period P&L: unrealized_delta + realized + income - fees_taxes")
     period_pnl_percent: Optional[SafeDecimal] = Field(None, description="Period return %: period_pnl / |start_value|. None if start_value=0")
+    annualized_return: Optional[SafeDecimal] = Field(
+        None, description="Net annualized return (CAGR) over the position's holding window inside the period (oldest lot opening in period -> period end), base = |start_value| or end cost basis when opened mid-period: (1+period_pnl_pct)^(365/days)-1. Fraction. None if <30 days / no base."
+    )
     start_value: Optional[SafeDecimal] = Field(None, description="Position value at period start (0 if there was no opening position)")
     end_value: Optional[SafeDecimal] = Field(None, description="Position value at period end (0 if the position was closed by period end)")
     is_fully_sold: bool = Field(False, description="True if position quantity is 0 at period end")
+    oldest_open_lot_date: Optional[date_type] = Field(None, description="Opening date of the oldest FIFO lot still open at period end for this (asset, broker); None if fully closed")
 
 
-class UnallocatedContribution(BaseModel):
+class UnallocatedContribution(StrictModel):
     """Broker-level fees/income not attributed to a specific asset."""
-
-    model_config = ConfigDict(extra="forbid")
 
     broker_id: int
     broker_name: str
@@ -328,10 +324,8 @@ class UnallocatedContribution(BaseModel):
     unallocated_fees_taxes: Optional[SafeDecimal] = Field(None, description="FEE/TAX without asset_id in period (positive value)")
 
 
-class OtherPeriodEffect(BaseModel):
+class OtherPeriodEffect(StrictModel):
     """Period P&L row not linked to a specific asset position."""
-
-    model_config = ConfigDict(extra="forbid")
 
     description: str
     category: str = Field(..., pattern="^(Income|Cost|Other)$")
@@ -340,10 +334,8 @@ class OtherPeriodEffect(BaseModel):
     broker_name: Optional[str] = Field(None, description="Nullable when effect is not broker-specific")
 
 
-class PositionsContribution(BaseModel):
+class PositionsContribution(StrictModel):
     """Complete per-asset contribution breakdown for a period."""
-
-    model_config = ConfigDict(extra="forbid")
 
     positions: List[AssetPeriodContribution] = Field(default_factory=list)
     unallocated: List[UnallocatedContribution] = Field(default_factory=list)
@@ -352,10 +344,8 @@ class PositionsContribution(BaseModel):
     gross_losses: SafeDecimal = Field(default=0, description="Sum of |min(period_pnl, 0)| across all positions")
 
 
-class BrokerBreakdown(BaseModel):
+class BrokerBreakdown(StrictModel):
     """Per-broker mini-summary (only populated when include_breakdown=True)."""
-
-    model_config = ConfigDict(extra="forbid")
 
     broker_id: int
     broker_name: str
@@ -366,7 +356,7 @@ class BrokerBreakdown(BaseModel):
     cash_balances: List[Currency] = Field(default_factory=list, description="Cash balance per currency, native (unconverted)")
 
 
-class PortfolioSummary(BaseModel):
+class PortfolioSummary(StrictModel):
     """Full portfolio summary response."""
 
     net_worth: Currency
@@ -482,8 +472,6 @@ class LotAnalysisType(StrEnum):
 class LotsAnalysisQuery(BaseModel):
     """Request body for POST /portfolio/lots/analysis."""
 
-    model_config = ConfigDict(extra="forbid")
-
     asset_id: int = Field(..., description="Asset to analyze.")
     broker_ids: Optional[List[int]] = Field(None, description="Optional broker filter. None = all accessible brokers.")
     date_range: Optional[OpenDateRangeModel] = Field(None, description="Optional date range filter for histories and visible intervals.")
@@ -507,20 +495,16 @@ class LotsAnalysisQuery(BaseModel):
         return v
 
 
-class LotCustodySummarySchema(BaseModel):
+class LotCustodySummarySchema(StrictModel):
     """Current custody slice for a lot."""
-
-    model_config = ConfigDict(extra="forbid")
 
     broker_id: Optional[int] = Field(None, description="Broker currently holding this fragment. None for in-transit slices.")
     custody_type: LotCustodyType
     quantity: SafeDecimal
 
 
-class LotSummarySchema(BaseModel):
+class LotSummarySchema(StrictModel):
     """Direction-neutral lot row used by table, selection sync, and custody modal."""
-
-    model_config = ConfigDict(extra="forbid")
 
     lot_id: int = Field(..., description="Stable lot identifier. Equals opening_transaction_id.")
     opening_transaction_id: int = Field(..., description="Transaction that opened the lot. Equals lot_id.")
@@ -528,6 +512,7 @@ class LotSummarySchema(BaseModel):
     direction: LotDirection
     opening_broker_id: int
     opening_date: date_type
+    closing_date: Optional[date_type] = Field(None, description="Authoritative closing date (max LotClosure.close_date) when fully closed (open_quantity == 0). None otherwise.")
     opening_unit_price: SafeDecimal = Field(..., description="Opening unit price converted to response target_currency.")
     original_quantity: SafeDecimal
     original_cost: SafeDecimal = Field(..., description="Original lot cost in response target_currency.")
@@ -549,6 +534,7 @@ class LotSummarySchema(BaseModel):
     total_pnl: Optional[SafeDecimal] = Field(None, description="market_pnl + realized_pnl + asset_income, in target_currency.")
     cash_yield: Optional[SafeDecimal] = Field(None, description="asset_income / opening_value, when opening_value > 0.")
     total_return: Optional[SafeDecimal] = Field(None, description="total_pnl / opening_value (opening_value = original_cost), when > 0.")
+    annualized_return: Optional[SafeDecimal] = Field(None, description="Net annualized return (CAGR) of net_total_return over the lot holding window (opening_date -> closing_date if closed, else analysis end): (1+net_total_return)^(365/days)-1. Fraction. None if net metrics unavailable / <30 days.")
     value_source: Optional[LotValueSource] = Field(None, description="MARKET_PRICE when a real current price exists, else ESTIMATED_AT_COST (open value assumed at cost, market_pnl=0).")
     allocated_fees: SafeDecimal = Field(default=0, description="Cumulative FEE allocated to this lot, target_currency (positive magnitude).")
     allocated_taxes: SafeDecimal = Field(default=0, description="Cumulative TAX allocated to this lot, target_currency (positive magnitude).")
@@ -562,10 +548,8 @@ class LotSummarySchema(BaseModel):
         return Currency.validate_code(v) if v else None
 
 
-class GanttSegmentSchema(BaseModel):
+class GanttSegmentSchema(StrictModel):
     """Serializable projection of one FragmentInterval."""
-
-    model_config = ConfigDict(extra="forbid")
 
     fragment_id: str
     lot_id: int
@@ -592,14 +576,12 @@ class LotTimelineEventKind(StrEnum):
     TRANSFER_ARRIVE = "TRANSFER_ARRIVE"
 
 
-class LotTimelineEventSchema(BaseModel):
+class LotTimelineEventSchema(StrictModel):
     """Flat lot timeline row.
 
     Shared by both custody_history and lot_events. Flat list + lot_id keeps response
     shape consistent with existing point-based history DTOs and simplifies multi-select UI.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     lot_id: int
     date: date_type
@@ -619,10 +601,8 @@ class LotTimelineEventSchema(BaseModel):
     ratio: Optional[SafeDecimal] = Field(None, description="Split ratio for SPLIT events.")
 
 
-class LotValueHistoryPoint(BaseModel):
+class LotValueHistoryPoint(StrictModel):
     """Per-lot value history point."""
-
-    model_config = ConfigDict(extra="forbid")
 
     lot_id: int
     date: date_type
@@ -637,10 +617,8 @@ class LotValueHistoryPoint(BaseModel):
     net_pnl: SafeDecimal = Field(default=0, description="pnl - allocated_fees - allocated_taxes up to date, in target_currency.")
 
 
-class LotReturnHistoryPoint(BaseModel):
+class LotReturnHistoryPoint(StrictModel):
     """Per-lot relative return point."""
-
-    model_config = ConfigDict(extra="forbid")
 
     lot_id: int
     date: date_type
@@ -654,15 +632,14 @@ class LotReturnHistoryPoint(BaseModel):
     net_total_return: Optional[SafeDecimal] = Field(None, description="(total_value + income - allocated_fees - allocated_taxes)/original_cost - 1, when original_cost != 0.")
 
 
-class LotPriceHistoryPoint(BaseModel):
+class LotPriceHistoryPoint(StrictModel):
     """Per-lot market price point."""
-
-    model_config = ConfigDict(extra="forbid")
 
     lot_id: int
     date: date_type
     market_price: SafeDecimal
     currency: str = Field(..., description="Currency of market_price, normally equal to response target_currency.")
+    estimated: bool = Field(default=False, description="True when market_price is estimated from the last-known trade (no real market quote on/before this date), False for an actual price-history quote.")
 
     @field_validator("currency")
     @classmethod
@@ -670,10 +647,8 @@ class LotPriceHistoryPoint(BaseModel):
         return Currency.validate_code(v)
 
 
-class BrokerWACHistoryPoint(BaseModel):
+class BrokerWACHistoryPoint(StrictModel):
     """Broker-scoped WAC time-series point for selected asset."""
-
-    model_config = ConfigDict(extra="forbid")
 
     date: date_type
     broker_id: int
@@ -681,20 +656,16 @@ class BrokerWACHistoryPoint(BaseModel):
     pool_qty: SafeDecimal
 
 
-class CumulativeWACHistoryPoint(BaseModel):
+class CumulativeWACHistoryPoint(StrictModel):
     """Combined WAC time-series point across requested brokers."""
-
-    model_config = ConfigDict(extra="forbid")
 
     date: date_type
     wac: SafeDecimal
     pool_qty: SafeDecimal
 
 
-class PerformanceHistoryPoint(BaseModel):
+class PerformanceHistoryPoint(StrictModel):
     """Asset-level ROI/TWRR time-series point (whole asset in filtered broker scope, independent of selected_lot_ids)."""
-
-    model_config = ConfigDict(extra="forbid")
 
     date: date_type
     roi: Optional[SafeDecimal] = Field(None, description="Simple ROI at this date, None if not computable (e.g. no cash flow yet).")
@@ -708,15 +679,13 @@ class LotIncomeEventKind(StrEnum):
     INTEREST = "INTEREST"
 
 
-class LotIncomeEventSchema(BaseModel):
+class LotIncomeEventSchema(StrictModel):
     """A single asset-linked DIVIDEND/INTEREST transaction allocated pro-rata across open LONG lots.
 
     Powers the dashed income markers on the WAC/Value/Return charts (plan v3 §11): one entry per
     income transaction that had at least one open LONG lot on its date. ``amount`` is the whole
     transaction total in target_currency (pre-split); ``lot_ids`` are the lots it was allocated to.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     type: LotIncomeEventKind
     date: date_type
@@ -739,10 +708,8 @@ AllocationRuleLiteral = Literal[
 ]
 
 
-class EconomicLotAllocationSchema(BaseModel):
+class EconomicLotAllocationSchema(StrictModel):
     """Audit leaf: share of a target operation assigned to a single lot."""
-
-    model_config = ConfigDict(extra="forbid")
 
     lot_id: int
     weight: SafeDecimal
@@ -750,7 +717,7 @@ class EconomicLotAllocationSchema(BaseModel):
     target_amount: SafeDecimal
 
 
-class TargetOperationAllocationSchema(BaseModel):
+class TargetOperationAllocationSchema(StrictModel):
     """Audit mid-level: one target operation (opening/closure/income/holding).
 
     The allocation context lives on the operation, not the group, so the same lot
@@ -758,18 +725,14 @@ class TargetOperationAllocationSchema(BaseModel):
     breakdown preserved.
     """
 
-    model_config = ConfigDict(extra="forbid")
-
     context: AllocationContextLiteral
     operation_transaction_id: Optional[int] = Field(None, description="Trade/income transaction the pool was matched against; None for HOLDING fallback.")
     weight: SafeDecimal
     lot_allocations: List[EconomicLotAllocationSchema] = Field(default_factory=list)
 
 
-class EconomicAllocationGroupSchema(BaseModel):
+class EconomicAllocationGroupSchema(StrictModel):
     """Audit top-level: a pooled economic group (FEE/TAX/income) and its allocations."""
-
-    model_config = ConfigDict(extra="forbid")
 
     economic_type: EconomicTypeLiteral
     asset_id: int
@@ -786,10 +749,8 @@ class EconomicAllocationGroupSchema(BaseModel):
     target_orphan: SafeDecimal = Field(default=0, description="Unallocated target residual (orphan pool).")
 
 
-class LotsAnalysisMetadata(BaseModel):
+class LotsAnalysisMetadata(StrictModel):
     """Metadata describing bulk lots-analysis computation."""
-
-    model_config = ConfigDict(extra="forbid")
 
     broker_ids: Optional[List[int]] = None
     selected_lot_ids: Optional[List[int]] = None
@@ -801,13 +762,11 @@ class LotsAnalysisMetadata(BaseModel):
     generated_at: date_type
 
 
-class LotsAnalysisResponse(BaseModel):
+class LotsAnalysisResponse(StrictModel):
     """Response for POST /portfolio/lots/analysis.
 
     Sections are None unless explicitly requested via requested_analyses.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     asset_id: int
     target_currency: str
@@ -854,20 +813,16 @@ class LotsAnalysisResponse(BaseModel):
 # =============================================================================
 
 
-class AllocationHistoryDimensions(BaseModel):
+class AllocationHistoryDimensions(StrictModel):
     """Allocation history for all three dimensions."""
-
-    model_config = ConfigDict(extra="forbid")
 
     type: List[AllocationHistoryPoint] = Field(default_factory=list)
     sector: List[AllocationHistoryPoint] = Field(default_factory=list)
     geography: List[AllocationHistoryPoint] = Field(default_factory=list)
 
 
-class PortfolioReportMetadata(BaseModel):
+class PortfolioReportMetadata(StrictModel):
     """Metadata describing the report computation parameters."""
-
-    model_config = ConfigDict(extra="forbid")
 
     broker_ids: Optional[List[int]] = None
     target_currency: str
@@ -880,13 +835,11 @@ class PortfolioReportMetadata(BaseModel):
     included_features: List[str] = Field(default_factory=list)
 
 
-class PortfolioReportQuery(BaseModel):
+class PortfolioReportQuery(StrictModel):
     """Request body for POST /portfolio/report.
 
     Runs the PortfolioCalculationEngine once and returns all requested views.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     broker_ids: Optional[List[int]] = Field(None, description="Broker filter. None = all accessible brokers.")
     date_range: Optional[OpenDateRangeModel] = Field(None, description="Date range for history. None = full history.")
@@ -898,14 +851,12 @@ class PortfolioReportQuery(BaseModel):
     include_positions_contribution: bool = Field(False, description="Include per-asset period P&L contribution.")
 
 
-class PortfolioReportResponse(BaseModel):
+class PortfolioReportResponse(StrictModel):
     """Response for POST /portfolio/report.
 
     Contains all requested views derived from a single engine run.
     Sections are None when the corresponding include_* flag was False.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     metadata: PortfolioReportMetadata
     summary: Optional[PortfolioSummary] = None

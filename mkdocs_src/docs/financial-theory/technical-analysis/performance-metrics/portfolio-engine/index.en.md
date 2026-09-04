@@ -1,7 +1,5 @@
 # ⚙️ Portfolio Engine — Mathematical Model
 
-*[⬅️ Back to Performance Metrics Overview](../index.md)*
-
 ## 💡 Overview
 
 This page formally defines the mathematical model underlying LibreFolio's portfolio calculation engine. All other metric pages ([NAV](nav.md), [Book Value](book-value.md), [Period P&L](period-pnl.md), [WAC](../weighted-average-cost.md), [Deposited Capital](deposited-capital.md)) reference this page for their precise computation rules.
@@ -26,16 +24,23 @@ This page formally defines the mathematical model underlying LibreFolio's portfo
 ## 📐 2. Valuation Price {: #2-valuation-price }
 
 $$
-p(a, t) = \begin{cases}
-p_{\text{mkt}}(a, t) & \text{if PriceHistory} \leq t \text{ exists} \\
-p_{\text{buy}}(a, t) & \text{if last BUY from } V(u) \text{ exists} \\
-\varnothing & \text{otherwise (excluded from NAV)}
+\operatorname{mark}(a,t)=
+\begin{cases}
+\text{MARKET}(a,t) & \text{same-day asset-system quote}\\
+\operatorname{avg}(\text{TRADE}(a,t)) & \text{same-day BUY/SELL/priced ADJUSTMENT observations}\\
+\text{last observation before }t & \text{carried forward (LOCF)}\\
+\varnothing & \text{no observation on or before }t
 \end{cases}
 $$
 
-- $p_{\text{mkt}}$ = backward-fill from PriceHistory (latest close with date $\leq t$)
-- $p_{\text{buy}}$ = unit price of most recent BUY of $a$ across all brokers in $V(u)$, with date $\leq t$
-- WAC is **never** used as valuation price
+- The unified resolver is the single valuation brain: `MARKET → TRADE_AVG → CARRIED → MISSING`.
+- `CARRIED` is last-observation-carried-forward. It carries `days_back` staleness metadata.
+- `estimated=True` means TRADE-origin. A stale carried MARKET quote is stale, not estimated.
+- Marks stay in native currency; each consumer converts to $C^*$ at valuation date $t$.
+- Cost-basis FX remains pinned to the transaction date.
+- WAC is **never** used as valuation price.
+
+See [Price Resolution](price-resolution.md) for the resolver contract and data-quality semantics.
 
 ---
 
@@ -44,7 +49,10 @@ $$
 For each position $(a, b)$ with $q(a,b,t) > 0$:
 
 $$
-\mathrm{MV}(a,b,t) = q(a,b,t) \cdot p(a,t) \cdot \mathrm{fx}\bigl(\mathrm{ccy}_p, C^*, t\bigr)
+\mathrm{MV}(a,b,t) =
+\frac{q(a,b,t)}{qbq(a)}\cdot
+\operatorname{mark}(a,t)\cdot
+\mathrm{fx}\bigl(\mathrm{ccy}_{mark}, C^*, t\bigr)
 $$
 
 $$
@@ -119,7 +127,7 @@ Three accumulator pools track cash provenance. $K$ and $R$ are maintained **per-
 
     A BUY on broker $b_1$ can only consume $R_{b_1}$, never $R_{b_2}$. Cash does not teleport between brokers — only explicit transfers move pool balances.
 
-### Update rules (per-transaction on broker $b$, chronological)
+### 🔁 Update rules (per-transaction on broker $b$, chronological)
 
 | Icon & Type | Update Formulas | Logic & Description |
 |:---:|---|---|
@@ -133,7 +141,7 @@ Three accumulator pools track cash provenance. $K$ and $R$ are maintained **per-
 
 If departure and arrival dates differ, the transfer is in-transit: subtracted from $s$ at departure day, added to $d$ at arrival day. Between those dates, $\sum K_b + \sum R_b < \mathrm{Cash}_{\text{like}}$ by the in-transit amount — handled by proportional reconciliation.
 
-### Aggregation for output
+### 🧮 Aggregation for output
 
 $$
 \mathrm{CashFromCapital}(t) = \sum_{b \in S} K_b(t)
@@ -143,7 +151,7 @@ $$
 \mathrm{CashFromReturns}(t) = \sum_{b \in S} R_b(t)
 $$
 
-### Reconciliation invariant
+### ⚖️ Reconciliation invariant
 
 $$
 \mathrm{Cash}_{\text{like}}(t) \approx \sum_{b \in S} K_b(t) + \sum_{b \in S} R_b(t)
@@ -162,16 +170,23 @@ $$
 $$
 
 $$
-\mathrm{PnL}(a,b) = \Delta\mathrm{UGL}(a,b) + \mathrm{Realized}(a,b) + \mathrm{Income}(a,b) - \mathrm{Fees}(a,b)
+\mathrm{PnL}(a,b) = \Delta\mathrm{UGL}(a,b) + \mathrm{Realized}(a,b) + \mathrm{Income}(a,b) - \mathrm{FeesTaxes}(a,b)
 $$
 
 Contribution position set:
 
 $$
-\mathcal{P} = \mathcal{P}(t_0) \cup \mathcal{P}(t_1) \cup \mathrm{keys}(\text{Realized}) \cup \mathrm{keys}(\text{Income}) \cup \mathrm{keys}(\text{Fees})
+\mathcal{P} = \text{positions with BUY/SELL/ADJUSTMENT/TRANSFER activity or boundary quantity}
 $$
 
-Unallocated (fees/income without `asset_id`) grouped per broker.
+Portfolio-level period P&L also exposes a residual:
+
+$$
+\mathrm{Other} =
+\mathrm{PnL}_{period} - \Delta\mathrm{UGL} - \mathrm{Realized} - \mathrm{Income} + \mathrm{FeesTaxes}
+$$
+
+Unallocated fees/income without `asset_id` are grouped per broker as other period effects.
 
 ---
 
@@ -208,11 +223,12 @@ Computed **after** daily states, as a separate pass:
 
 | Metric | Formula | Reference |
 |--------|---------|-----------|
-| Total PnL | $\mathrm{NAV}(t) - \text{DepositedCapital}(t)$ | [Deposited Capital](deposited-capital.md) |
+| Total PnL | $\mathrm{NAV}(t) - \text{CapitalBaseline}(t)$ | [Deposited Capital](deposited-capital.md) |
 | Period PnL | $\mathrm{NAV}(t_1) - \mathrm{NAV}(t_0) - \text{ECF}_{[t_0,t_1]}$ | [Period P&L](period-pnl.md) |
 | TWRR | $\prod_i (1 + r_i) - 1$ (sub-period chain) | [TWRR](twrr.md) |
 | MWRR | XIRR solving $\sum \frac{CF_i}{(1+r)^{d_i/365}} = 0$ | [MWRR](mwrr.md) |
 | Simple ROI | $(\mathrm{NAV} - \text{NetInvested}) / \text{NetInvested}$ | [ROI](roi.md) |
+| Net annualized return | $(1+r_{\mathrm{net}})^{365/d}-1$, suppressed below 30 days | [Net Annualized Return](net-annualized-return.md) |
 | Timing Effect | $\text{MWRR}_{\text{cum}} - \text{TWRR}_{\text{cum}}$ | [Timing Effect](timing-effect.md) |
 
 ---
@@ -220,7 +236,10 @@ Computed **after** daily states, as a separate pass:
 ## 🔗 Related
 
 - 💼 [NAV](nav.md) — snapshot valuation
+- 🧭 [Price Resolution](price-resolution.md) — unified valuation resolver
+- 📈 [Net Annualized Return](net-annualized-return.md) — holdings, period, and FIFO CAGR definitions
 - 📖 [Book Value](book-value.md) — cost basis aggregate
 - 📊 [Period P&L](period-pnl.md) — windowed gain/loss with contribution
 - 💸 [Deposited Capital](deposited-capital.md) — 3-pool details and worked examples
 - 📈 [WAC](../weighted-average-cost.md) — iterative cost method
+- 📈 [Performance Metrics Overview](../index.md) — all performance metrics at a glance

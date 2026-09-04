@@ -95,5 +95,5 @@ Phase 09 M1/M2 archive (2026-07-07, [[sources/phase09-m1-m2-archive-2026-07]]):
 | Service | `backend/app/services/portfolio_service.py` |
 | Engine (called by service) | `backend/app/services/portfolio_engine.py` |
 | API (calls service) | `backend/app/api/v1/portfolio_api.py` |
-| WAC compute | `backend/app/utils/wac_utils.py` |
-| Frontend store | `frontend/src/lib/stores/portfolioStore.svelte.ts` |
+| WAC compute | `backend/app/utils/financial/wac_utils.py` |
+| Frontend store | `frontend/src/lib/stores/portfolio/portfolioStore.svelte.ts` |

@@ -76,7 +76,7 @@ LibreFolio admite la importación de archivos de estado de cuenta de los siguien
  </a>
  <a href="trading212/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
  <div style="display: flex; align-items: center; gap: 0.75rem;">
- <img src="https://www.trading212.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="Icono de Trading212">
+ <img src="https://www.trading212.com/favicon-32x32.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="Icono de Trading212">
  <span class="card-title" style="margin: 0;">Trading212</span>
  </div>
  <span class="card-desc">Importa el historial de transacciones CSV de Trading212.</span>
@@ -109,13 +109,34 @@ LibreFolio admite la importación de archivos de estado de cuenta de los siguien
  </div>
  <span class="card-desc">Importa la exportación CSV del historial de transacciones desde InvestEngine.</span>
  </a>
- <a href="rabobank/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
- <div style="display: flex; align-items: center; gap: 0.75rem;">
- <img src="https://www.rabobank.com/static/msp/global-sites/rds/favicons/favicon-svg.svg" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Rabobank">
- <span class="card-title" style="margin: 0;">Rabobank</span>
- </div>
- <span class="card-desc">Importa la exportación CSV del historial de transacciones desde Rabobank.</span>
- </a>
+    <a href="rabobank/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
+    <div style="display: flex; align-items: center; gap: 0.75rem;">
+    <img src="https://www.rabobank.com/static/msp/global-sites/rds/favicons/favicon-svg.svg" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Rabobank">
+    <span class="card-title" style="margin: 0;">Rabobank</span>
+    </div>
+    <span class="card-desc">Importar la exportación CSV del historial de transacciones desde Rabobank.</span>
+    </a>
+    <a href="fineco/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
+    <div style="display: flex; align-items: center; gap: 0.75rem;">
+    <img src="https://finecobank.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Fineco">
+    <span class="card-title" style="margin: 0;">Fineco</span>
+    </div>
+    <span class="card-desc">Importar la exportación CSV "Movimenti Dossier Titoli" desde Fineco.</span>
+    </a>
+    <a href="intesa/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
+    <div style="display: flex; align-items: center; gap: 0.75rem;">
+    <img src="https://www.intesasanpaolo.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Intesa Sanpaolo">
+    <span class="card-title" style="margin: 0;">Intesa Sanpaolo</span>
+    </div>
+    <span class="card-desc">Importa los movimientos CSV/XLSX o las exportaciones de patrimonio de Intesa Sanpaolo.</span>
+    </a>
+    <a href="credit_agricole/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
+    <div style="display: flex; align-items: center; gap: 0.75rem;">
+    <img src="https://www.credit-agricole.it/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Crédit Agricole">
+    <span class="card-title" style="margin: 0;">Crédit Agricole</span>
+    </div>
+    <span class="card-desc">Importa movimientos de cuenta de Crédit Agricole — caja real, comisiones, impuestos y cupones/dividendos; exportación de valores opcional para historial superior a 2 años.</span>
+    </a>
  <a href="traderepublic/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
  <div style="display: flex; align-items: center; gap: 0.75rem;">
  <img src="https://traderepublic.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Trade Republic">
@@ -222,12 +243,15 @@ LibreFolio admite la importación de archivos de estado de cuenta de los siguien
     | <img src="https://www.coinbase.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Coinbase** | 🧪 Beta | CSV | ✅ | ❌ | ✅ | ✅ | Informes de transacciones solo de cripto |
     | <img src="https://cdn.prod.website-files.com/66289cd2c30bc8d40bd60733/66f526a076ad61485c78771c_favicon.png" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Freetrade** | 🧪 Beta | CSV | ✅ | ✅ | ✅ | ✅ | Estados de cuenta simples de bróker del Reino Unido |
     | <img src="https://www.finpension.ch/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Finpension** | 🧪 Beta | CSV | ✅ | ✅ | ✅ | ✅ | Estados de cuenta del pilar 3a suizo |
-    | <img src="https://www.trading212.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Trading212** | 🧪 Beta | CSV | ✅ | ✅ | ✅ | ✅ | CSV de actividad de trading europeo |
+    | <img src="https://www.trading212.com/favicon-32x32.png" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Trading212** | 🧪 Beta | CSV | ✅ | ✅ | ✅ | ✅ | CSV de actividad de trading europeo |
     | <img src="https://avanza.se/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Avanza** | 🧪 Beta | CSV | ✅ | ✅ | ✅ | ✅ | Escrito a partir de los archivos de ejemplo |
     | <img src="https://bux.com/it/wp-content/themes/vo-theme/assets/images/favicon/favicon-32x32.png" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **BUX** | 🧪 Beta | CSV | ✅ | ✅ | ✅ | ✅ | Escrito a partir de los archivos de ejemplo |
     | <img src="https://disnat.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Disnat** | 🧪 Beta | CSV | ✅ | ✅ | ✅ | ✅ | Escrito a partir de los archivos de ejemplo |
     | <img src="https://www.investengine.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **InvestEngine** | 🧪 Beta | CSV | ✅ | ✅ | ❌ | ❌ | Escrito a partir de los archivos de ejemplo |
-    | <img src="https://www.rabobank.com/static/msp/global-sites/rds/favicons/favicon-svg.svg" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Rabobank** | 🧪 Beta | CSV | ✅ | ✅ | ✅ | ✅ | Escrito a partir de los archivos de ejemplo |
+    | <img src="https://www.rabobank.com/static/msp/global-sites/rds/favicons/favicon-svg.svg" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Rabobank** | 🧪 Beta | CSV | ✅ | ✅ | ✅ | ✅ | Creado a partir de exportaciones de ejemplo |
+    | <img src="https://finecobank.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Fineco** | 🧪 Beta | CSV | ✅ | ✅ | ❌ | ✅ | Ambos diseños de exportación; importes en la divisa del informe |
+    | <img src="https://www.intesasanpaolo.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Intesa Sanpaolo** | 🧪 Beta | CSV/XLSX | ❌ | ✅ | ✅ | ✅ | Movimientos cupones/dividendos/comisiones/impuestos; la instantánea de patrimonio alimenta efectivo cuando presente + posiciones |
+    | <img src="https://www.credit-agricole.it/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Crédit Agricole** | ✅ Estable | CSV/XLSX | ✅ | ✅ | ✅ | ✅ | Los movimientos de cuenta aportan efectivo real, comisiones, impuestos y cupones/dividendos; la exportación opcional de títulos recupera el historial de más de 2 años; contraentradas automáticas de efectivo, vencimientos y ajustes de sucesión |
     | <img src="https://traderepublic.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Trade Republic** | 🧪 Beta | CSV | ✅ | ✅ | ✅ | ✅ | Escrito a partir de los archivos de ejemplo |
     | <img src="https://www.xtb.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **XTB** | 🧪 Beta | CSV | ✅ | ✅ | ✅ | ✅ | Escrito a partir de los archivos de ejemplo |
     | <img src="https://parqet.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Parqet** | 🧪 Beta | CSV | ✅ | ✅ | ✅ | ✅ | Escrito a partir de los archivos de ejemplo |
@@ -256,6 +280,12 @@ Durante el paso de vista previa, LibreFolio intenta **emparejar automáticamente
 ## ♻️ Detección de Duplicados {: #duplicate-detection }
 
 BRIM verifica si hay **transacciones duplicadas** basándose en la fecha, el tipo, el activo, la cantidad y el importe. Las filas duplicadas se marcan en la vista previa; puedes optar por omitirlas o forzar su importación.
+
+---
+
+## ⛔ Antes de la fecha de apertura del bróker {: #before-opening }
+
+Si un bróker tiene una **fecha de apertura** establecida, cualquier transacción con fecha **anterior** a esa fecha se marca en la vista previa como **"Antes de la apertura"** y no se puede importar (su casilla de verificación está desactivada). El día de apertura sigue siendo válido. Si una fila se marca por error, utiliza la acción **Editar fecha del bróker**, luego **vuelve a comprobar / actualizar** para reevaluar las filas.
 
 ---
 

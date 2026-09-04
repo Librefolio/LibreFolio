@@ -2,13 +2,13 @@
 
 El proveedor de **CSV Genérico** es un fallback flexible para los brókers que no cuentan con soporte directo. Permite el mapeo manual de columnas para que pueda importar desde cualquier exportación basada en CSV.
 
-## Cuándo usarlo
+## When usarlo
 
 - Su bróker no se encuentra en la lista de brókers compatibles.
 - Un bróker compatible cambió su formato de exportación y el plugin aún no ha sido actualizado.
 - Tiene una hoja de cálculo personalizada o un CSV generado por script que desea importar.
 
-## Cómo funciona
+## How funciona
 
 1. Cargue su archivo CSV.
 2. LibreFolio muestra las columnas detectadas sin procesar.
@@ -45,7 +45,7 @@ Estas son las columnas reconocidas por LibreFolio en un archivo CSV Genérico. L
 | **`asset`** | Requerida para BUY/SELL/DIVIDEND/TRANSFER/ADJUSTMENT | `symbol`, `ticker`, `isin`, `asset_id`, `instrument`, `strumento`, `security`, `titolo`, `name`, `nome` | Ticker, ISIN, o nombre consistente para activos no cotizados |
 | **`description`** | Opcional | `descrizione`, `notes`, `memo`, `note`, `details`, `dettagli`, `comment`, `commento` | Texto libre |
 
-### Valores válidos para `type`
+### Valid válidos para `type`
 
 `BUY` · `SELL` · `DIVIDEND` · `INTEREST` · `DEPOSIT` · `WITHDRAWAL` · `FEE` · `TAX` · `TRANSFER` · `ADJUSTMENT` · `FX_CONVERSION` · `CASH_TRANSFER`
 

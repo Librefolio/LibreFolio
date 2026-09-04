@@ -122,7 +122,7 @@ class TreeParser(argparse.ArgumentParser):
                 print(f"\nCommand tree:\n{tree}", file=file)
 
 
-def _option_strings_formatter(parser: argparse.ArgumentParser) -> str:
+def _option_strings_formatter(parser: argparse.ArgumentParser) -> str:  # noqa: C901 — flat option-format loop, no nested logic
     """
     Format option strings for a parser (used in tree display).
 

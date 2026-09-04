@@ -8,7 +8,7 @@
  * - Database populated with EUR-USD data
  */
 
-import {expect, test} from '@playwright/test';
+import {expect, test} from '../fixtures/playwright';
 import {login} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {goToFxDetailPage} from './fx-helpers';
@@ -24,7 +24,6 @@ test.describe('FX CSV Import', () => {
     async function openDataEditor(page: import('@playwright/test').Page) {
         await goToFxDetailPage(page, 'EUR-USD');
         await page.getByTestId('fx-detail-edit-btn').click();
-        await page.waitForTimeout(200);
         await expect(page.getByTestId('fx-detail-editor-panel')).toBeVisible();
     }
 
@@ -34,7 +33,6 @@ test.describe('FX CSV Import', () => {
     async function openImportModal(page: import('@playwright/test').Page) {
         await openDataEditor(page);
         await page.getByTestId('fx-data-import-btn').click();
-        await page.waitForTimeout(200);
         const modal = page.getByTestId('data-import-modal');
         await expect(modal).toBeVisible();
         return modal;
@@ -105,14 +103,12 @@ test.describe('FX CSV Import', () => {
         const swapBtn = modal.locator('button', {hasText: '⇄'});
         await expect(swapBtn).toBeVisible();
         await swapBtn.click();
-        await page.waitForTimeout(200);
 
         // Modal still visible
         await expect(modal).toBeVisible();
 
         // Header in textarea should now be USD>EUR
-        csvText = await getCsvText(modal);
-        expect(csvText.trim()).toBe('date;USD>EUR');
+        await expect(modal.locator('textarea')).toHaveValue(/^date;USD>EUR\s*$/);
 
         // No errors should appear
         await assertNoErrors(modal);
@@ -128,16 +124,12 @@ test.describe('FX CSV Import', () => {
 
         // First swap: EUR>USD → USD>EUR
         await swapBtn.click();
-        await page.waitForTimeout(200);
-        let csvText = await getCsvText(modal);
-        expect(csvText.trim()).toBe('date;USD>EUR');
+        await expect(modal.locator('textarea')).toHaveValue(/^date;USD>EUR\s*$/);
         await assertNoErrors(modal);
 
         // Second swap: USD>EUR → EUR>USD
         await swapBtn.click();
-        await page.waitForTimeout(200);
-        csvText = await getCsvText(modal);
-        expect(csvText.trim()).toBe('date;EUR>USD');
+        await expect(modal.locator('textarea')).toHaveValue(/^date;EUR>USD\s*$/);
         await assertNoErrors(modal);
     });
 
@@ -159,7 +151,6 @@ test.describe('FX CSV Import', () => {
         // Swap
         const swapBtn = modal.locator('button', {hasText: '⇄'});
         await swapBtn.click();
-        await page.waitForTimeout(200);
 
         // After swap: first=USD, last=EUR
         await expect(firstBadge).toHaveText(/USD/);
@@ -175,12 +166,10 @@ test.describe('FX CSV Import', () => {
         // Swap direction: EUR>USD → USD>EUR
         const swapBtn = modal.locator('button', {hasText: '⇄'});
         await swapBtn.click();
-        await page.waitForTimeout(200);
 
         // Paste data with swapped header
         const textarea = modal.locator('textarea');
         await textarea.fill('date;USD>EUR\n2020-01-15;0.9239\n2020-01-16;0.9221');
-        await page.waitForTimeout(200);
 
         // Should show 2 valid rows
         const importBtn = modal.locator('button', {hasText: 'Import (2)'});
@@ -199,7 +188,6 @@ test.describe('FX CSV Import', () => {
         // Paste some data first
         const textarea = modal.locator('textarea');
         await textarea.fill('date;EUR>USD\n2020-01-15;1.0823\n2020-01-16;1.0845');
-        await page.waitForTimeout(200);
 
         // Verify 2 valid rows
         await expect(modal.locator('button', {hasText: 'Import (2)'})).toBeVisible();
@@ -207,7 +195,8 @@ test.describe('FX CSV Import', () => {
         // Now swap
         const swapBtn = modal.locator('button', {hasText: '⇄'});
         await swapBtn.click();
-        await page.waitForTimeout(200);
+        // The header rewrite is what we are waiting for; poll until it lands.
+        await expect(textarea).toHaveValue(/date;USD>EUR/);
 
         // The header should be updated but user data lines remain
         const csvText = await getCsvText(modal);
@@ -226,7 +215,6 @@ test.describe('FX CSV Import', () => {
 
         const textarea = modal.locator('textarea');
         await textarea.fill('date;EUR>USD\n2020-01-15;1.0823\n2020-01-16;1.0845');
-        await page.waitForTimeout(200);
 
         // Check valid row count - the Import button shows count
         const importBtn = modal.locator('button', {hasText: 'Import (2)'});
@@ -234,25 +222,36 @@ test.describe('FX CSV Import', () => {
     });
 
     // ========================================================================
-    // Test 10: Close with dirty data shows confirm discard
+    // Test 10: Foreign pair header is rejected
+    // ========================================================================
+    test('rejects CSV header currencies that do not match page pair', async ({page}) => {
+        const modal = await openImportModal(page);
+
+        const textarea = modal.locator('textarea');
+        await textarea.fill('date;GBP>JPY\n2020-01-15;188.45');
+
+        await expect(modal.getByTestId('fx-import-header-mismatch-error')).toHaveText("Header currencies don't match");
+        await expect(modal.locator('button', {hasText: 'Import (1)'})).not.toBeVisible();
+    });
+
+    // ========================================================================
+    // Test 11: Close with dirty data shows confirm discard
     // ========================================================================
     test('close with dirty data shows discard confirm', async ({page}) => {
         const modal = await openImportModal(page);
 
         const textarea = modal.locator('textarea');
         await textarea.fill('date;EUR>USD\n2020-01-15;1.0823');
-        await page.waitForTimeout(200);
 
         // Try to close via ✕ button
         await modal.locator('button[aria-label="Close"]').click();
-        await page.waitForTimeout(200);
 
         // Should show discard confirm
         await expect(page.locator('text=Discard import')).toBeVisible();
     });
 
     // ========================================================================
-    // Test 11: Cancel closes modal without confirm when clean
+    // Test 12: Cancel closes modal without confirm when clean
     // ========================================================================
     test('cancel closes modal when clean', async ({page}) => {
         const modal = await openImportModal(page);
@@ -260,12 +259,11 @@ test.describe('FX CSV Import', () => {
 
         // Cancel should close immediately (no dirty data)
         await modal.locator('button', {hasText: 'Cancel'}).click();
-        await page.waitForTimeout(200);
         await expect(modal).not.toBeVisible();
     });
 
     // ========================================================================
-    // Test 12: Swap without data doesn't mark modal as dirty
+    // Test 13: Swap without data doesn't mark modal as dirty
     // ========================================================================
     test('swap without data does not mark modal as dirty', async ({page}) => {
         const modal = await openImportModal(page);
@@ -273,18 +271,16 @@ test.describe('FX CSV Import', () => {
         // Swap direction (should update header + initialCsvValue)
         const swapBtn = modal.locator('button', {hasText: '⇄'});
         await swapBtn.click();
-        await page.waitForTimeout(200);
 
         // Close should NOT show discard confirm (only header changed, no user data)
         await modal.locator('button[aria-label="Close"]').click();
-        await page.waitForTimeout(200);
 
         // Modal should just close — no discard prompt
         await expect(modal).not.toBeVisible();
     });
 
     // ========================================================================
-    // Test 13: Info banner updates on swap
+    // Test 14: Info banner updates on swap
     // ========================================================================
     test('info banner reflects current direction', async ({page}) => {
         const modal = await openImportModal(page);
@@ -300,7 +296,7 @@ test.describe('FX CSV Import', () => {
         // Swap
         const swapBtn = modal.locator('button', {hasText: '⇄'});
         await swapBtn.click();
-        await page.waitForTimeout(200);
+        await expect(modal.locator('textarea')).toHaveValue(/date;USD>EUR/);
 
         // After swap: should mention USD → EUR direction
         if ((await infoBanner.count()) > 0) {
@@ -311,17 +307,15 @@ test.describe('FX CSV Import', () => {
     });
 
     // ========================================================================
-    // Test 14: Inverted pair page (USD-EUR) has correct initial header
+    // Test 15: Inverted pair page (USD-EUR) has correct initial header
     // ========================================================================
     test('inverted pair URL has correct initial header', async ({page}) => {
         // Navigate to USD-EUR (inverted direction)
         await goToFxDetailPage(page, 'USD-EUR');
         await page.getByTestId('fx-detail-edit-btn').click();
-        await page.waitForTimeout(200);
         await expect(page.getByTestId('fx-detail-editor-panel')).toBeVisible();
 
         await page.getByTestId('fx-data-import-btn').click();
-        await page.waitForTimeout(200);
         const modal = page.getByTestId('data-import-modal');
         await expect(modal).toBeVisible();
 
@@ -332,7 +326,7 @@ test.describe('FX CSV Import', () => {
     });
 
     // ========================================================================
-    // Test 15: Less-than syntax updates badges but keeps original header text
+    // Test 16: Less-than syntax updates badges but keeps original header text
     // ========================================================================
     test('less-than syntax swaps badges but keeps original header text', async ({page}) => {
         const modal = await openImportModal(page);
@@ -340,11 +334,9 @@ test.describe('FX CSV Import', () => {
         // Type a header with < syntax: EUR<USD means EUR←USD → from=USD, to=EUR
         const textarea = modal.locator('textarea');
         await textarea.fill('date;EUR<USD');
-        await page.waitForTimeout(200);
 
         // The header text should stay as the user typed it (NOT rewritten)
-        const csvText = await getCsvText(modal);
-        expect(csvText.trim()).toBe('date;EUR<USD');
+        await expect(textarea).toHaveValue(/^date;EUR<USD\s*$/);
 
         // Currency badges should reflect the interpreted direction: USD → EUR
         const comboboxes = modal.locator('[role="combobox"]');
@@ -356,14 +348,14 @@ test.describe('FX CSV Import', () => {
     });
 
     // ========================================================================
-    // Test 16: Less-than syntax with data rows — header stays, data is valid
+    // Test 17: Less-than syntax with data rows — header stays, data is valid
     // ========================================================================
     test('less-than syntax with data rows keeps header and validates data', async ({page}) => {
         const modal = await openImportModal(page);
 
         const textarea = modal.locator('textarea');
         await textarea.fill('date;EUR<USD\n2020-01-15;1.0823\n2020-01-16;1.0845');
-        await page.waitForTimeout(200);
+        await expect(textarea).toHaveValue(/^date;EUR<USD/);
 
         // Header stays as typed
         const csvText = await getCsvText(modal);
@@ -379,7 +371,7 @@ test.describe('FX CSV Import', () => {
     });
 
     // ========================================================================
-    // Test 17: Swap after less-than syntax rewrites header with >
+    // Test 18: Swap after less-than syntax rewrites header with >
     // ========================================================================
     test('swap after less-than syntax rewrites header with greater-than', async ({page}) => {
         const modal = await openImportModal(page);
@@ -387,7 +379,6 @@ test.describe('FX CSV Import', () => {
         // Type header with < syntax
         const textarea = modal.locator('textarea');
         await textarea.fill('date;EUR<USD');
-        await page.waitForTimeout(200);
 
         // Badges should be USD → EUR (from < detection)
         const comboboxes = modal.locator('[role="combobox"]');
@@ -397,11 +388,9 @@ test.describe('FX CSV Import', () => {
         // Click swap: USD→EUR becomes EUR→USD
         const swapBtn = modal.locator('button', {hasText: '⇄'});
         await swapBtn.click();
-        await page.waitForTimeout(200);
 
         // NOW the header should be rewritten with > (swap always uses >)
-        const csvText = await getCsvText(modal);
-        expect(csvText.trim()).toBe('date;EUR>USD');
+        await expect(textarea).toHaveValue(/^date;EUR>USD\s*$/);
 
         // Badges should show EUR → USD
         await expect(comboboxes.first()).toHaveText(/EUR/);
@@ -411,7 +400,7 @@ test.describe('FX CSV Import', () => {
     });
 
     // ========================================================================
-    // Test 18: Changing from < to > syntax updates direction without errors
+    // Test 19: Changing from < to > syntax updates direction without errors
     // ========================================================================
     test('changing from less-than to greater-than syntax updates direction', async ({page}) => {
         const modal = await openImportModal(page);
@@ -420,7 +409,6 @@ test.describe('FX CSV Import', () => {
 
         // Step 1: Type header with < syntax → EUR<USD means from=USD, to=EUR
         await textarea.fill('date;EUR<USD');
-        await page.waitForTimeout(200);
 
         // Badges should be USD → EUR
         await expect(comboboxes.first()).toHaveText(/USD/);
@@ -429,7 +417,6 @@ test.describe('FX CSV Import', () => {
 
         // Step 2: Now change to > syntax → EUR>USD means from=EUR, to=USD
         await textarea.fill('date;EUR>USD');
-        await page.waitForTimeout(200);
 
         // Badges should update to EUR → USD
         await expect(comboboxes.first()).toHaveText(/EUR/);
@@ -444,7 +431,7 @@ test.describe('FX CSV Import', () => {
     });
 
     // ========================================================================
-    // Test 19: Changing from < to > with data rows — no validation errors
+    // Test 20: Changing from < to > with data rows — no validation errors
     // ========================================================================
     test('changing from less-than to greater-than with data keeps rows valid', async ({page}) => {
         const modal = await openImportModal(page);
@@ -453,7 +440,6 @@ test.describe('FX CSV Import', () => {
 
         // Step 1: Paste data with < syntax
         await textarea.fill('date;EUR<USD\n2020-01-15;1.0823\n2020-01-16;1.0845');
-        await page.waitForTimeout(200);
 
         // Badges: USD → EUR
         await expect(comboboxes.first()).toHaveText(/USD/);
@@ -465,7 +451,6 @@ test.describe('FX CSV Import', () => {
 
         // Step 2: Change header to > syntax (keep same data)
         await textarea.fill('date;EUR>USD\n2020-01-15;1.0823\n2020-01-16;1.0845');
-        await page.waitForTimeout(200);
 
         // Badges: EUR → USD
         await expect(comboboxes.first()).toHaveText(/EUR/);
@@ -477,7 +462,7 @@ test.describe('FX CSV Import', () => {
     });
 
     // ========================================================================
-    // Test 20: Changing > direction to different > direction updates badges
+    // Test 21: Changing > direction to different > direction updates badges
     // ========================================================================
     test('typing different greater-than direction updates badges', async ({page}) => {
         const modal = await openImportModal(page);
@@ -490,7 +475,6 @@ test.describe('FX CSV Import', () => {
 
         // Change header to opposite direction: USD>EUR
         await textarea.fill('date;USD>EUR');
-        await page.waitForTimeout(200);
 
         // Badges should update to USD → EUR
         await expect(comboboxes.first()).toHaveText(/USD/);
@@ -499,7 +483,6 @@ test.describe('FX CSV Import', () => {
 
         // Change back to EUR>USD
         await textarea.fill('date;EUR>USD');
-        await page.waitForTimeout(200);
 
         await expect(comboboxes.first()).toHaveText(/EUR/);
         await expect(comboboxes.last()).toHaveText(/USD/);

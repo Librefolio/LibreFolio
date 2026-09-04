@@ -22,6 +22,7 @@ graph TD
         BrokerAPIs[Broker APIs / CSVs]
         PricingAPIs[Pricing APIs]
         FXAPIs[FX Rate APIs]
+        WebSearch[Web Search Engine<br/>ddgs metasearch]
     end
     
     subgraph Plugins
@@ -39,6 +40,8 @@ graph TD
     B_Plugins -- Parses --> BrokerAPIs
     A_Plugins -- Fetches --> PricingAPIs
     F_Plugins -- Fetches --> FXAPIs
+
+    A_Plugins -. Last-resort URL resolve .-> WebSearch
 ```
 
 ### 🧱 Components
@@ -65,6 +68,7 @@ For detailed architectural documentation of specific subsystems, see:
 - ⚙️ **[Settings System](settings.md)**: User preferences and global settings.
 - 📥 **[BRIM Architecture](../backend/brim/architecture.md)**: Broker Report Import Manager.
 - 📈 **[Asset Pricing](../backend/assets/architecture.md)**: Asset data fetching and metadata.
+    - 🔎 See also: **[Asset Search & Link-Finder](../backend/assets/search_link_finder.md)** for the three-layer interactive search (on-site → `ddgs` web link-finder → `resolve_url`); best-effort, last-resort, and **never** used on automated price fetches.
 - 💱 **[FX Architecture](../backend/fx/architecture.md)**: Foreign Exchange system.
     - 🔀 See also: **[FX Configuration & Routing](../backend/fx/configuration.md)** for multi-provider setup.
 - 📁 **File Upload System**: Static file uploads with image preview cache (50MB, TTL 1h), avatar seeding, and BRIM file management. See `backend/app/services/static_uploads.py`.

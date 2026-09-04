@@ -1,0 +1,17 @@
+FROM python:3.13-slim AS base
+
+WORKDIR /probe
+
+FROM base AS quantlib
+
+RUN python -m pip install --no-cache-dir --only-binary=:all: QuantLib==1.43
+
+COPY scripts/spikes/risk/run_quant_library_probe.py /probe/
+COPY backend/test_scripts/fixtures/risk/quant_library_probe.json /probe/
+
+RUN python run_quant_library_probe.py \
+    --fixture /probe/quant_library_probe.json \
+    --require-quantlib \
+    --output /probe/report.json
+
+CMD ["cat", "/probe/report.json"]

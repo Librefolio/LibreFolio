@@ -15,14 +15,61 @@
         error?: string | null;
         onRequestClose?: () => void;
         onSheetChange?: (sheetName: string) => void;
+        /**
+         * 1-based lines in the source file to tint, scrolling to the first of them. Set
+         * when the preview is opened *from* specific rows: the point of looking at the
+         * file is usually the rows around the ones being questioned, which a plain
+         * preview cannot show.
+         */
+        highlightRows?: number[];
         zIndex?: number;
     }
 
-    type CheetahGridModule = {
-        ListGrid: new (options: Record<string, unknown>) => {dispose?: () => void};
+    type CheetahGridInstance = {
+        dispose?: () => void;
+        makeVisibleCell?: (col: number, row: number) => void;
+        setColWidth?: (col: number, width: number) => void;
+        getCellRect?: (col: number, row: number) => {left: number; width: number};
+        getElement?: () => HTMLElement;
+        invalidate?: () => void;
+        /** Recompute the grid's own idea of how wide its content is. */
+        updateSize?: () => void;
+        /** Re-fit the scrollbars to that width. */
+        updateScroll?: () => boolean;
+        scrollLeft?: number;
+        listen?: (type: string, listener: (event: {col: number; row: number; event: MouseEvent}) => void) => void;
     };
 
-    let {open = false, preview = null, loading = false, error = null, onRequestClose = () => {}, onSheetChange = () => {}, zIndex = 50}: Props = $props();
+    type CheetahGridModule = {
+        ListGrid: new (options: Record<string, unknown>) => CheetahGridInstance;
+        themes?: {MATERIAL_DESIGN?: {extends?: (patch: Record<string, unknown>) => unknown}};
+    };
+
+    /** The row-number column stays put while the rest scrolls. */
+    const FROZEN_COL_COUNT = 1;
+
+    /** A preview cannot save anything, so it must not offer to annotate or comment. */
+    const PDF_PREVIEW_DISABLED = ['annotation', 'annotation-comment', 'panel-comment'];
+
+    /**
+     * The grid's text font, pinned rather than left to the library's default.
+     *
+     * {@link fitColumnWidth} measures text with a canvas ruler, and a ruler set to a
+     * different font than the one being drawn is not a ruler: measuring 13px type that
+     * renders at 16px cut roughly a fifth off every column, which is exactly the tail
+     * of a long sentence going missing. Naming the font makes the two agree by
+     * construction. The value is cheetah-grid's own fallback, so nothing changes on
+     * screen — only the measurement becomes true.
+     */
+    const GRID_FONT = '16px sans-serif';
+
+    /** Left + right cell padding to leave around the widest value. */
+    const CELL_PADDING_PX = 24;
+
+    /** Amber, matching the "look at this row" accent used by the evidence tables. */
+    const HIGHLIGHT_BG = 'rgba(251, 191, 36, 0.35)';
+
+    let {open = false, preview = null, loading = false, error = null, onRequestClose = () => {}, onSheetChange = () => {}, highlightRows = [], zIndex = 50}: Props = $props();
 
     let markdownMode: 'rendered' | 'raw' = $state('rendered');
     let copied = $state(false);
@@ -144,10 +191,12 @@
                         type: 'container',
                         target: host,
                         src: sourceUrl,
-                        disabledCategories: ['annotation'],
-                        ui: {
-                            disabledCategories: ['panel-comment'],
-                        },
+                        // The viewer ships three `comment-button` entries in different
+                        // slots — one in categories ['panel','panel-comment'], two in
+                        // ['annotation','annotation-comment'] — and disables a category
+                        // by *hiding* the control, not by unmounting it. A preview that
+                        // cannot save anything must not offer to comment.
+                        disabledCategories: PDF_PREVIEW_DISABLED,
                     }),
                 );
             } catch (err) {
@@ -175,37 +224,72 @@
         }
 
         const token = ++tableToken;
+        const targets = new Set(highlightRows.filter((line) => line > 0 && line <= rows.length));
+        // Jump to the first of them: a highlighted block is read from its start.
+        const scrollTo = targets.size > 0 ? Math.min(...targets) : null;
         host.innerHTML = '';
         tableError = null;
-        let gridInstance: {dispose?: () => void} | null = null;
+        let gridInstance: CheetahGridInstance | null = null;
 
         void (async () => {
             try {
                 const cheetahGrid = (await import('cheetah-grid')) as CheetahGridModule;
                 if (token !== tableToken) return;
-                const tableTheme = document.documentElement.classList.contains('dark') ? buildDarkSpreadsheetTheme() : 'MATERIAL_DESIGN';
+                // Firmer grid lines than the stock theme: with faint borders there is no way to
+                // tell a short value from one the column is cutting off.
+                const tableTheme = document.documentElement.classList.contains('dark') ? buildDarkSpreadsheetTheme() : (cheetahGrid.themes?.MATERIAL_DESIGN?.extends?.({borderColor: '#cbd5e1', frozenRowsBorderColor: '#94a3b8'}) ?? 'MATERIAL_DESIGN');
+
+                // Tinting whole rows, not single cells: the rows are what the caller is
+                // pointing at, and a single highlighted cell reads as a selection instead.
+                const rowStyle = targets.size === 0 ? undefined : (record: {__rowNumber?: number}) => (record.__rowNumber !== undefined && targets.has(record.__rowNumber) ? {bgColor: HIGHLIGHT_BG} : undefined);
+
+                const records = rows.map((row, rowIndex) => {
+                    const record: Record<string, string | number> = {__rowNumber: rowIndex + 1};
+                    for (let colIndex = 0; colIndex < cols; colIndex += 1) {
+                        record[`c${colIndex}`] = row[colIndex] ?? '';
+                    }
+                    return record;
+                });
 
                 gridInstance = new cheetahGrid.ListGrid({
                     parentElement: host,
-                    frozenColCount: 1,
+                    font: GRID_FONT,
+                    frozenColCount: FROZEN_COL_COUNT,
                     defaultRowHeight: 30,
                     theme: tableTheme,
                     header: [
-                        {field: '__rowNumber', caption: '#', width: 56},
+                        {field: '__rowNumber', caption: '#', width: 56, style: rowStyle},
                         ...Array.from({length: cols}, (_, index) => ({
                             field: `c${index}`,
                             caption: spreadsheetColumnLabel(index),
                             width: 140,
+                            style: rowStyle,
                         })),
                     ],
-                    records: rows.map((row, rowIndex) => {
-                        const record: Record<string, string | number> = {__rowNumber: rowIndex + 1};
-                        for (let colIndex = 0; colIndex < cols; colIndex += 1) {
-                            record[`c${colIndex}`] = row[colIndex] ?? '';
-                        }
-                        return record;
-                    }),
+                    records,
                 });
+
+                // Double-clicking a header widens that column to its content, the way a
+                // spreadsheet does. Columns are laid out at a fixed width because their
+                // contents are unknown, so long values are cut off far more often here
+                // than in a real spreadsheet, and dragging every one of them is tedious.
+                gridInstance.listen?.('dblclick_cell', (event) => {
+                    if (event.row !== 0 || !gridInstance) return;
+                    const target = columnAtBorder(gridInstance, event.col, event.event);
+                    gridInstance.setColWidth?.(target, fitColumnWidth(target, records, cols));
+                    // The grid caches its own scrollable extent, so a wider column would
+                    // otherwise push the columns after it past a scrollbar that still stops
+                    // where it did before — the far right of the file becomes unreachable.
+                    gridInstance.updateSize?.();
+                    gridInstance.updateScroll?.();
+                    // Widening a column moves every column after it, and the grid only
+                    // repaints the cells it thinks changed — without this the old text
+                    // stays on screen until something else forces a redraw.
+                    gridInstance.invalidate?.();
+                });
+
+                // Row 0 is the header, so file line N sits at grid row N.
+                if (scrollTo !== null) gridInstance.makeVisibleCell?.(0, scrollTo);
             } catch (err) {
                 if (token === tableToken) {
                     tableError = err instanceof Error ? err.message : 'Failed to render spreadsheet preview';
@@ -446,6 +530,52 @@
         textNode.parentNode?.replaceChild(fragment, textNode);
     }
 
+    /** How close to a column border still counts as a click *on* the border. */
+    const BORDER_GRAB_PX = 6;
+
+    /**
+     * Column a header double-click means to resize.
+     *
+     * On the border between A and B the grid reports whichever cell owns that exact
+     * pixel, so the same gesture resizes A or B depending on where the pointer landed
+     * by a pixel. A spreadsheet has no such doubt: the border belongs to the column on
+     * its left, so a click within {@link BORDER_GRAB_PX} of a cell's left edge is read
+     * as a click on the previous column.
+     */
+    function columnAtBorder(grid: CheetahGridInstance, col: number, event: MouseEvent): number {
+        if (col <= 0) return col;
+        const element = grid.getElement?.();
+        const rect = grid.getCellRect?.(col, 0);
+        if (!element || !rect) return col;
+        // Frozen columns do not move with the horizontal scroll, so only the scrollable
+        // ones need it added back to reach the grid's own coordinate space.
+        const scrolled = col >= FROZEN_COL_COUNT ? (grid.scrollLeft ?? 0) : 0;
+        const pointer = event.clientX - element.getBoundingClientRect().left + scrolled;
+        return pointer - rect.left <= BORDER_GRAB_PX ? col - 1 : col;
+    }
+
+    /** Shared text ruler for {@link fitColumnWidth} — creating a canvas per column is waste. */
+    let textRuler: CanvasRenderingContext2D | null = null;
+
+    /**
+     * Width that shows the longest value in a column in full, header included, within
+     * limits: a column narrower than its header is unreadable, and one wider than the
+     * modal pushes everything else off screen.
+     */
+    function fitColumnWidth(col: number, records: Record<string, string | number>[], cols: number): number {
+        if (!textRuler) textRuler = document.createElement('canvas').getContext('2d');
+        if (!textRuler) return 140;
+        textRuler.font = GRID_FONT;
+        const field = col === 0 ? '__rowNumber' : `c${col - 1}`;
+        const caption = col === 0 ? '#' : spreadsheetColumnLabel(Math.min(col - 1, cols - 1));
+        let widest = textRuler.measureText(caption).width;
+        for (const record of records) {
+            const width = textRuler.measureText(String(record[field] ?? '')).width;
+            if (width > widest) widest = width;
+        }
+        return Math.min(720, Math.max(56, Math.ceil(widest) + CELL_PADDING_PX));
+    }
+
     function buildDarkSpreadsheetTheme() {
         return {
             color: '#e2e8f0',
@@ -454,8 +584,8 @@
             frozenRowsBgColor: '#111827',
             selectionBgColor: 'rgba(37, 99, 235, 0.38)',
             highlightBgColor: '#1e293b',
-            borderColor: '#334155',
-            frozenRowsBorderColor: '#475569',
+            borderColor: '#475569',
+            frozenRowsBorderColor: '#64748b',
             highlightBorderColor: '#60a5fa',
             checkbox: {
                 uncheckBgColor: '#0f172a',
@@ -493,7 +623,7 @@
 </script>
 
 <ModalBase {open} {onRequestClose} maxWidth="5xl" contentClass="file-preview-modal" testId="file-preview-modal" {zIndex}>
-    <div class="preview-shell">
+    <div class="preview-shell" data-testid="file-preview-shell" aria-busy={loading} data-busy={loading}>
         <div class="preview-header">
             <div class="preview-heading">
                 <div class="preview-title-row">
@@ -624,6 +754,10 @@
                                 <Eye size={16} />
                                 <span>{tableSizeLabel}</span>
                             </div>
+
+                            <!-- The gesture is standard in a spreadsheet but invisible here:
+                                 nothing about a canvas suggests its headers can be acted on. -->
+                            <div class="table-hint" data-testid="file-preview-autofit-hint">{$t('uploads.previewAutofitHint')}</div>
                         </div>
 
                         {#if tableError}
@@ -916,6 +1050,12 @@
         display: inline-flex;
         align-items: center;
         gap: 0.4rem;
+    }
+
+    .table-hint {
+        margin-left: auto;
+        font-size: 0.7rem;
+        opacity: 0.65;
     }
 
     .table-fallback {

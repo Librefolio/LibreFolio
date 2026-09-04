@@ -22,7 +22,7 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_core import PydanticCustomError
 
 from backend.app.db.models import Transaction, TransactionType
@@ -32,8 +32,9 @@ from backend.app.schemas.common import (
     Currency,
     DateRangeModel,
     SafeDecimal,
+    StrictModel,
 )
-from backend.app.schemas.wac import WACConversionInfo, WACPreviewResultItem, WACQualifyingTX  # noqa: E402, F401
+from backend.app.schemas.wac import WACPreviewResultItem
 from backend.app.utils.datetime_utils import UTCDateTime
 
 # =============================================================================
@@ -83,7 +84,7 @@ def tags_to_csv(tags: Optional[List[str]]) -> Optional[str]:
     return ",".join(tags)
 
 
-def validate_transaction_business_rules(
+def validate_transaction_business_rules(  # noqa: C901 — flat per-rule error collection
     *,
     tx_type: TransactionType,
     asset_id: Optional[int],
@@ -216,7 +217,7 @@ def validate_transaction_business_rules(
 # =============================================================================
 
 
-class TXCreateItem(BaseModel):
+class TXCreateItem(StrictModel):
     """
     DTO for creating a single transaction.
 
@@ -239,8 +240,6 @@ class TXCreateItem(BaseModel):
     - ADJUSTMENT: quantity +/-, cash = None
     """
 
-    model_config = ConfigDict(extra="forbid")
-
     broker_id: int = Field(..., description="Broker ID")
     asset_id: Optional[int] = Field(default=None, description="Asset ID. NULL for pure cash transactions")
 
@@ -262,11 +261,13 @@ class TXCreateItem(BaseModel):
     tags: Optional[List[str]] = Field(default=None, description="List of tags for filtering/grouping")
     description: Optional[str] = Field(default=None, max_length=500, description="Transaction notes")
 
-    # Frozen cost basis for TRANSFER_IN - snapshot of PMC at transfer time
+    # Frozen cost basis for TRANSFER_IN - snapshot of PMC at transfer time.
+    # IMPORTANT: amount is PER-UNIT (weighted-average cost per single unit), NOT a total.
+    # The engine multiplies it by quantity. Divide any TOTAL countervalue by quantity first.
     # Object {code, amount} — e.g. {"code": "EUR", "amount": "42.50"}
     cost_basis_override: Optional[Currency] = Field(
         default=None,
-        description="Frozen cost basis for TRANSFER_IN. Object {code, amount}.",
+        description="Frozen PER-UNIT cost basis (WAC per single unit) for TRANSFER_IN. Multiplied by quantity to get the total. Object {code, amount}.",
     )
 
     # WAC computation mode — session-only instruction (not persisted in DB).
@@ -291,7 +292,7 @@ class TXCreateItem(BaseModel):
         return validate_tags_list(v)
 
     @model_validator(mode="after")
-    def validate_transaction_rules(self) -> TXCreateItem:
+    def validate_transaction_rules(self) -> TXCreateItem:  # noqa: C901 — flat per-rule error collection
         """Validate transaction business rules based on 1.4 Constraint Analysis table.
 
         Collects ALL violations instead of raising at the first one, so the
@@ -405,7 +406,7 @@ class TXCreateItem(BaseModel):
 # =============================================================================
 
 
-class TXReadItem(BaseModel):
+class TXReadItem(StrictModel):
     """
     DTO for reading a transaction from the API.
 
@@ -417,8 +418,6 @@ class TXReadItem(BaseModel):
     on BOTH transactions in a pair (A->B and B->A), so no separate
     linked_transaction_id field is needed.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     id: int
     broker_id: int
@@ -531,7 +530,7 @@ def _swap_group_codes(tx_type: TransactionType) -> list[str]:
     return sorted(t.value for t in group if t != tx_type)
 
 
-class TXUpdateItem(BaseModel):
+class TXUpdateItem(StrictModel):
     """
     DTO for updating a transaction.
 
@@ -548,8 +547,6 @@ class TXUpdateItem(BaseModel):
     2. Re-create them with new link_uuid
     Or send updates for BOTH transactions in the same bulk request.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     # NOTE: gt=0 removed from Field — enforced in model_validator so that
     # Pydantic doesn't short-circuit and the full error set is returned.
@@ -612,14 +609,12 @@ class TXUpdateItem(BaseModel):
 # =============================================================================
 
 
-class TXQueryParams(BaseModel):
+class TXQueryParams(StrictModel):
     """
     Query parameters for filtering transactions.
 
     Used by GET /api/v1/transactions endpoint.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     broker_id: Optional[int] = Field(default=None, gt=0, description="Filter by broker")
     asset_id: Optional[int] = Field(default=None, gt=0, description="Filter by asset")
@@ -663,20 +658,27 @@ class TXQueryParams(BaseModel):
 # =============================================================================
 
 
-class TXDeleteItem(BaseModel):
+class TXDeleteItem(StrictModel):
     """Single transaction ID to delete."""
-
-    model_config = ConfigDict(extra="forbid")
 
     id: int = Field(..., gt=0, description="Transaction ID to delete")
 
 
 # Per-item diagnostic status for atomic bulk operations.
-# - "success":       item applied AND the whole batch committed.
-# - "simulated":     item applied in-session but batch was rolled back (another
-#                    item failed or balance validation triggered).
+# - "success":       item applied cleanly — and, when a commit was requested,
+#                    the whole batch committed. On a dry-run (`/validate`,
+#                    commit=False) it means "this item would apply cleanly":
+#                    the caller never asked to persist, so there is nothing to
+#                    be misled about.
+# - "simulated":     a commit WAS requested, the item applied in-session, but
+#                    the batch was rolled back (another item failed or balance
+#                    validation triggered). The `ids` are the ids the rows
+#                    would have had — they do not exist.
 # - "failed":        the item itself raised the error that caused the rollback.
 # - "not_attempted": processing stopped before this item was considered.
+#
+# A caller that wants "do my rows exist?" must read `committed`. `status` alone
+# answers "was this item acceptable?".
 TXItemStatus = Literal["success", "simulated", "failed", "not_attempted"]
 
 # Batch operation types — single source of truth for all operation Literals.
@@ -700,7 +702,7 @@ class TXDeleteResult(BaseDeleteResult):
 # =============================================================================
 
 
-class TXMixedBatch(BaseModel):
+class TXMixedBatch(StrictModel):
     """Unified batch body for /validate and /commit.
 
     `creates` and `updates` are List[dict] (not List[TXCreateItem]) so that
@@ -709,19 +711,15 @@ class TXMixedBatch(BaseModel):
     business-rule and balance violations in one response.
     """
 
-    model_config = ConfigDict(extra="forbid")
-
-    creates: List[dict] = Field(default_factory=list, max_length=500)
-    updates: List[dict] = Field(default_factory=list, max_length=500)
-    deletes: List[int] = Field(default_factory=list, max_length=500)
+    creates: List[dict] = Field(default_factory=list)
+    updates: List[dict] = Field(default_factory=list)
+    deletes: List[int] = Field(default_factory=list)
     splits: List[dict] = Field(default_factory=list, max_length=100)
     promotes: List[dict] = Field(default_factory=list, max_length=100)
 
 
-class TXBatchResultItem(BaseModel):
+class TXBatchResultItem(StrictModel):
     """Per-item result for committed rows."""
-
-    model_config = ConfigDict(extra="forbid")
 
     operation: TXBatchOperation
     index: int
@@ -770,10 +768,8 @@ class TXValidationCode(StrEnum):
     COST_BASIS_REQUIRED = "costBasisRequired"
 
 
-class TXValidationCodeInfo(BaseModel):
+class TXValidationCodeInfo(StrictModel):
     """Metadata for a validation code — exposed in GET /transactions/types."""
-
-    model_config = ConfigDict(extra="forbid")
 
     code: str = Field(..., description="Validation code identifier")
     description: str = Field(..., description="Human-readable description")
@@ -789,10 +785,8 @@ VALIDATION_CODE_METADATA: list[TXValidationCodeInfo] = [TXValidationCodeInfo(cod
 # =============================================================================
 
 
-class TXValidationIssue(BaseModel):
+class TXValidationIssue(StrictModel):
     """Single issue produced by validate_batch."""
-
-    model_config = ConfigDict(extra="forbid")
 
     operation: TXBatchOperation
     index: int = Field(..., ge=-1, description="Index within the corresponding list (-1 = broker-level, not row-specific)")
@@ -808,13 +802,11 @@ class TXValidationIssue(BaseModel):
 # =============================================================================
 
 
-class TXEventSuggestRequestItem(BaseModel):
+class TXEventSuggestRequestItem(StrictModel):
     """
     Single suggest request: given (asset_id, date, type), find candidate
     AssetEvent rows within +/- tolerance_days whose type maps to the tx type.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     asset_id: int = Field(..., gt=0)
     date: date_type
@@ -822,10 +814,8 @@ class TXEventSuggestRequestItem(BaseModel):
     tolerance_days: int = Field(0, ge=0, le=7, description="Days window (+/-) around date")
 
 
-class TXEventSuggestCandidate(BaseModel):
+class TXEventSuggestCandidate(StrictModel):
     """Lean AssetEvent projection returned as a candidate."""
-
-    model_config = ConfigDict(extra="forbid")
 
     id: int
     asset_id: int
@@ -837,10 +827,8 @@ class TXEventSuggestCandidate(BaseModel):
     distance_days: int = Field(..., ge=0, description="abs(event.date - request.date)")
 
 
-class TXEventSuggestResultItem(BaseModel):
+class TXEventSuggestResultItem(StrictModel):
     """Result for one request — candidates sorted by ascending distance."""
-
-    model_config = ConfigDict(extra="forbid")
 
     asset_id: int
     date: date_type
@@ -854,7 +842,7 @@ class TXEventSuggestResultItem(BaseModel):
 # =============================================================================
 
 
-class TXTransferPromoteRequest(BaseModel):
+class TXTransferPromoteRequest(StrictModel):
     """
     Atomically promote a DEPOSIT/WITHDRAWAL pair into a TRANSFER (with asset)
     or FX_CONVERSION (cross-currency, same broker).
@@ -863,8 +851,6 @@ class TXTransferPromoteRequest(BaseModel):
     the endpoint deletes the original pair and creates a new one within a
     single session.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     from_tx_id: int = Field(..., gt=0, description="Source transaction (e.g. original WITHDRAWAL)")
     to_tx_id: int = Field(..., gt=0, description="Destination transaction (e.g. original DEPOSIT)")
@@ -881,10 +867,8 @@ class TXTransferPromoteRequest(BaseModel):
     cost_basis_override: Optional[Currency] = None
 
 
-class TXTransferPromoteResponse(BaseModel):
+class TXTransferPromoteResponse(StrictModel):
     """Outcome of /transactions/transfers/promote."""
-
-    model_config = ConfigDict(extra="forbid")
 
     rolled_back: bool
     new_from_tx_id: Optional[int] = None
@@ -897,10 +881,8 @@ class TXTransferPromoteResponse(BaseModel):
 # =============================================================================
 
 
-class TXSplitBatchItem(BaseModel):
+class TXSplitBatchItem(StrictModel):
     """Single split within a batch. Both IDs of the pair must be provided."""
-
-    model_config = ConfigDict(extra="forbid")
 
     id_a: int = Field(..., gt=0, description="ID of one half of the pair")
     id_b: int = Field(..., gt=0, description="ID of the other half of the pair")
@@ -912,10 +894,8 @@ class TXSplitBatchItem(BaseModel):
         return self
 
 
-class TXPromoteBatchItem(BaseModel):
+class TXPromoteBatchItem(StrictModel):
     """Single promote within a batch. Supports saved+saved, new+new, saved+new."""
-
-    model_config = ConfigDict(extra="forbid")
 
     id_a: Optional[int] = Field(None, gt=0, description="Real ID for saved TX A")
     id_b: Optional[int] = Field(None, gt=0, description="Real ID for saved TX B")
@@ -942,10 +922,8 @@ class TXPromoteBatchItem(BaseModel):
 # =============================================================================
 
 
-class TXPromoteSuggestInput(BaseModel):
+class TXPromoteSuggestInput(StrictModel):
     """Single TX to find promote candidates for. id < 0 = fake (unsaved)."""
-
-    model_config = ConfigDict(extra="forbid")
 
     id: int = Field(..., description="Real ID (>0) or fake ID (<0) for unsaved TX")
     type: TransactionType
@@ -957,10 +935,8 @@ class TXPromoteSuggestInput(BaseModel):
     quantity: Optional[SafeDecimal] = None
 
 
-class TXPromoteSuggestCandidate(BaseModel):
+class TXPromoteSuggestCandidate(StrictModel):
     """A DB transaction that could be promoted with the input TX."""
-
-    model_config = ConfigDict(extra="forbid")
 
     id: int = Field(..., gt=0)
     broker_id: int
@@ -970,10 +946,8 @@ class TXPromoteSuggestCandidate(BaseModel):
     asset_id: Optional[int] = None
 
 
-class TXPromoteSuggestResponse(BaseModel):
+class TXPromoteSuggestResponse(StrictModel):
     """Map of input id/fakeId → list of DB candidates."""
-
-    model_config = ConfigDict(extra="forbid")
 
     results: Dict[int, List[TXPromoteSuggestCandidate]]
 
@@ -1004,10 +978,8 @@ PairFormLayout = Literal["fx", "transfer_asset", "transfer_cash"]
 PairFieldRelation = Literal["equal", "opposite", "different"]
 
 
-class PairFieldConstraint(BaseModel):
+class PairFieldConstraint(StrictModel):
     """How a field relates between the two halves of a pair."""
-
-    model_config = ConfigDict(extra="forbid")
 
     field: Literal["broker_id", "asset_id", "cash_currency", "cash_amount", "quantity"] = Field(..., description="Transaction field name")
     relation: PairFieldRelation = Field(
@@ -1016,34 +988,28 @@ class PairFieldConstraint(BaseModel):
     )
 
 
-class SplitMeta(BaseModel):
+class SplitMeta(StrictModel):
     """How a paired type splits into 2 standalone types."""
-
-    model_config = ConfigDict(extra="forbid")
 
     from_type: str = Field(..., description="Type for 'from' half (negative/source side)")
     to_type: str = Field(..., description="Type for 'to' half (positive/destination side)")
 
 
-class PromoteRule(BaseModel):
+class PromoteRule(StrictModel):
     """How 2 standalone types can be promoted to this paired type."""
-
-    model_config = ConfigDict(extra="forbid")
 
     type_a: str = Field(..., description="First standalone type")
     type_b: str = Field(..., description="Second standalone type")
     field_constraints: list[PairFieldConstraint] = Field(..., description="Validation rules for the pair")
 
 
-class TXTypeMetadata(BaseModel):
+class TXTypeMetadata(StrictModel):
     """
     Metadata about a transaction type.
 
     Used by GET /api/v1/transactions/types endpoint.
     Frontend uses these values directly (all lowercase, no mapping needed).
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     code: str = Field(..., description="Enum code (e.g., 'BUY')")
     name: str = Field(..., description="Display name")
@@ -1344,10 +1310,8 @@ def _build_tx_type_metadata() -> dict[TransactionType, TXTypeMetadata]:
 TX_TYPE_METADATA: dict[TransactionType, TXTypeMetadata] = _build_tx_type_metadata()
 
 
-class EventTypeMetadata(BaseModel):
+class EventTypeMetadata(StrictModel):
     """Metadata about an asset event type for frontend rendering."""
-
-    model_config = ConfigDict(extra="forbid")
 
     code: str = Field(..., description="Enum code (e.g., 'DIVIDEND')")
     name: str = Field(..., description="Display name")
@@ -1355,10 +1319,8 @@ class EventTypeMetadata(BaseModel):
     compatible_tx_types: list[str] = Field(..., description="Transaction types that can link to this event type")
 
 
-class TXTypesResponse(BaseModel):
+class TXTypesResponse(StrictModel):
     """Combined response for GET /transactions/types."""
-
-    model_config = ConfigDict(extra="forbid")
 
     transaction_types: list[TXTypeMetadata]
     event_types: list[EventTypeMetadata]

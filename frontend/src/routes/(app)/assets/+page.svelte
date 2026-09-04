@@ -15,9 +15,10 @@
      */
     import {onMount, tick} from 'svelte';
     import {goto} from '$app/navigation';
+    import {page} from '$app/stores';
     import {_ as t} from '$lib/i18n';
     import {zodiosApi, axiosInstance} from '$lib/api';
-    import {BarChart3, Check, Plus, RefreshCw, RotateCw, Search, Settings, Trash2, X} from 'lucide-svelte';
+    import {BarChart3, Check, Network, Plus, RefreshCw, RotateCw, Search, Settings, Trash2, X} from 'lucide-svelte';
     import AssetCard from '$lib/components/assets/AssetCard.svelte';
     import type {AssetRow} from '$lib/components/assets/AssetTable.svelte';
     import AssetTable from '$lib/components/assets/AssetTable.svelte';
@@ -25,6 +26,7 @@
     import type {LivePriceDirection} from '$lib/services/livePriceService';
     import AssetSyncModal from '$lib/components/assets/AssetSyncModal.svelte';
     import AssetModal from '$lib/components/assets/AssetModal.svelte';
+    import AssetMergeModal from '$lib/components/assets/AssetMergeModal.svelte';
     import {invalidateAfterMutation} from '$lib/stores/reference/assetStore';
     import ViewModeToggle from '$lib/components/ui/ViewModeToggle.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
@@ -38,16 +40,20 @@
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
+    import AssetSetRiskPanel from '$lib/components/risk/AssetSetRiskPanel.svelte';
     import {getFixedDropdownPosition} from '$lib/utils/layout/dropdownPosition';
     import {gotoDateRange} from '$lib/utils/url/dateRangeUrl';
-    import {type RenderedSignal, signalFromConfig} from '$lib/charts/signals';
+    import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, renderBackendSignalResult, signalFromConfig, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/charts/signals';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
-    import {createPairSlug, ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
+    import {createPairSlug, displayFxRate, ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
     import {getAssetPriceStore, invalidateAssetPriceStore} from '$lib/stores/assetPriceStoreRegistry';
     import {computeDerivedPriceState, computePeriodDelta, DELTA_PERIODS} from '$lib/utils/assetPriceDerived';
     import {processPriceItemsInParallel} from '$lib/workers/priceProcessingPool';
     import type {ProcessedAssetResult} from '$lib/workers/priceProcessing.worker';
+    import {signalCatalogStore} from '$lib/stores/signalCatalogStore.svelte';
+    import {globalSettings} from '$lib/stores/app/globalSettings';
+    import {buildTabUrl, getResolvedTabParam} from '$lib/utils/url/tabUrl';
 
     // =========================================================================
     // Types
@@ -61,6 +67,9 @@
         asset_type?: string | null;
         provider_code?: string | null;
         active: boolean;
+        quote_base_quantity?: number | null;
+        tx_count?: number;
+        tx_count_own?: number;
     }
 
     interface AssetState extends AssetInfo {
@@ -80,8 +89,23 @@
     let loading = $state(true);
     let refreshing = $state(false);
     let error = $state<string | null>(null);
-    let assetTableComponent: AssetTable | undefined = $state(undefined);
-    let selectedAssetRows = $state<AssetRow[]>([]);
+    // F15 round-2 — one AssetTable per usage panel (own / others / watched).
+    // Column layout is mirrored live across the three; pagination stays independent.
+    let assetTableRefs: Record<string, AssetTable | undefined> = $state({});
+    let panelSelections: Record<string, AssetRow[]> = $state({});
+    let selectedAssetRows = $derived(Object.values(panelSelections).flat());
+
+    /** Mirror a live column resize onto the sibling tables. */
+    function mirrorColumnResize(sourcePanel: string, columnId: string, width: number) {
+        for (const pid of ['own', 'others', 'analysis']) {
+            if (pid !== sourcePanel) assetTableRefs[pid]?.getTableRef()?.setColumnWidth(columnId, width);
+        }
+    }
+
+    function clearAllTableSelections() {
+        for (const ref of Object.values(assetTableRefs)) ref?.getTableRef()?.clearSelection();
+        panelSelections = {};
+    }
     /** Set of asset IDs currently syncing (for per-card/row rotating icon) */
     let syncingAssetIds = $state<Set<number>>(new Set());
 
@@ -91,6 +115,8 @@
     // Delete dialog (single)
     let deleteDialogOpen = $state(false);
     let deletingAsset: AssetRow | null = $state(null);
+    let mergeModalOpen = $state(false);
+    let mergingAsset: AssetRow | null = $state(null);
     let deleteLoading = $state(false);
 
     // Bulk delete confirmation dialog
@@ -159,6 +185,24 @@
     // View mode
     let viewMode = $state<'grid' | 'list'>('grid');
 
+    const ASSET_TAB_IDS = ['assets', 'correlation'] as const;
+    type AssetTabId = (typeof ASSET_TAB_IDS)[number];
+    let activeTab = $state<AssetTabId>('assets');
+    let assetTabs = $derived([
+        {id: 'assets', label: $t('risk.assetSet.assetsTab'), icon: BarChart3, testId: 'assets-tab-list'},
+        {id: 'correlation', label: $t('risk.assetSet.correlationTab'), icon: Network, testId: 'assets-tab-correlation'},
+    ]);
+
+    $effect(() => {
+        activeTab = getResolvedTabParam($page.url.searchParams, ASSET_TAB_IDS, 'assets');
+    });
+
+    function handleAssetTabChange(tabId: string): void {
+        if (!ASSET_TAB_IDS.includes(tabId as AssetTabId)) return;
+        activeTab = tabId as AssetTabId;
+        void goto(buildTabUrl($page.url, tabId), {replaceState: true, noScroll: true});
+    }
+
     // Grid delta display mode: absolute or percentage (E3)
     let globalViewMode = $state<'percentage' | 'absolute'>('percentage');
 
@@ -211,6 +255,12 @@
     let settingsModalOpen = $state(false);
     let settingsTargetId = $state<string | null>(null);
     let settingsForModal = $derived(settingsTargetId ? getSettingsForPair(`asset-${settingsTargetId}`, 'assets') : getGlobalSettings('assets'));
+    let signalDefinitions = $state<SignalDefinition[]>([]);
+    let signalResultsByAsset = $state(new Map<number, SignalInstanceResult[]>());
+    let signalCatalogFailed = $state(false);
+    let signalRequestFailed = $state(false);
+    const signalResultStates = new Map<number, SignalResultState>();
+    let signalBackendError = $derived(signalCatalogFailed ? $t('chartSettings.signalCatalogUnavailable') : signalRequestFailed ? $t('chartSettings.signalResultsUnavailable') : null);
 
     // FX pair slugs for cross-domain signal selection (loaded lazily)
     let fxPairSlugs = $state<string[]>([]);
@@ -218,6 +268,8 @@
     // =========================================================================
     // Derived
     // =========================================================================
+
+    let signalDefinitionsByType = $derived(new Map(signalDefinitions.map((definition) => [definition.type, definition])));
 
     // Extract unique currencies from all assets
     let configuredCurrencies = $derived([...new Set(assets.map((a) => a.currency))].sort());
@@ -261,18 +313,77 @@
             asset_type: a.asset_type,
             provider_code: a.provider_code,
             active: a.active,
+            quote_base_quantity: a.quote_base_quantity,
             lastPrice: a.lastPrice,
             deltaAbs: a.deltaAbs,
             deltaPercent: a.deltaPercent,
             deltas: a.deltas,
+            txCount: a.tx_count ?? 0,
+            txScope: assetScope(a),
         })),
     );
+
+    // =========================================================================
+    // F15 — usage panels: "yours" (tx in brokers you own), "other users'"
+    // (tx only outside your ownership), "under analysis" (never used). This
+    // grouping is unrelated to the active/inactive lifecycle flags above.
+    // =========================================================================
+    type AssetScope = 'own' | 'others' | 'analysis';
+
+    function assetScope(a: {tx_count?: number; tx_count_own?: number}): AssetScope {
+        if ((a.tx_count_own ?? 0) > 0) return 'own';
+        if ((a.tx_count ?? 0) > 0) return 'others';
+        return 'analysis';
+    }
+
+    let ownAssets = $derived(filteredAssets.filter((a) => assetScope(a) === 'own'));
+    let otherAssets = $derived(filteredAssets.filter((a) => assetScope(a) === 'others'));
+    let analysisAssets = $derived(filteredAssets.filter((a) => assetScope(a) === 'analysis'));
+    let assetPanels = $derived([
+        {id: 'own' as const, items: ownAssets},
+        {id: 'others' as const, items: otherAssets},
+        {id: 'analysis' as const, items: analysisAssets},
+    ]);
 
     // =========================================================================
     // Lifecycle
     // =========================================================================
 
+    async function loadAssetSignalDefinitions(force = false) {
+        try {
+            signalDefinitions = await signalCatalogStore.load('asset', force);
+            signalCatalogFailed = false;
+        } catch (catalogError) {
+            console.error('Failed to load Asset signal catalog:', catalogError);
+            signalDefinitions = getLocalSignalDefinitions();
+            signalCatalogFailed = true;
+        }
+    }
+
+    function resultStateForAsset(assetId: number): SignalResultState {
+        let state = signalResultStates.get(assetId);
+        if (!state) {
+            state = new SignalResultState();
+            signalResultStates.set(assetId, state);
+        }
+        return state;
+    }
+
+    function backendRequestFingerprint(configs: SignalConfig[]): string {
+        return JSON.stringify(
+            buildBackendSignalRequestPlan(configs, signalDefinitions)
+                .requests.map((request) => `${request.signal_code}:${JSON.stringify(request.params ?? {})}`)
+                .sort(),
+        );
+    }
+
+    async function retryBackendSignals() {
+        await loadAssetSignalDefinitions(true);
+        await fetchAllPriceData();
+    }
+
     onMount(async () => {
+        await loadAssetSignalDefinitions();
         await loadAssets();
         // Load FX pair slugs for cross-domain signal selection in settings modal
         loadFxPairSlugs();
@@ -370,22 +481,33 @@
                 quote_base_quantity: item.quote_base_quantity ?? 1,
                 provider_code: item.provider_code ?? null,
                 active: item.active ?? true,
+                tx_count: item.tx_count ?? 0,
+                tx_count_own: item.tx_count_own ?? 0,
                 lastPrice: null,
                 deltaAbs: null,
                 deltaPercent: null,
                 chartData: [],
                 deltas: {},
-                loadingPrices: false,
+                // Born already waiting for wave 2, so the row draws its own
+                // skeleton the instant it appears instead of a bare empty cell.
+                loadingPrices: true,
             }));
-
-            // Fetch price data for all assets via bulk query
-            await fetchAllPriceData();
         } catch (e: any) {
             console.error('Failed to load assets:', e);
             error = e?.message || 'Failed to load assets';
         } finally {
             loading = false;
         }
+
+        // Wave 2 — prices, signals, "All" resolution — deliberately OUTSIDE the
+        // `loading` window. The list and the prices are two separate calls, so
+        // there is no reason to hold the whole page behind a spinner until both
+        // are back: rows render at once and fill in per-row (loading=
+        // {asset.loadingPrices}). fetchAllPriceData() owns its own errors and
+        // clears loadingPrices on every path, so nothing here can strand a row.
+        // `data-busy` (loading || any loadingPrices) stays the single signal for
+        // "both waves finished".
+        if (!error) await fetchAllPriceData();
     }
 
     /**
@@ -425,13 +547,41 @@
 
     async function fetchAllPriceData() {
         if (assets.length === 0) return;
+        void getSettingsVersion();
 
-        // Split into cached (no gaps) and need-fetch (have gaps)
+        // Build one request item per asset that needs prices and/or backend signals.
         const cached: Map<number, any[]> = new Map();
         const needFetch: AssetState[] = [];
+        const queryItems: Array<{
+            asset_id: number;
+            date_range: {start: string; end: string};
+            include_price: boolean;
+            signals: ReturnType<typeof buildBackendSignalRequestPlan>['requests'];
+        }> = [];
+        const requestContexts = new Map<
+            number,
+            {
+                configs: SignalConfig[];
+                plan: ReturnType<typeof buildBackendSignalRequestPlan>;
+                requestVersion: number;
+            }
+        >();
+        const nextSignalResults = new Map(signalResultsByAsset);
+
         for (const asset of assets) {
+            const configs = getSettingsForPair(`asset-${asset.id}`, 'assets').signals;
+            const plan = buildBackendSignalRequestPlan(configs, signalDefinitions);
+            const state = resultStateForAsset(asset.id);
+            const requestVersion = state.beginRequest();
+            requestContexts.set(asset.id, {
+                configs,
+                plan,
+                requestVersion,
+            });
+
             const store = getAssetPriceStore(asset.id, asset.currency);
             const gaps = store.getMissingIntervals(dateStart, dateEnd);
+            const needsPrice = gaps.length > 0;
             if (gaps.length === 0) {
                 const rangeData = store.getRange(dateStart, dateEnd).data;
                 cached.set(
@@ -450,16 +600,33 @@
             } else {
                 needFetch.push(asset);
             }
+
+            if (needsPrice || plan.requests.length > 0) {
+                queryItems.push({
+                    asset_id: asset.id,
+                    date_range: {start: dateStart, end: dateEnd},
+                    include_price: needsPrice,
+                    signals: plan.requests,
+                });
+            } else {
+                const mapped = mapSignalInstanceResults(configs, plan, []);
+                if (state.apply(requestVersion, mapped)) {
+                    nextSignalResults.set(asset.id, [...state.values()]);
+                }
+            }
         }
 
-        // If all cached — update instantly, no loading indicators
-        if (needFetch.length === 0) {
+        // If all prices are cached and no backend signals are selected, update instantly.
+        if (queryItems.length === 0) {
             assets = assets.map((asset) => buildAssetStateFromPrices(asset, cached.get(asset.id) ?? []));
+            signalResultsByAsset = nextSignalResults;
+            signalRequestFailed = false;
             resolveMaxStartFromAssets();
             return;
         }
 
         refreshing = true;
+        signalRequestFailed = false;
         assets = assets.map((a) => ({...a, loadingPrices: needFetch.some((nf) => nf.id === a.id)}));
 
         try {
@@ -471,31 +638,38 @@
             // worker pool: validating + computing derived state for every asset in one
             // synchronous main-thread block was what monopolized the thread long enough
             // to delay click/navigation handling on large "ALL date range" loads.
-            const queries = needFetch.map((a) => ({
-                asset_id: a.id,
-                date_range: {start: dateStart, end: dateEnd},
-            }));
-
-            const rawResponse = await axiosInstance.post('/api/v1/assets/prices/query', queries);
+            const rawResponse = await axiosInstance.post('/api/v1/assets/prices/query', queryItems);
             const rawItems: unknown[] = rawResponse.data?.items ?? [];
 
             const {results, invalidItemErrors} = await processPriceItemsInParallel(rawItems);
             if (invalidItemErrors.length > 0) {
                 console.error('Some price-query items failed validation:', invalidItemErrors);
             }
+            signalRequestFailed = invalidItemErrors.length > 0 && [...requestContexts.values()].some((context) => context.plan.requests.length > 0);
 
             // Populate caches (cheap: just Map.set calls) and build a per-asset lookup
             // of the already-computed derived UI state (last price, deltas, chart data).
             const derivedByAssetId = new Map<number, ProcessedAssetResult>();
+            const needFetchIds = new Set(needFetch.map((asset) => asset.id));
             for (const result of results) {
                 derivedByAssetId.set(result.assetId, result);
                 const asset = needFetch.find((a) => a.id === result.assetId);
-                if (asset && result.mappedPoints.length > 0) {
+                if (asset && needFetchIds.has(result.assetId) && result.mappedPoints.length > 0) {
                     const store = getAssetPriceStore(asset.id, asset.currency);
                     store.merge(result.mappedPoints);
                     store.markFetched(dateStart, dateEnd);
                 }
             }
+
+            for (const [assetId, context] of requestContexts) {
+                const state = resultStateForAsset(assetId);
+                const processed = derivedByAssetId.get(assetId);
+                const mapped = mapSignalInstanceResults(context.configs, context.plan, processed?.signals ?? []);
+                if (state.apply(context.requestVersion, mapped)) {
+                    nextSignalResults.set(assetId, [...state.values()]);
+                }
+            }
+            signalResultsByAsset = nextSignalResults;
 
             // Merge cached + fresh results
             assets = assets.map((asset) => {
@@ -511,6 +685,7 @@
             resolveMaxStartFromAssets();
         } catch (e: any) {
             console.error('Failed to fetch prices bulk:', e);
+            signalRequestFailed = [...requestContexts.values()].some((context) => context.plan.requests.length > 0);
             // For cached assets, still use cached data; for others, clear loading
             assets = assets.map((a) => {
                 const cachedPrices = cached.get(a.id);
@@ -657,6 +832,11 @@
         deleteDialogOpen = true;
     }
 
+    function handleMergeAsset(asset: any) {
+        mergingAsset = asset;
+        mergeModalOpen = true;
+    }
+
     async function confirmDeleteAsset() {
         if (!deletingAsset) return;
         deleteLoading = true;
@@ -667,7 +847,7 @@
             const r = (response as any)?.results?.[0];
             if (r?.success) {
                 // Evict from the shared cache so other pages (transactions
-                // cell, LiveTicker) drop the deleted asset without a reload.
+                // cell, dashboard) drop the deleted asset without a reload.
                 invalidateAfterMutation(deletingAsset.id);
                 assets = assets.filter((a) => a.id !== deletingAsset!.id);
                 toasts.success($t('assets.delete.toastOk', {values: {name: deletingAsset!.display_name}}));
@@ -698,8 +878,7 @@
         for (const a of assets) invalidateAssetPriceStore(a.id);
         rearmMaxPendingBeforeReload();
         await fetchAllPriceData();
-        assetTableComponent?.getTableRef()?.clearSelection();
-        selectedAssetRows = [];
+        clearAllTableSelections();
     }
 
     function handleBulkDeleteAssets() {
@@ -730,8 +909,7 @@
             toasts.error('Delete failed: ' + (e?.message || 'unknown'));
             bulkDeleteDialogOpen = false;
             deletingAssets = [];
-            assetTableComponent?.getTableRef()?.clearSelection();
-            selectedAssetRows = [];
+            clearAllTableSelections();
         }
     }
 
@@ -740,7 +918,7 @@
         const successes = bulkDeleteResults.filter((r) => r.success).length;
         const failures = bulkDeleteResults.filter((r) => !r.success).length;
         if (successes > 0) {
-            toasts.success($t('assets.delete.bulkOk', {values: {count: successes}}));
+            toasts.success($t('assets.delete.bulkOk', {values: {n: successes}}));
         }
         if (failures > 0) {
             toasts.warning($t('assets.delete.bulkPartial', {values: {failed: failures}}));
@@ -748,8 +926,7 @@
         bulkDeleteDialogOpen = false;
         bulkDeleteResults = [];
         deletingAssets = [];
-        assetTableComponent?.getTableRef()?.clearSelection();
-        selectedAssetRows = [];
+        clearAllTableSelections();
     }
 
     function handleGlobalSettings() {
@@ -758,10 +935,14 @@
     }
 
     function handleSettingsSave(s: ChartSettings) {
+        const shouldReloadBackend = backendRequestFingerprint(settingsForModal.signals) !== backendRequestFingerprint(s.signals);
         if (settingsTargetId) {
             setPairSettings(`asset-${settingsTargetId}`, s);
         } else {
             setGlobalSettings(s, 'assets');
+        }
+        if (shouldReloadBackend) {
+            void fetchAllPriceData();
         }
     }
 
@@ -795,6 +976,16 @@
         await Promise.allSettled(promises);
     }
 
+    function fxPointToLineDataPoint(point: {date: string; rate: number | null; backwardFillInfo?: {daysBack: number} | null}): LineDataPoint {
+        const rate = displayFxRate(point.rate, false);
+        return {
+            date: point.date,
+            value: rate ?? 0,
+            missing: rate === null,
+            staleDays: point.backwardFillInfo?.daysBack ?? 0,
+        };
+    }
+
     /** Build pairsDataMap from FX stores for ChartSettingsModal preview */
     function buildPairsDataMap(): Record<string, LineDataPoint[]> {
         const entries: Array<[string, LineDataPoint[]]> = [];
@@ -803,12 +994,49 @@
                 const store = getFxStore(slug);
                 const data = store.getAllSorted();
                 if (data.length === 0) continue;
-                entries.push([slug, data.map((d) => ({date: d.date, value: d.rate, staleDays: d.backwardFillInfo?.daysBack ?? 0}))]);
+                entries.push([slug, data.map(fxPointToLineDataPoint)]);
             } catch {
                 /* skip */
             }
         }
         return Object.fromEntries(entries);
+    }
+
+    /**
+     * Global (filter-bar) mode: compute backend overlay signals live on the
+     * modal's synthetic preview curve, so indicators like SMA render in the
+     * preview without a real asset. Backend indicators can't run in the browser.
+     */
+    async function resolveGlobalBackendPreview(configs: SignalConfig[], points: LineDataPoint[], viewMode: 'absolute' | 'percentage'): Promise<RenderedSignal[]> {
+        const plan = buildBackendSignalRequestPlan(configs, signalDefinitions);
+        if (plan.requests.length === 0 || points.length === 0) return [];
+        const response = await zodiosApi.compute_signal_preview_api_v1_signals_preview_post({
+            domain: 'asset',
+            points: points.map((point) => ({date: point.date, value: point.value})),
+            signals: plan.requests,
+        });
+        const mapped = mapSignalInstanceResults(configs, plan, response.signals ?? []);
+        const rendered: RenderedSignal[] = [];
+        for (const item of mapped) {
+            if (item.source !== 'backend' || !item.result) continue;
+            const definition = signalDefinitionsByType.get(item.config.signalType);
+            if (!definition || definition.source !== 'backend') continue;
+            const outcome = renderBackendSignalResult(item.result, item.config, {
+                baseData: points,
+                viewMode,
+                definition,
+                translate: (key) => $t(key),
+            });
+            rendered.push(...outcome.signals);
+        }
+        return rendered;
+    }
+
+    function resolveSettingsBackendPreview(viewMode: 'absolute' | 'percentage'): RenderedSignal[] {
+        if (!settingsTargetId) return [];
+        const asset = assets.find((item) => item.id === Number(settingsTargetId));
+        if (!asset?.chartData.length) return [];
+        return getRenderedSignals(asset.id, asset.chartData, viewMode);
     }
 
     /**
@@ -821,6 +1049,8 @@
         if (!settings.signals.length) return [];
         const rendered: RenderedSignal[] = [];
         for (const cfg of settings.signals) {
+            const definition = signalDefinitionsByType.get(cfg.signalType);
+            if (!definition || definition.source === 'backend') continue;
             const instance = signalFromConfig(cfg);
             if (!instance) continue;
 
@@ -832,10 +1062,7 @@
                     const store = getFxStore(pairSlug);
                     const storeData = store.getAllSorted();
                     if (storeData.length === 0) continue;
-                    instance.params._resolvedData = storeData.map((d) => ({
-                        date: d.date,
-                        value: d.rate,
-                    }));
+                    instance.params._resolvedData = storeData.map(fxPointToLineDataPoint);
                 } catch {
                     continue;
                 }
@@ -856,6 +1083,23 @@
                 if (result.data.length > 0) rendered.push(result);
             }
         }
+
+        for (const item of signalResultsByAsset.get(assetId) ?? []) {
+            if (item.source !== 'backend' || !item.result) continue;
+            const currentConfig = settings.signals.find((config) => config.id === item.config.id) ?? item.config;
+            const definition = signalDefinitionsByType.get(currentConfig.signalType);
+            if (!definition || definition.source !== 'backend') {
+                console.error(`Missing backend signal definition for '${currentConfig.signalType}'`);
+                continue;
+            }
+            const outcome = renderBackendSignalResult(item.result, currentConfig, {
+                baseData: absoluteData,
+                viewMode: vm,
+                definition,
+                translate: (key) => $t(key),
+            });
+            rendered.push(...outcome.signals);
+        }
         return rendered;
     }
 
@@ -866,9 +1110,18 @@
     }
 
     let hasActiveFilters = $derived(!!searchText || filterTypes.size > 0 || filterCurrencies.size > 0);
+
+    /**
+     * The page renders in two waves: the asset list arrives first, then each row fetches its
+     * own prices. Until both are done the numbers on screen are placeholders, and nothing in
+     * the DOM said so — the only way to know was to wait and hope. Exposed here so the state
+     * is readable by assistive tech (`aria-busy`) and by anything else that needs to know
+     * whether what it is looking at is final.
+     */
+    let busy = $derived(loading || assets.some((a) => a.loadingPrices));
 </script>
 
-<div class="space-y-6" data-testid="assets-page">
+<div class="space-y-6" aria-busy={busy} data-busy={busy ? 'true' : 'false'} data-testid="assets-page">
     <!-- Header: Title left, ViewModeToggle + Add Asset right. Round 14.1 bugfix: `lg:` is a
          VIEWPORT breakpoint (1024px) — wraps unconditionally below that width regardless of
          whether the actual header row has room. Plain `flex-wrap` reacts to the row's OWN
@@ -893,8 +1146,7 @@
                         {id: 'delete', icon: Trash2, label: () => $t('common.delete'), variant: 'danger', onClick: () => handleBulkDeleteAssets()},
                     ]}
                     onClearSelection={() => {
-                        assetTableComponent?.getTableRef()?.clearSelection();
-                        selectedAssetRows = [];
+                        clearAllTableSelections();
                     }}
                 />
             {/if}
@@ -937,7 +1189,7 @@
          stackFilters: [ datepicker                     | col  ]
                       [ search active currency type ×  | btns ]
          oneColumn:    [ datepicker ] [ search active × ] [ currency type ] [ 2×2 btns, now BELOW ] -->
-    <PageToolbar thresholds={{oneRow: 1340, denseRow: 850, stackFilters: 440, oneColumn: 400, labelHideActions: 250, labelHideTabs: 370}} testId="assets-controls" filterRowTestId="assets-filter-bar" layoutDebugName="assetsList">
+    <PageToolbar thresholds={{oneRow: 1340, denseRow: 850, stackFilters: 440, oneColumn: 400, labelHideActions: 250, labelHideTabs: 370}} tabs={assetTabs} {activeTab} ontabchange={handleAssetTabChange} testId="assets-controls" filterRowTestId="assets-filter-bar" layoutDebugName="assetsList">
         {#snippet filters({layoutMode, filtersStacked})}
             <!-- DateRangePicker. Round 14 bugfix: this wrapper is `contents` (exits the box
                  model — data-testid stays queryable, it's just a DOM attribute) rather than
@@ -1134,7 +1386,7 @@
         {#snippet actions({showActionLabels})}
             <!-- Top-left: ColumnVisibility in table mode, Abs/% toggle in grid mode -->
             {#if viewMode === 'list'}
-                <ColumnVisibilityToggle tableRef={assetTableComponent?.getTableRef()} showLabel={showActionLabels} />
+                <ColumnVisibilityToggle tableRef={assetTableRefs['own']?.getTableRef()} additionalTableRefs={[assetTableRefs['others']?.getTableRef(), assetTableRefs['analysis']?.getTableRef()].filter((r) => r != null)} showLabel={showActionLabels} />
             {:else}
                 <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
                     <button
@@ -1157,6 +1409,7 @@
             <button
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                 onclick={handleGlobalSettings}
+                data-testid="assets-chart-settings-button"
             >
                 <Settings size={14} />
                 {#if showActionLabels}<span>{$t('sharedResource.settings')}</span>{/if}
@@ -1185,7 +1438,29 @@
     </PageToolbar>
 
     <!-- Content -->
-    {#if loading}
+    {#if activeTab === 'correlation'}
+        {#if loading}
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-12 text-center border border-gray-100 dark:border-slate-700">
+                <RefreshCw class="text-libre-green animate-spin mx-auto" size={32} />
+            </div>
+        {:else if error}
+            <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-6 text-center">
+                <p class="text-red-600 dark:text-red-400">{error}</p>
+            </div>
+        {:else}
+            <AssetSetRiskPanel
+                {assets}
+                {dateStart}
+                {dateEnd}
+                targetCurrency={$globalSettings.default_currency || 'EUR'}
+                onsynced={async () => {
+                    for (const asset of assets) invalidateAssetPriceStore(asset.id);
+                    rearmMaxPendingBeforeReload();
+                    await fetchAllPriceData();
+                }}
+            />
+        {/if}
+    {:else if loading}
         <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-12 text-center border border-gray-100 dark:border-slate-700">
             <div class="inline-flex items-center justify-center w-16 h-16 bg-libre-green/10 rounded-full mb-4">
                 <RefreshCw class="text-libre-green animate-spin" size={32} />
@@ -1218,54 +1493,90 @@
             {/if}
         </div>
     {:else if viewMode === 'grid'}
-        <!-- Grid View -->
-        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {#each filteredAssets as asset (asset.id)}
-                <AssetCard
-                    asset={{
-                        id: asset.id,
-                        display_name: asset.display_name,
-                        currency: asset.currency,
-                        icon_url: asset.icon_url,
-                        asset_type: asset.asset_type,
-                        provider_code: asset.provider_code,
-                        active: asset.active,
-                    }}
-                    livePrice={livePriceMap.get(asset.id)?.value ?? asset.lastPrice ?? null}
-                    livePriceDirection={livePriceMap.get(asset.id)?.direction ?? 'neutral'}
-                    deltaPercent={asset.deltaPercent}
-                    deltaAbs={asset.deltaAbs}
-                    dateStart={urlDateStart}
-                    dateEnd={urlDateEnd}
-                    chartSettings={getSettingsForPair(`asset-${asset.id}`, 'assets')}
-                    renderSignals={(chartData, vm) => getRenderedSignals(asset.id, chartData, vm)}
-                    chartData={asset.chartData}
-                    loading={asset.loadingPrices}
-                    syncing={syncingAssetIds.has(asset.id)}
-                    onsync={handleSyncAsset}
-                    onrefresh={handleRefreshAsset}
-                    ondelete={handleDeleteAsset}
-                    onsettings={handleCardSettings}
-                />
+        <!-- Grid View — F15: three usage panels (yours / other users' / under analysis) -->
+        <div class="space-y-6">
+            {#each assetPanels as panel (panel.id)}
+                {#if panel.items.length > 0}
+                    <section data-testid="assets-panel-{panel.id}">
+                        <header class="mb-2 px-1">
+                            <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-200">
+                                {$t(`assets.panels.${panel.id}`)} <span class="text-gray-400 dark:text-gray-500 font-normal">({panel.items.length})</span>
+                            </h2>
+                            <p class="text-[11px] text-gray-400 dark:text-gray-500">{$t(`assets.panels.${panel.id}Hint`)}</p>
+                        </header>
+                        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                            {#each panel.items as asset (asset.id)}
+                                <AssetCard
+                                    asset={{
+                                        id: asset.id,
+                                        display_name: asset.display_name,
+                                        currency: asset.currency,
+                                        icon_url: asset.icon_url,
+                                        asset_type: asset.asset_type,
+                                        provider_code: asset.provider_code,
+                                        active: asset.active,
+                                    }}
+                                    txCount={asset.tx_count ?? 0}
+                                    livePrice={livePriceMap.get(asset.id)?.value ?? asset.lastPrice ?? null}
+                                    livePriceDirection={livePriceMap.get(asset.id)?.direction ?? 'neutral'}
+                                    deltaPercent={asset.deltaPercent}
+                                    deltaAbs={asset.deltaAbs}
+                                    dateStart={urlDateStart}
+                                    dateEnd={urlDateEnd}
+                                    chartSettings={getSettingsForPair(`asset-${asset.id}`, 'assets')}
+                                    renderSignals={(chartData, vm) => getRenderedSignals(asset.id, chartData, vm)}
+                                    chartData={asset.chartData}
+                                    loading={asset.loadingPrices}
+                                    syncing={syncingAssetIds.has(asset.id)}
+                                    onsync={handleSyncAsset}
+                                    onrefresh={handleRefreshAsset}
+                                    ondelete={handleDeleteAsset}
+                                    onmerge={handleMergeAsset}
+                                    onsettings={handleCardSettings}
+                                />
+                            {/each}
+                        </div>
+                    </section>
+                {/if}
             {/each}
         </div>
     {:else}
-        <!-- Table View -->
-        <AssetTable
-            bind:this={assetTableComponent}
-            data={tableRows}
-            loading={false}
-            {visiblePeriods}
-            {livePriceMap}
-            dateStart={urlDateStart}
-            dateEnd={urlDateEnd}
-            onsync={handleSyncAsset}
-            onrefresh={handleRefreshAsset}
-            ondelete={handleDeleteAsset}
-            onselectionchange={(rows) => {
-                selectedAssetRows = rows;
-            }}
-        />
+        <!-- Table View — F15 round-2: three stacked tables (yours / other users' /
+             watched). Column widths, order and visibility stay in sync across the
+             three (width via mirrorColumnResize, order/visibility via the toggle's
+             additionalTableRefs); pagination is independent per table. -->
+        <div class="space-y-6">
+            {#each assetPanels as panel (panel.id)}
+                {#if panel.items.length > 0}
+                    <section data-testid="assets-table-panel-{panel.id}">
+                        <header class="mb-2 px-1">
+                            <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-200">
+                                {$t(`assets.panels.${panel.id}`)} <span class="text-gray-400 dark:text-gray-500 font-normal">({panel.items.length})</span>
+                            </h2>
+                            <p class="text-[11px] text-gray-400 dark:text-gray-500">{$t(`assets.panels.${panel.id}Hint`)}</p>
+                        </header>
+                        <AssetTable
+                            bind:this={assetTableRefs[panel.id]}
+                            data={tableRows.filter((r) => r.txScope === panel.id)}
+                            loading={false}
+                            {visiblePeriods}
+                            {livePriceMap}
+                            dateStart={urlDateStart}
+                            dateEnd={urlDateEnd}
+                            storageKey="assetsTable-{panel.id}"
+                            onsync={handleSyncAsset}
+                            onrefresh={handleRefreshAsset}
+                            ondelete={handleDeleteAsset}
+                            onmerge={handleMergeAsset}
+                            onColumnResize={(colId, w) => mirrorColumnResize(panel.id, colId, w)}
+                            onselectionchange={(rows) => {
+                                panelSelections = {...panelSelections, [panel.id]: rows};
+                            }}
+                        />
+                    </section>
+                {/if}
+            {/each}
+        </div>
     {/if}
 </div>
 
@@ -1273,6 +1584,11 @@
 <ChartSettingsModal
     open={settingsModalOpen}
     mode={settingsTargetId ? 'pair' : 'global'}
+    {signalDefinitions}
+    {signalBackendError}
+    onretrySignalBackend={retryBackendSignals}
+    backendPreviewSignalResolver={settingsTargetId ? resolveSettingsBackendPreview : undefined}
+    backendPreviewLiveResolver={resolveGlobalBackendPreview}
     onclose={() => {
         settingsModalOpen = false;
         settingsTargetId = null;
@@ -1307,7 +1623,7 @@
     danger={true}
     items={deletingAssets.map((a) => a.display_name)}
     itemsLabel={`${deletingAssets.length} assets`}
-    message={$t('assets.delete.bulkConfirmMessage', {values: {count: deletingAssets.length}})}
+    message={$t('assets.delete.bulkConfirmMessage', {values: {n: deletingAssets.length}})}
     onCancel={closeBulkDeleteDialog}
     onConfirm={confirmBulkDeleteAssets}
     open={bulkDeleteDialogOpen}
@@ -1347,5 +1663,19 @@
     onupdated={() => loadAssets()}
     onclose={() => {
         assetModalOpen = false;
+    }}
+/>
+
+<!-- Asset Merge Modal (P3 · WS-E) -->
+<AssetMergeModal
+    bind:open={mergeModalOpen}
+    sourceAsset={mergingAsset ? {id: mergingAsset.id, display_name: mergingAsset.display_name} : null}
+    onmerged={async () => {
+        if (mergingAsset) invalidateAfterMutation(mergingAsset.id);
+        await loadAssets();
+    }}
+    onclose={() => {
+        mergeModalOpen = false;
+        mergingAsset = null;
     }}
 />

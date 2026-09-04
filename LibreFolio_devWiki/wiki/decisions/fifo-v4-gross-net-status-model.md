@@ -64,7 +64,7 @@ quantitative corruption. Net table columns default to visible only when relevant
 ## Related
 - [[concepts/gross-net-dual-reporting]]
 - [[problems/datatable-net-columns-hidden-override-model]]
-- [[fifo-v4-engine-architecture]]
+- [[decisions/fifo-v4-engine-architecture]]
 - [[entities/fifo-lot-engine]]
 - [[sources/fifo-v4-fee-tax-integration]]
 

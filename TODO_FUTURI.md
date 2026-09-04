@@ -5,6 +5,312 @@ I TODO completati sono in `TODO_Completati.md`.
 
 ---
 
+## 📊 Dashboard — vista P&L assoluto e grafici avanzati (F8)
+
+**Data aggiunta**: 1 Settembre 2026
+**Status**: 📋 FUTURO — emerso dal feedback beta del 30/08/2026, rimandato per consolidamento pre-release
+**Origine**: feedback Alfy 30/08/2026 — classificazione in `LibreFolio_developer_journal/Release_2/Phase_0` (sessione 01/09/2026)
+
+### Richiesta
+
+- Grafico dashboard: vista **solo P&L assoluto** (senza cash, costo asset, ecc.).
+- Possibilità di mostrare il P&L con **grafico a candela** per far capire l'escursione giornaliera.
+- Valutare istogrammi per dividendi e interessi (gli altri parametri della KPI card 1).
+
+### Note
+
+- Va spezzata in sotto-feature: (a) vista P&L-only, (b) candele, (c) istogrammi dividendi/interessi.
+- Da riprendere dopo il consolidamento dei feedback di Release 2.
+
+---
+
+## 🔌 Arricchimento asset da fonti esterne — ESMA FIRDS, OpenFIGI, JustETF (F16)
+
+**Data aggiunta**: 1 Settembre 2026
+**Status**: 📋 FUTURO — da riprendere a consolidamento finito
+**Origine**: feedback Giuseppe + Alfy 07/08/2026; skill di riferimento: `asset-plugin`
+
+### Contesto
+
+Giuseppe scarica cataloghi da ESMA (FIRDS) e Yahoo Finance (quotazioni attuali e storiche) e usa OpenFIGI per arricchire gli ISIN. Twelve Data sarebbe ideale ma è a pagamento. Domanda aperta: esistono API JustETF?
+
+### Idea architetturale (Alfy)
+
+- Funzione di **arricchimento dati asset esterna al provider prezzo**, come **libreria interna**:
+  i plugin provider la usano per arricchire il proprio output — più gestibile di un plugin standalone.
+- ESMA FIRDS: `https://registers.esma.europa.eu/publication/searchRegister?core=esma_registers_firds_files`
+  — publication date ultima settimana, type "full file" → restituisce i cataloghi.
+- OpenFIGI: concettualmente simile agli altri provider → integrazione più semplice.
+
+### Collegamenti
+
+- Piano in pausa correlato: `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/plan-phase00AssetIdentityAndIdentifiers.prompt.md` (identità asset, identificativi).
+
+---
+
+## 🔄 Self-update in-app (da F14)
+
+**Data aggiunta**: 1 Settembre 2026
+**Status**: 📋 FUTURO — F14 è stato rilasciato in scope 1 (modale + guida); il self-update richiede un piano dedicato
+**Origine**: discussione F14 del 01/09/2026
+
+### Obiettivo
+
+Pulsante nel frontend (modale "nuova versione") che fa aggiornare e riavviare il backend.
+
+### Fattibilità analizzata
+
+- **Docker**: un container non può aggiornare la propria immagine da solo, ma può farlo se
+  `/var/run/docker.sock` è montato (opt-in in compose): Docker API → pull nuova immagine →
+  ricreazione del container. È ciò che fa **Watchtower** (documentato nella guida come alternativa).
+  Attenzione: docker.sock montato = root sull'host → montaggio opt-in esplicito, endpoint admin-only,
+  script fisso senza input utente. LibreFolio è single-image → caso semplice.
+- **Git clone**: script guardato — `git fetch`, `git pull` solo se work-tree pulito
+  (`git status --porcelain` vuoto), rebuild, restart. Il restart richiede un supervisore
+  (systemd o Docker restart policy). Candidato: `scripts/self_update.sh` documentato.
+- Distinguere le varianti di immagine full/light se necessario (F13).
+
+---
+
+## 📧 Server email — verifica account, inviti, recupero password (da P2-1)
+
+**Data aggiunta**: 3 Settembre 2026
+**Status**: 📋 FUTURO — non prioritario; nel frattempo l'opzione `require_email_verification` è marcata come placeholder (read-only + badge "coming soon") nella UI admin
+**Origine**: audit 08_newCleanAndDocumentation_audit (P2-1) + decisione utente 03/09/2026
+
+### Obiettivo
+
+Connettere LibreFolio a un server email (SMTP configurabile dalle impostazioni admin) e
+costruirci sopra tre funzioni:
+
+1. **Verifica email** — rende vera l'opzione `require_email_verification` (oggi placeholder:
+   la chiave esiste ma nessuna verifica avviene).
+2. **Link di invito** — un admin genera un invito via email; utile soprattutto quando la
+   registrazione libera dalla pagina di login è disattivata (l'utente si registra solo
+   tramite invito).
+3. **Recupero password via email** — reset self-service invece del reset manuale admin.
+
+### Note
+
+- Configurazione SMTP nelle impostazioni globali (host, porta, auth, mittente) con
+  test di connessione stile "Test Configuration" dei provider.
+- Il flusso invito/reset richiede token monouso a scadenza (tabella dedicata o
+  riuso del pattern dei settings con TTL).
+- Valutare dipendenza: `aiosmtplib` (async, non blocca l'event loop — regola Async I/O).
+- Fino a questo task, nessuna promessa UI sulla verifica email (P2-1 chiuso come placeholder).
+
+---
+
+## 🔀 `mode='duplicate'` del TransactionFormModal — ricollegare o rimuovere
+
+**Data aggiunta**: 3 Settembre 2026
+**Status**: 📋 DECISIONE APERTA — codice morto di fatto
+**Origine**: fix T3 (02/09) + collaudo 03/09; nota in `Release_2/phases/06_betaTestingReportAndFixing/INDEX.md` §7
+ e `plan-phase00TransactionsUxPolish.prompt.md` §Stato
+
+### Il punto
+
+`TransactionFormModal` ha una modalità `duplicate` (pre-compila il form come copia) ma
+**nessuna azione UI la raggiunge**: il "duplica" reale passa da `TransactionBulkModal`
+intent `clone` (workspace). La preservazione della data (T3) è quindi testata solo a
+livello componente per quel ramo.
+
+### Opzioni
+
+- **Ricollegare**: aggiungere un'azione "Duplica" (menu riga o form) che apre il FormModal
+  in `mode='duplicate'` per chi preferisce il singolo form alla bulk workspace.
+- **Rimuovere**: cancellare la modalità, il ramo di codice e i test dedicati, riducendo la
+  superficie del FormModal.
+
+### Note per chi riprende
+
+- I 3 path clone della bulk modal (`resolveInitialRows`, `cloneRow`, `createOpFromClone`)
+  sono quelli vivi — non confonderli con questa modalità.
+- Se si rimuove: eliminare anche l'opzione `resetDate` residua e i test del modo duplicate.
+
+---
+
+## 🧪 Test runner — residui della migrazione P8
+
+**Data aggiunta**: 3 Settembre 2026 · **Corretta** il 03/09 dopo verifica sistematica (verify-06)
+**Status**: 📋 FUTURO — ma **molto meno di quanto scritto altrove**: la verifica 03/09 ha trovato
+che il corpo del piano P8 segna già fatte le tappe 1, 2.2–2.4, 3.1–3.3, 4, 5.4, 6.3–6.4 (deliverable
+presenti: `_inventory.py`, `_scheduler.py`, `_executor.py`, flag `--workers`, reachability check) —
+header e INDEX non furono mai riallineati
+**Origine**: `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/plan-phase00TestRunnerMigration.prompt.md`
+
+### Cosa resta davvero (dopo la verifica del 03/09)
+
+- **Tappe 5.1–5.3** — isolamento scritture per worker: **deliberatamente NON eseguite**
+  (premesse false, vedi piano :1041 e :1169+). Sono il vero residuo.
+- **Tappe 0.1–0.2** — fotografia dei timing: probabilmente obsolete, da rivalutare.
+- **Rossi intermittenti sotto `--workers auto`** (broker-detail lot fee, asset-merge AM-001,
+  fx-csv-import editor) — verdi in seriale: sensibilità al carico parallelo; candidati a
+  diventare la checklist d'ingresso quando si riprende 5.x.
+
+### Correzioni fatte il 03/09
+
+- Questa voce inizialmente elencava «tappe 1–6» come aperte: **era stale** (copiato dall'header
+  del piano, mai aggiornato dopo i commit del 13/08). Ora riflette la verifica sul codice.
+- INDEX 06 e header dei piani P7/P8 vanno riallineati quando si tocca quella cartella:
+  - P7 «Fase D aperta» → **fatta** (`scripts/coverage_js.py` + `test coverage-report --lang js`
+    operativo, usato il 03/09 per la misura 72,3%); INDEX §4 vs §5 si contraddicono.
+  - P8 header «tappe 1–6 aperte» → quasi tutto fatto (sopra).
+  - INDEX dice «`_reachability.py`» → implementato dentro `_cli.py` + `_inventory.py`.
+
+---
+
+## 🧹 P3-27 — Batch traduzioni IT/FR/ES (debito a due generazioni)
+
+**Data aggiunta**: 3 Settembre 2026
+**Status**: 📋 SOLO SU RICHIESTA ESPLICITA — la pipeline Aphra si avvia solo quando l'utente la chiede
+**Origine**: audit 08 mk1 N8 + mk2 T16; ondata docs P3 del 03/09
+
+### Debito accumulato al 03/09
+
+Pagine EN aggiornate/riscritte con traduzioni IT/FR/ES ora stale:
+- **Riscritture**: `user/brokers/sharing` (sharing moderno), `user/brokers/import`
+  (wizard 7 step), sezione Import di `user/getting-started`, `user/fx/providers/snb`
+  (medie mensili), sezioni nuove di `admin/docker_advanced` (cache build-time, backup WAL).
+- **Correzioni di fatti** (le traduzioni riportano ancora gli errori): transactions/index,
+  files/index, assets/index, transactions/import/how-to + index + etoro, fx/index +
+  fx/detail/chart + signals, assets/detail/chart + signals, ai-export/index|asset|fx,
+  dashboard/kpi-cards, financial-theory day-count/dividend.
+- Per il debito strutturale esatto: `pipenv run python dev.py mkdocs translate-validate`.
+
+### Regola
+
+Le correzioni puramente cosmetiche sono già state stampate (`translate-stamp`) e NON
+verranno ritradotte; tutte le pagine sopra invece DEVONO essere ritradotte alla prossima
+run `./dev.py mkdocs translate` perché i fatti sono cambiati.
+
+---
+
+## 🧮 Riduzione complessità cognitiva — i 26 `TODO(P2-refactor)` (da P1-2)
+
+**Data aggiunta**: 3 Settembre 2026
+**Status**: 📋 FUTURO — NON urgente: sono debolezza strutturale, non bug. Lavoro grosso, da pianificare a sé
+**Origine**: piano `LibreFolio_developer_journal/Release_2/Phase_0/08_newCleanAndDocumentation_audit/plan-phase00P1QuickWins.prompt.md` (task P1-2, tabella completa dei 26 con righe e note)
+
+### Contesto
+
+Il 03/09 è stato attivato il gate ruff **C901 a soglia 10** (`pyproject.toml`): misura la
+complessità ciclomatica — conta OGNI punto decisionale (if, ternari, operatori booleani).
+199 funzioni sopra soglia sono state triagiate una a una: **173 "flat packer"** (parser CSV,
+packer di payload: branch meccanici, nessuna logica annidata) hanno ricevuto
+`# noqa: C901 — <giustificazione>`; **26 con logica annidata vera** (if in loop in if, stato
+che si accumula) sono state marcate `# noqa: C901 — TODO(P2-refactor): <motivo>`.
+
+### Come trovarle
+
+```bash
+grep -rn "TODO(P2-refactor)" backend/ scripts/
+```
+
+La tabella completa con complessità e nota per funzione è nel piano P1 citato sopra
+(sezione "P1-2 — esito triage"). I gruppi:
+
+| Gruppo | Esempi (complessità) | Natura |
+|---|---|---|
+| Motori replay/pipeline | `execute_batch` (115), `portfolio_engine.build` (97), `get_summary` (73), `get_positions_contribution` (62) | Loop per-giorno/transazione con rami annidati per tipo evento/FX/edge case |
+| Orchestratori a fasi | `bulk_refresh_prices` (62), `sync_pairs_bulk` (54), `get_prices_bulk` (49), `calculate` (26) | 3-9 fasi con closure annidate che catturano stato |
+| Parser non banali | `broker_credit_agricole._parse_account_movements` (71), `brim_provider.detect_tx_duplicates` (21) | Parse multi-passo con closure di risoluzione annidate |
+| State machine di calcolo | `drawdown_episodes` (15), `calculate_mwrr_series` (15), `_crossings` (11) | Macchine a stati con recovery/retry |
+| Tooling interno (priorità bassa) | 3 in `scripts/test_runner/` | Logistica del runner, non prodotto |
+
+### Cosa fare quando si riprende
+
+- Approccio: **estrazione di helper per stadio** (stage functions a livello modulo), non
+  riscrittura. Ogni funzione ha già il motivo specifico nel commento noqa.
+- Il gate impedisce che ne nascano di nuove: queste 26 sono tutto il debito esistente.
+- Dopo ogni refactor: togliere il noqa e verificare `pipenv run ruff check backend/` verde.
+- Attenzione a `asset_source.py`: ha drift black preesistente — non riformattare tutto il file.
+
+---
+
+## 🔗 Suggerimento eventi collegabili nella bulk modal (da P2-6)
+
+**Data aggiunta**: 3 Settembre 2026
+**Status**: 📋 FUTURO — feature pronta al 70% (backend già fatto e testato); manca il frontend
+**Origine**: audit 08 (P2-6) + idea originale utente (luglio 2026) + indagine 03/09/2026
+
+### La feature voluta
+
+Nella **bulk modal** delle transazioni, in stile riga-notifica "promote": quando una riga
+(transazione) può essere collegata a un **evento** di un asset (dividendo, interesse…)
+entro un range temporale compatibile, compare una riga di notifica con i candidati;
+l'utente conferma il collegamento. Il range riusa il valore dello **slider delta-days**
+già presente nella bulk modal.
+
+### Cosa esiste già (da riusare, NON riscrivere)
+
+- **Backend pronto**: `POST /api/v1/transactions/suggest-events`
+  (`backend/app/api/v1/transactions.py` ~:257) → `suggest_events_bulk` in
+  `transaction_service.py` ~:558-621. Fa: mappa tipo transazione → tipo evento compatibile,
+  filtra per tolleranza ±N giorni, ordina per distanza, accetta batch (lista di transazioni).
+  Coperto da 8 test API (`backend/test_scripts/test_api/test_events_suggest.py`), mai cablato
+  al frontend dal commit `c3faae19` (luglio).
+- **UX di riferimento**: la riga-notifica "promote" nella bulk modal
+  (`TransactionBulkModal.svelte` ~:2994-3094) come template di presentazione.
+- **Pattern picker esistente**: `AssetEventPicker.svelte` + `EventCreateMiniModal.svelte`
+  nella sezione avanzata della modale di edit transazione.
+
+### ⚠️ Duplicazione da sanare nell'occasione
+
+`AssetEventPicker` (edit modal) **NON usa** `suggest_events`: interroga gli eventi con
+`query_events_bulk` (query generica per asset+range) e manca della mappa di compatibilità
+tipo-transazione→tipo-evento e dell'ordinamento per distanza che `suggest_events` ha.
+Chi riprende il lavoro deve **fattorizzare**: un unico motore di matching (quello di
+`suggest_events`) consumato sia dall'edit modal sia dalla nuova riga-notifica bulk.
+
+### Note di implementazione (dall'indagine)
+
+- Il collegamento si scrive su `asset_event_id` della transazione (poi re-validate).
+- Servono: utility frontend condivisa (batch + cache + debounce), componente banner,
+  chiavi i18n ×4, E2E `event-suggest-bulk.spec.ts`.
+- L'analisi completa (forme, rischi, piano in 4 fasi) è nel report dell'indagine del
+  03/09/2026 in questa sessione — recuperabile anche rieseguendo il confronto
+  `suggest_events` vs `AssetEventPicker`.
+
+---
+
+## 📊 Risk Analysis — evoluzioni scenario catalog e replay
+
+**Data aggiunta**: 29 Luglio 2026
+**Status**: 📋 FUTURO — escluso da G6 iniziale
+**Priorità**: Da valutare dopo il rilascio del catalogo statico
+**Piano corrente**:
+`LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/plan-phase01Step6RiskFrontendInformationArchitecture.prompt.md`
+
+### Catalogo scenari dinamico
+
+- rilevamento dei file senza riavvio;
+- reload manuale o hot reload;
+- CRUD scenari personali;
+- salvataggio delle modifiche effettuate dalla UI;
+- import/export YAML;
+- override espliciti dei preset built-in;
+- validazione e diagnostica amministrativa.
+
+La prima implementazione G6 resta startup-loaded, senza CRUD, database o watcher.
+
+### Proxy historical replay
+
+- persistenza delle associazioni asset → proxy;
+- proposta di proxy solo esplicita e confermata dall'utente;
+- riuso delle associazioni nei replay successivi;
+- diagnostica di copertura/qualità prima di proporre il proxy.
+
+G6 richiede invece scelta manuale per singola esecuzione o esclusione.
+
+### RQMC
+
+Resta a priorità bassa: eventuale scrambling deve avere contratto separato da
+`sobol_start_index`, oracle di convergenza e processo `spawn`, senza fallback
+SciPy production.
+
+---
+
 ## 📈 Gestione Stock Splits nel Calcolo FIFO
 
 **Data aggiunta**: 10 Giugno 2026
@@ -411,6 +717,14 @@ Per ora solo FULL_RESET è implementato.
 
 ## 🗄️ Cache Server Centralizzato per Multi-Worker Uvicorn
 
+**Tema correlato (da fare PRIMA o insieme)**: audit del **necessario delle cache** — con il
+pannello admin (P2-4, 03/09) ora si vedono tutte le 16 cache nominali in un colpo d'occhio.
+Prima di investire nella condivisione multi-worker, vale la pena spendere tempo a capire se
+servono tutte o se ci sono refusi storici (cache aggiunte per colli di bottiglia poi spariti,
+TTL mai rivisti, cache mai popolate davvero). Il pannello "Server Caches" in Global Settings
+è lo strumento di osservazione già pronto per questa analisi (size/TTL/hit per nome).
+**Nota**: questa voce chiede l'analisi, non la soluzione.
+
 **Data aggiunta**: 14 Aprile 2026  
 **Status**: 📋 PIANIFICATO (quando si passerà a multi-worker)  
 **Priorità**: Bassa (oggi 1 worker è sufficiente con SQLite)
@@ -687,3 +1001,82 @@ Aggiungere la feature di analisi che permette di impostare una target allocation
 Aggiungere la possibilità di creare "Portafogli" che dovrebbero essere gruppi di broker o asset o entrambi, da approfondire.
 Fare delle pagine di dettaglio per analizzare i trade, le fee 
 Aggiungere un calcolatore FIRE non solo da oggi al futuro, ma anche fissando una data di inizio per aver modo di vedere la differenza tra andamento teorico e reale.
+
+
+---
+
+## Web search / link-finder
+
+### SearXNG metasearch — Fase B (deferred 2026-07-28)
+- **What**: self-hosted, anonymized, multi-engine metasearch as an *opt-in primary* engine for
+  the asset web link-finder, in front of the `ddgs` fallback (runtime chain `[searxng → ddgs]`).
+- **Why deferred**: `ddgs` (pip, multi-engine, zero-infra) already solves the DDG 202-anomaly
+  rate-limiting with no new infrastructure. SearXNG adds a container + config for marginal gain
+  today.
+- **Trigger to revisit**: search usage grows beyond what `ddgs` covers — heavier/aggregate
+  querying, need for true upstream anonymization, or `ddgs` itself gets rate-limited/broken.
+- **Detailed plan (already written)**:
+  `Phase_0/04_webSearchEngine/plan-phase00SearxngMetasearch.prompt.md`
+- **Deploy shape**: sidecar container (no Redis — limiter off), dev lifecycle via
+  `dev.py` (`docker compose up -d searxng`), internal-only in prod. Best-effort (boot never
+  waits for it). See the plan for D1–D10.
+
+### External shared cache across uvicorn workers (study — 2026-07-28)
+- **What**: the link-finder result cache (`web_link_finder._cache`) is an **in-process TTL dict**
+  → not shared across uvicorn workers (each worker re-queries the same URL). Study whether an
+  **external cache** (e.g. Redis/Valkey) shared by all workers is worth it.
+- **Synergy with SearXNG**: if/when the SearXNG Fase B lands it may ship a Redis anyway →
+  **reuse the same Redis** for this cross-worker cache instead of standing up a second store.
+- **Scope of the study**: which caches benefit (link-finder results, FX rates, provider probes?),
+  TTL/invalidation, single-worker dev vs multi-worker prod, and it MUST degrade gracefully to the
+  in-process dict when no external cache is configured (optional dependency).
+- **Trigger to revisit**: together with the SearXNG Fase B decision (shared Redis), or if prod
+  moves to multi-worker uvicorn.
+
+---
+
+## Risk Analysis
+
+### RQMC with explicit scrambling contract (low priority — 2026-07-28)
+- **What**: re-evaluate randomized quasi-Monte Carlo only when the QuantLib Python
+  binding exposes a complete scrambling path suitable for production.
+- **Why deferred**: production now supports MC and QMC entirely in QuantLib. The
+  previous SciPy RQMC path was removed, and its overloaded `seed` mixed random seed,
+  Sobol offset and scrambling semantics.
+- **Required contract**: separate scramble seed from `sobol_start_index`; never
+  overload either field.
+- **Required gate**: convergence across randomized replicates, QuantLib-only
+  execution inside the `spawn` worker and no silent SciPy production fallback.
+- **Trigger to revisit**: a newer QuantLib binding exposes the required scrambling
+  primitives or a separately approved production engine is adopted.
+
+### Dynamic scenario catalog (future — 2026-07-29)
+- **What**: evolve the initial static, typed, startup-loaded built-in/host YAML
+  catalog with file detection without restart, manual/hot reload, personal
+  scenario CRUD, persistence of UI edits, YAML import/export, explicit built-in
+  overrides and administrative diagnostics.
+- **Why deferred**: G6 first needs a small deterministic contract with no database,
+  watcher or generic form engine.
+- **Trigger to revisit**: the static catalog and typed editors are stable in
+  production and users need scenario lifecycle management.
+- **Reference**:
+  `Phase_0/02_riskfolioIntegration/plan-phase01Step6RiskFrontendInformationArchitecture.prompt.md`.
+
+### Persistent historical-replay proxies (future — 2026-07-29)
+- **What**: persist asset→proxy associations, optionally propose proxies only with
+  explicit user confirmation, and reuse confirmed mappings in later replays.
+- **Why deferred**: G6 deliberately keeps proxy choice explicit and ephemeral;
+  automatic or silent substitution is forbidden.
+- **Trigger to revisit**: repeated replay use demonstrates stable, auditable proxy
+  mappings and the persistence UX has been designed.
+
+
+## Realizzare un tool per aiutare nell'allocazione del pac
+usando l'esempio studio di LibreFolio_developer_journal/Release_2/guida_allocazione_pac_multi_etf.md pensato per directa che ha vincolo di acquisto intero e allocazione in euro,
+creare un tool che prenda vari parametri in input, risultanti dalla decisione nell'allocazione pac e creare vari flag per attivare la variante intera, il metodo di inserimento (numero quote o ammontare massimo), etc...
+Il tutto deve confluire in una funzionalità backend esposta tramite API e un frontend che consenta all'utente di interagire con il tool. In seguito lo stesso tool mi aspetto potrà essere esportato a un agente AI tramite server MCP così che dopo aver fatto l'analisi pac possa far eseguire al backed, possibilmente in forma ottimizzata i calcoli riportando tutte le colonne e le informazion e facendo poi cedicere all'ia o all'utente.
+
+## Aggiungere la colonna Yield on Cost (YOC) nelle tabelle delle posizioni in dashboard e broker
+L'utente @ExpectChaos ha manifestato interesse nella possibilità di avere una colonna che mostri il rendimento attuale dell'asset rispetto al costo di acquisto (Yield on Cost, YOC). Questa metrica è particolarmente utile per gli investitori che vogliono monitorare il rendimento delle loro posizioni nel tempo, indipendentemente dalle fluttuazioni del mercato, specie quando si usano strumenti a distribuzione.
+
+## Mettere una modalità privacy nella dashboard che permetta di nascondere i valori numerici e mostrare solo le percentuali, utile per chi vuole condividere screenshot senza rivelare il valore del portafoglio.

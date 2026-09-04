@@ -4,6 +4,10 @@ A **Broker** in LibreFolio represents a brokerage account — the place where yo
 
 All transactions, reports, and import data are tied to a broker. You need at least one broker to start tracking your portfolio.
 
+!!! note "Shared brokers show your share"
+
+    On a broker you co-own, the net worth shown on the broker card (and in the broker's Overview tab) is **scaled by your ownership share** — a 50% Owner sees half of the account's value. Editors and Viewers always see the full amounts. See [Broker Sharing](sharing.md).
+
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="brokers" data-name="list" alt="Broker List" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
@@ -13,7 +17,7 @@ All transactions, reports, and import data are tied to a broker. You need at lea
 ## ➕ Creating a Broker
 
 1. Navigate to the **Brokers** page from the sidebar
-2. Click **"New Broker"**
+2. Click **"Add Broker"**
 3. Fill in the details: name, base currency, and optionally an icon
     <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
         <img class="gallery-img" data-category="brokers" data-name="edit-modal" alt="Broker Edit Form" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -31,8 +35,8 @@ Once you select a broker from the list, the interface is split into four primary
 
 1. **Overview**: Display of net worth, return metrics, growth history, and allocation charts scoped exclusively to this broker account (see **[Dashboard Overview](../dashboard/index.md)**).
 2. **Positions**: List of open positions, asset weights, and performance metrics within this broker, with access to the inline FIFO Lots Analysis panel (see **[Dashboard Positions](../dashboard/positions.md)**).
-3. **Transactions**: The ledger of all financial activities, including manual entries, statement imports, and histories (see **[Importing Transactions](import.md)**).
-4. **Info**: Broker metadata, cash overdraft/shorting configurations, AI Export, and inline sharing controls (see **[Configuration & Info](info.md)**).
+3. **Transactions**: The ledger of all financial activities, including manual entries, statement imports, and histories (see **[Broker Transactions](import.md)**).
+4. **Info**: Broker metadata, cash overdraft/shorting configurations, AI Export, and inline sharing controls (see **[Configuration & Info](info.md)** and **[Broker AI Export](../ai-export/broker.md)**).
 
 ---
 
@@ -65,6 +69,7 @@ The **Positions** tab lists all active assets currently held under this broker. 
 
 ## 📑 In This Section
 
-- 📥 **[Importing Transactions (BRIM)](import.md)** — How to manually record transactions, run the BRIM CSV/Excel import wizard, and view import logs.
+- 📥 **[Broker Transactions](import.md)** — Record transactions manually scoped to this broker, launch the BRIM bulk-import wizard, and manage uploaded report files.
 - ⚙️ **[Configuration & Info](info.md)** — Metadata settings (overdrafts, shorting), scoped AI Export prompt generator, and the inline broker sharing panel.
+- 🧠 **[Broker AI Export](../ai-export/broker.md)** — Broker-scoped tasks, data coverage, exact sampling, availability, and privacy.
 - 🤝 **[Broker Sharing](sharing.md)** — Detailed guide on role permissions (Owner, Editor, Viewer) and asset percentage settings.

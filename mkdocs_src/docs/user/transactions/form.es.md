@@ -33,7 +33,7 @@ El formulario está diseñado para ser intuitivo y dinámico. Cuando selecciona 
 
 Para obtener una definición conceptual detallada de cada operación, consulta la [guía de Teoría Financiera](../../financial-theory/instruments/transaction-types/index.md).
 
-### Transacciones Simples
+### Single Simples
 
 Estas operan de forma independiente en una sola cuenta de bróker.
 
@@ -45,7 +45,7 @@ Estas operan de forma independiente en una sola cuenta de bróker.
 | ![](../../static/icons/transactions/fee.png){: width="24" style="vertical-align: middle;" } **COMISIÓN / IMPUESTO** ![](../../static/icons/transactions/tax.png){: width="24" style="vertical-align: middle;" } | Costos como comisiones de bróker o impuestos | [📖 Leer](../../financial-theory/instruments/transaction-types/fee.md) |
 | ![](../../static/icons/transactions/adjustment.png){: width="24" style="vertical-align: middle;" } **AJUSTE** | Corrección manual de saldos | [📖 Leer](../../financial-theory/instruments/transaction-types/adjustment.md) |
 
-### Transacciones Compuestas {: #composite-transactions }
+### Composite Compuestas {: #composite-transactions }
 
 Estas representan movimientos **entre** cuentas o monedas. Generan dos asientos vinculados que se equilibran entre sí.
 

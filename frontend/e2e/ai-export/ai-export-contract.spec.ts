@@ -1,0 +1,237 @@
+import {expect, test, type Page} from '../fixtures/playwright';
+
+import {API_TIMEOUT, exportCurrentSelection, gotoDashboard, gotoFirstBroker, gotoFx, gotoSeededAsset, isSnapshotPost, numericScopeId, openAiExportPanel, selectAiExportSelection, setupAiExportPage, waitForClipboard} from './helpers';
+
+const ASSET_OVERVIEW_FIXTURE = {
+    displayName: 'Apple Inc.',
+    ticker: 'AAPL',
+} as const;
+const PUBLIC_CONTRACT_VERSION = 1;
+
+interface ExpectedDatasetRequest {
+    readonly domain: 'portfolio' | 'broker' | 'asset' | 'fx';
+    readonly id: string;
+    readonly brokerId?: number;
+    readonly assetId?: number;
+    readonly baseCurrency?: string;
+    readonly quoteCurrency?: string;
+}
+
+function expectIsoPeriod(payload: Record<string, unknown>): void {
+    const period = payload.period as {start?: unknown; end?: unknown};
+    expect(period.start).toEqual(expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/));
+    expect(period.end).toEqual(expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/));
+    expect(String(period.start) < String(period.end)).toBe(true);
+}
+
+// V1 broker scope is optional on portfolio/asset/fx requests. The dashboard surface
+// always sends its explicit owned-broker set (beta F2: the export must aggregate the
+// same brokers the dashboard shows, never fall back to "every accessible broker"),
+// so portfolio payloads from the dashboard carry `broker_ids`. Assert the canonical
+// shape the backend enforces (NonEmptyBrokerIds: unique positive ints, min 1,
+// ascending) — never the literal IDs, which are shared-DB fixture data.
+function expectCanonicalBrokerIds(value: unknown): void {
+    expect(Array.isArray(value), 'broker_ids must be an array').toBe(true);
+    const ids = value as unknown[];
+    expect(ids.length, 'broker_ids must be non-empty').toBeGreaterThan(0);
+    for (const id of ids) {
+        expect(Number.isInteger(id), 'broker_ids entries must be integers').toBe(true);
+        expect(id as number, 'broker_ids entries must be positive').toBeGreaterThan(0);
+    }
+    expect(ids, 'broker_ids must be sorted ascending').toEqual([...(ids as number[])].sort((left, right) => left - right));
+    expect(new Set(ids).size, 'broker_ids must be unique').toBe(ids.length);
+}
+
+function expectUppercaseCurrency(value: unknown, field: string): void {
+    expect(typeof value, `${field} must be a string`).toBe('string');
+    expect(value, `${field} must be uppercase`).toBe(String(value).toUpperCase());
+    expect(value, `${field} must contain uppercase letters only`).toEqual(expect.stringMatching(/^[A-Z]+$/));
+}
+
+function expectDatasetRequest(payload: Record<string, unknown>, expected: ExpectedDatasetRequest): void {
+    expect(payload.domain).toBe(expected.domain);
+    expect(payload.selection).toEqual({
+        kind: 'dataset',
+        id: expected.id,
+        version: PUBLIC_CONTRACT_VERSION,
+    });
+    expect(payload.detail_level).toBe('compact');
+    expect(payload.expected_catalog_version).toBe(PUBLIC_CONTRACT_VERSION);
+    expectUppercaseCurrency(payload.target_currency, 'target_currency');
+    expectIsoPeriod(payload);
+
+    if (expected.domain === 'portfolio') {
+        expectCanonicalBrokerIds(payload.broker_ids);
+        expect(payload).not.toHaveProperty('broker_id');
+        expect(payload).not.toHaveProperty('asset_id');
+        expect(payload).not.toHaveProperty('base_currency');
+        expect(payload).not.toHaveProperty('quote_currency');
+    } else if (expected.domain === 'broker') {
+        expect(payload.broker_id).toBe(expected.brokerId);
+        expect(payload).not.toHaveProperty('broker_ids');
+        expect(payload).not.toHaveProperty('asset_id');
+        expect(payload).not.toHaveProperty('base_currency');
+        expect(payload).not.toHaveProperty('quote_currency');
+    } else if (expected.domain === 'asset') {
+        expect(payload.asset_id).toBe(expected.assetId);
+        expect(payload).not.toHaveProperty('broker_ids');
+        expect(payload).not.toHaveProperty('broker_id');
+        expect(payload).not.toHaveProperty('base_currency');
+        expect(payload).not.toHaveProperty('quote_currency');
+    } else {
+        expect(payload.base_currency).toBe(expected.baseCurrency);
+        expect(payload.quote_currency).toBe(expected.quoteCurrency);
+        expect(payload).not.toHaveProperty('broker_ids');
+        expect(payload).not.toHaveProperty('broker_id');
+        expect(payload).not.toHaveProperty('asset_id');
+    }
+}
+
+async function exportDataset(page: Page, id: string): Promise<Record<string, unknown>> {
+    await openAiExportPanel(page);
+    await selectAiExportSelection(page, 'dataset', id);
+    await page.getByTestId('ai-export-detail-compact').click();
+    return (await exportCurrentSelection(page)).payload;
+}
+
+async function captureDatasetRequest(page: Page, id: string): Promise<Record<string, unknown>> {
+    const panel = await openAiExportPanel(page);
+    await selectAiExportSelection(page, 'dataset', id);
+    await page.getByTestId('ai-export-detail-compact').click();
+
+    const requestPromise = page.waitForRequest(isSnapshotPost, {timeout: 8_000});
+    const responsePromise = page.waitForResponse((response) => isSnapshotPost(response.request()), {timeout: API_TIMEOUT});
+    await page.getByTestId('ai-export-copy-button').click();
+    const [request, response] = await Promise.all([requestPromise, responsePromise]);
+    const failureBody = response.status() === 200 ? '' : await response.text();
+    expect(response.status(), failureBody).toBe(200);
+
+    if (await panel.menu.isVisible()) {
+        await page.keyboard.press('Escape');
+        await expect(panel.menu).toBeHidden({timeout: 2_000});
+    }
+    return request.postDataJSON() as Record<string, unknown>;
+}
+
+// One test here exports four surfaces in sequence, so the whole-test budget has to
+// clear API_TIMEOUT plus three ordinary exports — otherwise a single slow response
+// gets reported as "test timeout", which names nothing, instead of "waitForResponse
+// timed out", which names the endpoint that stalled.
+test.setTimeout(180_000);
+
+// Earned parallel: this file's blocks own the data they touch and wait on published
+// state, so they share the backend with their neighbours instead of queueing behind
+// them. Verified by a green run of the whole category at 4 workers.
+test.describe.configure({mode: 'parallel'});
+
+test.describe('AI Export request and clipboard contract', () => {
+    test.beforeEach(async ({context, page}) => {
+        await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+        await setupAiExportPage(page);
+    });
+
+    test('sends V1 Dataset request shape and domain scope across all surfaces', async ({page}) => {
+        await test.step('Portfolio Dataset', async () => {
+            await gotoDashboard(page);
+            const payload = await exportDataset(page, 'portfolio.overview_and_history');
+            expectDatasetRequest(payload, {
+                domain: 'portfolio',
+                id: 'portfolio.overview_and_history',
+            });
+
+            await waitForClipboard(page, ['portfolio.overview_and_history'], 'Portfolio Dataset clipboard was not populated');
+        });
+
+        await test.step('Broker Dataset', async () => {
+            await gotoFirstBroker(page);
+            const brokerId = numericScopeId(page, 'brokers');
+            const payload = await captureDatasetRequest(page, 'broker.overview_and_history');
+            expectDatasetRequest(payload, {
+                domain: 'broker',
+                id: 'broker.overview_and_history',
+                brokerId,
+            });
+        });
+
+        await test.step('Asset Dataset', async () => {
+            await gotoSeededAsset(page, ASSET_OVERVIEW_FIXTURE);
+            const assetId = numericScopeId(page, 'assets');
+            const payload = await captureDatasetRequest(page, 'asset.position_and_history');
+            expectDatasetRequest(payload, {
+                domain: 'asset',
+                id: 'asset.position_and_history',
+                assetId,
+            });
+        });
+
+        await test.step('FX Dataset', async () => {
+            await gotoFx(page, 'EUR-USD');
+            const payload = await captureDatasetRequest(page, 'fx.market_and_exposure');
+            expectDatasetRequest(payload, {
+                domain: 'fx',
+                id: 'fx.market_and_exposure',
+                baseCurrency: 'EUR',
+                quoteCurrency: 'USD',
+            });
+        });
+    });
+
+    test('exports V1 performance-market-drivers analysis contract', async ({page}) => {
+        await gotoDashboard(page);
+        await openAiExportPanel(page);
+        await selectAiExportSelection(page, 'analysis', 'portfolio.performance_market_drivers');
+        await page.getByTestId('ai-export-detail-compact').click();
+
+        const notes = 'Review dated drivers, conflicting evidence, and unexplained material moves.';
+        await page.getByTestId('ai-export-user-notes').fill(notes);
+        const {payload} = await exportCurrentSelection(page);
+
+        expect(payload.domain).toBe('portfolio');
+        expect(payload.selection).toEqual({
+            kind: 'analysis',
+            id: 'portfolio.performance_market_drivers',
+            version: PUBLIC_CONTRACT_VERSION,
+            instruction_template_id: 'portfolio.performance_market_drivers.instructions',
+            instruction_template_version: PUBLIC_CONTRACT_VERSION,
+            response_contract_id: 'portfolio.performance_market_drivers.response',
+            response_contract_version: PUBLIC_CONTRACT_VERSION,
+        });
+        expect(payload.detail_level).toBe('compact');
+        expect(payload.expected_catalog_version).toBe(PUBLIC_CONTRACT_VERSION);
+        expectCanonicalBrokerIds(payload.broker_ids);
+        expectUppercaseCurrency(payload.target_currency, 'target_currency');
+        expectIsoPeriod(payload);
+
+        await waitForClipboard(page, ['portfolio.performance_market_drivers', notes], 'Performance-market-drivers Analysis clipboard was not populated');
+    });
+
+    test('exports capital-loss offset analysis with FIFO and fiscal-input contract', async ({page}) => {
+        await gotoDashboard(page);
+        await openAiExportPanel(page);
+        await selectAiExportSelection(page, 'analysis', 'portfolio.fiscal_lots');
+        await page.getByTestId('ai-export-detail-compact').click();
+
+        const notes = 'Prioritize losses expiring first without changing strategic exposures unnecessarily.';
+        await page.getByTestId('ai-export-user-notes').fill(notes);
+        const {payload} = await exportCurrentSelection(page);
+
+        expect(payload.domain).toBe('portfolio');
+        expect(payload.selection).toEqual({
+            kind: 'analysis',
+            id: 'portfolio.fiscal_lots',
+            version: PUBLIC_CONTRACT_VERSION,
+            instruction_template_id: 'portfolio.fiscal_lots.instructions',
+            instruction_template_version: PUBLIC_CONTRACT_VERSION,
+            response_contract_id: 'portfolio.fiscal_lots.response',
+            response_contract_version: PUBLIC_CONTRACT_VERSION,
+        });
+        expect(payload.detail_level).toBe('compact');
+        expect(payload.expected_catalog_version).toBe(PUBLIC_CONTRACT_VERSION);
+        expectCanonicalBrokerIds(payload.broker_ids);
+        expectUppercaseCurrency(payload.target_currency, 'target_currency');
+        expectIsoPeriod(payload);
+
+        const clipboard = await waitForClipboard(page, ['portfolio.fiscal_lots', 'dataset_id: portfolio.fifo', notes], 'Capital-loss offset Analysis clipboard was not populated');
+        expect(clipboard).toContain('dataset_id: portfolio.fifo');
+    });
+});

@@ -23,7 +23,7 @@ from backend.app.schemas.fx import (
     FXConvertResponse,
     FXCreateRoutesResponse,
 )
-from backend.app.schemas.refresh import FXSyncBulkResponse
+from backend.app.schemas.refresh import FXSyncBulkResponse, SyncStatus
 
 # Import mock provider constants for precise assertions
 from backend.app.services.fx_providers.mockfx import MockFXFailProvider
@@ -134,9 +134,13 @@ async def test_sync_auto_config(test_server):
     async with httpx.AsyncClient() as client:
         await create_user_and_login(client)
         # Step 1: Create routes for EUR-USD and GBP-USD
+        # MOCKFX, not ECB. What this test is about is that a configured route makes
+        # `pairs` resolve and sync — the provider is scaffolding, and using the real
+        # one sent the request out to the European Central Bank, where it timed out
+        # under load. A test that reaches a third party is testing today's weather.
         routes = [
-            _route_json("EUR", "USD", "ECB"),
-            _route_json("GBP", "USD", "ECB"),
+            _route_json("EUR", "USD", "MOCKFX"),
+            _route_json("GBP", "USD", "MOCKFX"),
         ]
 
         create_resp = await client.post(
@@ -227,39 +231,87 @@ async def test_sync_manual_only_skipped(test_server):
 
 
 # ============================================================
-# Test 4: POST /fx/currencies/sync — Weekend sync (ok but 0 points)
+# Test 4: POST /fx/currencies/convert — a day with no rate of its own
 # ============================================================
 @pytest.mark.asyncio
-async def test_sync_weekend_no_rates(test_server):
-    """Test 4: POST /fx/currencies/sync — Weekend sync returns ok with 0 points."""
-    print_section("Test 4: POST /fx/currencies/sync - Weekend sync")
+async def test_convert_falls_back_to_the_last_rate_before_a_gap(test_server):
+    """Test 4: a date with no observation of its own resolves to the previous one.
+
+    This replaces a test that registered a route on the **real ECB provider** and
+    asserted that a Saturday returned zero points. Two things were wrong with that.
+    It went out to the network, against the rule that a test never reaches a third
+    party — and it timed out under load, which is how it surfaced. And what it
+    asserted was not our behaviour but the ECB's publishing calendar: the day the
+    ECB starts publishing on Saturdays, or the day it is unreachable, the test says
+    something different without our code having changed.
+
+    What matters to a user is the same in either case: a series has gaps — weekends,
+    holidays, a provider that skipped a day — and a conversion dated inside a gap
+    must still resolve, using the most recent rate at or before that date.
+
+    MOCKFX returns a fixed rate for **every** day it is asked about, so the gap is
+    made here instead of hoped for: sync a closed window, then convert on a date
+    after it. Deterministic, offline, and it asserts our own behaviour.
+    """
+    print_section("Test 4: POST /fx/currencies/convert - gap falls back to the previous rate")
 
     async with httpx.AsyncClient() as client:
         await create_user_and_login(client)
-        # Ensure route exists
+
         await client.post(
             f"{API_BASE}/fx/providers/routes",
-            json=[_route_json("EUR", "GBP", "ECB")],
+            json=[_route_json("EUR", "GBP", "MOCKFX")],
             timeout=TIMEOUT,
         )
 
-        # 2025-01-04 = Saturday
-        weekend_date = "2025-01-04"
+        # A window that ends deliberately early, so the days after it have no
+        # observation of their own.
+        window_start = date(2025, 1, 6)
+        window_end = date(2025, 1, 8)
+        gap_day = date(2025, 1, 10)
+
         sync_resp = await client.post(
             f"{API_BASE}/fx/currencies/sync",
-            json={
-                "pairs": ["EUR-GBP"],
-                "start": weekend_date,
-                "end": weekend_date,
-            },
+            json={"pairs": ["EUR-GBP"], "start": window_start.isoformat(), "end": window_end.isoformat()},
             timeout=TIMEOUT,
         )
-
-        assert sync_resp.status_code == 200, f"Sync failed: {sync_resp.status_code}"
+        assert sync_resp.status_code == 200, f"Sync failed: {sync_resp.status_code}: {sync_resp.text}"
         sync_data = FXSyncBulkResponse(**sync_resp.json())
         assert len(sync_data.results) == 1
-        print_info(f"  Weekend result: status={sync_data.results[0].status}, pts={sync_data.results[0].points_changed}")
-        print_success("✓ Weekend sync handled correctly")
+        assert sync_data.results[0].status == SyncStatus.OK, f"Sync did not report ok: {sync_data.results[0]}"
+
+        async def convert_on(day: date):
+            payload = [
+                FXConversionRequest(
+                    from_amount=Currency(code="EUR", amount=Decimal("100")),
+                    **{"to": "GBP"},
+                    date_range=DateRangeModel(start=day, end=day),
+                )
+            ]
+            resp = await client.post(
+                f"{API_BASE}/fx/currencies/convert",
+                json=[c.model_dump(mode="json") for c in payload],
+                timeout=TIMEOUT,
+            )
+            assert resp.status_code == 200, f"Convert on {day} failed: {resp.status_code}: {resp.text}"
+            data = FXConvertResponse(**resp.json())
+            assert data.success_count == 1, f"Conversion on {day} did not succeed: {data.results[0]}"
+            assert data.results[0].to_amount is not None
+            return data.results[0].to_amount.amount
+
+        # The assertion is a *relation*, not a number: the day inside the gap must
+        # resolve to the same figure as the last day that actually has an observation.
+        #
+        # It is deliberately not `100 * MOCKFX_FIXED_RATE`, tempting as that is with a
+        # fixed-rate provider. `FxRate` is a global table with no user_id: a neighbour
+        # syncing EUR-GBP through a different provider would move the absolute value and
+        # turn this red for a reason that has nothing to do with gap handling. The
+        # relation holds whoever filled the series.
+        gap_amount = await convert_on(gap_day)
+        last_known_amount = await convert_on(window_end)
+        assert gap_amount == last_known_amount, f"A date inside a gap must carry the previous observation forward: {gap_day} gave {gap_amount}, {window_end} gave {last_known_amount}"
+
+        print_success(f"✓ Gap resolved from the previous observation: {gap_amount}")
 
         # Cleanup
         await client.request(
@@ -283,7 +335,7 @@ async def test_convert_multi_day_process(test_server):
         # Step 1: Ensure route + sync rates
         await client.post(
             f"{API_BASE}/fx/providers/routes",
-            json=[_route_json("EUR", "USD", "ECB")],
+            json=[_route_json("EUR", "USD", "MOCKFX")],
             timeout=TIMEOUT,
         )
 
@@ -346,12 +398,13 @@ async def test_convert_bulk_multi_day(test_server):
     async with httpx.AsyncClient() as client:
         await create_user_and_login(client)
         # Step 1: Ensure routes + sync
-        # Use pairs that ECB supports directly (base=EUR)
+        # MOCKFX: the subject is the sync/convert round trip, not which institution
+        # publishes the rate, and a fixed rate makes the assertions exact.
         await client.post(
             f"{API_BASE}/fx/providers/routes",
             json=[
-                _route_json("EUR", "USD", "ECB"),
-                _route_json("EUR", "GBP", "ECB"),
+                _route_json("EUR", "USD", "MOCKFX"),
+                _route_json("EUR", "GBP", "MOCKFX"),
             ],
             timeout=TIMEOUT,
         )

@@ -39,7 +39,7 @@ frontend/src/
 │   │   └── ui/       # Generic UI atoms
 │   │       ├── input/    # PasswordInput, PasswordStrength
 │   │       ├── media/    # ImageCropper, ImageEditModal, AssetPickerModal, FileEditModal
-│   │       ├── select/   # BaseDropdown, SimpleSelect, SearchSelect
+│   │       ├── select/   # SimpleSelect, SearchSelect + specialized selects
 │   │       ├── tabs/     # TabBar (used standalone and by PageToolbar)
 │   │       └── toolbar/  # PageToolbar — shared responsive shell (see Toolbar & Responsive Layout)
 │   ├── i18n/         # Internationalization (EN, IT, FR, ES)

@@ -12,7 +12,7 @@ Unlike standard stores that hold a single array of entities, a **Registry** acts
 |:------|:---------|:--------|
 | **`assetPriceStoreRegistry`** | `assetPriceStoreRegistry.ts` | Maintains an independent Svelte store for the price of *each* individual asset ID. |
 | **`fxStoreRegistry`** | `fxStoreRegistry.ts` | Maintains an independent store for the current exchange rate of *each* specific `base:target` currency pair. |
-| **`imagePreviewCache`** | `files/imagePreviewCache.ts` | Acts as an LRU cache or map for `Blob` URLs generated for image previews to prevent memory leaks. |
+| **`imagePreviewCache`** | `stores/files/imagePreviewCache.ts` | Plain `Map` of `Blob` URLs generated for image previews; entries are kept until the store is cleared, so preview URLs are not re-created on every render. |
 
 ## 📐 Architecture & Flow (The Registry Pattern)
 

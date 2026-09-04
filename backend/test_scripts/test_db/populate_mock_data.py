@@ -329,7 +329,7 @@ def populate_brokers(session: Session):
     session.commit()
 
 
-def populate_broker_user_access(session: Session):
+def populate_broker_user_access(session: Session):  # noqa: C901 — sequential fixture seeding steps
     """
     Associate all brokers with test users.
 
@@ -1146,6 +1146,38 @@ def populate_transactions(session: Session):
             "days_ago": 1,
             "description": "Monthly platform fee",
         },
+        # Day -4 / -4: a FEE and a TAX *attached to an asset*.
+        #
+        # Every other FEE/TAX in this file has `asset: None` — they are account-level
+        # charges, and the FIFO engine has nothing to attach them to. That left
+        # `allocated_fees`/`allocated_taxes` at zero for every lot in the database, so
+        # LotCustodyModal's whole net-cost section (`{#if lotHasNetCosts}`: gross vs net
+        # P&L, net return) was unreachable by any test — verified by scanning the lots
+        # of Interactive Brokers and finding none that qualified.
+        #
+        # These two hang off Apple, which IB holds in several lots, and are dated inside
+        # the lots' lifetime so `_allocate_cost_pools` has fragments to spread them over.
+        # Amounts are small on purpose: they must not turn any balance negative.
+        {
+            "broker": ib,
+            "asset": apple,
+            "type": TransactionType.FEE,
+            "quantity": Decimal("0"),
+            "amount": Decimal("-3.20"),
+            "currency": "USD",
+            "days_ago": 4,
+            "description": "AAPL custody fee (asset-attached, feeds lot cost allocation)",
+        },
+        {
+            "broker": ib,
+            "asset": apple,
+            "type": TransactionType.TAX,
+            "quantity": Decimal("0"),
+            "amount": Decimal("-1.13"),
+            "currency": "USD",
+            "days_ago": 4,
+            "description": "AAPL dividend withholding tax (asset-attached, feeds lot cost allocation)",
+        },
         # --- Directa SIM transactions ---
         # 2025-09-30: Initial deposit to Directa (EUR)
         {
@@ -1666,6 +1698,54 @@ def populate_transactions(session: Session):
     session.commit()
     print(f"  🗑️🔗 delete-safe TRANSFER ETH IB↔Coinbase (#{tx_del_pair_out.id} ↔ #{tx_del_pair_in.id})")
 
+    # 9c. delete-consume TRANSFER pair: a SECOND paired row, same shape, meant to be
+    # destroyed.
+    #
+    # The pair above is read by specs that need it to still be there: tx-delete's A2
+    # asserts it survives a cancelled delete, tx-bulk-suggest-ux raises when it cannot
+    # find it, tx-crud-full and tx-split-promote pick it up too. tx-delete's A2-confirm
+    # used to delete *that* pair, which made two things true at once: it raced with A2
+    # over the only paired row available, and it left the database without one for every
+    # spec the runner happened to schedule afterwards.
+    #
+    # Its description deliberately does NOT contain "delete-safe", so the finders that
+    # look for that substring keep landing on the pair above and ignore this one.
+    #
+    # Single use per population, by design: A2-confirm consumes it and does not restore
+    # it. Running that spec twice against the same database fails on the second pass —
+    # which is already true of A1-confirm and its FEE, and is what `db populate` is for.
+    tx_del_consume_out = Transaction(
+        broker_id=coinbase.id,
+        asset_id=eth.id,
+        type=TransactionType.TRANSFER,
+        date=today - timedelta(days=1),
+        quantity=Decimal("-0.001"),
+        amount=Decimal("0"),
+        currency="USD",
+        description="[delete-consume] ETH Coinbase ↔ IB (single-use)",
+        tags="delete-consume",
+    )
+    tx_del_consume_in = Transaction(
+        broker_id=ib.id,
+        asset_id=eth.id,
+        type=TransactionType.TRANSFER,
+        date=today - timedelta(days=1),
+        quantity=Decimal("0.001"),
+        amount=Decimal("0"),
+        currency="USD",
+        description="[delete-consume] ETH Coinbase ↔ IB (single-use)",
+        tags="delete-consume",
+        cost_basis_override=Decimal("3500.00"),
+        cost_basis_currency="USD",
+    )
+    session.add(tx_del_consume_out)
+    session.add(tx_del_consume_in)
+    session.flush()
+    tx_del_consume_out.related_transaction_id = tx_del_consume_in.id
+    tx_del_consume_in.related_transaction_id = tx_del_consume_out.id
+    session.commit()
+    print(f"  🗑️🔗 delete-consume TRANSFER ETH IB↔Coinbase, single-use (#{tx_del_consume_out.id} ↔ #{tx_del_consume_in.id})")
+
     # --- Balance-safe BUY to cover promote-test ADJUSTMENT qty on Apple/IB ---
     # Without this, the promote-test ADJUSTMENT qty=-2 causes Apple to go
     # negative on IB (BUY+15 - SELL5 - TRANSFER5 - Asym-a3 - Asym-d1 - ADJ2 = -1).
@@ -2182,7 +2262,7 @@ def populate_asset_events(session: Session):
     print(f"\n  📊 Total: {len(events_data)} events created")
 
 
-def link_transactions_to_events(session: Session):
+def link_transactions_to_events(session: Session):  # noqa: C901 — sequential fixture linking with early returns
     """
     Link a few existing DIVIDEND/INTEREST transactions to their corresponding AssetEvent.
 
@@ -2632,6 +2712,34 @@ def populate_fx_currency_pair_sources(session: Session):
         ("CAD", "EUR", [{"from": "CAD", "to": "EUR", "provider": "ECB"}]),
     ]
 
+    # ── Deterministic sync fixtures ──
+    #
+    # Two routes that always work and two that always fail, on currencies no
+    # other fixture touches. They exist so the sync flow can be tested without
+    # a network: MOCKFX returns a fixed rate for every date, MOCKFX_FAIL always
+    # raises, and neither can be asked of a real provider on demand.
+    #
+    # They live *here*, in the baseline, rather than being created by the spec
+    # that uses them, and the reason is measured. `populate_mock_data --force`
+    # truncates `fx_conversion_routes` wholesale, and the frontend recovery net
+    # runs it whenever a spec destroys a baseline row — so a pair created by a
+    # test vanished mid-run, twice, and the symptom was a row "not found" or a
+    # sync where every pair suddenly failed. A fixture that belongs to the
+    # baseline is *restored* by that net instead of being removed by it.
+    eur_direct_routes.extend(
+        [
+            ("EUR", "TRY", [{"from": "EUR", "to": "TRY", "provider": "MOCKFX"}]),
+            ("EUR", "THB", [{"from": "EUR", "to": "THB", "provider": "MOCKFX"}]),
+            ("EUR", "PHP", [{"from": "EUR", "to": "PHP", "provider": "MOCKFX"}]),
+            ("EUR", "TWD", [{"from": "EUR", "to": "TWD", "provider": "MOCKFX"}]),
+            ("EUR", "MYR", [{"from": "EUR", "to": "MYR", "provider": "MOCKFX"}]),
+            ("EUR", "ILS", [{"from": "EUR", "to": "ILS", "provider": "MOCKFX"}]),
+            ("EUR", "KRW", [{"from": "EUR", "to": "KRW", "provider": "MOCKFX_FAIL"}]),
+            ("EUR", "INR", [{"from": "EUR", "to": "INR", "provider": "MOCKFX_FAIL"}]),
+            ("EUR", "HUF", [{"from": "EUR", "to": "HUF", "provider": "MOCKFX_FAIL"}]),
+        ]
+    )
+
     for base, quote, steps in eur_direct_routes:
         route = FxConversionRoute(
             base=base,
@@ -2903,7 +3011,7 @@ def clean_data_dirs():
             print(f"  ✅ Created {d.relative_to(data_dir)} (empty)")
 
 
-def upload_static_resources(session: Session):
+def upload_static_resources(session: Session):  # noqa: C901 — sequential fixture upload steps
     """Upload static resource files (avatars + preview samples) to custom-uploads."""
 
     print("\n📁 Uploading static resources...")
@@ -3266,7 +3374,7 @@ def populate_scheduler_mock_log() -> None:
     print(f"📋 Mock scheduler state → {state_path}")
 
 
-async def validate_portfolio_math_async() -> int:
+async def validate_portfolio_math_async() -> int:  # noqa: C901 — flat anomaly checks + reporting
     """Validate portfolio return sanity for the admin user's portfolio.
 
     Calls get_summary() and get_history() for e2e_test_admin across all brokers
@@ -3339,7 +3447,7 @@ async def validate_portfolio_math_async() -> int:
     return len(anomalies) + len(realism_violations)
 
 
-def main():
+def main():  # noqa: C901 — sequential populate step driver
     """Populate database with mock data for testing."""
     # Parse arguments
     parser = argparse.ArgumentParser(description="Populate database with mock data")

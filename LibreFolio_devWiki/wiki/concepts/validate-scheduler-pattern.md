@@ -59,7 +59,7 @@ createValidateScheduler({
 
 | Role | Path |
 |------|------|
-| Scheduler factory | `frontend/src/lib/utils/useValidateScheduler.svelte.ts` |
-| FormModal consumer | `frontend/src/lib/components/transactions/TransactionFormModal.svelte` |
-| BulkModal consumer | `frontend/src/lib/components/transactions/TransactionBulkModal.svelte` |
+| Scheduler factory | `frontend/src/lib/utils/transactions/useValidateScheduler.svelte.ts` |
+| FormModal consumer | `frontend/src/lib/components/transactions/modals/TransactionFormModal.svelte` |
+| BulkModal consumer | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
 

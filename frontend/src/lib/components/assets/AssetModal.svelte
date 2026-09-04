@@ -14,6 +14,7 @@
     import {_ as t} from '$lib/i18n';
     import {untrack} from 'svelte';
     import {zodiosApi} from '$lib/api';
+    import {debug} from '$lib/debug';
     import {ChevronDown, ChevronRight, ExternalLink, Info, Loader2, Minus, Plus, RefreshCw, Search, Trash2, Upload, X} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
@@ -24,8 +25,11 @@
     import ProviderAssignmentSection from './ProviderAssignmentSection.svelte';
     import ProviderComparisonModal from './ProviderComparisonModal.svelte';
     import type {DiffItem} from './ProviderComparisonModal.svelte';
+    import IdentifierPrimaryChooser from './IdentifierPrimaryChooser.svelte';
+    import type {IdentifierChoice} from './IdentifierPrimaryChooser.svelte';
     import AssetCurrencyChangeModal from './AssetCurrencyChangeModal.svelte';
     import DistributionEditor from '$lib/components/ui/input/DistributionEditor.svelte';
+    import TagInput from '$lib/components/ui/input/TagInput.svelte';
     import {getIndexColor} from '$lib/utils/colors';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
@@ -38,9 +42,15 @@
     import {trySave} from '$lib/utils/trySave';
     import {ASSET_TYPES, IDENTIFIER_TYPES, buildAssetTypeOptions} from '$lib/utils/assetTypes';
     import {generateUUID} from '$lib/utils/core/uuid';
-    import {ensureAssetProvidersCached, isParametricProvider} from '$lib/utils/providerHelpers';
+    import {columnsToIdentifierRows, identifierRowsToColumns, nextAvailableIdentifierType, fieldToIdType} from './assetIdentifiers';
+    import {isCurrencyChangeBlockedMessage, parseCurrencyChangeBlocker} from './currencyBlocker';
+    import {normalizeQuoteBaseQuantity, buildClassificationParams} from './assetPayload';
+    import {isQuoteBaseQuantityInvalid, quoteBaseQuantityErrorKey, shouldSeedBondQuoteBase, computeHasProvider, computeProviderDirty, groupImportNotices} from './assetFormState';
+    import {ensureAssetProvidersCached, getAssetProviderName, isParametricProvider} from '$lib/utils/providerHelpers';
     import {mergeAssets, invalidateAfterMutation} from '$lib/stores/reference/assetStore';
+    import {isRealProbeError} from './providerProbe';
 
+    import {numericArrows} from '$lib/actions/numericArrows';
     // =========================================================================
     // Types
     // =========================================================================
@@ -65,7 +75,7 @@
         identifier_sedol?: string | null;
         identifier_figi?: string | null;
         identifier_uuid?: string | null;
-        identifier_other?: string | null;
+        identifier_other?: string | string[] | null;
         // Provider
         provider_code?: string | null;
         provider_identifier?: string;
@@ -104,17 +114,61 @@
          */
         initialSearchBadges?: Array<{label: string; value: string}>;
         /**
+         * Extra search terms (ISIN + all candidate names extracted from the report),
+         * forwarded to the provider search as `hints`. Used only by the link-finder
+         * fallback to build a specific query when a provider's on-site search finds
+         * nothing (e.g. a fund whose bare ISIN surfaces several sibling share classes).
+         */
+        searchHints?: string[];
+        /**
          * When true, open the provider section with "No provider" pre-selected.
          * Used by the BRIM import wizard: assets created manually don't come
          * from an online search, so the UI should default to no-provider mode.
          */
         initialNoProvider?: boolean;
+        /**
+         * Wizard create context only: called when the user, after selecting a search result
+         * whose provider name matches an existing asset, chooses to reuse that asset instead
+         * of creating a duplicate. `addKeys` = also merge the import's search keys into the
+         * existing asset's identifier_other. When undefined, the reuse prompt is disabled.
+         */
+        onReuseExisting?: (existingAssetId: number, addKeys: boolean) => void;
+        /**
+         * Whether reusing an existing asset may also merge the import's search keys into
+         * its identifiers. False when the caller has no identifier to offer — the plugin
+         * could not read one — so the prompt drops that option instead of proposing to
+         * add nothing.
+         */
+        reuseAllowKeyMerge?: boolean;
+        /**
+         * Wizard create context only: advisory notices raised by the broker-import plugin for
+         * this asset (e.g. a suspected maturity/redemption implying the security is delisted and
+         * won't be found by the online search). Rendered as amber banners grouped by `kind`;
+         * purely informational — never changes behaviour (the user decides via the active toggle).
+         */
+        importNotices?: Array<{kind: string; reason: string}>;
         oncreated?: (assetId: number) => void;
         onupdated?: () => void;
         onclose?: () => void;
     }
 
-    let {open = $bindable(false), editMode = false, editData = null, prefillData = null, zIndex = 50, initialSearchQuery = '', initialSearchBadges = [], initialNoProvider = false, oncreated, onupdated, onclose}: Props = $props();
+    let {
+        open = $bindable(false),
+        editMode = false,
+        editData = null,
+        prefillData = null,
+        zIndex = 50,
+        initialSearchQuery = '',
+        initialSearchBadges = [],
+        searchHints = [],
+        initialNoProvider = false,
+        onReuseExisting,
+        reuseAllowKeyMerge = true,
+        importNotices = [],
+        oncreated,
+        onupdated,
+        onclose,
+    }: Props = $props();
 
     // =========================================================================
     // Constants
@@ -131,6 +185,9 @@
     let assetType = $state('STOCK');
     let iconUrl: string | null = $state(null);
     let quoteBaseQuantity = $state(1);
+    // Tracks whether the user manually edited the quote-base field, so the bond heuristic
+    // (default 100) never overrides an explicit choice.
+    let quoteBaseQuantityTouched = $state(false);
     let active = $state(true);
 
     // Identifiers — dynamic rows instead of fixed fields
@@ -141,9 +198,15 @@
         autoFilled?: boolean;
     }
     let identifierRows: IdentifierRow[] = $state([]);
+    /** Codes that arrived from `prefillData` (i.e. from the imported reports), upper-cased. */
+    let prefilledIdentifiers = $state<Set<string>>(new Set());
 
     // Classification
     let shortDescription = $state('');
+    // True while shortDescription holds a BRIM-import prefill (identified-names block) that
+    // was auto-populated, not typed by the user. Lets provider enrichment merge over it
+    // instead of routing to the diff modal. Cleared on manual edit or provider autofill.
+    let descriptionFromPrefill = $state(false);
     let sectorDistribution: Record<string, number> = $state({});
     let geographicDistribution: Record<string, number> = $state({});
 
@@ -183,6 +246,14 @@
     let pendingSaveAssetId: number | null = $state(null);
     let initialProviderParamsJson: string = $state('');
 
+    // Leaving a parametric provider (scheduled_investment → Yahoo, …) wipes the
+    // generated series server-side, for the same reason a params change does: the
+    // prices were *invented* from the params, so under a market provider they are
+    // not history. Unlike the params change the user has no reason to expect it,
+    // so the warning states the actual counts before anything is destroyed.
+    let showParametricSwitchConfirm = $state(false);
+    let parametricSwitchInfo = $state<{prices: number; events: number; from: string; to: string} | null>(null);
+
     // I-bis #2 — snapshot of the provider config as loaded from the DB.
     // Used by the ``providerDirty`` derived below to gate the
     // "Save Without Testing?" modal: it must fire **only** when one of
@@ -209,6 +280,19 @@
     let currencyChangeProviderAssigned = $state(false);
     let pendingSearchResult: any = $state(null);
 
+    // ── Provider vs report: which code leads ────────────────────────────────────────────
+    // A provider search is a *source of information*, not an authority. When it returns an
+    // identifier of a type the form already holds with a different value, overwriting it
+    // silently destroys a code the user got from a document he owns — which is exactly how
+    // the CUM ISIN of an Italian retail BTP used to disappear. So the two values are put
+    // side by side, with their provenance, and the user says which one leads.
+    let identifierChoiceOpen = $state(false);
+    let identifierChoiceType = $state<string | null>(null);
+    let identifierChoiceOptions = $state<IdentifierChoice[]>([]);
+    let identifierChoicePrimary = $state<string | null>(null);
+    let identifierChoiceProvider = $state<string | null>(null);
+    let identifierChoiceDiscardOpen = $state(false);
+
     // Provider comparison modal
     let showComparisonModal = $state(false);
     let comparisonDifferences: DiffItem[] = $state([]);
@@ -230,12 +314,38 @@
     // Duplicate name detection
     let duplicateAssetName: string | null = $state(null);
 
+    // Reuse-existing prompt (wizard create context only): shown after a search selection
+    // whose provider name matches an existing asset — offers to reuse it instead of creating a dup.
+    let reuseModalOpen = $state(false);
+    let reuseExistingId: number | null = $state(null);
+    let reuseExistingName = $state('');
+
     // =========================================================================
     // Derived
     // =========================================================================
 
-    let isValid = $derived(displayName.trim().length > 0);
-    let hasProvider = $derived(!providerNoProvider && providerCode !== '' && (providerIdentifier !== '' || providerIdentifierType === 'AUTO_GENERATED'));
+    /**
+     * A quote base of zero or less is not a unit, it is a division by zero waiting to
+     * happen in every price conversion. It used to be coerced to 1 on save, which hid
+     * the mistake instead of reporting it.
+     */
+    let quoteBaseQuantityInvalid = $derived(isQuoteBaseQuantityInvalid(quoteBaseQuantity));
+    /** A price is quoted per N units, and half a unit is not a quotation base. */
+    let quoteBaseQuantityError = $derived(quoteBaseQuantityErrorKey(quoteBaseQuantity));
+
+    /** Drops the decimals the user typed, once they have moved on. */
+    function truncateQuoteBaseQuantity() {
+        if (!Number.isFinite(quoteBaseQuantity)) return;
+        const truncated = Math.trunc(quoteBaseQuantity);
+        if (truncated !== quoteBaseQuantity) quoteBaseQuantity = truncated;
+    }
+    let isValid = $derived(displayName.trim().length > 0 && !quoteBaseQuantityInvalid);
+    let hasProvider = $derived(computeHasProvider(providerNoProvider, providerCode, providerIdentifier, providerIdentifierType));
+
+    // Import advisory notices grouped by category (`kind`) — rendered as amber banners in the
+    // wizard create context. Category label comes from app i18n; each reason bullet is authored
+    // by the plugin in the report's language. Purely informational (never toggles `active`).
+    let groupedNotices = $derived.by(() => groupImportNotices(importNotices));
 
     // I-bis #2 — dirty detection for the provider block.
     //
@@ -248,7 +358,13 @@
     // compared to the snapshot taken at load time. In **create mode**
     // (editMode === false) there is no snapshot, so any provider
     // configured means "dirty" by definition.
-    let providerDirty = $derived(!editMode ? hasProvider : providerCode !== initialProviderCode || providerIdentifier !== initialProviderIdentifier || providerIdentifierType !== initialProviderIdentifierType || JSON.stringify(providerParams ?? null) !== (initialProviderParamsJson || 'null'));
+    let providerDirty = $derived(
+        computeProviderDirty(editMode, hasProvider, {code: providerCode, identifier: providerIdentifier, identifierType: providerIdentifierType, params: providerParams}, initialProviderParamsJson, {
+            code: initialProviderCode,
+            identifier: initialProviderIdentifier,
+            identifierType: initialProviderIdentifierType,
+        }),
+    );
     let title = $derived(editMode ? $t('assets.modal.titleEdit') : $t('assets.modal.title'));
 
     /** Asset type options for SimpleSelect (with PNG icons) */
@@ -281,34 +397,14 @@
 
     // =========================================================================
     // Helpers — Identifier rows ↔ DB columns conversion
+    // (pure logic lives in ./assetIdentifiers.ts)
     // =========================================================================
 
-    function columnsToIdentifierRows(data: AssetData): IdentifierRow[] {
-        const rows: IdentifierRow[] = [];
-        for (const idType of IDENTIFIER_TYPES) {
-            const key = `identifier_${idType.toLowerCase()}` as keyof AssetData;
-            const value = (data[key] as string) ?? '';
-            if (value) rows.push({id: generateUUID(), type: idType, value});
-        }
-        return rows;
-    }
-
-    function identifierRowsToColumns(rows: IdentifierRow[]): Record<string, string | undefined> {
-        const result: Record<string, string | undefined> = {};
-        for (const idType of IDENTIFIER_TYPES) {
-            result[`identifier_${idType.toLowerCase()}`] = undefined;
-        }
-        for (const row of rows) {
-            if (!row.value.trim()) continue;
-            result[`identifier_${row.type.toLowerCase()}`] = row.value.trim();
-        }
-        return result;
-    }
-
     function addIdentifierRow() {
-        // Find first unused type
-        const usedTypes = new Set(identifierRows.map((r) => r.type));
-        const availableType = IDENTIFIER_TYPES.find((t) => !usedTypes.has(t)) ?? 'TICKER';
+        // OTHER (soft identifiers) is managed via the tag/badge input below, so the table
+        // only adds fixed single-valued types. If all are already used, do nothing.
+        const availableType = nextAvailableIdentifierType(identifierRows);
+        if (!availableType) return;
         identifierRows = [...identifierRows, {id: generateUUID(), type: availableType, value: ''}];
     }
 
@@ -349,7 +445,23 @@
     // Identifier DataTable columns
     // =========================================================================
 
-    let idTypeOptions = $derived(IDENTIFIER_TYPES.map((t) => ({value: t, label: t})));
+    let idTypeOptions = $derived(IDENTIFIER_TYPES.filter((t) => t !== 'OTHER').map((t) => ({value: t, label: t})));
+
+    // OTHER (soft identifiers) are rendered as tag badges, not table rows.
+    let identifierRowsFixed = $derived(identifierRows.filter((r) => r.type !== 'OTHER'));
+    let otherIdentifiers = $derived(
+        identifierRows
+            .filter((r) => r.type === 'OTHER')
+            .map((r) => (typeof r.value === 'string' ? r.value : String(r.value ?? '')))
+            .filter((v) => v.trim().length > 0),
+    );
+
+    /** Replace all OTHER rows from the tag/badge input (fixed-type rows untouched). */
+    function setOtherIdentifiers(vals: string[]) {
+        const fixed = identifierRows.filter((r) => r.type !== 'OTHER');
+        const others = vals.map((v) => ({id: generateUUID(), type: 'OTHER', value: v}));
+        identifierRows = [...fixed, ...others];
+    }
 
     let identifierColumns = $derived.by<DTColumnDef<IdentifierRow>[]>(() => [
         {
@@ -466,9 +578,12 @@
         assetType = 'STOCK';
         iconUrl = null;
         quoteBaseQuantity = 1;
+        quoteBaseQuantityTouched = false;
         active = true;
         identifierRows = [];
+        prefilledIdentifiers = new Set();
         shortDescription = '';
+        descriptionFromPrefill = false;
         sectorDistribution = {};
         geographicDistribution = {};
         providerCode = '';
@@ -501,17 +616,21 @@
         if (data.currency) currency = data.currency;
         if (data.asset_type) assetType = data.asset_type;
         if (data.quote_base_quantity && data.quote_base_quantity > 0) quoteBaseQuantity = data.quote_base_quantity;
-        // Build identifier rows from prefilled columns
-        const rows: IdentifierRow[] = [];
-        for (const idType of IDENTIFIER_TYPES) {
-            const key = `identifier_${idType.toLowerCase()}` as keyof AssetData;
-            const value = (data[key] as string) ?? '';
-            if (value) rows.push({id: generateUUID(), type: idType, value});
+        if (data.classification_params?.short_description) {
+            shortDescription = data.classification_params.short_description;
+            descriptionFromPrefill = true;
         }
+        // Build identifier rows from prefilled columns (handles OTHER as a JSON list)
+        const rows = columnsToIdentifierRows(data as AssetData);
         if (rows.length > 0) {
             identifierRows = rows;
+            // Remember which codes came from the documents: it is the only way to tell the user
+            // later *where* a value came from when a provider proposes a different one.
+            prefilledIdentifiers = new Set(rows.map((r) => r.value.trim().toUpperCase()).filter((v) => v !== ''));
             moreInfoExpanded = true;
         }
+        maybeSeedBondQuoteBase();
+        naLog(`prefill from import → name="${data.display_name ?? ''}" type=${data.asset_type ?? '—'} currency=${data.currency ?? '—'} qbq=${data.quote_base_quantity ?? '—'} · suggested identifiers: ${identifiersSummary()}`);
     }
 
     // =========================================================================
@@ -565,12 +684,18 @@
         // Auto-fill identifier based on identifier_type
         const idType = (result.identifier_type ?? '').toUpperCase();
         if (idType && result.identifier) {
-            // Add or update the identifier row
             const existing = identifierRows.find((r) => r.type === idType);
-            if (existing) {
-                identifierRows = identifierRows.map((r) => (r.type === idType ? {...r, value: result.identifier} : r));
+            const incoming = String(result.identifier).trim();
+            const current = (existing?.value ?? '').trim();
+            if (existing && current !== '' && current.toUpperCase() !== incoming.toUpperCase()) {
+                // Two codes of the same type, both legitimate: don't pick for the user.
+                // The provider link below is established regardless — the search did its job;
+                // only the *identity* question is deferred to the chooser.
+                askIdentifierPrimary(idType, incoming, current, result.provider_code);
+            } else if (existing) {
+                identifierRows = identifierRows.map((r) => (r.type === idType ? {...r, value: incoming} : r));
             } else {
-                identifierRows = [...identifierRows, {id: generateUUID(), type: idType, value: result.identifier}];
+                identifierRows = [...identifierRows, {id: generateUUID(), type: idType, value: incoming}];
             }
         }
 
@@ -598,6 +723,142 @@
         // Auto-trigger test + metadata fetch (global ask provider)
         autoTriggerProbe();
         handleAskProvider();
+
+        // Wizard create context: if the selected result's provider name matches an existing
+        // asset, offer to reuse it (and add the search keys) instead of creating a duplicate.
+        void maybePromptReuse(result.display_name);
+
+        maybeSeedBondQuoteBase();
+        naLog(`search result selected → name="${result.display_name ?? ''}" provider=${result.provider_code ?? '—'} ${(result.identifier_type ?? 'ID').toUpperCase()}=${result.identifier ?? '—'} type=${result.asset_type ?? '—'} currency=${result.currency ?? '—'}`);
+        naLog(`identifiers now present: ${identifiersSummary()}`);
+    }
+
+    /**
+     * Two codes of the same type are on the table — ask which one leads.
+     *
+     * The one the user does *not* elect is not discarded: it lands among the alternate
+     * identifiers, where it no longer quotes but still *recognises*, so any future import
+     * quoting it finds this asset. That is the whole CUM/quoted mechanism for a BTP.
+     */
+    function askIdentifierPrimary(idType: string, incoming: string, current: string, providerCodeForResult?: string | null) {
+        identifierChoiceType = idType;
+        identifierChoiceProvider = providerCodeForResult ? getAssetProviderName(providerCodeForResult) : null;
+        identifierChoiceOptions = [
+            {value: incoming, origin: 'provider'},
+            {value: current, origin: prefilledIdentifiers.has(current.toUpperCase()) ? 'report' : editMode ? 'stored' : 'report'},
+        ];
+        // Default to the provider's value: it is the one a price provider can index.
+        identifierChoicePrimary = incoming;
+        identifierChoiceOpen = true;
+    }
+
+    /** Write the elected primary into its typed row and demote the rest to alternates. */
+    function confirmIdentifierPrimary() {
+        const idType = identifierChoiceType;
+        const primary = identifierChoicePrimary;
+        if (!idType || !primary) return;
+        const alternates = identifierChoiceOptions.map((c) => c.value).filter((v) => v.toUpperCase() !== primary.toUpperCase());
+        const known = new Set(identifierRows.filter((r) => r.type === 'OTHER').map((r) => r.value.trim().toUpperCase()));
+        const rows = identifierRows.map((r) => (r.type === idType ? {...r, value: primary} : r));
+        for (const value of alternates) {
+            const key = value.toUpperCase();
+            if (known.has(key)) continue;
+            known.add(key);
+            rows.push({id: generateUUID(), type: 'OTHER', value});
+        }
+        identifierRows = rows;
+        moreInfoExpanded = true;
+        closeIdentifierPrimary();
+    }
+
+    /**
+     * Leaving without choosing is a real outcome, not a non-event: the provider's code is
+     * dropped and the asset stays on the identifier it started with. Cheap to undo now,
+     * invisible later — so it is stated before it happens, never after.
+     */
+    function requestCloseIdentifierPrimary() {
+        identifierChoiceDiscardOpen = true;
+    }
+
+    function closeIdentifierPrimary() {
+        identifierChoiceDiscardOpen = false;
+        identifierChoiceOpen = false;
+        identifierChoiceType = null;
+        identifierChoiceOptions = [];
+        identifierChoicePrimary = null;
+        identifierChoiceProvider = null;
+    }
+
+    /**
+     * Bonds are conventionally quoted per 100 nominal (BTP/BOT and most MOT bonds). Seed 100
+     * as an *editable* default when the field is still at 1 and the user hasn't touched it; a
+     * reactive info banner reminds to verify. Never overrides an explicit value. This is a
+     * heuristic (per-100 is a market convention, not a hard rule) — hence a suggestion, not a fact.
+     */
+    function maybeSeedBondQuoteBase() {
+        if (shouldSeedBondQuoteBase(assetType, quoteBaseQuantity, quoteBaseQuantityTouched)) {
+            quoteBaseQuantity = 100;
+        }
+    }
+
+    /**
+     * Lightweight, text-only console trace for the new-asset (create) flow. Makes the decision
+     * history inspectable in the browser console: detected suggestions, identifiers already present,
+     * duplicate hits (who + which asset), reuse choices and the final created asset. No side effects,
+     * no network. Routed through the shared ``$lib/debug`` helper, so — exactly like the ``[API]`` and
+     * ``[Toast]`` traces — it is active only in dev (``vite dev``) or a debug build (``VITE_DEBUG=true`` /
+     * ``./dev.py server --debug``) and is tree-shaken away in a normal production build. Silent in edit
+     * mode (this is a create-flow aid only).
+     */
+    function naLog(msg: string) {
+        if (editMode) return;
+        debug.info('new-asset', msg);
+    }
+
+    /** Compact "TYPE=value" list of the current identifier rows (for console traces). */
+    function identifiersSummary(): string {
+        return identifierRows.map((r) => `${r.type}=${r.value}`).join(', ') || 'none';
+    }
+
+    /**
+     * After a search selection in the wizard create flow, check whether an existing asset
+     * already has the same provider-supplied name. If so, prompt the user to reuse it
+     * (optionally adding the import's search keys to its identifiers) instead of creating a
+     * duplicate. No-op outside the wizard create context (onReuseExisting undefined) or edit mode.
+     */
+    async function maybePromptReuse(name: string) {
+        if (!onReuseExisting || editMode) return;
+        const trimmed = (name ?? '').trim();
+        if (trimmed.length < 2) return;
+        try {
+            const response = await zodiosApi.list_assets_api_v1_assets_query_get({queries: {}});
+            const items = response as any[];
+            const match = items.find((a: any) => (a.display_name ?? '').toLowerCase() === trimmed.toLowerCase());
+            if (match) {
+                reuseExistingId = match.id;
+                reuseExistingName = match.display_name;
+                reuseModalOpen = true;
+                naLog(`duplicate name detected → existing asset #${match.id} "${match.display_name}" matches provider name "${trimmed}". Prompting reuse (annulla / usa / usa+aggiungi identificatore).`);
+            } else {
+                naLog(`no duplicate for provider name "${trimmed}" → proceeding as a new asset`);
+            }
+        } catch {
+            /* best-effort: if the lookup fails, just let the user create the asset normally */
+        }
+    }
+
+    function reuseExisting(addKeys: boolean) {
+        const id = reuseExistingId;
+        reuseModalOpen = false;
+        reuseExistingId = null;
+        naLog(`reuse choice → asset #${id} ${addKeys ? 'REUSE + add provider search key to its identifiers' : 'REUSE only (no identifier change)'}`);
+        if (id != null) onReuseExisting?.(id, addKeys);
+    }
+
+    function dismissReuse() {
+        reuseModalOpen = false;
+        reuseExistingId = null;
+        naLog('reuse dismissed → keeping the new-asset form (will create a distinct asset)');
     }
 
     async function autoTriggerProbe() {
@@ -616,8 +877,14 @@
 
             const cp = response.current_price;
             const h = response.history;
-            const allSuccess = (cp?.success ?? false) && h?.success !== false;
-            providerTestStatus = allSuccess ? 'passed' : 'failed';
+            // Mirror ProviderAssignmentSection.testConfiguration: a probe is "passed"
+            // unless an operation fails with a *real* error. Expected-empty results —
+            // NO_DATA (e.g. a fund whose NAV isn't dated today) or NOT_IMPLEMENTED —
+            // are soft failures: the provider is correctly configured, so they must not
+            // gate the "Save Without Testing?" warning. Shared classifier lives in
+            // ./providerProbe so both callers agree on what "real error" means.
+            const hasRealError = isRealProbeError(cp) || isRealProbeError(h);
+            providerTestStatus = hasRealError ? 'failed' : 'passed';
 
             if (response.provider_url) providerUrl = response.provider_url;
         } catch {
@@ -630,10 +897,6 @@
     // =========================================================================
 
     /** Helper: field name like 'identifier_ticker' → type 'TICKER' */
-    function fieldToIdType(field: string): string {
-        return field.replace('identifier_', '').toUpperCase();
-    }
-
     /** Set or update an identifier row by type */
     function setIdentifierByType(type: string, val: string) {
         const existing = identifierRows.find((r) => r.type === type);
@@ -642,6 +905,26 @@
         } else {
             identifierRows = [...identifierRows, {id: generateUUID(), type, value: val, autoFilled: true}];
         }
+    }
+
+    /**
+     * Merge provider "soft" identifiers (identifier_other, a JSON list) as separate OTHER rows.
+     * Additive + deduped: never route the array through the string-oriented compare path
+     * (which would stuff the whole list into one row.value and throw `.trim` at save time).
+     * Returns how many new rows were added.
+     */
+    function mergeOtherIdentifiers(raw: unknown): number {
+        const values = Array.isArray(raw) ? raw : raw != null ? [raw] : [];
+        const seen = new Set(identifierRows.filter((r) => r.type === 'OTHER').map((r) => (typeof r.value === 'string' ? r.value.trim() : String(r.value ?? '').trim())));
+        const additions: IdentifierRow[] = [];
+        for (const v of values) {
+            const s = (typeof v === 'string' ? v : String(v ?? '')).trim();
+            if (!s || seen.has(s)) continue;
+            seen.add(s);
+            additions.push({id: generateUUID(), type: 'OTHER', value: s, autoFilled: true});
+        }
+        if (additions.length > 0) identifierRows = [...identifierRows, ...additions];
+        return additions.length;
     }
 
     /**
@@ -674,6 +957,18 @@
             const differences: DiffItem[] = [];
             const missingFields: string[] = [];
 
+            // COVERAGE NOTE (branch): the two compare-helpers below and their call
+            // sites (~1029-1201) sit inside the async "Ask Provider" metadata flow.
+            // They mutate closure state (differences, autoFilledFields, the two
+            // distributions) as a side-effect of a live fetch+compare against a
+            // provider response. Their uncovered branches are the auto-fill /
+            // matched / differs three-way splits — reachable only by mocking a full
+            // provider metadata round-trip with three contrived response shapes.
+            // Left uncovered on purpose: extracting the decision would push
+            // offsetting dispatch branches back into this component (roughly
+            // coverage-neutral) while risking a real network path. The pure,
+            // testable half of this section (identifier reconciliation, payload
+            // building, notice grouping) already lives in the sibling .ts modules.
             // --- Helper: compare a string field — auto-fill if empty, diff if different ---
             function compareStringField(field: string, label: string, currentVal: string, providerVal: string | null | undefined) {
                 if (!providerVal) return;
@@ -704,12 +999,19 @@
             // --- IDENTIFIERS (scope 'all' or 'identifiers') ---
             if (scope === 'all' || scope === 'identifiers') {
                 for (const idType of IDENTIFIER_TYPES) {
+                    // OTHER is a JSON list of soft identifiers, not a scalar string — handled below.
+                    if (idType === 'OTHER') continue;
                     const dbKey = `identifier_${idType.toLowerCase()}`;
                     const provVal = pd[dbKey];
                     if (provVal) {
                         const currentVal = getIdentifierByType(idType);
                         compareStringField(dbKey, idType, currentVal, provVal);
                     }
+                }
+                // OTHER: merge each list element as its own row (additive, deduped) instead of
+                // routing the array through the string compare path.
+                if (mergeOtherIdentifiers(pd.identifier_other) > 0) {
+                    autoFilledFields = new Set([...autoFilledFields, 'identifier_other']);
                 }
             }
 
@@ -725,7 +1027,19 @@
 
             if (scope === 'all') {
                 if (cpData?.short_description) {
-                    compareStringField('short_description', 'Description', shortDescription, cpData.short_description);
+                    const provDesc = cpData.short_description;
+                    // BRIM prefill (auto-populated identified-names, not user-typed): merge the
+                    // provider enrichment (head) with the identified-names prefill (tail) instead
+                    // of routing to the diff modal, so the rich description always lands even
+                    // though the import wizard pre-populated the field.
+                    if (descriptionFromPrefill && shortDescription.trim() && shortDescription.trim() !== provDesc.trim()) {
+                        const tail = shortDescription.trim();
+                        shortDescription = provDesc.includes(tail) ? provDesc : `${provDesc}\n\n${tail}`;
+                        descriptionFromPrefill = false;
+                        autoFilledFields = new Set([...autoFilledFields, 'short_description']);
+                    } else {
+                        compareStringField('short_description', 'Description', shortDescription, provDesc);
+                    }
                 }
             }
 
@@ -788,23 +1102,38 @@
                     break;
                 case 'asset_type':
                     assetType = value;
+                    maybeSeedBondQuoteBase();
                     break;
                 case 'currency':
                     currency = value;
                     break;
                 case 'short_description':
                     shortDescription = value;
+                    descriptionFromPrefill = false;
                     break;
             }
         }
     }
 
-    /** Apply selected fields from ProviderComparisonModal */
-    function handleComparisonApply(selectedFields: string[]) {
+    /**
+     * Apply selected fields from ProviderComparisonModal.
+     *
+     * Identifier rows carry a `resolution` (P3/B-04): the chosen value lands in the
+     * structured column and everything else is merged into `identifier_other` instead of
+     * being discarded. Keeping the loser matters — for an Italian BTP the two ISINs are
+     * two phases of one security, and losing either breaks a future reimport.
+     */
+    function handleComparisonApply(selectedFields: string[], resolutions: Record<string, {primary: string; alternates: string[]}> = {}) {
         for (const diff of comparisonDifferences) {
             if (selectedFields.includes(diff.field)) {
                 if (diff.type === 'string') {
-                    setFieldValue(diff.field, diff.providerValue);
+                    const resolution = resolutions[diff.field];
+                    if (resolution) {
+                        setFieldValue(diff.field, resolution.primary);
+                        mergeOtherIdentifiers(resolution.alternates);
+                    } else {
+                        setFieldValue(diff.field, diff.providerValue);
+                    }
                 } else if (diff.type === 'distribution') {
                     if (diff.field === 'sector_area') {
                         sectorDistribution = diff.providerValue?.distribution ?? diff.providerValue;
@@ -896,12 +1225,9 @@
     }
 
     async function saveCreate() {
-        const normalizedQuoteBaseQuantity = !quoteBaseQuantity || quoteBaseQuantity <= 0 ? 1 : quoteBaseQuantity;
+        const normalizedQuoteBaseQuantity = normalizeQuoteBaseQuantity(quoteBaseQuantity);
         // Build classification_params if any fields are set
-        const classificationParams: any = {};
-        if (shortDescription) classificationParams.short_description = shortDescription;
-        if (Object.keys(sectorDistribution).length > 0) classificationParams.sector_area = {distribution: sectorDistribution};
-        if (Object.keys(geographicDistribution).length > 0) classificationParams.geographic_area = {distribution: geographicDistribution};
+        const classificationParams = buildClassificationParams(shortDescription, sectorDistribution, geographicDistribution);
 
         // Step 1: Create asset
         const createPayload = [
@@ -913,7 +1239,7 @@
                 quote_base_quantity: normalizedQuoteBaseQuantity,
                 active: active,
                 user_url: providerUserUrl || undefined,
-                classification_params: Object.keys(classificationParams).length > 0 ? classificationParams : undefined,
+                classification_params: classificationParams,
                 ...identifierRowsToColumns(identifierRows),
             },
         ];
@@ -924,9 +1250,10 @@
             throw new Error(result?.message || 'Failed to create asset');
         }
         const assetId = result.asset_id;
+        naLog(`created asset #${assetId} "${displayName.trim()}" type=${assetType} currency=${currency} qbq=${normalizedQuoteBaseQuantity} · identifiers: ${identifiersSummary()} · provider=${hasProvider ? providerCode : 'none'}`);
 
         // Upsert the new asset into the shared cache so other pages
-        // (transactions cell, AssetCard, LiveTicker, …) reflect the entry
+        // (transactions cell, AssetCard, AssetTable, …) reflect the entry
         // immediately. The BE response only carries `asset_id`; we merge the
         // fields the FE just submitted (no extra round-trip).
         mergeAssets([{id: assetId, ...(createPayload[0] as Record<string, unknown>)}]);
@@ -955,25 +1282,52 @@
             }
         }
 
-        // Trigger a full-history sync for new assets with a real data provider.
-        // Parametric providers (e.g. scheduled_investment) generate their own
-        // data and don't need a historical fetch.
-        if (hasProvider && !skipProviderAssignment && !isParametricProvider(providerCode)) {
-            try {
-                const end = new Date().toISOString().slice(0, 10);
-                await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([{asset_id: assetId, date_range: {start: '1975-01-01', end}} as any]);
-            } catch (syncErr) {
-                console.warn('Post-create full-history sync failed (non-blocking):', syncErr);
-            }
-        }
-
+        // Success UX first — close the modal and notify immediately. The historical price
+        // sync below is fired in the BACKGROUND so the ~2s network round-trip no longer
+        // blocks the modal close (the user reported the save felt too slow on localhost).
         toasts.success($t('assets.modal.createSuccess', {values: {name: displayName}}));
         open = false;
         oncreated?.(assetId);
+
+        // Trigger a full-history sync for new assets with a real data provider — fire-and-forget.
+        // Parametric providers (e.g. scheduled_investment) generate their own data and don't
+        // need a historical fetch. Errors are non-blocking (chart just stays empty until the
+        // next scheduled sync); we intentionally do NOT await this.
+        //
+        // `start: 'resume'` is the backend sentinel for "the day after the last price I already
+        // have, or the provider's full history if I have none". A just-created asset has none,
+        // so this is a full-history fetch — expressed as the same rule every other auto-sync
+        // uses, instead of a hardcoded date that silently truncates whatever precedes it.
+        if (hasProvider && !skipProviderAssignment && !isParametricProvider(providerCode)) {
+            const end = new Date().toISOString().slice(0, 10);
+            void zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([{asset_id: assetId, date_range: {start: 'resume', end}}]).catch((syncErr) => console.warn('Post-create full-history sync failed (non-blocking):', syncErr));
+        }
+    }
+
+    /** How much of the asset's series was generated, for the warning below.
+     *
+     * Uses the market-data summary — the same counters the currency-change flow
+     * relies on — because it reports *stored rows*. The price query endpoint
+     * cannot be used here: it backward-fills every calendar day in the requested
+     * range, so it would answer with the width of the window instead of the size
+     * of the series, and the warning would quote a plausible wrong number.
+     *
+     * Best effort on purpose: a failed count must never block a save, so a
+     * failure degrades to zeroes and the warning stays generic rather than
+     * lying with a number it does not have.
+     */
+    async function countGeneratedSeries(assetId: number): Promise<{prices: number; events: number}> {
+        try {
+            const summary: any = await zodiosApi.market_data_summary_api_v1_assets__asset_id__market_data_summary_get({params: {asset_id: assetId}});
+            return {prices: summary?.prices ?? 0, events: summary?.events_provider ?? 0};
+        } catch (err) {
+            console.warn('Could not count the generated series before the provider switch:', err);
+            return {prices: 0, events: 0};
+        }
     }
 
     async function saveEdit(assetId: number) {
-        const normalizedQuoteBaseQuantity = !quoteBaseQuantity || quoteBaseQuantity <= 0 ? 1 : quoteBaseQuantity;
+        const normalizedQuoteBaseQuantity = normalizeQuoteBaseQuantity(quoteBaseQuantity);
         // #R3-4 — for PARAMETRIC_GENERATION providers (e.g. scheduled_investment), if the
         // user changed `provider_params` intercept the save flow to show an explicit
         // regenerate confirmation. Confirming will: (1) PATCH/assign through the normal
@@ -989,11 +1343,25 @@
             return; // wait for confirm; the modal will re-invoke saveEdit()
         }
 
+        // Same interception for the *other* destructive parametric case: swapping the
+        // provider away from a parametric one. The backend wipes the generated prices
+        // and events (asset_source.py, "provider changed"), and without that wipe the
+        // next sync would resume from the day after the last invented price and never
+        // backfill the real past. Counts come from the two existing query endpoints —
+        // a warning that cannot say how much it is about to destroy is not a warning.
+        if (!providerNoProvider && hasProvider && initialProviderCode && providerCode !== initialProviderCode && isParametricProvider(initialProviderCode) && !pendingSaveAssetId) {
+            pendingSaveAssetId = assetId;
+            parametricSwitchInfo = {
+                ...(await countGeneratedSeries(assetId)),
+                from: getAssetProviderName(initialProviderCode) || initialProviderCode,
+                to: getAssetProviderName(providerCode) || providerCode,
+            };
+            showParametricSwitchConfirm = true;
+            return; // wait for confirm; the modal will re-invoke saveEdit()
+        }
+
         // Build classification_params
-        const classificationParams: any = {};
-        if (shortDescription) classificationParams.short_description = shortDescription;
-        if (Object.keys(sectorDistribution).length > 0) classificationParams.sector_area = {distribution: sectorDistribution};
-        if (Object.keys(geographicDistribution).length > 0) classificationParams.geographic_area = {distribution: geographicDistribution};
+        const classificationParams = buildClassificationParams(shortDescription, sectorDistribution, geographicDistribution);
 
         // Step 1: Patch asset
         const idCols = identifierRowsToColumns(identifierRows);
@@ -1006,7 +1374,7 @@
             quote_base_quantity: normalizedQuoteBaseQuantity,
             active: active,
             user_url: providerUserUrl || null,
-            classification_params: Object.keys(classificationParams).length > 0 ? classificationParams : null,
+            classification_params: classificationParams ?? null,
             identifier_isin: idCols.identifier_isin || null,
             identifier_ticker: idCols.identifier_ticker || null,
             identifier_cusip: idCols.identifier_cusip || null,
@@ -1041,22 +1409,10 @@
             }
         }
         const resultItem = patchResp?.results?.[0];
-        if (resultItem && resultItem.success === false && typeof resultItem.message === 'string' && resultItem.message.startsWith('CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA|')) {
-            const parsed: Record<string, string> = {};
-            for (const chunk of resultItem.message.split('|').slice(1)) {
-                const [k, v] = chunk.split('=');
-                if (k && v !== undefined) parsed[k] = v;
-            }
+        if (resultItem && resultItem.success === false && isCurrencyChangeBlockedMessage(resultItem.message)) {
             currencyChangeBlocker = {
                 assetId,
-                prices: parseInt(parsed.prices || '0', 10),
-                eventsManual: parseInt(parsed.events_manual || '0', 10),
-                eventsProvider: parseInt(parsed.events_provider || '0', 10),
-                linkedTx: parseInt(parsed.linked_tx || '0', 10),
-                oldest: parsed.oldest || '',
-                newest: parsed.newest || '',
-                from: parsed.from || '',
-                to: parsed.to || '',
+                ...parseCurrencyChangeBlocker(resultItem.message),
             };
             currencyChangePatchPayload = patchItem;
             currencyChangeProviderAssigned = hasProvider && !providerNoProvider;
@@ -1065,7 +1421,7 @@
         }
 
         // PATCH succeeded — sync the patched fields into the shared cache so
-        // every consumer (transactions cell, AssetCard, LiveTicker, …) sees
+        // every consumer (transactions cell, AssetCard, AssetTable, …) sees
         // the new icon/name/etc. without a manual reload. The BE response
         // only carries `{success, asset_id, message}`; we merge the fields
         // the FE just submitted.
@@ -1110,12 +1466,16 @@
         const shouldAutoSync = (didRegenerate && isParametricProvider(providerCode)) || providerChanged;
         if (shouldAutoSync && !providerNoProvider) {
             try {
-                const today = new Date();
-                const end = today.toISOString().slice(0, 10);
-                const startD = new Date(today);
-                startD.setFullYear(startD.getFullYear() - 5);
-                const start = startD.toISOString().slice(0, 10);
-                await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([{asset_id: assetId, date_range: {start, end}} as any]);
+                const end = new Date().toISOString().slice(0, 10);
+                // One rule for both cases: resume from the day after the last price we already
+                // have, and fall back to the provider's full history when there is none.
+                //
+                // It covers the parametric regenerate without a special case, because the backend
+                // wipes every price row before this runs (asset_source.py: "params changed … wiped
+                // N price row(s)") — nothing left to resume from, so 'resume' resolves to 'min' by
+                // itself. A provider change wipes nothing, so the old series stays and the new
+                // provider only fills the gap.
+                await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([{asset_id: assetId, date_range: {start: 'resume', end}}]);
             } catch (syncErr) {
                 console.warn('Post-save auto-sync failed (non-blocking):', syncErr);
                 // Non-blocking: the user can manually re-sync if needed.
@@ -1172,7 +1532,28 @@
     </div>
 
     <!-- Body -->
-    <div class="px-6 py-4 space-y-5 max-h-[70vh] overflow-y-auto" data-testid="asset-modal-form">
+    <div class="px-6 py-4 space-y-5 max-h-[70vh] overflow-y-auto" data-testid="asset-modal-form" data-snapshot-ready={initialSnapshot !== '' ? 'true' : 'false'} data-dirty={isDirty ? 'true' : 'false'}>
+        <!-- Import advisory notices (wizard create context): amber banners grouped by kind. -->
+        {#if !editMode && groupedNotices.length > 0}
+            <div class="space-y-2" data-testid="asset-import-notices">
+                {#each groupedNotices as group (group.kind)}
+                    {@const _key = `assets.modal.importNotices.kind.${group.kind}`}
+                    {@const _label = $t(_key)}
+                    <div class="rounded-lg border border-amber-300 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-900/20 px-3 py-2.5 space-y-1.5" data-testid="asset-import-notice">
+                        <div class="flex items-center gap-2 text-xs font-semibold text-amber-800 dark:text-amber-300">
+                            <span aria-hidden="true">⚠️</span>
+                            <span>{_label === _key ? $t('assets.modal.importNotices.kind.generic') : _label}</span>
+                        </div>
+                        <ul class="list-disc list-inside space-y-0.5 text-xs text-amber-700 dark:text-amber-200/90">
+                            {#each group.reasons as reason}
+                                <li>{reason}</li>
+                            {/each}
+                        </ul>
+                        <p class="text-[11px] text-amber-600 dark:text-amber-300/70">{$t('assets.modal.importNotices.intro')}</p>
+                    </div>
+                {/each}
+            </div>
+        {/if}
         <!-- Search Online -->
         {#if !editMode && initialSearchBadges.length > 0}
             <!-- All three (title, badges, input) in one space-y-1.5 wrapper → uniform 6px gaps -->
@@ -1194,12 +1575,12 @@
                     {/each}
                 </div>
                 {#key activeSearchQuery}
-                    <AssetSearchAutocomplete onselect={handleSearchSelect} initialQuery={activeSearchQuery} hideTitle={true} />
+                    <AssetSearchAutocomplete onselect={handleSearchSelect} initialQuery={activeSearchQuery} hideTitle={true} hints={searchHints} />
                 {/key}
             </div>
         {:else}
             {#key activeSearchQuery}
-                <AssetSearchAutocomplete onselect={handleSearchSelect} initialQuery={editMode ? '' : activeSearchQuery} />
+                <AssetSearchAutocomplete onselect={handleSearchSelect} initialQuery={editMode ? '' : activeSearchQuery} hints={searchHints} />
             {/key}
         {/if}
 
@@ -1265,7 +1646,7 @@
                             />
                             {#if duplicateAssetName}
                                 <Tooltip text={$t('assets.modal.duplicateNameTooltip', {values: {name: duplicateAssetName}})} position="bottom" maxWidth="300px">
-                                    <span class="inline-flex items-center gap-1 mt-1 text-xs text-amber-600 dark:text-amber-400">
+                                    <span data-testid="asset-modal-duplicate-warning" data-duplicate-name={duplicateAssetName} class="inline-flex items-center gap-1 mt-1 text-xs text-amber-600 dark:text-amber-400">
                                         ⚠️ {$t('assets.modal.duplicateNameWarning', {values: {name: duplicateAssetName}})}
                                     </span>
                                 </Tooltip>
@@ -1308,14 +1689,26 @@
                             <input
                                 id="asset-quote-base-quantity"
                                 type="number"
+                                use:numericArrows
                                 min="1"
                                 step="1"
                                 bind:value={quoteBaseQuantity}
+                                oninput={() => (quoteBaseQuantityTouched = true)}
+                                onblur={truncateQuoteBaseQuantity}
                                 data-testid="asset-modal-quote-base-quantity"
-                                class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
+                                class="w-full px-3 py-2 text-sm border rounded-lg
                                            bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
-                                           focus:outline-none focus:ring-2 focus:ring-libre-green/50 focus:border-libre-green"
+                                           focus:outline-none focus:ring-2 {quoteBaseQuantityInvalid ? 'border-red-400 focus:ring-red-400/50 dark:border-red-500' : 'border-gray-200 dark:border-slate-600 focus:ring-libre-green/50 focus:border-libre-green'}"
                             />
+                            {#if quoteBaseQuantityInvalid}
+                                <p class="mt-1 text-[11px] text-red-600 dark:text-red-400" data-testid="asset-modal-quote-base-quantity-error">{$t(quoteBaseQuantityError)}</p>
+                            {/if}
+                            {#if assetType === 'BOND'}
+                                <p class="mt-1 flex items-start gap-1 text-[11px] text-blue-600 dark:text-blue-300" data-testid="asset-modal-bond-qbq-hint">
+                                    <Info size={12} class="mt-0.5 shrink-0" />
+                                    <span>{$t('assets.modal.bondQuoteBaseHint')}</span>
+                                </p>
+                            {/if}
                         </div>
 
                         <!-- Currency -->
@@ -1370,6 +1763,7 @@
                 id="asset-description"
                 data-testid="asset-modal-description"
                 bind:value={shortDescription}
+                oninput={() => (descriptionFromPrefill = false)}
                 rows={2}
                 placeholder="Brief description of the asset…"
                 class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
@@ -1387,6 +1781,7 @@
                 role="button"
                 tabindex="0"
                 data-testid="asset-modal-more-info"
+                data-expanded={moreInfoExpanded}
                 onclick={() => {
                     moreInfoExpanded = !moreInfoExpanded;
                 }}
@@ -1436,6 +1831,7 @@
                                 <button
                                     type="button"
                                     onclick={addIdentifierRow}
+                                    data-testid="asset-modal-add-identifier"
                                     class="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
                                     title={$t('assets.identifiers.addIdentifier')}
                                 >
@@ -1453,9 +1849,9 @@
                                 </button>
                             </div>
                         </div>
-                        {#if identifierRows.length > 0}
+                        {#if identifierRowsFixed.length > 0}
                             <DataTable
-                                data={identifierRows}
+                                data={identifierRowsFixed}
                                 columns={identifierColumns}
                                 getRowId={(r) => r.id}
                                 storageKey="asset-modal-identifiers"
@@ -1476,6 +1872,17 @@
                         {:else}
                             <div class="text-xs text-gray-400 italic py-1">{$t('assets.identifiers.askProviderHint')}</div>
                         {/if}
+
+                        <!-- OTHER / soft identifiers as removable tag badges -->
+                        <div class="space-y-1 pt-1">
+                            <div class="flex items-center gap-1">
+                                <div class="text-[10px] font-medium text-gray-400">{$t('assets.identifiers.otherLabel')}</div>
+                                <Tooltip text={$t('assets.identifiers.otherSeparatorsHint')} position="top" maxWidth="320px">
+                                    <Info size={12} class="text-gray-400 cursor-help" />
+                                </Tooltip>
+                            </div>
+                            <TagInput value={otherIdentifiers} onchange={setOtherIdentifiers} placeholder={$t('assets.identifiers.otherPlaceholder')} />
+                        </div>
                     </div>
 
                     <!-- Sub-section: Classification -->
@@ -1498,6 +1905,8 @@
         <div class="border border-gray-200 dark:border-slate-700 rounded-lg">
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <div
+                data-testid="asset-modal-provider-header"
+                data-expanded={providerExpanded}
                 class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-50 dark:bg-slate-800 transition-colors select-none {providerNoProvider ? '' : 'hover:bg-gray-100 dark:hover:bg-slate-700 cursor-pointer'}"
                 role="button"
                 tabindex="0"
@@ -1511,7 +1920,7 @@
                     }
                 }}
             >
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2" data-testid="asset-modal-provider-status" data-status={providerTestStatus}>
                     {#if !providerNoProvider}
                         {#if providerExpanded}
                             <ChevronDown size={16} />
@@ -1576,7 +1985,7 @@
 
         <!-- Error -->
         {#if formError}
-            <div data-form-error class="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-4 py-2 rounded-lg">
+            <div data-form-error data-testid="asset-modal-form-error" class="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-4 py-2 rounded-lg">
                 {formError}
             </div>
         {/if}
@@ -1643,6 +2052,48 @@
     zIndex={zIndex + 20}
 />
 
+<!--
+  Provider vs report: which code leads.
+
+  Raised when a provider search returns an identifier of a type the form already holds with a
+  different value. Both are shown with their provenance; the loser becomes an alternate, so
+  nothing is destroyed — which is what keeps a dual-ISIN bond resolvable from either code.
+-->
+{#if identifierChoiceOpen}
+    <ModalBase open={true} maxWidth="lg" onRequestClose={requestCloseIdentifierPrimary} zIndex={zIndex + 20}>
+        <div class="p-5 space-y-4" data-testid="asset-modal-identifier-primary">
+            <IdentifierPrimaryChooser
+                choices={identifierChoiceOptions}
+                assetName={displayName}
+                typeLabel={identifierChoiceType ?? undefined}
+                isIsin={identifierChoiceType === 'ISIN'}
+                providerName={identifierChoiceProvider ?? undefined}
+                bind:primary={identifierChoicePrimary}
+                testid="asset-modal-primary-chooser"
+            />
+            <div class="flex justify-end gap-2 pt-1">
+                <button type="button" class="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700" onclick={requestCloseIdentifierPrimary} data-testid="asset-modal-primary-cancel">
+                    {$t('assets.identifiers.primaryChooser.cancel')}
+                </button>
+                <button type="button" class="rounded bg-libre-green px-3 py-1.5 text-sm font-medium text-white hover:opacity-90" onclick={confirmIdentifierPrimary} data-testid="asset-modal-primary-confirm">
+                    {$t('assets.identifiers.primaryChooser.confirm')}
+                </button>
+            </div>
+        </div>
+    </ModalBase>
+{/if}
+
+<ConfirmModal
+    open={identifierChoiceDiscardOpen}
+    title={$t('assets.identifiers.primaryChooser.discardTitle')}
+    message={$t('assets.identifiers.primaryChooser.discardMessage')}
+    confirmText={$t('assets.identifiers.primaryChooser.discardConfirm')}
+    warning={true}
+    onConfirm={closeIdentifierPrimary}
+    onCancel={() => (identifierChoiceDiscardOpen = false)}
+    zIndex={zIndex + 40}
+/>
+
 <!-- Confirmation: Identifier change in edit mode -->
 <ConfirmModal
     open={showIdentifierChangeConfirm}
@@ -1662,6 +2113,54 @@
     zIndex={zIndex + 20}
 />
 
+<!-- Reuse existing asset (wizard create): a search result's provider name matches an existing asset -->
+{#if reuseModalOpen}
+    <ModalBase maxWidth="max-w-md" onRequestClose={dismissReuse} open={reuseModalOpen} zIndex={zIndex + 20}>
+        <div class="flex items-center gap-3 px-5 py-4 border-b border-gray-200 dark:border-slate-700">
+            <Info class="text-amber-500 shrink-0" size={22} />
+            <h2 class="flex-1 text-lg font-semibold text-gray-900 dark:text-gray-100" data-testid="reuse-existing-title">
+                {$t('assets.modal.reuseExisting.title')}
+            </h2>
+            <button type="button" aria-label={$t('common.close')} class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors" onclick={dismissReuse}>
+                <X size={20} />
+            </button>
+        </div>
+        <div class="px-5 py-4 text-sm text-gray-700 dark:text-gray-300" data-testid="reuse-existing-message">
+            <!-- Without the key merge there is no identifier to speak of: mentioning one
+                 would send the user looking for a choice this dialog does not offer. -->
+            {#if reuseAllowKeyMerge}
+                {$t('assets.modal.reuseExisting.message', {values: {name: reuseExistingName}})}
+            {:else}
+                {$t('assets.modal.reuseExisting.messagePlain', {values: {name: reuseExistingName}})}
+            {/if}
+        </div>
+        <div class="flex flex-col gap-2 px-5 py-4 border-t border-gray-200 dark:border-slate-700">
+            {#if reuseAllowKeyMerge}
+                <button type="button" data-testid="reuse-existing-add" class="w-full px-4 py-2 text-sm font-medium text-white bg-libre-green rounded-lg hover:bg-libre-green/90 transition-colors" onclick={() => reuseExisting(true)}>
+                    {$t('assets.modal.reuseExisting.useAndAdd')}
+                </button>
+            {/if}
+            <button
+                type="button"
+                data-testid="reuse-existing-use"
+                class="w-full px-4 py-2 text-sm font-medium transition-colors {reuseAllowKeyMerge
+                    ? 'rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-300 dark:hover:bg-slate-700'
+                    : 'rounded-lg bg-libre-green text-white hover:bg-libre-green/90'}"
+                onclick={() => reuseExisting(false)}
+            >
+                {#if reuseAllowKeyMerge}
+                    {$t('assets.modal.reuseExisting.useOnly')}
+                {:else}
+                    {$t('assets.modal.reuseExisting.use')}
+                {/if}
+            </button>
+            <button type="button" data-testid="reuse-existing-cancel" class="w-full px-4 py-2 text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors" onclick={dismissReuse}>
+                {$t('assets.modal.reuseExisting.changeName')}
+            </button>
+        </div>
+    </ModalBase>
+{/if}
+
 <!-- Confirmation: Discard unsaved changes -->
 <ConfirmModal
     open={showDiscardConfirm}
@@ -1670,6 +2169,7 @@
     confirmText={$t('common.discardAndClose')}
     cancelText={$t('common.continueEditing')}
     warning={true}
+    testId="asset-modal-discard-confirm"
     onConfirm={() => doClose()}
     onCancel={() => {
         showDiscardConfirm = false;
@@ -1685,6 +2185,7 @@
     confirmText={$t('assets.modal.scheduledRegenConfirm')}
     cancelText={$t('common.cancel')}
     danger={true}
+    testId="asset-scheduled-regen-confirm"
     onConfirm={() => {
         showScheduledRegenConfirm = false;
         const aid = pendingSaveAssetId;
@@ -1705,10 +2206,48 @@
     zIndex={zIndex + 20}
 />
 
+<!-- Confirmation: swapping away from a parametric provider discards its generated series -->
+<ConfirmModal
+    open={showParametricSwitchConfirm}
+    title={$t('assets.modal.parametricSwitchTitle')}
+    message={$t('assets.modal.parametricSwitchMessage', {
+        values: {
+            from: parametricSwitchInfo?.from ?? '',
+            to: parametricSwitchInfo?.to ?? '',
+            prices: parametricSwitchInfo?.prices ?? 0,
+            events: parametricSwitchInfo?.events ?? 0,
+        },
+    })}
+    confirmText={$t('assets.modal.parametricSwitchConfirm')}
+    cancelText={$t('common.cancel')}
+    danger={true}
+    testId="asset-parametric-switch-confirm"
+    onConfirm={() => {
+        showParametricSwitchConfirm = false;
+        const aid = pendingSaveAssetId;
+        // pendingSaveAssetId stays non-null so the guard in saveEdit() skips this
+        // modal on the second pass and proceeds to PATCH+assign+sync.
+        if (aid !== null) {
+            saveEdit(aid).catch((err) => {
+                console.error('saveEdit after parametric switch confirm failed:', err);
+                toasts.error($t('common.errorOccurred'));
+                pendingSaveAssetId = null;
+            });
+        }
+    }}
+    onCancel={() => {
+        showParametricSwitchConfirm = false;
+        parametricSwitchInfo = null;
+        pendingSaveAssetId = null;
+    }}
+    zIndex={zIndex + 20}
+/>
+
 <!-- Provider Comparison Modal -->
 <ProviderComparisonModal
     bind:open={showComparisonModal}
     differences={comparisonDifferences}
+    assetName={displayName}
     onapply={handleComparisonApply}
     oncancel={() => {
         showComparisonModal = false;
@@ -1741,7 +2280,7 @@
 <ConfirmModal
     open={showIdentifierDeleteConfirm}
     title={$t('assets.identifiers.deleteSelected')}
-    message={$t('assets.identifiers.deleteConfirmMessage', {values: {count: pendingIdentifierDeleteIds.length}})}
+    message={$t('assets.identifiers.deleteConfirmMessage', {values: {n: pendingIdentifierDeleteIds.length}})}
     confirmText={$t('common.delete')}
     warning={true}
     onConfirm={confirmIdentifierBulkDelete}

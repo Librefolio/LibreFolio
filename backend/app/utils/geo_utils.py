@@ -86,7 +86,7 @@ def list_countries(language: str = "en") -> List[dict]:
     return sorted(countries, key=lambda x: x["name"])
 
 
-def normalize_country_to_iso3(country_input: str) -> str:
+def normalize_country_to_iso3(country_input: str) -> str:  # noqa: C901 — sequential format attempts (A3/A2/fuzzy name) with early returns
     """
     Normalize country code/name to ISO-3166-A3 format.
 

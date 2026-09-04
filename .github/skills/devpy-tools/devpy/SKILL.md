@@ -32,7 +32,7 @@ dev.py [-h]
 │ ├── api                          # List all API endpoints
 │ └── version                      # Show git-based version
 ├── format                         # black
-├── lint                           # ruff
+├── lint                           # ruff (--dead-code → vulture + knip)
 ├── shell                          # pipenv shell
 └── install                        # pip + npm
 ```
@@ -54,6 +54,7 @@ dev.py [-h]
 | Docker deploy | `./dev.py docker rebuild` |
 | Code formatting | `./dev.py format` |
 | Linting | `./dev.py lint` |
+| Dead code | `./dev.py lint --dead-code` |
 | User management | `./dev.py user create admin admin@mail.com pass` |
 
 ## Ports

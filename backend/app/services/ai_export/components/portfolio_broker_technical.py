@@ -1,0 +1,333 @@
+"""Real `ComponentSpec` implementations for the Portfolio/Broker technical wave.
+
+Owns exactly the eight `portfolio.technical_*`/`broker.technical_*` component
+IDs (matching the placeholders declared verbatim in `backend.app.services.
+ai_export.components.catalog`, so a future catalog wiring can swap the
+placeholder builders for these without touching any `component_id`/`domains`/
+`dependencies` metadata):
+
+- `portfolio.technical_prices` / `broker.technical_prices`.
+- `portfolio.technical_indicators` / `broker.technical_indicators`.
+- `portfolio.technical_breadth` / `broker.technical_breadth`.
+- `portfolio.technical_events` / `broker.technical_events`.
+
+Every builder analyzes the *complete* eligible held-asset universe (no
+Compact-level asset selection - requirement 5): eligibility, NAV weights, and
+the shared bulk price/signal loading are all delegated to
+`technical_shared.load_technical_universe_bundle`, which itself reuses the
+`PORTFOLIO_REPORT_RESOURCE`/`BROKER_REPORT_RESOURCE` resource cache entries
+also used by the sibling Portfolio/Broker *financial* wave (via
+`payloads/portfolio_broker.load_portfolio_report`), so the underlying
+`PortfolioService.get_report` call only ever happens once per request
+regardless of how many components (financial or technical) need it.
+
+This module is intentionally NOT wired into `backend.app.services.ai_export.
+components.catalog` (that file is owned by the parent integration step) -
+see the plan's Phase 0 AI Export refinement, "shared technical wave" section.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping
+from decimal import Decimal
+
+from backend.app.services.ai_export.components.envelope import SectionEnvelope
+from backend.app.services.ai_export.components.spec import ComponentSpec
+from backend.app.services.ai_export.components.technical_payloads import (
+    AssetIndicatorsPayload,
+    AssetPriceSeriesPayload,
+    PortfolioTechnicalPricesPayload,
+    TechnicalEventsPayload,
+    UniverseBreadthPayload,
+    UniverseIndicatorsPayload,
+)
+from backend.app.services.ai_export.components.technical_shared import (
+    BROKER_TECHNICAL_UNIVERSE_KWARGS,
+    OHLC_BUCKET_AGGREGATOR,
+    PORTFOLIO_TECHNICAL_UNIVERSE_KWARGS,
+    SIGNAL_PROFILE_BUCKET_AGGREGATOR,
+    TechnicalUniverseBundle,
+    build_breadth_payload,
+    build_events_payload,
+    build_indicator_table_payloads,
+    build_price_buckets,
+    coherent_price_currency,
+    latest_point_value,
+    load_technical_universe_bundle,
+    price_result_to_close_points,
+    signal_results_to_discrete_events,
+)
+from backend.app.services.ai_export.components.types import Domain, PeriodBehavior
+from backend.app.services.ai_export.dependencies import BuildContext
+
+# =============================================================================
+# {portfolio,broker}.technical_prices
+# =============================================================================
+
+
+async def _build_universe_technical_prices(context: BuildContext, *, universe_kwargs: Mapping[str, object]) -> PortfolioTechnicalPricesPayload:
+    scope = context.scope
+    assert scope is not None
+    universe: TechnicalUniverseBundle = await load_technical_universe_bundle(context, **universe_kwargs)
+
+    context.register_price_sampling()
+    assets: list[AssetPriceSeriesPayload] = []
+    for asset_id in universe.asset_ids:
+        result = universe.price_results.by_asset_id.get(asset_id)
+        if result is None:
+            continue
+        points = price_result_to_close_points(result, start=scope.period_start, end=scope.period_end)
+        buckets = build_price_buckets(points, context.bucket_plan, key="close")
+        latest_close, latest_date = latest_point_value(points, key="close")
+        currency = coherent_price_currency(result)
+        weight = universe.weights.get(asset_id)
+        assets.append(
+            AssetPriceSeriesPayload(
+                asset_id=asset_id,
+                portfolio_weight_ratio=(float(weight) if weight is not None else None),
+                currency=currency,
+                buckets=buckets,
+                latest_close=latest_close,
+                latest_date=latest_date,
+            )
+        )
+    assets.sort(key=lambda payload: payload.asset_id)
+
+    return PortfolioTechnicalPricesPayload(
+        assets=tuple(assets),
+        eligible_asset_count=len(universe.asset_ids),
+        period_position_leg_count=universe.period_position_leg_count,
+        period_contributor_asset_count=universe.period_contributor_asset_count,
+        covered_asset_count=len(assets),
+    )
+
+
+async def _build_portfolio_technical_prices(context: BuildContext, dependencies: Mapping[str, SectionEnvelope]) -> PortfolioTechnicalPricesPayload:
+    return await _build_universe_technical_prices(context, universe_kwargs=PORTFOLIO_TECHNICAL_UNIVERSE_KWARGS)
+
+
+async def _build_broker_technical_prices(context: BuildContext, dependencies: Mapping[str, SectionEnvelope]) -> PortfolioTechnicalPricesPayload:
+    return await _build_universe_technical_prices(context, universe_kwargs=BROKER_TECHNICAL_UNIVERSE_KWARGS)
+
+
+PORTFOLIO_TECHNICAL_PRICES_SPEC = ComponentSpec(
+    component_id="portfolio.technical_prices",
+    version=1,
+    domains=frozenset({Domain.PORTFOLIO}),
+    output_model=PortfolioTechnicalPricesPayload,
+    builder=_build_portfolio_technical_prices,
+    period_behavior=PeriodBehavior.AGGREGATED,
+    aggregator=OHLC_BUCKET_AGGREGATOR,
+)
+
+
+BROKER_TECHNICAL_PRICES_SPEC = ComponentSpec(
+    component_id="broker.technical_prices",
+    version=1,
+    domains=frozenset({Domain.BROKER}),
+    output_model=PortfolioTechnicalPricesPayload,
+    builder=_build_broker_technical_prices,
+    period_behavior=PeriodBehavior.AGGREGATED,
+    aggregator=OHLC_BUCKET_AGGREGATOR,
+)
+
+
+# =============================================================================
+# {portfolio,broker}.technical_indicators
+# =============================================================================
+
+
+async def _build_universe_technical_indicators(context: BuildContext, *, universe_kwargs: Mapping[str, object]) -> UniverseIndicatorsPayload:
+    universe: TechnicalUniverseBundle = await load_technical_universe_bundle(context, **universe_kwargs)
+
+    prepared_assets = []
+    for asset_id in universe.asset_ids:
+        result = universe.price_results.by_asset_id.get(asset_id)
+        if result is None:
+            continue
+        indicators = build_indicator_table_payloads(result.signals, context)
+        weight = universe.weights.get(asset_id)
+        prepared_assets.append(
+            (
+                asset_id,
+                float(weight) if weight is not None else None,
+                indicators,
+            )
+        )
+    covered_portfolio_weight = sum(weight for _asset_id, weight, indicators in prepared_assets if indicators and weight is not None)
+    covered_weight_by_instance: dict[str, float] = {}
+    for _asset_id, weight, indicators in prepared_assets:
+        if weight is None:
+            continue
+        for indicator in indicators:
+            covered_weight_by_instance[indicator.instance_id] = covered_weight_by_instance.get(indicator.instance_id, 0.0) + weight
+    assets = [
+        AssetIndicatorsPayload(
+            asset_id=asset_id,
+            portfolio_weight_ratio=weight,
+            indicators=tuple(
+                indicator.model_copy(
+                    update={
+                        "portfolio_weight_ratio": weight,
+                        "technical_normalized_weight_ratio": (weight / covered_weight_by_instance[indicator.instance_id] if weight is not None and covered_weight_by_instance.get(indicator.instance_id) else None),
+                    }
+                )
+                for indicator in indicators
+            ),
+        )
+        for asset_id, weight, indicators in prepared_assets
+    ]
+    assets.sort(key=lambda payload: payload.asset_id)
+    eligible_portfolio_weight = float(sum(universe.weights.values(), Decimal(0)))
+
+    return UniverseIndicatorsPayload(
+        assets=tuple(assets),
+        eligible_asset_count=len(universe.asset_ids),
+        period_position_leg_count=universe.period_position_leg_count,
+        period_contributor_asset_count=universe.period_contributor_asset_count,
+        covered_asset_count=sum(1 for asset in assets if asset.indicators),
+        eligible_portfolio_weight_ratio=eligible_portfolio_weight,
+        covered_portfolio_weight_ratio=covered_portfolio_weight,
+        covered_weight_ratio=(covered_portfolio_weight / eligible_portfolio_weight if eligible_portfolio_weight else 0.0),
+    )
+
+
+async def _build_portfolio_technical_indicators(context: BuildContext, dependencies: Mapping[str, SectionEnvelope]) -> UniverseIndicatorsPayload:
+    return await _build_universe_technical_indicators(context, universe_kwargs=PORTFOLIO_TECHNICAL_UNIVERSE_KWARGS)
+
+
+async def _build_broker_technical_indicators(context: BuildContext, dependencies: Mapping[str, SectionEnvelope]) -> UniverseIndicatorsPayload:
+    return await _build_universe_technical_indicators(context, universe_kwargs=BROKER_TECHNICAL_UNIVERSE_KWARGS)
+
+
+PORTFOLIO_TECHNICAL_INDICATORS_SPEC = ComponentSpec(
+    component_id="portfolio.technical_indicators",
+    version=1,
+    domains=frozenset({Domain.PORTFOLIO}),
+    output_model=UniverseIndicatorsPayload,
+    builder=_build_portfolio_technical_indicators,
+    dependencies=("portfolio.technical_prices",),
+    period_behavior=PeriodBehavior.AGGREGATED,
+    aggregator=SIGNAL_PROFILE_BUCKET_AGGREGATOR,
+)
+
+BROKER_TECHNICAL_INDICATORS_SPEC = ComponentSpec(
+    component_id="broker.technical_indicators",
+    version=1,
+    domains=frozenset({Domain.BROKER}),
+    output_model=UniverseIndicatorsPayload,
+    builder=_build_broker_technical_indicators,
+    dependencies=("broker.technical_prices",),
+    period_behavior=PeriodBehavior.AGGREGATED,
+    aggregator=SIGNAL_PROFILE_BUCKET_AGGREGATOR,
+)
+
+
+# =============================================================================
+# {portfolio,broker}.technical_breadth
+# =============================================================================
+
+
+async def _build_portfolio_technical_breadth(context: BuildContext, dependencies: Mapping[str, SectionEnvelope]) -> UniverseBreadthPayload:
+    universe = await load_technical_universe_bundle(context, **PORTFOLIO_TECHNICAL_UNIVERSE_KWARGS)
+    return build_breadth_payload(universe)
+
+
+async def _build_broker_technical_breadth(context: BuildContext, dependencies: Mapping[str, SectionEnvelope]) -> UniverseBreadthPayload:
+    universe = await load_technical_universe_bundle(context, **BROKER_TECHNICAL_UNIVERSE_KWARGS)
+    return build_breadth_payload(universe)
+
+
+PORTFOLIO_TECHNICAL_BREADTH_SPEC = ComponentSpec(
+    component_id="portfolio.technical_breadth",
+    version=1,
+    domains=frozenset({Domain.PORTFOLIO}),
+    output_model=UniverseBreadthPayload,
+    builder=_build_portfolio_technical_breadth,
+    period_behavior=PeriodBehavior.WINDOWED,
+)
+
+BROKER_TECHNICAL_BREADTH_SPEC = ComponentSpec(
+    component_id="broker.technical_breadth",
+    version=1,
+    domains=frozenset({Domain.BROKER}),
+    output_model=UniverseBreadthPayload,
+    builder=_build_broker_technical_breadth,
+    period_behavior=PeriodBehavior.WINDOWED,
+)
+
+
+# =============================================================================
+# {portfolio,broker}.technical_events
+# =============================================================================
+
+
+async def _build_universe_technical_events(context: BuildContext, *, universe_kwargs: Mapping[str, object]) -> TechnicalEventsPayload:
+    universe: TechnicalUniverseBundle = await load_technical_universe_bundle(context, **universe_kwargs)
+
+    events = []
+    for asset_id in universe.asset_ids:
+        result = universe.price_results.by_asset_id.get(asset_id)
+        if result is None:
+            continue
+        events.extend(
+            signal_results_to_discrete_events(
+                result.signals,
+                entity_id=f"asset:{asset_id}",
+                asset_id=asset_id,
+            )
+        )
+
+    return build_events_payload(tuple(events), context)
+
+
+async def _build_portfolio_technical_events(context: BuildContext, dependencies: Mapping[str, SectionEnvelope]) -> TechnicalEventsPayload:
+    return await _build_universe_technical_events(context, universe_kwargs=PORTFOLIO_TECHNICAL_UNIVERSE_KWARGS)
+
+
+async def _build_broker_technical_events(context: BuildContext, dependencies: Mapping[str, SectionEnvelope]) -> TechnicalEventsPayload:
+    return await _build_universe_technical_events(context, universe_kwargs=BROKER_TECHNICAL_UNIVERSE_KWARGS)
+
+
+PORTFOLIO_TECHNICAL_EVENTS_SPEC = ComponentSpec(
+    component_id="portfolio.technical_events",
+    version=1,
+    domains=frozenset({Domain.PORTFOLIO}),
+    output_model=TechnicalEventsPayload,
+    builder=_build_portfolio_technical_events,
+    period_behavior=PeriodBehavior.WINDOWED,
+)
+
+BROKER_TECHNICAL_EVENTS_SPEC = ComponentSpec(
+    component_id="broker.technical_events",
+    version=1,
+    domains=frozenset({Domain.BROKER}),
+    output_model=TechnicalEventsPayload,
+    builder=_build_broker_technical_events,
+    period_behavior=PeriodBehavior.WINDOWED,
+)
+
+
+PORTFOLIO_BROKER_TECHNICAL_COMPONENTS: tuple[ComponentSpec, ...] = (
+    PORTFOLIO_TECHNICAL_PRICES_SPEC,
+    PORTFOLIO_TECHNICAL_INDICATORS_SPEC,
+    PORTFOLIO_TECHNICAL_BREADTH_SPEC,
+    PORTFOLIO_TECHNICAL_EVENTS_SPEC,
+    BROKER_TECHNICAL_PRICES_SPEC,
+    BROKER_TECHNICAL_INDICATORS_SPEC,
+    BROKER_TECHNICAL_BREADTH_SPEC,
+    BROKER_TECHNICAL_EVENTS_SPEC,
+)
+
+
+__all__ = [
+    "BROKER_TECHNICAL_BREADTH_SPEC",
+    "BROKER_TECHNICAL_EVENTS_SPEC",
+    "BROKER_TECHNICAL_INDICATORS_SPEC",
+    "BROKER_TECHNICAL_PRICES_SPEC",
+    "PORTFOLIO_BROKER_TECHNICAL_COMPONENTS",
+    "PORTFOLIO_TECHNICAL_BREADTH_SPEC",
+    "PORTFOLIO_TECHNICAL_EVENTS_SPEC",
+    "PORTFOLIO_TECHNICAL_INDICATORS_SPEC",
+    "PORTFOLIO_TECHNICAL_PRICES_SPEC",
+]

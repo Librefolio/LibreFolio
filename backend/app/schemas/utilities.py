@@ -4,15 +4,13 @@ Pydantic schemas for utility endpoints.
 
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
-from backend.app.schemas.common import BaseListResponse
+from backend.app.schemas.common import BaseListResponse, StrictModel
 
 
-class CountryListItem(BaseModel):
+class CountryListItem(StrictModel):
     """Single country in the country list."""
-
-    model_config = ConfigDict(extra="forbid")
 
     iso3: str = Field(..., description="ISO-3166-A3 country code (e.g., USA, ITA)")
     iso2: str = Field(..., description="ISO-3166-A2 country code (e.g., US, IT)")
@@ -26,10 +24,8 @@ class CountryListResponse(BaseListResponse[CountryListItem]):
     language: str = Field(..., description="Language used for country names")
 
 
-class CurrencyListItem(BaseModel):
+class CurrencyListItem(StrictModel):
     """Single currency in the currency list."""
-
-    model_config = ConfigDict(extra="forbid")
 
     code: str = Field(..., description="ISO 4217 currency code (e.g., USD, EUR)")
     name: str = Field(..., description="Currency name in requested language")
@@ -45,10 +41,8 @@ class CurrencyListResponse(BaseListResponse[CurrencyListItem]):
     language: str = Field(..., description="Language used for currency names")
 
 
-class CurrencyNormalizationResponse(BaseModel):
+class CurrencyNormalizationResponse(StrictModel):
     """Response for currency normalization endpoint."""
-
-    model_config = ConfigDict(extra="forbid")
 
     query: str = Field(..., description="Original query string")
     iso_codes: List[str] = Field(..., description="List of ISO 4217 currency codes")
@@ -65,5 +59,3 @@ class SectorItem(BaseModel):
 
 class SectorListResponse(BaseListResponse[SectorItem]):
     """Response for sectors list endpoint."""
-
-    pass

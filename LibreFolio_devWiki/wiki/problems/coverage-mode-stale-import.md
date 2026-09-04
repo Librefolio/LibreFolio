@@ -4,7 +4,7 @@ category: problem
 status: resolved
 date: 2026-07-14
 tags: [testing, test-runner, coverage, python, infra]
-related: [[problems/resume-mode-stale-import]]
+related: [concepts/silent-no-op-option, problems/resume-mode-stale-import]
 ---
 
 # Problem: `--coverage` Flag Never Propagated to Frontend E2E Runs
@@ -66,6 +66,16 @@ subprocess launches during a `--coverage` run: before the fix, 0/47 calls receiv
 `COVERAGE_BACKEND=1`; after the fix, all 47 did. Re-ran the full
 `./dev.py test --coverage --fresh-run all` suite end-to-end (14/14 categories passed) and
 confirmed `.coverage_data/frontend` and `htmlcov-frontend/` were created for the first time.
+
+## The pattern this belongs to
+
+This is one of four incidents with the same shape, named at
+[[concepts/silent-no-op-option]] — *accepted is not arrived*: an option is declared,
+the parser accepts it, and the mechanism it was meant to reach never receives it.
+The failure mode is a **default**, not an error. Siblings:
+[[problems/resume-mode-stale-import]],
+[[problems/coverage-report-category-dest-collision]],
+[[problems/env-var-injection-point-duplicated]].
 
 ## Source files
 

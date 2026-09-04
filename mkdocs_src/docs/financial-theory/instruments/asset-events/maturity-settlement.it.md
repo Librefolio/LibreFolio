@@ -12,7 +12,7 @@ La scadenza è la data in cui uno strumento di debito (obbligazione, nota, certi
 2. Viene effettuato l'eventuale **ultimo pagamento degli interessi** (se applicabile)
 3. Lo strumento **cessa di esistere** — non vi sono più quotazioni o scambi
 
-### Strumenti con Data di Scadenza
+### Instruments con Data di Scadenza
 
 | Strumento | Scadenza Tipica | Regolamento |
 |------------|-----------------|------------|

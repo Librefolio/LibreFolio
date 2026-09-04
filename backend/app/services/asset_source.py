@@ -28,13 +28,15 @@ import hashlib
 import json
 import time
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
 from typing import AsyncGenerator, Dict, List, Literal, Optional
 
 import structlog
-from sqlalchemy import and_, delete, func, or_, select
+from sqlalchemy import String, and_, case, cast, delete, func, or_, select, update
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import (
@@ -48,6 +50,7 @@ from backend.app.db.models import (
     ProviderInputType,
     Transaction,
     User,
+    UserRole,
 )
 from backend.app.db.session import get_async_engine
 from backend.app.schemas import (
@@ -68,6 +71,13 @@ from backend.app.schemas import (
     FARefreshItem,
     FARefreshResult,
     FAUpsert,
+    SignalCadence,
+    SignalDomain,
+    SignalEventPoint,
+    SignalExecutionContext,
+    SignalPricePoint,
+    SignalSourceCapability,
+    SignalVolumeKind,
     SyncStatus,
 )
 from backend.app.schemas.assets import (
@@ -75,6 +85,8 @@ from backend.app.schemas.assets import (
     FAAssetCreateItem,
     FAAssetCreateResult,
     FAAssetDeleteResult,
+    FAAssetMergePreview,
+    FAAssetMergeResponse,
     FAAssetPatchItem,
     FAAssetPatchResult,
     FABulkAssetCreateResponse,
@@ -82,9 +94,13 @@ from backend.app.schemas.assets import (
     FABulkAssetPatchResponse,
     FAClassificationParams,
     FAinfoResponse,
-    FAMetadataChangeDetail,
 )
-from backend.app.schemas.common import Currency, FxBackwardFillInfo, OldNew
+from backend.app.schemas.common import (
+    Currency,
+    DateRangeModel,
+    FxBackwardFillInfo,
+    OldNew,
+)
 from backend.app.schemas.prices import AssetBackwardFillInfo, FAAssetEventPoint, FAAssetEventPointOut, FAEventBulkDeleteResponse, FAEventDeleteItemResult, FAEventQueryResult, FAPriceQueryResult
 from backend.app.schemas.provider import (
     FAProviderConfigBase,
@@ -93,19 +109,35 @@ from backend.app.schemas.provider import (
     FAProviderRefreshFieldsDetail,
     FAProviderSearchResponse,
     FAProviderSearchResultItem,
+    FAVolumeKind,
     ProbeCurrentPriceResult,
     ProbeHistoryResult,
     ProbeMetadataResult,
     ProbeOperation,
 )
+from backend.app.services import web_link_finder
 from backend.app.services.fx import convert_bulk
 from backend.app.services.provider_registry import AssetProviderRegistry
+from backend.app.services.series_preparation import prepare_asset_series_set
+from backend.app.services.signal_service import (
+    SignalPreparedSeriesBundle,
+    SignalService,
+)
 from backend.app.utils.cache_utils import get_ttl_cache
 from backend.app.utils.datetime_utils import utcnow
 from backend.app.utils.decimal_utils import truncate_priceHistory
+from backend.app.utils.identifier_utils import merge_other_identifiers
 
 # Initialize structured logger
 logger = structlog.get_logger(__name__)
+
+# Maximum number of price rows written per transaction by ``bulk_upsert_prices``.
+# SQLite serialises writers on a single lock held for the whole transaction, so an
+# unbounded upsert blocks every other write for its full duration. Measured on a
+# 45k-point full-history sync: one transaction held the lock 10.3s and starved every
+# concurrent writer; sliced at 1000 the longest hold fell to 1.2s with no change in
+# total runtime.
+PRICE_UPSERT_CHUNK_SIZE = 1000
 
 
 # ============================================================================
@@ -117,6 +149,7 @@ _asset_current_cache = get_ttl_cache("asset_current_fetch", maxsize=300, ttl=120
 _asset_metadata_cache = get_ttl_cache("asset_metadata_fetch", maxsize=200, ttl=1800)  # 30 min
 _search_result_cache = get_ttl_cache("search_results", maxsize=5000, ttl=86400)  # 24h — individual items
 _search_query_cache = get_ttl_cache("search_queries", maxsize=500, ttl=900)  # 15 min — query→results
+_RISK_WARMUP_DAY_MULTIPLIER = 2
 
 AssetHistoryStartDate = date_type | Literal["min"]
 ASSET_HISTORY_MIN_FALLBACK = date_type(1900, 1, 1)
@@ -200,6 +233,33 @@ class AssetSourceError(Exception):
         self.message = message
         self.error_code = error_code
         self.details = details or {}
+
+
+def _json_safe_details(details: Optional[dict]) -> Optional[dict]:
+    """Make an AssetSourceError ``details`` dict safe for a JSON response (I3).
+
+    Providers may put dates, Decimals or other non-primitives in ``details``;
+    the probe DTO must serialize, so anything not natively JSON-safe is
+    stringified. ``None`` and empty dicts stay ``None`` (field omitted).
+
+    Deliberately NOT :func:`backend.app.utils.json_utils.ensure_json_safe`:
+    that one is a *validator* — it rejects non-JSON producer output on contract
+    boundaries (signals, AI Export). Here the provider is a third-party plugin
+    and the probe must still return a localized error, so we *sanitize*
+    (stringify, one list level deep) instead of raising. See
+    ``backend/app/utils/json_utils.py`` module docstring (audit 08, report 03 §N-03-A).
+    """
+    if not details:
+        return None
+    safe: dict = {}
+    for key, value in details.items():
+        if value is None or isinstance(value, (str, int, float, bool)):
+            safe[str(key)] = value
+        elif isinstance(value, (list, tuple)):
+            safe[str(key)] = [item if item is None or isinstance(item, (str, int, float, bool)) else str(item) for item in value]
+        else:
+            safe[str(key)] = str(value)
+    return safe
 
 
 # ============================================================================
@@ -286,7 +346,6 @@ class AssetSourceProvider(ABC):
         - Unique across all registered providers
         - Stable (changing breaks existing assets)
         """
-        pass
 
     @property
     @abstractmethod
@@ -296,7 +355,6 @@ class AssetSourceProvider(ABC):
 
         Examples: 'Yahoo Finance', 'JustETF', 'CSS Web Scraper'
         """
-        pass
 
     @property
     def provider_kind(self) -> FAProviderKind:
@@ -324,6 +382,38 @@ class AssetSourceProvider(ABC):
         params change requires a destructive-confirm dialog.
         """
         return FAProviderKind.ONLINE_SCRAPER
+
+    @property
+    def supports_meaningful_volume(self) -> bool:
+        """
+        Declares whether this provider's ``volume`` field represents real,
+        comparable trading activity (e.g. exchange-traded share volume)
+        rather than being absent, synthetic, or of unverified origin.
+
+        Default is ``False`` (safe/unknown). Override to ``True`` only when
+        the source's semantics are unambiguous — e.g. a provider that
+        surfaces genuine exchange-traded share volume for the instruments it
+        serves. Do NOT infer this per-asset-type; a provider that mixes
+        volume-bearing and volume-less request paths (e.g. NAV-priced funds
+        vs ISIN-quoted stocks under the same provider) should still declare
+        the provider-level truth here, and rely on downstream structural
+        validation (sufficient non-null observed volume) to reject the
+        volume-less paths at the signal level.
+
+        Consumed by ``AssetSourceService`` to derive
+        ``SignalSourceCapability`` for volume-dependent signals (MFI, OBV),
+        and surfaced to the frontend via ``FAProviderInfo.supports_meaningful_volume``.
+        """
+        return False
+
+    @property
+    def volume_kind(self) -> FAVolumeKind:
+        """
+        Semantic kind of the volume field when ``supports_meaningful_volume``
+        is ``True``. Default ``FAVolumeKind.UNKNOWN``; override alongside
+        ``supports_meaningful_volume`` (e.g. ``FAVolumeKind.TRADED_SHARES``).
+        """
+        return FAVolumeKind.UNKNOWN
 
     @property
     def get_icon(self) -> str | None:
@@ -394,7 +484,6 @@ class AssetSourceProvider(ABC):
                 }
             ]
         """
-        pass
 
     @abstractmethod
     async def get_current_value(
@@ -435,7 +524,6 @@ class AssetSourceProvider(ABC):
             - FETCH_ERROR: Network/API error
             - MISSING_PARAMS: Required provider_params missing
         """
-        pass
 
     @property
     def supports_history(self) -> bool:
@@ -514,7 +602,6 @@ class AssetSourceProvider(ABC):
             - NO_DATA: No data available for date range
             - FETCH_ERROR: Network/API error
         """
-        pass
 
     @property
     @abstractmethod
@@ -530,7 +617,6 @@ class AssetSourceProvider(ABC):
             'MSCI World' - for ETF providers
             None - for CSS scrapers (no search)
         """
-        pass
 
     async def search(self, query: str) -> list[dict]:
         """
@@ -608,7 +694,7 @@ class AssetSourceProvider(ABC):
         Raises:
             AssetSourceError: With error_code 'MISSING_PARAMS' or 'INVALID_PARAMS'
         """
-        pass  # Default: no validation, accepts any params including None
+        # Default: no validation, accepts any params including None
 
     @property
     def params_schema(self) -> list[dict]:
@@ -742,6 +828,59 @@ class AssetSourceProvider(ABC):
         """
         return None
 
+    @property
+    def resolvable_url_domains(self) -> list[str]:
+        """Bare domains whose asset pages this provider can resolve via ``resolve_url``.
+
+        Default: empty list → the provider does not support URL resolution. A
+        provider that can turn one of its public page URLs back into a search-item
+        overrides this with the domains it recognises, e.g. ``["borsaitaliana.it"]``.
+        Sub-domains are covered automatically (``www.borsaitaliana.it`` matches).
+        """
+        return []
+
+    @property
+    def supports_url_resolution(self) -> bool:
+        """Whether this provider implements ``resolve_url`` (derived from the domains)."""
+        return bool(self.resolvable_url_domains)
+
+    async def resolve_url(self, url: str) -> dict | list[dict] | None:
+        """Resolve a provider page URL into search-item(s) (inverse of ``get_asset_url``).
+
+        Given a URL on one of ``resolvable_url_domains``, open and extract it, then
+        return the SAME shape ``search`` produces — either a single item dict or a
+        list of them::
+
+            {identifier, identifier_type, display_name, currency, type, provider_params}
+
+        ``resolve_url`` is only an alternative **entry point** into search: when a
+        single page maps to several canonical rows (e.g. one per language, like an
+        on-site search hit), return them all as a list; the orchestration flattens and
+        de-duplicates by ``(identifier, language)``. This lets an externally-found page
+        (e.g. via ``web_link_finder``) be turned into selectable assets exactly like an
+        on-site search — funds priced by their stored ``provider_params`` afterwards,
+        never by external search.
+
+        PLUGIN RESPONSIBILITY:
+        - Recognise whether ``url`` is one of your asset pages; return ``None`` if not.
+        - Extract identifier/name/currency/type and any ``provider_params`` needed
+          to price the asset later.
+        - Return one item, or the full canonical set (list) the same instrument would
+          yield from ``search``.
+        - Handle errors gracefully (return ``None`` rather than raising).
+
+        Like other provider methods this runs inside the provider thread, so sync
+        I/O is fine. Default: not supported → returns ``None``.
+
+        Args:
+            url: A candidate provider page URL.
+
+        Returns:
+            A search-item dict, a list of them, or ``None`` if the URL is not a
+            recognised asset page.
+        """
+        return None
+
     def shutdown(self) -> None:  # pragma: no cover  # noqa: B027 — intentional no-op default
         """
         Cleanup resources on application shutdown.
@@ -752,7 +891,6 @@ class AssetSourceProvider(ABC):
 
         Default: no-op.
         """
-        pass
 
 
 # ============================================================================
@@ -780,7 +918,7 @@ class AssetSourceManager:
     # PROVIDER ASSIGNMENT METHODS
     # ========================================================================
     @staticmethod
-    async def bulk_assign_providers(
+    async def bulk_assign_providers(  # noqa: C901 — per-item upsert loop; parametric-wipe gate is linear
         assignments: List[FAProviderAssignmentItem],
         session: AsyncSession,
     ) -> list[FAProviderAssignmentResult]:
@@ -848,109 +986,123 @@ class AssetSourceManager:
                 # provider_code check.
                 params_changed = (existing.provider_params or "") != (params_to_store or "")
                 provider_code_unchanged = existing.provider_code == a.provider_code
-                if params_changed and provider_code_unchanged:
-                    prov_instance = AssetProviderRegistry.get_provider_instance(a.provider_code)
-                    is_parametric = prov_instance is not None and prov_instance.provider_kind == FAProviderKind.PARAMETRIC_GENERATION
-                    if is_parametric:
-                        # 1. Delete ALL prices for this asset (full wipe).
-                        #
-                        # #R4-3 (2026-04-23): previously we scoped by
-                        # ``source_plugin_key == a.provider_code``, but
-                        # ``bulk_upsert_prices`` unconditionally hardcoded
-                        # ``source_plugin_key="MANUAL"`` for every inserted row
-                        # (fixed 2026-07-14 — see its ``source_plugin_key`` param,
-                        # L1207), so the DELETE matched **zero** rows and
-                        # old stale points from a previous schedule survived the
-                        # regen. The user observed weekly points (new regen) and
-                        # daily leftovers (pre-existing rows) mixed in the same
-                        # series, producing a misleading "flat line" chart.
-                        #
-                        # Semantically correct REGARDLESS of the above fix: an
-                        # asset bound to a parametric provider derives its
-                        # *entire* price series from the provider_params. A
-                        # change of params invalidates the whole series,
-                        # mirroring the R3-3 currency-change wipe policy.
-                        # Manually imported points (if any) are also wiped —
-                        # the user must re-import after the param change if
-                        # needed (same responsibility model as R3-3).
-                        deleted_rows_result = await session.execute(
-                            delete(PriceHistory).where(
-                                PriceHistory.asset_id == a.asset_id,
-                            )
+
+                def _is_parametric(code: str) -> bool:
+                    inst = AssetProviderRegistry.get_provider_instance(code)
+                    return inst is not None and inst.provider_kind == FAProviderKind.PARAMETRIC_GENERATION
+
+                if provider_code_unchanged:
+                    wipe_reason = "params changed" if (params_changed and _is_parametric(a.provider_code)) else ""
+                else:
+                    # Leaving a parametric provider is at least as invalidating as
+                    # changing its params: the whole series was *invented* from
+                    # provider_params, so under a market provider it is not history,
+                    # it is fiction. Keeping it also poisons the next sync, which
+                    # resumes from the day after the last stored price and therefore
+                    # never backfills the real past.
+                    wipe_reason = "provider changed" if _is_parametric(existing.provider_code) else ""
+
+                if wipe_reason:
+                    # 1. Delete ALL prices for this asset (full wipe).
+                    #
+                    # #R4-3 (2026-04-23): previously we scoped by
+                    # ``source_plugin_key == a.provider_code``, but
+                    # ``bulk_upsert_prices`` unconditionally hardcoded
+                    # ``source_plugin_key="MANUAL"`` for every inserted row
+                    # (fixed 2026-07-14 — see its ``source_plugin_key`` param,
+                    # L1207), so the DELETE matched **zero** rows and
+                    # old stale points from a previous schedule survived the
+                    # regen. The user observed weekly points (new regen) and
+                    # daily leftovers (pre-existing rows) mixed in the same
+                    # series, producing a misleading "flat line" chart.
+                    #
+                    # Semantically correct REGARDLESS of the above fix: an
+                    # asset bound to a parametric provider derives its
+                    # *entire* price series from the provider_params. A
+                    # change of params invalidates the whole series,
+                    # mirroring the R3-3 currency-change wipe policy.
+                    # Manually imported points (if any) are also wiped —
+                    # the user must re-import after the param change if
+                    # needed (same responsibility model as R3-3).
+                    deleted_rows_result = await session.execute(
+                        delete(PriceHistory).where(
+                            PriceHistory.asset_id == a.asset_id,
                         )
-                        deleted_count = deleted_rows_result.rowcount or 0
-                        # 1b. Symmetric wipe of **auto-generated** events
-                        # (#R6-4, 2026-04-24): before this fix, a param change
-                        # wiped only the prices but left the previously
-                        # generated events in place. The result was an asset
-                        # showing stale INTEREST / MATURITY_SETTLEMENT events
-                        # computed from the *old* schedule, plus new events
-                        # that will be regenerated on next sync — the two
-                        # sets can overlap or contradict each other (e.g.
-                        # an old coupon on Jul 1 at rate 0.05 vs a new one
-                        # at rate 0.12), and ``get_current_value`` sees the
-                        # stale subtractive events so its output is
-                        # essentially undefined.
-                        #
-                        # Policy: mirror the R3-3 wipe for events too —
-                        # delete all events generated by THIS provider
-                        # assignment (``provider_assignment_id ==
-                        # existing.id``). Manual events
-                        # (``provider_assignment_id IS NULL``) are
-                        # preserved: they are user-owned and survive param
-                        # changes. Transactions linked to the deleted
-                        # events are disconnected (SET asset_event_id =
-                        # NULL) — same responsibility model as Policy D:
-                        # the user can reattach them to the regenerated
-                        # events if needed.
-                        event_ids_subq = select(AssetEvent.id).where(
+                    )
+                    deleted_count = deleted_rows_result.rowcount or 0
+                    # 1b. Symmetric wipe of **auto-generated** events
+                    # (#R6-4, 2026-04-24): before this fix, a param change
+                    # wiped only the prices but left the previously
+                    # generated events in place. The result was an asset
+                    # showing stale INTEREST / MATURITY_SETTLEMENT events
+                    # computed from the *old* schedule, plus new events
+                    # that will be regenerated on next sync — the two
+                    # sets can overlap or contradict each other (e.g.
+                    # an old coupon on Jul 1 at rate 0.05 vs a new one
+                    # at rate 0.12), and ``get_current_value`` sees the
+                    # stale subtractive events so its output is
+                    # essentially undefined.
+                    #
+                    # Policy: mirror the R3-3 wipe for events too —
+                    # delete all events generated by THIS provider
+                    # assignment (``provider_assignment_id ==
+                    # existing.id``). Manual events
+                    # (``provider_assignment_id IS NULL``) are
+                    # preserved: they are user-owned and survive param
+                    # changes. Transactions linked to the deleted
+                    # events are disconnected (SET asset_event_id =
+                    # NULL) — same responsibility model as Policy D:
+                    # the user can reattach them to the regenerated
+                    # events if needed.
+                    event_ids_subq = select(AssetEvent.id).where(
+                        and_(
+                            AssetEvent.asset_id == a.asset_id,
+                            AssetEvent.provider_assignment_id == existing.id,
+                        )
+                    )
+                    disconnect_result = await session.execute(Transaction.__table__.update().where(Transaction.asset_event_id.in_(event_ids_subq)).values(asset_event_id=None))
+                    disconnected_tx = disconnect_result.rowcount or 0
+                    deleted_events_result = await session.execute(
+                        delete(AssetEvent).where(
                             and_(
                                 AssetEvent.asset_id == a.asset_id,
                                 AssetEvent.provider_assignment_id == existing.id,
                             )
                         )
-                        disconnect_result = await session.execute(Transaction.__table__.update().where(Transaction.asset_event_id.in_(event_ids_subq)).values(asset_event_id=None))
-                        disconnected_tx = disconnect_result.rowcount or 0
-                        deleted_events_result = await session.execute(
-                            delete(AssetEvent).where(
-                                and_(
-                                    AssetEvent.asset_id == a.asset_id,
-                                    AssetEvent.provider_assignment_id == existing.id,
-                                )
-                            )
+                    )
+                    deleted_events = deleted_events_result.rowcount or 0
+                    # 2. Invalidate outer caches for the OLD params hash (the new
+                    #    hash produces a different cache_key → natural MISS, but we
+                    #    also drop the stale entry explicitly so it doesn't linger
+                    #    for 15 min).
+                    try:
+                        old_params_dict = None
+                        if existing.provider_params:
+                            try:
+                                old_params_dict = json.loads(existing.provider_params)
+                            except Exception:
+                                old_params_dict = None
+                        old_hash = _provider_params_hash(old_params_dict)
+                        old_identifier = existing.identifier or ""
+                        old_key = (
+                            existing.provider_code,
+                            old_identifier,
+                            str(existing.identifier_type),
+                            old_hash,
                         )
-                        deleted_events = deleted_events_result.rowcount or 0
-                        # 2. Invalidate outer caches for the OLD params hash (the new
-                        #    hash produces a different cache_key → natural MISS, but we
-                        #    also drop the stale entry explicitly so it doesn't linger
-                        #    for 15 min).
-                        try:
-                            old_params_dict = None
-                            if existing.provider_params:
-                                try:
-                                    old_params_dict = json.loads(existing.provider_params)
-                                except Exception:
-                                    old_params_dict = None
-                            old_hash = _provider_params_hash(old_params_dict)
-                            old_identifier = existing.identifier or ""
-                            old_key = (
-                                existing.provider_code,
-                                old_identifier,
-                                str(existing.identifier_type),
-                                old_hash,
-                            )
-                            _asset_history_cache.delete(old_key)
-                            _asset_current_cache.delete(old_key)
-                        except Exception as cache_err:
-                            logger.debug(f"Cache invalidation skipped for asset {a.asset_id}: {cache_err}")
-                        logger.info(
-                            "parametric provider '%s' params changed for asset %s — wiped %d price row(s), %d event row(s), disconnected %d transaction(s), invalidated cache",
-                            a.provider_code,
-                            a.asset_id,
-                            deleted_count,
-                            deleted_events,
-                            disconnected_tx,
-                        )
+                        _asset_history_cache.delete(old_key)
+                        _asset_current_cache.delete(old_key)
+                    except Exception as cache_err:
+                        logger.debug(f"Cache invalidation skipped for asset {a.asset_id}: {cache_err}")
+                    logger.info(
+                        "parametric provider '%s' %s for asset %s — wiped %d price row(s), %d event row(s), disconnected %d transaction(s), invalidated cache",
+                        existing.provider_code,
+                        wipe_reason,
+                        a.asset_id,
+                        deleted_count,
+                        deleted_events,
+                        disconnected_tx,
+                    )
 
                 # UPDATE existing assignment (preserves id → FK stays valid)
                 existing.provider_code = a.provider_code
@@ -1016,7 +1168,7 @@ class AssetSourceManager:
         return FABulkRemoveResponse(results=results, success_count=len(results), errors=[])
 
     @staticmethod
-    async def refresh_assets_from_provider(asset_ids: list[int], session: AsyncSession) -> FABulkMetadataRefreshResponse:
+    async def refresh_assets_from_provider(asset_ids: list[int], session: AsyncSession) -> FABulkMetadataRefreshResponse:  # noqa: C901 — per-asset guard chain with early continues
         """
         Refresh asset data from assigned providers (bulk operation).
 
@@ -1113,7 +1265,7 @@ class AssetSourceManager:
                         FAMetadataRefreshResult(
                             asset_id=asset_id,
                             success=False,
-                            message=f"Failed to fetch metadata: {str(e)}",
+                            message=f"Failed to fetch metadata: {e!s}",
                         )
                     )
                     continue
@@ -1161,8 +1313,8 @@ class AssetSourceManager:
                 )
 
             except Exception as e:
-                logger.error(f"Error preparing refresh for asset {asset_id}: {e}")
-                results.append(FAMetadataRefreshResult(asset_id=asset_id, success=False, message=f"Error: {str(e)}"))
+                logger.exception(f"Error preparing refresh for asset {asset_id}: {e}")
+                results.append(FAMetadataRefreshResult(asset_id=asset_id, success=False, message=f"Error: {e!s}"))
 
         # Apply all patches in bulk using AssetCRUDService
         if patches_to_apply:
@@ -1206,7 +1358,7 @@ class AssetSourceManager:
     # ========================================================================
 
     @staticmethod
-    async def bulk_upsert_prices(data: List[FAUpsert], session: AsyncSession, source_plugin_key: str = "MANUAL") -> dict:
+    async def bulk_upsert_prices(data: List[FAUpsert], session: AsyncSession, source_plugin_key: str = "MANUAL") -> dict:  # noqa: C901 — chunked batch upsert, per-date sentinel merge
         """
         Bulk upsert prices manually (PRIMARY bulk method).
 
@@ -1268,9 +1420,6 @@ class AssetSourceManager:
             #   - field == None (omitted)  → preserve existing DB value (no-op)
             #   - field == -1              → write NULL
             #   - field >= 0               → write the provided value
-            price_objects = []
-            dates_to_upsert = []
-
             # I.2 — Currency coherence validation (Supersedes E.3).
             # Hard reject (not per-item skip): if ANY point has a currency that doesn't
             # match asset.currency, raise ValueError immediately so the router returns
@@ -1292,15 +1441,6 @@ class AssetSourceManager:
             valid_inputs: dict = {}
             for price in prices:
                 valid_inputs[price.date] = price
-                dates_to_upsert.append(price.date)
-
-            # Fetch existing rows for MERGE (F.4)
-            existing_rows: dict = {}
-            if dates_to_upsert:
-                existing_stmt = select(PriceHistory).where(and_(PriceHistory.asset_id == asset_id, PriceHistory.date.in_(dates_to_upsert)))
-                existing_res = await session.execute(existing_stmt)
-                for row in existing_res.scalars().all():
-                    existing_rows[row.date] = row
 
             # F.4 sentinel helper: -1 → None (SET NULL), None → preserve, else → write
             def _merge_field(new_val, existing_val):
@@ -1314,76 +1454,125 @@ class AssetSourceManager:
             # Integrity guard errors accumulated across all dates (surfaced via
             # the same `results[].message` the currency-mismatch check uses).
             rejected_dates: list[str] = []
+            upserted_count = 0
 
-            for date_key, price in valid_inputs.items():
-                existing = existing_rows.get(date_key)
-                # Sentinel merge for auxiliary OHLC fields (open/high/low) + volume
-                merged_open = _merge_field(price.open, existing.open if existing else None)
-                merged_high = _merge_field(price.high, existing.high if existing else None)
-                merged_low = _merge_field(price.low, existing.low if existing else None)
-                merged_volume = _merge_field(price.volume, existing.volume if existing else None)
+            # SQLite has a single writer per database file, and a transaction holds
+            # that writer from its first write until COMMIT. A full-history sync is
+            # ~45k daily points, which in one transaction kept the lock for ~10s —
+            # long past the 5s busy_timeout, so every concurrent write (another tab,
+            # the scheduler, a parallel test worker) died with "database is locked".
+            # Committing in bounded slices keeps each hold in the sub-second range
+            # and also caps the IN(...) bind-parameter count, which SQLite limits.
+            # Per-date merge semantics are unaffected: each date only ever consults
+            # its own stored row, so slicing changes nothing about the outcome.
+            chunk_keys = list(valid_inputs.keys())
+            for chunk_start in range(0, len(chunk_keys), PRICE_UPSERT_CHUNK_SIZE):
+                chunk_dates = chunk_keys[chunk_start : chunk_start + PRICE_UPSERT_CHUNK_SIZE]
 
-                # Integrity policy:
-                # - Fresh provider OHLC bundles (incoming low+high present) must
-                #   be self-consistent and are still rejected if corrupted.
-                # - Close-only / partial updates must not be rejected just because
-                #   F.4 preserved stale bounds from an older flat candle — that is
-                #   the justETF/scheduled-investment case and the original
-                #   production incident alike. In that branch we widen the merged
-                #   [low, high] bounds around the new close instead.
-                if price.low is not None and price.high is not None:
-                    if price.low > price.high or not (price.low <= price.close <= price.high):
-                        rejected_dates.append(f"{date_key.isoformat()} (close={price.close}, low={merged_low}, high={merged_high})")
-                        continue
-                elif merged_low is not None and merged_high is not None:
-                    merged_low = min(merged_low, price.close)
-                    merged_high = max(merged_high, price.close)
+                # Fetch existing rows for MERGE (F.4)
+                existing_rows: dict = {}
+                existing_stmt = select(PriceHistory).where(and_(PriceHistory.asset_id == asset_id, PriceHistory.date.in_(chunk_dates)))
+                existing_res = await session.execute(existing_stmt)
+                for row in existing_res.scalars().all():
+                    existing_rows[row.date] = row
 
-                price_obj = PriceHistory(
-                    asset_id=asset_id,
-                    date=price.date,
-                    open=(truncate_priceHistory(merged_open, "open") if merged_open is not None else None),
-                    high=(truncate_priceHistory(merged_high, "high") if merged_high is not None else None),
-                    low=(truncate_priceHistory(merged_low, "low") if merged_low is not None else None),
-                    close=truncate_priceHistory(price.close, "close"),
-                    volume=merged_volume,
-                    currency=price.currency or default_currency,
-                    source_plugin_key=source_plugin_key,
-                    # Only provider-driven writes get a real fetched_at — it feeds
-                    # _compute_price_fingerprint()'s COUNT+MAX(fetched_at) cache-
-                    # invalidation proxy (portfolio_engine.py). Manual entries keep
-                    # fetched_at=None (no "fetch" happened), matching prior behavior.
-                    fetched_at=utcnow() if source_plugin_key != "MANUAL" else None,
-                )
-                price_objects.append(price_obj)
+                price_objects = []
+                for date_key in chunk_dates:
+                    price = valid_inputs[date_key]
+                    existing = existing_rows.get(date_key)
+                    # Sentinel merge for auxiliary OHLC fields (open/high/low) + volume
+                    merged_open = _merge_field(price.open, existing.open if existing else None)
+                    merged_high = _merge_field(price.high, existing.high if existing else None)
+                    merged_low = _merge_field(price.low, existing.low if existing else None)
+                    merged_volume = _merge_field(price.volume, existing.volume if existing else None)
 
-            # Delete existing prices for these dates (MERGE = fetch + delete + insert)
-            # Only accepted dates — a date rejected by the integrity guard above
-            # must NOT be deleted (that would drop the row entirely instead of
-            # preserving it, since it's excluded from price_objects below).
-            accepted_dates = [p.date for p in price_objects]
-            if accepted_dates:
-                delete_stmt = delete(PriceHistory).where(and_(PriceHistory.asset_id == asset_id, PriceHistory.date.in_(accepted_dates)))
-                await session.execute(delete_stmt)
+                    # Integrity policy:
+                    # - Fresh provider OHLC bundles (incoming low+high present) must
+                    #   be self-consistent and are still rejected if corrupted.
+                    # - Close-only / partial updates must not be rejected just because
+                    #   F.4 preserved stale bounds from an older flat candle — that is
+                    #   the justETF/scheduled-investment case and the original
+                    #   production incident alike. In that branch we widen the merged
+                    #   [low, high] bounds around the new close instead.
+                    if price.low is not None and price.high is not None:
+                        if price.low > price.high or not (price.low <= price.close <= price.high):
+                            rejected_dates.append(f"{date_key.isoformat()} (close={price.close}, low={merged_low}, high={merged_high})")
+                            continue
+                    elif merged_low is not None and merged_high is not None:
+                        merged_low = min(merged_low, price.close)
+                        merged_high = max(merged_high, price.close)
 
-            # Bulk insert new prices
-            session.add_all(price_objects)
-            await session.commit()
+                    price_obj = PriceHistory(
+                        asset_id=asset_id,
+                        date=price.date,
+                        open=(truncate_priceHistory(merged_open, "open") if merged_open is not None else None),
+                        high=(truncate_priceHistory(merged_high, "high") if merged_high is not None else None),
+                        low=(truncate_priceHistory(merged_low, "low") if merged_low is not None else None),
+                        close=truncate_priceHistory(price.close, "close"),
+                        volume=merged_volume,
+                        currency=price.currency or default_currency,
+                        source_plugin_key=source_plugin_key,
+                        # Every write stamps fetched_at, manual ones included, because it
+                        # feeds _compute_price_fingerprint()'s COUNT+MAX(fetched_at) cache
+                        # key (portfolio_engine.py:2182). Editing an existing price by hand
+                        # leaves COUNT unchanged, so fetched_at is the ONLY thing that tells
+                        # the portfolio cache to recompute — without it the user's own edit
+                        # would stay invisible. A previous comment here claimed manual rows
+                        # kept fetched_at=None; they never did (the column is NOT NULL and
+                        # the model's default_factory overwrote it at flush), and the intent
+                        # it described would have been the bug above.
+                        fetched_at=utcnow(),
+                    )
+                    price_objects.append(price_obj)
+
+                # One native upsert instead of DELETE + INSERT. Python above has already
+                # resolved every F.4 sentinel and run the integrity guard, so the merge
+                # semantics stay where they can be read and SQL only decides insert vs
+                # update. A date rejected by the guard is simply absent from the VALUES,
+                # which preserves its stored row — the DELETE had to be filtered by hand
+                # to get the same outcome. Row ids are no longer recycled on every write
+                # (nothing references price_history.id, so this is free).
+                if price_objects:
+                    upsert_stmt = sqlite_insert(PriceHistory).values(
+                        [
+                            {
+                                "asset_id": obj.asset_id,
+                                "date": obj.date,
+                                "open": obj.open,
+                                "high": obj.high,
+                                "low": obj.low,
+                                "close": obj.close,
+                                "volume": obj.volume,
+                                "currency": obj.currency,
+                                "source_plugin_key": obj.source_plugin_key,
+                                "fetched_at": obj.fetched_at,
+                            }
+                            for obj in price_objects
+                        ]
+                    )
+                    upsert_stmt = upsert_stmt.on_conflict_do_update(
+                        index_elements=["asset_id", "date"],
+                        set_={column: upsert_stmt.excluded[column] for column in ("open", "high", "low", "close", "volume", "currency", "source_plugin_key", "fetched_at")},
+                    )
+                    await session.execute(upsert_stmt)
+                await session.commit()
+
+                upserted_count += len(price_objects)
 
             # Count as inserted
-            total_inserted += len(price_objects)
+            total_inserted += upserted_count
 
             # I.2 — currency-mismatch was hard-rejected earlier (whole call raises).
             # OHLC-integrity rejections (this function's own guard, soft-skip per date)
             # are reported in `msg` below instead.
-            msg = f"Upserted {len(price_objects)} prices"
+            msg = f"Upserted {upserted_count} prices"
             if rejected_dates:
                 msg += f"; rejected {len(rejected_dates)} date(s) with impossible OHLC (close outside [low, high]): " + ", ".join(rejected_dates[:5]) + (f" (+ {len(rejected_dates) - 5} more)" if len(rejected_dates) > 5 else "")
 
             results.append(
                 {
                     "asset_id": asset_id,
-                    "count": len(price_objects),
+                    "count": upserted_count,
                     "message": msg,
                 }
             )
@@ -1444,20 +1633,26 @@ class AssetSourceManager:
 
         # Delete existing events for these (date, type) pairs — only for the SAME provider
         # When provider_assignment_id is None, SQLAlchemy generates IS NULL which is correct
-        for evt_date, evt_type in keys_to_delete:
-            del_stmt = delete(AssetEvent).where(
-                and_(
-                    AssetEvent.asset_id == asset_id,
-                    AssetEvent.date == evt_date,
-                    AssetEvent.type == evt_type,
-                    AssetEvent.provider_assignment_id == provider_assignment_id,
+        # Committed in bounded slices for the same reason as bulk_upsert_prices: one
+        # transaction spanning every event would hold SQLite's single write lock for the
+        # whole loop. keys_to_delete and event_objects are built 1:1 in the same order,
+        # so slicing by index keeps each event with its own delete.
+        for chunk_start in range(0, len(event_objects), PRICE_UPSERT_CHUNK_SIZE):
+            chunk_end = chunk_start + PRICE_UPSERT_CHUNK_SIZE
+            for evt_date, evt_type in keys_to_delete[chunk_start:chunk_end]:
+                del_stmt = delete(AssetEvent).where(
+                    and_(
+                        AssetEvent.asset_id == asset_id,
+                        AssetEvent.date == evt_date,
+                        AssetEvent.type == evt_type,
+                        AssetEvent.provider_assignment_id == provider_assignment_id,
+                    )
                 )
-            )
-            await session.execute(del_stmt)
+                await session.execute(del_stmt)
 
-        # Insert new events
-        session.add_all(event_objects)
-        await session.commit()
+            # Insert new events
+            session.add_all(event_objects[chunk_start:chunk_end])
+            await session.commit()
 
         return len(event_objects)
 
@@ -1553,7 +1748,7 @@ class AssetSourceManager:
     # ========================================================================
 
     @staticmethod
-    async def wipe_market_data_for_currency_change(
+    async def wipe_market_data_for_currency_change(  # noqa: C901 — sequential count-then-delete steps, guard ifs
         asset_id: int,
         session: AsyncSession,
         dry_run: bool = False,
@@ -1713,7 +1908,7 @@ class AssetSourceManager:
     # ========================================================================
 
     @staticmethod
-    async def probe_provider_config(
+    async def probe_provider_config(  # noqa: C901 — three parallel probe closures, duplicated try/except mapping
         config: FAProviderConfigBase,
         operations: list[ProbeOperation],
     ) -> FAProviderProbeResponse:
@@ -1759,12 +1954,15 @@ class AssetSourceManager:
                 return ProbeCurrentPriceResult(
                     success=False,
                     error="Timeout after 15s",
+                    error_code="TIMEOUT",
                     execution_time_ms=(time.monotonic_ns() - op_start) // 1_000_000,
                 )
             except Exception as e:
                 return ProbeCurrentPriceResult(
                     success=False,
                     error=str(e),
+                    error_code=getattr(e, "error_code", None),
+                    error_details=_json_safe_details(getattr(e, "details", None)),
                     execution_time_ms=(time.monotonic_ns() - op_start) // 1_000_000,
                 )
 
@@ -1795,12 +1993,15 @@ class AssetSourceManager:
                 return ProbeHistoryResult(
                     success=False,
                     error="Timeout after 15s",
+                    error_code="TIMEOUT",
                     execution_time_ms=(time.monotonic_ns() - op_start) // 1_000_000,
                 )
             except Exception as e:
                 return ProbeHistoryResult(
                     success=False,
                     error=str(e),
+                    error_code=getattr(e, "error_code", None),
+                    error_details=_json_safe_details(getattr(e, "details", None)),
                     execution_time_ms=(time.monotonic_ns() - op_start) // 1_000_000,
                 )
 
@@ -1821,12 +2022,15 @@ class AssetSourceManager:
                 return ProbeMetadataResult(
                     success=False,
                     error="Timeout after 15s",
+                    error_code="TIMEOUT",
                     execution_time_ms=(time.monotonic_ns() - op_start) // 1_000_000,
                 )
             except Exception as e:
                 return ProbeMetadataResult(
                     success=False,
                     error=str(e),
+                    error_code=getattr(e, "error_code", None),
+                    error_details=_json_safe_details(getattr(e, "details", None)),
                     execution_time_ms=(time.monotonic_ns() - op_start) // 1_000_000,
                 )
 
@@ -1896,6 +2100,7 @@ class AssetSourceManager:
                         close=ph.close,
                         volume=ph.volume,
                         currency=ph.currency,
+                        source_plugin_key=ph.source_plugin_key,
                         backward_fill_info=None,
                     )
                 )
@@ -1910,6 +2115,7 @@ class AssetSourceManager:
                         close=last_known.close,
                         volume=last_known.volume,
                         currency=last_known.currency,
+                        source_plugin_key=last_known.source_plugin_key,
                         backward_fill_info=AssetBackwardFillInfo(actual_rate_date=last_known.date, days_back=days_back),
                     )
                 )
@@ -1918,7 +2124,47 @@ class AssetSourceManager:
         return results
 
     @staticmethod
-    async def get_prices_bulk(
+    def derive_signal_source_capability(prices: Sequence[FAPricePoint]) -> SignalSourceCapability:
+        """Derive the semantic volume capability of a neutral price series
+        from the source plugin(s) that directly observed it.
+
+        Fails closed (unknown/false) whenever:
+        - no point was directly observed (all backward-filled, or empty series),
+        - any observed source_plugin_key does not resolve to a registered
+          provider (e.g. "MANUAL" upserts, test/legacy sentinel keys), or
+        - observed sources disagree (mixed providers with different capability).
+
+        Only points with ``backward_fill_info is None`` count as evidence:
+        backward-filled rows copy the seed price's ``source_plugin_key`` onto
+        dates that source never actually reported, so counting them would let
+        a stale source's capability leak onto data it didn't produce.
+        """
+        observed_keys = {point.source_plugin_key for point in prices if point.backward_fill_info is None and point.source_plugin_key}
+        if not observed_keys:
+            return SignalSourceCapability()
+
+        capabilities: set[tuple[bool, FAVolumeKind]] = set()
+        for key in observed_keys:
+            provider = AssetProviderRegistry.get_provider_instance(key)
+            if provider is None:
+                # Unknown/manual source (e.g. "MANUAL") — fail closed.
+                return SignalSourceCapability()
+            capabilities.add((provider.supports_meaningful_volume, provider.volume_kind))
+
+        if len(capabilities) != 1:
+            # Mixed sources with disagreeing capability — fail closed.
+            return SignalSourceCapability()
+
+        supports_meaningful_volume, volume_kind = next(iter(capabilities))
+        if not supports_meaningful_volume:
+            return SignalSourceCapability()
+        return SignalSourceCapability(
+            supports_meaningful_volume=True,
+            volume_kind=SignalVolumeKind(volume_kind.value),
+        )
+
+    @staticmethod
+    async def get_prices_bulk(  # noqa: C901 — TODO(P2-refactor): multi-pass query/FX/signal pipeline, extract passes
         requests: list,
         session: AsyncSession,
     ) -> list:
@@ -1933,11 +2179,57 @@ class AssetSourceManager:
         if not requests:
             return []
 
-        # Build per-asset date ranges
+        signal_service = SignalService()
+        signal_plans = []
+        request_ranges: list[tuple[date_type, date_type]] = []
+        load_ranges: list[tuple[date_type, date_type]] = []
         asset_ranges: dict[int, tuple[date_type, date_type]] = {}
         for req in requests:
             end = req.date_range.end or req.date_range.start
-            asset_ranges[req.asset_id] = (req.date_range.start, end)
+            requested_range = (req.date_range.start, end)
+            context = SignalExecutionContext(
+                domain=SignalDomain.ASSET,
+                requested_range=req.date_range,
+                cadence=SignalCadence.DAILY,
+                source_reference=f"asset:{req.asset_id}",
+                target_currency=req.target_currency,
+            )
+            plan = signal_service.prepare_plan(
+                req.signals,
+                context,
+                req.annotation_requests,
+            )
+            # E1: a full-history computation (e.g. underwater drawdown, whose
+            # relevant peak may predate the visible range by years) loads from
+            # the beginning of the available history; the min() cap below then
+            # resolves to exactly date.min. Point-derived warm-up otherwise.
+            if plan.requires_full_history:
+                warmup_days = (req.date_range.start - date_type.min).days
+            else:
+                warmup_days = max(
+                    plan.max_history_points_before_visible,
+                    plan.max_prepared_history_points_before_visible * _RISK_WARMUP_DAY_MULTIPLIER,
+                )
+            warmup_days = min(
+                warmup_days,
+                (req.date_range.start - date_type.min).days,
+            )
+            load_range = (
+                req.date_range.start - timedelta(days=warmup_days),
+                end,
+            )
+            request_ranges.append(requested_range)
+            load_ranges.append(load_range)
+            signal_plans.append(plan)
+            for asset_id in (
+                req.asset_id,
+                *sorted(plan.comparison_asset_ids),
+            ):
+                existing = asset_ranges.get(asset_id)
+                asset_ranges[asset_id] = (
+                    min(existing[0], load_range[0]) if existing else load_range[0],
+                    max(existing[1], load_range[1]) if existing else load_range[1],
+                )
 
         asset_ids = list(asset_ranges.keys())
 
@@ -1992,7 +2284,15 @@ class AssetSourceManager:
         results = []
 
         # Check if any request wants events
-        event_requests = {req.asset_id for req in requests if getattr(req, "include_events", False)}
+        event_requests = {
+            req.asset_id
+            for req, plan in zip(
+                requests,
+                signal_plans,
+                strict=True,
+            )
+            if getattr(req, "include_events", False) or plan.requires_events
+        }
 
         # Query events if needed
         event_maps: dict[int, list[FAAssetEventPointOut]] = {}
@@ -2023,14 +2323,72 @@ class AssetSourceManager:
                     )
                 )
 
-        for req in requests:
+        for req, (start, end) in zip(
+            requests,
+            load_ranges,
+            strict=True,
+        ):
             aid = req.asset_id
-            start, end = asset_ranges[aid]
             price_map = price_maps.get(aid, {})
-            seed = seed_prices.get(aid)
+            in_memory_seed = max(
+                (price for point_date, price in price_map.items() if point_date < start),
+                key=lambda price: price.date,
+                default=None,
+            )
+            seed = in_memory_seed or seed_prices.get(aid)
             series = AssetSourceManager._build_backward_filled_series(price_map, start, end, seed_price=seed)
-            events = event_maps.get(aid, []) if aid in event_requests else []
+            events = [event for event in event_maps.get(aid, []) if start <= event.date <= end] if aid in event_requests else []
             results.append(FAPriceQueryResult(asset_id=aid, prices=series, events=events))
+
+        dependency_results: dict[
+            tuple[int, int],
+            FAPriceQueryResult,
+        ] = {}
+        effective_risk_targets: dict[int, str] = {}
+        for request_index, (
+            req,
+            result,
+            plan,
+            (start, end),
+        ) in enumerate(
+            zip(
+                requests,
+                results,
+                signal_plans,
+                load_ranges,
+                strict=True,
+            )
+        ):
+            if not plan.requires_prepared_asset_series:
+                continue
+            target = req.target_currency or next(
+                (point.currency for point in result.prices if point.currency is not None),
+                None,
+            )
+            if target is not None:
+                effective_risk_targets[request_index] = target
+            for comparison_asset_id in plan.comparison_asset_ids:
+                if comparison_asset_id == req.asset_id:
+                    continue
+                comparison_price_map = price_maps.get(
+                    comparison_asset_id,
+                    {},
+                )
+                in_memory_seed = max(
+                    (price for point_date, price in comparison_price_map.items() if point_date < start),
+                    key=lambda price: price.date,
+                    default=None,
+                )
+                comparison_seed = in_memory_seed or seed_prices.get(comparison_asset_id)
+                dependency_results[(request_index, comparison_asset_id)] = FAPriceQueryResult(
+                    asset_id=comparison_asset_id,
+                    prices=AssetSourceManager._build_backward_filled_series(
+                        comparison_price_map,
+                        start,
+                        end,
+                        seed_price=comparison_seed,
+                    ),
+                )
 
         # ── Currency conversion pass ──────────────────────────────────────
         # For each result whose request has target_currency, convert OHLC
@@ -2042,8 +2400,18 @@ class AssetSourceManager:
         # with dedicated banners + CTA. Auto-registration is NOT performed:
         # pair registration is an explicit user action (E.4 cancelled).
 
-        for req, result in zip(requests, results, strict=True):
-            target = getattr(req, "target_currency", None)
+        conversion_jobs = [(getattr(req, "target_currency", None), result) for req, result in zip(requests, results, strict=True)]
+        conversion_jobs.extend(
+            (
+                effective_risk_targets.get(request_index),
+                dependency_result,
+            )
+            for (
+                request_index,
+                _comparison_asset_id,
+            ), dependency_result in dependency_results.items()
+        )
+        for target, result in conversion_jobs:
             if not target or not result.prices:
                 continue
 
@@ -2061,6 +2429,26 @@ class AssetSourceManager:
                 continue
 
             converted, conv_errors = await convert_bulk(session, conversions, raise_on_error=False)
+
+            # Dedup conversion errors ONCE per job. The old per-point loop ran
+            # `err not in result.errors` for every failed point × every error —
+            # quadratic in the number of failures, and with a full-history load
+            # (E1) tens of thousands of distinct per-date errors made the pass
+            # spin the event loop for minutes (2026-09-02 live wedge).
+            # The list is also CAPPED: errors embed the failing date, so a
+            # long uncovered FX range would otherwise produce a multi-MB
+            # payload nobody reads (the frontend only ever surfaces [0]).
+            if conv_errors:
+                seen = set(result.errors)
+                deduped = []
+                for err in conv_errors:
+                    if err not in seen:
+                        seen.add(err)
+                        deduped.append(err)
+                MAX_CONV_ERRORS = 10
+                if len(deduped) > MAX_CONV_ERRORS:
+                    deduped = deduped[:MAX_CONV_ERRORS] + [f"… and {len(deduped) - MAX_CONV_ERRORS} more FX conversion failures"]
+                result.errors.extend(deduped)
 
             # Apply conversion results
             conv_idx = 0
@@ -2093,12 +2481,9 @@ class AssetSourceManager:
                         original_open=original_point.original_open,
                         original_high=original_point.original_high,
                         original_low=original_point.original_low,
+                        source_plugin_key=original_point.source_plugin_key,
                         backward_fill_info=failed_bfi,
                     )
-                    # Surface the per-pair error once per result (dedup)
-                    for err in conv_errors:
-                        if err not in result.errors:
-                            result.errors.append(err)
                     conv_idx += 1
                     continue
 
@@ -2156,9 +2541,54 @@ class AssetSourceManager:
                     original_open=original_point.open,
                     original_high=original_point.high,
                     original_low=original_point.low,
+                    source_plugin_key=original_point.source_plugin_key,
                     backward_fill_info=new_bfi,
                 )
                 conv_idx += 1
+
+        prepared_series_bundles: list[Optional[SignalPreparedSeriesBundle]] = []
+        for request_index, (
+            req,
+            result,
+            plan,
+            (start, end),
+        ) in enumerate(
+            zip(
+                requests,
+                results,
+                signal_plans,
+                load_ranges,
+                strict=True,
+            )
+        ):
+            target = effective_risk_targets.get(request_index)
+            if not plan.requires_prepared_asset_series or target is None:
+                prepared_series_bundles.append(None)
+                continue
+
+            prepared_range = DateRangeModel(start=start, end=end)
+            primary_set = prepare_asset_series_set(
+                [result],
+                requested_range=prepared_range,
+                target_currency=target,
+            )
+            series_sets = {None: primary_set}
+            for comparison_asset_id in plan.comparison_asset_ids:
+                if comparison_asset_id == req.asset_id:
+                    series_sets[comparison_asset_id] = primary_set
+                    continue
+                dependency_result = dependency_results[(request_index, comparison_asset_id)]
+                series_sets[comparison_asset_id] = prepare_asset_series_set(
+                    [result, dependency_result],
+                    requested_range=prepared_range,
+                    target_currency=target,
+                )
+            prepared_series_bundles.append(
+                SignalPreparedSeriesBundle(
+                    primary_asset_id=req.asset_id,
+                    series_sets=series_sets,
+                )
+            )
 
         # ── Event conversion pass (E.8) ───────────────────────────────────
         # Mirror of the price conversion above, applied to ``result.events``
@@ -2209,6 +2639,76 @@ class AssetSourceManager:
                 if err not in result.errors:
                     result.errors.append(err)
 
+        # ── Signal computation and response slicing ────────────────────────
+        for (
+            req,
+            result,
+            plan,
+            requested_range,
+            prepared_series_bundle,
+        ) in zip(
+            requests,
+            results,
+            signal_plans,
+            request_ranges,
+            prepared_series_bundles,
+            strict=True,
+        ):
+            if req.signals:
+                target = req.target_currency
+                price_currencies = {point.currency for point in result.prices if point.currency}
+                currency_coherent = len(price_currencies) <= 1 and (not target or not price_currencies or price_currencies == {target})
+                event_conversion_complete = not target or all(event.value.code == target for event in result.events)
+                if not currency_coherent:
+                    currencies = ", ".join(sorted(price_currencies))
+                    result.errors.append("Technical signal computation skipped because the price " f"series contains mixed currencies: {currencies}")
+                neutral_prices = (
+                    [
+                        SignalPricePoint(
+                            date=point.date,
+                            open=point.open,
+                            high=point.high,
+                            low=point.low,
+                            close=point.close,
+                            volume=point.volume,
+                            backward_fill_info=point.backward_fill_info,
+                        )
+                        for point in result.prices
+                    ]
+                    if currency_coherent
+                    else []
+                )
+                neutral_events = (
+                    [
+                        SignalEventPoint(
+                            date=event.date,
+                            type=event.type,
+                            value=event.value.amount,
+                            metadata={
+                                "currency": event.value.code,
+                                "notes": event.notes,
+                                "id": event.id,
+                                "is_auto": event.is_auto,
+                            },
+                        )
+                        for event in result.events
+                    ]
+                    if event_conversion_complete
+                    else []
+                )
+                result.signals = await signal_service.execute(
+                    plan,
+                    neutral_prices,
+                    neutral_events,
+                    events_loaded=(plan.requires_events and event_conversion_complete),
+                    prepared_series_bundle=prepared_series_bundle,
+                    source_capability=AssetSourceManager.derive_signal_source_capability(result.prices),
+                )
+
+            requested_start, requested_end = requested_range
+            result.prices = [point for point in result.prices if requested_start <= point.date <= requested_end] if req.include_price else []
+            result.events = [event for event in result.events if requested_start <= event.date <= requested_end] if req.include_events else []
+
         return results
 
     # ========================================================================
@@ -2216,7 +2716,7 @@ class AssetSourceManager:
     # ========================================================================
 
     @staticmethod
-    async def bulk_refresh_prices(
+    async def bulk_refresh_prices(  # noqa: C901 — TODO(P2-refactor): extract nested fetch/persist closures module-level
         requests: List[FARefreshItem],
         session: AsyncSession,
         concurrency: int = 5,
@@ -2261,6 +2761,17 @@ class AssetSourceManager:
         asset_stmt = select(Asset).where(Asset.id.in_(asset_ids))
         asset_res = await session.execute(asset_stmt)
         asset_map: Dict[int, Asset] = {a.id: a for a in asset_res.scalars().all()}
+
+        # Batch query: last stored price per asset, but only for the items that
+        # asked to resume. Resolving the sentinel here rather than in the caller
+        # keeps it to one round trip and leaves no window for another writer to
+        # land a price between "what do I have?" and "fetch from there".
+        resume_ids = [r.asset_id for r in requests if r.date_range.start == "resume"]
+        last_price_map: Dict[int, date_type] = {}
+        if resume_ids:
+            last_stmt = select(PriceHistory.asset_id, func.max(PriceHistory.date)).where(PriceHistory.asset_id.in_(resume_ids)).group_by(PriceHistory.asset_id)
+            last_res = await session.execute(last_stmt)
+            last_price_map = {row[0]: row[1] for row in last_res.all() if row[1] is not None}
 
         # Build prepared items and generate immediate SKIPPED/FAILED results
         prepared_items: Dict[int, dict] = {}  # asset_id → {assignment, asset, prov, params, ...}
@@ -2313,8 +2824,9 @@ class AssetSourceManager:
             try:
                 if isinstance(provider_params, str):
                     provider_params = json.loads(provider_params)
-            except Exception:
-                pass
+            except Exception as e:
+                # Keep legacy behaviour: validation below reports bad params to the result item.
+                logger.debug("Failed to decode provider params JSON", asset_id=asset_id, provider_code=provider_code, error=str(e))
 
             # Validate params
             try:
@@ -2325,7 +2837,31 @@ class AssetSourceManager:
                         asset_id=asset_id,
                         status=SyncStatus.FAILED,
                         provider_used=provider_code,
-                        errors=[f"Invalid provider params: {str(e)}"],
+                        errors=[f"Invalid provider params: {e!s}"],
+                        elapsed_ms=(time.monotonic_ns() - t_bulk_start_ns) // 1_000_000,
+                    )
+                )
+                continue
+
+            # Resolve the "resume" sentinel now that the asset is known to be
+            # syncable. No stored price means nothing to resume from — a new
+            # asset, or one whose series was just wiped by a parametric param
+            # change — so the honest answer is the provider's full history.
+            resolved_start = item.date_range.start
+            if resolved_start == "resume":
+                last_date = last_price_map.get(asset_id)
+                resolved_start = last_date + timedelta(days=1) if last_date else "min"
+
+            # Resuming past the requested end means the series already covers it.
+            # Reporting this as SKIPPED rather than sending an inverted range keeps
+            # the "nothing to do" case out of the provider and out of the error path.
+            if isinstance(resolved_start, date_type) and resolved_start > item.date_range.end:
+                immediate_results.append(
+                    FARefreshResult(
+                        asset_id=asset_id,
+                        status=SyncStatus.SKIPPED,
+                        provider_used=provider_code,
+                        message="Already up to date",
                         elapsed_ms=(time.monotonic_ns() - t_bulk_start_ns) // 1_000_000,
                     )
                 )
@@ -2339,7 +2875,7 @@ class AssetSourceManager:
                 "provider_params": provider_params,
                 "identifier": assignment.identifier,
                 "identifier_type": assignment.identifier_type,
-                "start": item.date_range.start,
+                "start": resolved_start,
                 "end": item.date_range.end,
             }
 
@@ -2347,7 +2883,7 @@ class AssetSourceManager:
         fetch_results: Dict[int, dict] = {}  # asset_id → {"prices": [...], "source": "..."}
         fetch_errors: Dict[int, str] = {}  # asset_id → error message
 
-        async def _fetch_single(asset_id: int, prep: dict):
+        async def _fetch_single(asset_id: int, prep: dict):  # noqa: C901 — TODO(P2-refactor): nested cache gap-analysis, split from fetch
             """Fetch prices from provider for a single asset (no DB access)."""
             prov = prep["prov"]
             identifier = prep["identifier"]
@@ -2526,7 +3062,7 @@ class AssetSourceManager:
 
             return new_count, changed_count, changed_items
 
-        async def _persist_single(asset_id: int) -> FARefreshResult:
+        async def _persist_single(asset_id: int) -> FARefreshResult:  # noqa: C901 — sequential guarded persist steps, per-step try/except
             """Upsert fetched prices and update assignment in an isolated session."""
             t_start_ns = time.monotonic_ns()
             prep = prepared_items[asset_id]
@@ -2661,7 +3197,7 @@ class AssetSourceManager:
                                 if "rejected" in (r.get("message") or ""):
                                     errors.append(r["message"])
                         except Exception as e:
-                            errors.append(f"DB upsert failed: {str(e)}")
+                            errors.append(f"DB upsert failed: {e!s}")
                             # If the upsert failed, no delta is reliable.
                             changed_items_delta = []
 
@@ -2681,7 +3217,7 @@ class AssetSourceManager:
                                 or 0
                             )
                         except Exception as e:
-                            errors.append(f"Event upsert failed: {str(e)}")
+                            errors.append(f"Event upsert failed: {e!s}")
 
                     # Update last_fetch_at on assignment
                     try:
@@ -2692,10 +3228,11 @@ class AssetSourceManager:
                             fresh_assignment.last_fetch_at = utcnow()
                             persist_session.add(fresh_assignment)
                             await persist_session.commit()
-                    except Exception:
-                        pass  # Not critical
+                    except Exception as e:
+                        # Not critical: price/event persistence result is already committed separately.
+                        logger.debug("Failed to update provider assignment fetch timestamp", asset_id=asset_id, error=str(e))
             except Exception as e:
-                errors.append(f"Persist session error: {str(e)}")
+                errors.append(f"Persist session error: {e!s}")
 
             points_changed = inserted_count + updated_count
             elapsed_ms = (time.monotonic_ns() - t_start_ns) // 1_000_000
@@ -2762,7 +3299,7 @@ class AssetSourceManager:
     # ========================================================================
 
     @staticmethod
-    async def get_current_prices_bulk(
+    async def get_current_prices_bulk(  # noqa: C901 — per-asset provider→cache→DB fallback chain
         asset_ids: list[int],
         session: AsyncSession,
         concurrency: int = 5,
@@ -3376,12 +3913,12 @@ class AssetCRUDService:
                 logger.info(f"Asset created: id={asset.id}, display_name={item.display_name}")
 
             except Exception as e:
-                logger.error(f"Error creating asset {item.display_name}: {e}")
+                logger.exception(f"Error creating asset {item.display_name}: {e}")
                 results.append(
                     FAAssetCreateResult(
                         asset_id=None,
                         success=False,
-                        message=f"Error: {str(e)}",
+                        message=f"Error: {e!s}",
                         display_name=item.display_name,
                     )
                 )
@@ -3390,20 +3927,20 @@ class AssetCRUDService:
         try:
             await session.commit()
         except Exception as e:
-            logger.error(f"Error committing asset creation: {e}")
+            logger.exception(f"Error committing asset creation: {e}")
             await session.rollback()
             # Mark all as failed
             for result in results:
                 if result.success:
                     result.success = False
-                    result.message = f"Transaction failed: {str(e)}"
+                    result.message = f"Transaction failed: {e!s}"
                     result.asset_id = None
 
         success_count = sum(1 for r in results if r.success)
         return FABulkAssetCreateResponse(results=results, success_count=success_count, errors=[])
 
     @staticmethod
-    async def list_assets(filters: FAAinfoFiltersRequest, session: AsyncSession) -> List[FAinfoResponse]:
+    async def list_assets(filters: FAAinfoFiltersRequest, session: AsyncSession, user_id: int | None = None) -> List[FAinfoResponse]:  # noqa: C901 — flat filter-chain query builder
         """
         List assets with optional filters - enhanced for BRIM asset matching.
 
@@ -3466,9 +4003,11 @@ class AssetCRUDService:
         if filters.uuid:
             conditions.append(Asset.identifier_uuid == filters.uuid)
 
-        # identifier_other uses partial match (LIKE) since it can contain anything
+        # identifier_other is a JSON list of soft identifiers: cast the column to text
+        # and substring-match, so any element of the list can match.
+        # NOTE: SQLite LIKE is case-insensitive for ASCII; on Postgres switch to .ilike().
         if filters.identifier_other:
-            conditions.append(Asset.identifier_other.ilike(f"%{filters.identifier_other}%"))
+            conditions.append(cast(Asset.identifier_other, String).like(f"%{filters.identifier_other}%"))
 
         # Partial identifier match (across all identifier columns)
         if filters.identifier_contains:
@@ -3481,7 +4020,7 @@ class AssetCRUDService:
                     Asset.identifier_sedol.ilike(pattern),
                     Asset.identifier_figi.ilike(pattern),
                     Asset.identifier_uuid.ilike(pattern),
-                    Asset.identifier_other.ilike(pattern),
+                    cast(Asset.identifier_other, String).like(pattern),
                 )
             )
 
@@ -3494,6 +4033,27 @@ class AssetCRUDService:
         # Execute query
         result = await session.execute(stmt)
         rows = result.all()
+
+        # F15 usage counters: per-asset transaction totals (global) and "own"
+        # totals (brokers the current user OWNs with a positive share; a NULL
+        # share is the legacy unset value and counts as full ownership).
+        tx_total_by_asset: dict[int, int] = {}
+        tx_own_by_asset: dict[int, int] = {}
+        if rows:
+            total_stmt = select(Transaction.asset_id, func.count()).group_by(Transaction.asset_id)
+            tx_total_by_asset = {asset_id: count for asset_id, count in (await session.execute(total_stmt)).all() if asset_id is not None}
+        if rows and user_id is not None:
+            own_brokers_sq = (
+                select(BrokerUserAccess.broker_id)
+                .where(
+                    BrokerUserAccess.user_id == user_id,
+                    BrokerUserAccess.role == UserRole.OWNER,
+                    or_(BrokerUserAccess.share_percentage.is_(None), BrokerUserAccess.share_percentage > 0),
+                )
+                .scalar_subquery()
+            )
+            own_stmt = select(Transaction.asset_id, func.count()).where(Transaction.broker_id.in_(own_brokers_sq)).group_by(Transaction.asset_id)
+            tx_own_by_asset = {asset_id: count for asset_id, count in (await session.execute(own_stmt)).all() if asset_id is not None}
 
         # Build response with identifier info
         assets = []
@@ -3516,6 +4076,8 @@ class AssetCRUDService:
                     user_url=asset.user_url,
                     provider_code=provider_code,
                     has_metadata=asset.classification_params is not None,
+                    tx_count=tx_total_by_asset.get(asset.id, 0),
+                    tx_count_own=tx_own_by_asset.get(asset.id, 0),
                     # Identifier columns from Asset
                     identifier_isin=asset.identifier_isin,
                     identifier_ticker=asset.identifier_ticker,
@@ -3609,13 +4171,13 @@ class AssetCRUDService:
                         message=message,
                     )
                 )
-                logger.error(f"Error deleting asset {asset_id}: {e}")
+                logger.exception(f"Error deleting asset {asset_id}: {e}")
 
         # Commit successful deletions
         try:
             await session.commit()
         except Exception as e:
-            logger.error(f"Error committing asset deletion: {e}")
+            logger.exception(f"Error committing asset deletion: {e}")
             await session.rollback()
 
         success_count = sum(1 for r in results if r.success)
@@ -3626,7 +4188,7 @@ class AssetCRUDService:
         )
 
     @staticmethod
-    async def patch_assets_bulk(patches: List[FAAssetPatchItem], session: AsyncSession) -> FABulkAssetPatchResponse:
+    async def patch_assets_bulk(patches: List[FAAssetPatchItem], session: AsyncSession) -> FABulkAssetPatchResponse:  # noqa: C901 — per-field patch mapping, classification shallow-merge branch
         """
         Patch multiple assets in bulk (partial success allowed).
 
@@ -3648,12 +4210,70 @@ class AssetCRUDService:
 
         results: list[FAAssetPatchResult] = []
 
+        # P0-5 (audit 08): no N+1. Preload every patched asset in ONE query and
+        # compute the currency-change guard data with per-asset aggregates.
+        # Before: 1 SELECT per patch + up to 6 per currency-changing patch.
+        # After: 1 SELECT + 3 constant aggregate queries.
+        patch_ids = [patch.asset_id for patch in patches]
+        asset_rows = (await session.execute(select(Asset).where(Asset.id.in_(patch_ids)))).scalars().all() if patch_ids else []
+        assets_by_id = {asset.id: asset for asset in asset_rows}
+
+        # Prepare each patch's payload once (pure CPU — same semantics as the
+        # old in-loop computation, including the explicit-None clearing rule for
+        # classification_params).
+        prepared: list[tuple[FAAssetPatchItem, dict]] = []
         for patch in patches:
+            patch_dict = patch.model_dump(mode="json", exclude={"asset_id"}, exclude_unset=True, exclude_none=True)
+            # Special handling for classification_params=None (clearing the field):
+            # only when the field was explicitly set on the patch object.
+            if "classification_params" not in patch_dict and patch.classification_params is None and "classification_params" in patch.model_fields_set:
+                patch_dict["classification_params"] = None
+            prepared.append((patch, patch_dict))
+
+        # Currency-change guard data (Policy D below), batched per asset.
+        currency_change_ids = [
+            patch.asset_id
+            for patch, patch_dict in prepared
+            if patch_dict.get("currency") and patch.asset_id in assets_by_id and patch_dict["currency"] != assets_by_id[patch.asset_id].currency
+        ]
+        price_agg: dict[int, tuple[int, object, object]] = {}
+        event_manual_agg: dict[int, int] = {}
+        event_provider_agg: dict[int, int] = {}
+        linked_tx_agg: dict[int, int] = {}
+        if currency_change_ids:
+            price_rows = (
+                await session.execute(
+                    select(PriceHistory.asset_id, func.count(), func.min(PriceHistory.date), func.max(PriceHistory.date)).where(PriceHistory.asset_id.in_(currency_change_ids)).group_by(PriceHistory.asset_id)
+                )
+            ).all()
+            price_agg = {row[0]: (int(row[1]), row[2], row[3]) for row in price_rows}
+
+            event_rows = (
+                await session.execute(
+                    select(
+                        AssetEvent.asset_id,
+                        func.sum(case((AssetEvent.provider_assignment_id.is_(None), 1), else_=0)),
+                        func.sum(case((AssetEvent.provider_assignment_id.is_not(None), 1), else_=0)),
+                    )
+                    .where(AssetEvent.asset_id.in_(currency_change_ids))
+                    .group_by(AssetEvent.asset_id)
+                )
+            ).all()
+            event_manual_agg = {row[0]: int(row[1] or 0) for row in event_rows}
+            event_provider_agg = {row[0]: int(row[2] or 0) for row in event_rows}
+
+            linked_rows = (
+                await session.execute(
+                    select(AssetEvent.asset_id, func.count(Transaction.id)).join(Transaction, Transaction.asset_event_id == AssetEvent.id).where(AssetEvent.asset_id.in_(currency_change_ids)).group_by(AssetEvent.asset_id)
+                )
+            ).all()
+            linked_tx_agg = {row[0]: int(row[1]) for row in linked_rows}
+
+        for patch, patch_dict in prepared:
             try:
-                # Fetch asset
-                stmt = select(Asset).where(Asset.id == patch.asset_id)
-                result = await session.execute(stmt)
-                asset: Asset = result.scalar_one_or_none()
+                # P0-5: the asset comes from the bulk preload above (identity map
+                # keeps sequential patches on the same id consistent).
+                asset = assets_by_id.get(patch.asset_id)
 
                 if not asset:
                     results.append(
@@ -3670,19 +4290,6 @@ class AssetCRUDService:
 
                 # Track updated fields
                 updated_fields: List[OldNew[str]] = []
-
-                # Update fields if present in patch (use model_dump to detect presence)
-                # Use exclude_unset=True to only include fields that were explicitly set
-                # Use exclude_none=True to exclude None values (except classification_params which we handle specially)
-                patch_dict = patch.model_dump(mode="json", exclude={"asset_id"}, exclude_unset=True, exclude_none=True)
-
-                # Special handling for classification_params=None (clearing the field)
-                # Check if it was explicitly set to None in the original patch object
-                if "classification_params" not in patch_dict and patch.classification_params is None:
-                    # Check if the field was explicitly set (not just default None)
-                    # We can use __pydantic_fields_set__ to check
-                    if "classification_params" in patch.model_fields_set:
-                        patch_dict["classification_params"] = None
 
                 # I.3 + R3-3 Policy D — guard against currency change on assets with
                 # any residual market data (prices, events, or transactions still
@@ -3709,42 +4316,14 @@ class AssetCRUDService:
                 if "currency" in patch_dict:
                     new_currency = patch_dict["currency"]
                     if new_currency and new_currency != asset.currency:
-                        price_count_res = await session.execute(select(func.count()).select_from(PriceHistory).where(PriceHistory.asset_id == patch.asset_id))
-                        price_count = int(price_count_res.scalar() or 0)
-
-                        event_manual_res = await session.execute(
-                            select(func.count())
-                            .select_from(AssetEvent)
-                            .where(
-                                AssetEvent.asset_id == patch.asset_id,
-                                AssetEvent.provider_assignment_id.is_(None),
-                            )
-                        )
-                        event_manual_count = int(event_manual_res.scalar() or 0)
-
-                        event_provider_res = await session.execute(
-                            select(func.count())
-                            .select_from(AssetEvent)
-                            .where(
-                                AssetEvent.asset_id == patch.asset_id,
-                                AssetEvent.provider_assignment_id.is_not(None),
-                            )
-                        )
-                        event_provider_count = int(event_provider_res.scalar() or 0)
-
-                        # Transactions linked (via asset_event_id) to any event of this asset.
-                        linked_tx_res = await session.execute(select(func.count()).select_from(Transaction).where(Transaction.asset_event_id.in_(select(AssetEvent.id).where(AssetEvent.asset_id == patch.asset_id))))
-                        linked_tx_count = int(linked_tx_res.scalar() or 0)
+                        # P0-5: all four counts + the price date range come from
+                        # the batched aggregates computed before the loop.
+                        price_count, oldest_date, newest_date = price_agg.get(patch.asset_id, (0, None, None))
+                        event_manual_count = event_manual_agg.get(patch.asset_id, 0)
+                        event_provider_count = event_provider_agg.get(patch.asset_id, 0)
+                        linked_tx_count = linked_tx_agg.get(patch.asset_id, 0)
 
                         if price_count > 0 or event_manual_count > 0 or event_provider_count > 0:
-                            oldest_date = None
-                            newest_date = None
-                            if price_count > 0:
-                                oldest_res = await session.execute(select(func.min(PriceHistory.date)).where(PriceHistory.asset_id == patch.asset_id))
-                                newest_res = await session.execute(select(func.max(PriceHistory.date)).where(PriceHistory.asset_id == patch.asset_id))
-                                oldest_date = oldest_res.scalar()
-                                newest_date = newest_res.scalar()
-
                             blocker_msg = (
                                 "CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA"
                                 f"|prices={price_count}"
@@ -3821,12 +4400,12 @@ class AssetCRUDService:
                 logger.info(f"Asset patched: id={patch.asset_id}, fields={updated_fields}")
 
             except Exception as e:
-                logger.error(f"Error patching asset {patch.asset_id}: {e}")
+                logger.exception(f"Error patching asset {patch.asset_id}: {e}")
                 results.append(
                     FAAssetPatchResult(
                         asset_id=patch.asset_id,
                         success=False,
-                        message=f"Error: {str(e)}",
+                        message=f"Error: {e!s}",
                         updated_fields=None,
                     )
                 )
@@ -3838,157 +4417,210 @@ class AssetCRUDService:
 
         return FABulkAssetPatchResponse(results=results, success_count=success_count, errors=[])
 
-
-# ============================================================================
-# ASSET METADATA SERVICES MANAGER
-# ============================================================================
-
-
-class AssetMetadataService:
-    """
-    Static service for asset metadata operations.
-
-    All methods are static - no instance state required.
-    """
-
     @staticmethod
-    def compute_metadata_diff(old: Optional[FAClassificationParams], new: Optional[FAClassificationParams]) -> list[FAMetadataChangeDetail]:
-        """
-        Compute diff between old and new metadata.
+    async def merge_assets(  # noqa: C901 — sequential 5-stage merge, per-stage collision branches
+        source_asset_id: int,
+        target_asset_id: int,
+        session: AsyncSession,
+        identifier_primaries: Optional[dict[str, str]] = None,
+        dry_run: bool = False,
+    ) -> FAAssetMergeResponse:
+        """Fold ``source_asset_id`` into ``target_asset_id``, then delete the source.
 
-        Tracks changes field-by-field for audit/display purposes.
+        Answers the duplicate-asset debt left behind whenever the same instrument was
+        booked twice (typically an Italian BTP whose "CUM" placement ISIN and market
+        ISIN were treated as two instruments). The target is *always* the asset the
+        user wants to keep — this method never picks for them.
+
+        Exactly four tables reference ``assets.id``; each gets an explicit policy:
+
+        - ``Transaction.asset_id`` — reassigned (nullable FK, no unique constraint).
+        - ``PriceHistory.asset_id`` — reassigned; on a ``(asset_id, date)`` collision
+          the **target row wins** and the source row is discarded, because the target
+          is the asset whose provider assignment will keep feeding it.
+        - ``AssetEvent.asset_id`` — reassigned, de-duplicated on
+          ``(date, type, value, currency)``. Transactions pointing at a discarded event
+          are remapped onto the surviving one *before* the delete, since
+          ``Transaction.asset_event_id`` is ``ondelete=RESTRICT``.
+        - ``AssetProviderAssignment.asset_id`` — moved when the target has none,
+          otherwise dropped. **Careful**: ``AssetEvent.provider_assignment_id`` is
+          ``ondelete=CASCADE``, so events surviving on the target are re-pointed at the
+          target's assignment before the source one is deleted — otherwise the merge
+          would silently destroy the events it had just migrated.
+
+        Identifiers are never lost: whatever does not stay primary is demoted into the
+        target's ``identifier_other``.
 
         Args:
-            old: Previous metadata state (or None)
-            new: New metadata state (or None)
+            source_asset_id: Asset to fold in and delete.
+            target_asset_id: Asset to keep.
+            session: Database session.
+            identifier_primaries: Optional ``{"identifier_isin": "IT…"}`` decisions.
+                A value must belong to one of the two assets (as primary or soft),
+                otherwise the merge is refused.
+            dry_run: Compute the plan and roll back without writing.
 
         Returns:
-            List of FAMetadataChangeDetail objects describing changes
-
-        Examples:
-            >>> old = FAClassificationParams(sector="Energy")
-            >>> new = FAClassificationParams(sector="Technology")
-            >>> changes = AssetMetadataService.compute_metadata_diff(old, new)
-            >>> len(changes)
-            2
-            >>> changes[0].field
-            'sector'
-        """
-        changes = []
-
-        # Convert to dicts for comparison
-        old_dict = old.model_dump(exclude_none=False) if old else {}
-        new_dict = new.model_dump(exclude_none=False) if new else {}
-
-        # Get all fields from both dicts
-        all_fields = set(old_dict.keys()) | set(new_dict.keys())
-
-        for field in all_fields:
-            old_value = old_dict.get(field)
-            new_value = new_dict.get(field)
-
-            # Check if changed
-            if old_value != new_value:
-                # Convert to JSON-serializable format for display
-                old_display = json.dumps(old_value, default=str) if old_value is not None else None
-                new_display = json.dumps(new_value, default=str) if new_value is not None else None
-
-                changes.append(FAMetadataChangeDetail(field=field, old_value=old_display, new_value=new_display))
-
-        return changes
-
-    @staticmethod
-    def apply_partial_update(current: Optional[FAClassificationParams], patch: FAClassificationParams) -> FAClassificationParams:
-        """
-        Apply PATCH request to current metadata.
-
-        PATCH Semantics:
-        - **Absent field** (not in patch dict) → ignored, keep current value
-        - **null in JSON** (None in Python) → clear field (set to None)
-        - **Value present** → update field
-        - **geographic_area** → full block replace (no partial merge)
-
-        Args:
-            current: Current metadata state (or None for new metadata)
-            patch: PATCH request with fields to update
-
-        Returns:
-            Updated FAClassificationParams
+            FAAssetMergeResponse with the preview of what moved (or would move).
 
         Raises:
-            ValueError: If validation fails (e.g., invalid geographic_area)
-
-        Examples:
-            >>> current = FAClassificationParams(sector="Technology")
-            >>> patch = FAClassificationParams(sector=None)  # Clear sector
-            >>> updated = AssetMetadataService.apply_partial_update(current, patch)
-            >>> updated.sector
-            None
+            AssetSourceError: NOT_FOUND, SAME_ASSET or INVALID_PRIMARY.
         """
-        # Start with current values (or empty dict)
-        current_dict = (
-            current.model_dump(exclude_none=False)
-            if current
-            else {
-                "short_description": None,
-                "geographic_area": None,
-                "sector_area": None,
-            }
-        )
+        if source_asset_id == target_asset_id:
+            raise AssetSourceError(
+                "Source and target asset must be different",
+                "SAME_ASSET",
+                {"asset_id": source_asset_id},
+            )
 
-        # Get patch fields that were explicitly set (exclude unset fields)
-        # This distinguishes between "field not in request" vs "field=null in request"
-        patch_dict = patch.model_dump(exclude_unset=True)
+        source = (await session.execute(select(Asset).where(Asset.id == source_asset_id))).scalar_one_or_none()
+        target = (await session.execute(select(Asset).where(Asset.id == target_asset_id))).scalar_one_or_none()
+        if source is None:
+            raise AssetSourceError(f"Asset with ID {source_asset_id} not found", "NOT_FOUND", {"asset_id": source_asset_id})
+        if target is None:
+            raise AssetSourceError(f"Asset with ID {target_asset_id} not found", "NOT_FOUND", {"asset_id": target_asset_id})
 
-        # Apply patch: only update fields that are present in patch_dict
-        for field, value in patch_dict.items():
-            current_dict[field] = value
+        preview = FAAssetMergePreview()
+        # IdentifierType.OTHER maps onto ``identifier_other``, which is the JSON *list*
+        # of soft identifiers, not a structured single-value column — it is the merge
+        # destination, never a candidate primary.
+        identifier_columns = [f"identifier_{t.value.lower()}" for t in IdentifierType if t != IdentifierType.OTHER]
 
-        # Validate and return updated model
         try:
-            return FAClassificationParams(**current_dict)
+            # ---------- identifiers: decide primaries, demote everything else ----------
+            demoted: list[str] = []
+            for column in identifier_columns:
+                source_value = (getattr(source, column, None) or "").strip()
+                target_value = (getattr(target, column, None) or "").strip()
+                chosen = (identifier_primaries or {}).get(column)
+                if chosen is not None:
+                    chosen = chosen.strip()
+                    known = {v.casefold() for v in (source_value, target_value) if v}
+                    if chosen and chosen.casefold() not in known:
+                        raise AssetSourceError(
+                            f"'{chosen}' is not a {column} of asset {source_asset_id} or {target_asset_id}",
+                            "INVALID_PRIMARY",
+                            {"field": column, "value": chosen},
+                        )
+                else:
+                    # Default: the target keeps its own value; the source's fills a gap.
+                    chosen = target_value or source_value
+
+                for value in (source_value, target_value):
+                    if value and value.casefold() != (chosen or "").casefold():
+                        demoted.append(value)
+                setattr(target, column, chosen or None)
+
+            merged_other = merge_other_identifiers(
+                target.identifier_other,
+                [*(source.identifier_other or []), *demoted],
+            )
+            before = {v.casefold() for v in (target.identifier_other or [])}
+            # A demoted primary must not shadow the value that is now primary on the target.
+            primaries_now = {(getattr(target, c, None) or "").casefold() for c in identifier_columns}
+            merged_other = [v for v in (merged_other or []) if v.casefold() not in primaries_now] or None
+            preview.identifiers_added = [v for v in (merged_other or []) if v.casefold() not in before]
+            target.identifier_other = merged_other
+
+            # ---------- price history: target wins on same date ----------
+            target_dates = set((await session.execute(select(PriceHistory.date).where(PriceHistory.asset_id == target_asset_id))).scalars().all())
+            source_prices = (await session.execute(select(PriceHistory).where(PriceHistory.asset_id == source_asset_id))).scalars().all()
+            for row in source_prices:
+                if row.date in target_dates:
+                    await session.delete(row)
+                    preview.prices_discarded += 1
+                else:
+                    row.asset_id = target_asset_id
+                    target_dates.add(row.date)
+                    preview.prices += 1
+
+            # ---------- asset events: dedup, then remap the transactions ----------
+            target_events = (await session.execute(select(AssetEvent).where(AssetEvent.asset_id == target_asset_id))).scalars().all()
+            source_events = (await session.execute(select(AssetEvent).where(AssetEvent.asset_id == source_asset_id))).scalars().all()
+
+            def _event_key(ev: AssetEvent) -> tuple:
+                return (ev.date, str(ev.type), Decimal(str(ev.value)), (ev.currency or "").upper())
+
+            surviving: dict[tuple, int] = {_event_key(ev): ev.id for ev in target_events if ev.id is not None}
+            kept_source_events: list[AssetEvent] = []
+            for ev in source_events:
+                key = _event_key(ev)
+                twin_id = surviving.get(key)
+                if twin_id is not None:
+                    relinked = await session.execute(update(Transaction).where(Transaction.asset_event_id == ev.id).values(asset_event_id=twin_id))
+                    preview.transactions_relinked += relinked.rowcount or 0
+                    await session.delete(ev)
+                    preview.events_discarded += 1
+                else:
+                    ev.asset_id = target_asset_id
+                    if ev.id is not None:
+                        surviving[key] = ev.id
+                    kept_source_events.append(ev)
+                    preview.events += 1
+
+            # ---------- provider assignment ----------
+            target_assignment = (await session.execute(select(AssetProviderAssignment).where(AssetProviderAssignment.asset_id == target_asset_id))).scalar_one_or_none()
+            source_assignment = (await session.execute(select(AssetProviderAssignment).where(AssetProviderAssignment.asset_id == source_asset_id))).scalar_one_or_none()
+            if source_assignment is not None:
+                if target_assignment is None:
+                    source_assignment.asset_id = target_asset_id
+                    preview.provider_assignment_moved = True
+                else:
+                    # CASCADE would wipe the events we just migrated → re-point them first.
+                    for ev in kept_source_events:
+                        if ev.provider_assignment_id == source_assignment.id:
+                            ev.provider_assignment_id = target_assignment.id
+                    await session.flush()
+                    await session.delete(source_assignment)
+                    preview.provider_assignment_dropped = True
+
+            # ---------- transactions ----------
+            moved = await session.execute(update(Transaction).where(Transaction.asset_id == source_asset_id).values(asset_id=target_asset_id))
+            preview.transactions = moved.rowcount or 0
+
+            await session.flush()
+            await session.delete(source)
+            await session.flush()
+
+            if dry_run:
+                await session.rollback()
+                return FAAssetMergeResponse(
+                    success=True,
+                    source_asset_id=source_asset_id,
+                    target_asset_id=target_asset_id,
+                    dry_run=True,
+                    preview=preview,
+                    message="Dry run: nothing was written",
+                )
+
+            await session.commit()
+        except AssetSourceError:
+            await session.rollback()
+            raise
         except Exception as e:
-            raise ValueError(f"Validation failed after applying PATCH: {e}") from e
+            await session.rollback()
+            logger.exception(f"Error merging asset {source_asset_id} into {target_asset_id}: {e}")
+            raise AssetSourceError(f"Merge failed: {e!s}", "MERGE_FAILED", {"source_asset_id": source_asset_id, "target_asset_id": target_asset_id}) from e
 
-    @staticmethod
-    def merge_provider_metadata(current: Optional[FAClassificationParams], provider_data: dict) -> FAClassificationParams:
-        """
-        Merge provider-fetched metadata with current metadata.
-
-        Strategy:
-        - Provider data takes precedence over current values
-        - Only updates fields that provider returns (non-None)
-        - Current values preserved if provider doesn't return field
-
-        Args:
-            current: Current metadata state (or None)
-            provider_data: Raw metadata dict from provider
-
-        Returns:
-            Merged FAClassificationParams
-
-        Note:
-            Provider data is already validated by FAClassificationParams
-            when this is called (geo_normalization runs in field_validator)
-        """
-        # Start with current values
-        current_dict = (
-            current.model_dump(exclude_none=False)
-            if current
-            else {
-                "short_description": None,
-                "geographic_area": None,
-                "sector_area": None,
-            }
+        logger.info(
+            "assets merged: %d → %d (tx=%d, prices=%d/-%d, events=%d/-%d, relinked=%d)",
+            source_asset_id,
+            target_asset_id,
+            preview.transactions,
+            preview.prices,
+            preview.prices_discarded,
+            preview.events,
+            preview.events_discarded,
+            preview.transactions_relinked,
         )
-
-        # Update with provider data (only non-None values)
-        for field in ["short_description", "geographic_area", "sector_area"]:
-            if field in provider_data and provider_data[field] is not None:
-                current_dict[field] = provider_data[field]
-
-        # Validate and return merged model
-        return FAClassificationParams(**current_dict)
+        return FAAssetMergeResponse(
+            success=True,
+            source_asset_id=source_asset_id,
+            target_asset_id=target_asset_id,
+            dry_run=False,
+            preview=preview,
+            message=f"Asset {source_asset_id} merged into {target_asset_id}",
+        )
 
 
 # ============================================================================
@@ -4008,7 +4640,152 @@ class AssetSearchService:
     """
 
     @staticmethod
-    async def search(query: str, provider_codes: Optional[list[str]] = None) -> FAProviderSearchResponse:
+    def _build_link_finder_queries(query: str, hints: Optional[list[str]] = None) -> list[str]:
+        """Ordered web-search queries for the link-finder: rich stringone first, base query last.
+
+        The rich query concatenates every hint (all report-extracted identifiers +
+        candidate names) together with the base ``query``, in the order supplied, deduped
+        and whitespace-collapsed. Nothing is sanitised, truncated or reordered — the whole
+        concatenation is handed to the web search, which is left to do the ranking. If the rich
+        query yields no URLs the finder falls back to the bare base query. When no hints
+        are supplied this returns just the base query (legacy behaviour).
+        """
+        base = " ".join((query or "").split())
+        terms: list[str] = []
+        seen: set[str] = set()
+
+        def _add(value: str) -> None:
+            value = " ".join((value or "").split())
+            key = value.lower()
+            if value and key not in seen:
+                seen.add(key)
+                terms.append(value)
+
+        for hint in hints or []:
+            _add(hint)
+        _add(base)  # keep the base query terms inside the rich string too
+
+        rich = " ".join(terms).strip()
+
+        candidates: list[str] = []
+        seen_candidates: set[str] = set()
+        for candidate in (rich, base):
+            candidate = candidate.strip()
+            if candidate and candidate.lower() not in seen_candidates:
+                seen_candidates.add(candidate.lower())
+                candidates.append(candidate)
+        return candidates
+
+    @staticmethod
+    async def _augment_with_link_finder(code: str, provider: "AssetSourceProvider", query: str, hints: Optional[list[str]] = None) -> list[dict]:  # noqa: C901 — best-effort fallback pipeline, nested dedup loops
+        """Last-resort fallback when a provider's on-site search yields nothing.
+
+        Uses the external :mod:`web_link_finder` to turn a query into candidate
+        provider-domain URLs, then asks the provider to ``resolve_url`` each into a
+        search-item dict. Best-effort: any failure returns ``[]`` and is never fatal.
+
+        When ``hints`` are supplied (report-extracted identifiers + names) the finder
+        tries a rich concatenated query first and falls back to the bare ``query`` — a
+        specific ISIN+name query resolves to a single fund page, whereas a bare ISIN can
+        surface several sibling share classes.
+
+        Only runs for providers that opt in via ``supports_url_resolution`` and only
+        when the link-finder is enabled. Provider ``resolve_url`` calls go through the
+        dedicated provider thread, like every other provider method.
+        """
+        try:
+            if not getattr(provider, "supports_url_resolution", False) or not web_link_finder.is_enabled():
+                return []
+
+            for candidate_query in AssetSearchService._build_link_finder_queries(query, hints):
+                urls = await web_link_finder.find_candidate_urls(candidate_query, provider.resolvable_url_domains)
+                if not urls:
+                    continue
+
+                items: list[dict] = []
+                seen_items: set[tuple[str, str]] = set()
+
+                async def _resolve_one(u: str):
+                    try:
+                        return await _run_provider_in_thread(lambda: provider.resolve_url(u), timeout=20.0)
+                    except Exception as e:
+                        logger.debug(f"link-finder: resolve_url failed for '{u}' on provider '{code}': {e}")
+                        return None
+
+                # Resolve candidate URLs concurrently — this was a sequential ``for url in urls``
+                # loop whose per-URL latencies (each up to the 20s provider timeout) SUMMED, the
+                # dominant cost of a web-fallback search. ``asyncio.to_thread`` runs each provider
+                # call on its own worker thread, so total time ≈ the slowest URL instead of the sum.
+                # ``gather`` preserves argument order, so dedup priority (first URL wins) is unchanged.
+                resolved_list = await asyncio.gather(*[_resolve_one(u) for u in urls])
+                for resolved in resolved_list:
+                    if not resolved:
+                        continue
+                    # resolve_url may return one item or the full canonical set (list),
+                    # e.g. one row per language. Flatten and de-dup by (identifier, language)
+                    # so sibling language-URLs of the same instrument don't pile up.
+                    for it in resolved if isinstance(resolved, list) else [resolved]:
+                        if not it:
+                            continue
+                        key = (str(it.get("identifier", "")).strip().upper(), str((it.get("provider_params") or {}).get("language", "")).strip().lower())
+                        if key in seen_items:
+                            continue
+                        seen_items.add(key)
+                        items.append(it)
+
+                if items:
+                    items = AssetSearchService._filter_items_by_known_identifiers(items, [*(hints or []), query])
+                    for it in items:
+                        it["_via_web"] = True
+                    logger.info(f"link-finder: provider '{code}' resolved {len(items)} item(s) via web for '{candidate_query}'")
+                    return items
+
+            return []
+        except Exception as e:
+            logger.debug(f"link-finder: augmentation error on provider '{code}': {e}")
+            return []
+
+    @staticmethod
+    def _filter_items_by_known_identifiers(items: list[dict], known_terms: Optional[list[str]]) -> list[dict]:
+        """Narrow link-finder results to those whose identifier matches a known one.
+
+        The web link-finder can surface sibling instruments (e.g. a bare ISIN search on
+        Borsa Italiana returns every share class of a fund family). When we already hold
+        technical identifiers — the searched query and any report-extracted ``hints`` —
+        and at least one resolved item's ``identifier`` matches one of them, only the
+        matching items are kept. If nothing matches (the terms were only free-text names,
+        or none of the pages carried a known identifier) every item is returned so the
+        user still gets candidates to choose from. Matching is case-insensitive and
+        whitespace-trimmed; non-identifier terms (names) are inert because they never
+        equal an ISIN/ticker identifier.
+        """
+        if not items or not known_terms:
+            return items
+        known = {t.strip().upper() for t in known_terms if t and t.strip()}
+        if not known:
+            return items
+        matching = [it for it in items if str(it.get("identifier", "")).strip().upper() in known]
+        return matching or items
+
+    @staticmethod
+    def _provider_url_for_item(code: str, item: dict) -> Optional[str]:
+        """Compute a search result's ``provider_url`` via the provider's ``get_asset_url``.
+
+        ``provider_params`` MUST be forwarded: some providers (e.g. Borsa Italiana funds)
+        derive the correct page URL from params such as ``codice_fondo`` rather than from
+        the identifier alone. Dropping the params yields a wrong/dead link for those assets.
+        """
+        provider_instance = AssetProviderRegistry.get_provider_instance(code)
+        if not provider_instance:
+            return None
+        return provider_instance.get_asset_url(
+            item.get("identifier", ""),
+            item.get("identifier_type"),
+            item.get("provider_params"),
+        )
+
+    @staticmethod
+    async def search(query: str, provider_codes: Optional[list[str]] = None, hints: Optional[list[str]] = None) -> FAProviderSearchResponse:  # noqa: C901 — per-provider fan-out, error mapping + item packing
         """
         Search for assets across one or more providers in parallel.
 
@@ -4016,6 +4793,9 @@ class AssetSearchService:
             query: Search query string
             provider_codes: Optional list of provider codes to query.
                            If None, queries all providers.
+            hints: Optional extra search terms (report-extracted identifiers + names).
+                   Used only by the link-finder fallback to build a specific query when
+                   a provider's on-site search returns nothing.
 
         Returns:
             FAProviderSearchResponse with aggregated results from all providers.
@@ -4077,6 +4857,9 @@ class AssetSearchService:
                     lambda: provider.search(query),
                     timeout=30.0,
                 )
+                # Last-resort: no on-site hits → try the external link-finder + resolve_url.
+                if not search_results:
+                    search_results = await AssetSearchService._augment_with_link_finder(code, provider, query, hints)
                 # Populate Layer 2
                 _search_query_cache.set(query_cache_key, search_results)
                 return (code, search_results, None)
@@ -4086,7 +4869,7 @@ class AssetSearchService:
                     logger.debug(f"Provider '{code}' does not support search")
                     return (code, [], None)
                 else:
-                    logger.error(f"Search error from provider '{code}': {e}")
+                    logger.exception(f"Search error from provider '{code}': {e}")
                     return (code, [], str(e))
 
         # Execute all searches in parallel
@@ -4114,14 +4897,8 @@ class AssetSearchService:
 
             # Convert provider results to response schema
             for item in items:
-                # Compute provider_url from provider instance
-                provider_instance = AssetProviderRegistry.get_provider_instance(code)
-                item_provider_url = None
-                if provider_instance:
-                    item_provider_url = provider_instance.get_asset_url(
-                        item.get("identifier", ""),
-                        item.get("identifier_type"),
-                    )
+                # Compute provider_url (forwards provider_params for fund-style URLs)
+                item_provider_url = AssetSearchService._provider_url_for_item(code, item)
 
                 # Validate asset_type: fallback to OTHER if unknown
                 raw_asset_type = item.get("type")
@@ -4139,6 +4916,7 @@ class AssetSearchService:
                         asset_type=raw_asset_type,
                         provider_url=item_provider_url,
                         provider_params=item.get("provider_params"),
+                        via_web=bool(item.get("_via_web", False)),
                     )
                 )
 
@@ -4151,7 +4929,7 @@ class AssetSearchService:
         )
 
     @staticmethod
-    async def search_stream(query: str, provider_codes: Optional[list[str]] = None) -> AsyncGenerator[str]:  # pragma: no cover
+    async def search_stream(query: str, provider_codes: Optional[list[str]] = None, hints: Optional[list[str]] = None) -> AsyncGenerator[str]:  # pragma: no cover  # noqa: C901 — SSE fan-out, per-provider error mapping
         """
         Stream search results as SSE events, one event per provider completion.
 
@@ -4204,8 +4982,11 @@ class AssetSearchService:
             try:
                 items = await _run_provider_in_thread(
                     lambda: provider.search(query),
-                    timeout=30.0,
+                    timeout=20.0,
                 )
+                # Last-resort: no on-site hits → try the external link-finder + resolve_url.
+                if not items:
+                    items = await AssetSearchService._augment_with_link_finder(code, provider, query, hints)
                 # Populate Layer 2
                 _search_query_cache.set(query_cache_key, items)
                 await queue.put((code, items, None))
@@ -4231,14 +5012,8 @@ class AssetSearchService:
             # Convert items to serializable dicts
             result_items = []
             for item in items:
-                # Compute provider_url
-                provider_instance = AssetProviderRegistry.get_provider_instance(code)
-                item_provider_url = None
-                if provider_instance:
-                    item_provider_url = provider_instance.get_asset_url(
-                        item.get("identifier", ""),
-                        item.get("identifier_type"),
-                    )
+                # Compute provider_url (forwards provider_params for fund-style URLs)
+                item_provider_url = AssetSearchService._provider_url_for_item(code, item)
 
                 # Validate asset_type
                 raw_asset_type = item.get("type")
@@ -4259,6 +5034,7 @@ class AssetSearchService:
                         "asset_type": raw_asset_type,
                         "provider_url": item_provider_url,
                         "provider_params": item.get("provider_params"),
+                        "via_web": bool(item.get("_via_web", False)),
                     }
                 )
 

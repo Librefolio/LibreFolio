@@ -11,6 +11,7 @@ description: "Use this skill when running lint or format on the backend Python c
 |------|---------|--------|
 | **ruff** | Linting (errors, style, imports, bugbear) | `pyproject.toml` → `[tool.ruff]` |
 | **black** | Formatting (parentheses, spacing, blank lines) | `pyproject.toml` → `[tool.black]` |
+| **vulture** | Dead code detection (unused functions, classes, methods) | `pyproject.toml` → `[tool.vulture]` |
 
 Both configured with **line-length = 300** (dense lines, minimal wrapping) and **target = py313**.
 
@@ -119,7 +120,71 @@ python -m ruff check backend/ --statistics > /tmp/ruff_stats.txt 2>&1; cat /tmp/
 | `# noqa: B015 — intentional: testing raises` | Comparison in `pytest.raises` block |
 | `# noqa: B027 — intentional no-op default` | Empty method in ABC that's a default, not abstract |
 
-## Workflow: Applying Lint+Format to a File
+## Dead Code Detection (vulture)
+
+`ruff`'s `F` rules catch unused *imports and locals*, but never unused module-level
+functions, classes or methods. That gap is covered by **vulture**.
+
+```bash
+# Backend only, high-signal findings
+./dev.py lint --dead-code --scope backend
+
+# Include low-signal findings (Enum members, Pydantic fields — mostly noise)
+./dev.py lint --dead-code --scope backend --all
+
+# Skip a subtree (repeatable)
+./dev.py lint --dead-code --scope backend --exclude "*/ai_export/*"
+```
+
+### The two result buckets
+
+| Bucket | Meaning |
+|--------|---------|
+| **Unreferenced** | No reference from production code (`backend/app`, `scripts/`, `dev.py`) nor from `backend/test_scripts` |
+| **Referenced only by tests** | Zero references from production code, N from `backend/test_scripts` — code kept alive artificially by its own tests |
+
+The second bucket comes from a differential scan: vulture runs twice, once over
+production code alone and once with `backend/test_scripts` added. Symbols that vanish
+from the report when tests enter scope are used *only* by tests.
+
+> **Production ≠ `backend/app`.** `scripts/` and `dev.py` are deliberately in scope:
+> the `./dev.py user` CLI imports `user_service` directly, so scanning `backend/app` in
+> isolation would report every CLI-only service function as dead.
+
+### ⚠️ Before deleting anything
+
+Dead code is a **question, not a verdict**. For each finding, first establish where its
+logic went:
+
+- **Logic absorbed elsewhere** (superseded by a newer implementation) → safe to remove,
+  along with its now-pointless tests.
+- **Logic exists nowhere else** → do NOT delete. It is either an unwired feature or a
+  regression waiting to happen. Stop and discuss with the maintainer.
+
+### False positives already handled
+
+Vulture is purely static and cannot see decorators, registries or `getattr()`. The
+`[tool.vulture]` config in `pyproject.toml` already suppresses:
+
+| Pattern | Why it looks dead |
+|---------|-------------------|
+| `@router.get` / `@*.post` / … | FastAPI handlers are invoked by the framework. Router variables have inconsistent names (`router`, `tx_router`, `brim_router`, `router_currencies`), hence the glob |
+| `@field_validator`, `@model_validator` | Resolved by the Pydantic metaclass |
+| `@event.listens_for` | SQLAlchemy ORM hooks |
+| `@register_provider`, `@register_plugin` | LibreFolio provider auto-discovery |
+| `test_cases`, `test_currencies`, `test_file_patterns` | Provider plugin self-test contract — abstract properties consumed by the test harness **by design** |
+| `mapper`, `connection`, `connection_record` | Positional params required by SQLAlchemy event signatures |
+
+If a new framework pattern produces noise, extend `ignore_decorators` / `ignore_names`
+in `[tool.vulture]` rather than sprinkling `# noqa` in the code.
+
+### Why `--all` is off by default
+
+At `min_confidence = 60` vulture reports ~460 items, but ~380 are `variable` and
+`attribute` findings dominated by **Enum members** (consumed by value, not by name) and
+**Pydantic model fields** (serialized reflectively). Filtering to
+`function / method / class / property` cuts that to ~60 genuinely actionable items.
+
 
 1. **Run ruff on the file**: `python -m ruff check backend/path/file.py > /tmp/ruff_out.txt 2>&1`
 2. **Read output**: check error codes and counts

@@ -18,9 +18,10 @@
  *     (data-testid="context-menu-action-delete")
  *   → click Save (data-testid="asset-editor-save-btn")
  */
-import {expect, test, type Page} from '@playwright/test';
+import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
+import {waitForSettled} from '../fixtures/app-events';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -28,6 +29,12 @@ import {TEST_USER} from '../fixtures/test-users';
 
 /** Open the combined data editor and switch to Events tab */
 async function openEventsEditor(page: Page) {
+    // The events are loaded by the detail page itself and handed to the editor
+    // as a prop, so the editor can only be as ready as the page. Sleeping 500 ms
+    // after the tab click turned "still loading" into "this asset has no events"
+    // once four workers shared the backend.
+    await expect(page.getByTestId('asset-detail-page')).toHaveAttribute('data-busy', 'false', {timeout: 30_000});
+
     // Click "Edit Prices & Events" button
     const editBtn = page.locator('[data-testid="asset-detail-editdata-btn"]');
     await expect(editBtn).toBeVisible({timeout: 5_000});
@@ -40,7 +47,7 @@ async function openEventsEditor(page: Page) {
     // Switch to Events tab
     const eventsTab = page.locator('[data-testid="asset-editor-events-tab"]');
     await eventsTab.click();
-    await page.waitForTimeout(500);
+    await expect(eventsTab).toHaveAttribute('aria-selected', 'true', {timeout: 5_000});
 }
 
 /** Get visible event rows in the DataEditor table */
@@ -64,6 +71,14 @@ async function clickDeleteRowAction(page: Page, row: import('@playwright/test').
 // ---------------------------------------------------------------------------
 
 test.describe('Asset Event Delete', () => {
+    const API = '/api/v1';
+
+    // No longer serial. It used to be, because the first test consumed one of
+    // Apple's two unlinked mock events and the others read that same finite set.
+    // The first test now creates the event it deletes, and the second works only
+    // inside the 3M window — where every fixture event is linked, so it deletes
+    // nothing. Neither takes anything from the other.
+
     test.beforeEach(async ({page}) => {
         await login(page, TEST_USER);
     });
@@ -72,55 +87,89 @@ test.describe('Asset Event Delete', () => {
     // Scenario 1: Delete event without linked transactions → success
     // ===================================================================
     test('delete unlinked event succeeds', async ({page}) => {
-        // Navigate to assets list and find "Apple Inc." (has unlinked DIVIDEND events)
+        // This test used to delete one of Apple's two unlinked mock DIVIDENDs.
+        // That works exactly twice: on the third run the oldest row is a *linked*
+        // event, the API answers `in_use`, and the test goes red for a reason that
+        // has nothing to do with the code. A test that consumes fixture data is a
+        // test with an expiry date — so it creates the event it is about to delete.
         await navigateTo(page, '/assets');
         await page.waitForSelector('[data-testid="assets-page"]', {timeout: 15_000});
+        // The cards render first and are re-rendered when the bulk price request lands.
+        // Clicking during that window aims at a node Svelte is about to replace, and the
+        // navigation is simply lost — which is what took this test red at load average 22.
+        await waitForSettled(page.getByTestId('assets-page'));
 
-        // Click on Apple card (has events without linked transactions)
         const appleCard = page.locator('[data-testid^="asset-card-"]').filter({hasText: /Apple/i}).first();
         await expect(appleCard).toBeVisible({timeout: 5_000});
         await appleCard.click();
 
-        // Wait for asset detail page
         await page.waitForSelector('[data-testid="asset-detail-page"]', {timeout: 15_000});
+        const assetId = Number(new URL(page.url()).pathname.split('/').filter(Boolean).pop());
+        expect(Number.isFinite(assetId), 'asset detail URL must end with the asset id').toBeTruthy();
 
-        // Expand time range to 1Y to show all events (default 3M may hide older ones)
-        const yearBtn = page.locator('button:text("1Y")');
-        await yearBtn.click();
-        await page.waitForTimeout(500);
+        // A date inside the 1Y window but clear of the fixture's own events
+        // (~270 / 180 / 90 / 13 / 3 days ago), so the upsert cannot overwrite one.
+        const eventDate = new Date(Date.now() - 230 * 86_400_000).toISOString().slice(0, 10);
+        const marker = `e2e-event-delete-${Date.now()}`;
+        const created = await page.request.post(`${API}/assets/events`, {
+            data: [{asset_id: assetId, events: [{date: eventDate, type: 'DIVIDEND', value: {amount: 0.42, code: 'USD'}, notes: marker}]}],
+        });
+        expect(created.ok(), 'the event this test deletes must exist first').toBeTruthy();
 
-        // Open events editor
-        await openEventsEditor(page);
+        const queried = await page.request.post(`${API}/assets/events/query`, {
+            data: [{asset_id: assetId, date_range: {start: eventDate, end: eventDate}}],
+        });
+        expect(queried.ok()).toBeTruthy();
+        const queryBody = await queried.json();
+        const mine = (queryBody.items?.[0]?.events ?? []).find((e: any) => e.notes === marker);
+        expect(mine, `no event carries the marker ${marker}`).toBeTruthy();
+        const eventId: number = mine.id;
 
-        // Events must exist (populated by mock data — Apple has 3 DIVIDEND events, some unlinked)
-        const eventRows = getEventRows(page);
-        const initialCount = await eventRows.count();
-        expect(initialCount, 'Apple must have events — check populate_mock_data.py').toBeGreaterThan(1);
+        try {
+            // Reload so the detail page fetches the event we just created, and widen
+            // to 1Y: the editor only lists events inside the selected range.
+            await page.reload();
+            await page.waitForSelector('[data-testid="asset-detail-page"]', {timeout: 15_000});
 
-        // Click delete on the oldest event row (first in ASC order).
-        // Apple has 3 DIVIDEND events; the 2 most recent are linked to transactions.
-        // Only the oldest (270 days ago) is unlinked and safe to delete.
-        const targetRow = eventRows.first();
-        await clickDeleteRowAction(page, targetRow);
+            // Changing the range refetches prices *and* events in one request. Arm the
+            // wait before the click: a refetch that lands after a row is marked for
+            // deletion resets the editor and silently disables Save.
+            const rangeApplied = page.waitForResponse((resp) => resp.url().includes('/api/v1/assets/prices/query') && resp.request().method() === 'POST', {timeout: 30_000});
+            await page.locator('button:text("1Y")').click();
+            await rangeApplied;
 
-        // The save button should become enabled (dirty count > 0)
-        const saveBtn = page.locator('[data-testid="asset-editor-save-btn"]');
-        await expect(saveBtn).toBeEnabled({timeout: 3_000});
+            await openEventsEditor(page);
 
-        // Intercept the delete API call to verify it succeeds
-        const responsePromise = page.waitForResponse((resp) => resp.url().includes('/api/v1/assets/events') && resp.request().method() === 'DELETE', {timeout: 10_000});
+            // Ours, by id — not "the first row", which belongs to whoever the fixture says.
+            const targetRow = page.locator(`[data-testid="asset-detail-editor-panel"] tbody tr[data-row-id="${eventId}"]`);
+            await expect(targetRow).toBeVisible({timeout: 15_000});
+            await clickDeleteRowAction(page, targetRow);
 
-        // Click save to commit deletion
-        await saveBtn.click();
+            // The save button should become enabled (dirty count > 0)
+            const saveBtn = page.locator('[data-testid="asset-editor-save-btn"]');
+            await expect(saveBtn).toBeEnabled({timeout: 3_000});
 
-        // Wait for the API response
-        const response = await responsePromise;
-        expect(response.status()).toBe(200);
+            // Intercept the delete API call to verify it succeeds
+            const responsePromise = page.waitForResponse((resp) => resp.url().includes('/api/v1/assets/events') && resp.request().method() === 'DELETE', {timeout: 10_000});
 
-        // Verify the response contains at least one "deleted" result
-        const body = await response.json();
-        const deletedResults = body.results?.filter((r: any) => r.status === 'deleted') ?? [];
-        expect(deletedResults.length).toBeGreaterThan(0);
+            // Click save to commit deletion
+            await saveBtn.click();
+
+            // Wait for the API response
+            const response = await responsePromise;
+            expect(response.status()).toBe(200);
+
+            // The event we own must come back as deleted — not merely "something was".
+            const body = await response.json();
+            const deletedResults = body.results?.filter((r: any) => r.status === 'deleted') ?? [];
+            expect(
+                deletedResults.some((r: any) => r.event_id === eventId),
+                `event ${eventId} should be reported deleted, got ${JSON.stringify(body.results)}`,
+            ).toBeTruthy();
+        } finally {
+            // If anything above failed before the UI deleted it, do not leave it behind.
+            await page.request.delete(`${API}/assets/events?ids=${eventId}`).catch(() => {});
+        }
     });
 
     // ===================================================================
@@ -130,6 +179,10 @@ test.describe('Asset Event Delete', () => {
         // Navigate to Apple detail (has a DIVIDEND event linked to a transaction)
         await navigateTo(page, '/assets');
         await page.waitForSelector('[data-testid="assets-page"]', {timeout: 15_000});
+        // The cards render first and are re-rendered when the bulk price request lands.
+        // Clicking during that window aims at a node Svelte is about to replace, and the
+        // navigation is simply lost — which is what took this test red at load average 22.
+        await waitForSettled(page.getByTestId('assets-page'));
 
         const appleCard = page.locator('[data-testid^="asset-card-"]').filter({hasText: /Apple/i}).first();
         await expect(appleCard).toBeVisible({timeout: 5_000});
@@ -139,10 +192,12 @@ test.describe('Asset Event Delete', () => {
         // Open events editor
         await openEventsEditor(page);
 
-        // Apple has 3 DIVIDEND events; the most recent one is linked to a transaction
+        // Deliberately left at the default 3M range: every Apple event inside that
+        // window is linked to a transaction, so this test stays independent of the
+        // destructive delete performed by the first test above.
         const eventRows = getEventRows(page);
+        await expect.poll(() => eventRows.count(), {timeout: 10_000, message: 'Apple must have events — check populate_mock_data.py'}).toBeGreaterThan(0);
         const count = await eventRows.count();
-        expect(count, 'Apple must have events — check populate_mock_data.py').toBeGreaterThan(0);
 
         // Mark ALL events for deletion (one of them is linked → will be blocked)
         for (let i = 0; i < count; i++) {
@@ -150,7 +205,6 @@ test.describe('Asset Event Delete', () => {
             const kebabBtn = row.getByTestId(/^row-actions-/);
             if (await kebabBtn.isVisible({timeout: 1_000}).catch(() => false)) {
                 await clickDeleteRowAction(page, row);
-                await page.waitForTimeout(200);
             }
         }
 
@@ -183,6 +237,10 @@ test.describe('Asset Event Delete', () => {
     test('delete asset with events shows appropriate warning', async ({page}) => {
         await navigateTo(page, '/assets');
         await page.waitForSelector('[data-testid="assets-page"]', {timeout: 15_000});
+        // The cards render first and are re-rendered when the bulk price request lands.
+        // Clicking during that window aims at a node Svelte is about to replace, and the
+        // navigation is simply lost — which is what took this test red at load average 22.
+        await waitForSettled(page.getByTestId('assets-page'));
 
         const assetCards = page.locator('[data-testid^="asset-card-"]');
         await expect(assetCards.first()).toBeVisible({timeout: 5_000});
@@ -193,7 +251,6 @@ test.describe('Asset Event Delete', () => {
         const moreBtn = firstCard.locator('button[title*="more" i], button[aria-label*="more" i], button[data-testid*="more"]').first();
         if (await moreBtn.isVisible({timeout: 2_000}).catch(() => false)) {
             await moreBtn.click();
-            await page.waitForTimeout(300);
             const deleteOption = page
                 .locator('[role="menuitem"]')
                 .filter({hasText: /delete|elimina/i})
@@ -212,18 +269,16 @@ test.describe('Asset Event Delete', () => {
     // ===================================================================
     test('event badge reflects current link state', async ({page}) => {
         await navigateTo(page, '/transactions');
-        await page.waitForTimeout(2000);
 
-        // Event dots should exist (Apple DIVIDEND tx is linked to an AssetEvent)
+        // The dots appear only once the transactions table has its rows. Waiting for the
+        // first one *is* the assertion: the previous fixed 2s sleep followed by a one-shot
+        // count() lost that race under concurrent load and read an empty list, reporting a
+        // missing fixture that was never missing.
         const eventDots = page.locator('[data-testid^="tx-event-dot-"]');
-        const dotCount = await eventDots.count();
-        expect(dotCount, 'Event dots must exist — check populate_mock_data.py link_transactions_to_events()').toBeGreaterThan(0);
-
-        const firstDot = eventDots.first();
-        expect(await firstDot.isVisible()).toBe(true);
+        await expect(eventDots.first(), 'Event dots must exist — check populate_mock_data.py link_transactions_to_events()').toBeVisible({timeout: 15_000});
 
         // Verify the dot has proper test-id format
-        const testId = await firstDot.getAttribute('data-testid');
+        const testId = await eventDots.first().getAttribute('data-testid');
         expect(testId).toMatch(/^tx-event-dot-\d+$/);
     });
 });

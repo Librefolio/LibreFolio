@@ -8,6 +8,8 @@ Mentre il [Prezzo Medio di Carico (PMC)](../weighted-average-cost.md) fonde ogni
 
 Questa pagina descrive il **funzionamento** di quel motore: come i lotti vengono creati, abbinati e chiusi. Per le **metriche** derivate da questo motore (Rendimento Aperto/Totale, ridimensionamento qbq, allocazione del reddito, un esempio pratico), consulta [Analisi dei Lotti FIFO](fifo-lot-analysis.md).
 
+Il motore FIFO è indipendente dal feed dei prezzi. Ricostruisce quantità, lotti, frammenti, trasferimenti e chiusure realizzate. I livelli di valutazione correnti risiedono all'esterno: [Risoluzione Prezzi](../portfolio-engine/price-resolution.md) e `LotsAnalysisService` forniscono le quotazioni di riferimento/correnti e il comportamento al costo stimato.
+
 !!! info "Due motori, due domande"
 
     [Motore di Portafoglio](../index.md) (basato sul PMC) risponde: _"Qual è il mio prezzo medio di carico per questa posizione?"_
@@ -27,6 +29,7 @@ Un **lotto** è un singolo lotto di acquisizione economica per un asset: un sing
 | Quantità e costo originali | Fissati all'apertura, successivamente ridimensionati solo da frazionamenti — mai da trasferimenti |
 | Quantità aperta | Quanto del lotto **non** è stato ancora abbinato da una transazione opposta |
 | Custodia | Quale broker (o broker, nel tempo) detiene attualmente la quantità aperta |
+| Prezzo di riferimento | `reference_unit_price` più `reference_price_source` (`exact`, `fallback`, `none`) |
 
 ---
 
@@ -121,8 +124,10 @@ Il risultato complessivo viene quindi contrassegnato come **completo** o **degra
 
 ---
 
+
 ## 🔗 Correlati
 
+- 🧭 **[Risoluzione Prezzi](../portfolio-engine/price-resolution.md)**
 - 🔬 **[Analisi dei Lotti FIFO](fifo-lot-analysis.md)** — Metriche derivate da questo motore: Rendimento Aperto/Totale per lotto, ridimensionamento qbq, allocazione del reddito, esempio pratico
 - ⚙️ **[Motore di Portafoglio](../index.md)** — Il motore complementare aggregato/basato su PMC e come i due si relazionano
 - 📊 **[Prezzo Medio di Carico (PMC)](../weighted-average-cost.md)** — Base di costo mista a livello di posizione

@@ -174,6 +174,21 @@ jobs:
             org.opencontainers.image.title=LibreFolio
             org.opencontainers.image.description=LibreFolio: Open Source Personal Finance & Portfolio Tracker
 
+      # Light variant: same tags with a "-light" suffix. The image ships without
+      # the documentation images (they load from the online docs site).
+      - name: Extract Docker Metadata (Light Variant)
+        id: meta-light
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/librefolio/librefolio
+          tags: |
+            type=semver,pattern={{version}},suffix=-light
+            type=raw,value=latest-light,enable=${{ github.ref_name == 'main' }}
+            type=raw,value=nightly-light,enable=${{ github.ref_name == 'dev' }}
+          labels: |
+            org.opencontainers.image.title=LibreFolio (light)
+            org.opencontainers.image.description=LibreFolio (light variant, without documentation images): Open Source Personal Finance & Portfolio Tracker
+
 
       - name: Build and Push Docker Image
         uses: docker/build-push-action@v7
@@ -182,6 +197,18 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and Push Docker Image (Light Variant)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          build-args: |
+            DOCS_VARIANT=light
+          tags: ${{ steps.meta-light.outputs.tags }}
+          labels: ${{ steps.meta-light.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -219,7 +246,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG_NAME="${{ github.event.release.tag_name }}"
-          DOCKER_CMD=$(printf '\n\n## 📦 Docker Installation\n\n```bash\n# Install the latest version\ndocker pull ghcr.io/librefolio/librefolio:latest\n\n# Or install this specific release\ndocker pull ghcr.io/librefolio/librefolio:%s\n```\n' "$TAG_NAME")
+          DOCKER_CMD=$(printf '\n\n## 📦 Docker Installation\n\n```bash\n# Install the latest version\ndocker pull ghcr.io/librefolio/librefolio:latest\n\n# Or install this specific release\ndocker pull ghcr.io/librefolio/librefolio:%s\n\n# Light variant (no documentation images — they load from the online docs site)\ndocker pull ghcr.io/librefolio/librefolio:%s-light\n```\n' "$TAG_NAME" "$TAG_NAME")
 
           # gh CLI has no --notes-append flag: fetch current notes and append manually
           CURRENT_NOTES=$(gh release view "$TAG_NAME" --json body -q .body)

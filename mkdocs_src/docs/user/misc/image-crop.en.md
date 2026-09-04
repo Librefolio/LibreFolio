@@ -9,7 +9,7 @@ LibreFolio includes a powerful interactive image editing tool that lets you crop
 The Image Crop modal opens automatically whenever you upload an image file in LibreFolio:
 
 - 📂 **Files page** → uploading any image (JPEG, PNG, WebP, GIF)
-- 👤 **Profile settings** → changing your avatar
+- 👤 **[Profile settings](../settings/profile.md)** → changing your avatar
 - 🏦 **Broker settings** → changing a broker icon
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
@@ -26,9 +26,12 @@ The tool offers presets for common use cases:
 |--------|------|-------------|----------|
 | **Avatar** | 200 × 200 px | 1:1 (square) | User profile pictures |
 | **Broker Icon** | 64 × 64 px | 1:1 (square) | Broker logos |
+| **Asset Icon** | 256 × 256 px | 1:1 (square) | Asset logos |
 | **Custom** | Free | Free | Any size and ratio |
 
 The preset automatically sets the aspect ratio constraint and output size.
+
+Ellipse preview appears only for the avatar and broker-icon presets.
 
 ---
 

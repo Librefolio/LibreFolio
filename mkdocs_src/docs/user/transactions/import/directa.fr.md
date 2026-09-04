@@ -6,27 +6,26 @@
 
 ## 📥 Comment exporter
 
-LibreFolio prend en charge le format **CSV** exporté depuis Directa SIM. Les captures d'écran ci-dessous proviennent de la version bureau, mais les étapes sont similaires sur mobile.
+LibreFolio prend en charge les formats **CSV** et **XLSX** (Excel) exportés depuis Directa SIM. Les captures d'écran ci-dessous proviennent de la version bureau, mais les étapes sont similaires sur mobile.
 
-### Étape 1 — Ouvrir la liste des mouvements
+### Step 1 — Ouvrir la liste des mouvements
 
 Connectez-vous à [Directa](https://www.directatrading.com) et cliquez sur l'onglet **CONTO** (❶). Cliquez ensuite sur l'icône filtre/mouvements à gauche (❷) et sélectionnez la période souhaitée — ex. **6M** (❸).
 
-![Directa SIM — onglet CONTO, liste des mouvements, sélecteur de période](../../../static/broker-guides/Directa_1.png){ style="border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
+![Directa SIM — onglet CONTO, liste des mouvements, sélecteur de période](../../../static/broker-guides/directa/Directa_1.png){ style="border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
 
-### Étape 2 — Exporter en CSV
+### Step 2 — Exporter en CSV ou Excel
 
-Cliquez sur l'icône d'exportation (l'icône du tableur avec le **X** vert) en haut du tableau. Dans la boîte de dialogue, sélectionnez **File separato da virgole (csv)** et cliquez sur **ESTRAI**.
+Cliquez sur l'icône d'exportation (l'icône du tableur avec le **X** vert) en haut du tableau. Dans la boîte de dialogue, sélectionnez **File separato da virgole (csv)** (ou l'option Excel) et cliquez sur **ESTRAI**.
 
-![Directa SIM — boîte de dialogue d'exportation, option CSV sélectionnée](../../../static/broker-guides/Directa_2.png){ style="border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
+![Directa SIM — boîte de dialogue d'exportation, option CSV sélectionnée](../../../static/broker-guides/directa/Directa_2.png){ style="border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
 
-Enregistrez le fichier sans l'ouvrir ni le modifier dans Excel, puis importez-le dans LibreFolio.
+Enregistrez le fichier et importez-le dans LibreFolio. Si vous choisissez le CSV, ne l'ouvrez pas et ne le réenregistrez pas dans Excel au préalable, car cela peut altérer le formatage des nombres.
 
 ## 📝 Notes
 
 - Prise en charge des transactions d'actions, d'obligations et d'ETF, des dividendes, des taxes (*ritenute fiscali*) et des frais de transaction.
-- Seul le format **CSV** est pris en charge — pas xlsx ni ods.
+- Les formats **CSV** et **XLSX** (Excel) sont pris en charge — pas ods.
 - Les opérations de compte sont libellées en EUR.
 - L'exportation couvre jusqu'à 3 000 lignes par fichier. Pour des historiques plus longs, exportez plusieurs périodes et importez-les successivement.
-
 

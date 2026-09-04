@@ -28,7 +28,7 @@ En comparant le [MWRR Cumulé](mwrr.md#cumulative-mwrr) (qui intègre le moment 
 
 ## 🔢 Exemples Numériques
 
-### Exemple 1 : Effet de timing positif (Flux favorables)
+### 📈 1 : Effet de timing positif (Flux favorables)
 * **TWRR Cumulé (Rendement de la Stratégie) :** $+20\%$
 * **MWRR Cumulé (Rendement de l'Investisseur) :** $+28\%$
 
@@ -38,7 +38,7 @@ $$
 
 * **Interprétation :** La stratégie des actifs sous-jacents a généré un rendement de $+20\%$. Cependant, comme vous avez ajouté un montant significatif de capitaux au portefeuille avant que le marché ne monte, votre rendement personnel pondéré par l'argent a augmenté pour atteindre $+28\%$. Le timing et le montant de vos dépôts ont contribué positivement, générant **$+8$ points de pourcentage** de rendement supplémentaire.
 
-### Exemple 2 : Effet de timing négatif (Flux défavorables)
+### 📉 2 : Effet de timing négatif (Flux défavorables)
 * **TWRR Cumulé (Rendement de la Stratégie) :** $+20\%$
 * **MWRR Cumulé (Rendement de l'Investisseur) :** $+12\%$
 
@@ -52,12 +52,12 @@ $$
 
 ## ⚖️ Ce qu'il Capture et Ce qu'il Ne Capture Pas
 
-### Ce qu'il Capture
+### 🎯 qu'il Capture
 - **Impact du moment des dépôts/retraits :** Si vous avez ajouté des liquidités pendant les creux du marché (achat à bas prix) ou les sommets (achat au prix fort).
 - **Impact de la taille des flux :** Les flux de trésorerie les plus importants ont un poids plus fort et un impact accru sur le MWRR, ce que reflète l'Effet de timing.
 - **L'"écart de l'investisseur" (Investor Gap) :** la distance entre le rendement de la stratégie et le rendement effectivement obtenu par l'investisseur, due au timing et à la taille des flux de trésorerie.
 
-### Ce qu'il Ne Capture Pas
+### 🚫 qu'il Ne Capture Pas
 - **Gain monétaire absolu :** Un Effet de timing positif de $+5$ pp peut exister même si le portefeuille est en perte nette (par exemple, si le TWRR est de $-20\%$ et le MWRR de $-15\%$). Utilisez le [P&L de la Période](period-pnl.md) pour évaluer les gains monétaires absolus.
 - **Risque et volatilité :** Il n'indique pas le profil de risque ni la volatilité des actifs.
 - **Impact distinct des taxes/frais :** l'Effet de timing ne décompose pas les taxes et les coûts ; les coûts et taxes éventuels peuvent être affichés séparément dans le P&L de la période.

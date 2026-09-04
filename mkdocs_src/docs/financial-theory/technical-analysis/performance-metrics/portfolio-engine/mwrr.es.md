@@ -11,7 +11,7 @@ Para proporcionar una visibilidad completa, LibreFolio distingue entre dos forma
 
 ## 📈 MWRR Anualizado vs. MWRR Acumulado
 
-### MWRR Anualizado {: #annualized-mwrr }
+### 📈 Anualizado {: #annualized-mwrr }
 El MWRR Anualizado es la tasa compuesta anual de retorno que iguala el valor presente neto (NPV) de todos los flujos de caja con cero.
 
 Esta tasa compuesta es matemáticamente equivalente al **CAGR** (Compound Annual Growth Rate - tasa de crecimiento anual compuesta) de su capital realmente invertido, representando la tasa de crecimiento anual constante necesaria para que el capital inicial alcance el saldo final, teniendo en cuenta todos los movimientos intermedios.
@@ -87,7 +87,7 @@ $$
 * Es ideal para comparaciones a largo plazo (por ejemplo, comparar su rendimiento con la tasa de interés anual de un banco o con el CAGR).
 * **Advertencia de volatilidad:** En períodos cortos (por ejemplo, unos pocos días o semanas), el retorno anualizado puede ser muy volátil y mostrar porcentajes extremos porque la matemática extrapola el retorno de un período pequeño a un año completo de 365 días.
 
-### MWRR Acumulado {: #cumulative-mwrr }
+### 📊 Acumulado {: #cumulative-mwrr }
 El MWRR Acumulado representa el retorno total equivalente durante el período seleccionado, obtenido al capitalizar la tasa anualizada por la duración real de ese período.
 
 **Fórmula Directa (sin raíces, usa directamente $r$):**
@@ -124,27 +124,27 @@ Veamos un escenario de 10 años para entender cómo la temporalidad afecta al re
 * **Día 5:** Deposita otros **90.000 €**.
 * **Día 10:** Su valor neto final (NAV) es de **200.000 €**.
 
-### Comparación con el ROI Simple
+### 📉 con el ROI Simple
 El ROI simple se calcula únicamente sobre las contribuciones netas totales:
 
 $$
 ROI = \frac{200.000 - 100.000}{100.000} = +100\%
 $$
 
-### Efecto de la sincronización en el MWRR
+### ⏱️ de la sincronización en el MWRR
 Si la mayor parte de su capital (90.000 €) se depositó en el Año 5, justo antes de una fuerte recuperación del mercado de varios años, su dinero trabajó de manera muy eficiente. Debido a que la suma más grande estuvo expuesta a los años de alto crecimiento, su **MWRR Anualizado** será significativamente mayor que el TWRR del mercado.
 
 Utilizando un solver matemático NPV para este escenario específico:
 * El **MWRR Anualizado ($r$)** es exactamente del **13,02%**.
 
-### Conversión a MWRR Acumulado
+### 🔁 a MWRR Acumulado
 Capitalizando este retorno anualizado del 13,02% durante el período de 10 años:
 
 $$
 \text{MWRR}_{\text{acumulado}} = (1 + 0.130227)^{10} - 1 \approx +240.14\%
 $$
 
-### ¿Qué significa +240.14%?
+### 💡 significa +240.14%?
 * **No** significa que sus 100.000 € de contribuciones totales se hayan convertido en 340.140 €.
 * Significa que un **euro teórico**, invertido al principio del período de 10 años y no vuelto a tocar, se habría convertido en 3,40 €, logrando un retorno total del 240.14% al crecer a la misma velocidad compuesta promedio generada por sus flujos de caja reales.
 
@@ -154,10 +154,10 @@ $$
 
 LibreFolio muestra estas métricas de rendimiento en el panel de control:
 
-### Gráfico de porcentaje (`%`)
+### 📊 de porcentaje (`%`)
 Las series trazadas utilizan el **MWRR Acumulado**, el **TWRR Acumulado** y el **ROI Simple**. Esto permite una comparación visual directa, ya que las tres series comienzan en 0% y representan el progreso total a lo largo del período seleccionado.
 
-### Tarjetas de KPI
+### 🧾 de KPI
 * **ROI Simple** (Métrica principal para el rendimiento absoluto).
 * **TWRR Acumulado** (Indicador de rendimiento de la estrategia o distribución de activos).
 * **MWRR Acumulado** (Indicador principal de la sincronización personal).

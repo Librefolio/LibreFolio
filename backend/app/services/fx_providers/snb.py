@@ -147,7 +147,7 @@ class SNBProvider(FXRateProvider):
                 r.raise_for_status()
                 data = r.json()
         except Exception as e:
-            logger.error(f"Failed to fetch SNB dimensions: {e}")
+            logger.exception(f"Failed to fetch SNB dimensions: {e}")
             raise FXServiceError(f"Cannot load SNB currency list: {e}") from e
 
         iso_to_d1: dict[str, str] = {}
@@ -272,17 +272,17 @@ class SNBProvider(FXRateProvider):
                 response.raise_for_status()
                 data = response.json()
         except httpx.HTTPError as e:
-            logger.error(f"Failed to fetch FX rates from SNB: {e}")
+            logger.exception(f"Failed to fetch FX rates from SNB: {e}")
             raise FXServiceError(f"SNB API error: {e}") from e
         except Exception as e:
-            logger.error(f"Failed to parse SNB JSON response: {e}")
+            logger.exception(f"Failed to parse SNB JSON response: {e}")
             raise FXServiceError(f"Unexpected SNB response: {e}") from e
 
         # Parse JSON timeseries
         results = self._parse_json(data, request_start, end_date)
         return results
 
-    def _parse_json(
+    def _parse_json(  # noqa: C901 — flat response parser; branches are per-point skip/validation guards
         self,
         data: dict,
         start_date: date,

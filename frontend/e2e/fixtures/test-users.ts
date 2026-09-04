@@ -22,37 +22,6 @@ export const TEST_USER_2 = {
     password: 'E2eTestPass456!',
 };
 
-// Additional users for broker sharing / multi-user scenarios
-export const TEST_USER_ALICE = {
-    username: 'e2e_user_alice',
-    email: 'alice@test.example.com',
-    password: 'AlicePass123!',
-};
-
-export const TEST_USER_BOB = {
-    username: 'e2e_user_bob',
-    email: 'bob@test.example.com',
-    password: 'BobPass123!',
-};
-
-export const TEST_USER_CAROL = {
-    username: 'e2e_user_carol',
-    email: 'carol@test.example.com',
-    password: 'CarolPass123!',
-};
-
-export const TEST_USER_DAVE = {
-    username: 'e2e_user_dave',
-    email: 'dave@test.example.com',
-    password: 'DavePass123!',
-};
-
-export const TEST_USER_EVE = {
-    username: 'e2e_user_eve',
-    email: 'eve@test.example.com',
-    password: 'EvePass123!',
-};
-
 // Gallery empty-state user — no broker access, used to photograph dashboard empty state
 export const TEST_EMPTY = {
     username: 'e2e_test_empty',

@@ -73,7 +73,7 @@ Un répertoire de **montage lié** créé à côté de `docker-compose.yml`. Il 
 
 Le conteneur LibreFolio s'exécute avec un **utilisateur non-root** pour des raisons de sécurité. L'UID/GID par défaut est `1000:1000`. Les fichiers créés par l'application dans `LibreFolio-data/` appartiendront à cet UID/GID sur l'hôte.
 
-#### Choisir le bon UID et GID
+#### Choosing le bon UID et GID
 
 Définissez `UID` et `GID` dans votre fichier `.env` pour qu'ils correspondent à l'**utilisateur hôte** (ou utilisateur dédié) qui doit être le propriétaire des fichiers de données :
 
@@ -197,7 +197,7 @@ La configuration Docker Compose expose **deux ports** :
 | `6040` | Serveur de production (lancé par le CMD du conteneur) | `prod-docker/sqlite/app.db` (volume persistant) |
 | `6041` | Serveur de test (lancé manuellement via `docker exec`) | `test/sqlite/app.db` (éphémère) |
 
-### Démarrer le serveur de test
+### Starting le serveur de test
 
 1. **Démarrer le conteneur** (le serveur de production démarre automatiquement sur `:6040`) :
 

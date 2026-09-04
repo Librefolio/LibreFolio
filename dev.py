@@ -17,7 +17,6 @@ Autocompletion setup:
 
 import argparse
 import hashlib
-import math
 import os
 import platform
 import re
@@ -60,6 +59,7 @@ from scripts.cli_base import (
     print_header,
     print_success,
     print_warning,
+    run_command,
     run_command_live,
     run_pipenv,
 )
@@ -134,17 +134,39 @@ def _print_port_help(port: int, processes: list):
     print(f"{Colors.YELLOW}     Use --force to automatically kill blocking processes.{Colors.NC}")
 
 
+def _resolve_server_workers(value) -> int:
+    """Resolve server worker CLI value to an integer."""
+    if isinstance(value, str) and value.strip().lower() == "auto":
+        cpu_count = os.cpu_count() or 1
+        return max(1, 2 * (cpu_count - 1))
+    try:
+        workers = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("--workers must be a positive integer, 0, or auto") from exc
+    if workers == 0:
+        cpu_count = os.cpu_count() or 1
+        return max(1, 2 * (cpu_count - 1))
+    if workers < 0:
+        raise ValueError("--workers must be a positive integer, 0, or auto")
+    return workers
+
+
 def cmd_server(args):
     """Start the development server."""
     test_mode = getattr(args, 'test', False)
     rebuild = getattr(args, 'rebuild', False)
     debug_mode = getattr(args, 'debug', False)
     force = getattr(args, 'force', False)
-    workers = getattr(args, 'workers', 1)
+    try:
+        workers = _resolve_server_workers(getattr(args, 'workers', 1))
+    except ValueError as exc:
+        print_error(str(exc))
+        return 1
     host_override = getattr(args, 'host', None)
     port_override = getattr(args, 'port', None)
     coverage_mode = getattr(args, 'coverage', False)
     no_scheduler = getattr(args, 'no_scheduler', False)
+    no_reload = getattr(args, 'no_reload', False)
 
     if test_mode:
         port = get_test_server_port()
@@ -262,6 +284,14 @@ def cmd_server(args):
     # would generate its own random secret → tokens invalid across workers.
     env.setdefault("JWT_SECRET", secrets.token_urlsafe(64))
 
+    # uvicorn closes idle keep-alive connections after 5 s by default. A test
+    # client that reuses a socket the server has just closed gets ECONNRESET on
+    # a POST, which is not retried — it surfaces as a lone, unreproducible red.
+    # Parallel E2E workers make it likelier: each context sits idle between
+    # steps while the others work. 65 s is the usual browser/proxy figure and
+    # outlives any gap inside a test.
+    keepalive_args = ["--timeout-keep-alive", "65"] if test_mode else []
+
     if coverage_mode:
         # Use 'coverage run --parallel-mode -m uvicorn' to track backend code
         # coverage during E2E tests.
@@ -286,16 +316,35 @@ def cmd_server(args):
         #   Without exec at ANY level, subprocess.run() creates a child process,
         #   SIGTERM only reaches the parent, the child becomes an orphan, and
         #   no coverage data is ever written.
+        #
+        #   MULTIPLE WORKERS: uvicorn --workers spawns child processes, and
+        #   'coverage run' tracks only the process it starts — the same reason
+        #   --reload is excluded above. Left alone, asking for N workers under
+        #   coverage would measure the supervisor (which executes no app code)
+        #   and silently discard everything the workers did.
+        #
+        #   .coveragerc declares 'concurrency = thread,gevent' for the common
+        #   single-process case; adding 'multiprocessing' there would change the
+        #   pytest runs too, so it is passed on the command line instead, only
+        #   when it is actually needed. Measured with 2 workers: supervisor 0
+        #   lines, each worker 224 — i.e. the children are fully tracked.
         coveragerc = str(PROJECT_ROOT / ".coveragerc")
         uvicorn_cmd = [
             *pipenv_prefix(), "coverage", "run",
             "--parallel-mode",
             f"--rcfile={coveragerc}",
+            ]
+        if workers > 1:
+            uvicorn_cmd.extend(["--concurrency", "multiprocessing,thread,gevent"])
+        uvicorn_cmd.extend([
             "-m", "uvicorn",
             "backend.app.main:app",
             "--host", host,
             "--port", str(port),
-            ]
+            ])
+        if workers > 1:
+            uvicorn_cmd.extend(["--workers", str(workers)])
+        uvicorn_cmd.extend(keepalive_args)
         print(f"{Colors.YELLOW}📊 Coverage tracking enabled via 'coverage run'{Colors.NC}")
         print(f"{Colors.YELLOW}   Config: {coveragerc}{Colors.NC}")
         print(f"{Colors.YELLOW}   Coverage data will be written to .coverage.<pid> on shutdown{Colors.NC}")
@@ -329,7 +378,9 @@ def cmd_server(args):
             # An ephemeral test server needs no reload anyway, so only enable it
             # when watchfiles is present; otherwise run a plain, stable server.
             import importlib.util
-            if importlib.util.find_spec("watchfiles") is not None:
+            if no_reload:
+                pass  # caller wants a single, plainly-killable process
+            elif importlib.util.find_spec("watchfiles") is not None:
                 uvicorn_cmd.append("--reload")
                 # Exclude the git directory and the configured data directory
                 uvicorn_cmd.extend([
@@ -354,6 +405,7 @@ def cmd_server(args):
                 print(f"{Colors.YELLOW}⚠️  watchfiles not installed → running WITHOUT --reload "
                       f"(StatReload ignores --reload-exclude and can reload-loop).{Colors.NC}")
 
+        uvicorn_cmd.extend(keepalive_args)
         return run_command_live(uvicorn_cmd, env=env)
 
 
@@ -484,7 +536,10 @@ def cmd_fe_dev(args):
 def cmd_fe_build(args):
     """Build frontend for production."""
     # Ensure fonts/JS libs exist before SvelteKit prerender (validates app.html refs)
-    update_js_cache()
+    cache_result = update_js_cache(strict=True)
+    if cache_result != 0:
+        print_error("Resource cache incomplete - aborting frontend build")
+        return cache_result
 
     # Sync API types to ensure frontend types are aligned with backend
     print(Colors.success("Syncing API types before build..."))
@@ -750,6 +805,12 @@ def cmd_mkdocs_deploy(args):
     return run_pipenv(["mkdocs", "gh-deploy", "--force", "-f", "mkdocs_src/mkdocs.yml"])
 
 
+def cmd_mkdocs_normalize_dashboard_fixture(args):
+    """Rescale the gallery dashboard fixture to a 50K net worth (privacy normalization)."""
+    from scripts.normalize_dashboard_fixture import normalize_file  # noqa: PLC0415 — CLI-only import
+
+    return normalize_file(Path(args.path), getattr(args, "dry_run", False))
+
 
 def cmd_mkdocs_gallery(args):
     """Generate gallery screenshots for documentation using Playwright."""
@@ -821,8 +882,10 @@ def cmd_mkdocs_gallery(args):
     explicit_workers = getattr(args, 'workers', None)
     cpu_count = os.cpu_count() or 2
     worker_count = explicit_workers if explicit_workers else max(2, cpu_count)
-    # Server workers: 1 per 4 browser workers, minimum 1
-    server_workers = max(1, math.ceil(worker_count / 4))
+    # Server workers: browser workers here spend most of their time rendering,
+    # so one server per four of them (vs one per two for API/E2E).
+    from scripts.test_runner._server import CLIENTS_PER_SERVER_WORKER_GALLERY, server_workers_for
+    server_workers = server_workers_for(worker_count, CLIENTS_PER_SERVER_WORKER_GALLERY)
     print(f"{Colors.BLUE}Browser workers: {worker_count}  |  Server workers: {server_workers}{Colors.NC}")
 
     # --- Port conflict check ---
@@ -993,19 +1056,36 @@ def cmd_mkdocs_check_links(args):
     print(f"{Colors.CYAN}── Scope 1: Frontend → MkDocs ──{Colors.NC}")
 
     # 1a. Collect docsPath values from .ts and .svelte files
+    # Test files are fixtures/mocks, not real links — exclude them (audit 03/09:
+    # AboutTab.test.ts mocks produced 6 of the 7 false positives).
+    def _is_test_file(path) -> bool:
+        name = path.name
+        return name.endswith((".test.ts", ".spec.ts"))
+
     docs_paths: list[tuple[str, str, int]] = []  # (path, file, line)
     for ext in ("*.ts", "*.svelte"):
         for f in frontend_src.rglob(ext):
+            if _is_test_file(f):
+                continue
             for i, line in enumerate(f.read_text().splitlines(), 1):
                 # static docsPath = '...'  or  docsPath: '...'
                 m = re.search(r"""docsPath\s*[:=]\s*['"]([^'"]+)['"]""", line)
                 if m:
-                    docs_paths.append((m.group(1), str(f.relative_to(PROJECT_ROOT)), i))
+                    raw = m.group(1)
+                    # Template literals with ${…} can't be resolved statically —
+                    # same handling as the /mkdocs/ scope below.
+                    if "${" in raw:
+                        clean = re.sub(r"\$\{[^}]+\}", "", raw).lstrip("/")
+                        if clean:
+                            docs_paths.append((clean, str(f.relative_to(PROJECT_ROOT)), i))
+                    else:
+                        docs_paths.append((raw, str(f.relative_to(PROJECT_ROOT)), i))
 
     # 1b. Collect /mkdocs/ URLs from window.open and href=
     for ext in ("*.ts", "*.svelte"):
         for f in frontend_src.rglob(ext):
-            for i, line in enumerate(f.read_text().splitlines(), 1):
+            if _is_test_file(f):
+                continue
                 m = re.search(r"""/mkdocs/([^'"`,\s)]+)""", line)
                 if m:
                     raw = m.group(1).rstrip("/")
@@ -1328,7 +1408,10 @@ def _docker_ensure_assets_built():
     from scripts.cli_base import check_frontend_needs_build
 
     # --- 1. JS library cache (fonts must exist before SvelteKit prerender) ----
-    update_js_cache()
+    cache_result = update_js_cache(strict=True)
+    if cache_result != 0:
+        print_error("Resource cache incomplete. Cannot build Docker image.")
+        return cache_result
 
     # --- 2. Frontend ----------------------------------------------------------
     if check_frontend_needs_build():
@@ -1415,30 +1498,49 @@ def _docker_ensure_assets_built():
     return 0
 
 
+def _docker_build_cmd(image_tag: str, no_cache: bool, light: bool) -> list:
+    """Assemble the `docker build` command for the full or light variant.
+
+    The light variant (build-arg DOCS_VARIANT=light) ships without the
+    documentation images and is tagged with a `-light` suffix.
+    """
+    alias_tag = "librefolio:latest-light" if light else "librefolio:latest"
+    docker_cmd = ["docker", "build", "-t", image_tag, "-t", alias_tag]
+    # Pass host UID/GID so container user matches host user
+    docker_cmd.extend(["--build-arg", f"UID={os.getuid()}", "--build-arg", f"GID={os.getgid()}"])
+    if light:
+        docker_cmd.extend(["--build-arg", "DOCS_VARIANT=light"])
+    if no_cache:
+        docker_cmd.append("--no-cache")
+    docker_cmd.append(".")
+    return docker_cmd
+
+
 def cmd_docker_build(args):
     """Build the Docker image with git-based versioning."""
     if not _check_env_file():
         return 1
     tag_override = getattr(args, 'tag', None)
     no_cache = getattr(args, 'no_cache', False)
+    light = getattr(args, 'light', False)
 
     result = _docker_ensure_assets_built()
     if result != 0:
         return result
 
     image_tag = _get_docker_tag(tag_override)
-    print(Colors.success(f"🐳 Building Docker image: {image_tag}..."))
-    docker_cmd = ["docker", "build", "-t", image_tag]
-    # Also tag as 'librefolio:latest'
-    docker_cmd.extend(["-t", "librefolio:latest"])
-    # Pass host UID/GID so container user matches host user
-    docker_cmd.extend(["--build-arg", f"UID={os.getuid()}", "--build-arg", f"GID={os.getgid()}"])
-    if no_cache:
-        docker_cmd.append("--no-cache")
-    docker_cmd.append(".")
+    if light and not tag_override:
+        image_tag += "-light"
+    variant = "light (no documentation images)" if light else "full"
+    print(Colors.success(f"🐳 Building Docker image: {image_tag} [{variant}]..."))
+    docker_cmd = _docker_build_cmd(image_tag, no_cache, light)
     result = run_command_live(docker_cmd)
     if result == 0:
-        print_success(f"✅ Image built: {image_tag} (also tagged librefolio:latest)")
+        alias_tag = "librefolio:latest-light" if light else "librefolio:latest"
+        print_success(f"✅ Image built: {image_tag} (also tagged {alias_tag})")
+        if light:
+            print(Colors.info("ℹ️  Light variant: documentation images load from the online"))
+            print(Colors.info("   docs site — viewing them requires an internet connection."))
     return result
 
 
@@ -1448,6 +1550,7 @@ def cmd_docker_rebuild(args):
         return 1
     tag_override = getattr(args, 'tag', None)
     no_cache = getattr(args, 'no_cache', False)
+    light = getattr(args, 'light', False)
 
     print(Colors.success("🐳 Rebuild: build new image → stop → start..."))
     print()
@@ -1458,18 +1561,18 @@ def cmd_docker_rebuild(args):
         return result
 
     image_tag = _get_docker_tag(tag_override)
+    if light and not tag_override:
+        image_tag += "-light"
     print(Colors.info(f"[1/3] Building new image: {image_tag}..."))
-    docker_cmd = ["docker", "build", "-t", image_tag, "-t", "librefolio:latest"]
-    # Pass host UID/GID so container user matches host user
-    docker_cmd.extend(["--build-arg", f"UID={os.getuid()}", "--build-arg", f"GID={os.getgid()}"])
-    if no_cache:
-        docker_cmd.append("--no-cache")
-    docker_cmd.append(".")
+    docker_cmd = _docker_build_cmd(image_tag, no_cache, light)
     result = run_command_live(docker_cmd)
     if result != 0:
         print_error("Build failed — containers NOT restarted.")
         return result
     print_success(f"Image built: {image_tag}")
+    if light:
+        # docker-compose.yml runs ${LIBREFOLIO_IMAGE:-librefolio:latest}
+        print(Colors.info("ℹ️  Light variant built. To run it, set LIBREFOLIO_IMAGE=librefolio:latest-light in .env"))
     print()
 
     # Step 2: Stop current containers
@@ -1565,6 +1668,8 @@ def cmd_format(args):
 
 def cmd_lint(args):
     """Lint code with ruff."""
+    if getattr(args, "dead_code", False):
+        return cmd_dead_code(args)
     cmd = ["ruff", "check", "backend/"]
     if getattr(args, "fix", False):
         cmd.append("--fix")
@@ -1574,6 +1679,184 @@ def cmd_lint(args):
         cmd.append("--statistics")
     print(Colors.success(f"Linting code with ruff {'(--fix) ' if getattr(args, 'fix', False) else ''}..."))
     return run_pipenv(cmd)
+
+
+# Vulture categories worth acting on. Everything else ("variable", "attribute",
+# "import") is dominated by Pydantic model fields and Enum members, which are
+# consumed by value rather than by name and therefore always look unused.
+DEAD_CODE_SIGNAL_TYPES = ("function", "method", "class", "property")
+
+_VULTURE_LINE_RE = re.compile(r"^(?P<loc>.+?): unused (?P<kind>[a-z ]+) '(?P<name>[^']+)'")
+
+
+def _parse_vulture(output: str):
+    """Turn raw vulture output into (line, kind) pairs."""
+    parsed = []
+    for line in output.splitlines():
+        m = _VULTURE_LINE_RE.match(line)
+        if m:
+            parsed.append((line, m.group("kind")))
+    return parsed
+
+
+def _run_vulture(paths, exclude):
+    """Run vulture and return its raw stdout (exit code 3 == findings, not an error)."""
+    cmd = ["vulture", *paths]
+    if exclude:
+        cmd += ["--exclude", ",".join(exclude)]
+    code, out, err = run_command(pipenv_prefix() + cmd, cwd=PROJECT_ROOT)
+    if code not in (0, 3):
+        print_error(f"vulture failed (exit {code})")
+        if err:
+            print(err.strip())
+        return None
+    return out
+
+
+def cmd_dead_code(args):
+    """Find dead code: vulture on the backend, knip on the frontend."""
+    print_header("Dead Code Analysis")
+    print()
+
+    show_all = getattr(args, "all", False)
+    exclude = list(getattr(args, "exclude", None) or [])
+    scope = getattr(args, "scope", "both")
+    failed = False
+
+    if scope in ("both", "backend"):
+        print(Colors.info("[backend] Scanning backend/app with vulture..."))
+        # Production consumers are not limited to backend/app: the ./dev.py CLI
+        # (scripts/user_cli.py & co.) imports services directly. Scanning app in
+        # isolation would flag every CLI-only service function as dead.
+        prod_paths = ["backend/app", "scripts", "dev.py"]
+        app_out = _run_vulture(prod_paths, exclude)
+        if app_out is None:
+            return 1
+
+        findings = [(line, kind) for line, kind in _parse_vulture(app_out) if line.startswith("backend/app")]
+        raw_total = len(findings)
+        if not show_all:
+            findings = [f for f in findings if f[1] in DEAD_CODE_SIGNAL_TYPES]
+
+        # Differential pass: symbols that disappear from the report once the test
+        # suite is in scope are referenced *only* by tests — i.e. code kept alive
+        # artificially by its own tests.
+        test_only = set()
+        with_tests_out = _run_vulture([*prod_paths, "backend/test_scripts"], exclude)
+        if with_tests_out is not None:
+            still_dead = {line for line, _ in _parse_vulture(with_tests_out) if line.startswith("backend/app")}
+            test_only = {line for line, _ in findings if line not in still_dead}
+
+        truly_dead = [line for line, _ in findings if line not in test_only]
+
+        print()
+        if truly_dead:
+            print(Colors.warning(f"  Unreferenced ({len(truly_dead)}):"))
+            for line in truly_dead:
+                print(f"    {line}")
+        else:
+            print_success("  No unreferenced symbols")
+
+        print()
+        if test_only:
+            print(Colors.warning(f"  Referenced only by tests ({len(test_only)}):"))
+            for line in sorted(test_only):
+                print(f"    {line}")
+        else:
+            print_success("  No test-only symbols")
+
+        if not show_all:
+            hidden = raw_total - len(findings)
+            if hidden:
+                print()
+                print(Colors.info(f"  {hidden} low-signal findings hidden (variables, attributes) — use --all to show"))
+        failed = failed or bool(truly_dead) or bool(test_only)
+        print()
+
+    if scope in ("both", "frontend"):
+        print(Colors.info("[frontend] Scanning with knip..."))
+        frontend_dir = PROJECT_ROOT / "frontend"
+        if not (frontend_dir / "node_modules" / "knip").exists():
+            print_warning("  knip not installed — run './dev.py install' or 'npm install' in frontend/")
+        else:
+            failed = _run_knip(frontend_dir, exclude) or failed
+
+    return 1 if failed else 0
+
+
+# knip issue buckets, in report order, with the label shown to the user.
+_KNIP_BUCKETS = [
+    ("files", "Unused files"),
+    ("exports", "Unused exports"),
+    ("types", "Unused exported types"),
+    ("enumMembers", "Unused enum members"),
+    ("duplicates", "Duplicate exports"),
+    ("dependencies", "Unused dependencies"),
+    ("devDependencies", "Unused devDependencies"),
+    ("unlisted", "Unlisted dependencies"),
+    ("unresolved", "Unresolved imports"),
+]
+
+
+def _extract_json(text):
+    """Pull the JSON blob out of noisy stdout (dotenv banners, svelte.config debug lines)."""
+    import json
+
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith('{"'):
+            try:
+                return json.loads(stripped)
+            except json.JSONDecodeError:
+                continue
+    return None
+
+
+def _run_knip(frontend_dir, exclude):
+    """Run knip via its JSON reporter so results can be path-filtered. Returns True on findings."""
+    import fnmatch
+
+    code, out, err = run_command(["npx", "knip", "--no-progress", "--reporter", "json"], cwd=frontend_dir)
+    payload = _extract_json(out)
+    if payload is None:
+        print_error("  could not parse knip output")
+        if err:
+            print(err.strip()[:2000])
+        return True
+    issues = payload.get("issues", [])
+
+    def skipped(path):
+        return any(fnmatch.fnmatch(path, pat) for pat in exclude)
+
+    buckets = {key: [] for key, _ in _KNIP_BUCKETS}
+    hidden = 0
+    for issue in issues:
+        path = issue.get("file", "")
+        for key, _ in _KNIP_BUCKETS:
+            for item in issue.get(key) or []:
+                name = item.get("name", "") if isinstance(item, dict) else str(item)
+                # Dependency findings are reported against package.json, so the
+                # exclude globs must be matched on the owning file instead.
+                if skipped(path):
+                    hidden += 1
+                    continue
+                buckets[key].append(f"{name}  ({path})" if key not in ("files",) else name)
+
+    total = sum(len(v) for v in buckets.values())
+    print()
+    if total == 0:
+        print_success("  No dead code found")
+    for key, label in _KNIP_BUCKETS:
+        items = buckets[key]
+        if not items:
+            continue
+        print(Colors.warning(f"  {label} ({len(items)}):"))
+        for item in sorted(items):
+            print(f"    {item}")
+        print()
+    if hidden:
+        print(Colors.info(f"  {hidden} findings hidden by --exclude"))
+    return total > 0
 
 
 # =============================================================================
@@ -1811,16 +2094,27 @@ def copy_docs_assets():
     #         print_success(f"Copied promo video to mkdocs assets: {video_file.name}")
 
 
-def update_js_cache():
-    """Update JS library cache."""
+def update_js_cache(strict: bool = False):
+    """Update JS library cache.
+
+    I1 (02/09): the script exits non-zero when a resource is missing AND has no
+    usable cached copy. With ``strict=True`` (build paths) that failure is
+    returned to the caller so a broken build stops instead of shipping; the
+    dev-server path stays non-blocking (offline development with a warm cache
+    must keep working).
+    """
     result = run_command_live(
         [*pipenv_prefix(), "python", "scripts/update_js_cache.py"],
         cwd=PROJECT_ROOT
         )
     if result == 0:
         print_success("JS libraries cached")
-    else:
-        print_warning("JS cache update failed (will use CDN fallback)")
+        return 0
+    if strict:
+        print_error("JS cache update failed — a required resource is missing and not cached")
+        return result
+    print_warning("JS cache update failed (will use CDN fallback)")
+    return 0
 
 
 # =============================================================================
@@ -1889,12 +2183,14 @@ Examples:
     p.add_argument("--rebuild", "-r", action="store_true", help="Force rebuild frontend before starting")
     p.add_argument("--debug", "-d", action="store_true", help="Debug mode: verbose logging + frontend debug build")
     p.add_argument("--force", "-f", action="store_true", help="Kill blocking processes on port before starting")
-    p.add_argument("--workers", "-w", type=int, default=1, help="Number of uvicorn workers (default: 1)")
+    p.add_argument("--workers", "-w", metavar="N|auto", default=1, help="Number of uvicorn workers, or 'auto' for 2 × (CPU-1) (default: 1)")
     p.add_argument("--host", type=str, default=None, help="Bind host (default: HOST env or 0.0.0.0)")
     p.add_argument("--port", "-p", type=int, default=None, help="Bind port (default: PORT env or 6040)")
     p.add_argument("--coverage", action="store_true", help="Enable backend code coverage tracking (writes .coverage.<pid>)")
     p.add_argument("--no-scheduler", action="store_true", dest="no_scheduler",
                    help="Disable the market data scheduler (no background sync jobs)")
+    p.add_argument("--no-reload", action="store_true", dest="no_reload",
+                   help="Never enable uvicorn --reload (the reloader adds a supervisor process that outlives SIGTERM)")
     p.set_defaults(func=cmd_server)
 
     # Database
@@ -2006,6 +2302,13 @@ Examples:
                       help="Kill zombie processes blocking the test port instead of failing")
     mk_p.set_defaults(func=cmd_mkdocs_gallery)
 
+    mk_p = mk_sub.add_parser("normalize-dashboard-fixture", help="Rescale the gallery dashboard snapshot to a 50K net worth (anonymization)")
+    mk_p.add_argument("path", nargs="?", default="frontend/e2e/dashboard-report.json",
+                      help="Fixture path (default: the gallery dashboard snapshot)")
+    mk_p.add_argument("--dry-run", action="store_true",
+                      help="Report what would change without writing")
+    mk_p.set_defaults(func=cmd_mkdocs_normalize_dashboard_fixture)
+
     mk_p = mk_sub.add_parser("video", help="Manage promotional video assets (sync, start, build, review)")
     mk_p.add_argument("action", choices=["sync", "start", "build", "review"], help="Action to perform")
     mk_p.add_argument("--locale", "-l", default="all", choices=["en", "it", "es", "fr", "all"], help="Locale to build (for build action)")
@@ -2075,11 +2378,13 @@ Examples:
     docker_p = docker_sub.add_parser("build", help="Build Docker image (tag from git version)")
     docker_p.add_argument("--tag", "-t", default=None, help="Override image tag (default: librefolio:<git-version>)")
     docker_p.add_argument("--no-cache", action="store_true", help="Build without Docker cache")
+    docker_p.add_argument("--light", action="store_true", help="Light variant: no documentation images (tagged *-light); doc images load from the online docs site")
     docker_p.set_defaults(func=cmd_docker_build)
 
     docker_p = docker_sub.add_parser("rebuild", help="Build new image → stop containers → restart with new version")
     docker_p.add_argument("--tag", "-t", default=None, help="Override image tag (default: librefolio:<git-version>)")
     docker_p.add_argument("--no-cache", action="store_true", help="Build without Docker cache")
+    docker_p.add_argument("--light", action="store_true", help="Light variant: no documentation images (tagged *-light); doc images load from the online docs site")
     docker_p.set_defaults(func=cmd_docker_rebuild)
 
     docker_p = docker_sub.add_parser("up", help="Start containers (docker compose up)")
@@ -2111,6 +2416,10 @@ Examples:
     p.add_argument("--fix", action="store_true", help="Auto-fix safe issues")
     p.add_argument("--unsafe", action="store_true", help="Include unsafe fixes (use with --fix)")
     p.add_argument("--statistics", action="store_true", help="Show error statistics")
+    p.add_argument("--dead-code", action="store_true", help="Find dead code (vulture + knip) instead of linting")
+    p.add_argument("--all", action="store_true", help="With --dead-code: include low-signal findings (variables, attributes)")
+    p.add_argument("--scope", choices=["both", "backend", "frontend"], default="both", help="With --dead-code: which side to scan (default: both)")
+    p.add_argument("--exclude", action="append", metavar="GLOB", help="With --dead-code: extra path globs to skip (repeatable)")
     p.set_defaults(func=cmd_lint)
 
     # =========================================================================
@@ -2173,7 +2482,9 @@ Examples:
     if HAS_ARGCOMPLETE:
         argcomplete.autocomplete(parser)
 
-    args = parser.parse_args()
+    from scripts.test_runner._cli import normalize_coverage_argv
+
+    args = parser.parse_args(normalize_coverage_argv(sys.argv[1:], only_command="test"))
 
     if args.command is None:
         parser.print_help()

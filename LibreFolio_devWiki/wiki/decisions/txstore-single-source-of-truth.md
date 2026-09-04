@@ -34,7 +34,7 @@ After Round 6 Plans A/B/B1/B23, the transactions frontend had accumulated 5 cate
 
 ## Consequences
 
-- **Created**: `frontend/src/lib/stores/txStore.svelte.ts` (~120 LOC)
+- **Created**: `frontend/src/lib/stores/transactions/txStore.svelte.ts` (~120 LOC)
 - **Created**: `frontend/src/lib/components/transactions/types.ts` (interface deduplication)
 - **Simplified**: BulkModal 1766→~1200 LOC (-30%), +page.svelte 1035→~700 LOC (-30%)
 - **Eliminated**: `allMainRows`/`allPartnerRows` variables and their prop drilling

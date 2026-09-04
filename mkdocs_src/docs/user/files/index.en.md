@@ -20,7 +20,7 @@ Static resources are **visible to all users** in the system. This is where you'l
 
 These files live in the `custom-uploads/` directory on the server.
 
-**Context Menu**: Right-click any file row (in list view) to access quick actions (Preview, Rename, Delete).
+**Context Menu**: Right-click any file row (in list view) to access quick actions (Preview, Copy Link, Download, Delete).
 
 You can switch between **list view** and **grid view** for a visual preview of image files:
 
@@ -40,7 +40,7 @@ Broker reports have **restricted visibility** — you can only see reports for b
 - ✅ **Parsed results** from the automatic import system (BRIM)
 - ❌ Files that **failed parsing** (kept for debugging)
 
-**Context Menu**: Right-click any report row to access quick actions (Preview, Rename, Delete).
+**Context Menu**: Right-click any report row to access quick actions (Preview, Download, Delete).
 
 ---
 
@@ -68,15 +68,15 @@ If you want to import transactions or manage existing statements:
 
 1. Go to the **Broker Reports** tab.
 2. Upload the CSV or Excel file exported from your broker (Degiro, Interactive Brokers, eToro, Directa SIM, etc.).
-3. Choose which **broker to associate** the file with — this determines which broker account receives the imported transactions.
-4. The system automatically detects the format and runs the guided **[Import Wizard](../transactions/import/index.md)**.
+3. Choose which **broker to associate** the file with — this determines which broker account will receive the imported transactions.
+4. The file is stored and appears in the reports list. **No import runs yet**: to actually parse it and import the transactions, open the **[Import Wizard](../transactions/import/index.md)** (Transactions → **Import**) — its *Select Files* step lists the reports you already uploaded, so you can pick one instead of uploading it again.
 
 ### ⚙️ Actions on Existing Reports
 
 Right-click any report in the table to open its context menu:
-- 🔄 **Reprocess**: Reruns the import parser on the statement. This is useful after an import plugin update or if you accidentally deleted some transactions and want to restore them.
+- 👁️ **Preview**: Inspect the file content without leaving the page.
 - 📥 **Download**: Download the original raw file.
-- 🗑️ **Delete**: Remove the statement and its associated transactions from the ledger.
+- 🗑️ **Delete**: Remove the file and its metadata. Transactions already imported from it **stay in the ledger** — deleting a report never deletes transactions.
 
 !!! info "Association vs. Parsing"
 
