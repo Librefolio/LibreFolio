@@ -16,6 +16,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
+from borsa_italiana_scraping import StrumentoNonRisolto
 
 from backend.app.db import IdentifierType
 from backend.app.db.models import AssetType, ProviderInputType
@@ -50,8 +51,8 @@ def _punto(data, *, apertura=None, massimo=None, minimo=None, chiusura=None, ult
     return SimpleNamespace(data=data, apertura=apertura, massimo=massimo, minimo=minimo, chiusura=chiusura, ultimo=ultimo, volume=volume)
 
 
-def _storico(punti):
-    return SimpleNamespace(punti=punti)
+def _storico(punti, valuta: str = "EUR"):
+    return SimpleNamespace(punti=punti, valuta=valuta)
 
 
 def _scheda(**kw):
@@ -75,8 +76,12 @@ def _scheda(**kw):
     return SimpleNamespace(**base)
 
 
-def _cerca_result(isin, nome, tipo):
-    return SimpleNamespace(isin=isin, nome=nome, tipo=tipo)
+def _cerca_result(isin, nome, tipo, link=None):
+    # The site search carries the market routing params in the result link; a
+    # non-fund result without a parseable mic is filtered out as a dead result.
+    if link is None:
+        link = f"https://www.borsaitaliana.it/borsa/search/scheda.html?code={isin}&mic=MTAA&lang=it"
+    return SimpleNamespace(isin=isin, nome=nome, tipo=tipo, link=link)
 
 
 # ── pure helpers ─────────────────────────────────────────────────────────────
@@ -86,6 +91,7 @@ def test_infer_country_from_issuer():
     assert bi._infer_country_from_issuer(None) is None
     assert bi._infer_country_from_issuer("") is None
     assert bi._infer_country_from_issuer("Republic of Italy") == "ITA"  # exact
+    assert bi._infer_country_from_issuer("United States Of America") == "USA"  # exact, mixed case
     assert bi._infer_country_from_issuer("The Federal Republic of Germany, Berlin") == "DEU"  # substring
     assert bi._infer_country_from_issuer("Nowhere Land") is None
 
@@ -152,7 +158,7 @@ def test_identity_and_urls():
     assert p.provider_help_url.startswith("/mkdocs/")
     assert p.resolvable_url_domains == ["borsaitaliana.it"]
     assert p.test_cases and p.test_search_query == "ENEL"
-    assert [s["key"] for s in p.params_schema] == ["language", "codice_fondo"]
+    assert [s["key"] for s in p.params_schema] == ["language", "codice_fondo", "mic", "platform"]
     # get_asset_url: ISIN scheda vs fund-by-code
     assert "scheda.html?code=IT0003128367" in p.get_asset_url("IT0003128367")
     fund_url = p.get_asset_url("IT0003128367", provider_params={"codice_fondo": "ABC123", "language": "it"})
@@ -160,6 +166,22 @@ def test_identity_and_urls():
     # _get_lingua default + override
     assert p._get_lingua(None) == "en"
     assert p._get_lingua({"language": "it"}) == "it"
+
+
+def test_get_asset_url_market_params():
+    """mic/platform from provider_params route the scheda URL; absent → legacy bare URL."""
+    p = _provider()
+    url = p.get_asset_url("US912810TU25", IdentifierType.ISIN, {"language": "it", "mic": "ETLX", "platform": "TLX"})
+    assert url == "https://www.borsaitaliana.it/borsa/search/scheda.html?code=US912810TU25&lang=it&mic=ETLX&platform=TLX"
+    # mic without platform: only the mic segment is appended
+    mic_only = p.get_asset_url("IT0005436693", IdentifierType.ISIN, {"language": "it", "mic": "MOTX"})
+    assert mic_only == "https://www.borsaitaliana.it/borsa/search/scheda.html?code=IT0005436693&lang=it&mic=MOTX"
+    # no market params → bare legacy URL (assets saved before mic/platform propagation)
+    bare = p.get_asset_url("IT0003128367", IdentifierType.ISIN, {"language": "it"})
+    assert bare == "https://www.borsaitaliana.it/borsa/search/scheda.html?code=IT0003128367&lang=it"
+    # fund-by-code path unchanged
+    fund_url = p.get_asset_url("LU2178929613", IdentifierType.ISIN, {"codice_fondo": "2FADB602822", "language": "it"})
+    assert fund_url == "https://www.borsaitaliana.it/borsa/fondi/dettaglio/2FADB602822.html?lang=it"
 
 
 @pytest.mark.asyncio
@@ -191,7 +213,7 @@ async def test_current_value_invalid_type():
 
 @pytest.mark.asyncio
 async def test_current_value_happy(monkeypatch):
-    monkeypatch.setattr(bi, "ottieni_prezzo_corrente", lambda ident, sessione=None: _prezzo(Decimal("6.42"), "EUR", date(2026, 2, 11)), raising=False)
+    monkeypatch.setattr(bi, "ottieni_prezzo_corrente", lambda ident, sessione=None, mic=None, platform=None: _prezzo(Decimal("6.42"), "EUR", date(2026, 2, 11)), raising=False)
     result = await _provider().get_current_value("IT0003128367", IdentifierType.ISIN)
     assert result.value == Decimal("6.42")
     assert result.currency == "EUR"
@@ -211,7 +233,7 @@ async def test_current_value_happy(monkeypatch):
 async def test_current_value_library_error_mapping(monkeypatch, exc_name, expected_code):
     exc_cls = getattr(bi, exc_name)
 
-    def boom(ident, sessione=None):
+    def boom(ident, sessione=None, mic=None, platform=None):
         raise exc_cls("lib error")
 
     monkeypatch.setattr(bi, "ottieni_prezzo_corrente", boom, raising=False)
@@ -222,13 +244,27 @@ async def test_current_value_library_error_mapping(monkeypatch, exc_name, expect
 
 @pytest.mark.asyncio
 async def test_current_value_unexpected_error(monkeypatch):
-    def boom(ident, sessione=None):
+    def boom(ident, sessione=None, mic=None, platform=None):
         raise ValueError("something odd")
 
     monkeypatch.setattr(bi, "ottieni_prezzo_corrente", boom, raising=False)
     with pytest.raises(AssetSourceError) as exc:
         await _provider().get_current_value("IT0003128367", IdentifierType.ISIN)
     assert exc.value.error_code == "FETCH_ERROR"
+
+
+@pytest.mark.asyncio
+async def test_current_value_unresolved_page_maps_to_unsupported(monkeypatch):
+    """StrumentoNonRisolto (subclass of StrumentoNonTrovato) must map to the actionable
+    UNSUPPORTED_PAGE, not to NOT_FOUND — the except order is the contract under test."""
+
+    def boom(ident, sessione=None, mic=None, platform=None):
+        raise StrumentoNonRisolto("no market page")
+
+    monkeypatch.setattr(bi, "ottieni_prezzo_corrente", boom, raising=False)
+    with pytest.raises(AssetSourceError) as exc:
+        await _provider().get_current_value("US912810TU25", IdentifierType.ISIN, {"mic": "ETLX", "platform": "TLX"})
+    assert exc.value.error_code == "UNSUPPORTED_PAGE"
 
 
 # ── get_history_value ────────────────────────────────────────────────────────
@@ -260,6 +296,36 @@ async def test_history_happy_with_filter_and_fallbacks(monkeypatch):
     p0, p1 = result.prices
     assert p0.close == Decimal("10.5") and p0.open == Decimal("10") and p0.volume == 1000
     assert p1.close == Decimal("12") and p1.open is None and p1.volume is None
+
+
+@pytest.mark.asyncio
+async def test_history_currency_from_library(monkeypatch):
+    """History currency comes from the library result (EuroTLX hosts FX-denominated
+    bonds), not from a hardcoded EUR."""
+    today = date.today()
+    punti = [
+        _punto(today - timedelta(days=2), chiusura=Decimal("99"), ultimo=Decimal("99")),
+        _punto(today - timedelta(days=1), chiusura=Decimal("100"), ultimo=Decimal("100")),
+    ]
+    monkeypatch.setattr(bi, "ottieni_storico", lambda ident, periodo=None, sessione=None: _storico(punti, valuta="USD"), raising=False)
+
+    result = await _provider().get_history_value("US912810TU25", IdentifierType.ISIN, None, today - timedelta(days=5), today)
+    assert result.currency == "USD"
+    assert len(result.prices) == 2
+    assert {p.currency for p in result.prices} == {"USD"}
+
+
+@pytest.mark.asyncio
+async def test_history_unresolved_page_maps_to_unsupported(monkeypatch):
+    """Same StrumentoNonRisolto → UNSUPPORTED_PAGE mapping as get_current_value."""
+
+    def boom(ident, periodo=None, sessione=None):
+        raise StrumentoNonRisolto("no market page")
+
+    monkeypatch.setattr(bi, "ottieni_storico", boom, raising=False)
+    with pytest.raises(AssetSourceError) as exc:
+        await _provider().get_history_value("US912810TU25", IdentifierType.ISIN, None, date(2026, 1, 1), date(2026, 1, 31))
+    assert exc.value.error_code == "UNSUPPORTED_PAGE"
 
 
 @pytest.mark.asyncio
@@ -346,7 +412,7 @@ async def test_metadata_scheda_bond_full(monkeypatch):
         ticker="BTP30",
         isin="IT0005436693",
     )
-    monkeypatch.setattr(bi, "ottieni_scheda", lambda ident, lingua=None, sessione=None: scheda, raising=False)
+    monkeypatch.setattr(bi, "ottieni_scheda", lambda ident, mic=None, lingua=None, sessione=None, platform=None: scheda, raising=False)
 
     result = await _provider().fetch_asset_metadata("IT0005436693", IdentifierType.ISIN, {"language": "it"})
     assert result is not None
@@ -366,7 +432,7 @@ async def test_metadata_scheda_bond_full(monkeypatch):
 @pytest.mark.asyncio
 async def test_metadata_scheda_long_description_truncated(monkeypatch):
     scheda = _scheda(descrizione="D" * 600, isin="IT0005436693", ticker=None)
-    monkeypatch.setattr(bi, "ottieni_scheda", lambda ident, lingua=None, sessione=None: scheda, raising=False)
+    monkeypatch.setattr(bi, "ottieni_scheda", lambda ident, mic=None, lingua=None, sessione=None, platform=None: scheda, raising=False)
     result = await _provider().fetch_asset_metadata("IT0005436693", IdentifierType.ISIN)
     sd = result.classification_params.short_description
     assert len(sd) == 500 and sd.endswith("...")
@@ -375,7 +441,7 @@ async def test_metadata_scheda_long_description_truncated(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_metadata_scheda_exception_returns_none(monkeypatch):
-    def boom(ident, lingua=None, sessione=None):
+    def boom(ident, mic=None, lingua=None, sessione=None, platform=None):
         raise RuntimeError("scheda parse error")
 
     monkeypatch.setattr(bi, "ottieni_scheda", boom, raising=False)
@@ -383,11 +449,25 @@ async def test_metadata_scheda_exception_returns_none(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_metadata_scheda_unresolved_page_raises_unsupported(monkeypatch):
+    """An unresolvable market page is actionable: surfaced as UNSUPPORTED_PAGE,
+    not swallowed into a None like ordinary parse failures."""
+
+    def boom(ident, mic=None, lingua=None, sessione=None, platform=None):
+        raise StrumentoNonRisolto("no market page")
+
+    monkeypatch.setattr(bi, "ottieni_scheda", boom, raising=False)
+    with pytest.raises(AssetSourceError) as exc:
+        await _provider().fetch_asset_metadata("US912810TU25", IdentifierType.ISIN, {"mic": "ETLX", "platform": "TLX"})
+    assert exc.value.error_code == "UNSUPPORTED_PAGE"
+
+
+@pytest.mark.asyncio
 async def test_metadata_scheda_minimal_no_optional_fields(monkeypatch):
     # tipo/nome/valuta only — every optional description field is None, so the
     # description stays None and no geographic/sector area is built.
     scheda = _scheda(tipo="Azione", nome="ENEL", valuta="EUR", isin="IT0003128367")
-    monkeypatch.setattr(bi, "ottieni_scheda", lambda ident, lingua=None, sessione=None: scheda, raising=False)
+    monkeypatch.setattr(bi, "ottieni_scheda", lambda ident, mic=None, lingua=None, sessione=None, platform=None: scheda, raising=False)
     result = await _provider().fetch_asset_metadata("IT0003128367", IdentifierType.ISIN)
     assert result.asset_type == AssetType.STOCK
     assert result.classification_params.short_description is None
@@ -476,6 +556,10 @@ async def test_search_dedup_and_stock_items(monkeypatch):
     assert {it["type"] for it in items} == {AssetType.STOCK.value}
     langs = {it["provider_params"]["language"] for it in items}
     assert langs == {"it", "en"}
+    # currency is not in the search payload — left unknown, metadata fills it
+    assert {it["currency"] for it in items} == {None}
+    # market routing params are parsed from the site link into provider_params
+    assert {it["provider_params"]["mic"] for it in items} == {"MTAA"}
 
 
 @pytest.mark.asyncio
@@ -530,27 +614,34 @@ async def test_resolve_url_fund_page_errors_return_none(monkeypatch):
 async def test_resolve_url_scheda_page(monkeypatch):
     monkeypatch.setattr(bi, "estrai_codice_da_url", lambda url: None, raising=False)  # not a fund
     scheda = _scheda(tipo="Azione", nome="ENEL", valuta="EUR", isin="IT0003128367")
-    monkeypatch.setattr(bi, "ottieni_scheda", lambda ident, mic=None, lingua=None, sessione=None: scheda, raising=False)
+    monkeypatch.setattr(bi, "ottieni_scheda", lambda ident, mic=None, lingua=None, sessione=None, platform=None: scheda, raising=False)
+    # resolve_url rediscovers the authoritative mic/platform via the site search:
+    # exact-ISIN hit whose link carries the market routing params.
+    monkeypatch.setattr(bi, "cerca", lambda q, lingua=None, sessione=None: [_cerca_result("IT0003128367", "ENEL", "Azione")], raising=False)
 
     url = "https://www.borsaitaliana.it/borsa/azioni/scheda/IT0003128367.html"
     items = await _provider().resolve_url(url)
     assert items is not None and len(items) == 2
     assert {it["identifier"] for it in items} == {"IT0003128367"}
     assert {it["type"] for it in items} == {AssetType.STOCK.value}
+    # the rediscovered mic lands in provider_params so the saved asset can be routed
+    assert {it["provider_params"]["mic"] for it in items} == {"MTAA"}
 
 
 @pytest.mark.asyncio
 async def test_resolve_url_scheda_errors_return_none(monkeypatch):
     monkeypatch.setattr(bi, "estrai_codice_da_url", lambda url: None, raising=False)
+    # No site-search rediscovery here: empty result → URL-only mic fallback.
+    monkeypatch.setattr(bi, "cerca", lambda q, lingua=None, sessione=None: [], raising=False)
     url = "https://www.borsaitaliana.it/borsa/azioni/scheda/IT0003128367.html"
 
-    def not_found(ident, mic=None, lingua=None, sessione=None):
+    def not_found(ident, mic=None, lingua=None, sessione=None, platform=None):
         raise bi.DatiNonDisponibili("no scheda")
 
     monkeypatch.setattr(bi, "ottieni_scheda", not_found, raising=False)
     assert await _provider().resolve_url(url) is None
 
-    def generic(ident, mic=None, lingua=None, sessione=None):
+    def generic(ident, mic=None, lingua=None, sessione=None, platform=None):
         raise RuntimeError("boom")
 
     monkeypatch.setattr(bi, "ottieni_scheda", generic, raising=False)

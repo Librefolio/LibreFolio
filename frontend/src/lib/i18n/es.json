@@ -3092,6 +3092,7 @@
     "TIMEOUT": "El proveedor no respondió a tiempo.",
     "MISSING_PARAMS": "A la configuración del proveedor le faltan parámetros obligatorios.",
     "PARSE_ERROR": "No se pudo interpretar la respuesta del proveedor.",
-    "SCRAPE_ERROR": "No se pudo leer la página del proveedor."
+    "SCRAPE_ERROR": "No se pudo leer la página del proveedor.",
+    "UNSUPPORTED_PAGE": "El proveedor encontró este instrumento pero su página de mercado aún no se puede leer. Abre un issue en GitHub (Librefolio/LibreFolio) indicando este ISIN para que se añada el soporte."
   }
 }
