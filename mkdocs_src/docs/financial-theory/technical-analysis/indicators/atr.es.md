@@ -14,15 +14,15 @@ Un simple rango máximo-mínimo ignora los movimientos nocturnos o de gaps; el A
 
 1. **Rango Verdadero** (True Range) — el mayor de tres candidatos, que captura los gaps así como el rango intradiario:
 
- $$
- TR_t = \max\big(H_t - L_t,\; \left| H_t - C_{t-1} \right|,\; \left| L_t - C_{t-1} \right|\big)
- $$
+    $$
+    TR_t = \max\big(H_t - L_t,\; \left| H_t - C_{t-1} \right|,\; \left| L_t - C_{t-1} \right|\big)
+    $$
 
 2. **Rango Verdadero Promedio** (Average True Range) — una media móvil suavizada (SMMA de Wilder) del Rango Verdadero:
 
- $$
- ATR_t = SMMA_N(TR)
- $$
+    $$
+    ATR_t = SMMA_N(TR)
+    $$
 
 ---
 

@@ -14,23 +14,23 @@ Aroon Up sale a 100 nel momento in cui il prezzo stabilisce un nuovo massimo su 
 
 1. **Periodi trascorsi dal massimo più alto / minimo più basso** all'interno delle ultime $N$ osservazioni:
 
- $$
- p^{H}_t = \operatorname*{argmax}_{0 \le i \le N} H_{t-i}, \qquad
- p^{L}_t = \operatorname*{argmax}_{0 \le i \le N} \big(-L_{t-i}\big)
- $$
+    $$
+    p^{H}_t = \operatorname*{argmax}_{0 \le i \le N} H_{t-i}, \qquad
+    p^{L}_t = \operatorname*{argmax}_{0 \le i \le N} \big(-L_{t-i}\big)
+    $$
 
 2. **Aroon Up / Down**, che riconvertono il tempo trascorso in un punteggio di "freschezza" da 0 a 100:
 
- $$
- Up_t = 100 \cdot \frac{N - p^{H}_t}{N}, \qquad
- Down_t = 100 \cdot \frac{N - p^{L}_t}{N}
- $$
+    $$
+    Up_t = 100 \cdot \frac{N - p^{H}_t}{N}, \qquad
+    Down_t = 100 \cdot \frac{N - p^{L}_t}{N}
+    $$
 
 3. **Oscillatore Aroon**:
 
- $$
- Osc_t = Up_t - Down_t
- $$
+    $$
+    Osc_t = Up_t - Down_t
+    $$
 
 ---
 

@@ -16,21 +16,21 @@ Le système MACD produit trois séries :
 
 1. **Ligne MACD** (la sortie passe-bande) :
 
- $$
- MACD_t = EMA_{fast}(C_t) - EMA_{slow}(C_t)
- $$
+    $$
+    MACD_t = EMA_{fast}(C_t) - EMA_{slow}(C_t)
+    $$
 
 2. **Ligne de signal** (MACD lissé) :
 
- $$
- Signal_t = EMA_{signal}(MACD_t)
- $$
+    $$
+    Signal_t = EMA_{signal}(MACD_t)
+    $$
 
 3. **Histogramme** (delta du momentum) :
 
- $$
- Histogram_t = MACD_t - Signal_t
- $$
+    $$
+    Histogram_t = MACD_t - Signal_t
+    $$
 
 ---
 

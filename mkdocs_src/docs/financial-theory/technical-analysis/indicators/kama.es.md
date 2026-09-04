@@ -14,23 +14,23 @@ Una EMA de período fijo es un compromiso: lo suficientemente rápida para segui
 
 1. **Ratio de Eficiencia** sobre la ventana de retroceso $N$ — distancia neta recorrida dividida por la longitud total del camino recorrido:
 
- $$
- ER_t = \frac{\left| C_t - C_{t-N} \right|}{\sum_{i=0}^{N-1} \left| C_{t-i} - C_{t-i-1} \right|}
- $$
+    $$
+    ER_t = \frac{\left| C_t - C_{t-N} \right|}{\sum_{i=0}^{N-1} \left| C_{t-i} - C_{t-i-1} \right|}
+    $$
 
  $ER_t \in [0, 1]$: es $1$ para una tendencia perfectamente recta y cercano a $0$ para ruido puro.
 
 2. **Constante de suavizado adaptativa**, interpolando entre una constante EMA rápida y una lenta:
 
- $$
- SC_t = \left[ ER_t \cdot (\alpha_{fast} - \alpha_{slow}) + \alpha_{slow} \right]^2
- $$
+    $$
+    SC_t = \left[ ER_t \cdot (\alpha_{fast} - \alpha_{slow}) + \alpha_{slow} \right]^2
+    $$
 
 3. **Recurrencia**, idéntica en forma a la EMA pero con un coeficiente que varía en el tiempo:
 
- $$
- KAMA_t = KAMA_{t-1} + SC_t \cdot (C_t - KAMA_{t-1})
- $$
+    $$
+    KAMA_t = KAMA_{t-1} + SC_t \cdot (C_t - KAMA_{t-1})
+    $$
 
 ---
 

@@ -17,24 +17,24 @@ El resultado se comprime en un rango de 0 a 100:
 
 1. **Descomponer** los cambios diarios en ganancias y pérdidas:
 
- $$
- U_t = \max(P_t - P_{t-1},\; 0), \qquad
- D_t = \max(P_{t-1} - P_t,\; 0)
- $$
+    $$
+    U_t = \max(P_t - P_{t-1},\; 0), \qquad
+    D_t = \max(P_{t-1} - P_t,\; 0)
+    $$
 
 2. **Suavizar** cada componente con una media móvil exponencial (variante SMMA):
 
- $$
- \overline{U} = SMMA_N(U), \qquad
- \overline{D} = SMMA_N(D)
- $$
+    $$
+    \overline{U} = SMMA_N(U), \qquad
+    \overline{D} = SMMA_N(D)
+    $$
 
 3. Relación de **Fuerza Relativa** (Relative Strength) y normalización:
 
- $$
- RS = \frac{\overline{U}}{\overline{D}}, \qquad
- RSI = 100 - \frac{100}{1 + RS}
- $$
+    $$
+    RS = \frac{\overline{U}}{\overline{D}}, \qquad
+    RSI = 100 - \frac{100}{1 + RS}
+    $$
 
 La normalización $100 - 100/(1+RS)$ es una sigmoide monótonamente creciente que mapea $RS \in [0, \infty)$ a $RSI \in [0, 100)$.
 

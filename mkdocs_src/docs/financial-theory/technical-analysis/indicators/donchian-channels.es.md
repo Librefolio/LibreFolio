@@ -14,21 +14,21 @@ Este es el indicador detrás del legendario sistema de ruptura "Turtle Trading":
 
 1. **Canal Superior** — el máximo móvil del high durante la ventana:
 
- $$
- Upper_t = \max_{0 \le i < N} H_{t-i}
- $$
+    $$
+    Upper_t = \max_{0 \le i < N} H_{t-i}
+    $$
 
 2. **Canal Inferior** — el mínimo móvil del low durante la ventana:
 
- $$
- Lower_t = \min_{0 \le i < N} L_{t-i}
- $$
+    $$
+    Lower_t = \min_{0 \le i < N} L_{t-i}
+    $$
 
 3. **Línea Media** — el punto medio simple de los dos:
 
- $$
- Middle_t = \frac{Upper_t + Lower_t}{2}
- $$
+    $$
+    Middle_t = \frac{Upper_t + Lower_t}{2}
+    $$
 
 ---
 

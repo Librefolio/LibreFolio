@@ -27,14 +27,24 @@ Questa guida offre uno sguardo più approfondito sulla configurazione Docker di 
 
 LibreFolio utilizza un'**immagine Docker di solo runtime**. Il frontend (SvelteKit) e la documentazione (MkDocs) vengono generati sull'host e poi copiati nell'immagine. Il comando `./dev.py docker build` gestisce tutto automaticamente.
 
-```text
-Host (build) Docker Image (runtime)
-┌──────────────┐ ┌──────────────────────┐
-│ frontend/src │──npm build──▶ │ frontend/build/ │
-│ mkdocs_src/ │──mkdocs ───▶ │ mkdocs_src/site/ │
-│ backend/ │──copy──────▶ │ backend/ │
-│ Pipfile* │──pipenv ───▶ │ Python packages │
-└──────────────┘ └──────────────────────┘
+```mermaid
+graph LR
+    subgraph "Host (build)"
+        FE["frontend/src"]
+        MK["mkdocs_src/"]
+        BE["backend/"]
+        PF["Pipfile*"]
+    end
+    subgraph "Docker Image (runtime)"
+        FB["frontend/build/"]
+        MS["mkdocs_src/site/"]
+        BC["backend/"]
+        PP["Python packages"]
+    end
+    FE -- "npm build" --> FB
+    MK -- "mkdocs build" --> MS
+    BE -- "copy" --> BC
+    PF -- "pipenv export" --> PP
 ```
 
 ### 🌐 Cache delle risorse in fase di build (font e JS)

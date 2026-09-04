@@ -14,22 +14,22 @@ El CCI fue diseñado para señalar el inicio de nuevos ciclos: lecturas por enci
 
 1. **Precio Típico** de cada barra:
 
- $$
- TP_t = \frac{H_t + L_t + C_t}{3}
- $$
+    $$
+    TP_t = \frac{H_t + L_t + C_t}{3}
+    $$
 
 2. **Media móvil simple** del precio típico, y su **desviación absoluta media**:
 
- $$
- \overline{TP}_t = SMA_N(TP), \qquad
- MD_t = \frac{1}{N}\sum_{i=0}^{N-1} \left| TP_{t-i} - \overline{TP}_t \right|
- $$
+    $$
+    \overline{TP}_t = SMA_N(TP), \qquad
+    MD_t = \frac{1}{N}\sum_{i=0}^{N-1} \left| TP_{t-i} - \overline{TP}_t \right|
+    $$
 
 3. **CCI**, escalado por la constante convencional $0.015$ para que aproximadamente el 70–80% de los valores se encuentren dentro de $\pm 100$:
 
- $$
- CCI_t = \frac{TP_t - \overline{TP}_t}{0.015 \cdot MD_t}
- $$
+    $$
+    CCI_t = \frac{TP_t - \overline{TP}_t}{0.015 \cdot MD_t}
+    $$
 
 ---
 
