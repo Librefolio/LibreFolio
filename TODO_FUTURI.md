@@ -1078,3 +1078,5 @@ Il tutto deve confluire in una funzionalità backend esposta tramite API e un fr
 
 ## Aggiungere la colonna Yield on Cost (YOC) nelle tabelle delle posizioni in dashboard e broker
 L'utente @ExpectChaos ha manifestato interesse nella possibilità di avere una colonna che mostri il rendimento attuale dell'asset rispetto al costo di acquisto (Yield on Cost, YOC). Questa metrica è particolarmente utile per gli investitori che vogliono monitorare il rendimento delle loro posizioni nel tempo, indipendentemente dalle fluttuazioni del mercato, specie quando si usano strumenti a distribuzione.
+
+## Mettere una modalità privacy nella dashboard che permetta di nascondere i valori numerici e mostrare solo le percentuali, utile per chi vuole condividere screenshot senza rivelare il valore del portafoglio.

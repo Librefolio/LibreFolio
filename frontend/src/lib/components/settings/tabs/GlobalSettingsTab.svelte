@@ -1,5 +1,6 @@
 <script lang="ts">
     import {_, LANGUAGE_OPTIONS} from '$lib/i18n';
+    import {currentLanguage} from '$lib/stores/app/language';
     import {isOutsideClick} from '$lib/utils/core/clickOutside';
     import {zodiosApi} from '$lib/api';
     import {isAxiosError} from 'axios';
@@ -300,6 +301,12 @@
         return localized !== key ? localized : id.replace(/\b\w/g, (l) => l.toUpperCase());
     }
 
+    // The store subscription is what makes the labels re-render on language change:
+    // without referencing $currentLanguage, Svelte has no reason to re-evaluate the
+    // getCategoryLabel(...) calls in the template below (they're plain function calls).
+    $: ($currentLanguage, (categoryLabels = Object.fromEntries(['all', ...visibleCategories.map((c) => c.id)].map((id) => [id, getCategoryLabel(id)]))));
+    let categoryLabels: Record<string, string> = {};
+
     function getSettingUnit(key: string): string {
         const localizedKey = `settings.globalSettingUnits.${key}`;
         const localized = $_(localizedKey);
@@ -370,7 +377,7 @@
     let dropdownRef: HTMLDivElement | null = null;
 
     // Get selected category label for mobile display
-    $: selectedCategoryLabel = getCategoryLabel(selectedCategory);
+    $: selectedCategoryLabel = categoryLabels[selectedCategory] ?? selectedCategory;
 
     // Get selected category icon
     $: selectedCategoryIcon = selectedCategory === 'all' ? null : visibleCategories.find((c) => c.id === selectedCategory)?.icon || null;
@@ -434,7 +441,7 @@
                     class="w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition-colors
                            {selectedCategory === 'all' ? 'bg-libre-green/10 text-libre-green font-medium' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700'}"
                 >
-                    <span class="flex-1">{getCategoryLabel('all')}</span>
+                    <span class="flex-1">{categoryLabels['all'] ?? ''}</span>
                     {#if selectedCategory === 'all'}
                         <ChevronRight size={16} />
                     {/if}
@@ -449,7 +456,7 @@
                                {selectedCategory === cat.id ? 'bg-libre-green/10 text-libre-green font-medium' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700'}"
                     >
                         <svelte:component this={cat.icon} size={16} class={selectedCategory === cat.id ? 'text-libre-green' : 'text-gray-400'} />
-                        <span class="flex-1">{getCategoryLabel(cat.id)}</span>
+                        <span class="flex-1">{categoryLabels[cat.id] ?? cat.id}</span>
                         {#if selectedCategory === cat.id}
                             <ChevronRight size={16} />
                         {/if}
@@ -469,7 +476,7 @@
                     {selectedCategory === 'all' ? 'bg-libre-green text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700'}"
                 on:click={() => (selectedCategory = 'all')}
             >
-                <span class="flex-1 text-left">{getCategoryLabel('all')}</span>
+                <span class="flex-1 text-left">{categoryLabels['all'] ?? ''}</span>
                 {#if selectedCategory === 'all'}
                     <ChevronRight size={16} />
                 {/if}
@@ -483,7 +490,7 @@
                         {selectedCategory === cat.id ? 'bg-libre-green text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700'}"
                 >
                     <svelte:component this={cat.icon} size={16} class="mr-2" />
-                    <span class="flex-1 text-left">{getCategoryLabel(cat.id)}</span>
+                    <span class="flex-1 text-left">{categoryLabels[cat.id] ?? cat.id}</span>
                     {#if selectedCategory === cat.id}
                         <ChevronRight size={16} />
                     {/if}
@@ -767,7 +774,6 @@
                             </button>
                         </div>
                     </div>
-
                 {/if}
 
                 <!-- Cache Panel (status for all users; clear actions admin-only via canEdit) -->

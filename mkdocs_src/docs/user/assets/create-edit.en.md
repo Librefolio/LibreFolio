@@ -69,6 +69,35 @@ The **Other identifiers** field is an editable list of alternative identifiers. 
 providers can add broker labels, technical codes, or fallback identifiers there; each value remains a
 separate list item.
 
+## 🗺️ Manual Geographic & Sector Distributions
+
+Providers fill in the **geographic area** and **sector** distributions when they can — but many
+assets (custom instruments, bonds, scheduled investments, or simply assets whose provider has no
+breakdown) arrive with none. You can always set or correct both distributions by hand from the
+asset modal: they feed the dashboard's **allocation charts** (geography and sector rings, now and
+over time) and the AI Export concentration context.
+
+In the asset modal ([create](#-asset-creation-flows) or [edit](#%EF%B8%8F-editing-an-asset)) open
+the **Classification** area:
+
+1. **Geographic distribution** — one row per country/area, with its weight in percent.
+2. **Sector distribution** — one row per sector, with its weight in percent.
+
+For each distribution you can:
+
+- **Add a row** and pick the area/sector from the dropdown, then type the weight.
+- **Edit weights inline**; the running **total** sits at the bottom of the editor and turns
+  **green at exactly 100%** — amber when something is missing, red when you overshoot.
+- **Remove** a row with its delete button.
+
+!!! tip "The 100% rule"
+
+    The dashboard normalizes partial distributions, but a clean 100% gives the most meaningful
+    allocation rings. If the instrument is 100% one country or sector, a single row at 100 is
+    both valid and the clearest choice.
+
+*(Screenshots of the two distribution editors — `assets/detail-classification` already exists and shows the area; dedicated close-ups of the editors are planned for the next gallery run.)*
+
 ## 🏷️ One instrument, several codes
 
 The same security can be known by more than one code. When that happens, LibreFolio keeps **one
