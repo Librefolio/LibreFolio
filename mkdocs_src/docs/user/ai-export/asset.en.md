@@ -35,11 +35,11 @@ results. The browser does not recalculate indicators.
 
 Two public data exports are available:
 
-- **Asset Position & History** — positions per Broker, cost, value, P&L,
+- **Position & Market History (full)** — positions per Broker, cost, value, P&L,
   recorded-zero period semantics, economic lots with allocated fees/taxes, compact
   market history, Drawdown, and provenance;
-- **Asset Market History** — observed-close buckets, returns, indicators, states,
-  events, Drawdown, and coverage.
+- **Market History Only (no holdings)** — observed-close buckets, returns,
+  indicators, states, events, Drawdown, and coverage.
 
 ## 📏 Detail and Sampling
 

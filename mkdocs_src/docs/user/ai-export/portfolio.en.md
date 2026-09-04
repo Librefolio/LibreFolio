@@ -6,7 +6,7 @@ analysis prompt. LibreFolio never sends the export to an AI service.
 ## 📍 Location
 
 Open **Dashboard** and select **AI Export** in the top toolbar, beside
-**Update/Sync**. The draft remains available for 10 minutes in the current login
+**Refresh**. The draft remains available for 10 minutes in the current login
 session and resets after logout or a new login.
 
 ## 🎯 Portfolio Analyses

@@ -12,7 +12,7 @@ The library is split into two architectural layers: **Core UI** (generic atoms a
 | **[Atoms & Modals](core-ui/index.md)** | `ModalBase`, `ConfirmModal`, `Tooltip`, `ToastContainer`, `DateRangePicker`, `DataEditor`, `Button`, etc. Generic building blocks. |
 | **[DataTable](core-ui/data-table.md)** | Advanced data grid with sorting, filtering, and column management. |
 | **[File Upload & Media](core-ui/file-upload.md)** | `FileUploader`, `ImageCropper`, `ImageEditModal`, `AssetPickerModal`, `LazyImage`. |
-| **[Select & Dropdowns](core-ui/select.md)** | `BaseDropdown`, `SimpleSelect`, `SearchSelect` with keyboard navigation. |
+| **[Select & Dropdowns](core-ui/select.md)** | `SimpleSelect`, `SearchSelect` with keyboard navigation, plus specialized wrappers. |
 
 ### Features (Domain)
 | Component | Details |

@@ -1,7 +1,5 @@
 # 🔍 Positions & Analysis
 
-*[⬅️ Back to Dashboard Overview](index.md)*
-
 The **Positions** tab of the dashboard allows you to inspect open holdings, analyze performance, and drill down into matching tax lots.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-positions-views" data-carousel-interval="6000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
@@ -139,3 +137,7 @@ Choose **View lot detail** from the table row actions to open the **FIFO Lot Det
 The **Transactions** tab on the Dashboard displays a complete, paginated list of all operations recorded across the active portfolio scope (buy/sell orders, dividend payouts, cash deposits, transfers, etc.).
 
 For a detailed explanation of the transaction list, filters, and how to read the read-only transaction details, please refer to the dedicated **[Transactions Overview](../transactions/index.md)** page.
+
+---
+
+*[⬅️ Back to Dashboard Overview](index.md)*

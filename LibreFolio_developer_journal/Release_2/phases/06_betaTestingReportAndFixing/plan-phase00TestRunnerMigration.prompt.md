@@ -7,6 +7,14 @@
 > **Stato**: 🟢 **Tappa 0.3 e 0.4 completate** (bug di raggiungibilità corretto e presidiato).
 > ⏳ Tappe 0.1–0.2 e 1–6 aperte.
 >
+> **⚠️ Riallineamento 03/09 (verifica sistematica)**: l'header era stale — il corpo del piano
+> segna già fatte le tappe 1, 2.2–2.4, 3.1–3.3, 4 (incluse 6.1/6.2 anticipate), 5.4, 6.3–6.4
+> (deliverable presenti: `_inventory.py`, `_scheduler.py`, `_executor.py`, flag `--workers`,
+> reachability check — implementato in `_cli.py` + `_inventory.py`, NON in un file
+> `_reachability.py` come scrive l'INDEX). **Residuo vero**: tappe 5.1–5.3 (isolamento
+> scritture per worker — deliberatemente non eseguite, premesse false, vedi :1041 e :1169+)
+> e 0.1–0.2 (fotografia timing, probabilmente obsolete). Tracciato in TODO_FUTURI.md.
+>
 > **Natura**: piano di **migrazione strutturale**, non di ottimizzazione mirata. L'obiettivo non è
 > «rendere più veloce la corsa dei test» ma **separare tre responsabilità che oggi sono fuse in una
 > sola funzione**, perché è quella fusione — non la mancanza di un flag — a rendere il parallelismo

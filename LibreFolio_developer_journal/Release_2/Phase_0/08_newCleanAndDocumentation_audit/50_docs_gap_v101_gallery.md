@@ -380,6 +380,9 @@ Steps of the 7-step wizard vs shots: `upload`→step1 ✓, `select`→step2 ✓,
 | Broker access / sharing panel (F4) | brokers/access-panel | `broker-sharing-section` inline in info tab | user/brokers/sharing.en.md (has sharing-modal; inline panel unshot) |
 | Tx clone flow | transactions/form-modal-clone | form pre-filled from kebab `context-menu-action-clone` | user/transactions/form.en.md |
 | Mobile variants | — | already comprehensive: every shot runs in the mobile project; menu-open is mobile-only | — (no action) |
+| Grouped signal tree (docs lane 03/09) | assets/detail-signals-tree (+ fx/detail-signals-tree variant) | SignalTreeSelect open: family groups (trend/momentum/volatility/volume/risk) with count badges + search box; use `signal-tree-group-*` / `signal-tree-option-*` testids (NOT `[role="option"]` — see §4) | user/assets/detail/signals.en.md, user/fx/detail/signals.en.md ("Finding an Indicator" sections; placeholder sentence in place until shot exists) |
+| Drawdown full-history toggle (docs lane 03/09) | assets/detail-signals-drawdown | Underwater Drawdown signal card with the **Full history** checkbox visible | user/assets/detail/signals.en.md ("Drawdown: Full-History Toggle" section; placeholder sentence in place) |
+| Asset-scope chart settings modal (docs lane 03/09) | assets/chart-settings | ChartSettingsModal opened from the Assets list toolbar (global mode), live preview visible | user/fx/chart-settings.en.md (page is shared-scope; existing fx/chart-settings shot used meanwhile), user/assets/detail/chart.en.md (Aesthetics section) |
 
 ## 3. Reusable existing shots
 
@@ -419,3 +422,24 @@ Steps of the 7-step wizard vs shots: `upload`→step1 ✓, `select`→step2 ✓,
 - Missing shots proposed: **13** (incl. 3 new wizard steps, 3 risk surfaces, 4 AI-export surfaces, changelog, update, cache, data-quality, clone)
 - Doc pages with zero images: **52** (.en.md), of which ~15 have a fitting existing shot (§3) and the ai-export set needs new shots.
 - REMOVED components referenced by spec: TransactionDeleteModal — **none** (spec already retargeted to bulk workspace, T4); only the 2 removed selector patterns above.
+
+---
+
+# Appendice — Docs lane 2026-09-03 (gallery entries requested by the written pages)
+
+Shots needed by the pages written/realigned in the docs lane of 03/09
+(`admin/settings`, `user/settings/about`, `admin/index`, `user/installation`,
+dashboard/kpi-cards ownership notes, `admin/docker_advanced`). Until these exist,
+the pages carry an explicit "not in the gallery yet" placeholder sentence instead
+of an `<img>` tag.
+
+| Proposed shot (category/name) | Page that references it | What it shows |
+|---|---|---|
+| `settings/cache-panel` | `admin/settings.en.md` §Server Caches | Cache panel at the bottom of Global Settings: name / size / TTL columns, per-row Clear, header Clear all (unlock as admin first) |
+| `settings/changelog-modal` | `user/settings/about.en.md` §Changelog Modal | Sidebar version click → changelog modal with foldable release panels, version chip index, search box, check-for-updates button |
+| `auth/update-available-modal` | `admin/index.en.md` §Update Notifications | Post-login admin modal: current → latest version badges, updating-guide + GitHub-release links, "later"/"skip this version" buttons |
+| `settings/about-plugin-diagnostics` (optional) | `user/settings/about.en.md` §Plugin Diagnostics | About tab → Plugin diagnostics collapsible expanded, 4 registries (asset/fx/brim/signals) all-loaded or per-plugin failure cards |
+
+Regeneration of existing shots needed by these pages (already stale per Part A):
+`settings/global-settings` (cache panel + email-verification "coming soon" badge now
+visible), `settings/about` (plugin-diagnostics collapsible now present).

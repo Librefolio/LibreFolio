@@ -1,8 +1,10 @@
 # 💰 KPI Cards
 
-*[⬅️ Back to Dashboard Overview](index.md)*
-
 The three KPI cards at the top of the dashboard give you a quick diagnostic of your portfolio. All values respect the **time range and broker scope** selected at the top of the page.
+
+!!! note "Sharing affects these numbers"
+
+    All amounts are aggregated over the brokers you have access to, and each broker you co-own contributes in proportion to your **ownership share** (e.g. a 50% Owner sees half of that broker's value and P&L). Editors and Viewers, whose share is always 0% by rule, see the broker's full amounts. See [Broker Sharing](../brokers/sharing.md).
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1.5rem auto 2rem auto;">
     <img class="gallery-img" data-category="dashboard" data-name="kpi-top" alt="KPI Cards Overview">
@@ -153,3 +155,7 @@ The hero number shows the net balance (deposited − withdrawn).
 - 📈 **[TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md)**
 - 📈 **[MWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)**
 - ⏱️ **[Timing Effect](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/timing-effect.md)**
+
+---
+
+*[⬅️ Back to Dashboard Overview](index.md)*

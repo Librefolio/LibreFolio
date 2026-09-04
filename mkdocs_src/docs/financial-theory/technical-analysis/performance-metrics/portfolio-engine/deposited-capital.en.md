@@ -1,7 +1,5 @@
 # 💸 Deposited Capital, Total PnL and Cash Pools
 
-*[⬅️ Back to Performance Metrics Overview](../index.md)*
-
 ## 💡 Concept Overview
 
 **Capital Baseline** = cumulative economic capital contributed since inception:
@@ -113,3 +111,4 @@ The ROI/TWRR/MWRR input series is derived from day-over-day changes in `cumulati
 - 💼 [NAV](nav.md) — the other term in Total PnL
 - 📊 [Period PnL](period-pnl.md) — windowed version
 - ⚙️ [Portfolio Engine](index.md) — full mathematical model
+- 📈 [Performance Metrics Overview](../index.md) — all performance metrics at a glance

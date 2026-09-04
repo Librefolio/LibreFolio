@@ -164,8 +164,8 @@ class Trading212BrokerProvider(BRIMProvider):
 
     @property
     def icon_url(self) -> str:
-        """Trading212 logo."""
-        return "https://www.trading212.com/favicon.ico"
+        """Trading212 logo (the bare favicon.ico is behind Cloudflare and 403s for non-browsers)."""
+        return "https://www.trading212.com/favicon-32x32.png"
 
     def can_parse(self, file_path: Path) -> bool:
         """Detect Trading212 format by checking for distinctive headers."""

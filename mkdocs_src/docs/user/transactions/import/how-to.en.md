@@ -11,7 +11,7 @@ Learn how to use the Broker Report Import Module (BRIM) to import your transacti
 3. Click the **Import** button (:material-file-upload:) in the page header.
 4. The **Import Wizard** opens — you can drag-and-drop your statement file into its upload step.
 5. Review the preview — check that dates, amounts, and asset names look correct.
-6. Click **Import** to commit all transactions.
+6. Click **Import N transactions** — the selected rows land in the **bulk editor** as new rows, where you can give them one last look (or keep editing) before **Save All** commits them to your portfolio.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-import-wizard" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
     <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="import-modal" data-title="📥 Quick Import Modal" alt="Quick Import Modal">
@@ -61,7 +61,9 @@ questions it deserves — and no others.
 
 ### 🧙 Step 1: Upload Report File
 
-This step accepts CSV or XLSX reports exported from your broker. You can select files manually or drag-and-drop them directly into the wizard.
+This step accepts CSV or XLSX reports exported from your broker. You can select files manually or drag-and-drop them directly into the wizard. Assign a broker to each file, either file by file or with the global selector — and if the broker does not exist yet, you can create it on the fly from here.
+
+The step is **optional**: reports uploaded in earlier sessions are already stored, and you can pick them in the next step without re-uploading.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="brokers" data-name="import-wizard-step1" alt="Wizard Step 1: Upload" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -69,7 +71,7 @@ This step accepts CSV or XLSX reports exported from your broker. You can select 
 
 ### ⚙️ Step 2: Select Files & Parser
 
-This step lists the reports stored for each broker, so you can pick exactly which ones to parse — including files uploaded in an earlier session. Each file gets its own parser: the system detects the broker format automatically (e.g. Degiro, Directa, Interactive Brokers, Intesa Sanpaolo, Crédit Agricole), and you can override the choice per file. If you upload a generic spreadsheet, use the **Generic CSV** parser to manually map your columns (date, type, quantity, asset, net cash) to LibreFolio fields.
+This step lists the reports stored for each broker, grouped in collapsible per-broker panels, so you can pick exactly which ones to parse — including files uploaded in an earlier session (the files you just uploaded are pre-selected). Reports can be previewed or deleted from this step. Each file gets its own parser: the system detects the broker format automatically (e.g. Degiro, Directa, Interactive Brokers, Intesa Sanpaolo, Crédit Agricole), and you can override the choice per file. If you upload a generic spreadsheet, use the **Generic CSV** parser to manually map your columns (date, type, quantity, asset, net cash) to LibreFolio fields.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="brokers" data-name="import-wizard-step2" alt="Wizard Step 2: Parser Configuration" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -78,6 +80,8 @@ This step lists the reports stored for each broker, so you can pick exactly whic
 ### 🧠 Step 3: Analysis & Parsing
 
 The system parses the files, validating dates, numbers and currencies. You will see a progress bar indicating the parsing speed and status. Once analysis completes, any warning or error in parsing will be summarized before continuing.
+
+The summary tiles at the top are **consolidated**: once parsing completes they describe what will actually be imported — the selected transactions and the distinct securities after unification — not the raw per-file rows; **View All** opens the aggregate detail. If you go back and change a parser choice, use **Re-parse all** to recompute the results.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="brokers" data-name="import-wizard-step3" alt="Wizard Step 3: Analysis" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -176,10 +180,11 @@ At the end of parsing, the table displays a summary of the processing for each f
     - **Order your files by priority.** Drag them into the order you trust: the copy kept for each
       group is taken from the highest-priority file.
     - **Recalculate** after re-ordering, to re-derive every choice from the new priority.
-    - **Override individually** in the group table, where each member shows which file it came
-      from and whether it is the copy being kept.
+    - **Override individually** in the group table: every row carries a **Keep** checkbox and shows
+      which file it came from and whether it is the copy being kept. **Reset defaults** restores the
+      automatic choices.
     - **Compare side by side** when two copies differ and you want to see exactly how before
-      choosing.
+      choosing — the compare modal highlights the fields that differ.
 
     Each group is labelled **Total** (the files agree on every detail — a pure overlap) or
     **Partial** (something differs, so it deserves a look).
@@ -213,6 +218,9 @@ what it is in your library. One search field covers everything, in two sections:
   never twice.
 - **In archive** — everything else in your asset library.
 
+Auto-matched candidates are pinned at the top of the search field with a confidence badge
+(**Exact** / **High** / **Medium** / **Low**), so the most likely match is usually one click away.
+
 If neither section has what you need, the **Create «…»** button at the bottom of the list is
 always visible and already carries whatever you typed — you never have to go looking for it.
 
@@ -221,7 +229,9 @@ always visible and already carries whatever you typed — you never have to go l
 </div>
 
 The ✏️ pencil next to a matched instrument opens the full asset editor without leaving the
-wizard, so you can fix an identifier or a name and come straight back.
+wizard, so you can fix an identifier or a name and come straight back. When an instrument matches
+**two** assets already in your library, the wizard detects the ambiguity and offers a **merge**
+action to fold one into the other.
 
 !!! question "«Which code is the main one?»"
 
@@ -237,8 +247,9 @@ wizard, so you can fix an identifier or a name and come straight back.
 
 If the target broker has an opening date, the wizard flags rows whose date is **strictly before**
 it with the status `Before opening`. Those rows are deselected and cannot be imported; a row on
-the opening day remains valid. Use **Edit broker date** and then re-check/refresh if the date is
-wrong.
+the opening day remains valid. If the date is wrong, a per-broker banner lets you **Edit broker
+date** by hand or **auto-fix** it to the earliest transaction date found, then re-check/refresh so
+the wizard re-evaluates every row against the updated date.
 
 #### ⚠️ Asset Notices
 
@@ -267,6 +278,15 @@ right here with a status badge.
 | <span style="background-color: rgba(239, 68, 68, 0.15); color: #ef4444; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 0.85em; white-space: nowrap;">❌ UNRESOLVED</span> | — | The broker or financial instrument was not matched to an existing entity in the database (requires resolution in Step 4 before importing). |
 
 By default, the wizard automatically unchecks "Likely" duplicates to prevent double-entry, but
-you can override this choice.
+you can override this choice. A banner above the grid summarizes why rows are deselected.
 
-Click **Import** to finalize the import and write the transactions to your ledger.
+Two more badges come from comparisons *inside this import* rather than against the database:
+
+| UI Badge | Meaning |
+| :--- | :--- |
+| ⧉ **Duplicate in batch** | Exact copy of a row still pending in this import (or already staged in the bulk editor) — deselected by default. |
+| ≈ **Possible batch dup** | Same, but the description differs — stays selected so you can decide. |
+
+Click **Import N transactions** to hand the selected rows to the **bulk editor** as new rows:
+nothing is written to the ledger yet. Give them one last look — or keep editing — and then
+**Save All** to commit them to your portfolio.

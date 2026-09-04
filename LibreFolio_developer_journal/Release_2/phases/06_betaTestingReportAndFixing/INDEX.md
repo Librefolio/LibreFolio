@@ -127,8 +127,8 @@ mentre lavoriamo — è un danno che cresce nel tempo.
 | P4 | Motore contabile e segnali | ✅ Completato 02/09 (test in chiusura) |
 | P5 | UX transazioni | ✅ Completato 02/09 (test in chiusura) |
 | P6 | i18n, font, documentazione | ✅ Completato 02/09 (I1 fail-loud, I2 dal 12/08, I3 ridotto) |
-| P7 | Coverage JavaScript (livelli A e B) | ✅ Fasi 0/A/B/C/E completate (12/08/2026) · `--coverage [py\|js\|all]`, 3 nuovi report JS, 64 spec migrati al barrel. Fase D (analizzatore buchi) aperta |
-| P8 | Migrazione del test runner (parallelizzazione) | 🟢 Tappa 0.3/0.4 (13/08/2026) · corretto il bug di raggiungibilità: 6 azioni registrate ma mai eseguite da un `all` (~273 test, tutti verdi) rimesse in circolo; nuovo `_reachability.py` + `check-orphans` esteso. Tappe 1–6 aperte |
+| P7 | Coverage JavaScript (livelli A e B) | ✅ **Completato** — incl. Fase D: `coverage_js.py` + `dev.py test coverage-report --lang js` operativi (header del piano riallineato 03/09; era stale «aperta») |
+| P8 | Migrazione del test runner (parallelizzazione) | 🟢 Quasi tutto fatto il 13/08 (tappe 1, 2.2–2.4, 3.x, 4, 5.4, 6.3–6.4; reachability check vive in `_cli.py`+`_inventory.py`, non in un file dedicato). **Residuo vero**: 5.1–5.3 (isolamento scritture per worker, premesse false — rinviato deliberatamente) + 0.1–0.2 (obsolete). Vedi TODO_FUTURI.md |
 
 ---
 

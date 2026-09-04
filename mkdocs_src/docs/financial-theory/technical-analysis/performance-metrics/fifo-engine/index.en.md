@@ -1,7 +1,5 @@
 # 🧬 FIFO Engine — Lot Lifecycle & Matching Model
 
-*[⬅️ Back to Performance Metrics Overview](../index.md)*
-
 ## 💡 Overview
 
 While [Weighted Average Cost](../weighted-average-cost.md) blends every acquisition of a position into one running average, LibreFolio's FIFO engine keeps track of **individual lots** — one per acquisition batch — through their entire lifecycle: opening, partial closures, transfers between brokers, splits, and eventual full closure.
@@ -133,3 +131,4 @@ The overall result is then marked **complete** or **degraded** as a whole, but c
 - ⚙️ **[Portfolio Engine](../index.md)** — The complementary aggregate/WAC-based engine, and how the two relate
 - 📊 **[Weighted Average Cost](../weighted-average-cost.md)** — Blended, position-level cost basis
 - 🧬 **[FIFO Lot Engine (Developer Manual)](../../../../developer/backend/transactions/fifo_lot_engine.md)** — Implementation deep-dive: classes, event dispatch, code-level constraints
+- 📈 **[Performance Metrics Overview](../index.md)** — All performance metrics at a glance

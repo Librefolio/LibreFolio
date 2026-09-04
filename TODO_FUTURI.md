@@ -44,7 +44,7 @@ Giuseppe scarica cataloghi da ESMA (FIRDS) e Yahoo Finance (quotazioni attuali e
 
 ### Collegamenti
 
-- Piano in pausa correlato: `LibreFolio_developer_journal/Release_2/Phase_0/06_betaTestingReportAndFixing/plan-phase00AssetIdentityAndIdentifiers.prompt.md` (identità asset, identificativi).
+- Piano in pausa correlato: `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/plan-phase00AssetIdentityAndIdentifiers.prompt.md` (identità asset, identificativi).
 
 ---
 
@@ -105,7 +105,7 @@ costruirci sopra tre funzioni:
 
 **Data aggiunta**: 3 Settembre 2026
 **Status**: 📋 DECISIONE APERTA — codice morto di fatto
-**Origine**: fix T3 (02/09) + collaudo 03/09; nota in `06_betaTestingReportAndFixing/INDEX.md` §7
+**Origine**: fix T3 (02/09) + collaudo 03/09; nota in `Release_2/phases/06_betaTestingReportAndFixing/INDEX.md` §7
  e `plan-phase00TransactionsUxPolish.prompt.md` §Stato
 
 ### Il punto
@@ -137,7 +137,7 @@ livello componente per quel ramo.
 che il corpo del piano P8 segna già fatte le tappe 1, 2.2–2.4, 3.1–3.3, 4, 5.4, 6.3–6.4 (deliverable
 presenti: `_inventory.py`, `_scheduler.py`, `_executor.py`, flag `--workers`, reachability check) —
 header e INDEX non furono mai riallineati
-**Origine**: `LibreFolio_developer_journal/Release_2/Phase_0/06_betaTestingReportAndFixing/plan-phase00TestRunnerMigration.prompt.md`
+**Origine**: `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/plan-phase00TestRunnerMigration.prompt.md`
 
 ### Cosa resta davvero (dopo la verifica del 03/09)
 
@@ -717,6 +717,14 @@ Per ora solo FULL_RESET è implementato.
 
 ## 🗄️ Cache Server Centralizzato per Multi-Worker Uvicorn
 
+**Tema correlato (da fare PRIMA o insieme)**: audit del **necessario delle cache** — con il
+pannello admin (P2-4, 03/09) ora si vedono tutte le 16 cache nominali in un colpo d'occhio.
+Prima di investire nella condivisione multi-worker, vale la pena spendere tempo a capire se
+servono tutte o se ci sono refusi storici (cache aggiunte per colli di bottiglia poi spariti,
+TTL mai rivisti, cache mai popolate davvero). Il pannello "Server Caches" in Global Settings
+è lo strumento di osservazione già pronto per questa analisi (size/TTL/hit per nome).
+**Nota**: questa voce chiede l'analisi, non la soluzione.
+
 **Data aggiunta**: 14 Aprile 2026  
 **Status**: 📋 PIANIFICATO (quando si passerà a multi-worker)  
 **Priorità**: Bassa (oggi 1 worker è sufficiente con SQLite)
@@ -1067,3 +1075,6 @@ Aggiungere un calcolatore FIRE non solo da oggi al futuro, ma anche fissando una
 usando l'esempio studio di LibreFolio_developer_journal/Release_2/guida_allocazione_pac_multi_etf.md pensato per directa che ha vincolo di acquisto intero e allocazione in euro,
 creare un tool che prenda vari parametri in input, risultanti dalla decisione nell'allocazione pac e creare vari flag per attivare la variante intera, il metodo di inserimento (numero quote o ammontare massimo), etc...
 Il tutto deve confluire in una funzionalità backend esposta tramite API e un frontend che consenta all'utente di interagire con il tool. In seguito lo stesso tool mi aspetto potrà essere esportato a un agente AI tramite server MCP così che dopo aver fatto l'analisi pac possa far eseguire al backed, possibilmente in forma ottimizzata i calcoli riportando tutte le colonne e le informazion e facendo poi cedicere all'ia o all'utente.
+
+## Aggiungere la colonna Yield on Cost (YOC) nelle tabelle delle posizioni in dashboard e broker
+L'utente @ExpectChaos ha manifestato interesse nella possibilità di avere una colonna che mostri il rendimento attuale dell'asset rispetto al costo di acquisto (Yield on Cost, YOC). Questa metrica è particolarmente utile per gli investitori che vogliono monitorare il rendimento delle loro posizioni nel tempo, indipendentemente dalle fluttuazioni del mercato, specie quando si usano strumenti a distribuzione.

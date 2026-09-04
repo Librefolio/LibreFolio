@@ -76,6 +76,20 @@ The fix serves both at once — publish the state the component already has:
 await page.waitForSelector('[data-testid="assets-page"][data-busy="false"]');
 ```
 
+The same contract exists for **charts**. ECharts emits `finished` when a render pass —
+animations included — completes, but nothing in the DOM says so. `attachChartReady()`
+(`frontend/src/lib/utils/chartReady.ts`) publishes it on the chart container:
+`data-chart-ready` flips to `'true'` after the first render, and `data-chart-renders` counts
+completed passes so a *re*-render (new range, new series) can be awaited without a stale
+`true` letting the reader through too early.
+
+On the spec side, `expectChartCanvas(page, testId)` (`frontend/e2e/fixtures/charts.ts`)
+asserts the container holds a **rendered** chart — container and `<canvas>` visible, non-zero
+CSS box *and* non-zero bitmap — with both size checks under `expect.poll` because ECharts
+attaches and sizes the canvas asynchronously after mount. Asserting the container alone stays
+green while ECharts never draws inside it; that is the exact regression shape this helper
+exists to catch.
+
 !!! warning "A signal can exist and still be lying"
 
     `ImageEditModal` sets `data-cropper-ready` as soon as the cropper can paint — but the modal

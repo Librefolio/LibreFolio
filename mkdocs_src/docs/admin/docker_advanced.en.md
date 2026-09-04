@@ -176,6 +176,7 @@ All Docker operations are available through `dev.py`:
 
 ```bash
 ./dev.py docker build          # Build image (auto-builds frontend + docs)
+./dev.py docker build --light  # Light variant: no documentation images (tag *-light, ~1.5 GB vs ~2.9 GB full)
 ./dev.py docker build --no-cache  # Full rebuild without Docker cache
 ./dev.py docker rebuild        # Build → stop → restart (one-step deploy)
 ./dev.py docker up             # Start containers
@@ -184,6 +185,8 @@ All Docker operations are available through `dev.py`:
 ./dev.py docker status         # Show container status
 ./dev.py docker exec <cmd>     # Run a dev.py command inside the container
 ```
+
+The `--light` variant ships the same application but without the bundled documentation screenshots (they are loaded on demand from the online docs site instead), and is tagged with a `-light` suffix. See [Image Variants](../user/installation.md#image-variants-full-and-light) in the user installation guide.
 
 !!! tip "Documentation with screenshots"
 

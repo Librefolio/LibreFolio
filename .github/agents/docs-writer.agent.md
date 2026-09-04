@@ -64,10 +64,25 @@ sections). Never stamp files you did not touch.
 
 | change size | run |
 |---|---|
-| one-liner / row fix | nothing beyond the timestamp; report |
+| one-liner / row fix | nothing beyond the stamp decision; report |
 | a section or several pages | `pipenv run python dev.py mkdocs build` (strict — catches broken admonitions/links) |
 | pages referenced from frontend/backend (DocsLink targets) | also `pipenv run python dev.py mkdocs check-links` |
-| page has IT/FR/ES translations | also `pipenv run python dev.py mkdocs translate-validate` and report structural debt |
+| page has IT/FR/ES translations | note the structural debt in your report (the batch runs at the end of the docs phase, user-launched) |
+
+## Adding or removing a page → `mkdocs.yml` nav
+
+When you ADD or DELETE a page, the nav in `mkdocs_src/mkdocs.yml` must be updated in the
+same edit — an orphan page (not in nav) or a nav entry without a file fails the build's
+strict checks. Two consequences:
+
+1. **The nav entry title is translated inline** in `mkdocs.yml` (the file carries
+   `nav_translations` per language). Because the Aphra pipeline translates only page
+   files — never the nav — **adding/removing a page is the ONE case where you edit all
+   four languages yourself**: the nav title for EN + IT/FR/ES entries, in the same edit.
+   Keep titles short and match the glossary tone of the neighbouring entries.
+2. Renaming/moving a page = delete + add: update every inbound link
+   (`grep -rn "old-name" mkdocs_src/docs/`), the nav, and check
+   `./dev.py mkdocs check-links` for frontend DocsLink targets.
 
 Full logs to `/tmp` per project terminal rules; truncate only after tee.
 

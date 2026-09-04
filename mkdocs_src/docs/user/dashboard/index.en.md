@@ -56,6 +56,10 @@ At the top right of the dashboard, you have several controls to customize your v
 
     When you filter to a single broker, cash transfers *to other brokers* become external flows for that scope. This affects [Deposited Capital](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md) and [P&L](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md) calculations.
 
+!!! note "Sharing affects these numbers"
+
+    The dashboard aggregates only the brokers **you have access to**, and every amount from a broker you co-own is **scaled by your ownership share**: an Owner with a 50% share sees half of that broker's value, income, and P&L counted in the totals (a 0% share is valid and contributes nothing). Editors and Viewers — who always carry a 0% share by rule — see the broker's **full** amounts instead. See [Broker Sharing](../brokers/sharing.md) for details.
+
 ---
 
 ## 🌡️ Data Quality Banner

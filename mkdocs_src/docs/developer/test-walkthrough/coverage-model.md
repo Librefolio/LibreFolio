@@ -154,6 +154,46 @@ report is produced once, at the end, by `frontend/scripts/mcr-generate.js`.
         (for example `src/lib/stores/core/EditBuffer.ts`) keeps its coverage in
         `combined/coverage-final.json`.
 
+## How Python coverage reaches **spawned** children
+
+`.coveragerc` already declares `concurrency = multiprocessing,thread,gevent`, which lets a
+*running* tracer follow **forked** children (e.g. `uvicorn --workers N`). It does nothing for a
+**spawned** child — `backend/app/services/risk/quant/spawn_worker.py` starts a fresh
+interpreter that inherits the environment but no tracer, so the quant workers measured **0 %**
+while being very much alive.
+
+The fix is coverage.py's documented subprocess recipe, wired by the test runner:
+
+1. `backend/test_scripts/_coverage_sitecustomize/sitecustomize.py` calls
+   `coverage.process_startup()` at interpreter startup.
+2. Whenever a run collects coverage, `scripts/test_runner/_common.py`
+   (`apply_subprocess_coverage_env`) sets `COVERAGE_PROCESS_START=<repo>/.coveragerc` and
+   **prepends** that directory to `PYTHONPATH` on every child it spawns (pytest workers, the
+   shared backend, Playwright → its `webServer`). Python's `site` module then imports the
+   sitecustomize in *every* interpreter of the process tree.
+3. Each child reads the repo `.coveragerc` (`parallel = true`), starts its own tracer, and
+   writes `.coverage.<host>.<pid>.<rand>` next to the parent's data file — where the existing
+   `coverage combine` steps already pick it up.
+
+Three load-bearing details:
+
+- **The guard is the feature.** Outside a coverage run `COVERAGE_PROCESS_START` is unset and
+  the module is a no-op — production interpreters pay nothing. When the variable *is* set, a
+  failure to start coverage must crash the spawn bootstrap (surfacing as a test failure)
+  instead of silently dropping data. `coverage.process_startup()` is itself idempotent, so
+  coexisting with the `a1_coverage.pth` that coverage 7.14 installs in the virtualenv is safe.
+- **Not every interpreter has coverage installed.** Along the spawn/exec chain there are
+  interpreters that never run measured code (the Homebrew Python hosting the `pipenv`
+  launcher): a `ModuleNotFoundError` on `import coverage` is tolerated for exactly those.
+- **The sitecustomize chain-execs the next one down `sys.path`.** Python imports only ONE
+  `sitecustomize` — the first found — so prepending ours **shadows** the interpreter's own.
+  Homebrew Python ships one that rewrites `sys.prefix` from the Cellar path to the opt prefix
+  and exposes `/opt/homebrew/lib/pythonX.Y/site-packages`; when it is shadowed, `pipenv`
+  becomes unimportable and every `pipenv run …` child of the server/test flow dies at import.
+  The file therefore finds and `exec`s the next sitecustomize down the path — do not remove
+  that block. The full post-mortem lives in the devWiki at
+  `LibreFolio_devWiki/wiki/problems/sitecustomize-shadows-homebrew-python.md`.
+
 ## Reading the reports
 
 !!! tip "Coverage is a map, not a grade"

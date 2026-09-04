@@ -322,7 +322,7 @@ Ordinati per valore/urgenza. Stima: S < 1 h · M < mezza giornata · L ≥ 1 gio
 - Report fratelli di questa tornata: `02_services_core.md`, `03_services_pricing_fx.md`, `06_db_models.md`, `07_schemas_utils.md`, `08_frontend_state_api.md`, `09_frontend_components.md`, `10_frontend_charts.md`, `12_test_coverage.md`, `13_ai_export.md`, `17_stabilizzazione.md`, `mkdocs/` (stessa directory).
 - I task riesumati alimentano `99_task_riesumati.md`.
 - Tornata precedente: [`05_cleanAudit/14`](../../phases/05_cleanAudit/14_backlog_per_complessita.md) · [`15`](../../phases/05_cleanAudit/15_esecuzione_s1_s3.md) · [`16`](../../phases/05_cleanAudit/16_feature_perse_nei_redesign.md) · [`INDEX.md`](../../phases/05_cleanAudit/INDEX.md) (sezione «Aggiornamento — esecuzione S1–S3»).
-- Lavoro beta che ha prodotto le chiusure/parziali: `Phase_0/06_betaTestingReportAndFixing/` (piani `…AssetIdentity…`, `…FrontendCoverage…`, `03_feedback_utenti_F1-F17…`).
+- Lavoro beta che ha prodotto le chiusure/parziali: `phases/06_betaTestingReportAndFixing/` (archiviata 03/09) (piani `…AssetIdentity…`, `…FrontendCoverage…`, `03_feedback_utenti_F1-F17…`).
 
 ---
 

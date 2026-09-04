@@ -1,7 +1,7 @@
 # Phase 0 — Archived Sub-Plans Index
 
 > Completed work-streams of Release 2, archived here once done. Active work stays in
-> `Phase_0/`: `02_riskfolioIntegration` (paused, beta), `06_betaTestingReportAndFixing`.
+> `Phase_0/`: `02_riskfolioIntegration` (paused, beta). Archiviata il 03/09: `06_betaTestingReportAndFixing` (beta feedback consolidation, chiusa).
 > `Phase_0/04_webSearchEngine/` was fully archived on 2026-09-02 (ddgs suffices; SearXNG dropped). When a phase completes entirely, its folder moves under
 > `phases/Phase_N/`.
 
@@ -15,4 +15,4 @@
 
 **Not archived (still active / paused):**
 - `../Phase_0/02_riskfolioIntegration/` — Risk Analysis subsystem, paused in beta per user decision.
-- `../Phase_0/06_betaTestingReportAndFixing/` — beta feedback consolidation; P2/P4/P5/P6 still open.
+- `06_betaTestingReportAndFixing/` — beta feedback consolidation (F1–F17, piani P1–P8); **archiviata il 03/09**: tutti i task eseguiti, residui veri tracciati in TODO_FUTURI (P8: tappe 5.1–5.3).

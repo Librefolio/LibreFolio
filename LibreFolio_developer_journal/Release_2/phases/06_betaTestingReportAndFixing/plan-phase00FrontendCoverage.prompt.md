@@ -8,6 +8,11 @@
 > **Stato**: 🟢 Fasi 0, A, B, C, E completate. Fase D (analizzatore dei buchi lato JS) **aperta**,
 > in attesa di decisione.
 >
+> **⚠️ Riallineamento 03/09 (verifica sistematica)**: la Fase D è **fatta** — il corpo del piano
+> (§8) la descrive costruita, `scripts/coverage_js.py` esiste, `dev.py test coverage-report
+> --lang js` è operativo (usato il 03/09 per la misura 72,3%). L'header non fu mai riallineato;
+> resta solo «la prima misura vera» a regime.
+>
 > **Prosegue in** [`plan-phase00TestRunnerMigration.prompt.md`](plan-phase00TestRunnerMigration.prompt.md)
 > (P8): la macchina di coverage costruita qui è il vincolo attorno a cui è disegnata la
 > parallelizzazione del test runner.

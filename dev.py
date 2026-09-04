@@ -1050,19 +1050,36 @@ def cmd_mkdocs_check_links(args):
     print(f"{Colors.CYAN}── Scope 1: Frontend → MkDocs ──{Colors.NC}")
 
     # 1a. Collect docsPath values from .ts and .svelte files
+    # Test files are fixtures/mocks, not real links — exclude them (audit 03/09:
+    # AboutTab.test.ts mocks produced 6 of the 7 false positives).
+    def _is_test_file(path) -> bool:
+        name = path.name
+        return name.endswith((".test.ts", ".spec.ts"))
+
     docs_paths: list[tuple[str, str, int]] = []  # (path, file, line)
     for ext in ("*.ts", "*.svelte"):
         for f in frontend_src.rglob(ext):
+            if _is_test_file(f):
+                continue
             for i, line in enumerate(f.read_text().splitlines(), 1):
                 # static docsPath = '...'  or  docsPath: '...'
                 m = re.search(r"""docsPath\s*[:=]\s*['"]([^'"]+)['"]""", line)
                 if m:
-                    docs_paths.append((m.group(1), str(f.relative_to(PROJECT_ROOT)), i))
+                    raw = m.group(1)
+                    # Template literals with ${…} can't be resolved statically —
+                    # same handling as the /mkdocs/ scope below.
+                    if "${" in raw:
+                        clean = re.sub(r"\$\{[^}]+\}", "", raw).lstrip("/")
+                        if clean:
+                            docs_paths.append((clean, str(f.relative_to(PROJECT_ROOT)), i))
+                    else:
+                        docs_paths.append((raw, str(f.relative_to(PROJECT_ROOT)), i))
 
     # 1b. Collect /mkdocs/ URLs from window.open and href=
     for ext in ("*.ts", "*.svelte"):
         for f in frontend_src.rglob(ext):
-            for i, line in enumerate(f.read_text().splitlines(), 1):
+            if _is_test_file(f):
+                continue
                 m = re.search(r"""/mkdocs/([^'"`,\s)]+)""", line)
                 if m:
                     raw = m.group(1).rstrip("/")

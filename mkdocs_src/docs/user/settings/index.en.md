@@ -4,9 +4,9 @@ LibreFolio's Settings panel lets you personalise the application and, if you are
 
 Settings are split into four tabs:
 
-- 👤 **[Profile](preferences.md)** — Username, email, and avatar.
-- 🎛️ **[Preferences](preferences.md)** — Language, currency, and theme.
-- ℹ️ **[About](about.md)** — License info, version numbers, and links to official resources.
+- 👤 **[Profile](profile.md)** — Username, email, avatar, password, and account deletion.
+- 🎛️ **[Preferences](preferences.md)** — Language, base currency, and theme.
+- ℹ️ **[About](about.md)** — License info, version numbers, installed plugins, and the in-app changelog.
 - 🛡️ **[Admin](../../admin/settings.md)** — Instance-wide configuration, visible to everyone but editable only by superusers.
 
 ---

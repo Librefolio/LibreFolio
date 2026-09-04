@@ -9,7 +9,7 @@ LibreFolio includes a powerful interactive image editing tool that lets you crop
 The Image Crop modal opens automatically whenever you upload an image file in LibreFolio:
 
 - 📂 **Files page** → uploading any image (JPEG, PNG, WebP, GIF)
-- 👤 **Profile settings** → changing your avatar
+- 👤 **[Profile settings](../settings/profile.md)** → changing your avatar
 - 🏦 **Broker settings** → changing a broker icon
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">

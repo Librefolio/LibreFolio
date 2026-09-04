@@ -451,7 +451,7 @@
     "manualFieldsToVerify": "Fields to Verify",
     "fieldTodoCount": "{n} fields require input",
     "noFieldTodos": "No fields require manual input",
-    "todoRow": "TX #{n}",
+    "todoRow": "Row #{n}",
     "noAssets": "No asset mappings",
     "noDuplicates": "No duplicates detected",
     "viewAll": "View All",
@@ -476,7 +476,6 @@
       "medium": "Medium",
       "low": "Low"
     },
-    "likelyDuplicate": "Likely duplicate",
     "beforeOpeningCount": "before opening",
     "recheckOpenings": "Recheck openings",
     "recheckOpeningsTip": "Re-check broker opening dates and re-select rows that just became importable.",
@@ -485,7 +484,6 @@
     "createAsset": {
       "identifiedNames": "Identified names/identifiers:"
     },
-    "possibleDuplicate": "Possible duplicate",
     "todoBlockerCommitHint": "Complete all required fields before saving",
     "todoWarningVerifyHint": "{n, plural, one {# auto-derived field to verify before saving} other {# auto-derived fields to verify before saving}}",
     "todoWarningConfirmTitle": "Verify auto-derived fields?",
@@ -728,10 +726,6 @@
     "duplicateCurrencies": "Duplicate currencies detected",
     "cashBalances": "Cash Balances",
     "noCashBalances": "No cash positions",
-    "holdings": "Holdings",
-    "noHoldings": "No asset holdings",
-    "noTransactions": "No transactions yet",
-    "viewAllTransactions": "View All Transactions",
     "confirmDelete": "Are you sure you want to delete this broker?",
     "confirmDeleteWithTransactions": "This broker has {n} transactions. Force delete will remove all transactions. Continue?",
     "forceDelete": "Force Delete",
@@ -1770,8 +1764,9 @@
     "discardChangesConfirm": "You have unsaved changes. Discard all changes?",
     "globalSettingCategories": {
       "session": "Session",
-      "sync": "Scheduler & Upload",
-      "defaults": "Defaults"
+      "sync": "Update Job",
+      "defaults": "Defaults",
+      "memory": "Memory"
     },
     "globalSettingNames": {
       "session_ttl_hours": "Session Duration",

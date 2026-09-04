@@ -1,7 +1,5 @@
 # 💼 Net Asset Value (NAV) / Net Worth
 
-*[⬅️ Back to Performance Metrics Overview](../index.md)*
-
 ## 💡 What is NAV?
 
 **Net Asset Value (NAV)** is the total market valuation of your portfolio at a point in time $t$. It answers: *"How much is the portfolio worth right now?"*

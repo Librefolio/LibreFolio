@@ -123,6 +123,15 @@ Quantitative risk and allocation analytics, powered by [QuantLib](https://www.qu
 
 ### 🐛 Fixed
 
+#### 🧹 Clean audit re-check — P2/P3 + docs wave (2026-09-03/04)
+
+- **New admin cache panel** — Global Settings now shows every named cache (size, TTL) to all signed-in users, with admin-only "Clear" per cache and "Clear all", each behind a confirmation that warns the next fetch will be as slow as a restart.
+- **Trading212 broker icon never loaded** — the plugin pointed at a Cloudflare-blocked `favicon.ico` (403); it now uses the public PNG.
+- **Settings docs area realigned** — new Profile page (it was folded into Preferences), rewritten Preferences, About page gains the changelog-modal and plugin-diagnostics guides, admin docs gain the update-notification flow and the cache panel, installation page no longer claims "Alpha".
+- **Signals docs realigned** — asset/FX signal pages now link the 22/9 backend indicators documented once in Financial Theory instead of listing a stale subset, and document the spinner, per-signal diagnostics and the drawdown full-history toggle.
+- **Documentation sweep** — import wizard guide rewritten for the real 7-step flow, sharing guide rewritten (multi-owner, self-leave, last-owner cascade), AI Export catalog names, SNB monthly averages, WAL-safe Docker backup, dead links/icons/backlinks fixed across the manual.
+- **check-links tooling** — test fixtures no longer scanned as real links and template-literal paths are handled: the report is now all-green with zero false positives.
+
 #### 🧹 Clean audit re-check — P1 hygiene (2026-09-03)
 
 - **Bulk FX conversion-route operations issued one query per route** — route replacement now preloads the touched pairs in one SELECT, batches deletes, and re-reads remaining routes with a single grouped query; the WAC analytics endpoint preloads its assets the same way.

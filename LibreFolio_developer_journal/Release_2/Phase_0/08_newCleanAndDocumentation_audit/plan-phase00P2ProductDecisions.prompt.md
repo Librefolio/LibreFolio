@@ -203,9 +203,10 @@ Inventario post-ripresa:
    aperte» — quasi tutto fatto il 13/08; INDEX §4 contraddice §5; "`_reachability.py`"
    → vive in `_cli.py`+`_inventory.py`). La voce TODO_FUTURI P8 è già stata corretta;
    restano da riallineare i file in 06 (o si archivia la cartella com'è, con nota).
-4. **P3-7 brief invertito**: la riga JustETF sotto le sorgenti DIVIDEND era **corretta
-   da aggiungere** (`justetf.py:419` emette DIVIDEND) — il report d'audit la voleva
-   tolta; i docs attuali sono giusti, l'annotazione va corretta in mkdocs/01.
+4. ~~**P3-7 brief invertito**~~ → **rettifica (03/09, ricontrollo)**: il mio appunto era
+   sbagliato. Il reperto audit (02_admin §R-06/T8) diceva «aggiungere la riga justETF alle
+   fonti DIVIDEND» — cosa fatta e vera (`justetf.py:419` emette DIVIDEND; la riga è ora in
+   `asset-events/index.en.md:40`). Nessuna inversione: l'annotazione Lane G era corretta.
 
 ## Regola di chiusura
 

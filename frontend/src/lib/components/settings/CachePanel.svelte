@@ -44,6 +44,28 @@
     /** Clear awaiting confirmation: a cache name, 'all', or null (modal closed). */
     let confirmTarget: string | 'all' | null = $state(null);
 
+    /** Table sorting: clickable column headers (name / size / TTL). */
+    type SortKey = 'name' | 'size' | 'ttl';
+    let sortKey: SortKey = $state('name');
+    let sortAsc = $state(true);
+
+    const sortedCaches = $derived.by(() => {
+        const list = [...caches];
+        const dir = sortAsc ? 1 : -1;
+        if (sortKey === 'name') list.sort((a, b) => a.name.localeCompare(b.name) * dir);
+        else if (sortKey === 'size') list.sort((a, b) => (a.current_size - b.current_size || a.name.localeCompare(b.name)) * dir);
+        else list.sort((a, b) => (a.ttl_seconds - b.ttl_seconds || a.name.localeCompare(b.name)) * dir);
+        return list;
+    });
+
+    function toggleSort(key: SortKey) {
+        if (sortKey === key) sortAsc = !sortAsc;
+        else {
+            sortKey = key;
+            sortAsc = key === 'name';
+        }
+    }
+
     onMount(loadStatus);
 
     async function loadStatus() {
@@ -148,16 +170,28 @@
             <table class="w-full text-xs">
                 <thead>
                     <tr class="text-left text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-slate-700">
-                        <th class="pb-1.5 font-medium">{$t('settings.cache.colName')}</th>
-                        <th class="pb-1.5 font-medium text-right">{$t('settings.cache.colSize')}</th>
-                        <th class="pb-1.5 font-medium text-right">{$t('settings.cache.colTtl')}</th>
+                        <th class="pb-1.5 font-medium">
+                            <button type="button" class="inline-flex items-center gap-0.5 hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer" data-testid="cache-sort-name" onclick={() => toggleSort('name')}>
+                                {$t('settings.cache.colName')}{sortKey === 'name' ? (sortAsc ? ' ▲' : ' ▼') : ''}
+                            </button>
+                        </th>
+                        <th class="pb-1.5 font-medium text-right">
+                            <button type="button" class="inline-flex items-center gap-0.5 hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer ml-auto" data-testid="cache-sort-size" onclick={() => toggleSort('size')}>
+                                {$t('settings.cache.colSize')}{sortKey === 'size' ? (sortAsc ? ' ▲' : ' ▼') : ''}
+                            </button>
+                        </th>
+                        <th class="pb-1.5 font-medium text-right">
+                            <button type="button" class="inline-flex items-center gap-0.5 hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer ml-auto" data-testid="cache-sort-ttl" onclick={() => toggleSort('ttl')}>
+                                {$t('settings.cache.colTtl')}{sortKey === 'ttl' ? (sortAsc ? ' ▲' : ' ▼') : ''}
+                            </button>
+                        </th>
                         {#if canEdit}
                             <th class="pb-1.5 font-medium text-right w-16"></th>
                         {/if}
                     </tr>
                 </thead>
                 <tbody>
-                    {#each caches as cache (cache.name)}
+                    {#each sortedCaches as cache (cache.name)}
                         <tr class="border-b border-gray-100 dark:border-slate-700/50 last:border-0" data-testid="cache-row-{cache.name}">
                             <td class="py-1.5 pr-2 font-mono text-gray-700 dark:text-gray-300 break-all">{cache.name}</td>
                             <td class="py-1.5 pr-2 text-right text-gray-600 dark:text-gray-400 whitespace-nowrap">

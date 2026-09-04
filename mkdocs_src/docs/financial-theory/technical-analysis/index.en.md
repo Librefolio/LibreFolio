@@ -8,12 +8,13 @@ Technical analysis studies **price patterns and market dynamics** to identify tr
 
 ### 📉 [Indicators](indicators/index.md)
 
-Chart overlays that extract trend, momentum, volatility, or volume information from market data. LibreFolio implements **17 backend indicators**, each explained from both a **financial** and **signal processing** perspective:
+Chart overlays that extract trend, momentum, volatility, volume, or risk information from market data. LibreFolio implements **22 backend indicators**, each explained from both a **financial** and **signal processing** perspective:
 
 - 📈 **[Trend](indicators/trend.md)** — EMA, SMA, KAMA, ADX, Aroon
 - ⚡ **[Momentum](indicators/momentum.md)** — RSI, MACD, ROC, Stochastic RSI, PPO, CCI
 - 🌊 **[Volatility](indicators/volatility.md)** — Bollinger Bands, ATR, NATR, Donchian Channels
 - 📊 **[Volume](indicators/volume.md)** — OBV, MFI
+- ⚠️ **Risk** — Underwater Drawdown, Rolling Return, Rolling Volatility, Rolling Sharpe Ratio, Rolling Beta (Asset-only; concepts under [Risk Metrics](risk-metrics/index.md))
 
 ### 🎯 [Synthetic Benchmarks](synthetic-benchmarks/index.md)
 
