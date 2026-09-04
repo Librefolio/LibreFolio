@@ -92,6 +92,16 @@ heading in every language, same convention as `{#updating}`) over translated slu
 a page is linked cross-language — localized slugs are the recurring false-positive and
 breakage source.
 
+**Math in lists/admonitions**: KaTeX display blocks (`$$…$$`) inside a list or
+admonition must keep their 4-space indent in translations too — the pipeline has twice
+emitted 1-space indentation, which renders the formula as raw text. The
+`math-indent-lost` check (translate-validate) catches it; run validate after every
+pipeline pass that touches `financial-theory/**`.
+
+**ASCII-art diagrams** do not survive translation runs intact (box-drawing alignment
+breaks). Prefer Mermaid (` ```mermaid ` blocks — labels stay language-neutral inside
+code and survive the pipeline) for architecture diagrams in user/admin pages.
+
 ## Translation-stamp rule (punctual changes)
 
 When you make a small, targeted fix to a page that **has translations** (a command

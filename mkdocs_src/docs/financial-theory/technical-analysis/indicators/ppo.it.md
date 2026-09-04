@@ -14,21 +14,21 @@ Una lettura MACD di €2 significa qualcosa di molto diverso per un'azione da �
 
 1. **Linea PPO** — la stessa differenza EMA veloce/lenta del MACD, ma divisa per l'EMA lenta e riscalata in percentuale:
 
- $$
- PPO_t = 100 \cdot \frac{EMA_{veloce}(C_t) - EMA_{lenta}(C_t)}{EMA_{lenta}(C_t)}
- $$
+    $$
+    PPO_t = 100 \cdot \frac{EMA_{veloce}(C_t) - EMA_{lenta}(C_t)}{EMA_{lenta}(C_t)}
+    $$
 
 2. **Linea Segnale** — un livellamento EMA della linea PPO stessa:
 
- $$
- segnale_t = EMA_{segnale}(PPO_t)
- $$
+    $$
+    segnale_t = EMA_{segnale}(PPO_t)
+    $$
 
 3. **Istogramma** — il momentum del momentum:
 
- $$
- Istogramma_t = PPO_t - segnale_t
- $$
+    $$
+    Istogramma_t = PPO_t - segnale_t
+    $$
 
 ---
 

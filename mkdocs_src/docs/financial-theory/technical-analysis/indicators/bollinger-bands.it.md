@@ -14,22 +14,22 @@ Quando le bande sono ampie, il mercato è volatile; quando si stringono (squeeze
 
 1. **Banda Centrale** (valore atteso):
 
- $$
- MB_t = SMA_N(C_t)
- $$
+    $$
+    MB_t = SMA_N(C_t)
+    $$
 
 2. **Deviazione standard** dei prezzi nell'intervallo:
 
- $$
- \sigma_t = \sqrt{\frac{1}{N} \sum_{i=0}^{N-1} (C_{t-i} - MB_t)^2}
- $$
+    $$
+    \sigma_t = \sqrt{\frac{1}{N} \sum_{i=0}^{N-1} (C_{t-i} - MB_t)^2}
+    $$
 
 3. **Bande Superiore e Inferiore**:
 
- $$
- Upper_t = MB_t + k \cdot \sigma_t, \qquad
- Lower_t = MB_t - k \cdot \sigma_t
- $$
+    $$
+    Upper_t = MB_t + k \cdot \sigma_t, \qquad
+    Lower_t = MB_t - k \cdot \sigma_t
+    $$
 
 Con $k = 2$, se i rendimenti fossero distribuiti normalmente, il prezzo rimarrebbe all'interno delle bande per circa il 95,4% del tempo. In pratica, i rendimenti finanziari presentano *code grasse* (leptocurtosi), quindi le violazioni sono più frequenti — ma comunque statisticamente significative.
 

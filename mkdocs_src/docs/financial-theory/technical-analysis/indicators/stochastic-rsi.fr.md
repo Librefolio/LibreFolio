@@ -14,21 +14,21 @@ Le RSI simple peut stagner dans la zone 40–60 pendant de longues périodes san
 
 1. **Série RSI de base** (voir [RSI](rsi.md)), en utilisant la période de référence configurée $N$ :
 
- $$
- RSI_t = 100 - \frac{100}{1+RS_t}
- $$
+    $$
+    RSI_t = 100 - \frac{100}{1+RS_t}
+    $$
 
 2. **Transformation stochastique** appliquée au RSI lui-même — où il se situe actuellement par rapport à sa propre fourchette haute/basse sur $N$ périodes :
 
- $$
- \%K_t = 100 \cdot \frac{RSI_t - \min_{0 \le i < N} RSI_{t-i}}{\max_{0 \le i < N} RSI_{t-i} - \min_{0 \le i < N} RSI_{t-i}}
- $$
+    $$
+    \%K_t = 100 \cdot \frac{RSI_t - \min_{0 \le i < N} RSI_{t-i}}{\max_{0 \le i < N} RSI_{t-i} - \min_{0 \le i < N} RSI_{t-i}}
+    $$
 
 3. **%D** — une moyenne mobile à court terme de %K qui lisse la ligne stochastique brute :
 
- $$
- \%D_t = SMA_{d}(\%K)
- $$
+    $$
+    \%D_t = SMA_{d}(\%K)
+    $$
 
 ---
 

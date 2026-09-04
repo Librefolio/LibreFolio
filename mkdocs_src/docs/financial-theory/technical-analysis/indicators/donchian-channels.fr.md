@@ -14,21 +14,21 @@ Il s'agit de l'indicateur derrière le légendaire système de "breakout Turtle 
 
 1. **Canal supérieur** — le maximum glissant du haut sur la fenêtre :
 
- $$
- Upper_t = \max_{0 \le i < N} H_{t-i}
- $$
+    $$
+    Upper_t = \max_{0 \le i < N} H_{t-i}
+    $$
 
 2. **Canal inférieur** — le minimum glissant du bas sur la fenêtre :
 
- $$
- Lower_t = \min_{0 \le i < N} L_{t-i}
- $$
+    $$
+    Lower_t = \min_{0 \le i < N} L_{t-i}
+    $$
 
 3. **Ligne médiane** — le simple point milieu des deux :
 
- $$
- Middle_t = \frac{Upper_t + Lower_t}{2}
- $$
+    $$
+    Middle_t = \frac{Upper_t + Lower_t}{2}
+    $$
 
 ---
 

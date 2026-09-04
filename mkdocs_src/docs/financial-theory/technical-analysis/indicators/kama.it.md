@@ -14,23 +14,23 @@ Una EMA a periodo fisso è un compromesso: abbastanza veloce da seguire i trend,
 
 1. **Efficiency Ratio** sulla finestra di lookback $N$ — distanza netta percorsa divisa per la lunghezza totale del percorso effettuato:
 
- $$
- ER_t = \frac{\left| C_t - C_{t-N} \right|}{\sum_{i=0}^{N-1} \left| C_{t-i} - C_{t-i-1} \right|}
- $$
+    $$
+    ER_t = \frac{\left| C_t - C_{t-N} \right|}{\sum_{i=0}^{N-1} \left| C_{t-i} - C_{t-i-1} \right|}
+    $$
 
  $ER_t \in [0, 1]$: vale $1$ per un trend perfettamente lineare e vicino a $0$ per puro rumore.
 
 2. **Costante di smussamento adattativa**, che interpola tra una costante EMA veloce e una lenta:
 
- $$
- SC_t = \left[ ER_t \cdot (\alpha_{fast} - \alpha_{slow}) + \alpha_{slow} \right]^2
- $$
+    $$
+    SC_t = \left[ ER_t \cdot (\alpha_{fast} - \alpha_{slow}) + \alpha_{slow} \right]^2
+    $$
 
 3. **Ricorrenza**, identica nella forma all'EMA ma con un coefficiente variabile nel tempo:
 
- $$
- KAMA_t = KAMA_{t-1} + SC_t \cdot (C_t - KAMA_{t-1})
- $$
+    $$
+    KAMA_t = KAMA_{t-1} + SC_t \cdot (C_t - KAMA_{t-1})
+    $$
 
 ---
 

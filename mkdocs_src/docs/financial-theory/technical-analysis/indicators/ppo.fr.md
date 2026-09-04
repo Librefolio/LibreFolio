@@ -14,21 +14,21 @@ Une lecture MACD de 2 € signifie quelque chose de très différent pour une ac
 
 1. **Ligne PPO** — le même écart EMA rapide/lente que le MACD, mais divisé par l'EMA lente et remis à l'échelle en pourcentage :
 
- $$
- PPO_t = 100 \cdot \frac{EMA_{rapide}(C_t) - EMA_{lente}(C_t)}{EMA_{lente}(C_t)}
- $$
+    $$
+    PPO_t = 100 \cdot \frac{EMA_{rapide}(C_t) - EMA_{lente}(C_t)}{EMA_{lente}(C_t)}
+    $$
 
 2. **Ligne de Signal** — un lissage EMA de la ligne PPO elle-même :
 
- $$
- Signal_t = EMA_{signal}(PPO_t)
- $$
+    $$
+    Signal_t = EMA_{signal}(PPO_t)
+    $$
 
 3. **Histogramme** — le momentum du momentum :
 
- $$
- Histogramme_t = PPO_t - Signal_t
- $$
+    $$
+    Histogramme_t = PPO_t - Signal_t
+    $$
 
 ---
 

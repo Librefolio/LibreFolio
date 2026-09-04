@@ -955,7 +955,7 @@ def check_latex(
                 check="latex-syntax-euro",
                 message=f"Raw Euro symbol '€' found outside \\text{{}} in {loc_str} math block: $${math_str.strip()}$$. Wrap it in \\text{{€}} or use EUR.",
             ))
-            
+
         # Check 2: Ampersand & or \& inside \text{}
         text_blocks = re.findall(r'\\text\{([^}]*)\}', math_str)
         for tb in text_blocks:
@@ -1063,6 +1063,58 @@ def check_latex(
 
 
 # ---------------------------------------------------------------------------
+# Math block structural position
+# ---------------------------------------------------------------------------
+
+def _math_block_positions(text: str) -> list[tuple[int, bool]]:
+    """Position of each display-math block: (opening line number, indented-4?)."""
+    positions: list[tuple[int, bool]] = []
+    lines = text.split("\n")
+    i = 0
+    while i < len(lines):
+        if lines[i].strip() == "$$":
+            indented = lines[i].startswith("    ")
+            i += 1
+            while i < len(lines) and lines[i].strip() != "$$":
+                i += 1
+            if i < len(lines):
+                positions.append((i, indented))
+        i += 1
+    return positions
+
+
+def check_math_indentation(
+    source: str, translated: str, cache_key: str, lang: str,
+) -> list[Issue]:
+    """
+    Display-math blocks inside lists/admonitions must keep their 4-space indent.
+
+    KaTeX renders `$$` blocks only when they stay inside the enclosing markdown
+    structure; a translation that drops the indentation renders the formula as raw
+    text. check_latex compares block *contents* and misses exactly this.
+    """
+    src_pos = _math_block_positions(source)
+    tr_pos = _math_block_positions(translated)
+    issues: list[Issue] = []
+    if len(src_pos) != len(tr_pos):
+        return issues  # count mismatch already reported by check_latex
+
+    for idx, ((src_line, src_ind), (_tr_line, tr_ind)) in enumerate(zip(src_pos, tr_pos)):
+        if src_ind and not tr_ind:
+            issues.append(Issue(
+                severity=Severity.ERROR,
+                file=cache_key, lang=lang,
+                check="math-indent-lost",
+                message=(
+                    f"Display math block #{idx + 1} (source line {src_line + 1}) lost its "
+                    f"4-space indentation — the formula renders as raw text instead of "
+                    f"rendering inside its list/admonition."
+                ),
+            ))
+    return issues
+
+
+# ---------------------------------------------------------------------------
 # Main validation orchestration
 # ---------------------------------------------------------------------------
 
@@ -1077,6 +1129,7 @@ ALL_CHECKS = [
     ("html-relative-src", check_html_relative_src, True),
     ("front-matter", check_front_matter, True),
     ("latex", check_latex, True),
+    ("math-indentation", check_math_indentation, True),     # positional: indented $$ blocks stay indented
     ("file-size", check_file_size, True),
     ("artifacts", check_artifacts, False),                  # only needs translated
     ("admonition-indent", check_admonition_indent, True),   # uses source for title comparison
@@ -1116,7 +1169,6 @@ def run_validate(args) -> int:
     # Get source files list
     if file_filter:
         # Resolve file paths (same logic as translate_docs)
-        import glob as glob_mod
         sources = []
         for f in file_filter:
             p = Path(f)
@@ -1148,7 +1200,7 @@ def run_validate(args) -> int:
 
     result = ValidationResult()
 
-    print(f"\n🔍 Validating translations...")
+    print("\n🔍 Validating translations...")
     print(f"   Languages: {', '.join(target_langs)}")
     print(f"   Source files: {len(sources)}")
     print()
@@ -1195,7 +1247,7 @@ def run_validate(args) -> int:
 
     # Summary
     print(f"\n{'=' * 60}")
-    print(f"📊 Validation Summary:")
+    print("📊 Validation Summary:")
     print(f"   Files checked:  {result.files_checked}")
     print(f"   Files OK:       {result.files_ok}")
     print(f"   Files missing:  {result.files_missing}")
@@ -1210,27 +1262,27 @@ def run_validate(args) -> int:
     warn_counts = Counter(i.check for i in result.issues if i.severity == Severity.WARN)
     loc_counts = Counter(i.check for i in result.issues if i.severity == Severity.LOCALIZED)
     if err_counts:
-        print(f"\n   ❌ Errors by type:")
+        print("\n   ❌ Errors by type:")
         for check, count in sorted(err_counts.items(), key=lambda x: -x[1]):
             print(f"      {count:3d}  {check}")
     if warn_counts:
-        print(f"\n   ⚠️  Warnings by type:")
+        print("\n   ⚠️  Warnings by type:")
         for check, count in sorted(warn_counts.items(), key=lambda x: -x[1]):
             print(f"      {count:3d}  {check}")
     if loc_counts and not hide_localized:
-        print(f"\n   🌐 Localized by type (intentional — use --hide-localized to suppress):")
+        print("\n   🌐 Localized by type (intentional — use --hide-localized to suppress):")
         for check, count in sorted(loc_counts.items(), key=lambda x: -x[1]):
             print(f"      {count:3d}  {check}")
 
     if result.errors:
         print(f"\n❌ {result.errors} error(s) found — translations need fixing.")
-        print(f"   Tip: re-translate with --force, or use a better model (e.g. Gemini Flash via OpenRouter)")
+        print("   Tip: re-translate with --force, or use a better model (e.g. Gemini Flash via OpenRouter)")
     elif result.warnings:
         print(f"\n⚠️  {result.warnings} warning(s) — review manually.")
     elif result.localized:
         print(f"\n🌐 {result.localized} localized diff(s) — intentional, no action needed.")
     else:
-        print(f"\n✅ All translations look good!")
+        print("\n✅ All translations look good!")
 
     return 1 if result.errors else 0
 

@@ -14,21 +14,21 @@ L'RSI classico può rimanere nella zona 40–60 per lunghi periodi senza mai rag
 
 1. **Serie RSI base** (vedi [RSI](rsi.md)), utilizzando il lookback configurato $N$:
 
- $$
- RSI_t = 100 - \frac{100}{1+RS_t}
- $$
+    $$
+    RSI_t = 100 - \frac{100}{1+RS_t}
+    $$
 
 2. **Trasformazione stocastica** applicata all'RSI stesso — dove si trova attualmente rispetto al suo range massimo/minimo su $N$ periodi:
 
- $$
- \%K_t = 100 \cdot \frac{RSI_t - \min_{0 \le i < N} RSI_{t-i}}{\max_{0 \le i < N} RSI_{t-i} - \min_{0 \le i < N} RSI_{t-i}}
- $$
+    $$
+    \%K_t = 100 \cdot \frac{RSI_t - \min_{0 \le i < N} RSI_{t-i}}{\max_{0 \le i < N} RSI_{t-i} - \min_{0 \le i < N} RSI_{t-i}}
+    $$
 
 3. **%D** — una media mobile corta del %K che attenua la linea stocastica grezza:
 
- $$
- \%D_t = SMA_{d}(\%K)
- $$
+    $$
+    \%D_t = SMA_{d}(\%K)
+    $$
 
 ---
 

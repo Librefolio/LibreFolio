@@ -14,22 +14,22 @@ Cuando las bandas se ensanchan, el mercado es volátil; cuando se comprimen, una
 
 1. **Banda Media** (valor esperado):
 
- $$
- MB_t = SMA_N(C_t)
- $$
+    $$
+    MB_t = SMA_N(C_t)
+    $$
 
 2. **Desviación estándar** de los precios durante la ventana:
 
- $$
- \sigma_t = \sqrt{\frac{1}{N} \sum_{i=0}^{N-1} (C_{t-i} - MB_t)^2}
- $$
+    $$
+    \sigma_t = \sqrt{\frac{1}{N} \sum_{i=0}^{N-1} (C_{t-i} - MB_t)^2}
+    $$
 
 3. **Bandas Superior e Inferior**:
 
- $$
- Upper_t = MB_t + k \cdot \sigma_t, \qquad
- Lower_t = MB_t - k \cdot \sigma_t
- $$
+    $$
+    Upper_t = MB_t + k \cdot \sigma_t, \qquad
+    Lower_t = MB_t - k \cdot \sigma_t
+    $$
 
 Con $k = 2$, si los rendimientos estuvieran distribuidos normalmente, el precio se mantendría dentro de las bandas aproximadamente el 95.4% del tiempo. En la práctica, los rendimientos financieros tienen *colas pesadas* (leptocurtosis), por lo que las rupturas son más frecuentes, aunque siguen siendo estadísticamente significativas.
 
