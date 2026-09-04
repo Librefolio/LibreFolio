@@ -1,73 +1,54 @@
-# 📥 Transazioni del broker
+# 📥 Transazioni del Broker
 
-La scheda **Transazioni** è il centro di controllo per modificare il registro del broker. Elenca tutte le operazioni finanziarie registrate (acquisti, vendite, dividendi, depositi, prelievi, trasferimenti e conversioni FX) relative a questo broker.
+La scheda **Transazioni** è il centro di controllo per modificare il libro mastro del broker. Elenca tutte le operazioni finanziarie registrate (acquisti, vendite, dividendi, depositi, prelievi, trasferimenti e conversioni FX) relative a questo broker.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="brokers" data-name="transactions-tab" alt="Broker Transactions Tab">
+ <img class="gallery-img" data-category="brokers" data-name="transactions-tab" alt="Scheda Transazioni del Broker">
 </div>
 
-Da questa scheda è possibile eseguire transazioni manuali o avviare importazioni massive di estratti conto.
+Da questa scheda puoi registrare transazioni manualmente o avviare importazioni in blocco di estratti conto.
 
 ---
 
 ## ➕ Transazioni Manuali
 
-Fai clic sul pulsante **Aggiungi Transazione** (icona `Plus`) per aprire la procedura guidata della finestra modale per singola transazione. Questo ti consente di registrare manualmente:
+Fai clic sul pulsante **Aggiungi Transazione** (icona `Plus`) per aprire la procedura guidata modale per la singola transazione. Questa ti consente di registrare manualmente:
 
-- **Acquisto / Vendita**: Negoziazione di asset, specificando data, prezzo, quantità e valuta.
-- **Dividendo / Reddito**: Reddito ricevuto dalle partecipazioni.
-- **Deposito / Prelievo**: Flussi di cassa esterni in entrata o in uscita dal saldo di cassa del broker.
-- **Trasferimento**: Trasferimento di denaro o asset tra broker (ad es., finanziamento del conto da un broker bancario).
-- **Conversione FX**: Cambi di valuta all'interno del conto del broker.
+- **Acquisto / Vendita**: scambia asset, specificando data, prezzo, quantità e valuta.
+- **Dividendo / Reddito**: reddito ricevuto dagli asset in portafoglio.
+- **Deposito / Prelievo**: flussi di cassa esterni in entrata o in uscita dal saldo di cassa del broker.
+- **Trasferimento**: trasferimento di liquidità o asset tra broker (ad esempio, finanziando il conto tramite un broker bancario).
+- **Conversione FX**: cambi di valuta all'interno del conto del broker.
 
-Per una spiegazione dettagliata dei campi della transazione e delle regole di validazione, consulta la guida **[Modulo Transazione](../transactions/form.md)**.
-
----
-
-## 🧙 BRIM: Modulo di Importazione Estratti Conto Broker
-
-Il pulsante **Importa** (icona `Upload`) avvia la procedura guidata **BRIM**. Questo modulo ti consente di importare in massa gli estratti conto esportati dal tuo broker (formati CSV o Excel), eseguire validazioni automatiche di integrità e mappare i ticker agli asset locali prima del commit finale.
-
-### 🖼️ Il Flusso di Importazione
-
-<div class="lf-screenshot-carousel" data-carousel="carousel-broker-import" data-carousel-interval="6000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
- <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="import-modal" data-title="📥 Quick Import Modal" alt="Import Modal">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step1" data-title="🧙 Wizard — Step 1: Upload" alt="Import Wizard Step 1">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step2" data-title="⚙️ Wizard — Step 2: Parser Config" alt="Import Wizard Step 2">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step3" data-title="🧠 Wizard — Step 3: Analysis" alt="Import Wizard Step 3">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step4-resolution" data-title="🔍 Wizard — Step 4: Asset Resolution" alt="Import Wizard Asset Resolution">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-duplicate" data-title="⚠️ Duplicate Detection" alt="Import Wizard Duplicate Detection">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-bulk-staging" data-title="📦 Bulk Staging" alt="Import Bulk Staging">
-</div>
-
-La procedura guidata procede attraverso i seguenti passaggi:
-
-1. **Seleziona File & Parser**: Scegli il file dell'estratto conto e seleziona la configurazione di parser appropriata (ad es., Interactive Brokers, Degiro, Directa, Charles Schwab, CSV generico, ecc.).
-2. **Verifica Intestazioni & Mappatura**: Mostra le intestazioni CSV per confermare che il parser sia allineato correttamente con le colonne.
-3. **Analisi Operazioni**: Elabora il file e visualizza una griglia di anteprima delle azioni analizzate (Acquisti, Vendite, Dividendi, ecc.).
- * **Badge**: Le operazioni sono etichettate come `UNIQUE` (nuova operazione), `DUPLICATE` (già esistente nel database), o `UNRESOLVED` (richiede mappatura ticker/ISIN).
- * **Note TODO**: Evidenziano campi che richiedono attenzione o elementi che non possono essere analizzati automaticamente.
-4. **Risoluzione Asset**: Se l'estratto conto contiene ticker o ISIN che non esistono nel tuo registro asset locale, BRIM mostra un passaggio di mappatura. Puoi:
- * Mappare il ticker a un asset esistente.
- * Creare un nuovo asset direttamente da questa schermata, precompilato con i dettagli estratti dall'estratto conto.
-5.  **Filtro Data Apertura**: Se una riga analizzata è antecedente alla data di apertura del broker, la procedura guidata la contrassegna come **Antecedente apertura**, disabilita la relativa casella di controllo e la esclude dall'importazione. Le righe alla data di apertura sono consentite. Usa **Modifica data broker** e ricontrolla/aggiorna se necessario.
-6.  **Staging Massivo & Commit**: Rivedi l'elenco di staging delle transazioni pulite e uniche. Deseleziona le operazioni che desideri escludere, quindi fai clic su **Commit** per scrivere i record nel registro del tuo portafoglio.
+Per una spiegazione dettagliata dei campi delle transazioni e delle regole di validazione, consulta la guida **[Modulo di Transazione](../transactions/form.md)**.
 
 ---
 
-## ⚠️ Avvisi Asset
+## 🧙 Importazione in Blocco (BRIM)
 
-Alcuni plugin collegano avvisi informativi agli asset estratti. Ad esempio, Intesa Sanpaolo e Crédit Agricole possono avvisare che un titolo potrebbe essere scaduto/rimborsato e difficile da trovare online. La finestra modale di creazione asset raggruppa questi avvisi in banner ambra; sono informativi e non modificano l'importazione delle transazioni.
+Il pulsante **Importa** (icona `Upload`) avvia la procedura guidata **BRIM** (Broker Report Import Module), che importa in blocco gli estratti conto esportati dal tuo broker: analizza i file, valida ogni riga, uniforma i titoli trovati, verifica la presenza di duplicati e ti consente di rivedere tutto prima che qualsiasi dato venga scritto. Le righe approvate finiscono nell'**editor in blocco**, dove un **Salva tutto** finale le registra nel libro mastro.
+
+La stessa procedura guidata è disponibile anche dalla pagina globale **[Transazioni](../transactions/index.md)**. Per la procedura completa, consulta le guide dedicate:
+
+- 📥 **[Importazione dal Broker (BRIM)](../transactions/import/index.md)** — broker supportati, formati e note specifiche per plugin.
+- 🧙 **[Come Importare le Transazioni](../transactions/import/how-to.md)** — la procedura guidata, passo dopo passo.
 
 ---
 
-## 📑 Cronologia Importazioni
+## 🧩 Il tuo broker non è supportato?
 
-Fai clic sul pulsante **Mostra Cronologia Importazioni** (icona `FileText`) per visualizzare un registro completo delle attività di importazione precedenti. Mostra:
+Se il tuo broker non ha ancora un plugin di importazione, puoi aiutare:
 
-- Nome e dimensione del file caricato.
-- Righe elaborate e numero totale di transazioni sottoposte a commit.
-- Timestamp del caricamento.
-- Utente che ha eseguito l'importazione.
+- **Richiedi un plugin** — apri una [richiesta di plugin](https://github.com/Librefolio/LibreFolio/issues/new?template=plugin_request.yml) su GitHub, allegando un campione anonimizzato del file esportato dal broker in modo che il formato possa essere compreso. (Il passaggio Corrections della procedura guidata include anche un banner "apri una segnalazione" per segnalare le righe che sembrano errate.)
+- **Scrivi un plugin** — la [Guida ai plugin BRIM](../../developer/architecture/patterns/brim_plugin_guide.md) guida gli sviluppatori attraverso il contratto del provider; consulta [Contribuire](../../community/contribute.md) per il flusso di lavoro generale.
 
+---
 
+## 🗂️ Report Caricati
+
+Fai clic sul pulsante **Report Caricati** (icona `FileText`) per gestire i file di report BRIM archiviati per questo broker. La finestra modale ti consente di:
+
+- Rivedere i report caricati (nome, data di caricamento, dimensione, stato), con un'**anteprima** rapida del contenuto di ciascun file.
+- **Caricare** nuovi report direttamente — vengono assegnati automaticamente a questo broker e diventano disponibili nel passaggio Select Files della procedura guidata.
+- **Eliminare** i report che non ti servono più.
+- Passare alla pagina completa **[File e Caricamenti](../files/index.md#broker-reports)**, pre-filtrata su questo broker.

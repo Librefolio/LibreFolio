@@ -1,7 +1,5 @@
 # 🧭 Resolución de Precios
 
-*[⬅️ Volver al Motor de Cartera](index.md)*
-
 ## 💡 Propósito
 
 LibreFolio utiliza un único resolutor unificado como fuente de valoración principal para posiciones abiertas, NAV, valoración de lotes, líneas de precio en gráficos e indicadores de calidad de datos. El resolutor responde a una pregunta diaria:

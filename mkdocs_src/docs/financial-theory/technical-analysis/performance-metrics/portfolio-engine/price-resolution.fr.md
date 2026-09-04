@@ -1,7 +1,5 @@
 # 🧭 Résolution de Prix
 
-*[⬅️ Retour au Moteur de Portefeuille](index.md)*
-
 ## 💡 Objectif
 
 LibreFolio utilise un moteur de résolution unifié comme source d'évaluation principale pour les positions ouvertes, la VNI, l'évaluation des lots, les lignes de prix des graphiques et les indicateurs de qualité des données. Le résolveur répond à une question quotidienne :

@@ -1,7 +1,5 @@
 # ⏱️ Effet de timing
 
-*[⬅️ Retour à l'Aperçu des Métriques de Performance](../index.md)*
-
 ## 💡 Qu'est-ce que c'est ?
 
 L'**Effet de timing** mesure à quel point le moment et le montant de vos dépôts et retraits (flux de trésorerie) ont influencé le rendement personnel de l'investisseur par rapport au rendement de la stratégie sous-jacente, neutralisant l'effet des flux de trésorerie externes.
@@ -23,6 +21,8 @@ En comparant le [MWRR Cumulé](mwrr.md#cumulative-mwrr) (qui intègre le moment 
 - **Effet de timing positif ($> 0$ pp) :** Vos flux de trésorerie sont intervenus à des moments favorables (par exemple, en achetant des actifs à prix réduit lors d'une baisse des marchés). Votre rendement personnel (MWRR) est supérieur à celui de la stratégie pure (TWRR).
 - **Effet de timing négatif ($< 0$ pp) :** Vos flux de trésorerie sont intervenus à des moments défavorables (par exemple, en déposant des sommes importantes au sommet du marché juste avant une correction). Votre rendement personnel (MWRR) est inférieur à celui de la stratégie pure (TWRR).
 - **Effet de timing proche de zéro ($\approx 0$ pp) :** Vos flux de trésorerie ont eu peu ou pas d'impact sur la performance (par exemple, si vous avez effectué de très petits dépôts ou si le marché est resté stable pendant vos transactions).
+
+Les deux côtés utilisent le même flux NAV du moteur de portefeuille et le même modèle de flux de la baseline de capital. Les ajustements de capital en nature affectent donc de manière cohérente les limites du MWRR comme du TWRR.
 
 ---
 
@@ -87,3 +87,4 @@ LibreFolio affiche l'Effet de timing dans la carte de **Rendements** du tableau 
 - **[TWRR](twrr.md) :** Mesure le rendement de la stratégie ou des actifs sous-jacents, en ignorant le moment des flux de trésorerie de l'investisseur.
 - **[MWRR](mwrr.md) :** Mesure le rendement du capital de l'investisseur, en tenant compte à la fois de la performance des actifs et du moment des flux de trésorerie.
 - **[P&L de la Période](period-pnl.md) :** Mesure le profit ou la perte monétaire absolue générée par le portefeuille au cours de la période sélectionnée.
+- **[Aperçu des Métriques de Performance](../index.md) :** Toutes les métriques de performance en un coup d'œil.

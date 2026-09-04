@@ -1,7 +1,5 @@
 # ⏱️ Effetto Timing
 
-*[⬅️ Torna alla Panoramica delle Metriche di Performance](../index.md)*
-
 ## 💡 Cos'è?
 
 L'**Effetto Timing** misura quanto il momento e l'importo dei versamenti e dei prelievi hanno inciso sul rendimento personale dell'investitore rispetto al rendimento della strategia sottostante, neutralizzando l’effetto dei flussi di cassa esterni.
@@ -23,6 +21,8 @@ Confrontando il [MWRR Cumulativo](mwrr.md#cumulative-mwrr) (che risente del timi
 - **Effetto Timing Positivo ($> 0$ pp):** I flussi di cassa sono avvenuti in momenti favorevoli (ad esempio, acquistando asset a sconto durante un ribasso del mercato). Il tuo rendimento personale (MWRR) è superiore a quello della strategia pura (TWRR).
 - **Effetto Timing Negativo ($< 0$ pp):** I flussi di cassa sono avvenuti in momenti sfavorevoli (ad esempio, depositando ingenti somme ai massimi di mercato, subito prima di una correzione). Il tuo rendimento personale (MWRR) è inferiore a quello della strategia pura (TWRR).
 - **Effetto Timing vicino allo Zero ($\approx 0$ pp):** I flussi di cassa hanno avuto un impatto minimo sulla performance (ad esempio, in caso di versamenti molto piccoli o se il mercato è rimasto piatto durante le transazioni).
+
+Entrambi i lati usano lo stesso flusso NAV del motore di portafoglio e lo stesso modello di flussi della baseline di capitale. Gli aggiustamenti di capitale in natura influenzano quindi coerentemente entrambi i confini, MWRR e TWRR.
 
 ---
 
@@ -87,3 +87,4 @@ LibreFolio mostra l'Effetto Timing all'interno della card **Rendimenti** della d
 - **[TWRR](twrr.md):** Misura il rendimento della strategia o degli asset neutralizzando il timing dei flussi.
 - **[MWRR](mwrr.md):** Misura il rendimento del capitale considerando importi e timing dei flussi.
 - **[P&L del Periodo](period-pnl.md):** Misura il profitto o la perdita in termini monetari assoluti generati nel periodo.
+- **[Panoramica delle Metriche di Performance](../index.md):** Tutte le metriche di performance a colpo d'occhio.
