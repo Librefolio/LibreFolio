@@ -1,12 +1,15 @@
 # 📉 Technical Indicators
 
-LibreFolio exposes **17 backend-calculated technical indicators**, grouped by the market property they measure. The same mathematical contracts power Asset charts, compatible FX charts, annotations, and future analytical consumers.
+LibreFolio exposes **22 backend-calculated technical indicators**, grouped by the market property they measure. The same mathematical contracts power Asset charts, compatible FX charts, annotations, and analytical consumers such as AI Export.
 
 !!! info "Price fields matter"
 
-    Not every indicator can run on every series. Close-only indicators work on Assets
-    and FX rates; indicators requiring high, low, or volume are Asset-only and report
-    themselves as unavailable when those fields do not exist.
+    Not every indicator can run on every series. **9 of the 22** are close-only
+    indicators and work on both Assets and FX rates (EMA, SMA, KAMA, MACD, RSI,
+    ROC, PPO, Stochastic RSI, Bollinger Bands). Indicators requiring high, low, or
+    volume are Asset-only and report themselves as unavailable when those fields
+    do not exist. The **Risk** family is also Asset-only: rolling risk readings are
+    not produced for FX pairs.
 
 ---
 
@@ -68,6 +71,22 @@ Volume indicators combine price direction with trading activity.
 | **MFI** | Is money flow buying or selling pressure? | High, Low, Close, Volume | [📖](mfi.md) |
 
 ➡️ [Volume group overview](volume.md)
+
+---
+
+## ⚠️ Risk
+
+Risk indicators turn the price series itself into a rolling risk read-out. They are **Asset-only** — FX pairs do not produce them.
+
+| Indicator | Main Question | Data | Details |
+|---|---|---|---|
+| **Underwater Drawdown** | How far below the running peak is the price? | Close | [📖](../risk-metrics/max-drawdown.md) |
+| **Rolling Return** | What did the last window compound to? | Close | [📖](../../fundamentals/returns.md) |
+| **Rolling Volatility** | How dispersed are recent returns? | Close | [📖](../risk-metrics/volatility.md) |
+| **Rolling Sharpe Ratio** | Is excess return paying for its risk? | Close | [📖](../risk-metrics/sharpe-ratio.md) |
+| **Rolling Beta** | How sensitive is the asset to a comparison asset? | Close + comparison asset | — |
+
+➡️ [Risk metrics overview](../risk-metrics/index.md)
 
 ---
 

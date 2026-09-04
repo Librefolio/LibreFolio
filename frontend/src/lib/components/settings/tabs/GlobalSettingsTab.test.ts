@@ -957,14 +957,14 @@ describe('GlobalSettingsTab — the mobile category dropdown', () => {
 
         await fireEvent.click(within(mobileSection()).getByRole('button'));
 
-        await waitFor(() => expect(within(mobileSection()).getAllByRole('button')).toHaveLength(6));
+        await waitFor(() => expect(within(mobileSection()).getAllByRole('button')).toHaveLength(7));
         expect(within(mobileSection()).getByRole('button', {name: /^Security/})).toBeInTheDocument();
     });
 
     it('filters and closes itself on a choice', async () => {
         await mount(ITEMS);
         await fireEvent.click(within(mobileSection()).getByRole('button'));
-        await waitFor(() => expect(within(mobileSection()).getAllByRole('button')).toHaveLength(6));
+        await waitFor(() => expect(within(mobileSection()).getAllByRole('button')).toHaveLength(7));
 
         await fireEvent.click(within(mobileSection()).getByRole('button', {name: /^Security/}));
 

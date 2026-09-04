@@ -451,7 +451,7 @@
     "manualFieldsToVerify": "Campos a verificar",
     "fieldTodoCount": "{n} campos requieren entrada",
     "noFieldTodos": "Ningún campo requiere entrada manual",
-    "todoRow": "TX #{n}",
+    "todoRow": "Fila n.º {n}",
     "noAssets": "Sin mapeos de activos",
     "noDuplicates": "No se detectaron duplicados",
     "viewAll": "Ver todo",
@@ -476,7 +476,6 @@
       "medium": "Media",
       "low": "Baja"
     },
-    "likelyDuplicate": "Probable duplicado",
     "beforeOpeningCount": "antes de la apertura",
     "recheckOpenings": "Volver a comprobar aperturas",
     "recheckOpeningsTip": "Vuelve a comprobar las fechas de apertura de los brókeres y reselecciona las filas que ya se pueden importar.",
@@ -485,7 +484,6 @@
     "createAsset": {
       "identifiedNames": "Nombres/identificadores detectados:"
     },
-    "possibleDuplicate": "Posible duplicado",
     "todoBlockerCommitHint": "Complete todos los campos requeridos antes de guardar",
     "todoWarningVerifyHint": "{n, plural, one {# campo auto-derivado a verificar antes de guardar} other {# campos auto-derivados a verificar antes de guardar}}",
     "todoWarningConfirmTitle": "¿Verificar los campos auto-derivados?",
@@ -728,10 +726,6 @@
     "duplicateCurrencies": "Monedas duplicadas detectadas",
     "cashBalances": "Saldos de Efectivo",
     "noCashBalances": "Sin posiciones de efectivo",
-    "holdings": "Posiciones",
-    "noHoldings": "Sin posiciones de activos",
-    "noTransactions": "Sin transacciones",
-    "viewAllTransactions": "Ver Todas las Transacciones",
     "confirmDelete": "¿Estás seguro de que quieres eliminar este bróker?",
     "confirmDeleteWithTransactions": "Este bróker tiene {n} transacciones. La eliminación forzada eliminará todas las transacciones. ¿Continuar?",
     "forceDelete": "Eliminar Forzosamente",
@@ -1770,8 +1764,9 @@
     "discardChangesConfirm": "Tiene cambios sin guardar. ¿Descartar todos los cambios?",
     "globalSettingCategories": {
       "session": "Sesión",
-      "sync": "Planificador y Subida",
-      "defaults": "Valores Predeterminados"
+      "sync": "Tarea de actualización",
+      "defaults": "Valores Predeterminados",
+      "memory": "Memoria"
     },
     "globalSettingNames": {
       "session_ttl_hours": "Duración de Sesión",

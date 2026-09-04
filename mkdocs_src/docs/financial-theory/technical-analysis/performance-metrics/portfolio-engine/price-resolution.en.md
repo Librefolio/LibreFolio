@@ -1,7 +1,5 @@
 # 🧭 Price Resolution
 
-*[⬅️ Back to Portfolio Engine](index.md)*
-
 ## 💡 Purpose
 
 LibreFolio uses one unified resolver as the primary valuation source for open positions, NAV, lot valuation, chart price lines, and data-quality flags. The resolver answers one daily question:

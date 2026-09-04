@@ -451,7 +451,7 @@
     "manualFieldsToVerify": "Champs à vérifier",
     "fieldTodoCount": "{n} champs nécessitent une saisie",
     "noFieldTodos": "Aucun champ ne nécessite de saisie manuelle",
-    "todoRow": "TX #{n}",
+    "todoRow": "Ligne n°{n}",
     "noAssets": "Aucun mappage d'actifs",
     "noDuplicates": "Aucun doublon détecté",
     "viewAll": "Voir tout",
@@ -476,7 +476,6 @@
       "medium": "Moyenne",
       "low": "Faible"
     },
-    "likelyDuplicate": "Doublon probable",
     "beforeOpeningCount": "avant l'ouverture",
     "recheckOpenings": "Revérifier les ouvertures",
     "recheckOpeningsTip": "Revérifier les dates d'ouverture des courtiers et resélectionner les lignes devenues importables.",
@@ -485,7 +484,6 @@
     "createAsset": {
       "identifiedNames": "Noms/identifiants détectés :"
     },
-    "possibleDuplicate": "Doublon possible",
     "todoBlockerCommitHint": "Complétez tous les champs requis avant de sauvegarder",
     "todoWarningVerifyHint": "{n, plural, one {# champ auto-dérivé à vérifier avant d'enregistrer} other {# champs auto-dérivés à vérifier avant d'enregistrer}}",
     "todoWarningConfirmTitle": "Vérifier les champs auto-dérivés ?",
@@ -728,10 +726,6 @@
     "duplicateCurrencies": "Devises en double détectées",
     "cashBalances": "Soldes de Trésorerie",
     "noCashBalances": "Aucune position de trésorerie",
-    "holdings": "Positions",
-    "noHoldings": "Aucune position d'actifs",
-    "noTransactions": "Aucune transaction",
-    "viewAllTransactions": "Voir Toutes les Transactions",
     "confirmDelete": "Êtes-vous sûr de vouloir supprimer ce courtier ?",
     "confirmDeleteWithTransactions": "Ce courtier a {n} transactions. La suppression forcée supprimera toutes les transactions. Continuer ?",
     "forceDelete": "Supprimer de Force",
@@ -1770,8 +1764,9 @@
     "discardChangesConfirm": "Vous avez des modifications non enregistrées. Abandonner toutes les modifications?",
     "globalSettingCategories": {
       "session": "Session",
-      "sync": "Planificateur et Upload",
-      "defaults": "Valeurs par Défaut"
+      "sync": "Tâche de mise à jour",
+      "defaults": "Valeurs par Défaut",
+      "memory": "Mémoire"
     },
     "globalSettingNames": {
       "session_ttl_hours": "Durée de Session",

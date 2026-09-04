@@ -1,7 +1,5 @@
 # 📉 Simple ROI (Return on Investment)
 
-*[⬅️ Back to Performance Metrics Overview](../index.md)*
-
 ## 💡 What is it?
 
 Simple ROI measures value generated relative to invested capital. In the current portfolio engine, the invested-capital denominator is the **capital baseline** from `cumulative_external_cash_flow`, not cash-only deposits.

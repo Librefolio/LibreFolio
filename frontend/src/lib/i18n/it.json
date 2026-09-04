@@ -451,7 +451,7 @@
     "manualFieldsToVerify": "Campi da verificare",
     "fieldTodoCount": "{n} campi richiedono input",
     "noFieldTodos": "Nessun campo richiede input manuale",
-    "todoRow": "TX #{n}",
+    "todoRow": "Riga #{n}",
     "noAssets": "Nessuna mappatura asset",
     "noDuplicates": "Nessun duplicato rilevato",
     "viewAll": "Vedi tutto",
@@ -476,7 +476,6 @@
       "medium": "Media",
       "low": "Bassa"
     },
-    "likelyDuplicate": "Probabile duplicato",
     "beforeOpeningCount": "prima dell'apertura",
     "recheckOpenings": "Ricontrolla aperture",
     "recheckOpeningsTip": "Ricontrolla le date di apertura dei broker e riseleziona le righe diventate importabili.",
@@ -485,7 +484,6 @@
     "createAsset": {
       "identifiedNames": "Nomi/identificatori individuati:"
     },
-    "possibleDuplicate": "Possibile duplicato",
     "todoBlockerCommitHint": "Completa tutti i campi obbligatori prima di salvare",
     "todoWarningVerifyHint": "{n, plural, one {# campo auto-derivato da verificare prima di salvare} other {# campi auto-derivati da verificare prima di salvare}}",
     "todoWarningConfirmTitle": "Verificare i campi auto-derivati?",
@@ -728,10 +726,6 @@
     "duplicateCurrencies": "Rilevate valute duplicate",
     "cashBalances": "Saldi di Cassa",
     "noCashBalances": "Nessuna posizione di cassa",
-    "holdings": "Posizioni",
-    "noHoldings": "Nessuna posizione in asset",
-    "noTransactions": "Nessuna transazione",
-    "viewAllTransactions": "Visualizza Tutte le Transazioni",
     "confirmDelete": "Sei sicuro di voler eliminare questo broker?",
     "confirmDeleteWithTransactions": "Questo broker ha {n} transazioni. L'eliminazione forzata rimuoverà tutte le transazioni. Continuare?",
     "forceDelete": "Elimina Forzatamente",
@@ -1770,8 +1764,9 @@
     "discardChangesConfirm": "Hai modifiche non salvate. Vuoi scartare tutte le modifiche?",
     "globalSettingCategories": {
       "session": "Sessione",
-      "sync": "Scheduler e Upload",
-      "defaults": "Valori Predefiniti"
+      "sync": "Job di aggiornamento",
+      "defaults": "Valori Predefiniti",
+      "memory": "Memoria"
     },
     "globalSettingNames": {
       "session_ttl_hours": "Durata Sessione",

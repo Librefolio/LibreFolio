@@ -1,7 +1,5 @@
 # 📈 Net Annualized Return
 
-*[⬅️ Back to Portfolio Engine](index.md)*
-
 ## 💡 Purpose
 
 LibreFolio reports annualized return only when the observed window is long enough to make compounding meaningful. The shared conversion is:
@@ -143,3 +141,4 @@ where $t_{\mathrm{lot\ end}}$ is the closing date for fully closed lots, otherwi
 - 📉 [Simple ROI](roi.md) — headline and position-level return context
 - 📊 [Period PnL](period-pnl.md) — period decomposition
 - 🔬 [FIFO Lot Analysis](../fifo-engine/fifo-lot-analysis.md) — per-lot net metrics
+- ⚙️ [Portfolio Engine](index.md) — full mathematical model

@@ -174,7 +174,7 @@ The official image is published in two variants:
 - 🗂️ **`latest`** (full) — includes the entire documentation with screenshots and images, for fully offline use.
 - 🪶 **`latest-light`** — the same application, but **without the documentation images**, making the image several hundred MB lighter. All documentation text pages are still included: when you open a page that contains screenshots, the images are loaded on demand from the online documentation site.
 
-Every version tag also has a light counterpart (for example, `ghcr.io/librefolio/librefolio:v0.10.0-light`).
+Every version tag also has a light counterpart (for example, `ghcr.io/librefolio/librefolio:v1.1.0-light`).
 
 !!! warning "The light variant needs internet for documentation images"
 
@@ -208,11 +208,11 @@ For detailed instructions on what to save and how to perform consistent backups,
 
 ## 🔄 Updating LibreFolio {#updating}
 
-### ⚠️ Warning: Alpha Status
-LibreFolio is currently in **Alpha** development. This means that between versions there could be structural changes or database migrations that might prevent the new version from starting, requiring manual intervention or restoring a previous version.
+### ⚠️ Warning: Beta Status
+LibreFolio is currently in **Beta** (version 1.1.0). Database migrations run automatically at container start and are designed to preserve existing installs, but between versions there can still be structural changes — some subsystems (such as Risk Analysis) are explicitly marked as beta. Having a [backup](#data-backup) before updating is always a good idea.
 
 - By using the `:latest` tag in the `docker-compose.yml` file, you will immediately receive the latest features but expose yourself to potential incompatibilities during automatic updates.
-- If you prefer stability and absolute control, we recommend pinning the image by replacing `:latest` with a specific version tag (for example, `ghcr.io/librefolio/librefolio:v0.10.0`).
+- If you prefer stability and absolute control, we recommend pinning the image by replacing `:latest` with a specific version tag (for example, `ghcr.io/librefolio/librefolio:v1.1.0`).
 
 ### 🛠️ 1. Manual Update
 

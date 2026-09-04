@@ -1,47 +1,40 @@
-# 👤 User Preferences
+# 🎛️ User Preferences
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
     <img class="gallery-img" data-category="settings" data-name="user-preferences" alt="User Preferences">
 </div>
 
-Every user can configure their own display preferences — changes apply only to your account:
+The **Preferences** tab controls **how the app looks and behaves for you** — changes apply only to your account. Your identity (username, email, avatar, password) lives in the **[Profile](profile.md)** tab instead.
 
-| Setting | Description |
-|---------|-------------|
-| **Language** | Interface language (English, Italiano, Français, Español) |
-| **Base Currency** | Default display currency for portfolio values |
-| **Theme** | Light / Dark mode |
+| Setting | Category | Description |
+|---------|----------|-------------|
+| **Language** | 🌍 Display | Interface language — 🇬🇧 English, 🇮🇹 Italiano, 🇫🇷 Français, 🇪🇸 Español. Applies immediately |
+| **Base Currency** | 💰 Currency | Default display currency for portfolio values |
+| **Theme** | 🎨 Appearance | ☀️ Light / 🌙 Dark / 🖥️ Auto (follows your operating system) |
 
----
+<style>
+/* Keep the first two columns on one line (long setting names would wrap otherwise) */
+article table:first-of-type th:nth-child(-n + 2),
+article table:first-of-type td:nth-child(-n + 2) {
+    white-space: nowrap;
+    min-width: 11rem;
+}
+</style>
 
-## 👤 Profile
+Use the **category sidebar** on the left to filter the visible settings.
 
-<div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="settings" data-name="profile" alt="Profile">
-</div>
+## 💾 Saving, Undo, Reset
 
-From the **Profile** tab you can update your username, email, and avatar. The avatar is used across the app wherever your identity is shown (e.g., broker sharing, comments).
+Each field tracks its own state:
 
----
-
-## 🔐 Change Password
-
-<div class="screenshot-container" style="max-width: 500px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="settings" data-name="password-modal" alt="Change Password">
-</div>
-
-The **Change Password** modal requires:
-
-1. Your **current password** (for verification)
-2. A **new password** (minimum 8 characters, at least one number)
-3. **Confirm** new password
-
-After confirmation, your session remains active — you do not need to log in again.
+- A modified field shows **save** and **undo** buttons; the header offers **save all** / **undo all** for bulk actions.
+- Fields whose value differs from the **instance default** (set by the administrator in [Global Settings](../../admin/settings.md)) are highlighted as non-default; the **reset** button restores the instance default for that field, and **reset all** restores every field at once.
 
 ---
 
 ## 🔗 Related
 
+- 👤 **[Profile](profile.md)** — Username, email, avatar, password, delete account
 - ⚙️ **[Settings Overview](index.md)** — General settings summary
+- ℹ️ **[About](about.md)** — Version info, plugins, and changelog
 - 🛡️ **[Global Settings](../../admin/settings.md)** — Administrator options and scheduler
-- ℹ️ **[About](about.md)** — Version info and license

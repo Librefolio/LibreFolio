@@ -12,6 +12,10 @@
     import {getCurrentResolvedTheme, getStoredThemePreference, type ThemePreference} from '$lib/stores/app/themeStore';
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
+    import ChangelogModal from '$lib/components/layout/ChangelogModal.svelte';
+    import {APP_VERSION} from '$lib/version';
+
+    let changelogOpen = false;
 
     const githubUrl = 'https://github.com/Librefolio/LibreFolio';
     const websiteUrl = 'https://librefolio.github.io/LibreFolio/';
@@ -72,6 +76,13 @@
     let importPlugins: ProviderInfo[] = [];
     let pluginDiscoveryFailures: PluginDiscoveryFailureInfo[] = [];
     let installedSignals: SignalDefinition[] = [];
+
+    /** Provider icons that failed to load (CDN blocks, dead URLs) — fall back to the letter tile. */
+    let failedIconUrls: Set<string> = new Set();
+
+    function markIconFailed(url: string) {
+        failedIconUrls = new Set(failedIconUrls).add(url);
+    }
 
     // Client-side diagnostic fields (no backend round-trip needed) — useful for UI bug reports.
     let viewportWidth = 0;
@@ -217,9 +228,11 @@ Generated: ${new Date().toISOString()}
         </div>
         <div>
             <h3 class="text-xl font-bold text-gray-800" data-testid="about-app-name">LibreFolio</h3>
-            <p class="text-gray-500" data-testid="about-version">{$_('settings.version')} {systemInfo?.app_version ?? '...'}</p>
+            <button type="button" class="text-gray-500 hover:text-gray-700 transition-colors cursor-pointer text-left" title={$_('changelog.title')} onclick={() => (changelogOpen = true)} data-testid="about-version">{$_('settings.version')} {systemInfo?.app_version ?? '...'}</button>
         </div>
     </div>
+
+    <ChangelogModal open={changelogOpen} onClose={() => (changelogOpen = false)} currentVersion={APP_VERSION} />
 
     <!-- Description -->
     <div class="space-y-2">
@@ -271,7 +284,7 @@ Generated: ${new Date().toISOString()}
     <div class="pt-6 border-t border-gray-200">
         <div class="flex items-center justify-between mb-4">
             <h4 class="text-md font-medium text-gray-700">{$_('settings.systemInfo')}</h4>
-            <button class="flex items-center space-x-2 px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed" data-testid="about-copy-report" disabled={!systemInfo} on:click={copySystemInfo}>
+            <button class="flex items-center space-x-2 px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed" data-testid="about-copy-report" disabled={!systemInfo} onclick={copySystemInfo}>
                 {#if copied}
                     <Check size={16} class="text-green-600" />
                     <span class="text-green-600">{$_('common.copied')}</span>
@@ -393,8 +406,8 @@ Generated: ${new Date().toISOString()}
                                 rel={getProviderUrl(p) ? 'noopener noreferrer' : undefined}
                                 class="flex items-center gap-3 p-3 bg-white border border-gray-100 rounded-lg shadow-sm {getProviderUrl(p) ? 'hover:border-libre-green hover:shadow-md cursor-pointer transition-all' : ''}"
                             >
-                                {#if p.icon_url}
-                                    <img src={p.icon_url} alt={p.name} class="w-8 h-8 rounded object-contain shrink-0 bg-gray-50 p-0.5" />
+                                {#if p.icon_url && !failedIconUrls.has(p.icon_url)}
+                                    <img src={p.icon_url} alt={p.name} class="w-8 h-8 rounded object-contain shrink-0 bg-gray-50 p-0.5" onerror={() => p.icon_url && markIconFailed(p.icon_url)} />
                                 {:else}
                                     <div class="w-8 h-8 rounded bg-libre-green/10 text-libre-green flex items-center justify-center text-xs font-bold shrink-0">
                                         {p.code.slice(0, 2).toUpperCase()}
@@ -426,8 +439,8 @@ Generated: ${new Date().toISOString()}
                                 rel={getProviderUrl(p) ? 'noopener noreferrer' : undefined}
                                 class="flex items-center gap-3 p-3 bg-white border border-gray-100 rounded-lg shadow-sm {getProviderUrl(p) ? 'hover:border-blue-400 hover:shadow-md cursor-pointer transition-all' : ''}"
                             >
-                                {#if p.icon_url}
-                                    <img src={p.icon_url} alt={p.name} class="w-8 h-8 rounded object-contain shrink-0 bg-gray-50 p-0.5" />
+                                {#if p.icon_url && !failedIconUrls.has(p.icon_url)}
+                                    <img src={p.icon_url} alt={p.name} class="w-8 h-8 rounded object-contain shrink-0 bg-gray-50 p-0.5" onerror={() => p.icon_url && markIconFailed(p.icon_url)} />
                                 {:else}
                                     <div class="w-8 h-8 rounded bg-blue-500/10 text-blue-600 flex items-center justify-center text-xs font-bold shrink-0">
                                         {p.code.slice(0, 3).toUpperCase()}
@@ -459,8 +472,8 @@ Generated: ${new Date().toISOString()}
                                 rel={getDocsUrl(p) ? 'noopener noreferrer' : undefined}
                                 class="flex items-center gap-3 p-3 bg-white border border-gray-100 rounded-lg shadow-sm {getDocsUrl(p) ? 'hover:border-amber-400 hover:shadow-md cursor-pointer transition-all' : ''}"
                             >
-                                {#if p.icon_url}
-                                    <img src={p.icon_url} alt={p.name} class="w-8 h-8 rounded object-contain shrink-0 bg-gray-50 p-0.5" />
+                                {#if p.icon_url && !failedIconUrls.has(p.icon_url)}
+                                    <img src={p.icon_url} alt={p.name} class="w-8 h-8 rounded object-contain shrink-0 bg-gray-50 p-0.5" onerror={() => p.icon_url && markIconFailed(p.icon_url)} />
                                 {:else}
                                     <div class="w-8 h-8 rounded bg-amber-500/10 text-amber-600 flex items-center justify-center text-xs font-bold shrink-0">
                                         {p.code.slice(0, 2).toUpperCase()}

@@ -54,12 +54,12 @@ AI Export panel to its defaults; drafts are not persisted in `localStorage`.
 
 ## 📤 Available Export Data
 
-| Page      | General snapshot                 | Detailed market history     |
-| --------- | -------------------------------- | --------------------------- |
-| Dashboard | **Portfolio Overview & History** | **Portfolio Asset History** |
-| Broker    | **Broker Overview & History**    | **Broker Asset History**    |
-| Asset     | **Asset Position & History**     | **Asset Market History**    |
-| FX        | **FX Market & Exposure**         | **FX Market History**       |
+| Page      | General snapshot                     | Detailed market history               |
+| --------- | ------------------------------------ | ------------------------------------- |
+| Dashboard | **Portfolio Overview & History**     | **Portfolio Asset History**           |
+| Broker    | **Broker Overview & History**        | **Broker Asset History**              |
+| Asset     | **Position & Market History (full)** | **Market History Only (no holdings)** |
+| FX        | **FX Market & Exposure**             | **FX Market History**                 |
 
 General snapshots combine current economic facts with a compact historical path
 and focused market context. Detailed market histories contain denser observed

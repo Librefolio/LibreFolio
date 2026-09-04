@@ -90,6 +90,14 @@ vi.mock('$lib/charts/signals/registry', () => ({getRegisteredSignalTypes: () => 
 // pass-through keeps this file honest about which contract it is checking.
 vi.mock('$lib/charts/signals/catalogMapper', () => ({mapBackendSignalDefinition: (raw: unknown) => raw}));
 
+// ChangelogModal pulls the bundled CHANGELOG.md via a `?raw` import that the
+// test environment denies. Mocking the feature module (as ChangelogModal's own
+// tests do) keeps the real modal component loadable without the raw file.
+vi.mock('$lib/features/changelog/changelog', () => ({
+    changelogChapters: [],
+    CHANGELOG_REMOTE_URL: 'https://example.invalid/CHANGELOG.md',
+}));
+
 import AboutTab from './AboutTab.svelte';
 import {zodiosApi} from '$lib/api';
 

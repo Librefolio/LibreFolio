@@ -1,7 +1,5 @@
 # ⚙️ Portfolio Engine — Mathematical Model
 
-*[⬅️ Back to Performance Metrics Overview](../index.md)*
-
 ## 💡 Overview
 
 This page formally defines the mathematical model underlying LibreFolio's portfolio calculation engine. All other metric pages ([NAV](nav.md), [Book Value](book-value.md), [Period P&L](period-pnl.md), [WAC](../weighted-average-cost.md), [Deposited Capital](deposited-capital.md)) reference this page for their precise computation rules.
@@ -244,3 +242,4 @@ Computed **after** daily states, as a separate pass:
 - 📊 [Period P&L](period-pnl.md) — windowed gain/loss with contribution
 - 💸 [Deposited Capital](deposited-capital.md) — 3-pool details and worked examples
 - 📈 [WAC](../weighted-average-cost.md) — iterative cost method
+- 📈 [Performance Metrics Overview](../index.md) — all performance metrics at a glance

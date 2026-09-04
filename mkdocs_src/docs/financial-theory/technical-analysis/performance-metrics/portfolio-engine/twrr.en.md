@@ -1,7 +1,5 @@
 # ⏱️ TWRR (Time-Weighted Rate of Return)
 
-*[⬅️ Back to Performance Metrics Overview](../index.md)*
-
 ## 💡 What is it?
 TWRR measures the **"pure" performance** of your chosen assets and strategy (The Market), completely ignoring the timing and size of your deposits or withdrawals. 
 

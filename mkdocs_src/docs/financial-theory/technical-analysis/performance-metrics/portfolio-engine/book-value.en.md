@@ -1,7 +1,5 @@
 # 📖 Book Value
 
-*[⬅️ Back to Performance Metrics Overview](../index.md)*
-
 ## 💡 What is Book Value?
 
 **Book Value** represents the historical accounting cost of your portfolio — open cost basis plus cash reserves and in-transit book value. It does not fluctuate with market prices, and it is distinct from [Price Resolution](price-resolution.md).
@@ -60,3 +58,4 @@ $$
 - 💼 [NAV](nav.md) — market-value counterpart
 - 🧭 [Price Resolution](price-resolution.md) — market/trade marks used by NAV, not by book value
 - 📈 [Period PnL](period-pnl.md) — realized + unrealized combined
+- 📈 [Performance Metrics Overview](../index.md) — all performance metrics at a glance

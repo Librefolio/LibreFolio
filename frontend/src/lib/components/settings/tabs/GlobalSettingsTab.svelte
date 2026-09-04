@@ -5,7 +5,7 @@
     import {isAxiosError} from 'axios';
     import {onDestroy, onMount} from 'svelte';
     import {debug} from '$lib/debug';
-    import {BarChart3, ChevronDown, ChevronRight, CircleEllipsis, Clock, Lock, RefreshCw, Settings, Shield, ShieldOff, Unlock, Users} from 'lucide-svelte';
+    import {BarChart3, ChevronDown, ChevronRight, CircleEllipsis, Clock, Database, Lock, RefreshCw, Settings, Shield, ShieldOff, Unlock, Users} from 'lucide-svelte';
     import {type SelectOption} from '$lib/components/ui/select';
     import type {GlobalSetting} from '$lib/types';
     import {globalSettings} from '$lib/stores/app/globalSettings';
@@ -52,7 +52,8 @@
     const baseCategories: Category[] = [
         {id: 'session', icon: Clock, keys: ['session_ttl_hours']},
         {id: 'security', icon: Shield, keys: ['enable_registration', 'require_email_verification']},
-        {id: 'sync', icon: RefreshCw, keys: ['scheduler_enabled', 'max_file_upload_mb']},
+        {id: 'sync', icon: RefreshCw, keys: ['scheduler_enabled']},
+        {id: 'memory', icon: Database, keys: ['max_file_upload_mb']},
         {id: 'defaults', icon: Users, keys: ['default_currency', 'default_language', 'default_theme']},
     ];
     const otherCategory: Category = {id: 'other', icon: CircleEllipsis, keys: []};
@@ -767,8 +768,11 @@
                         </div>
                     </div>
 
-                    <!-- Cache Panel (status for all users; clear actions admin-only via canEdit) -->
-                    <CachePanel {canEdit} />
+                {/if}
+
+                <!-- Cache Panel (status for all users; clear actions admin-only via canEdit) -->
+                {#if selectedCategory === 'memory' || selectedCategory === 'all'}
+                    <CachePanel canEdit={canEdit && !isLocked} />
                 {/if}
             </div>
         {/if}

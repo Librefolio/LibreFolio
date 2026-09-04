@@ -158,7 +158,9 @@ That multiplication is **only** for fallback Scenario B. Real market quotes alre
 
 ## 🧭 Unified Price Resolver
 
-`LotsAnalysisService` uses `backend/app/services/price_resolver.py` as the single daily mark path:
+`LotsAnalysisService` uses `backend/app/services/price_resolver.py` as the single daily mark path —
+the resolver's full contract (tiers, staleness semantics, qbq scale, the "only valuation path"
+invariant) lives in its own page: [Price Resolver](price_resolver.md).
 
 ```python
 price_series = build_asset_price_series(

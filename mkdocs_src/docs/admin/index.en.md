@@ -27,6 +27,24 @@ The documentation is organized into three main areas:
 
 ---
 
+## 🔔 Update Notifications {: #update-notifications }
+
+After each login, the browser of an **administrator** checks the GitHub Releases API for a newer **stable** LibreFolio release (drafts and pre-releases are never considered). To stay unobtrusive:
+
+- The check runs **at most once every 24 hours** — the last result is cached in the browser's local storage.
+- Self-hosted installs without internet access simply fail the fetch silently: **no error, no banner**.
+
+When a newer stable release exists, an **update-available modal** appears showing the current and latest versions side by side, with links to the **[updating guide](../user/installation.md#updating)** and to the GitHub release page. Two ways to dismiss it:
+
+- **"Later"** — the modal closes and will prompt again at the next login.
+- **"Skip this version"** — the modal never prompts for that specific version again (a future, newer version will still be announced).
+
+Non-admin users are never probed at login. If a non-admin manually checks for updates from the [changelog modal](../user/settings/about.md#changelog-modal) and a newer release exists, they see a dialog listing the instance administrators (with e-mail addresses when available) instead, so they know whom to ask for the upgrade.
+
+*(Screenshot `auth/update-available-modal` is not in the gallery yet.)*
+
+---
+
 ## 🔐 Authentication & Session Persistence
 
 LibreFolio uses **JWT (JSON Web Tokens)** for user authentication. By default:

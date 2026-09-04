@@ -1,7 +1,5 @@
 # 💵 MWRR (Money-Weighted Rate of Return) / XIRR
 
-*[⬅️ Back to Performance Metrics Overview](../index.md)*
-
 ## 💡 What is it?
 MWRR (also known as Internal Rate of Return) measures **your personal** performance as an investor. Unlike asset-only metrics, it accounts for both the performance of the underlying assets and the **timing and size** of your deposits and withdrawals. 
 
