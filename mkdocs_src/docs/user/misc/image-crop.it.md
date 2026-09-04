@@ -9,7 +9,7 @@ LibreFolio include un potente strumento di editing interattivo per immagini che 
 La finestra modale di ritaglio immagini si apre automaticamente ogni volta che carichi un file immagine in LibreFolio:
 
 - 📂 **Pagina File** → caricamento di qualsiasi immagine (JPEG, PNG, WebP, GIF)
-- 👤 **Impostazioni profilo** → modifica del proprio avatar
+- 👤 **[Impostazioni profilo](../settings/profile.md)** → modifica del proprio avatar
 - 🏦 **Impostazioni Broker** → modifica dell'icona di un broker
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
@@ -26,9 +26,12 @@ Lo strumento offre dei preset per i casi d'uso più comuni:
 |--------|------|-------------|----------|
 | **Avatar** | 200 × 200 px | 1:1 (quadrato) | Foto profilo utente |
 | **Icona Broker** | 64 × 64 px | 1:1 (quadrato) | Loghi dei broker |
+| **Icona Asset** | 256 × 256 px | 1:1 (quadrato) | Loghi degli asset |
 | **Personalizzato** | Libero | Libero | Qualsiasi dimensione e rapporto |
 
 Il preset imposta automaticamente il vincolo del rapporto d'aspetto e la dimensione di output.
+
+L'anteprima ellittica appare solo per i preset avatar e icona broker.
 
 ---
 

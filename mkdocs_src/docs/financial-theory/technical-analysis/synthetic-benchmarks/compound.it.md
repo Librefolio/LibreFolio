@@ -64,7 +64,7 @@ Questo è matematicamente equivalente alla forma chiusa $y_0(1+r)^t$ ma sostitui
 
 | Parametro | Chiave | Predefinito | Descrizione |
 |---|---|---|---|
-| Tasso Annuale | `annualRate` | 7 | Tasso di crescita composta in percentuale all'anno. |
+| Tasso Annuale | `annualRate` | 8 | Tasso di crescita composta in percentuale all'anno. |
 | Offset | `offset` | 0 | Spostamento verticale come % del valore di base. |
 
 ---

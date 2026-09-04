@@ -15,7 +15,7 @@ Il provider Scheduled Investment è progettato per strumenti a reddito fisso in 
 - **Tipo di Identificatore**: `AUTO_GENERATED`
 - **Parametri**: Configurati tramite l'**Interest Schedule Editor** (componente UI personalizzato)
 
-### Required Obbligatori
+### Campi Obbligatori
 
 | Campo | Descrizione |
 |-------|-------------|
@@ -36,7 +36,7 @@ L'editor consente di definire molteplici periodi di tasso di interesse:
 
 ### ⚡ Late Interest
 
-È possibile abilitare il **Late Interest** per definire un tasso di penale applicato dopo la fine dell'ultimo periodo programmato. Il Late Interest ha un **periodo di grazia** configurabile (in giorni) prima che inizino a maturare gli interessi di mora.
+È possibile abilitare il **Late Interest** per definire un tasso di penale applicato dopo la fine dell'ultimo periodo programmato. Si applica prima un **periodo di grazia** configurabile (in giorni); successivamente, gli interessi di mora iniziano a maturare.
 
 ## 📋 Asset Events
 
@@ -55,6 +55,8 @@ Gli eventi sono configurati nell'editor e influenzano il prezzo calcolato a part
 2. Per ogni periodo di interesse, si calcola l'interesse maturato in base al tasso, al tipo di capitalizzazione e alla convenzione di conteggio dei giorni
 3. Si applicano gli eventi dell'asset: gli eventi INTEREST riducono il prezzo, gli eventi PRICE_ADJUSTMENT lo modificano algebricamente
 4. Il valore corrente = `initial_value` + interessi maturati - Σ(eventi INTEREST) + Σ(eventi PRICE_ADJUSTMENT)
+
+Se è configurato `late_interest`, il provider prosegue oltre la scadenza usando prima il ramo del periodo di grazia, poi il ramo degli interessi di mora; se `generate_interest` è abilitato, emette anche eventi `INTEREST` tardivi e un `MATURITY_SETTLEMENT` finale, ove applicabile.
 
 !!! note "Motore Puramente Deterministico"
 

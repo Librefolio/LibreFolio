@@ -1,7 +1,5 @@
 # 💵 MWRR (Rendimento Ponderato per il Capitale) / XIRR
 
-*[⬅️ Torna alla Panoramica delle Metriche di Performance](../index.md)*
-
 ## 💡 Cos'è?
 Il MWRR (conosciuto anche come Tasso Interno di Rendimento) misura la **tua performance personale** come investitore. A differenza delle metriche focalizzate solo sugli asset, il MWRR tiene conto sia del rendimento degli strumenti sottostanti, sia del **tempismo (timing) e dell'entità** dei tuoi depositi e prelievi.
 

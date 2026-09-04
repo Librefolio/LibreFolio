@@ -15,7 +15,7 @@ El proveedor de Inversión Programada está diseñado para instrumentos de renta
 - **Tipo de Identificador**: `AUTO_GENERATED`
 - **Parámetros**: Configurados a través del **Editor de Calendario de Intereses** (componente de UI personalizado)
 
-### Required Obligatorios
+### Campos Obligatorios
 
 | Campo | Descripción |
 |-------|-------------|
@@ -34,9 +34,9 @@ El editor permite definir múltiples períodos de tasas de interés:
 | **Freq. Cap.** | Frecuencia de capitalización (Anual, Semestral, Trimestral, Mensual, Diaria) |
 | **Base de cálculo** | Convención de conteo de días (ACT/365, ACT/360, 30/360, ACT/ACT) |
 
-### ⚡ Interés Moratorio
+### ⚡ Interés Moratorio {: #late-interest }
 
-Puede activar el **Interés Moratorio** para definir una tasa de penalización aplicada después de que finalice el último período programado. El interés moratorio tiene un **período de gracia** configurable (en días) antes de comenzar a devengarse.
+Puede activar el **Interés Moratorio** para definir una tasa de penalización aplicada después de que finalice el último período programado. Primero se aplica un **período de gracia** configurable (en días); después, el interés moratorio comienza a devengarse.
 
 ## 📋 Eventos del Activo
 
@@ -55,6 +55,8 @@ Los eventos se configuran en el editor y afectan al precio calculado a partir de
 2. Para cada período de interés, se calcula el interés devengado basándose en la tasa, el tipo de capitalización y la convención de conteo de días
 3. Se aplican los eventos del activo: los eventos INTEREST reducen el precio, los eventos PRICE_ADJUSTMENT lo modifican algebraicamente
 4. El valor actual = `initial_value` + interés devengado - Σ(eventos INTEREST) + Σ(eventos PRICE_ADJUSTMENT)
+
+Si `late_interest` está configurado, el proveedor continúa más allá del vencimiento usando primero la rama del período de gracia y luego la rama del interés moratorio; si `generate_interest` está habilitado, también emite eventos `INTEREST` tardíos y un `MATURITY_SETTLEMENT` final cuando corresponde.
 
 !!! note "Motor Puramente Determinista"
 

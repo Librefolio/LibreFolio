@@ -64,7 +64,11 @@ At the top right of the dashboard, you have several controls to customize your v
 
 ## 🌡️ Data Quality Banner
 
-If any prices or FX rates are missing on the end date, a banner appears at the top explaining which assets could not be valued. Assets without a price provider (entered manually, such as real-estate crowdfunding projects) are permanently valued at purchase cost — this is intentional and does not generate a warning.
+If any prices or FX rates are missing on the end date, a banner appears at the top explaining which assets could not be valued.
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="dashboard" data-name="data-quality-banner" alt="Dashboard data-quality banner with per-asset links">
+</div>
+ Assets without a price provider (entered manually, such as real-estate crowdfunding projects) are permanently valued at purchase cost — this is intentional and does not generate a warning.
 
 ---
 

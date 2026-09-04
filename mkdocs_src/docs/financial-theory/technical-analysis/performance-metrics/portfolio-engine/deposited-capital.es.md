@@ -1,7 +1,5 @@
 # 💸 Capital Depositado, PnL Total y Pools de Efectivo
 
-*[⬅️ Volver a la Descripción General de Métricas de Rendimiento](../index.md)*
-
 ## 💡 Descripción General del Concepto
 
 **Capital Depositado** = capital externo neto acumulado aportado desde el inicio:
@@ -112,3 +110,4 @@ La serie de entradas ROI/TWRR/MWRR se deriva de los cambios día a día en `cumu
 - 💼 [NAV](nav.md) — el otro término en el PnL Total
 - 📊 [Period PnL](period-pnl.md) — versión basada en ventanas temporales
 - ⚙️ [Portfolio Engine](index.md) — modelo matemático completo
+- 📈 [Descripción General de Métricas de Rendimiento](../index.md) — todas las métricas de rendimiento de un vistazo

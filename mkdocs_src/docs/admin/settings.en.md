@@ -112,7 +112,11 @@ The log reports the execution timestamp, job name, status (Success/Error), execu
 
 LibreFolio keeps several **in-memory caches** on the backend (price fetches, search results, portfolio computations, provider responses, and more) so that repeated requests do not hit the external data providers every time. The **Global Settings** tab ends with a **Cache panel** (Memory category) that lists every registered cache by name, with its **current size / maximum size** and **TTL** (time-to-live) columns — each column header is clickable to sort by name, size, or TTL; a **Refresh** button re-reads the live stats.
 
-*(Screenshot `settings/cache-panel` is not in the gallery yet — the panel sits at the bottom of the Global Settings tab shown above.)*
+
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="settings" data-name="cache-panel" alt="Server caches panel in Global Settings (Memory category)">
+</div>
+
 
 **Who can do what:**
 

@@ -413,11 +413,11 @@ mkdir -p <ruta_elegida>/tailscale-nodes
 cd <ruta_elegida>/tailscale-nodes
 ```
 
-Descarga el script de inicio personalizado <a href="https://raw.githubusercontent.com/Librefolio/LibreFolio/main/docs/static/tailscale-guide/custom_startup.sh" target="_blank" rel="noopener noreferrer">custom_startup.sh</a> dentro de esta carpeta:
+Descarga el script de inicio personalizado <a href="https://raw.githubusercontent.com/Librefolio/LibreFolio/main/mkdocs_src/docs/static/tailscale-guide/custom_startup.sh" target="_blank" rel="noopener noreferrer">custom_startup.sh</a> dentro de esta carpeta:
 
 ```bash
 # Descargar el script desde el repositorio oficial
-wget https://raw.githubusercontent.com/Librefolio/LibreFolio/main/docs/static/tailscale-guide/custom_startup.sh
+wget https://raw.githubusercontent.com/Librefolio/LibreFolio/main/mkdocs_src/docs/static/tailscale-guide/custom_startup.sh
 # Hacer el script ejecutable
 chmod +x custom_startup.sh
 ```

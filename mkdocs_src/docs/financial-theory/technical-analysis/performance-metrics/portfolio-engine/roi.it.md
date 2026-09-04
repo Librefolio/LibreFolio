@@ -1,7 +1,5 @@
 # 📉 ROI Semplice (Return on Investment)
 
-*[⬅️ Torna alla Panoramica delle Metriche di Performance](../index.md)*
-
 ## 💡 Cos'è?
 
 Il ROI semplice misura il valore generato rispetto al capitale investito. Nel motore di portafoglio attuale, il denominatore del capitale investito è la **capital baseline** derivata da `cumulative_external_cash_flow`, non solo i depositi in contanti.

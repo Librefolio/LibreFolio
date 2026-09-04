@@ -1,7 +1,5 @@
 # 💵 MWRR (Taux de Rendement Pondéré par les Capitaux) / XIRR
 
-*[⬅️ Retour à l'aperçu des indicateurs de performance](../index.md)*
-
 ## 💡 Qu'est-ce que c'est ?
 Le MWRR (également connu sous le nom de Taux de Rendement Interne) mesure **votre performance personnelle** en tant qu'investisseur. Contrairement aux indicateurs centrés uniquement sur les actifs, il prend en compte à la fois la performance des actifs sous-jacents et le **timing et la taille** de vos dépôts et retraits.
 

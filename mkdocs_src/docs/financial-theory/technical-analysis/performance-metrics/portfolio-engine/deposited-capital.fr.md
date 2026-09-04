@@ -1,7 +1,5 @@
 # 💸 Capital Déposé, PnL Total et Pools de Cash
 
-*[⬅️ Retour à l'aperçu des mesures de performance](../index.md)*
-
 ## 💡 Aperçu du Concept
 
 **Capital Déposé** = capital externe net cumulé apporté depuis le début :
@@ -112,3 +110,4 @@ La série d'entrées ROI/TWRR/MWRR est dérivée des variations jour après jour
 - 💼 [NAV](nav.md) — l'autre terme du PnL Total
 - 📊 [Period PnL](period-pnl.md) — version par fenêtre
 - ⚙️ [Portfolio Engine](index.md) — modèle mathématique complet
+- 📈 [Aperçu des Métriques de Performance](../index.md) — toutes les métriques de performance en un coup d'œil

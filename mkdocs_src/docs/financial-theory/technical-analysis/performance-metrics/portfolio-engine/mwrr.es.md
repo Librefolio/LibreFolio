@@ -1,7 +1,5 @@
 # 💵 MWRR (Tasa de Retorno Ponderada por el Dinero) / XIRR
 
-*[⬅️ Volver a la Descripción General de Métricas de Rendimiento](../index.md)*
-
 ## 💡 ¿Qué es?
 El MWRR (también conocido como Tasa Interna de Retorno) mide **su rendimiento personal** como inversor. A diferencia de las métricas que solo consideran los activos, el MWRR tiene en cuenta tanto el rendimiento de los activos subyacentes como la **temporalidad (timing) y el volumen** de sus depósitos y retiros.
 

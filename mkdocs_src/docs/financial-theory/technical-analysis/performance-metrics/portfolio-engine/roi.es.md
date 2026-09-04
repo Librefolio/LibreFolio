@@ -1,7 +1,5 @@
 # 📉 ROI Simple (Retorno sobre la Inversión)
 
-*[⬅️ Volver a la Descripción General de Métricas de Rendimiento](../index.md)*
-
 ## 💡 ¿Qué es?
 
 El ROI simple mide el valor generado en relación con el capital invertido. En el motor de cartera actual, el denominador del capital invertido es la **línea base de capital** proveniente de `cumulative_external_cash_flow`, no solo depósitos en efectivo.

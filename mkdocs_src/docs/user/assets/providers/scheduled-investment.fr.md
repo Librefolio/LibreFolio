@@ -15,7 +15,7 @@ Le fournisseur d'Investissement à échéancier (Scheduled Investment) est conç
 - **Type d'identifiant** : `AUTO_GENERATED`
 - **Paramètres** : Configurés via l'**Éditeur de calendrier d'intérêts** (composant UI personnalisé)
 
-### Required requis
+### Champs Obligatoires
 
 | Champ | Description |
 |-------|-------------|
@@ -34,9 +34,9 @@ L'éditeur vous permet de définir plusieurs périodes de taux d'intérêt :
 | **Fréq. Cap.** | Fréquence de capitalisation (Annuelle, Semestrielle, Trimestrielle, Mensuelle, Quotidienne) |
 | **Comptage des jours** | Convention de comptage des jours (ACT/365, ACT/360, 30/360, ACT/ACT) |
 
-### ⚡ Intérêts de retard
+### ⚡ Intérêts de retard {: #late-interest }
 
-Vous pouvez activer les **Intérêts de retard** pour définir un taux de pénalité appliqué après la fin de la dernière période programmée. Un **délai de grâce** configurable (en jours) détermine le moment où les intérêts de retard commencent à s'accumuler.
+Vous pouvez activer les **Intérêts de retard** pour définir un taux de pénalité appliqué après la fin de la dernière période programmée. Un **délai de grâce** configurable (en jours) s'applique d'abord ; ensuite, les intérêts de retard commencent à courir.
 
 ## 📋 Événements de l'actif
 
@@ -55,6 +55,8 @@ Les événements sont configurés dans l'éditeur et affectent le prix calculé 
 2. Pour chaque période d'intérêt, calculez les intérêts courus en fonction du taux, du type de capitalisation et de la convention de comptage des jours
 3. Appliquez les événements de l'actif : les événements INTEREST réduisent le prix, les événements PRICE_ADJUSTMENT le modifient algébriquement
 4. La valeur actuelle = `initial_value` + intérêts courus - Σ(événements INTEREST) + Σ(événements PRICE_ADJUSTMENT)
+
+Si `late_interest` est configuré, le fournisseur continue au-delà de l'échéance en utilisant d'abord la branche du délai de grâce, puis la branche des intérêts de retard ; si `generate_interest` est activé, il émet également des événements `INTEREST` tardifs et un `MATURITY_SETTLEMENT` final, le cas échéant.
 
 !!! note "Moteur Purement Déterministe"
 

@@ -1,7 +1,5 @@
 # 📊 PnL de la période (Pertes et profits)
 
-*[⬅️ Retour à l'aperçu des indicateurs de performance](../index.md)*
-
 ## 💡 Qu'est-ce que le PnL de la période ?
 
 Le résultat monétaire absolu (gain ou perte) généré par votre portefeuille sur $[t_0, t_1]$, ajusté des flux de trésorerie externes.
@@ -77,3 +75,4 @@ $$
 - 💼 [NAV](nav.md) — aboutissement de chaque formule de PnL
 - 💸 [Capital déposé](deposited-capital.md) — PnL total depuis la création
 - ⚙️ [Moteur de portefeuille](index.md) — modèle mathématique complet
+- 📈 [Aperçu des Métriques de Performance](../index.md) — toutes les métriques de performance en un coup d'œil

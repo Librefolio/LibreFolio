@@ -1,7 +1,5 @@
 # 🧬 Motore FIFO — Ciclo di Vita dei Lotti e Modello di Abbinamento
 
-*[⬅️ Torna alla Panoramica delle Metriche di Performance](../index.md)*
-
 ## 💡 Panoramica
 
 Mentre il [Prezzo Medio di Carico (PMC)](../weighted-average-cost.md) fonde ogni acquisizione di una posizione in un'unica media mobile, il motore FIFO di LibreFolio tiene traccia dei **lotti individuali** — uno per lotto di acquisizione — attraverso il loro intero ciclo di vita: apertura, chiusure parziali, trasferimenti tra broker, frazionamenti ed eventuale chiusura totale.
@@ -127,8 +125,9 @@ Il risultato complessivo viene quindi contrassegnato come **completo** o **degra
 
 ## 🔗 Correlati
 
-- 🧭 **[Risoluzione Prezzi](../portfolio-engine/price-resolution.md)**
 - 🔬 **[Analisi dei Lotti FIFO](fifo-lot-analysis.md)** — Metriche derivate da questo motore: Rendimento Aperto/Totale per lotto, ridimensionamento qbq, allocazione del reddito, esempio pratico
+- 🧭 **[Risoluzione Prezzi](../portfolio-engine/price-resolution.md)** — Livelli di valutazione usati dal servizio lotti
 - ⚙️ **[Motore di Portafoglio](../index.md)** — Il motore complementare aggregato/basato su PMC e come i due si relazionano
 - 📊 **[Prezzo Medio di Carico (PMC)](../weighted-average-cost.md)** — Base di costo mista a livello di posizione
 - 🧬 **[Motore Lotti FIFO (Manuale dello Sviluppatore)](../../../../developer/backend/transactions/fifo_lot_engine.md)** — Approfondimento implementativo: classi, dispatch degli eventi, vincoli a livello di codice
+- 📈 **[Panoramica delle Metriche di Performance](../index.md)** — Tutte le metriche di performance a colpo d'occhio

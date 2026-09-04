@@ -1,7 +1,5 @@
 # 💼 Valore Patrimoniale Netto (NAV) / Patrimonio Netto
 
-*[⬅️ Torna alla Panoramica delle Metriche di Performance](../index.md)*
-
 ## 💡 Cos'è il NAV?
 
 Il **Valore Patrimoniale Netto (NAV)** è la valutazione complessiva di mercato del tuo portafoglio in un istante $t$. Risponde alla domanda: *"Quanto vale il portafoglio in questo momento?"*

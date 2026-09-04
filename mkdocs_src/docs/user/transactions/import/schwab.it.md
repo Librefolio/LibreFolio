@@ -23,7 +23,7 @@ Per esportare la cronologia delle transazioni da Charles Schwab:
 
 !!! warning "Non Modificare le Intestazioni"
 
-    I file CSV di Schwab hanno un layout specifico con righe di metadati in fondo (che solitamente iniziano con "Transactions Total"). Il parser BRIM rileva e ignora automaticamente queste righe di metadati. Non rimuovere manualmente le righe finali del CSV.
+    I file CSV di Schwab includono righe di riepilogo/metadati verso la fine. Il parser BRIM ignora le righe che non corrispondono a transazioni e può emettere avvisi per azioni sconosciute o righe non valide. Non modificare manualmente l'export.
 
 ## 📝 Note
 

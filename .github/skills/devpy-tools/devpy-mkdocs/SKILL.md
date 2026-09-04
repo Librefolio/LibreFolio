@@ -98,6 +98,30 @@ Failed tests:
 ./dev.py mkdocs translate-inspect --critique --file directa   # Filter artifacts (--analysis/--critique/--diff, --file, --lang)
 ```
 
+### Debt triage before translating (standard flow)
+
+Before the user launches the pipeline, triage the debt so the LLM only pays for real
+rewrites. Three detectors, then git for the evidence:
+
+```bash
+./dev.py mkdocs translate-validate --hide-localized   # structural drift
+./dev.py mkdocs translate-diff --issues-only          # per-file issue list
+./dev.py mkdocs translate --dry-run                   # hash-based: ANY change since last stamp
+git log --since=<last-stamp> -p -- <page>.en.md       # WHAT changed (drives classification)
+```
+
+`translate --dry-run` catches **semantic drift** — pages that keep their structure but
+whose prose went stale (validate stays silent on those). Never classify from issue
+counts alone: classify from the actual git diff of the EN page.
+
+- **Small drift** (few rows/lines): fix by targeted 4-language edits, then
+  `./dev.py mkdocs translate-stamp --file <page>.en.md` so the pipeline skips the file.
+- **Large drift** (new sections, rewrites, or stale prose under intact structure):
+  leave for the pipeline.
+
+Split report goes to the user before the pipeline run; after it, re-run the two
+commands and fix residual discrepancies, stamping what's clean.
+
 ### Manual Edits → Stamp (avoid re-translation)
 
 The pipeline skips a file only while its `.en.md` **MD5 is unchanged** (cache: `.translate-hashes.json`). If you hand-edit a translation (`.it/.fr/.es.md`) for a **small targeted change** — instead of running `translate` — you also touch the `.en.md` source, changing its MD5. Without a stamp, the next `translate` run detects the change and **re-translates all languages, overwriting your manual edits**.

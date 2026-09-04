@@ -35,6 +35,15 @@ Real-time password strength feedback helps users create secure passwords.
     <img class="gallery-img" data-category="auth" data-name="03-register-filled" alt="Register with Password Strength">
 </div>
 
+
+### ⬆️ Update Available
+
+The post-login modal announcing a newer release, with current vs latest version and links to the updating guide.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="auth" data-name="update-available-modal" alt="⬆️ Update Available">
+</div>
+
 ---
 
 ## 📊 Dashboard
@@ -110,6 +119,15 @@ A clean, encouraging empty state greets new users with no data yet.
 
 <div class="screenshot-container">
     <img class="gallery-img" data-category="dashboard" data-name="empty-state" alt="New Portfolio (empty state)">
+</div>
+
+
+### 🚩 Data-Quality Banner
+
+When prices or FX rates are missing, the dashboard explains what is stale and links straight to each affected asset.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="dashboard" data-name="data-quality-banner" alt="🚩 Data-Quality Banner">
 </div>
 
 ---
@@ -193,6 +211,14 @@ Import transactions from your broker's export files — via the quick modal or t
 </div>
 
 
+### 🧬 Clone into the Bulk Workspace
+
+Cloning a row stages a copy — original date preserved — ready to adjust and save.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="transactions" data-name="clone-flow" alt="🧬 Clone into the Bulk Workspace">
+</div>
+
 ## ⚙️ Settings
 
 ### 🎛️ User Preferences
@@ -251,6 +277,39 @@ Manage your profile information, avatar, and account settings.
     <img class="gallery-img" data-category="settings" data-name="profile" alt="Profile Tab">
 </div>
 
+
+
+### 🧠 Server Caches (Memory)
+
+Every named backend cache with size and TTL, sortable columns, and admin clear actions.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="cache-panel" alt="🧠 Server Caches (Memory)">
+</div>
+
+### 📜 Changelog Modal
+
+The bundled changelog a click away from the version label — foldable releases, version index, and search.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="changelog-modal" alt="📜 Changelog Modal">
+</div>
+
+### 🔎 Changelog Search
+
+Searching descends into the folds and the result chips jump to the exact spot.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="changelog-modal-search" alt="🔎 Changelog Search">
+</div>
+
+### 🧩 Plugin Diagnostics
+
+Per-registry plugin load health: what failed to load and why.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="about-plugin-diagnostics" alt="🧩 Plugin Diagnostics">
+</div>
 
 ---
 
@@ -389,6 +448,39 @@ The same FIFO lot drill-down — WAC/price chart, custody timeline, unified tabl
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="fifo-lots-custody-modal" data-title="🧾 Lot Detail Modal" alt="Broker FIFO Lots Analysis — Lot Detail Modal">
 </div>
 
+
+### 🧬 Import Wizard — Unify Assets
+
+The conditional step that groups the same security found under different codes or names.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="brokers" data-name="import-wizard-assets-step" alt="🧬 Import Wizard — Unify Assets">
+</div>
+
+### 🔧 Import Wizard — Corrections
+
+Rows the parser flagged get corrected, split or confirmed here before the duplicate check.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="brokers" data-name="import-wizard-fix-step" alt="🔧 Import Wizard — Corrections">
+</div>
+
+### 🧹 Import Wizard — Duplicates
+
+Cross-file duplicate clusters with per-row keep control and file priority.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="brokers" data-name="import-wizard-duplicates-step" alt="🧹 Import Wizard — Duplicates">
+</div>
+
+### 🔍 N-Way Compare
+
+Any number of candidate transactions side by side, with differing fields highlighted.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="brokers" data-name="import-nway-compare" alt="🔍 N-Way Compare">
+</div>
+
 ---
 
 ## 💼 Assets
@@ -463,6 +555,39 @@ Create a new asset with name, type, currency, identifiers, provider, and classif
 <div class="lf-screenshot-carousel" data-carousel="carousel-desktop-8" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
     <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="create-modal" data-title="➕ Manual create" alt="Create Asset Modal">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="create-wizard-modal" data-title="🧙 From Import Wizard (pre-filled)" alt="Create Asset from Import Wizard">
+</div>
+
+
+### 🌳 Grouped Indicator Search
+
+The signal picker groups the 22 indicators by family with counts, search and keyboard navigation.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="detail-signals-tree" alt="🌳 Grouped Indicator Search">
+</div>
+
+### 📉 Drawdown with Full History
+
+The drawdown signal computes against the full available history — the toggle is on the card.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="detail-signals-drawdown" alt="📉 Drawdown with Full History">
+</div>
+
+### 🎨 Chart Settings with Live Preview
+
+Indicator parameters preview live on a synthetic curve before anything is applied.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="chart-settings" alt="🎨 Chart Settings with Live Preview">
+</div>
+
+### 📅 Event Markers
+
+Corporate events appear as colored markers on the chart; hovering reveals the details.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="detail-events" alt="📅 Event Markers">
 </div>
 
 ---

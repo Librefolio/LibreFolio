@@ -33,8 +33,8 @@ dove:
 
 | Parametro | Chiave | Default | Descrizione |
 |---|---|---|---|
-| Ampiezza | `amplitude` | 10 | Intervallo di oscillazione picco-picco come % del valore base. |
-| Periodo | `period` | 365 | Lunghezza del ciclo completo in giorni. |
+| Ampiezza | `amplitude` | 15 | Intervallo di oscillazione picco-picco come % del valore base. |
+| Periodo | `period` | 45 | Lunghezza del ciclo completo in giorni. |
 | Offset | `offset` | 0 | Spostamento verticale come % del valore base. |
 
 ---

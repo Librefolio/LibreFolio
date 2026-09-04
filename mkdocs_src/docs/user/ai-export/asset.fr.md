@@ -5,7 +5,7 @@ pour l'actif actuellement ouvert. LibreFolio ne l'envoie jamais à un service d'
 
 ## 📍 Emplacement
 
-Ouvrez une page de détail d'actif. Dans l'en-tête **Signaux**, sélectionnez **Export IA**. Votre
+Ouvrez une page de détail d'actif. Dans la **barre d'outils de la page**, sélectionnez **Export IA**. Votre
 brouillon reste disponible pendant 10 minutes dans la session de connexion actuelle et se réinitialise
 après une déconnexion ou une nouvelle connexion.
 
@@ -35,10 +35,10 @@ calculés par le backend. Le navigateur ne recalcule pas les indicateurs.
 
 Deux exports de données publics sont disponibles :
 
-- **Position d'actif et historique** — positions par courtier, coût, valeur, P&L,
+- **Position et historique de marché (complet)** — positions par courtier, coût, valeur, P&L,
  sémantique des périodes à zéro enregistré, lots économiques avec frais/taxes alloués, historique
  de marché compact, Drawdown et provenance ;
-- **Historique de marché d'actif** — compartiments de clôtures observées, rendements, indicateurs, états,
+- **Historique de marché uniquement (sans positions)** — compartiments de clôtures observées, rendements, indicateurs, états,
  événements, Drawdown et couverture.
 
 ## 📏 Détail et échantillonnage

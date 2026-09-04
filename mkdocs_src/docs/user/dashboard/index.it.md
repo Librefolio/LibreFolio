@@ -56,11 +56,19 @@ Nella parte superiore destra della dashboard, hai diversi controlli per personal
 
     Quando filtri per un singolo broker, i trasferimenti di liquidità *verso altri broker* diventano flussi esterni per quell'ambito. Ciò influisce sui calcoli del [Capitale Depositato](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md) e del [P&L](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md).
 
+!!! note "La condivisione influenza questi numeri"
+
+    La dashboard aggrega solo i broker **a cui hai accesso**, e ogni importo proveniente da un broker di cui sei co-proprietario è **ridimensionato in base alla tua quota di proprietà**: un Proprietario con una quota del 50% vede conteggiata nei totali la metà del valore, del reddito e del P&L di quel broker (una quota dello 0% è valida e non contribuisce). Editor e Visualizzatori — che per regola hanno sempre una quota dello 0% — vedono invece gli importi **completi** del broker. Vedi [Condivisione del Broker](../brokers/sharing.md) per i dettagli.
+
 ---
 
 ## 🌡️ Banner di Qualità dei Dati
 
-Se mancano prezzi o tassi di cambio alla data di fine, appare un banner nella parte superiore che spiega quali asset non hanno potuto essere valutati. Gli asset senza un fornitore di prezzo (inseriti manualmente, come i progetti di crowdfunding immobiliare) sono permanentemente valutati al costo di acquisto — questo è intenzionale e non genera un avviso.
+Se mancano prezzi o tassi di cambio alla data di fine, appare un banner nella parte superiore che spiega quali asset non hanno potuto essere valutati.
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="dashboard" data-name="data-quality-banner" alt="Banner di qualità dei dati della dashboard con link per asset">
+</div>
+ Gli asset senza un fornitore di prezzo (inseriti manualmente, come i progetti di crowdfunding immobiliare) sono permanentemente valutati al costo di acquisto — questo è intenzionale e non genera un avviso.
 
 ---
 
