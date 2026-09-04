@@ -1,73 +1,54 @@
 # 📥 Transacciones del bróker
 
-La pestaña **Transacciones** es el centro de control para modificar el libro de contabilidad del bróker. Enumera todas las operaciones financieras registradas (compras, ventas, dividendos, depósitos, retiros, transferencias y conversiones FX) limitadas a este bróker.
+La pestaña **Transacciones** es el centro de control para modificar el libro mayor del bróker. Enumera todas las operaciones financieras registradas (compras, ventas, dividendos, depósitos, retiros, transferencias y conversiones de divisa) acotadas a este bróker.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="brokers" data-name="transactions-tab" alt="Pestaña de Transacciones del Bróker">
+ <img class="gallery-img" data-category="brokers" data-name="transactions-tab" alt="Broker Transactions Tab">
 </div>
 
-Desde esta pestaña, puede realizar transacciones manuales o iniciar importaciones masivas de extractos.
+Desde esta pestaña, puedes registrar transacciones manualmente o iniciar importaciones masivas de estados de cuenta.
 
 ---
 
-## ➕ Transacciones Manuales
+## ➕ Transacciones manuales
 
-Haga clic en el botón **Agregar Transacción** (icono `Plus`) para abrir el asistente modal de transacción única. Esto le permite registrar manualmente:
+Haz clic en el botón **Agregar Transacción** (ícono `Plus`) para abrir el asistente modal de transacción individual. Esto te permite registrar manualmente:
 
-- **Compra / Venta**: Comerciar activos, especificando fecha, precio, cantidad y moneda.
-- **Dividendo / Ingreso**: Ingresos recibidos de las tenencias de activos.
-- **Depósito / Retiro**: Entradas o salidas de efectivo externas con origen o destino en el saldo de efectivo del bróker.
-- **Transferencia**: Transferencia de efectivo o activos entre brókers (ej. financiar la cuenta desde un bróker bancario).
-- **Conversión FX**: Intercambios de moneda dentro de la cuenta del bróker.
+- **Compra / Venta**: Negociar activos, especificando fecha, precio, cantidad y moneda.
+- **Dividendo / Ingreso**: Ingresos recibidos por tenencias de activos.
+- **Depósito / Retiro**: Entradas o salidas de efectivo externas hacia/desde el saldo de efectivo del bróker.
+- **Transferencia**: Transferencia de efectivo o activos entre brókeres (p. ej., aportar fondos a la cuenta desde un bróker bancario).
+- **Conversión de divisa**: Intercambios de divisas dentro de la cuenta del bróker.
 
-Para una explicación detallada de los campos de transacción y las reglas de validación, consulte la guía **[Formulario de Transacción](../transactions/form.md)**.
-
----
-
-## 🧙 BRIM: Módulo de Importación de Extractos del Bróker
-
-El botón **Importar** (icono `Upload`) inicia el asistente **BRIM**. Este módulo le permite importar los extractos exportados de su bróker (formatos CSV o Excel) de forma masiva, ejecutar validaciones automáticas de cordura y mapear tickers a activos locales antes de la confirmación final.
-
-### 🖼️ El Flujo de Importación
-
-<div class="lf-screenshot-carousel" data-carousel="carousel-broker-import" data-carousel-interval="6000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
- <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="import-modal" data-title="📥 Modal de Importación Rápida" alt="Modal de Importación">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step1" data-title="🧙 Asistente — Paso 1: Carga" alt="Asistente de Importación Paso 1">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step2" data-title="⚙️ Asistente — Paso 2: Config. del Analizador" alt="Asistente de Importación Paso 2">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step3" data-title="🧠 Asistente — Paso 3: Análisis" alt="Asistente de Importación Paso 3">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step4-resolution" data-title="🔍 Asistente — Paso 4: Resolución de Activos" alt="Resolución de Activos del Asistente de Importación">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-duplicate" data-title="⚠️ Detección de Duplicados" alt="Detección de Duplicados del Asistente de Importación">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-bulk-staging" data-title="📦 Preparación Masiva" alt="Preparación Masiva de Importación">
-</div>
-
-El asistente avanza a través de los siguientes pasos:
-
-1. **Seleccionar Archivo y Analizador**: Elija el archivo de extracto y seleccione la configuración de analizador adecuada (ej. Interactive Brokers, Degiro, Directa, Charles Schwab, CSV genérico, etc.).
-2. **Verificar Encabezados y Mapeo**: Muestra los encabezados CSV para confirmar que el analizador se alinea correctamente con las columnas.
-3. **Análisis de Operaciones**: Procesa el archivo y muestra una cuadrícula de vista previa de las operaciones analizadas (Compras, Ventas, Dividendos, etc.).
- * **Insignias**: Las operaciones se etiquetan como `UNIQUE` (nueva operación), `DUPLICATE` (ya existe en la base de datos) o `UNRESOLVED` (requiere mapeo de ticker/ISIN).
- * **Notas TODO**: Resaltan campos que requieren atención o elementos que no pudieron analizarse automáticamente.
-4. **Resolución de Activos**: Si el extracto contiene tickers o ISINs que no existen en su registro de activos local, BRIM muestra un paso de mapeo. Puede:
- * Mapear el ticker a un activo existente.
- * Crear un nuevo activo directamente desde esta pantalla, prellenado con los detalles extraídos del extracto.
-5.  **Filtro Fecha de Apertura**: Si una fila analizada es estrictamente anterior a la fecha de apertura del bróker, el asistente la marca **Antes de la apertura**, desactiva su casilla de verificación y la excluye de la importación. Se permiten las filas en la fecha de apertura. Use **Editar fecha del bróker** y vuelva a comprobar/actualizar si es necesario.
-6.  **Preparación Masiva y Confirmación**: Revise la lista de verificación preparada de transacciones limpias y únicas. Desmarque cualquier operación que desee excluir, luego haga clic en **Confirmar** para escribir los registros en su libro de contabilidad de cartera.
+Para una explicación detallada de los campos de transacción y las reglas de validación, consulta la guía **[Formulario de Transacción](../transactions/form.md)**.
 
 ---
 
-## ⚠️ Avisos de activos
+## 🧙 Importación masiva (BRIM)
 
-Algunos plugins adjuntan avisos informativos a los activos extraídos. Por ejemplo, Intesa Sanpaolo y Crédit Agricole pueden advertir que un valor puede haber vencido/sido amortizado y ser difícil de encontrar en línea. El modal de creación de activos agrupa estos avisos en banners de color ámbar; son informativos y no cambian la importación de transacciones.
+El botón **Importar** (ícono `Upload`) abre el asistente **BRIM** (Módulo de Importación de Reportes de Bróker), que importa de forma masiva los estados de cuenta exportados por tu bróker: analiza los archivos, valida cada fila, unifica los valores encontrados, detecta duplicados y te permite revisarlo todo antes de que se escriba nada. Las filas aprobadas terminan en el **editor masivo**, donde un **Guardar Todo** final las confirma en el libro mayor.
+
+El mismo asistente también está disponible desde la página global de **[Transacciones](../transactions/index.md)**. Para ver el recorrido completo, consulta las guías dedicadas:
+
+- 📥 **[Importar desde el bróker (BRIM)](../transactions/import/index.md)** — brókeres compatibles, formatos y notas por plugin.
+- 🧙 **[Cómo Importar Transacciones](../transactions/import/how-to.md)** — el asistente, paso a paso.
 
 ---
 
-## 📑 Historial de Importaciones
+## 🧩 ¿Te falta tu bróker?
 
-Haga clic en el botón **Mostrar Historial de Importaciones** (icono `FileText`) para ver un registro completo de tareas de importación anteriores. Muestra:
+Si tu bróker aún no tiene un plugin de importación, puedes ayudar:
 
-- Nombre y tamaño del archivo cargado.
-- Filas procesadas y transacciones totales confirmadas.
-- Marca de tiempo de carga.
-- Usuario que realizó la importación.
+- **Solicitar un plugin** — abre una [solicitud de plugin](https://github.com/Librefolio/LibreFolio/issues/new?template=plugin_request.yml) en GitHub, adjuntando una muestra anonimizada del archivo de exportación del bróker para que se pueda entender el formato. (El paso de Correcciones del asistente también incluye un banner "abrir un issue" para reportar filas que parezcan incorrectas.)
+- **Escribir un plugin** — la [Guía de Plugins BRIM](../../developer/architecture/patterns/brim_plugin_guide.md) orienta a los desarrolladores a través del contrato del proveedor; consulta [Contribuir](../../community/contribute.md) para el flujo de trabajo general.
 
+---
 
+## 🗂️ Reportes subidos
+
+Haz clic en el botón **Reportes subidos** (ícono `FileText`) para gestionar los archivos de reportes BRIM almacenados para este bróker. El modal te permite:
+
+- Revisar los reportes subidos (nombre, fecha de subida, tamaño, estado), con una **vista previa** rápida del contenido de cada archivo.
+- **Subir** nuevos reportes directamente — se asignan automáticamente a este bróker y quedan disponibles en el paso Seleccionar Archivos del asistente.
+- **Eliminar** los reportes que ya no necesites.
+- Ir a la página completa de **[Archivos y Subidas](../files/index.md#broker-reports)**, prefiltrada por este bróker.

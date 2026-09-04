@@ -123,6 +123,14 @@ Quantitative risk and allocation analytics, powered by [QuantLib](https://www.qu
 
 ### 🐛 Fixed
 
+#### 📈 Borsa Italiana — non-XMIL markets (EuroTLX) + OHLC integrity (2026-09-04)
+
+- **EuroTLX instruments now resolve end-to-end** — instruments quoted on EuroTLX (e.g. a US T-Bond such as ISIN `US912810TU25`) were found by search but the generated page link landed on a dead generic URL and price/history/metadata all failed. The provider now carries the market `mic`/`platform` from the site's own search result into `provider_params` (never a hardcoded map), so the instrument page, current price, history and metadata all work for every market — present and future. History for FX-denominated bonds now reports the real currency (e.g. USD) instead of a hardcoded EUR.
+- **Government bonds get the right classification** — Italian BTPs, US T-Bonds and other sovereign paper now get sector = Financials (100%) and the issuer's country in the geographic area (e.g. *United States of America* → USA).
+- **Dead search results are never offered** — instruments the search can't route to a real market page (and non-purchasable indices) are filtered out instead of producing a result that fails on click; when a market page genuinely can't be read yet, the provider raises a clear `UNSUPPORTED_PAGE` error inviting you to open a GitHub issue with the ISIN.
+- **Sync no longer rejected valid bond prices** — Borsa Italiana reports the official daily fixing as the close even when it falls outside the day's traded low/high range (normal for thinly-traded bonds); the upsert validator rejected those points as "impossible OHLC". A new global guard on the provider base class now widens the candle's low/high bounds to contain the open/close for **every** provider, so no real price is ever dropped — each repair is logged at debug level.
+- **Provider config fields are tidier** — the per-asset provider parameters now show a short inline label with the longer explanation moved into an ⓘ tooltip, and the user manual documents how to set `mic`/`platform`/`codice_fondo` by hand (in all four languages).
+
 #### 🧹 Clean audit re-check — P2/P3 + docs wave (2026-09-03/04)
 
 - **New admin cache panel** — Global Settings now shows every named cache (size, TTL) to all signed-in users, with admin-only "Clear" per cache and "Clear all", each behind a confirmation that warns the next fetch will be as slow as a restart.
@@ -177,6 +185,19 @@ These affect newly introduced analytics or local UI persistence only — the sta
 
 - **Signals**: `gain_loss_change_1d_percent` is now computed on the previous position *market value* rather than the previous unrealized P&L.
 - **DataTable**: the column-visibility persistence key changed (`columnVisibility` → `columnVisibilityOverrides`). Saved show/hide preferences are not migrated and each table resets to its default once; column order and widths are preserved.
+
+---
+
+## [1.0.1] - 2026-07-21
+
+First patch release after 1.0.0 — a day-one polish round from real-world use: FX selection UX, a candlestick refresh bug, a fairer current price for thinly-traded ETFs, and two CI/test-runner fixes for fresh checkouts.
+
+### 🐛 Fixed
+
+- **FX & positions UX** — the currency selectors only offer pairs with a configured route (with a back-to-default and a create-pair shortcut); missing-FX data-quality issues now distinguish "no route configured" (add the pair) from "provider synced but gaps" (sync it, with the date range and gap count) from "manual-only"; the displayed currency stays frozen until the backend report resolves, so labels never mismatch stale numbers; the banner's sync CTA shows progress and reports "no new data" when a sync adds nothing.
+- **Candlestick charts ignored range changes** — the series was bound to a manually-cached derivation that short-circuited before reading the data, so Svelte stopped tracking it; switching the time range now redraws the candles.
+- **Thinly-traded ETFs showed a stale current price** — on JustETF/Gettex these trade mostly at the opening auction, so `last` sat at the open all day; the current price now prefers the live `mid` (bid+ask)/2, with a fallback to the performance chart's latest quote for all currencies.
+- **Fresh-checkout CI/test failures** — the test runner's frontend build and the CI pipeline consumed gitignored build artifacts (the generated API client) before ensuring they exist; both now generate them first.
 
 ---
 

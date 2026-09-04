@@ -15,11 +15,11 @@ L'Esportazione AI è disponibile da:
 
 - la barra degli strumenti della Dashboard per le attività di Portafoglio;
 - la barra degli strumenti del Broker per le attività di Broker;
-- l'intestazione Segnali nelle pagine di dettaglio Asset e FX.
+- la barra degli strumenti della pagina nelle pagine di dettaglio Asset e FX.
 
 Il backend fornisce valutazioni, performance, allocazioni, fatti economici FIFO,
 esposizione FX e indicatori tecnici. Il catalogo pubblico espone intenzionalmente
-solo **otto scelte autonome di Esporta Dati** e **tredici Analisi orientate alle
+solo **otto scelte autonome di Esporta Dati** e **undici Analisi orientate alle
 attività**. I dataset backend più piccoli rimangono blocchi di composizione interni.
 
 **Esporta Dati** copia uno snapshot fattuale selezionato senza istruzioni di
@@ -62,7 +62,7 @@ Esportazione AI ai suoi valori predefiniti; le bozze non vengono persistite in
 | --------- | -------------------------------------- | ----------------------------------- |
 | Dashboard | **Panoramica e Cronologia del Portafoglio** | **Cronologia Asset del Portafoglio** |
 | Broker | **Panoramica e Cronologia del Broker** | **Cronologia Asset del Broker** |
-| Asset | **Posizione e Cronologia dell'Asset** | **Cronologia di Mercato dell'Asset** |
+| Asset | **Posizione e Cronologia di Mercato (completa)** | **Solo Cronologia di Mercato (senza posizioni)** |
 | FX | **Mercato ed Esposizione FX** | **Cronologia di Mercato FX** |
 
 Gli snapshot generali combinano i fatti economici correnti con un percorso storico
@@ -120,6 +120,14 @@ esportazione migliorerebbe sostanzialmente la risposta. Il prompt fornisce il no
 pubblico dell'esportazione, il percorso UI, il periodo/dettaglio consigliato, il
 motivo e se è richiesto o opzionale.
 
+!!! info "Il Drawdown è sempre sull'intera cronologia"
+
+    Ovunque appaia una sezione Drawdown in un'esportazione, è calcolata sull'**intera
+    cronologia disponibile** — dal primo prezzo memorizzato per un Asset, o dalla
+    prima transazione per un Portafoglio o Broker — mai relativamente al periodo AI
+    selezionato. Una finestra di esportazione breve porta comunque il vero
+    picco-minimo storico.
+
 ## 🔗 Riferimenti Locali
 
 Il prompt utilizza riferimenti locali per unire tabelle compatte:
@@ -129,8 +137,11 @@ Il prompt utilizza riferimenti locali per unire tabelle compatte:
 - F# per le coppie FX;
 - L# per i lotti FIFO.
 
-La Directory delle Entità risolve questi riferimenti. Il modello ricevente dovrebbe
-utilizzare nomi leggibili nella sua risposta; gli ID del database non sono necessari.
+La Directory delle Entità risolve i riferimenti A#, B# e F#. I lotti L# sono
+diversi: sono **righe incorporate** dentro le tabelle FIFO dell'esportazione
+stessa, non voci della directory — il modello li legge sul posto. Il modello
+ricevente dovrebbe utilizzare nomi leggibili nella sua risposta; gli ID del
+database non sono necessari.
 
 ## 🔒 Ambito e Privacy
 

@@ -1,7 +1,5 @@
 # 📊 Grafici
 
-*[⬅️ Torna alla Panoramica della Dashboard](index.md)*
-
 La sezione dei grafici si trova sotto le schede KPI e fornisce una **visione storica e strutturale** del tuo portafoglio nell'intervallo di tempo selezionato.
 
 ---
@@ -122,3 +120,7 @@ Il pannello di allocazione mostra come il tuo portafoglio è distribuito nel mom
 - 💼 **[NAV / Patrimonio Netto](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)**
 - 💸 **[Capitale Depositato & P&L Totale](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)**
 - 📈 **[TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md)** · **[MWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)** · **[Effetto Tempistica](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/timing-effect.md)**
+
+---
+
+*[⬅️ Torna alla Panoramica della Dashboard](index.md)*

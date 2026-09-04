@@ -65,7 +65,7 @@ Ceci est mathématiquement équivalent à la forme analytique $y_0(1+r)^t$ mais 
 
 | Paramètre | Clé | Par défaut | Description |
 |---|---|---|---|
-| Taux Annuel | `annualRate` | 7 | Taux de croissance composée en pourcentage par an. |
+| Taux Annuel | `annualRate` | 8 | Taux de croissance composée en pourcentage par an. |
 | Décalage | `offset` | 0 | Décalage vertical en % de la valeur de base. |
 
 ---

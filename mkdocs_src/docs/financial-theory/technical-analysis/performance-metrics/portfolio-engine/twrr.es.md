@@ -1,7 +1,5 @@
 # ⏱️ TWRR (Tasa de Retorno Ponderada por el Tiempo)
 
-*[⬅️ Volver a la Descripción General de Métricas de Rendimiento](../index.md)*
-
 ## 💡 ¿Qué es?
 El TWRR (por sus siglas en inglés, *Time-Weighted Rate of Return*) mide el **rendimiento "puro"** de sus activos y su estrategia de inversión (El Mercado), ignorando por completo la temporalidad (timing) y el volumen de sus depósitos o retiros.
 

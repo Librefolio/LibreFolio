@@ -6,7 +6,7 @@ o un prompt di analisi mirato. LibreFolio non invia mai l'esportazione a un serv
 ## 📍 Posizione
 
 Apri **Dashboard** e seleziona **AI Export** nella barra degli strumenti superiore,
-accanto a **Update/Sync**. La bozza rimane disponibile per 10 minuti nella sessione
+accanto a **Aggiorna**. La bozza rimane disponibile per 10 minuti nella sessione
 di accesso corrente e viene azzerata dopo il logout o un nuovo accesso.
 
 ## 🎯 Analisi del portafoglio

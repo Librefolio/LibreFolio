@@ -1,7 +1,5 @@
 # ⏱️ Efecto Timing
 
-*[⬅️ Volver a la Descripción General de las Métricas de Rendimiento](../index.md)*
-
 ## 💡 ¿Qué es?
 
 El **Efecto Timing** mide cuánto influyó el momento y el importe de sus depósitos y retiradas (flujos de efectivo) en el rendimiento personal del inversor en comparación con el rendimiento de la estrategia subyacente, neutralizando el efecto de los flujos de efectivo externos.
@@ -23,6 +21,8 @@ Al comparar el [MWRR Acumulado](mwrr.md#cumulative-mwrr) (que incluye el momento
 - **Efecto Timing Positivo ($> 0$ pp):** Sus flujos de efectivo ocurrieron en momentos favorables (por ejemplo, comprando activos con descuento durante una caída del mercado). Su rendimiento personal (MWRR) es superior al rendimiento de la estrategia pura (TWRR).
 - **Efecto Timing Negativo ($< 0$ pp):** Sus flujos de efectivo ocurrieron en momentos desfavorables (por ejemplo, depositando grandes sumas en el máximo del mercado justo antes de una corrección). Su rendimiento personal (MWRR) es inferior al rendimiento de la estrategia pura (TWRR).
 - **Efecto Timing Cercano a Cero ($\approx 0$ pp):** Sus flujos de efectivo tuvieron poco o ningún impacto en el rendimiento (por ejemplo, si realizó depósitos muy pequeños o si el mercado permaneció plano durante sus transacciones).
+
+Ambos lados usan el mismo flujo NAV del motor de cartera y el mismo modelo de flujos de la baseline de capital. Por tanto, los ajustes de capital en especie afectan de forma consistente a los límites del MWRR y del TWRR.
 
 ---
 
@@ -87,3 +87,4 @@ LibreFolio muestra el Efecto Timing en la tarjeta de **Rendimientos** del panel 
 - **[TWRR](twrr.md):** Mide el rendimiento de la estrategia o activos subyacentes, ignorando el momento de los flujos de efectivo del inversor.
 - **[MWRR](mwrr.md):** Mide el rendimiento del capital del inversor, teniendo en cuenta tanto el rendimiento de los activos como el momento de los flujos de efectivo.
 - **[P&L del Periodo](period-pnl.md):** Mide el beneficio o pérdida monetaria absoluta generada por la cartera dentro del periodo de tiempo seleccionado.
+- **[Descripción General de Métricas de Rendimiento](../index.md):** Todas las métricas de rendimiento de un vistazo.

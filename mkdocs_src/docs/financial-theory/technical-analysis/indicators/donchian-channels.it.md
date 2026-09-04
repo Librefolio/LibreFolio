@@ -14,21 +14,21 @@ Questo è l'indicatore alla base del leggendario sistema di breakout "Turtle Tra
 
 1. **Canale Superiore** — il massimo mobile del prezzo massimo sulla finestra:
 
- $$
- Upper_t = \max_{0 \le i < N} H_{t-i}
- $$
+    $$
+    Upper_t = \max_{0 \le i < N} H_{t-i}
+    $$
 
 2. **Canale Inferiore** — il minimo mobile del prezzo minimo sulla finestra:
 
- $$
- Lower_t = \min_{0 \le i < N} L_{t-i}
- $$
+    $$
+    Lower_t = \min_{0 \le i < N} L_{t-i}
+    $$
 
 3. **Punto Medio** — il semplice punto medio dei due:
 
- $$
- Middle_t = \frac{Upper_t + Lower_t}{2}
- $$
+    $$
+    Middle_t = \frac{Upper_t + Lower_t}{2}
+    $$
 
 ---
 

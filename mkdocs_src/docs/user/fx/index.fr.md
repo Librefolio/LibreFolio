@@ -20,7 +20,7 @@ Chaque paire de devises est affichée avec des détails incluant :
 - 📈 Le **dernier taux de change** et la tendance des prix
 - 🏛️ Le **fournisseur de données actif** (ECB, FED, BOE, SNB ou MANUAL)
 - 📊 Un **graphique sparkline** montrant la tendance du taux sur les 30 derniers jours
-- 🖱️ **Menu contextuel** : Faites un clic droit sur n'importe quelle ligne du tableau pour des actions rapides (Modifier, Synchroniser, Supprimer)
+- 🖱️ **Menu contextuel** : Faites un clic droit sur n'importe quelle ligne du tableau pour des actions rapides (Inverser la direction, Synchroniser, Recharger, Supprimer)
 
 Vous pouvez **filtrer** par devise pour trouver rapidement une paire spécifique :
 

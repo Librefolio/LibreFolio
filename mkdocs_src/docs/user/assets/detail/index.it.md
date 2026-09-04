@@ -6,7 +6,11 @@ Clicca su qualsiasi asset dalla [Lista Asset](../index.md) per aprire la sua pag
  <img class="gallery-img" data-category="assets" data-name="detail-chart" alt="Pagina Dettaglio Asset" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-La pagina di dettaglio è organizzata in diverse funzionalità, ognuna accessibile dalla barra degli strumenti:
+La pagina di dettaglio è organizzata in due schede: **Panoramica** (tutte le funzionalità qui sotto) e **Rischio e scenari**.
+
+!!! info "Beta"
+
+    La scheda **Rischio e scenari** appartiene al sottosistema di Analisi del Rischio, attualmente in **beta**. Non è ancora coperta da questa documentazione — le sezioni seguenti descrivono la scheda Panoramica.
 
 ---
 
@@ -18,7 +22,7 @@ La vista principale: un grafico completo basato su ECharts con zoom, pan, filtra
 
 ### 📊 [Segnali](signals.md)
 
-Sovrapponi indicatori tecnici (EMA, MACD, RSI, Bollinger Bands, Confronto Asset) al grafico. Ogni segnale è calcolato in tempo reale dai dati dei prezzi e può essere gestito tramite un interruttore indipendente.
+Sovrapponi al grafico uno qualsiasi dei **22 indicatori tecnici del backend** (famiglie di trend, momentum, volatilità, volume e rischio), serie di confronto e curve benchmark sintetiche. Ogni segnale è calcolato dal backend dalla cronologia dei prezzi memorizzata e può essere configurato e attivato/disattivato indipendentemente.
 
 ### 📐 [Misure](measures.md)
 

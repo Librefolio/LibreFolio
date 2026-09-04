@@ -6,7 +6,7 @@ d'IA.
 
 ## 📍 Emplacement
 
-Ouvrez une page de détails FX. Dans l'en-tête **Signaux**, sélectionnez **Export IA**. Votre
+Ouvrez une page de détails FX. Dans la **barre d'outils de la page**, sélectionnez **Export IA**. Votre
 brouillon reste disponible pendant 10 minutes dans la session de connexion actuelle et se réinitialise
 après la déconnexion ou une nouvelle connexion.
 

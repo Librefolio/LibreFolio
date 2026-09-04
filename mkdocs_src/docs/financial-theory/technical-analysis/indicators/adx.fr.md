@@ -14,27 +14,27 @@ Les traders associent souvent l'ADX à un système de suivi de tendance (croisem
 
 1. **Mouvement directionnel** — le plus grand des mouvements à la hausse ou à la baisse dans le haut/bas, en ne conservant que le dominant :
 
- $$
- +DM_t = \max(H_t - H_{t-1},\, 0) \quad \text{si} \quad H_t - H_{t-1} > L_{t-1} - L_t, \text{ sinon } 0
- $$
+    $$
+    +DM_t = \max(H_t - H_{t-1},\, 0) \quad \text{si} \quad H_t - H_{t-1} > L_{t-1} - L_t, \text{ sinon } 0
+    $$
 
- $$
- -DM_t = \max(L_{t-1} - L_t,\, 0) \quad \text{si} \quad L_{t-1} - L_t > H_t - H_{t-1}, \text{ sinon } 0
- $$
+    $$
+    -DM_t = \max(L_{t-1} - L_t,\, 0) \quad \text{si} \quad L_{t-1} - L_t > H_t - H_{t-1}, \text{ sinon } 0
+    $$
 
 2. **True Range** $TR_t$ (voir [ATR](atr.md)), lissé sur $N$ périodes, normalise les mouvements directionnels en **+DI** / **-DI** :
 
- $$
- +DI_t = 100 \cdot \frac{SMMA_N(+DM)}{SMMA_N(TR)}, \qquad
- -DI_t = 100 \cdot \frac{SMMA_N(-DM)}{SMMA_N(TR)}
- $$
+    $$
+    +DI_t = 100 \cdot \frac{SMMA_N(+DM)}{SMMA_N(TR)}, \qquad
+    -DI_t = 100 \cdot \frac{SMMA_N(-DM)}{SMMA_N(TR)}
+    $$
 
 3. **Indice directionnel** et son propre lissage donnent l'**ADX** :
 
- $$
- DX_t = 100 \cdot \frac{\left| +DI_t - -DI_t \right|}{+DI_t + -DI_t}, \qquad
- ADX_t = SMMA_N(DX)
- $$
+    $$
+    DX_t = 100 \cdot \frac{\left| +DI_t - -DI_t \right|}{+DI_t + -DI_t}, \qquad
+    ADX_t = SMMA_N(DX)
+    $$
 
 ---
 

@@ -14,27 +14,27 @@ Los traders a menudo combinan el ADX con un sistema de seguimiento de tendencia 
 
 1. **Movimiento Direccional** — el mayor de los movimientos al alza o a la baja en el máximo/mínimo, conservando solo el dominante:
 
- $$
- +DM_t = \max(H_t - H_{t-1},\, 0) \quad \text{si} \quad H_t - H_{t-1} > L_{t-1} - L_t, \text{ sino } 0
- $$
+    $$
+    +DM_t = \max(H_t - H_{t-1},\, 0) \quad \text{si} \quad H_t - H_{t-1} > L_{t-1} - L_t, \text{ sino } 0
+    $$
 
- $$
- -DM_t = \max(L_{t-1} - L_t,\, 0) \quad \text{si} \quad L_{t-1} - L_t > H_t - H_{t-1}, \text{ sino } 0
- $$
+    $$
+    -DM_t = \max(L_{t-1} - L_t,\, 0) \quad \text{si} \quad L_{t-1} - L_t > H_t - H_{t-1}, \text{ sino } 0
+    $$
 
 2. **Rango Verdadero** $TR_t$ (ver [ATR](atr.md)), suavizado en $N$ períodos, normaliza los movimientos direccionales en **+DI** / **-DI**:
 
- $$
- +DI_t = 100 \cdot \frac{SMMA_N(+DM)}{SMMA_N(TR)}, \qquad
- -DI_t = 100 \cdot \frac{SMMA_N(-DM)}{SMMA_N(TR)}
- $$
+    $$
+    +DI_t = 100 \cdot \frac{SMMA_N(+DM)}{SMMA_N(TR)}, \qquad
+    -DI_t = 100 \cdot \frac{SMMA_N(-DM)}{SMMA_N(TR)}
+    $$
 
 3. **Índice Direccional** y su propio suavizado dan el **ADX**:
 
- $$
- DX_t = 100 \cdot \frac{\left| +DI_t - -DI_t \right|}{+DI_t + -DI_t}, \qquad
- ADX_t = SMMA_N(DX)
- $$
+    $$
+    DX_t = 100 \cdot \frac{\left| +DI_t - -DI_t \right|}{+DI_t + -DI_t}, \qquad
+    ADX_t = SMMA_N(DX)
+    $$
 
 ---
 

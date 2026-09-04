@@ -9,7 +9,7 @@ LibreFolio inclut un outil d'édition d'image interactif et puissant qui vous pe
 La fenêtre modale de recadrage d'image s'ouvre automatiquement chaque fois que vous téléversez un fichier image dans LibreFolio :
 
 - 📂 **Page Fichiers** → téléversement de n'importe quelle image (JPEG, PNG, WebP, GIF)
-- 👤 **Paramètres du profil** → modification de votre avatar
+- 👤 **[Paramètres du profil](../settings/profile.md)** → modification de votre avatar
 - 🏦 **Paramètres du courtier** → modification de l'icône d'un courtier
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
@@ -26,9 +26,12 @@ L'outil propose des préréglages pour les cas d'utilisation courants :
 |--------|------|-------------|----------|
 | **Avatar** | 200 × 200 px | 1:1 (carré) | Photos de profil utilisateur |
 | **Icône Courtier** | 64 × 64 px | 1:1 (carré) | Logos de courtiers |
+| **Icône d'actif** | 256 × 256 px | 1:1 (carré) | Logos d'actifs |
 | **Personnalisé** | Libre | Libre | Toute taille et tout ratio |
 
 Le préréglage définit automatiquement la contrainte du rapport d'aspect et la taille de sortie.
+
+L'aperçu elliptique n'apparaît que pour les préréglages avatar et icône de courtier.
 
 ---
 

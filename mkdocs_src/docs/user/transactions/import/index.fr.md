@@ -1,5 +1,17 @@
 # 📥 Importer depuis le courtier (BRIM)
 
+<style>
+/* Importer capabilities table: Broker icon+name on one line, cells vertically centered, Notes 50% wider */
+.md-typeset details table th:first-child,
+.md-typeset details table td:first-child { min-width: 9rem; white-space: nowrap; }
+.md-typeset details .md-typeset__table table td { vertical-align: middle; }
+.md-typeset details table th:last-child,
+.md-typeset details table td:last-child { min-width: 24rem; }
+/* Broker icon fallback: the letter tile sits after the image, hidden; onerror swaps them */
+.broker-icon-fallback { display: inline-flex; align-items: center; vertical-align: middle; margin-right: 4px; }
+.broker-icon-fallback > span { display: none; width: 16px; height: 16px; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: var(--md-accent-fg-color); }
+</style>
+
 **BRIM** (Broker Report Import Module) vous permet d'importer des transactions directement depuis les fichiers d'exportation de votre courtier — sans saisie manuelle. Téléchargez un rapport CSV et LibreFolio analyse, fait correspondre et importe toutes les transactions en une seule opération.
 
 Pour des instructions étape par étape sur le fonctionnement de l'assistant, consultez le **[Guide d'importation](how-to.md)**.
@@ -30,14 +42,14 @@ LibreFolio prend en charge l'importation de fichiers de relevés provenant des c
  <img src="https://www.etoro.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="eToro favicon">
  <span class="card-title" style="margin: 0;">eToro</span>
  </div>
- <span class="card-desc">Importez les fichiers de relevés de compte XLSX/CSV depuis eToro.</span>
+ <span class="card-desc">Importez les fichiers CSV de relevé de compte depuis eToro.</span>
  </a>
  <a href="directa/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
  <div style="display: flex; align-items: center; gap: 0.75rem;">
  <img src="https://www.directa.it/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="Directa SIM favicon">
  <span class="card-title" style="margin: 0;">Directa SIM</span>
  </div>
- <span class="card-desc">Importez les fichiers CSV de l'historique des transactions depuis Directa SIM.</span>
+ <span class="card-desc">Importez les fichiers CSV ou XLSX de l'historique des transactions depuis Directa SIM.</span>
  </a>
  <a href="schwab/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
  <div style="display: flex; align-items: center; gap: 0.75rem;">
@@ -51,7 +63,7 @@ LibreFolio prend en charge l'importation de fichiers de relevés provenant des c
  <img src="https://assets.revolut.com/assets/favicons/favicon-32x32.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="Revolut favicon">
  <span class="card-title" style="margin: 0;">Revolut</span>
  </div>
- <span class="card-desc">Importez les rapports de relevés de compte PDF/CSV depuis Revolut.</span>
+ <span class="card-desc">Importez les rapports CSV de relevé de compte depuis Revolut.</span>
  </a>
  <a href="coinbase/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
  <div style="display: flex; align-items: center; gap: 0.75rem;">
@@ -234,35 +246,35 @@ LibreFolio prend en charge l'importation de fichiers de relevés provenant des c
 
     | Courtier | Statut | Format | Achat/Vente | Dividendes | Dépôts/Espèces | Frais/Taxes | Remarques |
     | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-    | <img src="https://www.interactivebrokers.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Interactive Brokers** | 🧪 Bêta | CSV (Flex) | ✅ | ✅ | ✅ | ✅ | Meilleur pour les comptes multi-devises |
-    | <img src="https://www.degiro.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Degiro** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | Prise en charge des relevés de compte standard |
-    | <img src="https://www.etoro.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **eToro** | 🧪 Bêta | XLSX/CSV | ✅ | ✅ | ✅ | ✅ | Prise en charge des plus-values réalisées et des dividendes |
-    | <img src="https://www.directa.it/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Directa SIM** | ✅ Stable | CSV | ✅ | ✅ | ✅ | ✅ | Prise en charge des relevés fiscaux des courtiers italiens |
-    | <img src="https://www.schwab.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Charles Schwab** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | Relevé d'activité standard des courtiers américains |
-    | <img src="https://assets.revolut.com/assets/favicons/favicon-32x32.png" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Revolut** | 🧪 Bêta | PDF/CSV | ✅ | ✅ | ✅ | ✅ | Prise en charge des transactions d'actions et de crypto |
-    | <img src="https://www.coinbase.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Coinbase** | 🧪 Bêta | CSV | ✅ | ❌ | ✅ | ✅ | Rapports de transactions crypto uniquement |
-    | <img src="https://cdn.prod.website-files.com/66289cd2c30bc8d40bd60733/66f526a076ad61485c78771c_favicon.png" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Freetrade** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | Relevés de courtage britanniques simples |
-    | <img src="https://www.finpension.ch/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Finpension** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | Relevés du pilier 3a suisse |
-    | <img src="https://www.trading212.com/favicon-32x32.png" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Trading212** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | CSV d'activité de trading européen |
-    | <img src="https://avanza.se/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Avanza** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | Écrit à partir des fichiers d'exemple |
-    | <img src="https://bux.com/it/wp-content/themes/vo-theme/assets/images/favicon/favicon-32x32.png" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **BUX** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | Écrit à partir des fichiers d'exemple |
-    | <img src="https://disnat.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Disnat** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | Écrit à partir des fichiers d'exemple |
-    | <img src="https://www.investengine.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **InvestEngine** | 🧪 Bêta | CSV | ✅ | ✅ | ❌ | ❌ | Écrit à partir des fichiers d'exemple |
-    | <img src="https://www.rabobank.com/static/msp/global-sites/rds/favicons/favicon-svg.svg" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Rabobank** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | Écrit à partir des fichiers d'exemple |
-    | <img src="https://finecobank.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Fineco** | 🧪 Beta | CSV | ✅ | ✅ | ❌ | ✅ | Les deux modèles d'exportation ; montants dans la devise du rapport |
-    | <img src="https://www.intesasanpaolo.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Intesa Sanpaolo** | 🧪 Beta | CSV/XLSX | ❌ | ✅ | ✅ | ✅ | Mouvements coupons/dividendes/frais/taxes ; l'instantané patrimoine alimente le cash lorsqu'il est présent + positions |
-    | <img src="https://www.credit-agricole.it/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Crédit Agricole** | ✅ Stable | CSV/XLSX | ✅ | ✅ | ✅ | ✅ | Les mouvements de compte apportent du cash réel, frais, taxes et coupons/dividendes ; l'export titres optionnel récupère l'historique sur 2 ans ; contre-entrées auto de cash, échéances et ajustements de succession |
-    | <img src="https://traderepublic.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Trade Republic** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | Écrit à partir des fichiers d'exemple |
-    | <img src="https://www.xtb.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **XTB** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | Écrit à partir des fichiers d'exemple |
-    | <img src="https://parqet.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Parqet** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | Écrit à partir des fichiers d'exemple |
-    | <img src="https://home.saxo/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Saxo** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | Écrit à partir des fichiers d'exemple |
-    | <img src="https://www.swissquote.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Swissquote** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | Écrit à partir des fichiers d'exemple |
-    | <img src="https://bitvavo.com/favicon-32x32.png?v=7ba51b544a17c10de8defa086df79917" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Bitvavo** | 🧪 Bêta | CSV | ✅ | ❌ | ✅ | ✅ | Plateforme crypto — écrit à partir des fichiers d'exemple |
-    | <img src="https://crypto.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Crypto.com** | 🧪 Bêta | CSV | ✅ | ❌ | ❌ | ❌ | Plateforme crypto — écrit à partir des fichiers d'exemple |
-    | <img src="https://relai.app/app/uploads/2023/06/cropped-App-icon-32x32.png" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Relai** | 🧪 Bêta | CSV | ✅ | ❌ | ❌ | ✅ | Plateforme crypto — écrit à partir des fichiers d'exemple |
-    | <img src="https://cointracking.info/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **CoinTracking** | 🧪 Bêta | CSV | ✅ | ❌ | ✅ | ✅ | Plateforme crypto — écrit à partir des fichiers d'exemple |
-    | <img src="https://www.google.com/s2/favicons?domain=delta.app&amp;sz=64" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Delta** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | Plateforme crypto — écrit à partir des fichiers d'exemple |
-    | <img src="https://www.investimental.ro/wp-content/themes/investimental/img/favicon/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Investimental** | 🧪 Bêta | CSV | ✅ | ❌ | ❌ | ✅ | Écrit à partir des fichiers d'exemple |
+    | <span class="broker-icon-fallback"><img onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" src="https://www.interactivebrokers.com/favicon.ico" width="16" height="16" style=""><span>IB</span></span> **Interactive Brokers** | 🧪 Bêta | CSV (Flex) | ✅ | ✅ | ✅ | ✅ | Meilleur pour les comptes multi-devises |
+    | <span class="broker-icon-fallback"><img onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" src="https://www.degiro.com/favicon.ico" width="16" height="16" style=""><span>DE</span></span> **Degiro** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | Prise en charge des relevés de compte standard |
+    | <span class="broker-icon-fallback"><img onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" src="https://www.etoro.com/favicon.ico" width="16" height="16" style=""><span>ET</span></span> **eToro** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | Prise en charge des plus-values réalisées et des dividendes |
+    | <span class="broker-icon-fallback"><img onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" src="https://www.directa.it/favicon.ico" width="16" height="16" style=""><span>DS</span></span> **Directa SIM** | ✅ Stable | CSV/XLSX | ✅ | ✅ | ✅ | ✅ | Prise en charge des relevés fiscaux des courtiers italiens |
+    | <span class="broker-icon-fallback"><img onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" src="https://www.schwab.com/favicon.ico" width="16" height="16" style=""><span>CS</span></span> **Charles Schwab** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | Relevé d'activité standard des courtiers américains |
+    | <span class="broker-icon-fallback"><img onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" src="https://assets.revolut.com/assets/favicons/favicon-32x32.png" width="16" height="16" style=""><span>RE</span></span> **Revolut** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | Prise en charge des transactions d'actions et de crypto |
+    | <span class="broker-icon-fallback"><img onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" src="https://www.coinbase.com/favicon.ico" width="16" height="16" style=""><span>CO</span></span> **Coinbase** | 🧪 Bêta | CSV | ✅ | ❌ | ✅ | ✅ | Rapports de transactions crypto uniquement |
+    | <span class="broker-icon-fallback"><img onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" src="https://cdn.prod.website-files.com/66289cd2c30bc8d40bd60733/66f526a076ad61485c78771c_favicon.png" width="16" height="16" style=""><span>FR</span></span> **Freetrade** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | Relevés de courtage britanniques simples |
+    | <span class="broker-icon-fallback"><img onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" src="https://www.finpension.ch/favicon.ico" width="16" height="16" style=""><span>FI</span></span> **Finpension** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | Relevés du pilier 3a suisse |
+    | <span class="broker-icon-fallback"><img onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" src="https://www.trading212.com/favicon-32x32.png" width="16" height="16" style=""><span>TR</span></span> **Trading212** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | CSV d'activité de trading européen |
+    | <span class="broker-icon-fallback"><img onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" src="https://avanza.se/favicon.ico" width="16" height="16" style=""><span>AV</span></span> **Avanza** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | Écrit à partir des fichiers d'exemple |
+    | <span class="broker-icon-fallback"><img onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" src="https://bux.com/it/wp-content/themes/vo-theme/assets/images/favicon/favicon-32x32.png" width="16" height="16" style=""><span>BU</span></span> **BUX** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | Écrit à partir des fichiers d'exemple |
+    | <span class="broker-icon-fallback"><img onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" src="https://disnat.com/favicon.ico" width="16" height="16" style=""><span>DI</span></span> **Disnat** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | Écrit à partir des fichiers d'exemple |
+    | <span class="broker-icon-fallback"><img onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" src="https://www.investengine.com/favicon.ico" width="16" height="16" style=""><span>IN</span></span> **InvestEngine** | 🧪 Bêta | CSV | ✅ | ✅ | ❌ | ❌ | Écrit à partir des fichiers d'exemple |
+    | <span class="broker-icon-fallback"><img onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" src="https://www.rabobank.com/static/msp/global-sites/rds/favicons/favicon-svg.svg" width="16" height="16" style=""><span>RA</span></span> **Rabobank** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | Écrit à partir des fichiers d'exemple |
+    | <span class="broker-icon-fallback"><img onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" src="https://finecobank.com/favicon.ico" width="16" height="16" style=""><span>FI</span></span> **Fineco** | 🧪 Beta | CSV | ✅ | ✅ | ❌ | ✅ | Les deux modèles d'exportation ; montants dans la devise du rapport |
+    | <span class="broker-icon-fallback"><img onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" src="https://www.intesasanpaolo.com/favicon.ico" width="16" height="16" style=""><span>IS</span></span> **Intesa Sanpaolo** | 🧪 Beta | CSV/XLSX | ❌ | ✅ | ✅ | ✅ | Mouvements coupons/dividendes/frais/taxes ; l'instantané patrimoine alimente le cash lorsqu'il est présent + positions |
+    | <span class="broker-icon-fallback"><img onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" src="https://www.credit-agricole.it/favicon.ico" width="16" height="16" style=""><span>CA</span></span> **Crédit Agricole** | ✅ Stable | CSV/XLSX | ✅ | ✅ | ✅ | ✅ | Les mouvements de compte apportent du cash réel, frais, taxes et coupons/dividendes ; l'export titres optionnel récupère l'historique sur 2 ans ; contre-entrées auto de cash, échéances et ajustements de succession |
+    | <span class="broker-icon-fallback"><img onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" src="https://traderepublic.com/favicon.ico" width="16" height="16" style=""><span>TR</span></span> **Trade Republic** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | Écrit à partir des fichiers d'exemple |
+    | <span class="broker-icon-fallback"><img onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" src="https://www.xtb.com/favicon.ico" width="16" height="16" style=""><span>XT</span></span> **XTB** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | Écrit à partir des fichiers d'exemple |
+    | <span class="broker-icon-fallback"><img onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" src="https://parqet.com/favicon.ico" width="16" height="16" style=""><span>PA</span></span> **Parqet** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | Écrit à partir des fichiers d'exemple |
+    | <span class="broker-icon-fallback"><img onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" src="https://home.saxo/favicon.ico" width="16" height="16" style=""><span>SA</span></span> **Saxo** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | Écrit à partir des fichiers d'exemple |
+    | <span class="broker-icon-fallback"><img onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" src="https://www.swissquote.com/favicon.ico" width="16" height="16" style=""><span>SW</span></span> **Swissquote** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | Écrit à partir des fichiers d'exemple |
+    | <span class="broker-icon-fallback"><img onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" src="https://bitvavo.com/favicon-32x32.png?v=7ba51b544a17c10de8defa086df79917" width="16" height="16" style=""><span>BI</span></span> **Bitvavo** | 🧪 Bêta | CSV | ✅ | ❌ | ✅ | ✅ | Plateforme crypto — écrit à partir des fichiers d'exemple |
+    | <span class="broker-icon-fallback"><img onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" src="https://crypto.com/favicon.ico" width="16" height="16" style=""><span>CC</span></span> **Crypto.com** | 🧪 Bêta | CSV | ✅ | ❌ | ❌ | ❌ | Plateforme crypto — écrit à partir des fichiers d'exemple |
+    | <span class="broker-icon-fallback"><img onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" src="https://relai.app/app/uploads/2023/06/cropped-App-icon-32x32.png" width="16" height="16" style=""><span>RE</span></span> **Relai** | 🧪 Bêta | CSV | ✅ | ❌ | ❌ | ✅ | Plateforme crypto — écrit à partir des fichiers d'exemple |
+    | <span class="broker-icon-fallback"><img onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" src="https://cointracking.info/favicon.ico" width="16" height="16" style=""><span>CO</span></span> **CoinTracking** | 🧪 Bêta | CSV | ✅ | ❌ | ✅ | ✅ | Plateforme crypto — écrit à partir des fichiers d'exemple |
+    | <span class="broker-icon-fallback"><img onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" src="https://www.google.com/s2/favicons?domain=delta.app&amp;sz=64" width="16" height="16" style=""><span>DE</span></span> **Delta** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | Plateforme crypto — écrit à partir des fichiers d'exemple |
+    | <span class="broker-icon-fallback"><img onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" src="https://www.investimental.ro/wp-content/themes/investimental/img/favicon/favicon.ico" width="16" height="16" style=""><span>IN</span></span> **Investimental** | 🧪 Bêta | CSV | ✅ | ❌ | ❌ | ✅ | Écrit à partir des fichiers d'exemple |
     | <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" style="color: var(--md-accent-fg-color); vertical-align: middle; margin-right: 4px;"><path fill="currentColor" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6m1.8 18H14v-2h1.8v2m0-3H14v-2h1.8v2m0-3H14V9.8h1.8v4.2M13 9V3.5L18.5 9H13M6 20V4h5v7h7v9H6z"/></svg> **CSV Générique** | ✅ Stable | CSV | ✅ | ✅ | ✅ | ✅ | Analyseur fallback avec mappage manuel des colonnes |
 
 ---
@@ -279,7 +291,7 @@ Lors de l'étape de prévisualisation, LibreFolio tente de **faire correspondre 
 
 ## ♻️ Détection des doublons {: #duplicate-detection }
 
-BRIM vérifie les **transactions en double** en se basant sur la date, le type, l'actif, la quantité et le montant. Les lignes en double sont signalées dans l'aperçu — vous pouvez choisir de les ignorer ou de les forcer à être importées.
+BRIM vérifie les **transactions en double** au sein du même courtier en comparant **le type, la date, la quantité et le montant/la devise de trésorerie** (avec de petites tolérances pour les arrondis). Une **description** correspondante fait passer un signalement de *possible* à *probable* ; un **actif** correspondant — lorsque la ligne du rapport a été automatiquement associée à votre bibliothèque — augmente également le niveau de confiance. Les lignes en double sont signalées dans l'aperçu — vous pouvez choisir de les ignorer ou de les forcer à être importées.
 
 ---
 

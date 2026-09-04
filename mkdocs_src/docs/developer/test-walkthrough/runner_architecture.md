@@ -319,7 +319,7 @@ and a shared `htmlcov-backend/` would be written by every worker at once.
 - `--workers auto` resolves to half the cores, because a development machine is not dedicated to tests
   and timing-sensitive tests degrade under load.
 - On a **frontend** category the same flag sets Playwright's browser workers and, derived from it,
-  the number of uvicorn processes behind them (see *[`--workers` reaches Playwright too](#--workers-reaches-playwright-too)*).
+  the number of uvicorn processes behind them (see *[`--workers` reaches Playwright too](#-workers-reaches-playwright-too)*).
 
 The flag belongs to `./dev.py test`, so it goes **before** the category:
 
@@ -351,6 +351,7 @@ is WRITE-GLOBAL and stays serial by design. Going further means one database per
 bigger `N`.
 
 !!! note "The total has a noise floor of about 4 statements — and it is attributable"
+
     Two runs launched minutes apart matched exactly. A third, hours later, closed at 3220 uncovered
     instead of 3224 — *more* covered, despite doing strictly less work, which is causally impossible
     for a deterministic number.
@@ -364,6 +365,7 @@ bigger `N`.
     indistinguishable from a real loss of data; per file they are immediately attributable.
 
 !!! warning "A running test server poisons the whole backend run"
+
     `--fresh-run` starts with `db create`, which **unlinks the database first** and only then calls
     `db:upgrade` — and `db:upgrade` refuses to migrate while something holds port 6041. The result is
     not one clear error but roughly a dozen unrelated-looking reds downstream, all caused by a
@@ -459,6 +461,7 @@ that shows up as *slightly lower coverage* rather than as an error is the hardes
 compare the numbers, never the colour.
 
 !!! danger "An out-of-memory worker names the wrong test"
+
     Playwright reports it as `worker process exited unexpectedly (code=null, signal=SIGABRT)` against
     whichever test was running, with a duration of `0ms`. The real message is further up the log:
     `FATAL ERROR: Ineffective mark-compacts near heap limit`. A `0ms` failure is never an assertion —

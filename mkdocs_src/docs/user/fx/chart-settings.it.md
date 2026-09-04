@@ -1,19 +1,38 @@
-# ⚙️ Impostazioni Grafico
+# ⚙️ Impostazioni del Grafico
 
-LibreFolio fornisce una modale delle **Impostazioni del Grafico** per personalizzare l'aspetto e il comportamento dei grafici FX. Queste impostazioni si applicano sia ai mini-grafici nella [pagina FX List](index.md) che al grafico completo nella [pagina Pair Detail](detail/index.md).
+La finestra modale **Impostazioni del Grafico** personalizza l'aspetto del grafico e i segnali di sovrapposizione. La stessa finestra serve sia la pagina [Elenco FX](index.md) sia quella [Assets](../assets/index.md), con **impostazioni indipendenti per ambito** — la modifica delle impostazioni predefinite FX non tocca mai i grafici degli asset, e viceversa.
 
 ---
 
-## 🔓 Accesso alle Impostazioni Grafico
+## 🔓 Accesso alle Impostazioni del Grafico
 
-È possibile aprire la modale delle Impostazioni del Grafico da:
+La finestra modale si apre dalle pagine di elenco, in due varianti:
 
-- 📋 La **pagina FX List** — tramite il pulsante delle impostazioni (⚙️) nella barra degli strumenti
-- 📊 La **pagina Pair Detail** — tramite il pulsante delle impostazioni del grafico
+- 🌐 **Globale** — il pulsante delle impostazioni (⚙️) nella barra degli strumenti della pagina di elenco. Queste impostazioni diventano le impostazioni predefinite per ogni grafico dell'ambito; applicarle sostituisce tutte le personalizzazioni per singola card (la finestra modale ti avvisa di questo).
+- 🎯 **Locale** — il pulsante delle impostazioni (⚙️) su qualsiasi card di coppia o asset. Queste impostazioni prevalgono su quelle globali solo per quella card.
+
+!!! note "Le pagine di dettaglio usano invece pannelli in linea"
+
+    Nella [pagina di dettaglio della coppia](detail/index.md) (e nelle pagine di dettaglio degli asset) il pulsante ⚙️
+    attiva/disattiva un **pannello estetico** in linea e il pulsante 📈 attiva/disattiva
+    il **pannello dei segnali** in linea — stesse impostazioni, stessa archiviazione per singolo elemento, nessuna finestra modale.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <img class="gallery-img" data-category="fx" data-name="chart-settings" alt="Modale Impostazioni Grafico" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+ <img class="gallery-img" data-category="fx" data-name="chart-settings" alt="Finestra modale Impostazioni del Grafico" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
+
+---
+
+## 👀 Anteprima in Tempo Reale
+
+La finestra modale mostra sempre un **grafico di anteprima** con un interruttore Abs/%, così vedi l'effetto di ogni modifica prima di applicarla:
+
+<div class="screenshot-container" style="max-width: 620px; margin: 1rem auto;">
+ <img class="gallery-img" data-category="assets" data-name="chart-settings" alt="Finestra modale delle impostazioni del grafico con anteprima in tempo reale">
+</div>
+
+- 🌐 **Modalità globale** — l'anteprima disegna una curva demo sintetica. Gli indicatori backend non possono essere eseguiti nel browser, quindi la finestra modale chiede al server di calcolarli in tempo reale su quella curva: ciò che vedi corrisponde a ciò che i grafici reali visualizzeranno.
+- 🎯 **Modalità locale** — l'anteprima usa i **dati di prezzo reali** della card. Gli indicatori backend mostrano l'ultima configurazione applicata; un banner ti ricorda di fare clic su Apply per aggiornarli.
 
 ---
 
@@ -22,46 +41,25 @@ LibreFolio fornisce una modale delle **Impostazioni del Grafico** per personaliz
 ### 🎨 Aspetto
 
 | Impostazione | Descrizione |
-|-------------|-------------|
-| **Colore Linea** | Colore primario per la linea del grafico |
-| **Spessore Linea** | Spessore della linea del grafico (px) |
-| **Riempimento Area** | Abilita/disabilita il riempimento a gradiente sotto la linea |
-| **Linee della Griglia** | Mostra/nasconde le linee della griglia orizzontali e verticali |
+|---------|-------------|
+| **Colori della Linea di Base** | Colora la linea di verde sopra / di rosso sotto la linea di base |
+| **Riempimento Area** | Riempimento sfumato sotto la linea |
+| **Linee della Griglia** | Griglia orizzontale tratteggiata |
+| **Sfumatura dei Dati Obsoleti** | Sfuma i dati più vecchi verso lo sfondo |
+| **Scala dell'Asse Y** | Automatica, Includi 0, o un intervallo min/max personalizzato |
 
-### 🖱️ Suggerimento e Interazione
+### 📈 Segnali di Sovrapposizione
 
-| Impostazione | Descrizione |
-|-------------|-------------|
-| **Formato Suggerimento** | Numero di cifre decimali mostrate nei suggerimenti |
-| **Mirino** | Abilita/disabilita il mirino (crosshair) al passaggio del mouse |
-| **Zoom** | Impostazioni per lo zoom tramite rotella del mouse e pinch zoom |
+La finestra modale gestisce gli stessi segnali di sovrapposizione del [pannello Segnali](detail/signals.md) della pagina di dettaglio, aggiunti da tre menu a tendina di categoria:
 
-### 📈 Overlay di Segnali
+- 🧮 **Indicatori Tecnici** — il catalogo dei plugin backend per l'ambito corrente: **9 indicatori compatibili con FX** qui, 22 nell'ambito Assets. Il menu a tendina è un albero con ricerca raggruppato per famiglia (trend, momentum, volatilità, …). La matematica alla base di ogni indicatore è descritta in [Indicatori Tecnici — Teoria Finanziaria](../../financial-theory/technical-analysis/indicators/index.md).
+- ↔️ **Confronto Dati** — sovrapponi un'altra coppia FX configurata o un asset sullo stesso grafico.
+- 📐 **Benchmark Sintetici** — curve di riferimento generate da parametri ([Lineare](../../financial-theory/technical-analysis/synthetic-benchmarks/linear.md), [Composta](../../financial-theory/technical-analysis/synthetic-benchmarks/compound.md), [Onda Sinusoidale](../../financial-theory/technical-analysis/synthetic-benchmarks/sine-wave.md)). Sono pura matematica — non panieri personalizzati e non dati di mercato.
 
-Quando si utilizza il grafico della pagina di dettaglio, è possibile configurare quali **indicatori tecnici** devono essere visualizzati come overlay:
-
-#### 🧮 Segnali Calcolati
-
-Questi sono computati a partire dai dati della coppia stessa:
-
-- 📉 **EMA** (Exponential Moving Average)
-- 📊 **MACD** (Moving Average Convergence Divergence)
-- 💪 **RSI** (Relative Strength Index)
-- 📏 **Bollinger Bands**
-
-Ogni segnale può essere gestito tramite l'interruttore indipendentemente dal [pannello Signals](detail/signals.md).
-
-#### 🔍 Segnali Comparativi e Benchmark
-
-È inoltre possibile sovrapporre **confronti con benchmark** per vedere come una coppia si comporta rispetto a un riferimento:
-
-- 📐 **Benchmark Sintetici** — Panieri personalizzati o tassi di riferimento calcolati
-- ↔️ **Overlay Cross-pair** — Confronta EUR/USD rispetto a GBP/USD sullo stesso grafico
-
-Per le basi matematiche, consultare [Indicatori Tecnici](../../financial-theory/technical-analysis/indicators/index.md) e [Benchmark Sintetici](../../financial-theory/technical-analysis/synthetic-benchmarks/index.md).
+Ogni segnale configurato diventa una card con parametri in linea, un link 📖 alla sua pagina di teoria e diagnostica per singolo segnale una volta calcolato.
 
 ---
 
 ## 💾 Persistenza
 
-Le impostazioni del grafico sono memorizzate localmente nel `localStorage` del browser e si applicano a tutte le coppie di valute. Vengono mantenute tra le sessioni — anche dopo aver chiuso e riaperto il browser — e andranno perse solo se si svuota la cache/storage del browser o se lo storage scade (dipende dal browser, tipicamente da mesi ad anni).
+Le impostazioni del grafico vengono salvate localmente nel `localStorage` del tuo browser, separatamente per gli ambiti FX e Assets, con sovrascritture per singola card applicate sopra le impostazioni predefinite dell'ambito. Persistono tra le sessioni — anche dopo aver chiuso e riaperto il browser — e andranno perse solo se svuoti la cache/l'archiviazione del browser o se l'archiviazione scade (dipende dal browser, in genere da mesi ad anni).

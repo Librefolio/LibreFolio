@@ -6,7 +6,7 @@ ciblée. LibreFolio n'envoie jamais l'export à un service IA.
 ## 📍 Emplacement
 
 Ouvrez le **Tableau de bord** et sélectionnez **Export IA** dans la barre d'outils supérieure, à côté de
-**Mise à jour/Synchronisation**. Le brouillon reste disponible pendant 10 minutes dans la session de connexion en cours
+**Actualiser**. Le brouillon reste disponible pendant 10 minutes dans la session de connexion en cours
 et se réinitialise après une déconnexion ou une nouvelle connexion.
 
 ## 🎯 Analyses du portefeuille

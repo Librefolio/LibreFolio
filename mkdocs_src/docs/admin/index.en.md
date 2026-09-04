@@ -41,7 +41,11 @@ When a newer stable release exists, an **update-available modal** appears showin
 
 Non-admin users are never probed at login. If a non-admin manually checks for updates from the [changelog modal](../user/settings/about.md#changelog-modal) and a newer release exists, they see a dialog listing the instance administrators (with e-mail addresses when available) instead, so they know whom to ask for the upgrade.
 
-*(Screenshot `auth/update-available-modal` is not in the gallery yet.)*
+
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="auth" data-name="update-available-modal" alt="Update available modal with current and latest version">
+</div>
+
 
 ---
 

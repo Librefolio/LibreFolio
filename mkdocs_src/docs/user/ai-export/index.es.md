@@ -15,11 +15,11 @@ La Exportación IA está disponible desde:
 
 - la barra de herramientas del panel de control para tareas de cartera;
 - la barra de herramientas del bróker para tareas de bróker;
-- el encabezado de Señales en las páginas de detalle de Activo y FX.
+- la barra de herramientas de la página en las páginas de detalle de Activo y FX.
 
 El backend proporciona valoraciones, rendimiento, asignaciones, datos económicos FIFO,
 exposición a FX e indicadores técnicos. El catálogo público expone intencionadamente
-solo **ocho opciones autónomas de 'Exportar Datos'** y **trece Análisis orientados
+solo **ocho opciones autónomas de 'Exportar Datos'** y **once Análisis orientados
 a tareas**. Los conjuntos de datos más pequeños del backend permanecen como bloques
 internos de composición.
 
@@ -61,7 +61,7 @@ persisten en `localStorage`.
 | ---------- | ---------------------------------------- | --------------------------------------- |
 | Panel de control | **Descripción general e Historial de cartera** | **Historial de activos de cartera** |
 | Bróker | **Descripción general e Historial de bróker** | **Historial de activos de bróker** |
-| Activo | **Posición e Historial de Activo** | **Historial de Mercado de Activo** |
+| Activo | **Posición e Historial de Mercado (completo)** | **Solo Historial de Mercado (sin posiciones)** |
 | FX | **Mercado y Exposición de FX** | **Historial de Mercado de FX** |
 
 Las instantáneas generales combinan hechos económicos actuales con una ruta histórica
@@ -118,6 +118,14 @@ mejoraría sustancialmente la respuesta. El prompt proporciona el nombre públic
 exportación, la ruta de IU, el período/detalle recomendado, la razón y si es requerido
 u opcional.
 
+!!! info "El Drawdown es siempre sobre todo el historial"
+
+    Dondequiera que aparezca una sección de Drawdown en una exportación, se calcula
+    sobre **todo el historial disponible** — desde el primer precio almacenado para
+    un Activo, o desde la primera transacción para una Cartera o Bróker — nunca en
+    relación con el período de IA seleccionado. Una ventana de exportación corta aún
+    contiene el verdadero máximo-mínimo histórico.
+
 ## 🔗 Referencias Locales
 
 El prompt usa referencias locales para unir tablas compactas:
@@ -127,8 +135,10 @@ El prompt usa referencias locales para unir tablas compactas:
 - F# para pares FX;
 - L# para lotes FIFO.
 
-El Directorio de Entidades resuelve esas referencias. El modelo receptor debe usar
-nombres legibles en su respuesta; no se necesitan IDs de base de datos.
+El Directorio de Entidades resuelve las referencias A#, B# y F#. Los lotes L# son
+diferentes: son **filas incrustadas** dentro de las tablas FIFO de la propia
+exportación, no entradas del directorio — el modelo las lee en su lugar. El modelo
+receptor debe usar nombres legibles en su respuesta; no se necesitan IDs de base de datos.
 
 ## 🔒 Alcance y Privacidad
 

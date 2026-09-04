@@ -14,24 +14,24 @@ Un aumento di prezzo su volumi elevati produce un flusso monetario positivo molt
 
 1. **Prezzo Tipico** e **Flusso Monetario Lordo** per ogni barra:
 
- $$
- TP_t = \frac{H_t + L_t + C_t}{3}, \qquad
- RMF_t = TP_t \cdot V_t
- $$
+    $$
+    TP_t = \frac{H_t + L_t + C_t}{3}, \qquad
+    RMF_t = TP_t \cdot V_t
+    $$
 
 2. **Flusso positivo/negativo**, suddiviso in base alla direzione del prezzo tipico rispetto alla barra precedente:
 
- $$
- PMF_t = RMF_t \text{ se } TP_t > TP_{t-1} \text{ altrimenti } 0, \qquad
- NMF_t = RMF_t \text{ se } TP_t < TP_{t-1} \text{ altrimenti } 0
- $$
+    $$
+    PMF_t = RMF_t \text{ se } TP_t > TP_{t-1} \text{ altrimenti } 0, \qquad
+    NMF_t = RMF_t \text{ se } TP_t < TP_{t-1} \text{ altrimenti } 0
+    $$
 
 3. **Rapporto di Flusso Monetario** sulla finestra e sua normalizzazione in **MFI**:
 
- $$
- MFR_t = \frac{\sum_{i=0}^{N-1} PMF_{t-i}}{\sum_{i=0}^{N-1} NMF_{t-i}}, \qquad
- MFI_t = 100 - \frac{100}{1+MFR_t}
- $$
+    $$
+    MFR_t = \frac{\sum_{i=0}^{N-1} PMF_{t-i}}{\sum_{i=0}^{N-1} NMF_{t-i}}, \qquad
+    MFI_t = 100 - \frac{100}{1+MFR_t}
+    $$
 
 ---
 

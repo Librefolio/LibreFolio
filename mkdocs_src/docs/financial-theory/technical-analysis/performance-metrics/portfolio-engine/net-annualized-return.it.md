@@ -1,7 +1,5 @@
 # 📈 Rendimento Annualizzato Netto
 
-*[⬅️ Torna a Portfolio Engine](index.md)*
-
 ## 💡 Scopo
 
 LibreFolio riporta il rendimento annualizzato solo quando la finestra osservata è sufficientemente lunga da rendere significativa la capitalizzazione composta. La conversione utilizzata è:
@@ -143,3 +141,4 @@ dove $t_{\mathrm{fine\ lotto}}$ è la data di chiusura per i lotti completamente
 - 📉 [ROI Semplice](roi.md) — contesto del rendimento principale e a livello di posizione
 - 📊 [PnL di Periodo](period-pnl.md) — scomposizione del periodo
 - 🔬 [Analisi dei Lotti FIFO](../fifo-engine/fifo-lot-analysis.md) — metriche nette per lotto
+- ⚙️ [Portfolio Engine](index.md) — modello matematico completo

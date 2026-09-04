@@ -28,7 +28,7 @@ Al cambiar al modo %, todas las señales superpuestas también se recalculan com
 | **Alejar (Zoom out)** | Rueda del ratón abajo | Pellizcar hacia adentro |
 | **Restablecer zoom** | Doble clic | Doble toque |
 
-También puede utilizar los **ajustes preestablecidos de rango de tiempo** (1W, 1M, 3M, 6M, 1Y, 2Y) o seleccionar un rango de fechas **Personalizado** para saltar rápidamente a periodos específicos.
+También puede utilizar los **ajustes preestablecidos de rango de tiempo** (1W, 1M, 3M, 6M, 1Y, 2Y, YTD, MAX) o seleccionar un rango de fechas **Personalizado** para saltar rápidamente a periodos específicos. Cuando la barra de herramientas tiene espacio libre, aparecen **preajustes de relleno** adicionales para ocuparlo — 3Y, 5Y, 10Y junto a los preajustes de duración, y WTD, MTD, QTD junto a YTD.
 
 !!! info "Disponibilidad de datos"
 
@@ -51,7 +51,7 @@ Pase el cursor sobre cualquier punto del gráfico para ver:
 La barra de herramientas del gráfico proporciona acceso rápido a:
 
 - 📊 **Interruptor de modo de vista** — Absoluto / Porcentaje
-- ⏱️ **Rango de tiempo** — 1W, 1M, 3M, 6M, 1Y, 2Y, Personalizado
+- ⏱️ **Rango de tiempo** — 1W, 1M, 3M, 6M, 1Y, 2Y, YTD, MAX, Personalizado (más los preajustes de relleno 3Y/5Y/10Y y WTD/MTD/QTD cuando la barra de herramientas tiene espacio)
 - 📈 **[Señales](signals.md)** — Interruptor de superposiciones de indicadores técnicos
 - 📏 **[Medidas](measures.md)** — Herramienta de medición de clic a clic
 - ✏️ **[Editor de Datos](data-editor.md)** — Editar puntos de datos individuales

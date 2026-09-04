@@ -54,7 +54,11 @@ The indicator dropdown is a **collapsible tree grouped by family** (trend, momen
 - 📁 Each family shows a count badge and expands/collapses independently
 - 🖱️ Full keyboard support: arrows move, `→`/`←` expand and collapse a family, `Enter` selects
 
-*Screenshot coming: the grouped indicator tree open on the asset Signals panel.*
+
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="assets" data-name="detail-signals-tree" alt="Grouped indicator search on the asset signals panel">
+</div>
+
 
 ---
 
@@ -90,7 +94,11 @@ Indicators that tolerate gaps (ADX, Aroon, ATR, NATR, CCI, Donchian, MFI, OBV) d
 
 The **Underwater Drawdown** card carries a **Full history** checkbox (on by default): the decline is measured against the running peak of the *entire* available history, then sliced to the visible window — a peak from years ago still counts. Disable it for a faster, window-relative view. AI Export snapshots always use the full-history behavior regardless of this chart setting.
 
-*Screenshot coming: the Underwater Drawdown card with the Full history toggle.*
+
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="assets" data-name="detail-signals-drawdown" alt="Drawdown signal card with the full-history toggle">
+</div>
+
 
 ---
 

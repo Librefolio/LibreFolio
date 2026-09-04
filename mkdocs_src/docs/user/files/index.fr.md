@@ -20,7 +20,7 @@ Les ressources statiques sont **visibles par tous les utilisateurs** du système
 
 Ces fichiers résident dans le répertoire `custom-uploads/` sur le serveur.
 
-**Menu Contextuel** : Faites un clic droit sur n'importe quelle ligne de fichier (dans la vue en liste) pour accéder aux actions rapides (Aperçu, Renommer, Supprimer).
+**Menu Contextuel** : Faites un clic droit sur n'importe quelle ligne de fichier (dans la vue en liste) pour accéder aux actions rapides (Aperçu, Copier le Lien, Télécharger, Supprimer).
 
 Vous pouvez basculer entre la **vue en liste** et la **vue en grille** pour obtenir un aperçu visuel des fichiers image :
 
@@ -40,7 +40,7 @@ Les rapports de courtier ont une **visibilité restreinte** : vous ne pouvez voi
 - ✅ Les **résultats de l'analyse** du système d'importation automatique (BRIM)
 - ❌ Les fichiers dont **l'analyse a échoué** (conservés pour le débogage)
 
-**Menu Contextuel** : Faites un clic droit sur n'importe quelle ligne de rapport pour accéder aux actions rapides (Aperçu, Renommer, Supprimer).
+**Menu Contextuel** : Faites un clic droit sur n'importe quelle ligne de rapport pour accéder aux actions rapides (Aperçu, Télécharger, Supprimer).
 
 ---
 
@@ -69,14 +69,14 @@ Si vous souhaitez importer des transactions ou gérer des relevés existants :
 1. Allez sur l'onglet **Rapports de Courtier**.
 2. Téléchargez le fichier CSV ou Excel exporté de votre courtier (Degiro, Interactive Brokers, eToro, Directa SIM, etc.).
 3. Choisissez à quel **courtier associer** le fichier : cela détermine quel compte de courtier recevra les transactions importées.
-4. Le système détecte automatiquement le format et lance **[l'Assistant d'Importation](../transactions/import/index.md)** guidé.
+4. Le fichier est stocké et apparaît dans la liste des rapports. **Aucun import ne s'exécute encore** : pour réellement l'analyser et importer les transactions, ouvrez **[l'Assistant d'Importation](../transactions/import/index.md)** (Transactions → **Importer**) — son étape *Sélectionner des Fichiers* liste les rapports déjà téléversés, vous pouvez donc en choisir un au lieu de le téléverser à nouveau.
 
 ### ⚙️ Actions sur les Rapports Existants
 
 Faites un clic droit sur n'importe quel rapport dans le tableau pour ouvrir son menu contextuel :
-- 🔄 **Re-traiter (Reprocess)** : Relance l'analyseur d'importation sur le relevé. C'est utile après la mise à jour d'un plugin d'importation ou si vous avez supprimé des transactions par erreur et souhaitez les restaurer.
+- 👁️ **Aperçu (Preview)** : Inspecte le contenu du fichier sans quitter la page.
 - 📥 **Télécharger (Download)** : Télécharge le fichier brut d'origine.
-- 🗑️ **Supprimer (Delete)** : Supprime le relevé et toutes les transactions associées de votre registre.
+- 🗑️ **Supprimer (Delete)** : Supprime le fichier et ses métadonnées. Les transactions déjà importées à partir de celui-ci **restent dans le registre** — supprimer un rapport ne supprime jamais les transactions.
 
 !!! info "Association ≠ Analyse"
 

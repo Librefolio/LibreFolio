@@ -14,24 +14,24 @@ Une hausse de prix sur un volume élevé produit un flux monétaire positif bien
 
 1. **Prix Typique** et **Flux Monétaire Brut** pour chaque barre :
 
- $$
- TP_t = \frac{H_t + L_t + C_t}{3}, \qquad
- RMF_t = TP_t \cdot V_t
- $$
+    $$
+    TP_t = \frac{H_t + L_t + C_t}{3}, \qquad
+    RMF_t = TP_t \cdot V_t
+    $$
 
 2. **Flux positif/négatif**, réparti selon la direction du prix typique par rapport à la barre précédente :
 
- $$
- PMF_t = RMF_t \text{ si } TP_t > TP_{t-1} \text{ sinon } 0, \qquad
- NMF_t = RMF_t \text{ si } TP_t < TP_{t-1} \text{ sinon } 0
- $$
+    $$
+    PMF_t = RMF_t \text{ si } TP_t > TP_{t-1} \text{ sinon } 0, \qquad
+    NMF_t = RMF_t \text{ si } TP_t < TP_{t-1} \text{ sinon } 0
+    $$
 
 3. **Ratio de Flux Monétaire** sur la fenêtre, et sa normalisation en **MFI** :
 
- $$
- MFR_t = \frac{\sum_{i=0}^{N-1} PMF_{t-i}}{\sum_{i=0}^{N-1} NMF_{t-i}}, \qquad
- MFI_t = 100 - \frac{100}{1+MFR_t}
- $$
+    $$
+    MFR_t = \frac{\sum_{i=0}^{N-1} PMF_{t-i}}{\sum_{i=0}^{N-1} NMF_{t-i}}, \qquad
+    MFI_t = 100 - \frac{100}{1+MFR_t}
+    $$
 
 ---
 

@@ -136,7 +136,7 @@ $$
 
 Cuando una cartera contiene adquisiciones en diferentes monedas, LibreFolio:
 
-1. Determina la **moneda objetivo** (la más frecuente entre las adquisiciones)
+1. Determina la **moneda objetivo** a partir de la anulación de la solicitud cuando se proporciona; en caso contrario usa la moneda de la adquisición más reciente (determinístico), con respaldo en la moneda del activo
 2. Convierte todos los costes unitarios a la moneda objetivo utilizando tipos de cambio históricos
 3. Calcula el PMP en la moneda objetivo unificada
 
@@ -165,7 +165,7 @@ $$
 
 El motor calcula el PMP en línea durante el bucle diario de transacciones — no se necesitan consultas separadas a la base de datos. Esto logra un coste amortizado O(1) por transacción en lugar del coste O(N) de volver a consultar todo el historial.
 
-### 📅 de transacciones del mismo día
+### 📅 Ordenación de transacciones del mismo día
 
 Dentro de la misma fecha, **las adiciones se procesan antes que las reducciones**:
 

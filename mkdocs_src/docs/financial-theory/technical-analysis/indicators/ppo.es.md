@@ -14,21 +14,21 @@ Una lectura MACD de €2 significa algo muy diferente para una acción de €10 
 
 1. **Línea PPO** — la misma diferencia de EMA rápida/lenta que MACD, pero dividida por la EMA lenta y reescalada a un porcentaje:
 
- $$
- PPO_t = 100 \cdot \frac{EMA_{rápida}(C_t) - EMA_{lenta}(C_t)}{EMA_{lenta}(C_t)}
- $$
+    $$
+    PPO_t = 100 \cdot \frac{EMA_{rápida}(C_t) - EMA_{lenta}(C_t)}{EMA_{lenta}(C_t)}
+    $$
 
 2. **Línea de Señal** — un suavizado EMA de la propia línea PPO:
 
- $$
- Señal_t = EMA_{señal}(PPO_t)
- $$
+    $$
+    Señal_t = EMA_{señal}(PPO_t)
+    $$
 
 3. **Histograma** — el impulso del impulso:
 
- $$
- Histograma_t = PPO_t - Señal_t
- $$
+    $$
+    Histograma_t = PPO_t - Señal_t
+    $$
 
 ---
 

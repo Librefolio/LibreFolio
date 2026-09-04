@@ -3329,8 +3329,15 @@ test.describe('Gallery Screenshots', () => {
             await page.route('**/api/v1/assets/prices/query', async (route) => {
                 // The assets LIST also bulk-queries prices (per-card sparklines) before we
                 // reach the detail page — answer every requested item, not just Apple's.
-                const postData = route.request().postDataJSON?.() as Array<{asset_id?: number; target_currency?: string; include_events?: boolean}> | undefined;
-                const items = (postData ?? []).map((item) => {
+                // postDataJSON throws on an empty/non-JSON body; an unhandled throw leaves the
+                // request pending forever and the page stuck at data-busy — fall back to [].
+                let postData: Array<{asset_id?: number; target_currency?: string; include_events?: boolean}> = [];
+                try {
+                    postData = route.request().postDataJSON() ?? [];
+                } catch {
+                    postData = [];
+                }
+                const items = postData.map((item) => {
                     const currency = item?.target_currency ?? 'USD';
                     return {
                         asset_id: item?.asset_id ?? 0,
@@ -3496,6 +3503,66 @@ test.describe('Gallery Screenshots', () => {
                     await expect(page.getByTestId('asset-modal-form')).toBeVisible({timeout: 5000});
                     await page.waitForTimeout(500);
                     await screenshot(page, viewport, lang, theme, 'assets', 'create-modal');
+                    await page.keyboard.press('Escape');
+                    await page.waitForTimeout(200);
+                }
+            }
+        });
+
+        test('Asset distribution editors - sector and geographic', async ({page}, testInfo) => {
+            // Tesla is populated with both distributions summing to exactly 100%
+            // (sector: Consumer Discretionary 70 / Energy 30 — geographic: USA 50 / CHN 25 / DEU 25),
+            // so both editors render filled rows plus the green 100% total badge.
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await goToAssetsPage(page);
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+
+                    // Search for Tesla directly: navigateToAssetByName races the filter
+                    // debounce (waits data-busy=false, which is already false pre-refilter),
+                    // so instead wait until the first card actually shows the search hit.
+                    const searchInput = page.getByTestId('assets-search-input');
+                    await expect(searchInput).toBeVisible({timeout: 10_000});
+                    await searchInput.fill('Tesla');
+                    const teslaCard = page.locator('[data-testid^="asset-card-"]').first();
+                    await expect(teslaCard).toContainText('Tesla', {timeout: 10_000});
+                    await teslaCard.click();
+                    await page.waitForSelector('[data-testid="asset-detail-page"][data-busy="false"]', {timeout: 20_000});
+                    await expect(page.getByTestId('asset-detail-header')).toBeVisible({timeout: 10_000});
+
+                    // Open the edit modal — the button stays disabled until asset info
+                    // and classification have loaded, so waiting for enabled is the gate.
+                    const editBtn = page.getByTestId('asset-detail-edit-btn');
+                    await expect(editBtn).toBeEnabled({timeout: 10_000});
+                    await editBtn.click();
+                    await expect(page.getByTestId('asset-modal-form')).toBeVisible({timeout: 5_000});
+
+                    // Expand More Info (Identifiers + Classification area)
+                    const moreInfo = page.getByTestId('asset-modal-more-info');
+                    if ((await moreInfo.getAttribute('data-expanded')) !== 'true') {
+                        await moreInfo.click();
+                    }
+
+                    await expect(page.getByTestId('distribution-editor-sector')).toBeVisible({timeout: 5_000});
+                    await expect(page.getByTestId('distribution-editor-geographic')).toBeVisible({timeout: 5_000});
+                    // Populated distributions sum to 100% → totals render in the green (valid) state
+                    const sectorTotal = page.getByTestId('distribution-total-sector');
+                    const geoTotal = page.getByTestId('distribution-total-geographic');
+                    await expect(sectorTotal).toHaveClass(/text-green-600/, {timeout: 5_000});
+                    await expect(geoTotal).toHaveClass(/text-green-600/, {timeout: 5_000});
+                    await freezeAnimations(page);
+
+                    await sectorTotal.scrollIntoViewIfNeeded();
+                    await page.waitForTimeout(200);
+                    await screenshot(page, viewport, lang, theme, 'assets', 'distribution-editor-sector');
+
+                    await page.getByTestId('distribution-editor-geographic').scrollIntoViewIfNeeded();
+                    await page.waitForTimeout(200);
+                    await screenshot(page, viewport, lang, theme, 'assets', 'distribution-editor-geographic');
+
                     await page.keyboard.press('Escape');
                     await page.waitForTimeout(200);
                 }

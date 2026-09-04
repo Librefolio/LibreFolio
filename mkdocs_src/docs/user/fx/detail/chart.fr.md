@@ -28,7 +28,7 @@ Lors du passage au mode %, tous les signaux superposés sont également recalcul
 | **Zoom arrière** | Molette bas | Pincer vers l'intérieur |
 | **Réinitialiser le zoom** | Double-clic | Double-appui |
 
-Vous pouvez également utiliser les **préréglages de plage temporelle** (1W, 1M, 3M, 6M, 1Y, 2Y) ou sélectionner une plage de dates **Personnalisée** pour accéder rapidement à des périodes spécifiques.
+Vous pouvez également utiliser les **préréglages de plage temporelle** (1W, 1M, 3M, 6M, 1Y, 2Y, YTD, MAX) ou sélectionner une plage de dates **Personnalisée** pour accéder rapidement à des périodes spécifiques. Lorsque la barre d'outils a de l'espace libre, des **préréglages de remplissage** supplémentaires apparaissent pour l'occuper — 3Y, 5Y, 10Y aux côtés des préréglages de durée, et WTD, MTD, QTD aux côtés de YTD.
 
 !!! info "Disponibilité des données"
 
@@ -51,7 +51,7 @@ Survolez n'importe quel point du graphique pour voir :
 La barre d'outils du graphique permet un accès rapide à :
 
 - 📊 **Interrupteur du mode d'affichage** — Absolu / Pourcentage
-- ⏱️ **Plage temporelle** — 1W, 1M, 3M, 6M, 1Y, 2Y, Personnalisée
+- ⏱️ **Plage temporelle** — 1W, 1M, 3M, 6M, 1Y, 2Y, YTD, MAX, Personnalisée (plus les préréglages de remplissage 3Y/5Y/10Y et WTD/MTD/QTD quand la barre d'outils a de la place)
 - 📈 **[Signaux](signals.md)** — Activer/désactiver les superpositions d'indicateurs techniques
 - 📏 **[Mesures](measures.md)** — Outil de mesure par clics successifs
 - ✏️ **[Éditeur de données](data-editor.md)** — Modifier des points de données individuels

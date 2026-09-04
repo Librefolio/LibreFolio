@@ -108,6 +108,10 @@ At the end of parsing, the table displays a summary of the processing for each f
 
 ??? abstract "🧬 Unify Assets — appears when the same security was found under more than one name or code"
 
+    <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+        <img class="gallery-img" data-category="brokers" data-name="import-wizard-assets-step" alt="Import wizard — Unify Assets step with a proposed group">
+    </div>
+
     **When you will see it.** Whenever two or more of the instruments read from your files look
     like the same security — because they share an ISIN, a ticker or a name — or when your files
     describe one bond under two different codes. A single-file import in which every security is
@@ -144,6 +148,10 @@ At the end of parsing, the table displays a summary of the processing for each f
         alternative. See [Create & Edit Assets](../../assets/create-edit.md) for the full story.
 
 ??? warning "🔧 Corrections — appears when the parser booked rows it could not fully understand"
+
+    <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+        <img class="gallery-img" data-category="brokers" data-name="import-wizard-fix-step" alt="Import wizard — Corrections step with flagged rows">
+    </div>
 
     **When you will see it.** When your report contains lines the plugin recorded but could not
     read completely: a trade whose instrument or quantity the file simply does not carry, or a
@@ -185,6 +193,10 @@ At the end of parsing, the table displays a summary of the processing for each f
 
 ??? note "🧹 Duplicates — appears when the same movement is in two of the files you are importing together"
 
+    <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+        <img class="gallery-img" data-category="brokers" data-name="import-wizard-duplicates-step" alt="Import wizard — Duplicates step with a cross-file pair">
+    </div>
+
     **When you will see it.** Only when two or more files in this import overlap in time and
     contain the same movement. Duplicates against transactions **already in your database** do
     *not* open this step — they simply arrive at the final review already unchecked.
@@ -203,6 +215,10 @@ At the end of parsing, the table displays a summary of the processing for each f
       automatic choices.
     - **Compare side by side** when two copies differ and you want to see exactly how before
       choosing — the compare modal highlights the fields that differ.
+
+    <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+        <img class="gallery-img" data-category="brokers" data-name="import-nway-compare" alt="N-way compare modal with per-field differences highlighted">
+    </div>
 
     Each group is labelled **Total** (the files agree on every detail — a pure overlap) or
     **Partial** (something differs, so it deserves a look).

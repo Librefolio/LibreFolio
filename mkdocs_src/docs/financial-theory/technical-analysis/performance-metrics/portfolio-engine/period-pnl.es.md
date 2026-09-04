@@ -1,7 +1,5 @@
 # 📊 PnL del Período (Ganancias y Pérdidas)
 
-*[⬅️ Volver a la Descripción General de Métricas de Rendimiento](../index.md)*
-
 ## 💡 ¿Qué es el PnL del Período?
 
 La ganancia o pérdida monetaria absoluta generada por tu cartera dentro de $[t_0, t_1]$, ajustada por flujos de efectivo externos.
@@ -77,3 +75,4 @@ $$
 - 💼 [NAV](nav.md) — punto extremo de toda fórmula de PnL
 - 💸 [Capital Depositado](deposited-capital.md) — PnL Total desde el inicio hasta la fecha
 - ⚙️ [Portfolio Engine](index.md) — modelo matemático completo
+- 📈 [Descripción General de Métricas de Rendimiento](../index.md) — todas las métricas de rendimiento de un vistazo

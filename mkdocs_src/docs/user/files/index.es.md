@@ -20,7 +20,7 @@ Los recursos estáticos son **visibles para todos los usuarios** del sistema. Aq
 
 Estos archivos se guardan en el directorio `custom-uploads/` del servidor.
 
-**Menú Contextual**: Haga clic derecho en cualquier fila de archivo (en la vista de lista) para acceder a las acciones rápidas (Vista previa, Cambiar nombre, Eliminar).
+**Menú Contextual**: Haga clic derecho en cualquier fila de archivo (en la vista de lista) para acceder a las acciones rápidas (Vista previa, Copiar Enlace, Descargar, Eliminar).
 
 Puede cambiar entre **vista de lista** y **vista de cuadrícula** para ver una vista previa visual de los archivos de imagen:
 
@@ -40,7 +40,7 @@ Los informes de bróker tienen una **visibilidad restringida**: solo puede ver l
 - ✅ **Resultados de la lectura** del sistema de importación automática (BRIM)
 - ❌ Archivos cuya **lectura falló** (guardados para depuración)
 
-**Menú Contextual**: Haga clic derecho en cualquier fila de informe para acceder a las acciones rápidas (Vista previa, Cambiar nombre, Eliminar).
+**Menú Contextual**: Haga clic derecho en cualquier fila de informe para acceder a las acciones rápidas (Vista previa, Descargar, Eliminar).
 
 ---
 
@@ -68,15 +68,15 @@ Si desea importar transacciones o gestionar informes existentes:
 
 1. Vaya a la pestaña **Informes de Bróker**.
 2. Suba el archivo CSV o Excel exportado de su bróker (Degiro, Interactive Brokers, eToro, Directa SIM, etc.).
-3. Elija a qué **bróker asociar** el archivo: esto determina qué cuenta de bróker recibe las transacciones importadas.
-4. El sistema detecta automáticamente el formato y ejecuta el **[Asistente de Importación](../transactions/import/index.md)** guiado.
+3. Elija a qué **bróker asociar** el archivo: esto determina qué cuenta de bróker recibirá las transacciones importadas.
+4. El archivo se almacena y aparece en la lista de informes. **Todavía no se ejecuta ninguna importación**: para analizarlo de verdad e importar las transacciones, abra el **[Asistente de Importación](../transactions/import/index.md)** (Transacciones → **Importar**) — su paso *Seleccionar Archivos* lista los informes ya subidos, así puede elegir uno en lugar de subirlo de nuevo.
 
 ### ⚙️ Acciones en Informes Existentes
 
 Haga clic derecho en cualquier informe en la tabla para abrir su menú contextual:
-- 🔄 **Reprocesar (Reprocess)**: Ejecuta de nuevo el lector de importación en el informe. Esto es útil después de actualizar un complemento de importación o si borró transacciones por error y desea restaurarlas.
+- 👁️ **Vista previa (Preview)**: Inspecciona el contenido del archivo sin salir de la página.
 - 📥 **Descargar (Download)**: Descarga el archivo sin procesar original.
-- 🗑️ **Eliminar (Delete)**: Elimina el informe y todas las transacciones asociadas de su libro mayor.
+- 🗑️ **Eliminar (Delete)**: Elimina el archivo y sus metadatos. Las transacciones ya importadas desde él **permanecen en el libro mayor** — eliminar un informe nunca elimina transacciones.
 
 !!! info "Asociación ≠ Lectura"
 

@@ -165,7 +165,7 @@ Cependant, pour une simplicité et une sécurité maximales sans ouvrir de ports
 
 ---
 
-## 🏷️ Variantes de l'Image : Full et Light
+## 🏷️ Variantes de l'Image : Full et Light {: #image-variants-full-and-light }
 
 L'image officielle est publiée en deux variantes :
 
@@ -196,7 +196,7 @@ Pour plus de détails sur chaque option et sur la façon dont les variables sont
 
 ---
 
-## 💾 Sauvegarde des Données
+## 💾 Sauvegarde des Données {#data-backup}
 
 Toutes les données de LibreFolio (base de données SQLite, fichiers téléversés par les utilisateurs, rapports chargés et journaux) sont sauvegardées localement dans le dossier `./librefolio-data` créé à côté du fichier `docker-compose.yml`.
 
@@ -206,11 +206,11 @@ Pour des instructions détaillées sur ce qu'il faut sauvegarder et comment effe
 
 ## 🔄 Mise à jour de LibreFolio {#updating}
 
-### ⚠️ Attention : Statut Alpha
-LibreFolio est actuellement en cours de développement **Alpha**. Cela signifie qu'entre les versions, il pourrait y avoir des modifications structurelles ou des migrations de base de données susceptibles d'empêcher le démarrage de la nouvelle version, nécessitant une intervention manuelle ou la restauration d'une version précédente.
+### ⚠️ Attention : Statut Beta
+LibreFolio est actuellement en **Beta** (version 1.1.0). Les migrations de la base de données s'exécutent automatiquement au démarrage du conteneur et sont conçues pour préserver les installations existantes, mais entre les versions il peut toujours y avoir des modifications structurelles — certains sous-systèmes (comme l'Analyse de Risque) sont explicitement marqués comme beta. Avoir une [sauvegarde](#data-backup) avant de mettre à jour est toujours une bonne idée.
 
 - En utilisant le tag `:latest` dans le fichier `docker-compose.yml`, vous recevrez immédiatement les dernières fonctionnalités mais vous vous exposerez à de potentielles incompatibilités lors des mises à jour automatiques.
-- Si vous préférez la stabilité et un contrôle absolu, nous vous recommandons de figer l'image en remplaçant `:latest` par un tag de version spécifique (par exemple, `ghcr.io/librefolio/librefolio:v0.10.0`).
+- Si vous préférez la stabilité et un contrôle absolu, nous vous recommandons de figer l'image en remplaçant `:latest` par un tag de version spécifique (par exemple, `ghcr.io/librefolio/librefolio:v1.1.0`).
 
 ### 🛠️ 1. Mise à jour Manuelle
 

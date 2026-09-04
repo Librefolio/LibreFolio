@@ -28,6 +28,8 @@ I depositi e i prelievi non modificano il valore di mercato del tuo portafoglio,
 
 Senza un tracciamento accurato di depositi e prelievi, è impossibile distinguere tra i rendimenti *generati* dal portafoglio e i rendimenti *causati* dall'aggiunta o rimozione di liquidità.
 
+Sfumatura per l'importazione da broker: un export di soli titoli può omettere le gambe di cassa del conto bancario che hanno finanziato le operazioni o ricevuto i proventi. In tal caso un plugin può generare automaticamente contropartite di cassa per mantenere neutra la liquidità del broker importato: `DEPOSIT + BUY` per un acquisto a contanti, oppure `SELL + WITHDRAWAL` per una vendita/rimborso. Crédit Agricole usa questo modello solo per la sua **Lista Movimenti Deposito Titoli**: le cedole e i premi a scadenza restano reddito, ma ricevono voci `WITHDRAWAL` di compensazione. La sua **Lista Movimenti Conto** porta contante bancario reale e non crea quelle voci di compensazione.
+
 !!! tip "Learn more"
 
     Consulta **[📈 Rendimenti e Tassi di Crescita](../../fundamentals/returns.md)** per le formule e la metodologia.
