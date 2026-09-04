@@ -1509,7 +1509,7 @@
     }
   },
   "user/assets/create-edit.en.md": {
-    "md5": "65d9d6f90e1d1c77f6fb4ec7337c8aa6",
+    "md5": "6aa33d0cd18386c9ef5473c682f88c55",
     "langs_done": [
       "es",
       "fr",
@@ -1530,7 +1530,9 @@
         "structural_issues": 1,
         "elapsed_s": 1292.8,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. LINK_URLS: URL set differs.\n  Missing in translation: ['#%EF%B8%8F-editing-an-asset', '#-asset-creation-flows']\n  Added in translation:   ['#-flussi-di-creazione-degli-asset', '#-modifica-di-un-asset']\n\nSOURCE_OUTLINE (for reference):\n  # ➕ Create & Edit Assets\n    ## 🚀 Asset Creation Flows\n    ## 🧪 Testing Provider Configuration\n    ## 🔎 Smart Search Details\n    ## 🔌 Provider Assignment\n    ## 🛠️ Editing an Asset\n    ## 🗺️ Manual Geographic & Sector Distributions\n    ## 🏷️ One instrument, several codes\n      ### Italian retail government bonds (BTP Valore, BTP Più, BTP Italia)\n    ## 🧲 Merging duplicate assets\n    ## 🔗 Related",
-        "final_structural_issues": 1
+        "final_structural_issues": 1,
+        "stamped_at": "2026-09-04T19:52:10.814766+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-09-04T18:55:28.672167+00:00",
@@ -1543,7 +1545,9 @@
         "structural_issues": 0,
         "elapsed_s": 1065.1,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 2\n\n1. LINK_URLS: URL set differs.\n  Missing in translation: ['#%EF%B8%8F-editing-an-asset', '#-asset-creation-flows']\n  Added in translation:   ['#%EF%B8%8F-modifier-un-actif', '#-processus-de-creation-dactifs']\n2. BOLD_MARKERS: source=42, translated=44 (Δ+2)\n  L61: src=0 trn=1\n    EN: \n    TR: Cliquez sur le bouton **Modifier** (✏️) de la [page de détail](detail/index.md) pour ouvrir la fenêtre de l'actif avec t\n  L63: src=0 trn=1\n    EN: \n    TR: Le champ **Autres identifiants** est une liste modifiable d'identifiants alternatifs. Les importations et les fournisseu\n  L66: src=1 trn=0\n    EN: Click the **Edit** (✏️) button on the [detail page](detail/index.md) to open the asset modal with all fields pre-populat\n    TR: \n  L67: src=0 trn=3\n    EN: \n    TR: Les fournisseurs renseignent la **répartition géographique** et la **distribution sectorielle** lorsqu'ils le peuvent — \n  L68: src=1 trn=0\n    EN: The **Other identifiers** field is an editable list of alternative identifiers. Imports and\n    TR: \n  L69: src=0 trn=1\n    EN: providers can add broker labels, technical codes, or fallback identifiers there; each value remains a\n    TR: Dans la fenêtre de l'actif ([création](#-processus-de-creation-dactifs) ou [modification](#%EF%B8%8F-modifier-un-actif))\n  L71: src=0 trn=1\n    EN: \n    TR: 1. **Répartition géographique** — une ligne par pays/zone, avec son poids en pourcentage.\n  L72: src=0 trn=1\n    EN: ## 🗺️ Manual Geographic & Sector Distributions\n    TR: 2. **Distribution sectorielle** — une ligne par secteur, avec son poids en pourcentage.\n  … and more (showing first 8 mismatches)\n\nSOURCE_OUTLINE (for reference):\n  # ➕ Create & Edit Assets\n    ## 🚀 Asset Creation Flows\n    ## 🧪 Testing Provider Configuration\n    ## 🔎 Smart Search Details\n    ## 🔌 Provider Assignment\n    ## 🛠️ Editing an Asset\n    ## 🗺️ Manual Geographic & Sector Distributions\n    ## 🏷️ One instrument, several codes\n      ### Italian retail government bonds (BTP Valore, BTP Più, BTP Italia)\n    ## 🧲 Merging duplicate assets\n    ## 🔗 Related",
-        "final_structural_issues": 2
+        "final_structural_issues": 2,
+        "stamped_at": "2026-09-04T19:52:10.814766+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-09-04T18:55:28.672348+00:00",
@@ -1556,7 +1560,9 @@
         "structural_issues": 0,
         "elapsed_s": 1319.7,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. LINK_URLS: URL set differs.\n  Missing in translation: ['#%EF%B8%8F-editing-an-asset', '#-asset-creation-flows']\n  Added in translation:   ['#%EF%B8%8F-edicion-de-un-activo', '#-flujos-de-creacion-de-activos']\n\nSOURCE_OUTLINE (for reference):\n  # ➕ Create & Edit Assets\n    ## 🚀 Asset Creation Flows\n    ## 🧪 Testing Provider Configuration\n    ## 🔎 Smart Search Details\n    ## 🔌 Provider Assignment\n    ## 🛠️ Editing an Asset\n    ## 🗺️ Manual Geographic & Sector Distributions\n    ## 🏷️ One instrument, several codes\n      ### Italian retail government bonds (BTP Valore, BTP Più, BTP Italia)\n    ## 🧲 Merging duplicate assets\n    ## 🔗 Related",
-        "final_structural_issues": 1
+        "final_structural_issues": 1,
+        "stamped_at": "2026-09-04T19:52:10.814766+00:00",
+        "stamped_by": "translate-stamp"
       }
     }
   },
