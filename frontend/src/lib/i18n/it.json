@@ -3092,6 +3092,7 @@
     "TIMEOUT": "Il provider non ha risposto in tempo.",
     "MISSING_PARAMS": "Alla configurazione del provider mancano parametri obbligatori.",
     "PARSE_ERROR": "La risposta del provider non è stata interpretabile.",
-    "SCRAPE_ERROR": "La pagina del provider non è stata leggibile."
+    "SCRAPE_ERROR": "La pagina del provider non è stata leggibile.",
+    "UNSUPPORTED_PAGE": "Il provider ha trovato questo strumento ma la sua pagina di mercato non è ancora leggibile. Apri una issue su GitHub (Librefolio/LibreFolio) segnalando questo ISIN così possiamo aggiungere il supporto."
   }
 }

@@ -180,6 +180,19 @@ These affect newly introduced analytics or local UI persistence only — the sta
 
 ---
 
+## [1.0.1] - 2026-07-21
+
+First patch release after 1.0.0 — a day-one polish round from real-world use: FX selection UX, a candlestick refresh bug, a fairer current price for thinly-traded ETFs, and two CI/test-runner fixes for fresh checkouts.
+
+### 🐛 Fixed
+
+- **FX & positions UX** — the currency selectors only offer pairs with a configured route (with a back-to-default and a create-pair shortcut); missing-FX data-quality issues now distinguish "no route configured" (add the pair) from "provider synced but gaps" (sync it, with the date range and gap count) from "manual-only"; the displayed currency stays frozen until the backend report resolves, so labels never mismatch stale numbers; the banner's sync CTA shows progress and reports "no new data" when a sync adds nothing.
+- **Candlestick charts ignored range changes** — the series was bound to a manually-cached derivation that short-circuited before reading the data, so Svelte stopped tracking it; switching the time range now redraws the candles.
+- **Thinly-traded ETFs showed a stale current price** — on JustETF/Gettex these trade mostly at the opening auction, so `last` sat at the open all day; the current price now prefers the live `mid` (bid+ask)/2, with a fallback to the performance chart's latest quote for all currencies.
+- **Fresh-checkout CI/test failures** — the test runner's frontend build and the CI pipeline consumed gitignored build artifacts (the generated API client) before ensuring they exist; both now generate them first.
+
+---
+
 ## [1.0.0] - 2026-07-20
 
 LibreFolio is a self-hosted, open-source portfolio tracker: your brokers' reports in,

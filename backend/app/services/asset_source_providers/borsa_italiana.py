@@ -11,6 +11,7 @@ import re
 from datetime import date
 from decimal import Decimal
 from typing import Dict, List
+from urllib.parse import parse_qs, urlparse
 
 from backend.app.db import IdentifierType
 from backend.app.db.models import AssetType, ProviderInputType
@@ -35,6 +36,7 @@ try:
         DatiNonDisponibili,
         RicercaNonDisponibile,
         Sessione,
+        StrumentoNonRisolto,
         StrumentoNonTrovato,
         cerca,
         estrai_codice_da_url,
@@ -75,24 +77,75 @@ _TIPO_TO_ASSET_TYPE: dict[str, AssetType] = {
     # Italian labels (lingua="it")
     "azione": AssetType.STOCK,
     "obbligazione": AssetType.BOND,
+    "obbligazione eurotlx": AssetType.BOND,
     "etf": AssetType.ETF,
     "etc/etn": AssetType.ETF,
     "fondi comuni": AssetType.FUND,
+    "fondo chiuso": AssetType.FUND,
     # English labels (lingua="en")
     "stock": AssetType.STOCK,
     "share": AssetType.STOCK,
     "bond": AssetType.BOND,
+    "bond eurotlx": AssetType.BOND,
     "government bond": AssetType.BOND,
     "corporate bond": AssetType.BOND,
     "fund": AssetType.FUND,
     "common fund": AssetType.FUND,
     "common funds": AssetType.FUND,
+    "closed-end fund": AssetType.FUND,
+    "closed-end funds": AssetType.FUND,
 }
+
+# typeLabels of quotes that are NOT purchasable instruments (indices are
+# benchmarks): excluded from search results — emitting them would create
+# dead assets (exactly what the no-dead-results rule forbids).
+_TIPO_NON_ASSET: frozenset[str] = frozenset({"indice", "index"})
 
 
 def _map_asset_type(tipo: str) -> AssetType | None:
     """Map a Borsa Italiana type string to AssetType (case-insensitive)."""
-    return _TIPO_TO_ASSET_TYPE.get(tipo.lower().strip()) if tipo else None
+    if not tipo:
+        return None
+    key = tipo.lower().strip()
+    mapped = _TIPO_TO_ASSET_TYPE.get(key)
+    if mapped:
+        return mapped
+    # Prefix fallback: market-suffixed labels (e.g. "Obbligazione <Mercato>").
+    if key.startswith("obbligazione") or key.startswith("bond"):
+        return AssetType.BOND
+    return None
+
+
+def _parse_link_market_params(link: str | None) -> tuple[str | None, str | None]:
+    """Extract (mic, platform) from a Borsa Italiana instrument link.
+
+    The site's own search response carries the routing parameters in the link
+    query string (e.g. ``…&mic=ETLX&platform=TLX``) — sourcing them from there
+    keeps every market (present and future) supported without hardcoded maps.
+    """
+    if not link:
+        return (None, None)
+    try:
+        qs = parse_qs(urlparse(link).query)
+        mic = (qs.get("mic") or [None])[0]
+        platform = (qs.get("platform") or [None])[0]
+        return (mic.strip().upper() if mic else None, platform.strip().upper() if platform else None)
+    except Exception:
+        return (None, None)
+
+
+def _unsupported_page_error(identifier: str, err: Exception) -> AssetSourceError:
+    """Build the user-facing error for an instrument page we can't route.
+
+    The site search found the instrument but neither the universal URL nor our
+    params resolve a market page we can parse — likely a market family we don't
+    handle yet. The message invites the user to report it so support can be added.
+    """
+    return AssetSourceError(
+        f"Borsa Italiana: cannot resolve a usable market page for '{identifier}' " "(market not supported yet). Please open an issue at " "https://github.com/Librefolio/LibreFolio/issues reporting this ISIN.",
+        "UNSUPPORTED_PAGE",
+        {"identifier": identifier, "error": str(err)},
+    )
 
 
 _SEARCH_TERM_ABBREVIATIONS: tuple[tuple[str, str], ...] = (
@@ -294,7 +347,19 @@ class BorsaItalianaProvider(AssetSourceProvider):
             # BI code; the generic search/scheda page does not resolve a fund by ISIN,
             # so building the URL from the ISIN identifier yields a dead page.
             return f"https://www.borsaitaliana.it/borsa/fondi/dettaglio/{codice_fondo}.html?lang={lingua}"
-        return f"https://www.borsaitaliana.it/borsa/search/scheda.html?code={identifier}&lang={lingua}"
+        # Market routing params (mic/platform) come from the site's own search link and
+        # are stored in provider_params: with them the universal URL redirects to the
+        # canonical market page for EVERY market (EuroTLX included). Without them
+        # (assets saved before they were propagated) we keep the bare URL, which still
+        # resolves for MTA/MOT/ETFplus/SeDeX/MIV but not for EuroTLX.
+        url = f"https://www.borsaitaliana.it/borsa/search/scheda.html?code={identifier}&lang={lingua}"
+        mic = (provider_params or {}).get("mic")
+        platform = (provider_params or {}).get("platform")
+        if mic:
+            url += f"&mic={mic}"
+        if platform:
+            url += f"&platform={platform}"
+        return url
 
     @property
     def test_cases(self) -> list[dict]:
@@ -328,6 +393,18 @@ class BorsaItalianaProvider(AssetSourceProvider):
                 "required": False,
                 "description": "Internal Borsa Italiana fund code (auto-filled for mutual funds; enables NAV pricing when the fund is not on the XMIL market API).",
             },
+            {
+                "key": "mic",
+                "type": "string",
+                "required": False,
+                "description": "Market MIC (auto-filled from search, e.g. ETLX for EuroTLX; routes the instrument page and metadata to the right market).",
+            },
+            {
+                "key": "platform",
+                "type": "string",
+                "required": False,
+                "description": "Trading platform (auto-filled from search, e.g. TLX for EuroTLX; required by some markets to resolve the instrument page).",
+            },
         ]
 
     # ── Current value ───────────────────────────────────────────────────
@@ -351,14 +428,21 @@ class BorsaItalianaProvider(AssetSourceProvider):
                 "INVALID_IDENTIFIER_TYPE",
             )
 
+        mic = (provider_params or {}).get("mic")
+        platform = (provider_params or {}).get("platform")
+
         try:
-            prezzo = ottieni_prezzo_corrente(identifier, sessione=_get_session())
+            prezzo = ottieni_prezzo_corrente(identifier, sessione=_get_session(), mic=mic, platform=platform)
             return FACurrentValue(
                 value=prezzo.prezzo,
                 currency=prezzo.valuta,
                 as_of_date=prezzo.data,
                 source=self.provider_name,
             )
+        except StrumentoNonRisolto as e:
+            # Must precede StrumentoNonTrovato (subclass): the site knows the
+            # instrument family but we can't route it — actionable for us.
+            raise _unsupported_page_error(identifier, e) from e
         except StrumentoNonTrovato as e:
             raise AssetSourceError(
                 f"Instrument not found on Borsa Italiana: {identifier}",
@@ -420,6 +504,7 @@ class BorsaItalianaProvider(AssetSourceProvider):
                 periodo=periodo,
                 sessione=_get_session(),
             )
+            valuta = risultato.valuta or "EUR"
 
             prices: List[FAPricePoint] = []
             for punto in risultato.punti:
@@ -434,16 +519,19 @@ class BorsaItalianaProvider(AssetSourceProvider):
                         low=punto.minimo if punto.minimo else None,
                         close=punto.chiusura if punto.chiusura else punto.ultimo,
                         volume=punto.volume if punto.volume else None,
-                        currency="EUR",
+                        currency=valuta,
                         backward_fill_info=None,
                     )
                 )
 
             return FAHistoricalData(
                 prices=prices,
-                currency="EUR",
+                currency=valuta,
                 source=self.provider_name,
             )
+        except StrumentoNonRisolto as e:
+            # Must precede StrumentoNonTrovato (subclass).
+            raise _unsupported_page_error(identifier, e) from e
         except StrumentoNonTrovato as e:
             raise AssetSourceError(
                 f"Instrument not found on Borsa Italiana: {identifier}",
@@ -566,7 +654,7 @@ class BorsaItalianaProvider(AssetSourceProvider):
         emit_language_order = tuple(lg for lg in preferred if lg in self.SUPPORTED_LANGUAGES) + tuple(lg for lg in self.SUPPORTED_LANGUAGES if lg not in preferred)
         return [self._fund_search_item(dati, lingua, display_name=f"{dati.nome} {self.LANGUAGE_FLAGS[lingua]}") for lingua in emit_language_order]
 
-    def _scheda_search_items_all_langs(self, isin: str, mic: str | None) -> list[dict] | None:
+    def _scheda_search_items_all_langs(self, isin: str, mic: str | None, platform: str | None = None) -> list[dict] | None:
         """Emit the canonical search-item set for a resolved stock/bond/ETF page.
 
         Mirrors :meth:`_fund_search_items_all_langs` for ISIN-priced instruments: the
@@ -576,7 +664,7 @@ class BorsaItalianaProvider(AssetSourceProvider):
         ``None`` when the page can't be fetched or parsed.
         """
         try:
-            scheda = ottieni_scheda(isin, mic, "it", sessione=_get_session())
+            scheda = ottieni_scheda(isin, mic, "it", sessione=_get_session(), platform=platform)
         except (StrumentoNonTrovato, DatiNonDisponibili):
             return None
         except Exception as e:  # best-effort — never fatal to search
@@ -593,7 +681,11 @@ class BorsaItalianaProvider(AssetSourceProvider):
                 "display_name": f"{scheda.nome} {self.LANGUAGE_FLAGS[lingua]}",
                 "currency": scheda.valuta or "EUR",
                 "type": asset_type.value if asset_type else scheda.tipo,
-                "provider_params": {"language": lingua},
+                "provider_params": {
+                    "language": lingua,
+                    **({"mic": mic} if mic else {}),
+                    **({"platform": platform} if platform else {}),
+                },
             }
             for lingua in emit_language_order
         ]
@@ -639,7 +731,20 @@ class BorsaItalianaProvider(AssetSourceProvider):
         match = _SCHEDA_ISIN_RE.search(url)
         if not match:
             return None
-        return self._scheda_search_items_all_langs(match.group(1), match.group(2))
+        isin, mic = match.group(1), match.group(2)
+        # The canonical URL carries no platform (EuroTLX needs it): rediscover the
+        # authoritative mic/platform from the site's own search by ISIN — still no
+        # hardcoded market maps, and interactive resolve_url can afford one extra call.
+        platform = None
+        try:
+            for r in cerca(isin, lingua="it", sessione=_get_session()):
+                if (r.isin or "").upper() == isin.upper():
+                    found_mic, platform = _parse_link_market_params(getattr(r, "link", None))
+                    mic = found_mic or mic
+                    break
+        except Exception as e:  # best-effort — fall back to URL-only params
+            logger.debug(f"Borsa Italiana resolve_url: market-param discovery failed for '{isin}': {e}")
+        return self._scheda_search_items_all_langs(isin, mic, platform)
 
     # ── Search ──────────────────────────────────────────────────────────
 
@@ -676,11 +781,26 @@ class BorsaItalianaProvider(AssetSourceProvider):
             # Emit each instrument's language variants together (Italian before English within every
             # group), so the two rows of an instrument never interleave with a sibling.
             for r in results:
+                if (r.tipo or "").lower().strip() in _TIPO_NON_ASSET:
+                    # Indices are benchmarks, not purchasable instruments.
+                    continue
                 asset_type = _map_asset_type(r.tipo)
+                # Market routing params from the site's own link (None for funds,
+                # whose link carries only the internal code).
+                mic, platform = _parse_link_market_params(getattr(r, "link", None))
+                if asset_type != AssetType.FUND and not mic:
+                    # No-dead-results rule: without mic the generated URL would be
+                    # the unresolved generic /search/ page — skip rather than emit
+                    # a result that can't work downstream.
+                    logger.debug(f"Borsa Italiana search: skipping '{r.isin}' ({r.nome}): no market params in site link")
+                    continue
                 for lingua in emit_language_order:
                     flag = self.LANGUAGE_FLAGS[lingua]
 
-                    if asset_type == AssetType.FUND:
+                    # NAV-by-code path is only for open-end mutual funds, whose link
+                    # carries NO mic (internal code as symbol). Closed-end funds
+                    # (MIV) have a real ISIN + mic and price like any listed instrument.
+                    if asset_type == AssetType.FUND and not mic:
                         # For funds the search API returns the internal code in `isin`,
                         # not a real ISIN; only the fund page holds the real ISIN + NAV.
                         codice = r.isin
@@ -708,14 +828,20 @@ class BorsaItalianaProvider(AssetSourceProvider):
                             )
                         continue
 
+                    market_params = {"language": lingua, "mic": mic}
+                    if platform:
+                        market_params["platform"] = platform
                     items.append(
                         {
                             "identifier": r.isin,
                             "identifier_type": IdentifierType.ISIN,
                             "display_name": f"{r.nome} {flag}",
-                            "currency": "EUR",
+                            # Currency is not in the search payload: leave it unknown
+                            # rather than guessing EUR (EuroTLX hosts FX-denominated
+                            # bonds); the metadata fetch fills the real one.
+                            "currency": None,
                             "type": asset_type.value if asset_type else r.tipo,
-                            "provider_params": {"language": lingua},
+                            "provider_params": market_params,
                         }
                     )
             return items
@@ -813,7 +939,9 @@ class BorsaItalianaProvider(AssetSourceProvider):
 
         try:
             lingua = self._get_lingua(provider_params)
-            scheda = ottieni_scheda(identifier, lingua=lingua, sessione=_get_session())
+            mic = (provider_params or {}).get("mic")
+            platform = (provider_params or {}).get("platform")
+            scheda = ottieni_scheda(identifier, mic=mic, lingua=lingua, sessione=_get_session(), platform=platform)
 
             asset_type = _map_asset_type(scheda.tipo)
 
@@ -874,6 +1002,9 @@ class BorsaItalianaProvider(AssetSourceProvider):
                 identifier_isin=identifier,
                 identifier_ticker=scheda.ticker if scheda.ticker else None,
             )
+        except StrumentoNonRisolto as e:
+            # Unresolved market page: actionable — surface, don't swallow.
+            raise _unsupported_page_error(identifier, e) from e
         except Exception as e:
             logger.warning(f"Could not fetch metadata for {identifier} from Borsa Italiana: {e}")
             return None

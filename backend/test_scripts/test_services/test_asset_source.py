@@ -250,7 +250,7 @@ async def test_borsa_history_uses_remote_fallback_for_min_start(monkeypatch):
     def fake_ottieni_storico(identifier, periodo, sessione):
         calls["identifier"] = identifier
         calls["periodo"] = periodo
-        return SimpleNamespace(punti=punti)
+        return SimpleNamespace(punti=punti, valuta="EUR")
 
     monkeypatch.setattr(borsa_provider_module, "BORSA_ITALIANA_AVAILABLE", True)
     monkeypatch.setattr(borsa_provider_module, "_get_session", lambda: object())
