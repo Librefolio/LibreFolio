@@ -256,6 +256,23 @@ def _infer_sector(scheda) -> str | None:
     return None
 
 
+def _storico_con_mic_retry(identifier: str, periodo: str, mic: str | None):
+    """Fetch history with a MIC-as-exchCode retry.
+
+    The chart API natively knows only XMIL; some markets (EuroTLX) answer under
+    their own exchCode, which equals the MIC. The library's auto-discovery already
+    covers this via the site search — but when the ISIN is temporarily de-indexed
+    from the search, the stored MIC lets us retry directly. Never triggers for
+    XMIL-known markets (they resolve on the first attempt).
+    """
+    try:
+        return ottieni_storico(identifier, periodo=periodo, sessione=_get_session())
+    except StrumentoNonTrovato:
+        if not mic:
+            raise
+        return ottieni_storico(identifier, periodo=periodo, sessione=_get_session(), exchange=mic)
+
+
 def _select_period(start_date: date, end_date: date) -> str:
     """Select the best API period to cover the requested date range.
 
@@ -350,11 +367,17 @@ class BorsaItalianaProvider(AssetSourceProvider):
             # BI code; the generic search/scheda page does not resolve a fund by ISIN,
             # so building the URL from the ISIN identifier yields a dead page.
             return f"https://www.borsaitaliana.it/borsa/fondi/dettaglio/{codice_fondo}.html?lang={lingua}"
-        # Market routing params (mic/platform) come from the site's own search link and
-        # are stored in provider_params: with them the universal URL redirects to the
-        # canonical market page for EVERY market (EuroTLX included). Without them
-        # (assets saved before they were propagated) we keep the bare URL, which still
-        # resolves for MTA/MOT/ETFplus/SeDeX/MIV but not for EuroTLX.
+        # Market routing: the stored page URL (from the site's own search link or a
+        # link-finder hit) is always a working page by construction — prefer it over
+        # rebuilding. This is what keeps EuroTLX links alive when `platform` is missing
+        # (e.g. asset created while the site search had the ISIN de-indexed).
+        stored_url = (provider_params or {}).get("url")
+        if stored_url:
+            sep = "&" if "?" in stored_url else "?"
+            return stored_url if f"lang={lingua}" in stored_url else f"{stored_url}{sep}lang={lingua}"
+        # Without a stored URL: mic/platform params route the universal URL to the
+        # canonical market page (EuroTLX included). Without them (assets saved before
+        # they were propagated) the bare URL still resolves for MTA/MOT/ETFplus/SeDeX/MIV.
         url = f"https://www.borsaitaliana.it/borsa/search/scheda.html?code={identifier}&lang={lingua}"
         mic = (provider_params or {}).get("mic")
         platform = (provider_params or {}).get("platform")
@@ -441,7 +464,16 @@ class BorsaItalianaProvider(AssetSourceProvider):
         platform = (provider_params or {}).get("platform")
 
         try:
-            prezzo = ottieni_prezzo_corrente(identifier, sessione=_get_session(), mic=mic, platform=platform)
+            try:
+                prezzo = ottieni_prezzo_corrente(identifier, sessione=_get_session(), mic=mic, platform=platform)
+            except (StrumentoNonRisolto, StrumentoNonTrovato):
+                if not mic:
+                    raise
+                # The chart API only knows XMIL natively; some markets (EuroTLX) live
+                # under their own exchCode, which equals the MIC. If the site-search
+                # auto-discovery can't supply it (e.g. ISIN temporarily de-indexed),
+                # retry with the stored MIC as the exchange code.
+                prezzo = ottieni_prezzo_corrente(identifier, sessione=_get_session(), exchange=mic, mic=mic, platform=platform)
             return FACurrentValue(
                 value=prezzo.prezzo,
                 currency=prezzo.valuta,
@@ -508,11 +540,7 @@ class BorsaItalianaProvider(AssetSourceProvider):
         try:
             effective_start = ASSET_HISTORY_MIN_FALLBACK if start_date == "min" else start_date
             periodo = _select_period(effective_start, end_date)
-            risultato = ottieni_storico(
-                identifier,
-                periodo=periodo,
-                sessione=_get_session(),
-            )
+            risultato = _storico_con_mic_retry(identifier, periodo, (provider_params or {}).get("mic"))
             valuta = risultato.valuta or "EUR"
 
             prices: List[FAPricePoint] = []
@@ -687,6 +715,10 @@ class BorsaItalianaProvider(AssetSourceProvider):
         real_isin = scheda.isin or isin
         preferred = ("it", "en")
         emit_language_order = tuple(lg for lg in preferred if lg in self.SUPPORTED_LANGUAGES) + tuple(lg for lg in self.SUPPORTED_LANGUAGES if lg not in preferred)
+        # The page URL we actually loaded (scheda.url_pagina = post-redirect canonical,
+        # or the link-finder's canonical URL): stored so get_asset_url never rebuilds
+        # a dead universal link for markets whose routing params we don't have.
+        page_url = scheda.url_pagina or url_diretto
         return [
             {
                 "identifier": real_isin,
@@ -698,6 +730,7 @@ class BorsaItalianaProvider(AssetSourceProvider):
                     "language": lingua,
                     **({"mic": mic} if mic else {}),
                     **({"platform": platform} if platform else {}),
+                    **({"url": page_url} if page_url else {}),
                 },
             }
             for lingua in emit_language_order
@@ -848,6 +881,11 @@ class BorsaItalianaProvider(AssetSourceProvider):
                     market_params = {"language": lingua, "mic": mic}
                     if platform:
                         market_params["platform"] = platform
+                    # The site's own link routes correctly by construction (it carries
+                    # mic+platform) — stored so get_asset_url never rebuilds a dead link.
+                    link = getattr(r, "link", None)
+                    if link:
+                        market_params["url"] = link
                     items.append(
                         {
                             "identifier": r.isin,
@@ -958,7 +996,15 @@ class BorsaItalianaProvider(AssetSourceProvider):
             lingua = self._get_lingua(provider_params)
             mic = (provider_params or {}).get("mic")
             platform = (provider_params or {}).get("platform")
-            scheda = ottieni_scheda(identifier, mic=mic, lingua=lingua, sessione=_get_session(), platform=platform)
+            try:
+                scheda = ottieni_scheda(identifier, mic=mic, lingua=lingua, sessione=_get_session(), platform=platform)
+            except StrumentoNonRisolto:
+                stored_page = (provider_params or {}).get("url")
+                if not stored_page:
+                    raise
+                # The stored canonical page is readable even when the universal URL
+                # can't route (e.g. EuroTLX without platform).
+                scheda = ottieni_scheda(identifier, lingua=lingua, sessione=_get_session(), url_diretto=stored_page)
 
             asset_type = _map_asset_type(scheda.tipo)
 
