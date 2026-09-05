@@ -150,7 +150,11 @@ export default defineConfig({
         // unless the runner started the shared one, which already has coverage
         // enabled because both follow the same flag.
         reuseExistingServer: SHARED_SERVER ? true : process.env.COVERAGE_BACKEND ? false : !process.env.CI,
-        timeout: 120 * 1000,
+        // CI runners also build the MkDocs site from the test server on a cold
+        // cache; 120s proved too tight there (gallery webServer timeout on
+        // 2026-09-04 after the docs growth). Locally a warm reuse makes the
+        // short timeout fine.
+        timeout: process.env.CI ? 300 * 1000 : 120 * 1000,
         // Send SIGTERM instead of SIGKILL so coverage run can flush .coverage.<pid>.
         // In coverage mode the flush itself takes time (writing the coverage data file), and a
         // SIGKILL there silently discards the whole run's backend coverage — so the grace

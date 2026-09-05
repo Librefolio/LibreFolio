@@ -445,7 +445,7 @@ async def test_metadata_scheda_bond_full(monkeypatch):
         ticker="BTP30",
         isin="IT0005436693",
     )
-    monkeypatch.setattr(bi, "ottieni_scheda", lambda ident, mic=None, lingua=None, sessione=None, platform=None: scheda, raising=False)
+    monkeypatch.setattr(bi, "ottieni_scheda", lambda ident, mic=None, lingua=None, sessione=None, platform=None, url_diretto=None: scheda, raising=False)
 
     result = await _provider().fetch_asset_metadata("IT0005436693", IdentifierType.ISIN, {"language": "it"})
     assert result is not None
@@ -465,7 +465,7 @@ async def test_metadata_scheda_bond_full(monkeypatch):
 @pytest.mark.asyncio
 async def test_metadata_scheda_long_description_truncated(monkeypatch):
     scheda = _scheda(descrizione="D" * 600, isin="IT0005436693", ticker=None)
-    monkeypatch.setattr(bi, "ottieni_scheda", lambda ident, mic=None, lingua=None, sessione=None, platform=None: scheda, raising=False)
+    monkeypatch.setattr(bi, "ottieni_scheda", lambda ident, mic=None, lingua=None, sessione=None, platform=None, url_diretto=None: scheda, raising=False)
     result = await _provider().fetch_asset_metadata("IT0005436693", IdentifierType.ISIN)
     sd = result.classification_params.short_description
     assert len(sd) == 500 and sd.endswith("...")
@@ -500,7 +500,7 @@ async def test_metadata_scheda_minimal_no_optional_fields(monkeypatch):
     # tipo/nome/valuta only — every optional description field is None, so the
     # description stays None and no geographic/sector area is built.
     scheda = _scheda(tipo="Azione", nome="ENEL", valuta="EUR", isin="IT0003128367")
-    monkeypatch.setattr(bi, "ottieni_scheda", lambda ident, mic=None, lingua=None, sessione=None, platform=None: scheda, raising=False)
+    monkeypatch.setattr(bi, "ottieni_scheda", lambda ident, mic=None, lingua=None, sessione=None, platform=None, url_diretto=None: scheda, raising=False)
     result = await _provider().fetch_asset_metadata("IT0003128367", IdentifierType.ISIN)
     assert result.asset_type == AssetType.STOCK
     assert result.classification_params.short_description is None
@@ -647,7 +647,7 @@ async def test_resolve_url_fund_page_errors_return_none(monkeypatch):
 async def test_resolve_url_scheda_page(monkeypatch):
     monkeypatch.setattr(bi, "estrai_codice_da_url", lambda url: None, raising=False)  # not a fund
     scheda = _scheda(tipo="Azione", nome="ENEL", valuta="EUR", isin="IT0003128367")
-    monkeypatch.setattr(bi, "ottieni_scheda", lambda ident, mic=None, lingua=None, sessione=None, platform=None: scheda, raising=False)
+    monkeypatch.setattr(bi, "ottieni_scheda", lambda ident, mic=None, lingua=None, sessione=None, platform=None, url_diretto=None: scheda, raising=False)
     # resolve_url rediscovers the authoritative mic/platform via the site search:
     # exact-ISIN hit whose link carries the market routing params.
     monkeypatch.setattr(bi, "cerca", lambda q, lingua=None, sessione=None: [_cerca_result("IT0003128367", "ENEL", "Azione")], raising=False)

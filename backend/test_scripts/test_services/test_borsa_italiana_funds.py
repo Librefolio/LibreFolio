@@ -75,8 +75,8 @@ async def test_resolve_url_bond_scheda_page(monkeypatch):
     monkeypatch.setattr(borsa_italiana, "cerca", lambda q, lingua=None, sessione=None: [], raising=False)
     captured: dict = {}
 
-    def fake_ottieni_scheda(isin, mic=None, lingua="en", sessione=None, platform=None):
-        captured["isin"], captured["mic"], captured["platform"] = isin, mic, platform
+    def fake_ottieni_scheda(isin, mic=None, lingua="en", sessione=None, platform=None, url_diretto=None):
+        captured["isin"], captured["mic"], captured["platform"], captured["url_diretto"] = isin, mic, platform, url_diretto
         return SimpleNamespace(isin=isin, nome="Btp Tf 0,6% Ag31 Eur", valuta="EUR", tipo="obbligazione")
 
     monkeypatch.setattr(borsa_italiana, "ottieni_scheda", fake_ottieni_scheda, raising=False)
@@ -84,8 +84,14 @@ async def test_resolve_url_bond_scheda_page(monkeypatch):
     items = await BorsaItalianaProvider().resolve_url("https://www.borsaitaliana.it/borsa/obbligazioni/mot/btp/scheda/IT0005436693-MOTX.html?lang=it")
 
     assert isinstance(items, list) and len(items) == 2
-    # ISIN + market segment (MIC) are read straight from the URL tail
-    assert captured == {"isin": "IT0005436693", "mic": "MOTX", "platform": None}
+    # ISIN + market segment (MIC) are read straight from the URL tail; with no
+    # platform from the (empty) search, the canonical page is fetched directly.
+    assert captured == {
+        "isin": "IT0005436693",
+        "mic": "MOTX",
+        "platform": None,
+        "url_diretto": "https://www.borsaitaliana.it/borsa/obbligazioni/mot/btp/scheda/IT0005436693-MOTX.html",
+    }
     it_item, en_item = items[0], items[1]
     assert it_item["identifier"] == "IT0005436693"
     assert it_item["identifier_type"] == IdentifierType.ISIN
@@ -112,8 +118,8 @@ async def test_resolve_url_eurotlx_scheda_page(monkeypatch):
 
     captured: dict = {}
 
-    def fake_ottieni_scheda(isin_arg, mic=None, lingua="en", sessione=None, platform=None):
-        captured["isin"], captured["mic"], captured["platform"] = isin_arg, mic, platform
+    def fake_ottieni_scheda(isin_arg, mic=None, lingua="en", sessione=None, platform=None, url_diretto=None):
+        captured["isin"], captured["mic"], captured["platform"], captured["url_diretto"] = isin_arg, mic, platform, url_diretto
         return SimpleNamespace(isin=isin_arg, nome="United States Treasury 4% Nv34", valuta="USD", tipo="obbligazione eurotlx")
 
     monkeypatch.setattr(borsa_italiana, "cerca", fake_cerca, raising=False)
@@ -121,8 +127,9 @@ async def test_resolve_url_eurotlx_scheda_page(monkeypatch):
 
     items = await BorsaItalianaProvider().resolve_url("https://www.borsaitaliana.it/borsa/obbligazioni/eurotlx/scheda/US912810TU25-ETLX.html")
 
-    # the scheda fetch received the rediscovered market params (platform included)
-    assert captured == {"isin": isin, "mic": "ETLX", "platform": "TLX"}
+    # the scheda fetch received the rediscovered market params (platform included),
+    # so no direct-URL bypass was needed
+    assert captured == {"isin": isin, "mic": "ETLX", "platform": "TLX", "url_diretto": None}
     assert isinstance(items, list) and len(items) == 2
     for item in items:
         assert item["identifier"] == isin
