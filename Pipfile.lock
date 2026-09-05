@@ -52,11 +52,11 @@
         },
         "anyio": {
             "hashes": [
-                "sha256:7ecd9937369ffce8bba0b5ccb9b3a9507b101b0ed50256aecfbab27e6c2acb99",
-                "sha256:b5c620ed540725e2579c31b17bb995b3bf02c9281c9cace04c7d186380bab85e"
+                "sha256:6152fdbbf9a77fdec97731721bebf7c4c44f7c29b424b0065826173efc7ed101",
+                "sha256:9f28306018cbd6d329e64a36d58256edff76dd996fe423bc957326e578b82a94"
             ],
             "markers": "python_version >= '3.10'",
-            "version": "==4.15.0"
+            "version": "==4.15.1"
         },
         "apscheduler": {
             "hashes": [
@@ -238,7 +238,7 @@
         },
         "borsa-italiana-scraping": {
             "git": "https://github.com/Librefolio/borsaItaliana-scraping.git",
-            "ref": "f5fe28c666296726e1993c570846e9f2f35d9f9d"
+            "ref": "b3a8058da946688a000c5d56807806ef01336a5f"
         },
         "build": {
             "hashes": [
@@ -1072,7 +1072,7 @@
         },
         "justetf-scraping": {
             "git": "https://github.com/Librefolio/justetf-scraping.git",
-            "ref": "af6aa2519021b7966cf42378216c65e4729afd2d"
+            "ref": "f24a5c490c5b412272e2b47513ff3870c075b26e"
         },
         "kiwisolver": {
             "hashes": [
@@ -3676,11 +3676,11 @@
         },
         "anyio": {
             "hashes": [
-                "sha256:7ecd9937369ffce8bba0b5ccb9b3a9507b101b0ed50256aecfbab27e6c2acb99",
-                "sha256:b5c620ed540725e2579c31b17bb995b3bf02c9281c9cace04c7d186380bab85e"
+                "sha256:6152fdbbf9a77fdec97731721bebf7c4c44f7c29b424b0065826173efc7ed101",
+                "sha256:9f28306018cbd6d329e64a36d58256edff76dd996fe423bc957326e578b82a94"
             ],
             "markers": "python_version >= '3.10'",
-            "version": "==4.15.0"
+            "version": "==4.15.1"
         },
         "aphra": {
             "git": "https://github.com/DavidLMS/aphra.git",
@@ -4181,12 +4181,12 @@
         },
         "graphifyy": {
             "hashes": [
-                "sha256:900348aa7c41ef31c0581a8c2e0ca9f0b6a81f1e5bc6ef2184cce697e5342e3f",
-                "sha256:c951490a2c8856fe46ade3c165780de501a3fe8de1c9414e971c378e8f4d2164"
+                "sha256:52ec33eaf9124ad32b2adbfbdab919b6c853763a6f598eb4383af6174d793221",
+                "sha256:66003ab77b40bb9e639462736daa14d683aee99346e3d42a5da6be29ca53b3aa"
             ],
             "index": "pypi",
             "markers": "python_version >= '3.10'",
-            "version": "==0.9.53"
+            "version": "==0.9.54"
         },
         "greenlet": {
             "hashes": [

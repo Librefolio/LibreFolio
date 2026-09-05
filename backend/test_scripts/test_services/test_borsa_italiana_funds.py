@@ -77,7 +77,7 @@ async def test_resolve_url_bond_scheda_page(monkeypatch):
 
     def fake_ottieni_scheda(isin, mic=None, lingua="en", sessione=None, platform=None, url_diretto=None):
         captured["isin"], captured["mic"], captured["platform"], captured["url_diretto"] = isin, mic, platform, url_diretto
-        return SimpleNamespace(isin=isin, nome="Btp Tf 0,6% Ag31 Eur", valuta="EUR", tipo="obbligazione")
+        return SimpleNamespace(isin=isin, nome="Btp Tf 0,6% Ag31 Eur", valuta="EUR", tipo="obbligazione", url_pagina=None)
 
     monkeypatch.setattr(borsa_italiana, "ottieni_scheda", fake_ottieni_scheda, raising=False)
 
@@ -97,8 +97,9 @@ async def test_resolve_url_bond_scheda_page(monkeypatch):
     assert it_item["identifier_type"] == IdentifierType.ISIN
     assert it_item["type"] == "BOND"
     assert it_item["currency"] == "EUR"
-    # the MIC is propagated into provider_params so the saved asset stays routable
-    assert it_item["provider_params"] == {"language": "it", "mic": "MOTX"}
+    # the MIC is propagated into provider_params so the saved asset stays routable,
+    # plus the page URL actually loaded (kept so get_asset_url never rebuilds a dead link)
+    assert it_item["provider_params"] == {"language": "it", "mic": "MOTX", "url": "https://www.borsaitaliana.it/borsa/obbligazioni/mot/btp/scheda/IT0005436693-MOTX.html"}
     assert "🇮🇹" in it_item["display_name"]
     assert en_item["provider_params"]["language"] == "en"
     assert "🇬🇧" in en_item["display_name"]
@@ -120,7 +121,7 @@ async def test_resolve_url_eurotlx_scheda_page(monkeypatch):
 
     def fake_ottieni_scheda(isin_arg, mic=None, lingua="en", sessione=None, platform=None, url_diretto=None):
         captured["isin"], captured["mic"], captured["platform"], captured["url_diretto"] = isin_arg, mic, platform, url_diretto
-        return SimpleNamespace(isin=isin_arg, nome="United States Treasury 4% Nv34", valuta="USD", tipo="obbligazione eurotlx")
+        return SimpleNamespace(isin=isin_arg, nome="United States Treasury 4% Nv34", valuta="USD", tipo="obbligazione eurotlx", url_pagina="https://www.borsaitaliana.it/borsa/obbligazioni/eurotlx/scheda/US912810TU25-ETLX.html?lang=it")
 
     monkeypatch.setattr(borsa_italiana, "cerca", fake_cerca, raising=False)
     monkeypatch.setattr(borsa_italiana, "ottieni_scheda", fake_ottieni_scheda, raising=False)
@@ -138,6 +139,8 @@ async def test_resolve_url_eurotlx_scheda_page(monkeypatch):
         assert item["currency"] == "USD"
         assert item["provider_params"]["mic"] == "ETLX"
         assert item["provider_params"]["platform"] == "TLX"
+        # the loaded page URL is carried so get_asset_url returns a working link
+        assert item["provider_params"]["url"] == "https://www.borsaitaliana.it/borsa/obbligazioni/eurotlx/scheda/US912810TU25-ETLX.html?lang=it"
 
 
 @pytest.mark.asyncio

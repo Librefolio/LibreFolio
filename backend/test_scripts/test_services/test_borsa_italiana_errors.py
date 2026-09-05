@@ -57,6 +57,7 @@ def _storico(punti, valuta: str = "EUR"):
 
 def _scheda(**kw):
     base = {
+        "url_pagina": None,
         "tipo": "Obbligazione",
         "nome": "BTP Italia 2030",
         "valuta": "EUR",
@@ -256,9 +257,10 @@ async def test_current_value_unexpected_error(monkeypatch):
 @pytest.mark.asyncio
 async def test_current_value_unresolved_page_maps_to_unsupported(monkeypatch):
     """StrumentoNonRisolto (subclass of StrumentoNonTrovato) must map to the actionable
-    UNSUPPORTED_PAGE, not to NOT_FOUND — the except order is the contract under test."""
+    UNSUPPORTED_PAGE, not to NOT_FOUND — the except order is the contract under test.
+    The MIC-exchange retry fires first (mic present); when it also fails the mapping holds."""
 
-    def boom(ident, sessione=None, mic=None, platform=None):
+    def boom(ident, sessione=None, mic=None, platform=None, exchange=None):
         raise StrumentoNonRisolto("no market page")
 
     monkeypatch.setattr(bi, "ottieni_prezzo_corrente", boom, raising=False)
