@@ -78,6 +78,16 @@ jobs:
       - name: Install Python Dependencies
         run: pipenv install --dev
 
+      - name: Generate VERSION file for Docker
+        # Must run BEFORE any step that writes tracked files (gallery PNGs,
+        # translate caches, regenerated API client): `git describe --dirty`
+        # would otherwise stamp the image version with a spurious "-dirty".
+        # The Dockerfile COPYs a VERSION file (gitignored build artifact) so the
+        # image can report its version at runtime — the image has no .git/, so
+        # git describe cannot run there. Freeze it here on the host (fetch-depth:0
+        # gives us tags) reusing the same get_git_version() the app uses.
+        run: pipenv run python -c "from pathlib import Path; from backend.app.utils.version import get_git_version; get_git_version.cache_clear(); Path('VERSION').write_text(get_git_version())"
+
       - name: "[INFO] Environment summary before install"
         run: |
           pwd
@@ -117,6 +127,15 @@ jobs:
         continue-on-error: ${{ github.ref_name == 'dev' }}
         run: pipenv run ./dev.py mkdocs check-links
 
+      - name: Build MkDocs Documentation
+        # BEFORE the gallery: the Playwright webServer (`dev.py server --test`)
+        # serves /mkdocs and builds the 4-language site on startup when site/ is
+        # missing — ~40s+ inside the 120s webServer timeout, which is what made
+        # the gallery time out on 2026-09-04 after the docs growth (57 new
+        # translated files). With site/ already built, the server starts in seconds.
+        continue-on-error: ${{ github.ref_name == 'dev' }}
+        run: pipenv run ./dev.py mkdocs build
+
       - name: Generate Screenshots with Playwright
         continue-on-error: ${{ github.ref_name == 'dev' }}
         timeout-minutes: 120
@@ -130,20 +149,9 @@ jobs:
         run: pipenv run ./dev.py mkdocs gallery --workers 4
 
 
-      - name: Build MkDocs Documentation
-        continue-on-error: ${{ github.ref_name == 'dev' }}
-        run: pipenv run ./dev.py mkdocs build
-
       - name: Generate requirements.txt for Docker
         # The Dockerfile installs dependencies from a native requirements.txt
         run: pipenv requirements > requirements.txt
-
-      - name: Generate VERSION file for Docker
-        # The Dockerfile COPYs a VERSION file (gitignored build artifact) so the
-        # image can report its version at runtime — the image has no .git/, so
-        # git describe cannot run there. Freeze it here on the host (fetch-depth:0
-        # gives us tags) reusing the same get_git_version() the app uses.
-        run: pipenv run python -c "from pathlib import Path; from backend.app.utils.version import get_git_version; get_git_version.cache_clear(); Path('VERSION').write_text(get_git_version())"
 
       # ==========================================
       # 4. DOCKER BUILD & PUSH (Single Image)

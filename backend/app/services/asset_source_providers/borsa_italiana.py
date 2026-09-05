@@ -663,7 +663,7 @@ class BorsaItalianaProvider(AssetSourceProvider):
         emit_language_order = tuple(lg for lg in preferred if lg in self.SUPPORTED_LANGUAGES) + tuple(lg for lg in self.SUPPORTED_LANGUAGES if lg not in preferred)
         return [self._fund_search_item(dati, lingua, display_name=f"{dati.nome} {self.LANGUAGE_FLAGS[lingua]}") for lingua in emit_language_order]
 
-    def _scheda_search_items_all_langs(self, isin: str, mic: str | None, platform: str | None = None) -> list[dict] | None:
+    def _scheda_search_items_all_langs(self, isin: str, mic: str | None, platform: str | None = None, url_diretto: str | None = None) -> list[dict] | None:
         """Emit the canonical search-item set for a resolved stock/bond/ETF page.
 
         Mirrors :meth:`_fund_search_items_all_langs` for ISIN-priced instruments: the
@@ -671,9 +671,13 @@ class BorsaItalianaProvider(AssetSourceProvider):
         one row per supported language is emitted with a flag suffix, so a web
         link-finder hit behaves exactly like an on-site ``cerca`` result. Returns
         ``None`` when the page can't be fetched or parsed.
+
+        ``url_diretto`` (the canonical page URL the link-finder found) bypasses the
+        universal-URL redirect entirely — it rescues markets like EuroTLX when the
+        site search can't supply ``platform`` (e.g. instrument temporarily de-indexed).
         """
         try:
-            scheda = ottieni_scheda(isin, mic, "it", sessione=_get_session(), platform=platform)
+            scheda = ottieni_scheda(isin, mic, "it", sessione=_get_session(), platform=platform, url_diretto=url_diretto)
         except (StrumentoNonTrovato, DatiNonDisponibili):
             return None
         except Exception as e:  # best-effort — never fatal to search
@@ -753,7 +757,11 @@ class BorsaItalianaProvider(AssetSourceProvider):
                     break
         except Exception as e:  # best-effort — fall back to URL-only params
             logger.debug(f"Borsa Italiana resolve_url: market-param discovery failed for '{isin}': {e}")
-        return self._scheda_search_items_all_langs(isin, mic, platform)
+        # If the discovery couldn't supply the platform (e.g. the instrument is
+        # temporarily de-indexed from the site search), fall back to reading the
+        # canonical page directly: it contains everything the scheda needs.
+        url_diretto = url.split("?")[0] if platform is None else None
+        return self._scheda_search_items_all_langs(isin, mic, platform, url_diretto=url_diretto)
 
     # ── Search ──────────────────────────────────────────────────────────
 
