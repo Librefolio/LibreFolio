@@ -255,6 +255,10 @@ test.describe('Gallery Screenshots', () => {
                     }),
                 );
             });
+            // The prompt is now double-gated: GitHub release (mocked via the seeded cache
+            // above) AND the GHCR image manifest. Intercept the manifest HEAD too, or the
+            // 404 for the fake 99.9.0 tag silences the prompt (the gate working as designed).
+            await page.route('**/ghcr.io/v2/**/manifests/**', (route) => route.fulfill({status: 200}));
 
             await login(page, TEST_ADMIN);
 

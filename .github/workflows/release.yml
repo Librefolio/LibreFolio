@@ -142,7 +142,6 @@ jobs:
 
       - name: Generate Screenshots with Playwright
         id: gallery
-        continue-on-error: ${{ github.ref_name == 'dev' }}
         timeout-minutes: 120
         # ubuntu-latest (public repo) runners have 4 vCPU. --workers 8 was 2x
         # oversubscribed, causing heavy CPU contention across Chromium instances
@@ -151,11 +150,20 @@ jobs:
         # out on each run). Matched to actual CPU count for stable, predictable
         # per-test timing (verified locally: --workers 2-3 gives a constant,
         # non-degrading ~21s/interaction rate with zero flakiness).
-        run: pipenv run ./dev.py mkdocs gallery --workers 4
+        #
+        # Gallery is best-effort: a partially-failed run still produces most
+        # screenshots, and the docs' gallery-img-loader falls back to the
+        # published site for any missing one. So we keep the screenshots that
+        # succeeded, mark the step as a warning, and let the release continue
+        # instead of failing the whole image build over a flaky screenshot.
+        run: |
+          pipenv run ./dev.py mkdocs gallery --workers 4 || echo "::warning::Gallery had failures — releasing with the screenshots that succeeded (missing ones load from the online docs site)."
 
       # Nightly (dev) only: surface soft-failed steps as a yellow run banner + a
       # readable summary, instead of a green checkmark that hides them. Release
       # runs keep the hard-fail behaviour (no continue-on-error there).
+      # The gallery step is NOT here: it is best-effort (missing screenshots fall
+      # back to the published docs site) and reports itself as a ::warning above.
       - name: Report soft-failed steps (nightly)
         if: ${{ github.ref_name == 'dev' && always() }}
         run: |
@@ -167,7 +175,6 @@ jobs:
               ("Validate broken MkDocs translation links", "${{ steps.check-translate-validate.outcome }}"),
               ("Validate cross-boundary links", "${{ steps.check-cross-links.outcome }}"),
               ("Build MkDocs Documentation", "${{ steps.build-mkdocs.outcome }}"),
-              ("Generate Screenshots with Playwright", "${{ steps.gallery.outcome }}"),
           ]
           failed = [name for name, outcome in steps if outcome == "failure"]
           if not failed:
