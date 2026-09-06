@@ -31,7 +31,8 @@ The documentation is organized into three main areas:
 
 After each login, the browser of an **administrator** checks the GitHub Releases API for a newer **stable** LibreFolio release (drafts and pre-releases are never considered). To stay unobtrusive:
 
-- The check runs **at most once every 24 hours** — the last result is cached in the browser's local storage.
+- The check runs **at most once per hour** — the last result is cached in the browser's local storage.
+- The modal only appears once the release is **actually installable**: the check also verifies that the Docker image for that tag exists on the registry, so a release whose build is still in progress is not announced yet.
 - Self-hosted installs without internet access simply fail the fetch silently: **no error, no banner**.
 
 When a newer stable release exists, an **update-available modal** appears showing the current and latest versions side by side, with links to the **[updating guide](../user/installation.md#updating)** and to the GitHub release page. Two ways to dismiss it:

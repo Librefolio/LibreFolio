@@ -31,7 +31,8 @@ La documentazione è organizzata in tre aree principali:
 
 Dopo ogni accesso, il browser di un **amministratore** interroga l'API GitHub Releases per verificare la presenza di una versione **stabile** più recente di LibreFolio (bozze e pre-release non vengono mai prese in considerazione). Per non essere invadente:
 
-- Il controllo viene eseguito **al massimo una volta ogni 24 ore** — l'ultimo risultato viene salvato nella memoria locale del browser.
+- Il controllo viene eseguito **al massimo una volta ogni ora** — l'ultimo risultato viene salvato nella memoria locale del browser.
+- La modale compare solo quando la release è **effettivamente installabile**: il controllo verifica anche che l'immagine Docker di quel tag esista sul registry, quindi una release la cui build è ancora in corso non viene ancora annunciata.
 - Nelle installazioni self-hosted senza accesso a Internet il recupero fallisce semplicemente in silenzio: **nessun errore, nessun banner**.
 
 Quando esiste una versione stabile più recente, appare una **modale di aggiornamento disponibile** che mostra la versione corrente e l'ultima versione affiancate, con collegamenti alla **[guida all'aggiornamento](../user/installation.md#updating)** e alla pagina delle release di GitHub. Due modi per chiuderla:

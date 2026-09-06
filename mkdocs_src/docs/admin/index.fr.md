@@ -31,7 +31,8 @@ La documentation est organisée en trois domaines principaux :
 
 Après chaque connexion, le navigateur d'un **administrateur** interroge l'API GitHub Releases à la recherche d'une version **stable** plus récente de LibreFolio (les brouillons et les préversions ne sont jamais pris en compte). Pour rester discret :
 
-- La vérification s'exécute **au plus une fois toutes les 24 heures** — le dernier résultat est mis en cache dans le stockage local du navigateur.
+- La vérification s'exécute **au plus une fois par heure** — le dernier résultat est mis en cache dans le stockage local du navigateur.
+- La modale n'apparaît que lorsque la version est **réellement installable** : la vérification contrôle aussi que l'image Docker du tag existe sur le registre, donc une version dont la build est encore en cours n'est pas encore annoncée.
 - Les installations auto-hébergées sans accès à Internet échouent simplement, en silence, à récupérer les données : **aucune erreur, aucune bannière**.
 
 Lorsqu'une version stable plus récente existe, une **modale « Mise à jour disponible »** apparaît, affichant côte à côte la version actuelle et la plus récente, avec des liens vers le **[guide de mise à jour](../user/installation.md#updating)** et vers la page des versions GitHub. Deux façons de la fermer :

@@ -123,12 +123,19 @@ describe('checkForNewerRelease cache reuse', () => {
         vi.stubGlobal('localStorage', storage);
     });
 
-    it('serves a fresh cache without fetching', async () => {
+    it('serves a fresh cache without fetching, but only once the image exists', async () => {
         writeCache({checkedAt: Date.now(), latest: {version: '9.9.9', url: 'u', name: ''}}, storage);
-        const fetcher = vi.fn();
-        const result = await checkForNewerRelease('1.0.0', fetcher as unknown as typeof fetch);
+        // Image published → prompt, with exactly one fetch (the manifest HEAD).
+        const okFetcher = vi.fn(async () => new Response('', {status: 200}));
+        const result = await checkForNewerRelease('1.0.0', okFetcher as unknown as typeof fetch);
         expect(result?.version).toBe('9.9.9');
-        expect(fetcher).not.toHaveBeenCalled();
+        expect(okFetcher).toHaveBeenCalledTimes(1);
+        expect((okFetcher.mock.calls[0] as unknown[])[0]).toContain('ghcr.io/v2/librefolio/librefolio/manifests/9.9.9');
+
+        // Image still building on GHCR → silent, no prompt.
+        const buildingFetcher = vi.fn(async () => new Response('not yet', {status: 404}));
+        const building = await checkForNewerRelease('1.0.0', buildingFetcher as unknown as typeof fetch);
+        expect(building).toBeNull();
     });
 
     it('probes when the cache is stale, and keeps a dismissal across the re-probe', async () => {
@@ -136,6 +143,8 @@ describe('checkForNewerRelease cache reuse', () => {
         const stale = readCache(storage)!;
         writeCache({...stale, checkedAt: Date.now() - CHECK_INTERVAL_MS - 1}, storage);
 
+        // First (and only) call answers the GitHub release probe; the GHCR image
+        // gate short-circuits because the candidate equals the dismissed version.
         const fetcher = vi.fn(
             async () =>
                 new Response(JSON.stringify({tag_name: 'v2.0.0', html_url: 'https://example.com/r2', name: ''}), {
