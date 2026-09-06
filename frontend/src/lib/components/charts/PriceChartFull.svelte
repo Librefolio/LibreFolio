@@ -448,6 +448,9 @@
 
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+            // Expose the instance for gallery/E2E tooling (deterministic tooltip control
+            // without simulating a pixel-perfect hover on a scatter marker).
+            (chartContainer as unknown as Record<string, unknown>).__lfChart = chartInstance;
             attachChartReady(chartInstance, chartContainer, 'price-full');
             needsInitialLayoutStabilityPass = true;
             dataZoomTouchPanHandle = attachDataZoomTouchPan(chartInstance, chartContainer);

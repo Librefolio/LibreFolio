@@ -3369,7 +3369,9 @@ test.describe('Gallery Screenshots', () => {
                     if (!box) throw new Error('detail-events: chart canvas has no bounding box');
 
                     // Sweep a small spiral around the canvas centre until the event tooltip
-                    // (item trigger on the scatter marker) appears.
+                    // (item trigger on the scatter marker) appears. In headless CI the hover
+                    // never lands on the marker — so after the sweep, drive ECharts directly:
+                    // showTip on the scatter point instead of trusting the mouse.
                     const tooltip = chartCard.getByText('💰');
                     for (const dy of [0, -20, 20, -40, 40]) {
                         for (let dx = -80; dx <= 80; dx += 10) {
@@ -3378,6 +3380,25 @@ test.describe('Gallery Screenshots', () => {
                             if (await tooltip.isVisible().catch(() => false)) break;
                         }
                         if (await tooltip.isVisible().catch(() => false)) break;
+                    }
+                    if (!(await tooltip.isVisible().catch(() => false))) {
+                        // Deterministic fallback: drive the component's ECharts instance
+                        // (exposed on the container as __lfChart) and showTip the first point
+                        // of the "Events: …" scatter series (the mocked dividend).
+                        await canvas.evaluate((el) => {
+                            let node: HTMLElement | null = el as unknown as HTMLElement;
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            let chart: any = null;
+                            while (node && !chart) {
+                                chart = (node as any).__lfChart ?? null;
+                                node = node.parentElement;
+                            }
+                            if (!chart) return;
+                            const series = (chart.getOption().series as any[]) ?? [];
+                            const idx = series.findIndex((s) => String(s?.name ?? '').startsWith('Events: '));
+                            if (idx < 0) return;
+                            chart.dispatchAction({type: 'showTip', seriesIndex: idx, dataIndex: 0});
+                        });
                     }
                     await expect(tooltip).toBeVisible({timeout: 2_000});
                     await freezeAnimations(page);

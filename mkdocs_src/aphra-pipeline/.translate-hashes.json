@@ -853,7 +853,7 @@
     "last_translated": "2026-09-04T14:56:11.931592+00:00"
   },
   "admin/index.en.md": {
-    "md5": "93507b2d4bb828950a4c3270ab4dbe6c",
+    "md5": "e7e3e346ecbe6c085ac2b887fd6d08a2",
     "langs_done": [
       "es",
       "fr",
@@ -871,7 +871,9 @@
         "critique": "<translation_critique>\n<improvements>\n\n1. **Riformulare la frase sulle installazioni self-hosted (ridondanza e imprecisione semantica).**\n   - Testo attuale: \"Le installazioni self-hosted senza accesso a Internet semplicemente non riescono a recuperare l'aggiornamento e il tentativo fallisce in silenzio: **nessun errore, nessun banner**.\"\n   - Problema: \"non riescono a recuperare\" e \"il tentativo fallisce\" esprimono due volte lo stesso concetto. Inoltre, \"recuperare l'aggiornamento\" restringe il significato di \"fetch\" (il recupero dei metadati della release dall'API GitHub), che non è il download dell'aggiornamento stesso.\n   - Correzione suggerita: \"Nelle installazioni self-hosted senza accesso a Internet il recupero fallisce semplicemente in silenzio: **nessun errore, nessun banner**.\"\n\n2. **\"Installazione su Host\" → \"Installazione su host\".**\n   - \"Host\" qui è un nome comune (non un marchio o nome proprio) e in italiano tecnico va in minuscolo. L'occorrenza \"sulla macchina host\" nel testo della descrizione è già corretta; va corretta solo la voce dell'elenco.\n\n3. **Allineare le intestazioni al sentence case italiano (raccomandato per coerenza tipografica).**\n   - Le intestazioni \"Configurazione del Sistema\", \"Manutenzione e Operazioni\", \"Notifiche di Aggiornamento\", \"Variabili d'Ambiente\", \"Impostazioni Globali\", \"Struttura del Filesystem\", \"Esporre in Modo Sicuro\", \"Docker Avanzato\" riproducono il title case inglese, ma l'italiano preferisce la prima parola in maiuscolo e le successive in minuscolo: \"Configurazione del sistema\", \"Manutenzione e operazioni\", \"Notifiche di aggiornamento\", \"Variabili d'ambiente\", \"Impostazioni globali\", \"Struttura del filesystem\", \"Esporre in modo sicuro\", \"Docker avanzato\". La scelta va applicata in modo uniforme a tutte le intestazioni della pagina.\n\n4. **Parallelismo delle forme verbali nelle descrizioni dei collegamenti (minore).**\n   - \"Esponi in modo sicuro la tua istanza privata…\" e \"Configura le impostazioni di runtime…\" usano l'imperativo, mentre le altre voci dell'elenco usano forme nominali (\"Installazione manuale…\", \"Distribuzione containerizzata…\", \"Elenco completo…\"). Per uniformità si potrebbe rendere: \"Esposizione sicura della tua istanza privata di LibreFolio su internet.\" e \"Configurazione delle impostazioni di runtime a livello di sistema…\". La resa attuale non è errata (rispecchia la struttura della fonte), ma risulta meno coerente in una lista italiana.\n\nNota: tutte le voci del glossario obbligatorio presenti nel testo (overview → panoramica, settings → impostazioni, self-hosted → self-hosted) sono rispettate; non sono state rilevate deviazioni terminologiche. Anche la struttura Markdown (intestazioni, ancore, link, blocchi di codice, blocco HTML, emoji, elenchi) è preservata correttamente.\n\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 1073.5
+        "elapsed_s": 1073.5,
+        "stamped_at": "2026-09-06T12:26:53.645164+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-09-04T18:30:35.929041+00:00",
@@ -882,7 +884,9 @@
         "critique": "<translation_critique>\n<improvements>\n\n1. **Terminology — mandatory glossary compliance**: The heading `## 📖 Overview` is rendered as `## 📖 Vue d'ensemble`. The terminology glossary explicitly maps `overview → aperçu`, so this is a required correction. Change the heading to `## 📖 Aperçu`.\n\n2. **Awkward translation of \"update-available modal\"**: `une **modale de mise à jour disponible** apparaît` is ambiguous and reads literally as \"modal of an available update\". Since \"Update available\" is the UI label of this modal, render it more naturally and unambiguously as `une **modale « Mise à jour disponible »** apparaît` (or `une modale signalant qu'une mise à jour est disponible`).\n\n3. **Stilted syntax in the self-hosted note**: `Les installations auto-hébergées sans accès à Internet échouent simplement en silence lors de la récupération` is clumsy. \"Fail the fetch silently\" is better rendered with an infinitive complement: `échouent simplement, en silence, à récupérer les données` or `échouent silencieusement à récupérer les données`, keeping the ending `: **aucune erreur, aucune bannière**`.\n\n4. **\"GitHub release page\"**: `la page de version GitHub` is unidiomatic French, and it is inconsistent with the earlier successful treatment of `GitHub Releases API` as `l'API GitHub Releases`. Use `la page des versions GitHub` (or `la page des releases GitHub`).\n\nAll other structural elements are preserved correctly: headings and the `{: #update-notifications }` anchor, link targets, inline code (`.env`, `JWT_SECRET`, `PORT`, `LIBREFOLIO_DATA_DIR`, `dev.py`), the HTML `<div>`/`<img>` block, emoji, and horizontal rules. The glossary mappings for `settings` (paramètres), `self-hosted` (auto-hébergé), and `cache` (cache) are respected. The translation of the `alt` attribute is acceptable, as it is user-facing accessibility text.\n\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 1143.8
+        "elapsed_s": 1143.8,
+        "stamped_at": "2026-09-06T12:26:53.645164+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-09-04T18:30:35.929129+00:00",
@@ -893,7 +897,9 @@
         "critique": "<translation_critique>\n<improvements>\n\nThe translation is overall highly accurate, grammatically correct, and structurally faithful to the source. All Markdown elements (headings, links, code spans, bold emphasis, the HTML screenshot block, emoji, horizontal rules, and the heading anchor `{: #update-notifications }`) are preserved exactly. All glossary terms present in the source are correctly applied (\"self-hosted\" → \"autoalojadas\", \"overview\" → \"descripción general\", \"settings\" → \"configuración\", \"cache\" → \"caché\"), and no non-translatable elements (URLs, file paths, code content, HTML attributes, brand names, acronyms) were altered. Only the following refinements are recommended:\n\n1. **\"pre-publicaciones\" → \"versiones preliminares\"**  \n   In the sentence \"los borradores y las pre-publicaciones nunca se consideran\", the term \"pre-publicaciones\" is atypical in the software-release context (it usually refers to academic pre-publication). GitHub's established Spanish terminology for \"pre-releases\" is \"versiones preliminares\". Suggested correction:  \n   *\"los borradores y las **versiones preliminares** nunca se consideran\"*.\n\n2. **\"página de lanzamiento\" → \"página de lanzamientos\"**  \n   In \"con enlaces a la **[guía de actualización](../user/installation.md#updating)** y a la página de lanzamiento de GitHub\", the singular \"lanzamiento\" reads as if it referred to a single release event. The English \"GitHub release page\" refers to the GitHub Releases page, which lists multiple releases. Suggested correction:  \n   *\"y a la página de lanzamientos de GitHub\"*.\n\nThese are minor terminology refinements; no structural, grammatical, or glossary-compliance issues were found.\n\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 800.6
+        "elapsed_s": 800.6,
+        "stamped_at": "2026-09-06T12:26:53.645164+00:00",
+        "stamped_by": "translate-stamp"
       }
     },
     "pending_langs": [

@@ -31,7 +31,8 @@ La documentación está organizada en tres áreas principales:
 
 Después de cada inicio de sesión, el navegador de un **administrador** consulta la API de GitHub Releases en busca de una versión **estable** más reciente de LibreFolio (los borradores y las versiones preliminares nunca se consideran). Para que la comprobación pase desapercibida:
 
-- La comprobación se ejecuta **como máximo una vez cada 24 horas** — el último resultado se almacena en caché en el almacenamiento local del navegador.
+- La comprobación se ejecuta **como máximo una vez por hora** — el último resultado se almacena en caché en el almacenamiento local del navegador.
+- La ventana modal solo aparece cuando la versión es **realmente instalable**: la comprobación verifica además que la imagen Docker de esa etiqueta exista en el registro, por lo que una versión cuya compilación aún está en curso no se anuncia todavía.
 - Las instalaciones autoalojadas sin acceso a internet simplemente fallan silenciosamente al obtener los datos: **sin errores, sin banners**.
 
 Cuando existe una versión estable más reciente, aparece un **modal de actualización disponible** que muestra las versiones actual y más reciente una al lado de la otra, con enlaces a la **[guía de actualización](../user/installation.md#updating)** y a la página de lanzamientos de GitHub. Hay dos formas de descartarlo:
