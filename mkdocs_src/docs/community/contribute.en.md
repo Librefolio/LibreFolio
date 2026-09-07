@@ -29,10 +29,10 @@ LibreFolio uses a [Registry & Plugin System](../developer/architecture/patterns/
 | 📥 **BRIM** | [BRIM Plugin Guide](../developer/architecture/patterns/brim_plugin_guide.md) | Import transactions from a new broker (CSV/Excel) |
 | 📈 **Asset** | [Asset Plugin Guide](../developer/architecture/patterns/asset_plugin_guide.md) | Fetch prices from a new data source |
 | 💱 **FX** | [FX Plugin Guide](../developer/architecture/patterns/fx_plugin_guide.md) | Add a new exchange rate provider |
-| 📊 **Chart Signals** | *Guide coming soon* | New technical indicators and chart overlays (EMA, MACD, RSI, Bollinger…) |
+| 📊 **Technical Signals** | [Signal Plugin Guide](../developer/architecture/patterns/signal_plugin_guide.md) | Add backend indicators with schema-driven parameters, outputs, thresholds, and chart styling |
 
 * **If you are not a developer**: You can request a new plugin using our [Plugin Request Form](https://github.com/Librefolio/LibreFolio/issues/new?template=plugin_request.yml). In addition to the request details, you must provide anonymized examples of the broker report file (e.g. CSV or Excel) so we can understand the format.
-* **If you are a developer**: You can implement the plugin directly on your own. Please refer to the [Registry & Plugin System Guide](../developer/architecture/patterns/registry_pattern.md) and the specific guides linked in the table above to learn how to build them.
+* **If you are a developer**: You can implement the plugin directly. Start with the [Registry & Plugin System Guide](../developer/architecture/patterns/registry_pattern.md), then follow the relevant guide above — including the [Signal Plugin Guide](../developer/architecture/patterns/signal_plugin_guide.md) for new technical indicators.
 
 ### :art: UI/UX Ideas
 

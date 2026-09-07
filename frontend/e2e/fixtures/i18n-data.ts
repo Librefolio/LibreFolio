@@ -78,14 +78,3 @@ export function t(lang: string, key: string): string {
     if (!translations) return key;
     return getTranslation(translations, key);
 }
-
-/**
- * Generate test data for all languages
- * Useful for parameterized tests
- */
-export function forAllLanguages<T>(fn: (lang: string, translations: Record<string, any>) => T): T[] {
-    return SUPPORTED_LANGUAGES.map((lang) => fn(lang, TRANSLATIONS[lang]));
-}
-
-// Export default language
-export const DEFAULT_LANGUAGE = 'en';

@@ -1,7 +1,5 @@
 # 🔍 Posizioni e Analisi
 
-*[⬅️ Torna alla Panoramica della Dashboard](index.md)*
-
 La scheda **Posizioni** della dashboard ti consente di ispezionare le posizioni aperte, analizzare le performance e approfondire i lotti fiscali corrispondenti.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-positions-views" data-carousel-interval="6000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
@@ -15,32 +13,35 @@ La scheda **Posizioni** della dashboard ti consente di ispezionare le posizioni 
 
 ## 🔍 Scheda Posizioni
 
-La scheda **Posizioni** fornisce una ripartizione dettagliata di tutti gli strumenti finanziari attualmente presenti nel tuo portafoglio (Azioni, ETF, Obbligazioni, Criptovalute, ecc.).
+La scheda **Posizioni** ha due modalità semantiche: **Posizioni** e **Performance**.
 
-La scheda Posizioni ti consente di passare da una modalità di metrica primaria all'altra utilizzando l'interruttore di visualizzazione, ciascuna focalizzata su un aspetto diverso delle tue posizioni:
+Usa l'interruttore di visualizzazione per passare dall'una all'altra, e quello tabella/mappa per cambiare il layout visivo.
 
 #### 📋 Vista Posizioni
 
-La vista **Posizioni** si concentra sulla contabilità, le quantità e la valutazione corrente degli asset. Ti aiuta a monitorare l'esposizione attuale del tuo portafoglio e le metriche di base.
+La vista **Posizioni** mostra l'istantanea delle posizioni aperte. La tabella ha 13 colonne:
 
-| Metrica | Descrizione |
+| Colonna | Descrizione |
 |:---|:---|
-| **Quantità** | Azioni, unità o monete attualmente detenute nel tuo portafoglio. |
-| **Prezzo di Mercato** | Prezzo live dell'asset recuperato dal provider collegato. |
-| **Valore di Mercato** | Valore totale ai prezzi di mercato correnti (\(\text{Prezzo} \times \text{Quantità}\)). |
-| **Prezzo Medio (PMC)** | Il Prezzo Medio di Carico pagato per acquisire la posizione aperta corrente. |
-| **Peso** | Quota proporzionale di questo asset rispetto al valore totale del portafoglio. |
+| **Asset** | Nome dell'asset con icona del tipo — clicca per aprire la pagina di dettaglio dell'asset. |
+| **Δ1** | Variazione del P&L latente rispetto a ieri, a quantità odierna costante. |
+| **Δ1%** | La stessa variazione giornaliera in percentuale del valore di mercato della posizione di ieri. |
+| **P&L latente** | Guadagno/perdita aperta: valore attuale meno il costo residuo. |
+| **P&L %** | P&L latente in percentuale del costo residuo. |
+| **Annualizzato** | Rendimento netto annualizzato (CAGR) dei lotti ancora aperti, dalla prima transazione a oggi — per confrontare posizioni detenute per durate diverse. |
+| **Valore** | Valore totale ai prezzi di mercato correnti (\(\text{Prezzo} \times \text{Quantità}\)). |
+| **Peso** | Quota proporzionale di questa posizione rispetto al valore totale del portafoglio. |
+| **Qtà** | Azioni, unità o monete attualmente detenute. |
+| **Broker** | Account broker che detengono la posizione. |
+| **Prezzo** *(nascosta di default)* | Prezzo attuale dell'asset dal provider collegato. |
+| **Costo Medio** *(nascosta di default)* | Costo medio per unità della posizione attualmente aperta (Prezzo Medio di Carico). |
+| **Lotto aperto più vecchio** *(nascosta di default)* | Data di apertura del lotto FIFO più vecchio ancora aperto per questa posizione. |
+
+Usa l'**icona a occhio** nella barra degli strumenti della tabella per mostrare o nascondere le colonne — le tue scelte sono ricordate tra le sessioni.
 
 #### 📈 Vista Performance
 
-La vista **Performance** si concentra sui rendimenti assoluti e relativi. Ti aiuta ad analizzare la redditività delle tue posizioni aperte, tenendo conto delle transazioni storiche e dei redditi.
-
-| Metrica | Descrizione |
-|:---|:---|
-| **Valore Totale** | Valore corrente delle posizioni (corrisponde al Valore di Mercato). |
-| **P&L Non Realizzato** | Guadagno o perdita teorica calcolata come \(\text{Valore di Mercato} - \text{Valore Contabile}\). |
-| **ROI %** | Tasso di rendimento relativo alla base di costo della posizione. |
-| **P&L Totale** | Rendimenti assoluti cumulativi (include vendite chiuse passate e dividendi). |
+La vista **Performance** si carica su richiesta e mostra insieme posizioni aperte e chiuse. Nella tabella/mappa, lo **Stato** è filtrabile dentro il componente, non come interruttore di primo livello.
 
 #### 🗺️ Stile Visivo: Tabella vs. Mappa
 
@@ -136,3 +137,7 @@ Scegli **Visualizza dettaglio lotto** dalle azioni della riga della tabella per 
 La scheda **Transazioni** nella Dashboard visualizza un elenco completo e paginato di tutte le operazioni registrate nell'ambito del portafoglio attivo (ordini di acquisto/vendita, pagamenti di dividendi, depositi di denaro, trasferimenti, ecc.).
 
 Per una spiegazione dettagliata dell'elenco delle transazioni, dei filtri e di come leggere i dettagli delle transazioni in sola lettura, fare riferimento alla pagina dedicata **[Panoramica Transazioni](../transactions/index.md)**.
+
+---
+
+*[⬅️ Torna alla Panoramica della Dashboard](index.md)*

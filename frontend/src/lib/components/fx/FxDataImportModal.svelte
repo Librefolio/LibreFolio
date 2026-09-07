@@ -13,7 +13,7 @@
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import {ArrowRight} from 'lucide-svelte';
-    import {t} from '$lib/i18n';
+    import {locale, t} from '$lib/i18n';
 
     // =========================================================================
     // Types
@@ -23,6 +23,13 @@
         from: string;
         to: string;
     }
+
+    const HEADER_MISMATCH_MESSAGES = {
+        en: "Header currencies don't match",
+        it: "Le valute dell'intestazione non corrispondono",
+        fr: "Les devises de l'en-tête ne correspondent pas",
+        es: 'Las monedas del encabezado no coinciden',
+    } as const;
 
     // =========================================================================
     // Props
@@ -49,6 +56,7 @@
 
     let directionFrom = $state('');
     let directionTo = $state('');
+    let headerMismatchError = $state(false);
     let modalRef: DataImportModal;
 
     // Initialize direction on open
@@ -59,6 +67,7 @@
         } else {
             directionFrom = '';
             directionTo = '';
+            headerMismatchError = false;
         }
     });
 
@@ -68,6 +77,10 @@
 
     let displayFrom = $derived(directionFrom || displayBase);
     let displayTo = $derived(directionTo || displayQuote);
+    let headerMismatchMessage = $derived.by(() => {
+        const lang = ($locale ?? 'en').split('-')[0] as keyof typeof HEADER_MISMATCH_MESSAGES;
+        return HEADER_MISMATCH_MESSAGES[lang] ?? HEADER_MISMATCH_MESSAGES.en;
+    });
 
     /** CSV column: single rate column with direction in label */
     let fxColumns: CsvColumnDef[] = $derived([
@@ -84,6 +97,7 @@
     // =========================================================================
 
     function handleSwap() {
+        headerMismatchError = false;
         const oldFrom = directionFrom || displayBase;
         const oldTo = directionTo || displayQuote;
         directionFrom = oldTo;
@@ -114,6 +128,7 @@
     }
 
     function handleImport(rows: ParsedRow[]) {
+        if (headerMismatchError || !isPairDirectionAllowed(displayFrom, displayTo)) return;
         onimport?.(rows, {from: displayFrom, to: displayTo});
     }
 
@@ -130,6 +145,7 @@
      * for verification. Only the swap ⇄ button rewrites with `>`.
      */
     function handleCsvTextChange(text: string) {
+        headerMismatchError = false;
         const lineArray = text.split('\n');
         const headerIdx = lineArray.findIndex((l) => l.trim() !== '');
         if (headerIdx < 0) return;
@@ -144,6 +160,10 @@
             if (ltMatch) {
                 const left = ltMatch[1].toUpperCase();
                 const right = ltMatch[2].toUpperCase();
+                if (!isPairDirectionAllowed(right, left)) {
+                    headerMismatchError = true;
+                    return;
+                }
                 directionFrom = right;
                 directionTo = left;
                 return;
@@ -153,11 +173,21 @@
             if (gtMatch) {
                 const left = gtMatch[1].toUpperCase();
                 const right = gtMatch[2].toUpperCase();
+                if (!isPairDirectionAllowed(left, right)) {
+                    headerMismatchError = true;
+                    return;
+                }
                 directionFrom = left;
                 directionTo = right;
                 return;
             }
         }
+    }
+
+    function isPairDirectionAllowed(from: string, to: string): boolean {
+        const base = displayBase.toUpperCase();
+        const quote = displayQuote.toUpperCase();
+        return (from === base && to === quote) || (from === quote && to === base);
     }
 </script>
 
@@ -191,6 +221,12 @@
                 </InfoBanner>
             </div>
         </div>
+
+        {#if headerMismatchError}
+            <div class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300" data-testid="fx-import-header-mismatch-error">
+                {headerMismatchMessage}
+            </div>
+        {/if}
     {/snippet}
 
     {#snippet helpContent()}

@@ -16,21 +16,21 @@ El sistema MACD produce tres series:
 
 1. **Línea MACD** (la salida del filtro de banda pasante):
 
- $$
- MACD_t = EMA_{fast}(C_t) - EMA_{slow}(C_t)
- $$
+    $$
+    MACD_t = EMA_{fast}(C_t) - EMA_{slow}(C_t)
+    $$
 
 2. **Línea de señal** (MACD suavizado):
 
- $$
- Signal_t = EMA_{signal}(MACD_t)
- $$
+    $$
+    Signal_t = EMA_{signal}(MACD_t)
+    $$
 
 3. **Histograma** (delta de impulso):
 
- $$
- Histogram_t = MACD_t - Signal_t
- $$
+    $$
+    Histogram_t = MACD_t - Signal_t
+    $$
 
 ---
 

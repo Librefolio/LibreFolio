@@ -9,6 +9,7 @@ Test IDs: SS-001..SS-006
 import json
 import sys
 
+import backend.app.services.scheduler.state as state_mod
 from backend.app.config import PROJECT_ROOT
 
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -25,7 +26,6 @@ def _make_state_module(tmp_path, monkeypatch):
     monkeypatch.setenv("LIBREFOLIO_DATA_DIR", str(tmp_path))
 
     # Patch at the module level where it is used
-    import backend.app.services.scheduler.state as state_mod
 
     monkeypatch.setattr(state_mod, "get_data_dir", lambda: str(tmp_path))
     return state_mod

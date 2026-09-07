@@ -1,0 +1,15 @@
+# Revisions to skip when running `git blame`.
+#
+# Only whitespace/formatting-only commits belong here — never commits that
+# change behaviour. Listing a mass-reformat here keeps `git blame` pointing at
+# the commit that actually wrote each line.
+#
+# Enable locally (once per clone):
+#     git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# Add an entry as: <full 40-char sha>  # short description
+#
+# Pending: the commit that re-indents frontend/src/lib/i18n/{en,it,fr,es}.json
+# from 4 to 2 spaces, aligning them with the canonical form produced by
+# `./dev.py i18n` and now enforced by Prettier (see frontend/.prettierrc,
+# *.json override with tabWidth 2). Append its sha here after committing.

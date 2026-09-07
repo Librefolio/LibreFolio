@@ -4,7 +4,7 @@ category: decision
 status: resolved
 date: 2026-04-29
 tags: [backend, transactions, api, validation, breaking-change, architecture]
-related: [decisions/multi-broker-atomic-tx, features/F-046, sources/phase07-part4-round4-pipeline]
+related: [decisions/multi-broker-atomic-tx, features/F-046, sources/phase07-part4-round4-unified-pipeline]
 ---
 
 # Decision: Unified Batch Pipeline

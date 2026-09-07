@@ -5,6 +5,7 @@
   Uses Svelte 5 runes.
 -->
 <script lang="ts">
+    import {tick} from 'svelte';
     import {Eye, EyeOff, RotateCcw} from 'lucide-svelte';
     import {_ as t} from '$lib/i18n';
     import type DataTable from './DataTable.svelte';
@@ -44,7 +45,7 @@
     let open = $state(false);
     let triggerEl: HTMLButtonElement | undefined = $state(undefined);
     let dropdownRef: HTMLDivElement | undefined = $state(undefined);
-    let dropdownStyle = $state('');
+    let dropdownStyle = $state('position: fixed; top: 8px; left: 8px; width: max-content; max-width: calc(100vw - 1rem); z-index: 9999;');
     let columnItems: ColumnItem[] = $state([]);
 
     function refreshColumns() {
@@ -61,12 +62,15 @@
         });
     }
 
-    function toggle() {
-        if (!open) {
-            updatePosition();
-            refreshColumns();
+    async function toggle() {
+        if (open) {
+            close();
+            return;
         }
-        open = !open;
+        refreshColumns();
+        open = true;
+        await tick();
+        updatePosition();
     }
 
     function close() {
@@ -77,22 +81,19 @@
         if (!triggerEl) return;
         const rect = triggerEl.getBoundingClientRect();
         const margin = 8;
-        // Must match the dropdown's CSS `max-h-[400px]` cap (bugfix: this was previously
-        // 300, which under-estimated the real height for tables with many columns — e.g.
-        // the lots table's 13 columns push the rendered list past 300px — causing the
-        // "open above" branch to compute a negative `bottom`/off-screen `top` and render
-        // the dropdown fully or partially outside the viewport, i.e. invisible.
-        const dropH = 400;
+        const maxWidth = Math.max(0, window.innerWidth - margin * 2);
+        const dropW = Math.min(dropdownRef?.offsetWidth ?? 320, maxWidth);
+        const dropH = Math.min(dropdownRef?.offsetHeight ?? 400, 400);
         const spaceBelow = window.innerHeight - rect.bottom - margin;
         const spaceAbove = rect.top - margin;
         const openAbove = spaceBelow < dropH && spaceAbove > spaceBelow;
         const preferredTop = openAbove ? rect.top - dropH - 4 : rect.bottom + 4;
-        // Clamp so the dropdown always stays fully within the viewport vertically,
-        // regardless of where the trigger button sits (even near the top/bottom edge).
         const maxTop = Math.max(margin, window.innerHeight - dropH - margin);
         const top = Math.min(Math.max(preferredTop, margin), maxTop);
-        const right = window.innerWidth - rect.right;
-        dropdownStyle = `position: fixed; top: ${top}px; right: ${right}px; z-index: 9999;`;
+        const preferredLeft = rect.right - dropW;
+        const maxLeft = Math.max(margin, window.innerWidth - dropW - margin);
+        const left = Math.min(Math.max(preferredLeft, margin), maxLeft);
+        dropdownStyle = `position: fixed; top: ${top}px; left: ${left}px; width: max-content; max-width: calc(100vw - 1rem); z-index: 9999;`;
     }
 
     // Keep the dropdown anchored to the trigger while the page scrolls (ignore internal
@@ -102,12 +103,16 @@
     // dropdown that had just opened — looking like the click "did nothing".
     $effect(() => {
         if (!open) return;
-        const handleScroll = (e: Event) => {
-            if (dropdownRef && dropdownRef.contains(e.target as Node)) return;
+        const handleViewportChange = (e?: Event) => {
+            if (dropdownRef && e?.target instanceof Node && dropdownRef.contains(e.target)) return;
             updatePosition();
         };
-        window.addEventListener('scroll', handleScroll, true);
-        return () => window.removeEventListener('scroll', handleScroll, true);
+        window.addEventListener('scroll', handleViewportChange, true);
+        window.addEventListener('resize', handleViewportChange);
+        return () => {
+            window.removeEventListener('scroll', handleViewportChange, true);
+            window.removeEventListener('resize', handleViewportChange);
+        };
     });
 
     function handleToggleColumn(columnId: string) {
@@ -134,6 +139,7 @@
     class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors {extraClass}"
     onclick={toggle}
     type="button"
+    data-testid="column-visibility-toggle"
 >
     <Eye size={13} />
     {#if showLabel}<span>{$t('table.columns')}</span>{/if}
@@ -146,18 +152,18 @@
 
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <div bind:this={dropdownRef} class="bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg p-2 max-h-[400px] overflow-y-auto w-max" style={dropdownStyle} onclick={(e) => e.stopPropagation()}>
+    <div bind:this={dropdownRef} class="overflow-y-auto rounded-lg border border-gray-200 bg-white p-2 shadow-lg dark:border-slate-600 dark:bg-slate-700 max-h-[400px]" style={dropdownStyle} onclick={(e) => e.stopPropagation()} data-testid="column-visibility-dropdown">
         <OrderableList items={columnItems} keyFn={(c) => c.id} onReorder={handleReorder} compact={true}>
             {#snippet children({item})}
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
                 <!-- svelte-ignore a11y_click_events_have_key_events -->
-                <div class="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer select-none whitespace-nowrap" onclick={() => handleToggleColumn(item.id)}>
+                <div class="flex min-w-0 cursor-pointer select-none items-center gap-2 text-xs text-gray-700 whitespace-normal md:whitespace-nowrap dark:text-gray-300" onclick={() => handleToggleColumn(item.id)} data-testid={`column-visibility-item-${item.id}`}>
                     {#if item.visible}
                         <Eye size={13} class="text-libre-green shrink-0" />
                     {:else}
                         <EyeOff size={13} class="text-gray-400 dark:text-gray-500 shrink-0" />
                     {/if}
-                    <span class={item.visible ? '' : 'text-gray-400 dark:text-gray-500 line-through'}>{item.label}</span>
+                    <span class="min-w-0 {item.visible ? '' : 'text-gray-400 dark:text-gray-500 line-through'}">{item.label}</span>
                 </div>
             {/snippet}
         </OrderableList>

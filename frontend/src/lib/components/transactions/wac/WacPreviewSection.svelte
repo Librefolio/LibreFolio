@@ -19,6 +19,7 @@
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
     import {getTransactionTypeIconUrl} from '$lib/stores/transactions/transactionTypeStore';
     import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
+    import {normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
     import {formatCurrencyAmountPlain, formatCurrencyCodeHtml} from '$lib/utils/currency/currencyFormat';
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
 
@@ -166,7 +167,7 @@
      *  quantity of 0 makes "Total" meaningless, so conversions fall back to
      *  the raw per-unit value in that case regardless of `unitMode`. */
     let quantityNum = $derived.by(() => {
-        const n = Math.abs(Number(quantity ?? '0'));
+        const n = Math.abs(Number(normalizeDecimalInput(quantity ?? '0')));
         return Number.isFinite(n) ? n : 0;
     });
     /** Whether the Total/Per-unit toggle can actually take effect right now. */
@@ -176,7 +177,7 @@
      *  (× quantity when in "Total" mode), or pass through unchanged. */
     function toDisplayAmount(v: {code: string; amount: string} | null): {code: string; amount: string} | null {
         if (!v || !unitToggleActive) return v;
-        const amt = Number(v.amount);
+        const amt = Number(normalizeDecimalInput(v.amount));
         if (!Number.isFinite(amt)) return v;
         return {code: v.code, amount: String(amt * quantityNum)};
     }
@@ -186,7 +187,7 @@
      *  `value`/`onChange` always deal in per-unit amounts. */
     function toPerUnitAmount(v: {code: string; amount: string} | null): {code: string; amount: string} | null {
         if (!v || !unitToggleActive) return v;
-        const amt = Number(v.amount);
+        const amt = Number(normalizeDecimalInput(v.amount));
         if (!Number.isFinite(amt)) return v;
         return {code: v.code, amount: String(amt / quantityNum)};
     }
@@ -362,8 +363,13 @@
         <!-- Toggle Auto/Manual — always visible -->
         {#if !disabled}
             <div class="flex items-center gap-1 text-[10px] ml-auto" data-testid="{testid}-toggle">
-                <button type="button" class="px-1.5 py-0.5 rounded {isAuto && !forcedManual ? 'bg-libre-green/10 text-libre-green font-medium' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}" onclick={setAutoMode} disabled={disabled || forcedManual} data-testid="{testid}-toggle-auto"
-                    >{$t('transactions.wacPreview.toggleAuto')}{forcedManual ? ' ⚠️' : ''}</button
+                <button
+                    type="button"
+                    class="px-1.5 py-0.5 rounded {isAuto && !forcedManual ? 'bg-libre-green/10 text-libre-green font-medium' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}"
+                    onclick={setAutoMode}
+                    disabled={disabled || forcedManual}
+                    aria-pressed={isAuto && !forcedManual}
+                    data-testid="{testid}-toggle-auto">{$t('transactions.wacPreview.toggleAuto')}{forcedManual ? ' ⚠️' : ''}</button
                 >
                 <span class="text-gray-300 dark:text-gray-600">|</span>
                 <button
@@ -371,6 +377,7 @@
                     class="px-1.5 py-0.5 rounded {!isAuto || forcedManual ? 'bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-gray-200 font-medium' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}"
                     onclick={switchToManual}
                     {disabled}
+                    aria-pressed={!isAuto || forcedManual}
                     data-testid="{testid}-toggle-manual">{$t('transactions.wacPreview.toggleManual')}</button
                 >
             </div>
@@ -383,14 +390,19 @@
     {#if !disabled}
         <div class="flex items-center gap-1 text-[10px]" data-testid="{testid}-unit-toggle">
             <span class="text-gray-400 dark:text-gray-500">{$t('transactions.wacPreview.unitModeLabel') ?? 'Show as:'}</span>
-            <button type="button" class="px-1.5 py-0.5 rounded {unitMode === 'total' ? 'bg-libre-green/10 text-libre-green font-medium' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}" onclick={() => setUnitMode('total')} data-testid="{testid}-unit-toggle-total"
-                >{$t('transactions.wacPreview.unitModeTotal') ?? 'Total'}</button
+            <button
+                type="button"
+                class="px-1.5 py-0.5 rounded {unitMode === 'total' ? 'bg-libre-green/10 text-libre-green font-medium' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}"
+                onclick={() => setUnitMode('total')}
+                aria-pressed={unitMode === 'total'}
+                data-testid="{testid}-unit-toggle-total">{$t('transactions.wacPreview.unitModeTotal') ?? 'Total'}</button
             >
             <span class="text-gray-300 dark:text-gray-600">|</span>
             <button
                 type="button"
                 class="px-1.5 py-0.5 rounded {unitMode === 'unit' ? 'bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-gray-200 font-medium' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}"
                 onclick={() => setUnitMode('unit')}
+                aria-pressed={unitMode === 'unit'}
                 data-testid="{testid}-unit-toggle-unit">{$t('transactions.wacPreview.unitModePerUnit') ?? 'Per unit'}</button
             >
         </div>
@@ -432,7 +444,7 @@
                     {$t('transactions.wacPreview.txsUsed') ?? 'transactions used'})
                 </span>
             </button>
-            <DocsLink path="financial-theory/portfolio-theory/weighted-average-cost/" label={$t('transactions.wacPreview.docsTooltip') ?? 'Learn how WAC (Weighted Average Cost) is calculated'} size={11} />
+            <DocsLink path="financial-theory/technical-analysis/performance-metrics/weighted-average-cost/" label={$t('transactions.wacPreview.docsTooltip') ?? 'Learn how WAC (Weighted Average Cost) is calculated'} size={11} />
         </div>
     {:else if isAuto && !previewResult && !loading && !error}
         <!-- Auto mode: no result yet — hint to validate -->

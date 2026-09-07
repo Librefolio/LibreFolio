@@ -4,7 +4,7 @@ category: problem
 status: resolved
 date: 2026-07-14
 tags: [testing, coverage, cli, argparse, python, infra]
-related: []
+related: [concepts/silent-no-op-option]
 ---
 
 # Problem: `./dev.py test coverage-report --category X` Broke Subcommand Dispatch
@@ -67,6 +67,16 @@ Reproduced the crash before the fix (`args.category` became the filter value ins
 subcommand name), applied the rename, then confirmed `./dev.py test coverage-report --category
 core_svc --threshold 80` and `./dev.py test coverage-report --priority high --summary` both
 dispatch correctly and produce the expected filtered function-level report.
+
+## The pattern this belongs to
+
+This is one of four incidents with the same shape, named at
+[[concepts/silent-no-op-option]] — *accepted is not arrived*: an option is declared,
+the parser accepts it, and the mechanism it was meant to reach never receives it.
+The failure mode is a **default**, not an error. Siblings:
+[[problems/resume-mode-stale-import]], [[problems/coverage-mode-stale-import]],
+[[problems/coverage-report-category-dest-collision]],
+[[problems/env-var-injection-point-duplicated]].
 
 ## Source files
 

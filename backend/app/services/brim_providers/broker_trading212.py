@@ -164,8 +164,8 @@ class Trading212BrokerProvider(BRIMProvider):
 
     @property
     def icon_url(self) -> str:
-        """Trading212 logo."""
-        return "https://www.trading212.com/favicon.ico"
+        """Trading212 logo (the bare favicon.ico is behind Cloudflare and 403s for non-browsers)."""
+        return "https://www.trading212.com/favicon-32x32.png"
 
     def can_parse(self, file_path: Path) -> bool:
         """Detect Trading212 format by checking for distinctive headers."""
@@ -183,7 +183,7 @@ class Trading212BrokerProvider(BRIMProvider):
         except Exception:
             return False
 
-    def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:
+    def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:  # noqa: C901 — flat row loop: validation guards and per-type field mapping, no nested logic
         """Parse Trading212 CSV export file."""
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []

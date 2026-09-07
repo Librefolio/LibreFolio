@@ -112,6 +112,7 @@
 |------|-------|-------|--------|--------|
 | [[F-046]] | Transaction Model & Unified Batch API (validate + commit) | fullstack | `implemented` | [`dev/arch/database/brokers_transactions.md`](developer/architecture/database/brokers_transactions.md) |
 | [[F-047]] | Transaction List Page (DataTable + filters + dual-form modals) | frontend | `implemented` | — |
+| [[F-048]] | Transaction Modals — Form / Bulk / Delete / Promote / Split (mode-less, Round 6 Plan D done) | fullstack | `in-progress` | — |
 | [[F-049]] | BRIM Import UI (asset matching wizard, bulk commit) | frontend | `in-progress` | — |
 | [[F-050]] | File Preview System (image/text/table/md/code) | fullstack | `planned` | — |
 | [[F-051]] | Transaction ↔ AssetEvent Link | backend | `implemented` | — |
@@ -140,7 +141,7 @@
 
 | Code | Title | Layer | Status | mkdocs |
 |------|-------|-------|--------|--------|
-| [[F-056]] | FIFO at Runtime (on-demand cost basis) | backend | `implemented` | — |
+| [[F-056]] | FIFO at Runtime (on-demand cost basis) | backend | `implemented` | `fifo-lot-analysis.en.md` |
 | [[F-057]] | Currency Conversion (triangulation via FX graph) | backend | `implemented` | — |
 | [[F-058]] | ROI Calculations (TWRR + MWRR) | backend | `implemented` | — |
 

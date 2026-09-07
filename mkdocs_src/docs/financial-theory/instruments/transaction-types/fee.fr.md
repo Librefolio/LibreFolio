@@ -52,6 +52,14 @@ Où :
 - $R_{net}$ = rendement après frais (ce que vous conservez réellement)
 - $V_{start}$ = valeur du portefeuille au début de la période
 
+!!! note "Comment LibreFolio attribue les frais et taxes"
+
+    Un `FEE` / `TAX` **lié à un actif** est alloué aux lots spécifiques auxquels il se rapporte et détermine le
+    **P&L net / rendement net** de ce lot (voir
+    [Analyse des Lots FIFO → Coûts & Métriques Nettes](../../technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md#costs-and-net-metrics)).
+    Un coût **sans actif** (`asset_id = null`, par ex. des frais de plateforme fixes) est au niveau du portefeuille
+    et est géré par le Portfolio Engine à la place — il n'atterrit jamais sur un seul lot.
+
 ### 📉 Effet composé des frais
 
 Sur de longues périodes de détention, même de petits frais récurrents érodent considérablement les rendements en raison de l'effet d'érosion des intérêts composés (**compounding drag**) :

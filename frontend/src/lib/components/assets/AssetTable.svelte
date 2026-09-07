@@ -11,7 +11,7 @@
     import {_ as t} from '$lib/i18n';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import type {ColumnDef} from '$lib/components/table/types';
-    import {RefreshCw, RotateCw, Trash2} from 'lucide-svelte';
+    import {Merge, RefreshCw, RotateCw, Trash2} from 'lucide-svelte';
     import {ensureCurrenciesLoaded, getCurrencyInfo, currencyStoreVersion} from '$lib/stores/reference/currencyStore';
     import {currentLanguage} from '$lib/stores/app/language';
     import {assetProviderBadgeHtml, assetProvidersVersion, ensureAssetProvidersCached} from '$lib/utils/providerHelpers';
@@ -33,10 +33,15 @@
         asset_type?: string | null;
         provider_code?: string | null;
         active: boolean;
+        quote_base_quantity?: number | null;
         lastPrice?: number | null;
         deltaAbs?: number | null;
         deltaPercent?: number | null;
         deltas?: Record<string, number | null>;
+        /** F15 — transactions using this asset. */
+        txCount?: number;
+        /** F15 — usage scope: own (tx in your brokers) / others / analysis (unused). */
+        txScope?: 'own' | 'others' | 'analysis';
     }
 
     interface Props {
@@ -52,10 +57,16 @@
         onsync?: (asset: AssetRow) => void;
         onrefresh?: (asset: AssetRow) => void;
         ondelete?: (asset: AssetRow) => void;
+        onmerge?: (asset: AssetRow) => void;
         onselectionchange?: (rows: AssetRow[]) => void;
+        /** F15 round-2 — stacked usage tables share column layout; this callback
+         *  lets the parent mirror live resizes onto the sibling instances. */
+        onColumnResize?: (columnId: string, width: number) => void;
+        /** Distinct storageKey per stacked instance (independent client state). */
+        storageKey?: string;
     }
 
-    let {data = [], loading = false, visiblePeriods = [], livePriceMap = new Map(), dateStart, dateEnd, onsync, onrefresh, ondelete, onselectionchange}: Props = $props();
+    let {data = [], loading = false, visiblePeriods = [], livePriceMap = new Map(), dateStart, dateEnd, onsync, onrefresh, ondelete, onmerge, onselectionchange, onColumnResize, storageKey = 'assetsTable'}: Props = $props();
 
     ensureCurrenciesLoaded($currentLanguage);
     ensureAssetProvidersCached();
@@ -146,6 +157,23 @@
                 minWidth: 150,
             },
             {
+                id: 'txCount',
+                header: () => $t('assets.table.txCount'),
+                headerTooltip: () => $t('assets.table.txCountTooltip'),
+                cell: (row) => {
+                    const scopeCls =
+                        row.txScope === 'own' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : row.txScope === 'others' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' : 'bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-gray-400';
+                    return {
+                        type: 'html',
+                        html: `<span class="inline-flex items-center justify-center min-w-8 px-1.5 py-0.5 rounded-md text-[11px] font-mono font-medium ${scopeCls}">${row.txCount ?? 0}</span>`,
+                    };
+                },
+                type: 'number',
+                getValue: (row) => row.txCount ?? 0,
+                width: 60,
+                minWidth: 48,
+            },
+            {
                 id: 'type',
                 header: () => $t('common.type'),
                 cell: (row) => ({type: 'html', html: typeBadgeHtml(row.asset_type)}),
@@ -195,6 +223,21 @@
                 width: 150,
                 minWidth: 100,
             },
+            {
+                id: 'delta_1D',
+                header: 'Δ 1D',
+                cell: (row) => {
+                    const val = row.deltas?.['1D'] ?? null;
+                    return {
+                        type: 'html',
+                        html: `<span class="font-mono ${deltaColorClass(val)}">${formatDelta(val, '%')}</span>`,
+                    };
+                },
+                type: 'number',
+                getValue: (row) => row.deltas?.['1D'] ?? 0,
+                width: 80,
+                minWidth: 60,
+            },
             // Dynamic Δ multi-period columns
             ...visiblePeriods.map((period) => ({
                 id: `delta_${period.key}`,
@@ -223,6 +266,19 @@
                 width: 240,
                 minWidth: 160,
                 filterable: false,
+            },
+            {
+                id: 'quoteBaseQuantity',
+                header: () => $t('assets.table.quoteBaseQuantity'),
+                headerTooltip: () => $t('assets.modal.quoteBaseTooltip'),
+                cell: (row) => ({type: 'html', html: `<span class="font-mono tabular-nums">${row.quote_base_quantity ?? 1}</span>`}),
+                type: 'number',
+                getValue: (row) => row.quote_base_quantity ?? 1,
+                width: 100,
+                minWidth: 70,
+                align: 'right',
+                filterable: false,
+                hiddenByDefault: true,
             },
         ]),
     );
@@ -258,8 +314,11 @@
                         syncingRowIds = new Set([...syncingRowIds].filter((id) => id !== rid));
                     }
                 },
-                disabled: (row) => !row.provider_code,
+                disabled: (row) => !row.provider_code || row.active === false,
                 iconClass: (row) => (syncingRowIds.has(String(row.id)) ? 'animate-spin' : ''),
+                labelClass: (row) => (!row.provider_code || row.active === false ? 'line-through' : ''),
+                testid: 'asset-table-sync-action',
+                title: (row) => (!row.provider_code ? $t('assetDetail.syncDisabledManual') : row.active === false ? $t('assetDetail.syncDisabledInactive') : ''),
             },
             {
                 id: 'refresh',
@@ -277,6 +336,12 @@
                 iconClass: (row) => (refreshingRowIds.has(String(row.id)) ? 'animate-spin' : ''),
             },
             {
+                id: 'merge',
+                label: () => $t('assets.merge.action'),
+                icon: Merge,
+                onClick: (row) => onmerge?.(row),
+            },
+            {
                 id: 'delete',
                 label: () => $t('common.delete'),
                 icon: Trash2,
@@ -284,6 +349,7 @@
                 variant: 'danger',
             },
         ]}
-        storageKey="assetsTable"
+        {storageKey}
+        {onColumnResize}
     />
 </div>

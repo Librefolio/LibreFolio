@@ -86,14 +86,6 @@ export function signalLabelToHtml(info: SignalLabelInfo, truncateAt?: number): s
     return parts.join('');
 }
 
-/**
- * Plain-text version of signal label (for non-HTML contexts like aria labels).
- */
-export function signalLabelToText(info: SignalLabelInfo): string {
-    const prefix = info.isCrown ? '👑 ' : '';
-    return `${prefix}${info.label}`;
-}
-
 // =============================================================================
 // Overlay signal info map builder
 // =============================================================================

@@ -37,9 +37,9 @@ from __future__ import annotations
 from datetime import date
 from decimal import ROUND_HALF_EVEN, Decimal
 from enum import StrEnum
-from typing import List, Optional
+from typing import Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Field, field_validator
 
 from backend.app.db.models import AssetType, IdentifierType
 
@@ -51,10 +51,12 @@ from backend.app.schemas.common import (
     Currency,
     OldNew,
     SafeDecimal,
+    StrictModel,
 )
 from backend.app.schemas.prices import FAAssetEventPoint, FACurrentValue, FAHistoricalData, FAPricePoint
 from backend.app.schemas.provider import FAProviderRefreshFieldsDetail
 from backend.app.utils.geo_utils import normalize_country_keys
+from backend.app.utils.identifier_utils import normalize_other_identifiers
 from backend.app.utils.sector_fin_utils import normalize_sector
 
 # ============================================================================
@@ -121,8 +123,7 @@ class InterestType(StrEnum):
 # ============================================================================
 # PROVIDER ASSIGNMENT
 # ============================================================================
-class FAAssetProviderAssignment(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class FAAssetProviderAssignment(StrictModel):
     asset_id: int
     provider_code: str
     provider_params: Optional[dict] = None
@@ -134,7 +135,7 @@ class FAAssetProviderAssignment(BaseModel):
 # ============================================================================
 
 
-class FAInterestRatePeriod(BaseModel):
+class FAInterestRatePeriod(StrictModel):
     """
     Interest rate period for scheduled investments.
 
@@ -161,8 +162,6 @@ class FAInterestRatePeriod(BaseModel):
         }
     """
 
-    model_config = ConfigDict(extra="forbid")
-
     start_date: date
     end_date: date
     annual_rate: SafeDecimal
@@ -187,7 +186,7 @@ class FAInterestRatePeriod(BaseModel):
         return v
 
 
-class FALateInterestConfig(BaseModel):
+class FALateInterestConfig(StrictModel):
     """
     Late interest configuration for scheduled investments.
 
@@ -201,8 +200,6 @@ class FALateInterestConfig(BaseModel):
         interest_type: SIMPLE or COMPOUND for late interest (default: COMPOUND — penalties grow)
         maturation_frequency: How often late interest matures/emits price points (default: DAILY)
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     annual_rate: SafeDecimal
     grace_period_days: int = 0
@@ -228,7 +225,7 @@ class FALateInterestConfig(BaseModel):
         return v
 
 
-class FAScheduledInvestmentSchedule(BaseModel):
+class FAScheduledInvestmentSchedule(StrictModel):
     """
     Complete interest schedule configuration for scheduled investments.
 
@@ -293,8 +290,6 @@ class FAScheduledInvestmentSchedule(BaseModel):
         }
     """
 
-    model_config = ConfigDict(extra="forbid")
-
     initial_value: Currency = Field(..., description="Initial capital / face value with currency (e.g., {code: 'EUR', amount: 10000})")
     interest_type: InterestType = Field(default=InterestType.SIMPLE, description="Interest calculation method: SIMPLE (on initial principal) or COMPOUND (on running value)")
     day_count: DayCountConvention = Field(default=DayCountConvention.ACT_365, description="Day count convention for time fraction calculation (global for all periods)")
@@ -337,7 +332,7 @@ class FAScheduledInvestmentSchedule(BaseModel):
 # ============================================================================
 
 
-class BaseDistribution(BaseModel):
+class BaseDistribution(StrictModel):
     """
     Base class for distribution models (geographic, sector, etc.).
 
@@ -351,12 +346,10 @@ class BaseDistribution(BaseModel):
     before calling parent validation via _validate_and_normalize_weights().
     """
 
-    model_config = ConfigDict(extra="forbid")
-
     distribution: dict[str, SafeDecimal] = Field(..., description="Distribution weights (must sum to 1.0)")
 
     @classmethod
-    def _validate_and_normalize_weights(cls, weights: dict[str, Decimal], allow_empty: bool = False) -> dict[str, Decimal]:
+    def _validate_and_normalize_weights(cls, weights: dict[str, Decimal], allow_empty: bool = False) -> dict[str, Decimal]:  # noqa: C901 — flat validation/normalization passes, no nested logic
         """
         Common validation logic for distribution weights.
 
@@ -537,7 +530,7 @@ class FASectorArea(BaseDistribution):
         return cls._validate_and_normalize_weights(normalized_sectors)
 
 
-class FAClassificationParams(BaseModel):
+class FAClassificationParams(StrictModel):
     """
     Asset classification metadata.
 
@@ -558,14 +551,12 @@ class FAClassificationParams(BaseModel):
         ... )
     """
 
-    model_config = ConfigDict(extra="forbid")
-
     short_description: Optional[str] = None
     geographic_area: Optional[FAGeographicArea] = None
     sector_area: Optional[FASectorArea] = None
 
 
-class FAAssetMetadataResponse(BaseModel):
+class FAAssetMetadataResponse(StrictModel):
     """
     Asset with metadata fields.
 
@@ -581,8 +572,6 @@ class FAAssetMetadataResponse(BaseModel):
     - provider_code: Provider code if assigned (e.g. 'yfinance'), None otherwise
     """
 
-    model_config = ConfigDict(extra="forbid")
-
     asset_id: int
     display_name: str
     currency: str
@@ -593,25 +582,13 @@ class FAAssetMetadataResponse(BaseModel):
     provider_code: Optional[str] = Field(None, description="Provider code if assigned (e.g. 'yfinance')")
 
 
-class FAMetadataChangeDetail(BaseModel):
-    """Single field change in metadata."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    field: str
-    old_value: Optional[str] = None
-    new_value: Optional[str] = None
-
-
-class FAMetadataRefreshResult(BaseModel):
+class FAMetadataRefreshResult(StrictModel):
     """
     Result of metadata refresh for single asset.
 
     Follows FA pattern: { asset_id, success, message, ... }
     Includes fields_detail with old/new values for each refreshed field.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     asset_id: int
     success: bool
@@ -629,22 +606,18 @@ class FABulkMetadataRefreshResponse(BaseBulkResponse[FAMetadataRefreshResult]):
     - ignored_fields: Fields skipped (future use)
     """
 
-    pass
-
 
 # ============================================================================
 # ASSET CRUD SCHEMAS
 # ============================================================================
 
 
-class FAAssetCreateItem(BaseModel):
+class FAAssetCreateItem(StrictModel):
     """Single asset to create in bulk operation.
 
     Identifier fields (identifier_isin, identifier_ticker, etc.) are stored directly on Asset.
     Provider assignment can be done separately via POST /assets/provider.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     display_name: str = Field(..., description="Human-readable asset name (must be unique)")
     currency: str = Field(..., min_length=3, max_length=3, description="Asset currency (ISO 4217)")
@@ -664,7 +637,12 @@ class FAAssetCreateItem(BaseModel):
     identifier_sedol: Optional[str] = Field(None, max_length=7, description="SEDOL code (7 chars)")
     identifier_figi: Optional[str] = Field(None, max_length=12, description="FIGI code (12 chars)")
     identifier_uuid: Optional[str] = Field(None, max_length=36, description="UUID for custom assets")
-    identifier_other: Optional[str] = Field(None, max_length=100, description="Other identifier")
+    identifier_other: Optional[List[str]] = Field(None, description="JSON list of other/soft identifiers (additive across imports)")
+
+    @field_validator("identifier_other", mode="before")
+    @classmethod
+    def normalize_identifier_other(cls, v) -> Optional[List[str]]:
+        return normalize_other_identifiers(v)
 
     @field_validator("currency")
     @classmethod
@@ -698,10 +676,8 @@ class FAAssetCreateItem(BaseModel):
         return v.strip().upper()
 
 
-class FAAssetCreateResult(BaseModel):
+class FAAssetCreateResult(StrictModel):
     """Result of single asset creation in bulk operation."""
-
-    model_config = ConfigDict(extra="forbid")
 
     asset_id: Optional[int] = Field(None, description="Created asset ID (null if failed)")
     success: bool = Field(..., description="Whether creation succeeded")
@@ -717,12 +693,10 @@ class FABulkAssetCreateResponse(BaseBulkResponse[FAAssetCreateResult]):
     # - success_count: int
     # - errors: List[str]
     # Computed properties:
-    # - failed_count: int (computed from len(results) - success_count)
     # - total_count: int
-    pass
 
 
-class FAAinfoFiltersRequest(BaseModel):
+class FAAinfoFiltersRequest(StrictModel):
     """Filters for asset list query - enhanced for BRIM asset matching.
 
     Supports exact match on all identifier columns (one per IdentifierType):
@@ -730,8 +704,6 @@ class FAAinfoFiltersRequest(BaseModel):
     - identifier_other: partial match (LIKE)
     - identifier_contains: partial match across ALL identifier columns
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     # Filters with proper validation
     currency: Optional[str] = Field(None, description="Filter by currency (ISO 4217)")
@@ -780,10 +752,8 @@ class FAAinfoFiltersRequest(BaseModel):
         return v.strip().upper()
 
 
-class FAinfoResponse(BaseModel):
+class FAinfoResponse(StrictModel):
     """Single asset info - enhanced with identifier data for BRIM and frontend."""
-
-    model_config = ConfigDict(extra="forbid")
 
     id: int = Field(..., description="Asset ID")
     display_name: str = Field(..., description="Asset display name")
@@ -796,6 +766,12 @@ class FAinfoResponse(BaseModel):
     provider_code: Optional[str] = Field(None, description="Provider code if assigned (e.g. 'yfinance')")
     has_metadata: bool = Field(..., description="Whether asset has classification metadata")
 
+    # Usage counters (F15) — drive the "your assets / other users' assets / under
+    # analysis" panels on the global assets page. `tx_count_own` counts only
+    # transactions in brokers the current user OWNs with a positive share.
+    tx_count: int = Field(0, description="Total transactions referencing this asset (any broker)")
+    tx_count_own: int = Field(0, description="Transactions in brokers the current user owns (share > 0)")
+
     # Identifier columns (one per IdentifierType)
     identifier_isin: Optional[str] = Field(None, description="ISIN code")
     identifier_ticker: Optional[str] = Field(None, description="Ticker symbol")
@@ -803,11 +779,16 @@ class FAinfoResponse(BaseModel):
     identifier_sedol: Optional[str] = Field(None, description="SEDOL code")
     identifier_figi: Optional[str] = Field(None, description="FIGI code")
     identifier_uuid: Optional[str] = Field(None, description="UUID for custom assets")
-    identifier_other: Optional[str] = Field(None, description="Other identifier")
+    identifier_other: Optional[List[str]] = Field(None, description="JSON list of other/soft identifiers")
 
     # Legacy fields for backward compatibility with provider assignment
     identifier: Optional[str] = Field(None, description="Primary identifier (from provider assignment)")
     identifier_type: Optional[IdentifierType] = Field(None, description="Primary identifier type")
+
+    @field_validator("identifier_other", mode="before")
+    @classmethod
+    def normalize_identifier_other(cls, v) -> Optional[List[str]]:
+        return normalize_other_identifiers(v)
 
 
 class FAAssetDeleteResult(BaseDeleteResult):
@@ -827,15 +808,13 @@ class FAAssetDeleteResult(BaseDeleteResult):
 class FABulkAssetDeleteResponse(BaseBulkResponse[FAAssetDeleteResult]):
     """Bulk asset deletion response (partial success allowed)."""
 
-    pass
-
 
 # ============================================================================
 # ASSET PATCH SCHEMAS (for PATCH /assets endpoint)
 # ============================================================================
 
 
-class FAAssetPatchItem(BaseModel):
+class FAAssetPatchItem(StrictModel):
     """Single asset patch item for bulk update operations.
 
     Merge logic:
@@ -846,8 +825,6 @@ class FAAssetPatchItem(BaseModel):
     - If None: Set DB column to NULL
     - If present: Full replace (no merge of subfields)
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     asset_id: int = Field(..., description="Asset ID to update")
 
@@ -868,7 +845,12 @@ class FAAssetPatchItem(BaseModel):
     identifier_sedol: Optional[str] = Field(None, max_length=7, description="Update SEDOL code")
     identifier_figi: Optional[str] = Field(None, max_length=12, description="Update FIGI code")
     identifier_uuid: Optional[str] = Field(None, max_length=36, description="Update UUID")
-    identifier_other: Optional[str] = Field(None, max_length=100, description="Update other identifier")
+    identifier_other: Optional[List[str]] = Field(None, description="Update other/soft identifiers (JSON list; None = leave unchanged)")
+
+    @field_validator("identifier_other", mode="before")
+    @classmethod
+    def normalize_identifier_other(cls, v) -> Optional[List[str]]:
+        return normalize_other_identifiers(v)
 
     @field_validator("currency")
     @classmethod
@@ -903,10 +885,8 @@ class FAAssetPatchItem(BaseModel):
         return v.strip().upper()
 
 
-class FAAssetPatchResult(BaseModel):
+class FAAssetPatchResult(StrictModel):
     """Result of single asset patch in bulk operation."""
-
-    model_config = ConfigDict(extra="forbid")
 
     asset_id: int = Field(..., description="Asset ID")
     success: bool = Field(..., description="Whether patch succeeded")
@@ -917,11 +897,56 @@ class FAAssetPatchResult(BaseModel):
 class FABulkAssetPatchResponse(BaseBulkResponse[FAAssetPatchResult]):
     """Bulk asset patch response (partial success allowed)."""
 
-    pass
+
+# ============================================================================
+# ASSET MERGE SCHEMAS (P3/A-02)
+# ============================================================================
+
+
+class FAAssetMergeRequest(StrictModel):
+    """Request body for ``POST /assets/merge``.
+
+    Folds ``source_asset_id`` into ``target_asset_id`` and deletes the source.
+    The target is always the asset the user wants to keep — the endpoint never
+    picks for them.
+    """
+
+    source_asset_id: int = Field(..., description="Asset to fold in and delete")
+    target_asset_id: int = Field(..., description="Asset to keep")
+    identifier_primaries: Optional[Dict[str, str]] = Field(
+        None,
+        description="Optional per-column decision on which value stays primary, e.g. identifier_isin -> IT0005634800. Whatever loses is demoted into identifier_other rather than dropped. Values not belonging to either asset are rejected.",
+    )
+    dry_run: bool = Field(False, description="Compute and return the plan without writing anything")
+
+
+class FAAssetMergePreview(StrictModel):
+    """What a merge would move, so the user can confirm before anything is destroyed."""
+
+    transactions: int = Field(0, description="Transactions that will be reassigned to the target")
+    prices: int = Field(0, description="Price rows that will be reassigned")
+    prices_discarded: int = Field(0, description="Source price rows dropped because the target already has that date")
+    events: int = Field(0, description="Asset events that will be reassigned")
+    events_discarded: int = Field(0, description="Source events dropped as duplicates of a target event")
+    transactions_relinked: int = Field(0, description="Transactions whose asset_event_id was remapped onto the surviving event")
+    provider_assignment_moved: bool = Field(False, description="Whether the source provider assignment was moved to the target")
+    provider_assignment_dropped: bool = Field(False, description="Whether the source provider assignment was dropped (target already had one)")
+    identifiers_added: List[str] = Field(default_factory=list, description="Values added to the target's identifier_other")
+
+
+class FAAssetMergeResponse(StrictModel):
+    """Outcome of an asset merge."""
+
+    success: bool = Field(..., description="Whether the merge completed")
+    source_asset_id: int = Field(..., description="Asset folded in (deleted unless dry_run)")
+    target_asset_id: int = Field(..., description="Surviving asset")
+    dry_run: bool = Field(False, description="True when nothing was written")
+    preview: FAAssetMergePreview = Field(..., description="What was moved (or would be moved)")
+    message: str = Field("", description="Human-readable outcome")
 
 
 # Export convenience
-__all__ = [
+__all__ = [  # noqa: RUF022 — grouped by domain with section comments; sorting would scatter related names
     # Enums
     "MaturationFrequency",
     "DayCountConvention",
@@ -944,7 +969,6 @@ __all__ = [
     "FASectorArea",
     "FAClassificationParams",
     "FAAssetMetadataResponse",
-    "FAMetadataChangeDetail",
     "FAMetadataRefreshResult",
     "FABulkMetadataRefreshResponse",
     # Asset CRUD schemas
@@ -959,4 +983,8 @@ __all__ = [
     "FAAssetPatchItem",
     "FABulkAssetPatchResponse",
     "FAAssetPatchResult",
+    # Asset merge schemas
+    "FAAssetMergeRequest",
+    "FAAssetMergePreview",
+    "FAAssetMergeResponse",
 ]

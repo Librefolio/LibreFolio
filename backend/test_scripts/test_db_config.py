@@ -48,14 +48,6 @@ def setup_test_database():
     return TEST_DB_PATH
 
 
-def cleanup_test_database():
-    """
-    Remove test database after tests complete.
-    """
-    if TEST_DB_PATH.exists():
-        TEST_DB_PATH.unlink()
-
-
 def get_test_db_path() -> Path:
     """Get the path to test database."""
     return TEST_DB_PATH

@@ -105,4 +105,4 @@ export function saveLocalePreference(locale: SupportedLocale) {
 }
 
 // Re-export commonly used functions from svelte-i18n
-export {locale, t, _, date, time, number, isLoading as i18nLoading} from 'svelte-i18n';
+export {locale, t, _, isLoading as i18nLoading} from 'svelte-i18n';

@@ -62,6 +62,6 @@ Frontend uses server data **as-is** with zero mapping functions (all values lowe
 | Role | Path |
 |------|------|
 | Backend metadata | `backend/app/schemas/transactions.py` (TXTypeMetadata, EventTypeMetadata, TXTypesResponse) |
-| Frontend store | `frontend/src/lib/stores/transactionTypeStore.ts` |
+| Frontend store | `frontend/src/lib/stores/transactions/transactionTypeStore.ts` |
 | Source plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round4-5/plan-phase07-transaction-Part4_Round5_ServerDrivenTypeRules.prompt.md` |
 

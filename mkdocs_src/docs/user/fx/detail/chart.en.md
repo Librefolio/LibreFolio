@@ -28,7 +28,7 @@ When switching to % mode, all overlay signals are also recalculated as percentag
 | **Zoom out** | Mouse wheel down | Pinch in |
 | **Reset zoom** | Double-click | Double-tap |
 
-You can also use the **time range presets** (1W, 1M, 3M, 6M, 1Y, 2Y) or select a **Custom** date range to quickly jump to specific periods.
+You can also use the **time range presets** (1W, 1M, 3M, 6M, 1Y, 2Y, YTD, MAX) or select a **Custom** date range to quickly jump to specific periods. When the toolbar has leftover space, extra **fill presets** appear to use it — 3Y, 5Y, 10Y alongside the duration presets, and WTD, MTD, QTD alongside YTD.
 
 !!! info "Data availability"
 
@@ -51,7 +51,7 @@ Hover over any point on the chart to see:
 The chart toolbar provides quick access to:
 
 - 📊 **View mode toggle** — Absolute / Percentage
-- ⏱️ **Time range** — 1W, 1M, 3M, 6M, 1Y, 2Y, Custom
+- ⏱️ **Time range** — 1W, 1M, 3M, 6M, 1Y, 2Y, YTD, MAX, Custom (plus space-filling 3Y/5Y/10Y and WTD/MTD/QTD presets when the toolbar has room)
 - 📈 **[Signals](signals.md)** — Toggle technical indicator overlays
 - 📏 **[Measures](measures.md)** — Click-to-click measurement tool
 - ✏️ **[Data Editor](data-editor.md)** — Edit individual data points

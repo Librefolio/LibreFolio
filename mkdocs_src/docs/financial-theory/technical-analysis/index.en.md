@@ -8,12 +8,13 @@ Technical analysis studies **price patterns and market dynamics** to identify tr
 
 ### 📉 [Indicators](indicators/index.md)
 
-Chart overlays that extract trend, momentum, or volatility information from price data. LibreFolio implements four core indicators, each explained from both a **financial** and **signal processing** perspective:
+Chart overlays that extract trend, momentum, volatility, volume, or risk information from market data. LibreFolio implements **22 backend indicators**, each explained from both a **financial** and **signal processing** perspective:
 
-- **[EMA](indicators/ema.md)** — Exponential Moving Average (trend tracking)
-- **[MACD](indicators/macd.md)** — Moving Average Convergence Divergence (momentum)
-- **[RSI](indicators/rsi.md)** — Relative Strength Index (overbought/oversold)
-- **[Bollinger Bands](indicators/bollinger-bands.md)** — Adaptive volatility envelope
+- 📈 **[Trend](indicators/trend.md)** — EMA, SMA, KAMA, ADX, Aroon
+- ⚡ **[Momentum](indicators/momentum.md)** — RSI, MACD, ROC, Stochastic RSI, PPO, CCI
+- 🌊 **[Volatility](indicators/volatility.md)** — Bollinger Bands, ATR, NATR, Donchian Channels
+- 📊 **[Volume](indicators/volume.md)** — OBV, MFI
+- ⚠️ **Risk** — Underwater Drawdown, Rolling Return, Rolling Volatility, Rolling Sharpe Ratio, Rolling Beta (Asset-only; concepts under [Risk Metrics](risk-metrics/index.md))
 
 ### 🎯 [Synthetic Benchmarks](synthetic-benchmarks/index.md)
 
@@ -43,5 +44,4 @@ In finance, *fast* and *slow* refer to the **time constant** ($\tau$) of the und
 - 🏦 **[Instruments](../instruments/index.md)** — The assets these indicators analyze
 - 📐 **[Fundamentals](../fundamentals/index.md)** — Returns, day count conventions
 - 📈 **[Portfolio Theory](../portfolio-theory/index.md)** — Risk metrics and allocation
-
 

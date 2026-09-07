@@ -1,5 +1,6 @@
 <script lang="ts">
     import {_} from '$lib/i18n';
+    import {isOutsideClick} from '$lib/utils/core/clickOutside';
     import {onMount} from 'svelte';
     import {Book, Bug, ChevronDown, Coffee, Download, ExternalLink, HelpCircle, MessageCircle} from 'lucide-svelte';
 
@@ -29,7 +30,7 @@
     }
 
     function handleClickOutside(event: MouseEvent) {
-        if (menuRef && !menuRef.contains(event.target as Node)) {
+        if (isOutsideClick(event.target, (el) => !menuRef || menuRef.contains(el))) {
             isOpen = false;
             showIosHint = false;
             showDesktopHint = false;

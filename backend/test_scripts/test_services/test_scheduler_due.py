@@ -8,7 +8,7 @@ Test IDs: SD-001..SD-010
 """
 
 import sys
-from datetime import datetime, time, timedelta, timezone
+from datetime import UTC, datetime, time, timedelta, timezone
 
 from backend.app.config import PROJECT_ROOT
 
@@ -38,6 +38,7 @@ def _make_settings(
     times: list[time] | None = None,
     days: list[str] | None = None,
     enabled: bool = True,
+    scheduler_timezone: str = "Europe/Rome",
 ) -> SchedulerSettings:
     return SchedulerSettings(
         scheduler_enabled=enabled,
@@ -45,7 +46,7 @@ def _make_settings(
         history_sync_times=times if times is not None else [time(6, 0), time(23, 0)],
         history_sync_days=days if days is not None else ["mon", "tue", "wed", "thu", "fri", "sat"],
         history_sync_horizon_days=14,
-        scheduler_timezone="UTC",
+        scheduler_timezone=scheduler_timezone,
     )
 
 
@@ -189,3 +190,46 @@ class TestDueHistorySync:
         settings = _make_settings(times=[time(6, 0)], days=["mon", "tue", "wed", "thu", "fri", "sat", "sun"])
         assert due_history_sync(now, settings, state) is True
         print_success("7-day schedule includes Sunday → True")
+
+    def test_configured_timezone_west_uses_previous_local_day(self):
+        """SD-011: Monday 02:05 UTC is Sunday 21:05 in Bogotá; Sunday slot is due."""
+        print_section("SD-011: due_history_sync — west timezone uses previous local day")
+        now = datetime(2026, 6, 8, 2, 5, 0, tzinfo=UTC)
+        state = _make_state(history_last=None)
+
+        sunday_settings = _make_settings(times=[time(21, 0)], days=["sun"], scheduler_timezone="America/Bogota")
+        monday_settings = _make_settings(times=[time(21, 0)], days=["mon"], scheduler_timezone="America/Bogota")
+
+        assert due_history_sync(now, sunday_settings, state) is True
+        assert due_history_sync(now, monday_settings, state) is False
+        print_success("Bogotá local Sunday is used instead of UTC Monday")
+
+    def test_configured_timezone_east_uses_next_local_day(self):
+        """SD-012: Sunday 23:05 UTC is Monday 08:05 in Tokyo; Monday slot is due."""
+        print_section("SD-012: due_history_sync — east timezone uses next local day")
+        now = datetime(2026, 6, 7, 23, 5, 0, tzinfo=UTC)
+        state = _make_state(history_last=None)
+
+        monday_settings = _make_settings(times=[time(8, 0)], days=["mon"], scheduler_timezone="Asia/Tokyo")
+        sunday_settings = _make_settings(times=[time(8, 0)], days=["sun"], scheduler_timezone="Asia/Tokyo")
+
+        assert due_history_sync(now, monday_settings, state) is True
+        assert due_history_sync(now, sunday_settings, state) is False
+        print_success("Tokyo local Monday is used instead of UTC Sunday")
+
+    def test_dst_keeps_same_local_time_across_winter_and_summer(self):
+        """SD-013: 09:00 Europe/Rome remains 09:00 local in both CET and CEST."""
+        print_section("SD-013: due_history_sync — DST keeps local wall-clock time stable")
+        settings = _make_settings(times=[time(9, 0)], days=["mon", "tue", "wed", "thu", "fri", "sat", "sun"], scheduler_timezone="Europe/Rome")
+        state = _make_state(history_last=None)
+
+        winter_before = datetime(2026, 1, 15, 7, 59, 0, tzinfo=UTC)  # 08:59 CET
+        winter_due = datetime(2026, 1, 15, 8, 0, 0, tzinfo=UTC)  # 09:00 CET
+        summer_before = datetime(2026, 7, 15, 6, 59, 0, tzinfo=UTC)  # 08:59 CEST
+        summer_due = datetime(2026, 7, 15, 7, 0, 0, tzinfo=UTC)  # 09:00 CEST
+
+        assert due_history_sync(winter_before, settings, state) is False
+        assert due_history_sync(winter_due, settings, state) is True
+        assert due_history_sync(summer_before, settings, state) is False
+        assert due_history_sync(summer_due, settings, state) is True
+        print_success("09:00 Europe/Rome is due at 08:00 UTC in winter and 07:00 UTC in summer")

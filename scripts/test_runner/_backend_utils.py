@@ -59,6 +59,15 @@ def utils_version(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Version utility tests", verbose=verbose)
 
 
+def utils_coverage_js_adapter(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the JS/Svelte coverage adapter that feeds coverage_analysis."""
+    print_section("Utils: JS Coverage Adapter")
+    print_info("Testing: scripts/coverage_js.py")
+    print_info("Tests: line-based counting across the vitest/E2E double compilation, istanbul conversion")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_coverage_js_adapter.py", test_names)
+    return run_command(cmd, "JS coverage adapter tests", verbose=verbose)
+
+
 def utils_sector_normalization(verbose: bool = False, test_names: list = None) -> bool:
     """Test FinancialSector enum and sector normalization."""
     print_section("Utils: Sector Normalization")
@@ -111,8 +120,30 @@ def utils_translation_utils(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Translation helper tests", verbose=verbose)
 
 
+def utils_ai_export_probe_helpers(verbose: bool = False, test_names: list = None) -> bool:
+    """Test fast AI Export probe helper functions without running a real probe."""
+    print_section("Utils: AI Export Probe Helpers")
+    print_info("Testing helper logic only; no copied DB, API server, prompt corpus, or qualitative review")
+    cmd = _build_pytest_cmd(
+        "backend/test_scripts/test_utilities/test_ai_export_real_prompt_probe.py",
+        test_names,
+    )
+    return run_command(cmd, "AI Export probe helper tests", verbose=verbose)
+
+
+def utils_js_cache_fail_loud(verbose: bool = False, test_names: list = None) -> bool:
+    """Test update_js_cache fail-loud contract (I1)."""
+    print_section("Utils: JS Cache Fail-Loud")
+    print_info("Testing: scripts/update_js_cache.py")
+    print_info("Tests: hard failure (no cache) vs soft keep (cached), partial font subsets, exit codes")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_update_js_cache.py", test_names)
+    return run_command(cmd, "JS cache fail-loud tests", verbose=verbose)
+
+
 def utils_all(verbose: bool = False) -> bool:
     """Run all utility tests."""
+    if _common.nothing_left_to_run("utils"):
+        return _common.consolidated_verdict("utils")
     return _run_test_suite(
         suite_name="Utility Tests",
         tests=_get_category_tests_for_all("utils", verbose),
@@ -135,17 +166,42 @@ Tests for utility modules and helper functions:
   • Currency utilities, Cache utilities
   • Provider core cache & thread isolation
 """,
+        # These are functions over values. The three the static classifier could
+        # not prove pure only touch a database because they import a helper that
+        # mentions one.
+        default_isolation="write-scoped",
     )
     add_test(cat, "decimal-precision", utils_decimal_precision, name="Decimal Precision", desc="Model precision, truncation, edge cases")
     add_test(cat, "datetime", utils_datetime, name="Datetime Utils", desc="Timezone-aware datetime helpers")
     add_test(cat, "day-count", utils_day_count, name="Day Count Conventions", desc="ACT/365, ACT/360, ACT/ACT, 30/360")
     add_test(cat, "geo-utils", utils_geo_utils, name="Geographic Utils", desc="ISO-3166-A3 normalization, weights")
     add_test(cat, "version", utils_version, name="Version Utils", desc="get_git_version, get_version_info")
+    add_test(
+        cat,
+        "coverage-js-adapter",
+        utils_coverage_js_adapter,
+        name="JS Coverage Adapter",
+        desc="Line-based counting across the vitest/E2E double compilation, istanbul conversion",
+        # Overrides the category default: these are functions over plain dicts
+        # built inside the test. No session, no server, no file read — the module
+        # imports nothing but stdlib.
+        isolation="pure",
+    )
     add_test(cat, "sector-normalization", utils_sector_normalization, name="Sector Normalization", desc="FinancialSector enum, aliases")
     add_test(cat, "currency-utils", utils_currency_utils, name="Currency Utils", desc="Currency listing, flag mapping")
     add_test(cat, "cache-utils", utils_cache_utils, name="Cache Utils", desc="NamedCache, TTL, registry, stats")
     add_test(cat, "provider-core-cache", utils_provider_core_cache, name="Provider Core Cache", desc="Thread isolation, timeout, caches")
     add_test(cat, "roi-utils", utils_roi_utils, name="ROI Utils", desc="annualized_to_cumulative, calculate_mwrr/_series")
     add_test(cat, "translation-utils", utils_translation_utils, name="Translation Utils", desc="get_babel_locale + English fallback")
+    add_test(cat, "ai-export-probe-helpers", utils_ai_export_probe_helpers, name="AI Export Probe Helpers", desc="Fast unit tests for probe orchestration, metrics, security, and audit helpers; never runs a real prompt probe")
+    add_test(
+        cat,
+        "js-cache-fail-loud",
+        utils_js_cache_fail_loud,
+        name="JS Cache Fail-Loud (I1)",
+        desc="update_js_cache: undownloadable+uncached resource or partial font subsets → hard failure → exit 1; cached copy → exit 0",
+        # tmp_path + monkeypatched network only: no DB, no server, no repo writes.
+        isolation="pure",
+    )
     add_test(cat, "all", utils_all, test_names=False, name="All Utils Tests", desc="Run all utility tests")
     registry["utils"] = cat

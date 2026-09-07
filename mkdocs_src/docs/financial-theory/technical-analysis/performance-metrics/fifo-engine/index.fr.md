@@ -1,12 +1,12 @@
 # 🧬 FIFO Engine — Lot Lifecycle & Matching Model
 
-*[⬅️ Retour à l'aperçu des métriques de performance](../index.md)*
-
 ## 💡 Aperçu
 
 Alors que le [Prix Moyen Pondéré (PMP)](../weighted-average-cost.md) fusionne chaque acquisition d'une position en une moyenne continue, le moteur FIFO de LibreFolio conserve la trace de **lots individuels** — un par lot d'acquisition — tout au long de leur cycle de vie : ouverture, clôtures partielles, transferts entre courtiers, divisions et clôture définitive.
 
 Cette page décrit le **fonctionnement** de ce moteur : comment les lots sont créés, appariés et clôturés. Pour les **métriques** dérivées de ce moteur (Rendement Ouvert/Total, mise à l'échelle qbq, allocation des revenus, un exemple pratique), voir [Analyse des Lots FIFO](fifo-lot-analysis.md).
+
+Le moteur FIFO est indépendant du flux de prix. Il rejoue les quantités, lots, fragments, transferts et fermetures réalisées. Les niveaux de valorisation courants résident à l'extérieur : [Résolution des Prix](../portfolio-engine/price-resolution.md) et `LotsAnalysisService` fournissent les cours de référence/courants et le comportement au coût estimé.
 
 !!! info "Deux moteurs, deux questions"
 
@@ -27,6 +27,7 @@ Un **lot** est un lot d'acquisition économique pour un actif : un seul ACHAT, l
 | Quantité et coût d'origine | Fixés à l'ouverture, ensuite modifiés uniquement par les divisions — jamais par les transferts |
 | Quantité ouverte | Quelle partie du lot n'a **pas** encore été appariée par une transaction opposée |
 | Conservation | Quel courtier (ou courtiers, dans le temps) détient actuellement la quantité ouverte |
+| Prix de référence | `reference_unit_price` plus `reference_price_source` (`exact`, `fallback`, `none`) |
 
 ---
 
@@ -124,6 +125,8 @@ Le résultat global est ensuite marqué **complet** ou **dégradé** dans son en
 ## 🔗 Liens connexes
 
 - 🔬 **[Analyse des Lots FIFO](fifo-lot-analysis.md)** — Métriques dérivées de ce moteur : Rendement Ouvert/Total par lot, mise à l'échelle qbq, allocation des revenus, exemple pratique
+- 🧭 **[Résolution des Prix](../portfolio-engine/price-resolution.md)** — Niveaux de valorisation utilisés par le service des lots
 - ⚙️ **[Moteur de Portefeuille](../index.md)** — Le moteur complémentaire basé sur l'agrégat/PMP, et comment les deux sont liés
 - 📊 **[Prix Moyen Pondéré (PMP)](../weighted-average-cost.md)** — Coût de base consolidé au niveau de la position
 - 🧬 **[Moteur de Lot FIFO (Manuel du Développeur)](../../../../developer/backend/transactions/fifo_lot_engine.md)** — Plongée approfondie dans l'implémentation : classes, répartition des événements, contraintes au niveau du code
+- 📈 **[Aperçu des Métriques de Performance](../index.md)** — Toutes les métriques de performance en un coup d'œil

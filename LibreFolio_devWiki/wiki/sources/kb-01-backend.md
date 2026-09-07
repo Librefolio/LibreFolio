@@ -17,7 +17,7 @@ Comprehensive overview of LibreFolio's backend architecture covering directory s
 ## Key Insights Extracted
 
 ### Provider Architecture
-- **Provider Registry Pattern** ([[concepts/provider-registry-pattern]]): Auto-discovery via decorator across 3 domains (FX, Asset, BRIM)
+- **Provider Registry Pattern** ([[features/F-059]]): Auto-discovery via decorator across 3 domains (FX, Asset, BRIM)
 - **Thread Isolation** ([[F-060]]): All provider calls run in dedicated threads with own event loops
 - **5-Layer Cache** ([[F-061]]): TTL-based caching for asset history (15min), current (2min), metadata (30min), search queries (15min), search results (24h)
 - **MANUAL Sentinel** ([[decisions/manual-fx-sentinel]]): Auto-insert/remove FX provider at priority 999

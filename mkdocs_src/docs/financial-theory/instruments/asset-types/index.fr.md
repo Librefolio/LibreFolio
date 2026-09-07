@@ -14,7 +14,7 @@ LibreFolio prend en charge une large gamme de classes d'actifs pour couvrir un p
 | ![](../../../static/icons/asset-types/fund.png){: width="32" } | **Fonds commun de placement** | `FUND` | Fonds d'investissement gérés professionnellement. | [📖](mutual-fund.md) |
 | ![](../../../static/icons/asset-types/hold.png){: width="32" } | **Matières premières** | `HOLD` | Actifs physiques comme l'Or, l'Argent ou les Diamants détenus pour leur valeur à long terme. | [📖](commodities.md) |
 | ![](../../../static/icons/asset-types/other.png){: width="32" } | **Autre** | `OTHER` | Toute autre classe d'actifs (par exemple, Art, Private Equity, Objets de collection). | [📖](other.md) |
-| ![](../../../static/icons/asset-types/other.png){: width="32" } | **Indice &amp; Benchmark** | `—` | Indices de marché (S&amp;P 500, MSCI World) utilisés comme références — non négociables directement. | [📖](index-benchmark.md) |
+| ![](../../../static/icons/asset-types/index.png){: width="32" } | **Indice &amp; Benchmark** | `—` | Indices de marché (S&amp;P 500, MSCI World) utilisés comme références — non négociables directement. | [📖](index-benchmark.md) |
 
 ---
 

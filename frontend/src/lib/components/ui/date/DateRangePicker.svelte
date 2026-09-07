@@ -16,6 +16,7 @@
   Used by: FX list page, FX detail page, transaction filters, etc.
 -->
 <script lang="ts">
+    import {addDays, addMonths, todayIso} from '$lib/utils/dateOnly';
     import {tick, untrack} from 'svelte';
     import {Calendar} from 'lucide-svelte';
     import {_} from '$lib/i18n';
@@ -23,13 +24,20 @@
     import CalendarMonth from './CalendarMonth.svelte';
     import {SimpleSelect} from '$lib/components/ui/select';
     import {attachLayoutDebugExtra, type LayoutMode} from '$lib/utils/layout/responsiveLayout.svelte';
+    import {parseTypedDate} from '$lib/utils/core/parseTypedDate';
+    import {isOutsideClick} from '$lib/utils/core/clickOutside';
+    import {dateArrowStep, resetDateArrowHold} from '$lib/utils/core/dateArrowStep';
 
+    import {numericArrows} from '$lib/actions/numericArrows';
+    import {portal} from '$lib/actions/portal';
     // =========================================================================
     // Types
     // =========================================================================
 
     export type QuickPreset = '1W' | '1M' | '3M' | '6M' | 'WTD' | 'MTD' | 'QTD' | 'YTD' | '1Y' | '2Y' | '3Y' | '5Y' | '10Y' | 'MAX';
     export type Granularity = 'days' | 'weeks' | 'months' | 'years';
+    /** Which end of the range a typed field drives. */
+    export type RangeField = 'start' | 'end';
 
     interface Props {
         /** Start date (ISO YYYY-MM-DD) */
@@ -138,7 +146,31 @@
     let calendarOpen = $state(false);
     let pendingDate: string | null = $state(null);
     let hoveredDate: string | null = $state(null);
-    let triggerEl: HTMLButtonElement | null = $state(null);
+    let triggerEl: HTMLDivElement | null = $state(null);
+
+    /** What the user is typing in each field. `null` means the field just shows the range. */
+    let typedStart = $state<string | null>(null);
+    let typedEnd = $state<string | null>(null);
+    let focusedField = $state<RangeField | null>(null);
+    /**
+     * Validation is armed on the way out of a field, not while typing in it. Blur and
+     * Enter arm; `oninput` disarms; Escape and an abandoned edit reset. So a field is
+     * only ever red for a value the user has walked away from, never mid-keystroke.
+     */
+    let startArmed = $state(false);
+    let endArmed = $state(false);
+    /**
+     * A range being edited by hand, not yet handed to the caller. `start`/`end` are
+     * bound props and pages run their fetches off them, so writing every intermediate
+     * date there would fire one report request per keystroke. The draft holds the
+     * range while it is being built; only the flush publishes it.
+     */
+    let draftStart = $state<string | null>(null);
+    let draftEnd = $state<string | null>(null);
+    /** True while a swap is moving focus itself, so the blur is not read as "user left". */
+    let swapFollowing = false;
+    let startInputEl: HTMLInputElement | null = $state(null);
+    let endInputEl: HTMLInputElement | null = $state(null);
     let popoverStyle = $state('');
 
     // Semi-independent left/right month+year
@@ -223,7 +255,7 @@
         // concrete date by the controller, but the badge should highlight regardless.
         if (start === 'min') return 'MAX';
         if (!start || !end) return null;
-        const today = todayISO();
+        const today = todayIso();
         // End must be today (presets always go "backwards from today")
         if (end !== today) return null;
         for (const p of [...presets, ...durationFillPresets, ...periodFillPresets]) {
@@ -239,10 +271,6 @@
     // Helpers
     // =========================================================================
 
-    function todayISO(): string {
-        return new Date().toISOString().slice(0, 10);
-    }
-
     // Shared by YTD/WTD/MTD/QTD: a "start of period" that's very recent (e.g. YTD on Jan 2nd,
     // WTD on a Monday) would otherwise produce a near-empty 1-2 day chart — enforce a minimum
     // window by falling back to "N days ago" whenever the period start is more recent than
@@ -251,36 +279,32 @@
     // 14-day floor would ALWAYS override it, making WTD collapse into a fixed "last 14 days"
     // preset that can never show its real (shorter) range.
     function withMinWindow(periodStart: string, minDays = 14): string {
-        const minDate = new Date();
-        minDate.setDate(minDate.getDate() - minDays);
-        const floor = minDate.toISOString().slice(0, 10);
+        const floor = addDays(todayIso(), -minDays);
         return periodStart < floor ? periodStart : floor;
     }
 
     function computeStartDate(preset: QuickPreset): string {
-        const d = new Date();
+        // Calendar arithmetic through $lib/utils/dateOnly. These used to build a local
+        // Date, shift it, and read it back with toISOString() — which is UTC, so east of
+        // Greenwich every preset started a day early. MTD/QTD/YTD right below already did
+        // it correctly from local fields, so the two styles sat side by side in the same
+        // switch and disagreed by a day.
+        const today = todayIso();
         switch (preset) {
             case '1W':
-                d.setDate(d.getDate() - 7);
-                break;
+                return addDays(today, -7);
             case '1M':
-                d.setMonth(d.getMonth() - 1);
-                break;
+                return addMonths(today, -1);
             case '3M':
-                d.setMonth(d.getMonth() - 3);
-                break;
+                return addMonths(today, -3);
             case '6M':
-                d.setMonth(d.getMonth() - 6);
-                break;
+                return addMonths(today, -6);
             case 'WTD': {
-                const now = new Date();
-                const day = now.getDay(); // 0=Sun..6=Sat
+                const day = new Date().getDay(); // 0=Sun..6=Sat, in the user's own week
                 const diffToMonday = day === 0 ? 6 : day - 1;
-                const monday = new Date(now);
-                monday.setDate(now.getDate() - diffToMonday);
                 // 6-day floor (not the shared 14-day one) — WTD spans at most 6 days by
                 // definition, so the default floor would always win and hide the real range.
-                return withMinWindow(monday.toISOString().slice(0, 10), 6);
+                return withMinWindow(addDays(today, -diffToMonday), 6);
             }
             case 'MTD': {
                 const now = new Date();
@@ -298,43 +322,34 @@
                 return withMinWindow(jan1);
             }
             case '1Y':
-                d.setFullYear(d.getFullYear() - 1);
-                break;
+                return addMonths(today, -12);
             case '2Y':
-                d.setFullYear(d.getFullYear() - 2);
-                break;
+                return addMonths(today, -24);
             case '3Y':
-                d.setFullYear(d.getFullYear() - 3);
-                break;
+                return addMonths(today, -36);
             case '5Y':
-                d.setFullYear(d.getFullYear() - 5);
-                break;
+                return addMonths(today, -60);
             case '10Y':
-                d.setFullYear(d.getFullYear() - 10);
-                break;
+                return addMonths(today, -120);
             case 'MAX':
                 return 'min';
         }
-        return d.toISOString().slice(0, 10);
+        return today;
     }
 
     function computeCustomStart(amount: number, granularity: Granularity): string {
-        const d = new Date();
+        const today = todayIso();
         switch (granularity) {
             case 'days':
-                d.setDate(d.getDate() - amount);
-                break;
+                return addDays(today, -amount);
             case 'weeks':
-                d.setDate(d.getDate() - amount * 7);
-                break;
+                return addDays(today, -amount * 7);
             case 'months':
-                d.setMonth(d.getMonth() - amount);
-                break;
+                return addMonths(today, -amount);
             case 'years':
-                d.setFullYear(d.getFullYear() - amount);
-                break;
+                return addMonths(today, -amount * 12);
         }
-        return d.toISOString().slice(0, 10);
+        return today;
     }
 
     function monthOrder(year: number, month: number): number {
@@ -439,6 +454,7 @@
             pendingDate = null;
             hoveredDate = null;
             calendarOpen = false;
+            discardDraft();
             onchange?.(newStart, newEnd);
         }
     }
@@ -489,8 +505,10 @@
 
     function openCalendar() {
         // ...existing code for setting calLeft/calRight from start/end...
-        if (start) {
-            const [sy, sm] = start.split('-').map(Number);
+        const openStart = draftStart ?? start;
+        const openEnd = draftEnd ?? end;
+        if (openStart) {
+            const [sy, sm] = openStart.split('-').map(Number);
             calLeftYear = sy;
             calLeftMonth = sm - 1;
         } else {
@@ -498,8 +516,8 @@
             calLeftYear = now.getFullYear();
             calLeftMonth = Math.max(0, now.getMonth() - 1);
         }
-        if (end) {
-            const [ey, em] = end.split('-').map(Number);
+        if (openEnd) {
+            const [ey, em] = openEnd.split('-').map(Number);
             calRightYear = ey;
             calRightMonth = em - 1;
         } else {
@@ -521,6 +539,7 @@
         calendarOpen = false;
         pendingDate = null;
         hoveredDate = null;
+        flushTypedRange();
     }
 
     // Note: No scroll listener needed — popover uses position:fixed,
@@ -810,11 +829,9 @@
     });
 
     function handleClickOutside(e: MouseEvent) {
-        const target = e.target as HTMLElement;
-        // If the target was detached from DOM (e.g., SimpleSelect dropdown option removed
-        // on mousedown before the click event), skip — don't close customEditing
-        if (!target.isConnected) return;
-        if (!target.closest('.drp-popover') && !target.closest('.drp-trigger')) {
+        // The isConnected guard (target detached before the click — a nested
+        // SimpleSelect option removed on mousedown) now lives in isOutsideClick.
+        if (isOutsideClick(e.target, (el) => !!el.closest('.drp-popover') || !!el.closest('.drp-trigger'))) {
             closeCalendar();
             customEditing = false;
         }
@@ -834,13 +851,14 @@
     function handlePresetClick(preset: QuickPreset) {
         activePreset = preset;
         customEditing = false;
+        discardDraft();
         if (preset === 'MAX') {
             start = 'min';
             end = 'max';
             onchange?.('min', 'max');
         } else {
             const newStart = computeStartDate(preset);
-            const newEnd = todayISO();
+            const newEnd = todayIso();
             start = newStart;
             end = newEnd;
             onchange?.(newStart, newEnd);
@@ -850,9 +868,10 @@
     function handleCustomApply() {
         activePreset = 'custom';
         const newStart = computeCustomStart(customAmount, customGranularity);
-        const newEnd = todayISO();
+        const newEnd = todayIso();
         start = newStart;
         end = newEnd;
+        discardDraft();
         onchange?.(newStart, newEnd);
     }
 
@@ -883,6 +902,208 @@
         customGranularity = v as Granularity;
     }
 
+    // =========================================================================
+    // Typed date fields
+    //
+    // The range is also a pair of text fields, for the same reason the single picker
+    // is one: walking a calendar back to a date years away is slow, and a user who
+    // already knows the date should be able to write it. Tab moves between the two,
+    // the arrows step them, and driving one past the other swaps the pair rather than
+    // refusing the edit.
+    // =========================================================================
+
+    let typedStartIso = $derived(typedStart === null ? null : parseTypedDate(typedStart));
+    let typedEndIso = $derived(typedEnd === null ? null : parseTypedDate(typedEnd));
+    let startUnparseable = $derived(typedStart !== null && typedStart.trim() !== '' && !isSelectableDate(typedStartIso));
+    let endUnparseable = $derived(typedEnd !== null && typedEnd.trim() !== '' && !isSelectableDate(typedEndIso));
+    // A field is invalid only once its validation is armed — i.e. once the user has
+    // left it (blur/Enter). Half a date is unreadable too, and flagging it red while
+    // it is still being typed correctly is noise, not help.
+    let startInvalid = $derived(startArmed && startUnparseable);
+    let endInvalid = $derived(endArmed && endUnparseable);
+
+    /** The same ceiling the calendar applies, applied to what is typed. */
+    function isSelectableDate(iso: string | null): iso is string {
+        if (!iso) return false;
+        if (!allowFuture && iso > todayIso()) return false;
+        return true;
+    }
+
+    /** A concrete date for a field, or '' for the `min`/`max` sentinels and blanks. */
+    function fieldIso(which: RangeField): string {
+        const iso = which === 'start' ? (draftStart ?? start) : (draftEnd ?? end);
+        return !iso || iso === 'min' || iso === 'max' ? '' : iso;
+    }
+
+    /**
+     * What a field shows. Focused, it shows the ISO date, because that is what can be
+     * edited — "08 Aug 2024" is not something anyone can usefully type over. Blurred,
+     * it goes back to the formatted date the rest of the app reads.
+     */
+    function fieldText(which: RangeField): string {
+        const typed = which === 'start' ? typedStart : typedEnd;
+        if (typed !== null) return typed;
+        if (focusedField === which) return fieldIso(which);
+        const draft = which === 'start' ? draftStart : draftEnd;
+        return displayDate(draft ?? (which === 'start' ? start : end));
+    }
+
+    /**
+     * Writes one end of the range, swapping the pair when the user drives it past the
+     * other. A start after its end is not a range, and refusing the edit would be the
+     * worse answer: the user has said where they want that date, they simply reached
+     * it from the other field. Returns whether the swap happened.
+     */
+    function applyRangeDate(which: RangeField, iso: string): boolean {
+        let nextStart = which === 'start' ? iso : fieldIso('start') || iso;
+        let nextEnd = which === 'end' ? iso : fieldIso('end') || iso;
+        let swapped = false;
+        if (nextStart > nextEnd) {
+            [nextStart, nextEnd] = [nextEnd, nextStart];
+            swapped = true;
+        }
+        draftStart = nextStart;
+        draftEnd = nextEnd;
+        syncCalendarToRange();
+        return swapped;
+    }
+
+    /** Publishes a typed/stepped range, once the user has finished building it. */
+    function flushTypedRange() {
+        if (draftStart === null && draftEnd === null) return;
+        const nextStart = draftStart ?? start;
+        const nextEnd = draftEnd ?? end;
+        draftStart = null;
+        draftEnd = null;
+        if (nextStart === start && nextEnd === end) return;
+        start = nextStart;
+        end = nextEnd;
+        activePreset = null;
+        onchange?.(nextStart, nextEnd);
+    }
+
+    /** Drops a draft that a preset or a calendar click has just made irrelevant, along
+     *  with any half-typed text and its armed warning — those belong to the same edit
+     *  the click or preset has just superseded. */
+    function discardDraft() {
+        draftStart = null;
+        draftEnd = null;
+        typedStart = null;
+        typedEnd = null;
+        startArmed = false;
+        endArmed = false;
+    }
+
+    /** Moves both calendar halves onto the range, so the months follow the text. */
+    function syncCalendarToRange() {
+        const s = fieldIso('start');
+        const e = fieldIso('end');
+        if (s) {
+            const [y, m] = s.split('-').map(Number);
+            calLeftYear = y;
+            calLeftMonth = m - 1;
+        }
+        if (e) {
+            const [y, m] = e.split('-').map(Number);
+            calRightYear = y;
+            calRightMonth = m - 1;
+        }
+    }
+
+    /** Applies a date and, when the swap moved it to the other field, follows it there. */
+    async function applyAndFollow(which: RangeField, iso: string) {
+        if (!applyRangeDate(which, iso)) return;
+        const other: RangeField = which === 'start' ? 'end' : 'start';
+        typedStart = null;
+        typedEnd = null;
+        focusedField = other;
+        await tick();
+        const el = other === 'start' ? startInputEl : endInputEl;
+        // The blur this focus() causes is ours, not the user leaving the picker.
+        swapFollowing = true;
+        el?.focus();
+        el?.setSelectionRange(el.value.length, el.value.length);
+        swapFollowing = false;
+    }
+
+    function commitTypedField(which: RangeField, follow = true) {
+        const typed = which === 'start' ? typedStart : typedEnd;
+        if (typed === null) return;
+        const parsed = parseTypedDate(typed);
+        if (isSelectableDate(parsed)) {
+            // Accepted: clear the scratch text and let the committed value take over.
+            if (which === 'start') typedStart = null;
+            else typedEnd = null;
+            if (follow) void applyAndFollow(which, parsed);
+            else applyRangeDate(which, parsed);
+        } else if (typed.trim() === '') {
+            // Emptied: read as "never mind", so the stored value comes back.
+            if (which === 'start') typedStart = null;
+            else typedEnd = null;
+        }
+        // Otherwise the text is unreadable but not empty: leave it on screen, where the
+        // armed warning turns it red, instead of silently reverting to the old value and
+        // making "I mistyped" indistinguishable from "the field rejected my date".
+    }
+
+    function handleFieldKeydown(e: KeyboardEvent, which: RangeField) {
+        const typedIso = which === 'start' ? typedStartIso : typedEndIso;
+        const stepped = dateArrowStep(e, isSelectableDate(typedIso) ? typedIso : fieldIso(which) || null, todayIso());
+        if (stepped !== null) {
+            // Arrows are a stepper, and a stepper stops at its bound rather than
+            // walking past it into a date the calendar would grey out.
+            void applyAndFollow(which, !allowFuture && stepped > todayIso() ? todayIso() : stepped);
+            return;
+        }
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            // Enter toggles: it closes a calendar that is open (applying what was
+            // typed), and reopens it from the same field without reaching for the mouse.
+            if (!calendarOpen) {
+                openCalendar();
+                return;
+            }
+            // Enter means "done": apply and close, without chasing the caret into the
+            // other field when the value swapped. Arm first, so an unreadable value is
+            // flagged on the spot rather than dropped.
+            if (which === 'start') startArmed = true;
+            else endArmed = true;
+            commitTypedField(which, false);
+            closeCalendar();
+        } else if (e.key === 'Escape') {
+            // Escape abandons the whole hand edit — text, draft and the armed warning.
+            discardDraft();
+        }
+    }
+
+    function handleFieldFocus(which: RangeField) {
+        focusedField = which;
+        if (!calendarOpen) openCalendar();
+    }
+
+    async function handleFieldBlur(e: FocusEvent, which: RangeField) {
+        resetDateArrowHold();
+        // Leaving the field arms its validation: from here a still-unreadable value is a
+        // mistake worth flagging, where mid-edit it was simply unfinished.
+        if (which === 'start') startArmed = true;
+        else endArmed = true;
+        commitTypedField(which, false);
+        if (focusedField === which) focusedField = null;
+        if (swapFollowing) return;
+        // Moving between the two halves is still "inside the picker": the range is
+        // published when focus leaves the component altogether, not on every hop.
+        // `relatedTarget` is what receives focus, and it is the only reliable answer
+        // during blur — `document.activeElement` is still <body> at this point.
+        if (insidePicker(e.relatedTarget as HTMLElement | null)) return;
+        await tick();
+        if (insidePicker(document.activeElement as HTMLElement | null)) return;
+        flushTypedRange();
+    }
+
+    function insidePicker(el: HTMLElement | null): boolean {
+        return !!el?.closest && !!(el.closest('.drp-trigger') || el.closest('.drp-popover'));
+    }
+
     function displayDate(iso: string): string {
         if (!iso) return '—';
         // "min" is the MAX/"All" sentinel, pending resolution to a concrete date
@@ -890,29 +1111,23 @@
         if (iso === 'min') return $_('datePicker.resolvingStart');
         // "max" should never persist (controllers resolve it to today immediately),
         // kept only as a defensive fallback.
-        if (iso === 'max') return displayDate(todayISO());
+        if (iso === 'max') return displayDate(todayIso());
         if (compact) return iso; // YYYY-MM-DD — fits narrow cells
         const d = new Date(iso + 'T00:00:00');
         return d.toLocaleDateString('en', {day: '2-digit', month: 'short', year: 'numeric'});
     }
 
     /** Highlights object for CalendarMonth instances */
-    let calHighlights: CalendarHighlights = $derived({
-        rangeStart: start === 'min' ? undefined : start || undefined,
-        rangeEnd: end === 'max' ? undefined : end || undefined,
-        pending: pendingDate ?? undefined,
-        hovered: hoveredDate ?? undefined,
-    });
-
-    /** Svelte action: portal — moves node to document.body (escapes stacking contexts) */
-    function portalAction(node: HTMLElement) {
-        document.body.appendChild(node);
+    let calHighlights: CalendarHighlights = $derived.by(() => {
+        const s = draftStart ?? start;
+        const e = draftEnd ?? end;
         return {
-            destroy() {
-                if (node.parentElement === document.body) node.remove();
-            },
+            rangeStart: s === 'min' ? undefined : s || undefined,
+            rangeEnd: e === 'max' ? undefined : e || undefined,
+            pending: pendingDate ?? undefined,
+            hovered: hoveredDate ?? undefined,
         };
-    }
+    });
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -924,6 +1139,7 @@
             type="button"
             bind:this={coreBadgeRefs[i]}
             data-testid="date-preset-{preset.key.toLowerCase()}"
+            data-active={effectivePreset === preset.key ? 'true' : 'false'}
             class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
                 {effectivePreset === preset.key ? 'bg-libre-green text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
             onclick={() => handlePresetClick(preset.key)}>{preset.label}</button
@@ -938,6 +1154,7 @@
         <button
             type="button"
             data-testid="date-preset-{preset.key.toLowerCase()}"
+            data-active={effectivePreset === preset.key ? 'true' : 'false'}
             class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
                 {effectivePreset === preset.key ? 'bg-libre-green text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
             onclick={() => handlePresetClick(preset.key)}>{preset.label}</button
@@ -951,6 +1168,7 @@
         <button
             type="button"
             data-testid="date-preset-{preset.key.toLowerCase()}"
+            data-active={effectivePreset === preset.key ? 'true' : 'false'}
             class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
                 {effectivePreset === preset.key ? 'bg-libre-green text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
             onclick={() => handlePresetClick(preset.key)}>{preset.label}</button
@@ -964,6 +1182,7 @@
             type="button"
             bind:this={trailingBadgeRefs[i]}
             data-testid="date-preset-{preset.key.toLowerCase()}"
+            data-active={effectivePreset === preset.key ? 'true' : 'false'}
             class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
                 {effectivePreset === preset.key ? 'bg-libre-green text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
             onclick={() => handlePresetClick(preset.key)}>{preset.label}</button
@@ -986,10 +1205,12 @@
             >
                 <input
                     type="number"
+                    use:numericArrows
                     bind:value={customAmount}
+                    data-testid="date-range-custom-amount"
                     min="1"
                     max="999"
-                    class="w-8 px-0.5 py-0.5 text-xs text-center border-none bg-transparent text-amber-700 dark:text-amber-300 focus:ring-0 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    class="zoom-guard-exempt w-8 px-0.5 py-0.5 text-xs text-center border-none bg-transparent text-amber-700 dark:text-amber-300 focus:ring-0 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
                 <SimpleSelect value={customGranularity} options={granularitySelectOptions} onchange={handleGranularityChange} class="inline-block w-auto" dropdownPosition="auto" compact showChevron={false} />
             </div>
@@ -997,6 +1218,8 @@
             <button
                 type="button"
                 bind:this={customPlainBtnRef}
+                data-testid="date-preset-custom"
+                data-active={effectivePreset === 'custom' ? 'true' : 'false'}
                 class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
                     {effectivePreset === 'custom' ? 'bg-amber-500 text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
                 onclick={(e) => toggleCustomEdit(e)}>{effectivePreset === 'custom' ? `${customAmount}${$_(granularityOptions.find((o) => o.value === customGranularity)?.shortKey ?? 'common.custom').toUpperCase()}` : $_('common.custom')}</button
@@ -1005,7 +1228,7 @@
     {/if}
 {/snippet}
 
-<div class="relative flex flex-col gap-1.5 {align === 'start' ? 'grow self-stretch items-stretch' : 'items-center'}" style={align === 'start' ? `max-width: ${effectiveMaxWidth}px` : ''}>
+<div class="relative flex flex-col gap-1.5 {align === 'start' ? 'grow self-stretch items-stretch' : 'items-center'}" style={align === 'start' ? `max-width: ${effectiveMaxWidth}px` : ''} data-testid="date-range-picker-root" data-open={calendarOpen ? 'true' : 'false'}>
     {#if showPresets}
         <!-- align='start': JS decides ONLY isSingleRow + jolly counts (see measureAndFill) —
              the actual spreading/"giustificato" look is native CSS justify-between, applied to
@@ -1070,38 +1293,80 @@
 
     {#if showDateFields}
         <div class="relative drp-trigger w-full">
-            <button
+            <!-- A pair of text fields rather than a button: the calendar is still one
+                 click away, but a known date should not have to be navigated to. -->
+            <div
                 bind:this={triggerEl}
-                type="button"
-                class="w-full flex {stacked ? 'flex-col' : ''} items-center gap-0 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-600 overflow-hidden cursor-pointer hover:border-libre-green/50 transition-colors {compact ? '' : 'shadow-sm'} {calendarOpen
+                class="w-full flex {stacked ? 'flex-col' : ''} items-center gap-0 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-600 overflow-hidden hover:border-libre-green/50 transition-colors {compact ? '' : 'shadow-sm'} {calendarOpen
                     ? 'ring-1 ring-libre-green border-libre-green'
                     : ''}"
-                onclick={openCalendar}
             >
-                <span class="{stacked ? 'w-full' : 'flex-1'} flex items-center gap-1 whitespace-nowrap overflow-hidden {compact ? 'px-1.5 py-1' : 'px-3 py-2'}">
+                <!-- A label, so the padding around the field is part of the field. -->
+                <label class="{stacked ? 'w-full' : 'flex-1'} flex items-center gap-1 whitespace-nowrap overflow-hidden {compact ? 'px-1.5 py-1' : 'px-3 py-2'}">
                     <Calendar size={compact ? 11 : 14} class="text-libre-green flex-shrink-0" />
                     <span class="text-[9px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide flex-shrink-0">{$_('datePicker.from')}</span>
-                    <span class="font-mono {compact ? 'text-[10px]' : 'text-xs'} text-gray-700 dark:text-gray-200 truncate">{displayDate(start)}</span>
-                </span>
+                    <input
+                        bind:this={startInputEl}
+                        type="text"
+                        inputmode="numeric"
+                        autocomplete="off"
+                        spellcheck="false"
+                        class="zoom-guard-exempt min-w-0 flex-1 border-none bg-transparent p-0 font-mono {compact ? 'text-[10px]' : 'text-xs'} text-gray-700 outline-none dark:text-gray-200 {startInvalid ? 'text-red-600 dark:text-red-400' : ''}"
+                        value={fieldText('start')}
+                        title={$_('datePicker.formatHint')}
+                        data-testid="date-range-input-start"
+                        data-invalid={startInvalid ? 'true' : 'false'}
+                        oninput={(e) => {
+                            typedStart = e.currentTarget.value;
+                            startArmed = false;
+                        }}
+                        onfocus={() => handleFieldFocus('start')}
+                        onblur={(e) => handleFieldBlur(e, 'start')}
+                        onkeyup={resetDateArrowHold}
+                        onkeydown={(e) => handleFieldKeydown(e, 'start')}
+                        onclick={(e) => e.stopPropagation()}
+                    />
+                </label>
                 {#if stacked}
                     <span class="block w-full h-px bg-gray-200 dark:bg-slate-600 flex-shrink-0"></span>
                 {:else}
                     <span class="block w-px h-6 bg-gray-200 dark:bg-slate-600 flex-shrink-0"></span>
                 {/if}
-                <span class="{stacked ? 'w-full' : 'flex-1'} flex items-center gap-1 whitespace-nowrap overflow-hidden {compact ? 'px-1.5 py-1' : 'px-3 py-2'}">
+                <!-- A label, so the padding around the field is part of the field. -->
+                <label class="{stacked ? 'w-full' : 'flex-1'} flex items-center gap-1 whitespace-nowrap overflow-hidden {compact ? 'px-1.5 py-1' : 'px-3 py-2'}">
                     <Calendar size={compact ? 11 : 14} class="text-libre-green flex-shrink-0" />
                     <span class="text-[9px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide flex-shrink-0">{$_('datePicker.to')}</span>
-                    <span class="font-mono {compact ? 'text-[10px]' : 'text-xs'} text-gray-700 dark:text-gray-200 truncate">{displayDate(end)}</span>
-                </span>
-            </button>
+                    <input
+                        bind:this={endInputEl}
+                        type="text"
+                        inputmode="numeric"
+                        autocomplete="off"
+                        spellcheck="false"
+                        class="zoom-guard-exempt min-w-0 flex-1 border-none bg-transparent p-0 font-mono {compact ? 'text-[10px]' : 'text-xs'} text-gray-700 outline-none dark:text-gray-200 {endInvalid ? 'text-red-600 dark:text-red-400' : ''}"
+                        value={fieldText('end')}
+                        title={$_('datePicker.formatHint')}
+                        data-testid="date-range-input-end"
+                        data-invalid={endInvalid ? 'true' : 'false'}
+                        oninput={(e) => {
+                            typedEnd = e.currentTarget.value;
+                            endArmed = false;
+                        }}
+                        onfocus={() => handleFieldFocus('end')}
+                        onblur={(e) => handleFieldBlur(e, 'end')}
+                        onkeyup={resetDateArrowHold}
+                        onkeydown={(e) => handleFieldKeydown(e, 'end')}
+                        onclick={(e) => e.stopPropagation()}
+                    />
+                </label>
+            </div>
 
             {#if calendarOpen}
                 {#if usePortal}
                     <!-- svelte-ignore a11y_click_events_have_key_events -->
                     <!-- svelte-ignore a11y_no_static_element_interactions -->
-                    <div use:portalAction>
+                    <div use:portal>
                         <div class="fixed inset-0" style="z-index:99998;" onclick={closeCalendar}></div>
-                        <div class="drp-popover bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4" style={popoverStyle}>
+                        <div class="drp-popover bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4" style={popoverStyle} data-testid="date-range-popover">
                             <div class="flex {singleColumn ? 'flex-col' : 'flex-row'} gap-4 justify-center">
                                 <CalendarMonth
                                     year={calLeftYear}
@@ -1147,7 +1412,7 @@
                         </div>
                     </div>
                 {:else}
-                    <div class="drp-popover bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4" style={popoverStyle}>
+                    <div class="drp-popover bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4" style={popoverStyle} data-testid="date-range-popover">
                         <div class="flex {singleColumn ? 'flex-col' : 'flex-row'} gap-4 justify-center">
                             <CalendarMonth
                                 year={calLeftYear}

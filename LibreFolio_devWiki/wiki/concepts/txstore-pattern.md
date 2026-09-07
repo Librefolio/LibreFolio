@@ -134,10 +134,10 @@ All components import from this single file instead of declaring local duplicate
 
 | Role | Path |
 |------|------|
-| txStore implementation | `frontend/src/lib/stores/txStore.svelte.ts` |
+| txStore implementation | `frontend/src/lib/stores/transactions/txStore.svelte.ts` |
 | Interface types (canonical) | `frontend/src/lib/components/transactions/types.ts` |
 | Page (populates store) | `frontend/src/routes/(app)/transactions/+page.svelte` |
-| Picker (reads from store) | `frontend/src/lib/components/transactions/TransactionPickerModal.svelte` |
-| Bulk modal (reads + PendingOp) | `frontend/src/lib/components/transactions/TransactionBulkModal.svelte` |
+| Picker (reads from store) | `frontend/src/lib/components/transactions/modals/TransactionPickerModal.svelte` |
+| Bulk modal (reads + PendingOp) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
 | Plan (designed here) | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/plan-phase07-transaction-Part4_Round6_PlanC_TxStoreRefactor.prompt.md` |
 

@@ -4,7 +4,7 @@ category: problem
 status: resolved
 date: 2026-07-13
 tags: [testing, test-runner, python, infra]
-related: []
+related: [concepts/silent-no-op-option]
 ---
 
 # Problem: `--resume` Re-Ran Every Sub-Suite Inside a Category
@@ -62,10 +62,20 @@ failed partway (e.g. Transaction Tests, stopped at `TX Bulk Suggest UX`) correct
 `⏩ SKIP (cached pass)` for all 11 already-passed sub-suites and resumed exactly at the failed
 one, instead of re-running ~15 minutes of already-green Playwright specs.
 
+## The pattern this belongs to
+
+This is one of four incidents with the same shape, named at
+[[concepts/silent-no-op-option]] — *accepted is not arrived*: an option is declared,
+the parser accepts it, and the mechanism it was meant to reach never receives it.
+The failure mode is a **default**, not an error. Siblings:
+[[problems/coverage-mode-stale-import]],
+[[problems/coverage-report-category-dest-collision]],
+[[problems/env-var-injection-point-duplicated]].
+
 ## Source files
 
 | Role | Path |
 |------|------|
 | Correct pattern (unaffected) | `scripts/test_runner/_cli.py` (`_common._RESUME_MODE` attribute access) |
-| Definition | `scripts/test_runner/_common.py:31` |
+| Definition | `scripts/test_runner/_common.py` — `_RESUME_MODE` at L44 (**not** L31: that line is `_COVERAGE_MODE`) |
 | Fixed (13 files) | `scripts/test_runner/_backend_api.py`, `_backend_db.py`, `_backend_external.py`, `_backend_schemas.py`, `_backend_services.py`, `_backend_utils.py`, `_frontend_asset.py`, `_frontend_broker.py`, `_frontend_fx.py`, `_frontend_portfolio.py`, `_frontend_transaction.py`, `_frontend_user.py`, `_frontend_utility.py` |

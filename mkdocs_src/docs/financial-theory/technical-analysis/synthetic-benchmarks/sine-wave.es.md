@@ -33,8 +33,8 @@ donde:
 
 | Parámetro | Clave | Predeterminado | Descripción |
 |---|---|---|---|
-| Amplitud | `amplitude` | 10 | Rango de oscilación pico a pico como % del valor base. |
-| Periodo | `period` | 365 | Longitud del ciclo completo en días. |
+| Amplitud | `amplitude` | 15 | Rango de oscilación pico a pico como % del valor base. |
+| Periodo | `period` | 45 | Longitud del ciclo completo en días. |
 | Desplazamiento | `offset` | 0 | Desplazamiento vertical como % del valor base. |
 
 ---

@@ -2,8 +2,8 @@
  * livePriceService.ts — Shared utility for fetching live current prices.
  *
  * Single API wrapper used by:
- * - LiveTicker.svelte (dashboard, detail summary)
- * - Assets list page (cards + table)
+ * - routes/(app)/assets/+page.svelte (assets list, cards + table)
+ * - routes/(app)/assets/[id]/+page.svelte (asset detail summary)
  *
  * Always non-blocking: callers fire-and-forget via promises.
  */

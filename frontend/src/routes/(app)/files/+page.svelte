@@ -21,9 +21,11 @@
     import {t} from '$lib/i18n';
     import {axiosInstance, zodiosApi} from '$lib/api';
     import {formatBytes, uploadFile} from '$lib/utils/files/upload';
+    import {formatDateTime} from '$lib/utils/core/formatDateTime';
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
     import {globalSettings} from '$lib/stores/app/globalSettings';
-    import {ensureBrokersLoaded, getAllBrokers, brokerStoreVersion, type BrokerInfo as StoreBrokerInfo} from '$lib/stores/reference/brokerStore';
+    import {notify} from '$lib/stores/app/notify.svelte';
+    import {ensureBrokersLoaded, getEditableBrokers, brokerStoreVersion, type BrokerInfo as StoreBrokerInfo} from '$lib/stores/reference/brokerStore';
     import {ensurePluginIconsLoaded} from '$lib/utils/broker/brokerHelpers';
     import FileUploader from '$lib/components/ui/media/FileUploader.svelte';
     import {FileEditModal, ImageEditModal} from '$lib/components/ui/media';
@@ -58,7 +60,6 @@
     // LocalStorage keys (user-scoped via storage utils)
     const STORAGE_KEY_VIEW_MODE = 'filesPage_viewMode';
     const STORAGE_KEY_ACTIVE_TAB = 'filesPage_activeTab';
-    const STORAGE_KEY_BROKER_FILTER = 'filesPage_brokerFilter';
 
     // Load view mode from user-scoped localStorage (default: list/table)
     function loadViewMode(): 'grid' | 'list' {
@@ -81,22 +82,6 @@
     }
 
     // Load broker filter from user-scoped localStorage
-    function loadBrokerFilter(): Set<number> {
-        if (typeof window === 'undefined') return new Set();
-        try {
-            const stored = getUserStorage(STORAGE_KEY_BROKER_FILTER, '');
-            if (stored) {
-                return new Set(JSON.parse(stored) as number[]);
-            }
-        } catch {
-            // Ignore
-        }
-        return new Set();
-    }
-
-    function saveBrokerFilter(filter: Set<number>): void {
-        setUserStorage(STORAGE_KEY_BROKER_FILTER, JSON.stringify(Array.from(filter)));
-    }
 
     let activeTab: Tab = 'static';
     let staticFiles: UploadedFile[] = [];
@@ -115,7 +100,6 @@
     // Broker state for BRIM multi-user
     let brokers: StoreBrokerInfo[] = [];
     let brokerMap: Map<number, BrokerInfo> = new Map();
-    let selectedBrokerIds: Set<number> = new Set();
 
     // Broker IDs where user is VIEWER (cannot upload — greyed out in selector)
     $: viewerBrokerIds = new Set(brokers.filter((b) => b.user_role === 'VIEWER').map((b) => b.id));
@@ -194,7 +178,6 @@
             activeTab = loadActiveTab();
         }
 
-        selectedBrokerIds = loadBrokerFilter();
         await loadGlobalSettings();
         await ensurePluginIconsLoaded();
         await loadBrokers();
@@ -254,11 +237,7 @@
             // brokers/brokerMap are kept in sync via the brokerStoreVersion
             // subscription (see below). Default-select-all runs only on the
             // first hydration when no filter is active.
-            const list = getAllBrokers();
-            if (selectedBrokerIds.size === 0 && list.length > 0) {
-                selectedBrokerIds = new Set(list.map((b) => b.id));
-                saveBrokerFilter(selectedBrokerIds);
-            }
+            const list = getEditableBrokers();
         } catch (e) {
             console.error('Failed to load brokers:', e);
         }
@@ -269,7 +248,7 @@
      *  $brokerStoreVersion → we rebuild the local snapshots so icon/name
      *  changes propagate without a manual reload. */
     const _brokerStoreUnsub = brokerStoreVersion.subscribe(() => {
-        const list = getAllBrokers();
+        const list = getEditableBrokers();
         brokers = list;
         brokerMap = new Map(list.map((b) => [b.id, {id: b.id, name: b.name, icon_url: b.icon_url ?? null, portal_url: b.portal_url ?? null, default_import_plugin: (b as any).default_import_plugin ?? null}]));
     });
@@ -294,29 +273,6 @@
         }
     }
 
-    function toggleBrokerFilter(brokerId: number) {
-        if (selectedBrokerIds.has(brokerId)) {
-            selectedBrokerIds.delete(brokerId);
-        } else {
-            selectedBrokerIds.add(brokerId);
-        }
-        selectedBrokerIds = new Set(selectedBrokerIds); // Trigger reactivity
-        saveBrokerFilter(selectedBrokerIds);
-        // No loadFiles() — filter is applied client-side on already-loaded data
-    }
-
-    function selectAllBrokers() {
-        selectedBrokerIds = new Set(brokers.map((b) => b.id));
-        saveBrokerFilter(selectedBrokerIds);
-        // No loadFiles() — filter is applied client-side
-    }
-
-    function clearBrokerFilter() {
-        selectedBrokerIds = new Set();
-        saveBrokerFilter(selectedBrokerIds);
-        // No loadFiles() — filter is applied client-side
-    }
-
     async function handleUpload(event: CustomEvent<{files: globalThis.File[]}>) {
         const {files} = event.detail;
 
@@ -330,8 +286,12 @@
             showUploader = false;
             pendingStaticFiles = [];
             await loadFiles();
+            // No toast: the new rows appear in the list, which is the confirmation.
+            notify({name: 'file.uploaded', detail: {count: files.length}});
         } catch (e) {
             error = e instanceof Error ? e.message : 'Upload failed';
+            // No toast: `error` is rendered in the page.
+            notify({name: 'file.upload.failed', detail: {reason: error}});
         }
     }
 
@@ -495,11 +455,6 @@
                 await axiosInstance.post(`/api/v1/brokers/import/upload?broker_id=${brokerId}`, formData);
             }
 
-            // Add used broker IDs to selected filter so uploaded files are visible
-            usedBrokerIds.forEach((id) => selectedBrokerIds.add(id));
-            selectedBrokerIds = new Set(selectedBrokerIds); // Trigger reactivity
-            saveBrokerFilter(selectedBrokerIds);
-
             // Reset state
             closeBrimUploadModal();
             await loadFiles();
@@ -583,8 +538,10 @@
                 await zodiosApi.delete_file_api_v1_uploads__file_id__delete(undefined, {params: {file_id: fileId}});
             }
             await loadFiles();
+            notify({name: 'file.deleted', detail: {fileId, isBrim}});
         } catch (e) {
             error = e instanceof Error ? e.message : 'Delete failed';
+            notify({name: 'file.delete.failed', detail: {fileId, isBrim, reason: error}});
         }
     }
 
@@ -598,11 +555,14 @@
                     await zodiosApi.delete_file_api_v1_uploads__file_id__delete(undefined, {params: {file_id: fileId}});
                 }
             }
+            const deletedCount = selectedFileIds.length;
             selectedFileIds = [];
             activeTableRef?.getTableRef()?.clearSelection();
             await loadFiles();
+            notify({name: 'file.deleted.bulk', detail: {count: deletedCount, isBrim}});
         } catch (e) {
             error = e instanceof Error ? e.message : 'Delete failed';
+            notify({name: 'file.delete.failed', detail: {isBrim, reason: error}});
         }
     }
 
@@ -661,13 +621,7 @@
     }
 
     function formatDate(dateStr: string): string {
-        return new Date(dateStr).toLocaleDateString(undefined, {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-        });
+        return formatDateTime(dateStr);
     }
 
     // isImage and getFileIcon — now handled internally by FileGrid component
@@ -682,7 +636,7 @@
     <title>{$t('uploads.title')} - LibreFolio</title>
 </svelte:head>
 
-<div class="files-page" data-testid="files-page">
+<div class="files-page" aria-busy={loading} data-busy={loading ? 'true' : 'false'} data-testid="files-page">
     <header class="page-header">
         <h1>{$t('uploads.title')}</h1>
 

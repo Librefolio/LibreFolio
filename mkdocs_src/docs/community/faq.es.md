@@ -28,7 +28,7 @@ LibreFolio es un rastreador de carteras open-source que te ofrece una vista comp
 LibreFolio soporta:
 
 - **Acciones y ETFs** — Precios obtenidos automáticamente a través de proveedores de datos (ej. yfinance).
-- **Criptomonedas** — Próximamente.
+- **Criptoactivos** — Seguidos como activos de cartera en la UI; no son Forex ni forman parte del selector de divisas fiat
 - **Bonos** — Se admite la entrada manual.
 - **Préstamos P2P** — Activos con rendimiento programado.
 - **Efectivo y Depósitos** — Rastrea tu liquidez.

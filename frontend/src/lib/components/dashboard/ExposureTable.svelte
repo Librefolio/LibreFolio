@@ -17,10 +17,13 @@
     import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
     import {ensureAssetsLoaded, getAssetInfo} from '$lib/stores/reference/assetStore';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
+    import {makePositionKey} from '$lib/utils/core/positionKey';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {attachOverflowMarqueeToDescendants} from '$lib/actions/scrollOnOverflow';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {safeDecimal, safeNumber, safeString} from '$lib/types';
 
     interface Holding {
         asset_id: number;
@@ -36,8 +39,10 @@
         nav_weight_percent?: string | (string | null)[] | null;
         gain_loss?: string | (string | null)[] | null;
         gain_loss_percent?: string | (string | null)[] | null;
+        annualized_return?: string | (string | null)[] | null;
         gain_loss_change_1d?: string | (string | null)[] | null;
         gain_loss_change_1d_percent?: string | (string | null)[] | null;
+        oldest_open_lot_date?: string | (string | null)[] | null;
     }
 
     interface Props {
@@ -46,6 +51,8 @@
         displayCurrency: string;
         brokers?: ReadonlyArray<BrokerLike>;
         onAnalyze?: (assetId: number) => void;
+        /** Asset whose lot-analysis panel is open — its row stays tinted (F9). */
+        analyzedAssetId?: number | null;
     }
 
     interface DisplayRow {
@@ -60,14 +67,16 @@
         navWeight: number | null;
         unrealizedPnl: number | null;
         unrealizedPnlPercent: number | null;
+        annualizedReturn: number | null;
         gainLossChange1d: number | null;
         gainLossChange1dPercent: number | null;
         quantity: number | null;
         price: number | null;
         wacPerUnit: number | null;
+        oldestOpenLotDate: string | null;
     }
 
-    let {holdings = [], navAmount = 0, displayCurrency = 'EUR', brokers = [], onAnalyze, ..._legacyProps}: Props & Record<string, unknown> = $props();
+    let {holdings = [], navAmount = 0, displayCurrency = 'EUR', brokers = [], onAnalyze, analyzedAssetId = null, ..._legacyProps}: Props & Record<string, unknown> = $props();
     void _legacyProps;
 
     let tableRef: DataTable<DisplayRow> | undefined = $state(undefined);
@@ -87,31 +96,6 @@
 
     export function getTableRef() {
         return tableRef;
-    }
-
-    function safeNum(v: string | (string | null)[] | null | undefined): number | null {
-        const s = Array.isArray(v) ? (v[0] ?? null) : v;
-        if (s == null) return null;
-        const n = parseFloat(s);
-        return isNaN(n) ? null : n;
-    }
-
-    function safeInt(v: number | (number | null)[] | null | undefined): number | null {
-        if (v == null) return null;
-        return Array.isArray(v) ? (v[0] ?? null) : v;
-    }
-
-    function safeStr(v: string | (string | null)[] | null | undefined): string | null {
-        if (v == null) return null;
-        return Array.isArray(v) ? (v[0] ?? null) : v;
-    }
-
-    function makePositionKey(assetId: number, brokerId: number | null): string {
-        return `${assetId}-${brokerId ?? 0}`;
-    }
-
-    function escapeHtml(s: string): string {
-        return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
     function signedAmountCell(value: number | null) {
@@ -142,26 +126,28 @@
 
         return [...holdings]
             .map((holding) => {
-                const brokerId = safeInt(holding.broker_id);
+                const brokerId = safeNumber(holding.broker_id);
                 const broker = brokerId == null ? null : (brokerMap.get(brokerId) ?? null);
-                const currentValue = safeNum(holding.current_value);
+                const currentValue = safeDecimal(holding.current_value);
                 return {
                     key: makePositionKey(holding.asset_id, brokerId),
                     assetId: holding.asset_id,
                     assetName: holding.asset_name,
                     assetType: holding.asset_type,
                     brokerId,
-                    brokerName: safeStr(holding.broker_name) || broker?.name || '—',
+                    brokerName: safeString(holding.broker_name) || broker?.name || '—',
                     broker,
                     currentValue,
-                    navWeight: safeNum(holding.nav_weight_percent) ?? (currentValue != null && navAmount > 0 ? (currentValue / navAmount) * 100 : null),
-                    unrealizedPnl: safeNum(holding.gain_loss),
-                    unrealizedPnlPercent: safeNum(holding.gain_loss_percent),
-                    gainLossChange1d: safeNum(holding.gain_loss_change_1d),
-                    gainLossChange1dPercent: safeNum(holding.gain_loss_change_1d_percent),
-                    quantity: safeNum(holding.quantity),
-                    price: safeNum(holding.current_price),
-                    wacPerUnit: safeNum(holding.wac_per_unit),
+                    navWeight: safeDecimal(holding.nav_weight_percent) ?? (currentValue != null && navAmount > 0 ? (currentValue / navAmount) * 100 : null),
+                    unrealizedPnl: safeDecimal(holding.gain_loss),
+                    unrealizedPnlPercent: safeDecimal(holding.gain_loss_percent),
+                    annualizedReturn: safeDecimal(holding.annualized_return),
+                    gainLossChange1d: safeDecimal(holding.gain_loss_change_1d),
+                    gainLossChange1dPercent: safeDecimal(holding.gain_loss_change_1d_percent),
+                    quantity: safeDecimal(holding.quantity),
+                    price: safeDecimal(holding.current_price),
+                    wacPerUnit: safeDecimal(holding.wac_per_unit),
+                    oldestOpenLotDate: safeString(holding.oldest_open_lot_date),
                 };
             })
             .filter((row) => row.quantity == null || row.quantity !== 0)
@@ -275,6 +261,20 @@
                 cell: (row) => percentChangeCell(row.unrealizedPnlPercent),
             },
             {
+                id: 'annualized-return',
+                header: () => $_('dashboard.annualizedReturn') || 'Annualized',
+                headerTooltip: () => $_('dashboard.annualizedReturnTooltip') || 'P&L % annualized (CAGR) over the holding window (from the oldest open lot), for comparison across positions held for different durations.',
+                type: 'number',
+                align: 'right',
+                width: 120,
+                minWidth: 100,
+                maxWidth: 180,
+                resizable: true,
+                sortable: true,
+                getValue: (row) => row.annualizedReturn ?? 0,
+                cell: (row) => percentChangeCell(row.annualizedReturn),
+            },
+            {
                 id: 'value',
                 header: () => $_('common.value'),
                 type: 'number',
@@ -342,6 +342,21 @@
                 getValue: (row) => row.wacPerUnit ?? 0,
                 cell: (row) => (row.wacPerUnit == null ? '—' : formatCurrencyAmountPlain(row.wacPerUnit, displayCurrency)),
             },
+            {
+                id: 'oldest-open-lot',
+                header: () => $_('dashboard.oldestOpenLotDate') || 'Oldest open lot',
+                headerTooltip: () => $_('dashboard.oldestOpenLotDateTooltip') || 'Opening date of the oldest FIFO lot still open for this position.',
+                type: 'date',
+                align: 'right',
+                width: 150,
+                minWidth: 130,
+                maxWidth: 220,
+                resizable: true,
+                sortable: true,
+                hiddenByDefault: true,
+                getValue: (row) => row.oldestOpenLotDate ?? '',
+                cell: (row) => (row.oldestOpenLotDate ? {type: 'date' as const, value: row.oldestOpenLotDate, format: 'date' as const} : '—'),
+            },
             brokerColumn,
         ];
     });
@@ -378,7 +393,8 @@
         enableSelection={false}
         selectionMode="none"
         enableActions={true}
-        enablePagination={false}
+        enablePagination={true}
+        defaultPageSize={25}
         enableColumnVisibility={true}
         enableColumnFilters={false}
         enableSorting={true}
@@ -386,6 +402,7 @@
         enableContextMenu={true}
         tableLayout="fixed"
         {rowActions}
+        getRowClass={(row) => (row.assetId === analyzedAssetId ? 'row-analyzed' : '')}
         emptyMessage={tableEmptyMessage}
     />
 </div>

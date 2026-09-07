@@ -15,13 +15,21 @@
     import Header from '$lib/components/layout/Header.svelte';
     import ToastContainer from '$lib/components/ui/feedback/ToastContainer.svelte';
     import DonationPopupModal from '$lib/components/auth/DonationPopupModal.svelte';
+    import UpdateAvailableModal from '$lib/components/auth/UpdateAvailableModal.svelte';
     import {donationPopup} from '$lib/stores/app/donationPopupStore.svelte';
+    import {updateAvailable} from '$lib/features/update-check/updateCheckStore.svelte';
+    import {checkForNewerRelease} from '$lib/features/update-check/updateCheck';
+    import {zodiosApi} from '$lib/api';
+    import {get} from 'svelte/store';
 
     // Sidebar state for mobile
     let sidebarOpen = false;
 
     // Sidebar collapsed state
     let sidebarCollapsed = false;
+
+    // Running app version, fetched for the admin-only update prompt (F14)
+    let appVersion = '';
 
     // Initialize i18n
     initI18n();
@@ -55,8 +63,10 @@
             window.librefolioDebug = {
                 ...window.librefolioDebug,
                 showDonationPopup: () => donationPopup.forceShow(),
+                // F14: force the update-available modal with a fake future release
+                showUpdateModal: () => updateAvailable.show({version: '99.0.0', url: 'https://github.com/Librefolio/LibreFolio/releases', name: 'Debug test'}),
             };
-            debug.log('AppLayout', 'Registered window.librefolioDebug.showDonationPopup()');
+            debug.log('AppLayout', 'Registered window.librefolioDebug.showDonationPopup()/.showUpdateModal()');
         }
 
         // Check authentication with timeout
@@ -85,6 +95,21 @@
                     // Preload JS for common routes in background so navigation
                     // is instant — only code is prefetched, data is still lazy.
                     Promise.all(['/dashboard', '/fx', '/assets', '/brokers', '/transactions', '/settings', '/files'].map((r) => preloadCode(r).catch(() => {}))).catch(() => {});
+
+                    // F14: admins only — probe GitHub for a newer stable release
+                    // (throttled to once/24h, silent on offline installs).
+                    if (get(auth).user?.is_superuser) {
+                        void (async () => {
+                            try {
+                                const info = await zodiosApi.get_system_info_api_v1_system_info_get();
+                                appVersion = info.app_version;
+                                const release = await checkForNewerRelease(info.app_version);
+                                if (release) updateAvailable.show(release);
+                            } catch {
+                                // system info unreachable — no prompt
+                            }
+                        })();
+                    }
                 }
             } catch (error) {
                 debug.error('AppLayout', 'Auth check failed:', error);
@@ -127,6 +152,7 @@
     </div>
     <ToastContainer />
     <DonationPopupModal />
+    <UpdateAvailableModal currentVersion={appVersion} />
 {:else}
     <!-- Loading while checking auth -->
     <div class="min-h-screen flex items-center justify-center bg-libre-beige dark:bg-slate-900">

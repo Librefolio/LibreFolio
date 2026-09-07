@@ -84,7 +84,7 @@ def test_provider_metadata(provider_code: str):
 
     try:
         # Check registration
-        provider_class = AssetProviderRegistry.get_provider(provider_code)
+        provider_class = AssetProviderRegistry.get_plugin(provider_code)
         assert provider_class, f"{provider_code} provider not registered"
 
         print_success(f"{provider_code} is registered in registry")
@@ -111,7 +111,7 @@ def test_provider_metadata(provider_code: str):
 
 
 @pytest.mark.asyncio
-async def test_current_value(provider_code: str):
+async def test_current_value(provider_code: str):  # noqa: C901 — per-case test loop, flat asserts
     """Test get_current_value method."""
     print_section(f"Test 2: {provider_code} - Current Value Fetching")
 

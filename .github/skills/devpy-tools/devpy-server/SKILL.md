@@ -13,7 +13,7 @@ description: "Use this skill when the user needs to start/stop the development s
 ./dev.py server --debug                # Debug mode (port 6040, debug=true)
 ./dev.py server --force                # Kill zombie processes on the port first
 ./dev.py server --workers 4            # Multi-worker (default: 1)
-./dev.py server --coverage             # Start under coverage tracking (for E2E tests)
+./dev.py server --coverage             # Start under Python coverage tracking (boolean — no language argument)
 ./dev.py server --rebuild              # Force frontend rebuild before start
 ./dev.py server --host 0.0.0.0        # Override host
 ./dev.py server --port 9000           # Override port
@@ -28,6 +28,12 @@ description: "Use this skill when the user needs to start/stop the development s
 
 ### Coverage mode
 When `--coverage` is used, `dev.py` replaces itself via `os.execvpe()` with `coverage run -m uvicorn`. This enables backend coverage tracking during E2E tests via the SIGTERM chain (see testing-frontend skill).
+
+⚠️ **`server --coverage` stays boolean**, unlike `test --coverage [py|js|all]`. A
+server process can only measure Python — there is no JS to instrument in it. Passing
+a language here is an error, and the argv normaliser that makes `test --coverage api all`
+work is deliberately scoped to the `test` sub-command so it cannot corrupt the
+Playwright `webServer` command line.
 
 ## Database
 

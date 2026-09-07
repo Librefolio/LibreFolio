@@ -45,6 +45,6 @@ This pattern covers **same-client edits**. Cross-client updates (another browser
 
 | Role | Path |
 |------|------|
-| Asset store | `frontend/src/lib/stores/assetStore.ts` |
-| Entity factory | `frontend/src/lib/stores/entityStore.ts` |
+| Asset store | `frontend/src/lib/stores/reference/assetStore.ts` |
+| Entity factory | `frontend/src/lib/stores/core/entityStore.ts` |
 | First use in TX page | `frontend/src/routes/(app)/transactions/+page.svelte` |

@@ -2,7 +2,8 @@
 
 import asyncio
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import structlog
 
@@ -14,6 +15,19 @@ from backend.app.services.scheduler.state import SchedulerState, load_state, sav
 logger = structlog.get_logger(__name__)
 
 _shutdown_event: asyncio.Event | None = None
+
+
+def _scheduler_zoneinfo(tz_name: str) -> ZoneInfo:
+    try:
+        return ZoneInfo(tz_name)
+    except (ZoneInfoNotFoundError, ValueError):
+        return ZoneInfo("UTC")
+
+
+def _as_utc(dt: datetime) -> datetime:
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
 
 
 def get_shutdown_event() -> asyncio.Event:
@@ -41,8 +55,12 @@ def due_current_price(now: datetime, settings: SchedulerSettings, state: Schedul
 
 def due_history_sync(now: datetime, settings: SchedulerSettings, state: SchedulerState) -> bool:
     """Check if any history sync slot is due."""
-    # 1. Is today a configured day?
-    today_dow = now.strftime("%a").lower()[:3]
+    scheduler_tz = _scheduler_zoneinfo(settings.scheduler_timezone)
+    now_utc = _as_utc(now)
+    now_local = now_utc.astimezone(scheduler_tz)
+
+    # 1. Is today a configured day in the scheduler timezone?
+    today_dow = now_local.strftime("%a").lower()[:3]
     if today_dow not in settings.history_sync_days:
         return False
 
@@ -56,9 +74,10 @@ def due_history_sync(now: datetime, settings: SchedulerSettings, state: Schedule
             last_dt = None
 
     for slot_time in settings.history_sync_times:
-        slot_dt = now.replace(hour=slot_time.hour, minute=slot_time.minute, second=0, microsecond=0)
-        if now >= slot_dt:
-            if last_dt is None or last_dt < slot_dt:
+        slot_local = now_local.replace(hour=slot_time.hour, minute=slot_time.minute, second=0, microsecond=0)
+        slot_utc = slot_local.astimezone(UTC)
+        if now_utc >= slot_utc:
+            if last_dt is None or _as_utc(last_dt) < slot_utc:
                 return True
     return False
 
@@ -93,7 +112,7 @@ async def scheduler_loop(shutdown_event: asyncio.Event) -> None:
 
                 if settings.scheduler_enabled:
                     state = load_state()
-                    now = datetime.now(timezone.utc)
+                    now = datetime.now(UTC)
 
                     if due_current_price(now, settings, state):
                         await run_current_price_refresh(state)

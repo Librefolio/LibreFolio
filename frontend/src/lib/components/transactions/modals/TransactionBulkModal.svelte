@@ -24,13 +24,15 @@
   Architecture: Plan C3 — PendingOp refactor (2026-05-11).
 -->
 <script lang="ts">
+    import {todayIso} from '$lib/utils/dateOnly';
     import {onDestroy, untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/app/language';
-    import {X, Plus, Pencil, Copy, Trash2, Check, Undo2, Save, Unlink, Link2, Lightbulb, Upload} from 'lucide-svelte';
+    import {X, Plus, Pencil, Copy, Trash2, Check, Undo2, Save, Unlink, Link2, Lightbulb, Upload, ChevronDown, ChevronRight} from 'lucide-svelte';
 
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
+    import BrimEvidenceTable from '$lib/components/transactions/import/BrimEvidenceTable.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import TransactionResultBanner from '../shared/TransactionResultBanner.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
@@ -40,7 +42,7 @@
     import type {ColumnDef, CellContent} from '$lib/components/table/types';
     import {zodiosApi} from '$lib/api';
     import {ensureAssetsLoaded, getAssetInfo, getAllAssets} from '$lib/stores/reference/assetStore';
-    import {ensureBrokersLoaded, getAllBrokers, brokerStoreVersion, type BrokerInfo} from '$lib/stores/reference/brokerStore';
+    import {ensureBrokersLoaded, getEditableBrokers, brokerStoreVersion, type BrokerInfo} from '$lib/stores/reference/brokerStore';
     import {getBrokerIconHtmlById} from '$lib/utils/broker/brokerHelpers';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {type TransactionTypeCode, getTypeRule, isDraftReadyForValidation, ensureTypesLoaded, isTypesLoaded, getTransactionTypeIconUrl, getCostBasisRule} from '$lib/stores/transactions/transactionTypeStore';
@@ -63,7 +65,7 @@
     import ImportWizardModal from './ImportWizardModal.svelte';
     import {txStoreGet, txStoreCount} from '$lib/stores/transactions/txStore.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
-    import type {FormModalItems} from '../shared/resolveFormItems';
+    import {resolveFormItemsFromOps, type FormModalItems} from '../shared/resolveFormItems';
     import type {TXReadItem, ValidationIssue} from '../types';
     import type {TransactionCreateItem} from '$lib/types';
 
@@ -104,6 +106,19 @@
         pairedWith?: string;
         link_uuid?: string | null;
         /** W4b: partner on inaccessible broker — read-only sentinel */ inaccessible?: boolean;
+        /**
+         * Type this row had before a *mixed* promote reassigned it.
+         *
+         * A mixed promote (one saved row + one new one) is executed by the backend,
+         * which expects both halves in their pre-promote types and derives the target
+         * itself. The grid, however, must already show the promoted type. The two
+         * therefore diverge for exactly one row, and this remembers the wire value.
+         *
+         * Unset for create+create promotes: those carry no backend promote at all —
+         * the pair is formed by a shared link_uuid — so the target type is what must
+         * be sent.
+         */
+        promoteFromType?: TransactionTypeCode | null;
         /** Cached WAC result from validate — transient, not sent to backend */ _wacCache?: WacResultEntry | null;
         /** Currency hint for WAC target — null = backend decides */ wacCurrencyHint?: string | null;
         /** BRIM import field todos — blocker severity prevents commit until resolved */ todos?: ImportTodo[];
@@ -151,13 +166,9 @@
         return Math.round(Math.abs(da.getTime() - db.getTime()) / 86400000);
     }
 
-    function todayIso(): string {
-        return new Date().toISOString().slice(0, 10);
-    }
-
     /** Default DraftFields for a brand-new transaction. */
     function defaultFields(): DraftFields {
-        const brokers = getAllBrokers();
+        const brokers = getEditableBrokers();
         // defaultBrokerId (e.g. opened from a broker-scoped page) wins over the
         // single-broker heuristic; both are just an initial value, still editable.
         const defaultBroker = defaultBrokerId ?? (brokers.length === 1 ? brokers[0].id : 0);
@@ -230,7 +241,7 @@
     /** Create 'create' PendingOp by cloning from a TXReadItem. */
     function createOpFromClone(tx: TXReadItem, linkUuid?: string | null): PendingOp {
         const fields = fieldsFromTx(tx);
-        fields.date = todayIso();
+        // T3: keep the source date — clone is the correction workflow, not "same op today".
         const rule = getTypeRule(tx.type);
         if (rule.quantityRule === 'zero') fields.quantity = '0';
         return {op: 'create', tempId: generateUUID(), fields, link_uuid: linkUuid ?? null};
@@ -288,6 +299,8 @@
     /** B23 Step 4: confirm edit on a row marked for deletion. */
     let confirmEditDeleteOpen = $state(false);
     let confirmEditDeleteRow = $state<PendingOp | null>(null);
+    /** Gate: confirm Save when auto-derived "fields to verify" (warning todos) are still un-acknowledged. */
+    let confirmWarningsOpen = $state(false);
 
     // =========================================================================
     // WAC results — populated from validate response (Phase C: inline WAC)
@@ -356,11 +369,13 @@
                         }
                     }
                 }
-                const today = new Date().toISOString().slice(0, 10);
+                // T3 (02/09): the original date is PRESERVED on clone — duplication is
+                // how users fix a misclassified historical row, and resetting to
+                // today destroyed exactly the field they needed to keep.
                 // Generate shared link_uuid for paired clones
                 const sharedLinkUuid = resolved.length === 2 && resolved[0].type === resolved[1].type ? generateUUID() : null;
                 const cloned = resolved.map((r) => {
-                    const c = {...r, id: 0, date: today, related_transaction_id: null} as TXReadItem;
+                    const c = {...r, id: 0, related_transaction_id: null} as TXReadItem;
                     // Bug6-fix: reset quantity when the type requires qty=0 (e.g. INTEREST)
                     const rule = getTypeRule(r.type);
                     if (rule.quantityRule === 'zero') c.quantity = '0';
@@ -515,7 +530,7 @@
 
     let brokers = $derived.by<BrokerInfo[]>(() => {
         void $brokerStoreVersion;
-        return getAllBrokers();
+        return getEditableBrokers();
     });
 
     // =========================================================================
@@ -529,6 +544,19 @@
         ops = [...ops, createOpEmpty()];
     }
     void addRow;
+
+    function postSplitTypeForForm(d: PendingOp): string {
+        if (d.op !== 'edit' || !splitTxIdsSet.has(d.txId)) return d.fields.type;
+        const splitEntry = pendingSplits.find((s) => s.id_a === d.txId || s.id_b === d.txId);
+        const origType = splitEntry?.originalType ?? d.fields.type;
+        const splitTypes = SPLIT_TYPE_MAP[origType];
+        if (!splitTypes) return d.fields.type;
+
+        const qty = Number(d.fields.quantity ?? 0);
+        const cashAmt = Number(d.fields.cash?.amount ?? 0);
+        const isSender = origType === 'TRANSFER' ? qty < 0 || qty === 0 : cashAmt < 0 || cashAmt === 0;
+        return (isSender ? splitTypes[0] : splitTypes[1]) as string;
+    }
 
     /** Convert a PendingOp to a TXReadItem-shaped object so it can be fed back to
      *  TransactionFormModal as `initialRow`. We reuse the BulkModal's in-flight
@@ -556,6 +584,12 @@
             created_at: orig?.created_at,
             updated_at: orig?.updated_at,
         };
+    }
+
+    function opToTxLikeForForm(d: PendingOp): TXReadItem {
+        const item = opToTxLike(d);
+        item.type = postSplitTypeForForm(d);
+        return item;
     }
 
     /** Collapse paired drafts in an array: detect partners via
@@ -795,10 +829,11 @@
     function cloneRow(tempId: string) {
         const src = ops.find((d) => d.tempId === tempId);
         if (!src) return;
+        // T3: the source row's date is preserved (correction workflow) — not reset to today.
         const clone: PendingOp = {
             op: 'create',
             tempId: generateUUID(),
-            fields: {...src.fields, date: todayIso()},
+            fields: {...src.fields},
             link_uuid: getTypeRule(src.fields.type as TransactionTypeCode)?.requiresPair ? generateUUID() : null,
         };
         // Clone hidden partner if exists
@@ -807,7 +842,7 @@
             const partnerClone: PendingOp = {
                 op: 'create',
                 tempId: generateUUID(),
-                fields: {...srcPartner.fields, date: todayIso()},
+                fields: {...srcPartner.fields},
                 link_uuid: clone.link_uuid, // share link_uuid
                 pairedWith: clone.tempId,
             };
@@ -846,6 +881,12 @@
      *  New paired (link_uuid shared or pairedWith) → local transformation only. */
     function handleSplitRow(row: PendingOp) {
         const partnerOp = getPartnerOp(row.tempId);
+
+        // Splitting undoes the pairing, so any pre-promote type kept for the wire is
+        // now stale — left behind it would silently override the standalone type each
+        // branch below assigns, and the row would be committed as what it used to be.
+        row.promoteFromType = null;
+        if (partnerOp) partnerOp.promoteFromType = null;
 
         if (row.op === 'edit' && partnerOp && partnerOp.op === 'edit') {
             // Case A: Saved paired → backend split + preview editable (DD-R2.1)
@@ -893,6 +934,7 @@
             // Case B legacy: link_uuid shared between two visible create ops
             const partner = ops.find((o) => o !== row && o.op === 'create' && o.link_uuid === row.link_uuid);
             if (partner) {
+                partner.promoteFromType = null;
                 const splitTypes = SPLIT_TYPE_MAP[row.fields.type];
                 if (!splitTypes) return;
                 const [fromType, toType] = splitTypes;
@@ -917,8 +959,17 @@
     // -----------------------------------------------------------------
 
     function collectCreate(d: PendingOp): Record<string, unknown> {
-        const rule = getTypeRule(d.fields.type);
-        return buildCreatePayload(opToTxFields(d), rule);
+        // The rule must follow the type actually being sent, not the one on screen:
+        // for a mixed promote those differ, and a rule for the wrong type strips or
+        // keeps the wrong fields.
+        const fields = opToTxFields(d);
+        const payload = buildCreatePayload(fields, getTypeRule(fields.type as TransactionTypeCode));
+        // `buildCreatePayload` only forwards link_uuid for types whose rule requires a
+        // pair, which a pre-promote type by definition does not. Here the uuid is not
+        // a pairing marker at all: it is the handle the promote resolves as
+        // `link_uuid_b`, so it has to ride along independently of the type's own rule.
+        if (d.promoteFromType && d.link_uuid) payload.link_uuid = d.link_uuid;
+        return payload;
     }
 
     function collectUpdate(d: PendingOp): Record<string, unknown> | null {
@@ -963,16 +1014,34 @@
 
             // Skip split-queued edit rows ONLY if unchanged
             if (d.op === 'edit' && splitTxIds.has((d as any).txId) && st !== 'edited') continue;
-            // Skip promote-queued edit rows entirely
-            if (d.op === 'edit' && promoteTxIds.has((d as any).txId)) continue;
+            // Skip promote-queued edit rows: the promote itself carries them.
+            //
+            // But not their hidden partner. In a *mixed* promote (one saved row +
+            // one new one) the promote sends `link_uuid_b`, and the backend resolves
+            // that uuid only against the creates it receives in the same batch. If
+            // the new row happens to be the hidden partner of this edit, the two
+            // `continue`s cancel each other out — this one skips the main, line 960
+            // skips the partner — and the create is never sent at all. The commit
+            // then fails with "Cannot resolve TX B reference", pointing at a row the
+            // user filled in and can see on screen.
+            if (d.op === 'edit' && promoteTxIds.has((d as any).txId)) {
+                const hidden = getPartnerOp(d.tempId);
+                if (hidden && hidden.op === 'create') {
+                    resolved.push({intent: 'create', payload: collectCreate(hidden), partnerPayload: null});
+                }
+                continue;
+            }
 
             const pOp = getPartnerOp(d.tempId);
 
             if (st === 'new') {
                 let partnerPayload: Record<string, unknown> | null = null;
-                if (pOp) {
-                    const partnerRule = getTypeRule(pOp.fields.type as TransactionTypeCode);
-                    partnerPayload = buildCreatePayload(opToTxFields(pOp), partnerRule);
+                // Only a *new* partner is created alongside. A saved partner (the
+                // other half of a mixed promote) already exists in the database:
+                // emitting a create payload for it would insert a duplicate of a
+                // row the user was merely linking.
+                if (pOp && pOp.op === 'create') {
+                    partnerPayload = collectCreate(pOp);
                 }
                 resolved.push({intent: 'create', payload: collectCreate(d), partnerPayload});
             } else if (st === 'edited') {
@@ -1008,7 +1077,10 @@
     function opToTxFields(d: PendingOp): TxFields {
         // In auto mode with currency hint, override becomes the hint sentinel
         const cbo = d.fields.cost_basis_mode === 'auto' && d.wacCurrencyHint ? {code: d.wacCurrencyHint, amount: '0'} : d.fields.cost_basis_override || null;
-        return {...d.fields, cost_basis_override: cbo, link_uuid: d.link_uuid ?? null};
+        // A mixed promote is applied server-side from the two *source* types, so the
+        // wire keeps the pre-promote value while the grid shows the promoted one.
+        const type = d.promoteFromType ?? d.fields.type;
+        return {...d.fields, type, cost_basis_override: cbo, link_uuid: d.link_uuid ?? null};
     }
 
     /** Derive the effective display status of a draft row.
@@ -1117,7 +1189,20 @@
                 return {issuesCount: 0};
             }
             const splitTxIds = new Set(pendingSplits.flatMap((s) => [s.id_a, s.id_b]));
-            const resolved = resolveOps({splitTxIds});
+            // `promoteTxIds` has to be here for the same reason it is in commit():
+            // `buildOpsIndexMap` below derives it from `pendingPromotes` regardless
+            // and skips those rows *without advancing its cursor*. Leaving it out
+            // here made `resolveOps` keep them, so the two walked the same list at
+            // different speeds and every entry after a queued promote mapped to the
+            // wrong row — which is what `lastOpsIndexMap` is then read through to
+            // attach WAC previews and validation issues. The user saw the preview
+            // pinned to a neighbouring transaction.
+            //
+            // It also validated rows the commit will not send, which is the wrong
+            // question to ask: a preview should simulate the commit, not something
+            // adjacent to it.
+            const promoteTxIds = new Set(pendingPromotes.flatMap((p) => [p.id_a, p.id_b].filter(Boolean) as number[]));
+            const resolved = resolveOps({splitTxIds, promoteTxIds});
             const payload = buildBatchPayload({
                 ops: resolved,
                 splits: pendingSplits.length > 0 ? pendingSplits.map((s) => ({id_a: s.id_a, id_b: s.id_b})) : undefined,
@@ -1125,6 +1210,12 @@
             upgradeAutoToDetail(payload);
             const sentKey = lastDraftKey;
             const result = await validateTransactions(payload, {fallback: $t('transactions.bulk.saveFailed')});
+            // A response that lands after the draft moved on describes a state
+            // that no longer exists: applying it overwrites fresher numbers
+            // (a WAC cell falling back to its "…" placeholder is the visible
+            // symptom). The change that moved the key already armed a newer
+            // run, so dropping this one loses nothing.
+            if (lastDraftKey !== sentKey) return {issuesCount: issues.length};
             if (result.networkError) {
                 issues = [{operation: 'create', index: 0, error: result.networkError}];
             } else {
@@ -1308,6 +1399,20 @@
     // =========================================================================
     // Commit
     // =========================================================================
+
+    /**
+     * Save-gate: if there are auto-derived "fields to verify" (warning todos) that the user
+     * hasn't acknowledged yet, force a confirmation step listing them before committing.
+     * Blockers are already gated by `commitDisabled`; this covers non-blocking warnings so the
+     * user is prompted to look (e.g. matured-bond nominal quantities) instead of silently saving.
+     */
+    function requestCommit() {
+        if (todoWarningRowCount > 0) {
+            confirmWarningsOpen = true;
+            return;
+        }
+        void commit();
+    }
 
     async function commit() {
         if (committing) return;
@@ -1655,11 +1760,23 @@
                             // Auto-calculated value present
                             return {
                                 type: 'html',
-                                html: `<span class="text-gray-400 italic" data-testid="tx-bulk-cost-basis-auto">💡 ${formatCurrencyAmountHtml(displayAmount(Number(cbo.amount)), cbo.code)}${modeSuffix}</span>`,
+                                html: `<span class="text-gray-400 italic" data-testid="tx-bulk-cost-basis-auto" data-state="ready">💡 ${formatCurrencyAmountHtml(displayAmount(Number(cbo.amount)), cbo.code)}${modeSuffix}</span>`,
                             };
                         }
-                        // Loading/pending
-                        return {type: 'html', html: '<span class="text-gray-400 italic" data-testid="tx-bulk-cost-basis-auto">💡 …</span>'};
+                        // No amount. Two different facts used to share one glyph: the value is
+                        // still being computed, or it was computed and there is nothing to
+                        // propose (a BUY has no cost basis to match, a SELL may find no lot).
+                        // `…` now means only the first, `—` the second — the lightbulb stays in
+                        // both because the cell is still in automatic mode.
+                        //
+                        // `validateRuns === 0` belongs with "unknown", not with "empty": before
+                        // the first run nobody has asked yet, so an em-dash would be a verdict
+                        // the app has not reached.
+                        const unknown = scheduler.state.isPending || scheduler.state.isValidating || scheduler.state.validateRuns === 0;
+                        return {
+                            type: 'html',
+                            html: `<span class="text-gray-400 italic" data-testid="tx-bulk-cost-basis-auto" data-state="${unknown ? 'pending' : 'empty'}">💡 ${unknown ? '…' : '—'}</span>`,
+                        };
                     }
 
                     // mode 'manual'
@@ -1962,6 +2079,15 @@
     let hasPairedDelete = $derived(visibleOps.some((d) => deriveStatus(d) === 'delete' && getPartnerOp(d.tempId) != null));
     let actionCount = $derived(newCount + editedCount + deleteCount + pendingSplits.length + pendingPromotes.length);
     let hasTodoBlockers = $derived(ops.some((op) => op.todos?.some((t) => t.severity === 'blocker')));
+    /** Blocker todos with their row position, so the banner can name the offending rows.
+     *  Without this the user only sees a red row and a disabled Save, never the reason. */
+    let todoBlockerEntries = $derived(ops.flatMap((op, rowIdx) => (op.todos ?? []).filter((t) => t.severity === 'blocker').map((todo) => ({rowNumber: rowIdx + 1, date: op.fields.date, todo}))));
+    // Folded by default: with evidence tables attached, an expanded banner can be taller
+    // than the viewport and push the grid — the thing the user has to fix — off-screen.
+    let todoBlockersExpanded = $state(false);
+    let todoWarningRowCount = $derived(ops.filter((op) => op.todos?.some((t) => t.severity === 'warning')).length);
+    /** Human-readable list of the auto-derived fields still awaiting verification (for the Save-gate dialog). */
+    let todoWarningItems = $derived(ops.flatMap((op) => (op.todos ?? []).filter((t) => t.severity === 'warning').map((t) => t.message || t.field)));
     let commitDisabled = $derived(committing || ops.length === 0 || actionCount === 0 || hasTodoBlockers);
     let commitLabel = $derived(committing ? $t('common.saving') : $t('common.saveAll'));
 
@@ -1987,6 +2113,16 @@
     // ImportWizardModal (Phase 07 Part 5 v5 M1→M4): BRIM Import Wizard → BulkModal bridge.
     // -------------------------------------------------------------------------
     let importWizardOpen = $state(false);
+    let pendingCreateTransactions = $derived.by<TransactionCreateItem[]>(() =>
+        ops.flatMap((op) => {
+            if (op.op !== 'create') return [];
+            return [buildCreatePayload(opToTxFields(op), getTypeRule(op.fields.type as TransactionTypeCode)) as TransactionCreateItem];
+        }),
+    );
+    /** DB transaction ids the user has marked for deletion in the bulk editor. Passed to the
+     *  import wizard so DB-duplicate detection drops matches against to-be-deleted rows — a
+     *  re-imported row is not flagged as a duplicate of a transaction that is about to go. */
+    let pendingDeleteTxIds = $derived.by<number[]>(() => ops.flatMap((op) => (op.op === 'edit' && op.markedDelete ? [op.txId] : [])));
 
     /** Convert a TXCreateItem (from BRIM parse) to a PendingOp 'create' row.
      *  Signs are converted to display values (BulkModal convention: positive display,
@@ -2146,24 +2282,11 @@
         // When editing a 'new' draft, open in create mode so type stays editable;
         // formEditingTempId is still set so handleFormPushed patches (not adds).
         formMode = deriveStatus(row) === 'new' ? 'create' : 'edit';
-        let mainItem = opToTxLike(row);
-        // SP-C Step 2: if split-queued, override type with post-split target
-        if (row.op === 'edit' && splitTxIdsSet.has(row.txId) && mainItem) {
-            const splitEntry = pendingSplits.find((s) => s.id_a === row.txId || s.id_b === row.txId);
-            const origType = splitEntry?.originalType ?? row.fields.type;
-            const splitTypes = SPLIT_TYPE_MAP[origType];
-            if (splitTypes) {
-                const qty = Number(row.fields.quantity ?? 0);
-                const cashAmt = Number(row.fields.cash?.amount ?? 0);
-                const isSender = origType === 'TRANSFER' ? qty < 0 || qty === 0 : cashAmt < 0 || cashAmt === 0;
-                mainItem.type = (isSender ? splitTypes[0] : splitTypes[1]) as string;
-            }
-        }
         formEditingTempId = row.tempId;
-        // Resolve partner from hidden partner op or txStore fallback
-        const pOp = getPartnerOp(row.tempId);
-        const partnerItem = pOp ? opToTxLike(pOp) : null;
-        formItems = partnerItem ? [mainItem, partnerItem] : [mainItem];
+        // Project post-split type before validatePair: handleSplitRow already
+        // un-paired split tails, so the mismatch must stop txStore fallback from
+        // re-pairing them as the original transfer.
+        formItems = resolveFormItemsFromOps(row, ops, opToTxLikeForForm, txStoreGet);
         formKey++;
         formOpen = true;
     }
@@ -2332,7 +2455,9 @@
     }
 
     // cashAmountsCancel is imported from '$lib/utils/transactions/promoteHelpers'
-    // (extracted for unit-testability — see promoteHelpers.ts)
+    // (extracted for unit-testability — see promoteHelpers.ts). It takes `getTypeRule`
+    // because a cash amount cannot be compared without knowing the sign its type implies:
+    // pool rows arrive signed, DB rows arrive normalised to a magnitude by fieldsFromTx.
 
     /** Selection-based promote detection — 2 standalone rows with matching promote rule. */
     let selectedForPromote = $derived.by(() => {
@@ -2346,7 +2471,7 @@
         if (!match) return null;
         // For CASH_TRANSFER: require exact cash cancel (same currency, opposite sign).
         // For FX_CONVERSION: amounts are in different currencies — no cancel check.
-        if (match.targetType === 'CASH_TRANSFER' && !cashAmountsCancel(a, b)) return null;
+        if (match.targetType === 'CASH_TRANSFER' && !cashAmountsCancel(a, b, getTypeRule)) return null;
         return {...match, opA: a, opB: b};
     });
 
@@ -2381,11 +2506,25 @@
         const match = findPromoteMatch(opA.fields.type, opB.fields.type, $t, buildPromoteCtx(opA, opB));
         if (!match) return;
 
-        // Apply resolved fields (from MergeModal) to opA before collapsing
-        if (resolved.description != null) opA.fields.description = resolved.description as string;
-        if (resolved.tags != null) opA.fields.tags = resolved.tags as string[];
-        if (resolved.date != null) opA.fields.date = resolved.date as string;
-        if (resolved.cost_basis_override != null) opA.fields.cost_basis_override = resolved.cost_basis_override as any;
+        // Apply resolved fields (from MergeModal) to *both* ops before collapsing.
+        //
+        // Not just opA, for two reasons. The create+create branch below is purely
+        // local — it assigns a shared link_uuid and sends no `resolved_fields`, so
+        // nothing else would ever reach opB and the commit is rejected with
+        // `pairDescriptionMismatch`, quoting a description the user never chose.
+        // And `collapseIntoPaired` picks the displayed row by cash sign, so opB can
+        // become the *visible* one: resolving into opA alone can hide the chosen
+        // value as well as fail on it.
+        //
+        // For the edit+edit and mixed branches the backend applies `resolved_fields`
+        // to both sides anyway, so writing them here is idempotent — and it keeps
+        // the grid showing what will actually be persisted.
+        for (const op of [opA, opB]) {
+            if (resolved.description != null) op.fields.description = resolved.description as string;
+            if (resolved.tags != null) op.fields.tags = resolved.tags as string[];
+            if (resolved.date != null) op.fields.date = resolved.date as string;
+            if (resolved.cost_basis_override != null) op.fields.cost_basis_override = resolved.cost_basis_override as any;
+        }
 
         if (opA.op === 'edit' && opB.op === 'edit') {
             // 2 saved → batch promotes
@@ -2419,6 +2558,9 @@
                     ...(Object.keys(resolved).length > 0 ? {resolved_fields: resolved} : {}),
                 },
             ];
+            // The backend derives the target from the two *source* types, so the new
+            // row has to reach it un-promoted; the grid still shows the target below.
+            newOp.promoteFromType = newOp.fields.type as TransactionTypeCode;
             savedOp.fields.type = match.targetType as TransactionTypeCode;
             newOp.fields.type = match.targetType as TransactionTypeCode;
         }
@@ -2498,7 +2640,7 @@
                 const delta = daysDiff(dA, dB);
                 if (delta > maxDeltaDays) continue;
                 const match = findPromoteMatch(newStandalone[i].fields.type, newStandalone[j].fields.type, $t, buildPromoteCtx(newStandalone[i], newStandalone[j]));
-                if (match && (match.targetType !== 'CASH_TRANSFER' || cashAmountsCancel(newStandalone[i], newStandalone[j]))) {
+                if (match && (match.targetType !== 'CASH_TRANSFER' || cashAmountsCancel(newStandalone[i], newStandalone[j], getTypeRule))) {
                     results.push({
                         tempIdA: newStandalone[i].tempId,
                         tempIdB: newStandalone[j].tempId,
@@ -2534,7 +2676,7 @@
                 const match = findPromoteMatch(a.fields.type, b.fields.type, $t, buildPromoteCtx(a, b));
                 if (!match) continue;
                 // CASH_TRANSFER: amounts must cancel. FX_CONVERSION: different currencies, no cancel check.
-                if (match.targetType === 'CASH_TRANSFER' && !cashAmountsCancel(a, b)) continue;
+                if (match.targetType === 'CASH_TRANSFER' && !cashAmountsCancel(a, b, getTypeRule)) continue;
                 const pairKey = `${(a as any).txId}-${(b as any).txId}`;
                 if (seenPairs.has(pairKey)) continue;
                 seenPairs.add(pairKey);
@@ -2700,7 +2842,7 @@
 </script>
 
 <ModalBase {open} maxWidth="none" onRequestClose={requestClose} testId="tx-bulk-modal" allowOverflow={true} contentClass="max-w-[95vw] w-[95vw]">
-    <div class="flex flex-col max-h-[90vh] min-h-[50vh]" data-testid="tx-bulk-modal-root">
+    <div class="flex flex-col max-h-[90vh] min-h-[50vh]" data-testid="tx-bulk-modal-root" data-busy={scheduler.state.isPending || scheduler.state.isValidating || committing} data-validate-runs={scheduler.state.validateRuns}>
         <!-- Header -->
         <div class="flex items-center justify-between p-5 pb-4 border-b border-gray-100 dark:border-slate-700 shrink-0">
             <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100" data-testid="tx-bulk-title">
@@ -2813,7 +2955,39 @@
             {/if}
             {#if hasPairedDelete}
                 <InfoBanner variant="info">
-                    <p data-testid="tx-bulk-split-hint">ℹ️ {$t('transactions.deleteModal.splitHint')}</p>
+                    <p data-testid="tx-bulk-split-hint">ℹ️ {$t('transactions.bulk.splitHint')}</p>
+                </InfoBanner>
+            {/if}
+            {#if todoBlockerEntries.length > 0}
+                <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-xs" data-testid="tx-bulk-todo-blockers">
+                    <button type="button" class="flex w-full items-center gap-1.5 p-3 text-left font-medium text-red-800 dark:text-red-200" onclick={() => (todoBlockersExpanded = !todoBlockersExpanded)} data-testid="tx-bulk-todo-blockers-toggle">
+                        {#if todoBlockersExpanded}
+                            <ChevronDown size={14} class="shrink-0" />
+                        {:else}
+                            <ChevronRight size={14} class="shrink-0" />
+                        {/if}
+                        <span class="min-w-0 flex-1">🔴 {$t('importWizard.todoBlockerVerifyHint', {values: {n: todoBlockerEntries.length}})}</span>
+                    </button>
+                    {#if todoBlockersExpanded}
+                        <ul class="max-h-72 space-y-2 overflow-y-auto px-3 pb-3">
+                            {#each todoBlockerEntries as entry}
+                                <li class="space-y-1.5">
+                                    <p class="text-red-700 dark:text-red-300 leading-relaxed">
+                                        <span class="font-mono opacity-70">#{entry.rowNumber}</span>
+                                        {entry.todo.message}
+                                    </p>
+                                    {#each entry.todo.evidence ?? [] as evidence}
+                                        <BrimEvidenceTable {evidence} tone="blocker" collapsible />
+                                    {/each}
+                                </li>
+                            {/each}
+                        </ul>
+                    {/if}
+                </div>
+            {/if}
+            {#if todoWarningRowCount > 0}
+                <InfoBanner variant="warning">
+                    <p data-testid="tx-bulk-todo-warnings">🔧 {$t('importWizard.todoWarningVerifyHint', {values: {n: todoWarningRowCount}})}</p>
                 </InfoBanner>
             {/if}
             {#if bannerSuggestions.length > 0}
@@ -3062,7 +3236,7 @@
                 <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={() => scheduler.trigger('manual')} data-testid="tx-bulk-validate-now" title={$t('transactions.validate.now')}>
                     ⚡ <span class="hidden sm:inline">{$t('transactions.validate.now')}</span>
                 </button>
-                {#if scheduler.state.isValidating}
+                {#if scheduler.state.isValidating || scheduler.state.isPending}
                     <span class="text-[11px] text-gray-500 dark:text-gray-400" data-testid="tx-bulk-validating">{$t('transactions.validate.validating')}</span>
                 {:else if isFreshlyValid && !formError && !commitFailed}
                     <span class="text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-1" data-testid="tx-bulk-valid">
@@ -3079,7 +3253,7 @@
                     type="button"
                     class="px-4 py-2 text-sm rounded-lg text-white bg-libre-green hover:bg-libre-green/90 disabled:opacity-50 inline-flex items-center gap-1.5"
                     disabled={commitDisabled}
-                    onclick={commit}
+                    onclick={requestCommit}
                     data-testid="tx-bulk-commit"
                     title={hasTodoBlockers ? $t('importWizard.todoBlockerCommitHint') : commitLabel}
                 >
@@ -3089,6 +3263,25 @@
         </div>
     </div>
 </ModalBase>
+
+<!-- Save-gate: force the user to review auto-derived "fields to verify" (warning todos)
+     before committing. Non-destructive — "Save anyway" proceeds, "Review" returns to the grid. -->
+<ConfirmModal
+    open={confirmWarningsOpen}
+    title={$t('importWizard.todoWarningConfirmTitle')}
+    message={$t('importWizard.todoWarningConfirmMessage', {values: {n: todoWarningRowCount}})}
+    items={todoWarningItems}
+    itemsLabel={$t('importWizard.todoWarningConfirmItemsLabel', {values: {n: todoWarningItems.length}})}
+    confirmText={$t('importWizard.todoWarningConfirmProceed')}
+    cancelText={$t('importWizard.todoWarningConfirmReview')}
+    warning
+    onConfirm={() => {
+        confirmWarningsOpen = false;
+        void commit();
+    }}
+    onCancel={() => (confirmWarningsOpen = false)}
+    zIndex={70}
+/>
 
 <!-- Bugfix-3 §C11: confirm dialog when closing with unsaved changes. -->
 <ConfirmModal
@@ -3175,4 +3368,4 @@
 />
 
 <!-- Phase 07 Part 5 v5 M1: BRIM Import Wizard -->
-<ImportWizardModal open={importWizardOpen} zIndex={70} {defaultBrokerId} onClose={() => (importWizardOpen = false)} {onImportBatch} />
+<ImportWizardModal open={importWizardOpen} zIndex={70} {defaultBrokerId} {pendingCreateTransactions} {pendingDeleteTxIds} onClose={() => (importWizardOpen = false)} {onImportBatch} />

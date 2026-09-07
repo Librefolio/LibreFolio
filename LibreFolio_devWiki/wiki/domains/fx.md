@@ -77,7 +77,7 @@ No open problems. The FX domain is fully implemented and stable.
 |------|------|
 | Primary mkdocs | `mkdocs_src/docs/developer/backend/fx/architecture.md` |
 | FX configuration mkdocs | `mkdocs_src/docs/developer/backend/fx/configuration.md` |
-| FX providers list mkdocs | `mkdocs_src/docs/developer/backend/fx/providers_list.md` |
+| FX providers list mkdocs | `mkdocs_src/docs/developer/backend/fx/providers/index.md` |
 | FX plugin guide | `mkdocs_src/docs/developer/architecture/patterns/fx_plugin_guide.md` |
 | Conversion chain algorithm | `mkdocs_src/docs/developer/frontend/fx-chain-algorithm.md` |
 | User FX docs | `mkdocs_src/docs/user/fx/` |

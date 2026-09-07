@@ -7,14 +7,11 @@
  */
 
 import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
+import {escapeHtml} from '$lib/utils/core/escapeHtml';
 
 /**
  * Escape a string for safe inclusion in an HTML attribute / text node.
  */
-function escapeHtml(s: string): string {
-    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
-
 export interface CurrencyAmountFormatOptions {
     /** Show +/- sign prefix (default: false) */
     showSign?: boolean;

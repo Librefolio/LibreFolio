@@ -84,7 +84,8 @@ describe('computeDerivedPriceState', () => {
             {date: '2026-01-01', value: 100, staleDays: 0},
             {date: '2026-01-08', value: 110, staleDays: 0},
         ]);
-        expect(Object.keys(result.deltas)).toEqual(DELTA_PERIODS.map((p) => p.key));
+        expect(Object.keys(result.deltas)).toEqual(['1D', ...DELTA_PERIODS.map((p) => p.key)]);
+        expect(result.deltas['1D']).toBeCloseTo(10, 5);
     });
 
     it('reads staleDays from backward_fill_info.days_back when present', () => {

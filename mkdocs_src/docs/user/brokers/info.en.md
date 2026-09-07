@@ -22,15 +22,20 @@ The left column of the Info tab displays key properties and validation rules for
 
 ## 🧠 Scoped AI Export
 
-At the top right of the broker toolbar, the **AI Export** (:material-brain:) button copies a structured text representation of the broker's current state to your clipboard.
+At the top right of the broker toolbar, **AI Export** (:material-brain:) opens
+three dedicated Broker tasks—not filtered Portfolio prompts:
 
-This export is **scoped specifically to this broker** (unlike the main dashboard button which copies data for the entire portfolio). It aggregates:
+- **Broker Review**
+- **Broker Performance & Market Drivers**
+- **Capital-Loss Offset Strategies**
 
-- Local cash balances.
-- Local asset holdings and quantities.
-- Active allocation weights.
-
-You can paste this structured prompt directly into your preferred LLM (like Gemini or ChatGPT) for targeted, personalized analysis of this specific account.
+The backend snapshot is limited to the selected broker and can include its cash,
+holdings, activity, performance, costs, concentration, and FIFO lots according
+to the selected task. Server-side access checks prevent exporting a broker the
+current user cannot access. LibreFolio only copies the result to the clipboard;
+review sensitive financial data before sharing it. See
+[Broker AI Export](../ai-export/broker.md) or the
+[AI Export overview](../ai-export/index.md).
 
 ---
 

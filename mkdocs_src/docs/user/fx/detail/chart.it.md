@@ -28,7 +28,7 @@ Passando alla modalità %, tutti i segnali sovrapposti vengono ricalcolati come 
 | **Zoom out** | Rotella mouse giù | Pinch in |
 | **Reset zoom** | Doppio clic | Doppio tocco |
 
-Puoi anche utilizzare i **preset dell'intervallo temporale** (1W, 1M, 3M, 6M, 1Y, 2Y) o selezionare un intervallo di date **Personalizzato** per saltare rapidamente a periodi specifici.
+Puoi anche utilizzare i **preset dell'intervallo temporale** (1W, 1M, 3M, 6M, 1Y, 2Y, YTD, MAX) o selezionare un intervallo di date **Personalizzato** per saltare rapidamente a periodi specifici. Quando la barra degli strumenti ha spazio libero, compaiono **preset di riempimento** extra per occuparlo — 3Y, 5Y, 10Y insieme ai preset a durata, e WTD, MTD, QTD insieme a YTD.
 
 !!! info "Disponibilità dei dati"
 
@@ -51,7 +51,7 @@ Passa il mouse su qualsiasi punto del grafico per vedere:
 La barra degli strumenti del grafico fornisce un accesso rapido a:
 
 - 📊 **Interruttore modalità visualizzazione** — Assoluta / Percentuale
-- ⏱️ **Intervallo temporale** — 1W, 1M, 3M, 6M, 1Y, 2Y, Personalizzato
+- ⏱️ **Intervallo temporale** — 1W, 1M, 3M, 6M, 1Y, 2Y, YTD, MAX, Personalizzato (più i preset di riempimento 3Y/5Y/10Y e WTD/MTD/QTD quando la barra degli strumenti ha spazio)
 - 📈 **[Segnali](signals.md)** — Attiva/disattiva la sovrapposizione degli indicatori tecnici
 - 📏 **[Misure](measures.md)** — Strumento di misurazione punto-punto
 - ✏️ **[Editor Dati](data-editor.md)** — Modifica i singoli punti dati

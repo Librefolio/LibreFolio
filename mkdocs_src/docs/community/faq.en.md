@@ -28,7 +28,7 @@ Yes! Our roadmap includes **AI-powered assistants** to help you analyze your por
 LibreFolio supports:
 
 - **Stocks & ETFs** — Automatically fetched prices via data providers (e.g., yfinance)
-- **Cryptocurrencies** — Coming soon
+- **Crypto assets** — Tracked as portfolio assets in the UI; not Forex, and not part of the fiat currency picker
 - **Bonds** — Manual entry supported
 - **P2P Lending** — Scheduled-yield assets
 - **Cash & Deposits** — Track your liquidity

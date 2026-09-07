@@ -43,7 +43,7 @@ LibreFolio peut être installé en tant qu'**application web progressive (PWA)**
 
     L'invite d'installation automatique n'est pas disponible sur iOS. Utilisez le menu Partager comme décrit ci-dessus. Le menu Aide affichera des instructions si vous êtes sur un appareil iOS.
 
-### Bureau (Chrome / Edge)
+### Desktop (Chrome / Edge)
 
 1. Ouvrez LibreFolio dans Chrome ou Edge
 2. Cliquez sur le bouton **"Installer l'application"** dans le menu Aide et support

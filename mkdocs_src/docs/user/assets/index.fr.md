@@ -28,7 +28,7 @@ Accédez à **Assets** dans la barre latérale pour voir tous vos actifs. La pag
 - 🗃️ **Actifs Archivés** : Basculez entre les positions actives et les actifs archivés pour garder votre liste propre.
 - ⏱️ **Sélecteur de Delta Temporel** : Modifiez la période utilisée pour calculer les variations de prix (ex. `1D`, `1W`, `1M`, `YTD`, `ALL`).
 - 🔄 **Synchronisation & Rafraîchissement** : Synchronisez les données de prix en temps réel pour tous les fournisseurs configurés ou rafraîchissez manuellement la liste.
-- 🖱️ **Menu Contextuel** : Faites un clic droit sur n'importe quelle ligne dans la mise en page en tableau pour des actions rapides (Modifier, Supprimer, Synchroniser).
+- 🖱️ **Menu Contextuel** : Faites un clic droit sur n'importe quelle ligne dans la mise en page en tableau pour des actions rapides (**Synchroniser**, **Actualiser**, **Fusionner**, **Supprimer**). Synchroniser est désactivé pour les actifs sans fournisseur de prix et pour les actifs archivés ; Fusionner replie un actif en double dans un autre — transactions, prix et événements convergent vers la cible et l'actif source est supprimé.
 
 Cliquez sur n'importe quelle carte d'actif pour naviguer vers sa **[page de détail](detail/index.md)**.
 
@@ -50,11 +50,11 @@ Récupération automatique des prix depuis Yahoo Finance, justETF, CSS Scraper o
 
 ## 📡 Prix en temps réel & Ticker en temps réel
 
-Pour vous tenir informé des mouvements du marché sans forcer des rafraîchissements constants de la page, LibreFolio affiche des badges de prix compacts et en direct sur le **Tableau de bord** et les pages de **Détail d'actif**.
+Pour vous tenir informé des mouvements du marché sans forcer des rafraîchissements constants de la page, LibreFolio affiche des badges de prix compacts et en direct sur la **liste des Actifs** et les pages de **Détail d'actif**.
 
 ### ⏱️ Interrogation Automatique (Polling)
 
-Lorsque vous consultez ces pages, votre navigateur interroge le backend toutes les **30 secondes** pour obtenir les prix actuels des actifs. Ce processus s'exécute silencieusement en arrière-plan et n'est absolument pas bloquant (l'interface utilisateur est prête instantanément, et les prix se chargent à leur arrivée).
+Lorsque vous consultez ces pages, votre navigateur interroge le backend toutes les **30 secondes** pour obtenir les prix actuels des actifs. Ce processus s'exécute silencieusement en arrière-plan et n'est absolument pas bloquant (l'interface utilisateur est prête instantanément, et les prix se chargent à leur arrivée). Le tableau de bord n'interroge pas le backend : il affiche les derniers prix enregistrés.
 
 ### 🎨 Indicateurs Visuels
 

@@ -18,7 +18,7 @@ Semantics:
 from decimal import Decimal
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.v1.auth import get_current_user
@@ -268,12 +268,6 @@ async def suggest_events(
     caller only has to be authenticated. Results preserve input order and
     each list of candidates is sorted by ascending distance (days).
     """
-    if len(requests) > 500:
-        # Defensive: Pydantic enforces the cap on the list model, but a raw
-        # list body needs an explicit check.
-
-        raise HTTPException(status_code=422, detail="Max 500 requests per call")
-
     service = TransactionService(session)
     return await service.suggest_events_bulk(requests)
 
@@ -295,9 +289,6 @@ async def promote_suggest(
     Each input can have a real ID (>0) or a fake ID (<0, unsaved).
     Results are keyed by the input ID.
     """
-    if len(inputs) > 500:
-        raise HTTPException(status_code=422, detail="Max 500 inputs per call")
-
     service = TransactionService(session)
     return await service.promote_suggest_bulk(inputs, tolerance_days, user_id=current_user.id)
 

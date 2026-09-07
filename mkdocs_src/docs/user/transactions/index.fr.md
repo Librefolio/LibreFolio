@@ -15,7 +15,7 @@ Chaque compte de courtier dans LibreFolio possède son propre journal de transac
 La gestion de vos transactions est simple :
 
 * 📝 **Saisie manuelle et modification** : Ouvrez le **[Formulaire de transaction](form.md)** interactif pour ajouter, modifier ou ajuster manuellement des opérations individuelles.
-* 📥 **Importation simplifiée depuis le courtier** : Vous n'avez pas besoin de tout saisir à la main ! LibreFolio vous permet de télécharger des exports CSV ou PDF de votre courtier et de les associer et les importer automatiquement en quelques secondes. Pour en savoir plus, consultez le guide **[Importation depuis le courtier](import/index.md)**.
+* 📥 **Importation simplifiée depuis le courtier** : Vous n'avez pas besoin de tout saisir à la main ! LibreFolio vous permet de télécharger des exports CSV ou XLSX de votre courtier et de les associer et les importer automatiquement en quelques secondes. Pour en savoir plus, consultez le guide **[Importation depuis le courtier](import/index.md)**.
 
 ---
 
@@ -25,10 +25,17 @@ Voici un résumé des opérations et outils disponibles directement sur la page 
 
 | Fonctionnalité | Description | Référence |
 |---------|-------------|-----------|
-| **Ajouter et Modifier** | Cliquez sur **+ Nouvelle transaction** pour ouvrir le formulaire, ou cliquez sur n'importe quelle ligne existante pour modifier ses détails. | [Formulaire de transaction](form.md) |
-| **Importation depuis le courtier** | Glissez-déposez votre relevé de courtier pour importer votre historique automatiquement. | [Importation depuis le courtier](import/index.md) |
+| **Ajouter et Modifier** | Cliquez sur **Ajouter une transaction** pour ouvrir le formulaire, ou cliquez sur n'importe quelle ligne existante pour modifier ses détails. | [Formulaire de transaction](form.md) |
+| **Importation depuis le courtier** | Cliquez sur **Importer** pour téléverser un relevé de courtier et importer votre historique automatiquement. | [Importation depuis le courtier](import/index.md) |
 | **Tri et Filtrage** | Cliquez sur l'en-tête de n'importe quelle colonne pour trier la liste. Utilisez la barre de recherche pour filtrer par nom d'actif, type ou notes. | |
-| **Suppression et Actions groupées** | Faites un clic droit sur une ligne pour ouvrir le menu contextuel et accéder aux actions rapides, cliquez sur l'icône de la corbeille pour supprimer, ou cochez plusieurs lignes pour effectuer des suppressions groupées. | |
+| **Suppression et Actions groupées** | Faites un clic droit sur une ligne pour ouvrir le menu contextuel et accéder aux actions rapides. La suppression d'une seule ligne et la sélection de plusieurs lignes pour une suppression groupée ouvrent toutes deux le même **espace de travail groupé**, où les lignes sont préparées pour suppression avant confirmation ; un partenaire lié (opération FX ou jambe de transfert) est automatiquement préparé avec la ligne choisie. | |
+
+La duplication fonctionne de la même manière : **Cloner** depuis le menu contextuel prépare une copie dans l'espace de travail groupé — en conservant la **date d'origine** (le clonage est la façon dont une ligne historique mal classée est corrigée, donc la date doit survivre) — où vous l'ajustez et l'enregistrez.
+
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="transactions" data-name="clone-flow" alt="Bulk workspace with a cloned transaction row">
+</div>
+
 | **Transactions Composites et Promotion** | Liez des opérations individuelles dans une **Transaction Composite** via une **Promotion** pour permettre un suivi et des analyses plus sophistiqués, ou divisez à nouveau une transaction composite en opérations individuelles. | [Formulaire de transaction](form.md#composite-transactions) |
 
 ---

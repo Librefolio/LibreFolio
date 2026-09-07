@@ -1,7 +1,5 @@
 # 📊 Charts
 
-*[⬅️ Back to Dashboard Overview](index.md)*
-
 The chart section sits below the KPI cards and gives you a **historical and structural view** of your portfolio over the selected time range.
 
 ---
@@ -122,3 +120,7 @@ The allocation panel shows how your portfolio is distributed at the current poin
 - 💼 **[NAV / Net Worth](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)**
 - 💸 **[Deposited Capital & Total P&L](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)**
 - 📈 **[TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md)** · **[MWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)** · **[Timing Effect](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/timing-effect.md)**
+
+---
+
+*[⬅️ Back to Dashboard Overview](index.md)*

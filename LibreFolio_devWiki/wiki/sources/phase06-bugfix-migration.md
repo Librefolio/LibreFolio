@@ -6,7 +6,7 @@ date_ingested: 2026-04-24
 original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-06-subplan/Bugfix-Step1/
 tags: [phase06, assets, fx, responsive, i18n, ui, bugfix]
 related_features: [F-024, F-032, F-021]
-related_decisions: [responsive-layout-strategy]
+related_decisions: [concepts/responsive-4mode-layout]
 ---
 
 # Source: Phase 06 Bugfix Migration (Steps 1-3)

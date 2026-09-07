@@ -289,10 +289,13 @@ async def test_sync_rates(test_server):
         today = date.today()
         yesterday = today - timedelta(days=1)
 
-        # Ensure pair sources exist
+        # Ensure pair sources exist. MOCKFX, not ECB: a real provider would make this
+        # test reach the internet, so its duration would depend on someone else's servers
+        # and its result on what they answer. MOCKFX returns MOCKFX_FIXED_RATE for every
+        # date, which is what lets the assertions below be exact instead of approximate.
         await client.post(
             f"{API_BASE}/fx/providers/routes",
-            json=[{"base": "EUR", "quote": "GBP", "priority": 1, "chain_steps": [{"from": "EUR", "to": "GBP", "provider": "ECB"}]}],
+            json=[{"base": "EUR", "quote": "GBP", "priority": 1, "chain_steps": [{"from": "EUR", "to": "GBP", "provider": "MOCKFX"}]}],
             timeout=TIMEOUT,
         )
 
@@ -313,6 +316,9 @@ async def test_sync_rates(test_server):
         assert len(sync_response.results) == 1
         pr = sync_response.results[0]
         assert pr.pair == "EUR-GBP"
+        assert pr.provider_used == "MOCKFX", f"Expected MOCKFX to serve the pair, got {pr.provider_used}"
+        assert pr.points_fetched >= 1, f"Expected at least one point fetched, got {pr.points_fetched}"
+        assert not pr.errors, f"Unexpected errors: {pr.errors}"
         print_success(f"✓ Sync completed: status={pr.status}, pts_changed={pr.points_changed}")
 
         # Cleanup
@@ -338,8 +344,8 @@ async def test_sync_rates_auto_config(test_server):
         print_info("Step 1: Configure pair sources in DB")
 
         routes = [
-            _route_json("EUR", "USD", "ECB"),
-            _route_json("GBP", "USD", "ECB"),
+            _route_json("EUR", "USD", "MOCKFX"),
+            _route_json("GBP", "USD", "MOCKFX"),
         ]
 
         create_response = await client.post(
@@ -401,10 +407,12 @@ async def test_convert_currency(test_server):
         await create_user_and_login(client)
         today = date.today()
 
-        # First, ensure we have rates (sync via POST)
+        # First, ensure we have rates (sync via POST). MOCKFX keeps this off the network:
+        # the conversion asserted below runs on the MANUAL EUR/USD rate seeded right after,
+        # so what this sync provides is state, not the value under test.
         await client.post(
             f"{API_BASE}/fx/providers/routes",
-            json=[{"base": "EUR", "quote": "GBP", "priority": 1, "chain_steps": [{"from": "EUR", "to": "GBP", "provider": "ECB"}]}],
+            json=[{"base": "EUR", "quote": "GBP", "priority": 1, "chain_steps": [{"from": "EUR", "to": "GBP", "provider": "MOCKFX"}]}],
             timeout=TIMEOUT,
         )
         await client.post(

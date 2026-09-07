@@ -6,9 +6,10 @@
     import {isAxiosError} from 'axios';
     import {goto} from '$app/navigation';
     import {debug} from '$lib/debug';
-    import {Calendar, Camera, CheckCircle, Key, Mail, Pencil, PencilOff, Save, Trash2, Undo, User} from 'lucide-svelte';
+    import {Calendar, Camera, Key, Mail, Pencil, PencilOff, Save, Trash2, Undo, User} from 'lucide-svelte';
     import PasswordChangeModal from '$lib/components/settings/PasswordChangeModal.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
+    import {notify} from '$lib/stores/app/notify.svelte';
     import {ImagePickerWrapper} from '$lib/components/ui/media';
     import {onMount} from 'svelte';
 
@@ -58,7 +59,6 @@
     // Profile editing state
     let saving = false;
     let error: string | null = null;
-    let successItems: string[] = []; // Array of saved field names for bullet list
 
     // Original values (from server)
     let originalUsername = $currentUser?.username ?? '';
@@ -113,7 +113,6 @@
         debug.log('ProfileTab', 'saveField', field);
         saving = true;
         error = null;
-        successItems = [];
 
         try {
             const payload = field === 'username' ? {username: editedUsername} : {email: editedEmail};
@@ -122,8 +121,11 @@
             await auth.checkAuth();
 
             const fieldName = field === 'username' ? $_('auth.username') : $_('auth.email');
-            successItems = [fieldName];
-            setTimeout(() => (successItems = []), 3000);
+            notify({
+                name: 'settings.profile.saved',
+                detail: {fields: 1, field: fieldName},
+                toast: {variant: 'success', message: `${$_('settings.savedSuccessfully')}:<ul class="mt-1 list-inside list-disc">${[fieldName].map((l) => `<li>${l}</li>`).join('')}</ul>`},
+            });
         } catch (e: unknown) {
             debug.error('ProfileTab', 'saveField failed', e);
             const detail = isAxiosError(e) ? e.response?.data?.detail : null;
@@ -148,33 +150,63 @@
         debug.log('ProfileTab', 'saveAll');
         saving = true;
         error = null;
-        successItems = [];
 
-        const saved: string[] = [];
+        const fields: ('username' | 'email')[] = [];
+        if (usernameModified) fields.push('username');
+        if (emailModified) fields.push('email');
 
-        try {
-            if (usernameModified) {
-                await zodiosApi.update_profile_api_v1_auth_profile_put({username: editedUsername});
-                saved.push($_('auth.username'));
-            }
-            if (emailModified) {
-                await zodiosApi.update_profile_api_v1_auth_profile_put({email: editedEmail});
-                saved.push($_('auth.email'));
-            }
+        const saved: {field: 'username' | 'email'; label: string}[] = [];
+        const failed: {field: 'username' | 'email'; label: string; reason: string}[] = [];
 
-            if (saved.length > 0) {
-                await auth.checkAuth();
-                successItems = saved;
-                setTimeout(() => (successItems = []), 4000);
+        for (const field of fields) {
+            try {
+                const payload = field === 'username' ? {username: editedUsername} : {email: editedEmail};
+                await zodiosApi.update_profile_api_v1_auth_profile_put(payload);
+                saved.push({field, label: field === 'username' ? $_('auth.username') : $_('auth.email')});
+                if (field === 'username') originalUsername = editedUsername;
+                else originalEmail = editedEmail;
+            } catch (e: unknown) {
+                debug.error('ProfileTab', 'saveAll field failed', e);
+                const detail = isAxiosError(e) ? e.response?.data?.detail : null;
+                failed.push({
+                    field,
+                    label: field === 'username' ? $_('auth.username') : $_('auth.email'),
+                    reason: detail || (e instanceof Error ? e.message : $_('settings.updateFailed')),
+                });
+                if (field === 'username') editedUsername = originalUsername;
+                else editedEmail = originalEmail;
             }
-        } catch (e: unknown) {
-            debug.error('ProfileTab', 'saveAll failed', e);
-            const detail = isAxiosError(e) ? e.response?.data?.detail : null;
-            error = detail || (e instanceof Error ? e.message : $_('settings.updateFailed'));
-            setTimeout(() => (error = null), 5000);
-        } finally {
-            saving = false;
         }
+
+        if (saved.length > 0) {
+            await auth.checkAuth();
+        }
+
+        if (failed.length > 0) {
+            error = failed.map((f) => `${f.label}: ${f.reason}`).join('\n');
+            setTimeout(() => (error = null), 5000);
+        }
+
+        if (saved.length > 0 || failed.length > 0) {
+            const savedList = saved.map((s) => `<li>${s.label}</li>`).join('');
+            const failedList = failed.map((f) => `<li>${f.label}</li>`).join('');
+            const message =
+                failed.length === 0
+                    ? `${$_('settings.savedSuccessfully')}:<ul class="mt-1 list-inside list-disc">${savedList}</ul>`
+                    : `${$_(saved.length === 0 ? 'settings.profileSaveFailed' : 'settings.profileSavePartial')}:<div class="mt-1">${$_('settings.savedFields')}</div><ul class="list-inside list-disc">${savedList}</ul><div class="mt-1">${$_('settings.failedFields')}</div><ul class="list-inside list-disc">${failedList}</ul>`;
+            notify({
+                name: failed.length === 0 ? 'settings.profile.saved' : saved.length === 0 ? 'settings.profile.save.failed' : 'settings.profile.save.partial',
+                detail: {
+                    fields: saved.length,
+                    saved: saved.map((s) => s.field),
+                    failed: failed.map((f) => f.field),
+                    reasons: Object.fromEntries(failed.map((f) => [f.field, f.reason])),
+                },
+                toast: {variant: failed.length === 0 ? 'success' : saved.length === 0 ? 'error' : 'warning', message},
+            });
+        }
+
+        saving = false;
     }
 
     // Undo all changes
@@ -195,7 +227,6 @@
     async function saveAvatarField() {
         saving = true;
         error = null;
-        successItems = [];
 
         try {
             await zodiosApi.update_user_settings_endpoint_api_v1_settings_user_put({avatar_url: editedAvatarUrl});
@@ -209,8 +240,11 @@
                     avatar_url: editedAvatarUrl,
                 });
             }
-            successItems = [$_('common.avatar')];
-            setTimeout(() => (successItems = []), 3000);
+            notify({
+                name: 'settings.profile.avatar.saved',
+                detail: {},
+                toast: {variant: 'success', message: `${$_('settings.savedSuccessfully')}:<ul class="mt-1 list-inside list-disc">${[$_('common.avatar')].map((l) => `<li>${l}</li>`).join('')}</ul>`},
+            });
         } catch (e: unknown) {
             debug.error('ProfileTab', 'saveAvatarField failed', e);
             const detail = isAxiosError(e) ? e.response?.data?.detail : null;
@@ -247,7 +281,7 @@
     }
 </script>
 
-<div class="space-y-6" data-testid="profile-tab">
+<div class="space-y-6" data-testid="profile-tab" data-busy={saving ? 'true' : 'false'} aria-busy={saving}>
     <!-- Header with Lock/Unlock + Save/Undo All -->
     <div class="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-slate-700">
         <div>
@@ -287,24 +321,6 @@
         <div data-testid="profile-error">
             <InfoBanner variant="error">
                 <span class="text-sm">{error}</span>
-            </InfoBanner>
-        </div>
-    {/if}
-
-    {#if successItems.length > 0}
-        <div data-testid="profile-success">
-            <InfoBanner variant="success">
-                <div class="text-sm">
-                    <div class="flex items-center gap-2 mb-2">
-                        <CheckCircle size={18} />
-                        <span class="font-medium">{$_('settings.savedSuccessfully')}:</span>
-                    </div>
-                    <ul class="list-disc list-inside ml-6 space-y-0.5">
-                        {#each successItems as item}
-                            <li>{item}</li>
-                        {/each}
-                    </ul>
-                </div>
             </InfoBanner>
         </div>
     {/if}
@@ -502,7 +518,7 @@
 <!-- Discard Changes Confirmation -->
 {#if showDiscardConfirm}
     <!-- svelte-ignore a11y_no_static_element_interactions a11y_no_noninteractive_element_interactions -->
-    <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" on:click={cancelDiscard} on:keydown={(e) => e.key === 'Escape' && cancelDiscard()} role="dialog" aria-modal="true" tabindex="-1">
+    <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" on:click={cancelDiscard} on:keydown={(e) => e.key === 'Escape' && cancelDiscard()} role="dialog" data-testid="profile-discard-dialog" aria-modal="true" tabindex="-1">
         <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
         <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm p-6" role="document" on:click|stopPropagation on:keydown|stopPropagation>
             <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-2">
@@ -526,7 +542,7 @@
 <!-- Delete Account Confirmation Modal -->
 {#if showDeleteModal}
     <!-- svelte-ignore a11y_no_static_element_interactions a11y_label_has_associated_control a11y_no_noninteractive_element_interactions -->
-    <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" on:click={closeDeleteModal} on:keydown={(e) => e.key === 'Escape' && closeDeleteModal()} role="dialog" aria-modal="true" tabindex="-1">
+    <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" on:click={closeDeleteModal} on:keydown={(e) => e.key === 'Escape' && closeDeleteModal()} role="dialog" data-testid="profile-delete-dialog" aria-modal="true" tabindex="-1">
         <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
         <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-md p-6" role="document" on:click|stopPropagation on:keydown|stopPropagation>
             <div class="flex items-center gap-3 mb-4">

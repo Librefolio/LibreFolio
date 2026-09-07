@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "generator": {
+    "algorithm": "librefolio-lcg-v1",
+    "base_price": 100.0,
+    "cycle_amplitude": 4.0,
+    "cycle_period": 47,
+    "daily_drift": 0.015,
+    "points": 4096,
+    "seed": 20260722,
+    "start_date": "2010-01-01",
+    "volatility": 0.8
+  },
+  "variants": {
+    "date_gap": {
+      "drop_indexes": [
+        1500,
+        1501,
+        3000
+      ]
+    },
+    "flat": {
+      "price": 100.0,
+      "volume": 1000000.0
+    },
+    "nan_close_gap": {
+      "fields": [
+        "close"
+      ],
+      "indexes": [
+        2500
+      ]
+    },
+    "nan_hlc_gap": {
+      "fields": [
+        "high",
+        "low",
+        "close"
+      ],
+      "indexes": [
+        2500
+      ]
+    },
+    "nan_volume_gap": {
+      "fields": [
+        "volume"
+      ],
+      "indexes": [
+        2500
+      ]
+    },
+    "scale_high": {
+      "price_scale": 1000000.0
+    },
+    "scale_low": {
+      "price_scale": 0.001
+    },
+    "short": {
+      "points": 10
+    },
+    "trend": {
+      "base_price": 25.0,
+      "daily_drift": 0.08
+    }
+  },
+  "warmup": {
+    "candidate_limit": 1024,
+    "comparison_datasets": [
+      "trend",
+      "volatile",
+      "scale_low",
+      "scale_high"
+    ],
+    "normalized_tolerances": [
+      0.0001,
+      1e-06,
+      1e-08
+    ],
+    "visible_points": 128
+  },
+  "benchmark": {
+    "assets": 50,
+    "concurrency_rounds": 2,
+    "history_points": 1825,
+    "rounds": 3,
+    "workers": [
+      1,
+      2,
+      4,
+      8
+    ]
+  },
+  "expected_fingerprints": {
+    "date_gap": "c686b5514da6f9b23ab663eb093a3db9880d2cb4a429fce8177bf720de404e37",
+    "flat": "5e18e92aaecf08467b36112767f5caa64bbed99df79dea75166cf23a58e3c4f7",
+    "nan_close_gap": "74cece46ecbc7430019b1748dda4c2537dd9239533655434e2addd11f13a91cb",
+    "nan_hlc_gap": "a306ae8bd60fd7d3cd7005c46c592fa77575265a317eb128a521972191f6ec1c",
+    "nan_volume_gap": "4affc3f4bf31ebc5dcb69a4403c49980e3460699e49964ab311eac8b4ca830bd",
+    "scale_high": "050fb7626b9f7ddd62eb1dd3598be1b1077cd7732ce7becd0e8d491ab741c1c9",
+    "scale_low": "75eb41e0a06e14fd36d931a96d35a80c55551172e45529c7574fb3d5c1bcb3a8",
+    "short": "535d25b82e479efdd828512f9e07c7e67039654a7d5f757da536d7f285ee6b82",
+    "trend": "287f19dd012d14fc3d6038cddd86c9b7ed60a3d1eae455b6eb2d5edd85757134",
+    "volatile": "e97704caab997197e20b6044ae809cc490424f41d9b05ea4fc19dc0402e7e65a"
+  }
+}

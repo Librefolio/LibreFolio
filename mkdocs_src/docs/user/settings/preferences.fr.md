@@ -1,48 +1,40 @@
-# 👤 Préférences utilisateur
+# 🎛️ Préférences utilisateur
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <img class="gallery-img" data-category="settings" data-name="user-preferences" alt="User Preferences">
+ <img class="gallery-img" data-category="settings" data-name="user-preferences" alt="Préférences utilisateur">
 </div>
 
-Chaque utilisateur peut configurer ses propres préférences d'affichage — les modifications s'appliquent uniquement à son compte :
+L'onglet **Préférences** gère **l'apparence et le comportement de l'application pour vous** — les modifications ne s'appliquent qu'à votre compte. Vos informations d'identité (nom d'utilisateur, e-mail, avatar, mot de passe) se trouvent quant à elles dans l'onglet **[Profil](profile.md)**.
 
-| Paramètre | Description |
-|---------|-------------|
-| **Langue** | Langue de l'interface (English, Italiano, Français, Español) |
-| **Devise de base** | Devise d'affichage par défaut pour les valeurs du portefeuille |
-| **Thème** | Mode Clair / Sombre |
-| **Format de date** | JJ/MM/AAAA, MM/JJ/AAAA ou ISO YYYY-MM-DD |
+| Paramètre | Catégorie | Description |
+|---------|----------|-------------|
+| **Langue** | 🌍 Affichage | Langue de l'interface — 🇬🇧 English, 🇮🇹 Italiano, 🇫🇷 Français, 🇪🇸 Español. S'applique immédiatement |
+| **Devise de base** | 💰 Devise | Devise d'affichage par défaut pour les valeurs du portefeuille |
+| **Thème** | 🎨 Apparence | ☀️ Clair / 🌙 Sombre / 🖥️ Auto (suit votre système d'exploitation) |
+
+<style>
+/* Keep the first two columns on one line (long setting names would wrap otherwise) */
+article table:first-of-type th:nth-child(-n + 2),
+article table:first-of-type td:nth-child(-n + 2) {
+ white-space: nowrap;
+ min-width: 11rem;
+}
+</style>
+
+Utilisez la **barre latérale des catégories** à gauche pour filtrer les paramètres visibles.
+
+## 💾 Enregistrement, annulation et réinitialisation
+
+Chaque champ gère son propre état :
+
+- Un champ modifié affiche des boutons **enregistrer** et **annuler** ; l'en-tête propose **tout enregistrer** / **tout annuler** pour les actions groupées.
+- Les champs dont la valeur diffère de la **valeur par défaut de l'instance** (définie par l'administrateur dans [Paramètres globaux](../../admin/settings.md)) sont mis en évidence comme n'étant pas la valeur par défaut ; le bouton **réinitialiser** rétablit la valeur par défaut de l'instance pour ce champ, et **tout réinitialiser** rétablit tous les champs à la fois.
 
 ---
 
-## 👤 Profil
+## 🔗 Voir aussi
 
-<div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <img class="gallery-img" data-category="settings" data-name="profile" alt="Profile">
-</div>
-
-Depuis l'onglet **Profil**, vous pouvez mettre à jour votre nom d'affichage et votre avatar. L'avatar est utilisé dans toute l'application partout où votre identité est affichée (par exemple, partage de compte courtier, commentaires).
-
----
-
-## 🔐 Modifier le mot de passe
-
-<div class="screenshot-container" style="max-width: 500px; margin: 1rem auto;">
- <img class="gallery-img" data-category="settings" data-name="password-modal" alt="Change Password">
-</div>
-
-La fenêtre modale **Modifier le mot de passe** requiert :
-
-1. Votre **mot de passe actuel** (pour vérification)
-2. Un **nouveau mot de passe** (minimum 8 caractères, au moins un chiffre)
-3. **Confirmer** le nouveau mot de passe
-
-Après confirmation, votre session reste active — vous n'avez pas besoin de vous reconnecter.
-
----
-
-## 🔗 Articles liés
-
+- 👤 **[Profil](profile.md)** — Nom d'utilisateur, e-mail, avatar, mot de passe, suppression du compte
 - ⚙️ **[Aperçu des paramètres](index.md)** — Résumé des paramètres généraux
-- 🛡️ **[Paramètres globaux](../../admin/settings.md)** — Options d'administrateur et planificateur
-- ℹ️ **[À propos](about.md)** — Informations sur la version et licence
+- ℹ️ **[À propos](about.md)** — Informations de version, plugins et journal des modifications
+- 🛡️ **[Paramètres globaux](../../admin/settings.md)** — Options de l'administrateur et planificateur

@@ -93,15 +93,16 @@ export interface ImageCell {
 }
 
 /**
- * Editable number cell — renders an inline <input type="number">.
+ * Editable number cell — renders a text input that accepts "," or "." as the
+ * decimal separator and steps with the arrow keys.
  * Used by DataEditor for rate editing, etc.
  */
 export interface EditableNumberCell {
     type: 'editable-number';
     /** Current value (null = empty) */
     value: number | null;
-    /** Step for input increment (default: 1). Use 'any' to accept arbitrary
-     *  decimals (no spinner step constraint). */
+    /** Arrow-key increment (default: 1). 'any' means the arrows step by 1 while
+     *  typing stays free of any step constraint. */
     step?: number | 'any';
     /** Minimum allowed value */
     min?: number;
@@ -152,6 +153,8 @@ export interface HtmlCell {
     };
     /** Optional click handler. When provided, the cell content is wrapped in a button. */
     onClick?: () => void;
+    /** Optional test id for clickable HTML cells. */
+    testId?: string;
 }
 
 /**
@@ -176,6 +179,8 @@ export interface EditableCheckboxCell {
     type: 'editable-checkbox';
     /** Current checked state */
     value: boolean;
+    /** Disable toggling and render in a muted state. */
+    disabled?: boolean;
     /** Callback when checkbox changes */
     onchange: (newValue: boolean) => void;
 }
@@ -327,7 +332,7 @@ export type FooterCells<T> = Record<string, FooterCellContent> | ((rows: T[], se
  *
  * @typeParam T - The row data type
  */
-export interface RowAction<T> extends Omit<ContextMenuItem, 'id' | 'label' | 'disabled'> {
+export interface RowAction<T> extends Omit<ContextMenuItem, 'id' | 'label' | 'disabled' | 'title' | 'testid' | 'iconClass' | 'labelClass'> {
     /** Unique action identifier */
     id: string;
 
@@ -348,6 +353,15 @@ export interface RowAction<T> extends Omit<ContextMenuItem, 'id' | 'label' | 'di
 
     /** Dynamic CSS class for the icon (e.g. 'animate-spin' when loading) */
     iconClass?: (row: T) => string;
+
+    /** Optional tooltip/title text, static or row-derived */
+    title?: string | ((row: T) => string);
+
+    /** Optional data-testid, static or row-derived */
+    testid?: string | ((row: T) => string);
+
+    /** Optional CSS class for the label, static or row-derived */
+    labelClass?: string | ((row: T) => string);
 
     /** Require confirmation modal before action */
     requireConfirm?: boolean;

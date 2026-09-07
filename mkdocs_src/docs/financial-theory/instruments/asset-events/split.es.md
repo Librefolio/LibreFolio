@@ -8,7 +8,7 @@ Un **split** (o split inverso) es una acción corporativa que cambia el número 
 
 En un split, una empresa divide sus acciones existentes en múltiples acciones nuevas. El **valor total** de la posición de un inversor permanece igual; solo cambian el número de acciones y el precio por acción.
 
-### Split Forward
+### Forward Forward
 
 La empresa aumenta el número de acciones. Cada acción existente se convierte en múltiples acciones a un precio proporcionalmente menor.
 
@@ -61,7 +61,7 @@ Donde $P$ es el precio por acción y $Q$ es la cantidad de acciones.
 
 ## 📊 Por qué las empresas hacen Splits
 
-### Split Forward
+### Forward Forward
 
 - **Accesibilidad**: Un precio por acción más bajo hace que la acción sea más accesible para los inversores minoristas
 - **Liquidez**: Un mayor número de acciones en circulación puede aumentar el volumen de negociación

@@ -12,9 +12,11 @@
  *
  * Prerequisites: backend test mode (port 6041), mock data populated.
  */
-import {expect, test, type Page} from '@playwright/test';
+import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
+import {optionsClosed} from '../fixtures/probe';
+import {waitForSettled} from '../fixtures/app-events';
 
 test.setTimeout(20_000);
 
@@ -28,7 +30,7 @@ async function goToTransactions(page: Page) {
     await Promise.race([page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000}), page.getByTestId('tx-loading').waitFor({state: 'hidden', timeout: 10_000})]).catch(() => {
         /* either is fine */
     });
-    await page.waitForTimeout(500);
+    await waitForSettled(page.getByTestId('transactions-page'));
 }
 
 async function openNewTransactionForm(page: Page) {
@@ -39,9 +41,8 @@ async function openNewTransactionForm(page: Page) {
 async function selectType(page: Page, type: string) {
     const typeSelect = page.getByTestId('tx-form-type');
     await typeSelect.locator('button, [role="combobox"]').first().click();
-    await page.waitForTimeout(300);
     await page.getByTestId(`search-select-option-${type}`).click();
-    await page.waitForTimeout(300);
+    await optionsClosed(page);
 }
 
 // ---------------------------------------------------------------------------
@@ -73,7 +74,12 @@ test.describe('WAC Preview', () => {
         const amountInput = page.getByTestId('tx-form-cost-basis-input-amount');
         await amountInput.fill('42.50');
 
-        // The value should be present (number input normalizes trailing zero)
+        // T1-a: the raw buffer is preserved while the field is being edited (a
+        // typed "12," must not be rewritten mid-keystroke), so the trailing zero
+        // survives until commit. Formatting happens on blur — blur first, then
+        // assert the committed display form.
+        await amountInput.press('Tab');
+        await expect(amountInput).not.toBeFocused({timeout: 3_000});
         await expect(amountInput).toHaveValue('42.5');
     });
 

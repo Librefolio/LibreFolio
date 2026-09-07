@@ -392,3 +392,88 @@ async def test_validate_update_asset_event_without_asset_id(test_server):
 # both fragile and tests the test infra rather than the contract. Per the
 # §G-batch7 cost/benefit decision, this branch is left at its current
 # coverage level.
+
+
+# ============================================================================
+# Fase 0.1 — UPDATE final-state business-rule validation
+# ============================================================================
+# TXUpdateItem only validates id>0 at the DTO level, so before Fase 0.1 a bulk
+# PATCH could persist an invalid final state (e.g. a FEE/TAX flipped to a
+# positive amount, or a type swap that didn't flip the cash sign). The shared
+# ``validate_transaction_business_rules`` is now re-run on the merged ORM state
+# inside the update loop, giving CREATE/UPDATE parity.
+
+
+@pytest.mark.asyncio
+async def test_validate_update_fee_positive_cash_rejected(test_server):
+    """Flipping a FEE's cash to a positive amount via UPDATE must be rejected
+    by the shared final-state validator (parity with CREATE)."""
+    print_section("G.3.10 — UPDATE FEE → positive cash is rejected")
+    async with httpx.AsyncClient() as client:
+        await create_test_user(client)
+        broker_id = await _create_broker(client, allow_cash_overdraft=True)
+        today = date.today()
+        ids = await _post_tx(
+            client,
+            [{"broker_id": broker_id, "type": "FEE", "date": today.isoformat(), "cash": {"code": "EUR", "amount": "-50"}}],
+        )
+        body = await _validate(
+            client,
+            updates=[{"id": ids[0], "cash": {"code": "EUR", "amount": "50"}}],
+        )
+        assert body["committed"] is False, body
+        match = next(
+            (i for i in body["issues"] if i["operation"] == "update" and i["ref_id"] == ids[0] and i.get("code") == "cashSignNegative"),
+            None,
+        )
+        assert match is not None, body["issues"]
+        print_success("✓ UPDATE FEE +50 rejected with cashSignNegative")
+
+
+@pytest.mark.asyncio
+async def test_validate_update_fee_negative_cash_accepted(test_server):
+    """A FEE update that keeps the cash negative must produce no rule issue."""
+    print_section("G.3.11 — UPDATE FEE → still-negative cash is clean")
+    async with httpx.AsyncClient() as client:
+        await create_test_user(client)
+        broker_id = await _create_broker(client, allow_cash_overdraft=True)
+        today = date.today()
+        ids = await _post_tx(
+            client,
+            [{"broker_id": broker_id, "type": "FEE", "date": today.isoformat(), "cash": {"code": "EUR", "amount": "-50"}}],
+        )
+        body = await _validate(
+            client,
+            updates=[{"id": ids[0], "cash": {"code": "EUR", "amount": "-30"}}],
+        )
+        # validate is always a dry-run (committed False); a VALID update must
+        # not surface any business-rule issue.
+        assert body["committed"] is False, body
+        assert body["issues"] == [], body
+        print_success("✓ UPDATE FEE -30 produces no business-rule issue")
+
+
+@pytest.mark.asyncio
+async def test_validate_update_typeswap_without_sign_flip_rejected(test_server):
+    """Swapping DEPOSIT→WITHDRAWAL without flipping the cash sign is caught by
+    the final-state validator (the 'swap that doesn't flip the sign' case)."""
+    print_section("G.3.12 — UPDATE type swap keeping the wrong sign is rejected")
+    async with httpx.AsyncClient() as client:
+        await create_test_user(client)
+        broker_id = await _create_broker(client, allow_cash_overdraft=True)
+        today = date.today()
+        ids = await _post_tx(
+            client,
+            [{"broker_id": broker_id, "type": "DEPOSIT", "date": today.isoformat(), "cash": {"code": "EUR", "amount": "1000"}}],
+        )
+        body = await _validate(
+            client,
+            updates=[{"id": ids[0], "type": "WITHDRAWAL"}],
+        )
+        assert body["committed"] is False, body
+        match = next(
+            (i for i in body["issues"] if i["operation"] == "update" and i["ref_id"] == ids[0] and i.get("code") == "cashSignNegative"),
+            None,
+        )
+        assert match is not None, body["issues"]
+        print_success("✓ DEPOSIT→WITHDRAWAL without sign flip rejected with cashSignNegative")

@@ -22,6 +22,7 @@
     import {getBrokerIconCandidates} from '$lib/utils/broker/brokerHelpers';
     import {canPreviewFileData} from '$lib/utils/files/filePreview';
     import {getCachedPreview} from '$lib/stores/files/imagePreviewCache';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
 
     interface Props {
         files: FileData[];
@@ -182,10 +183,6 @@
 
     function getBrokerColor(brokerId: number): {bg: string; text: string; darkBg: string; darkText: string} {
         return getIndexColor(brokerId, 120);
-    }
-
-    function escapeHtml(s: string): string {
-        return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
     function getBrokerBadgeStyle(file: FileData): string | undefined {

@@ -290,7 +290,7 @@ description: Free to understand, free to act. LibreFolio brings all your investm
       Free yourself from spreadsheets. LibreFolio is engineered to <b>connect seamlessly</b> with the financial tools you already use, extending its capabilities through a growing ecosystem of <b>community-driven plugins</b>.
     </p>
     
-    <div class="plugin-radial-hub">
+    <div class="plugin-radial-hub plugin-radial-hub--four">
       <div class="hub-core">
         <img id="hub-core-img" alt="LibreFolio Core" src="/LibreFolio/static/logo.png">
         <script>
@@ -305,12 +305,13 @@ description: Free to understand, free to act. LibreFolio brings all your investm
       <div class="ellipse-wrapper">
         <div class="satellite-track">
           <svg class="hub-lines" viewBox="0 0 650 650" width="100%" height="100%">
-            <line x1="325" y1="325" x2="325" y2="0" />
-            <line x1="325" y1="325" x2="43.5" y2="487.5" />
-            <line x1="325" y1="325" x2="606.5" y2="487.5" />
+            <line x1="325" y1="325" x2="95" y2="95" />
+            <line x1="325" y1="325" x2="555" y2="95" />
+            <line x1="325" y1="325" x2="555" y2="555" />
+            <line x1="325" y1="325" x2="95" y2="555" />
           </svg>
           
-          <div class="hub-node node-top">
+          <div class="hub-node node-orbit-top-left">
             <div class="hub-node-unscale">
               <a href="user/transactions/import/" class="card-link provider-row" style="padding: 1rem; margin: 0; color: inherit; text-decoration: none; text-align: left;">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="6" rx="2"/><path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
@@ -322,30 +323,42 @@ description: Free to understand, free to act. LibreFolio brings all your investm
             </div>
           </div>
 
-            <div class="hub-node node-bottom-left">
-              <div class="hub-node-unscale">
-                <a href="user/assets/providers/" class="card-link provider-row" style="padding: 1rem; margin: 0; color: inherit; text-decoration: none; text-align: left;">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
-                  <div class="provider-info">
-                    <h4>Asset Prices & Quotes</h4>
-                    <p><b>Automatically update</b> the values of stocks, ETFs, and crypto by connecting to real-time data providers.</p>
-                  </div>
-                </a>
-              </div>
-            </div>
-
-            <div class="hub-node node-bottom-right">
-              <div class="hub-node-unscale">
-                <a href="user/fx/" class="card-link provider-row" style="padding: 1rem; margin: 0; color: inherit; text-decoration: none; text-align: left;">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></svg>
-                  <div class="provider-info">
-                    <h4>Exchange Rates & Forex</h4>
-                    <p><b>Sync exchange rates</b> (FX) to precisely calculate and balance your <b>multi-currency portfolios</b>.</p>
-                  </div>
-                </a>
-              </div>
+          <div class="hub-node node-orbit-top-right">
+            <div class="hub-node-unscale">
+              <a href="user/assets/providers/" class="card-link provider-row" style="padding: 1rem; margin: 0; color: inherit; text-decoration: none; text-align: left;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+                <div class="provider-info">
+                  <h4>Asset Prices & Quotes</h4>
+                  <p><b>Automatically update</b> the values of stocks, ETFs, and crypto by connecting to real-time data providers.</p>
+                </div>
+              </a>
             </div>
           </div>
+
+          <div class="hub-node node-orbit-bottom-right">
+            <div class="hub-node-unscale">
+              <a href="user/fx/" class="card-link provider-row" style="padding: 1rem; margin: 0; color: inherit; text-decoration: none; text-align: left;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></svg>
+                <div class="provider-info">
+                  <h4>Exchange Rates & Forex</h4>
+                  <p><b>Sync exchange rates</b> (FX) to precisely calculate and balance your <b>multi-currency portfolios</b>.</p>
+                </div>
+              </a>
+            </div>
+          </div>
+
+          <div class="hub-node node-orbit-bottom-left">
+            <div class="hub-node-unscale">
+              <a href="developer/architecture/patterns/signal_plugin_guide/" class="card-link provider-row" style="padding: 1rem; margin: 0; color: inherit; text-decoration: none; text-align: left;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 16 4-5 4 3 4-7"/></svg>
+                <div class="provider-info">
+                  <h4>Technical Signal Plugins</h4>
+                  <p><b>Add new indicators</b> as isolated Python plugins with schema-driven parameters, outputs, thresholds, and documentation.</p>
+                </div>
+              </a>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>

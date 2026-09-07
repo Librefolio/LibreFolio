@@ -25,6 +25,7 @@ type BucketedLineDataPoint = LineDataPoint & BucketMeta;
 
 interface BucketGroup {
     bucketStart: string;
+    bucketEnd: string;
     key: string;
     points: LineDataPoint[];
     startIndex: number;
@@ -68,6 +69,7 @@ function groupPointsByBucket(points: LineDataPoint[], resolution: ChartResolutio
         if (!current || current.key !== key) {
             groups.push({
                 bucketStart,
+                bucketEnd,
                 key,
                 points: [point],
                 startIndex: index,
@@ -82,11 +84,12 @@ function groupPointsByBucket(points: LineDataPoint[], resolution: ChartResolutio
 }
 
 /** Shallow-clone point and attach canonical bucket metadata. */
-function withBucketMeta(point: LineDataPoint, meta: BucketMeta): BucketedLineDataPoint {
+function withBucketMeta(point: LineDataPoint, meta: BucketMeta, renderDate: string = point.date, representativeDate: string = point.date): BucketedLineDataPoint {
     return {
         ...point,
         ...meta,
-        date: meta.bucketEnd,
+        date: renderDate,
+        representativeDate,
     };
 }
 
@@ -132,7 +135,7 @@ export function aggregateLineSeries(points: LineDataPoint[], resolution: ChartRe
         const lastPoint = group.points[group.points.length - 1];
         return withBucketMeta(lastPoint, {
             bucketStart: group.bucketStart,
-            bucketEnd: lastPoint.date,
+            bucketEnd: group.bucketEnd,
             resolution,
             sourcePointCount: group.points.length,
         });
@@ -184,7 +187,7 @@ export function aggregateOHLCV(points: LineDataPoint[], resolution: ChartResolut
             },
             {
                 bucketStart: group.bucketStart,
-                bucketEnd: lastPoint.date,
+                bucketEnd: group.bucketEnd,
                 resolution,
                 sourcePointCount: group.points.length,
             },
@@ -235,28 +238,135 @@ export function aggregateEnvelope(upper: number[], middleData: LineDataPoint[], 
     };
 }
 
-/** Downsample rendered overlay signal to chart bucket resolution. */
-export function downsampleRenderedSignal(signal: RenderedSignal, resolution: ChartResolution, bucketedDates: string[]): RenderedSignal {
+interface RenderBucket {
+    key: string;
+    bucketStart: string;
+    bucketEnd: string;
+    renderDate: string;
+}
+
+function renderBuckets(points: LineDataPoint[], resolution: ChartResolution): RenderBucket[] {
+    return points.map((point) => {
+        const mapped = mapDateToBucket(point.date, resolution);
+        const bucketStart = point.bucketStart ?? mapped.bucketStart;
+        const bucketEnd = point.bucketEnd ?? mapped.bucketEnd;
+        return {
+            key: `${bucketStart}|${bucketEnd}`,
+            bucketStart,
+            bucketEnd,
+            renderDate: point.date,
+        };
+    });
+}
+
+function signalGroups(points: LineDataPoint[], resolution: ChartResolution): Map<string, LineDataPoint[]> {
+    const grouped = new Map<string, LineDataPoint[]>();
+    for (const point of points) {
+        const {bucketStart, bucketEnd} = mapDateToBucket(point.date, resolution);
+        const key = `${bucketStart}|${bucketEnd}`;
+        const bucket = grouped.get(key);
+        if (bucket) bucket.push(point);
+        else grouped.set(key, [point]);
+    }
+    for (const bucket of grouped.values()) bucket.sort((left, right) => left.date.localeCompare(right.date));
+    return grouped;
+}
+
+export function selectSignalRepresentative(points: LineDataPoint[], profile: RenderedSignal['aggregationProfile']): LineDataPoint | null {
+    if (points.length === 0) return null;
+    const ordered = [...points].sort((left, right) => left.date.localeCompare(right.date));
+    if (profile === 'first_with_range') return ordered[0];
+    if (profile === 'last_with_range') return ordered[ordered.length - 1];
+    if (profile === 'min_with_range') {
+        return ordered.reduce((selected, point) => (point.value < selected.value ? point : selected));
+    }
+    if (profile === 'max_with_range') {
+        return ordered.reduce((selected, point) => (point.value > selected.value ? point : selected));
+    }
+    throw new Error(`Aggregation profile '${profile}' is not valid for a scalar signal series`);
+}
+
+function renderRepresentative(point: LineDataPoint, bucket: RenderBucket, resolution: ChartResolution, sourcePointCount: number): LineDataPoint {
+    return withBucketMeta(
+        point,
+        {
+            bucketStart: bucket.bucketStart,
+            bucketEnd: bucket.bucketEnd,
+            resolution,
+            sourcePointCount,
+        },
+        bucket.renderDate,
+        point.date,
+    );
+}
+
+interface IndexedBandValue {
+    index: number;
+    value: number;
+    date: string;
+}
+
+function bandRepresentative(values: number[], points: LineDataPoint[], indexes: number[], mode: 'min' | 'max' | 'last'): IndexedBandValue {
+    const candidates = indexes.map((index) => ({index, value: values[index], date: points[index].date})).sort((left, right) => left.date.localeCompare(right.date));
+    if (candidates.length === 0) throw new Error('Cannot aggregate an empty band bucket');
+    if (mode === 'last') return candidates[candidates.length - 1];
+    return candidates.reduce((selected, candidate) => {
+        if (mode === 'min') return candidate.value < selected.value ? candidate : selected;
+        return candidate.value > selected.value ? candidate : selected;
+    });
+}
+
+/** Downsample rendered overlay signal by logical bucket key. */
+export function downsampleRenderedSignal(signal: RenderedSignal, resolution: ChartResolution, bucketedData: LineDataPoint[]): RenderedSignal {
     if (resolution === 'daily') return signal;
 
-    const allowedDates = new Set(bucketedDates);
+    const buckets = renderBuckets(bucketedData, resolution);
 
-    const isBandSignal = signal.seriesType === 'band' && signal.bandData != null && Array.isArray(signal.bandData.upper) && Array.isArray(signal.bandData.lower) && signal.bandData.upper.length === signal.data.length && signal.bandData.lower.length === signal.data.length;
+    const isBandSignal =
+        signal.seriesType === 'band' &&
+        signal.bandData != null &&
+        Array.isArray(signal.bandData.upper) &&
+        Array.isArray(signal.bandData.middle) &&
+        Array.isArray(signal.bandData.lower) &&
+        signal.bandData.upper.length === signal.data.length &&
+        signal.bandData.middle.length === signal.data.length &&
+        signal.bandData.lower.length === signal.data.length;
 
     if (isBandSignal) {
+        if (signal.aggregationProfile !== 'band_envelope') {
+            throw new Error(`Band signal '${signal.id}' requires band_envelope aggregation`);
+        }
         const bandData = signal.bandData!;
-        const aggregated = aggregateEnvelope(bandData.upper, signal.data, bandData.lower, resolution);
+        const indexesByBucket = new Map<string, number[]>();
+        signal.data.forEach((point, index) => {
+            const {bucketStart, bucketEnd} = mapDateToBucket(point.date, resolution);
+            const key = `${bucketStart}|${bucketEnd}`;
+            const indexes = indexesByBucket.get(key);
+            if (indexes) indexes.push(index);
+            else indexesByBucket.set(key, [index]);
+        });
         const filteredUpper: number[] = [];
         const filteredLower: number[] = [];
         const filteredMiddle: LineDataPoint[] = [];
+        const observedDates: NonNullable<NonNullable<RenderedSignal['bandData']>['observedDates']> = [];
 
-        for (let i = 0; i < aggregated.middle.length; i++) {
-            const point = aggregated.middle[i];
-            if (!allowedDates.has(point.date)) continue;
-
-            filteredMiddle.push(point);
-            filteredUpper.push(aggregated.upper[i]);
-            filteredLower.push(aggregated.lower[i]);
+        for (const bucket of buckets) {
+            const indexes = indexesByBucket.get(bucket.key);
+            if (!indexes?.length) continue;
+            const lower = bandRepresentative(bandData.lower, signal.data, indexes, 'min');
+            const middle = bandRepresentative(bandData.middle, signal.data, indexes, 'last');
+            const upper = bandRepresentative(bandData.upper, signal.data, indexes, 'max');
+            if (lower.value > middle.value || middle.value > upper.value) {
+                throw new Error(`Band signal '${signal.id}' produced an invalid aggregated envelope`);
+            }
+            filteredMiddle.push(renderRepresentative(signal.data[middle.index], bucket, resolution, indexes.length));
+            filteredUpper.push(upper.value);
+            filteredLower.push(lower.value);
+            observedDates.push({
+                lower: lower.date,
+                middle: middle.date,
+                upper: upper.date,
+            });
         }
 
         return {
@@ -266,11 +376,25 @@ export function downsampleRenderedSignal(signal: RenderedSignal, resolution: Cha
                 middle: filteredMiddle.map((point) => point.value),
                 upper: filteredUpper,
                 lower: filteredLower,
+                observedDates,
             },
         };
     }
 
-    const filteredData = aggregateLineSeries(signal.data, resolution).filter((point) => allowedDates.has(point.date));
+    if (signal.seriesType === 'band') {
+        throw new Error(`Band signal '${signal.id}' is missing aligned bandData`);
+    }
+    if (signal.aggregationProfile === 'band_envelope' || signal.aggregationProfile === 'events_verbatim') {
+        throw new Error(`Signal '${signal.id}' has incompatible aggregation profile '${signal.aggregationProfile}'`);
+    }
+
+    const grouped = signalGroups(signal.data, resolution);
+    const filteredData = buckets.flatMap((bucket) => {
+        const points = grouped.get(bucket.key);
+        if (!points?.length) return [];
+        const representative = selectSignalRepresentative(points, signal.aggregationProfile);
+        return representative ? [renderRepresentative(representative, bucket, resolution, points.length)] : [];
+    });
 
     return {
         ...signal,

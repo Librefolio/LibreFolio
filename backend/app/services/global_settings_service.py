@@ -5,6 +5,9 @@ This module provides simple getter functions for global settings values.
 All functions read directly from DB (no cache) to ensure consistency
 across multiple workers.
 
+Pass keys from SETTINGS_REGISTRY (backend.app.schemas.settings) rather than
+raw string literals; defaults stay in GLOBAL_SETTINGS_DEFAULTS.
+
 Usage:
     from backend.app.services.global_settings_service import (
         get_session_ttl_hours,
@@ -24,7 +27,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import GlobalSetting
-from backend.app.schemas.settings import GLOBAL_SETTINGS_DEFAULTS
+from backend.app.schemas.settings import GLOBAL_SETTINGS_DEFAULTS, SETTINGS_REGISTRY
 
 
 async def get_setting_value(session: AsyncSession, key: str, default: Any = None) -> Any:
@@ -35,7 +38,7 @@ async def get_setting_value(session: AsyncSession, key: str, default: Any = None
 
     Args:
         session: Database session
-        key: Setting key (e.g., "session_ttl_hours")
+        key: Setting key — pass a registry constant, e.g. SETTINGS_REGISTRY.global_.SESSION_TTL_HOURS.key
         default: Default value if setting not found
 
     Returns:
@@ -78,7 +81,7 @@ async def get_session_ttl_hours(session: AsyncSession) -> int:
 
     Default: 24 hours
     """
-    value = await get_setting_value(session, "session_ttl_hours", 24)
+    value = await get_setting_value(session, SETTINGS_REGISTRY.global_.SESSION_TTL_HOURS.key, 24)
     return int(value) if value else 24
 
 
@@ -88,7 +91,7 @@ async def get_max_upload_mb(session: AsyncSession) -> int:
 
     Default: 10 MB
     """
-    value = await get_setting_value(session, "max_file_upload_mb", 10)
+    value = await get_setting_value(session, SETTINGS_REGISTRY.global_.MAX_FILE_UPLOAD_MB.key, 10)
     return int(value) if value else 10
 
 
@@ -98,5 +101,5 @@ async def is_registration_enabled(session: AsyncSession) -> bool:
 
     Default: True
     """
-    value = await get_setting_value(session, "enable_registration", True)
+    value = await get_setting_value(session, SETTINGS_REGISTRY.global_.ENABLE_REGISTRATION.key, True)
     return bool(value)

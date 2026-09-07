@@ -1,83 +1,100 @@
-# 🤝 Compartir Bróker
+# 🤝 Compartir bróker
 
-LibreFolio le permite compartir el acceso a sus cuentas de corretaje con otros usuarios. Esto es útil para familias, asesores financieros o contadores que necesiten visibilidad de su cartera.
+LibreFolio te permite compartir el acceso a tus cuentas de corretaje con otros usuarios. Esto es útil para familias, asesores financieros o contadores que necesitan visibilidad sobre tu cartera.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <img class="gallery-img" data-category="brokers" data-name="sharing-modal" alt="Modal de Compartir Bróker" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+ <img class="gallery-img" data-category="brokers" data-name="sharing-modal" alt="Broker Sharing Modal" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ---
 
-## 📋 Cómo Compartir
+## 📋 Cómo compartir
 
-1. Navegue a la página de detalles de un bróker
-2. Haga clic en el botón **Compartir** (:material-share-variant:) en el encabezado
-3. Se abrirá el **Modal de Compartir Bróker**
-4. **Busque** al usuario por su nombre de usuario
-5. **Seleccione un rol** (Visor, Editor o Propietario)
-6. **Establezca el porcentaje de participación** (arrastre el deslizador o escriba el valor)
-7. Haga clic en **Guardar** para aplicar los cambios
+Solo un **Propietario** del bróker puede gestionar el acceso. Puedes abrir el panel para compartir de dos maneras:
+
+- **Desde la lista de brókers**: haz clic en el icono **Compartir** (:material-share-variant:) en la tarjeta del bróker — se abre el **Modal de Compartir**.
+- **Desde la página de detalle del bróker**: haz clic en el botón **Compartir** del encabezado — llegarás a la pestaña **Información**, que aloja el panel para compartir.
+
+Luego:
+
+1. **Busca** al usuario por nombre de usuario
+2. **Selecciona un rol** (Visor, Editor o Propietario)
+3. **Define el porcentaje de participación** — solo para el rol de *Propietario* (arrastra el control deslizante o escribe un valor; los Visores y Editores siempre llevan un 0%)
+4. Haz clic en **Guardar** para aplicar los cambios
 
 !!! warning "Solo los Propietarios pueden gestionar el acceso"
 
-    Debe ser el **Propietario** del bróker para agregar, eliminar o modificar el acceso de otros usuarios.
+    Debes ser **Propietario** del bróker para añadir, eliminar o modificar el acceso de otros usuarios. Quienes no son propietarios ven el mismo panel en modo de solo lectura.
 
 ---
 
-## 🛡️ Roles de Acceso
+## 🛡️ Roles de acceso
 
-Cuando comparte un bróker, asigna un **rol** que determina qué puede hacer el otro usuario:
+Al compartir un bróker, asignas un **rol** que determina qué puede hacer el otro usuario:
 
-| Función | Visor | Editor | Propietario |
+| Característica | Visor | Editor | Propietario |
 |:-------------------------------------|:------:|:------:|:-----:|
-| **Ver Detalles del Bróker** | ✅ | ✅ | ✅ |
-| **Ver Transacciones** | ✅ | ✅ | ✅ |
-| **Ver Reportes y Gráficos** | ✅ | ✅ | ✅ |
-| **Agregar/Editar Transacciones** | ❌ | ✅ | ✅ |
-| **Importar Archivos (BRIM)** | ❌ | ✅ | ✅ |
-| **Editar Configuración del Bróker** | ❌ | ✅ | ✅ |
-| **Gestionar Acceso (Agregar/Eliminar Usuarios)** | ❌ | ❌ | ✅ |
-| **Eliminar Bróker** | ❌ | ❌ | ✅ |
+| **Ver detalles del bróker** | ✅ | ✅ | ✅ |
+| **Ver transacciones** | ✅ | ✅ | ✅ |
+| **Ver informes y gráficos** | ✅ | ✅ | ✅ |
+| **Añadir/editar transacciones** | ❌ | ✅ | ✅ |
+| **Importar archivos (BRIM)** | ❌ | ✅ | ✅ |
+| **Editar configuración del bróker** | ❌ | ✅ | ✅ |
+| **Gestionar acceso (añadir/eliminar usuarios)** | ❌ | ❌ | ✅ |
+| **Eliminar bróker** | ❌ | ❌ | ✅ |
 
-- 👁️ **Visor**: Acceso de solo lectura. Ideal para contadores o familiares que solo necesitan ver los datos.
-- ✏️ **Editor**: Puede gestionar las operaciones diarias (transacciones, importaciones) pero no puede eliminar el bróker ni cambiar los accesos.
-- 👑 **Propietario**: Control total. Puede hacer todo, incluyendo agregar o eliminar otros usuarios.
+- 👁️ **Visor**: acceso de solo lectura. Ideal para contadores o familiares que solo necesitan ver los datos.
+- ✏️ **Editor**: puede gestionar las operaciones del día a día (transacciones, importaciones), pero no puede eliminar el bróker ni cambiar los accesos.
+- 👑 **Propietario**: control total. Puede hacerlo todo, incluido añadir o eliminar a otros usuarios. Un bróker puede tener **más de un Propietario** — consulta el porcentaje de participación a continuación.
 
 ---
 
-## 📊 Porcentaje de Participación
+## 📊 Porcentaje de participación
 
-Cada usuario con acceso a un bróker tiene un **porcentaje de participación** (0% a 100%). Esto representa cuánto del valor de la cartera del bróker pertenece a ese usuario.
+Cada **Propietario** de un bróker tiene un **porcentaje de participación** (del 0% al 100%). Este representa qué parte del valor de la cartera del bróker pertenece a ese propietario. Los Visores y Editores siempre llevan un 0% — el esquema rechaza cualquier participación distinta de cero para ellos.
 
-!!! example "Cuenta Conjunta"
+!!! example "Cuenta conjunta"
 
-    Usted y su cónyuge comparten una cuenta de corretaje al 50/50:
+    Tú y tu cónyuge son copropietarios de una cuenta de corretaje al 50/50. Ambos son Propietarios:
 
-    - Usted (Propietario): **50%**
-    - Cónyuge (Editor): **50%**
+    - Tú (Propietario): **50%**
+    - Cónyuge (Propietario): **50%**
 
-    Al calcular el valor total de la cartera, el sistema cuenta el 50% del valor de este bróker para cada uno de ustedes.
+    Cada uno de ustedes ve el 50% del valor de este bróker contabilizado en su propio panel de control.
 
-!!! example "Asesor Financiero"
+!!! example "Asesor financiero"
 
-    Su asesor financiero necesita ver su cartera pero no es dueño de ninguna parte de ella:
+    Tu asesor financiero necesita ver tu cartera, pero no posee ninguna parte de ella:
 
-    - Usted (Propietario): **100%**
+    - Tú (Propietario): **100%**
     - Asesor (Visor): **0%**
 
-La suma de todos los porcentajes de participación de un bróker **no debe exceder el 100%**, pero puede ser menor (por ejemplo, una cuenta en copropiedad donde el copropietario no esté en el sistema).
+La suma de todos los porcentajes de participación de un bróker **no debe superar el 100%**, pero puede ser menor (por ejemplo, una cuenta en copropiedad en la que el copropietario no está en el sistema). El panel muestra los totales de **Asignado** y **Disponible** mientras editas.
+
+!!! note "Agregación de cartera"
+
+    El porcentaje de participación **ya está aplicado** a la agregación de tu cartera: el panel de control y las estadísticas a nivel de cartera escalan cada importe de un bróker compartido según tu participación en la propiedad. Un Propietario con un 50% ve la mitad del valor, de los ingresos y del P&L de ese bróker contabilizada en sus totales. Los Visores y Editores, cuya participación siempre es 0% por regla, ven en su lugar los importes **completos** del bróker; la participación solo escala lo que *posees*.
 
 ---
 
-## 💡 Escenarios Comunes
+## 🚪 Salir de un bróker compartido (Autoservicio)
 
-| Escenario | Configuración Sugerida |
+Nunca necesitas la intervención de un Propietario para salir de un bróker al que tengas acceso. En el panel para compartir, la sección **Tu acceso** te permite:
+
+- **Salir del bróker** — elimina tu propio acceso de inmediato. El bróker desaparece de tus listas.
+- **Cambiar a visor** — un Editor puede degradarse a Visor; un Propietario puede volver a ascenderlo más tarde.
+
+!!! danger "Último Propietario: salir elimina el bróker"
+
+    Si eres el **único Propietario** restante, la acción de salida se convierte en **Salir y eliminar el bróker**: salir *elimina permanentemente el bróker junto con todas sus transacciones y archivos de informes importados*. Esto no se puede deshacer. Si no es lo que quieres, asigna primero a otro usuario como Propietario y luego sal.
+
+---
+
+## 💡 Escenarios comunes
+
+| Escenario | Configuración sugerida |
 |----------|----------------|
-| **Cónyuge / Pareja** | Editor o co-Propietario, 50% de participación cada uno |
-| **Asesor Financiero** | Visor, 0% de participación |
+| **Cónyuge / Pareja** | Dos Propietarios, 50% cada uno |
+| **Asesor financiero** | Visor, 0% de participación |
 | **Contador** | Visor, 0% de participación |
-| **Familiar** | Visor o Editor, % de participación personalizado |
-
-!!! note "Agregación de Cartera"
-
-    El porcentaje de participación está diseñado para futuras funciones de agregación de cartera. Cuando estas se implementen, el panel de control de cada usuario mostrará su parte proporcional de todos los brókers a los que tenga acceso.
+| **Familiar** | Visor o Editor, 0% de participación |

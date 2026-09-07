@@ -27,13 +27,21 @@ Retroactive transaction edits are a first-class use case (users fix import error
 - Performance depends on the number of transactions per asset — acceptable for personal portfolios (hundreds, not millions).
 - All FIFO logic lives in the service layer, making it testable in isolation.
 - Adding a historical transaction immediately reflects in all calculations (no sync needed).
+- **2026-07-22 correction**: the FIFO logic referenced below has since moved. It no longer lives in
+  `transaction_service.py` — as of the v4 FEE/TAX integration, the canonical FIFO engine is
+  `backend/app/services/fifo_lot_engine.py`, orchestrated by `backend/app/services/lots_analysis_service.py`.
+  The "computed at runtime, never persisted" decision itself is unchanged and still holds for the new engine.
+  See [[entities/fifo-lot-engine]], [[sources/fifo-v4-fee-tax-integration]].
 
 ## Related
 - [[F-056]] — FIFO at Runtime (the feature implementing this decision)
+- [[entities/fifo-lot-engine]] — current canonical implementation (see correction above)
 
 ## Source files
 
 | Role | Path |
 |------|------|
-| Transaction service (FIFO logic) | `backend/app/services/transaction_service.py` |
+| FIFO engine (current, since 2026-07 v4) | `backend/app/services/fifo_lot_engine.py` |
+| Orchestration service (current) | `backend/app/services/lots_analysis_service.py` |
+| Transaction service (original location, superseded for FIFO logic) | `backend/app/services/transaction_service.py` |
 | DB model (Transaction) | `backend/app/db/models.py` |

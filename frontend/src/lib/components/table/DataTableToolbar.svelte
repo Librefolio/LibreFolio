@@ -32,7 +32,7 @@
     }
 </script>
 
-<div class="toolbar">
+<div class="toolbar" data-testid="selection-toolbar" data-selected-count={selectedCount}>
     <div class="toolbar-right">
         {#if selectedCount > 0}
             <button type="button" class="selected-count-btn" onclick={() => onClearSelection?.()} title={$t('common.clearSelection') || 'Clear selection'}>

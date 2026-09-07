@@ -10,8 +10,11 @@
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
+    import {safeDecimal} from '$lib/types';
     import {ArrowRightLeft, Info, Minus, Plus, X} from 'lucide-svelte';
     import type {z} from 'zod';
+    import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
+    import {compareHistoryEvents, eventMarkerKind, getBroker as sharedGetBroker, groupCustodySlices, historyKey, multiplyOrNull, unwrapScalar, type EventMarkerKind} from './lotCustodyModalHelpers';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type LotTimelineEventSchema = z.infer<typeof schemas.LotTimelineEventSchema>;
@@ -38,21 +41,11 @@
         onGotoTransaction?: (transactionId: number) => void;
     }
 
-    type EventMarkerKind = 'open' | 'transfer' | 'close' | 'split';
-
     let {open, lot, history = [], brokers = [], currency, onClose, onGotoTransaction}: Props = $props();
 
     let selectedHistoryKey = $state<string | null>(null);
 
-    function unwrapScalar<T>(value: T | T[] | null | undefined): T | null | undefined {
-        return Array.isArray(value) ? (value[0] ?? null) : value;
-    }
-
-    function getBroker(brokerId: number | (number | null)[] | null | undefined): BrokerLike | null {
-        const scalarBrokerId = unwrapScalar<number | null>(brokerId) ?? null;
-        if (scalarBrokerId == null) return null;
-        return brokers.find((broker) => broker.id === scalarBrokerId) ?? {id: scalarBrokerId, name: `#${scalarBrokerId}`};
-    }
+    const getBroker = (brokerId: number | (number | null)[] | null | undefined): BrokerLike | null => sharedGetBroker(brokerId, brokers);
 
     function getBrokerName(brokerId: number | (number | null)[] | null | undefined): string {
         const scalarBrokerId = unwrapScalar<number | null>(brokerId) ?? null;
@@ -60,12 +53,11 @@
         return getBroker(scalarBrokerId)?.name ?? `#${scalarBrokerId}`;
     }
 
-    function parseNumber(value: string | number | (string | number | null)[] | null | undefined): number | null {
-        const scalar = Array.isArray(value) ? (value.find((entry) => entry != null) ?? null) : value;
-        if (scalar == null) return null;
-        const parsed = typeof scalar === 'number' ? scalar : Number.parseFloat(scalar);
-        return Number.isFinite(parsed) ? parsed : null;
-    }
+    /** Local name for this chart's numeric unwrap. Delegates to the shared
+     *  `safeDecimal`: the body used to be copied five times, and two of those
+     *  copies went through `safeString`, which answers `null` for a value that
+     *  is already a number. */
+    const parseNumber = (value: unknown): number | null => safeDecimal(value);
 
     function formatDate(value: string, kind: 'long' | 'short' = 'long'): string {
         const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -92,12 +84,8 @@
         return parsed == null ? '—' : formatCurrencyAmountPlain(parsed, currency, {showSign: parsed !== 0});
     }
 
-    function formatPercent(value: string | number | null | undefined): string {
-        const parsed = parseNumber(value);
-        if (parsed == null) return '—';
-        const sign = parsed > 0 ? '+' : '';
-        return `${sign}${(parsed * 100).toFixed(2)}%`;
-    }
+    /** These come from the API as fractions, hence scale 100. */
+    const formatPercent = (value: unknown): string => sharedFormatPercent(parseNumber(value), {scale: 100});
 
     function signedToneClass(value: number | null): string {
         if (value == null) return 'text-slate-900 dark:text-slate-100';
@@ -129,17 +117,6 @@
         const key = `brokers.lots.modal.event.${kind}`;
         const translated = $_(key);
         return translated === key ? kind.replaceAll('_', ' ') : translated;
-    }
-
-    function historyKey(event: LotTimelineEventSchema): string {
-        return `${event.date}:${event.kind}:${event.transaction_id}:${event.related_transaction_id ?? ''}:${event.fragment_id ?? ''}`;
-    }
-
-    function eventMarkerKind(event: LotTimelineEventSchema): EventMarkerKind {
-        if (event.kind === 'BUY' || event.kind === 'ADJUSTMENT_IN') return 'open';
-        if (event.kind === 'TRANSFER_DEPART' || event.kind === 'TRANSFER_ARRIVE') return 'transfer';
-        if (event.kind === 'SPLIT') return 'split';
-        return 'close';
     }
 
     function eventQuantityText(event: LotTimelineEventSchema): string {
@@ -227,37 +204,8 @@
     let assetUnitLabel = $derived(assetInfo?.identifier_ticker?.trim() || assetInfo?.display_name || '');
     let lotStates = $derived(lot?.states ?? []);
     let currentCustody = $derived(lot?.current_custody ?? []);
-    let groupedCustody = $derived.by<CustodyGroup[]>(() => {
-        const groups: CustodyGroup[] = [];
-        const byKey = new Map<string, CustodyGroup>();
-        for (const slice of currentCustody) {
-            const brokerId = unwrapScalar<number | null>(slice.broker_id) ?? null;
-            const custodyType = slice.custody_type;
-            const key = `${custodyType}:${brokerId ?? 'none'}`;
-            const quantity = parseNumber(slice.quantity) ?? 0;
-            let group = byKey.get(key);
-            if (!group) {
-                group = {
-                    key,
-                    brokerId,
-                    custodyType,
-                    broker: custodyType === 'BROKER' ? getBroker(brokerId) : null,
-                    quantity: 0,
-                };
-                byKey.set(key, group);
-                groups.push(group);
-            }
-            group.quantity += quantity;
-        }
-        return groups;
-    });
-    let sortedHistory = $derived.by(() =>
-        [...history].sort((left, right) => {
-            const dateOrder = left.date.localeCompare(right.date);
-            if (dateOrder !== 0) return dateOrder;
-            return left.transaction_id - right.transaction_id;
-        }),
-    );
+    let groupedCustody = $derived.by<CustodyGroup[]>(() => groupCustodySlices(currentCustody, brokers));
+    let sortedHistory = $derived.by(() => [...history].sort(compareHistoryEvents));
     let defaultHistoryKey = $derived.by(() => {
         if (!lot) return null;
         const openingEvent = sortedHistory.find((event) => event.transaction_id === lot.opening_transaction_id);
@@ -272,9 +220,7 @@
     let canGotoTransaction = $derived(onGotoTransaction != null && activeTransactionId != null);
     let lotOpeningValue = $derived.by(() => {
         if (!lot) return null;
-        const quantity = parseNumber(lot.original_quantity);
-        const unitPrice = parseNumber(lot.opening_unit_price);
-        return quantity != null && unitPrice != null ? quantity * unitPrice : null;
+        return multiplyOrNull(parseNumber(lot.original_quantity), parseNumber(lot.opening_unit_price));
     });
     let lotCurrentValue = $derived.by(() => (lot ? (parseNumber(lot.total_value) ?? parseNumber(lot.open_value)) : null));
     let lotCumulativeProceeds = $derived.by(() => (lot ? parseNumber(lot.cumulative_proceeds) : null));
@@ -285,6 +231,13 @@
     let lotTotalPnl = $derived.by(() => (lot ? parseNumber(lot.total_pnl) : null));
     let lotCashYield = $derived.by(() => (lot ? parseNumber(lot.cash_yield) : null));
     let lotTotalReturn = $derived.by(() => (lot ? parseNumber(lot.total_return) : null));
+    let lotAllocatedFees = $derived.by(() => (lot ? parseNumber(lot.allocated_fees) : null));
+    let lotAllocatedTaxes = $derived.by(() => (lot ? parseNumber(lot.allocated_taxes) : null));
+    let lotNetTotalPnl = $derived.by(() => (lot ? parseNumber(lot.net_total_pnl) : null));
+    let lotNetTotalReturn = $derived.by(() => (lot ? parseNumber(lot.net_total_return) : null));
+    let lotNetMetricsStatus = $derived.by(() => (lot ? (unwrapScalar<string | null>(lot.net_metrics_status) ?? 'AVAILABLE') : 'AVAILABLE'));
+    let lotHasNetCosts = $derived((lotAllocatedFees != null && lotAllocatedFees !== 0) || (lotAllocatedTaxes != null && lotAllocatedTaxes !== 0));
+    let lotNetAvailable = $derived(lotNetMetricsStatus !== 'UNAVAILABLE');
     let lotValueSource = $derived.by(() => (lot ? (unwrapScalar<string | null>(lot.value_source) ?? null) : null));
     let lotIsEstimated = $derived(lotValueSource === 'ESTIMATED_AT_COST');
     let lotHasIncome = $derived(lotAssetIncome != null && lotAssetIncome !== 0);
@@ -389,6 +342,43 @@
                         <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
                             <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.totalReturn')}</dt>
                             <dd class={`mt-1 text-sm font-medium tabular-nums ${signedToneClass(lotTotalReturn)}`} data-testid="lot-custody-modal-total-return">{formatPercent(lotTotalReturn)}</dd>
+                        </div>
+                    {/if}
+                    {#if lotHasNetCosts}
+                        <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70 sm:col-span-2" data-testid="lot-custody-modal-net-breakdown">
+                            <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.netBreakdown')}</dt>
+                            <dd class="mt-2 space-y-1 text-sm tabular-nums text-slate-900 dark:text-slate-100">
+                                <div class="flex items-center justify-between gap-4">
+                                    <span class="text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.grossTotalPnl')}</span>
+                                    <span class={`font-medium ${signedToneClass(lotTotalPnl)}`}>{formatSignedCurrency(lotTotalPnl)}</span>
+                                </div>
+                                <div class="flex items-center justify-between gap-4">
+                                    <span class="text-slate-500 dark:text-slate-400">− {$_('brokers.lots.modal.fees')}</span>
+                                    <span class="font-medium text-red-500 dark:text-red-400" data-testid="lot-custody-modal-allocated-fees">{formatPrice(lotAllocatedFees)}</span>
+                                </div>
+                                <div class="flex items-center justify-between gap-4">
+                                    <span class="text-slate-500 dark:text-slate-400">− {$_('brokers.lots.modal.taxes')}</span>
+                                    <span class="font-medium text-red-500 dark:text-red-400" data-testid="lot-custody-modal-allocated-taxes">{formatPrice(lotAllocatedTaxes)}</span>
+                                </div>
+                                <div class="flex items-center justify-between gap-4 border-t border-slate-200 pt-1 dark:border-slate-700">
+                                    <span class="font-medium text-slate-600 dark:text-slate-300">{$_('brokers.lots.modal.netTotalPnl')}</span>
+                                    {#if lotNetAvailable}
+                                        <span class={`font-semibold ${signedToneClass(lotNetTotalPnl)}`} data-testid="lot-custody-modal-net-total-pnl">{formatSignedCurrency(lotNetTotalPnl)}</span>
+                                    {:else}
+                                        <span class="font-semibold text-slate-400 dark:text-slate-500" title={$_('brokers.lots.netMetricsUnavailable')} data-testid="lot-custody-modal-net-total-pnl">—</span>
+                                    {/if}
+                                </div>
+                                {#if lotNetTotalReturn != null || !lotNetAvailable}
+                                    <div class="flex items-center justify-between gap-4">
+                                        <span class="text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.netTotalReturn')}</span>
+                                        {#if lotNetAvailable}
+                                            <span class={`font-medium ${signedToneClass(lotNetTotalReturn)}`} data-testid="lot-custody-modal-net-total-return">{formatPercent(lotNetTotalReturn)}</span>
+                                        {:else}
+                                            <span class="font-medium text-slate-400 dark:text-slate-500" title={$_('brokers.lots.netMetricsUnavailable')} data-testid="lot-custody-modal-net-total-return">—</span>
+                                        {/if}
+                                    </div>
+                                {/if}
+                            </dd>
                         </div>
                     {/if}
                     {#if lotHasIncome && lotCashYield != null}

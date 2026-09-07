@@ -78,6 +78,6 @@ type PendingOp = (
 - [[concepts/txstore-pattern]]
 - [[decisions/txstore-single-source-of-truth]]
 - Source: `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/plan-phase07-transaction-Part4_Round6_PlanC3_PendingOpRefactor.prompt.md`
-- Implementation: `frontend/src/lib/components/transactions/TransactionBulkModal.svelte`
+- Implementation: `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte`
 
 

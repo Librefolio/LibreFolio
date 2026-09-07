@@ -109,13 +109,3 @@ export function getCountryInfo(iso3: string): CountryInfo {
         }
     );
 }
-
-/** Check if countries have been loaded. */
-export function isCountriesLoaded(): boolean {
-    return loaded;
-}
-
-/** Check if countries are currently being loaded. */
-export function isCountriesLoading(): boolean {
-    return loading;
-}

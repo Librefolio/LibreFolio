@@ -122,6 +122,28 @@ LibreFolio_developer_journal/
 └── knowledge_base/                # Project reference docs
 ```
 
+**Release_N structure (different — user-corrected 2026-09-02):** archived work-streams
+live in `Release_N/phases/`, at the SAME level as the active `Release_N/Phase_N/` — NOT
+inside it. The archive keeps the work-stream's ORIGINAL folder name
+(`01_signalMigration/`, `05_cleanAudit/`); do not rename to `phase-NN-…` on archive.
+When a phase completes entirely, its whole `Phase_N/` folder moves under
+`phases/Phase_N/`. So:
+
+```
+Release_2/
+├── Phase_0/                       # ACTIVE work (in-progress / paused streams)
+│   ├── 02_riskfolioIntegration/   # paused (beta)
+│   ├── 06_betaTestingReportAndFixing/
+│   └── 04_webSearchEngine/        # only the deferred SearXNG plan remains
+└── phases/                        # ARCHIVED completed streams (original names kept)
+    ├── 00-index.md
+    ├── 01_signalMigration/
+    ├── 03_brokerImportRecovery/
+    └── …
+```
+
+When a phase completes entirely, `Release_N/phases/Phase_N/` will hold it.
+
 ## Common Commands
 
 ```bash

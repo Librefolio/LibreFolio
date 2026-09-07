@@ -12,9 +12,10 @@
      *
      * Uses Svelte 5 runes. Reference: fx/[pair]/+page.svelte
      */
-    import {onMount, tick} from 'svelte';
+    import {onMount, tick, untrack} from 'svelte';
     import {page} from '$app/stores';
     import {goto} from '$app/navigation';
+    import {debug, isDebugEnabled} from '$lib/debug';
     import {_ as t} from '$lib/i18n';
     import {get} from 'svelte/store';
     import {zodiosApi} from '$lib/api';
@@ -37,11 +38,27 @@
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';
+    import AssetRiskScenariosView from '$lib/components/risk/AssetRiskScenariosView.svelte';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
-    import type {RenderedSignal, SignalConfig} from '$lib/charts/signals';
-    import {signalFromConfig} from '$lib/charts/signals';
+    import {
+        backendSignalSchemas,
+        buildBackendSignalRequestPlan,
+        getSignalProblem,
+        getSignalProblemSeverity,
+        getLocalSignalDefinitions,
+        mapSignalInstanceResults,
+        renderBackendSignalResult,
+        signalFromConfig,
+        SignalResultState,
+        type BackendSignalResult,
+        type RenderedSignal,
+        type SignalConfig,
+        type SignalDefinition,
+        type SignalInstanceResult,
+    } from '$lib/charts/signals';
     import {getSettingsForPair, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {invalidateFxRoutes} from '$lib/stores/reference/fxRoutesStore';
@@ -49,24 +66,31 @@
     import type {ViewMode, ChartType} from '$lib/components/charts/ChartToolbar.svelte';
     import type {LayoutMode} from '$lib/utils/layout/responsiveLayout.svelte';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
-    import {ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
+    import {displayFxRate, ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
     import {getAssetPriceStore, invalidateAssetPriceStore, apiPricesToAssetPricePoints} from '$lib/stores/assetPriceStoreRegistry';
     import {getAssetTypeIconUrl, buildIdentifiersList} from '$lib/utils/assetTypes';
     import {ensureAssetProvidersCached, getAssetProviderIconUrl, getAssetProviderName, isParametricProvider, assetProvidersVersion} from '$lib/utils/providerHelpers';
     import {replaceHistoryDateRange} from '$lib/utils/url/dateRangeUrl';
+    import {buildTabUrl, getResolvedTabParam} from '$lib/utils/url/tabUrl';
     import type {AssetDetail, ProviderAssignmentFlat} from '$lib/types';
     import type {SignalLabelInfo} from '$lib/charts/signalLabel';
     import {buildOverlaySignalInfoMap} from '$lib/charts/signalLabel';
     import {loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
-    import {fetchCurrentPrices} from '$lib/services/livePriceService';
+    import {fetchCurrentPrices, computeDirection} from '$lib/services/livePriceService';
+    import type {LivePriceDirection} from '$lib/services/livePriceService';
     import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';
     import {COLORS} from '$lib/components/charts/lineChartHelpers';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
     import AiExportMenu from '$lib/features/ai-export/AiExportMenu.svelte';
-    import {copyAssetAiExport} from '$lib/features/ai-export/asset/assetExportClipboard';
-    import {ASSET_PROMPT_CATALOG, type AssetPromptId} from '$lib/features/ai-export/asset/assetPromptCatalog';
+    import {prepareAiExport, type PreparedAiExport} from '$lib/features/ai-export/aiExportClipboard';
+    import type {AiExportOptionsSelection} from '$lib/features/ai-export/aiExportOptions';
+    import {aiExportCatalogLoader, emptyAiExportCompatibility, type AiExportCatalogCompatibilityResult} from '$lib/features/ai-export/catalog/compatibility';
+    import {buildAiExportMenuLabels, getAiExportErrorMessage, getAiExportSuccessMessages} from '$lib/features/ai-export/ui';
+    import {signalCatalogStore} from '$lib/stores/signalCatalogStore.svelte';
+
+    const DISABLED_AI_EXPORT_COMPATIBILITY = emptyAiExportCompatibility();
 
     // =========================================================================
     // Page data
@@ -77,6 +101,18 @@
     }
 
     let {data}: Props = $props();
+
+    const ASSET_DETAIL_TAB_IDS = ['overview', 'risk'] as const;
+    type AssetDetailTabId = (typeof ASSET_DETAIL_TAB_IDS)[number];
+    let activeTab = $state<AssetDetailTabId>('overview');
+    let assetDetailTabs = $derived([
+        {id: 'overview', label: $t('risk.assetDetail.overviewTab'), testId: 'asset-detail-tab-overview'},
+        {id: 'risk', label: $t('risk.assetDetail.riskScenariosTab'), testId: 'asset-detail-tab-risk'},
+    ]);
+
+    $effect(() => {
+        activeTab = getResolvedTabParam($page.url.searchParams, ASSET_DETAIL_TAB_IDS, 'overview');
+    });
 
     // =========================================================================
     // State
@@ -89,6 +125,7 @@
     let comparisonEvents = $state<Map<number, any[]>>(new Map());
 
     let loading = $state(true);
+    let riskRefreshVersion = $state(0);
     /** Stores either a raw message or an i18n key prefixed with `_i18n:` for reactive translation */
     let error: string | null = $state(null);
     let syncing = $state(false);
@@ -151,6 +188,13 @@
     // Chart settings
     let settings = $derived(getSettingsForPair(`asset-${data.assetId}`, 'assets'));
     let signals = $derived<SignalConfig[]>([...settings.signals]);
+    let signalDefinitions = $state<SignalDefinition[]>([]);
+    let signalInstanceResults = $state<SignalInstanceResult[]>([]);
+    let signalCatalogFailed = $state(false);
+    let signalRequestFailed = $state(false);
+    let signalsLoading = $state(false);
+    const signalResultState = new SignalResultState();
+    let signalBackendError = $derived(signalCatalogFailed ? $t('chartSettings.signalCatalogUnavailable') : signalRequestFailed ? $t('chartSettings.signalResultsUnavailable') : null);
 
     // Measure panel
     let measureMode = $state(false);
@@ -182,29 +226,11 @@
     let shortDescription: string | null = $state(null);
     let classificationLoaded = $state(false);
 
-    // AI export (Signals panel header button) — dropdown open/position handled internally by AiExportMenu
-    let assetAiExportLoading = $state(false);
-    let assetAiExportEntries = $derived(ASSET_PROMPT_CATALOG.map((p) => ({id: p.id, label: $t(p.labelKey), description: $t(p.descriptionKey), icon: p.icon})));
-
-    // Signals header row's OWN width (NOT pageLayoutMode — that tracks the PageToolbar bar,
-    // which needs ~780px+ to avoid stacking its date picker/filters/2x2 actions, so its
-    // 'oneColumn' cutoff (360px) fires on ordinary phone widths where THIS much lighter row
-    // — icon+"Segnali" label, the AI button, a chevron — still has plenty of room). 320px is
-    // the measured worst-case width (longest translation, "Exportar IA") this row needs to fit
-    // comfortably with the AI button's label shown; below that it goes icon-only.
-    let signalsHeaderRef = $state<HTMLDivElement | null>(null);
-    let signalsHeaderWidth = $state(9999); // generous default: show the label until the first real measurement lands
-    let showAiExportLabel = $derived(signalsHeaderWidth >= 320);
-
-    $effect(() => {
-        const el = signalsHeaderRef;
-        if (!el) return;
-        const ro = new ResizeObserver(([entry]) => {
-            signalsHeaderWidth = entry.contentRect.width;
-        });
-        ro.observe(el);
-        return () => ro.disconnect();
-    });
+    // AI export (page toolbar) — dropdown open/position handled internally by AiExportMenu
+    let assetAiExportCompatibility = $state<AiExportCatalogCompatibilityResult>(DISABLED_AI_EXPORT_COMPATIBILITY);
+    let assetAiExportCatalogLoading = $state(true);
+    let assetAiExportCatalogFailed = $state(false);
+    let assetAiExportLabels = $derived(buildAiExportMenuLabels($t, assetAiExportCompatibility, $t('assetDetail.aiExport')));
 
     // Provider icon for header badge
     let providerIconUrl = $state<string | null>(null);
@@ -218,6 +244,24 @@
     let currentLivePrice = $state<number | null>(null);
     /** True when live price conversion to displayCurrency failed (pair exists but rate unavailable) */
     let livePriceConversionFailed = $state(false);
+
+    // --- Live price direction flash --------------------------------------------
+    // Tracks whether the latest polled tick moved the price up/down vs the
+    // PREVIOUS poll (not vs the day's open) so AssetPriceSummary can flash the
+    // price text. Mirrors the assets list page's use of computeDirection, but
+    // compares the asset's NATIVE-currency value (not the possibly FX-converted
+    // display value) so switching displayCurrency never fabricates a fake
+    // up/down tick on its own.
+    /** Direction of the latest live-price tick — drives the transient flash animation. Resets to 'neutral' once the flash decays. */
+    let livePriceDirection = $state<LivePriceDirection>('neutral');
+    /** Increments on every non-neutral tick so the flash element can be re-keyed (forces the CSS animation to restart even for two consecutive same-direction ticks). */
+    let livePriceFlashToken = $state(0);
+    /** Previous poll's native-currency value — plain (non-reactive) bookkeeping var, not rendered directly. */
+    let previousNativeLivePrice: number | null = null;
+    /** Pending "decay back to neutral" timer for the current flash. */
+    let livePriceFlashTimeoutId: ReturnType<typeof setTimeout> | null = null;
+    /** How long the flash stays lit before decaying to the resting colour — kept in sync with the CSS animation duration in app.css (.lf-price-flash-*). */
+    const LIVE_PRICE_FLASH_DECAY_MS = 1300;
 
     // =========================================================================
     // Derived
@@ -251,6 +295,9 @@
         return isParametricProvider(providerAssignment?.provider_code);
     });
     let isManualOnly = $derived(!providerAssignment);
+    let isInactive = $derived(assetInfo?.active === false);
+    let syncDisabledReason = $derived(isManualOnly ? $t('assetDetail.syncDisabledManual') : isInactive ? $t('assetDetail.syncDisabledInactive') : '');
+    let syncBlocked = $derived(isManualOnly || isInactive);
     /** True when OHLCV price data is available (enables candlestick chart) */
     let hasOhlcv = $derived(lineData.some((p) => p.open != null));
     // Reset to line chart when OHLCV becomes unavailable (e.g. date range with no data)
@@ -559,11 +606,41 @@
         return buildIdentifiersList(assetInfo as Record<string, unknown>);
     });
 
+    let signalDefinitionsByType = $derived(new Map(signalDefinitions.map((definition) => [definition.type, definition])));
+
+    let backendOverlaySignals: RenderedSignal[] = $derived.by(() => {
+        const rendered: RenderedSignal[] = [];
+        for (const item of signalInstanceResults) {
+            if (item.source !== 'backend' || !item.result) continue;
+            const currentConfig = signals.find((config) => config.id === item.config.id) ?? item.config;
+            const definition = signalDefinitionsByType.get(currentConfig.signalType);
+            if (!definition || definition.source !== 'backend') {
+                console.error(`Missing backend signal definition for '${currentConfig.signalType}'`);
+                continue;
+            }
+            const outcome = renderBackendSignalResult(item.result, currentConfig, {
+                baseData: lineData,
+                viewMode,
+                definition,
+                translate: (key) => $t(key),
+            });
+            rendered.push(...outcome.signals);
+        }
+        return rendered;
+    });
+
+    let rollingRiskSignals = $derived.by(() => {
+        const riskConfigIds = new Set(signals.filter((config) => signalDefinitionsByType.get(config.signalType)?.indicatorGroup === 'risk').map((config) => config.id));
+        return backendOverlaySignals.filter((signal) => riskConfigIds.has(signal.id.split(':')[0]));
+    });
+
     // Overlay signals
     let overlaySignals: RenderedSignal[] = $derived.by(() => {
         void overlayDataVersion;
         const rendered: RenderedSignal[] = [];
         for (const cfg of signals) {
+            const definition = signalDefinitionsByType.get(cfg.signalType);
+            if (!definition || definition.source === 'backend') continue;
             const instance = signalFromConfig(cfg);
             if (!instance) continue;
 
@@ -574,7 +651,10 @@
                     const store = getFxStore(pairSlug);
                     const storeData = store.getAllSorted();
                     if (storeData.length === 0) continue;
-                    instance.params._resolvedData = storeData.map((d) => ({date: d.date, value: d.rate}));
+                    instance.params._resolvedData = storeData.map((d) => {
+                        const rate = displayFxRate(d.rate, false);
+                        return {date: d.date, value: rate ?? 0, missing: rate === null};
+                    });
                 } catch {
                     continue;
                 }
@@ -593,7 +673,7 @@
                 if (result.data.length > 0) rendered.push(result);
             }
         }
-        return rendered;
+        return [...rendered, ...backendOverlaySignals];
     });
 
     let allOverlaySignals: RenderedSignal[] = $derived([...overlaySignals, ...measureSignals, ...(pendingPreviewSignal ? [pendingPreviewSignal] : [])]);
@@ -681,8 +761,19 @@
     let signalSummaries: Map<string, SignalDataSummary> = $derived.by(() => {
         void overlayDataVersion; // recompute when overlay data changes (e.g. after sync)
         const result = new Map<string, SignalDataSummary>();
+        const instanceById = new Map(signalInstanceResults.map((item) => [item.config.id, item]));
         for (const cfg of signals) {
-            if (cfg.signalType === 'asset-comparison') {
+            const definition = signalDefinitionsByType.get(cfg.signalType);
+            if (definition?.source === 'backend') {
+                const rendered = backendOverlaySignals.filter((signal) => signal.id === cfg.id || signal.id.startsWith(`${cfg.id}:`));
+                const dates = rendered.flatMap((signal) => signal.data.map((point) => point.date)).sort();
+                result.set(cfg.id, {
+                    pointCount: rendered.reduce((maximum, signal) => Math.max(maximum, signal.data.length), 0),
+                    eventCounts: {},
+                    firstDate: dates[0] ?? null,
+                    problem: getSignalProblem(instanceById.get(cfg.id)) ?? undefined,
+                });
+            } else if (cfg.signalType === 'asset-comparison') {
                 const targetId = Number(cfg.params.assetId);
                 if (!targetId) continue;
                 const resolvedData = cfg.params._resolvedData as Array<{date: string; value: number}> | undefined;
@@ -720,6 +811,72 @@
     // Lifecycle
     // =========================================================================
 
+    async function loadAssetSignalDefinitions(force = false) {
+        try {
+            signalDefinitions = await signalCatalogStore.load('asset', force);
+            signalCatalogFailed = false;
+        } catch (catalogError) {
+            console.error('Failed to load Asset signal catalog:', catalogError);
+            signalDefinitions = getLocalSignalDefinitions();
+            signalCatalogFailed = true;
+        }
+    }
+
+    function parseBackendSignalResults(value: unknown): BackendSignalResult[] {
+        if (!Array.isArray(value)) return [];
+        return value.map((item) => backendSignalSchemas.result.parse(item));
+    }
+
+    function applyBackendSignalResults(configs: SignalConfig[], requestVersion: number, results: BackendSignalResult[]) {
+        const plan = buildBackendSignalRequestPlan(configs, signalDefinitions);
+        const mapped = mapSignalInstanceResults(configs, plan, results);
+        if (signalResultState.apply(requestVersion, mapped)) {
+            signalInstanceResults = [...signalResultState.values()];
+            if (isDebugEnabled()) {
+                const assetLabel = assetInfo?.display_name ?? `Asset #${data.assetId}`;
+                for (const item of mapped) {
+                    const problem = getSignalProblem(item);
+                    if (!problem) continue;
+                    const severity = getSignalProblemSeverity(problem);
+                    const logProblem = severity === 'error' ? debug.error : severity === 'warning' ? debug.warn : debug.info;
+                    logProblem('AssetSignals', `${assetLabel} (#${data.assetId}) · ${item.result?.signal_code ?? item.config.signalType} · ${item.status}`, {
+                        asset: {
+                            id: data.assetId,
+                            name: assetLabel,
+                            ticker: assetInfo?.identifier_ticker ?? null,
+                        },
+                        signal: {
+                            instanceId: item.config.id,
+                            type: item.config.signalType,
+                            code: item.result?.signal_code ?? null,
+                            params: item.config.params,
+                        },
+                        status: item.status,
+                        severity,
+                        warningMessages: item.result?.warnings?.map((warning) => warning.message) ?? [],
+                        problem,
+                        availability: item.result?.availability ?? null,
+                        warmup: item.result?.warmup ?? null,
+                        error: item.result?.error ?? item.error,
+                    });
+                }
+            }
+        }
+    }
+
+    function backendRequestFingerprint(configs: SignalConfig[]): string {
+        return JSON.stringify(
+            buildBackendSignalRequestPlan(configs, signalDefinitions)
+                .requests.map((request) => `${request.signal_code}:${JSON.stringify(request.params ?? {})}`)
+                .sort(),
+        );
+    }
+
+    async function retryBackendSignals() {
+        await loadAssetSignalDefinitions(true);
+        await loadChartData(false);
+    }
+
     /** Full page reload: fetches all data for the current assetId */
     async function reloadPage() {
         loading = true;
@@ -729,6 +886,8 @@
         providerAssignment = null;
         chartData = [];
         events = [];
+        signalInstanceResults = [];
+        signalRequestFailed = false;
         comparisonEvents = new Map();
         currentLivePrice = null;
         livePriceConversionFailed = false;
@@ -738,7 +897,8 @@
         classificationLoaded = false;
         providerIconUrl = null;
 
-        await Promise.all([ensureCurrenciesLoaded(get(currentLanguage)), ensureAssetProvidersCached(), loadAssetInfo(), loadProviderAssignment(), loadChartData(), loadFxPairSlugs(), loadAssetList()]);
+        await Promise.all([ensureCurrenciesLoaded(get(currentLanguage)), ensureAssetProvidersCached(), loadAssetInfo(), loadProviderAssignment(), loadAssetSignalDefinitions(), loadFxPairSlugs(), loadAssetList()]);
+        await loadChartData();
         // Resolve provider icon after data loads (use local ref to avoid TS narrowing)
         const info = assetInfo as AssetDetail | null;
         if (info?.provider_code) {
@@ -760,6 +920,7 @@
     onMount(() => {
         _prevAssetId = data.assetId;
         reloadPage();
+        void loadAssetAiExportCompatibility();
     });
 
     // Re-load everything when navigating to a different asset (same route pattern)
@@ -781,12 +942,27 @@
         if (!isHeadToday || !id) {
             currentLivePrice = null;
             livePriceConversionFailed = false;
+            // Polling context changed (asset switched, or range no longer heads
+            // "today") — drop the direction/flash state so it can't carry over
+            // and compare against a stale/unrelated previous value.
+            previousNativeLivePrice = null;
+            livePriceDirection = 'neutral';
+            if (livePriceFlashTimeoutId) {
+                clearTimeout(livePriceFlashTimeoutId);
+                livePriceFlashTimeoutId = null;
+            }
             return;
         }
         // Fetch immediately, then poll every 30s
         _fetchLivePrice(id, nativeCurrency ?? '', targetCurrency, fxMissing);
         const timer = setInterval(() => _fetchLivePrice(id, nativeCurrency ?? '', targetCurrency, fxMissing), 30_000);
-        return () => clearInterval(timer);
+        return () => {
+            clearInterval(timer);
+            if (livePriceFlashTimeoutId) {
+                clearTimeout(livePriceFlashTimeoutId);
+                livePriceFlashTimeoutId = null;
+            }
+        };
     });
 
     async function _fetchLivePrice(assetId: number, nativeCurrency: string, targetCurrency: string, fxMissing: boolean) {
@@ -794,6 +970,24 @@
             const results = await fetchCurrentPrices([assetId]);
             if (results.length === 0 || results[0].value == null) return;
             const nativeValue = results[0].value;
+
+            // Direction compares this tick's NATIVE value to the previous poll's
+            // NATIVE value (never the day's open, never the display-converted
+            // value) — reuses computeDirection from livePriceService.ts (same
+            // helper the assets list page uses) so a displayCurrency switch can
+            // never fabricate a false up/down tick. First poll after (re)mount
+            // has no previous value → computeDirection returns 'neutral'.
+            const direction = computeDirection(nativeValue, previousNativeLivePrice);
+            previousNativeLivePrice = nativeValue;
+            if (direction !== 'neutral') {
+                livePriceDirection = direction;
+                livePriceFlashToken++;
+                if (livePriceFlashTimeoutId) clearTimeout(livePriceFlashTimeoutId);
+                livePriceFlashTimeoutId = setTimeout(() => {
+                    livePriceDirection = 'neutral';
+                    livePriceFlashTimeoutId = null;
+                }, LIVE_PRICE_FLASH_DECAY_MS);
+            }
 
             // No conversion needed
             if (!targetCurrency || !nativeCurrency || targetCurrency === nativeCurrency || fxMissing) {
@@ -852,7 +1046,9 @@
 
     async function loadAssetInfo() {
         try {
-            const response = await zodiosApi.get_all_assets_api_v1_assets_all_get();
+            // Tri-state `active` omitted on purpose: an expired or delisted instrument is
+            // filed as inactive and must still be able to open its own detail page.
+            const response = await zodiosApi.list_assets_api_v1_assets_query_get({queries: {}});
             const items = response as any[];
             const asset = items.find((a: any) => a.id === data.assetId);
             if (asset) {
@@ -911,9 +1107,12 @@
         displayDateStart = 'min';
     }
 
-    async function loadChartData(force = false) {
+    async function loadChartData(force = false, requestedSignalConfigs: SignalConfig[] = signals) {
         const effectiveCurrency = displayCurrency && assetInfo?.currency && displayCurrency !== assetInfo.currency ? displayCurrency : (assetInfo?.currency ?? '');
         const targetCurrency = displayCurrency && assetInfo?.currency && displayCurrency !== assetInfo.currency ? displayCurrency : undefined;
+        const requestPlan = buildBackendSignalRequestPlan(requestedSignalConfigs, signalDefinitions);
+        const requestVersion = signalResultState.beginRequest();
+        let pricesFromCache = false;
 
         // Cache-first: check if the price store already covers this range
         if (!force && effectiveCurrency) {
@@ -939,36 +1138,48 @@
                     error = null;
                 }
                 resolveMaxStartFromChartData();
-                return;
+                pricesFromCache = true;
+                // No early return here: events travel in the same response as prices,
+                // so a price-cache hit would otherwise leave `events` empty and make
+                // them vanish from the chart and the data editor. Fall through with
+                // include_price:false to fetch just the events (a tiny payload).
             }
         }
 
-        // Cache miss or force — full fetch with loading spinner
-        loading = true;
+        // Cache miss fetches prices + signals; cache hit requests events (+ signals) only.
+        loading = !pricesFromCache;
         error = null;
+        signalRequestFailed = false;
+        signalsLoading = requestPlan.requests.length > 0;
         try {
             const response = await zodiosApi.query_prices_bulk_api_v1_assets_prices_query_post([
                 {
                     asset_id: data.assetId,
                     date_range: {start: dateStart, end: dateEnd},
+                    include_price: !pricesFromCache,
                     include_events: true,
                     target_currency: targetCurrency,
+                    signals: requestPlan.requests,
                 },
             ]);
             const result = (response as any)?.items?.[0];
             if (result) {
-                chartData = result.prices ?? [];
+                if (!pricesFromCache) {
+                    chartData = result.prices ?? [];
+                }
                 events = result.events ?? [];
+                applyBackendSignalResults(requestedSignalConfigs, requestVersion, parseBackendSignalResults(result.signals));
                 // Populate the price cache (derive currency from response if not known yet)
                 const cacheCurrency = effectiveCurrency || chartData[0]?.currency || '';
-                if (cacheCurrency && chartData.length > 0) {
+                if (!pricesFromCache && cacheCurrency && chartData.length > 0) {
                     const store = getAssetPriceStore(data.assetId, cacheCurrency);
                     store.merge(apiPricesToAssetPricePoints(chartData));
                     store.markFetched(dateStart, dateEnd);
                 }
             } else {
-                chartData = [];
+                if (!pricesFromCache) chartData = [];
                 events = [];
+                applyBackendSignalResults(requestedSignalConfigs, requestVersion, []);
             }
             if (chartData.length === 0 && !error) {
                 error = '_i18n:assetDetail.noData';
@@ -976,9 +1187,11 @@
             resolveMaxStartFromChartData();
         } catch (e: any) {
             console.error('Failed to load chart data:', e);
+            signalRequestFailed = requestPlan.requests.length > 0;
             if (chartData.length === 0) error = e?.message || 'Failed to load prices';
         } finally {
             loading = false;
+            signalsLoading = false;
         }
     }
 
@@ -1000,7 +1213,7 @@
 
     async function loadAssetList() {
         try {
-            const response = await zodiosApi.get_all_assets_api_v1_assets_all_get();
+            const response = await zodiosApi.list_assets_api_v1_assets_query_get({queries: {}});
             allAssets = (response as any[]).map((a: any) => ({
                 id: a.id,
                 display_name: a.display_name,
@@ -1170,28 +1383,38 @@
     // Actions
     // =========================================================================
 
-    async function handleAssetAiExport(promptId: AssetPromptId) {
-        if (!assetInfo) return;
-        assetAiExportLoading = true;
+    async function loadAssetAiExportCompatibility() {
+        assetAiExportCatalogLoading = true;
         try {
-            await copyAssetAiExport(
-                promptId,
-                {
-                    assetInfo,
-                    sectorDistribution,
-                    geographicDistribution,
-                    shortDescription,
-                },
-                {
-                    targetCurrency: displayCurrency || assetInfo.currency,
-                    locale: $currentLanguage,
-                },
-                toasts,
-                $t,
-            );
+            assetAiExportCompatibility = await aiExportCatalogLoader.load();
+            assetAiExportCatalogFailed = false;
+        } catch {
+            assetAiExportCatalogFailed = true;
+            toasts.error($t('aiExport.catalogUnavailable'));
         } finally {
-            assetAiExportLoading = false;
+            assetAiExportCatalogLoading = false;
         }
+    }
+
+    function handleAssetAiExport(options: AiExportOptionsSelection): Promise<PreparedAiExport> {
+        if (!assetInfo) return Promise.reject(new Error('Asset is not loaded'));
+        return prepareAiExport({
+            context: {
+                domain: 'asset',
+                assetId: data.assetId,
+                snapshotAsOf: dateEnd,
+                targetCurrency: displayCurrency || assetInfo.currency,
+            },
+            options,
+            compatibility: assetAiExportCompatibility,
+            translate: (key) => $t(key),
+        });
+    }
+
+    function handleAssetAiExportCopied(result: PreparedAiExport) {
+        const messages = getAiExportSuccessMessages($t, result);
+        toasts.success(messages.copied);
+        toasts.info(messages.privacyNotice);
     }
 
     async function handleRefresh() {
@@ -1206,16 +1429,21 @@
         }
         overlayDataVersion++;
         await maybeLoadComparison();
+        riskRefreshVersion += 1;
     }
 
     async function reloadMetadata() {
+        // Mark the classification as stale immediately: `buildEditData()` reads it, so the
+        // edit button must stay disabled for the whole reload, not just from the moment the
+        // classification fetch starts. Otherwise reopening the modal right after a save
+        // prefills it with the pre-save values.
+        classificationLoaded = false;
         await Promise.all([loadAssetInfo(), loadProviderAssignment()]);
         // Update provider icon if changed
         if (assetInfo?.provider_code) {
             providerIconUrl = getAssetProviderIconUrl(assetInfo.provider_code);
         }
         // Reload classification data if metadata is available (always refresh after sync)
-        classificationLoaded = false;
         if (assetInfo?.has_metadata) {
             await loadClassificationData();
         } else {
@@ -1308,8 +1536,12 @@
     }
 
     function handleSignalsChange(newSignals: SignalConfig[]) {
+        const shouldReloadBackend = backendRequestFingerprint(signals) !== backendRequestFingerprint(newSignals);
         setPairSettings(`asset-${data.assetId}`, {...settings, signals: JSON.parse(JSON.stringify(newSignals))});
         maybeLoadComparison(); // fire-and-forget: load data for newly added comparison signals
+        if (shouldReloadBackend) {
+            void loadChartData(false, newSignals);
+        }
     }
 
     async function handleSyncAsset(assetId: number, opts: {silent?: boolean} = {}) {
@@ -1495,9 +1727,22 @@
             provider_url: providerAssignment?.provider_url ?? null,
         };
     }
+
+    function handleAssetDetailTabChange(tabId: string): void {
+        if (!ASSET_DETAIL_TAB_IDS.includes(tabId as AssetDetailTabId)) return;
+        activeTab = tabId as AssetDetailTabId;
+        void goto(buildTabUrl($page.url, tabId === 'overview' ? null : tabId), {replaceState: true, noScroll: true});
+    }
+
+    async function openSignalConfiguration(): Promise<void> {
+        handleAssetDetailTabChange('overview');
+        showSignals = true;
+        await tick();
+        document.querySelector('[data-testid="asset-detail-signals-toggle"]')?.scrollIntoView({behavior: 'smooth', block: 'start'});
+    }
 </script>
 
-<div class="space-y-4" data-testid="asset-detail-page">
+<div class="space-y-4" data-testid="asset-detail-page" aria-busy={loading} data-busy={loading ? 'true' : 'false'}>
     <!-- ======================================================================= -->
     <!-- Header: asset info + back button -->
     <!-- ======================================================================= -->
@@ -1556,12 +1801,9 @@
         </div>
     {/if}
 
-    <!-- Unified data quality banners -->
-    <DataQualityBanner issues={assetDetailIssues} mode="flat" onaction={handleBannerAction} />
-
     <!-- ======================================================================= -->
-    <!-- Filter bar — shared PageToolbar (same component as dashboard/broker-detail/assets
-         list), so responsive/wrap fixes made there auto-propagate here too. -->
+    <!-- Page controls — shared PageToolbar (same component as dashboard/broker-detail/assets
+         list), including the integrated Overview/Risk tab row. -->
     <!-- oneRow:       [ datepicker  price-summary ─── actions-2×2 ]  1 row, picker 1-row     -->
     <!-- denseRow:     [ datepicker  price-summary ─── actions-2×2 ]  1 row, picker 2-row     -->
     <!-- stackFilters: [ datepicker       ] [ actions ]  filters+summary stacked+justified     -->
@@ -1572,7 +1814,16 @@
     <!--               [ price-summary    ]  still a labeled 2×2 grid (only position changed) -->
     <!--               [ actions ── 2×2   ]  (narrowest tier — Round 12 removed iconOnly)     -->
     <!-- ======================================================================= -->
-    <PageToolbar thresholds={{oneRow: 1215, denseRow: 780, stackFilters: 400, oneColumn: 360, labelHideActions: 230, labelHideTabs: 370}} filterRowTestId="asset-detail-filter-bar" layoutDebugName="assetDetail" bind:layoutMode={pageLayoutMode}>
+    <PageToolbar
+        thresholds={{oneRow: 1215, denseRow: 780, stackFilters: 400, oneColumn: 360, labelHideActions: 230, labelHideTabs: 370}}
+        tabs={assetDetailTabs}
+        {activeTab}
+        ontabchange={handleAssetDetailTabChange}
+        testId="asset-detail-controls"
+        filterRowTestId="asset-detail-filter-bar"
+        layoutDebugName="assetDetail"
+        bind:layoutMode={pageLayoutMode}
+    >
         {#snippet filters()}
             <!-- Round 14 bugfix: `contents` (not `flex flex-1 ...`) — see assets/+page.svelte's
                  equivalent wrapper for the full explanation (DateRangePicker self-applies
@@ -1585,29 +1836,41 @@
 
         {#snippet summary({layoutMode, filtersStacked})}
             {#if assetInfo}
-                <AssetPriceSummary {lastPrice} {deltaPercent} {deltaAbs} bind:displayCurrency assetCurrency={assetInfo.currency} {layoutMode} {filtersStacked} maxWidth={pickerMaxWidth} {livePriceConversionFailed} fxPairUrl={mainFxPairUrl} onCreateForex={() => (showFxPairAddModal = true)} />
+                <AssetPriceSummary
+                    {lastPrice}
+                    {deltaPercent}
+                    {deltaAbs}
+                    bind:displayCurrency
+                    assetCurrency={assetInfo.currency}
+                    {layoutMode}
+                    {filtersStacked}
+                    maxWidth={pickerMaxWidth}
+                    {livePriceConversionFailed}
+                    {livePriceDirection}
+                    {livePriceFlashToken}
+                    fxPairUrl={mainFxPairUrl}
+                    onCreateForex={() => (showFxPairAddModal = true)}
+                />
             {/if}
         {/snippet}
 
         {#snippet actions({showActionLabels})}
-            <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
-                <button
-                    class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {viewMode === 'absolute' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                    onclick={() => {
-                        viewMode = 'absolute';
-                    }}>Abs</button
-                >
-                <button
-                    class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {viewMode === 'percentage' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                    onclick={() => {
-                        viewMode = 'percentage';
-                    }}>%</button
-                >
-            </div>
+            <AiExportMenu
+                domain="asset"
+                compatibility={assetAiExportCompatibility}
+                memoryKey={`asset:${data.assetId}`}
+                defaultSelectionId="asset.market_analysis"
+                disabled={assetAiExportCatalogLoading || assetAiExportCatalogFailed || !assetInfo}
+                labels={assetAiExportLabels}
+                showLabel={showActionLabels}
+                onprepare={handleAssetAiExport}
+                oncopied={handleAssetAiExportCopied}
+                onerror={(error) => toasts.error(getAiExportErrorMessage($t, error))}
+            />
             <button
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 data-testid="asset-detail-edit-btn"
-                disabled={!assetInfo}
+                disabled={!assetInfo || !classificationLoaded}
                 onclick={() => {
                     editDataForModal = buildEditData();
                     editModalOpen = true;
@@ -1616,17 +1879,29 @@
                 <Pencil size={14} />
                 {#if showActionLabels}<span>{$t('common.edit')}</span>{/if}
             </button>
-            <button
-                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors
-                           {isManualOnly ? 'opacity-50 cursor-not-allowed' : ''}"
-                data-testid="asset-detail-sync-btn"
-                disabled={syncing || isManualOnly}
-                onclick={handleSync}
-                title={isManualOnly ? $t('assetDetail.syncDisabledManual') : ''}
-            >
-                <RotateCw class={syncing ? 'animate-spin' : ''} size={14} />
-                {#if showActionLabels}<span>{syncing ? $t('common.syncing') : isParametric ? $t('assetDetail.recalculate') : $t('common.sync')}</span>{/if}
-            </button>
+            {#if syncBlocked}
+                <Tooltip text={syncDisabledReason} position="top" maxWidth="320px" interactiveChild>
+                    <button
+                        class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors opacity-50 cursor-not-allowed"
+                        data-testid="asset-detail-sync-btn"
+                        disabled={syncing || syncBlocked}
+                        onclick={handleSync}
+                    >
+                        <RotateCw class={syncing ? 'animate-spin' : ''} size={14} />
+                        {#if showActionLabels}<span class="line-through">{syncing ? $t('common.syncing') : isParametric ? $t('assetDetail.recalculate') : $t('common.sync')}</span>{/if}
+                    </button>
+                </Tooltip>
+            {:else}
+                <button
+                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                    data-testid="asset-detail-sync-btn"
+                    disabled={syncing || syncBlocked}
+                    onclick={handleSync}
+                >
+                    <RotateCw class={syncing ? 'animate-spin' : ''} size={14} />
+                    {#if showActionLabels}<span>{syncing ? $t('common.syncing') : isParametric ? $t('assetDetail.recalculate') : $t('common.sync')}</span>{/if}
+                </button>
+            {/if}
             <button
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                 data-testid="asset-detail-refresh-btn"
@@ -1639,495 +1914,533 @@
         {/snippet}
     </PageToolbar>
 
-    <!-- ======================================================================= -->
-    <!-- Foldable Panel: Signals (ABOVE chart, replaces old Aesthetics position) -->
-    <!-- ======================================================================= -->
-    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
-        <div bind:this={signalsHeaderRef} class="w-full flex items-center gap-1 px-2 py-1.5">
-            <button class="flex items-center gap-2 px-2 py-1 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-lg" data-testid="asset-detail-signals-toggle" onclick={() => (showSignals = !showSignals)}>
-                <TrendingUp class="text-blue-500" size={15} />
-                {$t('common.signals')}
-            </button>
-            <div class="flex-1"></div>
-            <div class="shrink-0">
-                <AiExportMenu entries={assetAiExportEntries} loading={assetAiExportLoading} triggerLabel={$t('assetDetail.aiExport')} loadingLabel={$t('assetDetail.aiExportBuilding')} showLabel={showAiExportLabel} onselect={(id) => handleAssetAiExport(id as AssetPromptId)} />
-            </div>
-            <button class="flex items-center px-1 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-lg" data-testid="asset-detail-signals-chevron" onclick={() => (showSignals = !showSignals)} aria-label={$t('common.signals')}>
-                <ChevronDown class="transition-transform {showSignals ? 'rotate-180' : ''}" size={15} />
-            </button>
-        </div>
-        {#if showSignals}
-            <div data-testid="asset-detail-signals-panel" class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3">
-                <ChartSignalsSection
-                    signals={[...signals]}
-                    availablePairs={allConfiguredFxSlugs}
-                    availableAssets={allAssets.filter((a) => a.id !== data.assetId)}
-                    mainPairSlug={`asset-${data.assetId}`}
-                    onchange={handleSignalsChange}
-                    onsyncpair={handleSyncPair}
-                    ondetailpair={handleDetailPair}
-                    onsyncasset={handleSyncAsset}
-                    ondetailasset={handleDetailAsset}
-                    {signalSummaries}
-                    {dateStart}
-                    {displayCurrency}
-                    configuredFxSlugs={allConfiguredFxSlugs}
-                    oncreatefxpair={(slug) => {
-                        fxPairCreateSlug = slug;
-                        showFxPairAddModal = true;
-                    }}
-                    onsyncfxpair={handleSyncPair}
-                />
-            </div>
-        {/if}
-    </div>
+    {#if activeTab === 'overview'}
+        <!-- Unified data quality banners -->
+        <DataQualityBanner issues={assetDetailIssues} mode="flat" onaction={handleBannerAction} />
+    {/if}
 
-    <!-- ======================================================================= -->
-    <!-- Chart with left toolbar -->
-    <!-- ======================================================================= -->
-    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-4" data-testid="asset-detail-chart">
-        {#if loading && lineData.length === 0}
-            <div class="h-96 flex items-center justify-center">
-                <div class="text-center">
-                    <RefreshCw size={24} class="animate-spin text-libre-green mx-auto mb-2" />
-                    <p class="text-sm text-gray-500 dark:text-gray-400">{$t('assetDetail.loadingPrices')}</p>
+    {#if activeTab === 'overview'}
+        <!-- ======================================================================= -->
+        <!-- Foldable Panel: Signals (ABOVE chart, replaces old Aesthetics position) -->
+        <!-- ======================================================================= -->
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
+            <div class="relative">
+                <button type="button" class="absolute inset-0 z-0 w-full rounded-xl hover:bg-gray-50 dark:hover:bg-slate-700/50" data-testid="asset-detail-signals-toggle" aria-expanded={showSignals} aria-label={$t('common.signals')} onclick={() => (showSignals = !showSignals)}></button>
+                <div class="relative z-10 pointer-events-none w-full flex items-center gap-1 px-2 py-1.5" data-testid="asset-detail-signals-header">
+                    <span class="flex items-center gap-2 px-2 py-1 text-sm font-medium text-gray-700 dark:text-gray-200">
+                        <TrendingUp class="text-blue-500" size={15} />
+                        {$t('common.signals')}
+                    </span>
+                    <div class="flex-1"></div>
+                    <span class="flex items-center px-1 py-1 text-gray-700 dark:text-gray-200" data-testid="asset-detail-signals-chevron">
+                        <ChevronDown class="transition-transform {showSignals ? 'rotate-180' : ''}" size={15} />
+                    </span>
                 </div>
             </div>
-        {:else if lineData.length > 0}
-            <!-- Aesthetics panel (ABOVE chart, shown only when gear is active) -->
-            {#if showAesthetics}
-                <div data-testid="asset-detail-aesthetics-panel" class="mb-3 pb-3 border-b border-gray-100 dark:border-slate-700 relative">
-                    <button class="absolute top-0 right-0 p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors" onclick={() => (showAesthetics = false)} title={$t('common.close')}>
-                        <X size={16} />
-                    </button>
-                    <ChartAestheticsSection
-                        colorByBaseline={settings.colorByBaseline}
-                        areaFill={settings.areaFill}
-                        gridLines={settings.gridLines}
-                        staleGradient={settings.staleGradient}
-                        yAxisMode={settings.yAxisMode}
-                        yAxisMin={settings.yAxisMin}
-                        yAxisMax={settings.yAxisMax}
-                        onchange={handleAestheticsChange}
-                        disabledFields={disabledAesthetics}
+            {#if showSignals}
+                <div data-testid="asset-detail-signals-panel" class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3">
+                    <ChartSignalsSection
+                        signals={[...signals]}
+                        definitions={signalDefinitions}
+                        backendError={signalBackendError}
+                        {signalsLoading}
+                        onretrybackend={retryBackendSignals}
+                        availablePairs={allConfiguredFxSlugs}
+                        availableAssets={allAssets.filter((a) => a.id !== data.assetId)}
+                        mainPairSlug={`asset-${data.assetId}`}
+                        onchange={handleSignalsChange}
+                        onsyncpair={handleSyncPair}
+                        ondetailpair={handleDetailPair}
+                        onsyncasset={handleSyncAsset}
+                        ondetailasset={handleDetailAsset}
+                        {signalSummaries}
+                        {dateStart}
+                        {displayCurrency}
+                        configuredFxSlugs={allConfiguredFxSlugs}
+                        oncreatefxpair={(slug) => {
+                            fxPairCreateSlug = slug;
+                            showFxPairAddModal = true;
+                        }}
+                        onsyncfxpair={handleSyncPair}
                     />
                 </div>
             {/if}
+        </div>
 
-            <div class="relative">
-                <!-- Right toolbar -->
-                <div class="absolute top-0 right-0 z-10 flex items-center gap-1.5">
-                    <button
-                        data-testid="asset-detail-measure-btn"
-                        class="p-1.5 rounded-lg transition-colors {measureMode
-                            ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 ring-1 ring-violet-300 dark:ring-violet-700'
-                            : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
-                        onclick={async () => {
-                            if (measureMode) {
-                                measurePanel?.stopMeasureMode();
-                            } else {
-                                showMeasures = true;
-                                await tick();
-                                measurePanel?.startMeasureMode();
-                            }
-                        }}
-                        title={measureMode ? $t('common.exitMeasure') : $t('common.addMeasure')}
-                    >
-                        <Ruler size={16} />
-                    </button>
-                    <button
-                        data-testid="asset-detail-editdata-btn"
-                        class="p-1.5 rounded-lg transition-colors {showDataEditor
-                            ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 ring-1 ring-amber-300 dark:ring-amber-700'
-                            : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
-                        onclick={() => {
-                            if (showDataEditor) {
-                                showDataEditor = false;
-                                pendingPreviewSignal = null;
-                                if (savedPanelStates) {
-                                    showAesthetics = savedPanelStates.aesthetics;
-                                    showMeasures = savedPanelStates.measures;
-                                    showSignals = savedPanelStates.signals;
-                                    savedPanelStates = null;
-                                }
-                            } else {
-                                savedPanelStates = {aesthetics: showAesthetics, measures: showMeasures, signals: showSignals};
-                                showAesthetics = false;
-                                showMeasures = false;
-                                showSignals = false;
-                                showDataEditor = true;
-                            }
-                        }}
-                        title={showDataEditor ? $t('common.closeEditor') : $t('assetDetail.editData')}
-                    >
-                        <Pencil size={16} />
-                    </button>
-                    <button
-                        data-testid="asset-detail-aesthetics-toggle"
-                        class="p-1.5 rounded-lg transition-colors {showAesthetics
-                            ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-300 dark:ring-emerald-700'
-                            : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
-                        onclick={() => (showAesthetics = !showAesthetics)}
-                        title={$t('common.aesthetics')}
-                    >
-                        <Settings size={16} />
-                    </button>
+        <!-- ======================================================================= -->
+        <!-- Chart with left toolbar -->
+        <!-- ======================================================================= -->
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-4" data-testid="asset-detail-chart" data-view-mode={viewMode}>
+            {#if loading && lineData.length === 0}
+                <div class="h-96 flex items-center justify-center">
+                    <div class="text-center">
+                        <RefreshCw size={24} class="animate-spin text-libre-green mx-auto mb-2" />
+                        <p class="text-sm text-gray-500 dark:text-gray-400">{$t('assetDetail.loadingPrices')}</p>
+                    </div>
                 </div>
+            {:else if lineData.length > 0}
+                <!-- Aesthetics panel (ABOVE chart, shown only when gear is active) -->
+                {#if showAesthetics}
+                    <div data-testid="asset-detail-aesthetics-panel" class="mb-3 pb-3 border-b border-gray-100 dark:border-slate-700 relative">
+                        <button class="absolute top-0 right-0 p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors" onclick={() => (showAesthetics = false)} title={$t('common.close')}>
+                            <X size={16} />
+                        </button>
+                        <ChartAestheticsSection
+                            colorByBaseline={settings.colorByBaseline}
+                            areaFill={settings.areaFill}
+                            gridLines={settings.gridLines}
+                            staleGradient={settings.staleGradient}
+                            yAxisMode={settings.yAxisMode}
+                            yAxisMin={settings.yAxisMin}
+                            yAxisMax={settings.yAxisMax}
+                            onchange={handleAestheticsChange}
+                            disabledFields={disabledAesthetics}
+                        />
+                    </div>
+                {/if}
 
-                <PriceChartFull
-                    data={lineData}
-                    currency={displayCurrency}
-                    mainSeriesLabel={assetInfo?.display_name ?? ''}
-                    chartHeight="400px"
-                    overlaySignals={allOverlaySignals}
-                    eventMarkers={chartEventMarkers}
-                    {overlaySignalInfoMap}
-                    mainIconUrl={assetInfo?.icon_url}
-                    mainAssetType={assetInfo?.asset_type}
-                    colorByBaseline={settings.colorByBaseline}
-                    areaFill={settings.areaFill}
-                    showGridLines={settings.gridLines}
-                    showGradient={settings.staleGradient}
-                    yAxisMode={settings.yAxisMode}
-                    yAxisMin={settings.yAxisMin}
-                    yAxisMax={settings.yAxisMax}
-                    {measureMode}
-                    onMeasureClick={handleMeasureClick}
-                    onMeasureHover={(date, value) => measurePanel?.updatePendingEnd(date, value)}
-                    hideToolbar={true}
-                    externalChartType={chartType}
-                    onChartTypeChange={(t) => {
-                        chartType = t;
-                    }}
-                    externalViewMode={viewMode}
-                    editMode={showDataEditor}
-                    staleLabel={$t('chart.tooltip.stale')}
-                    fxStaleLabel={$t('chart.tooltip.fxStale')}
-                    displayCurrency={displayCurrency !== assetInfo?.currency ? displayCurrency : undefined}
-                    displayCurrencyFlag={displayCurrency !== assetInfo?.currency ? getCurrencyInfo(displayCurrency).flag_emoji : undefined}
-                    mainCurrency={assetInfo?.currency ?? undefined}
-                    mainCurrencyFlag={assetInfo?.currency ? getCurrencyInfo(assetInfo.currency).flag_emoji : undefined}
-                    onDblClick={(date) => {
-                        if (showDataEditor && assetDataEditorRef) {
-                            assetDataEditorRef.scrollToDate(date, 'prices');
-                        }
-                    }}
-                    onEventDblClick={(date) => {
-                        if (showDataEditor && assetDataEditorRef) {
-                            assetDataEditorRef.scrollToDate(date, 'events');
-                        }
-                    }}
-                />
-            </div>
-        {:else}
-            <div class="h-96 flex items-center justify-center">
-                <div class="text-center">
-                    {#if isManualOnly}
-                        <p class="text-gray-400 dark:text-gray-500 mb-3">{$t('assetDetail.noDataManual')}</p>
-                        <div class="flex items-center gap-2 justify-center">
-                            <button
-                                class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
-                                onclick={() => {
+                <div class="relative">
+                    <!-- Right toolbar -->
+                    <div class="absolute top-0 right-0 z-10 flex items-center gap-1.5">
+                        <button
+                            data-testid="asset-detail-measure-btn"
+                            class="p-1.5 rounded-lg transition-colors {measureMode
+                                ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 ring-1 ring-violet-300 dark:ring-violet-700'
+                                : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
+                            onclick={async () => {
+                                if (measureMode) {
+                                    measurePanel?.stopMeasureMode();
+                                } else {
+                                    showMeasures = true;
+                                    await tick();
+                                    measurePanel?.startMeasureMode();
+                                }
+                            }}
+                            title={measureMode ? $t('common.exitMeasure') : $t('common.addMeasure')}
+                        >
+                            <Ruler size={16} />
+                        </button>
+                        <button
+                            data-testid="asset-detail-editdata-btn"
+                            class="p-1.5 rounded-lg transition-colors {showDataEditor
+                                ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 ring-1 ring-amber-300 dark:ring-amber-700'
+                                : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
+                            onclick={() => {
+                                if (showDataEditor) {
+                                    showDataEditor = false;
+                                    pendingPreviewSignal = null;
+                                    if (savedPanelStates) {
+                                        showAesthetics = savedPanelStates.aesthetics;
+                                        showMeasures = savedPanelStates.measures;
+                                        showSignals = savedPanelStates.signals;
+                                        savedPanelStates = null;
+                                    }
+                                } else {
                                     savedPanelStates = {aesthetics: showAesthetics, measures: showMeasures, signals: showSignals};
                                     showAesthetics = false;
                                     showMeasures = false;
                                     showSignals = false;
                                     showDataEditor = true;
-                                }}
-                            >
-                                <Pencil class="inline mr-1" size={14} />
-                                {$t('fxDetail.insertManually')}
-                            </button>
+                                }
+                            }}
+                            title={showDataEditor ? $t('common.closeEditor') : $t('assetDetail.editData')}
+                        >
+                            <Pencil size={16} />
+                        </button>
+                        <button
+                            data-testid="asset-detail-aesthetics-toggle"
+                            class="p-1.5 rounded-lg transition-colors {showAesthetics
+                                ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-300 dark:ring-emerald-700'
+                                : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
+                            onclick={() => (showAesthetics = !showAesthetics)}
+                            title={$t('common.aesthetics')}
+                        >
+                            <Settings size={16} />
+                        </button>
+                    </div>
+
+                    <PriceChartFull
+                        data={lineData}
+                        currency={displayCurrency}
+                        mainSeriesLabel={assetInfo?.display_name ?? ''}
+                        chartHeight="400px"
+                        overlaySignals={allOverlaySignals}
+                        eventMarkers={chartEventMarkers}
+                        {overlaySignalInfoMap}
+                        mainIconUrl={assetInfo?.icon_url}
+                        mainAssetType={assetInfo?.asset_type}
+                        colorByBaseline={settings.colorByBaseline}
+                        areaFill={settings.areaFill}
+                        showGridLines={settings.gridLines}
+                        showGradient={settings.staleGradient}
+                        yAxisMode={settings.yAxisMode}
+                        yAxisMin={settings.yAxisMin}
+                        yAxisMax={settings.yAxisMax}
+                        {measureMode}
+                        onMeasureClick={handleMeasureClick}
+                        onMeasureHover={(date, value) => measurePanel?.updatePendingEnd(date, value)}
+                        hideToolbar={true}
+                        externalChartType={chartType}
+                        onChartTypeChange={(t) => {
+                            chartType = t;
+                        }}
+                        externalViewMode={viewMode}
+                        onViewModeChange={(mode) => {
+                            viewMode = mode;
+                        }}
+                        editMode={showDataEditor}
+                        staleLabel={$t('chart.tooltip.stale')}
+                        fxStaleLabel={$t('chart.tooltip.fxStale')}
+                        displayCurrency={displayCurrency !== assetInfo?.currency ? displayCurrency : undefined}
+                        displayCurrencyFlag={displayCurrency !== assetInfo?.currency ? getCurrencyInfo(displayCurrency).flag_emoji : undefined}
+                        mainCurrency={assetInfo?.currency ?? undefined}
+                        mainCurrencyFlag={assetInfo?.currency ? getCurrencyInfo(assetInfo.currency).flag_emoji : undefined}
+                        onDblClick={(date) => {
+                            if (showDataEditor && assetDataEditorRef) {
+                                assetDataEditorRef.scrollToDate(date, 'prices');
+                            }
+                        }}
+                        onEventDblClick={(date) => {
+                            if (showDataEditor && assetDataEditorRef) {
+                                assetDataEditorRef.scrollToDate(date, 'events');
+                            }
+                        }}
+                    />
+                </div>
+            {:else}
+                <div class="h-96 flex items-center justify-center">
+                    <div class="text-center">
+                        {#if isManualOnly}
+                            <p class="text-gray-400 dark:text-gray-500 mb-3">{$t('assetDetail.noDataManual')}</p>
+                            <div class="flex items-center gap-2 justify-center">
+                                <button
+                                    class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
+                                    onclick={() => {
+                                        savedPanelStates = {aesthetics: showAesthetics, measures: showMeasures, signals: showSignals};
+                                        showAesthetics = false;
+                                        showMeasures = false;
+                                        showSignals = false;
+                                        showDataEditor = true;
+                                    }}
+                                >
+                                    <Pencil class="inline mr-1" size={14} />
+                                    {$t('fxDetail.insertManually')}
+                                </button>
+                                <button
+                                    class="px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    disabled={!assetInfo}
+                                    onclick={() => {
+                                        editDataForModal = buildEditData();
+                                        editModalOpen = true;
+                                    }}
+                                >
+                                    {$t('common.edit')}
+                                </button>
+                            </div>
+                        {:else if isParametric}
+                            <p class="text-gray-400 dark:text-gray-500 mb-3">{$t('assetDetail.noDataScheduled')}</p>
                             <button
-                                class="px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 disabled={!assetInfo}
                                 onclick={() => {
                                     editDataForModal = buildEditData();
                                     editModalOpen = true;
-                                }}
+                                }}>{$t('common.edit')}</button
                             >
-                                {$t('common.edit')}
-                            </button>
-                        </div>
-                    {:else if isParametric}
-                        <p class="text-gray-400 dark:text-gray-500 mb-3">{$t('assetDetail.noDataScheduled')}</p>
+                        {:else}
+                            <p class="text-gray-400 dark:text-gray-500 mb-3">{$t('assetDetail.noData')}</p>
+                            <div class="flex items-center gap-2 justify-center">
+                                <button class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" onclick={handleSync} disabled={syncing}>{syncing ? $t('common.syncing') : $t('assetDetail.syncPrices')}</button>
+                                <!-- I-bis #6 — Add manually: open data editor pre-filtered on Prices tab -->
+                                <button
+                                    class="px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors"
+                                    data-testid="asset-detail-add-prices-manually"
+                                    onclick={() => {
+                                        savedPanelStates = {aesthetics: showAesthetics, measures: showMeasures, signals: showSignals};
+                                        showAesthetics = false;
+                                        showMeasures = false;
+                                        showSignals = false;
+                                        showDataEditor = true;
+                                    }}
+                                >
+                                    <Pencil class="inline mr-1" size={14} />
+                                    {$t('assetDetail.addPricesManually')}
+                                </button>
+                            </div>
+                        {/if}
+                    </div>
+                </div>
+            {/if}
+        </div>
+
+        <!-- ======================================================================= -->
+        <!-- Data Editor Placeholder -->
+        <!-- ======================================================================= -->
+        {#if showDataEditor}
+            <div data-testid="asset-detail-editor-panel" class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-amber-200 dark:border-amber-800">
+                <div class="flex items-center justify-between px-4 py-3 border-b border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-yellow-900/30 rounded-t-xl">
+                    <span class="flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-400">
+                        <Pencil size={15} />
+                        {$t('assetDetail.editData')}
+                    </span>
+                    <button
+                        class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                        onclick={() => {
+                            showDataEditor = false;
+                            pendingPreviewSignal = null;
+                            if (savedPanelStates) {
+                                showAesthetics = savedPanelStates.aesthetics;
+                                showMeasures = savedPanelStates.measures;
+                                showSignals = savedPanelStates.signals;
+                                savedPanelStates = null;
+                            }
+                        }}
+                        title={$t('common.closeEditor')}>✕</button
+                    >
+                </div>
+                <p class="px-4 pt-2 text-xs text-amber-700/70 dark:text-amber-400/70">
+                    💡 {pageLayoutMode === 'oneColumn' ? $t('assetDetail.editorTipMobile') : $t('assetDetail.editorTipDesktop')}
+                </p>
+                <div class="px-4 py-4">
+                    <AssetDataEditorSection
+                        bind:this={assetDataEditorRef}
+                        assetId={data.assetId}
+                        currency={assetInfo?.currency}
+                        {chartData}
+                        {events}
+                        bind:saving={savingEdit}
+                        bind:dirtyCount={editorDirtyCount}
+                        onsave={async (expandedRange) => {
+                            showDataEditor = false;
+                            pendingPreviewSignal = null;
+                            if (savedPanelStates) {
+                                showAesthetics = savedPanelStates.aesthetics;
+                                showMeasures = savedPanelStates.measures;
+                                showSignals = savedPanelStates.signals;
+                                savedPanelStates = null;
+                            }
+                            if (expandedRange) {
+                                dateStart = expandedRange.start;
+                                dateEnd = expandedRange.end;
+                                displayDateStart = isMaxPending ? 'min' : dateStart;
+                            }
+                            await handleRefresh();
+                        }}
+                        oncancel={() => {
+                            showDataEditor = false;
+                            pendingPreviewSignal = null;
+                            if (savedPanelStates) {
+                                showAesthetics = savedPanelStates.aesthetics;
+                                showMeasures = savedPanelStates.measures;
+                                showSignals = savedPanelStates.signals;
+                                savedPanelStates = null;
+                            }
+                        }}
+                        onpendingchange={(sig) => (pendingPreviewSignal = sig)}
+                    />
+                </div>
+            </div>
+        {/if}
+
+        <!-- ======================================================================= -->
+        <!-- Foldable Panel: Measures -->
+        <!-- ======================================================================= -->
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
+            <div
+                class="flex items-center justify-between px-4 py-2.5 cursor-pointer select-none hover:bg-gray-50 dark:hover:bg-slate-750 transition-colors rounded-t-xl"
+                role="button"
+                tabindex="0"
+                data-testid="asset-detail-measures-toggle"
+                onclick={() => (showMeasures = !showMeasures)}
+                onkeydown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        showMeasures = !showMeasures;
+                    }
+                }}
+            >
+                <div class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
+                    <Ruler class="text-violet-500" size={15} />
+                    {$t('common.measures')}
+                    {#if measureMode}
+                        <span class="text-[10px] px-1.5 py-0.5 bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 rounded-full">{$t('measure.active')}</span>
+                    {/if}
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <button
+                        type="button"
+                        class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md
+                               bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400
+                               hover:bg-violet-100 dark:hover:bg-violet-900/50
+                               transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={lineData.length < 2}
+                        data-testid="asset-detail-add-measure-btn"
+                        onclick={(e) => {
+                            e.stopPropagation();
+                            showMeasures = true;
+                            measurePanel?.addMeasureFromChartData();
+                        }}
+                        title={$t('common.addMeasure')}
+                    >
+                        <span class="text-sm leading-none">+</span>
+                        <span class="hidden sm:inline">{$t('common.addMeasure')}</span>
+                    </button>
+                    <ChevronDown class="transition-transform text-gray-400 {showMeasures ? 'rotate-180' : ''}" size={15} />
+                </div>
+            </div>
+            <div class={showMeasures ? 'px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3' : 'hidden'} data-testid="asset-detail-measures-panel">
+                <MeasurePanel
+                    bind:this={measurePanel}
+                    chartData={lineData}
+                    onmeasuremodechange={(active) => (measureMode = active)}
+                    onmeasureschange={(m) => (measureSignals = m)}
+                    {overlaySignals}
+                    {mainSignalInfo}
+                    {viewMode}
+                    displayCurrency={displayCurrency !== assetInfo?.currency ? displayCurrency : undefined}
+                    displayCurrencyFlag={displayCurrency !== assetInfo?.currency ? getCurrencyInfo(displayCurrency).flag_emoji : undefined}
+                    mainCurrency={assetInfo?.currency ?? undefined}
+                    mainCurrencyFlag={assetInfo?.currency ? getCurrencyInfo(assetInfo.currency).flag_emoji : undefined}
+                />
+            </div>
+        </div>
+
+        <!-- ======================================================================= -->
+        <!-- Foldable Panel: Metadata & Classification -->
+        <!-- ======================================================================= -->
+        {#if assetInfo}
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
+                <button
+                    class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-xl"
+                    data-testid="asset-detail-metadata-toggle"
+                    onclick={() => (showMetadata = !showMetadata)}
+                >
+                    <span class="flex items-center gap-2">
+                        <Info class="text-sky-500" size={15} />
+                        {$t('assetDetail.metadata')}
+                    </span>
+                    <ChevronDown class="transition-transform {showMetadata ? 'rotate-180' : ''}" size={15} />
+                </button>
+                {#if showMetadata}
+                    <div data-testid="asset-detail-metadata-panel" class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3 space-y-4">
+                        <!-- Description (from classification_params.short_description) — always first if set -->
+                        {#if shortDescription}
+                            <div>
+                                <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">{$t('common.description')}</h4>
+                                <p class="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap leading-relaxed">{shortDescription}</p>
+                            </div>
+                        {/if}
+
+                        <!-- External URLs (provider URL only — user URL is in header) -->
+                        {#if providerExternalUrl}
+                            <div>
+                                <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">{$t('assets.provider.providerUrl')}</h4>
+                                <a href={providerExternalUrl} target="_blank" rel="noopener noreferrer" class="text-sm text-libre-green hover:underline break-all">{providerExternalUrl}</a>
+                            </div>
+                        {/if}
+
+                        <!-- Classification Charts -->
+                        {#if classificationLoaded && (sectorDistribution || geographicDistribution)}
+                            <div class="space-y-3">
+                                <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">{$t('common.classification')}</h4>
+
+                                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                    {#if geographicDistribution && Object.keys(geographicDistribution).length > 0}
+                                        <div class="bg-gray-50 dark:bg-slate-700/30 rounded-lg p-3">
+                                            <h5 class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">{$t('common.geoDistribution')}</h5>
+                                            <GeographyMap data={geographicDistribution} height="280px" language={$currentLanguage} />
+                                        </div>
+                                    {/if}
+
+                                    {#if sectorDistribution && Object.keys(sectorDistribution).length > 0}
+                                        <div class="bg-gray-50 dark:bg-slate-700/30 rounded-lg p-3">
+                                            <h5 class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">{$t('common.sectorDistribution')}</h5>
+                                            <AllocationPieChart data={Object.entries(sectorDistribution).map(([name, w]) => ({name, value: w * 100, amount: 0, emoji: getSectorEmoji(name)}))} height="280px" />
+                                        </div>
+                                    {/if}
+                                </div>
+                            </div>
+                        {:else if !classificationLoaded}
+                            <div class="text-sm text-gray-500 dark:text-gray-400 italic">
+                                {$t('common.classification')} — {$t('common.loading')}...
+                            </div>
+                        {:else}
+                            <p class="text-sm text-gray-400 dark:text-gray-500">{$t('assetDetail.noClassification')}</p>
+                        {/if}
+
+                        <!-- Identifiers -->
+                        {#if identifiersList.length > 0}
+                            <div>
+                                <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">{$t('common.identifiers')}</h4>
+                                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                    {#each identifiersList as [label, value]}
+                                        <div class="bg-gray-50 dark:bg-slate-700/50 rounded-lg px-3 py-2">
+                                            <span class="text-[10px] uppercase text-gray-400 dark:text-gray-500">{label}</span>
+                                            <p class="text-sm font-mono text-gray-700 dark:text-gray-200">{value}</p>
+                                        </div>
+                                    {/each}
+                                </div>
+                            </div>
+                        {:else}
+                            <p class="text-sm text-gray-400 dark:text-gray-500">{$t('assetDetail.noIdentifiers')}</p>
+                        {/if}
+
+                        {#if providerAssignment}
+                            <div>
+                                <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">Provider</h4>
+                                <div class="flex items-center gap-3 text-sm flex-wrap">
+                                    <span class="inline-flex items-center gap-1.5 font-medium text-gray-700 dark:text-gray-200">
+                                        {#if providerIconUrl}
+                                            <img src={providerIconUrl} alt="" class="w-4 h-4 rounded-sm object-contain" />
+                                        {/if}
+                                        {getAssetProviderName(providerAssignment.provider_code)}
+                                    </span>
+                                    <span class="text-gray-400">→</span>
+                                    <span class="font-mono text-gray-500 dark:text-gray-400">{providerAssignment.identifier} ({providerAssignment.identifier_type})</span>
+                                    {#if providerAssignment.last_fetch_at}
+                                        <span class="text-xs text-gray-400 dark:text-gray-500">
+                                            {$t('assets.provider.lastFetch')}: {new Date(String(providerAssignment.last_fetch_at)).toLocaleDateString()}
+                                        </span>
+                                    {:else}
+                                        <span class="text-xs text-gray-400 dark:text-gray-500">{$t('assets.provider.neverFetched')}</span>
+                                    {/if}
+                                </div>
+                            </div>
+                        {/if}
+
                         <button
-                            class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            class="text-xs text-libre-green hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
                             disabled={!assetInfo}
                             onclick={() => {
                                 editDataForModal = buildEditData();
                                 editModalOpen = true;
-                            }}>{$t('common.edit')}</button
+                            }}
                         >
-                    {:else}
-                        <p class="text-gray-400 dark:text-gray-500 mb-3">{$t('assetDetail.noData')}</p>
-                        <div class="flex items-center gap-2 justify-center">
-                            <button class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" onclick={handleSync} disabled={syncing}>{syncing ? $t('common.syncing') : $t('assetDetail.syncPrices')}</button>
-                            <!-- I-bis #6 — Add manually: open data editor pre-filtered on Prices tab -->
-                            <button
-                                class="px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors"
-                                data-testid="asset-detail-add-prices-manually"
-                                onclick={() => {
-                                    savedPanelStates = {aesthetics: showAesthetics, measures: showMeasures, signals: showSignals};
-                                    showAesthetics = false;
-                                    showMeasures = false;
-                                    showSignals = false;
-                                    showDataEditor = true;
-                                }}
-                            >
-                                <Pencil class="inline mr-1" size={14} />
-                                {$t('assetDetail.addPricesManually')}
-                            </button>
-                        </div>
-                    {/if}
-                </div>
-            </div>
-        {/if}
-    </div>
-
-    <!-- ======================================================================= -->
-    <!-- Data Editor Placeholder -->
-    <!-- ======================================================================= -->
-    {#if showDataEditor}
-        <div data-testid="asset-detail-editor-panel" class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-amber-200 dark:border-amber-800">
-            <div class="flex items-center justify-between px-4 py-3 border-b border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-yellow-900/30 rounded-t-xl">
-                <span class="flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-400">
-                    <Pencil size={15} />
-                    {$t('assetDetail.editData')}
-                </span>
-                <button
-                    class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                    onclick={() => {
-                        showDataEditor = false;
-                        pendingPreviewSignal = null;
-                        if (savedPanelStates) {
-                            showAesthetics = savedPanelStates.aesthetics;
-                            showMeasures = savedPanelStates.measures;
-                            showSignals = savedPanelStates.signals;
-                            savedPanelStates = null;
-                        }
-                    }}
-                    title={$t('common.closeEditor')}>✕</button
-                >
-            </div>
-            <p class="px-4 pt-2 text-xs text-amber-700/70 dark:text-amber-400/70">
-                💡 {pageLayoutMode === 'oneColumn' ? $t('assetDetail.editorTipMobile') : $t('assetDetail.editorTipDesktop')}
-            </p>
-            <div class="px-4 py-4">
-                <AssetDataEditorSection
-                    bind:this={assetDataEditorRef}
-                    assetId={data.assetId}
-                    currency={assetInfo?.currency}
-                    {chartData}
-                    {events}
-                    bind:saving={savingEdit}
-                    bind:dirtyCount={editorDirtyCount}
-                    onsave={async (expandedRange) => {
-                        showDataEditor = false;
-                        pendingPreviewSignal = null;
-                        if (savedPanelStates) {
-                            showAesthetics = savedPanelStates.aesthetics;
-                            showMeasures = savedPanelStates.measures;
-                            showSignals = savedPanelStates.signals;
-                            savedPanelStates = null;
-                        }
-                        if (expandedRange) {
-                            dateStart = expandedRange.start;
-                            dateEnd = expandedRange.end;
-                            displayDateStart = isMaxPending ? 'min' : dateStart;
-                        }
-                        await handleRefresh();
-                    }}
-                    oncancel={() => {
-                        showDataEditor = false;
-                        pendingPreviewSignal = null;
-                        if (savedPanelStates) {
-                            showAesthetics = savedPanelStates.aesthetics;
-                            showMeasures = savedPanelStates.measures;
-                            showSignals = savedPanelStates.signals;
-                            savedPanelStates = null;
-                        }
-                    }}
-                    onpendingchange={(sig) => (pendingPreviewSignal = sig)}
-                />
-            </div>
-        </div>
-    {/if}
-
-    <!-- ======================================================================= -->
-    <!-- Foldable Panel: Measures -->
-    <!-- ======================================================================= -->
-    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
-        <div
-            class="flex items-center justify-between px-4 py-2.5 cursor-pointer select-none hover:bg-gray-50 dark:hover:bg-slate-750 transition-colors rounded-t-xl"
-            role="button"
-            tabindex="0"
-            data-testid="asset-detail-measures-toggle"
-            onclick={() => (showMeasures = !showMeasures)}
-            onkeydown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    showMeasures = !showMeasures;
-                }
-            }}
-        >
-            <div class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
-                <Ruler class="text-violet-500" size={15} />
-                {$t('common.measures')}
-                {#if measureMode}
-                    <span class="text-[10px] px-1.5 py-0.5 bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 rounded-full">{$t('measure.active')}</span>
+                            {$t('assetDetail.editViaModal')} →
+                        </button>
+                    </div>
                 {/if}
             </div>
-            <div class="flex items-center gap-1.5">
-                <button
-                    type="button"
-                    class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md
-                               bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400
-                               hover:bg-violet-100 dark:hover:bg-violet-900/50
-                               transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    disabled={lineData.length < 2}
-                    data-testid="asset-detail-add-measure-btn"
-                    onclick={(e) => {
-                        e.stopPropagation();
-                        showMeasures = true;
-                        measurePanel?.addMeasureFromChartData();
-                    }}
-                    title={$t('common.addMeasure')}
-                >
-                    <span class="text-sm leading-none">+</span>
-                    <span class="hidden sm:inline">{$t('common.addMeasure')}</span>
-                </button>
-                <ChevronDown class="transition-transform text-gray-400 {showMeasures ? 'rotate-180' : ''}" size={15} />
-            </div>
-        </div>
-        <div class={showMeasures ? 'px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3' : 'hidden'} data-testid="asset-detail-measures-panel">
-            <MeasurePanel
-                bind:this={measurePanel}
-                chartData={lineData}
-                onmeasuremodechange={(active) => (measureMode = active)}
-                onmeasureschange={(m) => (measureSignals = m)}
-                {overlaySignals}
-                {mainSignalInfo}
-                {viewMode}
-                displayCurrency={displayCurrency !== assetInfo?.currency ? displayCurrency : undefined}
-                displayCurrencyFlag={displayCurrency !== assetInfo?.currency ? getCurrencyInfo(displayCurrency).flag_emoji : undefined}
-                mainCurrency={assetInfo?.currency ?? undefined}
-                mainCurrencyFlag={assetInfo?.currency ? getCurrencyInfo(assetInfo.currency).flag_emoji : undefined}
+        {/if}
+    {:else if assetInfo && displayCurrency}
+        <div data-testid="asset-detail-risk-panel">
+            <AssetRiskScenariosView
+                assetId={data.assetId}
+                {dateStart}
+                {dateEnd}
+                targetCurrency={displayCurrency}
+                assetClass={assetInfo.asset_type}
+                sectorExposure={sectorDistribution}
+                geographyExposure={geographicDistribution}
+                {rollingRiskSignals}
+                refreshVersion={riskRefreshVersion}
+                onconfigure={openSignalConfiguration}
+                onsynced={handlePageSyncComplete}
             />
         </div>
-    </div>
-
-    <!-- ======================================================================= -->
-    <!-- Foldable Panel: Metadata & Classification -->
-    <!-- ======================================================================= -->
-    {#if assetInfo}
-        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
-            <button class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-xl" data-testid="asset-detail-metadata-toggle" onclick={() => (showMetadata = !showMetadata)}>
-                <span class="flex items-center gap-2">
-                    <Info class="text-sky-500" size={15} />
-                    {$t('assetDetail.metadata')}
-                </span>
-                <ChevronDown class="transition-transform {showMetadata ? 'rotate-180' : ''}" size={15} />
-            </button>
-            {#if showMetadata}
-                <div data-testid="asset-detail-metadata-panel" class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3 space-y-4">
-                    <!-- Description (from classification_params.short_description) — always first if set -->
-                    {#if shortDescription}
-                        <div>
-                            <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">{$t('common.description')}</h4>
-                            <p class="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap leading-relaxed">{shortDescription}</p>
-                        </div>
-                    {/if}
-
-                    <!-- External URLs (provider URL only — user URL is in header) -->
-                    {#if providerExternalUrl}
-                        <div>
-                            <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">{$t('assets.provider.providerUrl')}</h4>
-                            <a href={providerExternalUrl} target="_blank" rel="noopener noreferrer" class="text-sm text-libre-green hover:underline break-all">{providerExternalUrl}</a>
-                        </div>
-                    {/if}
-
-                    <!-- Classification Charts -->
-                    {#if classificationLoaded && (sectorDistribution || geographicDistribution)}
-                        <div class="space-y-3">
-                            <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">{$t('common.classification')}</h4>
-
-                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                {#if geographicDistribution && Object.keys(geographicDistribution).length > 0}
-                                    <div class="bg-gray-50 dark:bg-slate-700/30 rounded-lg p-3">
-                                        <h5 class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">{$t('common.geoDistribution')}</h5>
-                                        <GeographyMap data={geographicDistribution} height="280px" language={$currentLanguage} />
-                                    </div>
-                                {/if}
-
-                                {#if sectorDistribution && Object.keys(sectorDistribution).length > 0}
-                                    <div class="bg-gray-50 dark:bg-slate-700/30 rounded-lg p-3">
-                                        <h5 class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">{$t('common.sectorDistribution')}</h5>
-                                        <AllocationPieChart data={Object.entries(sectorDistribution).map(([name, w]) => ({name, value: w * 100, amount: 0, emoji: getSectorEmoji(name)}))} height="280px" />
-                                    </div>
-                                {/if}
-                            </div>
-                        </div>
-                    {:else if !classificationLoaded}
-                        <div class="text-sm text-gray-500 dark:text-gray-400 italic">
-                            {$t('common.classification')} — {$t('common.loading')}...
-                        </div>
-                    {:else}
-                        <p class="text-sm text-gray-400 dark:text-gray-500">{$t('assetDetail.noClassification')}</p>
-                    {/if}
-
-                    <!-- Identifiers -->
-                    {#if identifiersList.length > 0}
-                        <div>
-                            <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">{$t('common.identifiers')}</h4>
-                            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                {#each identifiersList as [label, value]}
-                                    <div class="bg-gray-50 dark:bg-slate-700/50 rounded-lg px-3 py-2">
-                                        <span class="text-[10px] uppercase text-gray-400 dark:text-gray-500">{label}</span>
-                                        <p class="text-sm font-mono text-gray-700 dark:text-gray-200">{value}</p>
-                                    </div>
-                                {/each}
-                            </div>
-                        </div>
-                    {:else}
-                        <p class="text-sm text-gray-400 dark:text-gray-500">{$t('assetDetail.noIdentifiers')}</p>
-                    {/if}
-
-                    {#if providerAssignment}
-                        <div>
-                            <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">Provider</h4>
-                            <div class="flex items-center gap-3 text-sm flex-wrap">
-                                <span class="inline-flex items-center gap-1.5 font-medium text-gray-700 dark:text-gray-200">
-                                    {#if providerIconUrl}
-                                        <img src={providerIconUrl} alt="" class="w-4 h-4 rounded-sm object-contain" />
-                                    {/if}
-                                    {getAssetProviderName(providerAssignment.provider_code)}
-                                </span>
-                                <span class="text-gray-400">→</span>
-                                <span class="font-mono text-gray-500 dark:text-gray-400">{providerAssignment.identifier} ({providerAssignment.identifier_type})</span>
-                                {#if providerAssignment.last_fetch_at}
-                                    <span class="text-xs text-gray-400 dark:text-gray-500">
-                                        {$t('assets.provider.lastFetch')}: {new Date(String(providerAssignment.last_fetch_at)).toLocaleDateString()}
-                                    </span>
-                                {:else}
-                                    <span class="text-xs text-gray-400 dark:text-gray-500">{$t('assets.provider.neverFetched')}</span>
-                                {/if}
-                            </div>
-                        </div>
-                    {/if}
-
-                    <button
-                        class="text-xs text-libre-green hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
-                        disabled={!assetInfo}
-                        onclick={() => {
-                            editDataForModal = buildEditData();
-                            editModalOpen = true;
-                        }}
-                    >
-                        {$t('assetDetail.editViaModal')} →
-                    </button>
-                </div>
-            {/if}
+    {:else}
+        <div class="flex min-h-48 items-center justify-center" data-testid="asset-detail-risk-loading">
+            <RefreshCw size={24} class="animate-spin text-libre-green" />
         </div>
     {/if}
 

@@ -16,7 +16,7 @@ The filter bar above the chart provides controls for customizing the view:
 
 Select a time window for the chart data:
 
-- **Presets**: 1W, 1M, 3M, 6M, 1Y, ALL
+- **Presets**: 1W, 1M, 3M, 6M, 1Y, 2Y, YTD, MAX — when the bar has leftover space, extra **fill presets** appear to use it (3Y, 5Y, 10Y and WTD, MTD, QTD)
 - **Custom**: pick a start and end date using the calendar picker
 
 ### 💱 Currency Selector
@@ -47,7 +47,7 @@ Hover over a marker to see the event details (date, type, value).
 
 ## 🎨 Aesthetics
 
-Click the **Settings** (⚙️) button to toggle the aesthetics panel for chart customization (line color, style, etc.).
+Click the **Settings** (⚙️) button to toggle the inline aesthetics panel (area fill, baseline colors, grid lines, stale gradient, Y-axis scale). The same settings — plus overlay signals — can also be edited for all asset charts at once from the **Chart Settings** modal on the [Assets list page](../index.md), which shows a live preview while you edit; see [Chart Settings](../../fx/chart-settings.md) for how the modal and its preview work (the Assets scope is independent from FX).
 
 ---
 

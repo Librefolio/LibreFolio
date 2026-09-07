@@ -1,0 +1,27 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "src/routes/**/+{page,layout,error,server}*.{ts,js,svelte}",
+    "src/hooks.{server,client}.ts",
+    "src/app.d.ts",
+    "src/**/*.{test,spec}.ts",
+    "e2e/**/*.{test,spec}.ts",
+    "scripts/*.{ts,mjs}",
+    "vite.config.ts",
+    "vitest.config.ts",
+    "svelte.config.js",
+    "playwright.config.ts"
+  ],
+  "project": ["src/**/*.{ts,js,svelte}", "e2e/**/*.ts"],
+  "ignore": [
+    "src/lib/api/generated.ts",
+    "src/__mocks__/**"
+  ],
+  "ignoreDependencies": [
+    "@tailwindcss/postcss",
+    "autoprefixer",
+    "postcss",
+    "tailwindcss"
+  ],
+  "ignoreExportsUsedInFile": true
+}

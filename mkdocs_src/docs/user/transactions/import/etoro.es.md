@@ -12,7 +12,7 @@ Para exportar su historial de transacciones desde eToro:
 2. Haga clic en **Cartera (Portfolio)** en la barra lateral izquierda y luego haga clic en el icono del reloj para abrir **Historial (History)**.
 3. Haga clic en el icono del engranaje de configuración en la parte superior derecha y seleccione **Estado de cuenta (Account Statement)**.
 4. Elija la fecha de inicio y fin para su estado de cuenta y luego haga clic en **Crear (Create)**.
-5. Seleccione la opción de exportación **Excel** o **CSV**. Guarde el archivo en su computadora.
+5. Seleccione la opción de exportación **CSV**. Guarde el archivo en su computadora.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
  <!-- [Screenshot Placeholder: eToro Portfolio History - Account Statement creation and export] -->
@@ -22,7 +22,7 @@ Para exportar su historial de transacciones desde eToro:
 
 !!! warning "No utilice estados de cuenta en PDF"
 
-    eToro permite descargar los estados de cuenta como PDF. Los archivos PDF no pueden ser procesados por el importador BRIM. Asegúrese de seleccionar el formato de hoja de cálculo (XLSX o CSV).
+    eToro permite descargar los estados de cuenta como PDF o archivos Excel. Solo los archivos **CSV** pueden ser procesados por el importador BRIM. Asegúrese de seleccionar el formato CSV.
 
 !!! warning "CFD frente a Activos Reales"
 

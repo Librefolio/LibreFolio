@@ -22,7 +22,7 @@ LibreFolio supports multiple pricing providers to automatically fetch current pr
             <img src="https://www.borsaitaliana.it/media-rwd/assets/images/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="Borsa Italiana favicon">
             <span class="card-title" style="margin: 0;">Borsa Italiana</span>
         </div>
-        <span class="card-desc">Italian stock exchange integration for Euronext instruments.</span>
+        <span class="card-desc">Italian stocks, bonds, ETFs, and funds with smart URL search.</span>
     </a>
     <a href="css-scraper/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
         <div style="display: flex; align-items: center; gap: 0.75rem;">
@@ -53,7 +53,7 @@ LibreFolio supports multiple pricing providers to automatically fetch current pr
 |----------|:---:|:---:|:---:|---|---|
 | <img src="https://s.yimg.com/cv/apiv2/myc/finance/Finance_icon_0919_250x252.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **Yahoo Finance** | ✅ | ✅ | ✅ | Ticker (e.g., `AAPL`, `VWCE.DE`) | Best for stocks, ETFs, mutual funds |
 | <img src="https://www.justetf.com/android-chrome-144x144.png?v2" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **justETF** | ✅ (EUR) | ✅ | ✅ | ISIN (e.g., `IE00BK5BQT80`) | European ETFs, multi-currency |
-| <img src="https://www.borsaitaliana.it/media-rwd/assets/images/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **Borsa Italiana** | ✅ | ✅ | ✅ | ISIN or alpha code | Italian stocks, bonds, and ETFs |
+| <img src="https://www.borsaitaliana.it/media-rwd/assets/images/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **Borsa Italiana** | ✅ | ✅ | ✅ | ISIN; funds use internal code | Italian stocks, bonds, ETFs, and funds. Fund NAV current value only when dated today; history is one NAV point at its real date. |
 | <img src="../../../static/cssscraper.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **CSS Scraper** | ✅ | ❌ | ❌ | URL | Scrape any web page for price data |
 | <img src="../../../static/scheduled_investment.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **Scheduled Investment** | ✅ | ✅ | ❌ | Auto-generated | Fixed-income instruments with interest schedules |
 
@@ -61,6 +61,5 @@ LibreFolio supports multiple pricing providers to automatically fetch current pr
 
 - **Stocks & ETFs**: Use **Yahoo Finance** — widest coverage, supports search
 - **European ETFs**: Use **justETF** for more detailed European ETF data
-- **Borsa Italiana**: Use Borsa Italiana directly for Euronext Milano listings
-- **Bonds on Borsa Italiana**: Use **CSS Scraper** to scrape prices directly from the web
+- **Borsa Italiana**: Use Borsa Italiana directly for Euronext Milano stocks, bonds, ETFs, and funds. Smart Search can also resolve supported Borsa provider URLs and capture fund pricing parameters automatically.
 - **Savings accounts / Fixed deposits**: Use **Scheduled Investment** with interest rate schedules

@@ -57,7 +57,21 @@ System-wide configuration with lock toggle:
 
 - Max file upload size
 - Registration toggle
+- Scheduler configuration and new-user defaults
 - Other app-wide settings
+
+For the three *display* defaults (`default_language`, `default_currency`, `default_theme`) the
+tab reuses the **same shared `Setting*` wrappers as the PreferencesTab**, passing the
+`embedded` prop (see below) so they sit inside the tab's own cards without double separators.
+
+### 🧹 CachePanel
+
+`CachePanel.svelte` shows the status of every named backend cache (the theine registry): name,
+`current_size / maxsize`, and a human-formatted TTL, refreshed on demand. Status is visible to
+any authenticated user; the per-cache **Clear** and **Clear all** buttons appear only when the
+`canEdit` prop is set (it mirrors the Global-settings lock). Both clear actions pass through a
+danger confirmation modal — after a clear, the next fetch hits the providers again. Backend
+contract: [Cache Registry & Admin](../../../architecture/settings_cache.md).
 
 ### ℹ️ AboutTab
 
@@ -96,6 +110,12 @@ Each setting type has a specialized component that handles its own UI and events
 - `isModified`: Highlights the field if changed.
 - `isNonDefault`: Shows a "Reset to Default" indicator.
 - `isLocked`: Disables input.
+
+The three wrappers shared with the Global Settings tab — `SettingSelect`, `SettingCurrency`,
+`SettingTheme` — also accept **`embedded`**: when `true`, the row drops its own padding and
+bottom border so it can sit inside a parent card without a double separator. The standalone
+Preferences tab renders rows in a list and keeps the default; the Global Settings tab embeds
+the shared wrappers in its own per-setting cards and passes `embedded`.
 
 ## 💻 Usage Example
 

@@ -32,5 +32,12 @@ Before adopting a UI library adapter, verify it explicitly supports the target f
 
 | Role | Path |
 |------|------|
-| Custom Svelte 5 adapter (workaround) | `frontend/src/lib/tanstack-table/` |
+| Custom Svelte 5 adapter (workaround) | **removed** — was `frontend/src/lib/tanstack-table/` |
 | DataTable component | `frontend/src/lib/components/table/DataTable.svelte` |
+
+> **Path note (2026-09-01)**: `frontend/src/lib/tanstack-table/` no longer exists,
+> and `@tanstack/*` appears **nowhere** in `frontend/package.json` or in any source
+> file. The workaround adapter this page describes was not merely refactored — the
+> dependency it worked around was **dropped entirely**, which is the outcome the page
+> argues for. `DataTable.svelte` is now a plain Svelte 5 component with no external
+> table engine. The row is kept below as a historical reference and marked as gone.

@@ -264,6 +264,46 @@ class TestBalanceWalk:
             print_success("Delete deposit → downstream BUY correctly rejected")
 
     # ------------------------------------------------------------------
+    # Test 6b: delete ADJUSTMENT whose removal drives ASSET negative → fail
+    # ------------------------------------------------------------------
+    async def test_delete_adjustment_cascades_asset_negative(self):
+        """Delete-side asset walk: removing the +5 seed leaves a bare −5.
+
+        The cash side of this cascade is covered by test_delete_deposit_cascades;
+        the asset side is what a single-row delete of an ADJUSTMENT hits (the
+        E2E for the bulk-workspace delete builds exactly this scenario).
+        """
+        print_section("Balance Walk: delete ADJ +5 → downstream ADJ −5 invalid")
+        async with httpx.AsyncClient() as client:
+            broker_id, asset_id = await _setup(client)
+            d1 = str(date.today() - timedelta(days=10))
+            d2 = str(date.today() - timedelta(days=5))
+
+            resp = await _commit(
+                client,
+                {
+                    "creates": [
+                        # ADJUSTMENT with qty>0 requires an explicit cost basis.
+                        {"broker_id": broker_id, "type": "ADJUSTMENT", "date": d1, "quantity": "5", "asset_id": asset_id, "cost_basis_override": {"code": "EUR", "amount": "10"}},
+                        {"broker_id": broker_id, "type": "ADJUSTMENT", "date": d2, "quantity": "-5", "asset_id": asset_id},
+                    ]
+                },
+            )
+            assert resp["committed"] is True, f"setup commit rolled back: {resp.get('issues')}"
+            seed_id = resp["results"][0]["ids"][0]
+            counterpart_id = resp["results"][1]["ids"][0]
+
+            try:
+                # Delete only the seed → day2 has −5 with nothing to draw from.
+                resp2 = await _commit(client, {"deletes": [seed_id]})
+                assert resp2["committed"] is False, f"expected rollback, got {resp2}"
+                issues = resp2.get("issues", [])
+                assert any("balanceAsset" in (i.get("code") or "") for i in issues), f"expected a balanceAsset issue, got {issues}"
+                print_success("Delete ADJ +5 → downstream ADJ −5 correctly rejected")
+            finally:
+                await _commit(client, {"deletes": [seed_id, counterpart_id]})
+
+    # ------------------------------------------------------------------
     # Test 7: Same-day multiple compensating ops → pass
     # ------------------------------------------------------------------
     async def test_same_day_multi_ops_compensating(self):

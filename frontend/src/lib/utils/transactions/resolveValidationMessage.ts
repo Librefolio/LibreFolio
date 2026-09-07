@@ -117,7 +117,7 @@ function extractFieldName(issue: ResolvableIssue): string | null {
  * Uses the i18n key `transactions.fields.<fieldName>`.
  * Falls back to a cleaned-up version of the raw name.
  */
-function translateFieldName(fieldName: string, t: (key: string, opts?: any) => string): string {
+export function translateFieldName(fieldName: string, t: (key: string, opts?: any) => string): string {
     // Flatten dots for the i18n key: "cash.amount" → "cash_amount"
     const keyPart = fieldName.replace(/\./g, '_');
     const key = `transactions.fields.${keyPart}`;

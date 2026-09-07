@@ -10,6 +10,7 @@ Set up your local development environment and learn the daily workflow:
 
 - 📦 **[Host Installation](../admin/host_installation.md)** — Set up Python, Node.js, and Pipenv environment
 - 🔄 **[Developer Workflow](dev_workflow.md)** — Start Vite dev server and view all development CLI commands
+- 🚦 **[Lint Gates & Code Policy](lint_gates.md)** — The ruff gate list, justified-noqa conventions, and code policies the linter can't express
 
 !!! tip "Quick start"
 
@@ -34,7 +35,8 @@ Set up your local development environment and learn the daily workflow:
     - 🛡️ [Security & Authentication](architecture/security.md) — JWT cookies, endpoint protection
     - 👤 [Users & Roles](architecture/users_and_brokers.md) — Login flow, session, user roles
     - 🔑 [Access Control (RBAC)](architecture/access_control.md) — Broker sharing permissions
-    - ⚙️ [Settings System](architecture/settings.md) — Global + user settings, fallback logic
+    - ⚙️ [Settings System](architecture/settings.md) — SETTINGS_REGISTRY, user vs global storage, base-currency resolution
+    - 🧹 [Cache Registry & Admin](architecture/settings_cache.md) — named theine caches, `/settings/cache/*` admin endpoints
 - 🗃️ **Database Schema**:
     - 📊 [Overview](architecture/database/index.md) — ER diagram, design philosophy
     - 👤 [Users & Access](architecture/database/users_access.md) · 🏦 [Brokers & Transactions](architecture/database/brokers_transactions.md) · 📈 [Assets & Pricing](architecture/database/assets_pricing.md) · 💱 [FX Rates & Routes](architecture/database/fx_rates.md)
@@ -45,6 +47,7 @@ Set up your local development environment and learn the daily workflow:
 
 - 📥 **[BRIM (Broker Report Import Manager)](backend/brim/architecture.md)** — CSV/Excel import pipeline, plugin architecture
 - 📈 **[Asset Pricing & Metadata](backend/assets/architecture.md)** — How asset prices and metadata are fetched and managed
+- 📏 **[Price Resolver](backend/transactions/price_resolver.md)** — The single daily valuation-mark source behind NAV/MWRR/TWRR/ROI
 - 💱 **[Foreign Exchange (FX)](backend/fx/architecture.md)** — Multi-provider currency conversion system
     - 🔀 [FX Configuration & Routing](backend/fx/configuration.md) — Chain routing algorithm
     - 🔌 [FX Providers](backend/fx/providers/index.md) — ECB, FED, BOE, SNB technical details

@@ -5,6 +5,11 @@
  * then caches it for the entire session. Both API responses are stable
  * (providers are registered at startup, currencies don't change).
  *
+ * There is deliberately no invalidation API: the graph is built only from
+ * provider capabilities, which are fixed at backend startup — the MANUAL
+ * sentinel is skipped and user FX routes/rates are not graph inputs — so a
+ * mid-session change is impossible and the cache can never go stale.
+ *
  * Usage:
  *   const graph = await getCurrencyGraph();
  *   const paths = findAllPaths(graph, 'RON', 'USD');
@@ -31,9 +36,6 @@ type CurrencyGraph = MultiDirectedGraph<Record<string, never>, EdgeAttributes>;
 
 /** Cached graph instance */
 let cachedGraph: CurrencyGraph | null = null;
-
-/** Hash of provider codes used to build the cached graph (for invalidation) */
-let cachedProvidersHash: string | null = null;
 
 /** Cached provider info list */
 let cachedFxProviders: ProviderInfo[] = [];
@@ -93,7 +95,6 @@ export async function getCurrencyGraph(): Promise<CurrencyGraph> {
 
             // Cache
             cachedFxProviders = providers;
-            cachedProvidersHash = JSON.stringify(providers.map((p) => p.code).sort());
             cachedGraph = graph;
             fxProvidersVersion.update((v) => v + 1);
 
@@ -126,15 +127,4 @@ export function getCachedFxProviders(): ProviderInfo[] {
 export async function findConversionPaths(source: string, target: string, maxDepth: number = 4): Promise<ChainStep[][]> {
     const graph = await getCurrencyGraph();
     return findAllPaths(graph as Parameters<typeof findAllPaths>[0], source, target, maxDepth);
-}
-
-/**
- * Invalidate the cached graph (force rebuild on next access).
- * Normally not needed — the graph is stable for the session.
- */
-export function invalidateCurrencyGraph(): void {
-    cachedGraph = null;
-    cachedProvidersHash = null;
-    cachedFxProviders = [];
-    buildPromise = null;
 }

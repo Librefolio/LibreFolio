@@ -33,8 +33,8 @@ where:
 
 | Parameter | Key | Default | Description |
 |---|---|---|---|
-| Amplitude | `amplitude` | 10 | Peak oscillation range as % of base value. |
-| Period | `period` | 365 | Full cycle length in days. |
+| Amplitude | `amplitude` | 15 | Peak oscillation range as % of base value. |
+| Period | `period` | 45 | Full cycle length in days. |
 | Offset | `offset` | 0 | Vertical shift as % of base value. |
 
 ---

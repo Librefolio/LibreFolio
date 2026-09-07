@@ -11,7 +11,7 @@ These Playwright tests cover fundamental UI components that are used across the 
 | **Authentication** | Login, registration, logout, session persistence |
 | **Settings** | Profile editing, preferences tabs, password change |
 | **Files** | File upload, file list, drag & drop, file deletion |
-| **Select Components** | `SearchSelect`, `BaseDropdown`, currency pickers |
+| **Select Components** | `SearchSelect`, `SimpleSelect`, currency pickers |
 | **Image Crop** | `ImageEditModal`, crop presets, zoom, rotation, format export |
 
 ## 🚀 Running

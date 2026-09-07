@@ -30,9 +30,37 @@ All tests are executed through `dev.py`:
 | Flag | Description |
 |------|-------------|
 | `--verbose` / `-v` | Show full pytest output |
-| `--coverage` | Run with code coverage tracking |
-| `--cov-clean-backend` | Clean backend coverage data (`htmlcov-backend/` + `.coverage` files) |
-| `--cov-clean-frontend` | Clean frontend coverage data (`htmlcov-frontend/` + `.coverage` files) |
+| `--coverage [py\|js\|all]` | Run with code coverage tracking. The language is optional and defaults to `all` |
+| `--cov-clean-backend` | Clean Python coverage from backend tests (`htmlcov-backend/` + `.coverage_data/backend`) |
+| `--cov-clean-backend-e2e` | Clean Python coverage collected during E2E runs (`htmlcov-backend-e2e/` + `.coverage_data/frontend`) |
+| `--cov-clean-js` | Clean JS/Svelte coverage (`coverage-js/`). Manual utility only — a `--coverage js` run cleans it by itself |
+| `--workers N\|auto` | Run isolation-safe backend units in parallel. Default `1` — the serial path, unchanged. `auto` is half the cores |
+| `--fail-fast` | Stop handing out work after the first red. The default runs everything and reports every failure |
+| `--log-dir PATH` | One log file per test unit. Defaults to `.testLog`; `--log-dir ""` turns it off |
+| `--no-consolidate` | Keep the one-invocation-per-action shape on the frontend instead of grouping a category into a single Playwright and vitest run |
+
+!!! note "Where the flags go"
+
+    They belong to `./dev.py test`, so they come **before** the category:
+    `./dev.py test --workers 4 --coverage py services all`.
+
+!!! warning "`--cov-clean-frontend` is deprecated"
+
+    It still works as an alias for `--cov-clean-backend-e2e`, but the old name was
+    misleading: it never cleaned JavaScript coverage. It cleans the **Python**
+    coverage collected while Playwright drives the backend.
+
+    JS coverage has no accumulate-or-clean choice to make. It is raw V8 data whose
+    byte offsets only mean anything for the bundle that produced them, so it cannot
+    survive a frontend rebuild — a `--coverage js|all` run therefore always wipes it
+    first. `--cov-clean-js` exists only to clean it outside a run.
+
+!!! tip "Two axes, not one"
+
+    `--coverage` selects **which language** is measured; the suite you run selects
+    **which tests drive it**. See [Coverage Model](coverage-model.md) for the full
+    picture — including why the report formerly called `htmlcov-frontend/` actually
+    measured Python.
 
 ### 🔍 Provider Filter Flags (external, all, all-backend)
 
@@ -159,9 +187,10 @@ LibreFolio/
 │       ├── backend_20260416_0930
 │       ├── backend_20260416_0951
 │       └── frontend_20260415_1420
-├── htmlcov-backend/            # HTML report: backend tests only
-├── htmlcov-frontend/           # HTML report: frontend E2E → backend coverage
-└── htmlcov/                    # HTML report: combined (backend + frontend merged)
+├── htmlcov-backend/            # HTML report: Python, driven by backend tests
+├── htmlcov-backend-e2e/        # HTML report: Python, driven by frontend E2E
+├── htmlcov/                    # HTML report: Python, combined
+└── frontend/coverage-js/       # JS/Svelte coverage (unit, e2e, combined)
 ```
 
 | File | Updated by | Contains |
@@ -170,8 +199,9 @@ LibreFolio/
 | `.coverage_data/backend` | `run_command()` finally block | Accumulated backend-only coverage, grows with each backend test run |
 | `.coverage_data/frontend` | `_finalize_coverage()` | Server subprocess coverage from Playwright E2E |
 | `htmlcov-backend/` | `_finalize_coverage()` | HTML report from `.coverage_data/backend` |
-| `htmlcov-frontend/` | `_finalize_coverage()` | HTML report from `.coverage_data/frontend` |
+| `htmlcov-backend-e2e/` | `_finalize_coverage()` | HTML report from `.coverage_data/frontend` |
 | `htmlcov/` | `_finalize_coverage()` | HTML report from merged backend + frontend |
+| `frontend/coverage-js/` | `_finalize_js_coverage()` | JS/Svelte reports — see [Coverage Model](coverage-model.md) |
 
 ### Running with Coverage
 
@@ -182,7 +212,7 @@ LibreFolio/
 ./dev.py test --coverage all
 
 # Clean stale data before a fresh run
-./dev.py test --coverage --cov-clean-backend --cov-clean-frontend all
+./dev.py test --coverage --cov-clean-backend --cov-clean-backend-e2e all
 ```
 
 #### Incremental Runs (append to existing)
@@ -211,8 +241,12 @@ in the existing `.coverage` database thanks to `--cov-append`:
 
 ```bash
 ./dev.py test coverage show backend    # open htmlcov-backend/
-./dev.py test coverage show frontend   # open htmlcov-frontend/
+./dev.py test coverage show frontend   # open htmlcov-backend-e2e/
 ./dev.py test coverage show combined   # open htmlcov/ (merged)
+
+./dev.py test coverage show js         # open frontend/coverage-js/combined/
+./dev.py test coverage show js-unit    # open frontend/coverage-js/unit-combined/
+./dev.py test coverage show js-e2e     # open frontend/coverage-js/e2e/
 ```
 
 ### Coverage Isolation
@@ -237,7 +271,7 @@ After pytest (finally block):
 
 After all tests (_finalize_coverage):
   .coverage_data/backend → htmlcov-backend/     (generate HTML report)
-  .coverage_data/frontend → htmlcov-frontend/
+  .coverage_data/frontend → htmlcov-backend-e2e/
   merge both → htmlcov/                          (combined report)
 ```
 
@@ -248,6 +282,11 @@ After all tests (_finalize_coverage):
     be consumed and deleted. Files in a subdirectory are safe.
 
 ### Frontend Coverage Architecture
+
+!!! info "This section is about **Python** coverage driven by the E2E suite"
+
+    For JS/Svelte coverage — the frontend's *own* code — see
+    [Coverage Model](coverage-model.md).
 
 Backend coverage during Playwright E2E tests requires a precise signal chain so that
 `coverage run` receives SIGTERM (not SIGKILL) and can write `.coverage.<pid>` data.
@@ -284,10 +323,23 @@ writes `.coverage.<pid>` before the process exits.
     By default, Playwright sends **SIGKILL** to terminate the webServer.
     SIGKILL cannot be caught or handled — the process is killed instantly
     and no coverage data is ever written. This is the most common cause of
-    missing `htmlcov-frontend/`.
+    missing `htmlcov-backend-e2e/`.
 
 !!! warning "Without `exec` at any level"
 
     If any level uses `subprocess.run()` instead of exec, SIGTERM only reaches
     the parent process. The child (`coverage run`) becomes an **orphan** and no
     coverage data is written.
+
+!!! danger "The grace window must be wide enough"
+
+    SIGTERM is only half the story: Playwright falls back to **SIGKILL** once the
+    `gracefulShutdown.timeout` expires. Flushing the coverage data file takes real
+    time, and the default 5 s was not always enough — when it wasn't, the run lost
+    **all** backend coverage and reported only a terse
+    `No .coverage.* files found!` at the end, which looks like a configuration
+    problem rather than a race.
+
+    The timeout is therefore widened to **30 s whenever `COVERAGE_BACKEND` is set**,
+    and left at 5 s otherwise (outside coverage there is nothing to flush, so a slow
+    shutdown would only waste time).

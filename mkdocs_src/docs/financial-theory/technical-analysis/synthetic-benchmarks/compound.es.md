@@ -65,7 +65,7 @@ Esto es matemáticamente equivalente a la forma cerrada $y_0(1+r)^t$, pero reemp
 
 | Parámetro | Clave | Valor predeterminado | Descripción |
 |---|---|---|---|
-| Tasa Anual | `annualRate` | 7 | Tasa de crecimiento compuesto en porcentaje por año. |
+| Tasa Anual | `annualRate` | 8 | Tasa de crecimiento compuesto en porcentaje por año. |
 | Desplazamiento | `offset` | 0 | Desplazamiento vertical como % del valor base. |
 
 ---

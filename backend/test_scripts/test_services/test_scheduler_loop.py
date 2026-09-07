@@ -15,6 +15,7 @@ from backend.app.config import PROJECT_ROOT
 
 sys.path.insert(0, str(PROJECT_ROOT))
 
+import backend.app.services.scheduler.state as state_mod
 from backend.app.services.scheduler.scheduler import due_current_price, due_history_sync
 from backend.app.services.scheduler.settings import SchedulerSettings
 from backend.app.services.scheduler.state import JobState, SchedulerState
@@ -113,7 +114,6 @@ class TestStateRoundtrip:
         """SLO-003: Save SchedulerState with all fields, reload and verify all fields match."""
         print_section("SLO-003: State serialization roundtrip")
 
-        import backend.app.services.scheduler.state as state_mod
 
         monkeypatch.setattr(state_mod, "get_data_dir", lambda: str(tmp_path))
 
@@ -162,7 +162,6 @@ class TestStateRoundtrip:
         """SLO-003b: JSON file has correct top-level keys: current_price, history_sync."""
         print_section("SLO-003b: JSON structure verification")
 
-        import backend.app.services.scheduler.state as state_mod
 
         monkeypatch.setattr(state_mod, "get_data_dir", lambda: str(tmp_path))
 

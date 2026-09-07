@@ -14,11 +14,11 @@ Un **graphique circulaire** montrant la ventilation par secteur d'activité (ex:
 
 ## 🌍 Répartition Géographique
 
-### Carte du Monde
+### World du Monde
 
 Une **carte du monde interactive** où les pays sont colorés selon le poids de l'allocation. Survolez un pays pour voir son pourcentage.
 
-### Ventilation par Pays
+### Country par Pays
 
 Un **graphique circulaire** montrant la ventilation en pourcentage par pays ou région (ex: États-Unis 60%, Europe 25%, Asie 15%...).
 

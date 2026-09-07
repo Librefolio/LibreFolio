@@ -56,6 +56,8 @@
     }
 
     async function handleSubmit() {
+        if (isSubmitting || success) return;
+
         error = '';
         success = '';
 
@@ -103,6 +105,9 @@
 
         if (result.status === 'success') {
             success = $_('settings.passwordChanged');
+            currentPassword = '';
+            newPassword = '';
+            confirmPassword = '';
             setTimeout(() => {
                 dispatch('success');
                 handleClose();
@@ -141,14 +146,14 @@
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="currentPassword">
                     {$_('settings.currentPassword')}
                 </label>
-                <PasswordInput autocomplete="current-password" bind:value={currentPassword} disabled={isSubmitting} id="currentPassword" placeholder={$_('settings.currentPassword')} testId="password-current" />
+                <PasswordInput autocomplete="current-password" bind:value={currentPassword} disabled={isSubmitting || !!success} id="currentPassword" placeholder={$_('settings.currentPassword')} testId="password-current" />
             </div>
 
             <div class="space-y-2">
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="newPassword">
                     {$_('settings.newPassword')}
                 </label>
-                <PasswordInput autocomplete="new-password" bind:value={newPassword} disabled={isSubmitting} id="newPassword" placeholder={$_('settings.newPassword')} testId="password-new" />
+                <PasswordInput autocomplete="new-password" bind:value={newPassword} disabled={isSubmitting || !!success} id="newPassword" placeholder={$_('settings.newPassword')} testId="password-new" />
                 <PasswordStrength password={newPassword} />
             </div>
 
@@ -156,7 +161,7 @@
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="confirmPassword">
                     {$_('settings.confirmNewPassword')}
                 </label>
-                <PasswordInput autocomplete="new-password" bind:value={confirmPassword} disabled={isSubmitting} id="confirmPassword" placeholder={$_('settings.confirmNewPassword')} testId="password-confirm" />
+                <PasswordInput autocomplete="new-password" bind:value={confirmPassword} disabled={isSubmitting || !!success} id="confirmPassword" placeholder={$_('settings.confirmNewPassword')} testId="password-confirm" />
                 {#if confirmPassword && newPassword !== confirmPassword}
                     <p class="text-xs text-red-500">{$_('settings.passwordsMustMatch')}</p>
                 {/if}
@@ -168,7 +173,7 @@
             <button class="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors disabled:opacity-50" data-testid="password-change-cancel" disabled={isSubmitting} on:click={handleClose} type="button">
                 {$_('common.cancel')}
             </button>
-            <button class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" data-testid="password-change-submit" disabled={!canSubmit || isSubmitting} on:click={handleSubmit} type="button">
+            <button class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" data-testid="password-change-submit" disabled={!canSubmit || isSubmitting || !!success} on:click={handleSubmit} type="button">
                 {#if isSubmitting}
                     {$_('common.loading')}
                 {:else}

@@ -116,7 +116,7 @@ cp -r backend/data/prod/ /path/to/backup/librefolio-$(date +%Y%m%d)/
 
 If you are running LibreFolio via Docker Compose (the standard deployment method), the production data directory is bind-mounted directly to the `./LibreFolio-data` directory on your host machine (and mapped to `/app/backend/data/prod-docker` inside the container).
 
-Therefore, you do not need any special Docker copy commands; simply backing up the `./LibreFolio-data` folder on your host machine is sufficient to secure your data.
+Therefore, you do not need any special Docker copy commands; back up the `./LibreFolio-data` folder on your host machine. For a consistent backup, stop the container first. `sqlite/app.db` contains structured data, while `custom-uploads/` and `broker_reports/uploaded/` are needed to preserve uploaded files.
 
 ### ✅ What to Back Up
 

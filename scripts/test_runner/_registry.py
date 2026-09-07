@@ -5,19 +5,20 @@ Built by calling populate_registry() from each category module.
 Each module owns its own entries (functions, names, descriptions, help text).
 """
 
-from ._backend_external import populate_registry as _pop_external
+from ._backend_api import populate_registry as _pop_api  # registers both "api" and "e2e"
 from ._backend_db import populate_registry as _pop_db
+from ._backend_external import populate_registry as _pop_external
+from ._backend_schemas import populate_registry as _pop_schemas
 from ._backend_services import populate_registry as _pop_services
 from ._backend_utils import populate_registry as _pop_utils
-from ._backend_schemas import populate_registry as _pop_schemas
-from ._backend_api import populate_registry as _pop_api  # registers both "api" and "e2e"
-from ._frontend_utility import populate_registry as _pop_front_utility
-from ._frontend_broker import populate_registry as _pop_front_broker
-from ._frontend_user import populate_registry as _pop_front_user
-from ._frontend_fx import populate_registry as _pop_front_fx
+from ._frontend_ai_export import populate_registry as _pop_front_ai_export
 from ._frontend_asset import populate_registry as _pop_front_asset
-from ._frontend_transaction import populate_registry as _pop_front_transaction
+from ._frontend_broker import populate_registry as _pop_front_broker
+from ._frontend_fx import populate_registry as _pop_front_fx
 from ._frontend_portfolio import populate_registry as _pop_front_portfolio
+from ._frontend_transaction import populate_registry as _pop_front_transaction
+from ._frontend_user import populate_registry as _pop_front_user
+from ._frontend_utility import populate_registry as _pop_front_utility
 
 # ── Assemble the registry ───────────────────────────────────────────────
 # Order matters: it determines the order in CLI help and "all" suites.
@@ -37,3 +38,4 @@ _pop_front_fx(TEST_REGISTRY)
 _pop_front_asset(TEST_REGISTRY)
 _pop_front_transaction(TEST_REGISTRY)
 _pop_front_portfolio(TEST_REGISTRY)
+_pop_front_ai_export(TEST_REGISTRY)

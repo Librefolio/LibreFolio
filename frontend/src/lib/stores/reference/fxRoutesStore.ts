@@ -35,7 +35,7 @@ let loadPromise: Promise<void> | null = null;
 /**
  * Reactive version counter — incremented whenever the routes data changes.
  * Subscribe in components (`void $fxRoutesVersion`) to retrigger derived
- * computations that call `getConfiguredCurrencies()`.
+ * computations that call `getConfiguredCurrencySet()`.
  */
 export const fxRoutesVersion = writable(0);
 
@@ -101,11 +101,6 @@ export function invalidateFxRoutes(): void {
     bumpVersion();
 }
 
-/** Sorted list of currencies reachable via a configured route (empty if not loaded yet). */
-export function getConfiguredCurrencies(): string[] {
-    return configuredCurrencies;
-}
-
 /** Set of currencies reachable via a configured route. */
 export function getConfiguredCurrencySet(): Set<string> {
     return configuredCurrencySet;
@@ -114,14 +109,4 @@ export function getConfiguredCurrencySet(): Set<string> {
 /** Set of configured pair slugs (alphabetical "BASE-QUOTE"). */
 export function getConfiguredPairSlugs(): Set<string> {
     return configuredPairSlugs;
-}
-
-/** Check if routes have been loaded. */
-export function isFxRoutesLoaded(): boolean {
-    return loaded;
-}
-
-/** Check if routes are currently being loaded. */
-export function isFxRoutesLoading(): boolean {
-    return loading;
 }

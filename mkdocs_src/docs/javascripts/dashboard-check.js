@@ -4,15 +4,12 @@
  * Adds a 🚀 dashboard icon in the MkDocs header (next to theme toggle and
  * language selector). The icon is hidden by default and only shown when the
  * LibreFolio server is online (health check passes).
- *
- * Also updates the homepage "Go to Dashboard" button if present.
  */
 (function () {
     'use strict';
 
     var healthUrl = '/api/v1/system/health';
     var dashboardUrl = '/';
-    var fallbackUrl = 'getting-started/installation/';
 
     function injectStyles() {
         var style = document.createElement('style');
@@ -70,16 +67,6 @@
             headerInner.appendChild(icon);
         }
 
-        // Homepage button (if present on the page)
-        var dashboardBtn = document.getElementById('dashboard-link');
-
-        // Start offline
-        if (dashboardBtn) {
-            dashboardBtn.href = fallbackUrl;
-            dashboardBtn.innerHTML = 'Server Offline - Setup Guide 📘';
-            dashboardBtn.classList.add('md-button--secondary');
-        }
-
         // Health check
         fetch(healthUrl)
             .then(function (response) {
@@ -93,14 +80,6 @@
 
                 // Show header icon
                 icon.classList.add('online');
-
-                // Update homepage button
-                if (dashboardBtn) {
-                    dashboardBtn.href = dashboardUrl;
-                    dashboardBtn.classList.remove('md-button--disabled', 'md-button--secondary');
-                    dashboardBtn.innerHTML = 'Go to Dashboard 🚀';
-                    dashboardBtn.title = 'Go to Dashboard';
-                }
             })
             .catch(function (error) {
                 console.log('Dashboard status: OFFLINE');

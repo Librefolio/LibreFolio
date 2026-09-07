@@ -28,7 +28,7 @@ Navega a **Activos** en la barra lateral para ver todos tus activos. La página 
 - 🗃️ **Activos Archivados**: Alterna entre posiciones activas y activos archivados para mantener tu lista limpia.
 - ⏱️ **Selector de Delta de Tiempo**: Cambia el marco temporal utilizado para calcular los cambios de precio (ej. `1D`, `1W`, `1M`, `YTD`, `ALL`).
 - 🔄 **Sincronización y Actualización**: Sincroniza los datos de precios en tiempo real para todos los proveedores configurados o actualiza la lista manualmente.
-- 🖱️ **Menú Contextual**: Haz clic derecho en cualquier fila del diseño de tabla de datos para acceder a acciones rápidas (Editar, Eliminar, Sincronizar).
+- 🖱️ **Menú Contextual**: Haz clic derecho en cualquier fila del diseño de tabla de datos para acceder a acciones rápidas (**Sincronizar**, **Actualizar**, **Fusionar**, **Eliminar**). Sincronizar está deshabilitado para los activos sin proveedor de precios y para los activos archivados; Fusionar pliega un activo duplicado en otro — transacciones, precios y eventos convergen en el destino y el activo de origen se elimina.
 
 Haz clic en cualquier tarjeta de activo para navegar a su **[página de detalles](detail/index.md)**.
 
@@ -50,11 +50,11 @@ Obtención automática de precios desde Yahoo Finance, justETF, CSS Scraper o el
 
 ## 📡 Precios en Tiempo Real y Ticker en Tiempo Real
 
-Para mantenerte actualizado sobre los movimientos del mercado sin obligarte a actualizar la página constantemente, LibreFolio muestra insignias de precios compactas y en vivo en las páginas del **panel de control** y de **Detalles del Activo**.
+Para mantenerte actualizado sobre los movimientos del mercado sin obligarte a actualizar la página constantemente, LibreFolio muestra insignias de precios compactas y en vivo en las páginas de la **lista de Activos** y de **Detalles del Activo**.
 
 ### ⏱️ Sondeo Automático (Polling)
 
-Al visualizar estas páginas, tu navegador consulta al backend cada **30 segundos** los precios actuales de los activos. Este proceso se ejecuta silenciosamente en segundo plano y no es bloqueante (la interfaz de usuario está lista instantáneamente y los precios se cargan a medida que llegan).
+Al visualizar estas páginas, tu navegador consulta al backend cada **30 segundos** los precios actuales de los activos. Este proceso se ejecuta silenciosamente en segundo plano y no es bloqueante (la interfaz de usuario está lista instantáneamente y los precios se cargan a medida que llegan). El panel de control no realiza sondeos: muestra los últimos precios almacenados.
 
 ### 🎨 Indicadores Visuales
 

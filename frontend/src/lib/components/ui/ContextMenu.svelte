@@ -9,6 +9,7 @@
 <script lang="ts">
     import {onMount} from 'svelte';
     import type {Component} from 'svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
 
     export interface ContextMenuItem {
         type?: 'action' | 'separator';
@@ -17,6 +18,10 @@
         icon?: Component;
         variant?: 'default' | 'danger';
         disabled?: boolean;
+        title?: string;
+        testid?: string;
+        iconClass?: string;
+        labelClass?: string;
     }
 
     interface Props {
@@ -139,13 +144,36 @@
     {#each items as item}
         {#if item.type === 'separator'}
             <hr class="context-separator" />
+        {:else if item.title}
+            <Tooltip text={item.title} position="right" maxWidth="320px" interactiveChild wrapperClass="w-full">
+                <button
+                    type="button"
+                    role="menuitem"
+                    class="context-item {item.variant === 'danger' ? 'danger' : ''}"
+                    disabled={item.disabled}
+                    data-testid={item.testid ?? `context-menu-action-${item.id}`}
+                    title={item.title}
+                    onclick={(e) => {
+                        e.stopPropagation();
+                        if (!item.disabled && item.id) {
+                            onAction(item.id);
+                        }
+                    }}
+                >
+                    {#if item.icon}
+                        {@const Icon = item.icon}
+                        <Icon size={16} class={item.iconClass ?? ''} />
+                    {/if}
+                    <span class={item.labelClass ?? ''}>{item.label ?? ''}</span>
+                </button>
+            </Tooltip>
         {:else}
             <button
                 type="button"
                 role="menuitem"
                 class="context-item {item.variant === 'danger' ? 'danger' : ''}"
                 disabled={item.disabled}
-                data-testid="context-menu-action-{item.id}"
+                data-testid={item.testid ?? `context-menu-action-${item.id}`}
                 onclick={(e) => {
                     e.stopPropagation();
                     if (!item.disabled && item.id) {
@@ -155,9 +183,9 @@
             >
                 {#if item.icon}
                     {@const Icon = item.icon}
-                    <Icon size={16} />
+                    <Icon size={16} class={item.iconClass ?? ''} />
                 {/if}
-                <span>{item.label ?? ''}</span>
+                <span class={item.labelClass ?? ''}>{item.label ?? ''}</span>
             </button>
         {/if}
     {/each}

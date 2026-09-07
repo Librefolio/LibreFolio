@@ -8,7 +8,7 @@
  * - Database populated with EUR-USD data
  */
 
-import {expect, test} from '@playwright/test';
+import {expect, test} from '../fixtures/playwright';
 import {login} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {goToFxDetailPage} from './fx-helpers';
@@ -24,7 +24,6 @@ test.describe('FX Data Editor', () => {
     test('can open data editor', async ({page}) => {
         await goToFxDetailPage(page, 'EUR-USD');
         await page.getByTestId('fx-detail-edit-btn').click();
-        await page.waitForTimeout(500);
         await expect(page.getByTestId('fx-detail-editor-panel')).toBeVisible();
     });
 
@@ -34,7 +33,6 @@ test.describe('FX Data Editor', () => {
     test('data editor table has rows', async ({page}) => {
         await goToFxDetailPage(page, 'EUR-USD');
         await page.getByTestId('fx-detail-edit-btn').click();
-        await page.waitForTimeout(1000);
         const editorPanel = page.getByTestId('fx-detail-editor-panel');
         await expect(editorPanel).toBeVisible();
 
@@ -50,12 +48,10 @@ test.describe('FX Data Editor', () => {
     test('closing editor hides the panel', async ({page}) => {
         await goToFxDetailPage(page, 'EUR-USD');
         await page.getByTestId('fx-detail-edit-btn').click();
-        await page.waitForTimeout(500);
         await expect(page.getByTestId('fx-detail-editor-panel')).toBeVisible();
 
         // Click the edit button again to close (toggle)
         await page.getByTestId('fx-detail-edit-btn').click();
-        await page.waitForTimeout(500);
         await expect(page.getByTestId('fx-detail-editor-panel')).not.toBeVisible();
     });
 });

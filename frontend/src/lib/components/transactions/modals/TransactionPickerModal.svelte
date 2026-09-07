@@ -15,7 +15,7 @@
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import TransactionsTable from '../TransactionsTable.svelte';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
-    import {canEditBroker, getBrokerRole, getBrokerInfo, getAllBrokers} from '$lib/stores/reference/brokerStore';
+    import {canEditBroker, getBrokerRole, getBrokerInfo, getAccessibleBrokers} from '$lib/stores/reference/brokerStore';
     import {getBrokerIconHtmlById} from '$lib/utils/broker/brokerHelpers';
     import {getRoleSvgHtml} from '$lib/utils/broker/brokerRoleHelpers';
     import {txStoreGetAll, txStoreGet, type TXReadItem} from '$lib/stores/transactions/txStore.svelte';
@@ -40,7 +40,7 @@
     let allRows = $derived(txStoreGetAll());
 
     /** Brokers from store (for TransactionsTable compatibility). */
-    let brokers = $derived(getAllBrokers() as BrokerLike[]);
+    let brokers = $derived(getAccessibleBrokers() as BrokerLike[]);
 
     /** Filtered rows: exclude IDs already in BulkModal, optionally include only specific IDs */
     let filteredMain = $derived(allRows.filter((r) => !excludeIds.has(r.id) && (includeIds == null || includeIds.has(r.id))));

@@ -10,6 +10,17 @@ export interface SelectOption {
     value: string;
     /** Display text for the option */
     label: string;
+    /**
+     * Render as a non-selectable section title rather than an option.
+     *
+     * A header answers "why is this here" without the user having to choose it, which is what a
+     * list mixing things and places to look cannot do. It is skipped by the keyboard, ignored by
+     * Enter, and — crucially — dropped from the results when the search empties its section: a
+     * title standing over nothing is worse than no title at all.
+     *
+     * Still needs a unique `value`, since the list is keyed by it (e.g. `__section:archive`).
+     */
+    header?: boolean;
     /** Optional text for search matching (combined with label and value) */
     searchText?: string;
     /** Disable this option */
@@ -24,28 +35,4 @@ export interface SelectOption {
     badgeClass?: string;
     /** Tooltip text shown on hover over the badge */
     badgeTooltip?: string;
-}
-
-/**
- * Props shared by dropdown-based select components
- */
-export interface BaseDropdownProps {
-    /** Disable the dropdown */
-    disabled?: boolean;
-    /** Position of dropdown relative to trigger */
-    dropdownPosition?: 'top' | 'bottom' | 'auto';
-}
-
-/**
- * Props for SimpleSelect and SearchSelect
- */
-export interface SelectProps extends BaseDropdownProps {
-    /** Currently selected value */
-    value: string;
-    /** Available options */
-    options: SelectOption[];
-    /** Placeholder when no value selected */
-    placeholder?: string;
-    /** Show loading state */
-    loading?: boolean;
 }

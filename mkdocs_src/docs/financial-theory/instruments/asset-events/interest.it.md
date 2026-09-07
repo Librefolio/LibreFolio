@@ -139,7 +139,7 @@ In LibreFolio, un evento `INTEREST` (e la corrispondente transazione di portafog
 - **Amount**: L'importo in contanti ricevuto
 - **Currency**: La valuta del pagamento
 
-### La Differenza Contabile: Interessi vs Dividendi
+### The Differenza Contabile: Interessi vs Dividendi
 È fondamentale distinguere tra una transazione di **Interessi** e una di **Dividendi** a livello di database:
 
 1. **Interessi (basati su Debito/Rendimento)**: Un pagamento di interessi rappresenta il rendimento su debiti o depositi di liquidità (es. conti di risparmio bancari, prestiti P2P o cedole obbligazionarie). Nel tracciamento del portafoglio a partita doppia, questi rappresentano entrate di cassa (`cash.amount > 0`) dove l'asset sottostante è opzionale. La transazione nel database richiede `quantity = 0` perché non vengono scambiate unità dell'asset durante un pagamento di interessi in contanti.

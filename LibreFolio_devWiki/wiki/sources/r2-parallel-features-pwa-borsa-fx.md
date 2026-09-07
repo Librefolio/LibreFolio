@@ -25,7 +25,7 @@ Four independent features/fixes developed in a parallel terminal without formal 
 ## 1. PWA Support (Progressive Web App)
 
 **Commits**: `b0bfde60`, `f6023a73`, `6db90b73`, `2b0142f0`
-**Plan file**: `LibreFolio_developer_journal/RoadmapV4_UI/plan-pwa-mobile-optimizations.prompt.md`
+**Plan file**: `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Standalone/plan-pwa-mobile-optimizations.prompt.md`
 **Status**: ✅ Completed (2026-05-26)
 
 ### What was done
@@ -57,7 +57,7 @@ Four independent features/fixes developed in a parallel terminal without formal 
 | CSS safe-area | `frontend/src/app.css` |
 | User docs | `mkdocs_src/docs/user/pwa.en.md` |
 | Dev docs | `mkdocs_src/docs/developer/frontend/pwa.md` |
-| Plan | `LibreFolio_developer_journal/RoadmapV4_UI/plan-pwa-mobile-optimizations.prompt.md` |
+| Plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Standalone/plan-pwa-mobile-optimizations.prompt.md` |
 
 ---
 

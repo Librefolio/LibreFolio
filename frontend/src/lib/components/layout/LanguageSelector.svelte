@@ -4,15 +4,12 @@
      * Language selector dropdown for header.
      * Uses custom dropdown styling optimized for header placement (minimal, transparent).
      */
-    import {currentLanguage} from '$lib/stores/app/language';
-    import {LANGUAGE_OPTIONS, type SupportedLocale} from '$lib/i18n';
+    import {availableLanguages, currentLanguage, currentLanguageFlag, currentLanguageName} from '$lib/stores/app/language';
+    import type {SupportedLocale} from '$lib/i18n';
     import {ChevronDown} from 'lucide-svelte';
 
     let isOpen = $state(false);
     let containerRef: HTMLDivElement | null = $state(null);
-
-    // Get current language info
-    let currentLangInfo = $derived(LANGUAGE_OPTIONS.find((l) => l.code === $currentLanguage) || LANGUAGE_OPTIONS[0]);
 
     // Close on click outside
     $effect(() => {
@@ -49,14 +46,14 @@
 </script>
 
 <div bind:this={containerRef} class="relative" data-testid="language-selector">
-    <button class="flex items-center space-x-1 p-2 rounded-lg hover:bg-white/20 dark:hover:bg-slate-600 transition-all" data-testid="language-selector-button" onclick={() => (isOpen = !isOpen)}>
-        <span class="text-xl emoji-flag">{currentLangInfo.flag}</span>
+    <button class="flex items-center space-x-1 p-2 rounded-lg hover:bg-white/20 dark:hover:bg-slate-600 transition-all" data-testid="language-selector-button" aria-label={$currentLanguageName} onclick={() => (isOpen = !isOpen)}>
+        <span class="text-xl emoji-flag">{$currentLanguageFlag}</span>
         <ChevronDown class="text-gray-600 dark:text-gray-300 transition-transform {isOpen ? 'rotate-180' : ''}" size={14} />
     </button>
 
     {#if isOpen}
         <div class="absolute right-0 mt-2 w-40 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-gray-100 dark:border-slate-700 overflow-hidden z-50" role="menu">
-            {#each LANGUAGE_OPTIONS as lang}
+            {#each availableLanguages as lang}
                 <button
                     onclick={() => handleLanguageChange(lang.code)}
                     role="menuitem"

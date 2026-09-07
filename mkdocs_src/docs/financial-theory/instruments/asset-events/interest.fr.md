@@ -139,7 +139,7 @@ Dans LibreFolio, un événement `INTEREST` (et la transaction de portefeuille co
 - **Amount** : Le montant en espèces reçu
 - **Currency** : La devise du paiement
 
-### La différence comptable : Intérêt vs Dividende
+### The différence comptable : Intérêt vs Dividende
 Il est crucial de distinguer une transaction d'**Intérêt** d'une transaction de **Dividende** au niveau de la base de données :
 
 1. **Intérêt (basé sur la dette/le rendement)** : Un paiement d'intérêt représente le rendement d'une dette ou de dépôts de liquidités (ex: comptes d'épargne bancaires, prêts P2P ou coupons obligataires). Dans le suivi de portefeuille en partie double, ceux-ci représentent des entrées de fonds (`cash.amount > 0`) où l'actif sous-jacent est optionnel. La transaction en base de données requiert `quantity = 0` car aucune unité de l'actif n'est échangée lors d'un paiement d'intérêt en espèces.

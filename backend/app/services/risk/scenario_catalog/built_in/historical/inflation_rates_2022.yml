@@ -1,0 +1,26 @@
+schema_version: 1
+id: inflation_rates_2022
+kind: historical_replay
+tags: [global, inflation, rates]
+name:
+  en: Inflation and rate shock 2022
+  it: Shock inflazione e tassi 2022
+  fr: Choc d'inflation et de taux de 2022
+  es: Choque de inflación y tipos de 2022
+description:
+  en: Broad 2022 repricing phase driven by inflation and rapidly rising interest rates.
+  it: Ampia fase di riprezzamento del 2022 guidata dall'inflazione e dal rapido aumento dei tassi.
+  fr: Large phase de réévaluation en 2022, portée par l'inflation et la hausse rapide des taux.
+  es: Amplia fase de reajuste de precios en 2022 impulsada por la inflación y la rápida subida de tipos.
+defaults:
+  start: 2022-01-03
+  end: 2022-10-14
+  missing_history_policy: manual_proxy_or_exclude
+  composition_policy: current_buy_and_hold
+editable:
+  dates: true
+  missing_history_policy: true
+  proxies: true
+  exclusions: true
+limits:
+  minimum_calendar_days: 1

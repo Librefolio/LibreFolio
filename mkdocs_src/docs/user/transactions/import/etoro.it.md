@@ -12,7 +12,7 @@ Per esportare la cronologia delle transazioni da eToro:
 2. Clicca su **Portafoglio** nella barra laterale sinistra, quindi clicca sull'icona dell'orologio per aprire **History**.
 3. Clicca sull'icona dell'ingranaggio delle impostazioni in alto a destra e seleziona **Account Statement**.
 4. Scegli la data di inizio e di fine per il tuo estratto conto, quindi clicca su **Create**.
-5. Seleziona l'opzione di esportazione **Excel** o **CSV**. Salva il file sul tuo computer.
+5. Seleziona l'opzione di esportazione **CSV**. Salva il file sul tuo computer.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
  <!-- [Screenshot Placeholder: eToro Portfolio History - Account Statement creation and export] -->
@@ -22,7 +22,7 @@ Per esportare la cronologia delle transazioni da eToro:
 
 !!! warning "Non Utilizzare Estratti PDF"
 
-    eToro consente di scaricare gli estratti conto come PDF. I file PDF non possono essere elaborati dall'importatore BRIM. Assicurati di selezionare il formato foglio di calcolo (XLSX o CSV).
+    eToro consente di scaricare gli estratti conto come PDF o file Excel. Solo i file **CSV** possono essere elaborati dall'importatore BRIM. Assicurati di selezionare il formato CSV.
 
 !!! warning "CFD vs Asset Reali"
 

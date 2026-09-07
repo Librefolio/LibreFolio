@@ -6,7 +6,7 @@ Decides, on each successful login, whether the frontend should show the
 
 Trigger rules (baseline = donation_popup_last_shown_at, or created_at if never shown):
 - Forced re-prompt if >= 60 days have passed since the baseline.
-- Otherwise, prompt if >= 50 logins have happened since the baseline AND
+- Otherwise, prompt if >= 10 logins have happened since the baseline AND
   >= 7 days have passed since the baseline (cooldown, avoids nagging too soon).
 
 login_count and donation_popup_logins_since_shown are incremented on every login,
@@ -26,7 +26,7 @@ from typing import Optional
 from backend.app.db.models import User
 from backend.app.utils.datetime_utils import ensure_utc, utcnow
 
-MIN_LOGINS_BETWEEN_PROMPTS = 50
+MIN_LOGINS_BETWEEN_PROMPTS = 10
 MIN_DAYS_BETWEEN_PROMPTS = 7
 MAX_DAYS_WITHOUT_PROMPT = 60
 

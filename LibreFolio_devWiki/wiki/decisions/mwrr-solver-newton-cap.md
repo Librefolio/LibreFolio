@@ -74,6 +74,6 @@ risk for the specific class of pathological inputs described in the analysis doc
 
 | Role | Path |
 |------|------|
-| MWRR/XIRR implementation | `backend/app/utils/roi_utils.py` |
+| MWRR/XIRR implementation | `backend/app/utils/financial/roi_utils.py` |
 | Numerical stability analysis | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/mwrr-numerical-stability-analysis.md` |
 | MWRR boundary anomaly report | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/portfolio_engine/mwrr_boundary_anomaly_report.md` |

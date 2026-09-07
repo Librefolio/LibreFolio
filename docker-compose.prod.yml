@@ -2,11 +2,18 @@
 # LibreFolio — Production Docker Compose
 # =============================================================================
 # Optimized for end-users running the official pre-built image from GHCR.
+#
+# Image variants:
+#   ghcr.io/librefolio/librefolio:latest        full — docs images included
+#   ghcr.io/librefolio/librefolio:latest-light  light — no docs images (lighter;
+#                                               viewing documentation images
+#                                               requires an internet connection)
+# Every version tag (e.g. v1.2.3) has a "-light" counterpart (v1.2.3-light).
 # =============================================================================
 
 services:
   librefolio:
-    image: ghcr.io/librefolio/librefolio:latest
+    image: ${LIBREFOLIO_IMAGE:-ghcr.io/librefolio/librefolio:latest}
     container_name: librefolio
     restart: unless-stopped
     ports:

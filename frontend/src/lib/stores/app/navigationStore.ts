@@ -22,6 +22,7 @@
  *    of how many replaceState calls happened in between.
  */
 import {goto} from '$app/navigation';
+import {registerClientSessionReset} from '$lib/stores/app/clientSession';
 
 let stack: string[] = [];
 
@@ -90,10 +91,4 @@ export function resetNavDepth() {
     stack = [];
 }
 
-/**
- * Debug helper — snapshot of the current stack.
- * Remove or expose via `window.__navStack` only in dev builds.
- */
-export function _debugStack(): string[] {
-    return [...stack];
-}
+registerClientSessionReset('navigationStore', resetNavDepth);

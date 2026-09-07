@@ -35,4 +35,4 @@ LiveTicker is placed **only in page-level components** where it mounts/unmounts 
 |------|------|
 | LiveTicker component | `frontend/src/lib/components/layout/LiveTicker.svelte` |
 | Header component | `frontend/src/lib/components/layout/Header.svelte` |
-| Navigation store | `frontend/src/lib/stores/navigationStore.ts` |
+| Navigation store | `frontend/src/lib/stores/app/navigationStore.ts` |

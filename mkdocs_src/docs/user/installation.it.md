@@ -165,6 +165,29 @@ Tuttavia, per la massima semplicità e sicurezza senza dover aprire porte sul tu
 
 ---
 
+## 🏷️ Varianti dell'Immagine: Full e Light {: #image-variants-full-and-light }
+
+L'immagine ufficiale è pubblicata in due varianti:
+
+- 🗂️ **`latest`** (full) — include l'intera documentazione con screenshot e immagini, per un uso completamente offline.
+- 🪶 **`latest-light`** — la stessa applicazione, ma **senza le immagini della documentazione**, rendendo l'immagine più leggera di diverse centinaia di MB. Tutte le pagine di testo della documentazione sono comunque incluse: quando apri una pagina che contiene screenshot, le immagini vengono caricate su richiesta dal sito di documentazione online.
+
+Ogni tag di versione ha anche una controparte light (ad esempio, `ghcr.io/librefolio/librefolio:v0.10.0-light`).
+
+!!! warning "La variante light richiede internet per le immagini della documentazione"
+
+    Con l'immagine `-light`, la visualizzazione di screenshot e immagini nella documentazione integrata (menu Aiuto) richiede una **connessione internet**, perché vengono scaricate dal sito di documentazione online. Tutto il resto — l'intera applicazione e tutti i testi della documentazione — funziona completamente offline.
+
+Per usare la variante light, sostituisci il tag dell'immagine nel tuo `docker-compose.yml`:
+
+```yaml
+services:
+  librefolio:
+    image: ghcr.io/librefolio/librefolio:latest-light
+```
+
+---
+
 ## ⚙️ Opzioni di Configurazione
 
 Tutte le impostazioni di LibreFolio (come porte, valuta di base e chiavi di sicurezza delle sessioni) sono gestite tramite variabili d'ambiente nel file `.env`.
@@ -173,7 +196,7 @@ Per i dettagli completi su ciascuna opzione e sulle modalità di risoluzione del
 
 ---
 
-## 💾 Backup dei Dati
+## 💾 Backup dei Dati {#data-backup}
 
 Tutti i dati di LibreFolio (database SQLite, file caricati dagli utenti, report caricati e log) sono salvati localmente all'interno della cartella `./librefolio-data` creata a fianco del file `docker-compose.yml`.
 
@@ -181,13 +204,13 @@ Per le istruzioni dettagliate su cosa salvare e su come eseguire backup consiste
 
 ---
 
-## 🔄 Aggiornamento di LibreFolio
+## 🔄 Aggiornamento di LibreFolio {#updating}
 
-### ⚠️ Attenzione: Stato di Alpha
-LibreFolio è attualmente in fase di sviluppo **Alpha**. Questo significa che tra una versione e l'altra potrebbero esserci modifiche strutturali o migrazioni del database che potrebbero impedire l'avvio della nuova versione, richiedendo un intervento manuale o il ripristino di una versione precedente.
+### ⚠️ Attenzione: Stato Beta
+LibreFolio è attualmente in **Beta** (versione 1.1.0). Le migrazioni del database vengono eseguite automaticamente all'avvio del container e sono progettate per preservare le installazioni esistenti, ma tra una versione e l'altra possono comunque esserci modifiche strutturali — alcuni sottosistemi (come l'Analisi del Rischio) sono esplicitamente contrassegnati come beta. Avere un [backup](#data-backup) prima di aggiornare è sempre una buona idea.
 
 - Usando il tag `:latest` nel file `docker-compose.yml`, riceverai subito le ultime funzionalità ma ti esporrai a potenziali incompatibilità durante gli aggiornamenti automatici.
-- Se preferisci stabilità e controllo assoluto, ti consigliamo di bloccare l'immagine sostituendo `:latest` con un tag di versione specifico (ad esempio, `ghcr.io/librefolio/librefolio:v0.10.0`).
+- Se preferisci stabilità e controllo assoluto, ti consigliamo di bloccare l'immagine sostituendo `:latest` con un tag di versione specifico (ad esempio, `ghcr.io/librefolio/librefolio:v1.1.0`).
 
 ### 🛠️ 1. Aggiornamento Manuale
 

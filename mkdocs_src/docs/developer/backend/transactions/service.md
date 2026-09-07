@@ -1,10 +1,10 @@
-# Transaction Service Architecture
+# 🧾 Transaction Service Architecture
 
 `backend/app/services/transaction_service.py` — 1600+ lines — is the **central engine** for all transaction operations in LibreFolio. It handles CRUD, validation, WAC, balance tracking, linked-pair logic, split/promote, and multi-broker batch execution as a single unified pipeline.
 
 ---
 
-## Responsibilities
+## 🧰 Responsibilities
 
 | Area | Description |
 |------|-------------|
@@ -12,14 +12,14 @@
 | **Access Control** | Per-broker EDITOR/OWNER checks before any mutation |
 | **Linked Pairs** | Validation and resolution of TRANSFER / FX_CONVERSION pairs |
 | **Balance Validation** | Chronological cash+asset balance walk after every mutation |
-| **WAC** | Delegated to `wac_service.compute_wac_iterative()` inline |
+| **WAC** | Delegated to `portfolio_service.compute_wac_iterative()` inline |
 | **Split** | Decompose a composite pair into two independent transactions |
 | **Promote** | Merge two independent transactions into a linked composite |
 | **Batch Semantics** | Full-session rollback on any error; per-item status reporting |
 
 ---
 
-## Entry Point — `execute_batch()`
+## 🚪 Entry Point — `execute_batch()`
 
 All mutations (REST endpoints `/validate` and `/commit`) funnel through **one method**:
 
@@ -38,7 +38,7 @@ async def execute_batch(
 
 The pipeline runs in strict order:
 
-```
+```text
 1. Lenient per-row parse (collect ALL parse errors, never fail-fast)
 2. Collect touched broker IDs from all operations
 3. Access check: EDITOR on each distinct broker
@@ -58,9 +58,9 @@ The pipeline runs in strict order:
 
 ---
 
-## Batch Semantics
+## 🔁 Batch Semantics
 
-```
+```text
 commit=False  →  validation-only run (dry run, never persists)
 commit=True   →  persist if issues is empty, otherwise rollback
 ```
@@ -77,7 +77,7 @@ Response shape (`TXBatchResponse`):
 
 ---
 
-## Access Control
+## 🔐 Access Control
 
 ```python
 # Single broker check
@@ -91,7 +91,7 @@ Role hierarchy: `OWNER > EDITOR > VIEWER`. Any mutation requires at least `EDITO
 
 ---
 
-## Linked Pairs
+## 🔗 Linked Pairs
 
 `TRANSFER` and `FX_CONVERSION` are **composite types** — they consist of two legs identified by a shared `link_uuid` (a UUID stored on both `Transaction` rows).
 
@@ -106,7 +106,7 @@ The legs must also share the same `description` and `tags` (validated by `_valid
 
 ---
 
-## Split Type Map
+## ✂️ Split Type Map
 
 When splitting a composite pair, the legs are re-typed deterministically:
 
@@ -118,7 +118,7 @@ When splitting a composite pair, the legs are re-typed deterministically:
 
 ---
 
-## Balance Queries
+## ⚖️ Balance Queries
 
 The service exposes three public query methods used by the broker summary:
 
@@ -130,7 +130,26 @@ await svc.get_cost_basis(broker_id, asset_id)  # Decimal
 
 ---
 
-## Related
+## 🧭 Valuation Boundary
+
+`TransactionService` does **not** build market marks, portfolio NAV, or lot valuation. Its transaction prices are persisted facts; valuation consumers later feed those facts into `build_asset_price_series()` together with `price_history`.
+
+Current flow:
+
+```mermaid
+flowchart LR
+    TX[transaction_service.py<br/>CRUD + stored trade prices] --> FIFO[fifo_lot_engine.py<br/>realized matching from trades]
+    TX --> Resolver[price_resolver.py<br/>MARKET / TRADE_AVG / CARRIED / MISSING]
+    Prices[price_history] --> Resolver
+    Resolver --> Lots[lots_analysis_service.py<br/>open-lot valuation + price history]
+    Resolver --> Portfolio[portfolio_service / portfolio_engine<br/>portfolio marks]
+```
+
+So the transaction layer can affect marks only by storing transaction facts (BUY/SELL amounts, priced ADJUSTMENT cost basis). It never reads current prices and never performs estimated-at-cost valuation.
+
+---
+
+## 🔗 Related
 
 - ⚖️ **[WAC & Cost Basis](wac.md)** — Cost basis computation engine
 - ✂️ **[Split & Promote](split_promote.md)** — Composite transaction operations

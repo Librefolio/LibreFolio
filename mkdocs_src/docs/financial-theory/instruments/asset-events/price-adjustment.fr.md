@@ -10,7 +10,7 @@ Les ajustements de prix capturent les variations de valeur qui ne sont **pas cau
 
 Ces événements sont particulièrement pertinents pour les actifs qui n'ont pas de tarification de marché continue — comme la dette privée, les instruments illiquides ou les actifs suivis via le fournisseur Scheduled Investment.
 
-### Scénarios courants
+### Common courants
 
 | Scénario | Montant | Description |
 |----------|--------|-------------|

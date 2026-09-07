@@ -26,7 +26,7 @@ from backend.app.db.base import (
 )
 from backend.app.db.session import get_async_engine, get_session_generator, get_sync_engine
 
-__all__ = [
+__all__ = [  # noqa: RUF022 — grouped by domain with section comments; sorting would scatter related names
     "SQLModel",
     "get_sync_engine",  # For sync scripts (migrations, populate, checks)
     "get_async_engine",  # For async FastAPI app

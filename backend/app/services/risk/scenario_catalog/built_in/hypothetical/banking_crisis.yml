@@ -1,0 +1,28 @@
+schema_version: 1
+id: banking_crisis
+kind: hypothetical_shock
+tags: [banking, crisis]
+name:
+  en: Banking crisis
+  it: Crisi bancaria
+  fr: Crise bancaire
+  es: Crisis bancaria
+description:
+  en: Editable sector shock focused on financial companies, with an explicit Other fallback.
+  it: Shock settoriale modificabile concentrato sulle società finanziarie, con fallback Other esplicito.
+  fr: Choc sectoriel modifiable centré sur les sociétés financières, avec un repli Other explicite.
+  es: Choque sectorial editable centrado en empresas financieras, con un fallback Other explícito.
+allowed_dimensions: [sector]
+defaults:
+  dimension: sector
+  bucket_shocks:
+    Financials: -0.40
+    Other: 0.0
+editable:
+  dimension: false
+  bucket_shocks: true
+  manual_overrides: true
+limits:
+  minimum_shock: -1.0
+  maximum_shock: 1.0
+  maximum_buckets: 100

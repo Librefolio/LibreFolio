@@ -23,7 +23,8 @@ import re
 import shutil
 import sys
 import urllib.request
-from datetime import datetime, timezone
+from contextlib import suppress
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Optional
 
@@ -31,6 +32,17 @@ from typing import Optional
 MAX_CACHED_VERSIONS = 4  # Keep last N versions of each library
 CACHE_MANIFEST_FILE = ".cache_manifest.json"
 CACHE_CHECK_INTERVAL_HOURS = 24  # Skip check if checked within this time
+
+# I1 (02/09): a resource that cannot be downloaded AND has no usable cached copy
+# must NOT degrade the build silently (the Docker image shipped with a 404 on
+# the emoji font for months — flags rendered as letters on Windows). Hard
+# failures are collected here and turn into a non-zero exit code so
+# `dev.py front build` / `docker build` stop instead of shipping a broken build.
+_HARD_FAILURES: list[str] = []
+
+
+def _hard_fail(name: str, reason: str) -> None:
+    _HARD_FAILURES.append(f"{name}: {reason}")
 
 # Libraries to cache
 # type="js"   → single file download
@@ -98,11 +110,9 @@ def load_manifest(vendor_dir: Path) -> dict:
     """Load cache manifest from vendor directory."""
     manifest_path = vendor_dir / CACHE_MANIFEST_FILE
     if manifest_path.exists():
-        try:
-            with open(manifest_path, "r") as f:
+        with suppress(Exception):  # corrupt manifest → treated as no cache
+            with open(manifest_path) as f:
                 return json.load(f)
-        except Exception:
-            pass
     return {"libraries": {}, "versions": []}
 
 
@@ -134,8 +144,8 @@ def should_skip_check(manifest: dict) -> bool:
     try:
         last_check_dt = datetime.fromisoformat(last_check.replace('Z', '+00:00'))
         if last_check_dt.tzinfo is None:
-            last_check_dt = last_check_dt.replace(tzinfo=timezone.utc)
-        hours_since = (datetime.now(timezone.utc) - last_check_dt).total_seconds() / 3600
+            last_check_dt = last_check_dt.replace(tzinfo=UTC)
+        hours_since = (datetime.now(UTC) - last_check_dt).total_seconds() / 3600
         return hours_since < CACHE_CHECK_INTERVAL_HOURS
     except Exception:
         return False
@@ -162,7 +172,7 @@ def _parse_google_fonts_css(css_text: str):
     return subsets
 
 
-def _download_font_resource(
+def _download_font_resource(  # noqa: C901 — flat download/manifest pipeline, no nested logic
     vendor_dir: Path, manifest: dict, name: str, config: dict, force: bool = False
 ) -> bool:
     """
@@ -188,9 +198,10 @@ def _download_font_resource(
     )
     if css_bytes is None:
         if file_exists:
-            print(f"  ⚠️  CSS download failed, keeping cached version")
+            print("  ⚠️  CSS download failed, keeping cached version")
         else:
-            print(f"  ❌ CSS download failed and no cached version exists")
+            print("  ❌ CSS download failed and no cached version exists")
+            _hard_fail(name, "CSS download failed, no cached version")
         return False
 
     css_text = css_bytes.decode("utf-8")
@@ -203,7 +214,9 @@ def _download_font_resource(
     # Parse subsets
     subsets = _parse_google_fonts_css(css_text)
     if not subsets:
-        print(f"  ⚠️  No subsets found in Google Fonts CSS")
+        print("  ⚠️  No subsets found in Google Fonts CSS")
+        if not file_exists:
+            _hard_fail(name, "no subsets parsed, no cached version")
         return False
 
     print(f"  📋 Found {len(subsets)} subsets")
@@ -214,21 +227,25 @@ def _download_font_resource(
     local_css_lines = [
         "/*",
         f" * {name} — self-hosted subsets (Google Fonts)",
-        f" * Auto-downloaded by scripts/update_js_cache.py",
+        " * Auto-downloaded by scripts/update_js_cache.py",
         f" * Source: {config['css_url']}",
-        f" * Updated: {datetime.now(timezone.utc).strftime('%Y-%m-%d')}",
+        f" * Updated: {datetime.now(UTC).strftime('%Y-%m-%d')}",
         f" * Subsets: {len(subsets)}",
         " */",
         "",
     ]
 
     total_size = 0
+    failed_subsets = 0
     font_family = " ".join(w.capitalize() for w in name.split("-"))
     for i, subset in enumerate(subsets):
         local_filename = f"{prefix}.{i}.woff2"
         woff2_content = download_file(subset["src_url"])
         if woff2_content is None:
-            print(f"  ⚠️  Failed to download subset {i}, skipping")
+            # I1: a partially cached font renders SOME glyph ranges as fallback
+            # letters — the same silent degradation as a missing font. Loud.
+            print(f"  ❌ Failed to download subset {i}")
+            failed_subsets += 1
             continue
 
         woff2_path = target_dir / local_filename
@@ -250,6 +267,12 @@ def _download_font_resource(
             "",
         ])
 
+    if failed_subsets:
+        # Do not write a partial CSS/manifest: the cached previous version (if
+        # any) stays authoritative, and the build learns this is broken.
+        _hard_fail(name, f"{failed_subsets}/{len(subsets)} font subsets failed to download")
+        return False
+
     # Write local CSS
     css_content = "\n".join(local_css_lines) + "\n"
     with open(css_path, "w") as f:
@@ -266,10 +289,10 @@ def _download_font_resource(
     manifest["libraries"][name]["type"] = "font"
     manifest["libraries"][name]["subset_count"] = len(subsets)
     manifest["libraries"][name]["total_size"] = total_size
-    manifest["libraries"][name]["updated_at"] = datetime.now(timezone.utc).isoformat()
+    manifest["libraries"][name]["updated_at"] = datetime.now(UTC).isoformat()
     manifest["libraries"][name]["versions"].append({
         "hash": css_hash,
-        "downloaded_at": datetime.now(timezone.utc).isoformat(),
+        "downloaded_at": datetime.now(UTC).isoformat(),
         "subset_count": len(subsets),
         "total_size": total_size,
     })
@@ -279,7 +302,7 @@ def _download_font_resource(
     return True
 
 
-def update_library(vendor_dir: Path, manifest: dict, name: str, config: dict, force: bool = False) -> bool:
+def update_library(vendor_dir: Path, manifest: dict, name: str, config: dict, force: bool = False) -> bool:  # noqa: C901 — flat update pipeline with guard returns, no nested logic
     """
     Update a single library.
 
@@ -311,7 +334,7 @@ def update_library(vendor_dir: Path, manifest: dict, name: str, config: dict, fo
 
             # If ETag matches, no update needed
             if remote_etag and current_etag and remote_etag == current_etag:
-                print(f"  ✓ Already up-to-date (ETag match)")
+                print("  ✓ Already up-to-date (ETag match)")
                 return False
 
             # If size matches and no ETag, likely same file
@@ -323,7 +346,10 @@ def update_library(vendor_dir: Path, manifest: dict, name: str, config: dict, fo
     content = download_file(config["url"])
     if content is None:
         if file_exists:
-            print(f"  ⚠️  Download failed, keeping cached version")
+            print("  ⚠️  Download failed, keeping cached version")
+        else:
+            print("  ❌ Download failed and no cached version exists")
+            _hard_fail(name, "download failed, no cached version")
         return False
 
     # Calculate hash
@@ -358,10 +384,10 @@ def update_library(vendor_dir: Path, manifest: dict, name: str, config: dict, fo
     manifest["libraries"][name]["url"] = config["url"]
     manifest["libraries"][name]["size"] = len(content)
     manifest["libraries"][name]["etag"] = etag
-    manifest["libraries"][name]["updated_at"] = datetime.now(timezone.utc).isoformat()
+    manifest["libraries"][name]["updated_at"] = datetime.now(UTC).isoformat()
     manifest["libraries"][name]["versions"].append({
         "hash": content_hash,
-        "downloaded_at": datetime.now(timezone.utc).isoformat(),
+        "downloaded_at": datetime.now(UTC).isoformat(),
         "size": len(content)
         })
 
@@ -389,7 +415,7 @@ def update_all_libraries(force: bool = False):
         manifest = load_manifest(vendor_dir)
         if update_library(vendor_dir, manifest, name, config, force):
             updated_count += 1
-        manifest["last_check"] = datetime.now(timezone.utc).isoformat()
+        manifest["last_check"] = datetime.now(UTC).isoformat()
         save_manifest(vendor_dir, manifest)
 
     print("-" * 60)
@@ -412,6 +438,13 @@ def run_from_args(args) -> int:
     """Execute the command from parsed args."""
     try:
         update_all_libraries(force=getattr(args, 'force', False))
+        if _HARD_FAILURES:
+            # I1: a build missing a resource it cannot cache is a broken build.
+            print("-" * 60)
+            print("❌ Resource cache incomplete — the build would ship without these:")
+            for failure in _HARD_FAILURES:
+                print(f"   - {failure}")
+            return 1
         return 0
     except KeyboardInterrupt:
         print("\n⚠️  Interrupted")

@@ -38,17 +38,22 @@ The Prices tab shows all price data points for the asset. Columns:
 
 ### CSV Import Format
 
+CSV import accepts both `;` and `,` separators, and the editor auto-detects the separator from the first non-empty line.
+
+Prices:
 ```
-date;currency;close
-2024-01-15;USD;145.50
-2024-01-16;USD;146.10
+date;close
+2024-01-15;145.50
+2024-01-16;146.10
 ```
 
-Extended format with optional columns:
+Extended prices with optional columns:
 ```
-date;currency;close;open;high;low;volume
-2024-01-15;USD;145.50;144.00;146.20;143.80;1500000
+date;close;open;high;low;volume
+2024-01-15;145.50;144.00;146.20;143.80;1500000
 ```
+
+The asset detail editor uses separate CSV formats for prices and events: prices support `date`, `close`, and optional `open`, `high`, `low`, `volume`; events support `date`, `type`, `amount`, and optional `notes`. The `currency` column is inherited from the asset and is not part of the editor payload.
 
 ---
 
@@ -70,10 +75,11 @@ The Events tab shows all [asset events](../../../financial-theory/instruments/as
 
 ### CSV Import Format
 
+Events:
 ```
-date;currency;type;amount;notes
-2024-03-15;USD;DIVIDEND;1.25;Q1 payout
-2024-06-01;;SPLIT;2;2:1 split
+date;type;amount;notes
+2024-03-15;DIVIDEND;1.25;Q1 payout
+2024-06-01;SPLIT;2;2:1 split
 ```
 
 ---

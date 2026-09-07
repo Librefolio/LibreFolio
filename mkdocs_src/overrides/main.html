@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{#
+  Publishes the canonical documentation URL to the browser.
+
+  `gallery-img-loader.js` falls back to the public GitHub Pages site when a screenshot
+  is missing locally — the normal situation for a self-hosted or nightly build, where
+  the gallery is a gitignored artefact that may not have been generated.
+
+  That base URL used to be hard-coded in the script. It survived the move from a
+  personal account to the organisation and pointed at a site that no longer exists, so
+  every fallback answered 404: the safety net was there, and empty, for months.
+
+  Deriving it from `config.site_url` removes the possibility of divergence — there is
+  now exactly one place where the public address is written down.
+#}
+{% block extrahead %}
+  {{ super() }}
+  <script>window.LF_GALLERY_FALLBACK_BASE = {{ (config.site_url or "") | tojson }};</script>
+{% endblock %}

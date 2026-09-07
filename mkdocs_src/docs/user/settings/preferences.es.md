@@ -1,48 +1,40 @@
-# 👤 Preferencias del Usuario
+# 🎛️ Preferencias de usuario
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <img class="gallery-img" data-category="settings" data-name="user-preferences" alt="Preferencias del Usuario">
+ <img class="gallery-img" data-category="settings" data-name="user-preferences" alt="Preferencias de usuario">
 </div>
 
-Cada usuario puede configurar sus propias preferencias de visualización; los cambios se aplican únicamente a su cuenta:
+La pestaña **Preferencias** controla **cómo se ve y se comporta la aplicación para ti** — los cambios se aplican solo a tu cuenta. En cambio, tu identidad (nombre de usuario, correo electrónico, avatar, contraseña) se encuentra en la pestaña **[Perfil](profile.md)**.
 
-| Configuración | Descripción |
-|---------|-------------|
-| **Idioma** | Idioma de la interfaz (English, Italiano, Français, Español) |
-| **Moneda Base** | Moneda de visualización predeterminada para los valores de la cartera |
-| **Tema** | Modo Claro / Oscuro |
-| **Formato de Fecha** | DD/MM/YYYY, MM/DD/YYYY, o ISO YYYY-MM-DD |
+| Configuración | Categoría | Descripción |
+|---------|----------|-------------|
+| **Idioma** | 🌍 Visualización | Idioma de la interfaz — 🇬🇧 English, 🇮🇹 Italiano, 🇫🇷 Français, 🇪🇸 Español. Se aplica inmediatamente |
+| **Moneda base** | 💰 Moneda | Moneda de visualización predeterminada para las valoraciones de la cartera |
+| **Tema** | 🎨 Apariencia | ☀️ Claro / 🌙 Oscuro / 🖥️ Automático (sigue tu sistema operativo) |
+
+<style>
+/* Keep the first two columns on one line (long setting names would wrap otherwise) */
+article table:first-of-type th:nth-child(-n + 2),
+article table:first-of-type td:nth-child(-n + 2) {
+ white-space: nowrap;
+ min-width: 11rem;
+}
+</style>
+
+Usa la **barra lateral de categorías** de la izquierda para filtrar la configuración visible.
+
+## 💾 Guardar, deshacer y restablecer
+
+Cada campo realiza un seguimiento de su propio estado:
+
+- Un campo modificado muestra los botones **Guardar** y **Deshacer**; el encabezado ofrece **Guardar todo** / **Deshacer todo** para acciones en bloque.
+- Los campos cuyo valor difiere del **valor predeterminado de la instancia** (establecido por el administrador en [Configuración global](../../admin/settings.md)) se resaltan como no predeterminados; el botón **Restablecer** restaura el valor predeterminado de la instancia para ese campo, y **Restablecer todo** restaura todos los campos a la vez.
 
 ---
 
-## 👤 Perfil
+## 🔗 Relacionados
 
-<div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <img class="gallery-img" data-category="settings" data-name="profile" alt="Perfil">
-</div>
-
-Desde la pestaña **Perfil** puede actualizar su nombre de visualización y su avatar. El avatar se utiliza en toda la aplicación donde se muestre su identidad (por ejemplo, al compartir brókers, comentarios).
-
----
-
-## 🔐 Cambiar Contraseña
-
-<div class="screenshot-container" style="max-width: 500px; margin: 1rem auto;">
- <img class="gallery-img" data-category="settings" data-name="password-modal" alt="Cambiar Contraseña">
-</div>
-
-La ventana modal de **Cambiar Contraseña** requiere:
-
-1. Su **contraseña actual** (para verificación)
-2. Una **nueva contraseña** (mínimo 8 caracteres, al menos un número)
-3. **Confirmar** la nueva contraseña
-
-Tras la confirmación, su sesión permanecerá activa; no es necesario volver a iniciar sesión.
-
----
-
-## 🔗 Relacionado
-
-- ⚙️ **[Descripción General de Configuración](index.md)** — Resumen de configuración general
-- 🛡️ **[Configuración Global](../../admin/settings.md)** — Opciones de administrador y programador
-- ℹ️ **[Acerca de](about.md)** — Información de versión y licencia
+- 👤 **[Perfil](profile.md)** — Nombre de usuario, correo electrónico, avatar, contraseña, eliminar cuenta
+- ⚙️ **[Descripción general de la configuración](index.md)** — Resumen general de la configuración
+- ℹ️ **[Acerca de](about.md)** — Información de versión, complementos y registro de cambios
+- 🛡️ **[Configuración global](../../admin/settings.md)** — Opciones de administrador y planificador

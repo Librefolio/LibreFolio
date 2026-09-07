@@ -69,6 +69,14 @@ Une fois qu'un événement de règlement à échéance est enregistré dans Libr
 - Le montant du règlement représente le **dernier point de donnée**
 - L'actif peut rester dans le système pour analyse historique mais ne recevra plus de nouvelles données de prix
 
+!!! note "Exception : intérêts de retard après l'échéance"
+
+    Les actifs valorisés par le fournisseur **Scheduled Investment** peuvent être configurés avec
+    les **Intérêts de retard** : après la fin de la dernière période programmée, un délai de grâce
+    configurable (en jours) s'applique d'abord, puis un taux de pénalité continue de courir au-delà
+    de l'échéance jusqu'au règlement. Dans ce cas, la série de prix ne s'arrête pas à
+    l'échéance — voir [fournisseur Scheduled Investment](../../../user/assets/providers/scheduled-investment.md#late-interest).
+
 ---
 
 ## 🧮 Comment LibreFolio gère le règlement à échéance

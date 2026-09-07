@@ -69,6 +69,14 @@ Once a maturity settlement event is recorded in LibreFolio:
 - The settlement amount represents the **final data point**
 - The asset can remain in the system for historical analysis but won't receive new price data
 
+!!! note "Exception: late interest after maturity"
+
+    Assets priced by the **Scheduled Investment** provider can be configured with
+    **Late Interest**: after the last scheduled period ends, a configurable grace
+    period (in days) applies first, then a penalty rate keeps accruing beyond
+    maturity until settlement. In that case the price series does not stop at
+    maturity — see [Scheduled Investment provider](../../../user/assets/providers/scheduled-investment.md#late-interest).
+
 ---
 
 ## 🧮 How LibreFolio Handles Maturity Settlement

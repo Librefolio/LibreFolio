@@ -1,26 +1,30 @@
-# 🤝 Partage de Courtier
+# 🤝 Partage de courtier
 
-LibreFolio vous permet de partager l'accès à vos comptes de courtage avec d'autres utilisateurs. Ceci est utile pour les familles, les conseillers financiers ou les comptables qui ont besoin d'une visibilité sur votre portefeuille.
+LibreFolio vous permet de partager l'accès à vos comptes de courtage avec d'autres utilisateurs. C'est utile pour les familles, les conseillers financiers ou les comptables qui ont besoin de visibilité sur votre portefeuille.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <img class="gallery-img" data-category="brokers" data-name="sharing-modal" alt="Modale de partage de courtier" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+ <img class="gallery-img" data-category="brokers" data-name="sharing-modal" alt="Broker Sharing Modal" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ---
 
 ## 📋 Comment partager
 
-1. Naviguez vers la page de détails d'un courtier
-2. Cliquez sur le bouton **Partager** (:material-share-variant:) dans l'en-tête
-3. La **fenêtre modale de partage** s'ouvre
-4. **Recherchez** l'utilisateur par son nom d'utilisateur
-5. **Sélectionnez un rôle** (Lecteur, Éditeur ou Propriétaire)
-6. **Définissez le pourcentage de partage** (faites glisser le curseur ou saisissez la valeur)
-7. Cliquez sur **Enregistrer** pour appliquer les modifications
+Seul un **Propriétaire** du courtier peut gérer les accès. Vous pouvez ouvrir le panneau de partage de deux manières :
 
-!!! warning "Seuls les Propriétaires peuvent gérer l'accès"
+- **Depuis la liste des courtiers** : cliquez sur l'icône **Partager** (:material-share-variant:) sur la carte du courtier — la **Modale de partage** s'ouvre.
+- **Depuis la page de détail du courtier** : cliquez sur le bouton **Partager** dans l'en-tête — vous arrivez sur l'onglet **Info**, qui héberge le panneau de partage.
 
-    Vous devez être **Propriétaire** du courtier pour ajouter, supprimer ou modifier l'accès d'autres utilisateurs.
+Ensuite :
+
+1. **Recherchez** l'utilisateur par son nom d'utilisateur
+2. **Sélectionnez un rôle** (Lecteur, Éditeur ou Propriétaire)
+3. **Définissez le pourcentage de propriété** — uniquement pour le rôle *Propriétaire* (faites glisser le curseur ou saisissez une valeur ; les Lecteurs et les Éditeurs ont toujours 0 %)
+4. Cliquez sur **Enregistrer** pour appliquer les modifications
+
+!!! warning "Seuls les propriétaires peuvent gérer les accès"
+
+    Vous devez être **Propriétaire** du courtier pour ajouter, supprimer ou modifier les accès des autres utilisateurs. Les non-propriétaires voient le même panneau en mode lecture seule.
 
 ---
 
@@ -33,39 +37,56 @@ Lorsque vous partagez un courtier, vous attribuez un **rôle** qui détermine ce
 | **Voir les détails du courtier** | ✅ | ✅ | ✅ |
 | **Voir les transactions** | ✅ | ✅ | ✅ |
 | **Voir les rapports et graphiques** | ✅ | ✅ | ✅ |
-| **Ajouter/Modifier des transactions**| ❌ | ✅ | ✅ |
+| **Ajouter/Modifier les transactions** | ❌ | ✅ | ✅ |
 | **Importer des fichiers (BRIM)** | ❌ | ✅ | ✅ |
-| **Modifier les paramètres du courtier**| ❌ | ✅ | ✅ |
-| **Gérer l'accès (Ajouter/Supprimer des utilisateurs)**| ❌ | ❌ | ✅ |
+| **Modifier les paramètres du courtier** | ❌ | ✅ | ✅ |
+| **Gérer les accès (Ajouter/Supprimer des utilisateurs)** | ❌ | ❌ | ✅ |
 | **Supprimer le courtier** | ❌ | ❌ | ✅ |
 
-- 👁️ **Lecteur** : Accès en lecture seule. Idéal pour les comptables ou les membres de la famille qui ont seulement besoin de consulter les données.
-- ✏️ **Éditeur** : Peut gérer les opérations quotidiennes (transactions, imports) mais ne peut pas supprimer le courtier ni modifier les accès.
-- 👑 **Propriétaire** : Contrôle total. Peut tout faire, y compris ajouter ou supprimer d'autres utilisateurs.
+- 👁️ **Lecteur** : Accès en lecture seule. Idéal pour les comptables ou les membres de la famille qui ont simplement besoin de consulter les données.
+- ✏️ **Éditeur** : Peut gérer les opérations courantes (transactions, importations) mais ne peut pas supprimer le courtier ni modifier les accès.
+- 👑 **Propriétaire** : Contrôle total. Peut tout faire, y compris ajouter/supprimer d'autres utilisateurs. Un courtier peut avoir **plusieurs propriétaires** — voir le pourcentage de partage ci-dessous.
 
 ---
 
 ## 📊 Pourcentage de partage
 
-Chaque utilisateur ayant accès à un courtier possède un **pourcentage de partage** (0 % à 100 %). Cela représente la part de la valeur du portefeuille associée à ce courtier qui appartient à cet utilisateur.
+Chaque **Propriétaire** d'un courtier a un **pourcentage de partage** (de 0 % à 100 %). Il représente la part de la valeur du portefeuille du courtier qui appartient à ce propriétaire. Les Lecteurs et les Éditeurs ont toujours 0 % — le schéma rejette toute part non nulle pour eux.
 
 !!! example "Compte joint"
 
-    Vous et votre conjoint(e) partagez un compte de courtage à 50/50 :
+    Vous et votre conjoint êtes copropriétaires d'un compte de courtage à 50/50. Vous êtes tous les deux propriétaires :
 
     - Vous (Propriétaire) : **50 %**
-    - Conjoint(e) (Éditeur) : **50 %**
+    - Conjoint (Propriétaire) : **50 %**
 
-    Lors du calcul de la valeur totale du portefeuille, le système comptabilise 50 % de la valeur de ce courtier pour chacun de vous.
+    Chacun de vous voit 50 % de la valeur de ce courtier comptabilisée dans son propre tableau de bord.
 
 !!! example "Conseiller financier"
 
-    Votre conseiller financier doit voir votre portefeuille mais n'en possède aucune part :
+    Votre conseiller financier doit voir votre portefeuille mais n'en détient aucune part :
 
     - Vous (Propriétaire) : **100 %**
     - Conseiller (Lecteur) : **0 %**
 
-La somme de tous les pourcentages de partage pour un courtier **ne doit pas dépasser 100 %**, mais elle peut être inférieure (par exemple, un compte co-détenu où le co-propriétaire n'est pas enregistré dans le système).
+La somme de tous les pourcentages de partage d'un courtier **ne doit pas dépasser 100 %**, mais elle peut être inférieure (par exemple, un compte en copropriété dont le copropriétaire n'est pas dans le système). Le panneau affiche les totaux **Alloués** et **Disponibles** pendant vos modifications.
+
+!!! note "Agrégation du portefeuille"
+
+    Le pourcentage de partage est **déjà appliqué** à l'agrégation de votre portefeuille : le tableau de bord et les statistiques au niveau du portefeuille ajustent chaque montant d'un courtier partagé en fonction de votre part de propriété. Un propriétaire à 50 % voit la moitié de la valeur, des revenus et des P&L de ce courtier comptabilisée dans ses totaux. Les Lecteurs et les Éditeurs, dont la part est toujours de 0 % par définition, voient les montants **complets** du courtier à la place — la part n'ajuste que ce que vous *possédez*.
+
+---
+
+## 🚪 Quitter un courtier partagé (en libre-service)
+
+Vous n'avez jamais besoin de l'intervention d'un propriétaire pour quitter un courtier auquel vous avez accès. Dans le panneau de partage, la section **Votre accès** vous permet de :
+
+- **Quitter le courtier** — supprime immédiatement votre propre accès. Le courtier disparaît de vos listes.
+- **Passer en lecteur** — un Éditeur peut se rétrograder en Lecteur ; un Propriétaire peut le promouvoir à nouveau plus tard.
+
+!!! danger "Dernier propriétaire : quitter supprime le courtier"
+
+    Si vous êtes le **seul propriétaire** restant, l'action Quitter devient **Quitter et supprimer le courtier** : quitter *supprime définitivement le courtier ainsi que toutes ses transactions et ses fichiers de rapports importés*. Cette action ne peut pas être annulée. Si ce n'est pas ce que vous souhaitez, attribuez d'abord le rôle de Propriétaire à un autre utilisateur, puis quittez.
 
 ---
 
@@ -73,11 +94,7 @@ La somme de tous les pourcentages de partage pour un courtier **ne doit pas dép
 
 | Scénario | Configuration suggérée |
 |----------|----------------|
-| **Conjoint / Partenaire** | Éditeur ou co-Propriétaire, part de 50 % chacun |
-| **Conseiller financier** | Lecteur, 0 % de partage |
-| **Comptable** | Lecteur, 0 % de partage |
-| **Membre de la famille** | Lecteur ou Éditeur, % de partage personnalisé |
-
-!!! note "Agrégation de portefeuille"
-
-    Le pourcentage de partage est conçu pour les futures fonctionnalités d'agrégation de portefeuille. Une fois implémentées, le tableau de bord de chaque utilisateur affichera sa part proportionnelle de tous les courtiers auxquels il a accès.
+| **Conjoint / Partenaire** | Deux propriétaires, 50 % de part chacun |
+| **Conseiller financier** | Lecteur, 0 % de part |
+| **Comptable** | Lecteur, 0 % de part |
+| **Membre de la famille** | Lecteur ou Éditeur, 0 % de part |

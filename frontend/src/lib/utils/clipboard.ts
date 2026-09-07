@@ -1,9 +1,6 @@
 /**
- * Shared clipboard writer for the AI export feature — copies text with a
- * secure-context fallback (textarea + execCommand) and shows toast feedback.
- * Used by both the portfolio-level (aiExportClipboard.ts) and asset-level
- * (asset/assetExportClipboard.ts) export flows so the copy/feedback behavior
- * never drifts between the two.
+ * Shared clipboard writer with a secure-context fallback (textarea +
+ * execCommand) and consistent toast feedback for reusable copy actions.
  */
 
 export type ToastFn = {

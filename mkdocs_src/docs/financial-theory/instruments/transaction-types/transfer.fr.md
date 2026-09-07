@@ -1,4 +1,4 @@
-# ![](../../../static/icons/transactions/transfer.png){: width="32" style="vertical-align: middle;" } Transfert d'actifs
+# 🔄 ![](../../../static/icons/transactions/transfer.png){: width="32" style="vertical-align: middle;" } Transfert d'actifs
 
 <div class="screenshot-container">
  <img class="gallery-img" data-category="transactions" data-name="form-modal-transfer" alt="Formulaire de transaction — TRANSFERT">
@@ -48,6 +48,12 @@ En arrière-plan, un Transfert est composé de deux écritures d'Ajustement. Lib
 | **Promouvoir** (lier) | Deux Ajustements → Transfert |
 
 **Contraintes de promotion** : même actif, courtiers différents, quantités opposées.
+
+---
+
+## 👵 Succession et courtiers d'origine non suivis
+
+Un vrai `TRANSFER` nécessite deux courtiers dans LibreFolio : source et destination. Si le dossier source est en dehors de LibreFolio, la jambe entrante est mieux modélisée comme un `ADJUSTMENT` positif sans trésorerie avec un `cost_basis_override` par unité, plutôt que comme un transfert apparié. Les lignes de succession de Crédit Agricole (`GIRO ALTRO DOSSIER`, `VERS.TITOLI`) utilisent ce modèle : les titres hérités entrent en tant que capital en nature, aucun `DEPOSIT` de trésorerie n'est créé et la causale d'origine reste dans la description à des fins d'auditabilité.
 
 ---
 

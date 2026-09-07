@@ -18,7 +18,7 @@ from backend.app.config import get_settings
 
 
 @event.listens_for(Engine, "connect")
-def set_sqlite_pragma(dbapi_conn, connection_record):
+def set_sqlite_pragma(dbapi_conn, _connection_record):
     """
     Enable essential SQLite PRAGMAs for proper operation.
 
@@ -26,12 +26,32 @@ def set_sqlite_pragma(dbapi_conn, connection_record):
     - journal_mode=WAL: Write-Ahead Logging — allows concurrent readers and
       one writer without blocking. Essential for the FX sync pipeline that
       reads route config in one session while writing rates in parallel sessions.
+    - busy_timeout: WAL still admits **one writer at a time**, and SQLite's
+      default on contention is to fail immediately rather than wait. Without
+      this, a second writer arriving during another's transaction gets
+      `database is locked` straight away — not after trying. That is reachable
+      in production, not only under test: the scheduler refreshes prices in the
+      background while the user saves a transaction, and uvicorn now runs with
+      several workers.
+
+      The value was 5000 on the assumption that no transaction here lasts that
+      long. Measured, that was false: a full-history price sync committed 45k
+      points in one transaction and held the write lock for 10.3s, so every
+      concurrent writer failed. bulk_upsert_prices now commits in bounded
+      slices (~1.2s each), but a slice's duration still scales with machine
+      load and instrumentation — under coverage the same slices take four
+      times longer. A timeout only decides how long a writer is willing to
+      wait; waiting costs nothing when there is no contention, because the
+      handler returns the moment the lock frees. Failing, by contrast, costs
+      the user their write. 30s is chosen to absorb a queue of slices on a
+      loaded machine rather than to match any single transaction.
 
     Note: This event listener applies to ALL sync engines (including the one backing async).
     """
     cursor = dbapi_conn.cursor()
     cursor.execute("PRAGMA foreign_keys=ON")
     cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA busy_timeout=30000")
     cursor.close()
 
 

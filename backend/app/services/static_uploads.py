@@ -127,8 +127,6 @@ BLOCKED_EXTENSIONS = {
 class UploadSecurityError(Exception):
     """Raised when upload fails security validation."""
 
-    pass
-
 
 def _ensure_dir() -> None:
     """Create storage directory if it doesn't exist."""

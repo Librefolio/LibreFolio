@@ -44,19 +44,31 @@ En la parte superior derecha del panel de control, tienes varios controles para 
 - **Rango de tiempo**: predefinidos desde 1 semana hasta Todo el tiempo (MAX), o un rango personalizado a través del selector de fechas.
 - **Filtro de bróker**: filtra todas las métricas a uno o más brókeres específicos.
 - **Moneda objetivo**: convierte dinámicamente todos los activos y saldos de efectivo a una única moneda seleccionada para una vista agregada.
-- **Exportación IA** (:material-brain:) — Haz clic en este botón para copiar al portapapeles un resumen en texto del estado actual de tu cartera, optimizado para pegar en LLMs (ej., Gemini). Puedes elegir entre:
- - **Exportación Completa**: Incluye todos los valores KPI, posiciones, ponderaciones y asignaciones.
- - **Solo Datos**: Una representación compacta en JSON/texto de tus posiciones y saldos.
+- **Exportación de IA** (:material-brain:) — abre una exportación al portapapeles.
+  Elige **Instantánea de datos** para copiar solo datos factuales, o una **tarea
+  de análisis** que incluye automáticamente sus instrucciones y su contrato de
+  respuesta; después, selecciona el **nivel de detalle** (Compacto, Estándar o
+  Completo). La instantánea del backend sigue el filtro de bróker activo, el
+  rango de fechas y la moneda objetivo; LibreFolio no contacta con servicios de
+  IA. Consulta [Exportación AI de Cartera](../ai-export/portfolio.md) o la [guía de Exportación de IA](../ai-export/index.md).
 
 !!! tip "El ámbito importa"
 
-    Cuando filtras a un solo bróker, las transferencias de efectivo *a otros brókeres* se convierten en flujos externos para ese ámbito. Esto afecta los cálculos de [Capital Depositado](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md) y [PyG](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md).
+    Cuando filtras a un solo bróker, las transferencias de efectivo *a otros brókeres* se convierten en flujos externos para ese ámbito. Esto afecta los cálculos de [Capital Depositado](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md) y del [PyG](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md).
+
+!!! note "El uso compartido afecta a estos números"
+
+    El panel agrega solo los brókeres **a los que tienes acceso**, y cada importe de un bróker que coposees se **escala según tu porcentaje de propiedad**: un Propietario con una participación del 50% ve contabilizada en los totales la mitad del valor, los ingresos y el PyG de ese bróker (una participación del 0% es válida y no aporta nada). Los Editores y Visores — que por regla siempre tienen una participación del 0% — ven en su lugar los importes **completos** del bróker. Consulta [Uso compartido del bróker](../brokers/sharing.md) para más detalles.
 
 ---
 
 ## 🌡️ Banner de Calidad de Datos
 
-Si faltan precios o tipos de cambio en la fecha de finalización, aparece un banner en la parte superior explicando qué activos no pudieron ser valorados. Los activos sin un proveedor de precios (ingresados manualmente, como proyectos de crowdfunding inmobiliario) se valoran permanentemente al costo de compra; esto es intencional y no genera una advertencia.
+Si faltan precios o tipos de cambio en la fecha de finalización, aparece un banner en la parte superior explicando qué activos no pudieron ser valorados.
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="dashboard" data-name="data-quality-banner" alt="Banner de calidad de datos del panel con enlaces por activo">
+</div>
+ Los activos sin un proveedor de precios (ingresados manualmente, como proyectos de crowdfunding inmobiliario) se valoran permanentemente al costo de compra; esto es intencional y no genera una advertencia.
 
 ---
 
@@ -65,6 +77,7 @@ Si faltan precios o tipos de cambio en la fecha de finalización, aparece un ban
 - 💰 **[Tarjetas KPI](kpi-cards.md)** — Valor Neto, PyG del Período y Rendimientos explicados
 - 📊 **[Gráficos](charts.md)** — Gráfico de Crecimiento y Panel de Asignación explicados
 - 🔍 **[Posiciones y Análisis](positions.md)** — Posiciones abiertas, vistas de tabla vs. mapa y análisis detallado de lotes fiscales FIFO.
+
 
 ## 🔗 Teoría relacionada
 

@@ -15,8 +15,8 @@ from backend.app.services.transaction_service import (
 )
 
 __all__ = [
-    "TransactionService",
     "BalanceValidationError",
-    "LinkedTransactionError",
     "BrokerService",
+    "LinkedTransactionError",
+    "TransactionService",
 ]

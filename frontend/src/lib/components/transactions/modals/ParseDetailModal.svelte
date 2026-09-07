@@ -6,13 +6,15 @@
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
-    import {CheckCircle, AlertTriangle, HelpCircle, X, CircleAlert, FileText, Wrench} from 'lucide-svelte';
+    import {CheckCircle, HelpCircle, X, CircleAlert, FileText, Wrench, Info} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
-    import {getTypeIconUrl} from '$lib/stores/transactions/transactionTypeStore';
+    import {getTransactionTypeIconUrl} from '$lib/stores/transactions/transactionTypeStore';
     import {getIndexColor} from '$lib/utils/colors';
-    import {resolveIssueMessage} from '$lib/utils/transactions/resolveValidationMessage';
-    import type {BrimParseResponse, BrimAssetMapping, BrimValidationIssue, BrimFieldTodo} from '$lib/types';
+    import {resolveIssueMessage, translateFieldName} from '$lib/utils/transactions/resolveValidationMessage';
+    import BrimNoticeList from '$lib/components/transactions/import/BrimNoticeList.svelte';
+    import type {BrimParseResponse, BrimAssetMapping, BrimValidationIssue, BrimFieldTodo, BrimNotice} from '$lib/types';
 
     interface ParsedFileResult {
         fileId: string;
@@ -43,7 +45,7 @@
 
     // Determine if we're in aggregate mode
     let isAggregate = $derived(!parseResult && (allResults?.length ?? 0) > 0);
-    let activeResults = $derived(allResults?.filter((r) => r.status === 'done' && r.response) ?? []);
+    let activeResults = $derived(allResults?.filter((r) => r.response != null && r.status !== 'error') ?? []);
 
     // Group transactions by type — works for single or aggregate
     let txByType = $derived.by(() => {
@@ -112,7 +114,7 @@
         return null;
     });
 
-    let warnings = $derived.by(() => {
+    let warnings = $derived.by((): BrimNotice[] => {
         if (parseResult?.response?.warnings) return parseResult.response.warnings;
         if (isAggregate) return activeResults.flatMap((r) => r.response!.warnings ?? []);
         return [];
@@ -124,11 +126,12 @@
         return [];
     });
 
-    let fieldTodos = $derived.by((): BrimFieldTodo[] => {
-        if (parseResult?.response?.field_todos) return parseResult.response.field_todos as BrimFieldTodo[];
-        if (isAggregate) return activeResults.flatMap((r) => (r.response!.field_todos as BrimFieldTodo[] | undefined) ?? []);
+    let fieldTodoEntries = $derived.by((): Array<{fileName: string | null; todo: BrimFieldTodo}> => {
+        if (parseResult?.response?.field_todos) return (parseResult.response.field_todos as BrimFieldTodo[]).map((todo) => ({fileName: null, todo}));
+        if (isAggregate) return activeResults.flatMap((r) => ((r.response!.field_todos as BrimFieldTodo[] | undefined) ?? []).map((todo) => ({fileName: r.fileName, todo})));
         return [];
     });
+    let hasBlockerTodo = $derived(fieldTodoEntries.some((e) => e.todo.severity === 'blocker'));
 
     let title = $derived.by(() => {
         if (parseResult) return $t('importWizard.detailTitle', {values: {file: parseResult.fileName}});
@@ -176,8 +179,8 @@
                     <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                         {#each txByType as [type, count]}
                             <div class="flex items-center gap-2 px-3 py-1.5 rounded bg-gray-100 dark:bg-slate-800">
-                                <img src={getTypeIconUrl(type)} alt={type} class="w-4 h-4" />
-                                <span class="text-xs font-medium text-gray-600 dark:text-gray-400 flex-1">{type}</span>
+                                <img src={getTransactionTypeIconUrl(type)} alt={type} class="w-4 h-4" />
+                                <span class="text-xs font-medium text-gray-600 dark:text-gray-400 flex-1">{$t('transactions.types.' + type)}</span>
                                 <span class="text-sm font-semibold text-gray-900 dark:text-white">{count}</span>
                             </div>
                         {/each}
@@ -259,24 +262,34 @@
                 {/if}
             </section>
 
-            <!-- Manual Fields Required (Field TODOs) -->
+            <!-- Manual Fields (Field TODOs) — 'Required' only when blockers exist, else 'To Verify' -->
             <section>
-                <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                    {$t('importWizard.manualFieldsRequired')}
-                    {#if fieldTodos.length > 0}
-                        {@const hasBlocker = fieldTodos.some((t) => t.severity === 'blocker')}
-                        <span class="ml-1 text-xs font-normal {hasBlocker ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}">({fieldTodos.length})</span>
+                <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-1.5">
+                    <span>
+                        {hasBlockerTodo ? $t('importWizard.manualFieldsRequired') : $t('importWizard.manualFieldsToVerify')}
+                        {#if fieldTodoEntries.length > 0}
+                            <span class="ml-1 text-xs font-normal {hasBlockerTodo ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}">({fieldTodoEntries.length})</span>
+                        {/if}
+                    </span>
+                    {#if fieldTodoEntries.length > 0}
+                        <Tooltip text={$t('importWizard.manualFieldsTooltip')} position="right" maxWidth="320px">
+                            <Info size={13} class="shrink-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" />
+                        </Tooltip>
                     {/if}
                 </h3>
-                {#if fieldTodos.length > 0}
+                {#if fieldTodoEntries.length > 0}
                     <ul class="space-y-1.5">
-                        {#each fieldTodos as todo}
+                        {#each fieldTodoEntries as entry}
+                            {@const todo = entry.todo}
                             {@const isBlocker = todo.severity === 'blocker'}
                             <li class="flex items-start gap-2 px-3 py-1.5 rounded text-sm {isBlocker ? 'bg-red-50 dark:bg-red-900/20' : 'bg-amber-50 dark:bg-amber-900/20'}">
                                 <Wrench size={14} class="mt-0.5 shrink-0 {isBlocker ? 'text-red-500' : 'text-amber-500'}" />
                                 <div class="min-w-0 flex-1">
+                                    {#if entry.fileName}
+                                        <span class="text-xs text-gray-400 dark:text-gray-500 mr-1">{entry.fileName} ·</span>
+                                    {/if}
                                     <span class="font-medium {isBlocker ? 'text-red-800 dark:text-red-300' : 'text-amber-800 dark:text-amber-300'}">{$t('importWizard.todoRow', {values: {n: todo.tx_index + 1}})}</span>
-                                    <span class="text-xs ml-1 {isBlocker ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}">({todo.field})</span>
+                                    <span class="text-xs ml-1 {isBlocker ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}">({translateFieldName(todo.field, $t)})</span>
                                     <span class="ml-1 {isBlocker ? 'text-red-700 dark:text-red-400' : 'text-amber-700 dark:text-amber-400'}">{todo.message}</span>
                                     {#if todo.context}
                                         <span class="text-xs text-gray-500 dark:text-gray-400 ml-1">— {JSON.stringify(todo.context)}</span>
@@ -315,14 +328,7 @@
             <section>
                 <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{$t('importWizard.warningsSection')}</h3>
                 {#if warnings.length > 0}
-                    <ul class="space-y-1">
-                        {#each warnings as warning}
-                            <li class="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-400">
-                                <AlertTriangle size={14} class="mt-0.5 shrink-0" />
-                                <span>{warning}</span>
-                            </li>
-                        {/each}
-                    </ul>
+                    <BrimNoticeList notices={warnings} />
                 {:else}
                     <p class="text-xs text-gray-400">{$t('importWizard.noWarnings')}</p>
                 {/if}
@@ -338,7 +344,7 @@
                     </button>
                 {/if}
             </div>
-            <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={onClose}>
+            <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={onClose} data-testid="parse-detail-close">
                 {$t('common.close')}
             </button>
         </div>

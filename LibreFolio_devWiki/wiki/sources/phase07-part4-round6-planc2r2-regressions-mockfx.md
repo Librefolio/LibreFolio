@@ -92,8 +92,8 @@ i18n keys + balance walk tests (8/8 pass) + FormModal context-aware validate + D
 | Test FX sync (MOCKFX) | `backend/test_scripts/test_api/test_fx_sync.py` |
 | E2E asset classification | `frontend/e2e/assets/asset-classification.spec.ts` |
 | Balance walk tests | `backend/test_scripts/test_api/test_tx_balance_walk.py` |
-| FormModal (contextual validate) | `frontend/src/lib/components/transactions/TransactionFormModal.svelte` |
-| BulkModal (getBulkContext) | `frontend/src/lib/components/transactions/TransactionBulkModal.svelte` |
+| FormModal (contextual validate) | `frontend/src/lib/components/transactions/modals/TransactionFormModal.svelte` |
+| BulkModal (getBulkContext) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
 | FxPairAddModal (RotateCw fix) | `frontend/src/lib/components/fx/FxPairAddModal.svelte` |
 | Dockerfile + entrypoint.sh | `Dockerfile`, `entrypoint.sh` |
 | Test runner frontend asset | `scripts/test_runner/_frontend_asset.py` |

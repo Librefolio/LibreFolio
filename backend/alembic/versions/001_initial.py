@@ -4,9 +4,23 @@ Revision ID: 001_initial
 Revises:
 Create Date: 2025-12-22
 
-REFACTORED for unified Transaction model.
-Added: users, user_settings, broker_user_access
-Updated: transactions (unified), brokers (new flags)
+Squashed baseline schema — the complete database and the sole migration from the start of
+the project up until 2026-07-28, when migration 002 was added on top. Every install still
+starts from this revision; its table structure remains current, and all changes since are
+shipped as incremental migrations (002+), never by editing this file (the only exception
+being a brand-new, never-shipped table).
+
+Creates the full baseline schema (12 tables) with every index and constraint:
+  • users, user_settings, global_settings — auth accounts, per-user preferences, and
+    instance-wide settings (multi-user support).
+  • assets — instruments, incl. per-type identifier columns (isin / ticker / cusip / sedol
+    / figi / uuid / other) and JSON ``classification_params``.
+  • brokers, broker_user_access — brokers with feature flags + per-user sharing / ACL.
+  • fx_rates, fx_conversion_routes — multi-provider FX rates and conversion routing.
+  • asset_provider_assignments — price / metadata provider bindings per asset.
+  • price_history, asset_events — OHLC price points and corporate / cash asset events.
+  • transactions — the UNIFIED transaction model (buy / sell / deposit / withdrawal /
+    adjustment / …), refactored from the earlier per-type transaction tables.
 """
 
 from typing import Sequence, Union

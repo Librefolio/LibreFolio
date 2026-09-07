@@ -9,7 +9,7 @@ LibreFolio incluye una potente herramienta interactiva de edición de imágenes 
 El modal de Recorte de Imagen se abre automáticamente siempre que suba un archivo de imagen en LibreFolio:
 
 - 📂 **Página de Archivos** → al subir cualquier imagen (JPEG, PNG, WebP, GIF)
-- 👤 **Configuración de perfil** → al cambiar su avatar
+- 👤 **[Configuración de perfil](../settings/profile.md)** → al cambiar su avatar
 - 🏦 **Configuración del bróker** → al cambiar el icono de un bróker
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
@@ -26,9 +26,12 @@ La herramienta ofrece ajustes preestablecidos para los casos de uso más comunes
 |--------|------|-------------|----------|
 | **Avatar** | 200 × 200 px | 1:1 (cuadrado) | Fotos de perfil de usuario |
 | **Icono de Bróker** | 64 × 64 px | 1:1 (cuadrado) | Logotipos de brókers |
+| **Icono de Activo** | 256 × 256 px | 1:1 (cuadrado) | Logotipos de activos |
 | **Personalizado** | Libre | Libre | Cualquier tamaño y proporción |
 
 El ajuste preestablecido define automáticamente la restricción de la relación de aspecto y el tamaño de salida.
+
+La vista previa de elipse solo aparece para los ajustes de avatar e icono de bróker.
 
 ---
 

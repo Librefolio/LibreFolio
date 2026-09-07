@@ -17,6 +17,7 @@
     import AssetIcon from './AssetIcon.svelte';
     import {ensureAssetProvidersCached, getAssetProviderIconUrl} from '$lib/utils/providerHelpers';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+    import {isOutsideClick} from '$lib/utils/core/clickOutside';
 
     // =========================================================================
     // Types
@@ -31,6 +32,7 @@
         asset_type?: string | null;
         provider_url?: string | null;
         provider_params?: Record<string, any> | null;
+        via_web?: boolean;
     }
 
     interface ProviderInfo {
@@ -51,9 +53,16 @@
         initialQuery?: string;
         /** When true, hides the "Search Online" section title (caller renders it externally). */
         hideTitle?: boolean;
+        /**
+         * Extra search terms (e.g. ISIN + all candidate names extracted from a broker
+         * report). Forwarded as `hints` to the backend; used only by the link-finder
+         * fallback to build a specific query when a provider's on-site search finds
+         * nothing (e.g. a fund whose bare ISIN surfaces several sibling share classes).
+         */
+        hints?: string[];
     }
 
-    let {onselect, disabled = false, initialQuery = '', hideTitle = false}: Props = $props();
+    let {onselect, disabled = false, initialQuery = '', hideTitle = false, hints = []}: Props = $props();
 
     // =========================================================================
     // State
@@ -70,6 +79,16 @@
     let debounceTimer: ReturnType<typeof setTimeout> | undefined;
     /** Monotonic search ID to ignore stale responses */
     let searchId = 0;
+    /** Last initialQuery auto-searched, so the auto-trigger fires once per query (even on 0 results) */
+    let lastAutoSearchedQuery: string | null = null;
+
+    // A query typed before the provider list has arrived used to vanish in
+    // silence: executeSearch() bailed on an empty selectedProviders and the
+    // debounce had already fired, so nothing ever retried — the box just looked
+    // dead. Hold the query and run it the moment providers land.
+    let pendingQuery = $state<string | null>(null);
+    /** Controller of the in-flight streamed request, aborted when a newer search starts */
+    let activeController: AbortController | null = null;
 
     // =========================================================================
     // Derived
@@ -77,6 +96,12 @@
 
     let searchableProviders = $derived(providers.filter((p) => p.supports_search));
     let hasResults = $derived(results.length > 0);
+    // Rank among web-resolved (link-finder) results only, in display order. 0 = native result
+    // (no badge). Web results are ordered best-first by the finder, so #1 is the most likely match.
+    let webRanks = $derived.by(() => {
+        let n = 0;
+        return results.map((r) => (r.via_web ? ++n : 0));
+    });
 
     // =========================================================================
     // Lifecycle — Load providers
@@ -90,9 +115,14 @@
     });
 
     // If initialQuery was provided, auto-trigger search after providers load.
+    // Guard on the query value (not on results/loading): a delisted asset returns 0
+    // results, and depending on results.length would re-fire this effect forever.
     $effect(() => {
-        if (providersLoaded && initialQuery.trim().length > 0 && results.length === 0 && !loading) {
-            executeSearch(initialQuery);
+        if (providersLoaded && initialQuery.trim().length > 0) {
+            if (untrack(() => lastAutoSearchedQuery) !== initialQuery) {
+                lastAutoSearchedQuery = initialQuery;
+                executeSearch(initialQuery);
+            }
         }
     });
 
@@ -106,8 +136,19 @@
             providersLoaded = true;
         } catch (e: any) {
             console.error('Failed to load providers:', e);
+            // Finished, badly. Still mark it: a query held back waiting for
+            // providers must not spin forever on a list that will never come.
+            providersLoaded = true;
         }
     }
+
+    // Run the query that was typed while the providers were still in flight.
+    $effect(() => {
+        if (!providersLoaded || pendingQuery === null) return;
+        const q = untrack(() => pendingQuery);
+        pendingQuery = null;
+        if (q) executeSearch(q);
+    });
 
     // =========================================================================
     // Search
@@ -129,11 +170,35 @@
     let providersDone = $state(0);
     let providersTotal = $state(0);
 
+    // Interactive search must never hang; cap the whole streamed request so a slow or
+    // stuck provider resolves to an empty result instead of an endless spinner.
+    const SEARCH_TIMEOUT_MS = 30000;
+
     async function executeSearch(q: string) {
-        if (q.trim().length === 0 || selectedProviders.size === 0) return;
+        if (q.trim().length === 0) return;
+
+        if (!providersLoaded) {
+            // Providers still in flight. Open the dropdown in its searching
+            // state and let the effect above re-run this once they land, so the
+            // user sees the search happening instead of nothing at all.
+            pendingQuery = q;
+            showResults = true;
+            loading = true;
+            return;
+        }
+        if (selectedProviders.size === 0) {
+            // Nothing to search against — clear the spinner so the dropdown can
+            // fall through to "no results" instead of spinning forever.
+            loading = false;
+            return;
+        }
 
         // Increment search ID and capture it for this request
         const mySearchId = ++searchId;
+
+        // Abort any previous in-flight streamed request so rapid/identical searches don't
+        // pile up (a stale stream would otherwise keep running until the server closes it).
+        activeController?.abort();
 
         loading = true;
         error = null;
@@ -144,9 +209,31 @@
 
         const providerCodes = [...selectedProviders].join(',');
 
+        // Extra terms (ISIN + candidate names) for the backend link-finder fallback.
+        // Deduped case-insensitively; the query itself is always included server-side.
+        const seenHints = new Set<string>();
+        const hintsParam = (hints ?? [])
+            .map((h) => (h ?? '').trim())
+            .filter((h) => {
+                const key = h.toLowerCase();
+                if (h.length === 0 || seenHints.has(key)) return false;
+                seenHints.add(key);
+                return true;
+            })
+            .map((h) => `&hints=${encodeURIComponent(h)}`)
+            .join('');
+
+        const controller = new AbortController();
+        activeController = controller;
+        let timedOut = false;
+        const timeoutId = setTimeout(() => {
+            timedOut = true;
+            controller.abort();
+        }, SEARCH_TIMEOUT_MS);
+
         try {
             // Try SSE streaming first
-            const response = await fetch(`/api/v1/assets/provider/search/stream?q=${encodeURIComponent(q)}&providers=${encodeURIComponent(providerCodes)}`);
+            const response = await fetch(`/api/v1/assets/provider/search/stream?q=${encodeURIComponent(q)}&providers=${encodeURIComponent(providerCodes)}${hintsParam}`, {signal: controller.signal});
 
             if (!response.ok || !response.body) {
                 throw new Error('SSE not available');
@@ -155,6 +242,7 @@
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let buffer = '';
+            let streamDone = false;
 
             while (true) {
                 const {done, value} = await reader.read();
@@ -185,25 +273,44 @@
                                 asset_type: r.asset_type,
                                 provider_url: r.provider_url,
                                 provider_params: r.provider_params,
+                                via_web: r.via_web ?? false,
                             }));
                             results = [...results, ...newItems];
                         } else if (event.event === 'provider_error') {
                             providersDone++;
                         } else if (event.event === 'done') {
-                            // Final event
+                            // Terminal event: stop now instead of waiting for the HTTP
+                            // stream to physically close (a slow provider or a buffering
+                            // proxy could otherwise keep it open indefinitely).
+                            streamDone = true;
                         }
                     } catch {
                         /* skip malformed SSE lines */
                     }
+                }
+
+                if (streamDone) {
+                    void reader.cancel();
+                    break;
                 }
             }
 
             if (mySearchId === searchId) {
                 loading = false;
             }
-        } catch {
-            // Fallback to REST endpoint
+        } catch (streamErr) {
             if (mySearchId !== searchId) return;
+
+            // Timed out / aborted: surface an empty result with a clear message instead of
+            // spinning forever. Don't fall back to REST — it would hang the same way.
+            if (timedOut || (streamErr instanceof DOMException && streamErr.name === 'AbortError')) {
+                results = [];
+                error = $t('assets.search.timeout');
+                loading = false;
+                return;
+            }
+
+            // Fallback to REST endpoint (SSE genuinely unavailable)
             try {
                 const response = (await zodiosApi.search_assets_via_providers_api_v1_assets_provider_search_get({
                     queries: {q, providers: providerCodes},
@@ -219,6 +326,8 @@
                     currency: r.currency,
                     asset_type: r.asset_type,
                     provider_url: r.provider_url,
+                    provider_params: r.provider_params,
+                    via_web: r.via_web ?? false,
                 }));
             } catch (e: any) {
                 if (mySearchId !== searchId) return;
@@ -230,6 +339,9 @@
                     loading = false;
                 }
             }
+        } finally {
+            clearTimeout(timeoutId);
+            if (activeController === controller) activeController = null;
         }
     }
 
@@ -257,8 +369,7 @@
     }
 
     function handleClickOutside(e: MouseEvent) {
-        const target = e.target as HTMLElement;
-        if (!target.closest('[data-search-autocomplete]')) {
+        if (isOutsideClick(e.target, (el) => !!el.closest('[data-search-autocomplete]'))) {
             showResults = false;
         }
     }
@@ -313,6 +424,8 @@
                 <button
                     type="button"
                     onclick={() => toggleProvider(prov.code)}
+                    data-testid="asset-search-provider-{prov.code}"
+                    data-selected={selectedProviders.has(prov.code)}
                     class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border transition-all
                                {selectedProviders.has(prov.code) ? 'bg-libre-green/15 dark:bg-libre-green/25 border-libre-green/40 text-libre-green dark:text-green-400' : 'bg-gray-100/50 dark:bg-slate-700/50 border-gray-200 dark:border-slate-600 text-gray-400 dark:text-gray-500 opacity-60'}"
                 >
@@ -328,6 +441,8 @@
     <!-- Results dropdown -->
     {#if showResults}
         <div
+            data-testid="asset-search-results"
+            data-state={loading ? 'searching' : error ? 'error' : hasResults ? 'results' : 'empty'}
             class="border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800
                     shadow-lg max-h-60 overflow-y-auto"
         >
@@ -352,8 +467,15 @@
                         <span>{$t('assets.search.searching')} ({providersDone}/{providersTotal})</span>
                     </div>
                 {/if}
-                {#each results as result}
-                    <button type="button" class="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors border-b border-gray-100 dark:border-slate-700 last:border-b-0" onclick={() => selectResult(result)}>
+                {#each results as result, i}
+                    <button
+                        type="button"
+                        data-testid="asset-search-result-{i}"
+                        data-identifier={result.identifier}
+                        data-provider={result.provider_code}
+                        class="w-full flex items-start sm:items-center gap-3 px-3 py-2.5 text-left hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors border-b border-gray-100 dark:border-slate-700 last:border-b-0"
+                        onclick={() => selectResult(result)}
+                    >
                         <!-- Icon placeholder -->
                         <AssetIcon assetType={result.asset_type} iconUrl={null} altText={result.display_name} size="sm" />
 
@@ -362,7 +484,14 @@
                             <div class="flex items-center gap-1.5 text-sm font-medium text-gray-900 dark:text-gray-100 min-w-0">
                                 <span class="truncate">{result.display_name}</span>
                             </div>
-                            <div class="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+                            <div class="flex flex-nowrap items-center gap-1 text-xs text-gray-500 dark:text-gray-400 overflow-x-auto [&>*]:shrink-0">
+                                {#if webRanks[i] > 0}
+                                    <span class="font-mono text-gray-400 dark:text-gray-500 shrink-0" title={$t('assets.search.rankHint')}>
+                                        <span class="sm:hidden">Web#{webRanks[i]}</span>
+                                        <span class="hidden sm:inline">WebSearch#{webRanks[i]}</span>
+                                    </span>
+                                    <span class="mx-0.5">·</span>
+                                {/if}
                                 <span class="font-mono">{result.identifier}</span>
                                 {#if result.currency}
                                     <span class="mx-0.5">·</span>

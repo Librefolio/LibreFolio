@@ -19,7 +19,7 @@ An embedded background daemon that automatically keeps market data (asset prices
 ## Location
 
 ```
-backend/app/services/scheduler.py        # Main daemon loop
+backend/app/services/scheduler/scheduler.py        # Main daemon loop
 backend/app/services/scheduler/
   ├── leader.py                          # Leader election (psutil + file lock)
   ├── state.py                           # State persistence (JSON, atomic write)
@@ -71,7 +71,7 @@ GET /api/v1/settings/scheduler/log     # JSONL log viewer (paginated, admin-only
 
 | Role | Path |
 |------|------|
-| Main daemon | `backend/app/services/scheduler.py` |
+| Main daemon | `backend/app/services/scheduler/scheduler.py` |
 | Leader election | `backend/app/services/scheduler/leader.py` |
 | Job implementations | `backend/app/services/scheduler/jobs.py` |
 | State persistence | `backend/app/services/scheduler/state.py` |

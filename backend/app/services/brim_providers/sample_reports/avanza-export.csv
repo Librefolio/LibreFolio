@@ -1,0 +1,21 @@
+Datum;Konto;Typ av transaktion;Värdepapper/beskrivning;Antal;Kurs;Belopp;Transaktionsvaluta;Courtage (SEK);Valutakurs;Instrumentvaluta;ISIN;Resultat
+2025-01-14;Savings;Uttag;Uttag till X;;;-54400;SEK;;;;;
+2025-01-13;Savings;Sälj;DNB Global Indeks S;-352,033838;154,665276;54447,41;SEK;0;;SEK;NO0010827280;14650,376974
+2025-01-10;Savings;Uttag;Uttag till X;;;-91900;SEK;;;;;
+2019-04-04;8346000;Köp;Avanza 75;6,3572;191,120305;-1214,99;SEK;0;;SEK;SE0004841500;
+2019-04-01;8346000;Insättning;Insättning från Avanzakonto Y;;;1215;SEK;0;;;;
+2022-09-19;Investments;Köp;CoinShares XBT Provider Bitcoin Tracker One;2;890,47;-1800;SEK;19;;SEK;SE0007126000;
+2022-09-19;Investments;Insättning;Direktinsättning från SEB;;;3650;SEK;;;;;
+2025-01-08;Investments;Uttag;Uttag till X;;;-7447;SEK;;;;;
+2024-12-02;Savings;Utdelning;Fidelity Global Quality Income UCITS ETF INC-EUR (hedged);503;0,049351;285,38;SEK;;1;EUR;IE00BYV1YH00;
+2024-05-31;Investments;Ränta;;;;0,84;SEK;;;;;
+2024-05-31;Savings;Ränta;;;;0,72;SEK;;;;;
+2024-02-27;Savings;Övrigt;Återbetalning Total avgift 2023 DNB Global Indeks S;;;1,24;SEK;;;;;
+2023-03-29;8346899;Övrigt;Återbetalning Total avgift 2022 Avanza 75;;;85,97;SEK;;;;;
+2022-01-27;8346899;Övrigt;Avkastningsskatt;;;-26;SEK;0;;;;
+2023-01-27;8346899;Övrigt;Avkastningsskatt;;;-118;SEK;;;;;
+2023-09-13;Savings;Utländsk källskatt;Utdelning SPGI.K 0.9 USD/aktie;11;;-16,49;SEK;;1;;US78409V1044;
+2023-03-10;Savings;Köp;S&P Global;2;330,16;-7104,41;SEK;21,45;10,72655;USD;US78409V1044;
+2023-03-10;8346899;Övrigt;DNB Renewable Energy A (SEK);3,6545;;;;;;;LU2553958823;
+2023-03-10;8346899;Övrigt;DNB RENEWABLE ENERGY;-3,6545;;;;;;;LU0302296149;
+2023-03-10;Savings;Insättning;Direktinsättning från SEB;;;10000;SEK;;;;;

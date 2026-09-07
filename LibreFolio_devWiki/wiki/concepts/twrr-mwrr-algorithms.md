@@ -37,4 +37,4 @@ As part of Phase 09 (Dashboard), LibreFolio introduces proper financial performa
 | File |
 |------|
 | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/plan_financial_algorithms.md` |
-| `backend/app/utils/roi_utils.py` |
+| `backend/app/utils/financial/roi_utils.py` |

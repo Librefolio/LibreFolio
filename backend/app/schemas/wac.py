@@ -2,7 +2,6 @@
 WAC (Weighted Average Cost) schemas for LibreFolio.
 
 Contains all schema classes related to WAC calculation:
-- WACConversionInfo: FX conversion details applied during WAC
 - WACQualifyingTX: A transaction that participated in iterative WAC
 - WACPreviewResultItem: Full result for preview/inline WAC (used in batch response)
 """
@@ -12,32 +11,17 @@ from __future__ import annotations
 from datetime import date as date_type
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 
-from backend.app.schemas.common import BackwardFillInfo, Currency, FxBackwardFillInfo, SafeDecimal
+from backend.app.schemas.common import BackwardFillInfo, Currency, FxBackwardFillInfo, SafeDecimal, StrictModel
 
 # =============================================================================
 # WAC (WEIGHTED AVERAGE COST) — FX-aware calculation results
 # =============================================================================
 
 
-class WACConversionInfo(BaseModel):
-    """Single FX conversion applied during WAC calculation."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    tx_id: int = Field(..., description="Transaction ID that needed conversion")
-    from_currency: str = Field(..., description="Original currency of the transaction")
-    to_currency: str = Field(..., description="Target currency for WAC")
-    rate: SafeDecimal = Field(..., description="FX rate applied")
-    rate_date: date_type = Field(..., description="Actual date of the FX rate used")
-    stale_days: int = Field(0, ge=0, description="Days between TX date and rate date (0 = fresh)")
-
-
-class WACQualifyingTX(BaseModel):
+class WACQualifyingTX(StrictModel):
     """A TX that participated in WAC calculation."""
-
-    model_config = ConfigDict(extra="forbid")
 
     tx_id: Optional[int] = Field(None, description="DB id, or None if pending without id")
     type: str
@@ -53,16 +37,14 @@ class WACQualifyingTX(BaseModel):
     fx_rate_used: Optional[SafeDecimal] = Field(None, description="FX rate applied (derived: converted/original)")
 
 
-class WACMissingPairInfo(BaseModel):
+class WACMissingPairInfo(StrictModel):
     """A missing FX pair with all dates that needed conversion."""
-
-    model_config = ConfigDict(extra="forbid")
 
     pair: str = Field(..., description="FX pair code (e.g. 'USD/EUR')")
     dates: List[date_type] = Field(default_factory=list, description="Dates for which FX rate was needed but unavailable")
 
 
-class WACPreviewResultItem(BaseModel):
+class WACPreviewResultItem(StrictModel):
     """Result for a single WAC preview item.
 
     Also used inline in TXBatchResponse.wac_results[] for items with
@@ -70,8 +52,6 @@ class WACPreviewResultItem(BaseModel):
     optional batch-context fields (operation, index, source_broker_id)
     are populated.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     # WAC inventory-aware
     wac: Optional[Currency] = Field(None, description="Calculated WAC per unit. None if FX conversion failed.")

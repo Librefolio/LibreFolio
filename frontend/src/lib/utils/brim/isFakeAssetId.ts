@@ -1,7 +1,10 @@
 /** Matches backend FAKE_ASSET_ID_BASE logic (brim.py:41-49). */
-const FAKE_ASSET_ID_BASE = 2 ** 31 - 1; // 2147483647
+export const FAKE_ASSET_ID_BASE = 2 ** 31 - 1; // 2147483647
+
+/** Lowest value considered a fake (placeholder) asset id. */
+export const FAKE_ASSET_ID_FLOOR = FAKE_ASSET_ID_BASE - 10000; // 2147473647
 
 export function isFakeAssetId(id: number | null | undefined): boolean {
     if (id == null) return false;
-    return id >= FAKE_ASSET_ID_BASE - 10000;
+    return id >= FAKE_ASSET_ID_FLOOR;
 }

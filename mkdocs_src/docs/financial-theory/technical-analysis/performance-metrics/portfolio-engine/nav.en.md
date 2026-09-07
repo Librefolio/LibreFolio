@@ -1,7 +1,5 @@
 # 💼 Net Asset Value (NAV) / Net Worth
 
-*[⬅️ Back to Performance Metrics Overview](../index.md)*
-
 ## 💡 What is NAV?
 
 **Net Asset Value (NAV)** is the total market valuation of your portfolio at a point in time $t$. It answers: *"How much is the portfolio worth right now?"*
@@ -14,21 +12,30 @@ $$
 \boxed{\mathrm{NAV}(t) = \mathrm{MV}(t) + \mathrm{Cash}(t) + \mathrm{InTransit}(t)}
 $$
 
-Where $\mathrm{MV}(t) = \sum_{(a,b) \in S} q(a,b,t) \cdot p(a,t) \cdot \mathrm{fx}(\mathrm{ccy}_p, C^*, t)$
+Where:
+
+$$
+\mathrm{MV}(t)=
+\sum_{(a,b)\in S}
+\frac{q(a,b,t)}{qbq(a)}
+\cdot \operatorname{mark}(a,t)
+\cdot \mathrm{fx}(\mathrm{ccy}_{mark}, C^*, t)
+$$
 
 🔗 See **[Portfolio Engine — §5 Aggregation](index.md#5-portfolio-aggregation)** for full derivation.
 
 ---
 
-## 🔗 Valuation Price Chain {: #valuation-price-chain }
+## 🔗 Unified Price Resolver {: #valuation-price-chain }
 
-The price $p(a,t)$ follows a strict priority:
+The mark $\operatorname{mark}(a,t)$ comes from the unified resolver:
 
-1. **Market price** — PriceHistory backward-fill (latest $\leq t$)
-2. **Last buy price** — most recent BUY unit price from $V(u)$ (all visible brokers)
-3. **Missing** — position excluded from NAV
+1. **MARKET** — same-day asset-system quote.
+2. **TRADE_AVG** — average same-day BUY/SELL/priced ADJUSTMENT observation.
+3. **CARRIED** — last observation before $t$, carried forward (LOCF).
+4. **MISSING** — no observation on or before $t$.
 
-WAC is **never** used for valuation. See **[Portfolio Engine — §2](index.md#2-valuation-price)**.
+Marks remain in native currency until valuation; FX conversion happens at $t$. WAC is **never** used for valuation. See [Price Resolution](price-resolution.md).
 
 ---
 
@@ -57,6 +64,10 @@ $$
 
 | Valuation Source | Confidence |
 |-----------------|------------|
-| `MARKET_PRICE` | Full — PriceHistory available |
-| `LAST_BUY_PRICE` | Partial — using transaction price |
+| `MARKET_PRICE` | Full — real quote, exact or carried |
+| `LAST_TRADE_PRICE` | Partial — trade-origin resolver mark |
 | `MISSING` | None — excluded from NAV |
+
+`estimated=True` only applies to TRADE-origin marks. A stale carried MARKET quote is stale but not estimated.
+
+Trade-origin valuations older than the 14-day grace period drive the “assets valued at cost / no market price for more than two weeks” warning as of the valuation date.

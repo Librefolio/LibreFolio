@@ -37,7 +37,7 @@ LibreFolio è un software open-source concesso in licenza ai sensi della **GNU A
 
 ### 📄 Testo Completo della Licenza
 
-Il testo integrale della licenza è disponibile nel file [LICENSE](https://github.com/Librefolio/LibreFolio/blob/main/LICENCE) nel repository.
+Il testo integrale della licenza è disponibile nel file [LICENSE](https://github.com/Librefolio/LibreFolio/blob/main/LICENSE) nel repository.
 
 ```text
 GNU AFFERO GENERAL PUBLIC LICENSE
@@ -49,3 +49,25 @@ of this license document, but changing it is not allowed.
 ...
 (See repository for full text)
 ```
+
+---
+
+## 🧩 Open Source di Terze Parti
+
+LibreFolio poggia sulle spalle della comunità open source. In particolare, le sue
+capacità quantitative sono rese possibili da:
+
+| Libreria | Licenza | Usata per |
+|----------|---------|-----------|
+| [QuantLib](https://www.quantlib.org/) | BSD 3-Clause | Motore di simulazione (Analisi del Rischio) |
+| [Riskfolio-Lib](https://github.com/dcajasn/Riskfolio-Lib) | BSD 3-Clause | Ottimizzazione di portafoglio e contributo al rischio |
+| [TA-Lib](https://github.com/TA-Lib/ta-lib) | BSD | Routine native di analisi tecnica |
+| [pandas-ta-classic](https://github.com/xgboosted/pandas-ta-classic) | MIT | Indicatori tecnici |
+| [NumPy](https://numpy.org/) · [SciPy](https://scipy.org/) · [pandas](https://pandas.pydata.org/) | BSD 3-Clause | Fondamenta numeriche e di gestione dati |
+
+Tutte queste librerie hanno licenze permissive e pienamente compatibili con la licenza
+AGPL-3.0 di LibreFolio. Le loro note di copyright sono riprodotte — come le rispettive
+licenze richiedono per la ridistribuzione in forma binaria, come la nostra immagine Docker — in
+[**THIRD_PARTY_LICENSES.md**](https://github.com/Librefolio/LibreFolio/blob/main/THIRD_PARTY_LICENSES.md),
+che contiene anche l'elenco completo delle attribuzioni e la citazione richiesta
+dall'autore di Riskfolio-Lib.

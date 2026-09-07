@@ -1,4 +1,4 @@
-# ![](../../../static/icons/asset-types/other.png){: width="32" style="vertical-align: middle;" } Index & Benchmark
+# ![](../../../static/icons/asset-types/index.png){: width="32" style="vertical-align: middle;" } Index & Benchmark
 
 An **index** is a statistical measure of a section of the financial market. It tracks the performance of a group of assets and serves as a **benchmark** against which investors measure their own portfolio performance.
 
@@ -10,7 +10,7 @@ An **index** is a statistical measure of a section of the financial market. It t
 |----------|--------|
 | **Tradeable?** | Not directly — but ETFs and futures track indexes |
 | **Examples** | S&P 500, MSCI World, FTSE 100, DAX, Nikkei 225 |
-| **Use in LibreFolio** | Reference for [Asset Comparison](../../../user/assets/detail/signals.md) signal |
+| **Use in LibreFolio** | Read-only benchmark reference for [Asset Comparison](../../../user/assets/detail/signals.md) signal; transactions are not allowed |
 | **Pricing** | Computed from constituent weights, not traded on an exchange |
 
 ---

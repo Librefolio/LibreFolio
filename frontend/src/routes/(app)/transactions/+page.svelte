@@ -7,30 +7,25 @@
     import {Plus, Upload, Pencil, Copy, Trash2, RefreshCw, Link2, Unlink} from 'lucide-svelte';
 
     import {zodiosApi} from '$lib/api';
-    import {commitTransactions, validateTransactions} from '$lib/utils/transactions/txCommitApi';
+    import {commitTransactions} from '$lib/utils/transactions/txCommitApi';
     import {ensureAssetsLoaded} from '$lib/stores/reference/assetStore';
-    import {ensureBrokersLoaded, getAllBrokers, brokerStoreVersion} from '$lib/stores/reference/brokerStore';
+    import {ensureBrokersLoaded, getAccessibleBrokers, brokerStoreVersion} from '$lib/stores/reference/brokerStore';
     import {ensurePluginIconsLoaded} from '$lib/utils/broker/brokerHelpers';
     import {ensureCurrenciesLoaded} from '$lib/stores/reference/currencyStore';
     import {currentLanguage} from '$lib/stores/app/language';
     import {findPromoteMatch, ensureTypesLoaded, typesVersion} from '$lib/stores/transactions/transactionTypeStore';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import type {FilterValue} from '$lib/components/table/types';
-    import {PromoteMergeModal, TransactionActionModal, TransactionBulkModal, TransactionDeleteModal, TransactionFormModal, TransactionsTable, resolveFormItemsForView, loadPartnerRows, loadEventTooltipMap, type FormModalItems} from '$lib/components/transactions';
+    import {PromoteMergeModal, TransactionActionModal, TransactionBulkModal, TransactionFormModal, TransactionsTable, resolveFormItemsForView, loadPartnerRows, loadEventTooltipMap, type FormModalItems} from '$lib/components/transactions';
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
-    import {getBrokerInfo, getPairedAccessLevel, canEditBroker, canEditPaired} from '$lib/stores/reference/brokerStore';
-    import {getAssetInfo, getAllAssets} from '$lib/stores/reference/assetStore';
+    import {canEditBroker, canEditPaired} from '$lib/stores/reference/brokerStore';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
-    import {getTransactionTypeIconUrl} from '$lib/stores/transactions/transactionTypeStore';
-    import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
-    import {getBrokerIconHtmlById} from '$lib/utils/broker/brokerHelpers';
-    import {getRoleSvgHtml} from '$lib/utils/broker/brokerRoleHelpers';
     import {getBrokerRole} from '$lib/stores/reference/brokerStore';
-    import {resolveIssueMessage, type ResolverContext} from '$lib/utils/transactions/resolveValidationMessage';
     import {txStoreSetAll, txStoreGet, txStoreCanEdit} from '$lib/stores/transactions/txStore.svelte';
     import {invalidate as invalidatePortfolioCache} from '$lib/stores/portfolio/portfolioStore.svelte';
+    import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
     import {applyTransactionColumnFilters, buildTransactionsFiltersUrl, parseTransactionFilters, toTransactionColumnFilters, type TransactionFilterMap} from './filterState';
     import type {TXReadItem, AssetEvent} from '$lib/components/transactions/types';
 
@@ -54,7 +49,7 @@
     let brokers = $derived.by<BrokerLike[]>(() => {
         void $brokerStoreVersion;
         void pluginIconsReady; // Re-run after plugin icon cache is populated
-        return getAllBrokers() as BrokerLike[];
+        return getAccessibleBrokers() as BrokerLike[];
     });
     let eventTooltipMap = $state<Map<number, AssetEvent>>(new Map());
 
@@ -131,6 +126,7 @@
     }
 
     async function reload(opts?: {soft?: boolean}): Promise<void> {
+        const sessionGeneration = getClientSessionGeneration();
         if (!opts?.soft) loading = true;
         error = null;
         // Any soft reload means a transaction mutation succeeded — bust the portfolio cache.
@@ -138,10 +134,12 @@
         try {
             // Stage 1: main filtered rows.
             const main = await loadMainRows();
+            if (!isClientSessionCurrent(sessionGeneration)) return;
             mainRows = main;
 
             // Stage 2: partners + tooltip + asset hydration in parallel.
             const [partner, tooltipMap] = await Promise.all([loadPartnerRows(main), loadEventTooltipMap(main), ensureAssetsLoaded()]);
+            if (!isClientSessionCurrent(sessionGeneration)) return;
             partnerRows = partner;
             eventTooltipMap = tooltipMap;
 
@@ -178,6 +176,7 @@
         void filters.broker_ids;
         void filters.asset_id;
         void filters.asset_ids;
+        void filters.without_asset;
         void filters.types;
         void filters.date_start;
         void filters.date_end;
@@ -510,13 +509,15 @@
         }
     }
 
-    async function mergeFetchedTransaction(row: TXReadItem): Promise<void> {
+    async function mergeFetchedTransaction(row: TXReadItem, sessionGeneration: number): Promise<void> {
+        if (!isClientSessionCurrent(sessionGeneration)) return;
         if (mainRows.some((r) => r.id === row.id) || partnerRows.some((r) => r.id === row.id)) return;
         mainRows = [row, ...mainRows];
 
         const partnerId = row.related_transaction_id;
         if (partnerId != null && !mainRows.some((r) => r.id === partnerId) && !partnerRows.some((r) => r.id === partnerId)) {
             const partner = await fetchTransactionById(partnerId);
+            if (!isClientSessionCurrent(sessionGeneration)) return;
             if (partner) partnerRows = [...partnerRows, partner];
         }
 
@@ -525,12 +526,13 @@
     }
 
     async function resolveHighlightedTransaction(txId: number): Promise<TXReadItem | null> {
+        const sessionGeneration = getClientSessionGeneration();
         const loaded = findLoadedTransaction(txId);
         if (loaded) return loaded;
         const fetched = await fetchTransactionById(txId);
-        if (!fetched) return null;
-        await mergeFetchedTransaction(fetched);
-        return fetched;
+        if (!fetched || !isClientSessionCurrent(sessionGeneration)) return null;
+        await mergeFetchedTransaction(fetched, sessionGeneration);
+        return isClientSessionCurrent(sessionGeneration) ? fetched : null;
     }
 
     async function pulseTransactionRow(txId: number): Promise<boolean> {
@@ -649,185 +651,20 @@
     });
 
     // =========================================================================
-    // Single-row delete (TransactionDeleteModal)
+    // Single-row delete → routed through the bulk workspace (T4)
     // =========================================================================
 
-    let deleteModalOpen = $state(false);
-    let deleteModalTx = $state<TXReadItem | null>(null);
-    let deleteModalPartner = $state<TXReadItem | null>(null);
-    let deleteModalPartnerInaccessible = $state(false);
-    let deleteModalPartnerBrokerName = $state('');
-    let deleteModalErrors = $state<string[]>([]);
-    let deleteModalErrorVariant = $state<'warning' | 'error'>('error');
-    let deleteModalValidating = $state(false);
-    let deleteModalValidated = $state(false);
-
+    /**
+     * Single-row delete opens the bulk workspace with the row pre-marked for
+     * deletion, consistent with single-row edit/clone. The workspace
+     * auto-includes a linked partner (resolveInitialRows), and the backend's
+     * linked-pair guard (`pairDeleteIncomplete`) covers the case of a partner
+     * the user cannot access — surfaced inline by the row validation.
+     */
     function handleDeleteRow(row: TXReadItem) {
-        const partnerId = row.related_transaction_id;
-        if (partnerId == null) {
-            // Standalone → Layout A
-            deleteModalTx = row;
-            deleteModalPartner = null;
-            deleteModalPartnerInaccessible = false;
-            deleteModalPartnerBrokerName = '';
-            deleteModalErrors = [];
-            deleteModalOpen = true;
-            return;
-        }
-        // Paired — try to find partner
-        const partner = txStoreGet(partnerId) ?? null;
-        if (!partner) {
-            // Partner not found → Layout C (inaccessible)
-            deleteModalTx = row;
-            deleteModalPartner = null;
-            deleteModalPartnerInaccessible = true;
-            // Try to get broker name from link info (we can't know the broker_id)
-            deleteModalPartnerBrokerName = '?';
-            deleteModalOpen = true;
-            return;
-        }
-        // Check paired access level
-        const level = getPairedAccessLevel(row.broker_id, partner.broker_id);
-        if (level === 'full') {
-            // Layout B — paired full access
-            deleteModalTx = row;
-            deleteModalPartner = partner;
-            deleteModalPartnerInaccessible = false;
-            deleteModalPartnerBrokerName = '';
-            deleteModalOpen = true;
-        } else {
-            // Layout C — blocked
-            deleteModalTx = row;
-            deleteModalPartner = partner;
-            deleteModalPartnerInaccessible = true;
-            const bi = getBrokerInfo(partner.broker_id);
-            deleteModalPartnerBrokerName = bi?.name ?? `#${partner.broker_id}`;
-            deleteModalOpen = true;
-        }
+        bulkIntent = {action: 'delete', txIds: [row.id]};
+        bulkOpen = true;
     }
-
-    /** Build resolver context for resolveIssueMessage (same shape as BulkModal). */
-    function buildResolverCtx(): ResolverContext {
-        const brkrs = getAllBrokers();
-        return {
-            brokers: brkrs as unknown as Array<{id: number; name: string}>,
-            assets: getAllAssets() as unknown as Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null}>,
-            getBrokerIconHtml: (brokerId: number) =>
-                getBrokerIconHtmlById(brokerId, brkrs as any[], {
-                    width: 16,
-                    height: 16,
-                    style: 'display:inline-block;vertical-align:middle;margin-right:2px;border-radius:2px',
-                }),
-        };
-    }
-
-    /** Build an HTML-rich broker label: icon + name + role SVG. */
-    function brokerHtml(brokerId: number): string {
-        const info = getBrokerInfo(brokerId);
-        const name = info?.name ?? `#${brokerId}`;
-        const brkrs = getAllBrokers();
-        const iconTag = getBrokerIconHtmlById(brokerId, brkrs as any[], {
-            width: 14,
-            height: 14,
-            style: 'display:inline-block;vertical-align:middle;margin-right:2px;border-radius:2px',
-        });
-        const role = getBrokerRole(brokerId);
-        const roleSvg = role ? getRoleSvgHtml(role) : '';
-        return `${iconTag}<strong>${name}</strong>${roleSvg ? ' ' + roleSvg : ''}`;
-    }
-
-    /** Build an HTML-rich type label: type icon + translated name. */
-    function typeHtml(type: string): string {
-        const iconUrl = getTransactionTypeIconUrl(type);
-        const name = $_(`transactions.types.${type}`) || type;
-        const iconTag = iconUrl ? `<img src="${iconUrl}" alt="" width="14" height="14" style="display:inline;vertical-align:middle;margin-right:2px" onerror="this.style.display='none'">` : '';
-        return `${iconTag}${name}`;
-    }
-
-    async function confirmDeleteModal() {
-        if (!deleteModalTx) return;
-        deleteModalErrors = [];
-        try {
-            const ids = [deleteModalTx.id];
-            if (deleteModalPartner && !deleteModalPartnerInaccessible) {
-                ids.push(deleteModalPartner.id);
-            }
-            const result = await commitTransactions({deletes: ids}, {fallback: $_('transactions.deleteModal.failed') || 'Delete failed'});
-            if (result.networkError) {
-                deleteModalErrors = [result.networkError];
-                deleteModalErrorVariant = 'error';
-            } else if (result.committed) {
-                // Build rich HTML toast from cached TX data
-                const tx = deleteModalTx;
-                const typeLabel = typeHtml(tx.type);
-                const assetName = tx.asset_id ? (getAssetInfo(tx.asset_id)?.display_name ?? '') : '';
-                const dateStr = tx.date;
-                const brokerLabel = brokerHtml(tx.broker_id);
-                const onLabel = $_('transactions.deleteModal.toastOnBroker') || 'on';
-                if (deleteModalPartner) {
-                    const partnerBrokerLabel = brokerHtml(deleteModalPartner.broker_id);
-                    const heading = $_('transactions.deleteModal.toastDeletedPaired') || 'Pair deleted:';
-                    toasts.success(
-                        `<div style="display:flex;flex-direction:column;gap:2px">` +
-                            `<span style="font-weight:600">${heading}</span>` +
-                            `<span>${typeLabel} ${assetName}</span>` +
-                            `<span style="font-size:0.8em;opacity:0.85">${brokerLabel} → ${partnerBrokerLabel}</span>` +
-                            `<span style="font-size:0.75em;opacity:0.7">${dateStr}</span>` +
-                            `</div>`,
-                    );
-                } else {
-                    const heading = $_('transactions.deleteModal.toastDeletedStandalone') || 'Transaction deleted:';
-                    toasts.success(
-                        `<div style="display:flex;flex-direction:column;gap:2px">` +
-                            `<span style="font-weight:600">${heading}</span>` +
-                            `<span>${typeLabel} ${assetName ? assetName + ' ' : ''}${onLabel} ${brokerLabel}</span>` +
-                            `<span style="font-size:0.75em;opacity:0.7">${dateStr}</span>` +
-                            `</div>`,
-                    );
-                }
-                deleteModalOpen = false;
-                deleteModalTx = null;
-                deleteModalPartner = null;
-                selectedRows = [];
-                void reload({soft: true});
-            } else {
-                // committed: false — resolve errors with resolveIssueMessage
-                const ctx = buildResolverCtx();
-                deleteModalErrors = (result.issues ?? []).map((i) => resolveIssueMessage(i, $_, ctx));
-                deleteModalErrorVariant = 'error';
-            }
-        } catch (e) {
-            console.error('[DeleteModal] failed:', e);
-            deleteModalErrors = [e instanceof Error ? e.message : String(e)];
-            deleteModalErrorVariant = 'error';
-        }
-    }
-
-    async function validateDeleteModal() {
-        if (!deleteModalTx) return;
-        deleteModalValidating = true;
-        deleteModalValidated = false;
-        deleteModalErrors = [];
-        try {
-            const ids = [deleteModalTx.id];
-            if (deleteModalPartner && !deleteModalPartnerInaccessible) {
-                ids.push(deleteModalPartner.id);
-            }
-            const result = await validateTransactions({deletes: ids}, {fallback: $_('transactions.deleteModal.validateFailed') || 'Validation failed'});
-            if (result.networkError) {
-                deleteModalErrors = [result.networkError];
-            } else if (!result.issues || result.issues.length === 0) {
-                deleteModalValidated = true;
-            } else {
-                const ctx = buildResolverCtx();
-                deleteModalErrors = result.issues.map((i) => resolveIssueMessage(i, $_, ctx));
-                deleteModalErrorVariant = 'warning';
-            }
-        } finally {
-            deleteModalValidating = false;
-        }
-    }
-
     function handlePageChange(page: number) {
         filters = {...filters, page};
     }
@@ -851,7 +688,7 @@
     });
 </script>
 
-<div class="space-y-6">
+<div class="space-y-6" aria-busy={loading} data-busy={loading ? 'true' : 'false'} data-testid="transactions-page">
     <!-- Header -->
     <div class="flex items-center justify-between flex-wrap gap-4">
         <div>
@@ -891,7 +728,7 @@
                     transactionsTableComponent?.resetFilters();
                     transactionsTableComponent?.getTableRef()?.clearSelection();
                     selectedRows = [];
-                    filters = {...filters, types: undefined, tags: undefined, broker_id: undefined, asset_id: undefined, date_start: undefined, date_end: undefined, cash: undefined, page: 1};
+                    filters = {...filters, types: undefined, tags: undefined, broker_id: undefined, asset_id: undefined, without_asset: undefined, date_start: undefined, date_end: undefined, cash: undefined, page: 1};
                     void reload();
                 }}
             >
@@ -966,27 +803,6 @@
         bulkIntent = undefined;
     }}
     onCommitted={handleBulkCommitted}
-/>
-<TransactionDeleteModal
-    open={deleteModalOpen}
-    transaction={deleteModalTx}
-    partner={deleteModalPartner}
-    partnerInaccessible={deleteModalPartnerInaccessible}
-    partnerBrokerName={deleteModalPartnerBrokerName}
-    errors={deleteModalErrors}
-    errorVariant={deleteModalErrorVariant}
-    validating={deleteModalValidating}
-    validated={deleteModalValidated}
-    onConfirm={confirmDeleteModal}
-    onValidate={validateDeleteModal}
-    onCancel={() => {
-        deleteModalOpen = false;
-        deleteModalTx = null;
-        deleteModalPartner = null;
-        deleteModalErrors = [];
-        deleteModalValidated = false;
-        deleteModalErrorVariant = 'error';
-    }}
 />
 <ConfirmModal
     open={promoteConfirmOpen}

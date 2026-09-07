@@ -71,6 +71,7 @@
 
     let entries: DistEntry[] = $state([]);
     let countries: CountryInfo[] = $state([]);
+    let addingEntry = $state(false);
     let skipNextSync = false;
     let selectedIds: string[] = $state([]);
     let showDeleteConfirm = $state(false);
@@ -169,17 +170,31 @@
         emitChange();
     }
 
-    function addEntry() {
-        let defaultKey = '';
-        if (kind === 'sector') {
-            defaultKey = getSectorKeysList().find((k) => !usedKeys.has(k)) ?? '';
-        } else {
-            const firstUnused = countries.find((c) => !usedKeys.has(c.iso3));
-            defaultKey = firstUnused?.iso3 ?? '';
+    async function addEntry() {
+        // Reference data is loaded asynchronously: clicking before it arrives used to
+        // produce an entry with an empty key, which the parent then dropped in silence.
+        // Awaiting fixes the key but not the timing — the click handler returns before
+        // the row exists, so a Save pressed straight after the click still saves
+        // nothing. `addingEntry` is what makes that window visible instead of silent.
+        addingEntry = true;
+        try {
+            if (kind === 'geographic' && countries.length === 0) {
+                await loadCountries($currentLanguage);
+            }
+            let defaultKey = '';
+            if (kind === 'sector') {
+                defaultKey = getSectorKeysList().find((k) => !usedKeys.has(k)) ?? '';
+            } else {
+                const firstUnused = countries.find((c) => !usedKeys.has(c.iso3));
+                defaultKey = firstUnused?.iso3 ?? '';
+            }
+            if (!defaultKey) return;
+            const remaining = Math.max(0, Math.round((100 - totalPercent) * 100) / 100);
+            entries = [...entries, {id: generateUUID(), key: defaultKey, weight: remaining}];
+            emitChange();
+        } finally {
+            addingEntry = false;
         }
-        const remaining = Math.max(0, Math.round((100 - totalPercent) * 100) / 100);
-        entries = [...entries, {id: generateUUID(), key: defaultKey, weight: remaining}];
-        emitChange();
     }
 
     /** Balance a single entry: assign all deficit/excess to this row */
@@ -389,8 +404,10 @@
                 <button
                     type="button"
                     onclick={addEntry}
+                    disabled={addingEntry}
+                    data-busy={addingEntry}
                     data-testid="distribution-add-{kind}"
-                    class="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                    class="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors disabled:opacity-50"
                     title={kind === 'sector' ? $t('assets.distribution.addSector') : $t('assets.distribution.addCountry')}
                 >
                     <Plus size={10} />

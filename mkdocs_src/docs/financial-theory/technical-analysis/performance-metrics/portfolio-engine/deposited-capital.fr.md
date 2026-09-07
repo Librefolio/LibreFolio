@@ -1,13 +1,13 @@
 # 💸 Capital Déposé, PnL Total et Pools de Cash
 
-*[⬅️ Retour à l'aperçu des mesures de performance](../index.md)*
-
 ## 💡 Aperçu du Concept
 
 **Capital Déposé** = capital externe net cumulé apporté depuis le début :
 
 $$
-\mathrm{DepCap}(t) = \sum_{\tau \leq t} D(\tau) - \sum_{\tau \leq t} W(\tau)
+\mathrm{CapitalBaseline}(t) =
+\sum_{\tau \leq t}\mathrm{ExternalCashFlow}(\tau)
+  + \sum_{\tau \leq t}\mathrm{InKindCapital}(\tau)
 $$
 
 **PnL Total** = toute la valeur générée au-delà des contributions externes :
@@ -25,6 +25,8 @@ $$
 | DÉPÔT / RETRAIT (non lié) | ✅ Oui |
 | TRANSFERT DE LIQUIDITÉS connecté-externe | ✅ Oui |
 | TRANSFERT DE LIQUIDITÉS connecté-interne | ❌ Non |
+| AJUSTEMENT / TRANSFERT avec `cost_basis_override`, sans `asset_id` | ✅ Oui, ajustement du capital externe |
+| AJUSTEMENT lié à FRACTIONNEMENT | ❌ Non, redimensionnement de quantité uniquement |
 | ACHAT, VENTE, DIVIDENDE, INTÉRÊT, FRAIS, TAXE | ❌ Non |
 
 ---
@@ -55,7 +57,7 @@ $$
 
 ## 📝 Exemples Pratiques
 
-### A — Dépôt → Achat → Vente avec Gain
+### 🧾 — Dépôt → Achat → Vente avec Gain
 
 | Étape | Tx | $K$ | $R$ | Cash |
 |------|----|-----|-----|------|
@@ -65,7 +67,7 @@ $$
 
 TotalPnL = 1 200 − 1 000 = **+200 €** ✓
 
-### B — Dividende puis Retrait
+### 💸 — Dividende puis Retrait
 
 | Étape | Tx | $K$ | $R$ | $W$ | Cash |
 |------|----|-----|-----|-----|------|
@@ -77,7 +79,7 @@ TotalPnL = 1 200 − 1 000 = **+200 €** ✓
 
 Après l'étape 5 : Cash=30, K=0, R=30 ✓ (rendements restaurés depuis W)
 
-### C — Régression après vente totale
+### 🧪 — Régression après vente totale
 
 | Étape | Tx | $K$ | $R$ | Cash |
 |------|----|-----|-----|------|
@@ -96,6 +98,9 @@ Le modèle à 3 pools s'exécute dans une **boucle unique par transaction** (bas
 2. Mise à jour de K/R/W selon les règles par type de transaction
 3. Décrémentation ensuite du pool PMP (pour les VENTES)
 
+
+La série d'entrées ROI/TWRR/MWRR est dérivée des variations jour après jour du `cumulative_external_cash_flow`, la baseline de capital. Elle n'est pas dérivée du champ `external_cash_flow` (liquidités uniquement).
+
 🔗 Voir **[Portfolio Engine — §6](index.md#6-three-pool-cash-model-per-broker-k_b-r_b-w)** pour toutes les règles formelles.
 
 ---
@@ -105,3 +110,4 @@ Le modèle à 3 pools s'exécute dans une **boucle unique par transaction** (bas
 - 💼 [NAV](nav.md) — l'autre terme du PnL Total
 - 📊 [Period PnL](period-pnl.md) — version par fenêtre
 - ⚙️ [Portfolio Engine](index.md) — modèle mathématique complet
+- 📈 [Aperçu des Métriques de Performance](../index.md) — toutes les métriques de performance en un coup d'œil

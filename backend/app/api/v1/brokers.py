@@ -32,6 +32,7 @@ from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.v1.auth import get_current_user
@@ -42,6 +43,8 @@ from backend.app.schemas.brim import (
     BRIMAssetCandidate,
     BRIMAssetCandidatesRequest,
     BRIMAssetMapping,
+    BRIMDuplicateCheckRequest,
+    BRIMDuplicateReport,
     BRIMFileInfo,
     BRIMFileStatus,
     BRIMParseRequest,
@@ -60,12 +63,15 @@ from backend.app.schemas.brokers import (
     BRDeleteItem,
     BRListResponse,
     BRReadItem,
+    BRSelfAccessResponse,
+    BRSelfRoleUpdate,
     BRSummary,
     BRUpdateItem,
 )
 from backend.app.schemas.uploads import FilePreviewResponse
 from backend.app.services import brim_provider
-from backend.app.services.brim_provider import BRIMParseError, detect_tx_duplicates, search_asset_candidates
+from backend.app.services.brim_parse_pool import parse_file_offloaded
+from backend.app.services.brim_provider import BRIMParseError, detect_tx_duplicates, search_asset_candidates, search_asset_candidates_bulk
 from backend.app.services.broker_service import BrokerService
 from backend.app.services.file_preview import (
     FilePreviewLinks,
@@ -73,6 +79,7 @@ from backend.app.services.file_preview import (
     build_image_preview_url,
     build_preview_response,
 )
+from backend.app.services.global_settings_service import get_max_upload_mb
 from backend.app.services.provider_registry import BRIMProviderRegistry
 
 logger = get_logger(__name__)
@@ -80,6 +87,29 @@ logger = get_logger(__name__)
 broker_router = APIRouter(prefix="/brokers", tags=["BR (Broker)"])
 
 brim_router = APIRouter(prefix="/import", tags=["BR Import"])
+
+
+def _delete_brim_files_for_brokers(broker_ids: List[int]) -> int:
+    """Delete every BRIM import file that belongs to the given brokers.
+
+    BRIM files live on the filesystem (not the DB), so the ORM cascade that removes a
+    broker and its transactions never touches them. This best-effort helper removes the
+    now-orphaned files after their broker has been deleted. Only files whose
+    ``target_broker_id`` matches exactly are removed — legacy files with no broker
+    (``None``) are left untouched.
+
+    Returns the number of files removed. Performs synchronous filesystem I/O, so callers
+    in async endpoints must invoke it via ``asyncio.to_thread``.
+    """
+    removed = 0
+    for broker_id in broker_ids:
+        try:
+            for file_info in brim_provider.list_files(broker_ids=[broker_id]):
+                if file_info.target_broker_id == broker_id and brim_provider.delete_file(file_info.file_id):
+                    removed += 1
+        except Exception as exc:  # best-effort: the broker is already deleted
+            logger.warning("Failed to clean BRIM files for deleted broker", broker_id=broker_id, error=str(exc))
+    return removed
 
 
 async def _get_brim_file_with_access(
@@ -138,7 +168,20 @@ async def create_brokers(
     response = await service.create_bulk(items, user_id=user_id)
 
     if not response.errors:
-        await session.commit()
+        try:
+            await session.commit()
+        except IntegrityError:
+            # The duplicate-name check inside `create_bulk` is a SELECT followed
+            # by an INSERT, so two requests racing on the same name both pass it
+            # and the loser only finds out at flush time. Without this the user
+            # gets a bare 500 instead of the reason, which is the one thing that
+            # would let them fix it.
+            await session.rollback()
+            logger.warning("Broker creation lost a uniqueness race", user_id=user_id)
+            raise HTTPException(
+                status_code=409,
+                detail="A broker with that name already exists. Choose a different name.",
+            ) from None
         logger.info(f"Created {response.success_count} brokers successfully", user_id=user_id)
     else:
         await session.rollback()
@@ -353,7 +396,12 @@ async def delete_brokers(
 
     if not response.errors:
         await session.commit()
-        logger.info(f"Deleted {response.total_deleted} brokers successfully", user_id=user_id)
+        # Cascade-delete orphaned BRIM import files for each broker that was actually
+        # deleted (files are on the filesystem, so the ORM cascade misses them). Done
+        # post-commit and best-effort so a filesystem hiccup never fails the delete.
+        deleted_broker_ids = [r.id for r in response.results if r.success]
+        files_removed = await asyncio.to_thread(_delete_brim_files_for_brokers, deleted_broker_ids)
+        logger.info(f"Deleted {response.total_deleted} brokers successfully", user_id=user_id, brim_files_removed=files_removed)
     else:
         await session.rollback()
         logger.warning(f"Broker deletion had errors: {response.errors}", user_id=user_id)
@@ -451,13 +499,67 @@ async def bulk_update_broker_access(
     )
 
 
+@broker_router.patch("/{broker_id}/access/me", response_model=BRSelfAccessResponse)
+async def update_own_broker_role(
+    broker_id: int,
+    item: BRSelfRoleUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: AsyncSession = Depends(get_session_generator),
+) -> BRSelfAccessResponse:
+    """
+    Self-service role change (F4) — demotion only:
+    - EDITOR → VIEWER
+    - OWNER → EDITOR/VIEWER, only when at least one other OWNER remains
+      (the last OWNER must promote someone else first).
+
+    Promotions are reserved to the OWNER-only bulk PUT endpoint.
+    """
+    service = BrokerService(session)
+    success, message = await service.update_own_role(broker_id, current_user.id, item.role)
+    if not success:
+        status = 403 if "no access" in message else 400
+        raise HTTPException(status_code=status, detail=message)
+
+    await session.commit()
+    logger.info(f"User self-demoted on broker {broker_id}", user_id=current_user.id, new_role=item.role.value)
+    return BRSelfAccessResponse(success=True, message=message, broker_deleted=False)
+
+
+@broker_router.delete("/{broker_id}/access/me", response_model=BRSelfAccessResponse)
+async def leave_broker_access(
+    broker_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: AsyncSession = Depends(get_session_generator),
+) -> BRSelfAccessResponse:
+    """
+    Remove the caller's own access to a broker (F4).
+
+    - EDITOR/VIEWER: always allowed.
+    - OWNER: allowed when another OWNER remains.
+    - The LAST owner leaving deletes the broker entirely — cascade over
+      transactions and BRIM report files (confirmed F4 semantics).
+    """
+    service = BrokerService(session)
+    success, message, broker_deleted = await service.leave_broker(broker_id, current_user.id)
+    if not success:
+        status = 403 if "no access" in message else 400
+        raise HTTPException(status_code=status, detail=message)
+
+    await session.commit()
+
+    if broker_deleted:
+        # Same orphaned-BRIM-file cleanup as the bulk delete endpoint
+        files_removed = await asyncio.to_thread(_delete_brim_files_for_brokers, [broker_id])
+        logger.info(f"Broker {broker_id} cascade-deleted: last owner left", user_id=current_user.id, brim_files_removed=files_removed)
+    else:
+        logger.info(f"User left broker {broker_id}", user_id=current_user.id)
+
+    return BRSelfAccessResponse(success=True, message=message, broker_deleted=broker_deleted)
+
+
 # =============================================================================
 # BRIM PROVIDER MANAGEMENT
 # =============================================================================
-
-
-# Maximum file size: 10 MB
-MAX_FILE_SIZE = 10 * 1024 * 1024
 
 
 # =============================================================================
@@ -490,23 +592,30 @@ async def upload_file(
     if not current_user.is_superuser and role is None:
         raise HTTPException(status_code=403, detail="EDITOR or OWNER access required to upload files to this broker")
 
+    max_mb = await get_max_upload_mb(session)
+    max_bytes = max_mb * 1024 * 1024
+
     # Read file content
     content = await file.read()
 
     # Validate file size
     if len(content) == 0:
         raise HTTPException(status_code=400, detail="Empty file")
-    if len(content) > MAX_FILE_SIZE:
+    if len(content) > max_bytes:
         raise HTTPException(
             status_code=413,
-            detail=f"File too large. Maximum size: {MAX_FILE_SIZE // (1024 * 1024)} MB",
+            detail=f"File too large. Maximum size is {max_mb} MB",
         )
 
     # Get filename: prefer user-provided custom_filename over original file.filename
     filename = custom_filename.strip() if custom_filename and custom_filename.strip() else (file.filename or "unknown")
 
-    # Save file with user_id and broker_id
-    file_info = brim_provider.save_uploaded_file(
+    # Save file with user_id and broker_id.
+    # Writing the payload, sniffing the compatible plugins (which re-reads it) and writing
+    # the sidecar are all blocking filesystem I/O: run them off the loop, or a handful of
+    # simultaneous uploads freeze every other request in the application.
+    file_info = await asyncio.to_thread(
+        brim_provider.save_uploaded_file,
         content,
         filename,
         user_id=current_user.id,
@@ -609,7 +718,7 @@ async def get_brim_file_preview(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        logger.error("Failed to build BRIM file preview", file_id=file_id, error=str(e))
+        logger.exception("Failed to build BRIM file preview", file_id=file_id, error=str(e))
         raise HTTPException(status_code=500, detail="Failed to build file preview") from e
 
 
@@ -730,11 +839,12 @@ async def parse_file(
     plugin_code = request.plugin_code
     if plugin_code == "auto":
         # Auto-detect plugin based on file content
-        file_path = brim_provider.get_file_path(file_id)
+        file_path = await asyncio.to_thread(brim_provider.get_file_path, file_id)
         if not file_path:
             raise HTTPException(status_code=404, detail="File not found")
 
-        detected_plugin = BRIMProviderRegistry.auto_detect_plugin(file_path)
+        # Detection sniffs the file itself — blocking read, same rule as the parse below.
+        detected_plugin = await asyncio.to_thread(BRIMProviderRegistry.auto_detect_plugin, file_path)
         if detected_plugin:
             plugin_code = detected_plugin
             logger.info("Auto-detected plugin for file", file_id=file_id, detected_plugin=plugin_code)
@@ -745,7 +855,7 @@ async def parse_file(
 
     try:
         # 1. Parse file using plugin (plugin only reads file format)
-        parse_output = brim_provider.parse_file(file_id=file_id, plugin_code=plugin_code, broker_id=request.broker_id)
+        parse_output = await parse_file_offloaded(file_id, plugin_code, request.broker_id)
         transactions = parse_output.transactions
         warnings = parse_output.warnings
         validation_issues = parse_output.validation_issues
@@ -754,13 +864,19 @@ async def parse_file(
 
         # 2. Build asset mappings (CORE responsibility)
         # Search DB for candidates for each extracted asset
+        # One round-trip for the whole file: the per-asset helper issued up to five
+        # queries each, so a thirty-instrument report spent a hundred-odd sequential
+        # waits inside a single request.
+        bulk = await search_asset_candidates_bulk(
+            session,
+            [(info.extracted_symbol, info.extracted_isin, info.extracted_name) for info in extracted_assets.values()],
+        )
+
         asset_mappings = []
         for fake_id, info in extracted_assets.items():
-            candidates, auto_selected = await search_asset_candidates(
-                session=session,
-                extracted_symbol=info.extracted_symbol,
-                extracted_isin=info.extracted_isin,
-                extracted_name=info.extracted_name,
+            candidates, auto_selected = bulk.get(
+                (info.extracted_symbol, info.extracted_isin, info.extracted_name),
+                ([], None),
             )
             asset_mappings.append(
                 BRIMAssetMapping(
@@ -770,6 +886,7 @@ async def parse_file(
                     extracted_name=info.extracted_name,
                     candidates=candidates,
                     selected_asset_id=auto_selected,
+                    notices=info.notices,
                 )
             )
 
@@ -783,8 +900,10 @@ async def parse_file(
             asset_mappings=asset_mappings,
         )
 
-        # Move file to parsed folder on success
-        brim_provider.move_to_parsed(file_id)
+        # Move file to parsed folder on success. Four filesystem operations
+        # (rename, read, write, unlink) — off the event loop like every other
+        # blocking call in this handler.
+        await asyncio.to_thread(brim_provider.move_to_parsed, file_id)
 
         # Build response
         response = BRIMParseResponse(
@@ -828,13 +947,57 @@ async def parse_file(
 
     except ValueError as e:
         # Parse failed - move to failed folder
-        brim_provider.move_to_failed(file_id, str(e))
+        await asyncio.to_thread(brim_provider.move_to_failed, file_id, str(e))
         raise HTTPException(status_code=400, detail=str(e)) from e
 
     except BRIMParseError as e:
         # Parse failed - move to failed folder
-        brim_provider.move_to_failed(file_id, e.message)
+        await asyncio.to_thread(brim_provider.move_to_failed, file_id, e.message)
         raise HTTPException(status_code=400, detail=f"Parse error: {e.message}") from e
+
+
+@brim_router.post("/duplicates", response_model=BRIMDuplicateReport)
+async def check_duplicates(
+    request: BRIMDuplicateCheckRequest,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session_generator),
+) -> BRIMDuplicateReport:
+    """
+    Re-run duplicate detection on transactions in their current, user-edited state.
+
+    ``/parse`` also returns a duplicate report, but it is computed on the plugin's raw
+    output. That verdict goes stale as soon as the user changes anything: a row the
+    plugin could only book as a cash movement — because the file did not give it the
+    instrument — gets compared against cash movements rather than against the purchase
+    it really is, and correcting it later never re-opens the question.
+
+    Call this once the transactions are final (assets unified, flagged rows corrected)
+    to get a verdict computed on the data that will actually be imported.
+
+    Requires EDITOR or OWNER access on the target broker.
+    """
+    broker_service = BrokerService(session)
+    role = await broker_service._check_user_access(request.broker_id, current_user.id, min_role=UserRole.EDITOR)
+    if not current_user.is_superuser and role is None:
+        raise HTTPException(status_code=403, detail="EDITOR or OWNER access required to check duplicates for this broker")
+
+    duplicates = await detect_tx_duplicates(
+        transactions=request.transactions,
+        broker_id=request.broker_id,
+        session=session,
+        asset_mappings=request.asset_mappings,
+    )
+
+    logger.info(
+        "Duplicate check re-run on corrected transactions",
+        broker_id=request.broker_id,
+        transaction_count=len(request.transactions),
+        unique_tx_count=len(duplicates.tx_unique_indices),
+        possible_duplicates=len(duplicates.tx_possible_duplicates),
+        likely_duplicates=len(duplicates.tx_likely_duplicates),
+    )
+
+    return duplicates
 
 
 # =============================================================================

@@ -1,4 +1,4 @@
-# ![](../../../static/icons/transactions/adjustment.png){: width="32" style="vertical-align: middle;" } Rettifica
+# 🧮 ![](../../../static/icons/transactions/adjustment.png){: width="32" style="vertical-align: middle;" } Rettifica
 
 <div class="screenshot-container">
  <img class="gallery-img" data-category="transactions" data-name="form-modal-adjustment" alt="Modulo Transazione — Rettifica">
@@ -26,6 +26,7 @@ Le rettifiche vengono utilizzate quando nessun altro tipo di transazione è adat
 - **Correzione di errori di importazione** — ad es., l'importazione dal broker ha omesso un'operazione societaria
 - **Frazionamento / frazionamento inverso** — regolazione della quantità senza movimento di cassa
 - **Regali** — ricezione o donazione di azioni
+- **Acquisizione gratuita** — airdrop, ricompense di staking, promozioni
 - **Configurazione saldo iniziale** — avvio di un portafoglio partendo da uno snapshot
 - **Operazioni societarie** non coperte da altri tipi (spin-off, fusioni, ecc.)
 
@@ -50,8 +51,9 @@ Le rettifiche con quantità positiva **aumentano** la quantità dei lotti (FIFO)
     $$\text{Costo totale} = \text{PMC} \times \text{quantità}$$
 
 ### 🏦 Costo di Carico Automatico nei Trasferimenti
-
 Quando si trasferiscono asset tra broker, LibreFolio **calcola automaticamente** il Cost Basis Override lato ricevente utilizzando il **Prezzo Medio di Carico (PMC)** della posizione del broker di origine.
+
+$$\text{Cost Basis Override} = \frac{C}{q}$$
 
 !!! tip "Scopri di più"
 

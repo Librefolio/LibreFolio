@@ -1,4 +1,4 @@
-import {expect, Page, test} from '@playwright/test';
+import {expect, type Page, test} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_ADMIN, TEST_USER, TEST_USER_2} from '../fixtures/test-users';
 
@@ -53,6 +53,33 @@ async function openSharingModalFromList(page: Page) {
     await expect(page.getByTestId('broker-sharing-modal')).toBeVisible({timeout: 5000});
 }
 
+async function expectOwnershipChartCanvas(page: Page) {
+    const section = page.getByTestId('ownership-chart-section');
+    await expect(section).toBeVisible({timeout: 5000});
+
+    const canvas = section.locator('canvas').first();
+    await expect(canvas).toBeVisible({timeout: 5000});
+    await expect
+        .poll(
+            async () => {
+                const box = await canvas.boundingBox();
+                if (!box || box.width <= 0 || box.height <= 0) return 'zero-css-size';
+
+                return canvas.evaluate((node) => {
+                    const htmlCanvas = node as HTMLCanvasElement;
+                    return htmlCanvas.width > 0 && htmlCanvas.height > 0 ? 'non-zero' : 'zero-bitmap-size';
+                });
+            },
+            {timeout: 5000},
+        )
+        .toBe('non-zero');
+}
+
+// Earned parallel: this file's blocks own the data they touch and wait on published
+// state, so they share the backend with their neighbours instead of queueing behind
+// them. Verified by a green run of the whole category at 4 workers.
+test.describe.configure({mode: 'parallel'});
+
 test.describe('Broker Sharing', () => {
     test.describe('Share Button Visibility', () => {
         test('S1: share button visible for OWNER on broker detail', async ({page}) => {
@@ -97,6 +124,7 @@ test.describe('Broker Sharing', () => {
         test('S9: close modal with Escape key', async ({page}) => {
             await login(page, TEST_ADMIN);
             await openSharingModalFromList(page);
+            await expectOwnershipChartCanvas(page);
             await page.getByTestId('broker-sharing-modal').press('Escape');
             await expect(page.getByTestId('broker-sharing-modal')).not.toBeVisible({timeout: 3000});
         });
@@ -110,7 +138,7 @@ test.describe('Broker Sharing', () => {
         });
 
         test('S4: panel shows ownership chart section', async ({page}) => {
-            await expect(page.getByTestId('ownership-chart-section')).toBeVisible();
+            await expectOwnershipChartCanvas(page);
         });
 
         test('S5: panel shows at least the current OWNER in badge list', async ({page}) => {
@@ -148,28 +176,31 @@ test.describe('Broker Sharing', () => {
             await openSharingModal(page);
         });
 
-        test('S11: add user form has search input', async ({page}) => {
+        test('S11: add user form has a user picker', async ({page}) => {
             await page.getByTestId('sharing-add-user-btn').click();
             await expect(page.getByTestId('sharing-add-form')).toBeVisible();
-            await expect(page.getByTestId('sharing-search-input')).toBeVisible();
+            await expect(page.getByTestId('sharing-user-select-trigger')).toBeVisible();
         });
 
-        test('S12: search for users returns results', async ({page}) => {
+        test('S12: user picker lists users up-front and narrows down while typing', async ({page}) => {
             await page.getByTestId('sharing-add-user-btn').click();
             await expect(page.getByTestId('sharing-add-form')).toBeVisible({timeout: 3000});
-            const searchInput = page.getByTestId('sharing-search-input');
+
+            // Opening the picker must already show the candidate list — no typing required
+            await page.getByTestId('sharing-user-select-trigger').click();
+            const options = page.locator('[data-testid^="search-select-option-"]');
+            await expect(options.first()).toBeVisible({timeout: 5000});
+
+            // Typing narrows the list client-side ('frank' is a free user on no broker)
+            const searchInput = page.getByTestId('sharing-user-select-search');
             await expect(searchInput).toBeVisible();
-
-            // Type a search query using pressSequentially to trigger Svelte on:input
-            // 'frank' is a free user NOT assigned to any broker
-            await searchInput.click();
             await searchInput.pressSequentially('frank', {delay: 50});
-            // Wait for debounce (300ms) + API call
-            await page.waitForTimeout(2000);
 
-            // Should see at least one search result item (e2e_user_frank)
-            const results = page.locator('[data-testid^="user-search-result-"]');
-            await expect(results.first()).toBeVisible({timeout: 5000});
+            await expect(options.first()).toBeVisible({timeout: 5000});
+            const remaining = await options.count();
+            for (let i = 0; i < remaining; i++) {
+                await expect(options.nth(i)).toContainText(/frank/i);
+            }
         });
     });
 
@@ -184,7 +215,7 @@ test.describe('Broker Sharing', () => {
             if (await editBtn.isVisible({timeout: 2000})) {
                 await editBtn.click();
                 // Edit modal/form should appear
-                await page.waitForTimeout(500);
+                await expect(page.locator('[role="dialog"], [data-testid$="-modal"]').first()).toBeVisible({timeout: 10_000});
             }
         });
     });
@@ -223,7 +254,6 @@ test.describe('Broker Sharing', () => {
             const themeToggle = page.getByTestId('theme-toggle');
             if (await themeToggle.isVisible({timeout: 3000})) {
                 await themeToggle.click();
-                await page.waitForTimeout(300);
             }
 
             // Navigate to broker detail and open the sharing panel (Info tab)
@@ -231,7 +261,7 @@ test.describe('Broker Sharing', () => {
             await openSharingModal(page);
 
             // Verify panel content is visible in dark mode
-            await expect(page.getByTestId('ownership-chart-section')).toBeVisible();
+            await expectOwnershipChartCanvas(page);
             // Verify dark class on html
             const isDark = await page.evaluate(() => document.documentElement.classList.contains('dark'));
             expect(isDark).toBe(true);

@@ -23,6 +23,7 @@ import {createEntityStore} from '../core/entityStore';
 import {derived} from 'svelte/store';
 import {canEditWithRole, getRoleRank, type PairedAccessLevel} from '$lib/utils/broker/brokerRoleHelpers';
 import {ensurePluginIconsLoaded, normalizeBrokerIconField} from '$lib/utils/broker/brokerHelpers';
+import {getClientSessionGeneration, isClientSessionCurrent, registerClientSessionReset} from '$lib/stores/app/clientSession';
 
 // ============================================================================
 // TYPES
@@ -44,6 +45,8 @@ export interface BrokerInfo {
     is_active?: boolean;
     opened_at?: string | null;
     user_role?: string | null;
+    /** Current user's ownership share as a decimal string ("0".."1"); null = unset (treated as 100% for OWNER). */
+    user_share_percentage?: string | null;
     /** Carried for compatibility with the wider `Broker` type (BRReadItem). */
     created_at?: string;
     /** Carried for compatibility with the wider `Broker` type (BRReadItem). */
@@ -75,6 +78,7 @@ function normalize(raw: Record<string, unknown>): BrokerInfo {
     copy('is_active');
     copy('opened_at');
     copy('user_role');
+    copy('user_share_percentage');
     copy('created_at');
     copy('updated_at');
     return out as unknown as BrokerInfo;
@@ -144,14 +148,19 @@ export const refreshAllBrokers = async (): Promise<void> => {
     ensurePluginIconsLoaded(); // fire-and-forget — keeps plugin icon cache fresh
 };
 
+/** Clear user-scoped broker data without starting another request. */
+export const resetBrokerStore = (): void => {
+    iconFieldLoaders.clear();
+    store.reset();
+};
+
+registerClientSessionReset('brokerStore', resetBrokerStore);
+
 /** Sync lookup. Returns null if id is null/undefined or not cached. */
 export const getBrokerInfo = store.get;
 
 /** All cached brokers, in insertion order. */
 export const getAllBrokers = store.getAll;
-
-/** Whether the store has been populated at least once. */
-export const isBrokersLoaded = store.isLoaded;
 
 /**
  * Hydrate icon-relevant fields for a broker when a consumer only has a partial
@@ -163,17 +172,20 @@ export async function ensureBrokerIconFieldsLoaded(brokerId: number | null | und
     const inFlight = iconFieldLoaders.get(brokerId);
     if (inFlight) return inFlight;
 
+    const sessionGeneration = getClientSessionGeneration();
     const loader = (async () => {
         try {
             const broker = (await zodiosApi.get_broker_api_v1_brokers__broker_id__get({
                 params: {broker_id: brokerId},
             } as never)) as Record<string, unknown>;
+            if (!isClientSessionCurrent(sessionGeneration)) return;
             store.merge([broker]);
         } catch (e) {
+            if (!isClientSessionCurrent(sessionGeneration)) return;
             // eslint-disable-next-line no-console
             console.error('[brokerStore] Failed to hydrate broker icon fields:', e);
         } finally {
-            iconFieldLoaders.delete(brokerId);
+            if (isClientSessionCurrent(sessionGeneration)) iconFieldLoaders.delete(brokerId);
         }
     })();
 
@@ -218,6 +230,19 @@ export function canEditPaired(brokerIdA: number, brokerIdB: number): boolean {
 /** All brokers the user has some access to (user_role != null). */
 export function getAccessibleBrokers(): BrokerInfo[] {
     return store.getAll().filter((b) => b.user_role != null);
+}
+
+/**
+ * Brokers the user actually OWNS with a positive share (F2 dashboard scope).
+ * A 0% share is valid and behaves like EDITOR/VIEWER — excluded here.
+ * Null share (legacy, never set) counts as 100% for an OWNER.
+ */
+export function getOwnedBrokers(): BrokerInfo[] {
+    return store.getAll().filter((b) => {
+        if (b.user_role !== 'OWNER') return false;
+        const share = b.user_share_percentage;
+        return share == null || parseFloat(share) > 0;
+    });
 }
 
 /** Only brokers where user is OWNER or EDITOR. */

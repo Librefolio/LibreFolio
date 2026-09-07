@@ -10,8 +10,8 @@ import type {TxFields, TxOriginal, CashValue, ResolvedOp, TxDualSide} from '../t
 // =============================================================================
 
 interface MockRule {
-    quantityRule: 'positive' | 'negative' | 'zero';
-    cashSign: 'positive' | 'negative' | 'optional';
+    quantityRule: 'positive' | 'negative' | 'zero' | 'free' | 'any';
+    cashSign: 'positive' | 'negative' | 'optional' | 'free' | 'any';
     cashField: 'required' | 'optional' | 'forbidden';
     assetField: 'required' | 'optional' | 'forbidden';
     requiresPair: boolean;
@@ -82,9 +82,57 @@ describe('applySignRules', () => {
         expect(signedCash?.amount).toBe(expectedAmt);
     });
 
+    it('forces a positive rule too, not only a negative one', () => {
+        // A "positive" rule binds exactly as hard as a "negative" one: the backend rejects
+        // `BUY requires quantity > 0` the same way it rejects `SELL requires quantity < 0`.
+        const r = rule({quantityRule: 'positive', cashSign: 'positive'});
+        const {signedQty, signedCash} = applySignRules('-10', cash('EUR', '-100'), r as any);
+        expect(signedQty).toBe('10');
+        expect(signedCash?.amount).toBe('100');
+    });
+
+    it('leaves a free-sign rule alone in both directions', () => {
+        // On ADJUSTMENT and TRANSFER the sign *is* the information — it says which way the
+        // position moved — so coercing it would silently reverse the user's meaning.
+        const r = rule({quantityRule: 'free', cashSign: 'any'});
+        expect(applySignRules('-10', cash('EUR', '-100'), r as any).signedQty).toBe('-10');
+        expect(applySignRules('-10', cash('EUR', '-100'), r as any).signedCash?.amount).toBe('-100');
+    });
+
+    it('retypes a deposit into a sale with the sale sign', () => {
+        // The import wizard case: a fund redemption arrives as a deposit, the user retypes it
+        // to SELL and states the units as a magnitude. Sending them unsigned failed the whole
+        // duplicate re-check with "SELL requires quantity < 0".
+        const r = rule({quantityRule: 'negative', cashSign: 'positive'});
+        const {signedQty, signedCash} = applySignRules('1867.178', cash('EUR', '9984.47'), r as any);
+        expect(signedQty).toBe('-1867.178');
+        expect(signedCash?.amount).toBe('9984.47');
+    });
+
     it('returns null cash when input is null', () => {
         const {signedCash} = applySignRules('5', null, rule() as any);
         expect(signedCash).toBeNull();
+    });
+
+    it('leaves an unparsable quantity as typed rather than inventing a number for it', () => {
+        // Coercion is a sign correction, not a parser: swallowing a malformed value here
+        // would hide it from the validator that is meant to report it. An empty string is
+        // the exception — `Number('')` is 0, so it normalises to a zero, which is the same
+        // thing the callers pass explicitly when a field is absent.
+        const r = rule({quantityRule: 'negative', cashSign: 'negative'});
+        expect(applySignRules('abc', cash('EUR', 'abc'), r as any).signedQty).toBe('abc');
+        expect(applySignRules('abc', cash('EUR', 'abc'), r as any).signedCash?.amount).toBe('abc');
+        expect(Number(applySignRules('', cash('EUR', ''), r as any).signedQty)).toBe(0);
+    });
+
+    it('never touches the currency, only the sign', () => {
+        const r = rule({quantityRule: 'negative', cashSign: 'negative'});
+        expect(applySignRules('10', cash('CHF', '100'), r as any).signedCash?.code).toBe('CHF');
+    });
+
+    it('keeps a zero unsigned, since -0 would serialise as "-0"', () => {
+        const r = rule({quantityRule: 'negative', cashSign: 'negative'});
+        expect(Number(applySignRules('0', cash('EUR', '0'), r as any).signedQty)).toBe(0);
     });
 });
 

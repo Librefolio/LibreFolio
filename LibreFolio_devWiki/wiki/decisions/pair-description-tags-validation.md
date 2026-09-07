@@ -45,6 +45,6 @@ Frontend handles legacy mismatched data by concatenating descriptions with `[aut
 |------|------|
 | Validation method | `backend/app/services/transaction_service.py` |
 | Backend tests | `backend/test_scripts/test_api/test_transactions_api.py` |
-| FormModal merge logic | `frontend/src/lib/components/transactions/TransactionFormModal.svelte` |
+| FormModal merge logic | `frontend/src/lib/components/transactions/modals/TransactionFormModal.svelte` |
 | Mock data (aligned) | `backend/test_scripts/test_db/populate_mock_data.py` |
 

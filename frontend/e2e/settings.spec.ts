@@ -1,4 +1,4 @@
-import {expect, test} from '@playwright/test';
+import {expect, test} from './fixtures/playwright';
 import {login, navigateTo} from './fixtures/auth-helpers';
 import {TEST_ADMIN, TEST_USER} from './fixtures/test-users';
 
@@ -218,7 +218,6 @@ test.describe('Settings', () => {
         test('toggle switch changes value when clicked (SettingToggle)', async ({page}) => {
             // Unlock
             await gs(page).locator('button[title="Click to unlock and edit"]').click();
-            await page.waitForTimeout(300);
 
             // Find toggle within global-settings-tab (excludes mobile menu toggle)
             const toggleBtn = gs(page).locator('button[aria-label^="Toggle"]').first();
@@ -233,15 +232,13 @@ test.describe('Settings', () => {
             // Click toggle
             await toggleBtn.click();
 
-            // State should have changed
-            const newState = await stateText.textContent();
-            expect(newState).not.toBe(initialState);
+            // State should have changed — the retrying assertion *is* the wait
+            await expect(stateText).not.toHaveText(initialState ?? '', {timeout: 5_000});
         });
 
         test('save and undo buttons appear after toggling', async ({page}) => {
             // Unlock
             await gs(page).locator('button[title="Click to unlock and edit"]').click();
-            await page.waitForTimeout(300);
 
             // Click a toggle
             await gs(page).locator('button[aria-label^="Toggle"]').first().click();
@@ -258,7 +255,6 @@ test.describe('Settings', () => {
         test('undo reverts toggle to original value', async ({page}) => {
             // Unlock
             await gs(page).locator('button[title="Click to unlock and edit"]').click();
-            await page.waitForTimeout(300);
 
             // Find first toggle setting-row
             const settingRow = gs(page)
@@ -274,7 +270,7 @@ test.describe('Settings', () => {
 
             // Toggle
             await toggleBtn.click();
-            expect(await stateText.textContent()).not.toBe(initialState);
+            await expect(stateText).not.toHaveText(initialState ?? '', {timeout: 5_000});
 
             // Undo
             await settingRow.locator('button[title="Undo"]').click();
@@ -284,7 +280,6 @@ test.describe('Settings', () => {
         test('number input can be edited and undone (SettingNumber)', async ({page}) => {
             // Unlock
             await gs(page).locator('button[title="Click to unlock and edit"]').click();
-            await page.waitForTimeout(300);
 
             const numberInput = gs(page).locator('.setting-row input[type="number"]').first();
             await expect(numberInput).toBeVisible();
@@ -349,6 +344,48 @@ test.describe('Settings', () => {
             await expect(page.getByTestId('about-app-name')).toContainText('LibreFolio');
             await expect(page.getByTestId('about-version')).toBeVisible();
         });
+
+        // The three tests above read the header and stop there, which left the rest of
+        // AboutTab — the installed-signal catalogue and the per-system plugin
+        // diagnostics — at 27% coverage. Both live inside a collapsed `<details>`, so
+        // nothing rendered them until something opened it.
+
+        test('installed signals section lists the signals the backend reports', async ({page}) => {
+            const details = page.getByTestId('about-installed-signals');
+            await expect(details).toBeVisible();
+            await details.locator('summary').click();
+            // A `<details>` announces itself: the open attribute is the post-condition,
+            // not the chevron rotating.
+            await expect(details).toHaveAttribute('open', '');
+
+            // Asserting on *which* signals exist would be asserting a catalogue this test
+            // does not own — plugins can be added. That at least one is listed, and that
+            // each entry carries the signal type in its testid, is the contract.
+            const entries = page.locator('[data-testid^="about-installed-signal-"]');
+            await expect(entries.first(), 'the signal registry should report at least one installed signal').toBeVisible({timeout: 5_000});
+        });
+
+        test('plugin diagnostics reports a load status for every plugin system', async ({page}) => {
+            const details = page.getByTestId('about-plugin-diagnostics');
+            await expect(details).toBeVisible();
+            await details.locator('summary').click();
+            await expect(details).toHaveAttribute('open', '');
+
+            // Four plugin systems, each of which must say whether its plugins loaded.
+            // The status used to be readable only from the green tick and its translated
+            // caption, so the component now publishes data-status / data-failures.
+            for (const system of ['asset', 'fx', 'brim', 'signals']) {
+                const card = page.getByTestId(`about-plugin-diagnostics-${system}`);
+                await expect(card, `the ${system} plugin system should report its diagnostics`).toBeVisible({timeout: 5_000});
+                await expect(card).toHaveAttribute('data-status', /^(ok|failed)$/);
+            }
+
+            // And in a healthy test environment nothing should have failed to load: a
+            // plugin that throws on import is a real defect, and this is where it surfaces
+            // instead of being discovered by a user.
+            const failed = page.locator('[data-testid^="about-plugin-diagnostics-"][data-status="failed"]');
+            await expect(failed, 'a plugin failed to load — open the About tab to see which').toHaveCount(0);
+        });
     });
 
     test.describe('Preferences Persistence', () => {
@@ -365,14 +402,15 @@ test.describe('Settings', () => {
 
             if (await darkButton.isVisible().catch(() => false)) {
                 await darkButton.click();
-                await page.waitForTimeout(500);
             }
 
             // Save if needed - look for save button and click it
             const saveButton = themeContainer.locator('button[title*="Save"], [data-testid*="save"]');
             if (await saveButton.isVisible().catch(() => false)) {
                 await saveButton.click();
-                await page.waitForTimeout(1000);
+                // The settings tabs now report what they persisted; wait for that
+                // instead of hoping a second is enough before the reload below.
+                await expect(page.locator('[data-testid^="toast-"]').first()).toBeVisible({timeout: 15_000});
             }
 
             // Reload the page
@@ -429,7 +467,6 @@ test.describe('Settings', () => {
             const langTrigger = langContainer.locator('button, [role="combobox"]').first();
             if (await langTrigger.isVisible().catch(() => false)) {
                 await langTrigger.click();
-                await page.waitForTimeout(300);
 
                 // Select Italian if available
                 const italianOption = page
@@ -438,13 +475,12 @@ test.describe('Settings', () => {
                     .first();
                 if (await italianOption.isVisible().catch(() => false)) {
                     await italianOption.click();
-                    await page.waitForTimeout(500);
 
                     // Save if there's a save button
                     const saveBtn = langContainer.locator('button[title*="Save"], [data-testid*="save"]');
                     if (await saveBtn.isVisible().catch(() => false)) {
                         await saveBtn.click();
-                        await page.waitForTimeout(1000);
+                        await expect(page.locator('[data-testid^="toast-"]').first()).toBeVisible({timeout: 15_000});
                     }
                 }
             }

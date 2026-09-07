@@ -14,7 +14,7 @@ The main view — a full ECharts-powered chart with zoom, pan, line/candlestick 
 
 ### 📊 [Signals](signals.md)
 
-Overlay technical indicators (EMA, MACD, RSI, Bollinger Bands) on the chart. Each signal is computed in real-time from the rate data and can be toggled independently.
+Overlay technical indicators on the chart — 9 backend-computed plugins are available for FX pairs (see [Signals](signals.md) for the list and the per-signal details). Each signal is computed from the rate data and can be toggled independently.
 
 ### 📐 [Measures](measures.md)
 

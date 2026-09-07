@@ -14,6 +14,7 @@
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {attachChartReady} from '$lib/utils/chartReady';
     import {CHART_ANIMATION_CONFIG, namedPoint} from '$lib/components/charts/echartsAnimationConfig';
     import {INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG} from '$lib/components/charts/chartCoreHelpers';
     import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from '$lib/components/charts/echartsDataZoomTouchPan';
@@ -125,9 +126,9 @@
                 CROWDFUND: '🤝',
                 INDEX: '📉',
                 OTHER: '📦',
-                Liquidity: '💰',
+                LIQUIDITY: '💰',
             };
-            return typeEmojis[rawName] ?? '📊';
+            return typeEmojis[rawName.toUpperCase()] ?? '📊';
         }
         return '';
     }
@@ -229,7 +230,12 @@
             return localized !== key ? localized : rawName;
         }
         if (dimension === 'type') {
-            return $t(`assets.types.${rawName}`) || rawName;
+            // The engine injects the cash slice as "Liquidity" (capitalized) while every
+            // other type is an uppercase enum — normalize so `assets.types.LIQUIDITY`
+            // resolves instead of leaking the raw i18n path into the chart.
+            const key = `assets.types.${rawName.toUpperCase()}`;
+            const localized = $t(key);
+            return localized !== key ? localized : rawName;
         }
         return rawName;
     }
@@ -672,6 +678,7 @@
 
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+            attachChartReady(chartInstance, chartContainer, 'allocation-history');
             needsInitialLayoutStabilityPass = true;
             tooltipCleanup?.();
             tooltipCleanup = setupTooltipAutoHide(chartContainer, () => chartInstance);
@@ -729,5 +736,5 @@
         </div>
     {/if}
 
-    <div bind:this={chartContainer} style="height: 100%; width: 100%;" class:invisible={loading || data.length === 0}></div>
+    <div bind:this={chartContainer} style="height: 100%; width: 100%;" class:invisible={loading || data.length === 0} data-testid="allocation-history-chart"></div>
 </div>

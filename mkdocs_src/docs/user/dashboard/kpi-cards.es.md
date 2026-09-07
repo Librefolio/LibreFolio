@@ -1,8 +1,10 @@
 # 💰 Tarjetas KPI
 
-*[⬅️ Volver a la Descripción General del Panel de Control](index.md)*
-
 Las tres tarjetas KPI en la parte superior del panel de control te brindan un diagnóstico rápido de tu cartera. Todos los valores respetan el **rango de tiempo y el ámbito del bróker** seleccionados en la parte superior de la página.
+
+!!! note "La compartición afecta a estos números"
+
+    Todos los importes se agregan sobre los brókers a los que tienes acceso, y cada bróker en copropiedad contribuye en proporción a tu **cuota de propiedad** (ej. un Owner al 50 % ve la mitad del valor y del P&L de ese bróker). Editors y Viewers, cuya cuota es siempre 0 % por regla, ven los importes completos del bróker. Consulta [Compartir bróker](../brokers/sharing.md).
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1.5rem auto 2rem auto;">
  <img class="gallery-img" data-category="dashboard" data-name="kpi-top" alt="Vista general de las tarjetas KPI">
@@ -29,7 +31,7 @@ Un número positivo significa que ganaste dinero gracias a la actividad de inver
 Justo debajo del valor de P&L del Período, una línea más pequeña muestra algo como `+45.20 (+3.10%)`.
 
 - La cantidad es el cambio **día a día** (hoy vs. ayer) en tu **P&L Total** — tu ganancia/pérdida acumulada de todos los tiempos, no solo del período seleccionado.
-- El porcentaje lo expresa como una proporción del P&L del Período de **ayer** — te indica cuánto "pesó" el movimiento de hoy en el resultado del período que estás viendo actualmente.
+- El porcentaje lo expresa como una proporción del **P&L Total** de ayer — te indica cuánto "pesó" el movimiento de hoy respecto a tu resultado acumulado histórico.
 
 \[\text{Cambio diario} = \text{P&L Total}_{\text{hoy}} - \text{P&L Total}_{\text{ayer}}\]
 
@@ -102,12 +104,16 @@ Es una estimación aproximada del rendimiento de **hoy** — una comprobación r
 
 La tarjeta **Patrimonio Neto** muestra el valor absoluto de tu cartera al final del período seleccionado.
 
+!!! note "El Patrimonio Neto incluye la liquidez"
+
+    La cifra es **valores a precio de mercado + saldo líquido** (+ cualquier valor en tránsito entre brókers). Como incluye la liquidez, **no es comparable** con el «contravalor de valores» de un extracto bancario, que excluye el efectivo — la liquidez del banco se muestra por separado.
+
 ### El número debajo del Patrimonio Neto
 
-Debajo del valor del Patrimonio Neto encontrarás tu **P&L Total**, con su cambio porcentual entre paréntesis — ej. `+12,450.30 (+0.35%)`.
+Debajo del valor del Patrimonio Neto encontrarás tu **P&L Total**, con tu rendimiento absoluto entre paréntesis — ej. `+12,450.30 (+24.85%)`.
 
 - La cantidad es tu **P&L Total** — la ganancia o pérdida acumulada desde el inicio, en todo el historial de este ámbito (no solo el período actual).
-- El porcentaje entre paréntesis expresa el cambio **día a día** (hoy vs. ayer) de este P&L Total, como una proporción del P&L Total de **ayer**.
+- El porcentaje entre paréntesis es el **ROI absoluto (desde el inicio)**: P&L Total ÷ capital neto invertido desde el inicio. *No* es un cambio día a día — para ese control de pulso diario, consulta las líneas pequeñas de la [Tarjeta 1](#card-1-period-pl) y la [Tarjeta 2](#card-2-returns).
 
 \[\text{P&L Total} = \text{Patrimonio Neto} - \text{Capital Neto Invertido Desde el Inicio}\]
 
@@ -149,3 +155,7 @@ El número principal muestra el saldo neto (depositado − retirado).
 - 📈 **[TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md)**
 - 📈 **[MWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)**
 - ⏱️ **[Efecto de la Oportunidad](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/timing-effect.md)**
+
+---
+
+*[⬅️ Volver a la Descripción General del Panel de Control](index.md)*

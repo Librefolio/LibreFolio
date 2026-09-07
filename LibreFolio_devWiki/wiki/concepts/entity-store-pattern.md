@@ -82,7 +82,7 @@ invalidateAfterMutation(assetId);                            // after /assets de
 
 | Role | Path |
 |------|------|
-| Factory implementation | `frontend/src/lib/stores/entityStore.ts` |
-| Asset store (instance) | `frontend/src/lib/stores/assetStore.ts` |
-| Broker store (instance) | `frontend/src/lib/stores/brokerStore.ts` |
+| Factory implementation | `frontend/src/lib/stores/core/entityStore.ts` |
+| Asset store (instance) | `frontend/src/lib/stores/reference/assetStore.ts` |
+| Broker store (instance) | `frontend/src/lib/stores/reference/brokerStore.ts` |
 | Round 2 plan (designed here) | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round1-3/plan-phase07-transaction-Part4_Round2-tableRefactorBugfix.prompt.md` |

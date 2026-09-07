@@ -88,7 +88,7 @@ async def test_provider_metadata(provider_code: str):
 
     try:
         # Check registration
-        provider_class = FXProviderRegistry.get_provider(provider_code)
+        provider_class = FXProviderRegistry.get_plugin(provider_code)
         assert provider_class, f"{provider_code} provider not registered"
 
         print_success(f"{provider_code} is registered in registry")

@@ -30,7 +30,12 @@ from datetime import date as date_type
 from decimal import Decimal
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import (
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 from backend.app.schemas.common import (
     BackwardFillInfo,
@@ -42,6 +47,15 @@ from backend.app.schemas.common import (
     DateRangeModel,
     FxBackwardFillInfo,
     SafeDecimal,
+    StrictModel,
+)
+from backend.app.schemas.signals import (
+    SignalAnnotationRequest,
+    SignalBandValueSource,
+    SignalLineCrossoverRequest,
+    SignalOutputValueSource,
+    SignalRequest,
+    SignalResult,
 )
 
 # ============================================================================
@@ -65,15 +79,13 @@ class AssetBackwardFillInfo(BackwardFillInfo, FxBackwardFillInfo):
     previous flat class — no client-side breaking change.
     """
 
-    pass
-
 
 # ============================================================================
 # FA PRICE UPSERT
 # ============================================================================
 
 
-class FAPricePoint(BaseModel):
+class FAPricePoint(StrictModel):
     """Single price point with OHLC data.
 
     Used for both:
@@ -81,8 +93,8 @@ class FAPricePoint(BaseModel):
     - Query results (backward_fill_info may be present)
 
     The API contract uses separate `close: Decimal` and `currency: str` fields
-    for JSON compatibility. Use `close_cur` property for internal operations
-    that need a Currency object.
+    for JSON compatibility. Build a `Currency(code=…, amount=…)` inline where
+    a Currency object is needed (project-wide style).
 
     **F.4 sentinel rules on upsert** (applied per-field, for ``open/high/low/volume``):
 
@@ -94,8 +106,6 @@ class FAPricePoint(BaseModel):
     and always written verbatim. To "clear" a row use the DELETE endpoint on
     that date; to clear OHLC auxiliary fields use ``-1``.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     date: date_type = Field(..., description="Price date")
     open: Optional[SafeDecimal] = Field(None, description="Opening price (upsert: None=no-op, -1=SET NULL, >=0=write)")
@@ -118,6 +128,7 @@ class FAPricePoint(BaseModel):
     original_open: Optional[SafeDecimal] = Field(None, description="Open price in original currency before FX conversion")
     original_high: Optional[SafeDecimal] = Field(None, description="High price in original currency before FX conversion")
     original_low: Optional[SafeDecimal] = Field(None, description="Low price in original currency before FX conversion")
+    source_plugin_key: Optional[str] = Field(None, description="Provider key that produced the stored price")
     backward_fill_info: Optional[AssetBackwardFillInfo] = Field(None, description="Backward-fill + FX staleness info (only in query results)")
 
     @field_validator("currency")
@@ -153,43 +164,20 @@ class FAPricePoint(BaseModel):
             raise ValueError("price/volume fields must be >= 0 (or -1 sentinel to clear)")
         return v
 
-    @property
-    def close_cur(self) -> Currency:
-        """Get close price as Currency object for internal calculations."""
-        return Currency(code=self.currency, amount=self.close)
-
-    @property
-    def open_cur(self) -> Optional[Currency]:
-        """Get open price as Currency object for internal calculations."""
-        return Currency(code=self.currency, amount=self.open) if self.open is not None else None
-
-    @property
-    def high_cur(self) -> Optional[Currency]:
-        """Get high price as Currency object for internal calculations."""
-        return Currency(code=self.currency, amount=self.high) if self.high is not None else None
-
-    @property
-    def low_cur(self) -> Optional[Currency]:
-        """Get low price as Currency object for internal calculations."""
-        return Currency(code=self.currency, amount=self.low) if self.low is not None else None
 
 
-class FAUpsert(BaseModel):
+class FAUpsert(StrictModel):
     """Price upsert for a single asset (multiple dates).
 
     Groups multiple price points for one asset.
     """
 
-    model_config = ConfigDict(extra="forbid")
-
     asset_id: int = Field(..., description="Asset ID")
     prices: List[FAPricePoint] = Field(..., min_length=1, description="List of price points")
 
 
-class FAUpsertResult(BaseModel):
+class FAUpsertResult(StrictModel):
     """Result of price upsert for single asset."""
-
-    model_config = ConfigDict(extra="forbid")
 
     asset_id: int
     count: int
@@ -209,14 +197,12 @@ class FABulkUpsertResponse(BaseBulkResponse[FAUpsertResult]):
 # ============================================================================
 
 
-class FAAssetDelete(BaseModel):
+class FAAssetDelete(StrictModel):
     """Price deletion request for a single asset (multiple ranges).
 
     Groups multiple date ranges for one asset.
     Uses DateRangeModel for consistency.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     asset_id: int = Field(..., description="Asset ID")
     date_ranges: List[DateRangeModel] = Field(..., min_length=1, description="List of date ranges to delete")
@@ -242,7 +228,6 @@ class FABulkDeleteResponse(BaseBulkDeleteResponse[FAPriceDeleteResult]):
     # - success_count: int
     # - errors: List[str]
     # - total_deleted: int (total price records deleted)
-    pass
 
 
 # ============================================================================
@@ -250,14 +235,13 @@ class FABulkDeleteResponse(BaseBulkDeleteResponse[FAPriceDeleteResult]):
 # ============================================================================
 
 
-class FACurrentValue(BaseModel):
+class FACurrentValue(StrictModel):
     """Current value of an asset.
 
     The API contract uses separate `value: Decimal` and `currency: str` fields
-    for JSON compatibility. Use `value_cur` property for internal operations.
+    for JSON compatibility. Build a `Currency(code=…, amount=…)` inline where
+    a Currency object is needed (project-wide style).
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     value: SafeDecimal
     currency: str
@@ -274,16 +258,10 @@ class FACurrentValue(BaseModel):
     def currency_validate(cls, v: str) -> str:
         return Currency.validate_code(v)
 
-    @property
-    def value_cur(self) -> Currency:
-        """Get value as Currency object for internal calculations."""
-        return Currency(code=self.currency, amount=self.value)
 
 
-class FAHistoricalData(BaseModel):
+class FAHistoricalData(StrictModel):
     """Historical price data for an asset (list of price points)."""
-
-    model_config = ConfigDict(extra="forbid")
 
     prices: List[FAPricePoint]
     events: List[FAAssetEventPoint] = Field(default_factory=list, description="Asset events in the date range")
@@ -291,7 +269,7 @@ class FAHistoricalData(BaseModel):
     source: Optional[str] = None
 
 
-class FAAssetEventPoint(BaseModel):
+class FAAssetEventPoint(StrictModel):
     """
     Single asset event data point — shared shape between DB, provider output, and frontend editor.
 
@@ -302,8 +280,6 @@ class FAAssetEventPoint(BaseModel):
     - FAPriceQueryResult.events (API response)
     - FAScheduledInvestmentSchedule.asset_events (provider_params config)
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     date: date_type = Field(..., description="Event date")
     type: str = Field(..., description="Event type (DIVIDEND, INTEREST, PRICE_ADJUSTMENT, SPLIT)")
@@ -354,23 +330,19 @@ class FAAssetEventPointOut(FAAssetEventPoint):
 # ============================================================================
 
 
-class FAEventUpsert(BaseModel):
+class FAEventUpsert(StrictModel):
     """Manual event upsert for a single asset (multiple events).
 
     Groups multiple event points for one asset.
     Only for manual events (provider_assignment_id = NULL).
     """
 
-    model_config = ConfigDict(extra="forbid")
-
     asset_id: int = Field(..., description="Asset ID")
     events: List[FAAssetEventPoint] = Field(..., min_length=1, description="List of event points")
 
 
-class FAEventUpsertResult(BaseModel):
+class FAEventUpsertResult(StrictModel):
     """Result of event upsert for a single asset."""
-
-    model_config = ConfigDict(extra="forbid")
 
     asset_id: int
     count: int
@@ -380,18 +352,8 @@ class FAEventUpsertResult(BaseModel):
 class FABulkEventUpsertResponse(BaseBulkResponse[FAEventUpsertResult]):
     """Response for bulk event upsert."""
 
-    pass
 
-
-class FAEventDeleteResult(BaseDeleteResult):
-    """Result of deleting a single event by ID."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    event_id: int = Field(..., description="ID of the event that was deleted")
-
-
-class FAEventDeleteItemResult(BaseModel):
+class FAEventDeleteItemResult(StrictModel):
     """
     Per-item result of a bulk AssetEvent delete.
 
@@ -402,8 +364,6 @@ class FAEventDeleteItemResult(BaseModel):
                   accessible_transactions[] lists tx IDs the caller can see,
                   hidden_transactions_count counts refs from other users.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     event_id: int = Field(..., description="Event ID this result refers to")
     status: Literal["deleted", "not_found", "in_use"] = Field(..., description="Outcome for this event")
@@ -417,7 +377,7 @@ class FAEventDeleteItemResult(BaseModel):
     )
 
 
-class FAEventBulkDeleteResponse(BaseModel):
+class FAEventBulkDeleteResponse(StrictModel):
     """
     Aggregate response of a bulk AssetEvent delete.
 
@@ -425,18 +385,14 @@ class FAEventBulkDeleteResponse(BaseModel):
     Successful deletions are committed even if others are blocked (no partial rollback).
     """
 
-    model_config = ConfigDict(extra="forbid")
-
     results: List[FAEventDeleteItemResult] = Field(default_factory=list)
     deleted_count: int = Field(..., description="Count of events successfully deleted")
     not_found_count: int = Field(..., description="Count of ids that did not exist")
     in_use_count: int = Field(..., description="Count of events blocked by RESTRICT")
 
 
-class FAEventQueryItem(BaseModel):
+class FAEventQueryItem(StrictModel):
     """Single asset event query in a bulk request."""
-
-    model_config = ConfigDict(extra="forbid")
 
     asset_id: int = Field(..., description="Asset ID to query")
     date_range: DateRangeModel = Field(..., description="Date range (end defaults to start)")
@@ -453,10 +409,8 @@ class FAEventQueryItem(BaseModel):
         return v
 
 
-class FAEventQueryResult(BaseModel):
+class FAEventQueryResult(StrictModel):
     """Response for a single asset event query."""
-
-    model_config = ConfigDict(extra="forbid")
 
     asset_id: int = Field(..., description="Asset ID queried")
     events: List[FAAssetEventPointOut] = Field(default_factory=list, description="Asset events with id and is_auto")
@@ -469,28 +423,32 @@ class FAEventQueryResult(BaseModel):
 class FAEventQueryResponse(BaseListResponse[FAEventQueryResult]):
     """Bulk response for event queries."""
 
-    pass
-
 
 # ============================================================================
 # FA PRICE BULK QUERY
 # ============================================================================
 
 
-class FAPriceQueryItem(BaseModel):
+class FAPriceQueryItem(StrictModel):
     """Single asset price query in a bulk request.
 
     Uses DateRangeModel from common.py (same as FXConversionRequest.date_range).
     If date_range.end is None, defaults to date_range.start (single day).
     """
 
-    model_config = ConfigDict(extra="forbid")
-
     asset_id: int = Field(..., description="Asset ID to query")
     date_range: DateRangeModel = Field(..., description="Date range (end defaults to start)")
     include_price: bool = Field(True, description="Include price history in response")
     include_events: bool = Field(False, description="Include asset events in response")
     target_currency: Optional[str] = Field(None, description="Convert prices to this currency via FX rates (None = native currency)")
+    signals: List[SignalRequest] = Field(
+        default_factory=list,
+        description="Technical signal instances to compute on the requested asset series",
+    )
+    annotation_requests: List[SignalAnnotationRequest] = Field(
+        default_factory=list,
+        description="Optional cross/threshold rules evaluated on extended signal output",
+    )
 
     @field_validator("target_currency")
     @classmethod
@@ -499,11 +457,27 @@ class FAPriceQueryItem(BaseModel):
             return Currency.validate_code(v)
         return v
 
+    @model_validator(mode="after")
+    def validate_signal_references(self) -> FAPriceQueryItem:
+        instance_ids = [signal.instance_id for signal in self.signals]
+        if len(instance_ids) != len(set(instance_ids)):
+            raise ValueError("signal instance_id values must be unique")
+        annotation_keys = [annotation.key for annotation in self.annotation_requests]
+        if len(annotation_keys) != len(set(annotation_keys)):
+            raise ValueError("annotation request keys must be unique")
+        known_instances = set(instance_ids)
+        for annotation in self.annotation_requests:
+            if annotation.attach_to_instance_id not in known_instances:
+                raise ValueError(f"annotation target '{annotation.attach_to_instance_id}' is not in signals")
+            sources = (annotation.left, annotation.right) if isinstance(annotation, SignalLineCrossoverRequest) else (annotation.source,)
+            for source in sources:
+                if isinstance(source, (SignalOutputValueSource, SignalBandValueSource)) and source.instance_id not in known_instances:
+                    raise ValueError(f"annotation source '{source.instance_id}' is not in signals")
+        return self
 
-class FAPriceQueryResult(BaseModel):
+
+class FAPriceQueryResult(StrictModel):
     """Response for a single asset price query."""
-
-    model_config = ConfigDict(extra="forbid")
 
     asset_id: int = Field(..., description="Asset ID queried")
     prices: List[FAPricePoint] = Field(default_factory=list, description="Price history with backward-fill")
@@ -512,6 +486,10 @@ class FAPriceQueryResult(BaseModel):
         description="Asset events (if requested). Includes DB id + is_auto flag so the frontend editor can reference them by id.",
     )
     errors: List[str] = Field(default_factory=list, description="Non-fatal warnings (e.g. FX pair missing)")
+    signals: List[SignalResult] = Field(
+        default_factory=list,
+        description="Technical signal results keyed by request instance_id",
+    )
 
 
 class FAPriceQueryResponse(BaseListResponse[FAPriceQueryResult]):
@@ -521,18 +499,14 @@ class FAPriceQueryResponse(BaseListResponse[FAPriceQueryResult]):
     - items: List[FAPriceQueryResult]  (one per asset queried)
     """
 
-    pass
-
 
 # ============================================================================
 # FA BULK CURRENT PRICE
 # ============================================================================
 
 
-class FACurrentPriceItem(BaseModel):
+class FACurrentPriceItem(StrictModel):
     """Current price result for a single asset."""
-
-    model_config = ConfigDict(extra="forbid")
 
     asset_id: int = Field(..., description="Asset ID")
     value: Optional[SafeDecimal] = Field(None, description="Current price value")
@@ -550,5 +524,3 @@ class FACurrentPriceResponse(BaseBulkResponse[FACurrentPriceItem]):
     - success_count: int
     - errors: List[str]
     """
-
-    pass

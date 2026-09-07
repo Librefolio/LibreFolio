@@ -3,8 +3,8 @@
 import subprocess
 
 from . import _common
-from ._common import PROJECT_ROOT, Colors, _run_test_suite, print_error, print_header, print_section, print_success
-from ._frontend_common import _ensure_frontend_build, _ensure_test_users, _run_playwright
+from ._common import PROJECT_ROOT, Colors, _get_category_tests_for_all, _run_test_suite, print_error, print_header, print_section, print_success
+from ._frontend_common import _ensure_frontend_build, _ensure_test_users, _run_playwright, reset_setup_scope
 
 
 def front_broker_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -52,14 +52,13 @@ def front_broker_detail(verbose: bool = False, ui: bool = False, headed: bool = 
 
 def front_broker_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, coverage: bool = False) -> bool:
     """Run all frontend broker tests (unit + E2E)."""
+    if _common.nothing_left_to_run("front-broker"):
+        return _common.consolidated_verdict("front-broker")
+    reset_setup_scope()
     print_header("Frontend Broker Tests (Unit + Playwright)")
     return _run_test_suite(
         suite_name="All Broker Tests (Unit + E2E)",
-        tests=[
-            ("Broker Unit (Vitest)", lambda: front_broker_unit(verbose=verbose)),
-            ("Broker List & CRUD", lambda: _run_playwright("brokers/brokers.spec.ts", ui=ui, headed=headed, debug=debug, coverage=coverage) if _ensure_frontend_build() and _ensure_test_users() else False),
-            ("Broker Detail", lambda: _run_playwright("brokers/brokers-detail.spec.ts", ui=ui, headed=headed, debug=debug, coverage=coverage) if _ensure_frontend_build() and _ensure_test_users() else False),
-        ],
+        tests=_get_category_tests_for_all("front-broker", verbose, ui=ui, headed=headed, debug=debug, coverage=coverage),
         verbose=verbose,
         header_msg=None,
         summary_title="Broker Test Summary",

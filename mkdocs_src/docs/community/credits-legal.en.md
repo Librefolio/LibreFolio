@@ -38,7 +38,7 @@ LibreFolio is open-source software licensed under the **GNU Affero General Publi
 
 ### 📄 Full License Text
 
-The full text of the license is available in the [LICENSE](https://github.com/Librefolio/LibreFolio/blob/main/LICENCE) file in the repository.
+The full text of the license is available in the [LICENSE](https://github.com/Librefolio/LibreFolio/blob/main/LICENSE) file in the repository.
 
 ```text
 GNU AFFERO GENERAL PUBLIC LICENSE
@@ -50,3 +50,25 @@ of this license document, but changing it is not allowed.
 ...
 (See repository for full text)
 ```
+
+---
+
+## 🧩 Third-Party Open Source
+
+LibreFolio stands on the shoulders of the open-source community. Its quantitative
+capabilities in particular are made possible by:
+
+| Library | License | Used for |
+|---------|---------|----------|
+| [QuantLib](https://www.quantlib.org/) | BSD 3-Clause | Simulation engine (Risk Analysis) |
+| [Riskfolio-Lib](https://github.com/dcajasn/Riskfolio-Lib) | BSD 3-Clause | Portfolio optimisation & risk contribution |
+| [TA-Lib](https://github.com/TA-Lib/ta-lib) | BSD | Native technical-analysis routines |
+| [pandas-ta-classic](https://github.com/xgboosted/pandas-ta-classic) | MIT | Technical indicators |
+| [NumPy](https://numpy.org/) · [SciPy](https://scipy.org/) · [pandas](https://pandas.pydata.org/) | BSD 3-Clause | Numerical and data foundations |
+
+All of these are permissively licensed and fully compatible with LibreFolio's AGPL-3.0
+license. Their copyright notices are reproduced — as their licenses require for binary
+redistribution such as our Docker image — in
+[**THIRD_PARTY_LICENSES.md**](https://github.com/Librefolio/LibreFolio/blob/main/THIRD_PARTY_LICENSES.md),
+which also carries the complete attribution list and the citation requested by the
+Riskfolio-Lib author.

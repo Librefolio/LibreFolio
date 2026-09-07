@@ -42,7 +42,7 @@ Ceci est équivalent à la formule de l'**intérêt simple** $A = P(1 + rt)$, o�
 
 | Paramètre | Clé | Par défaut | Description |
 |---|---|---|---|
-| Taux Annuel | `annualRate` | 5 | Taux de croissance en pourcentage par an. |
+| Taux Annuel | `annualRate` | 2 | Taux de croissance en pourcentage par an. |
 | Décalage | `offset` | 0 | Décalage vertical en % de la valeur de base. |
 
 ---

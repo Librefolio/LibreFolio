@@ -1,4 +1,27 @@
 # Code Reality Check
+
+> ## ⚠️ Documento superato — 2026-09-01
+>
+> Questa pagina è stata generata il **2025-05-24**, quando il grafo aveva 8 341 nodi.
+> Oggi ne ha ~1 617 su un corpus diverso, e nel frattempo il progetto ha cambiato una
+> regola fondamentale che questa pagina afferma al contrario.
+>
+> **La contraddizione più grave**, poche righe più sotto: la sezione «DB / MODELLI»
+> dichiara *«Alembic: 1 sola migrazione (`001_initial.py`) — conforme alle istruzioni "no
+> incremental migrations"»*. Le istruzioni di progetto **oggi impongono l'opposto**:
+> migrazioni incrementali per proteggere le installazioni già rilasciate, e
+> `001_initial.py` si modifica solo per tabelle mai spedite. Una pagina che pretende di
+> verificare la conformità al codice, e sbaglia proprio sulla regola più delicata, è essa
+> stessa deriva.
+>
+> **Come va letta**: come una fotografia del maggio 2025, utile per capire cosa si sapeva
+> allora, non per verificare qualcosa oggi. Ogni sua affermazione va confermata contro il
+> codice prima di essere citata.
+>
+> Il controllo automatico che ha reso visibile questo problema è
+> `check_source_paths.py`, che verifica l'esistenza di ogni path citato nelle tabelle
+> `## Source files`. Va eseguito **prima** di scrivere una pagina.
+
 > Generato da analisi graphify del corpus completo (backend + frontend + wiki + docs + roadmap)  
 > Data: 2025-05-24 | Grafo: 8341 nodi, 13328 edge, 691 comunità  
 > **Regola**: il codice è la fonte di verità. Ogni entry che riporta divergenze va intesa come "il codice prevale sulla wiki/docs."

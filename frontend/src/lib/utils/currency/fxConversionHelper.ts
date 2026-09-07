@@ -81,10 +81,21 @@ export function buildFxTooltipData(info: FxConversionInfo, fxPoint: FxDataPoint 
             spread: null,
         };
     }
+    if (fxPoint.rate === null || fxPoint.rate === 0) {
+        return {
+            impliedRate: info.impliedRate,
+            base: info.base,
+            quote: info.quote,
+            marketRate: null,
+            marketDate: null,
+            staleDays: null,
+            spread: null,
+        };
+    }
     const marketRate = fxPoint.rate;
     const staleDays = fxPoint.backwardFillInfo?.daysBack ?? null;
     const marketDate = fxPoint.backwardFillInfo?.actualRateDate ?? null;
-    const spread = marketRate !== 0 ? computeSpread(info.impliedRate, marketRate) : null;
+    const spread = computeSpread(info.impliedRate, marketRate);
     return {
         impliedRate: info.impliedRate,
         base: info.base,

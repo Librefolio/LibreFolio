@@ -1,1230 +1,794 @@
-# Graph Report - .  (2026-07-16)
+# Graph Report - corpus  (2026-09-02)
 
 ## Corpus Check
-- 1527 files · ~200,189 words
+- 100 files · ~56,067 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 6850 nodes · 20236 edges · 283 communities (220 shown, 63 thin omitted)
-- Extraction: 60% EXTRACTED · 40% INFERRED · 0% AMBIGUOUS · INFERRED: 8166 edges (avg confidence: 0.52)
+- 1618 nodes · 2278 edges · 160 communities (143 shown, 17 thin omitted)
+- Extraction: 94% EXTRACTED · 6% INFERRED · 0% AMBIGUOUS · INFERRED: 132 edges (avg confidence: 0.83)
 - Token cost: 0 input · 0 output
 
+## Graph Freshness
+- Built from commit: `c2f805ce`
+- Run `git rev-parse HEAD` and compare to check if the graph is stale.
+- Run `graphify update .` after code changes (no API cost).
+
 ## Community Hubs (Navigation)
-- [[_COMMUNITY_Frontend API Client & Allocation History|Frontend API Client & Allocation History]]
-- [[_COMMUNITY_Asset Provider Registry & Schemas|Asset Provider Registry & Schemas]]
-- [[_COMMUNITY_App Routes & Pages|App Routes & Pages]]
-- [[_COMMUNITY_Chart Components (PriceGrowthSignals)|Chart Components (Price/Growth/Signals)]]
-- [[_COMMUNITY_Transaction Form & Bulk Modals|Transaction Form & Bulk Modals]]
-- [[_COMMUNITY_i18n & Import Wizard UI|i18n & Import Wizard UI]]
-- [[_COMMUNITY_Price & Backward-Fill Data Models|Price & Backward-Fill Data Models]]
-- [[_COMMUNITY_BRIM Transaction Parsing|BRIM Transaction Parsing]]
-- [[_COMMUNITY_Currency & Transaction Base Models|Currency & Transaction Base Models]]
-- [[_COMMUNITY_Broker Service & Bulk Responses|Broker Service & Bulk Responses]]
-- [[_COMMUNITY_Base ListBulk API Responses|Base List/Bulk API Responses]]
-- [[_COMMUNITY_User Roles & Transaction Service|User Roles & Transaction Service]]
-- [[_COMMUNITY_Transactions Table & Broker Store|Transactions Table & Broker Store]]
-- [[_COMMUNITY_UserAssetPriceHistory DB Models|User/Asset/PriceHistory DB Models]]
-- [[_COMMUNITY_Async Session & Event Schemas|Async Session & Event Schemas]]
-- [[_COMMUNITY_Broker v2 UI & Portfolio Report|Broker v2 UI & Portfolio Report]]
-- [[_COMMUNITY_Chart Signal Registry|Chart Signal Registry]]
-- [[_COMMUNITY_API Client & Feedback Components|API Client & Feedback Components]]
-- [[_COMMUNITY_Settings Tabs (ProfileGlobalPreferences)|Settings Tabs (Profile/Global/Preferences)]]
-- [[_COMMUNITY_BRIM Provider & File Info|BRIM Provider & File Info]]
-- [[_COMMUNITY_Broker Access & Data Quality Issues|Broker Access & Data Quality Issues]]
-- [[_COMMUNITY_FX Rate Provider Service|FX Rate Provider Service]]
-- [[_COMMUNITY_Asset CRUD & Source Manager|Asset CRUD & Source Manager]]
-- [[_COMMUNITY_Asset Modal & Currency Change|Asset Modal & Currency Change]]
-- [[_COMMUNITY_Portfolio Report Query Models|Portfolio Report Query Models]]
-- [[_COMMUNITY_Asset Detail Page & Provider Registry Docs|Asset Detail Page & Provider Registry Docs]]
-- [[_COMMUNITY_Transaction Modals & Batch Pipeline Docs|Transaction Modals & Batch Pipeline Docs]]
-- [[_COMMUNITY_WAC Missing Pair & Portfolio Engine|WAC Missing Pair & Portfolio Engine]]
-- [[_COMMUNITY_Auth LoginRegister Requests|Auth Login/Register Requests]]
-- [[_COMMUNITY_PortfolioService get_summary|PortfolioService get_summary]]
-- [[_COMMUNITY_Select Components & Language Store|Select Components & Language Store]]
-- [[_COMMUNITY_Currency Search Select & Cash Cell|Currency Search Select & Cash Cell]]
-- [[_COMMUNITY_AssetFX Data Editor Sections|Asset/FX Data Editor Sections]]
-- [[_COMMUNITY_SplitPromote Full Stack Plans|Split/Promote Full Stack Plans]]
-- [[_COMMUNITY_Asset Allocation & Diversification Docs|Asset Allocation & Diversification Docs]]
-- [[_COMMUNITY_Phase 06 Asset Management Plans|Phase 06 Asset Management Plans]]
-- [[_COMMUNITY_Asset Currency Conversion & Chart Events|Asset Currency Conversion & Chart Events]]
-- [[_COMMUNITY_Measure Panel & Currency Formatting|Measure Panel & Currency Formatting]]
-- [[_COMMUNITY_Exposure Treemap & Positions Panel|Exposure Treemap & Positions Panel]]
-- [[_COMMUNITY_FX Rate & Conversion Route Models|FX Rate & Conversion Route Models]]
-- [[_COMMUNITY_SNB FX Provider|SNB FX Provider]]
-- [[_COMMUNITY_AI Export Builder (Portfolio)|AI Export Builder (Portfolio)]]
-- [[_COMMUNITY_Distribution Editor & Provider Comparison|Distribution Editor & Provider Comparison]]
-- [[_COMMUNITY_Phase 07 Round 6 Context MenuWAC Plans|Phase 07 Round 6 Context Menu/WAC Plans]]
-- [[_COMMUNITY_Domain Overviews (AssetsFX)|Domain Overviews (Assets/FX)]]
-- [[_COMMUNITY_FIFOWAC Transfer Docs|FIFO/WAC Transfer Docs]]
-- [[_COMMUNITY_Upload Preview Cache & Security|Upload Preview Cache & Security]]
-- [[_COMMUNITY_Portfolio Engine & Dashboard KPI (F-054)|Portfolio Engine & Dashboard KPI (F-054)]]
-- [[_COMMUNITY_Image Cropper Component|Image Cropper Component]]
-- [[_COMMUNITY_Measure Panel & DataTable Migration Plans|Measure Panel & DataTable Migration Plans]]
-- [[_COMMUNITY_ROI Utils (NAVCash Flow)|ROI Utils (NAV/Cash Flow)]]
-- [[_COMMUNITY_Auth ErrorLogout Responses|Auth Error/Logout Responses]]
-- [[_COMMUNITY_User Service|User Service]]
-- [[_COMMUNITY_Static Uploads Service|Static Uploads Service]]
-- [[_COMMUNITY_Scheduler Loop (PriceHistory Sync)|Scheduler Loop (Price/History Sync)]]
-- [[_COMMUNITY_FX Provider Registry|FX Provider Registry]]
-- [[_COMMUNITY_FX Provider Select & Route Tooltips|FX Provider Select & Route Tooltips]]
-- [[_COMMUNITY_Web Worker Pool|Web Worker Pool]]
-- [[_COMMUNITY_Currency Utilities (Babel)|Currency Utilities (Babel)]]
-- [[_COMMUNITY_Backup Router (Export Streaming)|Backup Router (Export Streaming)]]
-- [[_COMMUNITY_Yahoo Finance Provider|Yahoo Finance Provider]]
-- [[_COMMUNITY_Date Range Picker Component|Date Range Picker Component]]
-- [[_COMMUNITY_GlobalUser Settings Schemas|Global/User Settings Schemas]]
-- [[_COMMUNITY_DataTable SortSelect Types|DataTable Sort/Select Types]]
-- [[_COMMUNITY_Broker Sharing & Multi-User Roles|Broker Sharing & Multi-User Roles]]
-- [[_COMMUNITY_Currency Field Validation|Currency Field Validation]]
-- [[_COMMUNITY_TimeSeriesStore & EditBuffer|TimeSeriesStore & EditBuffer]]
-- [[_COMMUNITY_Transaction Model & FIFO Runtime Docs|Transaction Model & FIFO Runtime Docs]]
-- [[_COMMUNITY_Degiro Broker Provider|Degiro Broker Provider]]
-- [[_COMMUNITY_Provider Auto-Discovery Registry|Provider Auto-Discovery Registry]]
-- [[_COMMUNITY_Scheduled Investment Editor|Scheduled Investment Editor]]
-- [[_COMMUNITY_BRIM Import Wizard v5 Plans|BRIM Import Wizard v5 Plans]]
-- [[_COMMUNITY_Global Settings Service|Global Settings Service]]
-- [[_COMMUNITY_BOE FX Provider|BOE FX Provider]]
-- [[_COMMUNITY_FED FX Provider|FED FX Provider]]
-- [[_COMMUNITY_AI Export Renderers (PromptData)|AI Export Renderers (Prompt/Data)]]
-- [[_COMMUNITY_Scheduled Investment Service|Scheduled Investment Service]]
-- [[_COMMUNITY_Config & Data Directories|Config & Data Directories]]
-- [[_COMMUNITY_Mock FX Providers (Tests)|Mock FX Providers (Tests)]]
-- [[_COMMUNITY_AI Export Wiki Pages (this session)|AI Export Wiki Pages (this session)]]
-- [[_COMMUNITY_eToro Broker Provider|eToro Broker Provider]]
-- [[_COMMUNITY_File Preview Service|File Preview Service]]
-- [[_COMMUNITY_Provider Assignment & Scheduled Investment UI|Provider Assignment & Scheduled Investment UI]]
-- [[_COMMUNITY_Directa Broker Provider|Directa Broker Provider]]
-- [[_COMMUNITY_Broker Icon Helpers|Broker Icon Helpers]]
-- [[_COMMUNITY_FastAPI main.py Lifespan|FastAPI main.py Lifespan]]
-- [[_COMMUNITY_Finpension Broker Provider|Finpension Broker Provider]]
-- [[_COMMUNITY_Freetrade Broker Provider|Freetrade Broker Provider]]
-- [[_COMMUNITY_Revolut Broker Provider|Revolut Broker Provider]]
-- [[_COMMUNITY_Schwab Broker Provider|Schwab Broker Provider]]
-- [[_COMMUNITY_Trading212 Broker Provider|Trading212 Broker Provider]]
-- [[_COMMUNITY_Currency Graph Store|Currency Graph Store]]
-- [[_COMMUNITY_Phase Final QA & i18n Audit Docs|Phase Final QA & i18n Audit Docs]]
-- [[_COMMUNITY_Currency Common Schema Validation|Currency Common Schema Validation]]
-- [[_COMMUNITY_IBKR Broker Provider|IBKR Broker Provider]]
-- [[_COMMUNITY_Broker Sharing PanelModal|Broker Sharing Panel/Modal]]
-- [[_COMMUNITY_Brokers List Page|Brokers List Page]]
-- [[_COMMUNITY_Portfolio Store (fetchReport)|Portfolio Store (fetchReport)]]
-- [[_COMMUNITY_AI Export Clipboard (Portfolio + Asset)|AI Export Clipboard (Portfolio + Asset)]]
-- [[_COMMUNITY_Auth Store & User Types|Auth Store & User Types]]
-- [[_COMMUNITY_Asset Detail Page & Interactive Chart|Asset Detail Page & Interactive Chart]]
-- [[_COMMUNITY_Technical Indicators & Signal Plans|Technical Indicators & Signal Plans]]
-- [[_COMMUNITY_Gallery Screenshot Docs|Gallery Screenshot Docs]]
-- [[_COMMUNITY_TTL Cache Utilities|TTL Cache Utilities]]
-- [[_COMMUNITY_Logging Config|Logging Config]]
-- [[_COMMUNITY_Coinbase Broker Provider|Coinbase Broker Provider]]
-- [[_COMMUNITY_Single Date Picker Component|Single Date Picker Component]]
-- [[_COMMUNITY_Date Range StoreController|Date Range Store/Controller]]
-- [[_COMMUNITY_Asset-Level AI Export Builder|Asset-Level AI Export Builder]]
-- [[_COMMUNITY_DB Check Constraints Hook|DB Check Constraints Hook]]
-- [[_COMMUNITY_CSS Scraper Provider|CSS Scraper Provider]]
-- [[_COMMUNITY_Scheduled Investment Provider|Scheduled Investment Provider]]
-- [[_COMMUNITY_File Preview Type Detection|File Preview Type Detection]]
-- [[_COMMUNITY_System Info Endpoint|System Info Endpoint]]
-- [[_COMMUNITY_Phase 4 Brokers Management Plans|Phase 4 Brokers Management Plans]]
-- [[_COMMUNITY_Backup Download & Upload Client|Backup Download & Upload Client]]
-- [[_COMMUNITY_Interest & Day-Count Docs|Interest & Day-Count Docs]]
-- [[_COMMUNITY_FX Pair Detail Page|FX Pair Detail Page]]
-- [[_COMMUNITY_ECB FX Provider|ECB FX Provider]]
-- [[_COMMUNITY_DerivedViewsBuilder (Data Quality)|DerivedViewsBuilder (Data Quality)]]
-- [[_COMMUNITY_FX Store Registry|FX Store Registry]]
-- [[_COMMUNITY_Price Processing Web Worker|Price Processing Web Worker]]
-- [[_COMMUNITY_BRIM Import Wizard Modal|BRIM Import Wizard Modal]]
-- [[_COMMUNITY_MkDocs Admin Docs (ExposureCLI)|MkDocs Admin Docs (Exposure/CLI)]]
-- [[_COMMUNITY_Technical Export Builder|Technical Export Builder]]
-- [[_COMMUNITY_Toast Store & Debug Utils|Toast Store & Debug Utils]]
-- [[_COMMUNITY_EditBuffer Pattern|EditBuffer Pattern]]
-- [[_COMMUNITY_Decimal Precision Utilities|Decimal Precision Utilities]]
-- [[_COMMUNITY_WAC Cross-Currency Docs|WAC Cross-Currency Docs]]
-- [[_COMMUNITY_PortfolioService & Phase 5-8 Plans|PortfolioService & Phase 5-8 Plans]]
-- [[_COMMUNITY_Datetime Utilities|Datetime Utilities]]
-- [[_COMMUNITY_Tailscale Exposure Levels Docs|Tailscale Exposure Levels Docs]]
-- [[_COMMUNITY_Technical Signal Cross Detection|Technical Signal Cross Detection]]
-- [[_COMMUNITY_Asset Frontend Types|Asset Frontend Types]]
-- [[_COMMUNITY_Context Menu Component|Context Menu Component]]
-- [[_COMMUNITY_Phase 0-2 Foundation Plans|Phase 0-2 Foundation Plans]]
-- [[_COMMUNITY_Phase 06 Bugfix Migration Docs|Phase 06 Bugfix Migration Docs]]
-- [[_COMMUNITY_Global Settings Schemas|Global Settings Schemas]]
-- [[_COMMUNITY_Global Settings Getters|Global Settings Getters]]
-- [[_COMMUNITY_Common API Types|Common API Types]]
-- [[_COMMUNITY_BRIM FileMapping Types|BRIM File/Mapping Types]]
-- [[_COMMUNITY_GeographyCountry Utilities|Geography/Country Utilities]]
-- [[_COMMUNITY_Phase 5 FX Management Plans|Phase 5 FX Management Plans]]
-- [[_COMMUNITY_Synthetic Growth Benchmarks|Synthetic Growth Benchmarks]]
-- [[_COMMUNITY_FIFO Lot Engine Analysis Docs|FIFO Lot Engine Analysis Docs]]
-- [[_COMMUNITY_Market Data Scheduler (F-052F-053)|Market Data Scheduler (F-052/F-053)]]
-- [[_COMMUNITY_Scheduler Job Log|Scheduler Job Log]]
-- [[_COMMUNITY_URL Query Param Filters|URL Query Param Filters]]
-- [[_COMMUNITY_User Settings Store|User Settings Store]]
-- [[_COMMUNITY_JustETF Provider|JustETF Provider]]
-- [[_COMMUNITY_Scheduler Settings Loader|Scheduler Settings Loader]]
-- [[_COMMUNITY_Column Visibility Toggle|Column Visibility Toggle]]
-- [[_COMMUNITY_Financial Sector Utilities|Financial Sector Utilities]]
-- [[_COMMUNITY_Allocation Compaction (GeoSector)|Allocation Compaction (Geo/Sector)]]
-- [[_COMMUNITY_Async DB EngineSession|Async DB Engine/Session]]
-- [[_COMMUNITY_Playwright E2E Infrastructure Docs|Playwright E2E Infrastructure Docs]]
-- [[_COMMUNITY_Calendar Month Component|Calendar Month Component]]
-- [[_COMMUNITY_MkDocs i18n Pipeline & FX Testing Docs|MkDocs i18n Pipeline & FX Testing Docs]]
-- [[_COMMUNITY_Asset Price Store Registry|Asset Price Store Registry]]
-- [[_COMMUNITY_FIFO Lots Calculation|FIFO Lots Calculation]]
-- [[_COMMUNITY_URL Filter Types|URL Filter Types]]
-- [[_COMMUNITY_Broker Frontend Types|Broker Frontend Types]]
-- [[_COMMUNITY_Image Crop Modal Plans|Image Crop Modal Plans]]
-- [[_COMMUNITY_Scheduled Investment Schema|Scheduled Investment Schema]]
-- [[_COMMUNITY_Dual View & Lazy Image Cache Docs|Dual View & Lazy Image Cache Docs]]
-- [[_COMMUNITY_Asset Price Derived State|Asset Price Derived State]]
-- [[_COMMUNITY_Cache Stats Utilities|Cache Stats Utilities]]
-- [[_COMMUNITY_Theme Store (Dark Mode)|Theme Store (Dark Mode)]]
-- [[_COMMUNITY_App Version Utilities|App Version Utilities]]
-- [[_COMMUNITY_Image Preview Cache|Image Preview Cache]]
-- [[_COMMUNITY_Responsive Layout Mode|Responsive Layout Mode]]
-- [[_COMMUNITY_Phase 8 Scheduler Plans|Phase 8 Scheduler Plans]]
-- [[_COMMUNITY_Chart Label Shrink Utility|Chart Label Shrink Utility]]
-- [[_COMMUNITY_AI Export Prompt Templates|AI Export Prompt Templates]]
-- [[_COMMUNITY_AI Export Menu Component|AI Export Menu Component]]
-- [[_COMMUNITY_Asset Panel URL Helpers|Asset Panel URL Helpers]]
-- [[_COMMUNITY_Date Range Preset Handlers|Date Range Preset Handlers]]
-- [[_COMMUNITY_Files Page & TypeScript Types Plans|Files Page & TypeScript Types Plans]]
-- [[_COMMUNITY_Holding Valuation Utilities|Holding Valuation Utilities]]
-- [[_COMMUNITY_Base Dropdown Component|Base Dropdown Component]]
-- [[_COMMUNITY_BackupExport Enums|Backup/Export Enums]]
-- [[_COMMUNITY_Transaction Frontend Types|Transaction Frontend Types]]
-- [[_COMMUNITY_AI Portfolio Export MVP Docs|AI Portfolio Export MVP Docs]]
-- [[_COMMUNITY_Navigation Store|Navigation Store]]
-- [[_COMMUNITY_Transaction Type Icon Cell|Transaction Type Icon Cell]]
-- [[_COMMUNITY_Favicon  Brand Mark Image|Favicon / Brand Mark Image]]
-- [[_COMMUNITY_i18n Duplicate Audit Docs|i18n Duplicate Audit Docs]]
-- [[_COMMUNITY_MkDocs Structural Refinement Plans|MkDocs Structural Refinement Plans]]
-- [[_COMMUNITY_Asset Provider Guides (justETFBorsaCSS)|Asset Provider Guides (justETF/Borsa/CSS)]]
-- [[_COMMUNITY_Tags CSV Conversion|Tags CSV Conversion]]
-- [[_COMMUNITY_User Search Schemas|User Search Schemas]]
-- [[_COMMUNITY_Multi-Provider Asset Search|Multi-Provider Asset Search]]
-- [[_COMMUNITY_Tab URL Helpers|Tab URL Helpers]]
-- [[_COMMUNITY_Alembic Migration Env|Alembic Migration Env]]
-- [[_COMMUNITY_User Local Storage Keys|User Local Storage Keys]]
-- [[_COMMUNITY_Donation Popup Store|Donation Popup Store]]
-- [[_COMMUNITY_Aphra i18n Translation Pipeline Docs|Aphra i18n Translation Pipeline Docs]]
-- [[_COMMUNITY_Scheduled Investment Image Asset|Scheduled Investment Image Asset]]
-- [[_COMMUNITY_Promote Helpers (Cash Cancel)|Promote Helpers (Cash Cancel)]]
-- [[_COMMUNITY_Validate Scheduler Composable|Validate Scheduler Composable]]
-- [[_COMMUNITY_User Search Endpoint|User Search Endpoint]]
-- [[_COMMUNITY_Initial DB Migration (001_initial)|Initial DB Migration (001_initial)]]
-- [[_COMMUNITY_dev.py CLI Migration Docs|dev.py CLI Migration Docs]]
-- [[_COMMUNITY_DividendInterest & Scheduled Assets Docs|Dividend/Interest & Scheduled Assets Docs]]
-- [[_COMMUNITY_Phase 06 Documentation Audit|Phase 06 Documentation Audit]]
-- [[_COMMUNITY_Tweened Value Animation|Tweened Value Animation]]
-- [[_COMMUNITY_FX Card Inversion Store|FX Card Inversion Store]]
-- [[_COMMUNITY_Phase 3.5 Settings System Docs|Phase 3.5 Settings System Docs]]
-- [[_COMMUNITY_Dropdown Position Utility|Dropdown Position Utility]]
-- [[_COMMUNITY_Translation Pipeline Fix Plans|Translation Pipeline Fix Plans]]
-- [[_COMMUNITY_Scheduler Leader Election|Scheduler Leader Election]]
-- [[_COMMUNITY_Date Range URL Helpers|Date Range URL Helpers]]
-- [[_COMMUNITY_Weighted Average Cost Docs|Weighted Average Cost Docs]]
-- [[_COMMUNITY_Asset Pricing Architecture Docs|Asset Pricing Architecture Docs]]
-- [[_COMMUNITY_CSS Scraper & Borsa Italiana Docs|CSS Scraper & Borsa Italiana Docs]]
-- [[_COMMUNITY_CSS Scraper Static Image|CSS Scraper Static Image]]
-- [[_COMMUNITY_FX Route Chain Check|FX Route Chain Check]]
-- [[_COMMUNITY_FX Route Chain Steps Parsing|FX Route Chain Steps Parsing]]
-- [[_COMMUNITY_FX Route Providers Used|FX Route Providers Used]]
-- [[_COMMUNITY_Currency Equality Comparison|Currency Equality Comparison]]
-- [[_COMMUNITY_Svelte Table Adapter|Svelte Table Adapter]]
-- [[_COMMUNITY_Source Code Batch & Video Promo Docs|Source Code Batch & Video Promo Docs]]
-- [[_COMMUNITY_Backend API Package Init|Backend API Package Init]]
-- [[_COMMUNITY_Asset Source Providers Package Init|Asset Source Providers Package Init]]
-- [[_COMMUNITY_LibreFolio App Package Init|LibreFolio App Package Init]]
-- [[_COMMUNITY_BRIM Providers Package Init|BRIM Providers Package Init]]
-- [[_COMMUNITY_License & Credits Docs|License & Credits Docs]]
-- [[_COMMUNITY_Database Module Exports|Database Module Exports]]
-- [[_COMMUNITY_i18n Audit Report Docs|i18n Audit Report Docs]]
-- [[_COMMUNITY_FX Range Helper Plan|FX Range Helper Plan]]
-- [[_COMMUNITY_Financial Utilities Package Init|Financial Utilities Package Init]]
-- [[_COMMUNITY_FX Providers Package Init|FX Providers Package Init]]
-- [[_COMMUNITY_i18n CLI Tooling Docs|i18n CLI Tooling Docs]]
-- [[_COMMUNITY_File Preview Recovery Plan|File Preview Recovery Plan]]
-- [[_COMMUNITY_Market Scheduler Package Init|Market Scheduler Package Init]]
-- [[_COMMUNITY_Balance Validation Helper|Balance Validation Helper]]
-- [[_COMMUNITY_Failed Count Property|Failed Count Property]]
-- [[_COMMUNITY_Total Count Property|Total Count Property]]
-- [[_COMMUNITY_Currency Abs Value|Currency Abs Value]]
-- [[_COMMUNITY_Currency Comparison Operators|Currency Comparison Operators]]
-- [[_COMMUNITY_Currency Hash|Currency Hash]]
-- [[_COMMUNITY_Currency Le Comparison|Currency Le Comparison]]
-- [[_COMMUNITY_Currency Negation|Currency Negation]]
-- [[_COMMUNITY_Currency Repr|Currency Repr]]
-- [[_COMMUNITY_Currency String Format|Currency String Format]]
-- [[_COMMUNITY_Currency Serialization|Currency Serialization]]
-- [[_COMMUNITY_Pydantic Schemas Package Init|Pydantic Schemas Package Init]]
-- [[_COMMUNITY_Currency Getter Helper|Currency Getter Helper]]
-- [[_COMMUNITY_Pydantic ID Validation Rule|Pydantic ID Validation Rule]]
-- [[_COMMUNITY_Provider get_current_value Contract|Provider get_current_value Contract]]
-- [[_COMMUNITY_Broker Service Docstring|Broker Service Docstring]]
-- [[_COMMUNITY_Broker Access Listing|Broker Access Listing]]
-- [[_COMMUNITY_Services Package Init|Services Package Init]]
-- [[_COMMUNITY_Async DB Session Init|Async DB Session Init]]
-- [[_COMMUNITY_Utils Package Init|Utils Package Init]]
-- [[_COMMUNITY_API v1 Package Init|API v1 Package Init]]
-- [[_COMMUNITY_RoadMap V1V4 Index Docs|RoadMap V1/V4 Index Docs]]
-- [[_COMMUNITY_Wiki Audit AssetsBrokersBRIM|Wiki Audit: Assets/Brokers/BRIM]]
-- [[_COMMUNITY_Wiki Audit Video Marketing|Wiki Audit: Video Marketing]]
-- [[_COMMUNITY_MkDocs Suffix i18n Strategy|MkDocs Suffix i18n Strategy]]
-- [[_COMMUNITY_Responsive Layout 4-Mode Pattern Doc|Responsive Layout 4-Mode Pattern Doc]]
-- [[_COMMUNITY_F-085 QuarkAI Assistant|F-085 QuarkAI Assistant]]
-- [[_COMMUNITY_Coverage Report argparse Bug|Coverage Report argparse Bug]]
-- [[_COMMUNITY_Sync Settings Dead Code Removal|Sync Settings Dead Code Removal]]
-- [[_COMMUNITY_Knowledge Base Backend|Knowledge Base: Backend]]
-- [[_COMMUNITY_Knowledge Base Frontend|Knowledge Base: Frontend]]
-- [[_COMMUNITY_Knowledge Base MkDocs Docs|Knowledge Base: MkDocs Docs]]
-- [[_COMMUNITY_Knowledge Base Backend Testing|Knowledge Base: Backend Testing]]
-- [[_COMMUNITY_Knowledge Base Frontend Testing|Knowledge Base: Frontend Testing]]
-- [[_COMMUNITY_Knowledge Base i18n Duplicates|Knowledge Base: i18n Duplicates]]
-- [[_COMMUNITY_Phase 06 Bugfix Step 2 Providers|Phase 06 Bugfix Step 2 Providers]]
-- [[_COMMUNITY_TODO Files (Project Root)|TODO Files (Project Root)]]
+- [[_COMMUNITY_Community 0|Community 0]]
+- [[_COMMUNITY_Community 1|Community 1]]
+- [[_COMMUNITY_Community 2|Community 2]]
+- [[_COMMUNITY_Community 3|Community 3]]
+- [[_COMMUNITY_Community 4|Community 4]]
+- [[_COMMUNITY_Community 5|Community 5]]
+- [[_COMMUNITY_Community 6|Community 6]]
+- [[_COMMUNITY_Community 7|Community 7]]
+- [[_COMMUNITY_Community 8|Community 8]]
+- [[_COMMUNITY_Community 9|Community 9]]
+- [[_COMMUNITY_Community 10|Community 10]]
+- [[_COMMUNITY_Community 11|Community 11]]
+- [[_COMMUNITY_Community 12|Community 12]]
+- [[_COMMUNITY_Community 13|Community 13]]
+- [[_COMMUNITY_Community 14|Community 14]]
+- [[_COMMUNITY_Community 15|Community 15]]
+- [[_COMMUNITY_Community 16|Community 16]]
+- [[_COMMUNITY_Community 17|Community 17]]
+- [[_COMMUNITY_Community 18|Community 18]]
+- [[_COMMUNITY_Community 19|Community 19]]
+- [[_COMMUNITY_Community 20|Community 20]]
+- [[_COMMUNITY_Community 21|Community 21]]
+- [[_COMMUNITY_Community 22|Community 22]]
+- [[_COMMUNITY_Community 23|Community 23]]
+- [[_COMMUNITY_Community 24|Community 24]]
+- [[_COMMUNITY_Community 25|Community 25]]
+- [[_COMMUNITY_Community 26|Community 26]]
+- [[_COMMUNITY_Community 27|Community 27]]
+- [[_COMMUNITY_Community 28|Community 28]]
+- [[_COMMUNITY_Community 29|Community 29]]
+- [[_COMMUNITY_Community 30|Community 30]]
+- [[_COMMUNITY_Community 31|Community 31]]
+- [[_COMMUNITY_Community 32|Community 32]]
+- [[_COMMUNITY_Community 33|Community 33]]
+- [[_COMMUNITY_Community 34|Community 34]]
+- [[_COMMUNITY_Community 35|Community 35]]
+- [[_COMMUNITY_Community 36|Community 36]]
+- [[_COMMUNITY_Community 37|Community 37]]
+- [[_COMMUNITY_Community 38|Community 38]]
+- [[_COMMUNITY_Community 39|Community 39]]
+- [[_COMMUNITY_Community 40|Community 40]]
+- [[_COMMUNITY_Community 41|Community 41]]
+- [[_COMMUNITY_Community 42|Community 42]]
+- [[_COMMUNITY_Community 43|Community 43]]
+- [[_COMMUNITY_Community 44|Community 44]]
+- [[_COMMUNITY_Community 45|Community 45]]
+- [[_COMMUNITY_Community 46|Community 46]]
+- [[_COMMUNITY_Community 47|Community 47]]
+- [[_COMMUNITY_Community 48|Community 48]]
+- [[_COMMUNITY_Community 49|Community 49]]
+- [[_COMMUNITY_Community 50|Community 50]]
+- [[_COMMUNITY_Community 51|Community 51]]
+- [[_COMMUNITY_Community 52|Community 52]]
+- [[_COMMUNITY_Community 53|Community 53]]
+- [[_COMMUNITY_Community 54|Community 54]]
+- [[_COMMUNITY_Community 55|Community 55]]
+- [[_COMMUNITY_Community 56|Community 56]]
+- [[_COMMUNITY_Community 57|Community 57]]
+- [[_COMMUNITY_Community 58|Community 58]]
+- [[_COMMUNITY_Community 59|Community 59]]
+- [[_COMMUNITY_Community 60|Community 60]]
+- [[_COMMUNITY_Community 61|Community 61]]
+- [[_COMMUNITY_Community 62|Community 62]]
+- [[_COMMUNITY_Community 63|Community 63]]
+- [[_COMMUNITY_Community 64|Community 64]]
+- [[_COMMUNITY_Community 65|Community 65]]
+- [[_COMMUNITY_Community 66|Community 66]]
+- [[_COMMUNITY_Community 67|Community 67]]
+- [[_COMMUNITY_Community 68|Community 68]]
+- [[_COMMUNITY_Community 69|Community 69]]
+- [[_COMMUNITY_Community 70|Community 70]]
+- [[_COMMUNITY_Community 71|Community 71]]
+- [[_COMMUNITY_Community 72|Community 72]]
+- [[_COMMUNITY_Community 73|Community 73]]
+- [[_COMMUNITY_Community 74|Community 74]]
+- [[_COMMUNITY_Community 75|Community 75]]
+- [[_COMMUNITY_Community 76|Community 76]]
+- [[_COMMUNITY_Community 77|Community 77]]
+- [[_COMMUNITY_Community 78|Community 78]]
+- [[_COMMUNITY_Community 79|Community 79]]
+- [[_COMMUNITY_Community 80|Community 80]]
+- [[_COMMUNITY_Community 81|Community 81]]
+- [[_COMMUNITY_Community 82|Community 82]]
+- [[_COMMUNITY_Community 83|Community 83]]
+- [[_COMMUNITY_Community 84|Community 84]]
+- [[_COMMUNITY_Community 85|Community 85]]
+- [[_COMMUNITY_Community 86|Community 86]]
+- [[_COMMUNITY_Community 87|Community 87]]
+- [[_COMMUNITY_Community 88|Community 88]]
+- [[_COMMUNITY_Community 89|Community 89]]
+- [[_COMMUNITY_Community 90|Community 90]]
+- [[_COMMUNITY_Community 91|Community 91]]
+- [[_COMMUNITY_Community 92|Community 92]]
+- [[_COMMUNITY_Community 93|Community 93]]
+- [[_COMMUNITY_Community 94|Community 94]]
+- [[_COMMUNITY_Community 95|Community 95]]
+- [[_COMMUNITY_Community 96|Community 96]]
+- [[_COMMUNITY_Community 97|Community 97]]
+- [[_COMMUNITY_Community 98|Community 98]]
+- [[_COMMUNITY_Community 99|Community 99]]
+- [[_COMMUNITY_Community 100|Community 100]]
+- [[_COMMUNITY_Community 101|Community 101]]
+- [[_COMMUNITY_Community 102|Community 102]]
+- [[_COMMUNITY_Community 103|Community 103]]
+- [[_COMMUNITY_Community 104|Community 104]]
+- [[_COMMUNITY_Community 105|Community 105]]
+- [[_COMMUNITY_Community 106|Community 106]]
+- [[_COMMUNITY_Community 107|Community 107]]
+- [[_COMMUNITY_Community 108|Community 108]]
+- [[_COMMUNITY_Community 109|Community 109]]
+- [[_COMMUNITY_Community 110|Community 110]]
+- [[_COMMUNITY_Community 111|Community 111]]
+- [[_COMMUNITY_Community 112|Community 112]]
+- [[_COMMUNITY_Community 113|Community 113]]
+- [[_COMMUNITY_Community 114|Community 114]]
+- [[_COMMUNITY_Community 115|Community 115]]
+- [[_COMMUNITY_Community 116|Community 116]]
+- [[_COMMUNITY_Community 117|Community 117]]
+- [[_COMMUNITY_Community 118|Community 118]]
+- [[_COMMUNITY_Community 119|Community 119]]
+- [[_COMMUNITY_Community 120|Community 120]]
+- [[_COMMUNITY_Community 121|Community 121]]
+- [[_COMMUNITY_Community 122|Community 122]]
+- [[_COMMUNITY_Community 123|Community 123]]
+- [[_COMMUNITY_Community 124|Community 124]]
+- [[_COMMUNITY_Community 125|Community 125]]
+- [[_COMMUNITY_Community 126|Community 126]]
+- [[_COMMUNITY_Community 127|Community 127]]
+- [[_COMMUNITY_Community 128|Community 128]]
+- [[_COMMUNITY_Community 129|Community 129]]
+- [[_COMMUNITY_Community 131|Community 131]]
+- [[_COMMUNITY_Community 132|Community 132]]
+- [[_COMMUNITY_Community 133|Community 133]]
+- [[_COMMUNITY_Community 134|Community 134]]
+- [[_COMMUNITY_Community 135|Community 135]]
+- [[_COMMUNITY_Community 136|Community 136]]
+- [[_COMMUNITY_Community 137|Community 137]]
+- [[_COMMUNITY_Community 138|Community 138]]
+- [[_COMMUNITY_Community 139|Community 139]]
+- [[_COMMUNITY_Community 140|Community 140]]
+- [[_COMMUNITY_Community 141|Community 141]]
+- [[_COMMUNITY_Community 142|Community 142]]
+- [[_COMMUNITY_Community 143|Community 143]]
+- [[_COMMUNITY_Community 144|Community 144]]
+- [[_COMMUNITY_Community 145|Community 145]]
+- [[_COMMUNITY_Community 146|Community 146]]
+- [[_COMMUNITY_Community 147|Community 147]]
+- [[_COMMUNITY_Community 148|Community 148]]
+- [[_COMMUNITY_Community 149|Community 149]]
+- [[_COMMUNITY_Community 153|Community 153]]
+- [[_COMMUNITY_Community 154|Community 154]]
+- [[_COMMUNITY_Community 155|Community 155]]
+- [[_COMMUNITY_Community 158|Community 158]]
+- [[_COMMUNITY_Community 159|Community 159]]
+- [[_COMMUNITY_Community 161|Community 161]]
+- [[_COMMUNITY_Community 163|Community 163]]
+- [[_COMMUNITY_Community 164|Community 164]]
+- [[_COMMUNITY_Community 165|Community 165]]
 
 ## God Nodes (most connected - your core abstractions)
-1. `Currency` - 436 edges
-2. `TransactionType` - 200 edges
-3. `Transaction` - 170 edges
-4. `User` - 166 edges
-5. `Asset` - 158 edges
-6. `BaseBulkResponse` - 158 edges
-7. `BaseDeleteResult` - 147 edges
-8. `AssetSourceError` - 137 edges
-9. `AssetProviderRegistry` - 133 edges
-10. `BrokerUserAccess` - 127 edges
+1. `F-048 — Transaction Modals — Form / Bulk / Delete / Promote / Split (mode-less, Round 6 Plan D done)` - 76 edges
+2. `F-046 — Transaction Model & Bulk API` - 44 edges
+3. `F-047 — Transaction List Page` - 30 edges
+4. `WAC — Weighted Average Cost (cross-currency, auto-calc on TRANSFER)` - 21 edges
+5. `Dependency Graph — Full Project` - 20 edges
+6. `BRIM Framework (Broker Report Import)` - 20 edges
+7. `AI Export Technical Sampling` - 19 edges
+8. `🧩 AI Export Composition and Prompt` - 18 edges
+9. `Unified Batch Pipeline — 2 endpoints replace 4` - 18 edges
+10. `💱 FX Rates` - 17 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `Chart Resolution / Semantic Zoom` --semantically_similar_to--> `Daily-Point Policy`  [INFERRED] [semantically similar]
-  /Users/ea_enel/Documents/00_My/LibreFolio/LibreFolio_devWiki/wiki/concepts/chart-resolution-semantic-zoom.md → wiki/concepts/daily-point-policy.md
-- `DataTable column-resize handle has no effect in some tables` --semantically_similar_to--> `DataTable Enum Filter Options Disappear When Count Reaches Zero`  [INFERRED] [semantically similar]
-  /Users/ea_enel/Documents/00_My/LibreFolio/LibreFolio_devWiki/wiki/problems/datatable-column-resize-noop.md → wiki/problems/datatable-filter-options-disappear.md
-- `SP-C Bugfix Chain (11 plans) — BulkModal + Suggest + WAC Preview` --semantically_similar_to--> `R3-SP-D Plan Chain — FormModal Props + Event Picker + WAC FX Feedback + Bugfixes`  [INFERRED] [semantically similar]
-  wiki/sources/r2-sp-c-bugfix-chain.md → /Users/ea_enel/Documents/00_My/LibreFolio/LibreFolio_devWiki/wiki/sources/r3-sp-d-formmodal-wac-fx-chain.md
-- `Report di Audit della Documentazione - Transactions & Events` --references--> `Pair-Adjacent Rendering + GoTo — linked TX pairs in TransactionsTable`  [INFERRED]
-  roadmap/wiki_audit_2026_06_18/audit_transactions.md → wiki/concepts/always-pair-adjacent.md
-- `Image Preview Cache Pattern` --semantically_similar_to--> `TimeSeriesStore pattern`  [INFERRED] [semantically similar]
-  /Users/ea_enel/Documents/00_My/LibreFolio/LibreFolio_devWiki/wiki/concepts/image-preview-cache-pattern.md → wiki/concepts/timeseries-store-pattern.md
+- `Calendar-Bucket Sampling Policy Matrix` --conceptually_related_to--> `Detail Level x Temporal Class Sampling Matrix`  [INFERRED]
+  mkdocs-en/docs/developer/architecture/patterns/ai_export_sampling.md → wiki/decisions/ai-export-technical-series-and-density-contract.md
+- `Semantic Composition V2 Hard Cutover` --conceptually_related_to--> `Backend-owned versioned AI snapshots with a frontend-owned safe prompt and clipboard boundary`  [INFERRED]
+  mkdocs-en/docs/developer/architecture/patterns/ai_export_snapshot.md → wiki/decisions/ai-export-versioned-snapshot-boundary.md
+- `Clipboard-Only AI Export Boundary` --conceptually_related_to--> `AI Export Runtime Service and Snapshot Platform`  [INFERRED]
+  mkdocs-en/docs/user/ai-export/index.en.md → wiki/entities/ai-export-snapshot-service.md
+- `Pair-Adjacent Rendering + GoTo — linked TX pairs in TransactionsTable` --semantically_similar_to--> `Dual View Pattern (Card Grid + DataTable)`  [INFERRED] [semantically similar]
+  wiki/concepts/always-pair-adjacent.md → wiki/concepts/dual-view-pattern.md
+- `AI export: single kitchen-sink prompt replaced by a single-purpose prompt catalog` --conceptually_related_to--> `AnalysisSpec Prompt Contract`  [INFERRED]
+  wiki/decisions/ai-export-prompt-catalog.md → mkdocs-en/docs/developer/architecture/patterns/ai_export_composition.md
 
 ## Import Cycles
-- 1-file cycle: `backend/utils/decimal_utils.py -> backend/utils/decimal_utils.py`
-- 1-file cycle: `backend/main.py -> backend/main.py`
-- 1-file cycle: `backend/api/v1/transactions.py -> backend/api/v1/transactions.py`
-- 1-file cycle: `backend/services/donation_popup_service.py -> backend/services/donation_popup_service.py`
-- 1-file cycle: `backend/services/transaction_service.py -> backend/services/transaction_service.py`
-- 1-file cycle: `backend/schemas/assets.py -> backend/schemas/assets.py`
-- 1-file cycle: `backend/schemas/common.py -> backend/schemas/common.py`
-- 1-file cycle: `backend/schemas/prices.py -> backend/schemas/prices.py`
-- 1-file cycle: `backend/schemas/transactions.py -> backend/schemas/transactions.py`
-- 1-file cycle: `backend/services/asset_source.py -> backend/services/asset_source.py`
-- 1-file cycle: `backend/services/asset_source_providers/css_scraper.py -> backend/services/asset_source_providers/css_scraper.py`
-- 1-file cycle: `backend/services/asset_source_providers/scheduled_investment.py -> backend/services/asset_source_providers/scheduled_investment.py`
-- 1-file cycle: `backend/services/brim_providers/broker_coinbase.py -> backend/services/brim_providers/broker_coinbase.py`
-- 1-file cycle: `backend/services/brim_providers/broker_degiro.py -> backend/services/brim_providers/broker_degiro.py`
-- 1-file cycle: `backend/services/brim_providers/broker_directa.py -> backend/services/brim_providers/broker_directa.py`
-- 1-file cycle: `backend/services/brim_providers/broker_etoro.py -> backend/services/brim_providers/broker_etoro.py`
-- 1-file cycle: `backend/services/brim_providers/broker_finpension.py -> backend/services/brim_providers/broker_finpension.py`
-- 1-file cycle: `backend/services/brim_providers/broker_freetrade.py -> backend/services/brim_providers/broker_freetrade.py`
-- 1-file cycle: `backend/services/brim_providers/broker_generic_csv.py -> backend/services/brim_providers/broker_generic_csv.py`
-- 1-file cycle: `backend/services/brim_providers/broker_ibkr.py -> backend/services/brim_providers/broker_ibkr.py`
+- None detected.
 
 ## Hyperedges (group relationships)
-- **Portfolio Engine to Dashboard Report Pipeline** — wiki_concepts_inline_wac_computation, wiki_concepts_pre_frame_frame_separation, wiki_concepts_portfolio_report_unified, wiki_concepts_holdings_performance_panel [INFERRED 0.88]
-- **Broker Redesign Phase 9 Milestone 3** — wiki_decisions_broker_card_aggregation_no_n_plus_one, wiki_decisions_broker_list_visibility_non_members, wiki_decisions_broker_access_min_paired, wiki_decisions_brim_broker_scoped [INFERRED 0.82]
-- **Portfolio Performance Runtime Stack** — wiki_decisions_fifo-runtime-decision, wiki_decisions_mwrr-boundary-fix, wiki_decisions_mwrr-solver-newton-cap, wiki_decisions_portfolio-summary-direct-wiring [INFERRED 0.81]
-- **Broker Dashboard Milestone 3 Reuse** — wiki_domains_brokers, wiki_domains_dashboard, wiki_domains_calculations [INFERRED 0.78]
-- **Transaction Modal Editing Stack** — wiki_features_F-097, wiki_problems_browser-autofill-numeric-fields, wiki_problems_bulk-modal-sticky-z-index, wiki_problems_clone-link-uuid-duplication, wiki_problems_datatable-filter-options-disappear, wiki_problems_dual-form-collect-duplication [INFERRED 0.78]
-- **Split Promote Unified Batch Rollout** — wiki_sources_phase07-part4-round6-pland-split-promote-master, wiki_sources_phase07-part4-round6-pland1-backend-batch-suggest, wiki_sources_phase07-part4-round6-pland2-frontend-split-promote, wiki_sources_phase07-part4-round6-pland2-bugfix2, wiki_sources_phase07-part4-round6-pland2-bugfix3, wiki_sources_phase07-part4-round6-pland2-bugfix4, wiki_sources_phase07-pland-split-promote [INFERRED 0.94]
-- **Phase 09 Portfolio Engine to Broker UI Arc** — wiki_sources_phase09-dashboard-batch, wiki_sources_phase09-portfolio-engine-dashboard, wiki_sources_phase09-portfolio-engine-3pool-refactor, wiki_sources_phase09-m1-m2-archive-2026-07, wiki_sources_phase09-m3-broker-redesign-2026-07 [INFERRED 0.90]
-- **Core Risk Metrics Set** — risk_metrics_risk_metrics, sharpe_ratio_sharpe_ratio, sortino_ratio_sortino_ratio, max_drawdown_max_drawdown, volatility_volatility [EXTRACTED 1.00]
-- **Tailscale Service Exposure Levels** — service_exposure_private_vpn_level1_private_vpn, service_exposure_subnet_router_level2_subnet_router, service_exposure_public_funnel_level3_public_funnel, service_exposure_multifunnel_docker_level4_multi_funnel_docker [EXTRACTED 1.00]
-- **Weighted Average Cost Mechanics** — weighted_average_cost_weighted_average_cost, weighted_average_cost_cost_basis_override, weighted_average_cost_auto_wac, weighted_average_cost_multi_currency_handling [EXTRACTED 1.00]
-- **FIFO Engine Plan Series** — high_level_plan_v1_document, high_level_plan_v1_feasibility_report_document, high_level_plan_v1_open_questions_document, fifo_segment_model_analysis_document, portfolio_engine_cache_analysis_document, high_level_plan_v1_fifolotengine [EXTRACTED 1.00]
-- **Phase 9 Broker/Dashboard Reuse** — phase_09_dashboard_document, phase_09_milestone_3_readme_document, phase_09_dashboard_unified_portfolio_api, phase_09_milestone_3_widget_reuse [EXTRACTED 1.00]
-- **Phase Final Quality Workstreams** — phase_final_subplan_readme_document, duplicate_audit_pre_document, duplicate_audit_post_document, duplicate_audit_post2_document, ui_refinement_20260710_document, wiki_audit_assets_brokers_brim_document, wiki_audit_backend_infra_document, wiki_audit_transactions_document, wiki_audit_video_marketing_document [EXTRACTED 1.00]
-- **AI export rework bundle** — ai_export_prompt_catalog_decision, ai_export_name_not_ticker_problem, single_purpose_prompt_catalog, name_first_asset_labeling_policy, single_asset_ai_export [INFERRED 0.90]
-- **Wiki audit corrections bundle** — wiki_audit_2026_06_18_source, workspace_intent_frontend_only, test_runner_entity, market_data_scheduler_entity [EXTRACTED 1.00]
+- **Short-lived session memory decision mechanisms** — wiki_decisions_ai-export-contextual-ui-memory, wiki_decisions_ai-export-contextual-ui-memory_reactive_identity_bound_memory, wiki_decisions_ai-export-contextual-ui-memory_raw_note_effective_option_separation, wiki_decisions_ai-export-contextual-ui-memory_context_bound_in_flight_preparation, wiki_decisions_ai-export-contextual-ui-memory_concern_based_e2e_cutover [EXTRACTED 1.00]
 
-## Communities (283 total, 63 thin omitted)
+## Communities (160 total, 17 thin omitted)
 
-### Community 0 - "Frontend API Client & Allocation History"
-Cohesion: 0.01
-Nodes (268): active, AllocationHistoryDimensions, AllocationHistoryPoint, AllocationItem, amount_abs_max, amount_abs_min, api, as_of_date (+260 more)
-
-### Community 1 - "Asset Provider Registry & Schemas"
-Cohesion: 0.03
-Nodes (126): BorsaItalianaProvider, _get_session(), _infer_country_from_issuer(), _infer_sector(), _map_asset_type(), Borsa Italiana provider for asset pricing.  Uses the borsa-italiana-scraping lib, Try to map issuer name to ISO-3166-A3 country code., Infer sector from scheda fields.      Priority: scheda.settore (stocks) > scheda (+118 more)
-
-### Community 2 - "App Routes & Pages"
-Cohesion: 0.03
-Nodes (109): attachOverflowMarquee(), attachOverflowMarqueeToDescendants(), scrollOnOverflow(), ./AssetIcon.svelte, pngSrc, showPng, ./ContributionTable.svelte, n (+101 more)
-
-### Community 3 - "Chart Components (Price/Growth/Signals)"
-Cohesion: 0.03
-Nodes (101): ./CandlestickChart.svelte, renderChart(), ./ChartAestheticsSection.svelte, buildDataZoom(), buildOverlaySignalSeries(), buildPriceYAxis(), buildSecondaryYAxes(), ChartColors (+93 more)
-
-### Community 4 - "Transaction Form & Bulk Modals"
-Cohesion: 0.02
-Nodes (105): buildFxTooltipData(), buildFxTooltipHtml(), computeFxConversionInfo(), computeSpread(), FxConversionInfo, FxSpreadInfo, FxTooltipData, ../events/AssetEventPicker.svelte (+97 more)
-
-### Community 5 - "i18n & Import Wizard UI"
-Cohesion: 0.02
-Nodes (61): dispatch, handleSubmit(), passwordRules, validateConfirmPassword(), validateEmail(), validatePassword(), validateUsername(), ./BrokerForm.svelte (+53 more)
-
-### Community 6 - "Price & Backward-Fill Data Models"
-Cohesion: 0.02
-Nodes (94): Fetch mock asset metadata for testing.          Returns predictable mock data to, BaseDistribution, DayCountConvention, FAAinfoFiltersRequest, FAAssetCreateItem, FAAssetCreateResult, FAAssetDeleteResult, FAAssetMetadataResponse (+86 more)
-
-### Community 7 - "BRIM Transaction Parsing"
-Cohesion: 0.07
-Nodes (105): Parse Coinbase CSV export file., Parse Directa CSV export file.          Returns:             Tuple of (transacti, GenericCSVBrokerProvider, parse_date(), parse_decimal(), Generic CSV Broker Report Import Plugin.  This plugin provides a flexible CSV im, Parse a date string using multiple format patterns.      Args:         value: Da, Parse a decimal number from various formats.      Handles:     - Standard decima (+97 more)
-
-### Community 8 - "Currency & Transaction Base Models"
-Cohesion: 0.05
-Nodes (127): BaseModel, Unified transaction record for all asset and cash movements.      This is the si, Unified transaction record for all asset and cash movements.      This is the si, Transaction, FAAssetPatchResult, FAClassificationParams, FAinfoResponse, FAMetadataChangeDetail (+119 more)
-
-### Community 9 - "Broker Service & Bulk Responses"
-Cohesion: 0.10
-Nodes (112): BRAccessBulkItem, BRAccessBulkResponse, BRAccessListResponse, BRDeleteItem, BRIMAssetCandidate, BRIMAssetCandidatesRequest, BRIMParseRequest, BRIMParseResponse (+104 more)
-
-### Community 10 - "Base List/Bulk API Responses"
-Cohesion: 0.02
-Nodes (100): BRAccessBulkResponse, BRAccessItem, BRAccessListResponse, BRAssetHolding, BRBulkCreateResponse, BRBulkDeleteResponse, BRBulkUpdateResponse, BRCreateResult (+92 more)
-
-### Community 11 - "User Roles & Transaction Service"
-Cohesion: 0.07
-Nodes (94): AssetEventType, Broker, Types of asset-level events that affect price or generate distributions.      Th, User role for broker access control.      - OWNER: Full access (CRUD broker, man, Broker/platform where assets are held.      Examples: Interactive Brokers, Degir, Broker/platform where assets are held.      Examples: Interactive Brokers, Degir, UserRole, BalanceValidationError (+86 more)
-
-### Community 12 - "Transactions Table & Broker Store"
-Cohesion: 0.03
-Nodes (74): BrokerLike, getBrokerColor(), ensurePluginIconsLoaded(), getBrokerIconHtmlById(), canEditWithRole(), getRoleIcon(), getRoleIconColor(), getRoleRank() (+66 more)
-
-### Community 13 - "User/Asset/PriceHistory DB Models"
-Cohesion: 0.16
-Nodes (112): AssetProviderAssignment, BackwardFillInfo, Asset, AssetEvent, AssetProviderAssignment, IdentifierType, PriceHistory, Database models for LibreFolio.  All models use SQLModel (SQLAlchemy 2.x) with t (+104 more)
-
-### Community 14 - "Async Session & Event Schemas"
+### Community 0 - "Community 0"
 Cohesion: 0.06
-Nodes (107): FAEventQueryItem, FAEventUpsert, FAPriceQueryItem, FAProviderProbeRequest, FAAssetDelete, FABulkDeleteResponse, FABulkEventUpsertResponse, FABulkUpsertResponse (+99 more)
+Nodes (120): Transactions Without-Asset Filter NaN URL Loop, Pair-Adjacent Rendering + GoTo — linked TX pairs in TransactionsTable, Centralized TX Payload Layer, Entity Store Pattern — createEntityStore<T>() factory, Import Todo Signals, Opportunistic Cache Merge — assetStore.merge() as universal ingress, Paired Partner Architecture — pairedWith, getPartnerOp, visibleOps, Resolve Validation Message Pattern (+112 more)
 
-### Community 15 - "Broker v2 UI & Portfolio Report"
+### Community 1 - "Community 1"
 Cohesion: 0.06
-Nodes (107): LibreFolio — Portfolio Calculation Engine: Architectural Analysis, Portfolio Engine — Architecture & State Report, Asset History Endpoint, Asset WAC / Price Chart, Portfolio Engine — Banner & Valuation Analysis, gpt5.5 banner system high-level design, Read-Only Broker Sharing Visibility, Broker Breakdown Native Cash Balances (+99 more)
+Nodes (93): Async I/O Rule (Event Loop Safety), Daily-Point Policy, Image Preview Cache Pattern, Log Level Policy, `/prices/current` has a persistence side-effect — never chain with `/sync`, Single Migration Strategy (001_initial.py), Asset Feature Connections, Dependency Graph — Full Project (+85 more)
 
-### Community 16 - "Chart Signal Registry"
-Cohesion: 0.05
-Nodes (41): AssetComparisonSignal, BollingerSignal, ChartSignal, DEFAULT_SIGNAL_COLORS, MarkerType, RenderedSignal, SignalConfig, SignalParamDescriptor (+33 more)
-
-### Community 17 - "API Client & Feedback Components"
-Cohesion: 0.04
-Nodes (46): assetMap, targetIds, findSectionForId(), handleRetryFailed(), handleRetrySingle(), handleSyncAll(), mergeResults(), startCountdown() (+38 more)
-
-### Community 18 - "Settings Tabs (Profile/Global/Preferences)"
-Cohesion: 0.03
-Nodes (41): createApiClient(), schemas, ApiError, zodiosApi, defaultGlobalSettings, GlobalSettings, ComparisonAssetMeta, $app/environment (+33 more)
-
-### Community 19 - "BRIM Provider & File Info"
-Cohesion: 0.06
-Nodes (68): BRIMAssetMapping, BRIMDuplicateReport, BRIMDuplicateLevel, BRIMDuplicateMatch, BRIMDuplicateReport, BRIMMatchConfidence, BRIMTXDuplicateCandidate, is_fake_asset_id() (+60 more)
-
-### Community 20 - "Broker Access & Data Quality Issues"
-Cohesion: 0.07
-Nodes (58): ClassificationType, DataQualityReport, BrokerUserAccess, Many-to-many relationship between Users and Brokers with role-based access., Many-to-many relationship between Users and Brokers with role-based access., PortfolioCalculationResult, DataQualityIssue, DataQualityReport (+50 more)
-
-### Community 21 - "FX Rate Provider Service"
-Cohesion: 0.05
-Nodes (52): ABC, FXSyncLegDetail, FXSyncPairResult, Refresh & Sync Operation Schemas (FA + FX).  This module consolidates refresh/sy, Diagnostic detail for a single leg in a chain (or single-provider route)., Result of sync operation for a single pair., Status of a single sync operation (shared by FA and FX)., Sync date range with required end and sentinel-aware start. (+44 more)
-
-### Community 22 - "Asset CRUD & Source Manager"
-Cohesion: 0.05
-Nodes (37): AssetCRUDService, AssetSourceManager, _provider_params_hash(), Asset pricing source service.  This module provides: - AssetSourceProvider: Abst, Refresh asset data from assigned providers (bulk operation).          **EXPLICIT, Fetch provider assignment for asset.          Args:             asset_id: Asset, Bulk upsert prices manually (PRIMARY bulk method).          Args:             da, Stable short hash of `provider_params` for use in cache keys (#R3-4).      Uses (+29 more)
-
-### Community 23 - "Asset Modal & Currency Change"
-Cohesion: 0.05
-Nodes (50): toasts, ./AssetCurrencyChangeModal.svelte, exportBackup(), handleConfirm(), addIdentifierRow(), applySearchResult(), autoTriggerProbe(), columnsToIdentifierRows() (+42 more)
-
-### Community 24 - "Portfolio Report Query Models"
-Cohesion: 0.08
-Nodes (58): OpenDateRangeModel, OpenDateRangeModel, Open-ended date range — both start and end are optional.      Unlike DateRangeMo, Return True if either bound is a sentinel string., Return start as a concrete date, or None if sentinel/None., Return end as a concrete date, or None if sentinel/None., AllocationHistoryQuery, AllocationHistoryResponse (+50 more)
-
-### Community 25 - "Asset Detail Page & Provider Registry Docs"
-Cohesion: 0.09
-Nodes (64): Asset Feature Connections, Dependency Graph — Full Project, FX Feature Connections, Remove auto-populate — metadata flow is frontend-driven, Signal Label Unification (signalLabel.ts utility), 3-Phase Pipeline for Bulk Operations, FX Provider Registry ECB/FED/BOE/SNB, FX Pair CRUD (+56 more)
-
-### Community 26 - "Transaction Modals & Batch Pipeline Docs"
-Cohesion: 0.09
-Nodes (61): Report di Audit della Documentazione - Transactions & Events, Centralized TX Payload Layer, Entity Store Pattern — createEntityStore<T>() factory, Opportunistic Cache Merge — assetStore.merge() as universal ingress, Resolve Validation Message Pattern, txStore Pattern — Single Source of Truth for Loaded Transactions, Validate Scheduler Pattern, Batch-only split/promote — eliminate standalone endpoints (+53 more)
-
-### Community 27 - "WAC Missing Pair & Portfolio Engine"
-Cohesion: 0.22
-Nodes (60): Asset, Broker, BrokerUserAccess, FIFOTransactionInput, Input transaction for FIFO calculation.      Only BUY and SELL types are process, A transaction ready for WAC calculation (pre-processed, FX-converted).      All, WACInputTX, PortfolioHistoryPoint (+52 more)
-
-### Community 28 - "Auth Login/Register Requests"
-Cohesion: 0.07
-Nodes (56): AsyncSession, AuthLoginRequest, AuthRegisterRequest, ChangePasswordRequest, datetime, Request, Response, create_jwt_token() (+48 more)
-
-### Community 29 - "PortfolioService get_summary"
-Cohesion: 0.08
-Nodes (34): compute_wac_from_txlist(), determine_target_currency(), Financial utility functions — pure math, no I/O.  This module contains calculati, Result of pure WAC calculation., Determine target currency from acquisition TXs.      Rule: currency of the most, Compute inventory-aware WAC (PMC) from a pre-sorted list of transactions.      P, WACCalcResult, convert_bulk() (+26 more)
-
-### Community 30 - "Select Components & Language Store"
-Cohesion: 0.06
-Nodes (37): createLanguageStore(), currentLanguageFlag, currentLanguageName, getStoredLocale(), createEntityStore(), EntityStore, EntityStoreOptions, getInitialLocale() (+29 more)
-
-### Community 31 - "Currency Search Select & Cash Cell"
-Cohesion: 0.04
-Nodes (25): @zxcvbn-ts/core, formatDecimalForDisplay(), FormatDecimalOptions, amountStr, code, emit(), handleAmountInput(), handleBlur() (+17 more)
-
-### Community 32 - "Asset/FX Data Editor Sections"
-Cohesion: 0.06
-Nodes (28): chartDataToPriceRows(), eventsToEventRows(), handleCancel(), ColumnDef, DataRow, GapRow, RowStatus, TableRow (+20 more)
-
-### Community 33 - "Split/Promote Full Stack Plans"
-Cohesion: 0.07
-Nodes (50): Centralized Payload + API Commit/Validate, Plan — Centralize Payload Commit/Validate, PlanD-D1D2 Split/Promote Full Stack, README — PlanD-D1D2 Split/Promote Full Stack, Split/Promote Polish & Test Coverage, Plan D2 Bugfix 1 Split/Promote Polish, Payload, Split Preview, Access Guard, UX & E2E, Plan D2 Bugfix 2 Payload Split Preview UX (+42 more)
-
-### Community 34 - "Asset Allocation & Diversification Docs"
-Cohesion: 0.10
-Nodes (42): Adjustment, Weighted Average Cost (WAC), Asset Allocation, Glide Path, Rebalancing, Strategic Asset Allocation (SAA), Tactical Asset Allocation (TAA), Asset Types (+34 more)
-
-### Community 35 - "Phase 06 Asset Management Plans"
-Cohesion: 0.08
-Nodes (42): Asset Detail Page, Backend Lint/Format Standardization, Block G Coverage Campaign, BRIM Pure Parser, Candlestick Chart Support, Coverage Debt Strategy, Entity Store Cache Pattern, Form/Bulk Modal Redesign (+34 more)
-
-### Community 36 - "Asset Currency Conversion & Chart Events"
-Cohesion: 0.10
-Nodes (42): Changelog 2026-04-10 — Live Ticker, Provider Lifecycle, Asset Events & Bugfixes, Live Ticker & Provider Lifecycle, Asset Events CRUD API, Part B — Data Editor Unificato + CSV Import Generico + Test E2E, Unified Asset Data Editor, Plan: Part D — Bug Fix + Miglioramenti post-validazione Parte C (v2), Plan: Part C.2 — Fix post-review (v4), Plan: Part C.3 — Fix post-review round 2 (+34 more)
-
-### Community 37 - "Measure Panel & Currency Formatting"
-Cohesion: 0.08
-Nodes (29): addMeasureFromChartData(), addPoint(), emitRendered(), removeMeasure(), stopMeasureMode(), updateMeasureDates(), updateMeasureStyle(), updatePendingEnd() (+21 more)
-
-### Community 38 - "Exposure Treemap & Positions Panel"
-Cohesion: 0.06
-Nodes (32): attachTreemapZoomGuard(), panTreemapBy(), resetTreemapView(), TreemapZoomGuardHandle, TreemapZoomGuardOptions, ./ExposureTreemap.svelte, centroidOf(), handleTouchPanEnd() (+24 more)
-
-### Community 39 - "FX Rate & Conversion Route Models"
-Cohesion: 0.15
-Nodes (40): FxConversionRoute, FxRate, Daily foreign exchange rates.      Daily-point policy:     - Exactly one record, Daily foreign exchange rates.      Daily-point policy:     - Exactly one record, Configuration table: conversion routes for FX currency pairs.      Each route de, Configuration table: conversion routes for FX currency pairs.      Each route de, FXConversionRequest, FXConversionRouteItem (+32 more)
-
-### Community 40 - "SNB FX Provider"
-Cohesion: 0.07
-Nodes (23): _debug_dataset_check(), _debug_dimensions(), _debug_json_fetch(), _debug_supported(), _debug_test_parser(), Swiss National Bank (SNB) FX rate provider.  This provider fetches exchange rate, Load the currency map from the SNB dimensions API (once per process)., Recursively walk dimension items to extract currency codes. (+15 more)
-
-### Community 41 - "AI Export Builder (Portfolio)"
-Cohesion: 0.10
-Nodes (36): buildAiExport(), buildAllocation(), buildBrokerSummary(), buildDataQuality(), buildInvestorAssumptions(), buildMetadata(), buildPacContext(), buildPositions() (+28 more)
-
-### Community 42 - "Distribution Editor & Provider Comparison"
-Cohesion: 0.07
-Nodes (24): addEntry(), balanceEntry(), balanceSelected(), confirmBulkDelete(), emitChange(), formatLabel(), loadCountries(), removeEntry() (+16 more)
-
-### Community 43 - "Phase 07 Round 6 Context Menu/WAC Plans"
-Cohesion: 0.07
-Nodes (40): Plan: Fix WAC Feedback Loop + `cost_basis_mode` in Payload, Explicit WAC `cost_basis_mode`, Plan: Fix WAC Partner Rows (Bug F2 + 9-10-11) + Test FM1-FM9, Paired WAC Partner Row Propagation, Plan — Phase 07 · Part 4 · Round 6 · Plan D — Split/Promote Full Stack, Split/Promote Full-Stack Batch Pipeline, Plan — Phase 7 Part 4: `/transactions` page + Manual Staging + Promote, Plan — Phase 07 · Part 4 · Round 6 — Context Menu, Delete Riepilogo, Bug Fix & Polish (+32 more)
-
-### Community 44 - "Domain Overviews (Assets/FX)"
-Cohesion: 0.07
-Nodes (40): CI/CD Release Pipeline, Daily-Point Policy, EditBuffer pattern (DataRow status tracking), FX Range Helper Pattern (ensureFxRangeLoaded), Image Preview Cache Pattern, Log Level Policy, `/prices/current` has a persistence side-effect — never chain with `/sync`, Single Migration Strategy (001_initial.py) (+32 more)
-
-### Community 45 - "FIFO/WAC Transfer Docs"
-Cohesion: 0.10
-Nodes (38): Editor Role, Owner Role, Viewer Role, Share Percentage, Duplicate Detection, Import Wizard, Portfolio Aggregation, First User Becomes Administrator (+30 more)
-
-### Community 46 - "Upload Preview Cache & Security"
-Cohesion: 0.09
-Nodes (32): build_image_preview_url(), Build the optimized image preview URL for modal usage., get_upload_mime_type(), Raised when upload fails security validation., Get MIME type for a file.      Args:         file_id: File UUID      Returns:, UploadSecurityError, AsyncSession, Depends (+24 more)
-
-### Community 47 - "Portfolio Engine & Dashboard KPI (F-054)"
-Cohesion: 0.19
-Nodes (37): Piano UI: Dashboard Home, Asset-Level Contribution Gap Analysis, Dashboard Bottom Widgets — Technical Analysis Report, 3-Pool Cash Model, Backend-Only Calculations Rule, Chart Resolution / Semantic Zoom, FIFO Lot Tracking, Holdings / Performance Dashboard Panel (+29 more)
-
-### Community 48 - "Image Cropper Component"
-Cohesion: 0.08
-Nodes (21): IMAGE_PRESETS, ImageEditConfig, ImagePreset, PresetName, SUPPORTED_IMAGE_TYPES, ./ImageCropper.svelte, degreesToRadians(), dispatch (+13 more)
-
-### Community 49 - "Measure Panel & DataTable Migration Plans"
-Cohesion: 0.11
-Nodes (34): Chart Settings Persistence, ColumnVisibilityToggle Component, CurrencySearchSelect Component, DataTable/DataEditor Migration, CalendarMonth / DateRangePicker / SingleDatePicker Suite, FX Card and Detail Inversion Persistence, FX Conversion Chain Model, FX Detail Page Redesign (+26 more)
-
-### Community 50 - "ROI Utils (NAV/Cash Flow)"
-Cohesion: 0.11
-Nodes (31): annualized_to_cumulative(), calculate_mwrr(), calculate_mwrr_series(), calculate_simple_roi(), calculate_simple_roi_series(), calculate_twrr(), calculate_twrr_series(), CashFlowInput (+23 more)
-
-### Community 51 - "Auth Error/Logout Responses"
-Cohesion: 0.06
-Nodes (33): AuthErrorResponse, AuthLoginRequest, AuthLoginResponse, AuthLogoutResponse, AuthMeResponse, AuthPasswordResetRequest, AuthRegisterRequest, AuthRegisterResponse (+25 more)
-
-### Community 52 - "User Service"
-Cohesion: 0.11
-Nodes (33): hash_password(), Hash a password using bcrypt.      Args:         password: Plain text password, count_superusers(), count_users(), create_user(), delete_user(), get_user_by_email(), get_user_by_id() (+25 more)
-
-### Community 53 - "Static Uploads Service"
-Cohesion: 0.12
-Nodes (33): delete_upload(), _detect_actual_mime_type(), _ensure_dir(), _get_file_url(), get_upload_by_user(), get_upload_info(), get_upload_path(), get_uploads_dir() (+25 more)
-
-### Community 54 - "Scheduler Loop (Price/History Sync)"
-Cohesion: 0.11
-Nodes (30): Event, append_entry(), Append a single JSON line to the job log, rotating if needed., Scheduler jobs — current-price refresh and history sync., Fetch current prices for all active assets with assigned providers., Sync historical prices for active assets + all FX routes., run_current_price_refresh(), run_history_sync() (+22 more)
-
-### Community 55 - "FX Provider Registry"
-Cohesion: 0.07
-Nodes (19): FastAPI, Fetch FX rates from ECB API for given date range and currencies.          ECB AP, ManualProvider, Manual FX rate provider — sentinel for manually-managed currency pairs.  This pr, Sentinel FX provider for manually-managed currency pairs.      This provider acc, Alias for code (required by unified registry)., Wildcard — accepts any base currency., Override to accept any base currency. (+11 more)
-
-### Community 56 - "FX Provider Select & Route Tooltips"
-Cohesion: 0.10
-Nodes (20): addRoute(), buildSearchText(), computeRoutes(), emitSelection(), esc(), getChainGroupStepCounts(), getCurrencyInfo(), getFxProviderIconUrl() (+12 more)
-
-### Community 57 - "Web Worker Pool"
-Cohesion: 0.09
-Nodes (15): MockWorker, poolsToDestroy, TestRequest, TestResponse, isWorkerResponseMessage(), normalizePoolSize(), QueuedTask, toWorkerPoolError() (+7 more)
-
-### Community 58 - "Currency Utilities (Babel)"
-Cohesion: 0.07
-Nodes (28): Locale, _build_currency_to_countries_map(), _build_currency_to_flag_map(), list_currencies(), normalize_currency(), Currency utilities with multi-language support via Babel.  Provides normalizatio, Build mapping: currency_code → list of ISO-2 country codes that use it.      Onl, Normalize currency input to ISO 4217 code(s).      Accepts:     - ISO code (USD, (+20 more)
-
-### Community 59 - "Backup Router (Export Streaming)"
-Cohesion: 0.11
-Nodes (29): Backup export service — shared helpers for streaming CSV / JSON snapshots.  Used, Yield a JSON envelope with ``rows`` streamed as an array.      Layout::, Render a scalar for CSV/JSON output, preserving precision., Lowercase, non-alnum → ``-``, max 60 chars. Empty → ``fallback``., Yield CSV chunks (header first, then one line per row).      ``rows`` is consume, slugify_for_filename(), stream_rows_as_csv(), stream_rows_as_json() (+21 more)
-
-### Community 60 - "Yahoo Finance Provider"
-Cohesion: 0.08
-Nodes (17): _is_transient(), Yahoo Finance asset pricing provider.  Uses yfinance library to fetch stock/ETF/, Yahoo Finance data provider using yfinance library., Fetch currency for a symbol using yfinance fast_info.         Uses cache to avoi, Return provider icon URL (hardcoded), Generate URL to Yahoo Finance page for this asset., Test cases with identifier and provider_params., Search query to use in tests. (+9 more)
-
-### Community 61 - "Date Range Picker Component"
-Cohesion: 0.10
-Nodes (19): anyRowWrapped(), closeCalendar(), customWindowArea(), greedyFillCount(), greedyFillShared(), handleClickOutside(), handleKeydown(), leftNextMonth() (+11 more)
-
-### Community 62 - "Global/User Settings Schemas"
+### Community 2 - "Community 2"
 Cohesion: 0.21
-Nodes (29): GlobalSettingBulkUpdate, GlobalSettingsListResponse, AsyncSession, Depends, get_current_user, GlobalSettingRead, User, UserSettingsRead (+21 more)
+Nodes (17): Inter-Bucket Price/FX Return Anchors, Technical vs Financial Series Separation, Calendar-Bucket Sampling Policy Matrix, Detail-Only Price and Rate Sampling, Focused Context Sampling Contracts, FX Observed Range Position, Latest-per-Category Context Event Policy, Observation-Level Event Selection Policy (+9 more)
 
-### Community 63 - "DataTable Sort/Select Types"
-Cohesion: 0.11
-Nodes (27): AnyComponent, BadgeCell, BulkAction, ColumnFilter, ColumnType, ColumnWidthsState, CurrencyStackFilter, CustomCell (+19 more)
+### Community 3 - "Community 3"
+Cohesion: 0.05
+Nodes (50): Drawdown Chart, Drawdown Series, Loss-Recovery Asymmetry, Max Drawdown, Drawdown Recovery Time, Risk Analysis Application Plan, Applied Shock Bucket Audit, Shared Foundation and G6-11 Approval Gate (+42 more)
 
-### Community 64 - "Broker Sharing & Multi-User Roles"
-Cohesion: 0.10
-Nodes (30): i18n Key Rationalization — Intentional Duplicates, Port 60/40 Scheme (6040/6041/6042), Data Separation: prod/ and test/ Isolated Directories, Domain: AUTH, Domain: LAYOUT & SETTINGS, User Authentication & Sessions, User Management admin CRUD, Multi-User Role System (+22 more)
+### Community 4 - "Community 4"
+Cohesion: 0.05
+Nodes (53): Backend-Only Calculations Rule, Backend Test Isolation via unique_id, CI/CD Release Pipeline, Dual View Pattern (Card Grid + DataTable), E2E data-testid Rule, EditBuffer pattern (DataRow status tracking), FX Range Helper Pattern (ensureFxRangeLoaded), Svelte 5 Runes Convention (+45 more)
 
-### Community 65 - "Currency Field Validation"
-Cohesion: 0.11
-Nodes (20): Any, Validate base_currency against ISO 4217 + crypto., Validate base_currency against ISO 4217 + crypto., Validate currency field using cached Currency.validate_code().      This helper, Validate currency against ISO 4217 + crypto., Validate and normalize ISIN., Validate currency against ISO 4217 + crypto., Validate and normalize ISIN. (+12 more)
-
-### Community 66 - "TimeSeriesStore & EditBuffer"
-Cohesion: 0.11
-Nodes (12): BufferChangeCallback, EditSource, PendingEdit, addDays(), DateGap, formatDate(), parseDate(), RangeResult (+4 more)
-
-### Community 67 - "Transaction Model & FIFO Runtime Docs"
+### Community 5 - "Community 5"
 Cohesion: 0.19
-Nodes (29): Pair-Adjacent Rendering + GoTo — linked TX pairs in TransactionsTable, saveWithRetry — Frontend Modal Save Pattern, Transaction Feature Connections, FIFO Cost Basis Computed at Runtime, Multi-Broker Atomic Transactions (not broker-scoped), Policy D — Destructive symmetric wipe on asset currency change, Price Currency: Hard-Reject Mismatch + 409 on Asset Currency Change, Transaction Link UUID Semantics (TRANSFER/DEPOSIT/WITHDRAWAL/FX_CONVERSION) (+21 more)
+Nodes (30): 3-Pool Cash Model, Chart Resolution / Semantic Zoom, Holdings / Performance Dashboard Panel, Inline WAC Computation, Portfolio Report Unified Endpoint, Pre-Frame / Frame Separation, TWRR and MWRR Algorithms, BRIM Files Scoped to Broker (Multi-User Support) (+22 more)
 
-### Community 68 - "Degiro Broker Provider"
-Cohesion: 0.09
-Nodes (16): DegiroBrokerProvider, _detect_transaction_type(), _extract_quantity_from_description(), _parse_degiro_date(), _parse_degiro_number(), DEGIRO Broker Report Import Plugin.  This plugin parses CSV exports from DEGIRO, Parse DEGIRO date format (DD-MM-YYYY)., Parse DEGIRO number (Dutch format: comma as decimal separator). (+8 more)
-
-### Community 69 - "Provider Auto-Discovery Registry"
-Cohesion: 0.09
-Nodes (14): AbstractProviderRegistry, Invoke ``shutdown()`` on every registered provider instance.          Called dur, Abstract base class for provider registries.      Each subclass automatically ge, Auto-detect the best plugin for a file based on content analysis.          Itera, Ensure each subclass has its own _providers dict and discovery tracking., Get list of plugin codes that can parse the given file.          Iterates throug, Get detailed info for all registered plugins.          Returns:             List, Decorator to register a provider class with the given registry.     :param regis (+6 more)
-
-### Community 70 - "Scheduled Investment Editor"
-Cohesion: 0.12
-Nodes (27): Ask Provider Difference Flow, AssetEvent Infrastructure, AssetModal Completion, Phase 6 Step 3 Bugfix Plan v2, Bulk Delete Multi-Gap Logic, Checklist: Asset Providers CSS and Scheduled, Checklist: F9 Merge Split Test, CSS Scraper Provider (+19 more)
-
-### Community 71 - "BRIM Import Wizard v5 Plans"
-Cohesion: 0.12
-Nodes (27): BRIMFieldTodo, BRIM Import Bridge, BRIM Import Bridge Plan, BRIM Plugin Sign Audit, BRIM Sign Rules, Broker Creation Reactivity, Dynamic Preview Z-Index, FilePreviewModal (+19 more)
-
-### Community 72 - "Global Settings Service"
-Cohesion: 0.12
-Nodes (25): GlobalSetting, System-wide settings.      Key-value store for global configuration.     Only ad, System-wide settings.      Key-value store for global configuration.     Only ad, get_all_global_settings(), get_global_setting(), get_or_create_user_settings(), get_session_ttl(), get_session_ttl_sync() (+17 more)
-
-### Community 73 - "BOE FX Provider"
-Cohesion: 0.09
-Nodes (12): BOEProvider, Bank of England (BOE) FX rate provider.  This provider fetches exchange rates fr, Get list of supported currencies.          BOE has a fixed list of currencies, s, Fetch FX rates from BOE API for given date range and currencies.          BOE pr, Parse BOE CSV-like response.          Format (approximate):         DATE,XUDLXXX, Bank of England FX rate provider.      Provides daily exchange rates with GBP as, Parse BOE date format.          Format: "DD Mon YYYY" (e.g., "01 Jan 2025"), Alias for code (required by unified registry). (+4 more)
-
-### Community 74 - "FED FX Provider"
-Cohesion: 0.09
-Nodes (12): FEDProvider, Federal Reserve (FED) FX rate provider.  This provider fetches exchange rates fr, Common currencies that FED should always provide.         These are used for aut, FRED quotes ALL currencies per 1 unit, including JPY.         No multi-unit adju, Get list of supported currencies.          FED H.10 has a fixed list of currenci, Fetch FX rates from FRED API for given date range and currencies.          FRED, Parse FRED CSV response.          CSV Format:         DATE,DEXUSEU         2024-, Federal Reserve FX rate provider via FRED API.      Provides daily exchange rate (+4 more)
-
-### Community 75 - "AI Export Renderers (Prompt/Data)"
-Cohesion: 0.22
-Nodes (19): fmt(), renderDataOnly(), renderTechnicalAsset(), toYaml(), copyAiExport(), EMBEDS_OWN_WEB_RESEARCH, fmt(), renderFullPrompt() (+11 more)
-
-### Community 76 - "Scheduled Investment Service"
-Cohesion: 0.19
-Nodes (23): _calculate_30_360(), _calculate_act_act(), _calculate_act_fixed(), calculate_day_count_fraction(), calculate_simple_interest(), _compute_late_interest_value(), _compute_maturation_dates(), _compute_value_at() (+15 more)
-
-### Community 77 - "Config & Data Directories"
-Cohesion: 0.10
-Nodes (24): ensure_data_dirs(), get_data_dir(), get_database_url(), get_settings(), is_test_mode(), Application configuration module. Loads environment variables and provides appli, Get the current data directory based on environment and test mode.      Priority, Get the SQLite database URL based on current data directory. (+16 more)
-
-### Community 78 - "Mock FX Providers (Tests)"
-Cohesion: 0.09
-Nodes (10): MockFXFailProvider, MockFXProvider, Mock FX providers for testing purposes only.  Two providers: - MockFXProvider  (, Mock FX provider that always fails — for testing fallback logic.      Always rai, Always raises FXServiceError for testing fallback., Mock FX provider — returns a fixed rate for all dates/currencies.      The fixed, Return the fixed rate MOCKFX_FIXED_RATE for every date/currency., date (+2 more)
-
-### Community 79 - "AI Export Wiki Pages (this session)"
-Cohesion: 0.12
-Nodes (24): AI export MVP report, AI export used ticker/ISIN as primary asset label, AI export prompt catalog, audit_assets_brokers_brim.md, audit_backend_infra.md, audit_transactions.md, Dashboard KPI & Overview, Portfolio Charts (+16 more)
-
-### Community 80 - "eToro Broker Provider"
-Cohesion: 0.09
-Nodes (12): EtoroBrokerProvider, _parse_etoro_date(), _parse_etoro_number(), _parse_ticker_from_details(), eToro Broker Report Import Plugin.  This plugin parses CSV exports from eToro (s, Parse eToro number (may have parentheses for negative, spaces, commas)., Extract ticker and currency from eToro details field.      Format: SYMBOL/CURREN, eToro (social trading platform) CSV export import plugin. (+4 more)
-
-### Community 81 - "File Preview Service"
-Cohesion: 0.17
-Nodes (23): FilePreviewType, build_preview_response(), _dataframe_to_rows(), _detect_csv_delimiter(), detect_preview_type(), _excel_engine_error_message(), _excel_engine_for_extension(), _normalize_row() (+15 more)
-
-### Community 82 - "Provider Assignment & Scheduled Investment UI"
-Cohesion: 0.11
-Nodes (15): currentLanguage, ./BoundaryDateModal.svelte, ./CellDateRange.svelte, emitChange(), handleParamChange(), handleProviderChange(), addDays(), daysBetween() (+7 more)
-
-### Community 83 - "Directa Broker Provider"
-Cohesion: 0.09
-Nodes (12): DirectaBrokerProvider, _map_transaction_type(), _parse_directa_date(), _parse_directa_number(), Directa Broker Report Import Plugin.  This plugin parses CSV exports from Direct, Parse Directa date format (DD-MM-YYYY)., Parse Directa number (Italian format, may be negative)., Map Directa transaction type to TransactionType enum. (+4 more)
-
-### Community 84 - "Broker Icon Helpers"
-Cohesion: 0.16
-Nodes (19): BrokerIconExhaustedAction, BrokerIconHtmlOptions, BrokerIconSource, buildBriefcaseFallbackHtml(), escapeHtmlAttr(), getBrokerIconCandidates(), getBrokerIconCandidatesById(), getBrokerIconHtml() (+11 more)
-
-### Community 85 - "FastAPI main.py Lifespan"
-Cohesion: 0.13
-Nodes (21): docs_available(), frontend_available(), frontend_catchall(), _initialize_global_settings(), lifespan(), mkdocs_root(), mkdocs_static(), _prewarm_provider_caches() (+13 more)
-
-### Community 86 - "Finpension Broker Provider"
-Cohesion: 0.10
-Nodes (10): FinpensionBrokerProvider, _parse_finpension_date(), _parse_finpension_number(), Finpension Broker Report Import Plugin.  This plugin parses CSV exports from Fin, Finpension (Swiss pension) CSV export import plugin., Detect Finpension format by checking for distinctive headers., Parse Finpension CSV export file., Filename pattern for auto-detection tests. (+2 more)
-
-### Community 87 - "Freetrade Broker Provider"
-Cohesion: 0.10
-Nodes (10): FreetradeBrokerProvider, _parse_freetrade_datetime(), _parse_freetrade_number(), Freetrade Broker Report Import Plugin.  This plugin parses CSV exports from Free, Parse Freetrade number., Freetrade (UK broker) CSV export import plugin., Detect Freetrade format by checking for distinctive headers., Parse Freetrade CSV export file. (+2 more)
-
-### Community 88 - "Revolut Broker Provider"
-Cohesion: 0.09
-Nodes (11): _parse_revolut_amount(), _parse_revolut_datetime(), _parse_revolut_quantity(), Revolut Broker Report Import Plugin.  This plugin parses CSV exports from Revolu, Parse Revolut amount with currency symbol.      Handles both positive and negati, Parse Revolut quantity (may use comma as decimal)., Revolut Trading CSV export import plugin., Detect Revolut format by checking for distinctive headers. (+3 more)
-
-### Community 89 - "Schwab Broker Provider"
-Cohesion: 0.10
-Nodes (10): _parse_schwab_amount(), _parse_schwab_date(), Charles Schwab Broker Report Import Plugin.  This plugin parses CSV exports from, Parse Schwab US date format (MM/DD/YYYY).      Also handles the "MM/DD/YYYY as o, Parse Schwab amount ($1,234.56 format)., Charles Schwab CSV export import plugin., Detect Schwab format by checking for distinctive headers., Parse Charles Schwab CSV export file. (+2 more)
-
-### Community 90 - "Trading212 Broker Provider"
-Cohesion: 0.10
-Nodes (10): _parse_trading212_datetime(), _parse_trading212_number(), Trading212 Broker Report Import Plugin.  This plugin parses CSV exports from Tra, Parse Trading212 number., Trading212 (UK/EU broker) CSV export import plugin., Detect Trading212 format by checking for distinctive headers., Parse Trading212 CSV export file., Filename pattern for auto-detection tests. (+2 more)
-
-### Community 91 - "Currency Graph Store"
-Cohesion: 0.12
-Nodes (16): buildCurrencyGraph(), ChainStep, EdgeAttributes, findAllPaths(), ProviderInfo, allCurrencies, CurrencyInfo, currencyMap (+8 more)
-
-### Community 92 - "Phase Final QA & i18n Audit Docs"
+### Community 6 - "Community 6"
 Cohesion: 0.16
 Nodes (22): LibreFolio i18n Audit Report (post-compression pass 2), LibreFolio i18n Audit Report (post-compression), LibreFolio i18n Audit Report (pre-compression), Phase 7: Transactions System — Macro Plan, Phase 9: Dashboard, Unified Portfolio Report API, Milestone 3 — UI Broker v2 (post Portfolio Engine unificato), Broker v2 Widget Reuse (+14 more)
 
-### Community 93 - "Currency Common Schema Validation"
-Cohesion: 0.10
-Nodes (14): _decimal_fixed_point(), Common schemas shared across subsystems.  This module contains Pydantic models u, Cached currency code validation.      This function is cached to avoid repeated, Validate and normalize a currency code (static method).          Use this method, Validate and normalize currency code., Convert amount to Decimal if needed., Create a zero-valued Currency., Check if amount is zero. (+6 more)
-
-### Community 94 - "IBKR Broker Provider"
-Cohesion: 0.10
-Nodes (10): IBKRBrokerProvider, _parse_ibkr_date(), _parse_ibkr_number(), Interactive Brokers (IBKR) Report Import Plugin.  This plugin parses CSV exports, Interactive Brokers logo., Detect IBKR format by checking for distinctive quoted headers., Filename pattern for auto-detection tests., Parse IBKR date format (YYYYMMDD). (+2 more)
-
-### Community 95 - "Broker Sharing Panel/Modal"
+### Community 7 - "Community 7"
 Cohesion: 0.11
-Nodes (6): confirmDiscard(), doClose(), handleRequestClose(), handleSearchKeydown(), selectSearchUser(), $lib/components/charts/SemiDonutChart.svelte
+Nodes (18): 🎮 1. Customizing `docker-compose.yml`, 🔒 2. Security and Exposure (Tailscale and Reverse Proxy), 💾 3. Database Backup, 🔑 4. Environment Variables, 🐳 Advanced Docker Guide, 🏗️ Architecture, Choosing the right UID and GID, 🛠️ CLI Commands (+10 more)
 
-### Community 96 - "Brokers List Page"
-Cohesion: 0.14
-Nodes (16): asBrokerBreakdowns(), asPortfolioHoldings(), confirmDelete(), firstBoolean(), firstString(), handleCreated(), handleDiscoveryShare(), handleShare() (+8 more)
-
-### Community 97 - "Portfolio Store (fetchReport)"
+### Community 8 - "Community 8"
 Cohesion: 0.11
-Nodes (18): ApiReturnType, CacheEntry, CacheKey, DataQualityReport, _error, fetchHistory(), fetchReport(), fetchSummary() (+10 more)
+Nodes (18): ➕ Adding a Data Point, ⚠️ Common Errors, 📄 CSV File Format, 📥 CSV Import, ✏️ Data Editor & CSV Import, 🗑️ Deleting a Data Point, ↔️ Direction in the Header, 🔀 Direction & Swap (+10 more)
 
-### Community 98 - "AI Export Clipboard (Portfolio + Asset)"
-Cohesion: 0.15
-Nodes (15): AiExportOptions, ToastFn, ToastFn, writeExportToClipboard(), PORTFOLIO_PROMPT_CATALOG, PromptDefinition, PromptId, PromptSections (+7 more)
-
-### Community 99 - "Auth Store & User Types"
-Cohesion: 0.11
-Nodes (15): auth, authError, initialState, isAuthenticated, isAuthInitialized, isAuthLoading, AuthLoginRequest, AuthLoginResponse (+7 more)
-
-### Community 100 - "Asset Detail Page & Interactive Chart"
-Cohesion: 0.19
-Nodes (20): Classification, Data Editor, Interactive Chart, Asset Detail Page, Asset Detail Page, Asset Events, Asset Events, Measures (+12 more)
-
-### Community 101 - "Technical Indicators & Signal Plans"
+### Community 9 - "Community 9"
 Cohesion: 0.13
-Nodes (20): Asset Comparison, Signals, Bollinger Bands, Bollinger Bands, Bollinger Bands on Wikipedia, Dual-Axis Signal Charting, EMA — Exponential Moving Average, Exponential Moving Average (+12 more)
+Nodes (18): Cash-Income Zero-Quantity Rule, Dividend, Dividend Yield, Dividend Equity Asset Requirement, Ex-Dividend Date, LibreFolio DIVIDEND Event, Scheduled Investment Dividend Model, Dividend-Inclusive Total Return (+10 more)
 
-### Community 102 - "Gallery Screenshot Docs"
-Cohesion: 0.23
-Nodes (20): Asset List, Assets, Authentication, Brokers Integration, Dashboard, Desktop Gallery, Desktop View, Files (+12 more)
-
-### Community 103 - "TTL Cache Utilities"
-Cohesion: 0.13
-Nodes (12): clear_all_caches(), clear_cache(), close_all_caches(), get_ttl_cache(), NamedCache, Centralized caching utilities using theine (high-performance Rust-backed cache)., Clear a named cache. Returns True if found, False otherwise., Clear all registered caches. Returns count cleared. (+4 more)
-
-### Community 104 - "Logging Config"
+### Community 10 - "Community 10"
 Cohesion: 0.11
-Nodes (19): add_log_level(), _compress_rotated_file(), configure_logging(), get_log_directory(), get_logger(), _get_rotated_filename(), Logging configuration for LibreFolio backend.  Uses structlog for structured log, Compress rotated log files with gzip.      Args:         source: Source log file (+11 more)
+Nodes (18): 📁 1. Create a project folder, 🛠️ 1. Manual Update, 🤖 2. Automatic Update (Watchtower), 📥 2. Get the base configuration files, 🔌 3. Other Management Alternatives, ▶️ 3. Start the application, 🌐 4. Access LibreFolio, 📶 5. Local and Remote Network Access (+10 more)
 
-### Community 105 - "Coinbase Broker Provider"
-Cohesion: 0.10
-Nodes (9): CoinbaseBrokerProvider, _parse_coinbase_amount(), _parse_coinbase_datetime(), Coinbase Broker Report Import Plugin.  This plugin parses CSV exports from Coinb, Parse Coinbase amount (may have € symbol)., Coinbase crypto exchange CSV export import plugin., Detect Coinbase format by checking for distinctive headers., Filename pattern for auto-detection tests. (+1 more)
-
-### Community 106 - "Single Date Picker Component"
-Cohesion: 0.11
-Nodes (10): calendarOpen, calMonth, calYear, closeCalendar(), handleClickOutside(), handleKeydown(), MONTH_KEYS, popoverStyle (+2 more)
-
-### Community 107 - "Date Range Store/Controller"
-Cohesion: 0.18
-Nodes (18): createDateRangeController(), DateRangeActivePreset, DateRangeController, defaultRange(), _end, getEnd(), getResolvedEnd(), getResolvedStart() (+10 more)
-
-### Community 108 - "Asset-Level AI Export Builder"
-Cohesion: 0.20
-Nodes (17): buildMethodology(), buildAssetIdentifiers(), AiMethodology, AssetExportAssetInfo, buildAssetAiExport(), buildAssetDataQuality(), buildHolding(), buildIdentity() (+9 more)
-
-### Community 109 - "DB Check Constraints Hook"
+### Community 11 - "Community 11"
 Cohesion: 0.16
-Nodes (18): add_check_constraint_to_table(), check_and_add_missing_constraints(), get_db_check_constraints(), get_engine_for_check(), get_model_check_constraints(), is_check_constraints_eq(), LogLevel, main() (+10 more)
+Nodes (21): FIFO at Runtime, Asset Orphan vs Portfolio-Level Cost/Income, D-1 Income Eligibility Window, DataTable net columns hidden despite real costs (visibility snapshot bug), Deterministic Cost-Matching Ladder, FIFO income silently dropped when no lot was open (pre-v4 allocator), FIFO Lot Engine, FIFO Lot Tracking (+13 more)
 
-### Community 110 - "CSS Scraper Provider"
-Cohesion: 0.11
-Nodes (8): CSSScraperProvider, CSS Web Scraper provider for asset pricing.  Uses HTTP + BeautifulSoup to extrac, Test cases with identifier and provider_params.          Returns two test cases, Whether this provider supports historical data., Search query to use in tests (not supported for CSS scraper)., Web scraping provider with CSS selectors., Return provider icon URL from local static assets., The identifier IS the URL for CSS scraper.
-
-### Community 111 - "Scheduled Investment Provider"
-Cohesion: 0.11
-Nodes (8): Provider for scheduled-yield assets (loans, bonds).      Calculates synthetic va, Parametric generation provider (#R3-4): the price series is produced         **d, Return provider icon URL from local static assets., Search not applicable for scheduled investments., This provider supports historical data (calculated)., Search not applicable for scheduled investments., Search not applicable for scheduled investments., ScheduledInvestmentProvider
-
-### Community 112 - "File Preview Type Detection"
-Cohesion: 0.15
-Nodes (16): canPreviewFileData(), detectPreviewType(), getExtension(), getPreviewTypeForBrimFile(), getPreviewTypeForUploadedFile(), IMAGE_EXTENSIONS, MARKDOWN_EXTENSIONS, normalizeMimeType() (+8 more)
-
-### Community 113 - "System Info Endpoint"
-Cohesion: 0.16
-Nodes (17): DependencyInfo, get_backend_deps(), get_display_name(), get_frontend_deps(), get_system_info(), health_check(), parse_pipfile(), System API endpoints.  Provides system information, version data, and runtime de (+9 more)
-
-### Community 114 - "Phase 4 Brokers Management Plans"
-Cohesion: 0.18
-Nodes (17): Analisi Backend BRIM per Multi-User/Multi-Broker Support, Analisi Duplicazione Codice - Frontend Media Components, Analysis: DB Populate Mock Data, Archive Service for Bulk Download, Broker Access Role Model, Broker-First BRIM Flow, Broker Room Principle, BrokerSharingModal (+9 more)
-
-### Community 115 - "Backup Download & Upload Client"
-Cohesion: 0.15
-Nodes (9): BackupFormat, BackupKind, downloadAssetBackup(), downloadFxBackup(), extractFilename(), triggerBrowserDownload(), axiosInstance, LivePriceDirection (+1 more)
-
-### Community 116 - "Interest & Day-Count Docs"
-Cohesion: 0.26
-Nodes (17): Dividend, Asset Events, Interest, Maturity Settlement, Price Adjustment, Split, Bonds, Commodities (+9 more)
-
-### Community 117 - "FX Pair Detail Page"
-Cohesion: 0.23
-Nodes (17): FX Chain Algorithm, FX Configuration & Routing, Returns & Growth Rates, Synthetic Benchmarks, Technical Indicators, Adding a Currency Pair, Chart Settings, Conversion Routes (+9 more)
-
-### Community 118 - "ECB FX Provider"
+### Community 12 - "Community 12"
 Cohesion: 0.12
-Nodes (7): ECBProvider, European Central Bank (ECB) FX rate provider.  This provider fetches exchange ra, European Central Bank FX rate provider.      Provides daily exchange rates with, Alias for code (required by unified registry)., Returns the icon for the ECB provider, Common currencies that ECB should always provide.         These are used for aut, Fetch the list of available currencies from ECB API.          Returns:
+Nodes (16): 🤖 Are there AI features planned?, 📱 Can I use LibreFolio as a mobile app?, ❓ Frequently Asked Questions (FAQ), 💬 General Questions, 🚀 Getting Started, 👤 How do I create an account?, 📦 How do I install LibreFolio?, 🔐 I can't login (+8 more)
 
-### Community 119 - "DerivedViewsBuilder (Data Quality)"
-Cohesion: 0.12
-Nodes (9): DerivedViewsBuilder, Derives summary, history, allocation, and performance views from daily states., Build PortfolioHistoryPoint-compatible dicts from daily states.          Returns, Build current allocation from the last daily state.          Returns (by_type, b, Collect all asset IDs that had missing prices across any day., Collect all asset IDs that had stale prices across any day., Collect all missing FX pairs across all days., Collect all asset IDs valued via transaction-implied (no market price). (+1 more)
-
-### Community 120 - "FX Store Registry"
-Cohesion: 0.26
-Nodes (13): apiResultToFxDataPoint(), createPairSlug(), ensureFxRangeLoaded(), ensureFxRangeLoadedBulk(), fxStores, getFxStore(), getFxStoreByPair(), getRegisteredPairs() (+5 more)
-
-### Community 121 - "Price Processing Web Worker"
-Cohesion: 0.21
-Nodes (13): AssetPricePoint, DerivedPriceState, FAPriceQueryResult, PriceProcessingRequest, PriceProcessingResponse, ProcessedAssetResult, processRequest(), RawPriceQueryResultItem (+5 more)
-
-### Community 122 - "BRIM Import Wizard Modal"
-Cohesion: 0.31
-Nodes (17): Import Todo Signals, WorkspaceIntent Pattern, BRIM Fake Asset ID during Parse, BRIM is a Parser Only (Revision 2), Import Wizard v5 paradigm shift (v4→v5), ImportWizardModal, BRIM Framework (Broker Report Import), BRIM Plugins 11 broker parsers (+9 more)
-
-### Community 123 - "MkDocs Admin Docs (Exposure/CLI)"
-Cohesion: 0.17
-Nodes (16): Command-Line Tools, Advanced Docker Guide, Filesystem Structure, Admin Manual, JWT_SECRET, Global Settings, Exposing Securely, MagicDNS (+8 more)
-
-### Community 124 - "Technical Export Builder"
-Cohesion: 0.21
-Nodes (14): AiTechnicalAsset, AiTechnicalUnavailable, buildSingleAsset(), filterToWindow(), findBasePrice(), indexByDate(), round2(), subtractMonths() (+6 more)
-
-### Community 125 - "Toast Store & Debug Utils"
+### Community 13 - "Community 13"
 Cohesion: 0.13
-Nodes (9): DEFAULT_DURATION, items, show(), stripHtmlForLog(), Toast, ToastVariant, debug, DebugLogger (+1 more)
+Nodes (14): 📋 Available Settings, 🗂️ Categories, ⚙️ Configure Scheduler, 🌍 Defaults, 💻 From the CLI, 🖥️ From the UI, ⚙️ Global Settings, 🕐 Market Data Scheduler (+6 more)
 
-### Community 127 - "Decimal Precision Utilities"
-Cohesion: 0.20
-Nodes (14): Database base module. SQLModel base classes and metadata. Import all models here, Decimal, SQLModel, get_model_column_precision(), parse_decimal_value(), Decimal precision utilities for LibreFolio.  Provides functions to work with dat, Truncate value with the precision used in DB price_history.<column_name>., Truncate value with the precision used in DB fx_rates.rate column. (+6 more)
+### Community 14 - "Community 14"
+Cohesion: 0.13
+Nodes (14): 📈 Accumulating (e.g., Acc ETFs), 📦 Accumulating vs Distributing Instruments, 📊 Capital Gains & Losses, 🔗 Connection to Growth Models, 💵 Distributing (e.g., Dist ETFs), ⚠️ Jurisdiction-Specific Considerations, 🔄 Loss Carry-Forward, 📋 Matching Methods (+6 more)
 
-### Community 128 - "WAC Cross-Currency Docs"
-Cohesion: 0.26
-Nodes (16): Paired Partner Architecture — pairedWith, getPartnerOp, visibleOps, SafeDecimal — Preventing Scientific Notation in JSON Responses, Stateless Preview Pattern — Controlled Components for Computed Values, Blur detection: compare formatDecimalForDisplay() strings (not numeric tolerance), cost_basis_override as Currency object (not bare decimal), FxSyncModal reuse: parent owns modal, child calls onOpenFxSync prop, WAC Inline in Validate/Commit — No Standalone WAC Endpoint in Editing Flow, WAC — Weighted Average Cost (cross-currency, auto-calc on TRANSFER) (+8 more)
-
-### Community 129 - "PortfolioService & Phase 5-8 Plans"
-Cohesion: 0.21
-Nodes (15): Broker Sharing Architecture, Daily History Expansion, FIFO Utils, Golden Path Value Tests, Milestone 1 Execution Log, Milestone 1 Implementation Plan, PortfolioService Missing Tests Gap Analysis, Phase 5–8 Upgrade Master Plan (+7 more)
-
-### Community 130 - "Datetime Utilities"
-Cohesion: 0.16
-Nodes (14): Update updated_at timestamp on update., Update updated_at timestamp on update., receive_before_update(), date, datetime, ensure_utc(), Date and time utilities for LibreFolio.  Provides timezone-aware datetime helper, Get current UTC datetime with timezone info.      Returns:         datetime: Cur (+6 more)
-
-### Community 131 - "Tailscale Exposure Levels Docs"
-Cohesion: 0.16
-Nodes (15): Custom Domain Mapping for Tailscale, Tailscale DNS Settings Documentation, Tailscale Funnel ACL Configuration, MagicDNS, Level 4 Multi-Funnel via Docker Sidecars, Traditional Port Forwarding, Level 1 Private Point-to-Point VPN, Level 3 Public Exposure via Tailscale Funnel (+7 more)
-
-### Community 132 - "Technical Signal Cross Detection"
-Cohesion: 0.22
-Nodes (13): AlignedPoint, alignSeries(), applyEpsilon(), CrossDetectionOptions, CrossEvent, daysBetween(), detectCrosses(), isValid() (+5 more)
-
-### Community 133 - "Asset Frontend Types"
-Cohesion: 0.14
-Nodes (14): AssetBasicInfo, AssetCreateItem, AssetDetail, AssetInfo, AssetMetadata, AssetPatchItem, AssetProviderInfo, AssetWithUIState (+6 more)
-
-### Community 134 - "Context Menu Component"
-Cohesion: 0.17
-Nodes (12): adjustedX, adjustedY, currentX, currentY, flipX, flipY, handleResize(), handleScroll() (+4 more)
-
-### Community 135 - "Phase 0-2 Foundation Plans"
-Cohesion: 0.23
-Nodes (14): Authentication Store, Dark Mode Variable Palette, Guida Rapida - Modificare Colori Dark Mode, Frontend Development Plan - Index, Phase 0: Setup & Build Integration, Phase 1: Foundation & Frontend Auth, Phase 2.5: Auth Integration (Frontend ↔ Backend), Phase 2: Backend Authentication System (+6 more)
-
-### Community 136 - "Phase 06 Bugfix Migration Docs"
-Cohesion: 0.20
-Nodes (14): Phase 6 Assets Management, plan-partBDataEditorUnificato.prompt.md, plan-partCCurrencyConversion.prompt.md, plan-phase06-assets.md, plan-phase06Step4AssetDetailPage.prompt.md, plan-phase06Step6-Polish-Test-Docs.prompt.md, Phase 6 Assets Progress Summary, Phase 06 Bugfix Migration Master Plan (+6 more)
-
-### Community 137 - "Global Settings Schemas"
-Cohesion: 0.14
-Nodes (13): GlobalSettingBulkItem, GlobalSettingBulkUpdate, GlobalSettingRead, GlobalSettingsListResponse, Settings schemas for LibreFolio.  Schemas for user settings and global settings, User settings response schema., User settings update request. All fields optional., Global setting response schema. (+5 more)
-
-### Community 138 - "Global Settings Getters"
-Cohesion: 0.23
-Nodes (13): _convert_value(), get_max_upload_mb(), get_session_ttl_hours(), get_setting_value(), is_registration_enabled(), Global Settings Service - Utility functions for reading global settings.  This m, Get a global setting value by key, with automatic type conversion.      Reads di, Convert string value to appropriate Python type. (+5 more)
-
-### Community 139 - "Common API Types"
-Cohesion: 0.14
-Nodes (9): ApiErrorResponse, AssetType, Currency, DateRange, IdentifierType, PaginatedResponse, PaginationParams, TransactionType (+1 more)
-
-### Community 140 - "BRIM File/Mapping Types"
-Cohesion: 0.14
-Nodes (13): BrimAssetCandidate, BrimAssetMapping, BrimDuplicateLevel, BrimDuplicateMatch, BrimDuplicateReport, BrimFieldTodo, BrimFile, BrimFileStatus (+5 more)
-
-### Community 141 - "Geography/Country Utilities"
-Cohesion: 0.19
-Nodes (13): Any, Decimal, expand_region(), is_region(), normalize_country_keys(), normalize_country_to_iso3(), Geographic area utilities for LibreFolio.  Provides functions to normalize count, Check if a code is a region rather than a country. (+5 more)
-
-### Community 142 - "Phase 5 FX Management Plans"
-Cohesion: 0.29
-Nodes (13): API Endpoint Auth Guard, FX CSV Import v2, FX UI Refinements Round 2, Audit Phase 05 FX — Real Status and Pending Work, Phase 5 FX Management, Phase 5: FX Management Summary, Phase 5 Sub-Plans Index, Plan: API Endpoint Protection + Gallery Skip Fix (+5 more)
-
-### Community 143 - "Synthetic Growth Benchmarks"
-Cohesion: 0.22
-Nodes (13): Compound Growth Benchmark, Compound Growth, Compound Interest on Wikipedia, Linear Growth Benchmark, Linear Growth, Simple Interest on Wikipedia, Sine Wave Benchmark, Sine Wave (+5 more)
-
-### Community 144 - "FIFO Lot Engine Analysis Docs"
-Cohesion: 0.29
-Nodes (13): FIFO segments — prezzi, adjustment, transfer e short positions, Segment Custody Model, Proposta formale per un motore FIFO a segmenti in LibreFolio, Report di fattibilità tecnica — FIFO Lot Engine v1, FifoLotEngine, Absolute Engine + User Projection, Data Quality Banner Reuse, Verifica mirata — share, transito, split, short e banner FIFO (+5 more)
-
-### Community 145 - "Market Data Scheduler (F-052/F-053)"
-Cohesion: 0.26
-Nodes (13): Audit Documentazione: Backend Architecture & Test Infrastructure, Async I/O Rule (Event Loop Safety), Backend Test Isolation via unique_id, E2E data-testid Rule, Test Runner: monolith → 18-module package, Domain: SCHEDULER, dev.py CLI, Market Data Scheduler (+5 more)
-
-### Community 146 - "Scheduler Job Log"
-Cohesion: 0.21
-Nodes (12): build_current_price_entry(), build_history_sync_entry(), _log_path(), Scheduler job log — JSONL file with per-item detail and rotation., Build a JSONL entry for a current-price refresh run., Build a JSONL entry for a history-sync run., Keep only the last MAX_ENTRIES lines., Read log entries in reverse chronological order (newest first).      Args: (+4 more)
-
-### Community 147 - "URL Query Param Filters"
-Cohesion: 0.31
-Nodes (9): FilterValue, buildTransactionsFiltersUrl(), parseTransactionFilters(), TransactionFilterMap, getCsvNumberParam(), getCsvStringParam(), getOptionalNumberParam(), getOptionalQueryParam() (+1 more)
-
-### Community 148 - "User Settings Store"
+### Community 15 - "Community 15"
 Cohesion: 0.18
-Nodes (8): defaultSettings, userSettings, GlobalSetting, GlobalSettingsListResponse, SupportedLocale, Theme, UserSettings, UserSettingsUpdate
+Nodes (15): Riskfolio Portfolio Optimization, Riskfolio-Lib 7.0.1, CLARABEL Solver, Exact-Version Capability Probe, No vectorbt or Numba in Production, Numba 0.66, Numba 0.66 Requires numpy<2.5, NumPy 2.5.1 Baseline (+7 more)
 
-### Community 149 - "JustETF Provider"
+### Community 16 - "Community 16"
+Cohesion: 0.15
+Nodes (13): 📐 Annualized Log Return, 📅 Annualized Return, 📈 Compound Annual Growth Rate (CAGR), 🔄 Conversion, 📏 Day Count Conventions, 📐 Logarithmic (Continuous) Return, ⚠️ Pitfalls, 💰 Portfolio Return Methods (+5 more)
+
+### Community 17 - "Community 17"
+Cohesion: 0.22
+Nodes (14): Backend-Only Financial Mathematics, Asset Signals AI Export, Asset Comparison Overlay, Asset Signals Panel, Backend-Only Indicator Calculation, Canonical Currency Pair, Exponential Moving Average, FX Signals AI Export (+6 more)
+
+### Community 18 - "Community 18"
+Cohesion: 0.14
+Nodes (13): 📊 Capabilities, 🔧 Configuration, "Connection timeout", 🔢 Decimal Format, 💡 Example: Borsa Italiana BTP, 🔎 How to Find the CSS Selector, <img src="../../../../static/cssscraper.png" alt=""> CSS Scraper, "Parse error" (+5 more)
+
+### Community 19 - "Community 19"
+Cohesion: 0.15
+Nodes (12): 💾 Backup, 📊 `broker_reports/`, 🖼️ `custom-uploads/`, 🗂️ Directory Layout, 🐳 Docker Backup, 🌍 Environment Variables, 📂 Filesystem Structure, 📝 `logs/` (+4 more)
+
+### Community 20 - "Community 20"
+Cohesion: 0.15
+Nodes (12): 📊 [Asset Detail Page](detail/index.md), 📋 Asset List, 💼 Assets, ⏱️ Automatic Polling, 🔌 Caching & Background Scheduler, ➕ [Create & Edit](create-edit.md), 🧭 Features, 🔌 [Providers](providers/index.md) (+4 more)
+
+### Community 21 - "Community 21"
+Cohesion: 0.15
+Nodes (13): 🔗 Add Pair — Chain, ➕ Add Pair — Direct Routes, ⚙️ Chart Settings, 📄 CSV Import, ✏️ Data Editor, 📈 Detail Chart, 📋 FX List, 🔎 FX List Filtered (+5 more)
+
+### Community 22 - "Community 22"
+Cohesion: 0.15
+Nodes (13): 🔗 Add Pair — Chain, ➕ Add Pair — Direct Routes, ⚙️ Chart Settings, 📄 CSV Import, ✏️ Data Editor, 📈 Detail Chart, 📋 FX List, 🔎 FX List Filtered (+5 more)
+
+### Community 23 - "Community 23"
+Cohesion: 0.15
+Nodes (13): Auto WAC, WAC Cost Basis, Cost Basis Override, FIFO Lot Analysis, Historical FX Cost Conversion, Inventory-Aware WAC Iteration, WAC and Market Valuation Separation, WAC Pool Depletion Reset (+5 more)
+
+### Community 24 - "Community 24"
 Cohesion: 0.17
-Nodes (10): _country_name_to_iso3(), _ensure_live_feed(), _live_quote_worker(), JustETF provider for asset pricing.  Uses the justetf-scraping library to fetch, Stop all live-feed threads.  Called from app shutdown., Convert country name to ISO 3166-1 alpha-3 code.     Uses pycountry via geo_norm, Stop all persistent live-quote WebSocket threads., Background thread: keeps a WebSocket open and updates _live_quote_store.     Rec (+2 more)
+Nodes (11): 📖 Definition, Forward Split, Forward splits, 📈 Historical Price Adjustment, 🧮 How LibreFolio Handles Splits, 📉 Impact on Market Price, 🔗 Related, Reverse Split (+3 more)
 
-### Community 150 - "Scheduler Settings Loader"
+### Community 25 - "Community 25"
+Cohesion: 0.17
+Nodes (12): asyncio.shield Follower Protection, Cancellation-Safe In-Flight Calculation Deduplication, Content-Keyed Quantitative Cache, Follower Cancellation Propagation, Leader-Follower Calculation Protocol, Orphaned Follower Wait, Shared In-Flight Future, Success-Only Immutable Result Cache (+4 more)
+
+### Community 26 - "Community 26"
+Cohesion: 0.23
+Nodes (12): QuantLib MC/QMC Simulation, Legacy seed Input-Only Shim, Mutually Exclusive MC and QMC Controls, QuantLib Sobol Seed and Stream-Position Problem, QuantLib QMC Gaussianization, random_seed for MC, SobolRsg.skipTo(sobol_start_index), QuantLib Sobol Dimension Limit 21,201 (+4 more)
+
+### Community 27 - "Community 27"
+Cohesion: 0.17
+Nodes (11): ⚖️ Asset Allocation, 🌍 Geographic Diversification, 📈 Glide Path & Target-Date Strategy, 🔄 Rebalancing, 📐 Rebalancing Bonus, 📊 Rebalancing Methods, 🔗 Related, 🏗️ Strategic Asset Allocation (SAA) (+3 more)
+
+### Community 28 - "Community 28"
 Cohesion: 0.24
-Nodes (11): load_scheduler_settings(), _local_times_to_utc(), _parse_days(), _parse_times(), Scheduler settings — read from GlobalSetting table every tick., Parse 'HH:MM,HH:MM' → list of time objects., Convert a list of local times to UTC using today's date for DST offset.      Use, Parse 'mon,tue,wed' → list of day codes. (+3 more)
+Nodes (12): Funnel ACL Authorization, MagicDNS, Multi-Funnel Docker Sidecars, Private Tailscale Serve Connection, Secure Self-Hosted Service Exposure, Single Funnel per Host Limit, socat Proxy Forwarder, Tailscale Subnet Router (+4 more)
 
-### Community 151 - "Column Visibility Toggle"
-Cohesion: 0.21
-Nodes (8): allRefs, dropdownStyle, handleReset(), open, refreshColumns(), toggle(), updatePosition(), initSizeInputs()
-
-### Community 152 - "Financial Sector Utilities"
+### Community 29 - "Community 29"
 Cohesion: 0.18
-Nodes (8): FinancialSector, normalize_sector(), Sector normalization utilities.  Provides ENUM-based sector classification and v, Get list of all sector values (including OTHER).          Returns:             L, Normalize sector name to standard classification.      Args:         sector_name, Standard financial sector classification.      Based on GICS (Global Industry Cl, Convert string to FinancialSector enum (case-insensitive with aliases)., Get list of all sector values (excluding OTHER).          Returns:             L
+Nodes (10): :art: UI/UX Ideas, :bug: Bug Reports, :coffee: Buy Me a Coffee, :computer: Contribute Code, :electric_plug: New Plugins, :globe_with_meridians: What's Next — LibreFolio Cloud, :heart: Support LibreFolio, :rocket: Feature Requests (+2 more)
 
-### Community 153 - "Allocation Compaction (Geo/Sector)"
+### Community 30 - "Community 30"
+Cohesion: 0.18
+Nodes (10): 🔍 Asset Detail Page, 🗂️ [Classification](classification.md), 📅 [Events](events.md), 🔧 Header & Controls, ✏️ [Data Editor](data-editor.md), 🧭 Features, 📈 [Interactive Chart](chart.md), 📐 [Measures](measures.md) (+2 more)
+
+### Community 31 - "Community 31"
+Cohesion: 0.18
+Nodes (10): 🔀 Asset Comparison, 🧠 AI Export, 📊 Available Indicators, 📏 [Bollinger Bands](../../../financial-theory/technical-analysis/indicators/bollinger-bands.md), 📚 Deep Dive: Financial Theory, 📉 [EMA — Exponential Moving Average](../../../financial-theory/technical-analysis/indicators/ema.md), 🛠️ How to Use, 📊 [MACD — Moving Average Convergence Divergence](../../../financial-theory/technical-analysis/indicators/macd.md) (+2 more)
+
+### Community 32 - "Community 32"
+Cohesion: 0.18
+Nodes (10): 🎛️ Controls, ✂️ Crop Area, 🪞 Flip, ✂️ Image Crop Tool, ⚙️ Output Settings, 📐 Presets, 🔄 Rotation, 🎯 When Does It Appear? (+2 more)
+
+### Community 33 - "Community 33"
 Cohesion: 0.20
-Nodes (10): AFRICA, ASIA_PACIFIC, compactGeography(), continentBucketName(), EUROPE, ISO3_TO_CONTINENT, KEEP_SEPARATE, NORTH_AMERICA (+2 more)
+Nodes (11): Bounded Resources, Timeout Recovery, and Idle Reap, All-Lane Idle Reap, Lazy Restart with New PIDs, All Lanes Stopped on Idle Reap, Generation-Safe All-Lane Idle Reap, Generation Token Invalidation, Lazy Restart with New PIDs, No Orphan Worker Processes (+3 more)
 
-### Community 154 - "Async DB Engine/Session"
+### Community 34 - "Community 34"
+Cohesion: 0.18
+Nodes (10): 🔑 Correlation Effects, 🔀 Diversification, ⚠️ Diversification Pitfalls, 📊 Idiosyncratic (Diversifiable) Risk, 📈 N-Asset Generalization, 🔗 Related, 🌍 Systematic (Non-Diversifiable) Risk, 🎯 Systematic vs Idiosyncratic Risk (+2 more)
+
+### Community 35 - "Community 35"
+Cohesion: 0.18
+Nodes (10): ⚖️ [Asset Allocation](asset-allocation.md), 🔀 [Diversification](diversification.md), 🔑 Key Assumptions & Limitations, 🏛️ Modern Portfolio Theory (MPT), 📖 Overview, 📈 Portfolio Theory, 🔗 Related Sections, 📊 [Risk Metrics](../technical-analysis/risk-metrics/index.md) (+2 more)
+
+### Community 36 - "Community 36"
 Cohesion: 0.20
-Nodes (9): AsyncEngine, get_async_engine(), get_session_generator(), Database session management. Handles SQLite connection and session lifecycle wit, Async session factory for FastAPI dependency injection.      Creates a new sessi, Enable essential SQLite PRAGMAs for proper operation.      - foreign_keys=ON: Re, Create and configure the async database engine.      IMPORTANT: This function is, set_sqlite_pragma() (+1 more)
+Nodes (9): 🛠️ Command-Line Tools, 🗄️ Database Migrations, 📚 Documentation, 📋 Full Command Tree, 🔧 Initialize Global Settings, 🖥️ Server (Production), ▶️ Starting the Server, ⚙️ System Management (+1 more)
 
-### Community 155 - "Playwright E2E Infrastructure Docs"
-Cohesion: 0.27
-Nodes (11): Auth & Settings Backend Test Coverage, E2E Test Analysis - LibreFolio Frontend, Gallery Screenshot Pipeline, LibreFolio - Frontend Testing Implementation, Plan: E2E Test Remediation, Plan: Frontend Testing Infrastructure (v2), Phase 4 Summary & Next Steps, Plan: UI Fixes Post Data-Separation (+3 more)
-
-### Community 156 - "Calendar Month Component"
-Cohesion: 0.35
-Nodes (10): ./CalendarMonth.svelte, getDayClasses(), isDisabled(), isFuture(), isInRange(), isRangeEnd(), isRangeStart(), isSelected() (+2 more)
-
-### Community 157 - "MkDocs i18n Pipeline & FX Testing Docs"
-Cohesion: 0.31
-Nodes (11): Post-translation Documentation Cleanup, FX Testing and Gallery Suite, JWT Stateless Authentication, Admonition Blank-line Formatting Rule, MkDocs i18n Pipeline with Aphra, Plan: FX Documentation — User Guide, Admin Guide, Provider Docs & i18n Pipeline, Plan: FX Testing & Cleanup — E2E, Unit Tests, i18n Audit, Gallery, Plan: JWT Auth Migration + Gallery Screenshot Fixes + Provider Icon Fallback (+3 more)
-
-### Community 158 - "Asset Price Store Registry"
-Cohesion: 0.31
-Nodes (7): ensureAssetPriceRangeLoaded(), getAssetPriceStore(), invalidateAssetPriceStore(), storeKey(), stores, mockQuery, apiPricesToAssetPricePoints()
-
-### Community 159 - "FIFO Lots Calculation"
-Cohesion: 0.27
-Nodes (9): calculate_fifo_lots(), ClosedLot, FIFOResult, OpenLot, FIFO Lot Calculation Utilities — pure math, no I/O.  Computes open and closed lo, A buy lot that has not been fully sold yet., A fully or partially matched buy-sell pair., Result of FIFO lot calculation. (+1 more)
-
-### Community 160 - "URL Filter Types"
+### Community 37 - "Community 37"
 Cohesion: 0.20
-Nodes (5): DateFilter, EnumFilter, SizeFilter, TextFilter, UrlFilterConfig
+Nodes (9): 📊 Bond Pricing Concepts, 📈 Coupon Rate, 📉 Dirty vs Clean Price, 💵 Face Value (Par), 🔑 Key Characteristics, 📈 Price–Yield Relationship, 🔗 Related, ![](../../../static/icons/asset-types/bond.png){: width="32" style="vertical-align: middle;" } Bonds (+1 more)
 
-### Community 161 - "Broker Frontend Types"
+### Community 38 - "Community 38"
+Cohesion: 0.20
+Nodes (9): ⚠️ Considerations, 🔐 Decentralization, 🔑 Key Characteristics, 📊 Key Concepts, 📈 Market Capitalization, 🔗 Related, ⚡ Staking, ![](../../../static/icons/asset-types/crypto.png){: width="32" style="vertical-align: middle;" } Crypto (+1 more)
+
+### Community 39 - "Community 39"
+Cohesion: 0.20
+Nodes (9): 📊 How Indexes Are Constructed, 🔑 Key Characteristics, 📊 Real Benchmarks (Asset Comparison), 🔄 Rebalancing, 🔗 Related, ![](../../../static/icons/asset-types/other.png){: width="32" style="vertical-align: middle;" } Index & Benchmark, 🎯 Synthetic Benchmarks, 📐 Using Benchmarks in LibreFolio (+1 more)
+
+### Community 40 - "Community 40"
 Cohesion: 0.22
-Nodes (9): Broker, BrokerAccessItem, BrokerAccessListResponse, BrokerAssetHolding, BrokerCreateItem, BrokerInfo, BrokerSummary, BrokerUpdateItem (+1 more)
+Nodes (9): 🖱️ Chart ↔ Editor Navigation, CSV Import Format, CSV Import Format, 📅 Events Tab, 🛠️ How to Use, 💰 Prices Tab, 🔗 Related, ⚠️ Stale Rows Toggle (+1 more)
 
-### Community 162 - "Image Crop Modal Plans"
+### Community 41 - "Community 41"
+Cohesion: 0.20
+Nodes (9): 🔓 Accessing Chart Settings, 🎨 Appearance, 🎛️ Available Settings, 🧮 Calculated Signals, ⚙️ Chart Settings, 🔍 Comparative Signals & Benchmarks, 💾 Persistence, 📈 Signals Overlay (+1 more)
+
+### Community 42 - "Community 42"
+Cohesion: 0.20
+Nodes (9): 🎨 Asset Picker, 🔐 Authentication, 🖥️ Desktop Gallery, 📤 File Uploader, ✂️ Image Editor, 🔑 Login Page, 🖼️ Media & Upload, 📝 Registration - Empty Form (+1 more)
+
+### Community 43 - "Community 43"
+Cohesion: 0.20
+Nodes (9): 🔐 Authentication, 📋 Broker Reports (BRIM), 👁️ File Preview, 📁 Files, 🔑 Login Page, 📱 Mobile Gallery, 📝 Registration, 📂 Static Resources (+1 more)
+
+### Community 44 - "Community 44"
+Cohesion: 0.20
+Nodes (9): 📋 Asset Events, 📊 Capabilities, 🔧 Configuration, 🧮 How Value is Calculated, <img src="../../../../static/scheduled_investment.png" alt=""> Scheduled Investment, 📋 Interest Schedule Editor, ⚡ Late Interest, Required Fields (+1 more)
+
+### Community 45 - "Community 45"
+Cohesion: 0.20
+Nodes (10): Independent Quantitative Failure Domains, Targeted Worker-Lane Recycling, Bounded Multiprocessing Request Queue, Crash-Safe Lane Recycling, Forced Worker Termination, multiprocessing.Queue Response Channel, One-Way Response Pipe, Spawn-Worker Response-Queue Semaphore Leak (+2 more)
+
+### Community 46 - "Community 46"
+Cohesion: 0.20
+Nodes (9): 🧠 AI Export, 📊 Available Indicators, 📏 [Bollinger Bands](../../../financial-theory/technical-analysis/indicators/bollinger-bands.md), 📚 Deep Dive: Financial Theory, 📉 [EMA — Exponential Moving Average](../../../financial-theory/technical-analysis/indicators/ema.md), 🛠️ How to Use, 📊 [MACD — Moving Average Convergence Divergence](../../../financial-theory/technical-analysis/indicators/macd.md), 💪 [RSI — Relative Strength Index](../../../financial-theory/technical-analysis/indicators/rsi.md) (+1 more)
+
+### Community 47 - "Community 47"
 Cohesion: 0.22
-Nodes (9): AssetPickerModal, CropperJS Modal System, Advanced Image Crop Component, Plan: Advanced Image Crop Component, Plan: Image Crop Modal System, Plan: Settings Mobile Layout & Gallery Improvements, Plan: PreferencesTab and GlobalSettingsTab Unification, Settings Component Unification (+1 more)
+Nodes (8): 📖 Definition, 💰 Dividend, 🔢 Dividend Yield, 📊 Effect on Total Return, 🧮 How LibreFolio Handles Dividends, 📉 Impact on Market Price, 🔗 Related, The Accounting Difference: Dividend vs. Interest
 
-### Community 163 - "Scheduled Investment Schema"
+### Community 48 - "Community 48"
 Cohesion: 0.22
-Nodes (6): _cache_key(), Generate deterministic hash from canonical JSON of schedule params., Test cases for scheduled investment provider., Calculate current value for scheduled investment.          Uses cached schedule, Validate provider parameters for scheduled investment.          Uses Pydantic FA, FAScheduledInvestmentSchedule
+Nodes (8): 📅 Asset Events, 📈 Event Markers on the Chart, 📊 Event Types Overview, 🔄 Events vs Transactions, 🤖 Provider-generated (automatic), 🔗 Related, ⚙️ Sources of Events, ✏️ User-created (manual)
 
-### Community 164 - "Dual View & Lazy Image Cache Docs"
-Cohesion: 0.31
-Nodes (9): Phase 10: Polish & Responsive, Phase 10 — Sub-Plans Index, Plan: Backend Log Level Reorganization, Plan: LazyImage Client-Side Preview Cache, Phase Final, Phase Final — Sub-plans & QA Sessions, Bug Report — LibreFolio QA (Docker Build), UI Refinement — Feedback nightly 2026-07-10 (+1 more)
+### Community 49 - "Community 49"
+Cohesion: 0.22
+Nodes (8): 📖 Definition, 🧮 How LibreFolio Handles Interest, 📉 Impact on Market Price, 📈 Interest, 🧮 Interest Formulas, 🔗 Related, The Accounting Difference: Interest vs. Dividend, 📊 Yield Metrics
 
-### Community 165 - "Asset Price Derived State"
-Cohesion: 0.33
-Nodes (5): computeDerivedPriceState(), computePeriodDelta(), DELTA_PERIODS, DerivedChartPoint, RawPricePoint
+### Community 50 - "Community 50"
+Cohesion: 0.22
+Nodes (8): 📊 How It Works, 🔑 Key Characteristics, 🔧 Modeling in LibreFolio, 💸 P2P Lending, 🏗️ Real Estate Crowdfunding, 🔗 Related, ⚠️ Risk Factors, ![](../../../static/icons/asset-types/crowdfunding.png){: width="32" style="vertical-align: middle;" } P2P / Crowdfunding
 
-### Community 166 - "Cache Stats Utilities"
+### Community 51 - "Community 51"
 Cohesion: 0.25
-Nodes (7): Any, get_cache_stats(), list_caches(), Get statistics for a named cache, or None if not found., List all registered caches with their stats., Get value by key. Returns (value, True) if found, (None, False) otherwise., Set value with TTL (defaults to cache-level TTL).
+Nodes (9): BRIM Transaction Import, Broker Account, Broker AI Export, Broker Info, Broker Overview, Broker Positions, Broker Sharing, Holdings and Performance Dual View (+1 more)
 
-### Community 167 - "Theme Store (Dark Mode)"
-Cohesion: 0.36
-Nodes (6): applyTheme(), getCurrentResolvedTheme(), getStoredThemePreference(), getSystemTheme(), ResolvedTheme, ThemePreference
+### Community 52 - "Community 52"
+Cohesion: 0.20
+Nodes (9): 🤖 AI-Assisted Development, 👥 Core Team, 🏆 Credits, ⚖️ Credits & Legal, 🌐 Documentation Translations, 📄 Full License Text, 📜 Legal & License, 🧩 Third-Party Open Source (+1 more)
 
-### Community 168 - "App Version Utilities"
-Cohesion: 0.29
-Nodes (7): get_version(), Get application version from git tags.     Same logic as ./dev.py info version a, get_git_version(), get_version_info(), Version utilities for LibreFolio.  Gets version information from git tags., Get version from git describe.      Returns:         Version string like 'v1.2.3, Get version information as a dict.      Returns:         Dict with version detai
+### Community 53 - "Community 53"
+Cohesion: 0.22
+Nodes (8): 📊 Absolute / Percentage Toggle, 🎨 Aesthetics, 💱 Currency Selector, 📅 Date Range, 📅 Event Markers, 🎛️ Filter Bar, 📈 Interactive Chart, 🔗 Related
 
-### Community 170 - "Responsive Layout Mode"
+### Community 54 - "Community 54"
+Cohesion: 0.22
+Nodes (8): 🗂️ Classification, ⚙️ Configuring Classification, Country Breakdown, 🌍 Geographic Distribution, 🛠️ How to Use, 🔗 Related, 📊 Sector Distribution, World Map
+
+### Community 55 - "Community 55"
+Cohesion: 0.22
+Nodes (8): 1. Provider-generated (automatic), 2. User-created (manual), 📅 Asset Events, 📈 Event Markers on the Chart, 📊 Event Types, 🧮 How Events Affect Price Calculation, 🔗 Related, ⚙️ Where Events Come From
+
+### Community 56 - "Community 56"
+Cohesion: 0.22
+Nodes (8): 🔍 Pair Detail Page, ⚙️ [Provider Config](provider.md), ✏️ [Data Editor](data-editor.md), 🧭 Features, 📈 [Interactive Chart](chart.md), 📐 [Measures](measures.md), 🔗 Related, 📊 [Signals](signals.md)
+
+### Community 57 - "Community 57"
+Cohesion: 0.22
+Nodes (8): ⚙️ Actions on Existing Reports, 📊 Broker Reports, 📁 Files & Uploads, 📤 Managing Broker Reports, 🔒 Security, 📁 Static Resources, 📂 Two Tabs, Two Purposes, ⬆️ Uploading Files
+
+### Community 58 - "Community 58"
+Cohesion: 0.22
+Nodes (9): 📋 Asset List, 🔎 Asset List Filtered, 💼 Assets, 🗂️ Classification & Metadata, ➕ Create Asset, ✏️ Data Editor, 📈 Detail Chart, 📏 Measures Panel (+1 more)
+
+### Community 59 - "Community 59"
+Cohesion: 0.22
+Nodes (9): 📋 Asset List, 🔎 Asset List Filtered, 💼 Assets, 🗂️ Classification & Metadata, ➕ Create Asset, ✏️ Data Editor, 📈 Detail Chart, 📏 Measures Panel (+1 more)
+
+### Community 60 - "Community 60"
+Cohesion: 0.22
+Nodes (9): 🔍 Broker Detail, ✏️ Broker Edit, 📋 Broker List, 📊 Broker Positions, 🤝 Broker Sharing, 🏦 Brokers, 🔬 FIFO Lots Analysis, 🔬 FIFO Lots Analysis (+1 more)
+
+### Community 61 - "Community 61"
 Cohesion: 0.25
-Nodes (4): attachLayoutDebugExtra(), LayoutMode, LayoutThresholds, ResponsiveLayout
+Nodes (7): 🛡️ Admin Manual, 🔐 Authentication & Session Persistence, 🐳 Deployment & Exposure, 📚 Guides, 🧹 Maintenance & Operations, 📖 Overview, ⚙️ System Configuration
 
-### Community 171 - "Phase 8 Scheduler Plans"
-Cohesion: 0.36
-Nodes (8): Import Wizard Resolution Tests, Phase 07–08 Test Checkpoint Detail, Phase 07–08 Test Checkpoint, Phase 8 Backend Cleanup and Scheduler Plan, Phase 8: Market Data Scheduler, Phase 8 Sub-Plans Index, Embedded Scheduler Daemon, Scheduler Test Suite
-
-### Community 172 - "Chart Label Shrink Utility"
-Cohesion: 0.29
-Nodes (3): applyLinearShrink(), applyScale(), ShrinkTarget
-
-### Community 173 - "AI Export Prompt Templates"
+### Community 62 - "Community 62"
 Cohesion: 0.25
-Nodes (7): DESCRIBE_PORTFOLIO_TEMPLATE, INCOME_REVIEW_TEMPLATE, MARKET_TREND_TEMPLATE, PAC_PLANNING_TEMPLATE, PROMPT_TEMPLATES, PromptTemplateContent, REBALANCING_TEMPLATE
+Nodes (7): 📊 After Maturity, 📖 Definition, 🧮 How LibreFolio Handles Maturity Settlement, 📉 Impact on Market Price, Instruments with Maturity Dates, 🏁 Maturity Settlement, 🔗 Related
 
-### Community 174 - "AI Export Menu Component"
-Cohesion: 0.33
-Nodes (4): open, position, reposition(), toggle()
+### Community 63 - "Community 63"
+Cohesion: 0.25
+Nodes (7): Common Scenarios, 📖 Definition, 🧮 How LibreFolio Handles Price Adjustments, 📉 Impact on Market Price, 📊 Price Adjustment, 🔗 Related, 📊 When to Use Price Adjustments
 
-### Community 175 - "Asset Panel URL Helpers"
-Cohesion: 0.43
-Nodes (5): buildAssetPanelUrl(), getAssetPanelAssetId(), closeAssetPanel(), openAssetPanel(), setOptionalNumberParam()
+### Community 64 - "Community 64"
+Cohesion: 0.18
+Nodes (10): 🚀 Asset Creation Flows, ➕ Create & Edit Assets, 🛠️ Editing an Asset, Italian retail government bonds (BTP Valore, BTP Più, BTP Italia), 🧲 Merging duplicate assets, 🏷️ One instrument, several codes, 🔌 Provider Assignment, 🔗 Related (+2 more)
 
-### Community 176 - "Date Range Preset Handlers"
+### Community 65 - "Community 65"
+Cohesion: 0.18
+Nodes (11): AI export used ticker/ISIN as primary asset label, Dashboard KPI & Overview, Portfolio Charts, ROI Calculations, Holdings/Performance panel, Name-first asset labeling policy, Phase 09 M1+M2 archive (2026-07), Portfolio Engine (+3 more)
+
+### Community 66 - "Community 66"
+Cohesion: 0.25
+Nodes (7): 🗺️ Conceptual Map, 📚 Financial Theory, 📐 [Fundamentals](fundamentals/index.md), 🏦 [Instruments](instruments/index.md), 📖 Overview, 📈 [Portfolio Theory](portfolio-theory/index.md), 📊 [Technical Analysis](technical-analysis/index.md)
+
+### Community 67 - "Community 67"
+Cohesion: 0.25
+Nodes (8): ➕ Add / Edit Transaction, 🗑️ Delete Linked Pair, 📥 Import, 🔀 Merge / Promote, ✂️ Split Confirm, 📋 Transaction List, 🔗 Transaction Picker, 📒 Transactions
+
+### Community 68 - "Community 68"
+Cohesion: 0.25
+Nodes (8): 📊 Asset Allocation, 📊 Dashboard, 🌱 Empty State, 🔬 FIFO Lots Analysis, 📌 KPI Overview, 📈 Portfolio Growth, 📋 Positions, 💸 Transactions Tab
+
+### Community 69 - "Community 69"
+Cohesion: 0.25
+Nodes (8): 🔍 Broker Detail, ✏️ Broker Edit, 📋 Broker List, 📊 Broker Positions, 🤝 Broker Sharing, 🏦 Brokers, 🔬 FIFO Lots Analysis, ℹ️ Broker Info
+
+### Community 70 - "Community 70"
+Cohesion: 0.25
+Nodes (8): 🛡️ Global Settings (Admin), ℹ️ About, 🕐 Market Data Scheduler — Config, 📜 Market Data Scheduler — Log, 🔐 Password Change, 👤 Profile, ⚙️ Settings, 🎛️ User Preferences
+
+### Community 71 - "Community 71"
+Cohesion: 0.25
+Nodes (8): ➕ Add / Edit Transaction, 🗑️ Delete Linked Pair, 📥 Import, 🔀 Merge / Promote, ✂️ Split Confirm, 📋 Transaction List, 🔗 Transaction Picker, 📒 Transactions
+
+### Community 72 - "Community 72"
+Cohesion: 0.25
+Nodes (8): 📊 Asset Allocation, 📊 Dashboard, 🌱 Empty State, 📌 KPI Overview, ☰ Navigation Menu, 📈 Portfolio Growth, 📋 Positions, 💸 Transactions Tab
+
+### Community 73 - "Community 73"
+Cohesion: 0.25
+Nodes (8): 🛡️ Global Settings (Admin), ℹ️ About, 🕐 Market Data Scheduler — Config, 📜 Market Data Scheduler — Log, 🔐 Password Change, 👤 Profile, ⚙️ Settings, 🎛️ User Preferences
+
+### Community 74 - "Community 74"
+Cohesion: 0.25
+Nodes (8): Canonical Risk Series and Metadata, Deterministic Multi-Asset Risk Analytics, G6 Frontend Integration Plan Only — Not Implemented, No Risk Backend DB Migration, Phase 0 Risk Analysis Backend G0-G5, RiskAnalytic, Rolling Risk Plugins, SignalPlugin
+
+### Community 75 - "Community 75"
+Cohesion: 0.25
+Nodes (8): Docker arm64 Build and Import Smoke: Green, Final Focused Validation Evidence, Frontend Format, Check, and Build: Green, Mocked Desktop Risk E2E: 5 Passed, Risk API Tests: 7 Passed, Risk Schema Tests: 21 Passed, Risk Service Tests: 74 Passed, Spawn-Worker Lifecycle Tests: 11 Passed
+
+### Community 76 - "Community 76"
+Cohesion: 0.25
+Nodes (7): 📊 Capabilities, 🔧 Configuration, 💱 Currency Selection, 💡 Examples, <img src="https://www.justetf.com/android-chrome-144x144.png?v2" alt=""> justETF, ⚠️ Limitations, 📝 Notes
+
+### Community 77 - "Community 77"
+Cohesion: 0.25
+Nodes (8): Bounded Quantitative Worker Capacity, FastAPI Web Process, Optimization Idle Timeout Default: 600 Seconds, Riskfolio Optimization Pool, Idle-Reaped Spawn Worker Pools, Quantitative Process Isolation, Quantitative Worker Memory Budget, Optimization Idle Timeout Default: 600 Seconds
+
+### Community 78 - "Community 78"
+Cohesion: 0.25
+Nodes (8): Risk Quantitative Engine Process Boundary, Fresh Child per Request Option, In-Process Thread Offload Option, No Silent Quantitative Fallback, NumPy Independent Test Oracles, Serializable DTO Process Boundary, Risk Spawn Worker Idle Residency Problem, Warm Worker RSS Residency
+
+### Community 79 - "Community 79"
+Cohesion: 0.25
+Nodes (7): 📉 Compounding Effect of Fees, 📊 Fee Types, 📐 Impact on Returns, 🔑 Key Properties, 🔗 Related, ![](../../../static/icons/transactions/fee.png){: width="32" style="vertical-align: middle;" } Fee & Tax ![](../../../static/icons/transactions/tax.png){: width="32" style="vertical-align: middle;" }, 💰 Tax Types
+
+### Community 80 - "Community 80"
+Cohesion: 0.25
+Nodes (7): 📝 1. Register Your Account, 🔐 2. Log In, 🏦 3. Import Your First Statement (Create Broker & Assets On-the-Fly), 📈 4. Back to the Dashboard, 🔮 5. What's Next?, 🚀 Getting Started, 📋 Steps
+
+### Community 81 - "Community 81"
 Cohesion: 0.29
-Nodes (7): computeCustomStart(), computeStartDate(), displayDate(), handleCustomApply(), handlePresetClick(), todayISO(), withMinWindow()
+Nodes (6): 📊 Accumulating vs Distributing, 🔍 Index Tracking, 🔑 Key Characteristics, 📈 NAV vs Market Price, 🔗 Related, ![](../../../static/icons/asset-types/etf.png){: width="32" style="vertical-align: middle;" } ETFs (Exchange Traded Funds)
 
-### Community 177 - "Files Page & TypeScript Types Plans"
+### Community 82 - "Community 82"
 Cohesion: 0.29
-Nodes (7): Files URL Deep-Linking, Plan: Files Page UX Refactoring + URL Deep-Linking, Plan: Files Table Improvements with TanStack Table, Plan: TypeScript Types Library, TanStack Svelte DataTable Adapter, TypeScript Types Library, Zodios Typed API Client
+Nodes (7): audit_assets_brokers_brim.md, audit_backend_infra.md, audit_transactions.md, Market Data Scheduler, test_runner modular package, Wiki Audit 2026-06-18, WorkspaceIntent frontend-only staging pattern
 
-### Community 178 - "Holding Valuation Utilities"
-Cohesion: 0.38
-Nodes (6): compute_holding_value(), normalize_quote_base_quantity(), Financial valuation helpers.  Pure math helpers shared across portfolio, broker,, Return a safe positive quote base quantity., Compute market value from raw market quote and quote base quantity., Decimal
-
-### Community 179 - "Base Dropdown Component"
-Cohesion: 0.38
-Nodes (4): close(), handleTriggerClick(), isOpen, toggle()
-
-### Community 180 - "Backup/Export Enums"
-Cohesion: 0.38
-Nodes (7): BackupScope, Logical family of the exported series (encoded in the JSON envelope)., StrEnum, ExportFormat, ExportScope, Supported export formats., What to include in export.
-
-### Community 181 - "Transaction Frontend Types"
+### Community 83 - "Community 83"
 Cohesion: 0.29
-Nodes (6): Transaction, TransactionCreateItem, TransactionParsed, TransactionSummary, TransactionTypeMetadata, TransactionUpdateItem
+Nodes (6): 🗂️ Broker Detail Layout, 🏦 Brokers, ➕ Creating a Broker, 📑 In This Section, 📈 Overview Tab, 🔍 Positions Tab
 
-### Community 182 - "AI Portfolio Export MVP Docs"
-Cohesion: 0.53
-Nodes (6): AI Portfolio Export Architecture, AI Portfolio Export MVP Report, AI Portfolio Export MVP, Allocation Basis Exception, Allocation Compaction Policy, Technical Context Policy
+### Community 84 - "Community 84"
+Cohesion: 0.29
+Nodes (6): 🔍 Navigation & Zoom, 🧰 Toolbar, 💬 Tooltip, 🔀 View Modes, 📉 Interactive Chart, 🔗 Related
 
-### Community 185 - "Favicon / Brand Mark Image"
+### Community 85 - "Community 85"
+Cohesion: 0.29
+Nodes (6): 🔧 Changing Providers, 🔓 How to Access, 🔢 Priority & Fallback, 🔌 Provider Configuration, 📚 Related, 📋 What You See
+
+### Community 86 - "Community 86"
+Cohesion: 0.29
+Nodes (6): 📐 30/360 (Bond Basis), 📅 ACT/360 (Actual/360), 📅 ACT/365 (Actual/365), 📅 ACT/ACT (Actual/Actual), 📅 Day Count Conventions, 🔧 Usage in LibreFolio
+
+### Community 87 - "Community 87"
+Cohesion: 0.29
+Nodes (6): 📅 [Day Count Conventions](day-count.md), 📐 Fundamentals, 🔗 Related Sections, 📈 [Returns & Growth Rates](returns.md), 💰 [Taxation & Tax Efficiency](taxation.md), 📖 What's Inside
+
+### Community 88 - "Community 88"
+Cohesion: 0.29
+Nodes (6): ⚡ Momentum, 🔗 Related, 📉 Technical Indicators, 📈 Trend, 🌊 Volatility, 📊 Volume
+
+### Community 89 - "Community 89"
+Cohesion: 0.29
+Nodes (6): 📅 [Asset Events](asset-events/index.md), 📊 [Asset Types](asset-types/index.md), 🏦 Financial Instruments, 🔗 Related Sections, 💸 [Transaction Types](transaction-types/index.md), 📖 What's Inside
+
+### Community 90 - "Community 90"
+Cohesion: 0.29
+Nodes (6): 📊 Compound Growth, 💡 Financial Meaning, 🔍 Interpretation, 🔄 Iterative Computation (Daily Stepping), 🔢 Mathematical Formula, ⚙️ Parameters
+
+### Community 91 - "Community 91"
+Cohesion: 0.29
+Nodes (6): 📉 [Indicators](indicators/index.md), 🔗 Related Sections, 🎯 [Synthetic Benchmarks](synthetic-benchmarks/index.md), 📊 Technical Analysis, ⚡ The "Fast" vs "Slow" Intuition, 📖 What's Inside
+
+### Community 92 - "Community 92"
+Cohesion: 0.29
+Nodes (6): 🏦 Automatic Cost Basis on Transfers and Seeds, 📐 Impact on Cost Basis, 🔑 Key Properties, 🔗 Related, 🧮 ![](../../../static/icons/transactions/adjustment.png){: width="32" style="vertical-align: middle;" } Adjustment, 📊 Use Cases
+
+### Community 93 - "Community 93"
+Cohesion: 0.29
+Nodes (6): 🛒 Buy, 📊 How It Works, 🔑 Key Properties, 🔗 Related, 💰 Sell, ![](../../../static/icons/transactions/buy.png){: width="32" style="vertical-align: middle;" } Buy & Sell ![](../../../static/icons/transactions/sell.png){: width="32" style="vertical-align: middle;" }
+
+### Community 94 - "Community 94"
+Cohesion: 0.29
+Nodes (6): 📊 How It Works, 📈 Implied Rate & Broker Spread, 🔑 Key Properties, 🔗 Related, 🔀 Relationship with Deposits/Withdrawals, ![](../../../static/icons/transactions/fx-conversion.png){: width="32" style="vertical-align: middle;" } FX Conversion
+
+### Community 95 - "Community 95"
+Cohesion: 0.29
+Nodes (6): 📊 How It Works, 🔑 Key Properties, 🔗 Related, 🔀 Relationship with Adjustments, 🔄 ![](../../../static/icons/transactions/transfer.png){: width="32" style="vertical-align: middle;" } Asset Transfer, 👵 Succession and Untracked Source Brokers
+
+### Community 96 - "Community 96"
 Cohesion: 0.33
-Nodes (5): Frontend Brand Mark, Orange Fill (#ff3e00), Site Favicon, Svelte Logo, White Fill (#ffffff)
+Nodes (5): 📊 Common Commodities, 🔑 Key Characteristics, 🔗 Related, ![](../../../static/icons/asset-types/hold.png){: width="32" style="vertical-align: middle;" } Commodities, 📈 Why Hold Commodities
 
-### Community 186 - "i18n Duplicate Audit Docs"
-Cohesion: 0.67
-Nodes (6): i18n Duplicate Audit (Post-Compression), i18n Duplicate Audit (Pre-Compression), Duplicate Value Analysis, Dynamic Translation Prefixes, Potentially Unused Translation Keys, Translation Coverage Summary
-
-### Community 187 - "MkDocs Structural Refinement Plans"
-Cohesion: 0.53
-Nodes (6): MkDocs Component Refinements, MkDocs Documentation Perfection, MkDocs Structural Refactor, Plan: Documentation Component Refinements, Plan: LibreFolio Documentation Perfection, Plan: Documentation Structural Refinements
-
-### Community 188 - "Asset Provider Guides (justETF/Borsa/CSS)"
+### Community 97 - "Community 97"
 Cohesion: 0.33
-Nodes (6): Borsa Italiana, CSS Scraper, justETF, Scheduled Investment, Yahoo Finance, Asset Providers Guide
+Nodes (5): 📊 How Mutual Funds Work, 🔑 Key Characteristics, 📐 NAV Calculation, 🔗 Related, ![](../../../static/icons/asset-types/fund.png){: width="32" style="vertical-align: middle;" } Mutual Fund
 
-### Community 189 - "Tags CSV Conversion"
+### Community 98 - "Community 98"
 Cohesion: 0.33
-Nodes (4): Convert tags list to comma-separated string for DB storage., Convert tags list to comma-separated string for DB storage., Convert tags list to comma-separated string for DB storage., tags_to_csv()
+Nodes (5): 📊 Example Use Cases, 🔑 Key Characteristics, 🔗 Related, ![](../../../static/icons/asset-types/other.png){: width="32" style="vertical-align: middle;" } Other, 🔧 Tracking in LibreFolio
 
-### Community 190 - "User Search Schemas"
+### Community 99 - "Community 99"
 Cohesion: 0.33
-Nodes (5): User schemas for search and public-facing user info.  These schemas are separate, Minimal user info for search results. Does NOT expose email for privacy., Response for user search endpoint., UserSearchItem, UserSearchResponse
+Nodes (5): 📊 How Stocks Work, 🔑 Key Characteristics, 🔗 Related, ![](../../../static/icons/asset-types/stock.png){: width="32" style="vertical-align: middle;" } Stocks, 📐 Total Return
 
-### Community 191 - "Multi-Provider Asset Search"
+### Community 100 - "Community 100"
 Cohesion: 0.33
-Nodes (3): Search for assets across one or more providers in parallel.          Args:, Stream search results as SSE events, one event per provider completion., Generate URL to the provider's page for this specific asset.          Used by th
+Nodes (5): 🛡️ Access Roles, 🤝 Broker Sharing, 💡 Common Scenarios, 📋 How to Share, 📊 Share Percentage
 
-### Community 192 - "Tab URL Helpers"
-Cohesion: 0.67
-Nodes (4): setOptionalQueryParam(), buildTabUrl(), getOptionalTabParam(), getResolvedTabParam()
+### Community 101 - "Community 101"
+Cohesion: 0.33
+Nodes (5): 📊 Computed Metrics, 🔁 Multiple Measurements, 💡 Tips, 🖱️ How to Use, 📐 Measures
 
-### Community 193 - "Alembic Migration Env"
+### Community 102 - "Community 102"
+Cohesion: 0.33
+Nodes (5): ➕ Adding a Currency Pair, 🔀 Chain Routes, 🛤️ Conversion Routes (Direct & Chain), 🔗 Direct Routes, 🧭 How Route Discovery Works
+
+### Community 103 - "Community 103"
+Cohesion: 0.33
+Nodes (5): 🌐 Data Supply Chains, 🔄 FX Synchronization, ⚙️ How Sync Works, 🎯 Individual Pair Sync, 🔄 Sync All
+
+### Community 104 - "Community 104"
+Cohesion: 0.33
+Nodes (5): 📏 Bollinger Bands, 💡 Financial Meaning, 🔢 Mathematical Formulas, ⚙️ Parameters, 🎛️ Signal Processing Equivalent — Adaptive Confidence Interval Tracker
+
+### Community 105 - "Community 105"
+Cohesion: 0.33
+Nodes (5): 📉 EMA — Exponential Moving Average, 💡 Financial Meaning, 🔢 Mathematical Formula, ⚙️ Parameters, 🎛️ Signal Processing Equivalent — First-Order IIR Low-Pass Filter
+
+### Community 106 - "Community 106"
+Cohesion: 0.33
+Nodes (5): 💡 Financial Meaning, 📊 MACD — Moving Average Convergence Divergence, 🔢 Mathematical Formulas, ⚙️ Parameters, 🎛️ Signal Processing Equivalent — Band-Pass Filter (Smoothed Derivative)
+
+### Community 107 - "Community 107"
+Cohesion: 0.33
+Nodes (5): 💡 Financial Meaning, 🔢 Mathematical Formulas, ⚙️ Parameters, 💪 RSI — Relative Strength Index, 🎛️ Signal Processing Equivalent — Duty Cycle / Saturation Indicator
+
+### Community 108 - "Community 108"
+Cohesion: 0.33
+Nodes (6): Analytical GBM Moments, Covariance Standard Errors, Fisher-z Correlation Error, Motivated Mathematical Oracles, Power-of-Two QMC Path Count, QMC Convergence Across Powers of Two
+
+### Community 109 - "Community 109"
+Cohesion: 0.33
+Nodes (5): 📊 Capabilities, 🔧 Configuration, 💡 Examples, <img src="https://s.yimg.com/cv/apiv2/myc/finance/Finance_icon_0919_250x252.png" alt=""> Yahoo Finance, 📝 Notes
+
+### Community 110 - "Community 110"
+Cohesion: 0.33
+Nodes (5): 💡 Financial Meaning, 🔍 Interpretation, 📈 Linear Growth, 🔢 Mathematical Formula, ⚙️ Parameters
+
+### Community 111 - "Community 111"
+Cohesion: 0.33
+Nodes (5): 💡 Financial Meaning, 🔍 Interpretation, 🔢 Mathematical Formula, ⚙️ Parameters, 🌊 Sine Wave
+
+### Community 112 - "Community 112"
+Cohesion: 0.33
+Nodes (5): 📊 How It Works, 🔑 Key Properties, 🔗 Related, 🔀 Relationship with Deposits/Withdrawals, ![](../../../static/icons/transactions/cash-transfer.png){: width="32" style="vertical-align: middle;" } Cash Transfer
+
+### Community 113 - "Community 113"
 Cohesion: 0.40
-Nodes (4): Run migrations in 'offline' mode.      This configures the context with just a U, Run migrations in 'online' mode.      In this scenario we need to create an Engi, run_migrations_offline(), run_migrations_online()
+Nodes (5): 📋 Broker Reports (BRIM), 👁️ File Preview, 📁 Files, 📂 Static Resources, 🗂️ Static Resources - Grid View
 
-### Community 194 - "User Local Storage Keys"
-Cohesion: 0.60
-Nodes (4): currentUser, getUserStorage(), getUserStorageKey(), setUserStorage()
-
-### Community 196 - "Aphra i18n Translation Pipeline Docs"
-Cohesion: 0.60
-Nodes (5): Aphra v2.2.0 Prompt Override, Plan: Pipeline Aphra v2.2.0 — Prompt Override + Glossario JSON, Per-Language Translation Glossary JSON, Plan: Consolidamento Knowledge Base + Emoji Fix + Cleanup, Knowledge Base Consolidation
-
-### Community 197 - "Scheduled Investment Image Asset"
-Cohesion: 0.70
-Nodes (5): Calculator Icon, Scheduled Investment Image Asset, Portfolio Growth Concept, Recurring Investment Concept, Upward Trend Arrow
-
-### Community 199 - "Validate Scheduler Composable"
+### Community 114 - "Community 114"
 Cohesion: 0.40
-Nodes (4): ValidateReason, ValidateScheduler, ValidateSchedulerOptions, ValidateSchedulerState
+Nodes (4): 👁️ Choose Your View, ✨ Features Highlighted, 🌍 Language Support, 🖼️ LibreFolio Gallery
 
-### Community 200 - "User Search Endpoint"
+### Community 115 - "Community 115"
 Cohesion: 0.40
-Nodes (4): AsyncSession, User endpoints.  Provides user search functionality for features like broker sha, Search for users by username (ILIKE match). Does NOT expose email for privacy. O, search_users_endpoint()
+Nodes (4): 🔑 Key Properties, 🔗 Related, 💶 ![](../../../static/icons/transactions/deposit.png){: width="32" style="vertical-align: middle;" } Deposit & Withdrawal ![](../../../static/icons/transactions/withdrawal.png){: width="32" style="vertical-align: middle;" }, 💡 Why They Matter
 
-### Community 202 - "dev.py CLI Migration Docs"
+### Community 116 - "Community 116"
+Cohesion: 0.40
+Nodes (4): 🔀 Composite Transactions, 🔗 Related, 📋 Single Transactions, 💸 Transaction Types
+
+### Community 117 - "Community 117"
+Cohesion: 0.40
+Nodes (4): ⭐ Core Features, 🏁 Getting Started, 🧩 Misc, 📖 User Manual
+
+### Community 118 - "Community 118"
+Cohesion: 0.40
+Nodes (5): AI Export drafts use short-lived session memory, Concern-Based E2E Cutover, Context-Bound In-Flight Preparation, Raw-Note / Effective-Option Separation, Reactive Identity-Bound Memory
+
+### Community 119 - "Community 119"
 Cohesion: 0.50
-Nodes (4): dev.py CLI System, Plan: dev.sh → dev.py Migration, Plan: Phase 4 Consolidation, TreeParser Command Tree
+Nodes (3): 📊 Asset Types, 🔗 Related, 📋 Supported Assets
 
-### Community 203 - "Dividend/Interest & Scheduled Assets Docs"
-Cohesion: 0.83
-Nodes (4): Dividend, Market-Priced Assets, Scheduled Investment Assets, Interest
-
-### Community 204 - "Phase 06 Documentation Audit"
+### Community 120 - "Community 120"
 Cohesion: 0.50
-Nodes (4): Documentation Audit, Phase 06 Consolidation Hardening, Phase 06 Step 4 Part B — Consolidation, Test, Docker & Documentation, Documentation Audit — Phase 06 Step 4 Part A
+Nodes (3): 🔗 Related, 🛠️ How to Use, 📐 Measures
 
-### Community 205 - "Tweened Value Animation"
+### Community 121 - "Community 121"
 Cohesion: 0.50
-Nodes (3): svelte/easing, svelte/motion, displayValue
+Nodes (4): FIFO segments — prezzi, adjustment, transfer e short positions, Segment Custody Model, Portfolio/Lot Cache Strategy, Analisi architetturale — Portfolio Engine, FIFO history e cache
 
-### Community 207 - "Phase 3.5 Settings System Docs"
-Cohesion: 0.67
-Nodes (4): Global and Personal Settings System, GlobalSettingsTab, Piano di Rimedio - Phase 3.5, Phase 3.5: Settings System (Global + Personal)
-
-### Community 208 - "Dropdown Position Utility"
-Cohesion: 0.67
-Nodes (3): clamp(), DropdownPosition, getFixedDropdownPosition()
-
-### Community 209 - "Translation Pipeline Fix Plans"
-Cohesion: 0.67
-Nodes (4): Translation Pipeline Admonition Validation, Plan: Translation Residual Fix and Resize, Global Settings, Translation Residual Cleanup
-
-### Community 210 - "Scheduler Leader Election"
+### Community 122 - "Community 122"
 Cohesion: 0.50
-Nodes (3): am_i_leader(), Leader election via psutil — lowest-PID among uvicorn sibling workers., Determine if the current process is the scheduler leader.      Strategy for mult
+Nodes (3): 💱 FX Rates (Currency Exchange), 📋 The FX List Page, 🔮 What's Next?
 
-### Community 211 - "Date Range URL Helpers"
-Cohesion: 0.83
-Nodes (3): buildDateRangeUrl(), gotoDateRange(), replaceHistoryDateRange()
+### Community 123 - "Community 123"
+Cohesion: 0.50
+Nodes (4): 🎨 Asset Picker, 📤 File Uploader, ✂️ Image Editor, 🖼️ Media & Upload
 
-### Community 212 - "Weighted Average Cost Docs"
+### Community 124 - "Community 124"
+Cohesion: 0.50
+Nodes (3): 🎯 Choosing a Provider, 📊 Provider Comparison, 🔌 Providers
+
+### Community 125 - "Community 125"
+Cohesion: 0.50
+Nodes (3): 📋 Benchmark Overview, 🔗 Related, 🎯 Synthetic Benchmarks
+
+### Community 126 - "Community 126"
 Cohesion: 0.67
-Nodes (4): Auto WAC Mode, Cost Basis Override, Multi-Currency WAC Handling, Weighted Average Cost
+Nodes (3): NaN from __null__ Sentinel Numeric Conversion, Reactive Filter NaN Equality Guard Anti-Pattern, Explicit without_asset Boolean Filter State
 
-### Community 213 - "Asset Pricing Architecture Docs"
-Cohesion: 1.00
-Nodes (3): Asset Pricing Architecture, compute_holding_value(), Quote Base Quantity
-
-### Community 214 - "CSS Scraper & Borsa Italiana Docs"
-Cohesion: 0.67
-Nodes (3): Borsa Italiana, CSS Scraper, CSS Scraper Provider
-
-### Community 215 - "CSS Scraper Static Image"
-Cohesion: 1.00
-Nodes (3): CSS Scraper Asset-Source Provider, Handshake Icon, CSS Scraper Static Image
-
-### Community 222 - "Source Code Batch & Video Promo Docs"
+### Community 127 - "Community 127"
 Cohesion: 0.67
 Nodes (3): Interactive Pros/Cons Slider, Remotion Video Promo, Source Code v0.9.0 Batch
 
-## Ambiguous Edges - Review These
-- `WAC-Price Chart` → `Weighted Average Cost (WAC)`  [AMBIGUOUS]
-  mkdocs-en/docs/gallery/desktop.en.md · relation: conceptually_related_to
-- `TRANSFER Transactions` → `get_positions_contribution()`  [AMBIGUOUS]
-  roadmap/fifo-engine/fifo-engine-current-state.md · relation: conceptually_related_to
-- `Frontend Development Plan - Index` → `Phase 2.5: Auth Integration (Frontend ↔ Backend)`  [AMBIGUOUS]
-  roadmap/phases/00-index.md · relation: references
-- `Frontend Development - LibreFolio UI` → `Phase 2.5: Auth Integration (Frontend ↔ Backend)`  [AMBIGUOUS]
-  roadmap/phases/phase-00-subplan/plan-frontendDevelopment.prompt.md · relation: references
-- `Frontend Development - LibreFolio UI` → `Phase 3.5: Settings System (Global + Personal)`  [AMBIGUOUS]
-  roadmap/phases/phase-00-subplan/plan-frontendDevelopment.prompt.md · relation: references
-- `Phase 6 Assets Progress Summary` → `Phase 06 Bugfix Migration Master Plan`  [AMBIGUOUS]
-  roadmap/phases/phase-06-assets.md · relation: cites
-- `Test Walk Fixes` → `Server-Driven Type Rules`  [AMBIGUOUS]
-  roadmap/phases/phase-07-subplan/Parte4/Round4-5/plan-phase07-transaction-Part4_Round5_Bugfix3_TestWalkFixes.prompt.md · relation: conceptually_related_to
-- `Gallery Screenshot Update Plan` → `Broker Transactions UI v2 Plan`  [AMBIGUOUS]
-  roadmap/phases/phase-09-subplan/plan-gallery-update.prompt.md · relation: conceptually_related_to
-- `Milestone 3 — UI Broker v2` → `Responsive Toolbar Guide v2`  [AMBIGUOUS]
-  roadmap/phases/phase-09-subplan/README.md · relation: cites
-- `Handshake Icon` → `CSS Scraper Asset-Source Provider`  [AMBIGUOUS]
-  /Users/ea_enel/Documents/00_My/LibreFolio/backend/app/services/asset_source_providers/static/cssscraper.png · relation: conceptually_related_to
+### Community 145 - "Community 145"
+Cohesion: 0.28
+Nodes (16): Authoritative Closure Run 20260804T224056.073291Z, 67 Components, 40 Internal Datasets, 8 Public Datasets, 11 Public Analyses, Fail-Closed Catalog Handshake, First Public AI Export V1, Functional Test Boundary, AI Export Probe Helpers and Copied-DB Real Prompt Separation, AiExportRuntimeService and ComponentComposer, Snapshot/Catalog/Selection/Instruction/Response Contract V1 (+8 more)
+
+### Community 146 - "Community 146"
+Cohesion: 0.23
+Nodes (16): AnalysisSpec Prompt Contract, Authenticated Snapshot Runtime Flow, AI Export Backend-Frontend Ownership Boundary, BuildContext Resource Memoization, Component-Dataset-Analysis Runtime, AI Export Component Runtime, ComponentSpec Runtime Unit, AI Export Composition and Prompt (+8 more)
+
+### Community 147 - "Community 147"
+Cohesion: 0.23
+Nodes (12): Empty Temporal-Row Public Rendering Hardening: Omit Only Completely Empty Rows, Indicator History Density Policy: Compact 5 / Standard 10 / Full All Non-Empty Rows, Standard Event Selection Policy: Complete 21-Day Recent Window + Minimum Latest 10 per Entity/Annotation (Approved 2026-08-03), AI Export Technical Series and Density Contract, 2026-08-03 Indicator Density Amendment, Signal Density V2, Detail Level x Temporal Class Sampling Matrix, Signals Domain (+4 more)
+
+### Community 148 - "Community 148"
+Cohesion: 0.31
+Nodes (13): Causality Boundary for News-Movement Links, LLM-Side Web Research Pattern, portfolio.market_events_review Analysis, Cited Current News Research, Clipboard-Only AI Export Boundary, Contextual AI Export Draft Memory, Dated Asset Movement-to-News Matching, Market Events Review Evidence Binding (+5 more)
+
+### Community 153 - "Community 153"
+Cohesion: 0.12
+Nodes (15): 🧠 AI Export, 📈 Asset, ⚠️ Availability and Safety, 🗂️ Available Analyses, 📤 Available Export Data, 🏦 Broker, 🎛️ Export Options, 💱 FX (+7 more)
+
+### Community 154 - "Community 154"
+Cohesion: 0.13
+Nodes (15): 🧩 AI Export Composition and Prompt, 🧠 AnalysisSpec, 🗺️ Applicability, ♻️ BuildContext and Resource Memoization, 🧱 ComponentSpec, 🧮 Composer Ordering and Deduplication, 📚 DatasetSpec, Visibility, and Public Composition, 📉 Drawdown Risk Context (+7 more)
+
+### Community 155 - "Community 155"
+Cohesion: 0.14
+Nodes (14): ⏱️ AI Export Technical Sampling, 🔥 Calculation Range, Exported Range, and Warm-up, 🎯 Event Selection, 🧪 Extension and Testing Checklist, 🧮 Full Policy Matrix, 📈 Indicator Policy, 🗂️ Initial Instance Mapping, 🧾 Manifest Examples (+6 more)
+
+### Community 158 - "Community 158"
+Cohesion: 0.20
+Nodes (9): 🔒 Applicability, Errors, and Privacy, 📏 Detail and Sampling, 📤 Export Data and Request Analysis, 📍 Location, 📰 Performance and Market Drivers, 🧠 Portfolio AI Export, 🎯 Portfolio Analyses, 📅 Recurring Investment Plan (+1 more)
+
+### Community 159 - "Community 159"
+Cohesion: 0.22
+Nodes (9): 🧠 AI Export Component Runtime, 🔐 Authentication and Failures, 🏦 Broker Scope Semantics, 📦 Completeness and Size, 🗺️ Main Files, 🧭 Ownership Boundary, 🔗 Related Documentation, 🔄 Request Flow (+1 more)
+
+### Community 161 - "Community 161"
+Cohesion: 0.50
+Nodes (4): 🧭 Focused Context Policies, 💱 FX Observed Range Position, 🏷️ Latest-per-category Context Events, 🧹 Public Empty Temporal Rows
+
+### Community 163 - "Community 163"
+Cohesion: 0.67
+Nodes (3): 🧾 Capital-Loss Offset Contract, 📅 PAC Planning Contract, 🧭 Public Analysis Dataset Bindings
+
+### Community 164 - "Community 164"
+Cohesion: 0.67
+Nodes (3): 📝 Exact Prompt Order, 📤 Export Data, 🔬 Request Analysis
+
+### Community 165 - "Community 165"
+Cohesion: 0.67
+Nodes (3): 🎯 Focused Technical Projections, 🏦 Portfolio Broker Universes, 🔢 Universe Coverage Counts
 
 ## Knowledge Gaps
-- **788 isolated node(s):** `AsyncSession`, `Path`, `Engine`, `AsyncEngine`, `AsyncSession` (+783 more)
+- **731 isolated node(s):** `▶️ Starting the Server`, `👤 User Management`, `🔧 Initialize Global Settings`, `🗄️ Database Migrations`, `📚 Documentation` (+726 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **63 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **17 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **What is the exact relationship between `WAC-Price Chart` and `Weighted Average Cost (WAC)`?**
-  _Edge tagged AMBIGUOUS (relation: conceptually_related_to) - confidence is low._
-- **What is the exact relationship between `TRANSFER Transactions` and `get_positions_contribution()`?**
-  _Edge tagged AMBIGUOUS (relation: conceptually_related_to) - confidence is low._
-- **What is the exact relationship between `Frontend Development Plan - Index` and `Phase 2.5: Auth Integration (Frontend ↔ Backend)`?**
-  _Edge tagged AMBIGUOUS (relation: references) - confidence is low._
-- **What is the exact relationship between `Frontend Development - LibreFolio UI` and `Phase 2.5: Auth Integration (Frontend ↔ Backend)`?**
-  _Edge tagged AMBIGUOUS (relation: references) - confidence is low._
-- **What is the exact relationship between `Frontend Development - LibreFolio UI` and `Phase 3.5: Settings System (Global + Personal)`?**
-  _Edge tagged AMBIGUOUS (relation: references) - confidence is low._
-- **What is the exact relationship between `Phase 6 Assets Progress Summary` and `Phase 06 Bugfix Migration Master Plan`?**
-  _Edge tagged AMBIGUOUS (relation: cites) - confidence is low._
-- **What is the exact relationship between `Test Walk Fixes` and `Server-Driven Type Rules`?**
-  _Edge tagged AMBIGUOUS (relation: conceptually_related_to) - confidence is low._
+- **Why does `Portfolio Engine` connect `Community 11` to `Community 147`?**
+  _High betweenness centrality (0.018) - this node is a cross-community bridge._
+- **Why does `3-Pool Cash Model` connect `Community 5` to `Community 11`?**
+  _High betweenness centrality (0.018) - this node is a cross-community bridge._
+- **Why does `AI Export falsely required transaction-date engine cash to equal snapshot-date native-cash exposure` connect `Community 11` to `Community 5`?**
+  _High betweenness centrality (0.018) - this node is a cross-community bridge._
+- **What connects `▶️ Starting the Server`, `👤 User Management`, `🔧 Initialize Global Settings` to the rest of the system?**
+  _808 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Should `Community 0` be split into smaller, more focused modules?**
+  _Cohesion score 0.05672268907563025 - nodes in this community are weakly interconnected._
+- **Should `Community 1` be split into smaller, more focused modules?**
+  _Cohesion score 0.05516596540439458 - nodes in this community are weakly interconnected._
+- **Should `Community 3` be split into smaller, more focused modules?**
+  _Cohesion score 0.053877551020408164 - nodes in this community are weakly interconnected._

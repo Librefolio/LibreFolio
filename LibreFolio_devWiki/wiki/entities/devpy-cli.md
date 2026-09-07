@@ -70,7 +70,7 @@ Sub-commands imported from external modules via `register_subparser()`:
 ## History
 - Introduced in V4 rewrite to replace scattered shell scripts
 - Sub-module architecture allows skills and agents to extend it without touching the core
-- 2026-05-26: `scripts/test_runner.py` (4841-line monolith) refactored into 18-module package at `scripts/test_runner/`. See [[decisions/test-runner-package-split]].
+- 2026-05-26: `scripts/test_runner/` (4841-line monolith) refactored into 18-module package at `scripts/test_runner/`. See [[decisions/test-runner-package-split]].
 
 ## Source files
 

@@ -1,6 +1,18 @@
 [run]
 source = backend/app
 parallel = true
+# Misura anche gli archi decisionali, non solo le righe eseguite.
+#
+# Senza questo, un `if err: log(err)` in cui `err` capita sempre risulta
+# interamente coperto pur non avendo mai percorso il ramo «err assente»: la
+# riga è verde, la decisione non è mai stata presa in entrambi i sensi. È la
+# differenza fra sapere che il codice è stato *toccato* e sapere che è stato
+# *esercitato*, e senza la seconda la mappa che guida la scrittura dei test è
+# sbagliata proprio dove serve.
+#
+# La percentuale scende perché il denominatore cresce: non è un peggioramento,
+# è il numero vero.
+branch = true
 # Handle SIGTERM to save coverage data before process exits.
 # Without this, SIGTERM kills the process without running atexit handlers,
 # so no .coverage.<pid> file is written. Required for E2E test coverage
@@ -9,7 +21,13 @@ sigterm = true
 # Support async/await coverage in FastAPI endpoints
 # - thread: for uvicorn running in background thread
 # - gevent: for asyncio event loop context switches
-concurrency = thread,gevent
+# - multiprocessing: uvicorn --workers N *forks*, and a forked child is a new
+#   process that coverage does not follow without this. The shared E2E backend is
+#   sized at ceil(clients/2) workers, so above two clients every request was served
+#   by an unmeasured child: the run wrote its .coverage.<pid> files, they were empty,
+#   and nothing warned. Measured before the fix: the whole suite at 8 workers scored
+#   0.00% while a single spec at 2 workers scored 35.01%.
+concurrency = multiprocessing,thread,gevent
 omit =
     */test_*
     */tests/*

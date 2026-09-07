@@ -61,9 +61,12 @@ export class MeasureSignal extends ChartSignal {
         // Interpolate all dates between start and end so the line segment
         // remains visible when zoomed in (ECharts hides lines with both
         // endpoints outside the visible range if only 2 non-null points exist)
+        //
+        // No guard on the indices: `find` above has already returned when either
+        // endpoint is absent, and `findIndex` runs the same predicate over the
+        // same array, so it cannot then answer -1.
         const startIdx = baseData.findIndex((d) => d.date === startDate);
         const endIdx = baseData.findIndex((d) => d.date === endDate);
-        if (startIdx < 0 || endIdx < 0) return [];
 
         const points: LineDataPoint[] = [];
         const totalSteps = endIdx - startIdx;

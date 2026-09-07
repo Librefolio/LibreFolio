@@ -6,11 +6,12 @@ import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
 /**
  * Normalize data points to percentage change from first value (p0).
  * Formula: ((value - p0) / p0) * 100
- * Returns the original array unchanged if empty or p0 === 0.
+ * Missing values stay marked so LineChart renders them as gaps. The baseline
+ * is the first present non-zero value.
  */
 export function normalizeToPercentage(data: LineDataPoint[]): LineDataPoint[] {
     if (data.length === 0) return data;
-    const p0 = data[0].value;
-    if (p0 === 0) return data;
-    return data.map((d) => ({...d, value: ((d.value - p0) / p0) * 100}));
+    const p0 = data.find((d) => !d.missing && d.value !== 0)?.value;
+    if (p0 === undefined) return data;
+    return data.map((d) => (d.missing ? d : {...d, value: ((d.value - p0) / p0) * 100}));
 }

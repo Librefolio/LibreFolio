@@ -150,6 +150,15 @@ def configure_logging(log_level: str = "INFO", enable_file_logging: bool = True)
     logging.getLogger("peewee").setLevel(logging.WARNING)
     # watchfiles (used by uvicorn reload) logs every change detection at DEBUG level
     logging.getLogger("watchfiles").setLevel(logging.WARNING)
+    # ddgs (web link-finder) uses primp, a Rust HTTP client that forwards its crates'
+    # logs into Python logging via pyo3-log. At DEBUG those flood the console with DNS
+    # resolution (hickory-dns), TLS handshakes (rustls), HTTP/2 framing (h2/hpack) and
+    # connection traces (reqwest/hyper_util/cookie_store) — hundreds of lines per search.
+    for _noisy in ("primp", "hickory_resolver", "hickory_net", "rustls", "h2", "hpack", "hyper_util", "reqwest", "cookie_store"):
+        logging.getLogger(_noisy).setLevel(logging.WARNING)
+    # urllib3 (HTTP pool) and asyncio (event-loop selector) are also verbose at DEBUG
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("asyncio").setLevel(logging.WARNING)
 
     # Configure handlers
     handlers = []

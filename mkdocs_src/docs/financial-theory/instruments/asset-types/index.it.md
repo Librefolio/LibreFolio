@@ -14,7 +14,7 @@ LibreFolio supporta un'ampia gamma di classi di asset per coprire un portafoglio
 | ![](../../../static/icons/asset-types/fund.png){: width="32" } | **Fondo Comune d'Investimento** | `FUND` | Fondi di investimento gestiti professionalmente. | [📖](mutual-fund.md) |
 | ![](../../../static/icons/asset-types/hold.png){: width="32" } | **Materie Prime** | `HOLD` | Asset fisici come Oro, Argento o Diamanti detenuti per il loro valore a lungo termine. | [📖](commodities.md) |
 | ![](../../../static/icons/asset-types/other.png){: width="32" } | **Altro** | `OTHER` | Qualsiasi altra classe di asset (es. Arte, Private Equity, Oggetti da Collezione). | [📖](other.md) |
-| ![](../../../static/icons/asset-types/other.png){: width="32" } | **Indice &amp; Benchmark** | `—` | Indici di mercato (S&amp;P 500, MSCI World) utilizzati come benchmark di riferimento — non direttamente negoziabili. | [📖](index-benchmark.md) |
+| ![](../../../static/icons/asset-types/index.png){: width="32" } | **Indice &amp; Benchmark** | `—` | Indici di mercato (S&amp;P 500, MSCI World) utilizzati come benchmark di riferimento — non direttamente negoziabili. | [📖](index-benchmark.md) |
 
 ---
 

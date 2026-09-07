@@ -1,0 +1,26 @@
+schema_version: 1
+id: covid_crash_2020
+kind: historical_replay
+tags: [crisis, equity, global]
+name:
+  en: COVID-19 crash
+  it: Crollo COVID-19
+  fr: Krach du COVID-19
+  es: Caída por COVID-19
+description:
+  en: Acute phase of the global drawdown during the first pandemic wave.
+  it: Fase acuta del drawdown globale durante la prima ondata della pandemia.
+  fr: Phase aiguë du repli mondial pendant la première vague de la pandémie.
+  es: Fase aguda de la caída global durante la primera ola de la pandemia.
+defaults:
+  start: 2020-02-19
+  end: 2020-03-23
+  missing_history_policy: manual_proxy_or_exclude
+  composition_policy: current_buy_and_hold
+editable:
+  dates: true
+  missing_history_policy: true
+  proxies: true
+  exclusions: true
+limits:
+  minimum_calendar_days: 1

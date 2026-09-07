@@ -73,7 +73,7 @@
 </script>
 
 {#if hasContent}
-    <div class="flex items-start gap-2 p-3 rounded-lg border text-xs {styles.container} {extraClass}" role={variant === 'error' ? 'alert' : 'status'}>
+    <div class="flex items-start gap-2 p-3 rounded-lg border text-xs {styles.container} {extraClass}" data-testid="info-banner-{variant}" role={variant === 'error' ? 'alert' : 'status'}>
         {#if showIcon}
             <IconComponent size={16} class="{styles.icon} mt-0.5 shrink-0" />
         {/if}

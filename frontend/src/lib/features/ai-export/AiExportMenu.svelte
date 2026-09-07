@@ -1,129 +1,338 @@
-<!--
-  AiExportMenu — shared "Brain" trigger + dropdown for the AI export catalog.
-
-  Used identically by dashboard, broker detail, and asset detail (Signals panel
-  header) so the trigger/positioning/outside-click behavior never drifts between
-  the three call sites. Callers translate the catalog entries and pass plain
-  {id, label, description, icon} — this component has no i18n or catalog knowledge.
--->
 <script lang="ts">
-    import {onMount, tick, type ComponentType} from 'svelte';
-    import {Brain, RefreshCw} from 'lucide-svelte';
+    import {onDestroy, tick, untrack} from 'svelte';
+    import {get} from 'svelte/store';
+    import {Brain, LoaderCircle} from 'lucide-svelte';
+
+    import {clientSessionUserId, getClientSessionGeneration, getClientSessionUserId, isClientSessionCurrent} from '$lib/stores/app/clientSession';
+    import {currentLanguage} from '$lib/stores/app/language';
     import {getFixedDropdownPosition} from '$lib/utils/layout/dropdownPosition';
 
-    export interface AiExportMenuEntry {
-        id: string;
-        label: string;
-        description?: string;
-        /** Per-entry icon (Lucide component) shown in the dropdown row — falls back to Brain when omitted. */
-        icon?: ComponentType;
+    import AiExportOptionsPanel from './AiExportOptionsPanel.svelte';
+    import {writePreparedAiExport, type PreparedAiExport} from './aiExportClipboard';
+    import {loadAiExportMemory, saveAiExportMemory, type AiExportMemoryKey} from './aiExportMemory';
+    import {aiExportOptionsFingerprint, areAiExportOptionsEqual, estimateAiExportTokenSeverity, type AiExportOptionsPanelLabels, type AiExportOptionsSelection} from './aiExportOptions';
+    import type {AiExportCatalogCompatibilityResult} from './catalog/compatibility';
+    import type {AiExportDomain, AiExportSelectionId} from './catalog/shared';
+    import {aiExportResponseLanguageFromLocale} from './ui';
+
+    export interface AiExportMenuLabels {
+        readonly triggerLabel: string;
+        readonly panelLabel: string;
+        readonly options: AiExportOptionsPanelLabels;
     }
 
     interface Props {
-        entries: AiExportMenuEntry[];
-        loading?: boolean;
-        triggerLabel: string;
-        loadingLabel: string;
-        /** 'end' (default) aligns the panel's right edge with the trigger — matches the existing dashboard/broker-detail placement. */
+        domain: AiExportDomain;
+        compatibility: AiExportCatalogCompatibilityResult;
+        memoryKey: AiExportMemoryKey;
+        defaultSelectionId: AiExportSelectionId;
+        disabled?: boolean;
+        labels: AiExportMenuLabels;
         align?: 'start' | 'end';
-        /** Hide the text label next to the icon (narrow layouts / icon-only placements). */
         showLabel?: boolean;
-        onselect: (id: string) => void;
+        onprepare: (options: AiExportOptionsSelection) => Promise<PreparedAiExport>;
+        oncopied: (result: PreparedAiExport) => void;
+        onerror: (error: unknown) => void;
     }
 
-    let {entries, loading = false, triggerLabel, loadingLabel, align = 'end', showLabel = true, onselect}: Props = $props();
+    interface PreparationContext {
+        readonly contextEpoch: number;
+        readonly operationId: number;
+        readonly sessionGeneration: number;
+        readonly sessionUserId: string | null;
+        readonly memoryKey: AiExportMemoryKey;
+        readonly optionsFingerprint: string;
+    }
 
+    let {domain, compatibility, memoryKey, defaultSelectionId, disabled = false, labels, align = 'end', showLabel = true, onprepare, oncopied, onerror}: Props = $props();
+
+    const componentId = $props.id();
+    const panelId = `${componentId}-panel`;
     let open = $state(false);
-    let triggerEl = $state<HTMLElement | null>(null);
+    let loading = $state(false);
+    let triggerEl = $state<HTMLButtonElement | null>(null);
     let panelEl = $state<HTMLDivElement | null>(null);
     let position = $state({left: 8, top: 8});
+    let activeMemoryKey = $state<AiExportMemoryKey>(untrack(() => memoryKey));
+    let activeSessionUserId = $state<string | null>(untrack(getClientSessionUserId));
+    let responseLanguage = $derived(aiExportResponseLanguageFromLocale($currentLanguage));
+    let memory = $state(
+        untrack(() =>
+            loadAiExportMemory({
+                memoryKey: activeMemoryKey,
+                domain,
+                compatibility,
+                responseLanguage: aiExportResponseLanguageFromLocale(get(currentLanguage)),
+                defaultSelectionId,
+            }),
+        ),
+    );
+    let draft = $state<AiExportOptionsSelection>(memory.options);
+    let draftUserNotes = $state(memory.userNotesDraft);
+    let copyAnywayFingerprint = $state<string | undefined>(memory.copyAnywayFingerprint);
+    let pending = $state<PreparedAiExport | undefined>(undefined);
+    let pendingContext = $state<PreparationContext | undefined>(undefined);
+    let catalogSignature = $state('');
+    let draftRevision = $state(0);
+    let contextEpoch = 0;
+    let nextOperationId = 0;
+    let activeOperationId: number | undefined;
+
+    function portalToBody(node: HTMLElement) {
+        document.body.appendChild(node);
+        return {
+            destroy() {
+                if (node.parentNode === document.body) node.remove();
+            },
+        };
+    }
+
+    function loadDraft(key: AiExportMemoryKey) {
+        contextEpoch += 1;
+        activeOperationId = undefined;
+        loading = false;
+        const loaded = loadAiExportMemory({memoryKey: key, domain, compatibility, responseLanguage, defaultSelectionId});
+        draft = loaded.options;
+        draftUserNotes = loaded.userNotesDraft;
+        copyAnywayFingerprint = loaded.copyAnywayFingerprint;
+        pending = undefined;
+        pendingContext = undefined;
+        draftRevision += 1;
+    }
+
+    function saveDraft(options: AiExportOptionsSelection, overrideFingerprint = copyAnywayFingerprint, notesDraft = draftUserNotes) {
+        const normalized = {...options, responseLanguage};
+        if (!areAiExportOptionsEqual(draft, normalized)) draft = normalized;
+        draftUserNotes = notesDraft;
+        copyAnywayFingerprint = overrideFingerprint;
+        if (getClientSessionUserId() !== activeSessionUserId) return;
+        saveAiExportMemory({memoryKey: activeMemoryKey, options: normalized, userNotesDraft: notesDraft, copyAnywayFingerprint});
+    }
+
+    function handleDraftChange(options: AiExportOptionsSelection, notesDraft: string) {
+        saveDraft(options, copyAnywayFingerprint, notesDraft);
+        if (pendingContext && pendingContext.optionsFingerprint !== aiExportOptionsFingerprint(options)) {
+            contextEpoch += 1;
+            activeOperationId = undefined;
+            loading = false;
+            pending = undefined;
+            pendingContext = undefined;
+        }
+    }
 
     async function reposition() {
         await tick();
-        if (!open) return;
-        position = getFixedDropdownPosition(triggerEl, panelEl, align);
+        if (open) position = getFixedDropdownPosition(triggerEl, panelEl, align);
     }
 
-    function toggle() {
-        open = !open;
-        if (open) void reposition();
+    async function openMenu() {
+        if (disabled || loading) return;
+        loadDraft(activeMemoryKey);
+        open = true;
+        await reposition();
+        panelEl?.querySelector<HTMLElement>('[data-testid="ai-export-selection-button"]')?.focus();
     }
 
-    function select(id: string) {
+    function closeMenu() {
+        contextEpoch += 1;
+        activeOperationId = undefined;
+        loading = false;
         open = false;
-        onselect(id);
+        pending = undefined;
+        pendingContext = undefined;
+        triggerEl?.focus();
     }
 
-    function handleDocumentClick(e: MouseEvent) {
-        if (!open) return;
-        const target = e.target as HTMLElement;
-        if (target.closest?.('[data-ai-export-panel]') || target.closest?.('[data-testid="ai-export-button"]')) return;
-        open = false;
+    function capturePreparationContext(options: AiExportOptionsSelection): PreparationContext {
+        const operationId = ++nextOperationId;
+        activeOperationId = operationId;
+        return {
+            contextEpoch,
+            operationId,
+            sessionGeneration: getClientSessionGeneration(),
+            sessionUserId: activeSessionUserId,
+            memoryKey: activeMemoryKey,
+            optionsFingerprint: aiExportOptionsFingerprint(options),
+        };
+    }
+
+    function isPreparationContextCurrent(context: PreparationContext): boolean {
+        return (
+            context.contextEpoch === contextEpoch &&
+            context.operationId === activeOperationId &&
+            isClientSessionCurrent(context.sessionGeneration) &&
+            activeSessionUserId === context.sessionUserId &&
+            activeMemoryKey === context.memoryKey &&
+            aiExportOptionsFingerprint(draft) === context.optionsFingerprint
+        );
+    }
+
+    async function copyPrepared(result: PreparedAiExport, rememberOverride: boolean, context: PreparationContext) {
+        if (!isPreparationContextCurrent(context)) return;
+        await writePreparedAiExport(result);
+        if (!isPreparationContextCurrent(context)) return;
+        saveDraft(result.options, rememberOverride ? result.optionsFingerprint : copyAnywayFingerprint);
+        oncopied(result);
+        closeMenu();
+    }
+
+    async function prepare(options: AiExportOptionsSelection) {
+        if (loading) return;
+        loading = true;
+        pending = undefined;
+        pendingContext = undefined;
+        saveDraft(options);
+        const context = capturePreparationContext({...options, responseLanguage});
+        pendingContext = context;
+        try {
+            const result = await onprepare({...options, responseLanguage});
+            if (!isPreparationContextCurrent(context)) return;
+            pending = result;
+            const severity = estimateAiExportTokenSeverity(result.stats.finalPrompt.estimatedTokens);
+            if (severity === 'normal' || copyAnywayFingerprint === result.optionsFingerprint) await copyPrepared(result, false, context);
+        } catch (error) {
+            if (isPreparationContextCurrent(context)) onerror(error);
+            if (context.operationId === activeOperationId) pendingContext = undefined;
+        } finally {
+            if (context.operationId === activeOperationId) {
+                loading = false;
+                if (pendingContext?.operationId !== context.operationId) activeOperationId = undefined;
+            }
+        }
+    }
+
+    async function copyAnyway() {
+        if (!pending || !pendingContext || loading) return;
+        const context = pendingContext;
+        if (!isPreparationContextCurrent(context)) return;
+        loading = true;
+        try {
+            await copyPrepared(pending, true, context);
+        } catch (error) {
+            if (isPreparationContextCurrent(context)) onerror(error);
+        } finally {
+            if (context.operationId === activeOperationId) loading = false;
+        }
     }
 
     $effect(() => {
-        if (!open) return;
-        void reposition();
+        const key = memoryKey;
+        if (key !== activeMemoryKey) {
+            activeMemoryKey = key;
+            if (open) closeMenu();
+            loadDraft(key);
+        }
+    });
+
+    onDestroy(() => {
+        contextEpoch += 1;
+        activeOperationId = undefined;
+    });
+
+    $effect(() => {
+        const userId = $clientSessionUserId;
+        if (userId !== activeSessionUserId) {
+            activeSessionUserId = userId;
+            loadDraft(activeMemoryKey);
+        }
+    });
+
+    $effect(() => {
+        const signature = compatibility.selections.map((selection) => `${selection.kind}:${selection.id}:${selection.version}`).join('|');
+        if (signature !== catalogSignature) {
+            catalogSignature = signature;
+            loadDraft(activeMemoryKey);
+        }
     });
 
     $effect(() => {
         if (!open) return;
-        const handleViewportChange = () => void reposition();
-        window.addEventListener('resize', handleViewportChange);
-        window.addEventListener('scroll', handleViewportChange, true);
+        const pointer = (event: PointerEvent) => {
+            const path = event.composedPath();
+            const portal = event.target instanceof Element ? event.target.closest('[data-simpleselect-dropdown]') : null;
+            if (!(triggerEl && path.includes(triggerEl)) && !(panelEl && path.includes(panelEl)) && !portal) closeMenu();
+        };
+        const keyboard = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') closeMenu();
+        };
+        document.addEventListener('pointerdown', pointer, true);
+        document.addEventListener('keydown', keyboard, true);
         return () => {
-            window.removeEventListener('resize', handleViewportChange);
-            window.removeEventListener('scroll', handleViewportChange, true);
+            document.removeEventListener('pointerdown', pointer, true);
+            document.removeEventListener('keydown', keyboard, true);
         };
     });
 
-    onMount(() => {
-        document.addEventListener('click', handleDocumentClick);
-        return () => document.removeEventListener('click', handleDocumentClick);
+    $effect(() => {
+        if (!open) return;
+
+        const handleViewportChange = () => void reposition();
+        window.addEventListener('resize', handleViewportChange);
+        window.addEventListener('scroll', handleViewportChange, true);
+
+        const observer =
+            typeof ResizeObserver !== 'undefined' && panelEl
+                ? new ResizeObserver(() => {
+                      void reposition();
+                  })
+                : undefined;
+        if (panelEl) observer?.observe(panelEl);
+
+        return () => {
+            window.removeEventListener('resize', handleViewportChange);
+            window.removeEventListener('scroll', handleViewportChange, true);
+            observer?.disconnect();
+        };
     });
 </script>
 
-<div class="relative w-full">
-    <button
-        bind:this={triggerEl}
-        class="flex items-center justify-center gap-2 w-full px-3 py-1.5 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors disabled:opacity-50"
-        onclick={toggle}
-        disabled={loading}
-        data-testid="ai-export-button"
-        title={loading ? loadingLabel : triggerLabel}
-    >
-        {#if loading}
-            <RefreshCw size={14} class="animate-spin" />
-        {:else}
-            <Brain size={14} />
-        {/if}
-        {#if showLabel}
-            <span>{triggerLabel}</span>
-        {/if}
-    </button>
+<button
+    bind:this={triggerEl}
+    type="button"
+    disabled={disabled || loading}
+    aria-busy={loading}
+    aria-expanded={open}
+    aria-controls={panelId}
+    aria-haspopup="dialog"
+    aria-label={labels.triggerLabel}
+    class="flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-700 dark:text-gray-300 dark:hover:bg-slate-600"
+    onclick={() => (open ? closeMenu() : void openMenu())}
+    data-testid="ai-export-button"
+>
+    {#if loading}<LoaderCircle size={14} class="animate-spin" />{:else}<Brain size={14} />{/if}
+    {#if showLabel}<span>{labels.triggerLabel}</span>{/if}
+</button>
 
-    {#if open}
-        <div bind:this={panelEl} class="fixed z-50 w-96 max-w-[calc(100vw-1rem)] bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg overflow-hidden" style:left="{position.left}px" style:top="{position.top}px" data-ai-export-panel>
-            {#each entries as entry, i (entry.id)}
-                <button
-                    type="button"
-                    class="flex flex-col items-start gap-0.5 w-full px-3 py-2.5 text-left transition-colors hover:bg-gray-50 dark:hover:bg-slate-700 {i > 0 ? 'border-t border-gray-100 dark:border-slate-700' : ''}"
-                    onclick={() => select(entry.id)}
-                    data-testid={`ai-export-${entry.id}`}
-                >
-                    <span class="flex items-center gap-2 text-[13px] font-medium text-gray-700 dark:text-gray-200">
-                        {#if entry.icon}
-                            <entry.icon size={14} class="text-purple-500 shrink-0" />
-                        {:else}
-                            <Brain size={14} class="text-purple-500 shrink-0" />
-                        {/if}
-                        {entry.label}
-                    </span>
-                    {#if entry.description}
-                        <span class="text-[11px] text-gray-400 dark:text-gray-500">{entry.description}</span>
-                    {/if}
-                </button>
-            {/each}
-        </div>
-    {/if}
-</div>
+{#if open}
+    <div
+        use:portalToBody
+        bind:this={panelEl}
+        id={panelId}
+        role="dialog"
+        aria-label={labels.panelLabel}
+        tabindex="-1"
+        class="fixed z-[9000] max-h-[calc(100vh-1rem)] w-[30rem] max-w-[calc(100vw-1rem)] overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-xl outline-none dark:border-slate-600 dark:bg-slate-800"
+        style:left={`${position.left}px`}
+        style:top={`${position.top}px`}
+        data-testid="ai-export-menu-panel"
+    >
+        {#key draftRevision}
+            <AiExportOptionsPanel
+                {domain}
+                {compatibility}
+                initialOptions={draft}
+                initialUserNotes={draftUserNotes}
+                {responseLanguage}
+                {pending}
+                {disabled}
+                {loading}
+                labels={labels.options}
+                locale={$currentLanguage}
+                onprepare={(options) => void prepare(options)}
+                oncopyanyway={() => void copyAnyway()}
+                onusecompact={(options) => void prepare(options)}
+                ondraftchange={handleDraftChange}
+            />
+        {/key}
+    </div>
+{/if}

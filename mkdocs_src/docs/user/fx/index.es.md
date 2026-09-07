@@ -20,7 +20,7 @@ Cada par de divisas se muestra con detalles que incluyen:
 - 📈 El **tipo de cambio más reciente** y la tendencia del precio
 - 🏛️ El **proveedor de datos activo** (ECB, FED, BOE, SNB o MANUAL)
 - 📊 Un **gráfico de líneas simplificado (sparkline)** que muestra la tendencia del tipo de cambio en los últimos 30 días
-- 🖱️ **Menú Contextual**: Haga clic derecho en cualquier fila del diseño de tabla para acciones rápidas (Editar, Sincronizar, Eliminar)
+- 🖱️ **Menú Contextual**: Haga clic derecho en cualquier fila del diseño de tabla para acciones rápidas (Invertir dirección, Sincronizar, Recargar, Eliminar)
 
 Puede **filtrar** por divisa para encontrar rápidamente un par específico:
 

@@ -14,9 +14,11 @@
  * - Database populated with at least one asset with prices
  */
 
-import {expect, test} from '@playwright/test';
+import {expect, test} from '../fixtures/playwright';
 import {login} from '../fixtures/auth-helpers';
+import {expectChartCanvas} from '../fixtures/charts';
 import {TEST_USER} from '../fixtures/test-users';
+import {waitForChart} from '../fixtures/app-events';
 import {goToAssetsPage, navigateToAssetByName} from './assets-helpers';
 
 test.describe('Asset Data Editor', () => {
@@ -37,14 +39,15 @@ test.describe('Asset Data Editor', () => {
     // ========================================================================
     async function openDataEditor(page: import('@playwright/test').Page) {
         await goToAssetWithPrices(page);
-        // Wait for chart to render — the edit button only appears when lineData.length > 0
-        await page.waitForSelector('canvas', {timeout: 10_000});
-        await page.waitForTimeout(500);
+        // Wait for chart to render — the edit button only appears when lineData.length > 0.
+        // Scoped to the asset chart on purpose: an unscoped waitForSelector('canvas')
+        // would be satisfied by any canvas on the page (report 16, finding A5).
+        await expectChartCanvas(page, 'asset-detail-chart', 10_000);
+        await waitForChart(page, 20_000);
         // The edit data button is inside {:else if lineData.length > 0} — check it exists
         const editDataBtn = page.getByTestId('asset-detail-editdata-btn');
         await expect(editDataBtn).toBeVisible({timeout: 5_000});
         await editDataBtn.click();
-        await page.waitForTimeout(300);
         await expect(page.getByTestId('asset-detail-editor-panel')).toBeVisible();
     }
 
@@ -54,7 +57,6 @@ test.describe('Asset Data Editor', () => {
     async function openPriceImportModal(page: import('@playwright/test').Page) {
         await openDataEditor(page);
         await page.getByTestId('fx-data-import-btn').click();
-        await page.waitForTimeout(200);
         const modal = page.getByTestId('data-import-modal');
         await expect(modal).toBeVisible();
         return modal;
@@ -66,9 +68,7 @@ test.describe('Asset Data Editor', () => {
     async function openEventImportModal(page: import('@playwright/test').Page) {
         await openDataEditor(page);
         await page.getByTestId('asset-editor-events-tab').click();
-        await page.waitForTimeout(200);
         await page.getByTestId('fx-data-import-btn').click();
-        await page.waitForTimeout(200);
         const modal = page.getByTestId('data-import-modal');
         await expect(modal).toBeVisible();
         return modal;
@@ -117,7 +117,6 @@ test.describe('Asset Data Editor', () => {
         await openDataEditor(page);
         const eventsTab = page.getByTestId('asset-editor-events-tab');
         await eventsTab.click();
-        await page.waitForTimeout(200);
         // Events tab should now be active
         await expect(eventsTab).toHaveClass(/text-libre-green|text-emerald/);
     });
@@ -142,7 +141,6 @@ test.describe('Asset Data Editor', () => {
         await openDataEditor(page);
         // Switch to events tab
         await page.getByTestId('asset-editor-events-tab').click();
-        await page.waitForTimeout(200);
         // Import CSV button
         const importBtn = page.getByTestId('fx-data-import-btn');
         await expect(importBtn).toBeVisible();
@@ -192,7 +190,6 @@ test.describe('Asset Data Editor', () => {
         await expect(panel).toBeVisible();
         // Click close button
         await panel.locator('button:has-text("✕")').click();
-        await page.waitForTimeout(300);
         await expect(panel).not.toBeVisible();
     });
 
@@ -204,7 +201,6 @@ test.describe('Asset Data Editor', () => {
         const panel = page.getByTestId('asset-detail-editor-panel');
         // Click Add Row
         await page.getByTestId('fx-data-add-row-btn').click();
-        await page.waitForTimeout(300);
         // Save button should now show dirty count
         const saveBtn = panel.locator('button:has-text("Save")');
         await expect(saveBtn).toBeEnabled();
@@ -218,15 +214,12 @@ test.describe('Asset Data Editor', () => {
         const panel = page.getByTestId('asset-detail-editor-panel');
         // Add row in prices tab
         await page.getByTestId('fx-data-add-row-btn').click();
-        await page.waitForTimeout(200);
         // Prices tab badge should show 1
         const pricesTab = page.getByTestId('asset-editor-prices-tab');
         await expect(pricesTab.locator('span.rounded-full')).toHaveText('1');
         // Switch to events tab and back
         await page.getByTestId('asset-editor-events-tab').click();
-        await page.waitForTimeout(200);
         await pricesTab.click();
-        await page.waitForTimeout(200);
         // Save button should still be enabled
         const saveBtn = panel.locator('button:has-text("Save")');
         await expect(saveBtn).toBeEnabled();
@@ -240,10 +233,8 @@ test.describe('Asset Data Editor', () => {
         const panel = page.getByTestId('asset-detail-editor-panel');
         // Add row
         await page.getByTestId('fx-data-add-row-btn').click();
-        await page.waitForTimeout(200);
         // Click cancel
         await panel.locator('button:has-text("Cancel")').click();
-        await page.waitForTimeout(300);
         // Editor should be hidden
         await expect(panel).not.toBeVisible();
     });
@@ -257,7 +248,6 @@ test.describe('Asset Data Editor', () => {
         // Type valid price CSV data (must use full header with all columns)
         const textarea = modal.locator('textarea');
         await textarea.fill('date;currency;close;open;high;low;volume\n2020-06-10;USD;150.25;;;;\n2020-06-11;USD;151.30;;;;\n2020-06-12;EUR;148.90;;;;');
-        await page.waitForTimeout(200);
 
         // Import button should show "Import (3)" for 3 valid rows
         const importBtn = modal.locator('button', {hasText: /Import \(3\)/});
@@ -272,7 +262,6 @@ test.describe('Asset Data Editor', () => {
 
         const textarea = modal.locator('textarea');
         await textarea.fill('date;currency;close;open;high;low;volume\n2020-06-10;USD;150.25;149.00;151.00;148.50;1200000');
-        await page.waitForTimeout(200);
 
         // Should show 1 valid row
         const importBtn = modal.locator('button', {hasText: /Import \(1\)/});
@@ -288,7 +277,6 @@ test.describe('Asset Data Editor', () => {
         const textarea = modal.locator('textarea');
         // Missing close price (required), bad date, non-numeric close
         await textarea.fill('date;currency;close;open;high;low;volume\n2020-06-10;USD;;;;;\nnot-a-date;USD;100;;;;\n2020-06-11;USD;abc;;;;');
-        await page.waitForTimeout(200);
 
         // Error indicators (✗) should be visible
         const errorIndicators = modal.locator('.text-red-500');
@@ -307,13 +295,11 @@ test.describe('Asset Data Editor', () => {
 
         const textarea = modal.locator('textarea');
         await textarea.fill('date;currency;close;open;high;low;volume\n2019-01-15;USD;99.99;;;;\n2019-01-16;USD;100.50;;;;');
-        await page.waitForTimeout(200);
 
         // Click Import button
         const importBtn = modal.locator('button', {hasText: /Import \(2\)/});
         await expect(importBtn).toBeVisible();
         await importBtn.click();
-        await page.waitForTimeout(300);
 
         // Modal should be closed
         await expect(modal).not.toBeVisible();
@@ -335,7 +321,6 @@ test.describe('Asset Data Editor', () => {
 
         const textarea = modal.locator('textarea');
         await textarea.fill('date;currency;type;amount;notes\n2020-03-15;USD;DIVIDEND;1.25;Q1 payout\n2020-06-01;;SPLIT;2;2:1 split');
-        await page.waitForTimeout(200);
 
         // Import button should show "Import (2)" for 2 valid rows
         const importBtn = modal.locator('button', {hasText: /Import \(2\)/});
@@ -351,7 +336,6 @@ test.describe('Asset Data Editor', () => {
         const textarea = modal.locator('textarea');
         // Missing amount (required), and empty type (required)
         await textarea.fill('date;currency;type;amount;notes\n2020-03-15;USD;;1.25;test\n2020-06-01;USD;DIVIDEND;;test');
-        await page.waitForTimeout(200);
 
         // Error indicators should be visible
         const errorIndicators = modal.locator('.text-red-500');
@@ -366,13 +350,11 @@ test.describe('Asset Data Editor', () => {
 
         const textarea = modal.locator('textarea');
         await textarea.fill('date;currency;type;amount;notes\n2019-12-15;USD;DIVIDEND;0.75;test dividend');
-        await page.waitForTimeout(200);
 
         // Click Import
         const importBtn = modal.locator('button', {hasText: /Import \(1\)/});
         await expect(importBtn).toBeVisible();
         await importBtn.click();
-        await page.waitForTimeout(300);
 
         // Modal closed
         await expect(modal).not.toBeVisible();
@@ -408,7 +390,6 @@ test.describe('Asset Data Editor', () => {
         const textarea = modal.locator('textarea');
         // Use extended header but skip open,high,low with ;;
         await textarea.fill('date;currency;close;open;high;low;volume\n2020-06-10;USD;150.25;;;;1500000');
-        await page.waitForTimeout(200);
 
         // Should accept as 1 valid row (optional columns skipped)
         const importBtn = modal.locator('button', {hasText: /Import \(1\)/});
@@ -423,7 +404,6 @@ test.describe('Asset Data Editor', () => {
 
         const textarea = modal.locator('textarea');
         await textarea.fill('date;currency;type;amount;notes\n' + '2020-01-01;USD;DIVIDEND;1.00;\n' + '2020-02-01;EUR;INTEREST;0.50;\n' + '2020-03-01;;SPLIT;2;\n' + '2020-04-01;USD;PRICE_ADJUSTMENT;-5.00;\n' + '2020-05-01;USD;MATURITY_SETTLEMENT;100;final');
-        await page.waitForTimeout(200);
 
         // All 5 event types should be valid
         const importBtn = modal.locator('button', {hasText: /Import \(5\)/});

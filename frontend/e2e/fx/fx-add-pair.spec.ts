@@ -8,7 +8,7 @@
  * - Database populated (./dev.py test db populate --force)
  */
 
-import {expect, test} from '@playwright/test';
+import {expect, test} from '../fixtures/playwright';
 import {login} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {goToFxPage, openAddPairModal, selectCurrency} from './fx-helpers';
@@ -77,7 +77,6 @@ test.describe('FX Add Pair Modal', () => {
         const quoteContainer = modal.locator('[data-testid="fx-add-pair-quote"]');
         if (await quoteContainer.isVisible()) {
             await selectCurrency(page, quoteContainer, 'CAD');
-            await page.waitForTimeout(1000);
 
             // Route section should appear
             const routeSection = page.getByTestId('fx-route-select');

@@ -60,6 +60,7 @@
 
     export type {TXReadItem, AssetEvent} from './types';
     import type {TXReadItem, AssetEvent} from './types';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
 
     /**
      * Display row = TXReadItem + decoration metadata for adjacency rendering.
@@ -624,10 +625,6 @@
     }
 
     /** Escape a string for safe inclusion in an HTML attribute / text node. */
-    function escapeHtml(s: string): string {
-        return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-    }
-
     let allColumns = $derived<ColumnDef<DisplayRow>[]>([
         {
             id: 'date',

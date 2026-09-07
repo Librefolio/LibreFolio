@@ -54,6 +54,6 @@ The user can override via the chip valuta selector in the WAC preview:
 |------|------|
 | determine_target_currency | `backend/app/services/wac_service.py` |
 | Currency sentinella logic | `backend/app/services/transaction_service.py` |
-| Frontend chip selector | `frontend/src/lib/components/transactions/WacPreviewSection.svelte` |
+| Frontend chip selector | `frontend/src/lib/components/transactions/wac/WacPreviewSection.svelte` |
 | Plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/Bugfix-SPD/plan-R3-SP-D-WacCurrency.prompt.md` |
 

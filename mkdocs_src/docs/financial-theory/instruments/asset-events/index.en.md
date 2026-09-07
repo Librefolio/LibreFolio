@@ -37,6 +37,7 @@ Some providers produce events during data synchronization:
 
 - **Scheduled Investment**: generates `INTEREST` and `PRICE_ADJUSTMENT` events from the configured interest schedule
 - **Yahoo Finance**: may produce `DIVIDEND` events from historical data
+- **justETF**: produces `DIVIDEND` events from chart data (ETF distribution history)
 
 Provider-generated events have a `provider_assignment_id` and are automatically refreshed during sync (deduplication on `asset_id + date + type`).
 

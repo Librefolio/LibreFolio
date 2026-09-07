@@ -126,6 +126,14 @@ describe('txCommitApi', () => {
             const result = await commitTransactions({});
             expect(result.rawResponse).toEqual(rawResp);
         });
+
+        it('defaults committed=false when a success response omits the field', async () => {
+            // A 200 body without `committed` is treated as not committed rather than truthy.
+            mockedTrySave.mockResolvedValueOnce({status: 'success', data: {results: [{ids: [9]}]}} as any);
+            const result = await commitTransactions({creates: [{type: 'BUY'}]});
+            expect(result.committed).toBe(false);
+            expect(result.issues).toEqual([]);
+        });
     });
 
     // =========================================================================
@@ -176,6 +184,12 @@ describe('txCommitApi', () => {
 
             const result = await validateTransactions({});
             expect(result.committed).toBe(true);
+        });
+
+        it('defaults issues to an empty list when the success body omits them', async () => {
+            mockedTrySave.mockResolvedValueOnce({status: 'success', data: {committed: true}} as any);
+            const result = await validateTransactions({});
+            expect(result.issues).toEqual([]);
         });
     });
 });

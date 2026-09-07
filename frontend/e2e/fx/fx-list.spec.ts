@@ -8,7 +8,7 @@
  * - Database populated (./dev.py test db populate --force)
  */
 
-import {expect, test} from '@playwright/test';
+import {expect, test} from '../fixtures/playwright';
 import {login} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {goToFxPage} from './fx-helpers';
@@ -68,17 +68,16 @@ test.describe('FX List Page', () => {
 
         const firstFilter = filterContainers.first();
         await firstFilter.locator('[role="combobox"]').click();
-        await page.waitForTimeout(200);
         const searchInput = firstFilter.locator('input[type="text"]');
         await searchInput.fill('EUR');
-        await page.waitForTimeout(500);
 
         // SearchSelect uses <button> inside [role="listbox"], not [role="option"]
         const listbox = page.locator('[role="listbox"]');
         await expect(listbox).toBeVisible();
+        await expect(listbox).toHaveAttribute('aria-busy', 'false', {timeout: 10_000});
         const option = listbox.locator('button').filter({hasText: 'EUR'}).first();
         await option.click();
-        await page.waitForTimeout(500);
+        await expect(listbox).toHaveCount(0, {timeout: 10_000});
 
         // All visible cards should contain "EUR"
         const filtered = page.locator('[data-testid^="fx-card-"]');
@@ -99,26 +98,43 @@ test.describe('FX List Page', () => {
         const filterContainers = page.locator('[data-testid="fx-currency-filter"]');
         const firstFilter = filterContainers.first();
         await firstFilter.locator('[role="combobox"]').click();
-        await page.waitForTimeout(200);
         const searchInput = firstFilter.locator('input[type="text"]');
         await searchInput.fill('EUR');
-        await page.waitForTimeout(500);
 
         // SearchSelect uses <button> inside [role="listbox"], not [role="option"]
         const listbox = page.locator('[role="listbox"]');
+        await expect(listbox).toHaveAttribute('aria-busy', 'false', {timeout: 10_000});
         const option = listbox.locator('button').filter({hasText: 'EUR'}).first();
         await option.click();
-        await page.waitForTimeout(500);
+        await expect(listbox).toHaveCount(0, {timeout: 10_000});
 
         // Click reset filters button
         const resetBtn = page.getByTestId('fx-reset-filters');
         await expect(resetBtn).toBeVisible();
         await resetBtn.click();
-        await page.waitForTimeout(500);
 
         // All cards should be restored
-        const afterReset = await allCards.count();
-        expect(afterReset).toBe(totalBefore);
+        await expect(allCards).toHaveCount(totalBefore, {timeout: 10_000});
+    });
+
+    test('column menu stays compact and lists daily delta after rate', async ({page}) => {
+        await goToFxPage(page);
+        await page.getByTestId('view-mode-list').click();
+
+        await page.getByTestId('column-visibility-toggle').click();
+        const dropdown = page.getByTestId('column-visibility-dropdown');
+        await expect(dropdown).toBeVisible();
+        const box = await dropdown.boundingBox();
+        const viewport = page.viewportSize();
+        if (!box || !viewport) throw new Error('Column visibility dropdown must have measurable viewport bounds.');
+        expect(box.width).toBeLessThan(320);
+        expect(box.x).toBeGreaterThanOrEqual(7);
+        expect(box.x + box.width).toBeLessThanOrEqual(viewport.width - 7);
+
+        const rateItem = page.getByTestId('column-visibility-item-rate');
+        const dailyItem = page.getByTestId('column-visibility-item-delta_1D');
+        await expect(dailyItem).toBeVisible();
+        expect(await rateItem.evaluate((element) => element.compareDocumentPosition(document.querySelector('[data-testid="column-visibility-item-delta_1D"]')!) & Node.DOCUMENT_POSITION_FOLLOWING)).toBeTruthy();
     });
 
     // ========================================================================
@@ -133,7 +149,6 @@ test.describe('FX List Page', () => {
         const yearPreset = datePicker.getByRole('button', {name: /1Y/});
         await expect(yearPreset).toBeVisible();
         await yearPreset.click();
-        await page.waitForTimeout(500);
 
         // After clicking 1Y, the preset should be active (styled differently)
         // Verify the 1Y button has the active class
@@ -157,11 +172,9 @@ test.describe('FX List Page', () => {
         const swapBtn = firstCard.locator('[data-testid$="-swap-btn"]');
         await expect(swapBtn).toBeVisible();
         await swapBtn.click();
-        await page.waitForTimeout(500);
 
-        const labelAfter = await pairLabel.textContent();
-        // Labels should differ after swap
-        expect(labelAfter).not.toBe(labelBefore);
+        // Labels should differ after swap — the retrying assertion *is* the wait
+        await expect(pairLabel).not.toHaveText(labelBefore ?? '', {timeout: 10_000});
     });
 
     // ========================================================================
@@ -180,10 +193,8 @@ test.describe('FX List Page', () => {
             // Fallback: click the card itself
             await firstCard.click();
         }
-        await page.waitForTimeout(1000);
-
         // URL should contain /fx/ followed by a pair slug
-        await expect(page).toHaveURL(/\/fx\/[A-Z]+-[A-Z]+/);
+        await expect(page).toHaveURL(/\/fx\/[A-Z]+-[A-Z]+/, {timeout: 10_000});
     });
 
     // ========================================================================
@@ -201,5 +212,22 @@ test.describe('FX List Page', () => {
         await goToFxPage(page);
         const syncBtn = page.getByTestId('fx-sync-all-button');
         await expect(syncBtn).toBeVisible();
+    });
+
+    test('loads all FX cards through exactly one bulk conversion request', async ({page}) => {
+        const bulkRequests: Array<{postData: unknown}> = [];
+        page.on('request', (request) => {
+            if (request.method() !== 'POST') return;
+            if (new URL(request.url()).pathname !== '/api/v1/fx/currencies/convert') return;
+            bulkRequests.push({postData: request.postDataJSON()});
+        });
+
+        await goToFxPage(page);
+        await expect(page.getByTestId('fx-page')).toBeVisible({timeout: 8_000});
+        await page.waitForLoadState('networkidle');
+
+        expect(bulkRequests).toHaveLength(1);
+        expect(Array.isArray(bulkRequests[0].postData)).toBe(true);
+        expect((bulkRequests[0].postData as unknown[]).length).toBeGreaterThan(0);
     });
 });

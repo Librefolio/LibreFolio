@@ -32,9 +32,15 @@ from __future__ import annotations
 
 from datetime import date as date_type
 from decimal import Decimal
-from typing import Optional
+from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 from backend.app.schemas.common import (
     BackwardFillInfo,
@@ -45,6 +51,15 @@ from backend.app.schemas.common import (
     Currency,
     DateRangeModel,
     SafeDecimal,
+    StrictModel,
+)
+from backend.app.schemas.signals import (
+    SignalAnnotationRequest,
+    SignalBandValueSource,
+    SignalLineCrossoverRequest,
+    SignalOutputValueSource,
+    SignalRequest,
+    SignalResult,
 )
 from backend.app.utils.datetime_utils import parse_ISO_date
 
@@ -53,7 +68,7 @@ from backend.app.utils.datetime_utils import parse_ISO_date
 # ============================================================================
 
 
-class FXProviderInfo(BaseModel):
+class FXProviderInfo(StrictModel):
     """Information about a single FX rate provider."""
 
     model_config = ConfigDict(str_strip_whitespace=True)
@@ -94,11 +109,37 @@ class FXConversionRequest(BaseModel):
     from_amount: Currency = Field(..., description="Amount to convert with source currency")
     to_currency: str = Field(..., alias="to", min_length=3, max_length=3, description="Target currency (ISO 4217)")
     date_range: DateRangeModel = Field(..., description="Date range for conversion (start required, end optional for single day)")
+    signals: List[SignalRequest] = Field(
+        default_factory=list,
+        description="Technical signal instances computed on effective FX rates",
+    )
+    annotation_requests: List[SignalAnnotationRequest] = Field(
+        default_factory=list,
+        description="Optional cross/threshold rules evaluated on extended signal output",
+    )
 
     @field_validator("to_currency", mode="before")
     @classmethod
     def validate_to_currency(cls, v):
         return Currency.validate_code(v)
+
+    @model_validator(mode="after")
+    def validate_signal_references(self) -> FXConversionRequest:
+        instance_ids = [signal.instance_id for signal in self.signals]
+        if len(instance_ids) != len(set(instance_ids)):
+            raise ValueError("signal instance_id values must be unique")
+        annotation_keys = [annotation.key for annotation in self.annotation_requests]
+        if len(annotation_keys) != len(set(annotation_keys)):
+            raise ValueError("annotation request keys must be unique")
+        known_instances = set(instance_ids)
+        for annotation in self.annotation_requests:
+            if annotation.attach_to_instance_id not in known_instances:
+                raise ValueError(f"annotation target '{annotation.attach_to_instance_id}' is not in signals")
+            sources = (annotation.left, annotation.right) if isinstance(annotation, SignalLineCrossoverRequest) else (annotation.source,)
+            for source in sources:
+                if isinstance(source, (SignalOutputValueSource, SignalBandValueSource)) and source.instance_id not in known_instances:
+                    raise ValueError(f"annotation source '{source.instance_id}' is not in signals")
+        return self
 
 
 class FXConversionResult(BaseModel):
@@ -124,9 +165,16 @@ class FXConversionResult(BaseModel):
     def _parse_conversion_date(cls, v):
         return parse_ISO_date(v)
 
-    def conversion_date_str(self) -> str:
-        """Restituisce la data in formato ISO string (YYYY-MM-DD)."""
-        return self.conversion_date.isoformat()
+
+
+class FXSignalQueryResult(BaseModel):
+    """Signal results for one original (pre-daily-expansion) FX request."""
+
+    request_index: int = Field(..., ge=0)
+    from_currency: str = Field(..., min_length=3, max_length=3)
+    to_currency: str = Field(..., min_length=3, max_length=3)
+    date_range: DateRangeModel
+    signals: List[SignalResult] = Field(default_factory=list)
 
 
 class FXConvertResponse(BaseBulkResponse[FXConversionResult]):
@@ -134,7 +182,10 @@ class FXConvertResponse(BaseBulkResponse[FXConversionResult]):
 
     # Inherits: results, success_count, errors
     # Note: success_count should be populated by service layer
-    pass
+    signal_results: List[FXSignalQueryResult] = Field(
+        default_factory=list,
+        description="Signal results grouped by original conversion request",
+    )
 
 
 # ============================================================================
@@ -196,8 +247,6 @@ class FXUpsertResult(BaseModel):
 class FXBulkUpsertResponse(BaseBulkResponse[FXUpsertResult]):
     """Response model for bulk rate upsert."""
 
-    pass
-
 
 # ============================================================================
 # RATE DELETE MODELS
@@ -255,7 +304,6 @@ class FXBulkDeleteResponse(BaseBulkDeleteResponse[FXDeleteResult]):
     # - success_count: int
     # - errors: List[str]
     # - total_deleted: int (total FX rates deleted)
-    pass
 
 
 # ============================================================================
@@ -263,7 +311,7 @@ class FXBulkDeleteResponse(BaseBulkDeleteResponse[FXDeleteResult]):
 # ============================================================================
 
 
-def validate_chain_steps(
+def validate_chain_steps(  # noqa: C901 — flat numbered rule-chain validation
     steps: list,  # list[FXRouteStep] or list[dict] with from/to keys
     base: str,
     quote: str,
@@ -359,8 +407,8 @@ class FXConversionRouteItem(BaseModel):
 
     model_config = ConfigDict(str_strip_whitespace=True)
 
-    base: str = Field(..., min_length=3, max_length=3)
-    quote: str = Field(..., min_length=3, max_length=3)
+    base: str = Field(..., min_length=3, max_length=3, description="Base currency. Stored alphabetically: posting EUR/DKK yields a DKK-EUR row.")
+    quote: str = Field(..., min_length=3, max_length=3, description="Quote currency. See `base` — the pair is sorted on write, not rejected.")
     priority: int = Field(..., ge=1)
     chain_steps: list[FXRouteStep] = Field(..., min_length=1, description="Ordered list of conversion steps (edges of the graph)")
 
@@ -377,8 +425,6 @@ class FXConversionRouteItem(BaseModel):
 
 class FXConversionRoutesResponse(BaseListResponse[FXConversionRouteItem]):
     """Response model for listing conversion routes."""
-
-    pass
 
 
 class FXConversionRouteResult(BaseModel):
@@ -429,23 +475,8 @@ class FXDeleteRouteResult(BaseDeleteResult):
 class FXDeleteRoutesResponse(BaseBulkDeleteResponse[FXDeleteRouteResult]):
     """Response model for DELETE /routes."""
 
-    pass
-
 
 # NOTE: FXCurrenciesResponse was removed — GET /fx/currencies endpoint absorbed by
 # GET /fx/providers which now includes target_currencies per provider.
-
-
-class FXPairItem(BaseModel):
-    """A unique currency pair with optional metadata."""
-
-    base: str = Field(..., description="Base currency (alphabetically first)")
-    quote: str = Field(..., description="Quote currency (alphabetically second)")
-    has_provider: bool = Field(default=False, description="Whether this pair has configured providers")
-    rate_count: int = Field(default=0, description="Number of rate data points in the DB")
-
-
-class FXPairsListResponse(BaseListResponse[FXPairItem]):
-    """Response for GET /currencies/pairs — all known FX pairs."""
-
-    pass
+# FXPairItem/FXPairsListResponse were removed too — the GET /currencies/pairs
+# endpoint they were pre-written for never shipped (audit 08/G2).

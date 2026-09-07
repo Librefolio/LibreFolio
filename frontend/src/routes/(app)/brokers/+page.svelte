@@ -1,5 +1,6 @@
 <script lang="ts">
     import {onMount} from 'svelte';
+    import {goto} from '$app/navigation';
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
     import {fetchReport} from '$lib/stores/portfolio/portfolioStore.svelte';
@@ -12,6 +13,8 @@
     import DeleteBrokerDialog from '$lib/components/brokers/DeleteBrokerDialog.svelte';
     import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
     import {refreshAllBrokers, getAllBrokers, getAccessibleBrokers, invalidateBroker} from '$lib/stores/reference/brokerStore';
+    import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
+    import {notify} from '$lib/stores/app/notify.svelte';
     import type {Broker} from '$lib/types';
 
     type CurrencyLike = {code: string; amount: number | string};
@@ -70,6 +73,7 @@
     let deleteDialogOpen = false;
     let deletingBroker: {id: number; name: string} | null = null;
     let deletingTransactionCount = 0;
+    let deleteBlocked = false;
     let deleteLoading = false;
 
     let sharingModalOpen = false;
@@ -212,7 +216,15 @@
     function handleDelete(event: CustomEvent<{id: number; name: string}>) {
         deletingBroker = event.detail;
         deletingTransactionCount = 0;
+        deleteBlocked = false;
         deleteDialogOpen = true;
+    }
+
+    function closeDeleteDialog() {
+        deleteDialogOpen = false;
+        deletingBroker = null;
+        deletingTransactionCount = 0;
+        deleteBlocked = false;
     }
 
     function openSharingModal(brokerId: number, brokerName: string, readOnly: boolean) {
@@ -237,18 +249,59 @@
     async function confirmDelete(event: CustomEvent<{force: boolean}>) {
         if (!deletingBroker) return;
 
+        const sessionGeneration = getClientSessionGeneration();
         deleteLoading = true;
         try {
-            await zodiosApi.delete_brokers_api_v1_brokers_delete(undefined, {queries: {ids: [deletingBroker.id], force: event.detail.force}});
-            invalidateBroker(deletingBroker.id);
-            deleteDialogOpen = false;
-            deletingBroker = null;
+            const result = await zodiosApi.delete_brokers_api_v1_brokers_delete(undefined, {queries: {ids: [deletingBroker.id], force: event.detail.force}});
+            if (!isClientSessionCurrent(sessionGeneration)) return;
+            const deleteResult = result.results[0];
+            if (!deleteResult) {
+                notify({
+                    name: 'broker.delete.failed',
+                    detail: {brokerId: deletingBroker.id, reason: 'missing-result'},
+                    toast: {variant: 'error', message: $_('brokers.deleteFailed')},
+                });
+                return;
+            }
+            const transactionCount = deleteResult.transaction_count ?? 0;
+            if (!deleteResult.success && !event.detail.force && transactionCount > 0) {
+                deletingTransactionCount = transactionCount;
+                deleteBlocked = true;
+                // No toast: the dialog switches to its "blocked" state, which says more
+                // than a toast could and offers the way out.
+                notify({name: 'broker.delete.blocked', detail: {brokerId: deletingBroker.id, transactionCount}});
+                return;
+            }
+            if (!deleteResult.success) {
+                notify({
+                    name: 'broker.delete.failed',
+                    detail: {brokerId: deletingBroker.id, reason: deleteResult.message ?? 'unknown'},
+                    toast: {variant: 'error', message: deleteResult.message ? `${$_('brokers.deleteFailed')}: ${deleteResult.message}` : $_('brokers.deleteFailed')},
+                });
+                return;
+            }
+            const deletedId = deletingBroker.id;
+            invalidateBroker(deletedId);
+            closeDeleteDialog();
             await loadBrokers();
+            // No toast: the broker disappears from the list, which is the confirmation.
+            notify({name: 'broker.deleted', detail: {brokerId: deletedId}});
         } catch (e) {
-            console.error('Failed to delete broker:', e);
+            notify({
+                name: 'broker.delete.failed',
+                detail: {brokerId: deletingBroker.id, reason: (e as Error)?.message ?? 'exception'},
+                toast: {variant: 'error', message: $_('brokers.deleteFailed')},
+            });
         } finally {
             deleteLoading = false;
         }
+    }
+
+    async function viewBrokerTransactions() {
+        if (!deletingBroker || deleteLoading) return;
+        const brokerId = deletingBroker.id;
+        closeDeleteDialog();
+        await goto(`/transactions?broker_id=${brokerId}`);
     }
 
     function handleModalClose() {
@@ -264,7 +317,7 @@
     }
 </script>
 
-<div class="space-y-6" data-testid="brokers-page">
+<div class="space-y-6" aria-busy={loading} data-busy={loading ? 'true' : 'false'} data-testid="brokers-page">
     <!-- Header: Title left, controls right. Round 14.1 bugfix: `lg:` is a VIEWPORT breakpoint
          (1024px) — wraps unconditionally below that width regardless of whether the actual
          header row has room. Plain `flex-wrap` reacts to the row's OWN available width instead
@@ -364,10 +417,11 @@
     isOpen={deleteDialogOpen}
     loading={deleteLoading}
     on:cancel={() => {
-        deleteDialogOpen = false;
-        deletingBroker = null;
+        closeDeleteDialog();
     }}
     on:confirm={confirmDelete}
+    on:viewTransactions={viewBrokerTransactions}
+    blocked={deleteBlocked}
     transactionCount={deletingTransactionCount}
 />
 

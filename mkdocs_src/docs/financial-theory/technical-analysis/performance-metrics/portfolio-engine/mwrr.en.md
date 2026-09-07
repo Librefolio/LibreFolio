@@ -1,7 +1,5 @@
 # 💵 MWRR (Money-Weighted Rate of Return) / XIRR
 
-*[⬅️ Back to Performance Metrics Overview](../index.md)*
-
 ## 💡 What is it?
 MWRR (also known as Internal Rate of Return) measures **your personal** performance as an investor. Unlike asset-only metrics, it accounts for both the performance of the underlying assets and the **timing and size** of your deposits and withdrawals. 
 
@@ -11,7 +9,7 @@ To provide complete visibility, LibreFolio distinguishes between two forms of th
 
 ## 📈 Annualized MWRR vs. Cumulative MWRR
 
-### Annualized MWRR {: #annualized-mwrr }
+### 📈 Annualized MWRR {: #annualized-mwrr }
 Annualized MWRR is the compound annual rate of return that makes the Net Present Value (NPV) of all cash flows equal to zero. 
 
 This compound rate is mathematically equivalent to the **CAGR** (Compound Annual Growth Rate) of your actual invested money, representing the smoothed annual growth rate required for the capital to grow to the final balance, accounting for all intermediate movements.
@@ -87,7 +85,9 @@ $$
 * It is ideal for long-term comparisons (e.g., comparing your performance with an annual bank interest rate or CAGR).
 * **Volatility Warning:** On short periods (e.g., a few days or weeks), the annualized return can be highly volatile and display extreme percentages because the math extrapolates a small-window return to a full 365-day year.
 
-### Cumulative MWRR {: #cumulative-mwrr }
+LibreFolio builds MWRR cash flows from capital-baseline deltas, not cash-only deposit rows. Priced in-kind ADJUSTMENT/TRANSFER capital is therefore treated as contributed capital rather than as sudden investment performance.
+
+### 📊 Cumulative MWRR {: #cumulative-mwrr }
 Cumulative MWRR represents the total equivalent return over the selected period, obtained by compounding the annualized rate for the actual duration of that window.
 
 **Direct Formula (without roots, uses $r$ directly):**
@@ -124,27 +124,27 @@ Let's look at a 10-year scenario to see how timing impacts performance and how t
 * **Year 5:** You deposit another **€90,000**.
 * **Year 10:** Your final Net Asset Value (NAV) is **€200,000**.
 
-### Simple ROI Comparison
+### 📉 Simple ROI Comparison
 The simple ROI is calculated purely on total net contributions:
 
 $$
 ROI = \frac{200,000 - 100,000}{100,000} = +100\%
 $$
 
-### MWRR Timing Effect
+### ⏱️ MWRR Timing Effect
 If the bulk of your capital (€90,000) was deposited in Year 5, right before a massive multi-year market recovery, your money worked very efficiently. Because the larger sum was exposed to the high-growth years, your **Annualized MWRR** would be much higher than the market's TWRR.
 
 Using a mathematical NPV solver for this specific scenario:
 * **Annualized MWRR ($r$)** is exactly **13.02%**.
 
-### Converting to Cumulative MWRR
+### 🔁 Converting to Cumulative MWRR
 By compounding this 13.02% annualized return over the 10-year period:
 
 $$
 \text{MWRR}_{\text{cumulative}} = (1 + 0.130227)^{10} - 1 \approx +240.14\%
 $$
 
-### What does +240.14% mean?
+### 💡 What does +240.14% mean?
 * It does **not** mean that your total €100,000 contributions grew to €340,140.
 * It means that a **theoretical euro**, invested at the very beginning of the 10-year period and left untouched, would have grown to €3.40, achieving a total return of 240.14% by growing at the same average compound speed as your actual cash flows.
 
@@ -154,10 +154,10 @@ $$
 
 LibreFolio displays these performance metrics across the dashboard:
 
-### Percent Chart (`%`)
+### 📊 Percent Chart (`%`)
 Plotted series use **Cumulative MWRR**, **Cumulative TWRR**, and **Simple ROI**. This allows direct, side-by-side visual comparison as all three series start at 0% and represent total progress over the selected timeframe.
 
-### KPI Cards
+### 🧾 KPI Cards
 * **Simple ROI** (Primary metric for absolute return).
 * **Cumulative TWRR** (Strategy/allocation performance indicator).
 * **Cumulative MWRR** (Primary personal timing indicator).
@@ -166,4 +166,3 @@ Plotted series use **Cumulative MWRR**, **Cumulative TWRR**, and **Simple ROI**.
 !!! tip "Analyzing the Performance Difference"
 
     To interpret the difference between Cumulative MWRR and Cumulative TWRR, refer to the [Timing Effect](timing-effect.md) page.
-

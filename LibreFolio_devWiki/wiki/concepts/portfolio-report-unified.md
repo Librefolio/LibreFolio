@@ -85,5 +85,5 @@ unico — nessun nuovo endpoint creato."* No separate endpoint is planned. See
 |------|------|
 | API endpoint | `backend/app/api/v1/portfolio_api.py` |
 | Service method | `backend/app/services/portfolio_service.py` (`get_report()`) |
-| Frontend store | `frontend/src/lib/stores/portfolioStore.svelte.ts` |
+| Frontend store | `frontend/src/lib/stores/portfolio/portfolioStore.svelte.ts` |
 | Dashboard page | `frontend/src/routes/(app)/dashboard/+page.svelte` |

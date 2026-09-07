@@ -13,6 +13,7 @@ declare global {
         /** Debug-only helpers, registered when isDebugEnabled() is true. See routes/(app)/+layout.svelte. */
         librefolioDebug?: {
             showDonationPopup: () => void;
+            showUpdateModal: () => void;
         };
     }
 }

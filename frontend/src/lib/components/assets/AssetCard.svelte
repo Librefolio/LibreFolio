@@ -8,7 +8,7 @@
 <script lang="ts">
     import {goto} from '$app/navigation';
     import {_ as t} from '$lib/i18n';
-    import {Percent, RefreshCw, RotateCw, Settings, Trash2} from 'lucide-svelte';
+    import {Merge, Percent, RefreshCw, RotateCw, Settings, Trash2} from 'lucide-svelte';
     import PriceChartCompact from '$lib/components/charts/PriceChartCompact.svelte';
     import AssetIcon from './AssetIcon.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
@@ -37,6 +37,8 @@
 
     interface Props {
         asset: AssetData;
+        /** F15 — transactions using this asset; shown as a small badge on the header. */
+        txCount?: number;
         /** Live current price (from bulk current-price endpoint) */
         livePrice?: number | null;
         /** Direction of last price change (for flash animation) */
@@ -64,10 +66,31 @@
         onsync?: (asset: AssetData) => void;
         onrefresh?: (asset: AssetData) => void;
         ondelete?: (asset: AssetData) => void;
+        onmerge?: (asset: AssetData) => void;
         onsettings?: (asset: AssetData) => void;
     }
 
-    let {asset, livePrice = null, livePriceDirection = 'neutral', deltaPercent = null, deltaAbs = null, dateStart, dateEnd, globalViewMode = 'percentage', chartSettings, renderSignals, chartData = [], loading = false, syncing = false, onsync, onrefresh, ondelete, onsettings}: Props = $props();
+    let {
+        asset,
+        txCount = undefined,
+        livePrice = null,
+        livePriceDirection = 'neutral',
+        deltaPercent = null,
+        deltaAbs = null,
+        dateStart,
+        dateEnd,
+        globalViewMode = 'percentage',
+        chartSettings,
+        renderSignals,
+        chartData = [],
+        loading = false,
+        syncing = false,
+        onsync,
+        onrefresh,
+        ondelete,
+        onmerge,
+        onsettings,
+    }: Props = $props();
 
     // =========================================================================
     // State
@@ -204,6 +227,11 @@
                     <Percent size={14} />
                 </button>
                 <span class="w-2 h-2 rounded-full shrink-0 {asset.active ? 'bg-emerald-500' : 'bg-red-400'}"></span>
+                {#if txCount !== undefined}
+                    <span class="text-[10px] font-mono text-gray-400 dark:text-gray-500 shrink-0" title={$t('assets.table.txCountTooltip')} data-testid="asset-card-tx-count">
+                        {txCount} tx
+                    </span>
+                {/if}
             </div>
         </div>
     </div>
@@ -285,6 +313,17 @@
             </button>
         </div>
         <div class="flex items-center gap-0.5">
+            <button
+                class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-libre-green transition-colors"
+                data-testid="asset-card-merge"
+                onclick={(e) => {
+                    stop(e);
+                    onmerge?.(asset);
+                }}
+                title={$t('assets.merge.action')}
+            >
+                <Merge size={15} />
+            </button>
             <button
                 class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-red-500 transition-colors"
                 onclick={(e) => {

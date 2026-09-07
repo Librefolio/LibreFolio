@@ -20,7 +20,7 @@ Le risorse statiche sono **visibili a tutti gli utenti** del sistema. Qui trover
 
 Questi file risiedono nella directory `custom-uploads/` sul server.
 
-**Menu Contestuale**: fai clic con il tasto destro su qualsiasi riga di un file (nella vista elenco) per accedere alle azioni rapide (Anteprima, Rinomina, Elimina).
+**Menu Contestuale**: fai clic con il tasto destro su qualsiasi riga di un file (nella vista elenco) per accedere alle azioni rapide (Anteprima, Copia Link, Scarica, Elimina).
 
 Puoi passare dalla **vista elenco** alla **vista griglia** per un'anteprima visiva dei file immagine:
 
@@ -40,7 +40,7 @@ I report dei broker hanno una **visibilità ristretta** — puoi vedere solo i r
 - ✅ **Risultati del parsing** dal sistema di importazione automatica (BRIM)
 - ❌ File che hanno **fallito il parsing** (conservati per il debugging)
 
-**Menu Contestuale**: fai clic con il tasto destro su qualsiasi riga di un report per accedere alle azioni rapide (Anteprima, Rinomina, Elimina).
+**Menu Contestuale**: fai clic con il tasto destro su qualsiasi riga di un report per accedere alle azioni rapide (Anteprima, Scarica, Elimina).
 
 ---
 
@@ -68,15 +68,15 @@ Se desideri importare transazioni o gestire estratti conto esistenti:
 
 1. Vai alla scheda **Report dei Broker**.
 2. Carica il file CSV o Excel esportato dal tuo broker (Degiro, Interactive Brokers, eToro, Directa SIM, ecc.).
-3. Scegli a quale **broker associare** il file — questo determina quale account broker riceve le transazioni importate.
-4. Il sistema rileva automaticamente il formato e avvia il **[Wizard di Importazione](../transactions/import/index.md)** guidato.
+3. Scegli a quale **broker associare** il file — questo determina quale account broker riceverà le transazioni importate.
+4. Il file viene archiviato e appare nella lista dei report. **Nessun import viene ancora eseguito**: per analizzarlo davvero e importare le transazioni, apri il **[Wizard di Importazione](../transactions/import/index.md)** (Transazioni → **Importa**) — il suo passo *Seleziona File* elenca i report già caricati, così puoi sceglierne uno invece di caricarlo di nuovo.
 
 ### ⚙️ Azioni sui Report Esistenti
 
 Fai clic con il tasto destro su qualsiasi report nella tabella per aprire il suo menu contestuale:
-- 🔄 **Ri-elabora (Reprocess)**: Esegue nuovamente il parser di importazione sull'estratto conto. Questo è utile dopo l'aggiornamento di un plugin di importazione o se hai accidentalmente cancellato alcune transazioni e desideri ripristinarle.
+- 👁️ **Anteprima (Preview)**: Ispeziona il contenuto del file senza lasciare la pagina.
 - 📥 **Scarica (Download)**: Scarica il file originale non elaborato.
-- 🗑️ **Elimina (Delete)**: Rimuove l'estratto conto e tutte le transazioni associate dal registro.
+- 🗑️ **Elimina (Delete)**: Rimuove il file e i suoi metadati. Le transazioni già importate da esso **restano nel registro** — eliminare un report non elimina mai le transazioni.
 
 !!! info "Associazione ≠ Parsing"
 

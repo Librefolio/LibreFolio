@@ -29,10 +29,10 @@ LibreFolio utiliza un [Sistema de Registro y Plugins](../developer/architecture/
 | 📥 **BRIM** | [Guía de Plugins BRIM](../developer/architecture/patterns/brim_plugin_guide.md) | Importar transacciones desde un nuevo bróker (CSV/Excel) |
 | 📈 **Asset** | [Guía de Plugins de Activos](../developer/architecture/patterns/asset_plugin_guide.md) | Obtener precios de una nueva fuente de datos |
 | 💱 **FX** | [Guía de Plugins FX](../developer/architecture/patterns/fx_plugin_guide.md) | Añadir un nuevo proveedor de tipos de cambio |
-| 📊 **Señales de gráfico** | *Guía próximamente* | Nuevos indicadores técnicos y superposiciones de gráficos (EMA, MACD, RSI, Bollinger…) |
+| 📊 **Señales Técnicas** | [Guía de Plugins de Señales](../developer/architecture/patterns/signal_plugin_guide.md) | Añadir indicadores backend con parámetros guiados por esquemas, salidas, umbrales y estilo de gráficos |
 
 * **Si no eres desarrollador**: puedes solicitar un nuevo plugin completando nuestro [Formulario de Solicitud de Plugins](https://github.com/Librefolio/LibreFolio/issues/new?template=plugin_request.yml). Además de los detalles de la solicitud, es necesario que proporciones ejemplos reales y anonimizados (ej. archivos CSV o Excel) del reporte de tu bróker.
-* **Si eres desarrollador**: puedes proceder directamente por tu cuenta a implementarlos. Consulta la [Guía del Registry & Plugin System](../developer/architecture/patterns/registry_pattern.md) y las guías específicas enlazadas en la tabla de arriba para aprender cómo crearlos.
+* **Si eres desarrollador**: puedes proceder directamente por tu cuenta a implementarlos. Consulta la [Guía del Registry & Plugin System](../developer/architecture/patterns/registry_pattern.md), luego sigue la guía pertinente arriba — incluida la [Guía de Plugins de Señales](../developer/architecture/patterns/signal_plugin_guide.md) para nuevos indicadores técnicos.
 
 ### :art: Ideas de UI/UX
 

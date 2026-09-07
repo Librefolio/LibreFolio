@@ -8,7 +8,7 @@ Une **division d'actions** (ou regroupement d'actions / reverse split) est une o
 
 Lors d'une division d'actions, une société divise ses actions existantes en plusieurs nouvelles actions. La **valeur totale** de la position d'un investisseur reste la même — seuls le nombre d'actions et le prix par action changent.
 
-### Division (Forward Split)
+### Forward (Forward Split)
 
 L'entreprise augmente le nombre d'actions. Chaque action existante devient plusieurs actions à un prix proportionnellement plus bas.
 
@@ -19,7 +19,7 @@ L'entreprise augmente le nombre d'actions. Chaque action existante devient plusi
 | **4:1** | Chaque action devient 4 actions au quart du prix |
 | **10:1** | Chaque action devient 10 actions au dixième du prix |
 
-### Regroupement (Reverse Split)
+### Reverse (Reverse Split)
 
 L'entreprise réduit le nombre d'actions. Plusieurs actions existantes fusionnent en un nombre réduit d'actions à un prix proportionnellement plus élevé.
 
@@ -61,14 +61,14 @@ Où $P$ est le prix par action et $Q$ la quantité d'actions.
 
 ## 📊 Pourquoi les entreprises procèdent-elles à des divisions
 
-### Divisions (Forward splits)
+### Forward (Forward splits)
 
 - **Accessibilité** : Un prix d'action plus bas rend le titre plus accessible aux investisseurs particuliers
 - **Liquidité** : Un plus grand nombre d'actions en circulation peut augmenter le volume d'échanges
 - **Psychologie** : Un prix nominal plus bas peut attirer davantage d'acheteurs
 - **Options** : Un prix d'action plus bas réduit le capital nécessaire pour les contrats d'options (100 actions par contrat)
 
-### Regroupements (Reverse splits)
+### Reverse (Reverse splits)
 
 - **Conformité de cotation** : Les bourses exigent des prix d'action minimums (ex : 1,00 $ sur le NASDAQ)
 - **Perception institutionnelle** : Certains fonds ont des exigences de prix minimums

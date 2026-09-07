@@ -650,6 +650,7 @@ class TestBrokerDelete:
             assert response.status_code == 200
             data = response.json()
             assert data["results"][0]["success"] is False
+            assert data["results"][0]["transaction_count"] >= 1
             assert "transactions" in data["results"][0]["message"].lower()
 
             print_success("✓ Got error when deleting broker with transactions")
@@ -691,6 +692,77 @@ class TestBrokerDelete:
             print_success("✓ Force deleted broker with transactions")
 
     @pytest.mark.asyncio
+    async def test_delete_brokers_with_cross_broker_link_force(self, test_server):
+        """BR-A-032C: Force delete broker clears external related_transaction_id links."""
+        print_section("Test BR-A-032C: DELETE /brokers - force clears cross-broker links")
+
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+
+            broker_resp = await client.post(
+                f"{API_BASE}/brokers",
+                json=[
+                    {"name": unique_name("Force Delete Link Source"), "allow_cash_overdraft": True},
+                    {"name": unique_name("Force Delete Link Target"), "allow_cash_overdraft": True},
+                ],
+                timeout=TIMEOUT,
+            )
+            assert broker_resp.status_code == 200, broker_resp.text
+            broker1_id = broker_resp.json()["results"][0]["broker_id"]
+            broker2_id = broker_resp.json()["results"][1]["broker_id"]
+
+            asset_resp = await client.post(
+                f"{API_BASE}/assets",
+                json=[{"display_name": unique_name("Force Delete Link Asset"), "asset_type": "STOCK", "currency": "EUR"}],
+                timeout=TIMEOUT,
+            )
+            assert asset_resp.status_code in (200, 201), asset_resp.text
+            asset_id = asset_resp.json()["results"][0]["asset_id"]
+
+            seed_resp = await client.post(
+                f"{API_BASE}/transactions/commit",
+                json={"creates": [{"broker_id": broker1_id, "asset_id": asset_id, "type": "ADJUSTMENT", "date": date.today().isoformat(), "quantity": "10", "cost_basis_override": {"code": "EUR", "amount": "100"}}]},
+                timeout=TIMEOUT,
+            )
+            assert seed_resp.status_code == 200, seed_resp.text
+            assert seed_resp.json()["committed"] is True
+
+            link_uuid = str(uuid.uuid4())
+            create_resp = await client.post(
+                f"{API_BASE}/transactions/commit",
+                json={
+                    "creates": [
+                        {"broker_id": broker1_id, "asset_id": asset_id, "type": "TRANSFER", "date": date.today().isoformat(), "quantity": "-5", "link_uuid": link_uuid},
+                        {"broker_id": broker2_id, "asset_id": asset_id, "type": "TRANSFER", "date": date.today().isoformat(), "quantity": "5", "link_uuid": link_uuid, "cost_basis_mode": "auto"},
+                    ]
+                },
+                timeout=TIMEOUT,
+            )
+            assert create_resp.status_code == 200, create_resp.text
+            assert create_resp.json()["committed"] is True
+            target_tx_id = create_resp.json()["results"][1]["ids"][0]
+
+            delete_resp = await client.delete(
+                f"{API_BASE}/brokers",
+                params={"ids": [broker1_id], "force": True},
+                timeout=TIMEOUT,
+            )
+            assert delete_resp.status_code == 200, delete_resp.text
+            delete_data = delete_resp.json()
+            assert delete_data["results"][0]["success"] is True
+            assert delete_data["results"][0]["transactions_deleted"] >= 2
+
+            get_resp = await client.get(f"{API_BASE}/transactions", params={"ids": [target_tx_id]}, timeout=TIMEOUT)
+            assert get_resp.status_code == 200, get_resp.text
+            txs = get_resp.json()
+            assert len(txs) == 1
+            assert txs[0]["broker_id"] == broker2_id
+            assert txs[0]["related_transaction_id"] is None
+            assert txs[0]["partner_broker_id"] is None
+
+            print_success("✓ Force delete cleared external related_transaction_id")
+
+    @pytest.mark.asyncio
     async def test_delete_brokers_partial_success(self, test_server):
         """BR-A-032B: DELETE /brokers can delete valid broker and keep blocked broker."""
         print_section("Test BR-A-032B: DELETE /brokers - partial success")
@@ -728,6 +800,7 @@ class TestBrokerDelete:
             result_by_id = {item["id"]: item for item in data["results"]}
             assert result_by_id[deletable_broker_id]["success"] is True
             assert result_by_id[blocked_broker_id]["success"] is False
+            assert result_by_id[blocked_broker_id]["transaction_count"] >= 1
             assert "transactions" in result_by_id[blocked_broker_id]["message"].lower()
 
             deleted_check = await client.get(f"{API_BASE}/brokers/{deletable_broker_id}", timeout=TIMEOUT)

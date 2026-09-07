@@ -33,7 +33,7 @@ Il modulo è progettato per essere intuitivo e dinamico. Quando si seleziona un 
 
 Per una definizione concettuale approfondita di ogni operazione, fare riferimento alla [guida alla Teoria Finanziaria](../../financial-theory/instruments/transaction-types/index.md).
 
-### Transazioni Singole
+### Single Singole
 
 Queste operano indipendentemente su un singolo conto broker.
 
@@ -45,7 +45,7 @@ Queste operano indipendentemente su un singolo conto broker.
 | ![](../../static/icons/transactions/fee.png){: width="24" style="vertical-align: middle;" } **COMMISSIONE / TASSA** ![](../../static/icons/transactions/tax.png){: width="24" style="vertical-align: middle;" } | Costi come commissioni del broker o tasse | [📖 Leggi](../../financial-theory/instruments/transaction-types/fee.md) |
 | ![](../../static/icons/transactions/adjustment.png){: width="24" style="vertical-align: middle;" } **REGOLAZIONE** | Correzione manuale dei saldi | [📖 Leggi](../../financial-theory/instruments/transaction-types/adjustment.md) |
 
-### Transazioni Composite {: #composite-transactions }
+### Composite Composite {: #composite-transactions }
 
 Queste rappresentano movimenti **tra** conti o valute. Producono due voci collegate che si compensano a vicenda.
 

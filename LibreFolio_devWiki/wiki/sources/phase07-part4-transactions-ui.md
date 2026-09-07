@@ -59,7 +59,7 @@ Plan for building the `/transactions` frontend page as a DataTable read-view wit
 | Staging modal | `frontend/src/lib/components/transactions/TransactionStagingModal.svelte` |
 | Promote modal | `frontend/src/lib/components/transactions/TransferPromoteModal.svelte` |
 | Bulk delete modal | `frontend/src/lib/components/transactions/BulkDeleteLinkedPairModal.svelte` |
-| Asset store | `frontend/src/lib/stores/assetStore.ts` |
+| Asset store | `frontend/src/lib/stores/reference/assetStore.ts` |
 | TX type utilities | `frontend/src/lib/utils/transactionTypes.ts` |
-| Broker colors | `frontend/src/lib/utils/brokerColors.ts` |
+| Broker colors | `frontend/src/lib/utils/broker/brokerColors.ts` |
 | Asset select | `frontend/src/lib/components/ui/select/AssetSelect.svelte` |

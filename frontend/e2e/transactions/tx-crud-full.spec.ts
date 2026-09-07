@@ -8,9 +8,11 @@
  *
  * Prerequisites: backend in test mode (port 6041), mock data populated.
  */
-import {expect, test, type Page} from '@playwright/test';
+import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
+import {waitForSettled} from '../fixtures/app-events';
+import {appears, optionsClosed} from '../fixtures/probe';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -20,7 +22,9 @@ import {TEST_USER} from '../fixtures/test-users';
 async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions');
     await Promise.race([page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000}), page.getByTestId('tx-loading').waitFor({state: 'hidden', timeout: 10_000})]).catch(() => {});
-    await page.waitForTimeout(500);
+    // The table being VISIBLE is not the table being LOADED: it renders empty
+    // and fills in. The page publishes data-busy, so wait on that instead.
+    await waitForSettled(page.getByTestId('transactions-page'));
 }
 
 /** Open create flow: click + button → FormModal opens. */
@@ -41,7 +45,7 @@ async function fillDeposit(page: Page, amount: string = '100') {
     const depositOption = page.getByTestId('search-select-option-DEPOSIT');
     await expect(depositOption).toBeVisible({timeout: 5_000});
     await depositOption.click();
-    await page.waitForTimeout(300);
+    await optionsClosed(page);
 
     // Pick first available broker
     const brokerWrap = page.getByTestId('tx-form-broker-wrap');
@@ -49,15 +53,14 @@ async function fillDeposit(page: Page, amount: string = '100') {
     const brokerOption = page.locator('[data-testid^="search-select-option-"]').first();
     await expect(brokerOption).toBeVisible({timeout: 5_000});
     await brokerOption.click();
-    await page.waitForTimeout(300);
 
     // Cash amount — DEPOSIT always requires cash, so this must be present.
     const cashWrap = page.getByTestId('tx-form-cash-wrap');
     await expect(cashWrap).toBeVisible({timeout: 3_000});
-    const cashInput = cashWrap.locator('input[type="number"]').first();
+    const cashInput = cashWrap.locator('input[data-testid$="-amount"]').first();
     await expect(cashInput).toBeVisible({timeout: 2_000});
     await cashInput.fill(amount);
-    await page.waitForTimeout(200);
+    await expect(cashInput).toHaveValue(amount);
 }
 
 /** Save the FormModal (click save button). */
@@ -108,15 +111,13 @@ test.describe('Transaction CRUD Full Lifecycle', () => {
         // Select CASH_TRANSFER type
         const typeButton = page.getByTestId('tx-form-type');
         await typeButton.click();
-        await page.waitForTimeout(300);
         const ctOption = page
             .locator('[data-testid^="search-select-option-"]')
             .filter({hasText: /cash transfer/i})
             .first();
-        if (await ctOption.isVisible({timeout: 2_000}).catch(() => false)) {
+        if (await appears(ctOption)) {
             await ctOption.click();
         }
-        await page.waitForTimeout(500);
 
         // The FormModal should show dual-form layout for paired type
         const formModal = page.getByTestId('tx-form-modal');
@@ -132,35 +133,33 @@ test.describe('Transaction CRUD Full Lifecycle', () => {
         // Select WITHDRAWAL type
         const typeButton = page.getByTestId('tx-form-type');
         await typeButton.click();
-        await page.waitForTimeout(300);
         const wOption = page
             .locator('[data-testid^="search-select-option-"]')
             .filter({hasText: /withdrawal/i})
             .first();
-        if (await wOption.isVisible({timeout: 2_000}).catch(() => false)) {
+        if (await appears(wOption)) {
             await wOption.click();
         }
-        await page.waitForTimeout(300);
+        await optionsClosed(page);
 
         // Pick first broker
         const brokerWrap = page.getByTestId('tx-form-broker-wrap');
         await brokerWrap.locator('button, [role="combobox"]').first().click();
-        await page.waitForTimeout(300);
         const brokerOption = page.locator('[data-testid^="search-select-option-"]').first();
-        if (await brokerOption.isVisible({timeout: 2_000}).catch(() => false)) {
+        if (await appears(brokerOption)) {
             await brokerOption.click();
         }
-        await page.waitForTimeout(300);
+        await optionsClosed(page);
 
         // Set cash amount
         const cashWrap = page.getByTestId('tx-form-cash-wrap');
-        if (await cashWrap.isVisible({timeout: 2_000}).catch(() => false)) {
-            const cashInput = cashWrap.locator('input[type="number"]').first();
-            if (await cashInput.isVisible({timeout: 1_000}).catch(() => false)) {
+        if (await appears(cashWrap)) {
+            const cashInput = cashWrap.locator('input[data-testid$="-amount"]').first();
+            if (await appears(cashInput, 1_000)) {
                 await cashInput.fill('500');
+                await expect(cashInput).toHaveValue('500');
             }
         }
-        await page.waitForTimeout(200);
 
         await saveFormModal(page);
 
@@ -200,7 +199,6 @@ test.describe('Transaction CRUD Full Lifecycle', () => {
 
         // Hover to reveal actions, click split
         await pairedRow!.hover();
-        await page.waitForTimeout(200);
         const splitBtn = pairedRow!.getByTestId(/^row-actions-/);
         await expect(splitBtn).toBeVisible({timeout: 2_000});
         await splitBtn.click();

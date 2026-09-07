@@ -15,6 +15,7 @@
 <script lang="ts">
     import {t} from '$lib/i18n';
     import {formatBytes} from '$lib/utils/files/upload';
+    import {formatDateTime} from '$lib/utils/core/formatDateTime';
     import LazyImage from '$lib/components/ui/media/LazyImage.svelte';
     import {Check, Download, Eye, File as FileIcon, FileSpreadsheet, FileText, Image as ImageIcon, Link2, Search, Trash2, X} from 'lucide-svelte';
     import type {UploadedFile} from '$lib/types';
@@ -69,13 +70,7 @@
     }
 
     function formatDate(dateStr: string): string {
-        return new Date(dateStr).toLocaleDateString(undefined, {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-        });
+        return formatDateTime(dateStr);
     }
 
     function getPreviewUrl(file: UploadedFile, size: string): string {

@@ -44,4 +44,4 @@ TRACE registration requires three patches in `configure_logging()`:
 | Role | Path |
 |------|------|
 | Policy + TRACE registration | `backend/app/logging_config.py` |
-| Source plan | `LibreFolio_developer_journal/RoadmapV4_UI/plan-independent-BackendLogAudit.prompt.md` |
+| Source plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-10-subplan/plan-independent-BackendLogAudit.prompt.md` |

@@ -24,7 +24,7 @@ Le fournisseur CSS Scraper vous permet d'extraire des données de prix de n'impo
 
 ## 🔎 Comment trouver le sélecteur CSS
 
-### Étape par étape (Chrome)
+### Step par étape (Chrome)
 
 1. Ouvrez la page contenant le prix dans Chrome
 2. Faites un **clic droit** sur la valeur du prix
@@ -34,7 +34,7 @@ Le fournisseur CSS Scraper vous permet d'extraire des données de prix de n'impo
 6. Sélectionnez **Copier** → **Copier le sélecteur**
 7. Collez-le dans le champ `current_css_selector`
 
-### Étape par étape (Firefox)
+### Step par étape (Firefox)
 
 1. Ouvrez la page contenant le prix dans Firefox
 2. Faites un **clic droit** sur la valeur du prix
@@ -83,5 +83,5 @@ La page a mis trop de temps à répondre. Essayez d'augmenter le paramètre `tim
 ### "Parse error"
 Le texte du prix n'a pas pu être analysé comme un nombre. Vérifiez le paramètre `decimal_format` — si la page affiche `100,39`, utilisez `eu` ; si elle affiche `100.39`, utilisez `us`.
 
-### Le prix affiche 0 ou une valeur erronée
+### Price prix affiche 0 ou une valeur erronée
 Le sélecteur correspond peut-être à un autre élément. Essayez un sélecteur plus spécifique. Utilisez les DevTools pour vérifier exactement quel élément votre sélecteur cible.

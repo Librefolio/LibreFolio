@@ -9,6 +9,10 @@ import subprocess
 from functools import lru_cache
 from pathlib import Path
 
+import structlog
+
+logger = structlog.get_logger(__name__)
+
 
 @lru_cache(maxsize=1)
 def get_git_version() -> str:
@@ -34,7 +38,7 @@ def get_git_version() -> str:
             if content:
                 return content
     except Exception:
-        pass
+        logger.debug("version_file_read_failed", path=str(version_file), exc_info=True)
 
     try:
         result = subprocess.run(["git", "describe", "--tags", "--always", "--dirty"], capture_output=True, text=True, cwd=project_root, timeout=5)
@@ -49,7 +53,7 @@ def get_git_version() -> str:
 
         return version
     except Exception:
-        pass
+        logger.debug("git_describe_failed", cwd=str(project_root), exc_info=True)
     return "unknown"
 
 

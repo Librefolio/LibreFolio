@@ -49,7 +49,7 @@ Visual only — colored dots instead of brand icons. Confusing UX when users hav
 
 | Role | Path |
 |------|------|
-| brokerHelpers | `frontend/src/lib/utils/brokerHelpers.ts` |
+| brokerHelpers | `frontend/src/lib/utils/broker/brokerHelpers.ts` |
 | FilesTable | `frontend/src/lib/components/files/FilesTable.svelte` |
 | files page (missing call) | `frontend/src/routes/(app)/files/+page.svelte` |
 | transactions page (race) | `frontend/src/routes/(app)/transactions/+page.svelte` |

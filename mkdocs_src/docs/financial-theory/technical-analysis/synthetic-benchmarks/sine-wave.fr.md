@@ -33,8 +33,8 @@ où :
 
 | Paramètre | Clé | Par défaut | Description |
 |---|---|---|---|
-| Amplitude | `amplitude` | 10 | Plage d'oscillation crête-à-crête en % de la valeur de base. |
-| Période | `period` | 365 | Longueur d'un cycle complet en jours. |
+| Amplitude | `amplitude` | 15 | Plage d'oscillation crête-à-crête en % de la valeur de base. |
+| Période | `period` | 45 | Longueur d'un cycle complet en jours. |
 | Décalage | `offset` | 0 | Décalage vertical en % de la valeur de base. |
 
 ---

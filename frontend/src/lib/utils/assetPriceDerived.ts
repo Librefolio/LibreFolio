@@ -174,6 +174,7 @@ export function computeDerivedPriceState(prices: RawPricePoint[]): DerivedPriceS
     }));
 
     const deltas: Record<string, number | null> = {};
+    deltas['1D'] = computePeriodDelta(chartData, 1);
     for (const period of DELTA_PERIODS) {
         deltas[period.key] = computePeriodDelta(chartData, period.days);
     }

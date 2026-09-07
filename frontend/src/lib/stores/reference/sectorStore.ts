@@ -94,8 +94,3 @@ export function getSectorEmoji(key: string): string {
     };
     return FALLBACK[key] ?? '📊';
 }
-
-/** Check if sectors have been loaded. */
-export function isSectorsLoaded(): boolean {
-    return loaded;
-}

@@ -1,0 +1,320 @@
+[
+  {
+    "signal_code": "EMA",
+    "pandas_ta_function": "ema",
+    "talib_backend": "EMA",
+    "preferred_backend": "TA-Lib",
+    "fallback_allowed": false,
+    "required_fields": [
+      "close"
+    ],
+    "output_shape": "Series",
+    "minimum_lookback": "length",
+    "stabilization_policy": "3.5 * length",
+    "known_differences": "Seed initialization in ewm vs TA-Lib SMA seed. Match after 3.5x lookback.",
+    "runtime_checks": [
+      "Imports[talib] == True"
+    ],
+    "test_tolerance": 1e-06
+  },
+  {
+    "signal_code": "SMA",
+    "pandas_ta_function": "sma",
+    "talib_backend": "SMA",
+    "preferred_backend": "TA-Lib",
+    "fallback_allowed": false,
+    "required_fields": [
+      "close"
+    ],
+    "output_shape": "Series",
+    "minimum_lookback": "length",
+    "stabilization_policy": "length",
+    "known_differences": "Identical values after length periods.",
+    "runtime_checks": [
+      "Imports[talib] == True"
+    ],
+    "test_tolerance": 1e-09
+  },
+  {
+    "signal_code": "RSI",
+    "pandas_ta_function": "rsi",
+    "talib_backend": "RSI",
+    "preferred_backend": "TA-Lib",
+    "fallback_allowed": false,
+    "required_fields": [
+      "close"
+    ],
+    "output_shape": "Series",
+    "minimum_lookback": "length + 1",
+    "stabilization_policy": "4 * length",
+    "known_differences": "Wilders smoothing recursive seed. Matches exactly after 4x length warm-up.",
+    "runtime_checks": [
+      "Imports[talib] == True"
+    ],
+    "test_tolerance": 1e-06
+  },
+  {
+    "signal_code": "MACD",
+    "pandas_ta_function": "macd",
+    "talib_backend": "MACD",
+    "preferred_backend": "TA-Lib",
+    "fallback_allowed": false,
+    "required_fields": [
+      "close"
+    ],
+    "output_shape": "DataFrame",
+    "minimum_lookback": "slow + signal",
+    "stabilization_policy": "3.5 * slow",
+    "known_differences": "Histogram column is MACD - Signal.",
+    "runtime_checks": [
+      "Imports[talib] == True"
+    ],
+    "test_tolerance": 1e-06
+  },
+  {
+    "signal_code": "BBANDS",
+    "pandas_ta_function": "bbands",
+    "talib_backend": "BBANDS",
+    "preferred_backend": "TA-Lib",
+    "fallback_allowed": false,
+    "required_fields": [
+      "close"
+    ],
+    "output_shape": "DataFrame",
+    "minimum_lookback": "length",
+    "stabilization_policy": "length",
+    "known_differences": "TA-Lib BBANDS uses sample std deviation matching pandas.",
+    "runtime_checks": [
+      "Imports[talib] == True"
+    ],
+    "test_tolerance": 1e-07
+  },
+  {
+    "signal_code": "ROC",
+    "pandas_ta_function": "roc",
+    "talib_backend": "ROC",
+    "preferred_backend": "TA-Lib",
+    "fallback_allowed": false,
+    "required_fields": [
+      "close"
+    ],
+    "output_shape": "Series",
+    "minimum_lookback": "length",
+    "stabilization_policy": "length",
+    "known_differences": "Exact percentage change.",
+    "runtime_checks": [
+      "Imports[talib] == True"
+    ],
+    "test_tolerance": 1e-09
+  },
+  {
+    "signal_code": "STOCHRSI",
+    "pandas_ta_function": "stochrsi",
+    "talib_backend": "STOCHRSI",
+    "preferred_backend": "TA-Lib",
+    "fallback_allowed": false,
+    "required_fields": [
+      "close"
+    ],
+    "output_shape": "DataFrame",
+    "minimum_lookback": "rsi_length + length + k + d",
+    "stabilization_policy": "4 * rsi_length",
+    "known_differences": "Chained RSI and Stochastic calculation.",
+    "runtime_checks": [
+      "Imports[talib] == True"
+    ],
+    "test_tolerance": 1e-06
+  },
+  {
+    "signal_code": "ATR",
+    "pandas_ta_function": "atr",
+    "talib_backend": "ATR",
+    "preferred_backend": "TA-Lib",
+    "fallback_allowed": false,
+    "required_fields": [
+      "high",
+      "low",
+      "close"
+    ],
+    "output_shape": "Series",
+    "minimum_lookback": "length",
+    "stabilization_policy": "3.5 * length",
+    "known_differences": "Wilder smoothing warm-up.",
+    "runtime_checks": [
+      "Imports[talib] == True"
+    ],
+    "test_tolerance": 1e-06
+  },
+  {
+    "signal_code": "ADX",
+    "pandas_ta_function": "adx",
+    "talib_backend": "ADX",
+    "preferred_backend": "TA-Lib",
+    "fallback_allowed": false,
+    "required_fields": [
+      "high",
+      "low",
+      "close"
+    ],
+    "output_shape": "DataFrame",
+    "minimum_lookback": "2 * length",
+    "stabilization_policy": "4 * length",
+    "known_differences": "Combines ADX, +DI, -DI.",
+    "runtime_checks": [
+      "Imports[talib] == True"
+    ],
+    "test_tolerance": 1e-06
+  },
+  {
+    "signal_code": "OBV",
+    "pandas_ta_function": "obv",
+    "talib_backend": "OBV",
+    "preferred_backend": "TA-Lib",
+    "fallback_allowed": false,
+    "required_fields": [
+      "close",
+      "volume"
+    ],
+    "output_shape": "Series",
+    "minimum_lookback": "1",
+    "stabilization_policy": "1",
+    "known_differences": "Cumulative volume sign sum.",
+    "runtime_checks": [
+      "Imports[talib] == True"
+    ],
+    "test_tolerance": 1e-09
+  },
+  {
+    "signal_code": "NATR",
+    "pandas_ta_function": "natr",
+    "talib_backend": "NATR",
+    "preferred_backend": "TA-Lib",
+    "fallback_allowed": false,
+    "required_fields": [
+      "high",
+      "low",
+      "close"
+    ],
+    "output_shape": "Series",
+    "minimum_lookback": "length",
+    "stabilization_policy": "3.5 * length",
+    "known_differences": "Normalized ATR percentage.",
+    "runtime_checks": [
+      "Imports[talib] == True"
+    ],
+    "test_tolerance": 1e-06
+  },
+  {
+    "signal_code": "KAMA",
+    "pandas_ta_function": "kama",
+    "talib_backend": "KAMA",
+    "preferred_backend": "TA-Lib",
+    "fallback_allowed": false,
+    "required_fields": [
+      "close"
+    ],
+    "output_shape": "Series",
+    "minimum_lookback": "length",
+    "stabilization_policy": "4 * length",
+    "known_differences": "Adaptive MA smoothing constant.",
+    "runtime_checks": [
+      "Imports[talib] == True"
+    ],
+    "test_tolerance": 1e-06
+  },
+  {
+    "signal_code": "PPO",
+    "pandas_ta_function": "ppo",
+    "talib_backend": "PPO",
+    "preferred_backend": "TA-Lib",
+    "fallback_allowed": false,
+    "required_fields": [
+      "close"
+    ],
+    "output_shape": "DataFrame",
+    "minimum_lookback": "slow + signal",
+    "stabilization_policy": "3.5 * slow",
+    "known_differences": "Percentage Oscillator.",
+    "runtime_checks": [
+      "Imports[talib] == True"
+    ],
+    "test_tolerance": 1e-06
+  },
+  {
+    "signal_code": "AROON",
+    "pandas_ta_function": "aroon",
+    "talib_backend": "AROON",
+    "preferred_backend": "TA-Lib",
+    "fallback_allowed": false,
+    "required_fields": [
+      "high",
+      "low"
+    ],
+    "output_shape": "DataFrame",
+    "minimum_lookback": "length",
+    "stabilization_policy": "length",
+    "known_differences": "Returns Aroon Down, Up, and Oscillator.",
+    "runtime_checks": [
+      "Imports[talib] == True"
+    ],
+    "test_tolerance": 1e-09
+  },
+  {
+    "signal_code": "DONCHIAN",
+    "pandas_ta_function": "donchian",
+    "talib_backend": null,
+    "preferred_backend": "native",
+    "fallback_allowed": true,
+    "required_fields": [
+      "high",
+      "low"
+    ],
+    "output_shape": "DataFrame",
+    "minimum_lookback": "max(lower_length, upper_length)",
+    "stabilization_policy": "max(lower_length, upper_length)",
+    "known_differences": "Not present in TA-Lib C library. Always computed natively by pandas-ta-classic.",
+    "runtime_checks": [],
+    "test_tolerance": 1e-09
+  },
+  {
+    "signal_code": "MFI",
+    "pandas_ta_function": "mfi",
+    "talib_backend": "MFI",
+    "preferred_backend": "TA-Lib",
+    "fallback_allowed": false,
+    "required_fields": [
+      "high",
+      "low",
+      "close",
+      "volume"
+    ],
+    "output_shape": "Series",
+    "minimum_lookback": "length",
+    "stabilization_policy": "length + 1",
+    "known_differences": "Volume-weighted RSI-like oscillator.",
+    "runtime_checks": [
+      "Imports[talib] == True"
+    ],
+    "test_tolerance": 1e-06
+  },
+  {
+    "signal_code": "CCI",
+    "pandas_ta_function": "cci",
+    "talib_backend": "CCI",
+    "preferred_backend": "TA-Lib",
+    "fallback_allowed": false,
+    "required_fields": [
+      "high",
+      "low",
+      "close"
+    ],
+    "output_shape": "Series",
+    "minimum_lookback": "length",
+    "stabilization_policy": "length",
+    "known_differences": "Commodity Channel Index.",
+    "runtime_checks": [
+      "Imports[talib] == True"
+    ],
+    "test_tolerance": 1e-06
+  }
+]

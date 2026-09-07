@@ -78,6 +78,16 @@ jobs:
       - name: Install Python Dependencies
         run: pipenv install --dev
 
+      - name: Generate VERSION file for Docker
+        # Must run BEFORE any step that writes tracked files (gallery PNGs,
+        # translate caches, regenerated API client): `git describe --dirty`
+        # would otherwise stamp the image version with a spurious "-dirty".
+        # The Dockerfile COPYs a VERSION file (gitignored build artifact) so the
+        # image can report its version at runtime — the image has no .git/, so
+        # git describe cannot run there. Freeze it here on the host (fetch-depth:0
+        # gives us tags) reusing the same get_git_version() the app uses.
+        run: pipenv run python -c "from pathlib import Path; from backend.app.utils.version import get_git_version; get_git_version.cache_clear(); Path('VERSION').write_text(get_git_version())"
+
       - name: "[INFO] Environment summary before install"
         run: |
           pwd
@@ -106,19 +116,32 @@ jobs:
         run: pipenv run ./dev.py front build
 
       - name: Check MkDocs translation structure consistency
+        id: check-translate-diff
         continue-on-error: ${{ github.ref_name == 'dev' }}
         run: pipenv run ./dev.py mkdocs translate-diff --issues-only
 
       - name: Validate broken MkDocs translation links
+        id: check-translate-validate
         continue-on-error: ${{ github.ref_name == 'dev' }}
         run: pipenv run ./dev.py mkdocs translate-validate --hide-localized
 
       - name: Validate cross-boundary links
+        id: check-cross-links
         continue-on-error: ${{ github.ref_name == 'dev' }}
         run: pipenv run ./dev.py mkdocs check-links
 
-      - name: Generate Screenshots with Playwright
+      - name: Build MkDocs Documentation
+        id: build-mkdocs
+        # BEFORE the gallery: the Playwright webServer (`dev.py server --test`)
+        # serves /mkdocs and builds the 4-language site on startup when site/ is
+        # missing — ~40s+ inside the 120s webServer timeout, which is what made
+        # the gallery time out on 2026-09-04 after the docs growth (57 new
+        # translated files). With site/ already built, the server starts in seconds.
         continue-on-error: ${{ github.ref_name == 'dev' }}
+        run: pipenv run ./dev.py mkdocs build
+
+      - name: Generate Screenshots with Playwright
+        id: gallery
         timeout-minutes: 120
         # ubuntu-latest (public repo) runners have 4 vCPU. --workers 8 was 2x
         # oversubscribed, causing heavy CPU contention across Chromium instances
@@ -127,23 +150,55 @@ jobs:
         # out on each run). Matched to actual CPU count for stable, predictable
         # per-test timing (verified locally: --workers 2-3 gives a constant,
         # non-degrading ~21s/interaction rate with zero flakiness).
-        run: pipenv run ./dev.py mkdocs gallery --workers 4
+        #
+        # Gallery is best-effort: a partially-failed run still produces most
+        # screenshots, and the docs' gallery-img-loader falls back to the
+        # published site for any missing one. So we keep the screenshots that
+        # succeeded, mark the step as a warning, and let the release continue
+        # instead of failing the whole image build over a flaky screenshot.
+        run: |
+          pipenv run ./dev.py mkdocs gallery --workers 4 || echo "::warning::Gallery had failures — releasing with the screenshots that succeeded (missing ones load from the online docs site)."
 
+      # Nightly (dev) only: surface soft-failed steps as a yellow run banner + a
+      # readable summary, instead of a green checkmark that hides them. Release
+      # runs keep the hard-fail behaviour (no continue-on-error there).
+      # The gallery step is NOT here: it is best-effort (missing screenshots fall
+      # back to the published docs site) and reports itself as a ::warning above.
+      - name: Report soft-failed steps (nightly)
+        if: ${{ github.ref_name == 'dev' && always() }}
+        run: |
+          python3 - << 'PYEOF'
+          import os
 
-      - name: Build MkDocs Documentation
-        continue-on-error: ${{ github.ref_name == 'dev' }}
-        run: pipenv run ./dev.py mkdocs build
+          steps = [
+              ("Check MkDocs translation structure consistency", "${{ steps.check-translate-diff.outcome }}"),
+              ("Validate broken MkDocs translation links", "${{ steps.check-translate-validate.outcome }}"),
+              ("Validate cross-boundary links", "${{ steps.check-cross-links.outcome }}"),
+              ("Build MkDocs Documentation", "${{ steps.build-mkdocs.outcome }}"),
+          ]
+          failed = [name for name, outcome in steps if outcome == "failure"]
+          if not failed:
+              print("All soft-gated steps passed.")
+              raise SystemExit(0)
+
+          lines = [
+              "## ⚠️ Soft-failed steps (nightly continues, release would fail)",
+              "",
+              "These steps failed but are `continue-on-error` on `dev`:",
+              "",
+              *[f"- ❌ {name}" for name in failed],
+              "",
+              "The release pipeline does **not** tolerate these — fix before tagging.",
+          ]
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as fh:
+              fh.write("\n".join(lines) + "\n")
+          print(f"::warning title=Soft-failed steps::{len(failed)} docs/gallery step(s) failed — see the job summary")
+          PYEOF
+
 
       - name: Generate requirements.txt for Docker
         # The Dockerfile installs dependencies from a native requirements.txt
         run: pipenv requirements > requirements.txt
-
-      - name: Generate VERSION file for Docker
-        # The Dockerfile COPYs a VERSION file (gitignored build artifact) so the
-        # image can report its version at runtime — the image has no .git/, so
-        # git describe cannot run there. Freeze it here on the host (fetch-depth:0
-        # gives us tags) reusing the same get_git_version() the app uses.
-        run: pipenv run python -c "from pathlib import Path; from backend.app.utils.version import get_git_version; get_git_version.cache_clear(); Path('VERSION').write_text(get_git_version())"
 
       # ==========================================
       # 4. DOCKER BUILD & PUSH (Single Image)
@@ -174,6 +229,21 @@ jobs:
             org.opencontainers.image.title=LibreFolio
             org.opencontainers.image.description=LibreFolio: Open Source Personal Finance & Portfolio Tracker
 
+      # Light variant: same tags with a "-light" suffix. The image ships without
+      # the documentation images (they load from the online docs site).
+      - name: Extract Docker Metadata (Light Variant)
+        id: meta-light
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/librefolio/librefolio
+          tags: |
+            type=semver,pattern={{version}},suffix=-light
+            type=raw,value=latest-light,enable=${{ github.ref_name == 'main' }}
+            type=raw,value=nightly-light,enable=${{ github.ref_name == 'dev' }}
+          labels: |
+            org.opencontainers.image.title=LibreFolio (light)
+            org.opencontainers.image.description=LibreFolio (light variant, without documentation images): Open Source Personal Finance & Portfolio Tracker
+
 
       - name: Build and Push Docker Image
         uses: docker/build-push-action@v7
@@ -182,6 +252,18 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and Push Docker Image (Light Variant)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          build-args: |
+            DOCS_VARIANT=light
+          tags: ${{ steps.meta-light.outputs.tags }}
+          labels: ${{ steps.meta-light.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -219,7 +301,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG_NAME="${{ github.event.release.tag_name }}"
-          DOCKER_CMD=$(printf '\n\n## 📦 Docker Installation\n\n```bash\n# Install the latest version\ndocker pull ghcr.io/librefolio/librefolio:latest\n\n# Or install this specific release\ndocker pull ghcr.io/librefolio/librefolio:%s\n```\n' "$TAG_NAME")
+          DOCKER_CMD=$(printf '\n\n## 📦 Docker Installation\n\n```bash\n# Install the latest version\ndocker pull ghcr.io/librefolio/librefolio:latest\n\n# Or install this specific release\ndocker pull ghcr.io/librefolio/librefolio:%s\n\n# Light variant (no documentation images — they load from the online docs site)\ndocker pull ghcr.io/librefolio/librefolio:%s-light\n```\n' "$TAG_NAME" "$TAG_NAME")
 
           # gh CLI has no --notes-append flag: fetch current notes and append manually
           CURRENT_NOTES=$(gh release view "$TAG_NAME" --json body -q .body)

@@ -13,7 +13,7 @@ by a single PUT bulk endpoint.
 """
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
@@ -665,3 +665,315 @@ class TestSelfModification:
             assert user1_acc["role"] == "EDITOR"
 
             print_success("✓ Owner degraded self successfully")
+
+
+# ============================================================================
+# SELF-SERVICE ACCESS TESTS (F4) — PATCH/DELETE /brokers/{id}/access/me
+# ============================================================================
+
+
+async def self_patch_role(client: httpx.AsyncClient, broker_id: int, role: str) -> httpx.Response:
+    """PATCH the caller's own role. Returns the raw response."""
+    return await client.patch(
+        f"{API_BASE}/brokers/{broker_id}/access/me",
+        json={"role": role},
+        timeout=TIMEOUT,
+    )
+
+
+async def self_leave(client: httpx.AsyncClient, broker_id: int) -> httpx.Response:
+    """DELETE the caller's own access. Returns the raw response."""
+    return await client.delete(f"{API_BASE}/brokers/{broker_id}/access/me", timeout=TIMEOUT)
+
+
+class TestSelfServiceAccess:
+    """F4 — self-service access: a user manages their OWN access row only.
+
+    PATCH is demotion-only (EDITOR→VIEWER; OWNER→EDITOR/VIEWER with another OWNER
+    remaining). DELETE is always allowed for EDITOR/VIEWER, allowed for a non-last
+    OWNER, and the LAST owner leaving cascade-deletes the broker with its
+    transactions (confirmed F4 semantics, surfaced as broker_deleted=true).
+    """
+
+    @pytest.mark.asyncio
+    async def test_editor_demotes_self_to_viewer(self, test_server):
+        """ACCESS-070: EDITOR → VIEWER via PATCH /access/me succeeds."""
+        print_section("ACCESS-070: Editor self-demotes to viewer")
+
+        async with httpx.AsyncClient() as client1, httpx.AsyncClient() as client2:
+            user1_id, _, _, _ = await create_user_and_login(client1)
+            broker_id = await create_broker(client1)
+            user2_id, _, _, _ = await create_user_and_login(client2)
+
+            resp = await add_user_via_bulk(client1, broker_id, user1_id, user2_id, "EDITOR")
+            assert resp.status_code == 200
+
+            resp = await self_patch_role(client2, broker_id, "VIEWER")
+            assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+            body = resp.json()
+            assert body["success"] is True
+            assert body["broker_deleted"] is False
+
+            accesses = await get_access_list(client1, broker_id)
+            user2_acc = next(a for a in accesses if a["user_id"] == user2_id)
+            assert user2_acc["role"] == "VIEWER"
+
+            print_success("✓ Editor demoted self to viewer")
+
+    @pytest.mark.asyncio
+    async def test_self_promotion_is_rejected(self, test_server):
+        """ACCESS-071: self-PATCH to a higher/equal-privilege role is 400."""
+        print_section("ACCESS-071: Self-promotion rejected")
+
+        async with httpx.AsyncClient() as client1, httpx.AsyncClient() as client2, httpx.AsyncClient() as client3:
+            user1_id, _, _, _ = await create_user_and_login(client1)
+            broker_id = await create_broker(client1)
+            user2_id, _, _, _ = await create_user_and_login(client2)
+            user3_id, _, _, _ = await create_user_and_login(client3)
+
+            # user2 EDITOR, user3 VIEWER
+            resp = await bulk_set_access(
+                client1,
+                broker_id,
+                [
+                    {"user_id": user1_id, "role": "OWNER", "share_percentage": 1.0},
+                    {"user_id": user2_id, "role": "EDITOR", "share_percentage": 0},
+                    {"user_id": user3_id, "role": "VIEWER", "share_percentage": 0},
+                ],
+            )
+            assert resp.status_code == 200
+
+            # EDITOR → OWNER is a promotion
+            resp = await self_patch_role(client2, broker_id, "OWNER")
+            assert resp.status_code == 400, f"EDITOR→OWNER must be 400, got {resp.status_code}: {resp.text}"
+
+            # VIEWER → EDITOR is a promotion
+            resp = await self_patch_role(client3, broker_id, "EDITOR")
+            assert resp.status_code == 400, f"VIEWER→EDITOR must be 400, got {resp.status_code}: {resp.text}"
+
+            # VIEWER → OWNER is a promotion
+            resp = await self_patch_role(client3, broker_id, "OWNER")
+            assert resp.status_code == 400, f"VIEWER→OWNER must be 400, got {resp.status_code}: {resp.text}"
+
+            # Nothing moved
+            accesses = await get_access_list(client1, broker_id)
+            assert next(a for a in accesses if a["user_id"] == user2_id)["role"] == "EDITOR"
+            assert next(a for a in accesses if a["user_id"] == user3_id)["role"] == "VIEWER"
+
+            print_success("✓ Self-promotion rejected for EDITOR and VIEWER")
+
+    @pytest.mark.asyncio
+    async def test_owner_demotes_self_when_another_owner_remains(self, test_server):
+        """ACCESS-072: OWNER → VIEWER allowed with a second OWNER; share is zeroed."""
+        print_section("ACCESS-072: Owner self-demotes with another owner present")
+
+        async with httpx.AsyncClient() as client1, httpx.AsyncClient() as client2:
+            user1_id, _, _, _ = await create_user_and_login(client1)
+            broker_id = await create_broker(client1)
+            user2_id, _, _, _ = await create_user_and_login(client2)
+
+            resp = await bulk_set_access(
+                client1,
+                broker_id,
+                [
+                    {"user_id": user1_id, "role": "OWNER", "share_percentage": 0.6},
+                    {"user_id": user2_id, "role": "OWNER", "share_percentage": 0.4},
+                ],
+            )
+            assert resp.status_code == 200
+
+            resp = await self_patch_role(client1, broker_id, "VIEWER")
+            assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+            assert resp.json()["broker_deleted"] is False
+
+            accesses = await get_access_list(client2, broker_id)
+            user1_acc = next(a for a in accesses if a["user_id"] == user1_id)
+            assert user1_acc["role"] == "VIEWER"
+            # Only OWNERs may hold share > 0: demotion must zero the share.
+            assert Decimal(str(user1_acc["share_percentage"])) == Decimal("0")
+            # The remaining owner is untouched.
+            user2_acc = next(a for a in accesses if a["user_id"] == user2_id)
+            assert user2_acc["role"] == "OWNER"
+            assert Decimal(str(user2_acc["share_percentage"])) == Decimal("0.4")
+
+            print_success("✓ Owner demoted self, share zeroed, co-owner intact")
+
+    @pytest.mark.asyncio
+    async def test_last_owner_cannot_demote_self(self, test_server):
+        """ACCESS-073: last OWNER self-demotion via PATCH /access/me is 400."""
+        print_section("ACCESS-073: Last owner cannot self-demote")
+
+        async with httpx.AsyncClient() as client1:
+            user1_id, _, _, _ = await create_user_and_login(client1)
+            broker_id = await create_broker(client1)
+
+            resp = await self_patch_role(client1, broker_id, "EDITOR")
+            assert resp.status_code == 400, f"Last-owner demotion must be 400, got {resp.status_code}: {resp.text}"
+
+            resp = await self_patch_role(client1, broker_id, "VIEWER")
+            assert resp.status_code == 400, f"Last-owner demotion must be 400, got {resp.status_code}: {resp.text}"
+
+            # Still the sole OWNER
+            accesses = await get_access_list(client1, broker_id)
+            user1_acc = next(a for a in accesses if a["user_id"] == user1_id)
+            assert user1_acc["role"] == "OWNER"
+
+            print_success("✓ Last owner self-demotion rejected")
+
+    @pytest.mark.asyncio
+    async def test_editor_and_viewer_can_always_leave(self, test_server):
+        """ACCESS-074: DELETE /access/me as EDITOR and VIEWER → 200, broker intact."""
+        print_section("ACCESS-074: Editor and viewer leave")
+
+        async with httpx.AsyncClient() as client1, httpx.AsyncClient() as client2, httpx.AsyncClient() as client3:
+            user1_id, _, _, _ = await create_user_and_login(client1)
+            broker_id = await create_broker(client1)
+            user2_id, _, _, _ = await create_user_and_login(client2)
+            user3_id, _, _, _ = await create_user_and_login(client3)
+
+            resp = await bulk_set_access(
+                client1,
+                broker_id,
+                [
+                    {"user_id": user1_id, "role": "OWNER", "share_percentage": 1.0},
+                    {"user_id": user2_id, "role": "EDITOR", "share_percentage": 0},
+                    {"user_id": user3_id, "role": "VIEWER", "share_percentage": 0},
+                ],
+            )
+            assert resp.status_code == 200
+
+            # EDITOR leaves
+            resp = await self_leave(client2, broker_id)
+            assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+            assert resp.json()["broker_deleted"] is False
+
+            # VIEWER leaves
+            resp = await self_leave(client3, broker_id)
+            assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+            assert resp.json()["broker_deleted"] is False
+
+            # Both rows gone, owner untouched, broker still alive
+            accesses = await get_access_list(client1, broker_id)
+            remaining_ids = {a["user_id"] for a in accesses}
+            assert user2_id not in remaining_ids
+            assert user3_id not in remaining_ids
+            assert user1_id in remaining_ids
+
+            resp = await client1.get(f"{API_BASE}/brokers/{broker_id}", timeout=TIMEOUT)
+            assert resp.status_code == 200, "Broker must survive members leaving"
+
+            print_success("✓ Editor and viewer left, broker intact")
+
+    @pytest.mark.asyncio
+    async def test_owner_leaves_when_another_owner_remains(self, test_server):
+        """ACCESS-075: non-last OWNER leaves → 200, broker_deleted=false, row gone."""
+        print_section("ACCESS-075: Owner leaves with co-owner present")
+
+        async with httpx.AsyncClient() as client1, httpx.AsyncClient() as client2:
+            user1_id, _, _, _ = await create_user_and_login(client1)
+            broker_id = await create_broker(client1)
+            user2_id, _, _, _ = await create_user_and_login(client2)
+
+            resp = await bulk_set_access(
+                client1,
+                broker_id,
+                [
+                    {"user_id": user1_id, "role": "OWNER", "share_percentage": 0.5},
+                    {"user_id": user2_id, "role": "OWNER", "share_percentage": 0.5},
+                ],
+            )
+            assert resp.status_code == 200
+
+            resp = await self_leave(client1, broker_id)
+            assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+            assert resp.json()["broker_deleted"] is False
+
+            accesses = await get_access_list(client2, broker_id)
+            remaining_ids = {a["user_id"] for a in accesses}
+            assert user1_id not in remaining_ids
+            assert user2_id in remaining_ids
+
+            resp = await client2.get(f"{API_BASE}/brokers/{broker_id}", timeout=TIMEOUT)
+            assert resp.status_code == 200, "Broker must survive a non-last owner leaving"
+
+            print_success("✓ Owner left, co-owner kept the broker")
+
+    @pytest.mark.asyncio
+    async def test_last_owner_leaving_cascade_deletes_broker(self, test_server):
+        """ACCESS-076: last OWNER leaves → broker_deleted=true; broker, its
+        transactions and every access row are gone (confirmed F4 semantics)."""
+        print_section("ACCESS-076: Last owner leaving cascade-deletes the broker")
+
+        async with httpx.AsyncClient() as client1, httpx.AsyncClient() as client2:
+            user1_id, _, _, _ = await create_user_and_login(client1)
+            broker_id = await create_broker(client1, name=unique_name("CascadeBroker"))
+            user2_id, _, _, _ = await create_user_and_login(client2)
+
+            # A second (non-owner) member, to prove their access row goes too.
+            resp = await add_user_via_bulk(client1, broker_id, user1_id, user2_id, "VIEWER")
+            assert resp.status_code == 200
+
+            # One committed transaction on this broker — the cascade must take it too.
+            tx_resp = await client1.post(
+                f"{API_BASE}/transactions/commit",
+                json={
+                    "creates": [
+                        {
+                            "broker_id": broker_id,
+                            "type": "DEPOSIT",
+                            "date": date.today().isoformat(),
+                            "cash": {"code": "EUR", "amount": "1000"},
+                        }
+                    ]
+                },
+                timeout=TIMEOUT,
+            )
+            assert tx_resp.status_code == 200, f"Failed to commit tx: {tx_resp.text}"
+            tx_id = tx_resp.json()["results"][0]["ids"][0]
+            assert tx_id is not None
+
+            resp = await self_leave(client1, broker_id)
+            assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+            body = resp.json()
+            assert body["success"] is True
+            assert body["broker_deleted"] is True, "Last owner leaving must report broker_deleted=true"
+
+            # The broker is gone for everyone.
+            resp = await client1.get(f"{API_BASE}/brokers/{broker_id}", timeout=TIMEOUT)
+            assert resp.status_code == 404, f"Deleted broker must 404, got {resp.status_code}"
+            resp = await client2.get(f"{API_BASE}/brokers/{broker_id}", timeout=TIMEOUT)
+            assert resp.status_code == 404, f"Deleted broker must 404 for the ex-viewer too, got {resp.status_code}"
+
+            # The transaction committed above is gone (cascade), checked by id.
+            resp = await client1.get(f"{API_BASE}/transactions", params={"ids": [tx_id]}, timeout=TIMEOUT)
+            assert resp.status_code == 200
+            remaining_tx_ids = {t["id"] for t in resp.json()}
+            assert tx_id not in remaining_tx_ids, f"Transaction {tx_id} survived the broker cascade"
+
+            # The access surface is gone with the broker (404, like any missing broker).
+            resp = await client1.get(f"{API_BASE}/brokers/{broker_id}/access", timeout=TIMEOUT)
+            assert resp.status_code == 404, f"Access list of a deleted broker must 404, got {resp.status_code}"
+
+            print_success("✓ Last owner left: broker, transaction and access rows cascade-deleted")
+
+    @pytest.mark.asyncio
+    async def test_user_without_access_gets_403(self, test_server):
+        """ACCESS-077: PATCH and DELETE /access/me with no access row → 403."""
+        print_section("ACCESS-077: No access → 403 on both self-service verbs")
+
+        async with httpx.AsyncClient() as client1, httpx.AsyncClient() as client2:
+            await create_user_and_login(client1)
+            broker_id = await create_broker(client1)
+            await create_user_and_login(client2)  # stranger: no access row
+
+            resp = await self_patch_role(client2, broker_id, "VIEWER")
+            assert resp.status_code == 403, f"PATCH without access must be 403, got {resp.status_code}: {resp.text}"
+
+            resp = await self_leave(client2, broker_id)
+            assert resp.status_code == 403, f"DELETE without access must be 403, got {resp.status_code}: {resp.text}"
+
+            # Owner untouched
+            accesses = await get_access_list(client1, broker_id)
+            assert len([a for a in accesses if a["role"] == "OWNER"]) >= 1
+
+            print_success("✓ Stranger got 403 on PATCH and DELETE")

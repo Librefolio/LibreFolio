@@ -33,7 +33,7 @@ Le formulaire est conçu pour être intuitif et dynamique. Lorsque vous sélecti
 
 Pour une définition conceptuelle approfondie de chaque opération, veuillez vous référer au [guide de Théorie Financière](../../financial-theory/instruments/transaction-types/index.md).
 
-### Transactions Simples
+### Single Simples
 
 Celles-ci opèrent indépendamment sur un seul compte de courtage.
 
@@ -45,7 +45,7 @@ Celles-ci opèrent indépendamment sur un seul compte de courtage.
 | ![](../../static/icons/transactions/fee.png){: width="24" style="vertical-align: middle;" } **FRAIS / TAXE** ![](../../static/icons/transactions/tax.png){: width="24" style="vertical-align: middle;" } | Coûts tels que les frais de courtage ou les taxes | [📖 Lire](../../financial-theory/instruments/transaction-types/fee.md) |
 | ![](../../static/icons/transactions/adjustment.png){: width="24" style="vertical-align: middle;" } **AJUSTEMENT** | Correction manuelle des soldes | [📖 Lire](../../financial-theory/instruments/transaction-types/adjustment.md) |
 
-### Transactions Composites {: #composite-transactions }
+### Composite Composites {: #composite-transactions }
 
 Celles-ci représentent des mouvements **entre** des comptes ou des devises. Elles produisent deux entrées liées qui s'équilibrent.
 

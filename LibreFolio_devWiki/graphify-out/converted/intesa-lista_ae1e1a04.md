@@ -1,0 +1,24 @@
+<!-- converted from intesa-lista.xlsx -->
+
+## Sheet: Lista Operazione
+|  | Conti e Carte: | Conto 0000/00000000 |  |  |  |  |  |  |  |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+|  |  | XME CARD PLUS MC PRENOTABILE ****0000 |  |  |  |  |  |  |  |
+|  | Finanziamento: | - |  |  |  |  |  |  |  |
+|  | Investimenti e previdenza: | Deposito Amministrato 0000/00000000 |  |  |  |  |  |  |  |
+|  | I movimenti selezionati sono: | 11 | Tipo operazione:  | Operazioni titoli |  |  |  |  |  |
+|  |  |  | Entrate/Uscite: | - |  |  |  |  |  |
+|  | Data inizio periodo: | 25/07/2025 |  |  |  |  |  |  |  |
+|  | Data fine periodo: | 25/07/2026 |  |  |  |  |  |  |  |
+| Data | Operazione | Dettagli | Conto o carta | Contabilizzazione | Categoria  | Valuta | Importo |  |  |
+| 2026-07-01 00:00:00 | Commissione Di Gest. E Amministr. | Commissione Di Gestione E Amministrazione Relative Al D.A. N. 00000/000000000000 | Conto 0000/00000000 | CONTABILIZZATO | Imposte, bolli e commissioni | EUR | -10 |  |  |
+| 2026-06-29 00:00:00 | Cedole | Cedole Su EUR 35.00000 BTPIT 28GN30 160 | Conto 0000/00000000 | CONTABILIZZATO | Interessi e cedole | EUR | 122.5 |  |  |
+| 2026-06-29 00:00:00 | Cedole | Cedole Su EUR 35.00000 BTPIT 28GN30 160 | Conto 0000/00000000 | CONTABILIZZATO | Interessi e cedole | EUR | 975.69 |  |  |
+| 2026-05-25 00:00:00 | Cedole | Cedole Su EUR 15.00000 BTPPIU 25FB33 SU | Conto 0000/00000000 | CONTABILIZZATO | Interessi e cedole | EUR | 93.52 |  |  |
+| 2026-05-18 00:00:00 | Cedole | Cedole Su EUR 50.00000 BTPFUT 17NV28 SU | Conto 0000/00000000 | CONTABILIZZATO | Interessi e cedole | EUR | 131.25 |  |  |
+| 2026-02-25 00:00:00 | Cedole | Cedole Su EUR 15.00000 BTPPIU 25FB33 SU | Conto 0000/00000000 | CONTABILIZZATO | Interessi e cedole | EUR | 93.52 |  |  |
+| 2026-01-02 00:00:00 | Commissione Di Gest. E Amministr. | Commissione Di Gestione E Amministrazione Relative Al D.A. N. 00000/000000000000 | Conto 0000/00000000 | CONTABILIZZATO | Imposte, bolli e commissioni | EUR | -10 |  |  |
+| 2025-12-29 00:00:00 | Cedole | Cedole Su EUR 35.00000 BTPIT 28GN30 160 | Conto 0000/00000000 | CONTABILIZZATO | Interessi e cedole | EUR | 277.72 |  |  |
+| 2025-11-25 00:00:00 | Cedole | Cedole Su EUR 15.00000 BTPPIU 25FB33 SU | Conto 0000/00000000 | CONTABILIZZATO | Interessi e cedole | EUR | 93.52 |  |  |
+| 2025-11-17 00:00:00 | Cedole | Cedole Su EUR 50.00000 BTPFUT 17NV28 SU | Conto 0000/00000000 | CONTABILIZZATO | Interessi e cedole | EUR | 131.25 |  |  |
+| 2025-08-25 00:00:00 | Cedole | Cedole Su EUR 15.00000 BTPPIU 25FB33 SU | Conto 0000/00000000 | CONTABILIZZATO | Interessi e cedole | EUR | 93.52 |  |  |

@@ -9,7 +9,10 @@ from decimal import Decimal
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import tuple_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.exc import StaleDataError
 from sqlmodel import delete as sql_delete
 from sqlmodel import select
 
@@ -17,7 +20,11 @@ from backend.app.api.v1.auth import get_current_user
 from backend.app.db.models import FxConversionRoute, FxRate, User
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
-from backend.app.schemas.common import BackwardFillInfo, DateRangeModel
+from backend.app.schemas.common import (
+    BackwardFillInfo,
+    Currency,
+    DateRangeModel,
+)
 from backend.app.schemas.fx import (
     FXBulkDeleteResponse,
     FXBulkUpsertResponse,
@@ -40,11 +47,19 @@ from backend.app.schemas.fx import (
     FXProviderInfo,
     # Route models (replaces pair-source models)
     FXRouteStep,
+    FXSignalQueryResult,
     # Rate upsert models
     FXUpsertItem,
     FXUpsertResult,
 )
 from backend.app.schemas.refresh import FXSyncBulkResponse, FXSyncPairRequest
+from backend.app.schemas.signals import (
+    SignalCadence,
+    SignalCatalogResponse,
+    SignalDomain,
+    SignalExecutionContext,
+    SignalPricePoint,
+)
 from backend.app.services.fx import (
     FXServiceError,
     convert_bulk,
@@ -53,7 +68,15 @@ from backend.app.services.fx import (
     upsert_rates_bulk,
 )
 from backend.app.services.fx_providers.manual import MANUAL_PRIORITY
-from backend.app.services.provider_registry import FXProviderRegistry
+from backend.app.services.provider_registry import (
+    FXProviderRegistry,
+    SignalPluginRegistry,
+)
+from backend.app.services.signal_service import (
+    SignalExecutionPlan,
+    SignalRequestValidationError,
+    SignalService,
+)
 
 logger = get_logger(__name__)
 fx_router = APIRouter(prefix="/fx", tags=["FX (Forex)"])
@@ -143,7 +166,7 @@ async def list_providers(
 
         return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch providers: {str(e)}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to fetch providers: {e!s}") from e
 
 
 @router_currencies.post("/sync", response_model=FXSyncBulkResponse)
@@ -190,10 +213,10 @@ async def sync_rates(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except FXServiceError as e:
-        raise HTTPException(status_code=502, detail=f"Failed to sync rates: {str(e)}") from e
+        raise HTTPException(status_code=502, detail=f"Failed to sync rates: {e!s}") from e
     except Exception as e:
         # Catch-all to prevent hanging — always return a response
-        raise HTTPException(status_code=500, detail=f"Unexpected sync error: {str(e)}") from e
+        raise HTTPException(status_code=500, detail=f"Unexpected sync error: {e!s}") from e
 
 
 @router_currencies.post("/rate", response_model=FXBulkUpsertResponse, status_code=200)
@@ -256,10 +279,10 @@ async def upsert_rates_endpoint(
             )
 
         except ValueError as e:
-            error_msg = f"Rate {idx}: Validation error: {str(e)}"
+            error_msg = f"Rate {idx}: Validation error: {e!s}"
             errors.append(error_msg)
         except Exception as e:
-            error_msg = f"Rate {idx}: Failed: {str(e)}"
+            error_msg = f"Rate {idx}: Failed: {e!s}"
             errors.append(error_msg)
 
     # If all rates failed, return 400
@@ -270,7 +293,7 @@ async def upsert_rates_endpoint(
 
 
 @router_currencies.delete("/rate", response_model=FXBulkDeleteResponse)
-async def delete_rates_endpoint(
+async def delete_rates_endpoint(  # noqa: C901 — flat bulk loop, per-item validation/dispatch
     deletions: List[FXDeleteItem],
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
@@ -362,7 +385,7 @@ async def delete_rates_endpoint(
                 )
                 total_deleted += deleted_count
             except Exception as e:
-                errors.append(f"Delete all for {base}/{quote} failed: {str(e)}")
+                errors.append(f"Delete all for {base}/{quote} failed: {e!s}")
         else:
             # Date-range deletion — collect for bulk service call
             start_date = delete_req.date_range.start
@@ -416,7 +439,7 @@ async def delete_rates_endpoint(
                 total_deleted += deleted_count
 
         except Exception as e:
-            error_msg = f"Bulk deletion failed: {str(e)}"
+            error_msg = f"Bulk deletion failed: {e!s}"
             errors.append(error_msg)
             # If entire bulk operation failed, return 500
             raise HTTPException(status_code=500, detail=error_msg) from e
@@ -436,6 +459,7 @@ async def delete_rates_endpoint(
 import re
 
 _RATE_NOT_FOUND_RE = re.compile(r"^Conversion \d+: No FX rate found for (\S+) on or before (\S+)\. (.+)$")
+_CONVERSION_ERROR_INDEX_RE = re.compile(r"^Conversion (\d+)(?::| failed:)")
 
 
 def _compress_convert_errors(errors: list[str]) -> list[str]:
@@ -470,8 +494,34 @@ def _compress_convert_errors(errors: list[str]) -> list[str]:
     return compressed + other_errors
 
 
+def _convert_errors_for_kind(
+    errors: list[str],
+    metadata: list[dict],
+    kind: str,
+) -> list[str]:
+    selected: list[str] = []
+    for error in errors:
+        match = _CONVERSION_ERROR_INDEX_RE.match(error)
+        if not match:
+            if kind == "daily":
+                selected.append(error)
+            continue
+        index = int(match.group(1))
+        if index < len(metadata) and metadata[index]["kind"] == kind:
+            selected.append(error)
+    return selected
+
+
+@router_currencies.get("/signals", response_model=SignalCatalogResponse)
+async def list_fx_signal_catalog(
+    _current_user: User = Depends(get_current_user),
+) -> SignalCatalogResponse:
+    """Return static signal definitions compatible with FX close rates."""
+    return SignalCatalogResponse(items=[definition for definition in SignalPluginRegistry.list_definitions() if SignalDomain.FX in definition.compatible_domains])
+
+
 @router_currencies.post("/convert", response_model=FXConvertResponse)
-async def convert_currency_bulk(
+async def convert_currency_bulk(  # noqa: C901 — sequential bulk pipeline: expand, convert, map results
     request: List[FXConversionRequest],
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
@@ -497,90 +547,167 @@ async def convert_currency_bulk(
         Conversion results with rate information for each conversion (one result per day)
     """
 
-    # Prepare bulk conversions, expanding date ranges
+    signal_service = SignalService()
+    signal_plans: dict[int, SignalExecutionPlan] = {}
     bulk_conversions = []
-    conversion_metadata = []  # Track which original conversion each bulk conversion belongs to
+    conversion_metadata: list[dict] = []
 
     for conv_idx, conversion in enumerate(request):
         to_cur = conversion.to_currency
+        requested_end = conversion.date_range.end or conversion.date_range.start
 
-        # Validate date range
-        if conversion.date_range.end and conversion.date_range.start > conversion.date_range.end:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Conversion {conv_idx}: start date must be before or equal to end date",
+        current_date = conversion.date_range.start
+        while current_date <= requested_end:
+            bulk_conversions.append(
+                (
+                    conversion.from_amount,
+                    to_cur,
+                    current_date,
+                )
             )
-
-        # Expand date range into individual days
-        # Now using new signature: (Currency, to_currency, date)
-        if conversion.date_range.end:
-            # Multi-day conversion: process each day in range
-            current_date = conversion.date_range.start
-            while current_date <= conversion.date_range.end:
-                bulk_conversions.append((conversion.from_amount, to_cur, current_date))
-                conversion_metadata.append({"original_idx": conv_idx, "conversion": conversion, "date": current_date})
-                current_date += timedelta(days=1)
-        else:
-            # Single-day conversion
-            bulk_conversions.append((conversion.from_amount, to_cur, conversion.date_range.start))
             conversion_metadata.append(
                 {
+                    "kind": "daily",
                     "original_idx": conv_idx,
                     "conversion": conversion,
-                    "date": conversion.date_range.start,
+                    "date": current_date,
                 }
             )
+            current_date += timedelta(days=1)
 
-    # Call convert_bulk with raise_on_error=False to get partial results
-    bulk_results, bulk_errors = await convert_bulk(session, bulk_conversions, raise_on_error=False)
+        if conversion.signals:
+            context = SignalExecutionContext(
+                domain=SignalDomain.FX,
+                requested_range=conversion.date_range,
+                cadence=SignalCadence.DAILY,
+                source_reference=(f"fx:{conversion.from_amount.code}/" f"{conversion.to_currency}"),
+            )
+            try:
+                plan = signal_service.prepare_plan(
+                    conversion.signals,
+                    context,
+                    conversion.annotation_requests,
+                )
+            except SignalRequestValidationError as e:
+                raise HTTPException(status_code=422, detail=str(e)) from e
+            warmup_days = min(
+                plan.max_history_points_before_visible,
+                (conversion.date_range.start - date.min).days,
+            )
+            signal_start = conversion.date_range.start - timedelta(days=warmup_days)
+            signal_plans[conv_idx] = plan
+            signal_amount = Currency(
+                code=conversion.from_amount.code,
+                amount=Decimal("1"),
+            )
+            current_date = signal_start
+            while current_date <= requested_end:
+                bulk_conversions.append(
+                    (
+                        signal_amount,
+                        to_cur,
+                        current_date,
+                    )
+                )
+                conversion_metadata.append(
+                    {
+                        "kind": "signal",
+                        "original_idx": conv_idx,
+                        "conversion": conversion,
+                        "date": current_date,
+                    }
+                )
+                current_date += timedelta(days=1)
+
+    bulk_results, bulk_errors = await convert_bulk(
+        session,
+        bulk_conversions,
+        raise_on_error=False,
+    )
 
     results = []
+    signal_points: dict[int, list[SignalPricePoint]] = {index: [] for index in signal_plans}
 
-    # Process results
-    for _idx, (metadata, bulk_result) in enumerate(zip(conversion_metadata, bulk_results, strict=True)):
+    for metadata, bulk_result in zip(
+        conversion_metadata,
+        bulk_results,
+        strict=True,
+    ):
         if bulk_result is None:
-            # This conversion failed (error already in bulk_errors)
             continue
 
-        # bulk_result is now (Currency, rate_date, backward_fill_applied)
         converted_currency, actual_rate_date, backward_fill_applied = bulk_result
         conversion = metadata["conversion"]
         on_date = metadata["date"]
         from_cur = conversion.from_amount.code
         to_cur = conversion.to_currency
 
-        # Calculate effective rate (for display purposes)
+        backward_fill_info = None
+        if backward_fill_applied:
+            backward_fill_info = BackwardFillInfo(
+                actual_rate_date=actual_rate_date,
+                days_back=(on_date - actual_rate_date).days,
+            )
+
+        if metadata["kind"] == "signal":
+            close = Decimal("1") if from_cur == to_cur else converted_currency.amount
+            signal_points[metadata["original_idx"]].append(
+                SignalPricePoint(
+                    date=on_date,
+                    close=close,
+                    backward_fill_info=backward_fill_info,
+                )
+            )
+            continue
+
         rate = None
         if from_cur != to_cur:
             rate = converted_currency.amount / conversion.from_amount.amount
-
-        # Build backward-fill info if applicable
-        backward_fill_info = None
-        if backward_fill_applied:
-            days_back = (on_date - actual_rate_date).days
-            backward_fill_info = BackwardFillInfo(actual_rate_date=actual_rate_date, days_back=days_back)
-
         results.append(
             FXConversionResult(
                 from_amount=conversion.from_amount,
-                to_amount=converted_currency,  # Already a Currency object
+                to_amount=converted_currency,
                 conversion_date=on_date.isoformat(),
                 rate=rate,
                 backward_fill_info=backward_fill_info,
             )
         )
 
-    # Compress repeated errors (e.g. same pair missing for N dates → single message)
-    compressed_errors = _compress_convert_errors(bulk_errors) if bulk_errors else []
+    signal_results = []
+    for request_index, plan in signal_plans.items():
+        conversion = request[request_index]
+        signal_results.append(
+            FXSignalQueryResult(
+                request_index=request_index,
+                from_currency=conversion.from_amount.code,
+                to_currency=conversion.to_currency,
+                date_range=conversion.date_range,
+                signals=await signal_service.execute(
+                    plan,
+                    signal_points[request_index],
+                    events_loaded=False,
+                ),
+            )
+        )
 
-    # If all conversions failed, return 404
-    if bulk_errors and not results:
-        raise HTTPException(status_code=404, detail=f"All conversions failed: {'; '.join(compressed_errors)}")
+    daily_errors = _convert_errors_for_kind(
+        bulk_errors,
+        conversion_metadata,
+        "daily",
+    )
+    compressed_errors = _compress_convert_errors(daily_errors) if daily_errors else []
+
+    if daily_errors and not results and not signal_results:
+        raise HTTPException(
+            status_code=404,
+            detail=("All conversions failed: " f"{'; '.join(compressed_errors)}"),
+        )
 
     return FXConvertResponse(
         results=results,
-        success_count=len([r for r in results if r.to_amount is not None]),
+        success_count=len([result for result in results if result.to_amount is not None]),
         errors=compressed_errors,
+        signal_results=signal_results,
     )
 
 
@@ -617,11 +744,11 @@ async def list_routes(session: AsyncSession = Depends(get_session_generator), _c
 
         return FXConversionRoutesResponse(items=routes_list)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch routes: {str(e)}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to fetch routes: {e!s}") from e
 
 
 @router_providers.post("/routes", response_model=FXCreateRoutesResponse, status_code=201)
-async def create_routes_bulk(
+async def create_routes_bulk(  # noqa: C901 — flat bulk upsert loop, per-item validation
     routes: List[FXConversionRouteItem],
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
@@ -629,8 +756,16 @@ async def create_routes_bulk(
     """
     Create or update multiple conversion routes in a single atomic transaction.
 
+    **The pair is normalised, not validated.** A route posted as ``EUR-DKK`` is
+    stored — and later listed, and addressed by the UI — as ``DKK-EUR``: the
+    endpoint sorts the two codes alphabetically and the caller is told nothing.
+    It is the same convention the rates use (see ``normalize_rate_for_storage``
+    in ``services/fx.py``), and it is what makes a pair one row instead of two
+    that can disagree. But a client that posts one direction and then looks for
+    that direction finds nothing, so it is worth saying out loud here rather
+    than leaving it to be discovered from the response.
+
     Validations:
-    - base < quote (alphabetical ordering)
     - Provider codes must be registered in FXProviderRegistry
     - Chain steps must be valid (continuity, no repeated edges, matching endpoints)
 
@@ -759,13 +894,33 @@ async def create_routes_bulk(
 
     except HTTPException:
         raise
+    except (IntegrityError, StaleDataError) as e:
+        # Two writers, one row. The upsert reads before it writes, so a second
+        # caller working on the same (base, quote, priority) lands either on the
+        # insert — `UNIQUE constraint failed` because both passed the existence
+        # check — or on the update, with `expected to update 1 row(s); 0 were
+        # matched` because the row went away in between.
+        #
+        # It is a genuine conflict, not a server fault: 409, and a sentence the
+        # UI can show as it stands. What must *not* travel is the driver's text,
+        # which carries the INSERT statement and its bound parameters and was
+        # being rendered verbatim in the add-pair dialog.
+        #
+        # Retrying is the user's move, not ours: the client cannot know whether
+        # the other writer meant to replace this route or a different one.
+        await session.rollback()
+        logger.warning("Concurrent write on fx_conversion_routes: %s", e)
+        raise HTTPException(
+            status_code=409,
+            detail="This conversion route was modified by another request at the same time. Nothing was saved — please try again.",
+        ) from e
     except Exception as e:
         await session.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to create routes: {str(e)}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to create routes: {e!s}") from e
 
 
 @router_providers.delete("/routes", response_model=FXDeleteRoutesResponse)
-async def delete_routes_bulk(
+async def delete_routes_bulk(  # noqa: C901 — sequential batch stages: preload, replay, sentinel reinstate
     routes: List[FXDeleteRouteItem],
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
@@ -787,29 +942,31 @@ async def delete_routes_bulk(
     total_deleted = 0
 
     try:
-        for route_item in routes:
-            base = route_item.base
-            quote = route_item.quote
-            priority = route_item.priority
+        # P0-5b (audit 08): no N+1. Before: 1 DELETE per item plus 1 SELECT per
+        # affected pair. After: 1 preload SELECT, at most 2 batched DELETEs,
+        # and 1 post-delete SELECT for the MANUAL-sentinel check.
+        #
+        # The unique constraint on (base, quote, priority) makes each targeted
+        # row individually identifiable, so per-item deleted_count can be
+        # replayed in memory from the preload — the loop below consumes the
+        # preloaded keys in request order, exactly mirroring the old sequential
+        # DELETE semantics (duplicate items: first one reports the row, later
+        # ones report "not found").
+        normalized_items = [(min(item.base, item.quote), max(item.base, item.quote), item.priority) for item in routes]
+        pair_keys = {(norm_base, norm_quote) for norm_base, norm_quote, _ in normalized_items}
 
-            # Normalize to alphabetical
-            norm_base = min(base, quote)
-            norm_quote = max(base, quote)
+        existing_keys: set[tuple[str, str, int]] = set()
+        if pair_keys:
+            preload_stmt = select(FxConversionRoute.base, FxConversionRoute.quote, FxConversionRoute.priority).where(tuple_(FxConversionRoute.base, FxConversionRoute.quote).in_(pair_keys))
+            existing_keys = {(row_base, row_quote, row_priority) for row_base, row_quote, row_priority in (await session.execute(preload_stmt)).all()}
 
+        for norm_base, norm_quote, priority in normalized_items:
             if priority is not None:
-                stmt = sql_delete(FxConversionRoute).where(
-                    FxConversionRoute.base == norm_base,
-                    FxConversionRoute.quote == norm_quote,
-                    FxConversionRoute.priority == priority,
-                )
+                deleted_count = 1 if (norm_base, norm_quote, priority) in existing_keys else 0
+                existing_keys.discard((norm_base, norm_quote, priority))
             else:
-                stmt = sql_delete(FxConversionRoute).where(
-                    FxConversionRoute.base == norm_base,
-                    FxConversionRoute.quote == norm_quote,
-                )
-
-            result = await session.execute(stmt)
-            deleted_count = result.rowcount
+                deleted_count = sum(1 for row_base, row_quote, _ in existing_keys if (row_base, row_quote) == (norm_base, norm_quote))
+                existing_keys = {key for key in existing_keys if (key[0], key[1]) != (norm_base, norm_quote)}
 
             if deleted_count == 0:
                 priority_str = f" with priority={priority}" if priority else ""
@@ -834,7 +991,19 @@ async def delete_routes_bulk(
                         message=None,
                     )
                 )
-                total_deleted += deleted_count
+            total_deleted += deleted_count
+
+        # Apply the deletions with at most two statements: full-pair deletes
+        # (priority omitted) and priority-targeted deletes. The union matches
+        # exactly the rows consumed by the in-memory replay above, regardless
+        # of execution order.
+        full_delete_pairs = {(norm_base, norm_quote) for norm_base, norm_quote, priority in normalized_items if priority is None}
+        targeted_triples = {(norm_base, norm_quote, priority) for norm_base, norm_quote, priority in normalized_items if priority is not None and (norm_base, norm_quote) not in full_delete_pairs}
+
+        if targeted_triples:
+            await session.execute(sql_delete(FxConversionRoute).where(tuple_(FxConversionRoute.base, FxConversionRoute.quote, FxConversionRoute.priority).in_(targeted_triples)))
+        if full_delete_pairs:
+            await session.execute(sql_delete(FxConversionRoute).where(tuple_(FxConversionRoute.base, FxConversionRoute.quote).in_(full_delete_pairs)))
 
         # Auto-reinstate MANUAL sentinel for pairs that have no routes left
         # (but NOT for pairs that were fully deleted with priority=None — that's intentional removal)
@@ -852,13 +1021,16 @@ async def delete_routes_bulk(
             if (b, q) not in fully_deleted_pairs:
                 affected_pairs.add((b, q))
 
+        # P0-5b: ONE post-delete SELECT for every affected pair, grouped in
+        # memory, instead of one SELECT per pair.
+        remaining_by_pair: dict[tuple[str, str], list[FxConversionRoute]] = {}
+        if affected_pairs:
+            remaining_stmt = select(FxConversionRoute).where(tuple_(FxConversionRoute.base, FxConversionRoute.quote).in_(affected_pairs))
+            for remaining_route in (await session.execute(remaining_stmt)).scalars().all():
+                remaining_by_pair.setdefault((remaining_route.base, remaining_route.quote), []).append(remaining_route)
+
         for base, quote in affected_pairs:
-            count_stmt = select(FxConversionRoute).where(
-                FxConversionRoute.base == base,
-                FxConversionRoute.quote == quote,
-            )
-            remaining = await session.execute(count_stmt)
-            remaining_routes = remaining.scalars().all()
+            remaining_routes = remaining_by_pair.get((base, quote), [])
 
             # Check if any non-MANUAL route exists
             has_real = False
@@ -888,7 +1060,7 @@ async def delete_routes_bulk(
 
     except Exception as e:
         await session.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to delete routes: {str(e)}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to delete routes: {e!s}") from e
 
 
 # ============================================================================

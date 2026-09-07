@@ -1,7 +1,5 @@
 # 🔍 Positions & Analyse
 
-*[⬅️ Retour à la vue d'ensemble du tableau de bord](index.md)*
-
 L'onglet **Positions** du tableau de bord vous permet d'inspecter les positions ouvertes, d'analyser les performances et d'explorer les lots correspondants selon la méthode FIFO.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-positions-views" data-carousel-interval="6000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
@@ -15,32 +13,35 @@ L'onglet **Positions** du tableau de bord vous permet d'inspecter les positions 
 
 ## 🔍 Onglet Positions
 
-L'onglet **Positions** fournit une ventilation détaillée de tous les instruments financiers actuellement détenus dans votre portefeuille (Actions, ETF, Obligations, Cryptomonnaies, etc.).
+L'onglet **Positions** a deux modes sémantiques : **Positions** et **Performance**.
 
-L'onglet Positions vous permet de basculer entre deux modes de métriques principaux à l'aide de l'interrupteur de vue, chacun se concentrant sur un aspect différent de vos positions :
+Utilisez le sélecteur de vue pour passer de l'un à l'autre, et le bascule tableau/carte pour changer la présentation visuelle.
 
 #### 📋 Vue Positions
 
-La vue **Positions** se concentre sur la comptabilité, les quantités et l'évaluation actuelle des actifs. Elle vous aide à surveiller l'exposition actuelle de votre portefeuille et les métriques de base.
+La vue **Positions** montre l'instantané des positions ouvertes. Le tableau comporte 13 colonnes :
 
-| Métrique | Description |
+| Colonne | Description |
 |:---|:---|
-| **Quantité** | Actions, unités ou pièces actuellement détenues dans votre portefeuille. |
-| **Cours de marché** | Prix en direct de l'actif récupéré auprès du fournisseur de données connecté. |
-| **Valeur de marché** | Valeur totale aux cours actuels du marché (\(\text{Prix} \times \text{Quantité}\)). |
-| **Prix moyen (PMP)** | Le Prix Moyen Pondéré payé pour acquérir la position ouverte actuelle. |
-| **Poids** | Part proportionnelle de cet actif par rapport à la valeur totale du portefeuille. |
+| **Actif** | Nom de l'actif avec l'icône du type — cliquez pour ouvrir la page de détail de l'actif. |
+| **Δ1** | Variation du P&L latent par rapport à hier, à quantité du jour constante. |
+| **Δ1%** | La même variation quotidienne en pourcentage de la valeur de marché de la position d'hier. |
+| **P&L latent** | Gain/perte ouvert : valeur actuelle moins le coût résiduel. |
+| **P&L %** | P&L latent en pourcentage du coût résiduel. |
+| **Annualisé** | Rendement net annualisé (CAGR) des lots encore ouverts, de la première transaction à aujourd'hui — pour comparer des positions détenues sur des durées différentes. |
+| **Valeur** | Valeur totale aux prix de marché courants (\(\text{Prix} \times \text{Quantité}\)). |
+| **Poids** | Part proportionnelle de cette position par rapport à la valeur totale du portefeuille. |
+| **Qté** | Actions, unités ou pièces actuellement détenues. |
+| **Courtiers** | Compte(s) courtier détenant la position. |
+| **Prix** *(masquée par défaut)* | Prix actuel de l'actif fourni par le fournisseur connecté. |
+| **Coût Moyen** *(masquée par défaut)* | Coût moyen par unité de la position actuellement ouverte (Prix Moyen de Revient). |
+| **Lot ouvert le plus ancien** *(masquée par défaut)* | Date d'ouverture du plus ancien lot FIFO encore ouvert pour cette position. |
+
+Utilisez l'**icône en forme d'œil** dans la barre d'outils du tableau pour afficher ou masquer des colonnes — vos choix sont mémorisés d'une session à l'autre.
 
 #### 📈 Vue Performance
 
-La vue **Performance** se concentre sur les rendements absolus et relatifs. Elle vous aide à analyser la rentabilité de vos positions ouvertes, en tenant compte des transactions historiques et des revenus.
-
-| Métrique | Description |
-|:---|:---|
-| **Valeur totale** | Valeur actuelle des positions (correspond à la Valeur de marché). |
-| **P&L non réalisé** | Gain ou perte papier calculé comme \(\text{Valeur de marché} - \text{Valeur comptable}\). |
-| **ROI %** | Taux de rendement par rapport à la base de coût de la position. |
-| **P&L total** | Rendements absolus cumulés (inclut les ventes passées clôturées et les dividendes). |
+La vue **Performance** se charge à la demande et montre ensemble les positions ouvertes et clôturées. Dans le tableau/la carte, le **Statut** est filtrable à l'intérieur du composant, pas via un sélecteur de premier niveau.
 
 #### 🗺️ Style Visuel : Tableau vs. Carte
 
@@ -136,3 +137,7 @@ Choisissez **Voir le détail du lot** dans les actions de la ligne du tableau po
 L'onglet **Transactions** du tableau de bord affiche une liste complète et paginée de toutes les opérations enregistrées dans le périmètre du portefeuille actif (ordres d'achat/vente, paiements de dividendes, dépôts d'espèces, transferts, etc.).
 
 Pour une explication détaillée de la liste des transactions, des filtres et de la façon de lire les détails des transactions en lecture seule, veuillez vous référer à la page dédiée **[Aperçu des Transactions](../transactions/index.md)**.
+
+---
+
+*[⬅️ Retour à la vue d'ensemble du tableau de bord](index.md)*

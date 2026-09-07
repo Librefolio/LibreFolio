@@ -52,6 +52,14 @@ Where:
 - $R_{net}$ = return after costs (what you actually keep)
 - $V_{start}$ = portfolio value at the start of the period
 
+!!! note "How LibreFolio attributes fees and taxes"
+
+    A `FEE` / `TAX` **linked to an asset** is allocated to the specific lots it relates to and drives that
+    lot's **net P&L / net return** (see
+    [FIFO Lot Analysis → Costs & Net Metrics](../../technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md#costs-and-net-metrics)).
+    A cost with **no asset** (`asset_id = null`, e.g. a flat platform fee) is portfolio-level and is handled by
+    the Portfolio Engine instead — it never lands on a single lot.
+
 ### 📉 Compounding Effect of Fees
 
 Over long holding periods, even small recurring fees erode returns significantly due to **compounding drag**:

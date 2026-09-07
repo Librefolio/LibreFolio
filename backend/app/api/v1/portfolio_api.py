@@ -14,6 +14,7 @@ from datetime import date as date_type
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
 
 from backend.app.api.v1.auth import get_current_user
 from backend.app.db.models import Asset, User
@@ -41,12 +42,19 @@ async def get_portfolio_wac(
     """Compute WAC time series for each (broker, asset) query."""
     results: list[WACAnalyticsResultItem] = []
 
+    # P0-5b (audit 08): no N+1 — preload every queried asset in ONE SELECT
+    # instead of one session.get() per query. The identity map keeps the
+    # per-query lookup on the same instances a plain get() would return.
+    queried_asset_ids = [query.asset_id for query in body.queries]
+    asset_rows = (await session.execute(select(Asset).where(Asset.id.in_(queried_asset_ids)))).scalars().all() if queried_asset_ids else []
+    assets_by_id = {asset.id: asset for asset in asset_rows}
+
     for query in body.queries:
         # Determine as_of_date: use query end date or today
         as_of_date = query.date_range.end if query.date_range and query.date_range.end else date_type.today()
 
         # Get asset currency
-        asset = await session.get(Asset, query.asset_id)
+        asset = assets_by_id.get(query.asset_id)
         if asset is None:
             results.append(
                 WACAnalyticsResultItem(

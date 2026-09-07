@@ -44,4 +44,4 @@ Static code analysis of the Docker production build conducted on 2026-06-25, ide
 | dashboard page | `frontend/src/routes/(app)/dashboard/+page.svelte` |
 | ImportWizardModal | `frontend/src/lib/components/transactions/modals/ImportWizardModal.svelte` |
 | TransactionBulkModal | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
-| brokerHelpers | `frontend/src/lib/utils/brokerHelpers.ts` |
+| brokerHelpers | `frontend/src/lib/utils/broker/brokerHelpers.ts` |

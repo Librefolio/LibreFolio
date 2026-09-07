@@ -39,11 +39,6 @@ export type FilePreviewType = z.infer<typeof schemas.FilePreviewType>;
 export type BrimFile = z.infer<typeof schemas.BRIMFileInfo>;
 
 /**
- * Status of a BRIM file.
- */
-export type BrimFileStatus = z.infer<typeof schemas.BRIMFileStatus>;
-
-/**
  * Information about a BRIM import plugin.
  * Retrieved from GET /brokers/import/plugins
  */
@@ -60,6 +55,19 @@ export type BrimParseResponse = z.infer<typeof schemas.BRIMParseResponse>;
 export type BrimValidationIssue = z.infer<typeof schemas.BRIMValidationIssue>;
 
 /**
+ * A source-data table backing a notice or a field todo.
+ * Rendered as a navigable table next to the human-readable comment.
+ */
+export type BrimEvidence = z.infer<typeof schemas.BRIMEvidence>;
+
+/**
+ * Parser notice: an `info` or `warning` message with optional evidence tables.
+ * Plugins may still emit plain strings; the backend coerces them to a
+ * `warning` notice, so this type is always the shape received by the frontend.
+ */
+export type BrimNotice = z.infer<typeof schemas.BRIMNotice>;
+
+/**
  * Field todo: an accepted TX with a field intentionally left incomplete.
  */
 export type BrimFieldTodo = z.infer<typeof schemas.BRIMFieldTodo>;
@@ -70,29 +78,9 @@ export type BrimFieldTodo = z.infer<typeof schemas.BRIMFieldTodo>;
 export type BrimAssetMapping = z.infer<typeof schemas.BRIMAssetMapping>;
 
 /**
- * Asset candidate for mapping.
- */
-export type BrimAssetCandidate = z.infer<typeof schemas.BRIMAssetCandidate>;
-
-/**
- * Confidence level for asset matching.
- */
-export type BrimMatchConfidence = z.infer<typeof schemas.BRIMMatchConfidence>;
-
-/**
- * Duplicate detection report.
- */
-export type BrimDuplicateReport = z.infer<typeof schemas.BRIMDuplicateReport>;
-
-/**
  * Single duplicate match entry.
  */
 export type BrimDuplicateMatch = z.infer<typeof schemas.BRIMDuplicateMatch>;
-
-/**
- * Duplicate detection confidence level.
- */
-export type BrimDuplicateLevel = z.infer<typeof schemas.BRIMDuplicateLevel>;
 
 // =============================================================================
 // FRONTEND-ONLY TYPES
@@ -102,12 +90,3 @@ export type BrimDuplicateLevel = z.infer<typeof schemas.BRIMDuplicateLevel>;
  * Combined file type for tables that show both static and BRIM files.
  */
 export type FileData = UploadedFile | BrimFile;
-
-/**
- * File with UI state for interactive components.
- */
-export interface FileWithUIState {
-    file: FileData;
-    isSelected?: boolean;
-    isLoading?: boolean;
-}

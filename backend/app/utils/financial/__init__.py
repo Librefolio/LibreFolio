@@ -25,7 +25,7 @@ from backend.app.utils.financial.wac_utils import (
     determine_target_currency,
 )
 
-__all__ = [
+__all__ = [  # noqa: RUF022 — grouped by domain with section comments; sorting would scatter related names
     # WAC
     "WACInputTX",
     "WACCalcResult",

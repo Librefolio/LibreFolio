@@ -23,9 +23,11 @@
  * - Row actions: kebab button [data-testid^="row-actions-"] → opens context menu with
  *   items at [data-testid="context-menu-action-{id}"] (e.g. "split", "edit", "view").
  */
-import {expect, test, type Page} from '@playwright/test';
+import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
+import {waitForSettled} from '../fixtures/app-events';
+import {appears} from '../fixtures/probe';
 
 test.setTimeout(30_000);
 
@@ -36,7 +38,9 @@ test.setTimeout(30_000);
 async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions?page_size=200');
     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 8_000});
-    await page.waitForTimeout(400);
+    // The table being VISIBLE is not the table being LOADED: it renders empty
+    // and fills in. The page publishes data-busy, so wait on that instead.
+    await waitForSettled(page.getByTestId('transactions-page'));
 }
 
 /** Find the first row matching ALL substrings (and NOT matching any excludes). Returns data-row-id or null. */
@@ -59,7 +63,10 @@ async function selectRow(page: Page, rowId: string) {
     const checkbox = row.locator('.checkbox-btn').first();
     await expect(checkbox).toBeVisible({timeout: 2_000});
     await checkbox.click();
-    await page.waitForTimeout(200);
+    // The toolbar publishes how many rows it holds. A paired row selects both
+    // halves, so the count is not always 1 — what matters is that the selection
+    // registered at all before the caller reaches for a toolbar action.
+    await expect(page.getByTestId('selection-toolbar')).not.toHaveAttribute('data-selected-count', '0');
 }
 
 /** Find a paired row (has link icon). Returns row-id or null. */
@@ -90,6 +97,46 @@ async function findStandaloneRowId(page: Page): Promise<string | null> {
     return null;
 }
 
+/**
+ * Find a row that actually offers the split action, trying rows matching
+ * `prefer` first and then any paired row.
+ *
+ * Picking a paired row and assuming it can be split is precisely the
+ * assumption that broke: a neighbouring spec had already split the row this
+ * one reached for, and the menu opened without the entry. Being paired is a
+ * necessary condition, not a sufficient one — the only way to know a row is
+ * splittable is to open its menu and look.
+ */
+async function findSplittableRowId(page: Page, prefer: string[] = []): Promise<string | null> {
+    const rows = page.locator('[data-testid="tx-table"] tr[data-row-id^="tx-"]');
+    const count = await rows.count();
+    const menu = page.locator('[data-testid="context-menu"]');
+
+    for (const includes of prefer.length ? [prefer, []] : [[]]) {
+        for (let i = 0; i < count; i++) {
+            const row = rows.nth(i);
+            if (includes.length) {
+                const text = (await row.textContent()) ?? '';
+                if (!includes.every((s) => text.includes(s))) continue;
+            }
+            if ((await row.locator('.tx-link-icon').count()) === 0) continue;
+
+            const kebab = row.getByTestId(/^row-actions-/);
+            if ((await kebab.count()) === 0) continue;
+
+            await row.hover();
+            await kebab.first().click();
+            await expect(menu).toBeVisible({timeout: 3_000});
+            const hasSplit = (await menu.locator('[data-testid="context-menu-action-split"]').count()) > 0;
+            await page.keyboard.press('Escape');
+            await expect(menu).toBeHidden({timeout: 2_000});
+
+            if (hasSplit) return await row.getAttribute('data-row-id');
+        }
+    }
+    return null;
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -111,12 +158,11 @@ test.describe('Split & Promote', () => {
         // Hover row to make actions visible
         const row = page.locator(`[data-testid="tx-table"] tr[data-row-id="${standaloneRowId}"]`);
         await row.hover();
-        await page.waitForTimeout(200);
 
         // Split action should NOT be visible (visible function filters paired-only) —
         // check via kebab menu since actions are no longer inline buttons
         const kebabBtn = row.getByTestId(/^row-actions-/);
-        if ((await kebabBtn.count()) === 0) return; // no actions at all — split is a fortiori hidden
+        if (!(await appears(kebabBtn))) return; // no actions at all — split is a fortiori hidden
         await kebabBtn.click();
         const menu = page.locator('[data-testid="context-menu"]');
         await expect(menu).toBeVisible({timeout: 3_000});
@@ -127,23 +173,18 @@ test.describe('Split & Promote', () => {
     test('Split from Main Table → confirm modal appears', async ({page}) => {
         await goToTransactions(page);
 
-        // Find a paired row — prefer delete-safe tagged ones
-        let pairedRowId = await findRowId(page, ['delete-safe'], []);
-        if (!pairedRowId) {
-            pairedRowId = await findPairedRowId(page);
-        }
-        expect(pairedRowId, 'Need at least 1 paired TX for split test').toBeTruthy();
+        // Find a row that offers the split action — verified, not assumed.
+        const pairedRowId = await findSplittableRowId(page, ['delete-safe']);
+        expect(pairedRowId, 'Need at least 1 splittable TX for split test').toBeTruthy();
 
         // Hover to show actions, click split
         const row = page.locator(`[data-testid="tx-table"] tr[data-row-id="${pairedRowId}"]`);
         await row.hover();
-        await page.waitForTimeout(200);
 
         const splitAction = row.getByTestId(/^row-actions-/);
         await expect(splitAction).toBeVisible({timeout: 2_000});
         await splitAction.click();
         await page.getByTestId('context-menu-action-split').click();
-        await page.waitForTimeout(300);
 
         // A confirmation modal should appear (TransactionActionModal testId="tx-action-modal")
         const modal = page.locator('[data-testid="tx-action-modal"]');
@@ -183,11 +224,12 @@ test.describe('Split & Promote', () => {
         const pairedId = await findPairedRowId(page);
         expect(pairedId, 'Paired TX must exist — check populate_mock_data.py').toBeTruthy();
         await selectRow(page, pairedId!);
-        await page.waitForTimeout(300);
+        // Absence is only a fact once the toolbar has actually rendered FOR THIS
+        // selection. Without this barrier the next assertion is satisfied by
+        // "the toolbar hasn't caught up yet", which is not what the test claims.
+        await expect(page.getByTestId('selection-toolbar')).toHaveAttribute('data-selected-count', '1');
         // The promote/link button should NOT appear for paired rows
-        const promoteBtn = page.locator('[data-testid="toolbar-action-promote"]');
-        const visible = await promoteBtn.isVisible({timeout: 1_000}).catch(() => false);
-        expect(visible).toBeFalsy();
+        await expect(page.locator('[data-testid="toolbar-action-promote"]')).toHaveCount(0);
     });
 
     // -----------------------------------------------------------------------
@@ -204,12 +246,12 @@ test.describe('Split & Promote', () => {
         // Refresh the page
         await page.reload();
         await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 8_000});
-        await page.waitForTimeout(400);
 
-        // Try row action: hover + click edit or view
+        // Try row action: hover + click edit or view. The table being visible does not
+        // mean THIS row has been re-rendered into it after the reload.
         const row = page.locator(`[data-testid="tx-table"] tr[data-row-id="${firstRowId}"]`);
+        await expect(row).toBeVisible({timeout: 8_000});
         await row.hover();
-        await page.waitForTimeout(200);
 
         const kebabBtn = row.getByTestId(/^row-actions-/);
         await expect(kebabBtn).toBeVisible({timeout: 2_000});
@@ -226,7 +268,6 @@ test.describe('Split & Promote', () => {
         } else {
             await viewAction.click();
         }
-        await page.waitForTimeout(500);
 
         // A modal should open (BulkModal or FormModal)
         const anyModal = page.locator('[data-testid="tx-bulk-modal"], [data-testid="tx-form-modal"], .modal-base');
@@ -251,7 +292,6 @@ test.describe('Split & Promote', () => {
         // Select both
         await selectRow(page, withdrawalRowId);
         await selectRow(page, depositRowId);
-        await page.waitForTimeout(500);
 
         // The toolbar should show the promote/link button
         const promoteBtn = page.locator('[data-testid="toolbar-action-promote"]');
@@ -265,16 +305,16 @@ test.describe('Split & Promote', () => {
     test('C3: Split + edit quantity → commit payload has splits + updates without type', async ({page}) => {
         await goToTransactions(page);
 
-        // Find a paired "delete-safe" row (Asset Transfer)
-        const pairedRowId = await findRowId(page, ['delete-safe'], []);
-        expect(pairedRowId, 'delete-safe paired TX must exist — check populate_mock_data.py').toBeTruthy();
+        // Find a splittable "delete-safe" row (Asset Transfer). Verified, not
+        // assumed: a neighbour may already have split the obvious candidate.
+        const pairedRowId = await findSplittableRowId(page, ['delete-safe']);
+        expect(pairedRowId, 'splittable delete-safe TX must exist — check populate_mock_data.py').toBeTruthy();
 
         // Select the row and open BulkModal via Edit toolbar
         await selectRow(page, pairedRowId!);
         const editBtn = page.locator('[data-testid="toolbar-action-edit"]');
         await expect(editBtn).toBeVisible({timeout: 2_000});
         await editBtn.click();
-        await page.waitForTimeout(500);
 
         // BulkModal should be open
         const bulkModal = page.locator('[data-testid="tx-bulk-modal"]');
@@ -285,18 +325,15 @@ test.describe('Split & Promote', () => {
         if (await formModalInit.isVisible({timeout: 1_000}).catch(() => false)) {
             await page.keyboard.press('Escape');
             await expect(formModalInit).not.toBeVisible({timeout: 2_000});
-            await page.waitForTimeout(300);
         }
 
         // Click Split on the row — need to hover to reveal row actions
         const bulkRow = bulkModal.locator('tr[data-row-id]').first();
         await bulkRow.hover();
-        await page.waitForTimeout(300);
         const splitBtn = bulkRow.getByTestId(/^row-actions-/);
         await expect(splitBtn).toBeVisible({timeout: 2_000});
         await splitBtn.click();
         await page.getByTestId('context-menu-action-split').click();
-        await page.waitForTimeout(500);
 
         // Verify split-queued badge appears in the header summary
         const splitBadge = bulkModal.locator('[data-testid="split-queued-badge"]');
@@ -305,7 +342,6 @@ test.describe('Split & Promote', () => {
         // Double-click first row to open FormModal (triggers handleEditRowClick)
         const firstRow = bulkModal.locator('tr[data-row-id]').first();
         await firstRow.dblclick();
-        await page.waitForTimeout(500);
 
         // FormModal should open
         const formModal = page.locator('[data-testid="tx-form-modal"]');
@@ -315,12 +351,11 @@ test.describe('Split & Promote', () => {
         const qtyInput = formModal.getByTestId('tx-form-quantity');
         await expect(qtyInput).toBeVisible({timeout: 2_000});
         await qtyInput.fill('-0.002');
-        await page.waitForTimeout(200);
+        await expect(qtyInput).toHaveValue('-0.002');
 
         // Save the FormModal
         const saveBtn = formModal.locator('button[data-testid="tx-form-save"], button:has-text("Save"), button:has-text("Apply")').first();
         await saveBtn.click();
-        await page.waitForTimeout(500);
 
         // FormModal should close
         await expect(formModal).not.toBeVisible({timeout: 2_000});

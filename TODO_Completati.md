@@ -4,6 +4,23 @@ Questo file documenta i TODO che sono stati completati durante lo sviluppo di Li
 
 ---
 
+## 📝 Changelog nella UI (click sulla versione) ✅
+
+**Data aggiunta**: (preesistente, sezione orfana in TODO_FUTURI)
+**Data completamento**: 1 Settembre 2026
+**Status**: ✅ COMPLETATO
+
+### Richiesta originale
+Aggiungere una pagina changelog dentro la UI per mostrare le modifiche di rilascio, forse con link ai PR e issue.
+
+### Implementazione (feedback F12)
+Click sulla versione nella sidebar → modale con il `CHANGELOG.md` bundled, diviso in
+capitoli per release (parsing in build via `?raw` import, rendering markdown con `marked`),
+più link al file remoto su GitHub. Componenti: `frontend/src/lib/features/changelog/changelog.ts`,
+`frontend/src/lib/components/layout/ChangelogModal.svelte`, wiring in `Sidebar.svelte`.
+
+---
+
 ## 🖼️ File Uploader Image Preview ✅
 
 **Data aggiunta**: 23 Gennaio 2026  

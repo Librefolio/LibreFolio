@@ -42,7 +42,7 @@ This is equivalent to the **simple interest** formula $A = P(1 + rt)$, where $t$
 
 | Parameter | Key | Default | Description |
 |---|---|---|---|
-| Annual Rate | `annualRate` | 5 | Growth rate in percent per year. |
+| Annual Rate | `annualRate` | 2 | Growth rate in percent per year. |
 | Offset | `offset` | 0 | Vertical shift as % of base value. |
 
 ---

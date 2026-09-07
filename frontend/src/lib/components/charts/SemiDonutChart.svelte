@@ -20,6 +20,8 @@
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {attachChartReady} from '$lib/utils/chartReady';
+    import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS} from '$lib/components/charts/echartsAnimationConfig';
     import {scheduleFirstRenderStabilityFix, tooltipPositionAboveFinger} from '$lib/components/charts/echartsTooltipHelpers';
 
@@ -53,8 +55,11 @@
 
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | null = null;
-    let resizeObserver: ResizeObserver | null = null;
+    const resizeWatcher = createResizeWatcher(() => {
+        chartInstance?.resize();
+    });
     let needsInitialLayoutStabilityPass = false;
+    let renderGeneration = 0;
 
     // Diversified color palette — high chromatic distance between adjacent slices
     const PALETTE = ['#1a4031', '#2563eb', '#7c3aed', '#dc2626', '#d97706', '#0d9488', '#be185d', '#4f46e5'];
@@ -71,27 +76,31 @@
     });
 
     $effect(() => {
-        // Re-render when data changes or container appears
-        if (chartContainer && data) {
-            tick().then(() => {
+        const container = chartContainer;
+        const slices = data.map((slice) => ({...slice}));
+        const label = availableLabel;
+        void height;
+
+        if (container) {
+            const generation = ++renderGeneration;
+            tick().then(async () => {
+                if (generation !== renderGeneration || chartContainer !== container) return;
                 setupResizeObserver();
-                renderChart();
+                await renderChart(generation, slices, label);
             });
         }
     });
 
     function setupResizeObserver() {
-        if (resizeObserver || !chartContainer) return;
-        resizeObserver = new ResizeObserver(() => {
-            chartInstance?.resize();
-        });
-        resizeObserver.observe(chartContainer);
+        resizeWatcher.observe(chartContainer);
     }
 
     function cleanup() {
-        resizeObserver?.disconnect();
-        resizeObserver = null;
-        chartInstance?.dispose();
+        renderGeneration++;
+        resizeWatcher.disconnect();
+        if (chartInstance && !chartInstance.isDisposed()) {
+            chartInstance.dispose();
+        }
         chartInstance = null;
     }
 
@@ -149,13 +158,27 @@
     // Chart Rendering
     // =========================================================================
 
-    async function renderChart() {
-        if (!chartContainer) return;
+    async function waitForRenderableContainer(container: HTMLDivElement, generation: number) {
+        for (let attempt = 0; attempt < 4; attempt++) {
+            if (generation !== renderGeneration || chartContainer !== container || !container.isConnected) return false;
+            const rect = container.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) return true;
+            await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        }
+        return generation === renderGeneration && chartContainer === container && container.isConnected;
+    }
 
-        if (!chartInstance) {
-            chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+    async function renderChart(generation: number, slices: OwnerSlice[], label: string) {
+        const container = chartContainer;
+        if (!container) return;
+        if (!(await waitForRenderableContainer(container, generation))) return;
+
+        if (!chartInstance || chartInstance.isDisposed()) {
+            chartInstance = echarts.init(container, undefined, {renderer: 'canvas'});
+            attachChartReady(chartInstance, container, 'semi-donut');
             needsInitialLayoutStabilityPass = true;
         }
+        const currentInstance = chartInstance;
 
         const isDark = document.documentElement.classList.contains('dark');
         const avatarSize = 44;
@@ -164,7 +187,7 @@
 
         // Pre-load circular avatars in parallel
         const avatarPromises: Array<{index: number; promise: Promise<string>}> = [];
-        data.forEach((slice, i) => {
+        slices.forEach((slice, i) => {
             if (slice.avatarUrl && slice.percentage > 0) {
                 const url = slice.avatarUrl.includes('?') ? slice.avatarUrl : `${slice.avatarUrl}?img_preview=64x64`;
                 avatarPromises.push({index: i, promise: createCircularImage(url, avatarSize, borderColor, borderWidth)});
@@ -172,6 +195,8 @@
         });
 
         const resolvedAvatars = await Promise.all(avatarPromises.map(async (p) => ({index: p.index, dataUrl: await p.promise})));
+        if (generation !== renderGeneration || chartInstance !== currentInstance || currentInstance.isDisposed()) return;
+
         const avatarMap = new Map<number, string>();
         resolvedAvatars.forEach((r) => {
             if (r.dataUrl) avatarMap.set(r.index, r.dataUrl);
@@ -179,9 +204,9 @@
 
         // Build chart data
         const chartData: Array<{value: number; name: string; itemStyle?: any; label?: any}> = [];
-        const totalAllocated = data.reduce((sum, s) => sum + s.percentage, 0);
+        const totalAllocated = slices.reduce((sum, s) => sum + s.percentage, 0);
 
-        data.forEach((slice, i) => {
+        slices.forEach((slice, i) => {
             if (slice.percentage <= 0) return;
 
             const initial = slice.name.charAt(0).toUpperCase();
@@ -238,7 +263,7 @@
         if (avail > 0.01) {
             chartData.push({
                 value: avail,
-                name: availableLabel,
+                name: label,
                 itemStyle: {color: isDark ? 'rgba(100,116,139,0.3)' : 'rgba(203,213,225,0.5)'},
                 label: {show: false},
             });
@@ -248,7 +273,7 @@
         if (chartData.length === 0) {
             chartData.push({
                 value: 100,
-                name: `${availableLabel} (100%)`,
+                name: `${label} (100%)`,
                 itemStyle: {color: isDark ? 'rgba(100,116,139,0.3)' : 'rgba(203,213,225,0.5)'},
                 label: {show: false},
             });
@@ -298,10 +323,12 @@
             ],
         };
 
-        chartInstance.setOption(option, CHART_SET_OPTION_OPTS);
+        if (generation !== renderGeneration || chartInstance !== currentInstance || currentInstance.isDisposed()) return;
+
+        currentInstance.setOption(option, CHART_SET_OPTION_OPTS);
         if (needsInitialLayoutStabilityPass) {
             needsInitialLayoutStabilityPass = false;
-            scheduleFirstRenderStabilityFix(chartInstance, chartContainer);
+            scheduleFirstRenderStabilityFix(currentInstance, container);
         }
     }
 </script>

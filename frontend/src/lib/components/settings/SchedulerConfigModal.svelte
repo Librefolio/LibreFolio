@@ -2,8 +2,8 @@
   SchedulerConfigModal.svelte — Svelte 5
 
   Modal for configuring scheduler settings: frequency, time slots, days, horizon.
-  Times are stored in UTC. The user selects an IANA timezone and sees/edits times
-  in that timezone; conversion to/from UTC happens on open/save.
+  Times and days are stored in the configured scheduler timezone. The backend
+  converts local slots to UTC only when deciding if a job is due.
   Uses ModalBase + InfoBanner. Saves each key individually via PUT.
 -->
 <script lang="ts">
@@ -12,9 +12,10 @@
     import {zodiosApi} from '$lib/api';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
-    import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {notify} from '$lib/stores/app/notify.svelte';
     import {Clock, Calendar, Search, Lightbulb, Plus, X, Globe} from 'lucide-svelte';
 
+    import {numericArrows} from '$lib/actions/numericArrows';
     interface Props {
         open: boolean;
         serverTz: string;
@@ -48,6 +49,7 @@
     let saving = $state(false);
     let error: string | null = $state(null);
     let selectedTz = $state('UTC');
+    let initialTz = $state('UTC');
     let tzSearch = $state('');
     let tzDropdownOpen = $state(false);
 
@@ -64,50 +66,6 @@
 
     let filteredTimezones = $derived(tzSearch.length > 0 ? TIMEZONES.filter((tz) => tz.toLowerCase().includes(tzSearch.toLowerCase())).slice(0, 30) : TIMEZONES.slice(0, 30));
 
-    // ── UTC ↔ Local conversion helpers ──
-
-    function utcToLocal(utcTime: string, tz: string): string {
-        try {
-            const [h, m] = utcTime.split(':').map(Number);
-            const now = new Date();
-            const utcDate = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), h, m));
-            const localStr = utcDate.toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit', timeZone: tz, hour12: false});
-            return localStr;
-        } catch {
-            return utcTime;
-        }
-    }
-
-    function localToUtc(localTime: string, tz: string): string {
-        try {
-            const [h, m] = localTime.split(':').map(Number);
-            // Create a date in the target timezone and find the UTC equivalent
-            const now = new Date();
-            const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`;
-            // Use Intl to find the UTC offset for this timezone
-            const formatter = new Intl.DateTimeFormat('en-US', {timeZone: tz, timeZoneName: 'shortOffset'});
-            const parts = formatter.formatToParts(new Date(dateStr));
-            const offsetPart = parts.find((p) => p.type === 'timeZoneName')?.value ?? '+00:00';
-            // Parse offset
-            const match = offsetPart.match(/GMT([+-]?\d+)?(?::(\d+))?/);
-            let offsetMinutes = 0;
-            if (match) {
-                const hours = parseInt(match[1] || '0', 10);
-                const mins = parseInt(match[2] || '0', 10);
-                offsetMinutes = hours * 60 + (hours >= 0 ? mins : -mins);
-            }
-            // Subtract offset to get UTC
-            let totalMinutes = h * 60 + m - offsetMinutes;
-            if (totalMinutes < 0) totalMinutes += 24 * 60;
-            if (totalMinutes >= 24 * 60) totalMinutes -= 24 * 60;
-            const utcH = Math.floor(totalMinutes / 60);
-            const utcM = totalMinutes % 60;
-            return `${String(utcH).padStart(2, '0')}:${String(utcM).padStart(2, '0')}`;
-        } catch {
-            return localTime;
-        }
-    }
-
     // Reset local state only on open transition (false → true).
     // untrack(currentValues) prevents re-triggering when parent re-renders the inline object.
     let wasOpen = $state(false);
@@ -116,10 +74,9 @@
         if (isOpen && !wasOpen) {
             untrack(() => {
                 frequency = currentValues.frequency;
-                // Times from backend are in UTC — convert to local display
-                selectedTz = schedulerTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-                const utcTimes = currentValues.times ? currentValues.times.split(',').filter(Boolean) : [];
-                timeSlots = utcTimes.map((t) => utcToLocal(t, selectedTz));
+                selectedTz = schedulerTimezone || 'UTC';
+                initialTz = selectedTz;
+                timeSlots = currentValues.times ? currentValues.times.split(',').filter(Boolean) : [];
                 const activeDays = currentValues.days ? currentValues.days.split(',').map((d: string) => d.trim().toLowerCase()) : [];
                 selectedDays = Object.fromEntries(DAY_KEYS.map((d) => [d, activeDays.includes(d)]));
                 horizon = currentValues.horizon;
@@ -144,6 +101,11 @@
         timeSlots = timeSlots.filter((s) => s !== t);
     }
 
+    function changeTimezone(nextTz: string) {
+        if (nextTz === selectedTz) return;
+        selectedTz = nextTz;
+    }
+
     function toggleDay(day: string) {
         // Don't allow unchecking the last selected day
         const currentSelected = Object.entries(selectedDays).filter(([, v]) => v);
@@ -154,18 +116,16 @@
     let hasAtLeastOneDay = $derived(Object.values(selectedDays).some((v) => v));
     let hasAtLeastOneTime = $derived(timeSlots.length > 0);
     let canSave = $derived(frequency >= 1 && frequency <= 1440 && hasAtLeastOneTime && hasAtLeastOneDay && horizon >= 1 && horizon <= 365);
+    let timezoneChanged = $derived(selectedTz !== initialTz);
 
     async function handleSave() {
         if (!canSave) return;
         saving = true;
         error = null;
 
-        // Convert local display times → UTC for storage
-        const utcTimes = timeSlots.map((t) => localToUtc(t, selectedTz));
-
         const keysToSave: [string, string][] = [
             ['scheduler_current_price_frequency_minutes', String(frequency)],
-            ['scheduler_history_sync_times', utcTimes.join(',')],
+            ['scheduler_history_sync_times', timeSlots.join(',')],
             [
                 'scheduler_history_sync_days',
                 Object.entries(selectedDays)
@@ -183,10 +143,17 @@
             });
             onsave();
             open = false;
+            // The modal closes on success and the schedule it wrote is not shown anywhere
+            // else, so without this the user cannot tell a save from a dismiss.
+            notify({
+                name: 'settings.scheduler.saved',
+                detail: {frequencyMinutes: frequency, horizonDays: horizon, timezone: selectedTz, times: timeSlots.length},
+                toast: {variant: 'success', message: $_('settings.savedSuccessfully')},
+            });
         } catch (e: any) {
             const msg = e?.response?.data?.detail || e?.message || 'Save failed';
             error = msg;
-            toasts.error(msg);
+            notify({name: 'settings.scheduler.save.failed', detail: {reason: msg}, toast: {variant: 'error', message: msg}});
         } finally {
             saving = false;
         }
@@ -250,7 +217,7 @@
                                 class="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-slate-700 {tz === selectedTz ? 'text-libre-green font-medium' : 'text-gray-700 dark:text-gray-300'}"
                                 onmousedown={(e) => e.preventDefault()}
                                 onclick={() => {
-                                    selectedTz = tz;
+                                    changeTimezone(tz);
                                     tzSearch = '';
                                     tzDropdownOpen = false;
                                 }}>{tz}</button
@@ -259,7 +226,12 @@
                     </div>
                 {/if}
             </div>
-            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{$_('settings.global.scheduler.timezoneHint') || 'Times below are displayed in this timezone. Stored in UTC.'}</p>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{$_('settings.global.scheduler.timezoneHintLocal')}</p>
+            {#if timezoneChanged}
+                <div data-testid="scheduler-timezone-change-warning" class="mt-2">
+                    <InfoBanner variant="warning" message={$_('settings.global.scheduler.timezoneChangeWarning')} />
+                </div>
+            {/if}
         </section>
 
         <!-- Error -->
@@ -277,6 +249,7 @@
                 <input
                     id="scheduler-freq"
                     type="number"
+                    use:numericArrows
                     bind:value={frequency}
                     min={1}
                     max={1440}
@@ -333,6 +306,8 @@
                 {#each DAY_KEYS as day}
                     <button
                         type="button"
+                        aria-pressed={selectedDays[day]}
+                        data-testid="scheduler-day-{day}"
                         class="px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors {selectedDays[day] ? 'bg-libre-green text-white border-libre-green' : 'bg-white dark:bg-slate-700 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-slate-600 hover:border-libre-green'}"
                         onclick={() => toggleDay(day)}
                     >
@@ -350,7 +325,14 @@
                 {$_('settings.global.scheduler.horizonLabel')}
             </h3>
             <div class="flex items-center gap-2">
-                <input type="number" bind:value={horizon} min={1} max={365} class="w-20 px-2 py-1.5 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-libre-green/40 focus:border-libre-green" />
+                <input
+                    type="number"
+                    use:numericArrows
+                    bind:value={horizon}
+                    min={1}
+                    max={365}
+                    class="w-20 px-2 py-1.5 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-libre-green/40 focus:border-libre-green"
+                />
                 <span class="text-sm text-gray-500 dark:text-gray-400">{$_('settings.global.scheduler.horizonSuffix')}</span>
             </div>
             <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{$_('settings.global.scheduler.horizonHint')}</p>

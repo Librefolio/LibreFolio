@@ -21,6 +21,8 @@ python-dateutil = "*"
 forex-python = "*"
 yfinance = "*"
 pandas = "*"
+pandas-ta-classic = "==0.6.52"
+ta-lib = "==0.7.1"
 httpx = "*"
 beautifulsoup4 = "*"
 sqlglot = "*"
@@ -42,10 +44,15 @@ argcomplete = "*"
 pillow = "*"
 PyJWT = "*"
 mkdocs-static-i18n = "*"
-"borsa-italiana-scraping " = {git = "https://github.com/Librefolio/borsaItaliana-scraping.git"}
 scipy = "*"
+quantlib = "==1.43"
+riskfolio-lib = "==7.0.1"
 justetf-scraping = {git = "https://github.com/Librefolio/justetf-scraping.git", ref = "main"}
 xlrd = "*"
+openpyxl = "*"
+borsa-italiana-scraping = {git = "https://github.com/Librefolio/borsaItaliana-scraping.git", ref = "main"}
+ddgs = "*"
+pyyaml = "==6.0.3"
 
 [dev-packages]
 pytest = "*"
@@ -57,10 +64,10 @@ pytest-cov = "*"
 coverage = {extras = ["toml"], version = "*"}
 gevent = "*"
 tabulate = "*"
-openpyxl = "*"
 aphra = {git = "https://github.com/DavidLMS/aphra.git", ref = "main"}
 graphifyy = "*"
 autobatcher = "*"
+vulture = "*"
 
 [requires]
 python_version = "3.13"

@@ -23,7 +23,7 @@ Para exportar su historial de transacciones desde Charles Schwab:
 
 !!! warning "Do Not Modify Headers"
 
-    Los archivos CSV de Schwab tienen un diseño específico con líneas de metadatos al final (que generalmente comienzan con "Transactions Total"). El analizador BRIM detecta y omite automáticamente estas líneas de metadatos. No recorte manualmente las líneas finales del CSV.
+    Los archivos CSV de Schwab incluyen filas de resumen/metadatos cerca del final. El analizador BRIM ignora las filas que no corresponden a transacciones y puede emitir advertencias por acciones desconocidas o filas no válidas. No edite manualmente la exportación.
 
 ## 📝 Notas
 

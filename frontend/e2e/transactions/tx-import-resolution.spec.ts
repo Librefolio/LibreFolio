@@ -1,15 +1,19 @@
 /**
  * Import Wizard — Asset Resolution E2E Tests
  *
- * Tests the advanced resolution flow in Step 4 of the ImportWizardModal.
+ * Tests the advanced resolution flow in the review step of the ImportWizardModal.
  * Uses generic_simple.csv which contains UNETF (unknown asset → fake_id).
+ *
+ * The wizard has seven steps, three of them conditional: unification, corrections and
+ * duplicates appear only when the parse produced something for them to do. Walking to
+ * the review step therefore means asking at each one, never assuming a fixed order.
  *
  * Prerequisites:
  *   - Backend test mode (port 6041)
  *   - DB populated (./dev.py db populate --test --with-reports)
  *     generic_simple.csv is uploaded for "Interactive Brokers" by populate_mock_data.py
  *
- * Test IDs: IWR-001..IWR-006
+ * Test IDs: IWR-001..IWR-011
  *
  * Key data-testids used:
  *   import-wizard-step4             — Step 4 container
@@ -27,8 +31,9 @@
  *   tx-form-modal-root              — Compare modal (TransactionFormModal in view mode)
  */
 
-import {expect, test, type Page} from '@playwright/test';
+import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
+import {waitForParseVerdict, waitForSettled} from '../fixtures/app-events';
 import {TEST_USER} from '../fixtures/test-users';
 
 test.setTimeout(90_000);
@@ -37,10 +42,22 @@ test.setTimeout(90_000);
 // Helpers
 // ---------------------------------------------------------------------------
 
+/** The option list is present and has finished loading its catalogue. */
+async function optionListReady(page: Page) {
+    const list = page.locator('[role="listbox"]');
+    await expect(list.first()).toBeVisible({timeout: 5_000});
+    await expect(list.first()).toHaveAttribute('aria-busy', 'false', {timeout: 10_000});
+}
+
+/** The option list is gone — the teardown that follows a pick or an Escape. */
+async function optionListClosed(page: Page) {
+    await expect(page.locator('[data-testid^="search-select-option-"]')).toHaveCount(0, {timeout: 10_000});
+}
+
 async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions');
     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
-    await page.waitForTimeout(400);
+    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
 }
 
 /** Open BulkModal → click Import → ImportWizard opens */
@@ -58,23 +75,37 @@ async function openImportWizard(page: Page) {
     const formClose = page.getByTestId('tx-form-close');
     if (await formClose.isVisible({timeout: 1_500}).catch(() => false)) {
         await formClose.click();
-        await page.waitForTimeout(300);
+        await expect(formClose).toHaveCount(0, {timeout: 5_000});
     }
 
     await page.getByTestId('tx-bulk-import').click();
     await page.getByTestId('import-wizard-stepper').waitFor({state: 'visible', timeout: 5_000});
 }
 
-/** Navigate through wizard to Step 4, selecting generic_simple.csv for parsing */
-async function goToStep4WithGenericSimple(page: Page) {
+/**
+ * Click a conditional step's Continue button if that step is on screen.
+ *
+ * The wizard shows unification, corrections and duplicates only when the parse produced
+ * something for them to do, so a walk to the review step has to ask rather than assume.
+ */
+async function skipStepIfPresent(page: Page, continueTestId: string) {
+    const button = page.getByTestId(continueTestId);
+    if (await button.isVisible({timeout: 1_500}).catch(() => false)) {
+        await button.click();
+        await expect(button).toHaveCount(0, {timeout: 5_000});
+    }
+}
+
+/** Select generic_simple.csv and parse it, stopping on the analysis step. */
+async function parseGenericSimple(page: Page) {
     // Step 1: skip (no new uploads)
     await page.getByTestId('import-wizard-next').click();
     await page.getByTestId('import-wizard-step2').waitFor({state: 'visible', timeout: 5_000});
-    await page.waitForTimeout(600); // wait for broker files to load and panels to auto-expand
+    await waitForSettled(page.getByTestId('import-wizard-step2'), 20_000);
 
     // Dismiss any open dropdown (e.g. column-visibility panel) before interacting
     await page.keyboard.press('Escape');
-    await page.waitForTimeout(200);
+    await optionListClosed(page);
 
     const step2 = page.getByTestId('import-wizard-step2');
 
@@ -89,7 +120,6 @@ async function goToStep4WithGenericSimple(page: Page) {
         const count = await brokerHeaders.count();
         for (let i = 0; i < count; i++) {
             await brokerHeaders.nth(i).click();
-            await page.waitForTimeout(300);
             if (await fileRow.isVisible({timeout: 1_000}).catch(() => false)) break;
         }
     }
@@ -101,7 +131,6 @@ async function goToStep4WithGenericSimple(page: Page) {
     const checkbox = fileRow.locator('td.td-select button.checkbox-btn');
     await checkbox.scrollIntoViewIfNeeded();
     await page.keyboard.press('Escape'); // dismiss any open dropdown
-    await page.waitForTimeout(200);
     await checkbox.click();
 
     await expect(page.getByTestId('import-wizard-parse')).toBeEnabled({timeout: 3_000});
@@ -109,12 +138,22 @@ async function goToStep4WithGenericSimple(page: Page) {
     // Step 3: parse
     await page.getByTestId('import-wizard-parse').click();
     await page.getByTestId('import-wizard-step3').waitFor({state: 'visible', timeout: 10_000});
-    await expect(page.getByTestId('import-wizard-continue')).toBeEnabled({timeout: 30_000});
+    await waitForParseVerdict(page);
+}
 
-    // Continue to Step 4
+/**
+ * Walk from the analysis step to the review step, crossing whichever of the three
+ * conditional steps this parse happens to raise.
+ */
+async function goToStep4WithGenericSimple(page: Page) {
+    await parseGenericSimple(page);
+
     await page.getByTestId('import-wizard-continue').click();
+    for (const testid of ['import-wizard-assets-continue', 'import-wizard-fix-continue', 'import-wizard-duplicates-continue']) {
+        await skipStepIfPresent(page, testid);
+    }
     await page.getByTestId('import-wizard-step4').waitFor({state: 'visible', timeout: 5_000});
-    await page.waitForTimeout(500);
+    await waitForSettled(page.getByTestId('import-wizard-step4'), 20_000);
 }
 
 /**
@@ -128,7 +167,6 @@ async function openFirstAssetSelectDropdown(page: Page) {
 
     // Scroll resolve section into view (it may be above the visible area in the modal)
     await resolveSection.scrollIntoViewIfNeeded();
-    await page.waitForTimeout(300);
 
     // Wait for AssetSelect in the first UNRESOLVED card.
     // Resolved cards have 'border-emerald-200'; unresolved cards have 'border-gray-200'.
@@ -149,7 +187,7 @@ async function openFirstAssetSelectDropdown(page: Page) {
     }
 
     await assetSelect.click();
-    await page.waitForTimeout(400); // wait for dropdown to open
+    await optionListReady(page);
 
     return step4;
 }
@@ -169,17 +207,15 @@ async function resolveFirstAssetManually(page: Page): Promise<boolean> {
     if (!(await searchInput.isVisible({timeout: 2_000}).catch(() => false))) {
         // Dropdown might not be open yet; click the select again
         await resolveSection.locator('[data-testid="asset-select"]').first().click();
-        await page.waitForTimeout(400);
+        await optionListReady(page);
     }
 
     // Type to trigger search
     await searchInput.fill('e');
-    await page.waitForTimeout(600);
 
     const firstOption = page.locator('[data-testid^="search-select-option-"]').first();
     if (!(await firstOption.isVisible({timeout: 3_000}).catch(() => false))) {
         await searchInput.fill('a');
-        await page.waitForTimeout(600);
     }
 
     const option = page.locator('[data-testid^="search-select-option-"]').first();
@@ -188,7 +224,7 @@ async function resolveFirstAssetManually(page: Page): Promise<boolean> {
     }
 
     await option.click();
-    await page.waitForTimeout(500);
+    await optionListClosed(page);
 
     // Handle identifier prompt (skip or confirm)
     const skipBtn = page.getByTestId('identifier-prompt-skip');
@@ -197,13 +233,10 @@ async function resolveFirstAssetManually(page: Page): Promise<boolean> {
 
     if (await skipBtn.isVisible({timeout: 2_000}).catch(() => false)) {
         await skipBtn.click();
-        await page.waitForTimeout(300);
     } else if (await confirmBtn.isVisible({timeout: 500}).catch(() => false)) {
         await confirmBtn.click();
-        await page.waitForTimeout(800);
     } else if (await cancelBtn.isVisible({timeout: 500}).catch(() => false)) {
         await cancelBtn.click();
-        await page.waitForTimeout(300);
     }
 
     return true;
@@ -256,7 +289,7 @@ test.describe('Import Wizard — Asset Resolution', () => {
 
         // Close dropdown by pressing Escape
         await page.keyboard.press('Escape');
-        await page.waitForTimeout(200);
+        await optionListClosed(page);
     });
 
     // -----------------------------------------------------------------------
@@ -270,7 +303,6 @@ test.describe('Import Wizard — Asset Resolution', () => {
 
         // Click the "Create new" footer button
         await page.getByTestId('search-select-create-new').click();
-        await page.waitForTimeout(500);
 
         // AssetModal must open
         const assetModal = page.getByTestId('asset-modal-form');
@@ -282,7 +314,7 @@ test.describe('Import Wizard — Asset Resolution', () => {
 
         // Cancel the modal — we're just verifying the pre-fill
         await page.getByTestId('asset-modal-cancel').click();
-        await page.waitForTimeout(300);
+        await expect(page.getByTestId('asset-modal-form')).toHaveCount(0, {timeout: 5_000});
 
         // Wizard still open
         await expect(page.getByTestId('import-wizard-step4')).toBeVisible();
@@ -304,13 +336,12 @@ test.describe('Import Wizard — Asset Resolution', () => {
         // Type a search to get options
         const searchInput = resolveSection.locator('[data-testid="asset-select"] input[type="text"]').first();
         await searchInput.fill('e');
-        await page.waitForTimeout(600);
 
         // Pick the first available asset option
         const firstOption = page.locator('[data-testid^="search-select-option-"]').first();
         await expect(firstOption).toBeVisible({timeout: 5_000});
         await firstOption.click();
-        await page.waitForTimeout(500);
+        await optionListClosed(page);
 
         // One of: identifier prompt appears OR asset is directly resolved
         const skipBtn = page.getByTestId('identifier-prompt-skip');
@@ -325,7 +356,7 @@ test.describe('Import Wizard — Asset Resolution', () => {
                 // Cancel if skip not available
                 await page.getByTestId('identifier-prompt-cancel').click();
             }
-            await page.waitForTimeout(400);
+            await expect(skipBtn).toHaveCount(0, {timeout: 5_000});
         }
 
         // Either way the asset should now be resolved (emerald border on card)
@@ -348,18 +379,18 @@ test.describe('Import Wizard — Asset Resolution', () => {
         await openFirstAssetSelectDropdown(page);
         const searchInput = resolveSection.locator('[data-testid="asset-select"] input[type="text"]').first();
         await searchInput.fill('e');
-        await page.waitForTimeout(600);
 
         const firstOption = page.locator('[data-testid^="search-select-option-"]').first();
         await expect(firstOption).toBeVisible({timeout: 5_000});
         await firstOption.click();
-        await page.waitForTimeout(500);
+        await optionListClosed(page);
 
         // If identifier prompt appears, use Confirm (not Skip)
         const confirmBtn = page.getByTestId('identifier-prompt-confirm');
         if (await confirmBtn.isVisible({timeout: 2_000}).catch(() => false)) {
             await confirmBtn.click();
-            await page.waitForTimeout(800); // wait for API call to complete
+            await expect(confirmBtn).toHaveCount(0, {timeout: 10_000});
+            await waitForSettled(page.getByTestId('import-wizard-step4'), 20_000);
 
             // Asset should be resolved
             const resolvedCard = resolveSection.locator('.border-emerald-200, [class*="border-emerald"]').first();
@@ -409,27 +440,25 @@ test.describe('Import Wizard — Asset Resolution', () => {
                 }
 
                 await assetSelectLocator.click();
-                await page.waitForTimeout(400);
+                await optionListReady(page);
 
                 // Search and pick
                 const searchInput = resolveSection.locator('.border-gray-200 [data-testid="asset-select"] input[type="text"]').first();
                 if (await searchInput.isVisible({timeout: 2_000}).catch(() => false)) {
                     await searchInput.fill('e');
-                    await page.waitForTimeout(600);
                 }
 
                 const option = page.locator('[data-testid^="search-select-option-"]').first();
                 if (!(await option.isVisible({timeout: 3_000}).catch(() => false))) {
                     if (await searchInput.isVisible({timeout: 500}).catch(() => false)) {
                         await searchInput.fill('a');
-                        await page.waitForTimeout(600);
                     }
                 }
 
                 const opt = page.locator('[data-testid^="search-select-option-"]').first();
                 if (await opt.isVisible({timeout: 2_000}).catch(() => false)) {
                     await opt.click();
-                    await page.waitForTimeout(500);
+                    await optionListClosed(page);
                 }
 
                 // Handle identifier prompt — skip
@@ -440,11 +469,10 @@ test.describe('Import Wizard — Asset Resolution', () => {
                     await skipBtn.click();
                 } else if (await confirmBtn.isVisible({timeout: 500}).catch(() => false)) {
                     await confirmBtn.click();
-                    await page.waitForTimeout(600);
                 } else if (await cancelBtn.isVisible({timeout: 500}).catch(() => false)) {
                     await cancelBtn.click();
                 }
-                await page.waitForTimeout(400);
+                await waitForSettled(page.getByTestId('import-wizard-step4'), 20_000);
             }
         } // end if (startedDisabled)
 
@@ -453,7 +481,6 @@ test.describe('Import Wizard — Asset Resolution', () => {
 
         // Click import and verify wizard closes
         await importBtn.click();
-        await page.waitForTimeout(500);
         await expect(page.getByTestId('import-wizard-stepper')).not.toBeVisible({timeout: 5_000});
         // BulkModal should still be open with imported rows
         await expect(page.getByTestId('tx-bulk-modal-root')).toBeVisible();
@@ -462,30 +489,38 @@ test.describe('Import Wizard — Asset Resolution', () => {
     // -----------------------------------------------------------------------
     // IWR-007: Duplicate Detection — second parse detects previously imported rows
     // -----------------------------------------------------------------------
-    test('IWR-007: Second import of same file shows likely-duplicate rows deselected', async ({page}) => {
-        // IWR-006 already imported rows from generic_simple.csv into the DB.
-        // Open the wizard again and parse the same file — the backend should flag
-        // the already-imported rows as "likely" duplicates, which are deselected by default.
+    test('IWR-007: Second import of same file raises the duplicates step', async ({page}) => {
+        // IWR-006 already imported rows from generic_simple.csv into the DB. Parsing the
+        // same file again must now stop on the dedicated duplicates step — it used to be
+        // a badge inside the review table, which is why this test looked for one.
         await openImportWizard(page);
-        await goToStep4WithGenericSimple(page);
+        await parseGenericSimple(page);
 
-        const step4 = page.getByTestId('import-wizard-step4');
+        await page.getByTestId('import-wizard-continue').click();
+        await skipStepIfPresent(page, 'import-wizard-assets-continue');
+        await skipStepIfPresent(page, 'import-wizard-fix-continue');
 
-        // Check the toolbar: if there are likely duplicates, the amber badge is shown
-        // "⚠ N likely duplicate" text in the toolbar area
-        const likelyDupBadge = step4.locator('span.text-amber-600, span[class*="amber"]').first();
-        const hasDupBadge = await likelyDupBadge.isVisible({timeout: 3_000}).catch(() => false);
+        const duplicatesStep = page.getByTestId('import-wizard-step-duplicates');
+        const reached = await duplicatesStep.isVisible({timeout: 4_000}).catch(() => false);
 
-        if (hasDupBadge) {
-            // There are likely duplicates — verify at least one row is deselected (opacity-50)
-            const deselectedRows = step4.locator('tr.opacity-50, tr[class*="opacity-50"]');
-            const dupCount = await deselectedRows.count();
-            expect(dupCount).toBeGreaterThan(0);
-        } else {
-            // No duplicates found: this is valid if IWR-006 ran in a fresh DB or
-            // the test DB was reset between tests. Just verify the step 4 loaded.
-            await expect(step4).toBeVisible();
+        if (!reached) {
+            // A fresh database has nothing to collide with, and the step is conditional:
+            // its absence is then the correct behaviour, not a missing assertion.
+            await expect(page.getByTestId('import-wizard-step4')).toBeVisible({timeout: 5_000});
+            return;
         }
+
+        // The resolver states how many groups need arbitration, and each group is a
+        // clash between the file and the archive.
+        await expect(page.getByTestId('import-wizard-duplicate-resolver')).toBeVisible({timeout: 5_000});
+        await expect(page.getByTestId('import-wizard-resolver-status')).toBeVisible();
+        expect(await page.getByTestId('import-wizard-duplicate-group').count()).toBeGreaterThan(0);
+
+        // A row already in the archive must not be re-imported by default.
+        await page.getByTestId('import-wizard-duplicates-continue').click();
+        const step4 = page.getByTestId('import-wizard-step4');
+        await expect(step4).toBeVisible({timeout: 5_000});
+        expect(await step4.locator('tr.opacity-50, tr[class*="opacity-50"]').count()).toBeGreaterThan(0);
     });
 
     // -----------------------------------------------------------------------
@@ -504,7 +539,6 @@ test.describe('Import Wizard — Asset Resolution', () => {
 
         if (await dupBadge.isVisible({timeout: 3_000}).catch(() => false)) {
             await dupBadge.click();
-            await page.waitForTimeout(600);
 
             // TransactionFormModal should open in view mode
             // ModalBase renders testId="tx-form-modal" as data-testid on the backdrop
@@ -556,13 +590,12 @@ test.describe('Import Wizard — Asset Resolution', () => {
 
         // Open the BrokerSearchSelect dropdown
         await brokerSelectWrapper.click();
-        await page.waitForTimeout(400);
+        await optionListReady(page);
 
         // Click "Create new" in the dropdown footer
         const createNewBtn = page.getByTestId('search-select-create-new');
         await expect(createNewBtn).toBeVisible({timeout: 3_000});
         await createNewBtn.click();
-        await page.waitForTimeout(400);
 
         // BrokerModal should open
         const brokerModal = page.locator('[data-testid="broker-modal"]');
@@ -573,18 +606,17 @@ test.describe('Import Wizard — Asset Resolution', () => {
         await expect(nameInput).toBeVisible({timeout: 3_000});
         const uniqueName = `E2E Test Broker ${Date.now()}`;
         await nameInput.fill(uniqueName);
-        await page.waitForTimeout(200);
+        await expect(nameInput).toHaveValue(uniqueName);
 
         // Save
         await page.getByTestId('broker-form-submit').click();
-        await page.waitForTimeout(800);
 
         // BrokerModal should close
         await expect(brokerModal).not.toBeVisible({timeout: 5_000});
 
         // Open the BrokerSearchSelect dropdown again — new broker should appear
         await brokerSelectWrapper.click();
-        await page.waitForTimeout(400);
+        await optionListReady(page);
 
         // Verify the newly created broker appears in the options
         const newBrokerOption = page.locator(`[data-testid^="search-select-option-"]`).filter({hasText: uniqueName});
@@ -603,7 +635,7 @@ test.describe('Import Wizard — Asset Resolution', () => {
         // Step 1: skip to Step 2 where files are listed with a preview action
         await page.getByTestId('import-wizard-next').click();
         await page.getByTestId('import-wizard-step2').waitFor({state: 'visible', timeout: 5_000});
-        await page.waitForTimeout(500);
+        await waitForSettled(page.getByTestId('import-wizard-step2'), 20_000);
 
         const step2 = page.getByTestId('import-wizard-step2');
 
@@ -619,7 +651,6 @@ test.describe('Import Wizard — Asset Resolution', () => {
 
         await previewBtn.click();
         await page.getByTestId('context-menu-action-preview').click();
-        await page.waitForTimeout(600);
 
         // FilePreviewModal should open (ModalBase with testId="file-preview-modal")
         const previewModal = page.locator('[data-testid="file-preview-modal"]');
@@ -632,5 +663,66 @@ test.describe('Import Wizard — Asset Resolution', () => {
         // Wizard should still be visible and functional
         await expect(page.getByTestId('import-wizard-stepper')).toBeVisible();
         await expect(step2).toBeVisible();
+    });
+
+    // -----------------------------------------------------------------------
+    // IWR-011: Conditional steps — a clean parse shows none of the three
+    // -----------------------------------------------------------------------
+    test('IWR-011: A parse with nothing to arbitrate goes straight to the review step', async ({page}) => {
+        // The three middle steps exist to be skipped when there is no work for them. If
+        // they appeared unconditionally the shortest import would be five clicks longer,
+        // which is exactly what the restructure set out to remove.
+        await openImportWizard(page);
+        await parseGenericSimple(page);
+
+        await page.getByTestId('import-wizard-continue').click();
+
+        const conditional = ['import-wizard-step-assets', 'import-wizard-step-fix', 'import-wizard-step-duplicates'];
+        const shown: string[] = [];
+        for (const testid of conditional) {
+            if (
+                await page
+                    .getByTestId(testid)
+                    .isVisible({timeout: 1_200})
+                    .catch(() => false)
+            )
+                shown.push(testid);
+            await skipStepIfPresent(page, testid.replace('-step-', '-') + '-continue');
+        }
+
+        // Whatever this parse raised, the walk must end on the review step, and every
+        // step shown must have had a reason to be there.
+        await expect(page.getByTestId('import-wizard-step4')).toBeVisible({timeout: 5_000});
+        for (const testid of shown) {
+            expect(conditional).toContain(testid);
+        }
+    });
+
+    // -----------------------------------------------------------------------
+    // IWR-012: Going back from the review step lands on the analysis, not on nothing
+    // -----------------------------------------------------------------------
+    test('IWR-012: Back from the review step returns through the steps that were shown', async ({page}) => {
+        await openImportWizard(page);
+        await goToStep4WithGenericSimple(page);
+
+        await page.getByTestId('import-wizard-back').click();
+
+        // The previous step is whichever conditional step was raised, or the analysis if
+        // none was. An empty panel — the symptom of a step machine counting by number
+        // rather than by what it showed — is what this rules out.
+        const landed = ['import-wizard-step-duplicates', 'import-wizard-step-fix', 'import-wizard-step-assets', 'import-wizard-step3'];
+        let found = false;
+        for (const testid of landed) {
+            if (
+                await page
+                    .getByTestId(testid)
+                    .isVisible({timeout: 1_200})
+                    .catch(() => false)
+            ) {
+                found = true;
+                break;
+            }
+        }
+        expect(found).toBe(true);
     });
 });

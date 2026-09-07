@@ -1,22 +1,16 @@
 <script lang="ts">
     import type {ComponentType} from 'svelte';
+    import {isOutsideClick} from '$lib/utils/core/clickOutside';
     /**
      * SettingsLayout.svelte
      * Responsive layout for settings pages
      * - Desktop: 2-column (sidebar + content)
      * - Mobile: custom dropdown + content
      */
-    import {createEventDispatcher, onDestroy, onMount} from 'svelte';
+    import {onDestroy, onMount} from 'svelte';
     import {_} from '$lib/i18n';
-    import {ChevronDown, ChevronRight, Lock, RotateCcw, Save, Undo, Unlock} from 'lucide-svelte';
-
-    type _DispatchEvents = {
-        saveAll: void;
-        undoAll: void;
-        resetAll: void;
-        toggleLock: void;
-    };
-    const dispatch = createEventDispatcher();
+    import {ChevronDown, ChevronRight, Lock, Unlock} from 'lucide-svelte';
+    import SettingBulkActions from './SettingBulkActions.svelte';
 
     interface Category {
         id: string;
@@ -33,6 +27,16 @@
     export let showLock: boolean = false;
     export let title: string = '';
     export let description: string = '';
+    export let isSaving: boolean = false;
+    export let onsaveAll: (() => void) | undefined = undefined;
+    export let onundoAll: (() => void) | undefined = undefined;
+    export let onresetAll: (() => void) | undefined = undefined;
+    export let ontoggleLock: (() => void) | undefined = undefined;
+    /** Publishes "an async operation is in flight" — a load or a save — on the
+     *  layout root as `data-busy`, the attribute `waitForSettled()` reads. Both
+     *  a test and a screen reader can then read the state directly instead of
+     *  inferring it from a disabled button somewhere else in the tree. */
+    export let isBusy: boolean = false;
 
     // Mobile dropdown state
     let showDropdown = false;
@@ -55,7 +59,7 @@
 
     // Close dropdown on click outside
     function handleClickOutside(event: MouseEvent) {
-        if (dropdownRef && !dropdownRef.contains(event.target as Node)) {
+        if (isOutsideClick(event.target, (el) => !dropdownRef || dropdownRef.contains(el))) {
             showDropdown = false;
         }
     }
@@ -129,7 +133,7 @@
     </div>
 </div>
 
-<div class="flex flex-col sm:flex-row gap-4 sm:gap-6 min-h-[300px] sm:min-h-[400px]">
+<div class="flex flex-col sm:flex-row gap-4 sm:gap-6 min-h-[300px] sm:min-h-[400px]" data-testid="settings-layout" data-busy={isBusy ? 'true' : 'false'} aria-busy={isBusy}>
     <!-- Desktop: Left sidebar category navigation (hidden on mobile) -->
     <div class="hidden sm:block w-48 flex-shrink-0">
         <nav class="space-y-1">
@@ -173,25 +177,11 @@
                 <!-- Action buttons - inline with title -->
                 {#if showLock || hasChanges || hasNonDefaults}
                     <div class="flex items-center gap-1 flex-shrink-0">
-                        {#if !isLocked}
-                            {#if hasChanges}
-                                <button type="button" on:click={() => dispatch('saveAll')} class="p-2 rounded-lg transition-all bg-libre-green text-white hover:bg-libre-green/90" title={$_('common.saveAll')}>
-                                    <Save size={18} />
-                                </button>
-                                <button type="button" on:click={() => dispatch('undoAll')} class="p-2 rounded-lg transition-all bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600" title={$_('common.undoAll')}>
-                                    <Undo size={18} />
-                                </button>
-                            {/if}
-                            {#if hasNonDefaults}
-                                <button type="button" on:click={() => dispatch('resetAll')} class="p-2 rounded-lg transition-all bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 hover:bg-orange-200 dark:hover:bg-orange-900/50" title={$_('common.resetAll')}>
-                                    <RotateCcw size={18} />
-                                </button>
-                            {/if}
-                        {/if}
+                        <SettingBulkActions {hasChanges} {hasNonDefaults} {isLocked} {isSaving} {onsaveAll} {onundoAll} {onresetAll} />
                         {#if showLock}
                             <button
                                 type="button"
-                                on:click={() => dispatch('toggleLock')}
+                                on:click={() => ontoggleLock?.()}
                                 class="p-2 rounded-lg transition-all {isLocked
                                     ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50'
                                     : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50'}"

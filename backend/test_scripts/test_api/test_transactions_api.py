@@ -1057,6 +1057,14 @@ async def test_delete_linked_without_pair(test_server, test_broker_id, test_asse
         assert len(data.get("issues", [])) > 0
         assert any("pair" in issue.get("error", "").lower() for issue in data["issues"])
 
+        # T4: the wire contract the frontend localizes on is the structured
+        # code + params, not the English text — the bulk workspace resolves
+        # `transactions.errors.pairDeleteIncomplete` from these. Pin them.
+        pair_issues = [i for i in data["issues"] if i.get("code") == "pairDeleteIncomplete"]
+        assert pair_issues, f"expected a pairDeleteIncomplete issue, got {data['issues']}"
+        assert pair_issues[0].get("params", {}).get("id") == tx_ids[0]
+        assert pair_issues[0].get("params", {}).get("partnerId") == tx_ids[1]
+
         print_success("✓ Got error when trying to delete only one of linked pair")
 
 

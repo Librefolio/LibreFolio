@@ -1,9 +1,9 @@
 # ⏱️ TWRR (Time-Weighted Rate of Return)
 
-*[⬅️ Back to Performance Metrics Overview](../index.md)*
-
 ## 💡 What is it?
 TWRR measures the **"pure" performance** of your chosen assets and strategy (The Market), completely ignoring the timing and size of your deposits or withdrawals. 
+
+LibreFolio detects external sub-period breaks from capital-baseline deltas. This includes priced in-kind ADJUSTMENT/TRANSFER capital, so seeded assets are treated as investor capital entering the portfolio, not as market return.
 
 It is the standard metric used by mutual funds and ETFs because fund managers have no control over when clients deposit or withdraw capital; they must be evaluated solely on the returns of the underlying investments.
 
@@ -37,13 +37,13 @@ $$
 
 ??? note "Example of Unfolding TWRR"
 
-    ### 1. The Scenario
+    ### 🧾 1. The Scenario
 
     * **Day 0:** You start your portfolio with an initial deposit of **€1,000**.
     * **Day 10:** The market goes up. Your portfolio is now worth **€1,100**. On this same day, you deposit another **€500** cash.
     * **Day 20:** The market drops. Your portfolio ends at a final value of **€1,440**.
     
-    ### 2. Breaking Down the Sub-Periods
+    ### 🧩 2. Breaking Down the Sub-Periods
     The timeline is split into two sub-periods because of the cash flow on Day 10:
     
     **Sub-Period 1 (Day 0 to Day 10):**
@@ -66,7 +66,7 @@ $$
     r_2 = \frac{V_{\text{end}}}{V_{\text{start}}} - 1 = \frac{1,440}{1,600} - 1 = -10\%
     \]
     
-    ### 3. Unfolding the TWRR Calculation
+    ### 🧮 3. Unfolding the TWRR Calculation
     We link the returns of the sub-periods together:
     
     \[
@@ -81,7 +81,7 @@ $$
     
     The assets you picked went up 10% and then down 10%, resulting in a net asset-level return of **-1%**.
     
-    ### 4. TWRR vs. Simple ROI
+    ### ⚖️ 4. TWRR vs. Simple ROI
     Let's calculate the **Simple ROI** for the exact same scenario to see the contrast:
 
     * Total net cash invested = €1,000 + €500 = **€1,500**
@@ -108,4 +108,3 @@ $$
 !!! tip "Analyzing the Performance Difference"
 
     To understand how your personal cash flows caused your actual returns to deviate from the pure strategy return (TWRR), refer to the [Timing Effect](timing-effect.md) page.
-

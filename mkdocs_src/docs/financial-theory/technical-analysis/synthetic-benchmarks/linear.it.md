@@ -42,7 +42,7 @@ Questo è equivalente alla formula dell'**interesse semplice** $A = P(1 + rt)$, 
 
 | Parametro | Chiave | Predefinito | Descrizione |
 |---|---|---|---|
-| Tasso Annuale | `annualRate` | 5 | Tasso di crescita in percentuale annua. |
+| Tasso Annuale | `annualRate` | 2 | Tasso di crescita in percentuale annua. |
 | Offset | `offset` | 0 | Spostamento verticale come % del valore di base. |
 
 ---

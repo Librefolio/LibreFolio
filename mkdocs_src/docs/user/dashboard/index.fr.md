@@ -44,19 +44,31 @@ En haut à droite du tableau de bord, plusieurs contrôles vous permettent de pe
 - **Période** — préréglages de 1 semaine à Tout (MAX), ou une période personnalisée via le sélecteur de dates.
 - **Filtre courtier** — filtrer tous les indicateurs sur un ou plusieurs courtiers spécifiques.
 - **Devise cible** — convertit dynamiquement tous les actifs et soldes de liquidités dans une devise unique sélectionnée pour une vue agrégée.
-- **Export IA** (:material-brain:) — Cliquez sur ce bouton pour copier dans le presse-papiers un résumé textuel de l'état actuel de votre portefeuille, optimisé pour être collé dans des LLM (ex. Gemini). Vous pouvez choisir entre :
- - **Export complet** : Inclut toutes les valeurs KPI, les positions, les pondérations et les allocations.
- - **Données uniquement** : Une représentation compacte en JSON/texte de vos avoirs et soldes.
+- **Export IA** (:material-brain:) — ouvre un export vers le presse-papiers.
+  Choisissez **Instantané des données** pour copier uniquement les données
+  factuelles, ou une **tâche d'analyse** qui inclut automatiquement ses
+  instructions et son contrat de réponse, puis sélectionnez le **niveau de
+  détail** (Compact, Standard ou Complet). L'instantané du backend suit le filtre
+  de courtier actif, la période et la devise cible ; LibreFolio ne contacte aucun
+  service d'IA. Consultez [Export AI Portefeuille](../ai-export/portfolio.md) ou le [guide Export AI](../ai-export/index.md).
 
 !!! tip "Le périmètre a son importance"
 
     Lorsque vous filtrez sur un seul courtier, les transferts de liquidités *vers d'autres courtiers* deviennent des flux externes pour ce périmètre. Cela affecte le calcul du [Capital déposé](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md) et du [P&L](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md).
 
+!!! note "Le partage influence ces chiffres"
+
+    Le tableau de bord n'agrège que les courtiers **auxquels vous avez accès**, et chaque montant provenant d'un courtier que vous détenez en copropriété est **ajusté selon votre part de propriété** : un Propriétaire avec une part de 50 % voit la moitié de la valeur, des revenus et du P&L de ce courtier comptabilisés dans les totaux (une part de 0 % est valide et ne contribue pas). Les Éditeurs et les Lecteurs — qui portent toujours une part de 0 % par règle — voient à la place les montants **complets** du courtier. Voir [Partage de Courtier](../brokers/sharing.md) pour les détails.
+
 ---
 
 ## 🌡️ Bannière de qualité des données
 
-Si des cours ou des taux de change sont manquants à la date de fin, une bannière apparaît en haut pour expliquer quels actifs n'ont pas pu être valorisés. Les actifs sans fournisseur de cours (saisis manuellement, comme les projets de crowdfunding immobilier) sont valorisés en permanence au coût d'achat — cela est intentionnel et ne génère pas d'avertissement.
+Si des cours ou des taux de change sont manquants à la date de fin, une bannière apparaît en haut pour expliquer quels actifs n'ont pas pu être valorisés.
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="dashboard" data-name="data-quality-banner" alt="Bannière de qualité des données du tableau de bord avec liens par actif">
+</div>
+ Les actifs sans fournisseur de cours (saisis manuellement, comme les projets de crowdfunding immobilier) sont valorisés en permanence au coût d'achat — cela est intentionnel et ne génère pas d'avertissement.
 
 ---
 
@@ -65,6 +77,7 @@ Si des cours ou des taux de change sont manquants à la date de fin, une banniè
 - 💰 **[Indicateurs KPI](kpi-cards.md)** — Valeur nette, P&L de période et rendements expliqués
 - 📊 **[Graphiques](charts.md)** — Graphique de croissance et panneau d'allocation expliqués
 - 🔍 **[Positions et analyse](positions.md)** — Positions ouvertes, vues tableau vs. carte, et analyse détaillée des lots fiscaux FIFO.
+
 
 ## 🔗 Théorie connexe
 

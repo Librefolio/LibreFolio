@@ -139,7 +139,7 @@ En LibreFolio, un evento `INTEREST` (y la transacción de cartera correspondient
 - **Amount**: El monto en efectivo recibido
 - **Currency**: La moneda del pago
 
-### La diferencia contable: Interés vs. Dividendo
+### The diferencia contable: Interés vs. Dividendo
 Es fundamental distinguir entre una transacción de **Interés** y una de **Dividendo** a nivel de base de datos:
 
 1. **Interés (Basado en Deuda/Rendimiento)**: Un pago de intereses representa el rendimiento de una deuda o depósitos en efectivo (ej. cuentas de ahorro bancarias, préstamos P2P o cupones de bonos). En el seguimiento de cartera de partida doble, estos representan entradas de efectivo (`cash.amount > 0`) donde el activo subyacente es opcional. La transacción de la base de datos requiere `quantity = 0` porque no se transaccionan unidades del activo durante un pago de intereses en efectivo.

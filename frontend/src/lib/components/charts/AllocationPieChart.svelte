@@ -19,6 +19,8 @@
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {attachChartReady} from '$lib/utils/chartReady';
+    import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {CHART_ANIMATION_CONFIG} from '$lib/components/charts/echartsAnimationConfig';
     import {scheduleFirstRenderStabilityFix, tooltipPositionAboveFinger} from '$lib/components/charts/echartsTooltipHelpers';
     import {_ as t} from '$lib/i18n';
@@ -64,7 +66,24 @@
 
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | null = null;
-    let resizeObserver: ResizeObserver | null = null;
+    const resizeWatcher = createResizeWatcher(() => {
+        // Bugfix: chartInstance.resize() is required to make ECharts actually re-measure
+        // the container and resize the underlying <canvas> pixel dimensions — setOption()
+        // alone re-applies percentage-based geometry (pieCenter/pieRadius) against the
+        // STALE canvas size from the last init()/resize(), so the chart appeared "frozen"
+        // at the old size/position on window/panel resize (every sibling chart component
+        // — GeographyMap, SemiDonutChart, LineChart, etc. — already calls resize() here).
+        chartInstance?.resize();
+        // Container size ALSO affects layout (pieCenter/pieRadius/legend orientation) which
+        // the fast-path below skips — force a full rebuild so resizing actually
+        // repositions the chart. Skip the enter/update animation for this specific
+        // call: a live window drag-resize can fire the observer many times in rapid
+        // succession, and animating every intermediate frame (800ms update transition)
+        // would queue up and look janky. Data/dark-mode driven rebuilds still animate
+        // smoothly as before.
+        chartFullyInitialized = false;
+        renderChart({skipAnimation: true});
+    });
     let lastDark: boolean | null = null;
     let chartFullyInitialized = false;
     // Tracks the distinct set of raw type keys (mode='type') used to build richStyles
@@ -93,7 +112,14 @@
     });
 
     $effect(() => {
-        if (chartContainer && data) {
+        // Read every element synchronously so this effect tracks the CONTENT of
+        // `data`, not merely the truthiness of the array reference: an array is
+        // always truthy, so the previous `if (chartContainer && data)` guard never
+        // re-fired when the parent rebuilt the slices. Same defect that made
+        // SemiDonutChart render blank — see its $effect for the reference fix.
+        void data.map((slice) => ({...slice}));
+
+        if (chartContainer) {
             tick().then(() => {
                 setupResizeObserver();
                 renderChart();
@@ -102,31 +128,11 @@
     });
 
     function setupResizeObserver() {
-        if (resizeObserver || !chartContainer) return;
-        resizeObserver = new ResizeObserver(() => {
-            // Bugfix: chartInstance.resize() is required to make ECharts actually re-measure
-            // the container and resize the underlying <canvas> pixel dimensions — setOption()
-            // alone re-applies percentage-based geometry (pieCenter/pieRadius) against the
-            // STALE canvas size from the last init()/resize(), so the chart appeared "frozen"
-            // at the old size/position on window/panel resize (every sibling chart component
-            // — GeographyMap, SemiDonutChart, LineChart, etc. — already calls resize() here).
-            chartInstance?.resize();
-            // Container size ALSO affects layout (pieCenter/pieRadius/legend orientation) which
-            // the fast-path below skips — force a full rebuild so resizing actually
-            // repositions the chart. Skip the enter/update animation for this specific
-            // call: a live window drag-resize can fire the observer many times in rapid
-            // succession, and animating every intermediate frame (800ms update transition)
-            // would queue up and look janky. Data/dark-mode driven rebuilds still animate
-            // smoothly as before.
-            chartFullyInitialized = false;
-            renderChart({skipAnimation: true});
-        });
-        resizeObserver.observe(chartContainer);
+        resizeWatcher.observe(chartContainer);
     }
 
     function cleanup() {
-        resizeObserver?.disconnect();
-        resizeObserver = null;
+        resizeWatcher.disconnect();
         chartInstance?.dispose();
         chartInstance = null;
     }
@@ -140,6 +146,7 @@
 
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+            attachChartReady(chartInstance, chartContainer, 'allocation-pie');
             needsInitialLayoutStabilityPass = true;
         }
 

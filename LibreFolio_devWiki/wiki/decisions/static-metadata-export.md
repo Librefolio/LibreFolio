@@ -75,7 +75,7 @@ import txTypeMetadata from '$lib/api/tx-type-metadata.json';
 |------|------|
 | TX_TYPE_METADATA definition | `backend/app/schemas/transactions.py` |
 | Runtime type-rules endpoint | `backend/app/api/v1/transactions.py` |
-| Frontend store (consumer) | `frontend/src/lib/stores/transactionTypeStore.ts` |
+| Frontend store (consumer) | `frontend/src/lib/stores/transactions/transactionTypeStore.ts` |
 | Sync pipeline CLI | `dev.py` (`api sync` command) |
 
 ## Links

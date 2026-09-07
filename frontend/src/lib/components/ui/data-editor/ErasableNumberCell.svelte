@@ -19,12 +19,11 @@
 <script lang="ts">
     import {Eraser} from 'lucide-svelte';
     import {_ as t} from '$lib/i18n';
+    import {decimalArrowStep, normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
 
     interface Props {
         /** Current numeric value. `null`/`undefined` = not set. `-1` = user-cleared sentinel. */
         value: number | null | undefined;
-        /** Decimal step for the native input. */
-        step?: number;
         /** Minimum allowed value (values below this are clamped on commit). */
         min?: number;
         /**
@@ -37,23 +36,21 @@
         onchange: (newValue: number | null) => void;
     }
 
-    let {value, step = 0.01, min, placeholder = '', onchange}: Props = $props();
+    let {value, min, placeholder = '', onchange}: Props = $props();
 
     let editing = $state(false);
-    // IMPORTANT: `draft` is bound to `<input type="number" bind:value>`. Svelte 5
-    // coerces numeric-input bindings to `number | null` automatically. Declaring
-    // draft as string would make the runtime value a number after first keystroke,
-    // and the subsequent `.trim()` call in commit() would throw silently (TypeError
-    // "draft.trim is not a function") — with the net effect that `onchange` was
-    // never fired and the parent's dirty tracker never saw the edit (I-bis #9).
-    let draft: number | null = $state(null);
+    // `draft` is a STRING buffer, not a number. The input is `type="text"` on purpose:
+    // `type="number"` is parsed by the browser against its own locale, so a user typing
+    // "5,9" on an Italian keyboard hands us an empty value and watches their digits
+    // vanish. We keep the raw keystrokes and normalise the separator on commit.
+    let draft: string = $state('');
 
     // Sync draft FROM incoming value only when we are NOT actively editing.
     // Guarded with equality check to avoid spurious writes that would interrupt the
     // user while they type (the input is bound to `draft`).
     $effect(() => {
         if (editing) return;
-        const desired = value == null || value === -1 ? null : value;
+        const desired = value == null || value === -1 ? '' : String(value);
         if (draft !== desired) draft = desired;
     });
 
@@ -61,16 +58,15 @@
     let isCleared = $derived(value === -1);
 
     function commit() {
-        if (draft === null || draft === undefined || Number.isNaN(draft)) {
-            if (value !== null && value !== undefined) {
-                onchange(null);
-            }
+        const normalized = normalizeDecimalInput(draft ?? '');
+        if (normalized === '') {
+            if (value !== null && value !== undefined) onchange(null);
         } else {
-            let n = Number(draft);
+            let n = Number(normalized);
             if (!Number.isNaN(n)) {
                 if (min !== undefined && n < min) n = min;
                 if (n !== value) onchange(n);
-                draft = n;
+                draft = String(n);
             }
         }
         editing = false;
@@ -79,18 +75,23 @@
     function handleEraseClick() {
         // No confirm dialog - row-level "Revert" action covers undo; adding a
         // confirm on every erase is too much friction (user feedback 2026-04-22).
-        draft = null;
+        draft = '';
         editing = false;
         onchange(-1);
     }
 
     function handleKeyDown(ev: KeyboardEvent) {
-        if (ev.key === 'Delete' && (draft === null || draft === undefined)) {
+        if (ev.key === 'Delete' && (draft ?? '') === '') {
             ev.preventDefault();
             handleEraseClick();
-        } else if (ev.key === 'Enter') {
-            (ev.currentTarget as HTMLInputElement).blur();
+            return;
         }
+        if (ev.key === 'Enter') {
+            (ev.currentTarget as HTMLInputElement).blur();
+            return;
+        }
+        const stepped = decimalArrowStep(ev, draft ?? '');
+        if (stepped !== null) draft = stepped;
     }
 </script>
 
@@ -115,7 +116,7 @@
             type="button"
             class="w-full text-left text-xs italic text-red-400 dark:text-red-500 cursor-text px-1.5 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20"
             onclick={() => {
-                draft = null;
+                draft = '';
                 editing = true;
             }}
             title={$t('dataEditor.cell.clearField')}
@@ -124,12 +125,12 @@
         </button>
     {:else}
         <input
-            type="number"
+            type="text"
+            inputmode="decimal"
+            autocomplete="off"
             class="w-full text-xs font-mono px-1.5 py-1 bg-transparent border border-transparent focus:border-gray-300 dark:focus:border-slate-500 rounded focus:outline-none
                    {isNotSet && !editing ? 'italic text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-200'}"
             bind:value={draft}
-            {step}
-            {min}
             placeholder={isNotSet && !editing ? $t('dataEditor.cell.notSet') : placeholder}
             onfocus={() => (editing = true)}
             onblur={commit}

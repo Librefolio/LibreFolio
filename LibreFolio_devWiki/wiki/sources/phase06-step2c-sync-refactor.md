@@ -6,7 +6,7 @@ date_ingested: 2026-04-24
 original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-06-subplan/Bugfix-Step2/plan-phase06Step2cSyncDeleteRefactor.prompt.md
 tags: [phase06, architecture, sync, delete, backend, refactoring]
 related_features: [F-027, F-024]
-related_decisions: [three-phase-pipeline-pattern, sync-modal-base-pattern]
+related_decisions: [decisions/three-phase-pipeline, decisions/fxsyncmodal-parent-ownership]
 ---
 
 # Source: Phase 06 Step 2c — Asset Sync/Delete Refactor
@@ -185,7 +185,7 @@ if (result.error_code === "HAS_TRANSACTIONS") {
 | FxSyncModal | `frontend/src/lib/components/fx/FxSyncModal.svelte` |
 | AssetSyncModal | `frontend/src/lib/components/assets/AssetSyncModal.svelte` |
 | ConfirmModal | `frontend/src/lib/components/ui/modals/ConfirmModal.svelte` |
-| syncHelpers | `frontend/src/lib/utils/syncHelpers.ts` |
+| syncHelpers | `frontend/src/lib/utils/sync/syncHelpers.ts` |
 | providerHelpers | `frontend/src/lib/utils/providerHelpers.ts` |
-| responsiveLayout | `frontend/src/lib/utils/responsiveLayout.svelte.ts` |
+| responsiveLayout | `frontend/src/lib/utils/layout/responsiveLayout.svelte.ts` |
 | Asset sync tests | `backend/test_scripts/test_services/test_asset_source_refresh.py` |

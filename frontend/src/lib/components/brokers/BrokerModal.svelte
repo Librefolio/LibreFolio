@@ -10,6 +10,7 @@
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {trySave} from '$lib/utils/trySave';
     import {mergeBrokers} from '$lib/stores/reference/brokerStore';
+    import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
 
     interface Props {
         isOpen?: boolean;
@@ -59,6 +60,7 @@
             initial_balances?: Array<{code: string; amount: number}>;
         }>,
     ) {
+        const sessionGeneration = getClientSessionGeneration();
         loading = true;
         error = null;
 
@@ -73,6 +75,7 @@
                     error = result.message;
                     return;
                 }
+                if (!isClientSessionCurrent(sessionGeneration)) return;
                 const apiResult = result.data.results[0];
                 const createdId = Array.isArray(apiResult?.broker_id) ? apiResult.broker_id[0] : apiResult?.broker_id;
                 const errorMsg = Array.isArray(apiResult?.error) ? apiResult.error[0] : apiResult?.error;
@@ -111,6 +114,7 @@
                     error = result.message;
                     return;
                 }
+                if (!isClientSessionCurrent(sessionGeneration)) return;
                 // Sync the patched fields into the cache so other pages
                 // (e.g. icon refresh) reflect the change immediately.
                 mergeBrokers([

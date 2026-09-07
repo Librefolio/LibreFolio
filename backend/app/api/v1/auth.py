@@ -33,7 +33,7 @@ from backend.app.services.auth_service import (
     verify_password,
 )
 from backend.app.services.donation_popup_service import record_login_and_maybe_show_popup
-from backend.app.services.global_settings_service import get_session_ttl_hours
+from backend.app.services.global_settings_service import get_session_ttl_hours, is_registration_enabled
 
 logger = structlog.get_logger(__name__)
 
@@ -77,17 +77,6 @@ async def get_current_user(request: Request, session: AsyncSession = Depends(get
         raise HTTPException(status_code=401, detail="User account is disabled")
 
     return user
-
-
-async def get_optional_user(request: Request, session: AsyncSession = Depends(get_session_generator)) -> User | None:  # pragma: no cover — unused dependency, prepared for future use
-    """
-    Dependency to get current user if authenticated, None otherwise.
-    Does not raise exceptions.
-    """
-    try:
-        return await get_current_user(request, session)
-    except HTTPException:
-        return None
 
 
 @router.post("/login", response_model=AuthLoginResponse)
@@ -196,6 +185,10 @@ async def register(request: AuthRegisterRequest, session: AsyncSession = Depends
     # Check if this is the first user - make them admin
     user_count = await user_service.count_users(session)
     is_first_user = user_count == 0
+
+    registration_enabled = await is_registration_enabled(session)
+    if not registration_enabled and not is_first_user:
+        raise HTTPException(status_code=403, detail="New user registration is disabled")
 
     # Create user using service
     user, error = await user_service.create_user(

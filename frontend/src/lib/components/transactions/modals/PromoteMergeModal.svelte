@@ -19,6 +19,7 @@
     import TagInput from '$lib/components/ui/input/TagInput.svelte';
     import {Link2} from 'lucide-svelte';
     import {getStringBadgeStyle} from '$lib/utils/colors';
+    import {mergeStrings, mergeTagSets} from '$lib/utils/transactions/promoteHelpers';
 
     interface Props {
         open: boolean;
@@ -66,17 +67,6 @@
             initialSnapshot = currentSnapshot();
         }, 0);
     });
-
-    function mergeStrings(a: string, b: string): string {
-        if (!a) return b;
-        if (!b) return a;
-        if (a === b) return a;
-        return `${a}\n${b}`;
-    }
-
-    function mergeTagSets(a: string[], b: string[]): string[] {
-        return [...new Set([...(a ?? []), ...(b ?? [])])];
-    }
 
     // Global actions
     function allLeft() {

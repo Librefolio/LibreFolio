@@ -78,7 +78,13 @@ function identifierLabel(type: string): string {
  * @example buildIdentifiersList(asset) → [['ISIN', 'IE00B4L5Y983'], ['Ticker', 'VWCE']]
  */
 export function buildIdentifiersList(asset: Record<string, unknown>): [string, string][] {
-    return IDENTIFIER_TYPES.map((type) => [identifierLabel(type), asset[`identifier_${type.toLowerCase()}`]]).filter((e): e is [string, string] => typeof e[1] === 'string' && e[1].length > 0);
+    return IDENTIFIER_TYPES.flatMap((type): [string, string][] => {
+        const label = identifierLabel(type);
+        const raw = asset[`identifier_${type.toLowerCase()}`];
+        // identifier_other is a JSON list → expand into one [label, value] entry per soft identifier
+        const values = Array.isArray(raw) ? raw : [raw];
+        return values.filter((v): v is string => typeof v === 'string' && v.length > 0).map((v): [string, string] => [label, v]);
+    });
 }
 
 // =============================================================================

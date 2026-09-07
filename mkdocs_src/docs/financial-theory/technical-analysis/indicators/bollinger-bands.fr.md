@@ -14,22 +14,22 @@ Lorsque les bandes sont larges, le marché est volatil ; lorsqu'elles se resserr
 
 1. **Bande Centrale** (valeur attendue) :
 
- $$
- MB_t = SMA_N(C_t)
- $$
+    $$
+    MB_t = SMA_N(C_t)
+    $$
 
 2. **Écart-type** des prix sur la fenêtre :
 
- $$
- \sigma_t = \sqrt{\frac{1}{N} \sum_{i=0}^{N-1} (C_{t-i} - MB_t)^2}
- $$
+    $$
+    \sigma_t = \sqrt{\frac{1}{N} \sum_{i=0}^{N-1} (C_{t-i} - MB_t)^2}
+    $$
 
 3. **Bandes Supérieure et Inférieure** :
 
- $$
- Upper_t = MB_t + k \cdot \sigma_t, \qquad
- Lower_t = MB_t - k \cdot \sigma_t
- $$
+    $$
+    Upper_t = MB_t + k \cdot \sigma_t, \qquad
+    Lower_t = MB_t - k \cdot \sigma_t
+    $$
 
 Avec $k = 2$, si les rendements étaient distribués normalement, le prix resterait à l'intérieur des bandes environ 95,4 % du temps. En pratique, les rendements financiers présentent des *queues épaisses* (leptokurtosis), donc les franchissements sont plus fréquents — mais restent statistiquement significatifs.
 

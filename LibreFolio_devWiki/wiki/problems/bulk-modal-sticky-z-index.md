@@ -47,4 +47,4 @@ After importing transactions, users cannot bulk-select rows, bulk-delete, or per
 | Role | Path |
 |------|------|
 | TransactionBulkModal | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
-| DataTable component | `frontend/src/lib/components/ui/DataTable.svelte` |
+| DataTable component | `frontend/src/lib/components/table/DataTable.svelte` |

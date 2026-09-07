@@ -12,7 +12,7 @@ Pour exporter l'historique de vos transactions depuis eToro :
 2. Cliquez sur **Portefeuille** dans la barre latérale gauche, puis cliquez sur l'icône d'horloge pour ouvrir l'**Historique**.
 3. Cliquez sur l'icône d'engrenage des paramètres en haut à droite et sélectionnez **Relevé de compte** (Account Statement).
 4. Choisissez la date de début et de fin pour votre relevé, puis cliquez sur **Créer** (Create).
-5. Sélectionnez l'option d'exportation **Excel** ou **CSV**. Enregistrez le fichier sur votre ordinateur.
+5. Sélectionnez l'option d'exportation **CSV**. Enregistrez le fichier sur votre ordinateur.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
  <!-- [Screenshot Placeholder: eToro Portfolio History - Account Statement creation and export] -->
@@ -22,7 +22,7 @@ Pour exporter l'historique de vos transactions depuis eToro :
 
 !!! warning "N'utilisez pas les relevés PDF"
 
-    eToro permet de télécharger des relevés au format PDF. Les fichiers PDF ne peuvent pas être traités par l'importateur BRIM. Assurez-vous de sélectionner le format tableur (XLSX ou CSV).
+    eToro permet de télécharger des relevés au format PDF ou Excel. Seuls les fichiers **CSV** peuvent être traités par l'importateur BRIM. Assurez-vous de sélectionner le format CSV.
 
 !!! warning "CFD vs Actifs Réels"
 

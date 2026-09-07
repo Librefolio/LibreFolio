@@ -10,7 +10,7 @@ Los ajustes de precio capturan cambios de valor que **no son causados por operac
 
 Estos eventos son más relevantes para activos que no tienen una cotización de mercado continua, como la deuda privada, instrumentos ilíquidos o activos rastreados a través del proveedor Scheduled Investment.
 
-### Escenarios Comunes
+### Common Comunes
 
 | Escenario | Importe | Descripción |
 |----------|--------|-------------|

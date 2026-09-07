@@ -1,6 +1,6 @@
 # 🎯 Benchmark Sintetici
 
-LibreFolio può sovrapporre **curve di benchmark sintetici** a qualsiasi grafico. A differenza degli indicatori tecnici (che sono calcolati *dai* dati di mercato), i benchmark sintetici sono generati matematicamente e fungono da **linee di riferimento visivo** — "cosa accadrebbe se il prezzo avesse seguito questa traiettoria ideale?"
+LibreFolio può sovrapporre **curve di benchmark sintetici** a qualsiasi grafico. A differenza degli indicatori tecnici (che sono calcolati *dai* dati di mercato), i benchmark sintetici sono generati matematicamente, calcolati localmente nel browser, e fungono da **linee di riferimento visivo** — "cosa accadrebbe se il prezzo avesse seguito questa traiettoria ideale?"
 
 Sono preziosi per:
 

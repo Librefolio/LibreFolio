@@ -117,7 +117,8 @@ The parent is intentionally thin in business logic and heavy in orchestration:
 - resets `selectedLotIds`, shared zoom, and computed range when a new panel instance opens;
 - keeps Gantt and Block 1 zoom synchronized through `sharedZoomStart` / `sharedZoomEnd`;
 - bridges cross-component navigation (`table → Gantt`, `Gantt → table`, event marker → multi-lot selection);
-- owns the custody modal lifecycle.
+- owns the custody modal lifecycle;
+- when `calculation_status === 'FAILED'`, shows a red warning banner (`lots-analysis-panel-failed`) **above** the panel but still renders the full charts/table ("warn but show" — reconstructed values stay inspectable, flagged as possibly incomplete).
 
 ### `LotWacPriceChart`
 
@@ -144,7 +145,11 @@ The table is the **inspection and action hub**.
 - mirrors the parent-filtered `visibleLots` set;
 - supports multi-selection and propagates row selection back to the parent;
 - exposes custody cells as clickable drill-down entry points;
-- offers row actions for lot detail, Gantt focus, opening transaction navigation, and lot-id copy.
+- offers row actions for lot detail, Gantt focus, opening transaction navigation, and lot-id copy;
+- adds four **net columns** (`allocated_fees`, `allocated_taxes`, `net P&L`, `net return`) shown by default
+  only when **any visible row** carries allocated FEE/TAX (`hasNetCosts`); otherwise they stay hidden.
+  Visibility follows the `DataTable` override policy: the dynamic default applies until the user explicitly
+  toggles a column, and **Reset layout** clears that override and re-applies the dynamic default.
 
 ### `LotComparisonChart`
 
@@ -161,6 +166,10 @@ The modal is the **deep audit view** for one lot.
 
 It shows summary metrics, current custody fragments, and a clickable chronology built from `EVENT_HISTORY`, with navigation to the active transaction when available.
 
+When the lot carries allocated FEE/TAX, it also renders a **net breakdown** block: gross total P&L → `− fees`
+→ `− taxes` → **net total P&L** and **net return**. Only the numeric breakdown is shown today; the cost
+provenance (pool / rule / source transactions) is available in the DTO but not yet surfaced here.
+
 ---
 
 ## 🧪 `data-testid` reference
@@ -169,7 +178,7 @@ The list below reflects the literal `data-testid` strings present in the compone
 
 | Component | `data-testid` values |
 |---|---|
-| `LotsAnalysisPanel` | `lots-analysis-panel`, `lots-analysis-panel-title`, `lots-analysis-panel-asset-link`, `lots-analysis-panel-close`, `lots-analysis-panel-error`, `lots-analysis-panel-loading` |
+| `LotsAnalysisPanel` | `lots-analysis-panel`, `lots-analysis-panel-title`, `lots-analysis-panel-asset-link`, `lots-analysis-panel-close`, `lots-analysis-panel-error`, `lots-analysis-panel-loading`, `lots-analysis-panel-failed` |
 | `LotWacPriceChart` | `lot-wac-price-chart`, `lot-wac-yaxis-toggle`, `lot-wac-yaxis-auto`, `lot-wac-yaxis-zero`, `lot-wac-toggle-absolute`, `lot-wac-toggle-percentage` |
 | `LotGanttChart` | `lot-gantt-chart`, `lot-gantt-state-filter`, `lot-gantt-filter-open`, `lot-gantt-filter-closed`, `lot-gantt-scroll`, `lot-gantt-echart`, `lot-gantt-segment-{lotId}`, `lot-gantt-sticky-axis`, `lot-gantt-legend`, `lot-gantt-legend-broker-{brokerId}`, `lot-gantt-legend-transit` |
 | `UnifiedLotsTable` | `unified-lots-table`, `unified-lots-custody-{lotId}` |

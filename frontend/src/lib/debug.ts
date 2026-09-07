@@ -76,13 +76,3 @@ export const debug: DebugLogger = {
  * Useful for conditional rendering of debug UI elements.
  */
 export const isDebugEnabled = (): boolean => DEBUG_ENABLED;
-
-/**
- * Assert a condition in debug mode.
- * Throws in debug mode, no-op in production.
- */
-export function debugAssert(condition: boolean, message: string): void {
-    if (DEBUG_ENABLED && !condition) {
-        throw new Error(`Assertion failed: ${message}`);
-    }
-}

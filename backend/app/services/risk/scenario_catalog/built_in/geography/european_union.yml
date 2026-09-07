@@ -1,0 +1,35 @@
+schema_version: 1
+id: european_union
+name:
+  en: European Union
+  it: Unione Europea
+  fr: Union européenne
+  es: Unión Europea
+members:
+  - AUT
+  - BEL
+  - BGR
+  - HRV
+  - CYP
+  - CZE
+  - DNK
+  - EST
+  - FIN
+  - FRA
+  - DEU
+  - GRC
+  - HUN
+  - IRL
+  - ITA
+  - LVA
+  - LTU
+  - LUX
+  - MLT
+  - NLD
+  - POL
+  - PRT
+  - ROU
+  - SVK
+  - SVN
+  - ESP
+  - SWE

@@ -40,49 +40,7 @@
 // Main component
 export {default as DataTable} from './DataTable.svelte';
 
-// Sub-components (for advanced customization)
-export {default as DataTablePagination} from './DataTablePagination.svelte';
-export {default as DataTableToolbar} from './DataTableToolbar.svelte';
-export {default as DataTableColumnFilter} from './DataTableColumnFilter.svelte';
-export {default as ColumnVisibilityToggle} from './ColumnVisibilityToggle.svelte';
-export {default as SelectionBar} from './SelectionBar.svelte';
 export {default as ConfirmModal} from '$lib/components/ui/modals/ConfirmModal.svelte';
 
 // Types
-export type {
-    // Cell content
-    CellContent,
-    SimpleCellContent,
-    IconTextCell,
-    BadgeCell,
-    DateCell,
-    SizeCell,
-    LinkCell,
-    CustomCell,
-    ImageCell,
-    EditableCheckboxCell,
-    // Column definition
-    ColumnDef,
-    ColumnType,
-    EnumOption,
-    // Actions
-    RowAction,
-    RowActions,
-    BulkAction,
-    // Filters
-    ColumnFilter,
-    FilterValue,
-    TextFilter,
-    NumberFilter,
-    DateFilter,
-    EnumFilter,
-    // State
-    SortState,
-    PaginationState,
-    VisibilityState,
-    ColumnWidthsState,
-    SelectionState,
-    TablePreferences,
-    // Props
-    DataTableProps,
-} from './types';
+export type {ColumnDef, RowAction, BulkAction, FilterValue} from './types';

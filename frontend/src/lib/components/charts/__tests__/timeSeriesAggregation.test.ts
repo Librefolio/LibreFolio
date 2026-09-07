@@ -1,14 +1,24 @@
 /**
  * Unit tests for timeSeriesAggregation.ts — shared chart bucketing and aggregation helpers.
  */
+import {readFileSync} from 'node:fs';
+
 import {describe, expect, it} from 'vitest';
 
 import type {RenderedSignal} from '$lib/charts/signals';
 
 import type {LineDataPoint} from '../LineChart.svelte';
-import {aggregateEnvelope, aggregateLineSeries, aggregateOHLCV, bucketEventMarkers, cascadeResolution, chooseInitialResolution, chooseResolution, computeDensity, downsampleRenderedSignal, mapDateToBucket, type BucketMeta} from '../timeSeriesAggregation';
+import {aggregateEnvelope, aggregateLineSeries, aggregateOHLCV, bucketEventMarkers, cascadeResolution, chooseInitialResolution, chooseResolution, computeDensity, downsampleRenderedSignal, mapDateToBucket, selectSignalRepresentative, type BucketMeta} from '../timeSeriesAggregation';
 
 type BucketedPoint = LineDataPoint & BucketMeta;
+const sharedAggregationFixture = JSON.parse(readFileSync(new URL('../../../../../../backend/test_scripts/fixtures/signals/aggregation_profiles.v1.json', import.meta.url), 'utf8')) as {
+    scalar_cases: Array<{
+        points: Array<{date: string; value: string}>;
+        expected: {
+            representatives: Record<string, {date: string; value: string} | null>;
+        };
+    }>;
+};
 
 function pt(date: string, value: number, extra: Partial<LineDataPoint> = {}): LineDataPoint {
     return {
@@ -28,6 +38,7 @@ function signal(data: LineDataPoint[], extra: Partial<RenderedSignal> = {}): Ren
         lineType: extra.lineType ?? 'solid',
         markerStart: extra.markerStart ?? null,
         markerEnd: extra.markerEnd ?? null,
+        aggregationProfile: extra.aggregationProfile ?? (extra.seriesType === 'band' ? 'band_envelope' : 'last_with_range'),
         yAxisIndex: extra.yAxisIndex ?? 0,
         seriesType: extra.seriesType,
         bandData: extra.bandData,
@@ -37,6 +48,10 @@ function signal(data: LineDataPoint[], extra: Partial<RenderedSignal> = {}): Ren
         currency: extra.currency ?? 'EUR',
         currencyFlag: extra.currencyFlag ?? '🇪🇺',
     };
+}
+
+function renderedBucket(date: string, bucketStart: string, bucketEnd: string): LineDataPoint {
+    return pt(date, 0, {bucketStart, bucketEnd});
 }
 
 describe('timeSeriesAggregation', () => {
@@ -76,9 +91,10 @@ describe('timeSeriesAggregation', () => {
             value: 105,
             staleDays: 2,
             bucketStart: '2026-01-05',
-            bucketEnd: '2026-01-09',
+            bucketEnd: '2026-01-11',
             resolution: 'weekly',
             sourcePointCount: 3,
+            representativeDate: '2026-01-09',
         });
 
         const secondBucket = result[1] as BucketedPoint;
@@ -86,9 +102,10 @@ describe('timeSeriesAggregation', () => {
             date: '2026-01-12',
             value: 106,
             bucketStart: '2026-01-12',
-            bucketEnd: '2026-01-12',
+            bucketEnd: '2026-01-18',
             resolution: 'weekly',
             sourcePointCount: 1,
+            representativeDate: '2026-01-12',
         });
     });
 
@@ -147,13 +164,14 @@ describe('timeSeriesAggregation', () => {
     it('downsampleRenderedSignal downsamples line signals and preserves metadata', () => {
         const lineSignal = signal([pt('2026-01-05', 1), pt('2026-01-06', 2), pt('2026-01-09', 3), pt('2026-01-12', 4)], {id: 'line-1', label: 'EMA(14)', color: '#3b82f6', opacity: 0.7, yAxisIndex: 1});
 
-        const result = downsampleRenderedSignal(lineSignal, 'weekly', ['2026-01-09']);
+        const result = downsampleRenderedSignal(lineSignal, 'weekly', [renderedBucket('2026-01-09', '2026-01-05', '2026-01-11')]);
 
         expect(result).not.toBe(lineSignal);
         expect(result.data).toEqual([
             expect.objectContaining({
                 date: '2026-01-09',
                 value: 3,
+                representativeDate: '2026-01-09',
             }),
         ]);
         expect(result.id).toBe('line-1');
@@ -175,7 +193,7 @@ describe('timeSeriesAggregation', () => {
             },
         });
 
-        const result = downsampleRenderedSignal(bandSignal, 'weekly', ['2026-01-09']);
+        const result = downsampleRenderedSignal(bandSignal, 'weekly', [renderedBucket('2026-01-09', '2026-01-05', '2026-01-11')]);
 
         expect(result.data).toEqual([
             expect.objectContaining({
@@ -187,13 +205,20 @@ describe('timeSeriesAggregation', () => {
             middle: [105],
             upper: [112],
             lower: [89],
+            observedDates: [
+                {
+                    lower: '2026-01-06',
+                    middle: '2026-01-09',
+                    upper: '2026-01-06',
+                },
+            ],
         });
     });
 
     it('downsampleRenderedSignal keeps bar signals as end-of-period snapshots, not bucket sums', () => {
         const barSignal = signal([pt('2026-01-05', 1), pt('2026-01-06', 2), pt('2026-01-09', 3)], {seriesType: 'bar'});
 
-        const result = downsampleRenderedSignal(barSignal, 'weekly', ['2026-01-09']);
+        const result = downsampleRenderedSignal(barSignal, 'weekly', [renderedBucket('2026-01-09', '2026-01-05', '2026-01-11')]);
 
         expect(result.data).toEqual([
             expect.objectContaining({
@@ -203,22 +228,59 @@ describe('timeSeriesAggregation', () => {
         ]);
     });
 
-    it('downsampleRenderedSignal falls back to line path when bandData is missing', () => {
+    it('downsampleRenderedSignal rejects malformed band data', () => {
         const malformedBandSignal = signal([pt('2026-01-05', 1), pt('2026-01-06', 2), pt('2026-01-09', 3)], {seriesType: 'band'});
 
-        const result = downsampleRenderedSignal(malformedBandSignal, 'weekly', ['2026-01-09']);
-
-        expect(result.data).toEqual([
-            expect.objectContaining({
-                date: '2026-01-09',
-                value: 3,
-            }),
-        ]);
+        expect(() => downsampleRenderedSignal(malformedBandSignal, 'weekly', [renderedBucket('2026-01-09', '2026-01-05', '2026-01-11')])).toThrow('missing aligned bandData');
     });
 
     it('downsampleRenderedSignal returns same reference for daily fast-path', () => {
         const dailySignal = signal([pt('2026-01-05', 1)]);
-        expect(downsampleRenderedSignal(dailySignal, 'daily', ['2026-01-05'])).toBe(dailySignal);
+        expect(downsampleRenderedSignal(dailySignal, 'daily', [pt('2026-01-05', 1)])).toBe(dailySignal);
+    });
+
+    it('preserves a Drawdown trough and its real date in a weekly bucket', () => {
+        const drawdown = signal([pt('2026-01-05', 0), pt('2026-01-06', -20), pt('2026-01-09', -5)], {
+            id: 'drawdown',
+            seriesType: 'area',
+            aggregationProfile: 'min_with_range',
+        });
+
+        const result = downsampleRenderedSignal(drawdown, 'weekly', [renderedBucket('2026-01-09', '2026-01-05', '2026-01-11')]);
+
+        expect(result.data).toEqual([
+            expect.objectContaining({
+                date: '2026-01-09',
+                value: -20,
+                representativeDate: '2026-01-06',
+                bucketStart: '2026-01-05',
+                bucketEnd: '2026-01-11',
+                sourcePointCount: 3,
+            }),
+        ]);
+    });
+
+    it('joins Signal and price by logical bucket when observed end dates differ', () => {
+        const lastObservedThursday = signal([pt('2026-01-05', 1), pt('2026-01-08', 4)]);
+        const result = downsampleRenderedSignal(lastObservedThursday, 'weekly', [renderedBucket('2026-01-09', '2026-01-05', '2026-01-11')]);
+
+        expect(result.data).toEqual([
+            expect.objectContaining({
+                date: '2026-01-09',
+                value: 4,
+                representativeDate: '2026-01-08',
+            }),
+        ]);
+    });
+
+    it('matches the shared Python/TypeScript scalar representative fixture', () => {
+        for (const fixtureCase of sharedAggregationFixture.scalar_cases) {
+            const points = fixtureCase.points.map((point) => pt(point.date, Number(point.value)));
+            for (const [profile, expected] of Object.entries(fixtureCase.expected.representatives)) {
+                const representative = selectSignalRepresentative(points, profile as RenderedSignal['aggregationProfile']);
+                expect(representative ? {date: representative.date, value: String(representative.value)} : null).toEqual(expected);
+            }
+        }
     });
 
     // =========================================================================

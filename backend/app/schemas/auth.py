@@ -31,13 +31,6 @@ class AuthRegisterRequest(BaseModel):
     password: str = Field(..., min_length=8, description="Password (min 8 chars)")
 
 
-class AuthPasswordResetRequest(BaseModel):
-    """Password reset request (for terminal CLI)."""
-
-    username: str = Field(..., description="Username to reset")
-    new_password: str = Field(..., min_length=8, description="New password")
-
-
 class ChangePasswordRequest(BaseModel):
     """Change password request (for authenticated users)."""
 
@@ -111,9 +104,3 @@ class UpdateProfileResponse(BaseModel):
 
     user: AuthUserResponse
     message: str = "Profile updated successfully"
-
-
-class AuthErrorResponse(BaseModel):
-    """Error response for auth failures."""
-
-    detail: str

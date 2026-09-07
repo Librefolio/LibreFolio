@@ -192,10 +192,10 @@ class BOEProvider(FXRateProvider):
                     return currency, observations
 
             except httpx.HTTPError as e:
-                logger.error(f"Failed to fetch FX rates for {currency} from BOE: {e}")
+                logger.exception(f"Failed to fetch FX rates for {currency} from BOE: {e}")
                 raise FXServiceError(f"BOE API error for {currency}: {e}") from e
             except Exception as e:
-                logger.error(f"Failed to parse BOE response for {currency}: {e}")
+                logger.exception(f"Failed to parse BOE response for {currency}: {e}")
                 raise FXServiceError(f"Unexpected BOE response format for {currency}: {e}") from e
 
         # Launch all HTTP calls in parallel (return_exceptions to avoid cascade failure)

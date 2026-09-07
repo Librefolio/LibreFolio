@@ -49,7 +49,7 @@ Issues returned by `/validate` are filtered to only those matching the current r
 
 | Role | Path |
 |------|------|
-| FormModal (contextual validate) | `frontend/src/lib/components/transactions/TransactionFormModal.svelte` |
-| BulkModal (getBulkContextExcluding) | `frontend/src/lib/components/transactions/TransactionBulkModal.svelte` |
+| FormModal (contextual validate) | `frontend/src/lib/components/transactions/modals/TransactionFormModal.svelte` |
+| BulkModal (getBulkContextExcluding) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
 | Balance walk tests | `backend/test_scripts/test_api/test_tx_balance_walk.py` |
 

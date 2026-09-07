@@ -48,9 +48,12 @@
          *  (double-click still navigates to asset detail, unchanged). Forwarded as-is to all
          *  4 sub-views. */
         onAnalyze?: (assetId: number) => void;
+        /** Asset whose lot-analysis panel is open — its table row stays tinted (F9).
+         *  Forwarded to the table sub-views. */
+        analyzedAssetId?: number | null;
     }
 
-    let {summary = null, contribution = null, loading = false, contributionLoading = false, assetsHref = '/assets', brokers = [], onRequestContribution, onAnalyze}: Props = $props();
+    let {summary = null, contribution = null, loading = false, contributionLoading = false, assetsHref = '/assets', brokers = [], onRequestContribution, onAnalyze, analyzedAssetId = null}: Props = $props();
 
     // =========================================================================
     // Toggle state (persisted in localStorage)
@@ -130,7 +133,7 @@
     let showPerformanceEmpty = $derived(semanticMode === 'performance' && (!contribution || (contributionPositions.length === 0 && otherEffects.length === 0)));
 </script>
 
-<div class="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-4 flex flex-col" data-testid="positions-panel">
+<div class="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-4 flex flex-col" data-testid="positions-panel" aria-busy={showLoading} data-busy={showLoading ? 'true' : 'false'}>
     <!-- Header -->
     <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
         <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-200">
@@ -197,11 +200,11 @@
     {:else}
         <div class="flex-1 {visualMode === 'table' ? 'overflow-x-auto' : ''}">
             {#if semanticMode === 'holdings' && visualMode === 'table'}
-                <ExposureTable bind:this={exposureTableComponent} {holdings} {navAmount} {displayCurrency} {brokers} {onAnalyze} />
+                <ExposureTable bind:this={exposureTableComponent} {holdings} {navAmount} {displayCurrency} {brokers} {onAnalyze} {analyzedAssetId} />
             {:else if semanticMode === 'holdings' && visualMode === 'map'}
                 <ExposureTreemap {holdings} {displayCurrency} {onAnalyze} />
             {:else if semanticMode === 'performance' && visualMode === 'table' && contribution}
-                <ContributionTable bind:this={contributionTableComponent} positions={contributionPositions} {holdings} {displayCurrency} {brokers} {onAnalyze} />
+                <ContributionTable bind:this={contributionTableComponent} positions={contributionPositions} {holdings} {displayCurrency} {brokers} {onAnalyze} {analyzedAssetId} />
                 <OtherPeriodEffectsTable effects={otherEffects} {displayCurrency} />
             {:else if semanticMode === 'performance' && visualMode === 'map' && contribution}
                 <PerformanceChart positions={contributionPositions} {otherEffects} {displayCurrency} {onAnalyze} />

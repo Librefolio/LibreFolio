@@ -16,7 +16,7 @@ La barra dei filtri sopra il grafico fornisce i controlli per personalizzare la 
 
 Seleziona una finestra temporale per i dati del grafico:
 
-- **Preset**: 1W, 1M, 3M, 6M, 1Y, ALL
+- **Preset**: 1W, 1M, 3M, 6M, 1Y, 2Y, YTD, MAX — quando la barra ha spazio libero, compaiono **preset di riempimento** extra per occuparlo (3Y, 5Y, 10Y e WTD, MTD, QTD)
 - **Personalizzato**: scegli una data di inizio e di fine utilizzando il selettore del calendario
 
 ### 💱 Selettore di Valuta
@@ -47,7 +47,7 @@ Passa il mouse su un indicatore per vedere i dettagli dell'evento (data, tipo, v
 
 ## 🎨 Estetica
 
-Clicca sul pulsante **Impostazioni** (⚙️) per mostrare/nascondere il pannello aspetto per la personalizzazione del grafico (colore della linea, stile, ecc.).
+Clicca sul pulsante **Impostazioni** (⚙️) per mostrare/nascondere il pannello aspetto inline (riempimento dell'area, colori della baseline, linee della griglia, gradiente stale, scala dell'asse Y). Le stesse impostazioni — più i segnali di overlay — possono essere modificate per tutti i grafici degli asset in una volta dalla modale **Impostazioni Grafico** sulla [pagina della lista Asset](../index.md), che mostra un'anteprima live durante la modifica; vedi [Impostazioni Grafico](../../fx/chart-settings.md) per come funzionano la modale e la sua anteprima (l'ambito Asset è indipendente da FX).
 
 ---
 

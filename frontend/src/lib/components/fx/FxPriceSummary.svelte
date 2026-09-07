@@ -9,6 +9,7 @@
 <script lang="ts">
     import {TrendingUp, TrendingDown} from 'lucide-svelte';
     import type {LayoutMode} from '$lib/utils/layout/responsiveLayout.svelte';
+    import {_ as t} from '$lib/i18n';
 
     interface Props {
         /** Last exchange rate */
@@ -46,4 +47,6 @@
             </span>
         {/if}
     </div>
+{:else}
+    <div class="text-sm text-gray-400 dark:text-gray-500" data-fx-rate-state="missing" data-testid="fx-price-summary-missing">{$t('fx.rateNotAvailable')}</div>
 {/if}

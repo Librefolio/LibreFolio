@@ -72,8 +72,7 @@ The filter matches against test descriptions:
 frontend/e2e/
 ├── fixtures/
 │   ├── test-users.ts      # Test credentials
-│   ├── auth-helpers.ts    # Login/logout/navigation helpers
-│   └── db-helpers.ts      # Database reset helpers
+│   └── auth-helpers.ts    # Login/logout/navigation helpers
 ├── auth.spec.ts           # Login, register, logout
 ├── settings.spec.ts       # User/global settings
 ├── files.spec.ts          # Files page

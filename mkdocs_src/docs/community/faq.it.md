@@ -28,7 +28,7 @@ Sì! La nostra roadmap include **assistenti basati su AI** per aiutarvi ad anali
 LibreFolio supporta:
 
 - **Azioni & ETF** — Prezzi recuperati automaticamente tramite provider di dati (es. yfinance)
-- **Criptovalute** — Prossimamente
+- **Cripto asset** — Tracciati come asset di portafoglio nell'UI; non sono Forex e non fanno parte del selettore di valute fiat
 - **Obbligazioni** — Supportato l'inserimento manuale
 - **P2P Lending** — Asset con investimento programmato
 - **Liquidità & Depositi** — Monitorate la vostra liquidità

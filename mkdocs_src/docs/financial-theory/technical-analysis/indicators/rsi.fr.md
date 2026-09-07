@@ -17,24 +17,24 @@ Le résultat est compressé dans une plage de 0 à 100 :
 
 1. **Décomposer** les variations quotidiennes en gains et pertes :
 
- $$
- U_t = \max(P_t - P_{t-1},\; 0), \qquad
- D_t = \max(P_{t-1} - P_t,\; 0)
- $$
+    $$
+    U_t = \max(P_t - P_{t-1},\; 0), \qquad
+    D_t = \max(P_{t-1} - P_t,\; 0)
+    $$
 
 2. **Lisser** chaque composante avec une moyenne mobile exponentielle (variante SMMA) :
 
- $$
- \overline{U} = SMMA_N(U), \qquad
- \overline{D} = SMMA_N(D)
- $$
+    $$
+    \overline{U} = SMMA_N(U), \qquad
+    \overline{D} = SMMA_N(D)
+    $$
 
 3. **Force Relative** (ratio RS) et normalisation :
 
- $$
- RS = \frac{\overline{U}}{\overline{D}}, \qquad
- RSI = 100 - \frac{100}{1 + RS}
- $$
+    $$
+    RS = \frac{\overline{U}}{\overline{D}}, \qquad
+    RSI = 100 - \frac{100}{1 + RS}
+    $$
 
 La normalisation $100 - 100/(1+RS)$ est une sigmoïde monotone croissante qui projette $RS \in [0, \infty)$ vers $RSI \in [0, 100)$.
 

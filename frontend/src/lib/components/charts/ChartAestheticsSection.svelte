@@ -12,6 +12,7 @@
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
 
+    import {numericArrows} from '$lib/actions/numericArrows';
     // =========================================================================
     // Props
     // =========================================================================
@@ -172,6 +173,7 @@
                         <span class="text-[10px] text-gray-500 dark:text-gray-400">Min</span>
                         <input
                             type="number"
+                            use:numericArrows
                             class="w-20 px-1.5 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-libre-green"
                             step="any"
                             value={yAxisMin ?? ''}
@@ -185,6 +187,7 @@
                         <span class="text-[10px] text-gray-500 dark:text-gray-400">Max</span>
                         <input
                             type="number"
+                            use:numericArrows
                             class="w-20 px-1.5 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-libre-green"
                             step="any"
                             value={yAxisMax ?? ''}

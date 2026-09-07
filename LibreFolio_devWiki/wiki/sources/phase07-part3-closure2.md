@@ -207,7 +207,7 @@ with matching currency instead.
 | CsvEditor | `frontend/src/lib/components/ui/data-editor/CsvEditor.svelte` |
 | Transaction validate test | `backend/test_scripts/test_api/test_transactions_validate.py` |
 | Events suggest test | `backend/test_scripts/test_api/test_events_suggest.py` |
-| OHLC sentinel test | `backend/test_scripts/test_services/test_ohlc_sentinel.py` |
-| Prices currency coherence test | `backend/test_scripts/test_services/test_prices_currency_coherence.py` |
+| OHLC sentinel test | `backend/test_scripts/test_api/test_ohlc_sentinel.py` |
+| Prices currency coherence test | `backend/test_scripts/test_api/test_prices_currency_coherence.py` |
 | Asset currency change test | `backend/test_scripts/test_api/test_asset_currency_change.py` |
 | Scheduled investment param change test | `backend/test_scripts/test_services/test_scheduled_investment_param_change.py` |

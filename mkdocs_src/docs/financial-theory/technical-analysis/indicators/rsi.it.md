@@ -17,24 +17,24 @@ Il risultato è compresso in un intervallo tra 0 e 100:
 
 1. **Scomponi** le variazioni giornaliere in guadagni e perdite:
 
- $$
- U_t = \max(P_t - P_{t-1},\; 0), \qquad
- D_t = \max(P_{t-1} - P_t,\; 0)
- $$
+    $$
+    U_t = \max(P_t - P_{t-1},\; 0), \qquad
+    D_t = \max(P_{t-1} - P_t,\; 0)
+    $$
 
 2. **Liscia** ogni componente con una media mobile esponenziale (variante SMMA):
 
- $$
- \overline{U} = SMMA_N(U), \qquad
- \overline{D} = SMMA_N(D)
- $$
+    $$
+    \overline{U} = SMMA_N(U), \qquad
+    \overline{D} = SMMA_N(D)
+    $$
 
 3. Rapporto di **Forza Relativa** e normalizzazione:
 
- $$
- RS = \frac{\overline{U}}{\overline{D}}, \qquad
- RSI = 100 - \frac{100}{1 + RS}
- $$
+    $$
+    RS = \frac{\overline{U}}{\overline{D}}, \qquad
+    RSI = 100 - \frac{100}{1 + RS}
+    $$
 
 La normalizzazione $100 - 100/(1+RS)$ è una sigmoide monotonicamente crescente che mappa $RS \in [0, \infty)$ in $RSI \in [0, 100)$.
 

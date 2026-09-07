@@ -65,5 +65,5 @@ Note: `createPairSlug` always sorts alphabetically so `EUR-USD` and `USD-EUR` re
 
 | Role | Path |
 |------|------|
-| TimeSeriesStore | `frontend/src/lib/stores/TimeSeriesStore.ts` |
+| TimeSeriesStore | `frontend/src/lib/stores/core/TimeSeriesStore.ts` |
 | FX store registry | `frontend/src/lib/stores/fxStoreRegistry.ts` |

@@ -144,13 +144,13 @@ class ECBProvider(FXRateProvider):
                 return sorted(currencies)
 
         except httpx.HTTPError as e:
-            logger.error(f"Failed to fetch available currencies from ECB: {e}")
+            logger.exception(f"Failed to fetch available currencies from ECB: {e}")
             raise FXServiceError(f"ECB API error: {e}") from e
         except (KeyError, ValueError) as e:
-            logger.error(f"Failed to parse ECB response: {e}")
+            logger.exception(f"Failed to parse ECB response: {e}")
             raise FXServiceError(f"Invalid ECB response format: {e}") from e
 
-    async def fetch_rates(self, date_range: tuple[FXProviderStartDate, date], currencies: list[str], base_currency: str | None = None) -> dict[str, list[tuple[date, str, str, Decimal]]]:
+    async def fetch_rates(self, date_range: tuple[FXProviderStartDate, date], currencies: list[str], base_currency: str | None = None) -> dict[str, list[tuple[date, str, str, Decimal]]]:  # noqa: C901 — flat fetch/parse pipeline; branches are per-currency error isolation and response navigation
         """
         Fetch FX rates from ECB API for given date range and currencies.
 
@@ -227,10 +227,10 @@ class ECBProvider(FXRateProvider):
                     return currency, observations
 
             except httpx.HTTPError as e:
-                logger.error(f"Failed to fetch FX rates for {currency}: {e}")
+                logger.exception(f"Failed to fetch FX rates for {currency}: {e}")
                 raise FXServiceError(f"ECB API error for {currency}: {e}") from e
             except (KeyError, IndexError, ValueError) as e:
-                logger.error(f"Failed to parse ECB response for {currency}: {e}")
+                logger.exception(f"Failed to parse ECB response for {currency}: {e}")
                 raise FXServiceError(f"Unexpected ECB response format for {currency}: {e}") from e
 
         # ── Serial fetch: ECB triggers bot protection on parallel requests ──

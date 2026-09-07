@@ -16,6 +16,7 @@
 <p align="center">
   <a href="https://github.com/Librefolio/LibreFolio/actions/workflows/release.yml"><img src="https://github.com/Librefolio/LibreFolio/actions/workflows/release.yml/badge.svg" alt="Build Status"></a>
   <a href="https://www.gnu.org/licenses/agpl-3.0"><img src="https://img.shields.io/badge/License-AGPL_v3-blue.svg" alt="License: AGPL v3"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/github/v/release/Librefolio/LibreFolio?label=changelog&color=blue" alt="Changelog"></a>
   <a href="https://github.com/orgs/Librefolio/packages/container/package/librefolio"><img src="https://img.shields.io/badge/container-ghcr.io-blue?logo=github" alt="Docker Registry"></a>
   <a href="https://github.com/Librefolio/LibreFolio/stargazers"><img src="https://img.shields.io/github/stars/Librefolio/LibreFolio.svg" alt="GitHub stars"></a>
 </p>
@@ -27,6 +28,8 @@ Bring all your investments into one private, secure dashboard. Track stocks, ETF
 Your data stays on your server. No third-party cloud. No tracking.
 
 📚 **Full Documentation**: [https://librefolio.github.io/LibreFolio/](https://librefolio.github.io/LibreFolio/)
+
+📋 **What's new**: [Changelog](CHANGELOG.md) · [Releases](https://github.com/Librefolio/LibreFolio/releases)
 
 ---
 
@@ -111,6 +114,8 @@ Run LibreFolio using the official pre-built image. No development tools or compi
 
 Access: **http://localhost:6040**. The first registered user automatically becomes the administrator.
 
+> 🪶 **Image variants**: `latest` is the full image (docs images included, fully offline). `latest-light` is the same application **without the documentation images** — several hundred MB lighter. Docs text pages are still bundled; documentation images load on demand from the online docs site, so viewing them requires an internet connection. To use it, set `image: ghcr.io/librefolio/librefolio:latest-light` in `docker-compose.yml`.
+
 For complete guide, auto-updates (Watchtower), and backups, see the [🐳 User Installation Manual](https://librefolio.github.io/LibreFolio/user/installation/).
 
 </details>
@@ -191,6 +196,8 @@ LibreFolio is licensed under **GNU Affero General Public License v3.0** (AGPL-3.
 You can use, modify, and distribute it freely — if you distribute modifications (including over a network), you must release your source under AGPL-3.0.
 
 See [LICENSE](LICENSE) for the full text and the [Credits & Legal](https://librefolio.github.io/LibreFolio/community/credits-legal/) page for details.
+
+LibreFolio builds on excellent open-source work released under permissive licenses — QuantLib, Riskfolio-Lib, TA-Lib, pandas-ta-classic and many more. See [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) for the full attribution list.
 
 ---
 

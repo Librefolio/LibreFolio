@@ -21,8 +21,12 @@ LibreFolio provides the `dev.py` script for administration tasks. This page cove
 # Standard start
 pipenv run ./dev.py server
 
-# With auto-calculated workers (2 × (CPU-1))
-pipenv run ./dev.py server --workers N
+# Auto-size workers to the CPU count — 2 × (cores - 1)
+# Both `auto` and `0` trigger the calculation
+pipenv run ./dev.py server --workers auto
+
+# Or pass an explicit worker count
+pipenv run ./dev.py server --workers 4
 
 # Kill existing process on port before starting
 pipenv run ./dev.py server --force
@@ -39,7 +43,7 @@ pipenv run ./dev.py server --force
 User management is done via `./dev.py user` subcommands:
 
 ```bash
-# Create a user (first user becomes admin automatically)
+# Create a user (users created from the CLI are always superusers)
 pipenv run ./dev.py user create <username> <email> <password>
 
 # List all users
@@ -86,7 +90,7 @@ pipenv run ./dev.py db upgrade
 # Build and deploy MkDocs documentation to GitHub Pages
 pipenv run ./dev.py mkdocs deploy
 
-# Generate gallery screenshots (requires running server + test data)
+# Generate gallery screenshots (uses Playwright; starts/controls a test server and populates test data unless --no-populate)
 pipenv run ./dev.py mkdocs gallery
 ```
 
@@ -108,4 +112,3 @@ pipenv run ./dev.py --help
     - **Testing**: `pipenv run ./dev.py test all` — see [Test Walkthrough](../developer/test-walkthrough/index.md)
     - **API Client**: `pipenv run ./dev.py api sync` — see [API Overview](../developer/api/overview.md)
     - **i18n**: `pipenv run ./dev.py i18n audit` — see [Internationalization](../developer/frontend/i18n.md)
-

@@ -14,6 +14,7 @@
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import KpiMetricBar from '$lib/components/dashboard/KpiMetricBar.svelte';
     import KpiDivergingFlowBar from '$lib/components/dashboard/KpiDivergingFlowBar.svelte';
+    import {safeString} from '$lib/types';
 
     interface Props {
         summary: PortfolioSummary | null;
@@ -23,12 +24,6 @@
     }
 
     let {summary, history, loading, displayCurrency}: Props = $props();
-
-    function safeStr(v: string | (string | null)[] | null | undefined): string | null {
-        if (v == null) return null;
-        if (Array.isArray(v)) return v[0] ?? null;
-        return v;
-    }
 
     function safeCurrency(v: any): {code: string; amount: string} | null {
         if (v == null) return null;
@@ -88,14 +83,6 @@
         if (prevNav === 0 || pnlDeltaDay == null) return null;
         return ((pnlDeltaDay / prevNav) * 100).toFixed(2);
     });
-    const periodPnlDeltaDayPct = $derived.by(() => {
-        if (!firstHistoryPoint || !prevHistoryPoint || firstHistoryPoint === prevHistoryPoint || pnlDeltaDay == null) return null;
-        const firstTotalPnl = parseFloat(firstHistoryPoint.total_pnl.amount);
-        const prevTotalPnl = parseFloat(prevHistoryPoint.total_pnl.amount);
-        const periodPnlYesterday = prevTotalPnl - firstTotalPnl;
-        if (!Number.isFinite(periodPnlYesterday) || Math.abs(periodPnlYesterday) < 0.01) return null;
-        return ((pnlDeltaDay / periodPnlYesterday) * 100).toFixed(2);
-    });
 
     const cashContribAmt = $derived(lastHistoryPoint?.cash_from_contributed_capital != null ? parseFloat(lastHistoryPoint.cash_from_contributed_capital.amount) : null);
     const cashGeneratedAmt = $derived(lastHistoryPoint?.cash_from_generated_returns != null ? parseFloat(lastHistoryPoint.cash_from_generated_returns.amount) : null);
@@ -123,11 +110,19 @@
         const amount = parseFloat(totalPnlCur.amount);
         return Number.isFinite(amount) ? amount : null;
     });
-    const totalPnlDeltaPct = $derived.by(() => {
+    const pnlDeltaDayVsPrevTotalPct = $derived.by(() => {
         if (!prevHistoryPoint || pnlDeltaDay == null) return null;
         const prevTotalPnl = parseFloat(prevHistoryPoint.total_pnl.amount);
         if (!Number.isFinite(prevTotalPnl) || Math.abs(prevTotalPnl) < 0.01) return null;
         return ((pnlDeltaDay / prevTotalPnl) * 100).toFixed(2);
+    });
+    // Absolute (since-inception) ROI next to the absolute total P&L in Card 3 —
+    // period ROI (simple_roi_percent) belongs to Card 2's period-based returns only.
+    const absRoiPct = $derived.by(() => {
+        if (!summary) return null;
+        const roi = parseFloat(summary.total_gain_loss_percent);
+        if (!Number.isFinite(roi)) return null;
+        return (roi * 100).toFixed(2);
     });
     const nwBarMax = $derived(Math.max(navHeroAmt, marketValueStartAmt, marketValueAmt, purchaseCostAmt, purchaseCostStartAmt, cashAmt, cashStartAmt, totalDepositedAmt, totalWithdrawnAmt) || 1);
     const marketBarPct = $derived((marketValueAmt / nwBarMax) * 100);
@@ -197,15 +192,15 @@
 
     const roiVal = $derived(summary ? parseFloat(summary.simple_roi_percent) * 100 : 0);
     const twrrCumVal = $derived.by(() => {
-        const v = summary ? safeStr(summary.twrr_percent) : null;
+        const v = summary ? safeString(summary.twrr_percent) : null;
         return v != null ? parseFloat(v) * 100 : 0;
     });
     const mwrrCumVal = $derived.by(() => {
-        const v = summary ? safeStr(summary.mwrr_cumulative_percent) : null;
+        const v = summary ? safeString(summary.mwrr_cumulative_percent) : null;
         return v != null ? parseFloat(v) * 100 : 0;
     });
     const mwrrAnnVal = $derived.by(() => {
-        const v = summary ? safeStr(summary.mwrr_annualized_percent) : null;
+        const v = summary ? safeString(summary.mwrr_annualized_percent) : null;
         return v != null ? parseFloat(v) * 100 : 0;
     });
     const timingEffectVal = $derived(mwrrCumVal - twrrCumVal);
@@ -260,8 +255,8 @@
                 {#if pnlDeltaDay != null}
                     <p class="text-xs text-right tabular-nums transition-colors duration-300 {pnlDeltaDay >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}" data-testid="kpi-pnl-delta-day">
                         <TweenedValue value={pnlDeltaDay} format={fmtMoney} />
-                        {#if periodPnlDeltaDayPct != null}
-                            <span> ({pnlDeltaDay >= 0 ? '+' : ''}{periodPnlDeltaDayPct}%)</span>
+                        {#if pnlDeltaDayVsPrevTotalPct != null}
+                            <span> ({pnlDeltaDay >= 0 ? '+' : ''}{pnlDeltaDayVsPrevTotalPct}%)</span>
                         {/if}
                     </p>
                 {/if}
@@ -326,7 +321,9 @@
     <!-- Card 3 — Net Worth -->
     <div class="relative @container bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-5 flex flex-col gap-2 overflow-hidden" data-testid="kpi-net-worth">
         <div class="flex items-center justify-between">
-            <p class="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">{$_('dashboard.netWorth')}</p>
+            <Tooltip text={$_('dashboard.netWorthTooltip')} position="top">
+                <p class="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">{$_('dashboard.netWorth')}</p>
+            </Tooltip>
             <DocsLink path="user/dashboard/kpi-cards/#card-3-net-worth" label={$_('dashboard.netWorth')} size={14} />
         </div>
         {#if loading}
@@ -339,8 +336,8 @@
             {#if totalPnlAmt != null}
                 <p class="text-xs text-right tabular-nums transition-colors duration-300 {totalPnlAmt >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}" data-testid="kpi-total-pnl-delta">
                     <TweenedValue value={totalPnlAmt} format={fmtMoney} />
-                    {#if totalPnlDeltaPct != null}
-                        <span> ({pnlDeltaDay != null && pnlDeltaDay >= 0 ? '+' : ''}{totalPnlDeltaPct}%)</span>
+                    {#if absRoiPct != null}
+                        <span> ({parseFloat(absRoiPct) >= 0 ? '+' : ''}{absRoiPct}%)</span>
                     {/if}
                 </p>
             {/if}

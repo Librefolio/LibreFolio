@@ -5,10 +5,18 @@
  * without a Svelte component context.
  */
 
-/** Minimal shape required by cashAmountsCancel (subset of PendingOp). */
+import {signedCashAmount, type CashValue} from './txPayloadHelpers';
+import type {TypeRule} from '$lib/stores/transactions/transactionTypeStore';
+
+/** Minimal shape required by cashAmountsCancel (subset of PendingOp).
+ *  `type` is mandatory: without it the sign of a DB-sourced amount cannot be recovered. */
 export interface CashCancelable {
-    fields: {cash: {amount: string} | null};
+    fields: {type: string; cash: CashValue | null};
 }
+
+/** Resolve a transaction type to its rule. Injected rather than imported so these helpers
+ *  stay pure — the real resolver reads type rules the backend provides at runtime. */
+export type TypeRuleResolver = (type: string) => TypeRule;
 
 /**
  * Return true only when the two ops have cash amounts that are exactly
@@ -16,15 +24,41 @@ export interface CashCancelable {
  * prevents false positives between unrelated transactions that only share
  * type and date proximity but have different amounts.
  *
+ * Both sides are canonicalised through `signedCashAmount` first, so the answer is the same
+ * whether a row came from the import pool (already signed) or from the database (normalised
+ * to a magnitude by the edit form). Comparing the stored strings instead made a DEPOSIT of
+ * +11 and a WITHDRAWAL of -11 read as +11 and +11: the pairing worked during an import and
+ * never worked between two saved transactions.
+ *
+ * `resolveRule` is a required parameter on purpose: a caller that does not have the type
+ * cannot ask this question correctly, and should not be able to ask it at all.
+ *
  * Uses floating-point epsilon relative to the larger absolute value to
  * handle decimal strings that lose precision when parsed as Number.
  */
-export function cashAmountsCancel(a: CashCancelable, b: CashCancelable): boolean {
-    if (!a.fields.cash || !b.fields.cash) return false;
-    const numA = Number(a.fields.cash.amount);
-    const numB = Number(b.fields.cash.amount);
+export function cashAmountsCancel(a: CashCancelable, b: CashCancelable, resolveRule: TypeRuleResolver): boolean {
+    const numA = signedCashAmount(a.fields.cash, resolveRule(a.fields.type));
+    const numB = signedCashAmount(b.fields.cash, resolveRule(b.fields.type));
+    if (numA === null || numB === null) return false;
     const maxAbs = Math.max(Math.abs(numA), Math.abs(numB));
     if (maxAbs === 0) return false;
     // Exact cancellation: sum must be 0 within floating-point epsilon
     return Math.abs(numA + numB) / maxAbs < 1e-9;
+}
+
+/**
+ * Merge two free-text field values (e.g. descriptions) for the promote-merge modal.
+ * An empty side yields the other; identical sides collapse to one; otherwise the two are
+ * stacked on separate lines so nothing the user wrote is silently dropped.
+ */
+export function mergeStrings(a: string, b: string): string {
+    if (!a) return b;
+    if (!b) return a;
+    if (a === b) return a;
+    return `${a}\n${b}`;
+}
+
+/** Union of two tag lists, de-duplicated and order-preserving; nullish lists are treated as empty. */
+export function mergeTagSets(a: string[], b: string[]): string[] {
+    return [...new Set([...(a ?? []), ...(b ?? [])])];
 }

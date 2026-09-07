@@ -8,7 +8,9 @@
 #       sudo usermod -aG docker $USER && newgrp docker
 #
 # Usage:
-#   1. Build image:     ./dev.py docker build
+#   1. Build image:     ./dev.py docker build          (full variant)
+#                       ./dev.py docker build --light  (light variant: no docs
+#                        images — they load from the online docs site)
 #   2. Start:           docker compose up -d
 #   3. Access:          http://localhost:${PORT:-6040}
 #
@@ -16,16 +18,21 @@
 #   ./dev.py docker exec server --test            # start test server on :6041
 #   ./dev.py docker exec test db populate --force --with-static
 #   Access:  http://localhost:${TEST_PORT:-6041}
+#
+# Light variant: to run the light image via compose, set in .env:
+#   LIBREFOLIO_IMAGE=librefolio:latest-light
 # =============================================================================
 
 services:
   librefolio:
-    image: librefolio:latest
+    image: ${LIBREFOLIO_IMAGE:-librefolio:latest}
     build:
       context: .
       args:
         UID: ${UID:-1000}
         GID: ${GID:-1000}
+        # Set DOCS_VARIANT=light to build the light image via compose
+        DOCS_VARIANT: ${DOCS_VARIANT:-full}
     container_name: librefolio
     # The container starts as root so the entrypoint can fix bind-mount
     # permissions, then drops to the 'librefolio' user via gosu.

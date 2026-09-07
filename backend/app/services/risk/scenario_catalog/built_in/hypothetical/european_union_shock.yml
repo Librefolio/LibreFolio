@@ -1,0 +1,28 @@
+schema_version: 1
+id: european_union_shock
+kind: hypothetical_shock
+tags: [europe, geography]
+name:
+  en: European Union shock
+  it: Shock Unione Europea
+  fr: Choc Union européenne
+  es: Choque Unión Europea
+description:
+  en: Editable geographic shock applied to European Union member states before the Other fallback.
+  it: Shock geografico modificabile applicato agli Stati membri dell'Unione Europea prima del fallback Other.
+  fr: Choc géographique modifiable appliqué aux États membres de l'Union européenne avant le repli Other.
+  es: Choque geográfico editable aplicado a los Estados miembros de la Unión Europea antes del fallback Other.
+allowed_dimensions: [geography]
+defaults:
+  dimension: geography
+  bucket_shocks:
+    european_union: -0.20
+    Other: 0.0
+editable:
+  dimension: false
+  bucket_shocks: true
+  manual_overrides: true
+limits:
+  minimum_shock: -1.0
+  maximum_shock: 1.0
+  maximum_buckets: 100

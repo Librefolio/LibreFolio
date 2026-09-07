@@ -89,7 +89,11 @@ export class CompoundSignal extends ChartSignal {
     getLabel(): string {
         const rate = this.params.annualRate ?? 8;
         const offset = Number(this.params.offset ?? 0);
-        const offsetStr = offset !== 0 ? ` +${offset}%` : '';
+        // The sign travels with the number: a hard-coded `+` in front of a
+        // negative offset reads as `+-5%`, which users reported. The
+        // descriptor allows `min: -100`, so a benchmark below the start is a
+        // legitimate thing to draw.
+        const offsetStr = offset !== 0 ? ` ${offset > 0 ? '+' : ''}${offset}%` : '';
         return `Compound ${rate}%/yr${offsetStr}`;
     }
 }

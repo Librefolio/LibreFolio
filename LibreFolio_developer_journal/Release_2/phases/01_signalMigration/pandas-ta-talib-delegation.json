@@ -1,0 +1,268 @@
+[
+  {
+    "pandas_ta_function": "ema",
+    "talib_function": "EMA",
+    "default_backend": "native",
+    "activation_parameter": "talib=True",
+    "fallback_behavior": "silent_fallback_to_native",
+    "input_fields": [
+      "close"
+    ],
+    "output_columns": [
+      "EMA_{length}"
+    ],
+    "source_permalink": "https://github.com/xgboosted/pandas-ta-classic/blob/v0.6.52/pandas_ta_classic/overlap/ema.py#L25",
+    "notes": "Native uses ewm(span=length, adjust=False), TA-Lib uses C-accelerated exponential smoothing."
+  },
+  {
+    "pandas_ta_function": "sma",
+    "talib_function": "SMA",
+    "default_backend": "native",
+    "activation_parameter": "talib=True",
+    "fallback_behavior": "silent_fallback_to_native",
+    "input_fields": [
+      "close"
+    ],
+    "output_columns": [
+      "SMA_{length}"
+    ],
+    "source_permalink": "https://github.com/xgboosted/pandas-ta-classic/blob/v0.6.52/pandas_ta_classic/overlap/sma.py#L22",
+    "notes": "Native uses rolling(length).mean(), TA-Lib uses C SMA."
+  },
+  {
+    "pandas_ta_function": "rsi",
+    "talib_function": "RSI",
+    "default_backend": "native",
+    "activation_parameter": "talib=True",
+    "fallback_behavior": "silent_fallback_to_native",
+    "input_fields": [
+      "close"
+    ],
+    "output_columns": [
+      "RSI_{length}"
+    ],
+    "source_permalink": "https://github.com/xgboosted/pandas-ta-classic/blob/v0.6.52/pandas_ta_classic/momentum/rsi.py#L29",
+    "notes": "Wilder smoothing. Native and TA-Lib yield identical values after stabilization."
+  },
+  {
+    "pandas_ta_function": "macd",
+    "talib_function": "MACD",
+    "default_backend": "native",
+    "activation_parameter": "talib=True",
+    "fallback_behavior": "silent_fallback_to_native",
+    "input_fields": [
+      "close"
+    ],
+    "output_columns": [
+      "MACD_{fast}_{slow}_{signal}",
+      "MACDH_{fast}_{slow}_{signal}",
+      "MACDS_{fast}_{slow}_{signal}"
+    ],
+    "source_permalink": "https://github.com/xgboosted/pandas-ta-classic/blob/v0.6.52/pandas_ta_classic/momentum/macd.py#L42",
+    "notes": "TA-Lib returns (macd, macdsignal, macdhist). pandas-ta-classic normalizes column names."
+  },
+  {
+    "pandas_ta_function": "bbands",
+    "talib_function": "BBANDS",
+    "default_backend": "native",
+    "activation_parameter": "talib=True",
+    "fallback_behavior": "silent_fallback_to_native",
+    "input_fields": [
+      "close"
+    ],
+    "output_columns": [
+      "BBL_{length}_{std}",
+      "BBM_{length}_{std}",
+      "BBU_{length}_{std}",
+      "BBB_{length}_{std}",
+      "BBP_{length}_{std}"
+    ],
+    "source_permalink": "https://github.com/xgboosted/pandas-ta-classic/blob/v0.6.52/pandas_ta_classic/volatility/bbands.py#L47",
+    "notes": "TA-Lib BBANDS returns upper, middle, lower. pandas-ta-classic additionally computes bandwidth (BBB) and percent (BBP)."
+  },
+  {
+    "pandas_ta_function": "roc",
+    "talib_function": "ROC",
+    "default_backend": "native",
+    "activation_parameter": "talib=True",
+    "fallback_behavior": "silent_fallback_to_native",
+    "input_fields": [
+      "close"
+    ],
+    "output_columns": [
+      "ROC_{length}"
+    ],
+    "source_permalink": "https://github.com/xgboosted/pandas-ta-classic/blob/v0.6.52/pandas_ta_classic/momentum/roc.py#L29",
+    "notes": "Rate of change percentage."
+  },
+  {
+    "pandas_ta_function": "stochrsi",
+    "talib_function": "STOCHRSI",
+    "default_backend": "native",
+    "activation_parameter": "talib=True",
+    "fallback_behavior": "silent_fallback_to_native",
+    "input_fields": [
+      "close"
+    ],
+    "output_columns": [
+      "STOCHRSIk_{length}_{rsi_length}_{k}_{d}",
+      "STOCHRSId_{length}_{rsi_length}_{k}_{d}"
+    ],
+    "source_permalink": "https://github.com/xgboosted/pandas-ta-classic/blob/v0.6.52/pandas_ta_classic/momentum/stochrsi.py#L70",
+    "notes": "Calculates Stochastic RSI."
+  },
+  {
+    "pandas_ta_function": "atr",
+    "talib_function": "ATR",
+    "default_backend": "native",
+    "activation_parameter": "talib=True",
+    "fallback_behavior": "silent_fallback_to_native",
+    "input_fields": [
+      "high",
+      "low",
+      "close"
+    ],
+    "output_columns": [
+      "ATRr_{length}"
+    ],
+    "source_permalink": "https://github.com/xgboosted/pandas-ta-classic/blob/v0.6.52/pandas_ta_classic/volatility/atr.py#L42",
+    "notes": "Average True Range using Wilder smoothing."
+  },
+  {
+    "pandas_ta_function": "adx",
+    "talib_function": "ADX, MINUS_DI, PLUS_DI",
+    "default_backend": "native",
+    "activation_parameter": "talib=True",
+    "fallback_behavior": "silent_fallback_to_native",
+    "input_fields": [
+      "high",
+      "low",
+      "close"
+    ],
+    "output_columns": [
+      "ADX_{length}",
+      "DMP_{length}",
+      "DMN_{length}"
+    ],
+    "source_permalink": "https://github.com/xgboosted/pandas-ta-classic/blob/v0.6.52/pandas_ta_classic/trend/adx.py#L47",
+    "notes": "TA-Lib calls 3 separate C functions (ADX, MINUS_DI, PLUS_DI) and combines them."
+  },
+  {
+    "pandas_ta_function": "obv",
+    "talib_function": "OBV",
+    "default_backend": "native",
+    "activation_parameter": "talib=True",
+    "fallback_behavior": "silent_fallback_to_native",
+    "input_fields": [
+      "close",
+      "volume"
+    ],
+    "output_columns": [
+      "OBV"
+    ],
+    "source_permalink": "https://github.com/xgboosted/pandas-ta-classic/blob/v0.6.52/pandas_ta_classic/volume/obv.py#L31",
+    "notes": "On-Balance Volume."
+  },
+  {
+    "pandas_ta_function": "natr",
+    "talib_function": "NATR",
+    "default_backend": "native",
+    "activation_parameter": "talib=True",
+    "fallback_behavior": "silent_fallback_to_native",
+    "input_fields": [
+      "high",
+      "low",
+      "close"
+    ],
+    "output_columns": [
+      "NATR_{length}"
+    ],
+    "source_permalink": "https://github.com/xgboosted/pandas-ta-classic/blob/v0.6.52/pandas_ta_classic/volatility/natr.py#L43",
+    "notes": "Normalized Average True Range."
+  },
+  {
+    "pandas_ta_function": "kama",
+    "talib_function": "KAMA",
+    "default_backend": "native",
+    "activation_parameter": "talib=True",
+    "fallback_behavior": "silent_fallback_to_native",
+    "input_fields": [
+      "close"
+    ],
+    "output_columns": [
+      "KAMA_{length}_{fast}_{slow}"
+    ],
+    "source_permalink": "https://github.com/xgboosted/pandas-ta-classic/blob/v0.6.52/pandas_ta_classic/overlap/kama.py#L42",
+    "notes": "Kaufman Adaptive Moving Average."
+  },
+  {
+    "pandas_ta_function": "ppo",
+    "talib_function": "PPO",
+    "default_backend": "native",
+    "activation_parameter": "talib=True",
+    "fallback_behavior": "silent_fallback_to_native",
+    "input_fields": [
+      "close"
+    ],
+    "output_columns": [
+      "PPO_{fast}_{slow}_{signal}",
+      "PPOh_{fast}_{slow}_{signal}",
+      "PPOs_{fast}_{slow}_{signal}"
+    ],
+    "source_permalink": "https://github.com/xgboosted/pandas-ta-classic/blob/v0.6.52/pandas_ta_classic/momentum/ppo.py#L22",
+    "notes": "Percentage Price Oscillator."
+  },
+  {
+    "pandas_ta_function": "aroon",
+    "talib_function": "AROON, AROONOSC",
+    "default_backend": "native",
+    "activation_parameter": "talib=True",
+    "fallback_behavior": "silent_fallback_to_native",
+    "input_fields": [
+      "high",
+      "low"
+    ],
+    "output_columns": [
+      "AROOND_{length}",
+      "AROONU_{length}",
+      "AROONOSC_{length}"
+    ],
+    "source_permalink": "https://github.com/xgboosted/pandas-ta-classic/blob/v0.6.52/pandas_ta_classic/trend/aroon.py#L31",
+    "notes": "Combines TA-Lib AROON (up/down) and AROONOSC into a single 3-column DataFrame."
+  },
+  {
+    "pandas_ta_function": "mfi",
+    "talib_function": "MFI",
+    "default_backend": "native",
+    "activation_parameter": "talib=True",
+    "fallback_behavior": "silent_fallback_to_native",
+    "input_fields": [
+      "high",
+      "low",
+      "close",
+      "volume"
+    ],
+    "output_columns": [
+      "MFI_{length}"
+    ],
+    "source_permalink": "https://github.com/xgboosted/pandas-ta-classic/blob/v0.6.52/pandas_ta_classic/volume/mfi.py#L41",
+    "notes": "Money Flow Index."
+  },
+  {
+    "pandas_ta_function": "cci",
+    "talib_function": "CCI",
+    "default_backend": "native",
+    "activation_parameter": "talib=True",
+    "fallback_behavior": "silent_fallback_to_native",
+    "input_fields": [
+      "high",
+      "low",
+      "close"
+    ],
+    "output_columns": [
+      "CCI_{length}"
+    ],
+    "source_permalink": "https://github.com/xgboosted/pandas-ta-classic/blob/v0.6.52/pandas_ta_classic/momentum/cci.py#L35",
+    "notes": "Commodity Channel Index."
+  }
+]

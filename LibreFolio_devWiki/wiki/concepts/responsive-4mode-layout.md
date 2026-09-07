@@ -199,5 +199,5 @@ let showActionLabels = $derived(layoutMode === 'wide' || layoutMode === 'tablet'
 |------|------|
 | Assets page | `frontend/src/routes/(app)/assets/+page.svelte` |
 | FX page | `frontend/src/routes/(app)/fx/+page.svelte` |
-| Responsive helper | `frontend/src/lib/utils/responsiveLayout.svelte.ts` |
+| Responsive helper | `frontend/src/lib/utils/layout/responsiveLayout.svelte.ts` |
 | Source plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-06-subplan/Bugfix-Step1/plan-phase06BugfixMigration-part2.md` |

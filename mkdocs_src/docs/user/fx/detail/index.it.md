@@ -14,7 +14,7 @@ La vista principale: un grafico completo basato su ECharts con zoom, pan, interr
 
 ### 📊 [Segnali](signals.md)
 
-Sovrapponi indicatori tecnici (EMA, MACD, RSI, Bollinger Bands) al grafico. Ogni segnale è calcolato in tempo reale a partire dai dati del tasso e può essere gestito tramite interruttore indipendentemente.
+Sovrapponi indicatori tecnici al grafico — per le coppie FX sono disponibili 9 plugin calcolati dal backend (vedi [Segnali](signals.md) per l'elenco e i dettagli per segnale). Ogni segnale è calcolato a partire dai dati del tasso e può essere gestito tramite interruttore indipendentemente.
 
 ### 📐 [Misure](measures.md)
 

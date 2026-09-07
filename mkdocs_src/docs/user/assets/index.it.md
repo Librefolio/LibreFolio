@@ -28,7 +28,7 @@ Naviga verso **Assets** nella barra laterale per vedere tutti i tuoi asset. La p
 - 🗃️ **Asset Archiviati**: Usa l'interruttore per passare dalle posizioni attive agli asset archiviati per mantenere pulita la tua lista.
 - ⏱️ **Selettore Delta Temporale**: Cambia l'intervallo di tempo utilizzato per calcolare le variazioni di prezzo (es. `1D`, `1W`, `1M`, `YTD`, `ALL`).
 - 🔄 **Sincronizzazione e Aggiornamento**: Sincronizza i dati dei prezzi in tempo reale per tutti i provider configurati o aggiorna manualmente la lista.
-- 🖱️ **Menu Contestuale**: Fai clic con il tasto destro su qualsiasi riga nel layout a tabella per azioni rapide (Modifica, Elimina, Sincronizza).
+- 🖱️ **Menu Contestuale**: Fai clic con il tasto destro su qualsiasi riga nel layout a tabella per azioni rapide (**Sincronizza**, **Aggiorna**, **Unisci**, **Elimina**). Sincronizza è disabilitata per gli asset senza provider di prezzi e per gli asset archiviati; Unisci incorpora un asset duplicato in un altro — transazioni, prezzi ed eventi convergono sulla destinazione e l'asset di origine viene eliminato.
 
 Clicca su qualsiasi scheda asset per navigare verso la sua **[pagina di dettaglio](detail/index.md)**.
 
@@ -50,11 +50,11 @@ Recupero automatico dei prezzi da Yahoo Finance, justETF, CSS Scraper o dal moto
 
 ## 📡 Prezzi in Tempo Reale e Ticker in Tempo Reale
 
-Per tenerti aggiornato sui movimenti di mercato senza costringerti a continui aggiornamenti della pagina, LibreFolio mostra badge di prezzo live e compatti nelle pagine **Dashboard** e **Dettaglio Asset**.
+Per tenerti aggiornato sui movimenti di mercato senza costringerti a continui aggiornamenti della pagina, LibreFolio mostra badge di prezzo live e compatti nelle pagine **Lista Asset** e **Dettaglio Asset**.
 
 ### ⏱️ Polling Automatico
 
-Durante la visualizzazione di queste pagine, il browser interroga il backend ogni **30 secondi** per i prezzi correnti degli asset. Questo processo avviene silenziosamente in background ed è completamente non bloccante (l'interfaccia utente è pronta istantaneamente e i prezzi vengono caricati man mano che arrivano).
+Durante la visualizzazione di queste pagine, il browser interroga il backend ogni **30 secondi** per i prezzi correnti degli asset. Questo processo avviene silenziosamente in background ed è completamente non bloccante (l'interfaccia utente è pronta istantaneamente e i prezzi vengono caricati man mano che arrivano). La Dashboard non esegue polling: mostra gli ultimi prezzi memorizzati.
 
 ### 🎨 Indicatori Visivi
 

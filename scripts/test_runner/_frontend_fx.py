@@ -3,8 +3,8 @@
 import subprocess
 
 from . import _common
-from ._common import PROJECT_ROOT, Colors, _run_test_suite, print_error, print_section, print_success
-from ._frontend_common import _ensure_db_populated, _ensure_frontend_build, _ensure_test_users, _run_playwright
+from ._common import PROJECT_ROOT, Colors, _get_category_tests_for_all, _run_test_suite, print_error, print_section, print_success
+from ._frontend_common import _ensure_db_populated, _ensure_frontend_build, _ensure_test_users, _run_playwright, reset_setup_scope
 
 
 def front_fx_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -87,6 +87,23 @@ def front_fx_sync(verbose: bool = False, ui: bool = False, headed: bool = False,
     return _run_playwright("fx/fx-sync.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_fx_sync_mock(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run FX sync E2E tests against the deterministic mock providers.
+
+    Kept apart from ``fx-sync`` because the two ask different questions. That
+    one drives the modal on the seeded pairs, which route to real central banks;
+    this one owns four disposable pairs wired to ``MOCKFX`` and ``MOCKFX_FAIL``,
+    so it can assert *which* outcome each produced instead of only that a sync
+    happened. No network is involved, which is why the failure path is reachable
+    at all — a real provider cannot be asked to fail on command.
+    """
+    print_section("Frontend FX Sync (mock providers)")
+    if not _ensure_frontend_build(): return False
+    if not _ensure_db_populated(): return False
+    if not _ensure_test_users(): return False
+    return _run_playwright("fx/fx-sync-mock.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_fx_api(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run FX API route E2E tests."""
     print_section("Frontend FX API Route Tests")
@@ -105,20 +122,32 @@ def front_fx_settings(verbose: bool = False, ui: bool = False, headed: bool = Fa
     return _run_playwright("fx/fx-chart-settings.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_fx_bulk(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run FX list-view bulk actions & second-filter E2E tests."""
+    print_section("Frontend FX Bulk Actions Tests")
+    if not _ensure_frontend_build(): return False
+    if not _ensure_db_populated(): return False
+    if not _ensure_test_users(): return False
+    return _run_playwright("fx/fx-bulk.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_fx_destructive(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run FX destructive-route E2E tests (pair delete single/bulk, bulk refresh, rate delete)."""
+    print_section("Frontend FX Destructive Tests")
+    if not _ensure_frontend_build(): return False
+    if not _ensure_db_populated(): return False
+    if not _ensure_test_users(): return False
+    return _run_playwright("fx/fx-destructive.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_fx(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run all FX tests (unit + E2E)."""
+    if _common.nothing_left_to_run("front-fx"):
+        return _common.consolidated_verdict("front-fx")
+    reset_setup_scope()
     return _run_test_suite(
         suite_name="All FX Tests (Unit + E2E)",
-        tests=[
-            ("FX Unit (Vitest)", lambda: front_fx_unit(verbose=verbose)),
-            ("FX List Page", lambda: front_fx_list(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("FX Add Pair Modal", lambda: front_fx_add_pair(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("FX Detail Page", lambda: front_fx_detail(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("FX Data Editor", lambda: front_fx_editor(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("FX Sync Modal", lambda: front_fx_sync(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("FX API Routes", lambda: front_fx_api(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("FX Chart Settings", lambda: front_fx_settings(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-        ],
+        tests=_get_category_tests_for_all("front-fx", verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage),
         verbose=verbose,
         header_msg="All FX Tests (Unit + E2E)",
         summary_title="FX Test Summary",
@@ -140,7 +169,10 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "fx-editor", front_fx_editor, name="FX Data Editor", desc="Inline editing, save, cancel", tests="fx/fx-data-editor.spec.ts")
     add_test(cat, "fx-csv-import", front_fx_csv_import, name="FX CSV Import", desc="CSV upload, preview, import", tests="fx/fx-csv-import.spec.ts")
     add_test(cat, "fx-sync", front_fx_sync, name="FX Sync Modal", desc="Sync modal, providers, results", tests="fx/fx-sync.spec.ts")
+    add_test(cat, "fx-sync-mock", front_fx_sync_mock, name="FX Sync (mock providers)", desc="Sync against MOCKFX/MOCKFX_FAIL: batch announcement, success/failure tallies, mixed batch + retry-failed, second sync reports nothing changed (disposable pairs, no network)", tests="fx/fx-sync-mock.spec.ts")
     add_test(cat, "fx-api", front_fx_api, name="FX API Routes", desc="API routes via Playwright", tests="fx/fx-api.spec.ts")
     add_test(cat, "fx-settings", front_fx_settings, name="FX Chart Settings", desc="Chart interval, granularity", tests="fx/fx-chart-settings.spec.ts")
+    add_test(cat, "fx-bulk", front_fx_bulk, name="FX Bulk Actions", desc="List-view selection toolbar, bulk sync/invert/delete, second currency filter", tests="fx/fx-bulk.spec.ts")
+    add_test(cat, "fx-destructive", front_fx_destructive, name="FX Destructive Routes", desc="Pair delete (single + bulk confirmed), bulk refresh, manual rate delete, swap-while-editing confirm (disposable pairs, self-restoring)", tests="fx/fx-destructive.spec.ts")
     add_test(cat, "all", front_fx, test_names=False, name="All FX Tests", desc="Run all FX tests (unit + E2E)")
     registry["front-fx"] = cat

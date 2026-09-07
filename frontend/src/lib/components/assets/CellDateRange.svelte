@@ -18,6 +18,8 @@
 <script lang="ts">
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
 
+    import {numericArrows} from '$lib/actions/numericArrows';
+    import {portal} from '$lib/actions/portal';
     interface Props {
         start: string;
         end: string;
@@ -62,15 +64,6 @@
     // Note: No scroll listener needed — grace popover uses position:fixed.
 
     /** Svelte action: portal — moves the node to document.body */
-    function portal(node: HTMLElement) {
-        document.body.appendChild(node);
-        return {
-            destroy() {
-                if (node.parentElement === document.body) node.remove();
-            },
-        };
-    }
-
     function openGracePopover() {
         if (disabled || !anchorEl) return;
         const rect = anchorEl.getBoundingClientRect();
@@ -123,6 +116,9 @@
         class="inline-flex items-center gap-1 text-sm cursor-pointer select-none
                {disabled ? 'opacity-50 cursor-not-allowed' : 'hover:text-libre-green'}"
         onclick={() => !disabled && openGracePopover()}
+        data-testid="celldr-late-trigger"
+        data-grace-days={graceDays}
+        data-disabled={disabled}
     >
         <span class="text-amber-500">⚡</span>
         <span class="font-medium">Late</span>
@@ -136,11 +132,12 @@
             <div
                 class="fixed inset-0"
                 style="z-index:99998;"
+                data-testid="celldr-grace-backdrop"
                 onclick={() => {
                     showGracePopover = false;
                 }}
             ></div>
-            <div style={gracePopoverStyle}>
+            <div style={gracePopoverStyle} data-testid="celldr-grace-popover">
                 <div
                     class="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600
                             rounded-xl shadow-xl p-3 space-y-3"
@@ -151,9 +148,11 @@
                     <div class="flex items-center gap-1.5">
                         <input
                             type="number"
+                            use:numericArrows
                             bind:value={localY}
                             oninput={handleYMDBlur}
                             min="0"
+                            data-testid="celldr-grace-y"
                             class="w-14 px-1.5 py-1.5 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
                                    bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 text-center
                                    focus:outline-none focus:ring-2 focus:ring-libre-green/50"
@@ -161,9 +160,11 @@
                         <span class="text-xs text-gray-500">y</span>
                         <input
                             type="number"
+                            use:numericArrows
                             bind:value={localM}
                             oninput={handleYMDBlur}
                             min="0"
+                            data-testid="celldr-grace-m"
                             class="w-14 px-1.5 py-1.5 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
                                    bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 text-center
                                    focus:outline-none focus:ring-2 focus:ring-libre-green/50"
@@ -171,9 +172,11 @@
                         <span class="text-xs text-gray-500">m</span>
                         <input
                             type="number"
+                            use:numericArrows
                             bind:value={localD}
                             oninput={handleYMDBlur}
                             min="0"
+                            data-testid="celldr-grace-d"
                             class="w-14 px-1.5 py-1.5 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
                                    bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 text-center
                                    focus:outline-none focus:ring-2 focus:ring-libre-green/50"
@@ -186,9 +189,11 @@
                         <input
                             id="grace-days"
                             type="number"
+                            use:numericArrows
                             bind:value={localGraceDays}
                             oninput={handleGraceDaysBlur}
                             min="0"
+                            data-testid="celldr-grace-total"
                             class="w-20 px-2 py-1 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
                                    bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 text-center
                                    focus:outline-none focus:ring-2 focus:ring-libre-green/50"
@@ -200,6 +205,7 @@
                         onclick={() => {
                             showGracePopover = false;
                         }}
+                        data-testid="celldr-grace-close"
                         class="w-full px-3 py-1.5 text-xs rounded-lg bg-gray-100 dark:bg-slate-700
                                text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
                     >
@@ -211,7 +217,7 @@
     {/if}
 {:else}
     <!-- Normal period: DateRangePicker embedded directly — 1 click to open calendar -->
-    <div class="cell-drp-inline" class:opacity-50={disabled} class:pointer-events-none={disabled}>
+    <div class="cell-drp-inline" class:opacity-50={disabled} class:pointer-events-none={disabled} data-testid="celldr-inline">
         <DateRangePicker {start} {end} showPresets={false} showCustomWindow={false} showDateFields={true} compact={true} stacked={true} usePortal={true} allowFuture={true} onchange={handleDateChange} />
     </div>
 {/if}

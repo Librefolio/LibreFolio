@@ -290,9 +290,9 @@ description: Libre para entender, libre para actuar. LibreFolio reúne todas sus
  Libérese de las hojas de cálculo. LibreFolio está diseñado para <b>conectarse a la perfección</b> con las herramientas financieras que ya utiliza, extendiendo sus capacidades a través de un ecosistema creciente de <b>plugins impulsados por la comunidad</b>.
  </p>
  
- <div class="plugin-radial-hub">
+ <div class="plugin-radial-hub plugin-radial-hub--four">
  <div class="hub-core">
- <img id="hub-core-img" alt="Núcleo de LibreFolio" src="/LibreFolio/static/logo.png">
+ <img id="hub-core-img" alt="LibreFolio Core" src="/LibreFolio/static/logo.png">
  <script>
  (function() {
  var p = window.location.pathname.replace(/\/+$/, '');
@@ -304,43 +304,56 @@ description: Libre para entender, libre para actuar. LibreFolio reúne todas sus
 
  <div class="ellipse-wrapper">
  <div class="satellite-track">
- <svg class="hub-lines" viewBox="0 0 650 650" width="100%" height="100%">
- <line x1="325" y1="325" x2="325" y2="0" />
- <line x1="325" y1="325" x2="43.5" y2="487.5" />
- <line x1="325" y1="325" x2="606.5" y2="487.5" />
- </svg>
+          <svg class="hub-lines" viewBox="0 0 650 650" width="100%" height="100%">
+            <line x1="325" y1="325" x2="95" y2="95" />
+            <line x1="325" y1="325" x2="555" y2="95" />
+            <line x1="325" y1="325" x2="555" y2="555" />
+            <line x1="325" y1="325" x2="95" y2="555" />
+          </svg>
  
- <div class="hub-node node-top">
+ <div class="hub-node node-orbit-top-left">
  <div class="hub-node-unscale">
  <a href="user/transactions/import/" class="card-link provider-row" style="padding: 1rem; margin: 0; color: inherit; text-decoration: none; text-align: left;">
  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="6" rx="2"/><path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
  <div class="provider-info">
- <h4>Importación de Brókers</h4>
- <p><b>Cargue y procese</b> los archivos de exportación de sus brókers <b>en segundos</b> gracias a los analizadores inteligentes de la comunidad.</p>
+ <h4>Importaciones de Brókers</h4>
+ <p><b>Carga y procesa</b> los archivos de exportación de tu bróker <b>en segundos</b> mediante analizadores inteligentes de la comunidad.</p>
  </div>
  </a>
  </div>
  </div>
 
- <div class="hub-node node-bottom-left">
+ <div class="hub-node node-orbit-top-right">
  <div class="hub-node-unscale">
  <a href="user/assets/providers/" class="card-link provider-row" style="padding: 1rem; margin: 0; color: inherit; text-decoration: none; text-align: left;">
  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
  <div class="provider-info">
  <h4>Precios y Cotizaciones de Activos</h4>
- <p><b>Actualice automáticamente</b> los valores de acciones, ETFs y criptomonedas conectándose a proveedores de datos en tiempo real.</p>
+ <p><b>Actualiza automáticamente</b> el valor de acciones, ETF y criptomonedas conectándote a proveedores de datos en tiempo real.</p>
  </div>
  </a>
  </div>
  </div>
 
- <div class="hub-node node-bottom-right">
+ <div class="hub-node node-orbit-bottom-right">
  <div class="hub-node-unscale">
  <a href="user/fx/" class="card-link provider-row" style="padding: 1rem; margin: 0; color: inherit; text-decoration: none; text-align: left;">
  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></svg>
  <div class="provider-info">
- <h4>Gestión de Cambio y Forex</h4>
- <p><b>Sincronice los tipos de cambio</b> (FX) para calcular y equilibrar con precisión sus <b>carteras multidivisa</b>.</p>
+ <h4>Tipos de Cambio y Forex</h4>
+ <p><b>Sincroniza tipos de cambio</b> (FX) para calcular con precisión y equilibrar tus <b>carteras multidivisa</b>.</p>
+ </div>
+ </a>
+ </div>
+ </div>
+
+ <div class="hub-node node-orbit-bottom-left">
+ <div class="hub-node-unscale">
+ <a href="developer/architecture/patterns/signal_plugin_guide/" class="card-link provider-row" style="padding: 1rem; margin: 0; color: inherit; text-decoration: none; text-align: left;">
+ <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 16 4-5 4 3 4-7"/></svg>
+ <div class="provider-info">
+ <h4>Plugins de Señales Técnicas</h4>
+ <p><b>Añade nuevos indicadores</b> como plugins de Python aislados con parámetros guiados por esquemas, salidas, umbrales y documentación.</p>
  </div>
  </a>
  </div>

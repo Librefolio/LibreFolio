@@ -1,45 +1,43 @@
-# ⚙️ Configuración del bróker & Exportación IA
+# ⚙️ Configuración del bróker y Exportación IA
 
-La pestaña **Info** alberga la configuración de metadatos, controles de seguridad, la herramienta de Exportación IA acotada, y el panel de configuración de uso compartido.
+La pestaña **Info** alberga la configuración de metadatos, los controles de seguridad, la herramienta de Exportación IA acotada y el panel de configuración de uso compartido.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1.5rem auto 2rem auto;">
- <img class="gallery-img" data-category="brokers" data-name="info-tab" alt="Vista de Información y Uso Compartido del Bróker">
+ <img class="gallery-img" data-category="brokers" data-name="info-tab" alt="Vista de información y uso compartido del bróker">
 </div>
 
 ---
 
 ## ⚙️ Metadatos y Configuración
 
-La columna izquierda de la pestaña Info muestra las propiedades clave y las reglas de validación para este bróker:
+La columna izquierda de la pestaña Info muestra las propiedades clave y las reglas de validación de este bróker:
 
-- **Estado del Bróker**: Muestra si la cuenta está actualmente `Activa`. Los brókeres inactivos se ocultan en los menús desplegables de listas, pero sus valores históricos se conservan en los gráficos.
+- **Estado del bróker**: Muestra si la cuenta está actualmente `Active`. Los brókeres inactivos se ocultan de los menús desplegables, pero sus valores históricos se conservan en los gráficos.
 - **Fechas**: Muestra cuándo se abrió la cuenta y cuándo se creó en LibreFolio.
-- **Moneda Base**: La moneda base de la cuenta (todas las transacciones y valoraciones se convierten internamente a esta moneda para los informes locales utilizando tipos de cambio históricos).
-- **Permitir Sobregiro de Efectivo**: Un interruptor para eludir los errores de saldo negativo. Cuando está desactivado, LibreFolio bloquea las transacciones (como compras o retiros) que resultarían en un saldo de efectivo negativo.
-- **Permitir Posiciones Cortas**: Un interruptor para autorizar cantidades negativas de activos. Cuando está desactivado, se bloquea la venta de más activos de los que tienes en tu posición abierta actual.
+- **Moneda base**: La moneda base de la cuenta (todas las transacciones y valoraciones se convierten internamente a esta moneda utilizando tipos de cambio históricos para los informes locales).
+- **Permitir sobregiro de efectivo**: Un interruptor para omitir los errores de saldo negativo. Cuando está deshabilitado, LibreFolio bloquea las transacciones (como compras o retiros) que resultarían en un saldo de efectivo negativo.
+- **Permitir posiciones cortas**: Un interruptor para autorizar cantidades negativas de activos. Cuando está deshabilitado, se bloquea vender más del tamaño de su posición abierta actual.
 
 ---
 
 ## 🧠 Exportación IA Acotada
 
-En la parte superior derecha de la barra de herramientas del bróker, el botón **Exportación IA** (:material-brain:) copia al portapapeles una representación textual estructurada del estado actual del bróker.
+En la parte superior derecha de la barra de herramientas del bróker, **Exportación IA** (:material-brain:) abre tres tareas dedicadas de bróker, no prompts de cartera filtrados:
 
-Esta exportación está **limitada específicamente a este bróker** (a diferencia del botón principal del panel de control que copia los datos de toda la cartera). Agrega:
+- **Revisión del bróker**
+- **Rendimiento del bróker y factores de mercado**
+- **Estrategias de Compensación de Pérdidas de Capital**
 
-- Saldos de efectivo locales.
-- Posiciones locales de activos y sus cantidades.
-- Pesos de la asignación activa.
-
-Puedes pegar este prompt estructurado directamente en tu LLM preferido (como Gemini o ChatGPT) para obtener un análisis dirigido y personalizado de esta cuenta específica.
+La instantánea del backend se limita al bróker seleccionado y puede incluir su efectivo, posiciones, actividad, rendimiento, costos, concentración y lotes FIFO según la tarea seleccionada. Las comprobaciones de acceso del lado del servidor impiden exportar un bróker al que el usuario actual no puede acceder. LibreFolio solo copia el resultado al portapapeles; revise los datos financieros sensibles antes de compartirlos. Consulte [Exportación IA del bróker](../ai-export/broker.md) o la [Descripción general de la Exportación IA](../ai-export/index.md).
 
 ---
 
-## 🤝 Panel de Acceso Compartido
+## 🤝 Panel de Uso Compartido de Acceso
 
-La columna derecha de la pestaña Info alberga el gestor de **Uso Compartido del Bróker** integrado. Aquí puedes:
+La columna derecha de la pestaña Info alberga el gestor integrado de **uso compartido del bróker**. Aquí puede:
 
 - Invitar a otros usuarios por su correo electrónico o nombre de usuario.
 - Definir su permiso de rol (Propietario, Editor, Visor).
 - Configurar los porcentajes de propiedad.
 
-Para una explicación detallada de las reglas de uso compartido, roles y la lógica de porcentajes, consulta la página dedicada **[Uso Compartido del Bróker](sharing.md)**.
+Para una explicación detallada de las reglas de uso compartido, los roles y la lógica de porcentajes, consulte la página dedicada **[Broker Sharing](sharing.md)**.

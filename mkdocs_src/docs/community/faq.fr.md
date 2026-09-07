@@ -28,7 +28,7 @@ Oui ! Notre feuille de route inclut des **assistants propulsés par l'IA** pour 
 LibreFolio prend en charge :
 
 - **Actions & ETF** — Prix récupérés automatiquement via des fournisseurs de données (ex: yfinance)
-- **Cryptomonnaies** — Prochainement
+- **Crypto-actifs** — Suivis comme actifs de portefeuille dans l'UI ; pas du Forex, et absents du sélecteur de devises fiat
 - **Obligations** — Saisie manuelle prise en charge
 - **Prêts P2P** — Actifs à investissement programmé
 - **Espèces & Dépôts** — Suivez votre liquidité

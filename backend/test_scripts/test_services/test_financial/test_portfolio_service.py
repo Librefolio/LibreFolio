@@ -4,9 +4,6 @@ Integration tests for PortfolioService.
 Uses a real AsyncSession against the test database.
 Tests WAC orchestration and history aggregation.
 
-Also contains pure unit tests for _build_history_series() —
-synchronous, no DB, verify computation in isolation (TestBuildHistorySeries).
-
 Reference: backend/app/services/portfolio_service.py
 """
 
@@ -25,27 +22,20 @@ from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import backend.app.services.portfolio_engine as portfolio_engine_module
-import backend.app.services.portfolio_service as portfolio_service_module
-from backend.app.db.models import Asset, AssetProviderAssignment, AssetType, Broker, BrokerUserAccess, PriceHistory, ProviderInputType, Transaction, TransactionType, User
+from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetProviderAssignment, AssetType, Broker, BrokerUserAccess, PriceHistory, ProviderInputType, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
-from backend.app.schemas.common import Currency
-from backend.app.schemas.portfolio import IssueCode, PortfolioReportQuery
+from backend.app.schemas.brokers import BRAccessBulkItem
+from backend.app.schemas.portfolio import AssetPeriodContribution, IssueCode, PortfolioReportQuery
+from backend.app.services.broker_service import BrokerService
 from backend.app.services.portfolio_service import (
     PortfolioService,
-    _build_history_series,
-    _HistoryTxRow,
     _portfolio_l2_cache,
-    _price_on_date,
-    _wac_cache,
-    compute_wac_iterative_multi_broker,
 )
 from backend.app.utils.datetime_utils import utcnow
 from backend.app.utils.financial.valuation_utils import compute_holding_value
-from backend.app.utils.financial.wac_utils import WACInputTX, compute_wac_from_txlist
 
 # =============================================================================
 # FIXTURES
@@ -117,429 +107,12 @@ async def broker_with_access(session, test_user) -> tuple[Broker, BrokerUserAcce
     access = BrokerUserAccess(
         broker_id=broker.id,
         user_id=test_user.id,
-        role="OWNER",
+        role=UserRole.OWNER,
         share_percentage=Decimal("1.0"),
     )
     session.add(access)
     await session.flush()
     return broker, access
-
-
-# =============================================================================
-# TestComputeWacIterativeMultiBroker
-# =============================================================================
-
-
-class TestComputeWacIterativeMultiBroker:
-    @pytest.mark.asyncio
-    async def test_empty_position_returns_zero_wac(self, session, broker_with_access, test_asset):
-        """No quantity transactions -> zero WAC, no qualifying rows."""
-        broker, _ = broker_with_access
-        _wac_cache.clear()
-
-        result = await compute_wac_iterative_multi_broker(
-            session=session,
-            broker_ids=[broker.id],
-            asset_id=test_asset.id,
-            as_of_date=date(2025, 1, 1),
-            asset_currency="EUR",
-        )
-
-        assert result.wac is not None
-        assert result.wac.code == "EUR"
-        assert result.wac.amount == Decimal("0")
-        assert result.wac_qualifying_txs == []
-        assert result.wac_missing_pairs == []
-
-    @pytest.mark.asyncio
-    async def test_matches_manual_merged_txlist(self, session, broker_with_access, test_asset):
-        """Multi-broker WAC must match manual merged txlist math."""
-        broker_one, _ = broker_with_access
-        broker_two = Broker(name=f"PfBroker_{utcnow().timestamp()}_wac_two")
-        session.add(broker_two)
-        await session.flush()
-
-        session.add_all(
-            [
-                Transaction(
-                    broker_id=broker_one.id,
-                    asset_id=test_asset.id,
-                    type=TransactionType.BUY,
-                    date=date(2025, 1, 10),
-                    quantity=Decimal("10"),
-                    amount=Decimal("-1000"),
-                    currency="EUR",
-                ),
-                Transaction(
-                    broker_id=broker_two.id,
-                    asset_id=test_asset.id,
-                    type=TransactionType.BUY,
-                    date=date(2025, 2, 1),
-                    quantity=Decimal("5"),
-                    amount=Decimal("-600"),
-                    currency="EUR",
-                ),
-                Transaction(
-                    broker_id=broker_one.id,
-                    asset_id=test_asset.id,
-                    type=TransactionType.SELL,
-                    date=date(2025, 3, 5),
-                    quantity=Decimal("-4"),
-                    amount=Decimal("520"),
-                    currency="EUR",
-                ),
-            ]
-        )
-        await session.flush()
-
-        service_result = await compute_wac_iterative_multi_broker(
-            session=session,
-            broker_ids=[broker_two.id, broker_one.id],
-            asset_id=test_asset.id,
-            as_of_date=date(2025, 3, 5),
-            asset_currency="EUR",
-        )
-
-        merged_rows = list(
-            (
-                await session.execute(
-                    select(Transaction).where(
-                        Transaction.broker_id.in_([broker_one.id, broker_two.id]),
-                        Transaction.asset_id == test_asset.id,
-                        Transaction.date <= date(2025, 3, 5),
-                        Transaction.quantity.is_not(None),
-                        Transaction.quantity != 0,
-                    )
-                )
-            )
-            .scalars()
-            .all()
-        )
-        manual_result = compute_wac_from_txlist(
-            [
-                WACInputTX(
-                    tx_id=row.id,
-                    type=row.type.value if hasattr(row.type, "value") else str(row.type),
-                    date=row.date,
-                    quantity=row.quantity,
-                    unit_cost_converted=abs(row.amount) / row.quantity if row.quantity > 0 and row.amount else Decimal("0"),
-                    original_currency=row.currency or test_asset.currency,
-                )
-                for row in merged_rows
-            ],
-            "EUR",
-        )
-
-        assert service_result.wac is not None
-        assert service_result.wac.code == manual_result.wac_currency == "EUR"
-        assert service_result.wac.amount == manual_result.wac_amount
-        assert [tx.tx_id for tx in service_result.wac_qualifying_txs] == [tx.tx_id for tx in manual_result.qualifying]
-
-    @pytest.mark.asyncio
-    async def test_adjustment_cost_basis_override_and_cache_hit(self, session, broker_with_access, test_asset, monkeypatch):
-        """Positive ADJUSTMENT uses cost_basis_override; identical repeat hits cache."""
-        broker_one, _ = broker_with_access
-        broker_two = Broker(name=f"PfBroker_{utcnow().timestamp()}_adj_two")
-        session.add(broker_two)
-        await session.flush()
-
-        session.add_all(
-            [
-                Transaction(
-                    broker_id=broker_one.id,
-                    asset_id=test_asset.id,
-                    type=TransactionType.BUY,
-                    date=date(2025, 1, 10),
-                    quantity=Decimal("10"),
-                    amount=Decimal("-1000"),
-                    currency="EUR",
-                ),
-                Transaction(
-                    broker_id=broker_two.id,
-                    asset_id=test_asset.id,
-                    type=TransactionType.ADJUSTMENT,
-                    date=date(2025, 1, 20),
-                    quantity=Decimal("2"),
-                    amount=Decimal("0"),
-                    currency="EUR",
-                    cost_basis_override=Decimal("120"),
-                    cost_basis_currency="EUR",
-                ),
-            ]
-        )
-        await session.flush()
-        _wac_cache.clear()
-
-        first = await compute_wac_iterative_multi_broker(
-            session=session,
-            broker_ids=[broker_one.id, broker_two.id],
-            asset_id=test_asset.id,
-            as_of_date=date(2025, 1, 20),
-            asset_currency="EUR",
-        )
-
-        assert first.wac is not None
-        assert first.wac.code == "EUR"
-        assert first.wac.amount == Decimal("1240") / Decimal("12")
-        assert [tx.type for tx in first.wac_qualifying_txs] == ["BUY", "ADJUSTMENT"]
-        assert first.wac_qualifying_txs[1].unit_cost == Decimal("120")
-        assert first.wac_qualifying_txs[1].currency == "EUR"
-
-        async def fail_compute(*args, **kwargs):
-            raise AssertionError("WAC math should not rerun on cache hit")
-
-        monkeypatch.setattr(portfolio_service_module, "compute_wac_from_txlist", fail_compute)
-
-        second = await compute_wac_iterative_multi_broker(
-            session=session,
-            broker_ids=[broker_two.id, broker_one.id],
-            asset_id=test_asset.id,
-            as_of_date=date(2025, 1, 20),
-            asset_currency="EUR",
-        )
-
-        assert second.wac is not None
-        assert second.wac.amount == first.wac.amount
-        assert [tx.tx_id for tx in second.wac_qualifying_txs] == [tx.tx_id for tx in first.wac_qualifying_txs]
-
-    @pytest.mark.asyncio
-    async def test_foreign_currency_costs_use_bulk_fx_conversion(self, session, broker_with_access, test_asset, monkeypatch):
-        """BUY + positive ADJUSTMENT in foreign ccy use converted unit costs and FX metadata."""
-        broker_one, _ = broker_with_access
-        broker_two = Broker(name=f"PfBroker_{utcnow().timestamp()}_fx_two")
-        session.add(broker_two)
-        await session.flush()
-
-        buy_date = date(2025, 2, 10)
-        adj_date = date(2025, 2, 20)
-        session.add_all(
-            [
-                Transaction(
-                    broker_id=broker_one.id,
-                    asset_id=test_asset.id,
-                    type=TransactionType.BUY,
-                    date=buy_date,
-                    quantity=Decimal("10"),
-                    amount=Decimal("-1200"),
-                    currency="USD",
-                ),
-                Transaction(
-                    broker_id=broker_two.id,
-                    asset_id=test_asset.id,
-                    type=TransactionType.ADJUSTMENT,
-                    date=adj_date,
-                    quantity=Decimal("2"),
-                    amount=Decimal("0"),
-                    currency="USD",
-                    cost_basis_override=Decimal("150"),
-                    cost_basis_currency="USD",
-                ),
-            ]
-        )
-        await session.flush()
-        _wac_cache.clear()
-
-        async def fake_convert_bulk(_session, bulk_input, raise_on_error=False):
-            assert bulk_input == [
-                (Currency(code="USD", amount=Decimal("1200")), "EUR", buy_date),
-                (Currency(code="USD", amount=Decimal("300")), "EUR", adj_date),
-            ]
-            return (
-                [
-                    (Currency(code="EUR", amount=Decimal("1080")), buy_date, None),
-                    (Currency(code="EUR", amount=Decimal("270")), adj_date, None),
-                ],
-                [],
-            )
-
-        monkeypatch.setattr(portfolio_service_module, "convert_bulk", fake_convert_bulk)
-
-        result = await compute_wac_iterative_multi_broker(
-            session=session,
-            broker_ids=[broker_one.id, broker_two.id],
-            asset_id=test_asset.id,
-            as_of_date=adj_date,
-            asset_currency="EUR",
-            target_currency_override="EUR",
-        )
-
-        assert result.wac is not None
-        assert result.wac.code == "EUR"
-        assert result.wac.amount == Decimal("1350") / Decimal("12")
-        assert [tx.unit_cost for tx in result.wac_qualifying_txs] == [Decimal("108"), Decimal("135")]
-        assert [tx.original_unit_cost for tx in result.wac_qualifying_txs] == [Decimal("120"), Decimal("150")]
-        assert [tx.original_currency for tx in result.wac_qualifying_txs] == ["USD", "USD"]
-        assert [tx.fx_rate_used for tx in result.wac_qualifying_txs] == [Decimal("0.9"), Decimal("0.9")]
-
-
-# =============================================================================
-# TestBuildHistorySeries — PURE UNIT TESTS (no DB, no async, no fixtures)
-# =============================================================================
-
-
-def _row(dt: str, type_: str, amount: str, share: str = "1") -> _HistoryTxRow:
-    return _HistoryTxRow(
-        date=date.fromisoformat(dt),
-        type=type_,
-        amount=Decimal(amount),
-        share=Decimal(share),
-    )
-
-
-class TestBuildHistorySeries:
-    """Pure unit tests — no DB, no async, no fixtures. Fast and deterministic.
-
-    NOTE: _build_history_series was refactored to produce a *dense daily* series
-    (one point per calendar day) rather than one point per transaction date.
-    `market_value` is always 0 at this stage (patched by mark-to-market in
-    get_history()). `nav_value == cash_value` always in the raw output.
-
-    All transaction types contribute to cash_value (no type-based filtering here).
-    """
-
-    def test_empty_input(self):
-        assert _build_history_series([]) == []
-
-    def test_single_deposit(self):
-        """
-        Single DEPOSIT 10000 -> point on that date has cash=10000, market_value=0, nav=10000.
-        This test would have caught Bug 2 (NameError on vals["cash"]).
-        """
-        rows = [_row("2025-01-01", "DEPOSIT", "10000")]
-        result = _build_history_series(rows)
-
-        assert len(result) >= 1
-        pt = result[0]
-        assert pt.date == date(2025, 1, 1)
-        assert pt.cash_value == Decimal("10000")
-        assert pt.market_value == Decimal("0")
-        assert pt.nav_value == Decimal("10000")
-
-    def test_buy_moves_cash_to_invested(self):
-        """DEPOSIT 10000 then BUY -5000 (BUY amounts are negative = cash out).
-        Dense series: point on 2025-01-01 has cash=10000; point on 2025-03-01 has
-        cash=10000+(-5000)=5000. market_value is always 0 (MtM layer patches it).
-        """
-        rows = [
-            _row("2025-01-01", "DEPOSIT", "10000"),
-            _row("2025-03-01", "BUY", "-5000"),  # BUY: negative amount (cash out)
-        ]
-        result = _build_history_series(rows)
-
-        # Dense expansion: many daily points between 2025-01-01 and 2025-03-01
-        assert len(result) > 2
-        # Find points by date
-        t0 = next(p for p in result if p.date == date(2025, 1, 1))
-        t1 = next(p for p in result if p.date == date(2025, 3, 1))
-        assert t0.cash_value == Decimal("10000")
-        assert t0.nav_value == Decimal("10000")
-        assert t1.cash_value == Decimal("5000")
-        assert t1.nav_value == Decimal("5000")  # market_value=0, so nav=cash
-
-    def test_nav_invariant(self):
-        """For every point: nav_value == cash_value + market_value (market_value=0 always)."""
-        rows = [
-            _row("2025-01-01", "DEPOSIT", "10000"),
-            _row("2025-02-01", "BUY", "-3000"),
-            _row("2025-04-01", "SELL", "1000"),
-            _row("2025-06-01", "WITHDRAWAL", "-2000"),
-            _row("2025-09-01", "DEPOSIT", "5000"),
-        ]
-        result = _build_history_series(rows)
-        # Dense: many more than 5 points
-        assert len(result) > 5
-        for point in result:
-            assert point.nav_value == point.cash_value + point.market_value, f"NAV invariant violated at {point.date}: " f"nav={point.nav_value} != cash={point.cash_value} + market_value={point.market_value}"
-
-    def test_chronological_order(self):
-        """Output must be sorted by date ascending regardless of input order."""
-        rows = [
-            _row("2025-06-01", "DEPOSIT", "3000"),
-            _row("2025-01-01", "DEPOSIT", "5000"),
-            _row("2025-03-15", "DEPOSIT", "2000"),
-        ]
-        result = _build_history_series(rows)
-        dates = [p.date for p in result]
-        assert dates == sorted(dates)
-
-    def test_share_halves_values(self):
-        """share=0.5 -> all monetary values are halved."""
-        rows = [_row("2025-01-01", "DEPOSIT", "10000", share="0.5")]
-        result = _build_history_series(rows)
-
-        assert len(result) >= 1
-        assert result[0].cash_value == Decimal("5000")
-        assert result[0].nav_value == Decimal("5000")
-
-    def test_withdrawal_reduces_cash(self):
-        """DEPOSIT 10000 -> WITHDRAWAL -3000 -> cash = 7000 on withdrawal date."""
-        rows = [
-            _row("2025-01-01", "DEPOSIT", "10000"),
-            _row("2025-06-01", "WITHDRAWAL", "-3000"),
-        ]
-        result = _build_history_series(rows)
-
-        # Dense: many points; find the withdrawal date
-        assert len(result) > 2
-        pt = next(p for p in result if p.date == date(2025, 6, 1))
-        assert pt.cash_value == Decimal("7000")
-        assert pt.nav_value == Decimal("7000")
-
-    def test_sell_increases_cash_reduces_invested(self):
-        """DEPOSIT 10000 -> BUY -8000 -> SELL 3000.
-        Net cash at end: 10000 - 8000 + 3000 = 5000.
-        market_value is always 0 in the raw series (patched by MtM later).
-        """
-        rows = [
-            _row("2025-01-01", "DEPOSIT", "10000"),
-            _row("2025-02-01", "BUY", "-8000"),
-            _row("2025-03-01", "SELL", "3000"),
-        ]
-        result = _build_history_series(rows)
-
-        final = result[-1]
-        assert final.cash_value == Decimal("5000")
-        assert final.nav_value == Decimal("5000")  # market_value=0 at this stage
-
-    def test_all_types_contribute_to_cash(self):
-        """All transaction types (including DIVIDEND) contribute to cash_value.
-        There is no type-based filtering in _build_history_series.
-        """
-        rows = [
-            _row("2025-01-01", "DEPOSIT", "10000"),
-            _row("2025-02-01", "DIVIDEND", "500"),
-        ]
-        result = _build_history_series(rows)
-        final = result[-1]
-        # DIVIDEND adds to cash (no type filtering at this layer)
-        assert final.cash_value == Decimal("10500")
-        assert final.nav_value == Decimal("10500")
-
-    def test_multiple_transactions_same_date(self):
-        """Two deposits on same date -> single point with cumulative state."""
-        rows = [
-            _row("2025-01-01", "DEPOSIT", "5000"),
-            _row("2025-01-01", "DEPOSIT", "3000"),
-        ]
-        result = _build_history_series(rows)
-        assert len(result) == 1
-        assert result[0].cash_value == Decimal("8000")
-
-
-class TestPriceOnDate:
-    def test_empty_and_before_first_price_return_none(self):
-        assert _price_on_date([], date(2025, 1, 10)) is None
-        assert _price_on_date([(date(2025, 1, 10), Decimal("100"), "EUR")], date(2025, 1, 9)) is None
-
-    def test_exact_match_and_backward_fill(self):
-        prices = [
-            (date(2025, 1, 10), Decimal("100"), "EUR"),
-            (date(2025, 1, 15), Decimal("105"), "EUR"),
-            (date(2025, 1, 20), Decimal("110"), "EUR"),
-        ]
-
-        assert _price_on_date(prices, date(2025, 1, 15)) == (Decimal("105"), "EUR")
-        assert _price_on_date(prices, date(2025, 1, 18)) == (Decimal("105"), "EUR")
 
 
 # =============================================================================
@@ -604,6 +177,44 @@ class TestPortfolioServiceGetHistory:
 
         for point in result:
             assert point.nav_value == point.cash_value + point.market_value, f"NAV invariant violated at {point.date}: " f"nav={point.nav_value} != cash+market_value"
+
+    @pytest.mark.asyncio
+    async def test_dividend_and_interest_move_nav_exactly_like_a_deposit(self, session, test_user, broker_with_access, test_asset):
+        """E2 (beta-feedback guard): a DIVIDEND and an INTEREST move nav exactly
+        like a DEPOSIT of the same amount — counted once, through cash.
+
+        The beta tester suspected income was double counted (once as cash, once
+        more somewhere else). With no BUY anywhere, market_value stays 0, so
+        every euro of income must appear in nav exactly once: nav deltas equal
+        the row amounts, and the nav == cash + market_value invariant holds on
+        every point.
+        """
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=date(2025, 6, 1), amount=Decimal("1000"), currency="EUR"),
+                Transaction(broker_id=broker.id, asset_id=test_asset.id, type=TransactionType.DIVIDEND, date=date(2025, 6, 2), amount=Decimal("200"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.INTEREST, date=date(2025, 6, 3), amount=Decimal("50"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+        service = PortfolioService(session)
+        result = await service.get_history(user_id=test_user.id)
+
+        points = {p.date: p for p in result}
+        for d in (date(2025, 6, 1), date(2025, 6, 2), date(2025, 6, 3)):
+            assert d in points, f"No history point for {d} in {sorted(points)}"
+
+        # Exact values are owned by this test: the user and broker are fresh
+        # fixtures, so no neighbour can have contributed to them.
+        assert points[date(2025, 6, 1)].nav_value.amount == Decimal("1000")
+        assert points[date(2025, 6, 2)].nav_value.amount == Decimal("1200"), "DIVIDEND must move nav by exactly its amount, like a deposit"
+        assert points[date(2025, 6, 3)].nav_value.amount == Decimal("1250"), "INTEREST must move nav by exactly its amount, like a deposit"
+
+        for point in result:
+            assert point.market_value.amount == Decimal("0"), f"no BUY happened — market value must stay 0 at {point.date}"
+            assert point.nav_value == point.cash_value + point.market_value, f"NAV invariant violated at {point.date}: nav={point.nav_value} != cash+market_value"
 
     @pytest.mark.asyncio
     async def test_history_date_range_filter(self, session, test_user, broker_with_access):
@@ -696,7 +307,7 @@ class TestPortfolioServiceGetSummary:
             BrokerUserAccess(
                 broker_id=broker_two.id,
                 user_id=test_user.id,
-                role="OWNER",
+                role=UserRole.OWNER,
                 share_percentage=Decimal("1.0"),
             )
         )
@@ -739,76 +350,118 @@ class TestPortfolioServiceGetSummary:
         assert summary.net_worth.amount == Decimal("0")
 
 
-class TestPortfolioServicePrivateHelpers:
-    @pytest.mark.asyncio
-    async def test_price_bulk_loader_quote_base_map_and_latest_price(self, session):
-        """Private loaders return sorted filtered data and latest tuple."""
-        first_asset = Asset(
-            display_name=f"LoaderAssetA_{utcnow().timestamp()}",
-            ticker="LOADA",
-            currency="EUR",
-            type=AssetType.STOCK,
-            quote_base_quantity=100,
-        )
-        second_asset = Asset(
-            display_name=f"LoaderAssetB_{utcnow().timestamp()}",
-            ticker="LOADB",
-            currency="USD",
-            type=AssetType.STOCK,
-        )
-        no_price_asset = Asset(
-            display_name=f"LoaderAssetC_{utcnow().timestamp()}",
-            ticker="LOADC",
-            currency="EUR",
-            type=AssetType.STOCK,
-        )
-        session.add_all([first_asset, second_asset, no_price_asset])
-        await session.flush()
+class TestRoleAwareShareScaling:
+    """F2 — broker share scaling is role-aware.
 
+    An OWNER row scales the broker's contribution by share_percentage: 0% is a
+    valid share and contributes nothing, NULL (legacy unset) means 100%.
+    EDITOR/VIEWER rows always carry share 0 by schema rule, yet they must still
+    see the FULL broker data — an intermediate version of this fix scaled them
+    to 0 too and blanked every editor's dashboard/risk view (caught in CI).
+    """
+
+    async def _make_broker_with_role(self, session, user: User, role: str, share: Decimal | None, deposit: str = "1000") -> Broker:
+        """One broker, one access row with the given role/share, one DEPOSIT."""
+        broker = Broker(name=f"PfBroker_F2_{role}_{share}_{utcnow().timestamp()}")
+        session.add(broker)
+        await session.flush()
+        session.add(BrokerUserAccess(broker_id=broker.id, user_id=user.id, role=role, share_percentage=share))
+        session.add(
+            Transaction(
+                broker_id=broker.id,
+                type=TransactionType.DEPOSIT,
+                date=date(2025, 1, 1),
+                amount=Decimal(deposit),
+                currency="EUR",
+            )
+        )
+        await session.flush()
+        return broker
+
+    @pytest.mark.asyncio
+    async def test_owner_with_zero_share_contributes_nothing(self, session, test_user):
+        """OWNER share=0% is valid and contributes 0 to the summary."""
+        await self._make_broker_with_role(session, test_user, "OWNER", Decimal("0"))
+
+        summary = await PortfolioService(session).get_summary(user_id=test_user.id)
+
+        assert summary.cash_total.amount == Decimal("0"), f"0%-owner cash must be 0, got {summary.cash_total}"
+        assert summary.net_worth.amount == Decimal("0"), f"0%-owner net_worth must be 0, got {summary.net_worth}"
+        assert summary.total_invested.amount == Decimal("0")
+
+    @pytest.mark.asyncio
+    async def test_owner_with_full_share_contributes_full(self, session, test_user):
+        """OWNER share=1 boundary: contributes 100% (the scale=1 anchor).
+
+        NOTE on NULL: the column is NOT NULL DEFAULT 1, so a NULL share cannot
+        exist at this layer — the `is not None` branch in the fix is reachable
+        only from API payloads, and that semantic is covered frontend-side
+        (brokerStore.getOwnedBrokers treats a null share as 100% for an OWNER).
+        """
+        await self._make_broker_with_role(session, test_user, "OWNER", Decimal("1"))
+
+        summary = await PortfolioService(session).get_summary(user_id=test_user.id)
+
+        assert summary.cash_total.amount == Decimal("1000"), f"full-share owner must see full cash, got {summary.cash_total}"
+        assert summary.net_worth.amount == Decimal("1000")
+
+    @pytest.mark.asyncio
+    async def test_owner_with_partial_share_scales(self, session, test_user):
+        """OWNER share=30% contributes exactly 30% — pins the scale direction."""
+        await self._make_broker_with_role(session, test_user, "OWNER", Decimal("0.3"))
+
+        summary = await PortfolioService(session).get_summary(user_id=test_user.id)
+
+        assert summary.cash_total.amount == Decimal("300"), f"30%-owner cash must be 300, got {summary.cash_total}"
+        assert summary.net_worth.amount == Decimal("300")
+
+    @pytest.mark.asyncio
+    async def test_editor_sees_full_data_despite_zero_share(self, session, test_user):
+        """EDITOR rows carry share 0 by schema rule but must see FULL data.
+
+        This is the risk-API regression lock: scale-by-share without the role
+        check zeroes every non-owner's view.
+        """
+        await self._make_broker_with_role(session, test_user, "EDITOR", Decimal("0"))
+
+        summary = await PortfolioService(session).get_summary(user_id=test_user.id)
+
+        assert summary.cash_total.amount == Decimal("1000"), f"EDITOR must see full cash, got {summary.cash_total}"
+        assert summary.net_worth.amount == Decimal("1000"), f"EDITOR must see full net worth, got {summary.net_worth}"
+
+    @pytest.mark.asyncio
+    async def test_viewer_sees_full_data_despite_zero_share(self, session, test_user):
+        """VIEWER rows carry share 0 by schema rule but must see FULL data."""
+        await self._make_broker_with_role(session, test_user, "VIEWER", Decimal("0"))
+
+        summary = await PortfolioService(session).get_summary(user_id=test_user.id)
+
+        assert summary.cash_total.amount == Decimal("1000"), f"VIEWER must see full cash, got {summary.cash_total}"
+        assert summary.net_worth.amount == Decimal("1000")
+
+    @pytest.mark.asyncio
+    async def test_positions_contribution_scales_by_owner_share_not_by_role(self, session, test_user, test_asset):
+        """get_positions_contribution applies the same rule: the same access row
+        flipped OWNER(0) → EDITOR(0) → OWNER(NULL) → OWNER(0.3) must move the
+        numbers — the role/share pair is the only variable."""
+        broker = Broker(name=f"PfBroker_F2_contrib_{utcnow().timestamp()}")
+        session.add(broker)
+        await session.flush()
+        access = BrokerUserAccess(broker_id=broker.id, user_id=test_user.id, role=UserRole.OWNER, share_percentage=Decimal("0"))
+        session.add(access)
         session.add_all(
             [
+                Transaction(broker_id=broker.id, asset_id=test_asset.id, type=TransactionType.BUY, date=date(2025, 1, 2), quantity=Decimal("10"), amount=Decimal("-1000"), currency="EUR"),
+                Transaction(broker_id=broker.id, asset_id=test_asset.id, type=TransactionType.DIVIDEND, date=date(2025, 1, 15), amount=Decimal("100"), currency="EUR"),
                 PriceHistory(
-                    asset_id=first_asset.id,
-                    date=date(2025, 1, 1),
-                    open=Decimal("99"),
-                    high=Decimal("99"),
-                    low=Decimal("99"),
-                    close=Decimal("99"),
+                    asset_id=test_asset.id,
+                    date=date(2025, 1, 31),
+                    open=Decimal("110"),
+                    high=Decimal("110"),
+                    low=Decimal("110"),
+                    close=Decimal("110"),
                     volume=Decimal("1"),
                     currency="EUR",
-                    source_plugin_key="manual_test",
-                ),
-                PriceHistory(
-                    asset_id=first_asset.id,
-                    date=date(2025, 1, 3),
-                    open=Decimal("100"),
-                    high=Decimal("100"),
-                    low=Decimal("100"),
-                    close=Decimal("100"),
-                    volume=Decimal("1"),
-                    currency="EUR",
-                    source_plugin_key="manual_test",
-                ),
-                PriceHistory(
-                    asset_id=first_asset.id,
-                    date=date(2025, 1, 5),
-                    open=Decimal("101"),
-                    high=Decimal("101"),
-                    low=Decimal("101"),
-                    close=Decimal("101"),
-                    volume=Decimal("1"),
-                    currency="EUR",
-                    source_plugin_key="manual_test",
-                ),
-                PriceHistory(
-                    asset_id=second_asset.id,
-                    date=date(2025, 1, 4),
-                    open=Decimal("55"),
-                    high=Decimal("55"),
-                    low=Decimal("55"),
-                    close=Decimal("55"),
-                    volume=Decimal("1"),
-                    currency="USD",
                     source_plugin_key="manual_test",
                 ),
             ]
@@ -817,30 +470,171 @@ class TestPortfolioServicePrivateHelpers:
 
         service = PortfolioService(session)
 
-        assert await service._bulk_load_asset_prices(set(), date(2025, 1, 1), date(2025, 1, 5)) == {}
-        assert await service._get_quote_base_map(set()) == {}
+        async def contribution_row() -> AssetPeriodContribution:
+            contribution = await service.get_positions_contribution(user_id=test_user.id, date_from=date(2025, 1, 1), date_to=date(2025, 1, 31))
+            row = next((p for p in contribution.positions if p.broker_id == broker.id and p.asset_id == test_asset.id), None)
+            assert row is not None, "position row for this test's broker+asset missing"
+            return row
 
-        bulk = await service._bulk_load_asset_prices(
-            {first_asset.id, second_asset.id},
-            date(2025, 1, 2),
-            date(2025, 1, 5),
+        # OWNER share=0 → everything scaled to nothing (income 100×0, qty 10×0).
+        # The row contract encodes "zero" as None (`income if income else None`),
+        # so normalize before comparing: the assertion is "contributes nothing".
+        row = await contribution_row()
+        assert (row.period_income or Decimal("0")) == Decimal("0"), f"0%-owner income must be zero, got {row.period_income}"
+        assert row.end_value == Decimal("0"), f"0%-owner end value must be 0, got {row.end_value}"
+
+        # Same row as EDITOR (share stays 0 per the schema rule) → FULL data.
+        # Assign the enum, not a raw string: the ORM does not coerce attribute
+        # writes, and the engine's cache fingerprint reads `role.value` — a raw
+        # str would never occur from a DB load, so the test must not invent one.
+        access.role = UserRole.EDITOR
+        await session.flush()
+        row = await contribution_row()
+        assert row.period_income == Decimal("100"), f"EDITOR income must be full, got {row.period_income}"
+        assert row.end_value == Decimal("1100"), f"EDITOR end value must be full (10 × 110), got {row.end_value}"
+
+        # OWNER with share=1 → full again (the scale=1 anchor).
+        access.role = UserRole.OWNER
+        access.share_percentage = Decimal("1")
+        await session.flush()
+        row = await contribution_row()
+        assert row.period_income == Decimal("100"), f"full-share owner income must be full, got {row.period_income}"
+        assert row.end_value == Decimal("1100")
+
+        # OWNER with 30% → exactly 30%.
+        access.share_percentage = Decimal("0.3")
+        await session.flush()
+        row = await contribution_row()
+        assert row.period_income == Decimal("30"), f"30%-owner income must be 30, got {row.period_income}"
+        assert row.end_value == Decimal("330"), f"30%-owner end value must be 330 (3 × 110), got {row.end_value}"
+
+
+class TestAccessFingerprintCacheBust:
+    """R2-F2a — role/share edits must bust the report caches.
+
+    get_report is guarded by two caches: the L2 report cache (30 min TTL) and
+    the engine's daily-states blob cache (24 h TTL). Both keys now include an
+    access fingerprint (broker_id, role, share per access row). Before that, a
+    share edit moved no tx/price fingerprint, so every scaled number stayed
+    stale for the whole TTL — the user changed their ownership % and kept
+    seeing the old values.
+
+    One test suffices for both layers: the L2 key change forces the miss that
+    reaches the engine, and the engine blob key change is what makes THAT
+    recompute return fresh numbers instead of a stale blob — a missing
+    fingerprint in either layer shows up as r2 still saying 1000.
+    """
+
+    @pytest.mark.asyncio
+    async def test_share_change_busts_report_caches(self, session, test_user):
+        broker = Broker(name=f"PfBroker_F2cache_{utcnow().timestamp()}")
+        session.add(broker)
+        await session.flush()
+        session.add(BrokerUserAccess(broker_id=broker.id, user_id=test_user.id, role=UserRole.OWNER, share_percentage=Decimal("1")))
+        session.add(
+            Transaction(
+                broker_id=broker.id,
+                type=TransactionType.DEPOSIT,
+                date=date(2025, 1, 1),
+                amount=Decimal("1000"),
+                currency="EUR",
+            )
         )
-        assert bulk == {
-            first_asset.id: [
-                (date(2025, 1, 3), Decimal("100"), "EUR"),
-                (date(2025, 1, 5), Decimal("101"), "EUR"),
-            ],
-            second_asset.id: [
-                (date(2025, 1, 4), Decimal("55"), "USD"),
-            ],
-        }
+        await session.flush()
 
-        quote_map = await service._get_quote_base_map({first_asset.id, second_asset.id, no_price_asset.id})
-        assert quote_map == {
-            first_asset.id: 100,
-            second_asset.id: 1,
-            no_price_asset.id: 1,
-        }
+        service = PortfolioService(session)
+        query = PortfolioReportQuery(include_summary=True, include_history=False, include_allocation_history=False)
+
+        async def net_worth() -> Decimal:
+            report = await service.get_report(test_user.id, query)
+            assert report.summary is not None
+            return report.summary.net_worth.amount
+
+        async def set_share(share: str) -> None:
+            """Through BrokerService.bulk_update_access — the production write path."""
+            ok, message, _ = await BrokerService(session).bulk_update_access(
+                broker.id,
+                [BRAccessBulkItem(user_id=test_user.id, role=UserRole.OWNER, share_percentage=Decimal(share))],
+                current_user_id=test_user.id,
+            )
+            assert ok, f"share update to {share} refused: {message}"
+
+        # Baseline at 100%.
+        assert await net_worth() == Decimal("1000")
+
+        # Share 1.0 → 0.3: both cache keys must move, so this is a MISS and a
+        # recompute — not a stale hit. 300, not 1000.
+        await set_share("0.3")
+        assert await net_worth() == Decimal("300"), "share edit did not bust the report caches — stale 1000 served"
+
+        # And back: 1.0 restores the original numbers (a legitimately-cached or
+        # freshly-recomputed 1000 — same fingerprint, same truth).
+        await set_share("1")
+        assert await net_worth() == Decimal("1000")
+
+    @pytest.mark.asyncio
+    async def test_role_change_busts_report_caches(self, session, test_user):
+        """Same fingerprint, other field: OWNER(1) → EDITOR keeps the FULL numbers
+        (role-aware scaling, F2) — but only if the cache actually misses. A stale
+        hit would be invisible here numerically, so this flips twice: 1 → 0.5 →
+        EDITOR. If the role were missing from the key, the second flip would still
+        serve the cached 500."""
+        broker = Broker(name=f"PfBroker_F2role_{utcnow().timestamp()}")
+        session.add(broker)
+        await session.flush()
+        # A co-owner (share 0) exists only so the bulk path allows the last-step
+        # demotion (F4: a last OWNER cannot demote themselves). Their row never
+        # enters test_user's report scope — get_report filters accesses by
+        # user_id — so the numbers below are test_user's alone.
+        co_owner = User(username=f"pfco_{utcnow().timestamp()}", email=f"pfco_{utcnow().timestamp()}@test.com", hashed_password="fakehash", is_active=True)
+        session.add(co_owner)
+        await session.flush()
+        session.add_all(
+            [
+                BrokerUserAccess(broker_id=broker.id, user_id=test_user.id, role=UserRole.OWNER, share_percentage=Decimal("1")),
+                BrokerUserAccess(broker_id=broker.id, user_id=co_owner.id, role=UserRole.OWNER, share_percentage=Decimal("0")),
+            ]
+        )
+        session.add(
+            Transaction(
+                broker_id=broker.id,
+                type=TransactionType.DEPOSIT,
+                date=date(2025, 1, 1),
+                amount=Decimal("1000"),
+                currency="EUR",
+            )
+        )
+        await session.flush()
+
+        service = PortfolioService(session)
+        query = PortfolioReportQuery(include_summary=True, include_history=False, include_allocation_history=False)
+
+        assert (await service.get_report(test_user.id, query)).summary.net_worth.amount == Decimal("1000")
+
+        # Halve the share: 500, cached under the (OWNER, 0.5) fingerprint.
+        ok, message, _ = await BrokerService(session).bulk_update_access(
+            broker.id,
+            [
+                BRAccessBulkItem(user_id=test_user.id, role=UserRole.OWNER, share_percentage=Decimal("0.5")),
+                BRAccessBulkItem(user_id=co_owner.id, role=UserRole.OWNER, share_percentage=Decimal("0")),
+            ],
+            current_user_id=test_user.id,
+        )
+        assert ok, message
+        assert (await service.get_report(test_user.id, query)).summary.net_worth.amount == Decimal("500")
+
+        # OWNER(0.5) → EDITOR(0): role-aware scaling says EDITOR sees FULL data
+        # (1000). A cache keyed without the role would serve the stale 500.
+        ok, message, _ = await BrokerService(session).bulk_update_access(
+            broker.id,
+            [
+                BRAccessBulkItem(user_id=test_user.id, role=UserRole.EDITOR, share_percentage=Decimal("0")),
+                BRAccessBulkItem(user_id=co_owner.id, role=UserRole.OWNER, share_percentage=Decimal("0")),
+            ],
+            current_user_id=test_user.id,
+        )
+        assert ok, message
+        assert (await service.get_report(test_user.id, query)).summary.net_worth.amount == Decimal("1000"), "role edit did not bust the report caches — stale 500 served"
 
 
 # =============================================================================
@@ -849,14 +643,16 @@ class TestPortfolioServicePrivateHelpers:
 
 
 class TestTransactionImpliedDataQuality:
-    """TRANSACTION_IMPLIED must respect the selected date range and a placement grace period.
+    """TRANSACTION_IMPLIED is an *as-of* health flag: it fires only when a held asset is
+    STILL valued at cost on the valuation date (date_to), respecting a placement grace
+    period for brand-new acquisitions.
 
-    Regression test: previously, the issue was aggregated from the engine's full-lifetime
-    daily_states (always computed from t=0 regardless of the requested date_from, for
-    correct cumulative values) with no date_from filtering and no grace period. This meant
-    a placement-period gap (e.g. BTP collocamento) from months/years ago kept showing up
-    as a warning even after the price feed caught up and even when the user's selected
-    date range no longer covered that period at all.
+    Regression test: previously the flag was aggregated across the engine's full-lifetime
+    daily_states (always computed from t=0 for correct cumulative values). Even after a
+    placement gap (e.g. BTP collocamento) was priced, or a fund received its first provider
+    quotes, the asset kept showing the "valued at cost — no market price" warning forever,
+    contradicting the message's own "as of {as_of_date}" wording. The flag now reflects only
+    the valuation-date state, so a currently-priced asset clears the warning.
     """
 
     @pytest.mark.asyncio
@@ -900,34 +696,35 @@ class TestTransactionImpliedDataQuality:
         assert IssueCode.TRANSACTION_IMPLIED in codes
 
     @pytest.mark.asyncio
-    async def test_old_resolved_gap_excluded_when_date_range_narrowed(self, session, test_user, broker_with_access, test_asset_with_provider):
-        """A placement gap that resolved long ago must not resurface once the
-        selected date range no longer includes it (the exact reported bug)."""
+    async def test_resolved_gap_with_current_price_not_flagged(self, session, test_user, broker_with_access, test_asset_with_provider):
+        """A placement gap that has since been priced must NOT be flagged as 'valued at
+        cost' once a market price exists on the valuation date — even when the report range
+        still spans the long historical at-cost period. This is the exact reported bug: a
+        fund priced only from its first provider sync onward stayed flagged forever despite a
+        fresh current price. date_from no longer affects the flag (it is purely as-of)."""
         broker, _ = broker_with_access
         buy_date = date(2024, 1, 1)
-        first_price_date = date(2024, 2, 1)  # ~31 days later, well past the grace period
         report_end = date(2024, 6, 1)
+        # Fresh quote two days before the report date -> current value is MARKET, not cost.
+        fresh_price_date = report_end - timedelta(days=2)
         session.add_all(
             [
                 Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=buy_date, amount=Decimal("10000"), currency="EUR"),
                 Transaction(broker_id=broker.id, asset_id=test_asset_with_provider.id, type=TransactionType.BUY, date=buy_date, quantity=Decimal("100"), amount=Decimal("-9950"), currency="EUR"),
-                # Price feed catches up on first_price_date -> backward-fill covers all later days
-                PriceHistory(asset_id=test_asset_with_provider.id, date=first_price_date, open=Decimal("100"), high=Decimal("100"), low=Decimal("100"), close=Decimal("100"), volume=Decimal("1"), currency="EUR", source_plugin_key="manual_test"),
+                PriceHistory(asset_id=test_asset_with_provider.id, date=fresh_price_date, open=Decimal("100"), high=Decimal("100"), low=Decimal("100"), close=Decimal("100"), volume=Decimal("1"), currency="EUR", source_plugin_key="manual_test"),
             ]
         )
         await session.flush()
 
         service = PortfolioService(session)
 
-        # "All" — includes the resolved placement gap -> flagged
+        # Full range spans the historical at-cost period, but the asset is currently priced.
         summary_all = await service.get_summary(user_id=test_user.id, date_to=report_end)
-        codes_all = {i.code for i in summary_all.data_quality.issues}
-        assert IssueCode.TRANSACTION_IMPLIED in codes_all
+        assert IssueCode.TRANSACTION_IMPLIED not in {i.code for i in summary_all.data_quality.issues}
 
-        # "3 months"-like narrower window that excludes the gap -> NOT flagged
+        # Narrow range behaves identically (the flag is as-of, not range-dependent).
         summary_narrow = await service.get_summary(user_id=test_user.id, date_from=date(2024, 3, 1), date_to=report_end)
-        codes_narrow = {i.code for i in summary_narrow.data_quality.issues}
-        assert IssueCode.TRANSACTION_IMPLIED not in codes_narrow
+        assert IssueCode.TRANSACTION_IMPLIED not in {i.code for i in summary_narrow.data_quality.issues}
 
 
 # =============================================================================
@@ -1136,7 +933,7 @@ class TestNetDepositedCapital:
         assert len(summary.holdings) == 1
         assert summary.holdings[0].price_change_1d == Decimal("0.1000")
         assert summary.holdings[0].gain_loss_change_1d == Decimal("50")
-        assert summary.holdings[0].gain_loss_change_1d_percent == Decimal("100.00")
+        assert summary.holdings[0].gain_loss_change_1d_percent == Decimal("10.00")
 
     @pytest.mark.asyncio
     async def test_holding_gain_loss_change_1d_respects_quote_base_quantity(self, session, test_user, broker_with_access):
@@ -1226,12 +1023,90 @@ class TestNetDepositedCapital:
         # 100x too large. Explicitly guard against regressing to that.
         assert holding.gain_loss_change_1d != Decimal("1900")
 
-        expected_gain_loss_yesterday = holding.gain_loss - expected_change_1d
-        expected_pct = (expected_change_1d / abs(expected_gain_loss_yesterday) * 100).quantize(Decimal("0.01"))
+        previous_position_value = compute_holding_value(Decimal("10000"), Decimal("98.51"), 100)
+        expected_pct = (expected_change_1d / abs(previous_position_value) * 100).quantize(Decimal("0.01"))
         assert holding.gain_loss_change_1d_percent == expected_pct
+
+    @pytest.mark.asyncio
+    async def test_holding_daily_percent_uses_previous_position_value(self, session, test_user, broker_with_access):
+        """A small market move must stay small even when unrealized P&L is near zero."""
+        broker, _ = broker_with_access
+        today = date.today()
+        yesterday = today - timedelta(days=1)
+        asset = Asset(
+            display_name=f"DailyPercent_{utcnow().timestamp()}",
+            asset_type=AssetType.ETF,
+            currency="EUR",
+            quote_base_quantity=1,
+        )
+        session.add(asset)
+        await session.flush()
+        session.add_all(
+            [
+                Transaction(
+                    broker_id=broker.id,
+                    type=TransactionType.BUY,
+                    date=yesterday,
+                    amount=Decimal("-473.11"),
+                    currency="EUR",
+                    asset_id=asset.id,
+                    quantity=Decimal("17"),
+                ),
+                PriceHistory(
+                    asset_id=asset.id,
+                    date=yesterday,
+                    close=Decimal("27.81"),
+                    currency="EUR",
+                    source_plugin_key="manual_test",
+                ),
+                PriceHistory(
+                    asset_id=asset.id,
+                    date=today,
+                    close=Decimal("27.84"),
+                    currency="EUR",
+                    source_plugin_key="manual_test",
+                ),
+            ]
+        )
+        await session.flush()
+
+        summary = await PortfolioService(session).get_summary(user_id=test_user.id)
+        holding = next(item for item in summary.holdings if item.asset_id == asset.id)
+
+        assert holding.gain_loss_change_1d == Decimal("0.51")
+        assert holding.gain_loss_change_1d_percent == Decimal("0.11")
 
 
 class TestPortfolioServiceDateAwareDashboardData:
+    @pytest.mark.asyncio
+    async def test_summary_selects_historical_buy_reference_before_future_buy(self, session, test_user, broker_with_access, test_asset):
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, asset_id=test_asset.id, type=TransactionType.BUY, date=date(2025, 1, 2), quantity=Decimal("1"), amount=Decimal("-100"), currency="EUR"),
+                Transaction(broker_id=broker.id, asset_id=test_asset.id, type=TransactionType.BUY, date=date(2025, 1, 10), quantity=Decimal("1"), amount=Decimal("-120"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+        service = PortfolioService(session)
+        historical = await service.get_summary(user_id=test_user.id, date_to=date(2025, 1, 5))
+        current = await service.get_summary(user_id=test_user.id, date_to=date(2025, 1, 15))
+
+        historical_holding = historical.holdings[0]
+        assert historical_holding.quantity == Decimal("1")
+        assert historical_holding.current_price == Decimal("100")
+        assert historical_holding.current_value == Decimal("100")
+        assert historical_holding.valuation_reference_date == date(2025, 1, 2)
+        assert historical_holding.valuation_reference_unit_price == Decimal("100")
+
+        current_holding = current.holdings[0]
+        assert current_holding.quantity == Decimal("2")
+        assert current_holding.current_price == Decimal("120")
+        assert current_holding.current_value == Decimal("240")
+        assert current_holding.valuation_reference_date == date(2025, 1, 10)
+        assert current_holding.valuation_reference_unit_price == Decimal("120")
+
     @pytest.mark.asyncio
     async def test_summary_holdings_use_date_to_snapshot(self, session, test_user, broker_with_access, test_asset):
         """Summary holdings and cash must reflect selected date_to, not current ledger state."""
@@ -1280,7 +1155,114 @@ class TestPortfolioServiceDateAwareDashboardData:
         assert holding.quantity == Decimal("1")
         assert holding.current_price == Decimal("110")
         assert holding.current_value == Decimal("110")
+        assert holding.valuation_source == "MARKET_PRICE"
+        assert holding.valuation_reference_date == date(2025, 1, 31)
+        assert holding.valuation_reference_unit_price == Decimal("110")
+        assert holding.valuation_reference_currency == "EUR"
+        assert holding.missing_fx_pair is None
         assert holding.nav_weight_percent == Decimal("10.89")
+
+    @pytest.mark.asyncio
+    async def test_summary_maps_seed_cost_valuation_reference(self, session, test_user, broker_with_access, test_asset):
+        broker, _ = broker_with_access
+        split_event = AssetEvent(
+            asset_id=test_asset.id,
+            date=date(2025, 1, 10),
+            type=AssetEventType.SPLIT,
+            value=Decimal("2"),
+            currency="EUR",
+        )
+        session.add(split_event)
+        await session.flush()
+        session.add_all(
+            [
+                Transaction(
+                    broker_id=broker.id,
+                    asset_id=test_asset.id,
+                    type=TransactionType.ADJUSTMENT,
+                    date=date(2025, 1, 2),
+                    quantity=Decimal("5"),
+                    amount=Decimal("0"),
+                    currency="EUR",
+                    cost_basis_override=Decimal("20"),
+                    cost_basis_currency="EUR",
+                ),
+                Transaction(
+                    broker_id=broker.id,
+                    asset_id=test_asset.id,
+                    asset_event_id=split_event.id,
+                    type=TransactionType.ADJUSTMENT,
+                    date=date(2025, 1, 10),
+                    quantity=Decimal("5"),
+                    amount=Decimal("0"),
+                    currency="EUR",
+                ),
+            ]
+        )
+        await session.flush()
+
+        summary = await PortfolioService(session).get_summary(
+            user_id=test_user.id,
+            date_to=date(2025, 1, 31),
+        )
+
+        assert summary.net_worth.amount == Decimal("100")
+        assert len(summary.holdings) == 1
+        holding = summary.holdings[0]
+        assert holding.quantity == Decimal("10")
+        assert holding.current_price == Decimal("10")
+        assert holding.current_value == Decimal("100")
+        assert holding.gain_loss == Decimal("0")
+        assert holding.valuation_source == "LAST_TRADE_PRICE"
+        assert holding.valuation_effective_unit_price == Decimal("10")
+        assert holding.valuation_effective_currency == "EUR"
+        assert holding.valuation_reference_date == date(2025, 1, 2)
+        assert holding.valuation_reference_unit_price == Decimal("20")
+        assert holding.valuation_reference_currency == "EUR"
+        assert holding.valuation_split_adjusted is True
+        assert holding.missing_fx_pair is None
+
+    @pytest.mark.asyncio
+    async def test_summary_deduplicates_shared_split_event_and_maps_effective_price(self, session, test_user, broker_with_access, test_asset):
+        broker_one, _ = broker_with_access
+        broker_two = Broker(name=f"PfBroker_{utcnow().timestamp()}_split_two")
+        session.add(broker_two)
+        await session.flush()
+        session.add(BrokerUserAccess(broker_id=broker_two.id, user_id=test_user.id, role=UserRole.OWNER, share_percentage=Decimal("1")))
+
+        split_event = AssetEvent(
+            asset_id=test_asset.id,
+            date=date(2025, 1, 5),
+            type=AssetEventType.SPLIT,
+            value=Decimal("2"),
+            currency="EUR",
+        )
+        session.add(split_event)
+        await session.flush()
+
+        session.add_all(
+            [
+                Transaction(broker_id=broker_one.id, asset_id=test_asset.id, type=TransactionType.BUY, date=date(2025, 1, 2), quantity=Decimal("10"), amount=Decimal("-1000"), currency="EUR"),
+                Transaction(broker_id=broker_two.id, asset_id=test_asset.id, type=TransactionType.BUY, date=date(2025, 1, 2), quantity=Decimal("10"), amount=Decimal("-1000"), currency="EUR"),
+                Transaction(broker_id=broker_one.id, asset_id=test_asset.id, asset_event_id=split_event.id, type=TransactionType.ADJUSTMENT, date=date(2025, 1, 5), quantity=Decimal("10"), amount=Decimal("0"), currency="EUR"),
+                Transaction(broker_id=broker_two.id, asset_id=test_asset.id, asset_event_id=split_event.id, type=TransactionType.ADJUSTMENT, date=date(2025, 1, 5), quantity=Decimal("10"), amount=Decimal("0"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+        summary = await PortfolioService(session).get_summary(user_id=test_user.id, date_to=date(2025, 1, 10))
+
+        assert len(summary.holdings) == 2
+        for holding in summary.holdings:
+            assert holding.quantity == Decimal("20")
+            assert holding.current_price == Decimal("50")
+            assert holding.current_value == Decimal("1000")
+            assert holding.valuation_effective_unit_price == Decimal("50")
+            assert holding.valuation_effective_currency == "EUR"
+            assert holding.valuation_reference_date == date(2025, 1, 2)
+            assert holding.valuation_reference_unit_price == Decimal("100")
+            assert holding.valuation_reference_currency == "EUR"
+            assert holding.valuation_split_adjusted is True
 
     @pytest.mark.asyncio
     async def test_positions_contribution_uses_date_to_and_other_effects(self, session, test_user, broker_with_access, test_asset):
@@ -1390,6 +1372,42 @@ class TestPortfolioServiceDateAwareDashboardData:
         assert row.end_value == Decimal("0")
 
     @pytest.mark.asyncio
+    async def test_positions_contribution_closed_position_has_annualized_return(self, session, test_user, broker_with_access, test_asset):
+        """A fully-closed position (no still-open lot) must still expose an annualized
+        return in the performance/contribution table. The generic path cannot annualize
+        it — there is no open lot to date the window start and no end cost basis to
+        normalize against — so it falls back to the realized net return over the
+        position's real flight time [oldest lot opened -> last lot closed], normalized on
+        the capital actually deployed. Modelled on the real "MARINA DI SCARLINO"
+        (Recrowd/CROWDFUND) case: ~2005 deployed, +257.32 interest, -66.92 tax, sold flat
+        -> ~+9.5% total over ~1000 days -> ~+3.4%/yr net."""
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=date(2022, 11, 1), amount=Decimal("2100"), currency="EUR"),
+                Transaction(broker_id=broker.id, asset_id=test_asset.id, type=TransactionType.BUY, date=date(2022, 11, 5), quantity=Decimal("1"), amount=Decimal("-2005"), currency="EUR"),
+                Transaction(broker_id=broker.id, asset_id=test_asset.id, type=TransactionType.INTEREST, date=date(2023, 11, 5), amount=Decimal("257.32"), currency="EUR"),
+                Transaction(broker_id=broker.id, asset_id=test_asset.id, type=TransactionType.TAX, date=date(2023, 11, 6), amount=Decimal("-66.92"), currency="EUR"),
+                Transaction(broker_id=broker.id, asset_id=test_asset.id, type=TransactionType.SELL, date=date(2025, 8, 1), quantity=Decimal("-1"), amount=Decimal("2005"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+        service = PortfolioService(session)
+        contribution = await service.get_positions_contribution(
+            user_id=test_user.id,
+            date_to=date(2025, 8, 1),
+        )
+
+        assert len(contribution.positions) == 1
+        row = contribution.positions[0]
+        assert row.is_fully_sold is True
+        assert row.period_pnl == Decimal("190.40")  # realized 0 + interest 257.32 - tax 66.92
+        # Closed-position annualized: ~9.5% total over ~1000 days -> ~+3.4%/yr net.
+        assert row.annualized_return is not None
+        assert Decimal("0.02") < row.annualized_return < Decimal("0.05")
+
+    @pytest.mark.asyncio
     async def test_positions_contribution_includes_income_only_asset_rows(self, session, test_user, broker_with_access, test_asset):
         """Asset-linked income/fee rows without BUY/SELL still become contribution rows."""
         broker, _ = broker_with_access
@@ -1436,6 +1454,73 @@ class TestPortfolioServiceDateAwareDashboardData:
         assert contribution.other_effects == []
         assert contribution.gross_gains == Decimal("26")
         assert contribution.gross_losses == Decimal("0")
+
+    @pytest.mark.asyncio
+    async def test_positions_contribution_in_kind_adjustment_is_held_not_fully_sold(self, session, test_user, broker_with_access, test_asset):
+        """An in-kind ADJUSTMENT-seeded position held through the period must be treated as
+        held (end value + unrealized delta + net annualized return), not collapsed to
+        fully-sold. Regression: qty was summed over BUY/SELL only, so ADJUSTMENT/TRANSFER
+        (e.g. succession in-kind transfers) reported qty 0 at period end -> empty column."""
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                # In-kind seed: +100 units at a per-unit cost of 10 (amount 0 = no cash leg).
+                Transaction(
+                    broker_id=broker.id,
+                    asset_id=test_asset.id,
+                    type=TransactionType.ADJUSTMENT,
+                    date=date(2024, 1, 1),
+                    quantity=Decimal("100"),
+                    amount=Decimal("0"),
+                    cost_basis_override=Decimal("10"),
+                    currency="EUR",
+                ),
+                Transaction(
+                    broker_id=broker.id,
+                    asset_id=test_asset.id,
+                    type=TransactionType.INTEREST,
+                    date=date(2024, 6, 1),
+                    amount=Decimal("50"),
+                    currency="EUR",
+                ),
+                PriceHistory(
+                    asset_id=test_asset.id,
+                    date=date(2025, 1, 10),
+                    open=Decimal("11"),
+                    high=Decimal("11"),
+                    low=Decimal("11"),
+                    close=Decimal("11"),
+                    volume=Decimal("1"),
+                    currency="EUR",
+                    source_plugin_key="manual_test",
+                ),
+            ]
+        )
+        await session.flush()
+
+        service = PortfolioService(session)
+        contribution = await service.get_positions_contribution(
+            user_id=test_user.id,
+            date_from=date(2023, 12, 1),
+            date_to=date(2025, 1, 15),
+        )
+
+        assert len(contribution.positions) == 1
+        row = contribution.positions[0]
+        assert row.asset_id == test_asset.id
+        # Held, not fully-sold: qty at end = +100 from the ADJUSTMENT.
+        assert row.is_fully_sold is False
+        assert row.end_value == Decimal("1100")  # 100 units * price 11
+        assert row.start_value == Decimal("0")  # seeded after date_from
+        assert row.period_unrealized_delta == Decimal("100")  # mv 1100 - cost 1000
+        assert row.period_income == Decimal("50")
+        assert row.period_pnl == Decimal("150")  # 100 unrealized + 50 income
+        # start_value == 0 -> period_pnl_percent stays None (unchanged semantics),
+        # but the net annualized return uses the end cost basis as fallback base.
+        assert row.period_pnl_percent is None
+        assert row.annualized_return is not None
+        assert row.annualized_return > Decimal("0")  # net positive return, >30-day window
+        assert row.oldest_open_lot_date == date(2024, 1, 1)
 
 
 class TestPortfolioServiceGetReport:

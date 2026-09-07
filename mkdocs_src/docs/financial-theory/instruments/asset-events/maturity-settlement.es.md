@@ -12,7 +12,7 @@ El vencimiento es la fecha en la que un instrumento de deuda (bono, letra, certi
 2. Se realiza cualquier **pago de interés final** (si corresponde)
 3. El instrumento **deja de existir**: no hay más valoraciones ni negociaciones
 
-### Instrumentos con Fechas de Vencimiento
+### Instruments con Fechas de Vencimiento
 
 | Instrumento | Vencimiento Típico | Liquidación |
 |------------|-----------------|------------|
@@ -68,6 +68,14 @@ Una vez que se registra un evento de liquidación al vencimiento en LibreFolio:
 - La **serie de precios** del activo finaliza en la fecha de vencimiento
 - El importe de la liquidación representa el **punto de datos final**
 - El activo puede permanecer en el sistema para análisis históricos, pero no recibirá nuevos datos de precios
+
+!!! note "Excepción: intereses de mora después del vencimiento"
+
+    Los activos valorados por el proveedor **Scheduled Investment** pueden configurarse con
+    **Intereses de mora**: después de que finaliza el último período programado, primero se aplica
+    un período de gracia configurable (en días), luego una tasa de penalización sigue acumulándose
+    más allá del vencimiento hasta la liquidación. En ese caso la serie de precios no se detiene en
+    el vencimiento — véase [proveedor Scheduled Investment](../../../user/assets/providers/scheduled-investment.md#late-interest).
 
 ---
 

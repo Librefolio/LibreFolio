@@ -358,7 +358,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
         except Exception:
             return False
 
-    def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:
+    def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:  # noqa: C901 — flat row loop: header validation and per-row error handling, no nested logic
         """
         Parse CSV file and return transactions, warnings, and extracted assets.
 
@@ -422,7 +422,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
                             validation_issues=validation_issues,
                         )
                     except Exception as e:
-                        warnings.append(f"Row {row_num}: {str(e)}")
+                        warnings.append(f"Row {row_num}: {e!s}")
                         continue
 
                     # Emit field_todo for ADJUSTMENT rows missing cost_basis_override
@@ -438,14 +438,14 @@ class GenericCSVBrokerProvider(BRIMProvider):
                                         field="cost_basis_override",
                                         severity="blocker",
                                         reason_code="corporate_action",
-                                        message="Missing inherited cost basis (WAC). Fill this field to import.",
+                                        message="Missing inherited per-unit cost basis (WAC). Enter the cost per single unit (not the total) to import.",
                                     )
                                 )
 
         except BRIMParseError:
             raise
         except Exception as e:
-            raise BRIMParseError(f"Error reading CSV file: {str(e)}", details={"file": file_path.name}) from e
+            raise BRIMParseError(f"Error reading CSV file: {e!s}", details={"file": file_path.name}) from e
 
         if not transactions:
             warnings.append("No valid transactions found in file")
@@ -483,7 +483,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
 
         return column_map
 
-    def _parse_row(
+    def _parse_row(  # noqa: C901 — flat field mapping with validation raises, no nested logic
         self,
         row: Dict[str, str],
         column_map: Dict[str, str],

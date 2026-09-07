@@ -1,4 +1,4 @@
-# ![](../../../static/icons/transactions/transfer.png){: width="32" style="vertical-align: middle;" } Trasferimento di Asset
+# 🔄 ![](../../../static/icons/transactions/transfer.png){: width="32" style="vertical-align: middle;" } Trasferimento di Asset
 
 <div class="screenshot-container">
     <img class="gallery-img" data-category="transactions" data-name="form-modal-transfer" alt="Transaction Form — TRANSFER">
@@ -48,6 +48,12 @@ Sotto il cofano, un Trasferimento è composto da due voci di Rettifica. LibreFol
 | **Promote** (collega) | Due Rettifiche → Trasferimento |
 
 **Vincoli di promozione**: stesso asset, broker diversi, quantità opposte.
+
+---
+
+## 👵 Successione e Broker di Origine Non Tracciati
+
+Un vero `TRANSFER` richiede due broker in LibreFolio: origine e destinazione. Se il dossier di origine è esterno a LibreFolio, la gamba in entrata è modellata meglio come un `ADJUSTMENT` positivo senza cassa con un `cost_basis_override` per unità, invece di un trasferimento accoppiato. Le righe di successione di Crédit Agricole (`GIRO ALTRO DOSSIER`, `VERS.TITOLI`) utilizzano questo modello: i titoli ereditati entrano come capitale in natura, non viene creato alcun `DEPOSIT` di cassa e la causale di origine rimane nella descrizione a fini di verificabilità.
 
 ---
 

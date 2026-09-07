@@ -16,7 +16,7 @@ La barre de filtres située au-dessus du graphique propose des commandes pour pe
 
 Sélectionnez une fenêtre temporelle pour les données du graphique :
 
-- **Préréglages** : 1W, 1M, 3M, 6M, 1Y, ALL
+- **Préréglages** : 1W, 1M, 3M, 6M, 1Y, 2Y, YTD, MAX — lorsque la barre a de l'espace libre, des **préréglages de remplissage** supplémentaires apparaissent pour l'occuper (3Y, 5Y, 10Y et WTD, MTD, QTD)
 - **Personnalisé** : choisissez une date de début et de fin à l'aide du sélecteur de calendrier
 
 ### 💱 Sélecteur de Devise
@@ -47,7 +47,7 @@ Survolez un marqueur pour voir les détails de l'événement (date, type, valeur
 
 ## 🎨 Esthétique
 
-Cliquez sur le bouton **Paramètres** (⚙️) pour utiliser l'interrupteur du panneau d'esthétique permettant la personnalisation du graphique (couleur de la ligne, style, etc.).
+Cliquez sur le bouton **Paramètres** (⚙️) pour afficher/masquer le panneau d'esthétique en ligne (remplissage de l'aire, couleurs de la ligne de base, lignes de grille, dégradé stale, échelle de l'axe Y). Les mêmes paramètres — plus les signaux de surimpression — peuvent aussi être modifiés pour tous les graphiques d'actifs en une fois depuis la modale **Paramètres des Graphiques** sur la [page de la liste des Actifs](../index.md), qui affiche un aperçu en direct pendant l'édition ; voir [Paramètres des Graphiques](../../fx/chart-settings.md) pour le fonctionnement de la modale et de son aperçu (la portée Actifs est indépendante de FX).
 
 ---
 

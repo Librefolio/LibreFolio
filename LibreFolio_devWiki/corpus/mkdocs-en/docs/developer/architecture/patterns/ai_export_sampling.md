@@ -1,0 +1,1 @@
+/Users/ea_enel/Documents/00_My/LibreFolio/mkdocs_src/docs/developer/architecture/patterns/ai_export_sampling.md

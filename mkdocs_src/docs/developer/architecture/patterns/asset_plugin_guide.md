@@ -109,6 +109,8 @@ graph TD
 | `supports_history` | `True` | Set `False` for providers that only support current prices (e.g., web scrapers) |
 | `params_schema` | `[]` | List of field definitions for `provider_params`. Used by frontend to generate dynamic forms. |
 | `get_asset_url(identifier, type, params)` | `None` | Generate URL to the provider's page for this asset (e.g., Yahoo Finance quote page) |
+| `resolvable_url_domains` | `[]` | Domains this provider can turn a page URL back into a search-item for (opt-in). See [Asset Search & Link-Finder](../../backend/assets/search_link_finder.md). |
+| `resolve_url(url)` | `None` | Inverse of `get_asset_url`: open a provider page URL → return one search-item dict, a list of dicts, or `None`. Enables the last-resort external search stack. |
 | `accepted_identifier_types` | `[TICKER, ISIN]` | Input types accepted by this provider (shown in frontend dropdown) |
 | `fetch_asset_metadata(identifier, type, params)` | `None` | Fetch asset metadata (type, sector, identifiers) from the provider |
 | `provider_help_url` | `None` | URL to the provider's documentation page (served by the running instance) |
@@ -137,11 +139,52 @@ The `search(query)` method allows users to **discover assets** by name, ticker, 
 | **JustETF** | ✅ | `"iShares Core S&P 500"` | ✅ | ISIN-based search across cached ETF list |
 | **CSS Scraper** | ❌ | `None` | ✅ | No search — URL must be provided manually |
 | **Scheduled Investment** | ❌ | `None` | — | Synthetic provider, no external search |
-| **Borsa Italiana** | ✅ | `"ENEL"` | ✅ | Full search on borsaitaliana.it (stocks, bonds, ETFs) |
+| **Borsa Italiana** | ✅ | `"ENEL"` | ✅ | Full search on borsaitaliana.it; funds price by `provider_params.codice_fondo`; `resolve_url` emits IT + EN canonical rows |
 
 !!! info "`supports_search` detection"
 
     The `list_providers` endpoint checks `instance.test_search_query is not None` (a local property) to determine search support. This avoids cold-start HTTP calls.
+
+### 🧵 Last-resort external fallback (optional)
+
+A provider can go beyond its own on-site search. When `search()` returns **0** results, the
+orchestration can fall back to an external engine (`web_link_finder`, `ddgs` by default) to find
+candidate **provider-domain** URLs and then resolve them back into search-items. To opt in, a
+provider sets `resolvable_url_domains` and implements `resolve_url(url)` (see the
+[Optional overrides](#optional-override) list). The caller may also pass **`hints`** (extra
+identifiers/names, e.g. from a broker report) to narrow the external query and post-filter the
+results by known identifier.
+
+`resolve_url` is an alternate entry point into **interactive search**, not into pricing. It may
+return:
+
+- one search-item dict;
+- a list of search-item dicts when one page maps to several canonical choices;
+- `None` when the URL is not recognised.
+
+The search layer flattens lists and de-duplicates by `(identifier, language)`. Borsa Italiana uses
+this to return the full **IT + EN** canonical set for a fund or scheda page.
+
+This whole stack — the `web_link_finder` module, the two-stage "stringone", and the identifier
+post-filter — is documented on its own page:
+
+- 🔎 **[Asset Search & Link-Finder](../../backend/assets/search_link_finder.md)** — the generic
+  three-layer resolution (on-site → link-finder → `resolve_url`), config, and invariants.
+
+!!! warning "Never on price fetches"
+
+    The external stack is interactive-only. Once an asset exists it must be priced by its stored
+    identifier / `provider_params`, never by re-searching. For Borsa Italiana funds, the stored
+    `provider_params.codice_fondo` is the price key; the ISIN is descriptive/identity data, not the
+    NAV lookup key.
+
+### 🧾 Alternative identifiers
+
+`Asset.identifier_other` is a JSON list (`list[str]`) of soft or technical identifiers. Use it for
+alternate broker labels and provider-specific codes that do not deserve a first-class identifier
+column. Provider metadata patches should return a list, not a scalar; for example, Borsa Italiana
+fund metadata stores the internal fund code as `identifier_other=["2FADB…"]` while pricing uses
+`provider_params.codice_fondo`.
 
 ### 🌐 API Endpoints
 
@@ -282,4 +325,3 @@ class MyProvider(AssetSourceProvider):
 - 🔌 [Asset Providers](../../backend/assets/system_providers.md) — All providers (Yahoo Finance, JustETF, CSS Scraper, Scheduled Investment)
 - 📦 [Providers Overview](../../backend/assets/system_providers.md) — Summary table of all providers
 - 🔄 [Registry Pattern Overview](registry_pattern.md) — How the plugin system works
-

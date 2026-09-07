@@ -1,0 +1,855 @@
+"""Shared Portfolio/Broker financial payload models and domain-neutral build helpers.
+
+This module hosts everything the Portfolio (`backend.app.services.ai_export.
+components.portfolio_financial`) and Broker (`backend.app.services.ai_export.
+components.broker_financial`) component builder modules need in common, so
+neither financial formulas nor payload shapes are duplicated between the two
+domains:
+
+- Currency-safe, `extra="forbid"` Pydantic row/payload models (reusing
+  `backend.app.schemas.common.Currency`/`SafeDecimal` for stable, non-scientific
+  JSON output) for every frozen `portfolio.*`/`broker.*` non-technical
+  component ID.
+- Pure mapping helpers from `PortfolioService`/`LotsAnalysisService` output
+  models to the payload rows above - no financial formulas are recomputed
+  here, every number is read straight off the already-computed engine output.
+- Domain-neutral `BuildContext` resource-loading helpers (`load_portfolio_report`,
+  `load_lots_results`) that both domains call with their own
+  `PORTFOLIO_REPORT_RESOURCE`/`BROKER_REPORT_RESOURCE` and
+  `PORTFOLIO_LOTS_RESULTS_RESOURCE`/`BROKER_LOTS_RESULTS_RESOURCE` keys (see
+  `backend.app.services.ai_export.components.resources`), guaranteeing exactly
+  one `PortfolioService.get_report` call per request regardless of how many
+  components need it.
+
+FIFO lot status/residual-cost-basis classification and transacted-asset discovery
+live here with the shared Portfolio/Broker payload mapping. They are plain
+bookkeeping helpers around authoritative Lots Analysis output, not a second
+financial engine.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Awaitable, Callable, Mapping, Sequence
+from datetime import date as Date
+from decimal import Decimal
+from enum import StrEnum
+from typing import TYPE_CHECKING, Any
+
+from pydantic import Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.app.db.models import Asset, Broker, BrokerUserAccess, Transaction
+from backend.app.schemas.common import Currency, OpenDateRangeModel, SafeDecimal, StrictModel
+from backend.app.schemas.portfolio import (
+    AllocationItem,
+    AssetPeriodContribution,
+    LotAnalysisType,
+    LotsAnalysisResponse,
+    LotSummarySchema,
+    OtherPeriodEffect,
+    PortfolioHistoryPoint,
+    PortfolioHolding,
+    PortfolioReportQuery,
+    PortfolioReportResponse,
+    UnallocatedContribution,
+)
+from backend.app.services.ai_export.components.resources import LotsResultsResource
+from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, ResourceKey
+from backend.app.services.ai_export.temporal.plan import Bucket, BucketPlan
+from backend.app.services.ai_export.temporal.uniform import uniform_calendar_buckets
+from backend.app.services.lots_analysis_service import LotsAnalysisService
+from backend.app.services.portfolio_service import PortfolioService
+
+if TYPE_CHECKING:
+    from backend.app.services.ai_export.dependencies import BuildContext
+
+__all__ = [
+    "AllocationSlice",
+    "ContributionRow",
+    "EffectRow",
+    "FifoAssetSummaryRow",
+    "FifoCustodyRow",
+    "FifoLotRow",
+    "PerformanceBucketRow",
+    "PositionRow",
+    "UnallocatedRow",
+    "build_fifo_lot_refs",
+    "build_performance_bucket_rows",
+    "build_uniform_performance_buckets",
+    "discover_transacted_asset_ids",
+    "has_nonzero_open_lot",
+    "load_lots_results",
+    "load_portfolio_report",
+    "lot_is_eligible",
+    "lot_residual_cost_basis",
+    "lot_status",
+    "map_allocation_slice",
+    "map_contribution_row",
+    "map_effect_row",
+    "map_fifo_lot_row",
+    "map_position_row",
+    "map_unallocated_row",
+    "performance_path_bucket_count",
+    "resolve_accessible_broker_ids",
+    "summarize_fifo_asset_rows",
+]
+
+
+# =============================================================================
+# Currency-safe helpers
+# =============================================================================
+
+
+class _FifoLotStatus(StrEnum):
+    OPEN = "open"
+    PARTIAL = "partial"
+    CLOSED = "closed"
+
+
+TransactionAssetIdsLoader = Callable[
+    [AsyncSession, Sequence[int], Date],
+    Awaitable[set[int]],
+]
+
+
+async def default_transaction_asset_ids_loader(
+    session: AsyncSession,
+    broker_ids: Sequence[int],
+    snapshot_as_of: Date,
+) -> set[int]:
+    """Discover every transacted Asset in scope through ``snapshot_as_of``."""
+
+    if not broker_ids:
+        return set()
+    result = await session.execute(
+        select(Transaction.asset_id)
+        .where(
+            Transaction.broker_id.in_(sorted(set(broker_ids))),
+            Transaction.date <= snapshot_as_of,
+            Transaction.asset_id.is_not(None),
+        )
+        .distinct()
+    )
+    return {int(asset_id) for asset_id in result.scalars().all() if asset_id is not None}
+
+
+def _lot_decimal(value: Any) -> Decimal:
+    if value is None:
+        return Decimal("0")
+    if isinstance(value, Decimal):
+        return value
+    return Decimal(str(value))
+
+
+def lot_status(lot: Any) -> _FifoLotStatus:
+    open_quantity = _lot_decimal(getattr(lot, "open_quantity", None))
+    realized_quantity = _lot_decimal(getattr(lot, "realized_quantity", None))
+    if open_quantity.is_zero():
+        return _FifoLotStatus.CLOSED
+    if realized_quantity.is_zero():
+        return _FifoLotStatus.OPEN
+    return _FifoLotStatus.PARTIAL
+
+
+def lot_residual_cost_basis(lot: Any) -> Decimal:
+    """Return original cost attributable to the still-open quantity."""
+
+    open_quantity = abs(_lot_decimal(getattr(lot, "open_quantity", None)))
+    if open_quantity.is_zero():
+        return Decimal("0")
+    original_quantity = abs(_lot_decimal(getattr(lot, "original_quantity", None)))
+    if original_quantity.is_zero():
+        return Decimal("0")
+    return _lot_decimal(getattr(lot, "original_cost", None)) * open_quantity / original_quantity
+
+
+def has_nonzero_open_lot(lots: Sequence[Any]) -> bool:
+    return any(not _lot_decimal(getattr(lot, "open_quantity", None)).is_zero() for lot in lots)
+
+
+def lot_is_eligible(lot: Any, *, cutoff: Date) -> bool:
+    """Keep open/partial lots and closed lots inside the requested period."""
+
+    if lot_status(lot) is not _FifoLotStatus.CLOSED:
+        return True
+    closing_date = getattr(lot, "closing_date", None)
+    return closing_date is not None and closing_date >= cutoff
+
+
+def _currency(currency_code: str, value: Decimal | None) -> Currency | None:
+    """Wraps a plain `Decimal`/`SafeDecimal` amount as a `Currency` in `currency_code`, preserving `None`."""
+    if value is None:
+        return None
+    return Currency(code=currency_code, amount=value)
+
+
+def _currency_required(currency_code: str, value: Decimal) -> Currency:
+    return Currency(code=currency_code, amount=value)
+
+
+# =============================================================================
+# Row models
+# =============================================================================
+
+
+class PositionRow(StrictModel):
+    """One open holding snapshot at `snapshot_as_of`, currency-safe and self-describing."""
+
+    asset_id: int
+    asset_name: str
+    asset_ticker: str | None = None
+    asset_type: str
+    broker_id: int | None = None
+    broker_name: str | None = None
+    quantity: SafeDecimal
+    wac_per_unit: Currency | None = None
+    unit_price: Currency | None = None
+    current_value: Currency | None = None
+    valuation_source: str | None = None
+    gain_loss: Currency | None = None
+    gain_loss_percent: SafeDecimal | None = None
+    allocation_percent: SafeDecimal | None = None
+    nav_weight_percent: SafeDecimal | None = None
+
+
+class AllocationSlice(StrictModel):
+    """One allocation category slice (type/sector/geography)."""
+
+    name: str
+    percent: SafeDecimal
+    amount: Currency
+    emoji: str | None = None
+
+
+class ContributionRow(StrictModel):
+    """Per-asset period P&L contribution, mirroring `AssetPeriodContribution` currency-safe."""
+
+    asset_id: int
+    asset_name: str
+    asset_ticker: str | None = None
+    asset_type: str
+    broker_id: int
+    broker_name: str
+    period_unrealized_delta: Currency | None = None
+    period_realized_gain_loss: Currency | None = None
+    period_income: Currency | None = None
+    period_fees_taxes: Currency | None = None
+    period_pnl: Currency | None = None
+    period_pnl_percent: SafeDecimal | None = None
+    start_value: Currency | None = None
+    end_value: Currency | None = None
+    is_fully_sold: bool = False
+
+
+class UnallocatedRow(StrictModel):
+    """Broker-level fees/income not attributed to a specific asset, mirroring `UnallocatedContribution`."""
+
+    broker_id: int
+    broker_name: str
+    unallocated_income: Currency | None = None
+    unallocated_fees_taxes: Currency | None = None
+
+
+class EffectRow(StrictModel):
+    """Non-position period P&L row, mirroring `OtherPeriodEffect`."""
+
+    description: str
+    category: str
+    period_pnl: Currency
+    broker_id: int | None = None
+    broker_name: str | None = None
+
+
+class PerformanceBucketRow(StrictModel):
+    """One bucket's internal NAV statistics plus inter-bucket performance.
+
+    `has_data=False` (all other fields `None`) is an explicit, valid outcome for a
+    bucket with no daily history points (e.g. a bucket entirely before the first
+    transaction) - never fabricated as zero.
+
+    `start_value`/`end_value` are the first/last observations inside the bucket.
+    Variation fields use the previous non-empty bucket close, exposed separately
+    as `variation_start_*`. The first populated bucket therefore has null
+    variation fields unless a deterministic pre-period observation was loaded.
+    """
+
+    index: int
+    start_date: Date
+    end_date: Date
+    has_data: bool
+    start_value: Currency | None = None
+    end_value: Currency | None = None
+    min_value: Currency | None = None
+    max_value: Currency | None = None
+    min_date: Date | None = None
+    max_date: Date | None = None
+    variation_start_date: Date | None = None
+    variation_start_value: Currency | None = None
+    net_external_flow: Currency | None = None
+    period_pnl: Currency | None = None
+    return_percent: SafeDecimal | None = None
+    normalized_index_base_100: SafeDecimal | None = None
+    return_from_first_ratio: SafeDecimal | None = None
+    reconciliation_diff: Currency | None = None
+
+
+_PERFORMANCE_PATH_BUCKET_COUNTS = {
+    DetailLevel.COMPACT: 8,
+    DetailLevel.STANDARD: 16,
+    DetailLevel.FULL: 30,
+}
+
+
+def performance_path_bucket_count(detail_level: DetailLevel) -> int:
+    return _PERFORMANCE_PATH_BUCKET_COUNTS[detail_level]
+
+
+def build_uniform_performance_buckets(scope: BuildScope) -> tuple[Bucket, ...]:
+    return uniform_calendar_buckets(scope.period_start, scope.period_end, performance_path_bucket_count(scope.detail_level))
+
+
+def build_performance_bucket_rows(
+    history: Sequence[PortfolioHistoryPoint],
+    bucket_plan: BucketPlan | Sequence[Bucket],
+    *,
+    currency_code: str,
+) -> tuple[PerformanceBucketRow, ...]:
+    """Map engine history to flow-aware inter-bucket returns and P&L."""
+    ordered_history = tuple(sorted(history, key=lambda point: point.date))
+    previous_close: PortfolioHistoryPoint | None = None
+    rows: list[PerformanceBucketRow] = []
+
+    buckets = bucket_plan.buckets if isinstance(bucket_plan, BucketPlan) else tuple(bucket_plan)
+    first_twrr_observation = next((point for point in ordered_history if point.twrr is not None), None)
+    for bucket in buckets:
+        bucket_points = tuple(point for point in ordered_history if bucket.start_date <= point.date <= bucket.end_date)
+        if not bucket_points:
+            rows.append(
+                PerformanceBucketRow(
+                    index=bucket.index,
+                    start_date=bucket.start_date,
+                    end_date=bucket.end_date,
+                    has_data=False,
+                )
+            )
+            continue
+
+        first_point = bucket_points[0]
+        end_point = bucket_points[-1]
+        min_point = min(bucket_points, key=lambda point: point.nav_value.amount)
+        max_point = max(bucket_points, key=lambda point: point.nav_value.amount)
+
+        net_external_flow = None
+        period_pnl = None
+        return_percent = None
+        reconciliation_diff = None
+        if previous_close is not None:
+            net_external_flow = Currency(
+                code=currency_code,
+                amount=(end_point.capital_baseline.amount - previous_close.capital_baseline.amount),
+            )
+            period_pnl = Currency(
+                code=currency_code,
+                amount=end_point.total_pnl.amount - previous_close.total_pnl.amount,
+            )
+            reconciliation_diff = Currency(
+                code=currency_code,
+                amount=(end_point.nav_value.amount - previous_close.nav_value.amount - net_external_flow.amount - period_pnl.amount),
+            )
+            if previous_close.twrr is not None and end_point.twrr is not None:
+                denominator = Decimal(1) + Decimal(previous_close.twrr)
+                if denominator != 0:
+                    return_percent = ((Decimal(1) + Decimal(end_point.twrr)) / denominator) - Decimal(1)
+
+        rows.append(
+            PerformanceBucketRow(
+                index=bucket.index,
+                start_date=bucket.start_date,
+                end_date=bucket.end_date,
+                has_data=True,
+                start_value=first_point.nav_value,
+                end_value=end_point.nav_value,
+                min_value=min_point.nav_value,
+                max_value=max_point.nav_value,
+                min_date=min_point.date,
+                max_date=max_point.date,
+                variation_start_date=(previous_close.date if previous_close is not None else None),
+                variation_start_value=(previous_close.nav_value if previous_close is not None else None),
+                net_external_flow=net_external_flow,
+                period_pnl=period_pnl,
+                return_percent=return_percent,
+                normalized_index_base_100=(
+                    (Decimal(1) + Decimal(end_point.twrr)) / (Decimal(1) + Decimal(first_twrr_observation.twrr)) * Decimal("100")
+                    if first_twrr_observation is not None and first_twrr_observation.twrr is not None and end_point.twrr is not None and Decimal(1) + Decimal(first_twrr_observation.twrr) != 0
+                    else None
+                ),
+                return_from_first_ratio=(
+                    (Decimal(1) + Decimal(end_point.twrr)) / (Decimal(1) + Decimal(first_twrr_observation.twrr)) - Decimal("1")
+                    if first_twrr_observation is not None and first_twrr_observation.twrr is not None and end_point.twrr is not None and Decimal(1) + Decimal(first_twrr_observation.twrr) != 0
+                    else None
+                ),
+                reconciliation_diff=reconciliation_diff,
+            )
+        )
+        previous_close = end_point
+
+    return tuple(rows)
+
+
+class FifoAssetSummaryRow(StrictModel):
+    """Per-asset economic FIFO summary derived from authoritative lot rows."""
+
+    asset_id: int
+    asset_name: str
+    asset_ticker: str | None = None
+    open_lot_count: int
+    partial_lot_count: int
+    closed_lot_count: int
+    has_open_position: bool
+    original_quantity: SafeDecimal
+    open_quantity: SafeDecimal
+    realized_quantity: SafeDecimal
+    original_cost: Currency
+    residual_cost_basis: Currency
+    cumulative_proceeds: Currency
+    realized_pnl: Currency
+    open_value: Currency | None = None
+    unrealized_pnl: Currency | None = None
+    potential_gain: Currency | None = None
+    potential_loss: Currency | None = None
+    total_pnl: Currency | None = None
+    net_total_pnl: Currency | None = None
+    income: Currency
+    fees: Currency
+    taxes: Currency
+    valued_open_lot_count: int = Field(..., ge=0)
+    unavailable_open_lot_count: int = Field(..., ge=0)
+    value_coverage_status: str
+    net_metrics_status: str
+    broker_ids: list[int] = Field(default_factory=list)
+    custody_types: list[str] = Field(default_factory=list)
+    states: list[str] = Field(default_factory=list)
+    has_in_transit_custody: bool = False
+
+
+class FifoCustodyRow(StrictModel):
+    """Current broker or in-transit custody slice for a public FIFO lot."""
+
+    broker_id: int | None = None
+    custody_type: str
+    quantity: SafeDecimal
+
+
+class FifoLotRow(StrictModel):
+    """One FIFO lot row with a prompt-local audit reference, never a database ID."""
+
+    lot_ref: str = Field(..., pattern=r"^L[1-9]\d*$")
+    asset_id: int
+    asset_name: str
+    asset_ticker: str | None = None
+    opening_broker_id: int
+    direction: str
+    status: str
+    opening_date: Date
+    closing_date: Date | None = None
+    opening_unit_price: Currency
+    original_quantity: SafeDecimal
+    open_quantity: SafeDecimal
+    realized_quantity: SafeDecimal
+    original_cost: Currency
+    residual_cost_basis: Currency
+    cumulative_proceeds: Currency
+    open_value: Currency | None = None
+    realized_pnl: Currency
+    unrealized_pnl: Currency | None = None
+    total_pnl: Currency | None = None
+    net_total_pnl: Currency | None = None
+    income: Currency
+    fees: Currency
+    taxes: Currency
+    value_source: str | None = None
+    net_metrics_status: str
+    states: list[str] = Field(default_factory=list)
+    current_custody: list[FifoCustodyRow] = Field(default_factory=list)
+
+
+def summarize_fifo_asset_rows(rows: Sequence[FifoLotRow]) -> FifoAssetSummaryRow:
+    """Aggregate one Asset's public lot rows without re-deriving lot economics."""
+
+    rows = tuple(rows)
+    if not rows:
+        raise ValueError("FIFO Asset summary requires at least one lot row")
+    asset_ids = {row.asset_id for row in rows}
+    if len(asset_ids) != 1:
+        raise ValueError("FIFO Asset summary rows must belong to one asset")
+    currency_codes = {
+        value.code
+        for row in rows
+        for value in (
+            row.original_cost,
+            row.residual_cost_basis,
+            row.cumulative_proceeds,
+            row.realized_pnl,
+            row.income,
+            row.fees,
+            row.taxes,
+        )
+    }
+    if len(currency_codes) != 1:
+        raise ValueError("FIFO Asset summary rows must use one target currency")
+    currency_code = next(iter(currency_codes))
+    open_rows = tuple(row for row in rows if row.open_quantity != 0)
+    valued_open_rows = tuple(row for row in open_rows if row.open_value is not None and row.unrealized_pnl is not None)
+    if not open_rows:
+        value_coverage_status = "not_applicable"
+    elif not valued_open_rows:
+        value_coverage_status = "unavailable"
+    elif len(valued_open_rows) == len(open_rows):
+        value_coverage_status = "complete"
+    else:
+        value_coverage_status = "partial"
+
+    def _sum_required(field_name: str) -> Currency:
+        return Currency(code=currency_code, amount=sum((getattr(row, field_name).amount for row in rows), Decimal("0")))
+
+    def _sum_optional(field_name: str, selected_rows: Sequence[FifoLotRow] = rows) -> Currency | None:
+        available = [value for row in selected_rows if (value := getattr(row, field_name)) is not None]
+        if not available:
+            return None
+        return Currency(code=currency_code, amount=sum((value.amount for value in available), Decimal("0")))
+
+    unrealized_amounts = [row.unrealized_pnl.amount for row in valued_open_rows if row.unrealized_pnl is not None]
+    potential_gain = Currency(code=currency_code, amount=sum((max(amount, Decimal("0")) for amount in unrealized_amounts), Decimal("0"))) if unrealized_amounts else None
+    potential_loss = Currency(code=currency_code, amount=sum((max(-amount, Decimal("0")) for amount in unrealized_amounts), Decimal("0"))) if unrealized_amounts else None
+    net_statuses = {row.net_metrics_status for row in rows}
+    net_metrics_status = next(iter(net_statuses)) if len(net_statuses) == 1 else "PARTIAL"
+    broker_ids = {
+        broker_id
+        for row in rows
+        for broker_id in (
+            row.opening_broker_id,
+            *(custody.broker_id for custody in row.current_custody if custody.broker_id is not None),
+        )
+    }
+    custody_types = {custody.custody_type for row in rows for custody in row.current_custody}
+    first = rows[0]
+    return FifoAssetSummaryRow(
+        asset_id=first.asset_id,
+        asset_name=first.asset_name,
+        asset_ticker=first.asset_ticker,
+        open_lot_count=sum(row.status == "OPEN" for row in rows),
+        partial_lot_count=sum(row.status == "PARTIAL" for row in rows),
+        closed_lot_count=sum(row.status == "CLOSED" for row in rows),
+        has_open_position=bool(open_rows),
+        original_quantity=sum((row.original_quantity for row in rows), Decimal("0")),
+        open_quantity=sum((row.open_quantity for row in rows), Decimal("0")),
+        realized_quantity=sum((row.realized_quantity for row in rows), Decimal("0")),
+        original_cost=_sum_required("original_cost"),
+        residual_cost_basis=_sum_required("residual_cost_basis"),
+        cumulative_proceeds=_sum_required("cumulative_proceeds"),
+        realized_pnl=_sum_required("realized_pnl"),
+        open_value=_sum_optional("open_value", open_rows),
+        unrealized_pnl=_sum_optional("unrealized_pnl", open_rows),
+        potential_gain=potential_gain,
+        potential_loss=potential_loss,
+        total_pnl=_sum_optional("total_pnl"),
+        net_total_pnl=_sum_optional("net_total_pnl"),
+        income=_sum_required("income"),
+        fees=_sum_required("fees"),
+        taxes=_sum_required("taxes"),
+        valued_open_lot_count=len(valued_open_rows),
+        unavailable_open_lot_count=len(open_rows) - len(valued_open_rows),
+        value_coverage_status=value_coverage_status,
+        net_metrics_status=net_metrics_status,
+        broker_ids=sorted(broker_ids),
+        custody_types=sorted(custody_types),
+        states=sorted({state for row in rows for state in row.states}),
+        has_in_transit_custody="IN_TRANSIT" in custody_types,
+    )
+
+
+# =============================================================================
+# Pure mapping helpers (no I/O, no recomputed formulas)
+# =============================================================================
+
+
+def map_position_row(
+    holding: PortfolioHolding,
+    *,
+    currency_code: str,
+) -> PositionRow:
+    unit_price = holding.current_value / holding.quantity if holding.current_value is not None and holding.quantity != 0 else None
+    return PositionRow(
+        asset_id=holding.asset_id,
+        asset_name=holding.asset_name,
+        asset_ticker=holding.asset_ticker,
+        asset_type=holding.asset_type,
+        broker_id=holding.broker_id,
+        broker_name=holding.broker_name,
+        quantity=holding.quantity,
+        wac_per_unit=_currency(currency_code, holding.wac_per_unit),
+        unit_price=_currency(currency_code, unit_price),
+        current_value=_currency(currency_code, holding.current_value),
+        valuation_source=holding.valuation_source,
+        gain_loss=_currency(currency_code, holding.gain_loss),
+        gain_loss_percent=holding.gain_loss_percent,
+        allocation_percent=holding.allocation_percent,
+        nav_weight_percent=holding.nav_weight_percent,
+    )
+
+
+def sort_positions(rows: Sequence[PositionRow]) -> list[PositionRow]:
+    """Deterministic order independent of upstream ordering: (broker_id, asset_id)."""
+    return sorted(rows, key=lambda row: (row.broker_id if row.broker_id is not None else -1, row.asset_id))
+
+
+def map_allocation_slice(item: AllocationItem, *, currency_code: str) -> AllocationSlice:
+    return AllocationSlice(name=item.name, percent=item.value, amount=_currency_required(currency_code, item.amount), emoji=item.emoji)
+
+
+def map_contribution_row(item: AssetPeriodContribution, *, currency_code: str) -> ContributionRow:
+    return ContributionRow(
+        asset_id=item.asset_id,
+        asset_name=item.asset_name,
+        asset_ticker=item.asset_ticker,
+        asset_type=item.asset_type,
+        broker_id=item.broker_id,
+        broker_name=item.broker_name,
+        period_unrealized_delta=_currency(currency_code, item.period_unrealized_delta),
+        period_realized_gain_loss=_currency(currency_code, item.period_realized_gain_loss),
+        period_income=_currency(currency_code, item.period_income),
+        period_fees_taxes=_currency(currency_code, item.period_fees_taxes),
+        period_pnl=_currency(currency_code, item.period_pnl),
+        period_pnl_percent=item.period_pnl_percent,
+        start_value=_currency(currency_code, item.start_value),
+        end_value=_currency(currency_code, item.end_value),
+        is_fully_sold=item.is_fully_sold,
+    )
+
+
+def sort_contributions(rows: Sequence[ContributionRow]) -> list[ContributionRow]:
+    return sorted(rows, key=lambda row: (row.broker_id, row.asset_id))
+
+
+def map_unallocated_row(item: UnallocatedContribution, *, currency_code: str) -> UnallocatedRow:
+    return UnallocatedRow(
+        broker_id=item.broker_id,
+        broker_name=item.broker_name,
+        unallocated_income=_currency(currency_code, item.unallocated_income),
+        unallocated_fees_taxes=_currency(currency_code, item.unallocated_fees_taxes),
+    )
+
+
+def sort_unallocated(rows: Sequence[UnallocatedRow]) -> list[UnallocatedRow]:
+    return sorted(rows, key=lambda row: row.broker_id)
+
+
+def map_effect_row(item: OtherPeriodEffect, *, currency_code: str) -> EffectRow:
+    return EffectRow(
+        description=item.description,
+        category=item.category,
+        period_pnl=_currency_required(currency_code, item.period_pnl),
+        broker_id=item.broker_id,
+        broker_name=item.broker_name,
+    )
+
+
+def sort_effects(rows: Sequence[EffectRow]) -> list[EffectRow]:
+    return sorted(rows, key=lambda row: (row.broker_id if row.broker_id is not None else -1, row.category, row.description))
+
+
+def map_fifo_lot_row(
+    lot: LotSummarySchema,
+    *,
+    lot_ref: str,
+    asset_id: int,
+    currency_code: str,
+    asset_name: str,
+    asset_ticker: str | None,
+) -> FifoLotRow:
+    """Maps one authoritative lot to a public row without database identifiers."""
+    status = lot_status(lot)
+    residual_cost_basis = lot_residual_cost_basis(lot)
+    closing_date = lot.closing_date if status.value == "closed" else None
+    return FifoLotRow(
+        lot_ref=lot_ref,
+        asset_id=asset_id,
+        asset_name=asset_name,
+        asset_ticker=asset_ticker,
+        opening_broker_id=lot.opening_broker_id,
+        direction=str(lot.direction),
+        status=status.value.upper(),
+        opening_date=lot.opening_date,
+        closing_date=closing_date,
+        opening_unit_price=_currency_required(currency_code, lot.opening_unit_price),
+        original_quantity=lot.original_quantity,
+        open_quantity=lot.open_quantity,
+        realized_quantity=lot.realized_quantity,
+        original_cost=_currency_required(currency_code, lot.original_cost),
+        residual_cost_basis=_currency_required(currency_code, residual_cost_basis),
+        cumulative_proceeds=_currency_required(currency_code, lot.cumulative_proceeds),
+        open_value=_currency(currency_code, lot.open_value),
+        realized_pnl=_currency_required(currency_code, lot.realized_pnl),
+        unrealized_pnl=_currency(currency_code, lot.market_pnl),
+        total_pnl=_currency(currency_code, lot.total_pnl),
+        net_total_pnl=_currency(currency_code, lot.net_total_pnl),
+        income=_currency_required(currency_code, lot.asset_income),
+        fees=_currency_required(currency_code, lot.allocated_fees),
+        taxes=_currency_required(currency_code, lot.allocated_taxes),
+        value_source=lot.value_source,
+        net_metrics_status=lot.net_metrics_status,
+        states=list(lot.states),
+        current_custody=[
+            FifoCustodyRow(
+                broker_id=custody.broker_id,
+                custody_type=str(custody.custody_type),
+                quantity=custody.quantity,
+            )
+            for custody in sorted(
+                lot.current_custody,
+                key=lambda custody: (
+                    str(custody.custody_type),
+                    custody.broker_id if custody.broker_id is not None else -1,
+                    custody.quantity,
+                ),
+            )
+        ],
+    )
+
+
+def build_fifo_lot_refs(
+    lots_by_asset: Mapping[int, Sequence[LotSummarySchema]],
+) -> dict[int, str]:
+    """Assign deterministic prompt-local L# references in public lot order."""
+    ordered = sorted(
+        ((asset_id, lot.opening_date, lot.lot_id) for asset_id, lots in lots_by_asset.items() for lot in lots),
+        key=lambda item: item,
+    )
+    lot_ids = [lot_id for _asset_id, _opening_date, lot_id in ordered]
+    if len(lot_ids) != len(set(lot_ids)):
+        raise ValueError("FIFO lot IDs must be unique before public lot_ref assignment")
+    return {
+        lot_id: f"L{index}"
+        for index, (_asset_id, _opening_date, lot_id) in enumerate(
+            ordered,
+            start=1,
+        )
+    }
+
+
+def sort_fifo_lots(rows: Sequence[tuple[int, FifoLotRow]]) -> list[FifoLotRow]:
+    """Sort `(lot_id, row)` pairs by `(asset_id, opening_date, lot_id)`.
+
+    `lot_id` remains an internal tie-breaker only; returned rows expose `lot_ref`.
+    """
+    ordered = sorted(rows, key=lambda pair: (pair[1].asset_id, pair[1].opening_date, pair[0]))
+    return [row for _lot_id, row in ordered]
+
+
+# =============================================================================
+# Domain-neutral BuildContext resource-loading helpers
+# =============================================================================
+
+
+async def resolve_accessible_broker_ids(session: AsyncSession, user_id: int) -> list[int]:
+    """Every broker_id `user_id` has any access role on, sorted ascending.
+
+    Used only when `BuildScope.broker_scope` is empty (whole-portfolio scope):
+    FIFO asset discovery needs a concrete broker_id list, unlike
+    `PortfolioService`/`LotsAnalysisService`, which already resolve `None` to
+    "every accessible broker" internally.
+    """
+    result = await session.execute(select(BrokerUserAccess.broker_id).where(BrokerUserAccess.user_id == user_id))
+    return sorted({int(broker_id) for broker_id in result.scalars().all()})
+
+
+async def load_portfolio_report(
+    context: BuildContext,
+    scope: BuildScope,
+    resource_key: ResourceKey[PortfolioReportResponse],
+) -> PortfolioReportResponse:
+    """Loads the single `PortfolioReportResponse` for this request, memoized under `resource_key`.
+
+    Every `portfolio.*`/`broker.*` financial component builder calls this with
+    the *same* `PORTFOLIO_REPORT_RESOURCE`/`BROKER_REPORT_RESOURCE` key for its
+    domain, so `BuildContext.db_resource` guarantees exactly one
+    `PortfolioService.get_report` call per request regardless of how many
+    components need it. Includes summary + history + breakdown +
+    positions-contribution for the inclusive `[scope.period_start,
+    scope.period_end]` period - an empty portfolio/broker is a valid,
+    successfully-built (empty) result, never a source failure.
+    """
+
+    async def _loader(session: AsyncSession) -> PortfolioReportResponse:
+        query = PortfolioReportQuery(
+            broker_ids=list(scope.broker_scope) if scope.broker_scope else None,
+            date_range=OpenDateRangeModel(start=scope.period_start, end=scope.period_end),
+            target_currency=scope.target_currency,
+            include_summary=True,
+            include_history=True,
+            include_allocation_history=False,
+            include_breakdown=True,
+            include_positions_contribution=True,
+        )
+        return await PortfolioService(session).get_report(scope.user_id, query)
+
+    return await context.db_resource(resource_key, _loader)
+
+
+async def discover_transacted_asset_ids(session: AsyncSession, scope: BuildScope) -> set[int]:
+    """Every distinct asset_id ever transacted within `scope`'s broker access, through `snapshot_as_of`."""
+    if scope.broker_scope:
+        broker_ids = list(scope.broker_scope)
+    else:
+        broker_ids = await resolve_accessible_broker_ids(session, scope.user_id)
+    return await default_transaction_asset_ids_loader(session, broker_ids, scope.snapshot_as_of)
+
+
+async def load_lots_results(
+    context: BuildContext,
+    scope: BuildScope,
+    resource_key: ResourceKey[LotsResultsResource],
+) -> LotsResultsResource:
+    """Loads one `LotsAnalysisResponse` (LOT_SUMMARY) per historical asset, memoized under `resource_key`.
+
+    Historical assets are discovered from transactions (never a fixed/limited
+    universe), scoped to `scope`'s accessible brokers. An empty transacted-asset
+    universe is a valid, successfully-built empty result.
+    """
+
+    async def _loader(session: AsyncSession) -> LotsResultsResource:
+        broker_ids = list(scope.broker_scope) if scope.broker_scope else await resolve_accessible_broker_ids(session, scope.user_id)
+        asset_ids = await discover_transacted_asset_ids(session, scope)
+        service = LotsAnalysisService(session)
+        results: dict[int, LotsAnalysisResponse] = {}
+        for asset_id in sorted(asset_ids):
+            results[asset_id] = await service.get_lots_analysis(
+                user_id=scope.user_id,
+                asset_id=asset_id,
+                broker_ids=broker_ids or None,
+                date_from=None,
+                date_to=scope.snapshot_as_of,
+                target_currency=scope.target_currency,
+                selected_lot_ids=None,
+                requested_analyses=[LotAnalysisType.LOT_SUMMARY],
+            )
+        return LotsResultsResource.from_mapping(results)
+
+    return await context.db_resource(resource_key, _loader)
+
+
+async def load_asset_metadata(session: AsyncSession, asset_ids: Sequence[int]) -> Mapping[int, Asset]:
+    """Bulk asset metadata lookup (name/ticker), used only by FIFO lot row mapping."""
+    if not asset_ids:
+        return {}
+    result = await session.execute(select(Asset).where(Asset.id.in_(sorted(set(asset_ids)))))
+    return {asset.id: asset for asset in result.scalars().all() if asset.id is not None}
+
+
+async def load_broker_metadata(session: AsyncSession, broker_ids: Sequence[int]) -> Mapping[int, Broker]:
+    """Bulk broker metadata lookup (name), used only by FIFO lot row mapping."""
+    if not broker_ids:
+        return {}
+    result = await session.execute(select(Broker).where(Broker.id.in_(sorted(set(broker_ids)))))
+    return {broker.id: broker for broker in result.scalars().all() if broker.id is not None}

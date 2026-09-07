@@ -105,7 +105,10 @@
         // Convert edited/appended rows to a RenderedSignal overlay for chart preview
         const pendingPoints: LineDataPoint[] = dirtyRows
             .filter((r) => r.status === 'edited' || r.status === 'appended')
-            .filter((r) => r.values.rate !== undefined && r.values.rate !== null)
+            .filter((r) => {
+                const rate = Number(r.values.rate);
+                return Number.isFinite(rate) && rate > 0;
+            })
             .map((r) => ({
                 date: r.date,
                 value: Number(r.values.rate),
@@ -127,6 +130,7 @@
             markerStart: null,
             markerEnd: null,
             yAxisIndex: 0,
+            aggregationProfile: 'last_with_range',
         };
 
         onpendingchange?.(previewSignal);
@@ -309,11 +313,11 @@
 
     <!-- Save / Cancel bar -->
     <div class="flex items-center justify-end gap-2 px-1">
-        <button class="flex items-center gap-1.5 px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 disabled:opacity-50 transition-colors" disabled={saving || _dirtyCount === 0} onclick={handleSave}>
+        <button data-testid="fx-editor-save-btn" class="flex items-center gap-1.5 px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 disabled:opacity-50 transition-colors" disabled={saving || _dirtyCount === 0} onclick={handleSave}>
             <Save size={15} />
             {saving ? 'Saving...' : `Save (${_dirtyCount})`}
         </button>
-        <button class="flex items-center gap-1.5 px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors" onclick={handleCancel}>
+        <button data-testid="fx-editor-cancel-btn" class="flex items-center gap-1.5 px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors" onclick={handleCancel}>
             <X size={15} />
             Cancel
         </button>

@@ -52,6 +52,14 @@ Donde:
 - $R_{net}$ = rendimiento después de costes (lo que usted conserva realmente)
 - $V_{start}$ = valor de la cartera al inicio del periodo
 
+!!! note "Cómo LibreFolio atribuye comisiones e impuestos"
+
+    Una `FEE` / `TAX` **vinculada a un activo** se asigna a los lotes específicos a los que se refiere y determina
+    el **P&L neto / rendimiento neto** de ese lote (véase
+    [Análisis de Lotes FIFO → Costes y Métricas Netas](../../technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md#costs-and-net-metrics)).
+    Un coste **sin activo** (`asset_id = null`, p. ej. una comisión fija de la plataforma) es a nivel de cartera
+    y lo gestiona en su lugar el Portfolio Engine — nunca recae sobre un único lote.
+
 ### 📉 Efecto Compuesto de las Comisiones
 
 En periodos de tenencia prolongados, incluso las comisiones recurrentes pequeñas erosionan los rendimientos significativamente debido al **lastre del interés compuesto**:

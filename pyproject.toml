@@ -4,20 +4,18 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "librefolio"
-version = "0.6.x"
+version = "1.1.0"
 description = "Self-hosted financial portfolio tracker"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 authors = [
     {name = "Alfystar", email = "alfanoing@gmail.com"}
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
 ]
 
@@ -80,6 +78,11 @@ select = [
     "C4",     # flake8-comprehensions
     "UP",     # pyupgrade
     "PLC0415",  # import-outside-toplevel (imports inside functions)
+    "S110",   # try-except-pass (silent swallow) — audit 08/P0-3: punctual gate so fixed instances never come back
+    "C901",   # cyclomatic complexity — audit 08/P1-2: gate at 10; flat data packers carry a justified noqa
+    "RUF022",  # sorted __all__ — audit 08/P1-2 follow-up (03/09): adopted; the 5 deliberately
+               # comment-grouped barrels (db/__init__, db/base, schemas/__init__, schemas/assets,
+               # utils/financial/__init__) carry a justified `# noqa: RUF022` instead.
 ]
 ignore = [
     "E501",   # line too long (handled by black)
@@ -91,6 +94,13 @@ ignore = [
     "UP045",  # keep Optional[X] instead of X | None — more explicit with Pydantic
 ]
 
+[tool.ruff.lint.mccabe]
+# Threshold decided 03/09: 10 counts every decision point (incl. ternaries/boolean ops).
+# Functions whose branches are flat format/error handling (packers, CSV parsers) get a
+# per-function `# noqa: C901` with an explicit justification; genuinely nested logic is
+# marked TODO(P2-refactor) and tracked in the audit backlog.
+max-complexity = 10
+
 [tool.pytest.ini_options]
 testpaths = ["backend/tests"]
 python_files = "test_*.py"
@@ -98,3 +108,72 @@ python_classes = "Test*"
 python_functions = "test_*"
 addopts = "-v --strict-markers"
 
+[tool.vulture]
+# Dead-code detection. Run via `./dev.py lint --dead-code`.
+#
+# Vulture is purely static: it cannot see symbols reached through decorators,
+# dynamic registries or getattr(). Everything listed below is *known-live*
+# infrastructure that would otherwise flood the report with false positives.
+paths = ["backend/app"]
+min_confidence = 60
+exclude = [
+    "*/__pycache__/*",
+    "*/alembic/versions/*",
+]
+ignore_decorators = [
+    # FastAPI/Starlette route handlers — invoked by the framework, never called
+    # directly. Router variables are named inconsistently across modules
+    # (router, tx_router, brim_router, router_currencies, ...), hence the glob.
+    "@*.get",
+    "@*.post",
+    "@*.put",
+    "@*.patch",
+    "@*.delete",
+    "@*.head",
+    "@*.options",
+    "@*.websocket",
+    "@*.exception_handler",
+    "@*.middleware",
+    "@*.on_event",
+    # Pydantic v2 validators — resolved by the metaclass
+    "@field_validator",
+    "@model_validator",
+    "@field_serializer",
+    "@model_serializer",
+    "@computed_field",
+    "@validator",
+    "@root_validator",
+    # SQLAlchemy ORM/event hooks
+    "@event.listens_for",
+    "@hybrid_property",
+    # LibreFolio provider auto-discovery registries
+    "@register_provider",
+    "@register_plugin",
+    # pytest fixtures (only relevant when scanning test_scripts/)
+    "@pytest.fixture",
+]
+ignore_names = [
+    # SQLAlchemy/SQLModel event-listener signatures require positional params
+    # that the callback body legitimately ignores.
+    "mapper",
+    "connection",
+    "connection_record",
+    "connection_proxy",
+    "dbapi_connection",
+    # Pydantic/SQLModel declarative configuration blocks
+    "model_config",
+    "Config",
+    "__tablename__",
+    "__table_args__",
+    # Standard protocol hooks
+    "__init_subclass__",
+    "__class_getitem__",
+    # Provider plugin self-test contract: abstract properties every plugin must
+    # declare so the test harness can exercise it. Consumed only by tests *by
+    # design* — see AssetSourceProvider.test_cases / BRIMProvider.test_file_patterns.
+    "test_cases",
+    "test_currencies",
+    "test_file_patterns",
+    "test_file_pattern",
+    "multi_unit_currencies",
+]

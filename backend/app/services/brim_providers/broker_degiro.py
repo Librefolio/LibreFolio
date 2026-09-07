@@ -291,7 +291,7 @@ class DegiroBrokerProvider(BRIMProvider):
         except Exception:
             return False
 
-    def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:
+    def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:  # noqa: C901 — flat row loop: validation guards, column scan and sign rules, no nested logic
         """
         Parse DEGIRO CSV export file.
 

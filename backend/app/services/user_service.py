@@ -363,6 +363,7 @@ async def search_users(
     session: AsyncSession,
     query: str,
     exclude_broker_id: Optional[int] = None,
+    admins_only: bool = False,
 ) -> list[dict]:
     """
     Search users by username (ILIKE). Does NOT expose email for privacy.
@@ -371,11 +372,13 @@ async def search_users(
 
     Args:
         session: Database session
-        query: Search string (min 2 chars, searches username)
+        query: Search string matched against username; empty string matches every active user
         exclude_broker_id: If provided, exclude users already on this broker
+        admins_only: If provided and True, return only superusers and flag each row
+            with is_admin=True (for the update-check hint shown to non-admins)
 
     Returns:
-        List of dicts with id, username, avatar_url
+        List of dicts with id, username, avatar_url (+ is_admin when admins_only)
     """
     stmt = (
         select(User, UserSettings)
@@ -386,6 +389,9 @@ async def search_users(
         )
         .order_by(User.username)
     )
+
+    if admins_only:
+        stmt = stmt.where(User.is_superuser == True)  # noqa: E712 — SQLAlchemy filter
 
     if exclude_broker_id is not None:
         # Subquery to find users already on this broker
@@ -400,6 +406,7 @@ async def search_users(
             "id": user.id,
             "username": user.username,
             "avatar_url": settings.avatar_url if settings else None,
+            **({"is_admin": user.is_superuser, "email": user.email} if admins_only else {}),
         }
         for user, settings in rows
     ]

@@ -66,6 +66,7 @@
         {#each actions as action}
             <button
                 type="button"
+                data-testid="selection-bar-action-{action.id}"
                 class="flex items-center justify-center w-7 h-7 rounded-md transition-colors
                        {action.variant === 'danger'
                     ? 'text-red-500 bg-gray-100 hover:bg-red-50 hover:text-red-600 dark:bg-slate-700 dark:text-red-400 dark:hover:bg-red-900/30'
