@@ -212,7 +212,7 @@ LibreFolio se encuentra actualmente en **Beta** (versión 1.1.0). Las migracione
 - Al usar la etiqueta `:latest` en el archivo `docker-compose.yml`, recibirá de inmediato las últimas funciones, pero se expondrá a posibles incompatibilidades durante las actualizaciones automáticas.
 - Si prefiere estabilidad y un control absoluto, le recomendamos fijar la imagen reemplazando `:latest` con una etiqueta de versión específica (por ejemplo, `ghcr.io/librefolio/librefolio:v1.1.0`).
 
-### 🛠️ 1. Actualización manual
+### 🛠️ 1. Actualización manual {: #manual-update }
 
 Para actualizar LibreFolio manualmente a la última versión disponible:
 
