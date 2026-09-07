@@ -48,7 +48,7 @@ def _check_deps() -> None:
 # Configuration
 I18N_DIR = Path(__file__).parent.parent / "src" / "lib" / "i18n"
 LANGUAGES = ["en", "it", "fr", "es"]  # Order matters for display
-BACKEND_DIR = Path(__file__).parent.parent.parent / "backend"  # repo_root/backend
+BACKEND_DIR = Path(__file__).parent.parent.parent / "backend" / "app"
 
 
 def flatten_dict(d: dict, parent_key: str = "", sep: str = ".") -> dict[str, Any]:
@@ -187,13 +187,12 @@ def is_key_potentially_used(key: str, exact_keys: set[str], prefix_patterns: set
 def find_used_keys_in_backend() -> set[str]:
     """
     Scan backend/**/*.py for i18n keys passed as data (not called via $t()/$_()
-    in the frontend at all). Confirmed pattern: API response fields such as
-    `message_i18n_key="dataQuality.missingFx"` are set in backend services and
-    consumed dynamically in the frontend via `$_(issue.message_i18n_key)` —
-    a variable reference the static frontend scan can never resolve.
+    in the frontend at all). Confirmed patterns include API response fields such
+    as `message_i18n_key="dataQuality.missingFx"` and signal plugin metadata such
+    as `label_key="signals.adx.plusDi"` / `description_key="..."`, all consumed
+    dynamically by frontend components.
 
-    Returns the set of literal i18n keys found as `..._i18n_key="ns.key"` (or
-    `'ns.key'`) assignments anywhere under backend/.
+    Returns literal i18n keys found in supported backend metadata assignments.
     """
     import re
 
@@ -201,7 +200,8 @@ def find_used_keys_in_backend() -> set[str]:
     if not BACKEND_DIR.is_dir():
         return backend_keys
 
-    pattern = re.compile(r"[a-zA-Z_]*i18n_key\s*=\s*['\"]([a-zA-Z0-9_.]+)['\"]")
+    assignment_pattern = re.compile(r"(?:[a-zA-Z_]*i18n_key|display_name_key|description_key|label_key)\s*=\s*['\"]([a-zA-Z0-9_.]+)['\"]")
+    schema_pattern = re.compile(r"['\"]x-(?:i18n|tooltip)-key['\"]\s*:\s*['\"]([a-zA-Z0-9_.]+)['\"]")
 
     for file_path in BACKEND_DIR.rglob("*.py"):
         if "__pycache__" in str(file_path):
@@ -210,7 +210,8 @@ def find_used_keys_in_backend() -> set[str]:
             content = file_path.read_text(encoding="utf-8")
         except Exception:
             continue
-        backend_keys.update(pattern.findall(content))
+        backend_keys.update(assignment_pattern.findall(content))
+        backend_keys.update(schema_pattern.findall(content))
 
     return backend_keys
 
@@ -404,8 +405,8 @@ def generate_unused_keys_report(
         "\n**Note:** This analysis cannot detect:\n",
         "- Keys passed as variables computed from unrecognized expressions\n",
         "- Keys used in computed expressions not matching a known dynamic pattern\n\n",
-        "Backend-driven keys (e.g. `message_i18n_key=\"ns.key\"` set in `backend/**/*.py` and consumed "
-        "via `$_(issue.message_i18n_key)`) and camelCase-continuation dynamic templates (e.g. "
+        "Backend-driven keys (e.g. `message_i18n_key=\"ns.key\"` or signal `label_key=\"ns.key\"` metadata, "
+        "consumed dynamically by frontend components) and camelCase-continuation dynamic templates (e.g. "
         "`` $t(`prefix.historyDays${day}`) ``) ARE detected automatically and excluded below.\n\n",
         ]
 
@@ -900,9 +901,12 @@ def run_audit(format_type: str = "none", output: str | None = None, duplicates: 
     all_keys = get_all_keys(translations)
     exact_keys, prefix_patterns = find_used_keys_in_sources()
     backend_keys = find_used_keys_in_backend()
+    missing_backend_keys = sorted(backend_keys - set(all_keys))
     if backend_keys:
-        print(f"   Found {len(backend_keys)} keys used via backend-driven i18n_key fields: {', '.join(sorted(backend_keys))}")
+        print(f"   Found {len(backend_keys)} keys used via backend-driven metadata fields: {', '.join(sorted(backend_keys))}")
         exact_keys = exact_keys | backend_keys
+    if missing_backend_keys:
+        print(f"   ❌ Missing backend-driven translation keys: {', '.join(missing_backend_keys)}")
     unused_report, unused_keys = generate_unused_keys_report(all_keys, exact_keys, prefix_patterns)
     print(f"   Found {len(exact_keys)} exact keys in source code")
     print(f"   Found {len(prefix_patterns)} dynamic prefixes: {', '.join(sorted(prefix_patterns)) or 'none'}")
@@ -952,12 +956,13 @@ def run_audit(format_type: str = "none", output: str | None = None, duplicates: 
     incomplete = len(df) - complete
     print(f"  Complete:   {complete} ✅")
     print(f"  Incomplete: {incomplete} {'⚠️' if incomplete > 0 else ''}")
+    print(f"  Missing backend keys: {len(missing_backend_keys)} {'❌' if missing_backend_keys else ''}")
     print(f"  Unused:     {len(unused_keys)} {'⚠️' if len(unused_keys) > 0 else ''}")
     if duplicates:
         print(f"  Duplicates: {dup_count} unique group{'s' if dup_count != 1 else ''} {'ℹ️' if dup_count > 0 else ''}")
     print()
 
-    return 0
+    return 1 if missing_backend_keys else 0
 
 
 def add_arguments(parser) -> None:

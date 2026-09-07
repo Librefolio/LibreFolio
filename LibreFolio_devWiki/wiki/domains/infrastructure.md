@@ -111,12 +111,12 @@ graph TD
 | Test walkthrough | `mkdocs_src/docs/developer/test-walkthrough/index.md` |
 | Translation pipeline | `mkdocs_src/docs/developer/docs/translation-pipeline.md` |
 | Frontend state | `mkdocs_src/docs/developer/frontend/state/index.md` |
-| Data editor | `mkdocs_src/docs/developer/frontend/components/ui-base/data-editor.md` |
+| Data editor | `mkdocs_src/docs/developer/frontend/components/core-ui/data-editor.md` |
 | Provider registry | `backend/app/services/provider_registry.py` |
 | Thread isolation + 5-layer cache | `backend/app/services/asset_source.py` |
 | Zodios client | `frontend/src/lib/api/` |
-| TimeSeriesStore | `frontend/src/lib/stores/TimeSeriesStore.ts` |
-| EditBuffer | `frontend/src/lib/stores/EditBuffer.ts` |
+| TimeSeriesStore | `frontend/src/lib/stores/core/TimeSeriesStore.ts` |
+| EditBuffer | `frontend/src/lib/stores/core/EditBuffer.ts` |
 | Dockerfile | `Dockerfile` |
 | Dev CLI | `dev.py` + `scripts/` |
 | E2E tests | `frontend/e2e/` |

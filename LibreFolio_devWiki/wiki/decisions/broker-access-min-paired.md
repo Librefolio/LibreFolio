@@ -56,11 +56,11 @@ New field in `TXReadItem` — batch lookup of partner broker IDs for tooltip and
 
 | Role | Path |
 |------|------|
-| Broker role helpers | `frontend/src/lib/utils/brokerRoleHelpers.ts` |
-| Broker store | `frontend/src/lib/stores/brokerStore.ts` |
-| BrokerBadge (showRole) | `frontend/src/lib/components/ui/BrokerBadge.svelte` |
+| Broker role helpers | `frontend/src/lib/utils/broker/brokerRoleHelpers.ts` |
+| Broker store | `frontend/src/lib/stores/reference/brokerStore.ts` |
+| BrokerBadge (showRole) | `frontend/src/lib/components/ui/display/BrokerBadge.svelte` |
 | Transaction service | `backend/app/services/transaction_service.py` |
 | Transaction schemas | `backend/app/schemas/transactions.py` |
-| Delete modal | `frontend/src/lib/components/transactions/TransactionDeleteModal.svelte` |
+| Delete modal | `frontend/src/lib/components/transactions/modals/TransactionDeleteModal.svelte` |
 | Broker service | `backend/app/services/broker_service.py` |
 

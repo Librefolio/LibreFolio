@@ -5,8 +5,8 @@
   The cache is loaded lazily (`ensureAssetsLoaded()` is called on mount), so
   the component is self-sufficient — callers just bind a `value: number | null`.
 
-  Each option shows: [type icon] display_name [(currency)]; inactive assets are
-  greyed out via `disabled`.
+  Each option shows: [type icon] display_name [(currency)]; inactive assets remain
+  selectable but are sorted last and marked with an "inactive" badge (P3/A1).
 
   Pattern: Svelte 5 runes, dark mode via Tailwind, `data-testid` for E2E.
 
@@ -69,8 +69,19 @@
         const baseOptions = filtered.map<SelectOption>((a) => ({
             value: String(a.id),
             label: a.display_name,
-            searchText: [a.identifier_isin, a.identifier_ticker, a.currency, a.asset_type].filter(Boolean).join(' '),
-            disabled: a.active === false,
+            // P3/A6: `identifier_other` holds alternate codes (e.g. the non-tradeable
+            // "CUM" ISIN of an Italian BTP). Omitting it made those codes unsearchable
+            // even though they were stored on the asset.
+            //
+            // Currency and asset type are deliberately *not* here. They are properties
+            // shared by hundreds of rows, so any query that is a prefix of one — `eur`,
+            // `bon`, `etf` — matched the whole list, and the search looked as if it only
+            // began working from the fourth letter. An identifier names an instrument;
+            // a currency describes it.
+            searchText: [a.identifier_isin, a.identifier_ticker, ...(a.identifier_other ?? [])].filter(Boolean).join(' '),
+            // P3/A1: inactive assets stay selectable — imports are retroactive by nature,
+            // and final coupons, redemptions and loyalty premiums land on matured
+            // (hence deactivated) securities. Selecting one does NOT reactivate it.
             icon: a.icon_url || (a.asset_type ? getAssetTypeIconUrl(a.asset_type) : undefined),
             data: a,
         }));
@@ -120,7 +131,14 @@
                     </span>
                 {/if}
                 <div class="min-w-0 flex-1">
-                    <div class="font-medium text-gray-900 dark:text-gray-100 truncate text-sm">{a?.identifier_ticker || option.label}</div>
+                    <div class="font-medium text-gray-900 dark:text-gray-100 truncate text-sm flex items-center gap-1.5">
+                        <span class="truncate">{a?.identifier_ticker || option.label}</span>
+                        {#if a?.active === false}
+                            <span data-testid="asset-select-selected-inactive-badge" class="shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-gray-400">
+                                {$t('assets.edit.status.inactive')}
+                            </span>
+                        {/if}
+                    </div>
                     <div class="text-xs text-gray-500 dark:text-gray-400 truncate">
                         {option.label}{#if a?.currency}{@const ci = getCurrencyInfo(a.currency)} ·
                             <span class="inline-flex items-center gap-0.5"
@@ -136,7 +154,12 @@
                 {#if option.icon}
                     <img src={option.icon} alt="" class="w-4 h-4 rounded-sm object-contain shrink-0" onerror={hideOnError} />
                 {/if}
-                <span class="truncate text-sm">{a?.identifier_ticker ? `${a.identifier_ticker} · ${option.label}` : option.label}</span>
+                <span class="truncate text-sm {a?.active === false ? 'opacity-60' : ''}">{a?.identifier_ticker ? `${a.identifier_ticker} · ${option.label}` : option.label}</span>
+                {#if a?.active === false}
+                    <span data-testid="asset-select-inactive-badge" class="shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-gray-400">
+                        {$t('assets.edit.status.inactive')}
+                    </span>
+                {/if}
                 {#if option.badge}
                     {#if option.badgeTooltip}
                         <Tooltip text={option.badgeTooltip} position="left" maxWidth="220px">

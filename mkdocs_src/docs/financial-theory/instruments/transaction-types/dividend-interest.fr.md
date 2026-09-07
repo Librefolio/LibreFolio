@@ -32,7 +32,7 @@ Utilisez ces transactions lorsque des liquidités arrivent sur votre compte de c
 
 ## 💰 Les dividendes en détail
 
-### Événement vs Transaction
+### Event vs Transaction
 
 | Concept | Événement de dividende | Transaction de dividende |
 |---------|------------------------|-------------------------|
@@ -41,7 +41,7 @@ Utilisez ces transactions lorsque des liquidités arrivent sur votre compte de c
 | **Enregistré par** | Fournisseur ou manuellement (Éditeur de données) | Relevé de courtage (import BRIM) |
 | **Impact sur le graphique** | Marqueur losange (◆) sur le graphique des prix | Non visible sur le graphique |
 
-### Montant du dividende
+### Dividend du dividende
 
 Le montant reçu dépend du nombre d'actions détenues à la **date d'enregistrement** :
 
@@ -49,7 +49,7 @@ $$
 \text{Dividende reçu} = \text{Actions détenues} \times \text{Dividende par action}
 $$
 
-### Retenue à la source
+### Withholding à la source
 
 De nombreuses juridictions appliquent une **retenue à la source** sur les dividendes — en particulier pour les actions étrangères. L'impôt est prélevé à la source :
 

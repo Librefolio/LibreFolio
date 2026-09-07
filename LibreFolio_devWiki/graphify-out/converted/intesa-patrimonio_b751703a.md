@@ -1,0 +1,22 @@
+<!-- converted from intesa-patrimonio.xlsx -->
+
+## Sheet: Sheet0
+| Investimenti |  |  |  | Totale Controvalore |  |  | 0,43% | 590,09 € |  | 136.278,63 € |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Deposito Amministrato 0000000000000000000000 |  |  |  | Controvalore |  |  | 0,43 % | 590,09 € |  | 136.278,63 € |
+| Descrizione | ISIN | Numero Quote | Valore quota di carico € | Valore Ultima Quota | Var %  | Data Ultima Quota | Utile Perdite |  | Controvalore di carico fiscale € | Controvalore € |
+|  |  |  |  |  |  |  | Var.% | Var.€ |  |  |
+| EURIZON NEXT 2.0  DIVERSIFICATO 40 P | LU2178929613 | 92,71 | 107,7662 € | 122,5 € | 0,12 % | 22.07.2026 | 13,67% | 1.365,98 | 9.991 | 11.356,98 |
+| EURIZON NEXT 2.0 - SELEZIONE PRUDENTE P | LU2178932757 | 91,861 | 108,76174 € | 119,2 € | 0,13 % | 22.07.2026 | 9,60% | 958,87 | 9.990,96 | 10.949,83 |
+| EURIZON NEXT 2.0 - STRATEGIA OBBLIGAZIONARIA P | LU2178928565 | 86,806 | 112,026221 € | 112,29 € | -0,02 % | 22.07.2026 | 0,24% | 22,90 | 9.724,55 | 9.747,45 |
+| EURIZON NEXT 2.0 - SELEZIONE EQUILIBRIO P | LU2178932245 | 52,682 | 113,549784 € | 124,81 € | 0,18 % | 22.07.2026 | 9,92% | 593,21 | 5.982,03 | 6.575,24 |
+| Totale Fondi e Sicav |  |  |  |  |  |  | 8,24% | 2.940,96 |  | 38.629,50 |
+| Descrizione | ISIN | Quantità | Prezzo medio fiscale | Prezzo Mercato | Var %  | Data-Ora | Utile-Perdite |  | Controvalore di carico fiscale € | Controvalore € |
+|  |  |  |  |  |  |  | Var.% | Var.€ |  |  |
+| BTPFUT 17NV28 SU CUM | IT0005425753 | 50.000 | 100 € | 95,13 € | 0,01 % | 24.07.2026 | -4,87% | -2.435,00 | 50.000 | 47.565,00 |
+| BTPIT 28GN30 1,60CUM | IT0005496994 | 35.000 | 100 € | 100,94 € | -0,12 % | 24.07.2026 | 1,29% | 450,13 | 35.000 | 35.450,13 |
+| BTPPIU 25FB33 SU PUT | IT0005634792 | 15.000 | 100 € | 97,56 € | 0,32 % | 24.07.2026 | -2,44% | -366,00 | 15.000 | 14.634,00 |
+| Totale Titoli di stato |  |  |  |  |  |  | -2,35% | -2.350,87 |  | 97.649,13 |
+| Liquidità |  |  |  |  |  |  |  |  | Saldo totale | 14.757,45 € |
+| Saldo disponibilità conti (escluso fido) |  |  |  |  |  |  |  |  |  | 14.757,45 € |
+| Conto 00000/0000/00000000 |  |  |  |  |  |  |  |  |  | 14757.45 |

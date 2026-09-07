@@ -16,6 +16,14 @@ This directory contains sample broker report files for testing BRIM plugins.
 | `generic_with_assets.csv`   | Transactions with asset identifiers                | Fake IDs assigned, assets classified            |
 | `generic_no_asset.csv`      | No asset column - requires manual mapping          | UNKNOWN_ROW_* fake IDs for asset-required types |
 
+### Fineco Plugin (`broker_fineco`)
+
+| File                   | Description                                              | Expected Result                                             |
+|------------------------|---------------------------------------------------------|-------------------------------------------------------------|
+| `fineco-export.csv`    | Variant B (15 columns, with commission columns)         | Trades/dividends/coupons/redemptions + separate FEE rows    |
+| `fineco_variant_a.csv` | Variant A (11 columns, no commission columns)           | Same operations parsed, no FEE rows (currency from Divisa)  |
+
+
 ## File Format
 
 All CSV files should have headers in the first row. The plugin auto-detects

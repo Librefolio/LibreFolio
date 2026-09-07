@@ -14,6 +14,9 @@
     import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
     import type {PositionsContribution} from '$lib/stores/portfolio/portfolioStore.svelte';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {translateOr} from '$lib/utils/core/translateOr';
+    import {safeDecimal, safeNumber, safeString} from '$lib/types';
 
     type OtherPeriodEffect = NonNullable<PositionsContribution['other_effects']>[number];
 
@@ -35,42 +38,16 @@
 
     let tableShell: HTMLDivElement | null = $state(null);
 
-    function safeNum(v: string | (string | null)[] | null | undefined): number | null {
-        const s = Array.isArray(v) ? (v[0] ?? null) : v;
-        if (s == null) return null;
-        const n = parseFloat(s);
-        return Number.isNaN(n) ? null : n;
-    }
-
-    function safeInt(v: number | (number | null)[] | null | undefined): number | null {
-        if (v == null) return null;
-        return Array.isArray(v) ? (v[0] ?? null) : v;
-    }
-
-    function safeStr(v: string | (string | null)[] | null | undefined): string | null {
-        if (v == null) return null;
-        return Array.isArray(v) ? (v[0] ?? null) : v;
-    }
-
-    function label(key: string, fallback: string): string {
-        const translated = $_(key);
-        return !translated || translated === key ? fallback : translated;
-    }
-
     let rows = $derived.by<DisplayRow[]>(() =>
         (effects ?? []).map((effect, index) => ({
-            key: `effect-${index}-${effect.category}-${safeInt(effect.broker_id) ?? 'global'}`,
+            key: `effect-${index}-${effect.category}-${safeNumber(effect.broker_id) ?? 'global'}`,
             description: effect.description,
             category: effect.category,
-            periodPnl: safeNum(effect.period_pnl),
-            brokerId: safeInt(effect.broker_id),
-            brokerName: safeStr(effect.broker_name),
+            periodPnl: safeDecimal(effect.period_pnl),
+            brokerId: safeNumber(effect.broker_id),
+            brokerName: safeString(effect.broker_name),
         })),
     );
-
-    function escapeHtml(value: string): string {
-        return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    }
 
     function categoryBadgeClass(category: string): string {
         switch (category) {
@@ -84,18 +61,18 @@
     }
 
     function categoryLabel(category: string): string {
-        if (category === 'Income') return label('dashboard.categoryIncome', category);
-        if (category === 'Cost') return label('dashboard.categoryCost', category);
-        if (category === 'Other') return label('dashboard.categoryOther', category);
+        if (category === 'Income') return translateOr($_, 'dashboard.categoryIncome', category);
+        if (category === 'Cost') return translateOr($_, 'dashboard.categoryCost', category);
+        if (category === 'Other') return translateOr($_, 'dashboard.categoryOther', category);
         return category;
     }
 
     /** Backend sends fixed English description strings (never localized) — translate
      *  the known ones instead of leaking raw English into other languages. */
     function descriptionLabel(description: string): string {
-        if (description === 'Unallocated income') return label('dashboard.unallocatedIncome', description);
-        if (description === 'Unallocated costs') return label('dashboard.unallocatedCosts', description);
-        if (description === 'Other / reconciliation residual') return label('dashboard.otherReconciliationResidual', description);
+        if (description === 'Unallocated income') return translateOr($_, 'dashboard.unallocatedIncome', description);
+        if (description === 'Unallocated costs') return translateOr($_, 'dashboard.unallocatedCosts', description);
+        if (description === 'Other / reconciliation residual') return translateOr($_, 'dashboard.otherReconciliationResidual', description);
         return description;
     }
 
@@ -121,7 +98,7 @@
     let columns = $derived.by<ColumnDef<DisplayRow>[]>(() => [
         {
             id: 'description',
-            header: () => label('common.description', 'Description'),
+            header: () => translateOr($_, 'common.description', 'Description'),
             type: 'text',
             width: 320,
             minWidth: 240,
@@ -137,7 +114,7 @@
         },
         {
             id: 'category',
-            header: () => label('common.category', 'Category'),
+            header: () => translateOr($_, 'common.category', 'Category'),
             type: 'text',
             width: 120,
             minWidth: 110,
@@ -153,7 +130,7 @@
         },
         {
             id: 'period-pnl',
-            header: () => label('dashboard.periodPnl', 'Period P&L'),
+            header: () => translateOr($_, 'dashboard.periodPnl', 'Period P&L'),
             type: 'number',
             width: 150,
             minWidth: 140,
@@ -170,7 +147,7 @@
         },
         {
             id: 'broker',
-            header: () => label('common.broker', 'Broker'),
+            header: () => translateOr($_, 'common.broker', 'Broker'),
             type: 'text',
             width: 190,
             minWidth: 150,
@@ -250,10 +227,10 @@
     <section class="mt-3 rounded-lg border border-gray-200/80 bg-gray-50/80 dark:border-slate-700 dark:bg-slate-900/30" data-testid="other-period-effects-table">
         <div class="border-b border-gray-200/80 px-3 py-2 dark:border-slate-700" data-testid="other-period-effects-header">
             <h3 class="text-[11px] font-semibold uppercase tracking-wide text-gray-700 dark:text-gray-200">
-                {label('dashboard.otherPeriodEffects', 'Other Period Effects')}
+                {translateOr($_, 'dashboard.otherPeriodEffects', 'Other Period Effects')}
             </h3>
             <p class="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">
-                {label('dashboard.otherPeriodEffectsSubtitle', 'Effects that contribute to period P&L but are not linked to a specific asset')}
+                {translateOr($_, 'dashboard.otherPeriodEffectsSubtitle', 'Effects that contribute to period P&L but are not linked to a specific asset')}
             </p>
         </div>
 

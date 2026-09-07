@@ -1,6 +1,6 @@
 # 🔬 Analisi dei Lotti FIFO
 
-L'analisi dei lotti FIFO è il complemento **per lotto** del [Prezzo Medio di Carico (PMC)](../weighted-average-cost.md).
+L'analisi dei lotti FIFO è il complemento **per lotto** del [Prezzo Medio di Carico (PMC)](../weighted-average-cost.md). Vedi [Risoluzione Prezzi](../portfolio-engine/price-resolution.md).
 
 Il PMC risponde: _"Qual è il mio prezzo medio di carico per questa posizione?"_ L'analisi dei lotti FIFO risponde a una domanda diversa: _"Come sta andando ogni singolo lotto di acquisto nel tempo?"_
 
@@ -46,12 +46,16 @@ In pratica:
 
 - se esiste una quotazione di mercato alla data di apertura del lotto, quella quotazione di apertura diventa `prezzo_di_riferimento`
 - se il lotto è stato aperto prima della prima quotazione di mercato disponibile, il sistema utilizza come riferimento il costo di apertura del lotto stesso, scalato alle unità della quotazione di mercato
+- `reference_price_source` registra se il riferimento era `exact`, `fallback` o `unavailable`
 
 Questa metrica esclude dividendi, interessi e ricavi di vendita realizzati. Risponde: _"Quanto si è mosso il prezzo di mercato da quando questo lotto è stato aperto?"_
 
 !!! tip "Fallback del prezzo di riferimento"
 
     Quando non esiste una quotazione di mercato del giorno di apertura, LibreFolio utilizza il prezzo di acquisto del lotto come base di riferimento, scalato alla convenzione di quotazione dell'asset. Questo evita rendimenti percentuali fuorvianti su strumenti quotati per 100 unità nominali.
+
+
+    Il fallback è $\text{OpeningUnitPrice}\times qbq$. Per `qbq = 100`, un'obbligazione acquistata a `0.992` viene confrontata sull'asse della quotazione di mercato come `99.20`, non `0.992`.
 
 <div class="screenshot-container">
  <img class="gallery-img" data-category="dashboard" data-name="fifo-lots-wac-chart" alt="Grafico PMC / Prezzo di Mercato — una bolla per lotto, colorata per broker di apertura, dimensionata per valore di apertura, tracciata sulla linea del prezzo di mercato">
@@ -160,7 +164,7 @@ Senza questo ridimensionamento, i rendimenti e le valutazioni delle obbligazioni
 
 ---
 
-## 🛟 Stimato al Costo
+## 🛟 Stimato al Costo {: #estimated-at-cost }
 
 Se non è disponibile un prezzo di mercato in tempo reale per un asset, LibreFolio **non** interrompe l'analisi. Invece, valuta temporaneamente la parte ancora aperta del lotto al costo:
 
@@ -178,6 +182,9 @@ Implicazione pratica:
 - i ricavi già realizzati rimangono ancora visibili
 - i dividendi o gli interessi allocati rimangono ancora visibili
 - **la volatilità non realizzata è temporaneamente sottostimata**
+- `value_source` = `ESTIMATED_AT_COST`
+- `market_pnl` = 0
+- codice problema qualità dati: `CURRENT_PRICE_ASSUMED_AT_COST`
 
 !!! info "Interpretazione"
 
@@ -187,25 +194,39 @@ Implicazione pratica:
 
 ## 💸 Allocazione del Reddito tra i Lotti {: #income-allocation-across-lots }
 
-I dividendi e gli interessi collegati a un asset vengono allocati **pro-rata tra tutti i lotti in acquisto che sono aperti alla data del reddito**.
+I dividendi e gli interessi collegati a un asset vengono allocati **pro-rata tra i lotti in acquisto ammissibili
+al giorno precedente la data del reddito (D-1)**, e solo tra i lotti detenuti **presso il broker pagatore**.
 
 Regola di allocazione esatta:
 
 $$
-w_i(t) = \frac{\text{QtàAperta}_i(t)}{\sum_j \text{QtàAperta}_j(t)}
+w_i(D) = \frac{\text{QtàAmmissibile}_i(D)}{\sum_j \text{QtàAmmissibile}_j(D)}, \qquad
+\text{QtàAmmissibile}_i(D) = \text{QtàAperta}_i(D-1)
 $$
 
 $$
-\text{Reddito}_i = \text{Converti}(I, val, t)\cdot w_i(t)
+\text{Reddito}_i = \text{Converti}(I, val, D)\cdot w_i(D)
 $$
 
 Dove:
 
-- $I$ = importo del reddito ricevuto
-- $\text{Converti}(I, val, t)$ = reddito convertito nella valuta di destinazione alla data $t$
-- solo i lotti in acquisto ancora aperti al tempo $t$ partecipano al denominatore
+- $I$ = importo del reddito ricevuto alla data $D$
+- $\text{Converti}(I, val, D)$ = reddito convertito nella valuta di destinazione alla data $D$
+- $\text{QtàAmmissibile}_i(D)$ = quantità del lotto $i$ aperta presso il **broker pagatore** al $D-1$ (la quantità
+  in trasferimento in uscita da quel broker conta comunque come originata lì)
+- solo i lotti in acquisto partecipano al denominatore
 
-Ciò significa che i lotti aperti più grandi ricevono una quota maggiore del dividendo o della cedola, mentre i lotti già chiusi non ne ricevono alcuna.
+La regola **D-1** mantiene puntuale la data di rilevazione: un acquisto effettuato *nel* giorno del reddito non
+matura quella distribuzione, e nemmeno un lotto venduto il giorno precedente. I lotti ammissibili più grandi
+ricevono una quota maggiore; i lotti detenuti presso altri broker, o non ancora (o non più) ammissibili, non
+ricevono nulla.
+
+!!! warning "Modificato in FIFO v5"
+
+    Le versioni precedenti utilizzavano la data del reddito stessa con **tutti** i broker ($\text{QtàAperta}_i(t)$
+    su ogni lotto). Il motore attuale utilizza l'ammissibilità al D-1 limitata al broker pagatore. Se nessun lotto
+    è ammissibile, il reddito viene mantenuto come **reddito orfano a livello di asset** (mai perso, mai assegnato
+    al lotto sbagliato).
 
 !!! tip "Regola di conservazione"
 
@@ -219,20 +240,84 @@ La riga **Reddito Asset** della modale di dettaglio del lotto è esattamente $\t
 
 ---
 
+## 💸 Costi e Metriche Nette {: #costs-and-net-metrics }
+
+Le `FEE` e `TAX` collegate a un asset vengono allocate ai lotti tramite una **scala deterministica di abbinamento
+alle operazioni**, per poi essere sottratte e produrre le cifre **nette** insieme a quelle **lorde**.
+
+### 🧭 deterministica dei costi
+
+Un pool di costo (stesso broker, stesso giorno, stesso tipo) viene abbinato al primo target non vuoto in questo ordine:
+
+| Costo | Ordine di abbinamento |
+|------|----------------|
+| `FEE` | operazioni dello stesso giorno → operazioni del giorno precedente → posizioni aperte → orfano a livello di asset |
+| `TAX` | reddito dello stesso giorno → operazioni dello stesso giorno → reddito del giorno precedente → operazioni del giorno precedente → posizioni aperte → orfano a livello di asset |
+
+All'interno di un'operazione abbinata, il costo **passa esattamente ai lotti toccati da quell'operazione** — il
+costo di un ACQUISTO finisce sul lotto che ha aperto, il costo di una VENDITA finisce sui lotti consumati in FIFO
+— quindi l'attribuzione del costo non contraddice mai l'abbinamento FIFO stesso. Gli importi vengono convertiti
+nella valuta di destinazione e memorizzati come magnitudini positive.
+
+!!! tip "Conservazione"
+
+    Per pool, $\sum_i \text{Costo}_i + \text{Orfano} = \text{Converti}(\text{pool}, val, D)$. Un costo che non
+    trova alcun lotto ammissibile (es. una commissione registrata dopo che la posizione è stata completamente
+    chiusa) diventa **costo orfano a livello di asset** invece di essere scartato o forzato su un lotto non
+    correlato.
+
+### ⚖️ Lordo vs netto
+
+Con i costi attribuiti per lotto, LibreFolio riporta sia la performance lorda che quella netta:
+
+$$
+\text{PnL Totale Netto}_i = \text{PnL Totale}_i - \text{Commissioni}_i - \text{Tasse}_i
+$$
+
+$$
+\text{RendimentoTotaleNetto}_i = \frac{\text{PnL Totale Netto}_i}{\text{ValoreIniziale}_i}
+
+$$
+
+Il rendimento annualizzato del lotto utilizza il rendimento **netto**, non quello lordo:
+
+$$
+\mathrm{AnnualizedReturn}_i = \left(1+\mathrm{NetTotalReturn}_i\right)^{365/d_i}-1
+$$
+
+con $d_i$ dalla data di apertura alla data di chiusura per i lotti chiusi, o alla data di fine analisi per i lotti aperti. Finestre inferiori a 30 giorni non restituiscono un valore annualizzato; vedi [Rendimento Annualizzato Netto](../portfolio-engine/net-annualized-return.md).
+
+dove $\text{PnL Totale}_i$ **include** già il reddito (PnL di mercato + PnL realizzato + reddito da asset). La
+serie storica del valore per lotto riporta invece un PnL netto *solo di capitale*,
+$\text{pnl}_i - \text{Commissioni}_i - \text{Tasse}_i$, che **esclude** il reddito — ogni riga netta rispecchia
+la propria controparte lorda meno i costi.
+
+!!! example "Numeri esemplificativi"
+
+    ACQUISTO 10×100, VENDITA 4×120, prezzo corrente 110, dividendo 50, commissioni 8, tasse 5:
+    P&L Totale Lordo $= 60 + 80 + 50 = 190$; P&L Totale Netto $= 190 - 13 = 177$; su un valore iniziale di 1.000
+    corrisponde a un rendimento totale del **19%** lordo contro il **17,7%** netto.
+
+I costi con `asset_id = null` **non** fanno parte di questa vista a livello di lotto — sono a livello di
+portafoglio e gestiti dal [Portfolio Engine](../portfolio-engine/roi.md). Vedi
+[Commissioni e Tasse](../../../instruments/transaction-types/fee.md) per la teoria a livello di strumento.
+
+---
+
 ## 📝 Esempio Pratico
 
 ??? example "Esempio: due lotti, un dividendo, un prezzo di mercato"
 
-    Supponiamo stessa azione, stessa valuta, `qbq = 1`.
+    Supponiamo stesso titolo, stessa valuta, `qbq = 1`.
 
     | Data | Evento | Q.tà Aperta Lotto A | Q.tà Aperta Lotto B | Note |
     |------|-------|----------------|----------------|-------|
     | 2 Gen | ACQUISTO 100 @ $10 | 100 | 0 | Il lotto A si apre con costo originale $1.000 |
     | 10 Feb | ACQUISTO 50 @ $14 | 100 | 50 | Il lotto B si apre con costo originale $700 |
     | 15 Mar | DIVIDENDO $30 | 100 | 50 | Entrambi i lotti sono ancora aperti |
-    | 1 Apr | Prezzo mercato = $16 | 100 | 50 | Valuta entrambi i lotti |
+    | 1 Apr | Prezzo di mercato = $16 | 100 | 50 | Valuta entrambi i lotti |
 
-    **Passo 1 — Alloca dividendo pro-rata**
+    **Passo 1 — Alloca dividendo pro-quota**
 
     $$
     w_A = \frac{100}{100 + 50} = \frac{2}{3}
@@ -241,54 +326,55 @@ La riga **Reddito Asset** della modale di dettaglio del lotto è esattamente $\t
     $$
 
     $$
-    \text{Reddito}_A = 30 \times \frac{2}{3} = 20
+    \text{Income}_A = 30 \times \frac{2}{3} = 20
     \qquad
-    \text{Reddito}_B = 30 \times \frac{1}{3} = 10
+    \text{Income}_B = 30 \times \frac{1}{3} = 10
     $$
 
-    **Passo 2 — Rendimento Non Realizzato per ogni lotto**
+    **Passo 2 — Rendimento Aperto per ogni lotto**
 
     $$
-    \text{RendimentoRelativo}_A = \frac{16}{10} - 1 = 60,00\%
+    \text{RelativeReturn}_A = \frac{16}{10} - 1 = 60.00\%
     $$
 
     $$
-    \text{RendimentoRelativo}_B = \frac{16}{14} - 1 \approx 14,29\%
+    \text{RelativeReturn}_B = \frac{16}{14} - 1 \approx 14.29\%
     $$
 
     **Passo 3 — Valore di mercato e Rendimento Totale**
 
     $$
-    \text{ValoreCorrente}_A = 100 \times 16 = 1.600
+    \text{OpenValue}_A = 100 \times 16 = 1,600
     \qquad
-    \text{ValoreCorrente}_B = 50 \times 16 = 800
+    \text{OpenValue}_B = 50 \times 16 = 800
     $$
 
-    Poiché nessuna azione è stata ancora venduta, ricavi e P&L realizzato sono entrambi zero.
+    Poiché nessuna azione è stata ancora venduta, i ricavi e il PnL realizzato sono entrambi zero.
 
     $$
-    \text{PnL Totale}_A = (1.600 - 1.000) + 20 = 620
-    $$
-
-    $$
-    \text{RendimentoTotale}_A = \frac{620}{1.000} = 62,00\%
+    \text{TotalPnL}_A = (1,600 - 1,000) + 20 = 620
     $$
 
     $$
-    \text{PnL Totale}_B = (800 - 700) + 10 = 110
+    \text{TotalReturn}_A = \frac{620}{1,000} = 62.00\%
     $$
 
     $$
-    \text{RendimentoTotale}_B = \frac{110}{700} \approx 15,71\%
+    \text{TotalPnL}_B = (800 - 700) + 10 = 110
+    $$
+
+    $$
+    \text{TotalReturn}_B = \frac{110}{700} \approx 15.71\%
     $$
 
     **Passo 4 — Rendimento aggregato tra i lotti visualizzati**
 
     $$
-    \text{RendimentoAggregato} = \frac{620 + 110}{1.000 + 700} = \frac{730}{1.700} \approx 42,94\%
+    \text{AggregateReturn} = \frac{620 + 110}{1,000 + 700} = \frac{730}{1,700} \approx 42.94\%
     $$
 
-    Anche se entrambi i lotti appartengono allo stesso asset, i loro rendimenti differiscono perché sono stati aperti a prezzi diversi.
+    Anche se entrambi i lotti appartengono allo stesso asset, hanno basi di costo e date diverse, quindi producono percentuali di rendimento significativamente diverse.
+
 
 ---
 

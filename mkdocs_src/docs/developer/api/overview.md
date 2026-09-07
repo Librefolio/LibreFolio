@@ -68,6 +68,53 @@ This ensures that if the backend API changes (e.g., a field is renamed), the fro
 
 ---
 
+## 📜 Contract Rules
+
+Three rules the pipeline depends on. Breaking any of them fails the **frontend build**, not a
+backend test — which is why they are written down here.
+
+### 1. Every endpoint declares `response_model`
+
+Every API endpoint declares an explicit `response_model` Pydantic schema: the generated client
+is only as typed as the OpenAPI schema, and an endpoint without a model silently degrades to
+`unknown`. The audit (08) closed the last stragglers; the deliberate exceptions are endpoints
+that do not return JSON documents — the SSE stream (`GET /assets/provider/search/stream`),
+binary file downloads (`FileResponse` under `/uploads/file/…`, `/brim/files/…/download`), and a
+handful of legacy `dict` returns.
+
+### 2. New discriminated-union members register in `fix-openapi-discriminators.mjs`
+
+Pydantic discriminated unions (`Annotated[A | B, Field(discriminator="kind")]`) generate
+correct OpenAPI, but `openapi-zod-client` exports each member as
+`const Member: z.ZodType<Member> = …` — the exported `z.ZodType<T>` annotation **hides the
+`ZodObject` methods** that `z.discriminatedUnion` needs, and the generated client fails to
+compile. The post-processor `frontend/scripts/fix-openapi-discriminators.mjs` strips that
+annotation for a hardcoded list of schemas (**40 today**), letting TypeScript infer the
+concrete type while keeping the exported alias. It runs as part of `npm run generate-api`
+(which `./dev.py api sync` / `./dev.py api client` wrap) and **throws** if a registered schema
+is not found exactly once — a stale entry fails loud, never silently.
+
+> When you add a new member to a discriminated union, add its schema name to
+> `discriminatedSchemas` in `frontend/scripts/fix-openapi-discriminators.mjs`, then re-run
+> `./dev.py api sync`.
+
+### 3. Discriminator fields carry an explicit `enum`
+
+The discriminator field of each union member must pin its value with
+`Field(json_schema_extra={"enum": [...]})`:
+
+```python
+class SchedulerLogCurrentPriceEntry(BaseModel):
+    job: Literal["current_price"] = Field(json_schema_extra={"enum": ["current_price"]})
+```
+
+Without the extra, the discriminator is emitted without an enum constraint and the generated
+TypeScript client fails to compile (real incident, 03/09 — the scheduler log union). This
+pattern is used across `schemas/signals.py`, `schemas/ai_export_runtime.py`, `schemas/risk.py`,
+`schemas/risk_scenarios.py`, and `schemas/settings.py`.
+
+---
+
 ## 📡 Notable Endpoints
 
 ### `POST /api/v1/assets/prices/current` — Bulk Current Price

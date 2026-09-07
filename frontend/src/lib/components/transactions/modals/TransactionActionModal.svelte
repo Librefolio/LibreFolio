@@ -1,6 +1,6 @@
 <!--
   TransactionActionModal.svelte — Rich confirmation for split and promote actions.
-  Uses tabular layout (From/To columns) matching TransactionDeleteModal style.
+  Uses tabular layout (From/To columns).
   - mode='split': shows BEFORE (paired) → AFTER (2 standalone) preview
   - mode='promote': shows 2 standalone → paired target preview
   Plan D2 Bugfix 3 Step 4 — tabular redesign (2026-05-14).
@@ -10,7 +10,7 @@
     import {Unlink, Link2, ArrowDown} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
-    import {getBrokerInfo, getAllBrokers, getBrokerRole} from '$lib/stores/reference/brokerStore';
+    import {getBrokerInfo, getAccessibleBrokers, getBrokerRole} from '$lib/stores/reference/brokerStore';
     import {getTransactionTypeIconUrl} from '$lib/stores/transactions/transactionTypeStore';
     import {getStringBadgeStyle} from '$lib/utils/colors';
     import {formatTxQuantity, formatTxCash} from '../shared/txDisplayHelpers';
@@ -52,7 +52,7 @@
 
     let {open, mode, transaction = null, partner = null, targetTypeLabel = '', targetType = '', loading = false, onConfirm, onCancel}: Props = $props();
 
-    let brkrs = $derived(getAllBrokers() as BrokerLike[]);
+    let brkrs = $derived(getAccessibleBrokers() as BrokerLike[]);
 
     function bLike(brokerId: number): BrokerLike {
         return (getBrokerInfo(brokerId) as BrokerLike) ?? ({id: brokerId, name: `#${brokerId}`} as BrokerLike);

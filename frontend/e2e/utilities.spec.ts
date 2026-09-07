@@ -12,7 +12,7 @@
  * - FinancialSector.list_all() → sector_fin_utils.py
  */
 
-import {expect, test} from '@playwright/test';
+import {expect, test} from './fixtures/playwright';
 import {login} from './fixtures/auth-helpers';
 import {TEST_USER} from './fixtures/test-users';
 import {goToFxPage} from './fx/fx-helpers';
@@ -137,7 +137,9 @@ test.describe('Utilities API — Countries', () => {
 
     test('country list has ISO codes', async ({page}) => {
         await login(page, TEST_USER);
-        const response = await page.request.get(`${API}/countries`);
+        // `include_other=false`: the default list ends with an intentional "Other"
+        // catch-all whose iso3 is the literal string "Other", not an ISO code.
+        const response = await page.request.get(`${API}/countries?include_other=false`);
         const data = await response.json();
 
         for (const country of data.items) {
@@ -154,9 +156,12 @@ test.describe('Utilities API — Sectors', () => {
         expect(response.ok()).toBeTruthy();
         const data = await response.json();
 
-        expect(data.items).toContain('Technology');
-        expect(data.items).toContain('Financials');
-        expect(data.items).toContain('Health Care');
+        // Items are {key, emoji} objects — asserting on the raw array would pass or fail
+        // for the wrong reason.
+        const keys = data.items.map((item: {key: string}) => item.key);
+        expect(keys).toContain('Technology');
+        expect(keys).toContain('Financials');
+        expect(keys).toContain('Health Care');
     });
 
     test('sector list with Other included', async ({page}) => {
@@ -164,7 +169,7 @@ test.describe('Utilities API — Sectors', () => {
         const response = await page.request.get(`${API}/sectors?include_other=true`);
         const data = await response.json();
 
-        expect(data.items).toContain('Other');
+        expect(data.items.map((item: {key: string}) => item.key)).toContain('Other');
     });
 
     test('sector list without Other', async ({page}) => {
@@ -172,7 +177,7 @@ test.describe('Utilities API — Sectors', () => {
         const response = await page.request.get(`${API}/sectors?include_other=false`);
         const data = await response.json();
 
-        expect(data.items).not.toContain('Other');
+        expect(data.items.map((item: {key: string}) => item.key)).not.toContain('Other');
     });
 });
 
@@ -213,11 +218,10 @@ test.describe('Utilities — UI Rendering', () => {
         await page.getByTestId('asset-detail-edit-btn').click();
         await expect(page.getByTestId('asset-modal-form')).toBeVisible({timeout: 5000});
 
-        // Find the currency combobox and open it
-        const form = page.getByTestId('asset-modal-form');
-        const combobox = form.locator('[role="combobox"]').first();
+        // Find the currency combobox and open it. Scoped to its own group: the modal has
+        // several comboboxes and `.first()` silently followed whichever came first in the DOM.
+        const combobox = page.getByTestId('asset-modal-currency-group').locator('[role="combobox"]').first();
         await combobox.click();
-        await page.waitForTimeout(500);
 
         // Listbox should show options with 3-letter ISO codes
         const listbox = page.locator('[role="listbox"]');

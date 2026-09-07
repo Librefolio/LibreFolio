@@ -50,10 +50,10 @@ Frontend UX plan (✅ completed + BugfixRound1/2 all done by 2026-05-30) impleme
 ## Source files
 | Role | Path |
 |------|------|
-| BulkModal | `frontend/src/lib/components/transactions/TransactionBulkModal.svelte` |
-| PromoteMergeModal | `frontend/src/lib/components/transactions/PromoteMergeModal.svelte` |
-| TransactionActionModal | `frontend/src/lib/components/transactions/TransactionActionModal.svelte` |
-| FormModal | `frontend/src/lib/components/transactions/TransactionFormModal.svelte` |
+| BulkModal | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
+| PromoteMergeModal | `frontend/src/lib/components/transactions/modals/PromoteMergeModal.svelte` |
+| TransactionActionModal | `frontend/src/lib/components/transactions/modals/TransactionActionModal.svelte` |
+| FormModal | `frontend/src/lib/components/transactions/modals/TransactionFormModal.svelte` |
 | E2E split/promote | `frontend/e2e/transactions/tx-split-promote.spec.ts` |
 | E2E bulk operations | `frontend/e2e/transactions/tx-bulk-operations.spec.ts` |
 | Test runner registration | `scripts/test_runner/_frontend_transaction.py` |

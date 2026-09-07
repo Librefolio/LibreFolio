@@ -52,6 +52,14 @@ Dove:
 - $R_{net}$ = rendimento dopo i costi (ciò che effettivamente trattieni)
 - $V_{start}$ = valore del portafoglio all'inizio del periodo
 
+!!! note "Come LibreFolio attribuisce commissioni e tasse"
+
+    Una `FEE` / `TAX` **collegata a un asset** viene allocata ai lotti specifici a cui si riferisce e determina il
+    **P&L netto / rendimento netto** di quel lotto (vedi
+    [Analisi dei Lotti FIFO → Costi e Metriche Nette](../../technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md#costs-and-net-metrics)).
+    Un costo **senza asset** (`asset_id = null`, es. una commissione fissa della piattaforma) è a livello di
+    portafoglio ed è gestito invece dal Portfolio Engine — non finisce mai su un singolo lotto.
+
 ### 📉 Effetto Composto delle Commissioni
 
 Su lunghi periodi di detenzione, anche piccole commissioni ricorrenti erodono significativamente i rendimenti a causa del **trascinamento composto** (compounding drag):

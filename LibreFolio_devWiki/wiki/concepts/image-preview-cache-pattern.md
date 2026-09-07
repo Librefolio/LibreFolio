@@ -13,7 +13,7 @@ A client-side `Map<fileId, {objectUrl, maxWidth}>` that caches fetched image pre
 
 ## Where It Applies
 
-`frontend/src/lib/stores/imagePreviewCache.ts` — used by `LazyImage.svelte` in cache mode (when `fileId` + `previewUrl` props are provided).
+`frontend/src/lib/stores/files/imagePreviewCache.ts` — used by `LazyImage.svelte` in cache mode (when `fileId` + `previewUrl` props are provided).
 
 ## Key Design Decisions
 
@@ -33,6 +33,6 @@ clearImagePreviewCache(): void  // call on logout
 
 | Role | Path |
 |------|------|
-| Cache store | `frontend/src/lib/stores/imagePreviewCache.ts` |
+| Cache store | `frontend/src/lib/stores/files/imagePreviewCache.ts` |
 | LazyImage (Svelte 5) | `frontend/src/lib/components/ui/media/LazyImage.svelte` |
-| Source plan | `LibreFolio_developer_journal/RoadmapV4_UI/plan-independent-LazyImageCache.prompt.md` |
+| Source plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-10-subplan/plan-independent-LazyImageCache.prompt.md` |

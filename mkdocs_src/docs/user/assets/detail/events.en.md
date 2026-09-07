@@ -19,6 +19,10 @@ For a deep dive into each event type — including market impact, formulas, and 
 ## 📈 Event Markers on the Chart
 
 Events appear as **colored markers** on the [price chart](chart.md). Each event type has a distinct color and icon. Hover over a marker to see the event details (date, type, value, currency).
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="assets" data-name="detail-events" alt="Asset chart with an event marker hovered">
+</div>
+
 
 ## ⚙️ Where Events Come From
 

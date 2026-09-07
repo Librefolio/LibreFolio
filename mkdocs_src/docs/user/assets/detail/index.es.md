@@ -6,7 +6,11 @@ Haga clic en cualquier activo de la [Lista de Activos](../index.md) para abrir s
  <img class="gallery-img" data-category="assets" data-name="detail-chart" alt="Página de Detalle del Activo" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-La página de detalle está organizada en varias funcionalidades, cada una accesible desde la barra de herramientas:
+La página de detalle está organizada en dos pestañas: **Resumen** (todas las funcionalidades a continuación) y **Riesgo y escenarios**.
+
+!!! info "Beta"
+
+    La pestaña **Riesgo y escenarios** pertenece al subsistema de Análisis de Riesgo, actualmente en **beta**. Aún no está cubierta por esta documentación — las secciones siguientes describen la pestaña Resumen.
 
 ---
 
@@ -18,7 +22,7 @@ La vista principal: un gráfico completo impulsado por ECharts con zoom, desplaz
 
 ### 📊 [Señales](signals.md)
 
-Superponga indicadores técnicos (EMA, MACD, RSI, Bandas de Bollinger, Comparación de Activos) en el gráfico. Cada señal se calcula en tiempo real a partir de los datos de precios y puede conmutarse de forma independiente.
+Superponga en el gráfico cualquiera de los **22 indicadores técnicos del backend** (familias de tendencia, momentum, volatilidad, volumen y riesgo), series de comparación y curvas de referencia sintéticas. Cada señal es calculada por el backend a partir del historial de precios almacenado y puede configurarse y conmutarse de forma independiente.
 
 ### 📐 [Medidas](measures.md)
 

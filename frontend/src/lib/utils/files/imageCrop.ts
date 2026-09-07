@@ -10,31 +10,6 @@ import type Cropper from 'cropperjs';
 // TYPES
 // =============================================================================
 
-/**
- * Configuration for image editing, saved per-file for re-editing
- */
-export interface ImageEditConfig {
-    // Crop area
-    cropX: number;
-    cropY: number;
-    cropWidth: number;
-    cropHeight: number;
-
-    // Transform
-    rotation: number; // degrees
-    scaleX: number; // 1 or -1 (flip H)
-    scaleY: number; // 1 or -1 (flip V)
-
-    // Output
-    outputWidth: number | null;
-    outputHeight: number | null;
-    outputFormat: 'png' | 'jpeg' | 'webp';
-    outputQuality: number; // 0-1
-
-    // File name
-    outputFileName: string;
-}
-
 export interface ImagePreset {
     aspectRatio: number; // 0 or NaN = free, 1 = square, 16/9, etc.
     outputWidth: number | null;
@@ -131,38 +106,6 @@ export async function getCroppedImageFromCropper(cropper: Cropper, outputWidth: 
 }
 
 /**
- * Create ImageEditConfig from cropperjs v2 selection state
- */
-export function createImageEditConfig(
-    cropper: Cropper,
-    fileName: string,
-    outputWidth: number | null = null,
-    outputHeight: number | null = null,
-    outputFormat: 'png' | 'jpeg' | 'webp' = 'png',
-    outputQuality: number = 0.9,
-    rotation: number = 0,
-    scaleX: number = 1,
-    scaleY: number = 1,
-): ImageEditConfig {
-    const selection = cropper.getCropperSelection();
-
-    return {
-        cropX: selection?.x || 0,
-        cropY: selection?.y || 0,
-        cropWidth: selection?.width || 0,
-        cropHeight: selection?.height || 0,
-        rotation,
-        scaleX,
-        scaleY,
-        outputWidth,
-        outputHeight,
-        outputFormat,
-        outputQuality,
-        outputFileName: fileName,
-    };
-}
-
-/**
  * Convert a Blob to a File with a name
  */
 export function blobToFile(blob: Blob, fileName: string): File {
@@ -184,25 +127,4 @@ export function blobToFile(blob: Blob, fileName: string): File {
  */
 export function isImageFile(file: File): boolean {
     return file.type.startsWith('image/');
-}
-
-/**
- * Get supported image MIME types
- */
-export const SUPPORTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-
-/**
- * Check if MIME type is supported for cropping
- */
-export function isSupportedImageType(mimeType: string): boolean {
-    return SUPPORTED_IMAGE_TYPES.includes(mimeType);
-}
-
-/**
- * Get default output filename from original file
- */
-export function getDefaultOutputFileName(originalName: string, format: 'png' | 'jpeg' | 'webp'): string {
-    const baseName = originalName.replace(/\.[^.]+$/, '');
-    const ext = format === 'jpeg' ? 'jpg' : format;
-    return `${baseName}.${ext}`;
 }

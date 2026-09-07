@@ -49,6 +49,12 @@ class CSSScraperProvider(AssetSourceProvider):
         return "CSS Web Scraper"
 
     @property
+    def supports_meaningful_volume(self) -> bool:
+        """Generic CSS scraper extracts only the price value the user's
+        selector targets; it has no notion of trading volume at all."""
+        return False
+
+    @property
     def accepted_identifier_types(self) -> list:
         return [ProviderInputType.URL]
 

@@ -6,7 +6,11 @@ Cliquez sur n'importe quel actif depuis la [Liste des Actifs](../index.md) pour 
  <img class="gallery-img" data-category="assets" data-name="detail-chart" alt="Page de Détails de l'Actif" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-La page de détails est organisée en plusieurs fonctionnalités, chacune accessible depuis la barre d'outils :
+La page de détails est organisée en deux onglets : **Vue d'ensemble** (toutes les fonctionnalités ci-dessous) et **Risque et scénarios**.
+
+!!! info "Beta"
+
+    L'onglet **Risque et scénarios** appartient au sous-système d'Analyse de Risque, actuellement en **beta**. Il n'est pas encore couvert par cette documentation — les sections ci-dessous décrivent l'onglet Vue d'ensemble.
 
 ---
 
@@ -18,7 +22,7 @@ La vue principale — un graphique complet propulsé par ECharts avec zoom, pano
 
 ### 📊 [Signaux](signals.md)
 
-Superposez des indicateurs techniques (EMA, MACD, RSI, Bandes de Bollinger, Comparaison d'Actifs) sur le graphique. Chaque signal est calculé en temps réel à partir des données de prix et peut être commuté indépendamment.
+Superposez sur le graphique l'un quelconque des **22 indicateurs techniques du backend** (familles de tendance, momentum, volatilité, volume et risque), des séries de comparaison et des courbes de référence synthétiques. Chaque signal est calculé par le backend à partir de l'historique des prix enregistré et peut être configuré et commuté indépendamment.
 
 ### 📐 [Mesures](measures.md)
 

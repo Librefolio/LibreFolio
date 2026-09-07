@@ -32,7 +32,7 @@ Utilice estas transacciones cuando el efectivo llegue a su cuenta de corretaje c
 
 ## 💰 Dividendos en Detalle
 
-### Evento vs Transacción
+### Event vs Transacción
 
 | Concepto | Evento de Dividendo | Transacción de Dividendo |
 |----------|---------------------|--------------------------|
@@ -41,7 +41,7 @@ Utilice estas transacciones cuando el efectivo llegue a su cuenta de corretaje c
 | **Registrado por** | Proveedor o manual (Editor de Datos) | Informe del bróker (importación BRIM) |
 | **Impacto en gráfico** | Marcador de diamante (◆) en el gráfico de precios | No visible en el gráfico |
 
-### Monto del Dividendo
+### Dividend del Dividendo
 
 El monto recibido depende del número de acciones poseídas en la **fecha de registro**:
 
@@ -49,7 +49,7 @@ $$
 \text{Dividendo Recibido} = \text{Acciones Poseídas} \times \text{Dividendo por Acción}
 $$
 
-### Retención de Impuestos
+### Withholding de Impuestos
 
 Muchas jurisdicciones aplican **retención de impuestos** sobre los dividendos — especialmente para acciones extranjeras. El impuesto se deduce en origen:
 

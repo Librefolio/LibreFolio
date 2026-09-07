@@ -188,6 +188,13 @@ class JustETFProvider(AssetSourceProvider):
         return "JustETF"
 
     @property
+    def supports_meaningful_volume(self) -> bool:
+        """JustETF is a NAV-based data source (no exchange trading volume);
+        it never populates the `volume` field. Explicit False to make the
+        audit decision visible (inherits the safe base default anyway)."""
+        return False
+
+    @property
     def accepted_identifier_types(self) -> list:
         return [ProviderInputType.ISIN]
 
@@ -238,7 +245,7 @@ class JustETFProvider(AssetSourceProvider):
             },
         ]
 
-    async def get_current_value(
+    async def get_current_value(  # noqa: C901 — flat fallback chain + error wrapping
         self,
         identifier: str,
         identifier_type: IdentifierType,
@@ -321,7 +328,7 @@ class JustETFProvider(AssetSourceProvider):
     def supports_history(self) -> bool:
         return True
 
-    async def get_history_value(
+    async def get_history_value(  # noqa: C901 — flat fetch→map pipeline with guarded enrichments
         self,
         identifier: str,
         identifier_type: IdentifierType,
@@ -485,7 +492,7 @@ class JustETFProvider(AssetSourceProvider):
                 {"currency": currency, "supported": list(self.SUPPORTED_CURRENCIES)},
             )
 
-    async def fetch_asset_metadata(
+    async def fetch_asset_metadata(  # noqa: C901 — flat metadata mapping with guarded sections
         self,
         identifier: str,
         identifier_type: IdentifierType,

@@ -16,7 +16,7 @@ La barra de filtros situada sobre el gráfico proporciona controles para persona
 
 Seleccione una ventana de tiempo para los datos del gráfico:
 
-- **Preajustes**: 1W, 1M, 3M, 6M, 1Y, TODO
+- **Preajustes**: 1W, 1M, 3M, 6M, 1Y, 2Y, YTD, MAX — cuando la barra tiene espacio libre, aparecen **preajustes de relleno** adicionales para ocuparlo (3Y, 5Y, 10Y y WTD, MTD, QTD)
 - **Personalizado**: elija una fecha de inicio y fin utilizando el selector de calendario
 
 ### 💱 Selector de Divisa
@@ -47,7 +47,7 @@ Pase el cursor sobre un marcador para ver los detalles del evento (fecha, tipo, 
 
 ## 🎨 Estética
 
-Haga clic en el botón de **Configuración** (⚙️) para activar el interruptor del panel de estética para la personalización del gráfico (color de línea, estilo, etc.).
+Haga clic en el botón de **Configuración** (⚙️) para mostrar/ocultar el panel de estética en línea (relleno de área, colores de la línea base, líneas de cuadrícula, degradado stale, escala del eje Y). Los mismos ajustes — más las señales de superposición — también pueden editarse para todos los gráficos de activos a la vez desde el modal **Configuración del Gráfico** en la [página de la lista de Activos](../index.md), que muestra una vista previa en vivo mientras edita; consulte [Configuración del Gráfico](../../fx/chart-settings.md) para ver cómo funcionan el modal y su vista previa (el ámbito de Activos es independiente de FX).
 
 ---
 

@@ -1,12 +1,10 @@
 # 🧬 Motor FIFO — Ciclo de Vida de Lotes y Modelo de Emparejamiento
 
-*[⬅️ Volver a la Descripción General de Métricas de Rendimiento](../index.md)*
-
 ## 💡 Descripción General
 
 Mientras que el [Precio Medio Ponderado (PMP)](../weighted-average-cost.md) fusiona cada adquisición de una posición en un promedio continuo, el motor FIFO de LibreFolio realiza un seguimiento de **lotes individuales** — uno por lote de adquisición — a lo largo de todo su ciclo de vida: apertura, cierres parciales, transferencias entre brókeres, divisiones y cierre total final.
 
-Esta página describe la **mecánica** de ese motor: cómo se crean, emparejan y cierran los lotes. Para las **métricas** derivadas de este motor (Retorno Abierto/Total, escalado qbq, asignación de ingresos, un ejemplo práctico), consulte [Análisis de Lotes FIFO](fifo-lot-analysis.md).
+Esta página describe la **mecánica** de ese motor: cómo se crean, emparejan y cierran los lotes. El motor FIFO es independiente del feed de precios. Reproduce cantidades, lotes, fragmentos, transferencias y cierres realizados. Los niveles de valoración actuales residen fuera de él: [Resolución de Precios](../portfolio-engine/price-resolution.md) y `LotsAnalysisService` suministran las marcas de referencia/actuales y el comportamiento al coste estimado. Para las **métricas** derivadas de este motor (Retorno Abierto/Total, escalado qbq, asignación de ingresos, un ejemplo práctico), consulte [Análisis de Lotes FIFO](fifo-lot-analysis.md).
 
 !!! info "Dos motores, dos preguntas"
 
@@ -27,6 +25,7 @@ Un **lote** es un lote de adquisición económica para un activo: una sola COMPR
 | Cantidad y costo originales | Fijados en la apertura, posteriormente reescalados solo por divisiones — nunca por transferencias |
 | Cantidad abierta | Cuánto del lote **no** ha sido emparejado aún por una transacción opuesta |
 | Custodia | Qué bróker (o brókeres, a lo largo del tiempo) posee actualmente la cantidad abierta |
+| Precio de referencia | `reference_unit_price` más `reference_price_source` (`exact`, `fallback`, `none`) |
 
 ---
 
@@ -121,9 +120,12 @@ El resultado general se marca entonces como **completo** o **degradado** en su c
 
 ---
 
+
 ## 🔗 Relacionados
 
 - 🔬 **[Análisis de Lotes FIFO](fifo-lot-analysis.md)** — Métricas derivadas de este motor: Retorno Abierto/Total por lote, escalado qbq, asignación de ingresos, ejemplo práctico
+- 🧭 **[Resolución de Precios](../portfolio-engine/price-resolution.md)** — Niveles de valoración usados por el servicio de lotes
 - ⚙️ **[Motor de Cartera](../index.md)** — El motor agregado/complementario basado en PMP, y cómo se relacionan ambos
 - 📊 **[Precio Medio Ponderado (PMP)](../weighted-average-cost.md)** — Costo base combinado a nivel de posición
 - 🧬 **[Motor de Lotes FIFO (Manual del Desarrollador)](../../../../developer/backend/transactions/fifo_lot_engine.md)** — Inmersión profunda en la implementación: clases, despacho de eventos, restricciones a nivel de código
+- 📈 **[Descripción General de Métricas de Rendimiento](../index.md)** — Todas las métricas de rendimiento de un vistazo

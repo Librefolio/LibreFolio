@@ -198,10 +198,10 @@ class FEDProvider(FXRateProvider):
                     return currency, observations
 
             except httpx.HTTPError as e:
-                logger.error(f"Failed to fetch FX rates for {currency} from FED/FRED: {e}")
+                logger.exception(f"Failed to fetch FX rates for {currency} from FED/FRED: {e}")
                 raise FXServiceError(f"FED/FRED API error for {currency}: {e}") from e
             except Exception as e:
-                logger.error(f"Failed to parse FED/FRED response for {currency}: {e}")
+                logger.exception(f"Failed to parse FED/FRED response for {currency}: {e}")
                 raise FXServiceError(f"Unexpected FED/FRED response format for {currency}: {e}") from e
 
         # Launch all HTTP calls in parallel (return_exceptions to avoid cascade failure)

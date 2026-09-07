@@ -2,7 +2,6 @@
 Backend schema validation tests: computed fields, common, assets, transactions, brokers.
 """
 
-
 from . import _common
 from ._common import (
     _build_pytest_cmd,
@@ -63,8 +62,40 @@ def schemas_brokers(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Broker schemas tests", verbose=verbose)
 
 
+def schemas_signals(verbose: bool = False, test_names: list = None) -> bool:
+    """Test library-independent technical signal schemas."""
+    print_section("Schemas: Technical Signals")
+    print_info("Testing: backend/app/schemas/signals.py")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_schemas/test_signal_schemas.py", test_names)
+    return run_command(cmd, "Signal schemas tests", verbose=verbose)
+
+
+def schemas_risk(verbose: bool = False, test_names: list = None) -> bool:
+    """Test canonical risk-series and metadata schemas."""
+    print_section("Schemas: Risk Analysis")
+    print_info("Testing: backend/app/schemas/risk.py and DataQualityReport extensions")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_schemas/test_risk_schemas.py", test_names)
+    return run_command(cmd, "Risk schemas tests", verbose=verbose)
+
+
+def schemas_ai_export(verbose: bool = False, test_names: list = None) -> bool:
+    """Test AI Export request, response, and catalog schemas."""
+    print_section("Schemas: AI Export")
+    print_info("Testing: component-based public runtime contracts")
+
+    cmd = _build_pytest_cmd(
+        "backend/test_scripts/test_schemas/test_ai_export_runtime_schemas.py",
+        test_names,
+    )
+    return run_command(cmd, "AI Export schemas tests", verbose=verbose)
+
+
 def schemas_all(verbose: bool = False) -> bool:
     """Run all schema validation tests."""
+    if _common.nothing_left_to_run("schemas"):
+        return _common.consolidated_verdict("schemas")
     return _run_test_suite(
         suite_name="Schema Validation Tests",
         tests=_get_category_tests_for_all("schemas", verbose),
@@ -72,8 +103,8 @@ def schemas_all(verbose: bool = False) -> bool:
         info_msgs=["Testing Pydantic schema validation rules"],
         summary_title="Schema Tests Summary",
         success_msg="All schema tests passed! 🎉",
-            resume=_common._RESUME_MODE,
-        )
+        resume=_common._RESUME_MODE,
+    )
 
 
 def populate_registry(registry: dict) -> None:
@@ -86,12 +117,17 @@ Schema Validation Tests
 Tests for Pydantic/SQLModel schema validation:
   • Computed fields, Common schemas, Asset schemas
   • Transaction schemas, Broker schemas
-""")
+""",
+        # Pydantic validation: no shared state to contend for.
+        default_isolation="write-scoped",
+    )
     add_test(cat, "computed-fields", schemas_computed_fields, name="Computed Fields", desc="Computed properties across all schemas")
     add_test(cat, "common", schemas_common, name="Common Schemas", desc="Currency, DateRangeModel, OldNew")
     add_test(cat, "assets", schemas_assets, name="Asset Schemas", desc="FAGeographicArea, FAInterestRatePeriod")
     add_test(cat, "transactions", schemas_transactions, name="Transaction Schemas", desc="TXCreateItem, TXReadItem")
     add_test(cat, "brokers", schemas_brokers, name="Broker Schemas", desc="BRCreateItem, BRReadItem")
+    add_test(cat, "signals", schemas_signals, name="Signal Schemas", desc="Plugin, catalog, canonical output, status and availability contracts")
+    add_test(cat, "risk", schemas_risk, name="Risk Schemas", desc="Canonical valuations, returns, metadata and data-quality contracts")
+    add_test(cat, "ai-export", schemas_ai_export, name="AI Export Schemas", desc="Strict requests, responses, catalog, and typed problem contracts")
     add_test(cat, "all", schemas_all, test_names=False, name="All Schema Tests", desc="Run all schema tests")
     registry["schemas"] = cat
-

@@ -1,6 +1,7 @@
-import {expect, test, type Page} from '@playwright/test';
+import {expect, test, type Page} from './fixtures/playwright';
 import {login, navigateTo} from './fixtures/auth-helpers';
 import {TEST_USER} from './fixtures/test-users';
+import {waitForEvent} from './fixtures/app-events';
 import {readFileSync} from 'fs';
 import path from 'path';
 import {fileURLToPath} from 'url';
@@ -84,6 +85,20 @@ async function openStaticGridView(page: Page): Promise<void> {
     await expect(page.getByTestId('view-mode-toggle')).toBeVisible({timeout: 8_000});
     await page.getByTestId('view-mode-grid').click();
     await expect(page.getByTestId('view-mode-grid')).toHaveClass(/active/);
+}
+
+/**
+ * Wait for the preview modal to be open *and* done fetching.
+ *
+ * The modal renders a "Loading…" placeholder while the preview request is in
+ * flight, so asserting on its body straight after it opens turns a slow backend
+ * into "the element does not exist" — which is what four concurrent workers
+ * produced. The shell publishes `data-busy`, so we wait for the state instead of
+ * guessing a bigger number.
+ */
+async function waitForPreviewReady(page: Page): Promise<void> {
+    await expect(page.getByTestId('file-preview-modal')).toBeVisible({timeout: 8_000});
+    await expect(page.getByTestId('file-preview-shell')).toHaveAttribute('data-busy', 'false', {timeout: 30_000});
 }
 
 test.describe('Files Page', () => {
@@ -209,35 +224,9 @@ test.describe('Files Page', () => {
             // Wait for tab to be selected
             await expect(page.getByTestId('files-tab-brim')).toHaveAttribute('aria-selected', 'true');
 
-            // Wait a bit for content to load
-            await page.waitForTimeout(500);
-
-            // Either files table is visible OR empty state is shown
-            const hasTable = await page
-                .getByTestId('files-table-brim')
-                .isVisible()
-                .catch(() => false);
-            const hasEmptyState = await page
-                .getByTestId('brim-empty-state')
-                .isVisible()
-                .catch(() => false);
-
-            // If neither, check for loading state
-            if (!hasTable && !hasEmptyState) {
-                // Maybe still loading - wait more
-                await page.waitForTimeout(1000);
-                const hasTableRetry = await page
-                    .getByTestId('files-table-brim')
-                    .isVisible()
-                    .catch(() => false);
-                const hasEmptyRetry = await page
-                    .getByTestId('brim-empty-state')
-                    .isVisible()
-                    .catch(() => false);
-                expect(hasTableRetry || hasEmptyRetry).toBeTruthy();
-            } else {
-                expect(hasTable || hasEmptyState).toBeTruthy();
-            }
+            // Either the table or the empty state has to land — the two-stage
+            // "look, sleep, look again" this replaced was a hand-rolled retry.
+            await expect(page.getByTestId('files-table-brim').or(page.getByTestId('brim-empty-state')).first()).toBeVisible({timeout: 15_000});
         });
     });
 
@@ -262,8 +251,10 @@ test.describe('Files Page', () => {
             // Click the upload submit button
             await page.getByTestId('file-upload-submit').click();
 
-            // Wait for upload to complete and uploader to clear
-            await page.waitForTimeout(3000);
+            // The page now reports the upload (`file.uploaded`, no toast: the
+            // list itself is the user-visible proof). Waiting on the event is
+            // waiting on the thing, not on a duration.
+            await waitForEvent(page, 'file.uploaded', {timeout: 30_000});
 
             // The uploader should have cleared after successful upload
             // or show a success state. Check if file-item is gone (cleared)
@@ -278,7 +269,6 @@ test.describe('Files Page', () => {
                 const searchInput = page.locator('input[placeholder*="Search"], input[type="search"]').first();
                 if (await searchInput.isVisible().catch(() => false)) {
                     await searchInput.fill('generic_simple');
-                    await page.waitForTimeout(500);
                 }
 
                 // Check that file appears in the files table
@@ -329,7 +319,7 @@ test.describe('Files Page', () => {
             await expect(row).toBeVisible({timeout: 8_000});
             await row.dblclick();
 
-            await expect(page.getByTestId('file-preview-modal')).toBeVisible({timeout: 8_000});
+            await waitForPreviewReady(page);
             await expect(page.getByTestId('file-preview-markdown-rendered')).toBeVisible({
                 timeout: 8_000,
             });
@@ -347,7 +337,7 @@ test.describe('Files Page', () => {
             await expect(previewButton).toBeVisible({timeout: 8_000});
             await previewButton.click();
 
-            await expect(page.getByTestId('file-preview-modal')).toBeVisible({timeout: 8_000});
+            await waitForPreviewReady(page);
             await expect(page.getByTestId('file-preview-image')).toBeVisible({timeout: 8_000});
         });
 
@@ -368,7 +358,7 @@ test.describe('Files Page', () => {
             await expect(row).toBeVisible({timeout: 8_000});
             await row.dblclick();
 
-            await expect(page.getByTestId('file-preview-modal')).toBeVisible({timeout: 8_000});
+            await waitForPreviewReady(page);
             await expect(page.getByTestId('file-preview-modal')).toContainText('Legacy .xls preview requires xlrd on server');
         });
 
@@ -381,6 +371,7 @@ test.describe('Files Page', () => {
             await expect(previewButton).toBeVisible({timeout: 8_000});
             await previewButton.click();
 
+            await waitForPreviewReady(page);
             const imageStage = page.getByTestId('file-preview-image');
             await expect(imageStage).toBeVisible({timeout: 8_000});
 
@@ -402,8 +393,15 @@ test.describe('Files Page', () => {
             await expect(previewButton).toBeVisible({timeout: 8_000});
             await previewButton.click();
 
-            await expect(page.getByTestId('file-preview-modal')).toBeVisible({timeout: 8_000});
-            await expect(page.locator('[data-epdf-i="comment-button"]')).toHaveCount(0, {timeout: 8_000});
+            await waitForPreviewReady(page);
+            // Two traps in one assertion. `toHaveCount(0)` is satisfied by a toolbar
+            // that has not painted yet — which is how this test stayed green for
+            // months — *and* it counts DOM nodes regardless of visibility, while the
+            // viewer disables a category by hiding the control rather than unmounting
+            // it. So: prove the toolbar is there, then assert the button is not usable.
+            await expect(page.locator('[data-epdf-i]').first()).toBeVisible({timeout: 20_000});
+            await expect(page.locator('[data-epdf-i="search-button"]')).toBeVisible({timeout: 8_000});
+            await expect(page.locator('[data-epdf-i="comment-button"]')).toBeHidden({timeout: 8_000});
         });
 
         test('opens table preview for BRIM files', async ({page}) => {
@@ -417,7 +415,7 @@ test.describe('Files Page', () => {
             await expect(row).toBeVisible({timeout: 8_000});
             await row.dblclick();
 
-            await expect(page.getByTestId('file-preview-modal')).toBeVisible({timeout: 8_000});
+            await waitForPreviewReady(page);
             await expect(page.getByTestId('file-preview-grid')).toBeVisible({timeout: 8_000});
         });
     });

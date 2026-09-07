@@ -1,7 +1,5 @@
 # 🔍 Positions & Analysis
 
-*[⬅️ Back to Dashboard Overview](index.md)*
-
 The **Positions** tab of the dashboard allows you to inspect open holdings, analyze performance, and drill down into matching tax lots.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-positions-views" data-carousel-interval="6000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
@@ -15,32 +13,35 @@ The **Positions** tab of the dashboard allows you to inspect open holdings, anal
 
 ## 🔍 Positions Tab
 
-The **Positions** tab provides a detailed breakdown of all the financial instruments currently held in your portfolio (Stocks, ETFs, Bonds, Cryptocurrencies, etc.). 
+The **Positions** panel has two semantic modes: **Holdings** and **Performance**.
 
-The Positions tab allows you to switch between two primary metric modes using the view toggle, each focusing on a different aspect of your holdings:
+Use the view toggle to switch between them, and the table/map toggle to change the visual layout.
 
 #### 📋 Holdings View
 
-The **Holdings** view focuses on bookkeeping, quantities, and current asset valuation. It helps you monitor your current portfolio exposure and baseline metrics.
+The **Holdings** view shows the current open-position snapshot. The table has 13 columns:
 
-| Metric | Description |
+| Column | Description |
 |:---|:---|
-| **Quantity** | Current shares, units, or coins held in your portfolio. |
-| **Market Price** | Live asset price retrieved from the connected data provider. |
-| **Market Value** | Total value at current market prices (\(\text{Price} \times \text{Quantity}\)). |
-| **Average Price (WAC)** | The Weighted Average Cost paid to acquire the current open position. |
-| **Weight** | Proportional share of this asset relative to the total portfolio value. |
+| **Asset** | Asset name with type icon — click to open the asset detail page. |
+| **Δ1** | Change in unrealized P&L versus yesterday, keeping today's quantity constant. |
+| **Δ1%** | The same daily change as a percentage of yesterday's position market value. |
+| **Unrealized P&L** | Open gain/loss: current value minus residual cost basis. |
+| **P&L %** | Unrealized P&L as a percentage of the residual cost basis. |
+| **Annualized** | Net annualized return (CAGR) of the still-open lots, from the first transaction to today — for comparison across positions held for different durations. |
+| **Value** | Total value at current market prices (\(\text{Price} \times \text{Quantity}\)). |
+| **Weight** | Proportional share of this position relative to the total portfolio value. |
+| **Qty** | Current shares, units, or coins held. |
+| **Brokers** | Broker account(s) holding the position. |
+| **Price** *(hidden by default)* | Current asset price from the connected data provider. |
+| **Avg. Cost** *(hidden by default)* | Average cost per unit of the currently open position (Weighted Average Cost). |
+| **Oldest open lot** *(hidden by default)* | Opening date of the oldest FIFO lot still open for this position. |
+
+Use the **eye icon** in the table toolbar to show or hide columns — your choices are remembered across sessions.
 
 #### 📈 Performance View
 
-The **Performance** view focuses on absolute and relative returns. It helps you analyze the profitability of your open positions, factoring in historical transactions and income.
-
-| Metric | Description |
-|:---|:---|
-| **Total Value** | Current value of the holdings (matches Market Value). |
-| **Unrealized P&L** | Paper gain or loss calculated as \(\text{Market Value} - \text{Book Value}\). |
-| **ROI %** | Rate of return relative to the cost basis of the position. |
-| **Total P&L** | Cumulative absolute returns (includes past closed sales & dividends). |
+The **Performance** view loads on demand and shows open and closed positions together. In the table/chart, **Status** is filterable inside the component, not a top-level toggle.
 
 #### 🗺️ Visual Style: Table vs. Map
 
@@ -136,3 +137,7 @@ Choose **View lot detail** from the table row actions to open the **FIFO Lot Det
 The **Transactions** tab on the Dashboard displays a complete, paginated list of all operations recorded across the active portfolio scope (buy/sell orders, dividend payouts, cash deposits, transfers, etc.).
 
 For a detailed explanation of the transaction list, filters, and how to read the read-only transaction details, please refer to the dedicated **[Transactions Overview](../transactions/index.md)** page.
+
+---
+
+*[⬅️ Back to Dashboard Overview](index.md)*

@@ -32,7 +32,7 @@ dev.py [-h]
 │ ├── api                          # List all API endpoints
 │ └── version                      # Show git-based version
 ├── format                         # black
-├── lint                           # ruff
+├── lint                           # ruff (--dead-code → vulture + knip)
 ├── shell                          # pipenv shell
 └── install                        # pip + npm
 ```
@@ -54,7 +54,32 @@ dev.py [-h]
 | Docker deploy | `./dev.py docker rebuild` |
 | Code formatting | `./dev.py format` |
 | Linting | `./dev.py lint` |
+| Dead code | `./dev.py lint --dead-code` |
 | User management | `./dev.py user create admin admin@mail.com pass` |
+
+## Dependency Management (pipenv)
+
+⚠️ **NEVER run `pipenv update <pkg>` on a VCS (git) dependency** — pipenv 2026.x rewrites
+the Pipfile during `update` and **drops the `git`/`ref` fields** (the entry becomes a plain
+`"*"` PyPI requirement). The next lock then fails with `No matching distribution found`
+(our git deps, e.g. `borsa-italiana-scraping`, are not on PyPI). Lost hours on 2026-09-04/05
+chasing a "mysterious Pipfile edit" that was `pipenv update` itself.
+
+Correct flow to bump a git dependency (e.g. after pushing a new commit on the lib's main):
+
+```bash
+pipenv lock --clear        # re-resolves ref = "main" to the latest commit; does NOT rewrite the Pipfile
+pipenv install             # sync the venv from the updated lock
+```
+
+`requirements.txt` is gitignored — the release pipeline regenerates it (`pipenv requirements`);
+never commit or hand-edit it.
+
+Related incident notes (2026-09-05): the Borsa Italiana site-search may return HTTP 200 with
+ALL sections empty — a silent WAF soft-block per IP after heavy scraping. `cerca()` (library
+≥ 0.3.1) detects it via a control-query probe and raises `RicercaNonDisponibile` instead of
+returning "no results". If searches suddenly return empty for everything: wait a few hours or
+change IP before suspecting the code.
 
 ## Ports
 

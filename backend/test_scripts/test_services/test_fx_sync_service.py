@@ -32,16 +32,29 @@ from backend.app.services.fx import _is_date_within_sync_range, sync_pairs_bulk
 from backend.app.services.fx_providers.mockfx import MOCKFX_FIXED_RATE
 from backend.test_scripts.test_utils import print_section, print_success
 
+# The two pairs this file works on, and the only rows it is entitled to remove.
+#
+# The fixture below used to be two DELETEs with no WHERE, committed: it emptied the
+# whole `fx_rates` table *and every FX route in the database* before each of its
+# tests. That took the mock's ECB series and every route another test had just
+# configured with it, and a committed DELETE is not something a neighbour's rollback
+# can put back.
+#
+# Scoping the rates by MOCKFX is enough because that provider only ever runs in
+# tests: a real ECB or SNB row is never touched. The routes are scoped by pair.
+FX_SYNC_PAIRS = (("EUR", "USD"), ("GBP", "JPY"))
+
 
 @pytest.fixture(autouse=True)
 def _clean_fx_tables():
-    """Keep FX route/rate tables isolated per test."""
+    """Remove this file's own rates and routes, and nobody else's."""
 
     async def _purge():
         engine = get_async_engine()
         async with AsyncSession(engine) as session:
-            await session.execute(delete(FxRate))
-            await session.execute(delete(FxConversionRoute))
+            await session.execute(delete(FxRate).where(FxRate.source == "MOCKFX"))
+            for base, quote in FX_SYNC_PAIRS:
+                await session.execute(delete(FxConversionRoute).where(FxConversionRoute.base == base, FxConversionRoute.quote == quote))
             await session.commit()
 
     asyncio.run(_purge())
@@ -104,7 +117,10 @@ class TestSyncPairsBulk:
         assert result.points_changed == 2
 
         async with AsyncSession(engine) as verify_session:
-            rows = (await verify_session.execute(select(FxRate).where(FxRate.base == "EUR", FxRate.quote == "USD").order_by(FxRate.date))).scalars().all()
+            # Filtered by source as well as pair: counting every EUR/USD row in the
+            # table was a global count this test never created, and it only ever
+            # worked because the fixture had just emptied the table for everyone.
+            rows = (await verify_session.execute(select(FxRate).where(FxRate.base == "EUR", FxRate.quote == "USD", FxRate.source == "MOCKFX").order_by(FxRate.date))).scalars().all()
 
         assert len(rows) == 2
         assert all(row.rate == MOCKFX_FIXED_RATE for row in rows)

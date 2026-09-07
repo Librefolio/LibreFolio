@@ -29,7 +29,7 @@ from backend.app.db.models import (
     UserSettings,
 )
 
-__all__ = [
+__all__ = [  # noqa: RUF022 — grouped by domain with section comments; sorting would scatter related names
     "SQLModel",
     # Enums
     "IdentifierType",

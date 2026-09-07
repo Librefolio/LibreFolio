@@ -3,17 +3,40 @@ Frontend common: build checks, DB population, test user creation, Playwright run
 """
 
 import inspect
+import os
 import re
 import subprocess
 from pathlib import Path
 
 from scripts.cli_base import auto_build_frontend, pipenv_prefix
 
-from ._common import (
-    PROJECT_ROOT, Colors,
-    print_section, print_info, print_success, print_error, print_warning,
-)
+from . import _common
+from ._archive import log_file_for
 from ._backend_db import db_populate
+from ._common import (
+    PROJECT_ROOT,
+    Colors,
+    print_error,
+    print_info,
+    print_success,
+    print_warning,
+)
+
+# Setup already performed in the current scope. A scope is one run of one
+# category: `reset_setup_scope()` opens it, and the first `_ensure_*` call
+# inside it does the real work while the rest find it warm.
+#
+# This is what lets an `all` action be derived from the registry instead of
+# hand-written. Without it, calling the registered actions would repopulate the
+# database and recreate the eight users once per action; with it, the cost is
+# paid exactly once per category — which is what the hand-written lists did.
+_SETUP_DONE: set[str] = set()
+
+
+def reset_setup_scope() -> None:
+    """Open a new setup scope, so the next ``_ensure_*`` call works for real."""
+    _SETUP_DONE.clear()
+    os.environ.pop("LF_SETUP_DONE", None)
 
 
 def _ensure_frontend_build() -> bool:
@@ -28,29 +51,139 @@ def _ensure_frontend_build() -> bool:
     regenerates them first. ``auto_build_frontend`` still only rebuilds when the
     sources actually changed.
     """
+    import os
+    from pathlib import Path
     from types import SimpleNamespace
 
     from dev import cmd_fe_build
 
-    result = auto_build_frontend(
-        debug=False,
-        build_func=lambda debug=False: cmd_fe_build(SimpleNamespace(debug=debug)),
-    )
+    if "build" in _SETUP_DONE:
+        return True
+
+    # JS coverage needs an *instrumented* build, and an instrumented build must
+    # never be left behind for a normal run: it is slower and its output is not
+    # what ships. `auto_build_frontend` only rebuilds when sources changed, which
+    # would happily reuse a build of the wrong kind — so the kind is recorded
+    # beside the output and a mismatch forces a rebuild.
+    #
+    # Why instrumented at all: the V8 route reports an *empty* branch map for a
+    # Svelte template, so every `{#if}` in the app was invisible to the numbers.
+    # Instrumenting the source before the compiler rewrites it keeps those
+    # branches, and makes the unit and E2E measurements describe the same
+    # positions instead of two different compilations of one file.
+    want_instrumented = bool(_common._COVERAGE_JS)
+    marker = Path("frontend/build/.coverage-instrumented")
+    have_instrumented = marker.exists()
+    force = want_instrumented != have_instrumented
+
+    env_backup = os.environ.get("COVERAGE_INSTRUMENT")
+    node_backup = os.environ.get("NODE_OPTIONS")
+    if want_instrumented:
+        os.environ["COVERAGE_INSTRUMENT"] = "1"
+        # Instrumenting every file of `src` while also emitting sourcemaps does
+        # not fit in Node's default heap: the build dies with "Ineffective
+        # mark-compacts near heap limit" and the runner reports it as a build
+        # failure. Unlike the coverage *accumulation* inside a Playwright worker
+        # — where raising the limit only postponed a leak — this is a genuine
+        # one-shot working set, so more headroom is the fix rather than a delay.
+        os.environ["NODE_OPTIONS"] = f"{node_backup + ' ' if node_backup else ''}--max-old-space-size=8192"
+        print_info("Building the frontend instrumented for coverage (slower; not shippable)")
+    else:
+        os.environ.pop("COVERAGE_INSTRUMENT", None)
+
+    try:
+        result = auto_build_frontend(
+            debug=False,
+            force=force,
+            build_func=lambda debug=False: cmd_fe_build(SimpleNamespace(debug=debug)),
+        )
+    finally:
+        if env_backup is None:
+            os.environ.pop("COVERAGE_INSTRUMENT", None)
+        else:
+            os.environ["COVERAGE_INSTRUMENT"] = env_backup
+        if node_backup is None:
+            os.environ.pop("NODE_OPTIONS", None)
+        else:
+            os.environ["NODE_OPTIONS"] = node_backup
+
     if result is None or result == 0:
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        if want_instrumented:
+            # Verified, not declared. Announcing an instrumented build and
+            # shipping an ordinary one produces a run that measures nothing and
+            # still reports success — which is exactly what happened while
+            # `forceBuildInstrument` was missing from the plugin options: the
+            # plugin's `apply()` excludes it from `vite build` unless forced, so
+            # the log said "instrumented" and the bundle was plain.
+            if not _bundle_is_instrumented():
+                print_error(
+                    "The frontend build is not instrumented despite COVERAGE_INSTRUMENT=1. "
+                    "JS coverage would come back empty without failing, so the run stops here. "
+                    "Check the vite-plugin-istanbul options in frontend/vite.config.ts."
+                )
+                marker.unlink(missing_ok=True)
+                return False
+            marker.write_text("this build is istanbul-instrumented; do not ship it\n")
+        elif marker.exists():
+            marker.unlink()
+    if result is None or result == 0:
+        _SETUP_DONE.add("build")
         return True
     else:
         print_error("Frontend build failed!")
         return False
 
 
+def _bundle_is_instrumented() -> bool:
+    """Does the built client bundle actually carry istanbul counters?
+
+    Reads the chunks rather than trusting the flag: the counter global is what
+    the Playwright fixture will look for at runtime, so this asks the same
+    question the collection asks.
+    """
+    from pathlib import Path
+
+    app_dir = Path("frontend/build/_app/immutable")
+    if not app_dir.is_dir():
+        return False
+    for chunk in app_dir.rglob("*.js"):
+        try:
+            if "__coverage__" in chunk.read_text(errors="ignore"):
+                return True
+        except OSError:
+            continue
+    return False
+
+
 def _ensure_db_populated() -> bool:
-    """Ensure test database has been populated with mock data."""
+    """Ensure test database has been populated with mock data.
+
+    ``with_reports=True`` matters: Playwright's ``globalSetup`` has always used
+    it, and the broker import-history specs need those sample BRIM files to have
+    anything to show. Without it here, the Python populate would be a *subset* of
+    the JS one, and telling `globalSetup` to stand down (``LF_SETUP_DONE``) would
+    quietly remove data those specs depend on.
+    """
+    if "db" in _SETUP_DONE:
+        return True
+
     print_info("Populating test DB with mock data...")
-    return db_populate(verbose=False, force=True)
+    if not db_populate(verbose=False, force=True, with_reports=True):
+        return False
+
+    _SETUP_DONE.add("db")
+    # Repopulating drops the E2E users, so they must be recreated after it.
+    _SETUP_DONE.discard("users")
+    os.environ.pop("LF_SETUP_DONE", None)
+    return True
 
 
 def _ensure_test_users() -> bool:
     """Ensure E2E test users exist in test database."""
+    if "users" in _SETUP_DONE:
+        return True
+
     print_info("Ensuring E2E test users exist...")
 
     users = [
@@ -81,6 +214,12 @@ def _ensure_test_users() -> bool:
         capture_output=True
     )
 
+    _SETUP_DONE.add("users")
+    # Both halves of what globalSetup would redo are now in place, so it can skip
+    # them. It still initialises the global settings over the API — nothing on the
+    # Python side does that, and `populate --force` wipes them.
+    if "db" in _SETUP_DONE:
+        os.environ["LF_SETUP_DONE"] = "1"
     print_success("Test users ready")
     return True
 
@@ -94,7 +233,57 @@ def _run_playwright(
     test_names: list = None,
     coverage: bool = False,
 ) -> bool:
-    """Run Playwright tests with given options."""
+    """
+    Run Playwright tests with given options.
+
+    When ``--log-dir`` is active the whole run is teed to its own file, exactly
+    like ``run_command`` does for the Python side. Playwright is invoked through
+    ``subprocess.run`` rather than ``run_command``, so without this the E2E
+    output — the part a CI artifact is actually needed for — was the only thing
+    the log dir did not capture.
+    """
+    log_dir = _common.get_log_dir()
+    if log_dir is None:
+        return _run_playwright_body(spec_file, ui, headed, debug, project, test_names, coverage)
+
+    spec_files = spec_file if isinstance(spec_file, list) else ([spec_file] if spec_file else [])
+    unit = _playwright_log_unit(spec_files, test_names)
+    try:
+        log_path = log_file_for(log_dir, _common.get_log_category(), unit)
+    except Exception:
+        return _run_playwright_body(spec_file, ui, headed, debug, project, test_names, coverage)
+
+    with _common.tee_output(log_path):
+        return _run_playwright_body(spec_file, ui, headed, debug, project, test_names, coverage)
+
+
+def _playwright_log_unit(spec_files: list[str], test_names: list | None) -> str:
+    """
+    Name the log after what was run: the spec file's stem, or the count when a
+    single invocation carries several specs. Falls back to the grep pattern so a
+    filtered run is still identifiable.
+    """
+    stems = [Path(sf).name.replace(".spec.ts", "") for sf in spec_files]
+    if len(stems) == 1:
+        base = stems[0]
+    elif stems:
+        base = f"e2e-{len(stems)}-specs"
+    elif test_names:
+        base = "-".join(test_names)[:60]
+    else:
+        base = "e2e"
+    return base
+
+
+def _run_playwright_body(  # noqa: C901 — flat command/env assembly + error handling, no nested logic
+    spec_file: str | list[str] | None = None,
+    ui: bool = False,
+    headed: bool = False,
+    debug: bool = False,
+    project: str = "desktop",
+    test_names: list = None,
+    coverage: bool = False,
+) -> bool:
     cmd = ["npm", "run"]
 
     if ui:
@@ -125,21 +314,40 @@ def _run_playwright(
     print(f"\n{Colors.BLUE}Running: Playwright {spec_label}{Colors.NC}")
     if test_names:
         print(f"{Colors.YELLOW}Filter: {' | '.join(test_names)}{Colors.NC}")
-    if coverage:
+
+    # `coverage` stays a plain on/off switch for the ~77 callers; *which*
+    # languages to collect is decided centrally in _cli.py.
+    cov_py = bool(coverage) and _common._COVERAGE_PY
+    cov_js = bool(coverage) and _common._COVERAGE_JS
+    if cov_py:
         print(f"{Colors.YELLOW}📊 Backend coverage tracking enabled (COVERAGE_BACKEND=1){Colors.NC}")
+    if cov_js:
+        print(f"{Colors.YELLOW}📊 JS/Svelte coverage tracking enabled (COVERAGE_JS=1){Colors.NC}")
     print(f"Command:\n└─▶ $ cd frontend && {' '.join(cmd)}")
 
     try:
         env = None
-        if coverage:
-            import os
-            env = os.environ.copy()
-            env['COVERAGE_BACKEND'] = '1'
+        # `--workers` decided by the runner, not read from the shell.
+        if getattr(_common, "_E2E_WORKERS", 1) > 1 and "E2E_WORKERS" not in os.environ:
+            env = _common.apply_e2e_workers(os.environ.copy())
+        if cov_py or cov_js:
+            if env is None:
+                env = os.environ.copy()
+            if cov_py:
+                env['COVERAGE_BACKEND'] = '1'
+                # Playwright merges this env into its webServer (`dev.py server
+                # --coverage`), whose spawn workers then measure themselves —
+                # see _common.apply_subprocess_coverage_env.
+                _common.apply_subprocess_coverage_env(env)
+            if cov_js:
+                env['COVERAGE_JS'] = '1'
+            else:
+                env.pop('COVERAGE_JS', None)
 
         result = subprocess.run(cmd, cwd=PROJECT_ROOT / "frontend", text=True, env=env)
 
         if result.returncode == 0:
-            print_success(f"Playwright tests - PASSED")
+            print_success("Playwright tests - PASSED")
             return True
         else:
             print_error(f"Playwright tests - FAILED (exit code: {result.returncode})")
@@ -150,7 +358,7 @@ def _run_playwright(
         return False
 
 
-def _list_front_tests(category: str, action: str = None) -> bool:
+def _list_front_tests(category: str, action: str = None) -> bool:  # noqa: C901 — flat spec-file report printing, no nested logic
     """
     List available test names from spec files for a front-* category.
     Parses .spec.ts files looking for test.describe() and test() calls.
@@ -233,7 +441,7 @@ BACKEND_TEST_PATHS = {
 }
 
 
-def _list_pytest_tests(category: str, action: str = None) -> bool:
+def _list_pytest_tests(category: str, action: str = None) -> bool:  # noqa: C901 — flat collect-output report printing, no nested logic
     """List available pytest test names for a backend category."""
     from ._registry import TEST_REGISTRY
 

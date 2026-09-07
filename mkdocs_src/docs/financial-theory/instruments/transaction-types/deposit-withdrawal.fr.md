@@ -1,4 +1,4 @@
-# ![](../../../static/icons/transactions/deposit.png){: width="32" style="vertical-align: middle;" } Dépôts et Retraits ![](../../../static/icons/transactions/withdrawal.png){: width="32" style="vertical-align: middle;" }
+# 💶 ![](../../../static/icons/transactions/deposit.png){: width="32" style="vertical-align: middle;" } Dépôts et Retraits ![](../../../static/icons/transactions/withdrawal.png){: width="32" style="vertical-align: middle;" }
 
 <div class="screenshot-container">
  <img class="gallery-img" data-category="transactions" data-name="form-modal-deposit" alt="Formulaire de Transaction — DÉPÔT">
@@ -27,6 +27,8 @@ Les dépôts et les retraits ne modifient pas la valeur marchande de votre porte
 - **Time-Weighted Return (TWR)** : élimine l'effet des flux de trésorerie pour mesurer la performance "pure" du portefeuille
 
 Sans un suivi précis des dépôts et retraits, il est impossible de distinguer les rendements *générés* par le portefeuille des rendements *causés* par l'ajout ou le retrait de liquidités.
+
+Nuance pour l'importation depuis un courtier : un export limité aux titres peut omettre les jambes de trésorerie du compte bancaire qui ont financé les opérations ou reçu les produits. Dans ce cas, un plugin peut générer automatiquement des contreparties de trésorerie pour garder la trésorerie du courtier importé neutre : `DEPOSIT + BUY` pour un achat au comptant, ou `SELL + WITHDRAWAL` pour une vente/un rachat. Crédit Agricole n'utilise ce modèle que pour sa **Liste des Mouvements du Dépôt Titres** : les coupons et les primes d'échéance restent des revenus, mais reçoivent des écritures `WITHDRAWAL` d'équilibrage. Sa **Liste des Mouvements de Compte** transporte la trésorerie bancaire réelle et ne crée pas ces écritures d'équilibrage.
 
 !!! tip "Learn more"
 

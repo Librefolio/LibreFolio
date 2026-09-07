@@ -14,6 +14,9 @@ from backend.app.config import PROJECT_ROOT
 
 sys.path.insert(0, str(PROJECT_ROOT))
 
+import psutil as psutil_module
+
+from backend.app.services.scheduler.leader import am_i_leader
 from backend.test_scripts.test_utils import print_section, print_success
 
 # ============================================================================
@@ -55,7 +58,6 @@ class TestSingleWorker:
     def test_single_sibling_is_leader(self):
         """SL-001: Only 1 sibling (self) → True."""
         print_section("SL-001: am_i_leader — single worker")
-        from backend.app.services.scheduler.leader import am_i_leader
 
         me_pid = 1001
         me = _mock_process(me_pid)
@@ -81,7 +83,6 @@ class TestLowestPidIsLeader:
     def test_lowest_pid_leader(self):
         """SL-002: siblings=[100,200,300], me=100 → True (lowest)."""
         print_section("SL-002: am_i_leader — lowest PID is leader")
-        from backend.app.services.scheduler.leader import am_i_leader
 
         me_pid = 100
         siblings = [_mock_process(100), _mock_process(200), _mock_process(300)]
@@ -108,7 +109,6 @@ class TestNotLowestPid:
     def test_not_lowest_pid_not_leader(self):
         """SL-003: siblings=[100,200,300], me=200 → False."""
         print_section("SL-003: am_i_leader — not lowest PID")
-        from backend.app.services.scheduler.leader import am_i_leader
 
         me_pid = 200
         siblings = [_mock_process(100), _mock_process(200), _mock_process(300)]
@@ -136,7 +136,6 @@ class TestZombieSiblingsExcluded:
         """SL-004: siblings=[zombie(100), running(200)], me=200 → True (zombie excluded)."""
         print_section("SL-004: am_i_leader — zombie siblings excluded")
 
-        from backend.app.services.scheduler.leader import am_i_leader
 
         me_pid = 200
         zombie = _mock_process(100, status="zombie")
@@ -164,7 +163,6 @@ class TestDockerPid1:
     def test_no_parent_is_leader(self):
         """SL-005: parent() returns None (Docker PID 1) → True."""
         print_section("SL-005: am_i_leader — Docker PID 1 (no parent)")
-        from backend.app.services.scheduler.leader import am_i_leader
 
         me_pid = 1
         me = MagicMock()
@@ -187,7 +185,6 @@ class TestDevModeReload:
     def test_reload_flag_always_leader(self):
         """SL-006: parent cmdline contains '--reload' → True (dev mode fast-path)."""
         print_section("SL-006: am_i_leader — dev mode --reload fast-path")
-        from backend.app.services.scheduler.leader import am_i_leader
 
         me_pid = 5000
         me = _mock_process(me_pid)
@@ -212,9 +209,7 @@ class TestPsutilException:
     def test_no_such_process_returns_true(self):
         """SL-007: psutil.Process() raises NoSuchProcess → True (fail-safe)."""
         print_section("SL-007: am_i_leader — psutil.NoSuchProcess → fail-safe True")
-        import psutil as psutil_module
 
-        from backend.app.services.scheduler.leader import am_i_leader
 
         with (
             patch(
@@ -231,9 +226,7 @@ class TestPsutilException:
     def test_access_denied_returns_true(self):
         """SL-007b: psutil.AccessDenied → True (fail-safe)."""
         print_section("SL-007b: am_i_leader — psutil.AccessDenied → fail-safe True")
-        import psutil as psutil_module
 
-        from backend.app.services.scheduler.leader import am_i_leader
 
         with (
             patch(

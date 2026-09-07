@@ -92,8 +92,9 @@ pipenv run ./dev.py install
 Sous le capot, cette commande va :
 
 1. Initialiser l'environnement virtuel Python et installer les packages via `pipenv`.
-2. Installer les dépendances frontend SvelteKit via `npm`.
-3. Installer les binaires du navigateur Playwright (utilisés pour la génération de rapports PDF et les tests E2E).
+2. Installer les outils racine du projet via `npm install`.
+3. Installer les dépendances frontend SvelteKit via `npm ci`.
+4. Installer les binaires du navigateur Playwright (utilisés pour la génération de rapports PDF et les tests E2E).
 
 ### ⚙️ 3. Configurer l'Environnement
 
@@ -105,9 +106,11 @@ cp .env.example .env
 
 Les paramètres par défaut fonctionnent immédiatement. Voici les variables clés :
 
-* **`PORT`** : Port de liaison du serveur (par défaut : `6040`).
-* **`LIBREFOLIO_DATA_DIR`** : Chemin du répertoire où la base de données, les téléchargements et les journaux sont stockés (par défaut : `./backend/data/prod`).
-* **`LOG_LEVEL`** : Niveau de détail des journaux (par défaut : `INFO`).
+| Variable | Par défaut | Description |
+| --- | --- | --- |
+| `PORT` | `6040` | Port de liaison du serveur. |
+| `LIBREFOLIO_DATA_DIR` | `./backend/data/prod` | Chemin du répertoire où la base de données, les téléchargements et les journaux sont stockés. |
+| `LOG_LEVEL` | `INFO` | Niveau de détail des journaux. |
 
 Pour une description complète de toutes les variables d'environnement prises en charge, consultez le [Guide des Variables d'Environnement](configuration.md).
 
@@ -121,7 +124,7 @@ pipenv run ./dev.py server
 
 Le serveur sera disponible à l'adresse `http://localhost:6040`.
 
-#### Options de la Commande du Serveur
+#### Server de la Commande du Serveur
 
 | Option | Description |
 |------|-------------|

@@ -18,14 +18,14 @@ PlanC + post-validation fixes covering: backend FX-aware price queries (C1-C2), 
 - **OHLC scaling by FX factor**: When converting, all four OHLC values are scaled proportionally by the `close` conversion factor — not converted individually. This preserves the candle shape even if only `close` has a direct FX rate.
 - **FX staleness composited with price staleness**: `AssetBackwardFillInfo` extends `BackwardFillInfo` adding `fx_rate_date` + `fx_days_back`. The tooltip shows both independently (`⚠ Price: N days old` + `⚠ FX rate: N days old`). Chart opacity uses `max(staleDays, fxStaleDays)`.
 - **Staircase fix via null gaps**: Comparison points where `original_close == null AND currency != targetCurrency` are set to `value: null` in `loadComparisonData.ts`, producing a gap in the chart instead of a cross-scale jump.
-- **`sync_pairs_bulk` bug**: `_process_route()` was defined but never called — function returned `None` → 500 error. Fix: added `await asyncio.gather(...)` call and `FXSyncBulkResponse` assembly. (See also [[problems/sync-pairs-bulk-none]] if created.)
+- **`sync_pairs_bulk` bug**: `_process_route()` was defined but never called — function returned `None` → 500 error. Fix: added `await asyncio.gather(...)` call and `FXSyncBulkResponse` assembly. (No dedicated problem page was ever created; see [[problems/fx-multi-route-no-fallback]] for the sibling defect in the same function.)
 - **"Go to" opens new tab**: Navigation from signal cards uses `window.open(url, '_blank')` instead of `goto(url)` to prevent losing chart state.
 - **Core-level cache wraps ALL provider calls**: Thread isolation and 5-layer cache are the core's responsibility, not individual providers'. Providers can assume sync I/O is fine — the core runs them in dedicated threads.
 - **Probe bypasses all caches**: `probe_provider_config()` is always a live call — it's a dry-run test, not a real fetch.
 
 ## Key problems recorded
 
-- **BUG: `sync_pairs_bulk` returns None** (D1): `_process_route()` inner function defined but `asyncio.gather()` never called. Hard 500. Fix: 3 lines in `fx.py`. See [[problems/sync-pairs-bulk-none]] (if created) or verify directly in `backend/app/services/fx.py`.
+- **BUG: `sync_pairs_bulk` returns None** (D1): `_process_route()` inner function defined but `asyncio.gather()` never called. Hard 500. Fix: 3 lines in `fx.py`. No dedicated problem page was ever created — verify directly in `backend/app/services/fx.py`, and see [[problems/fx-multi-route-no-fallback]] for the sibling defect in the same function.
 - **BUG: Staircase on comparison signals** (C4 Step 1): Backend returns unconverted (native currency) points mixed with converted (target currency) points when FX data is incomplete. The chart value axis mixes two scales. Fix: null-gap filtering in `loadComparisonData.ts`.
 - **BUG: `fxPairCreateSlug` guard always-true** (C5 Step 1): `fxPairCreateSlug = ''` then `if (!fxPairCreateSlug)` — guard was always `true`. Fix: extract `oncreated` as named function `handleFxPairCreated`, capture `wasForComparison` before clearing.
 

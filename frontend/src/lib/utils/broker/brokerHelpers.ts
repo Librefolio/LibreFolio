@@ -15,6 +15,7 @@
 
 import type {BrokerLike} from './brokerColors';
 import {zodiosApi} from '$lib/api';
+import {escapeHtml} from '$lib/utils/core/escapeHtml';
 
 /** Minimal shape for broker icon resolution (subset of BrokerLike). */
 export interface BrokerIconSource {
@@ -74,10 +75,6 @@ export function getPluginIconUrl(pluginCode: string | null | undefined): string 
     return _pluginIconCache.get(normalizedCode) ?? null;
 }
 
-function escapeHtmlAttr(value: string): string {
-    return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
 export function normalizeBrokerIconField(value: unknown): string | null {
     if (typeof value === 'string') {
         const trimmed = value.trim();
@@ -105,8 +102,8 @@ function getBrokerSourceById(brokerId: number, brokers: Map<number, BrokerIconSo
 }
 
 function buildBriefcaseFallbackHtml({width = 16, height = 16, className, style, visible = false}: Pick<BrokerIconHtmlOptions, 'width' | 'height' | 'className' | 'style'> & {visible?: boolean} = {}): string {
-    const attrs = ['aria-hidden="true"', `style="${escapeHtmlAttr((style ?? '') + `;display:${visible ? 'inline-flex' : 'none'};align-items:center;justify-content:center;flex-shrink:0;`)}"`];
-    if (className) attrs.push(`class="${escapeHtmlAttr(className)}"`);
+    const attrs = ['aria-hidden="true"', `style="${escapeHtml((style ?? '') + `;display:${visible ? 'inline-flex' : 'none'};align-items:center;justify-content:center;flex-shrink:0;`)}"`];
+    if (className) attrs.push(`class="${escapeHtml(className)}"`);
     return [
         `<span ${attrs.join(' ')}>`,
         `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">`,
@@ -184,16 +181,16 @@ export function getBrokerIconImgHtml(broker: BrokerIconSource | null | undefined
     const candidates = getBrokerIconCandidates(broker);
     if (candidates.length === 0) return '';
     const attrs = [
-        `src="${escapeHtmlAttr(candidates[0])}"`,
-        `alt="${escapeHtmlAttr(alt)}"`,
+        `src="${escapeHtml(candidates[0])}"`,
+        `alt="${escapeHtml(alt)}"`,
         `width="${width}"`,
         `height="${height}"`,
-        `data-fallbacks="${escapeHtmlAttr(JSON.stringify(candidates.slice(1)))}"`,
-        `onerror="${escapeHtmlAttr(getExhaustedScript(onExhausted))}"`,
-        `referrerpolicy="${escapeHtmlAttr(referrerPolicy)}"`,
+        `data-fallbacks="${escapeHtml(JSON.stringify(candidates.slice(1)))}"`,
+        `onerror="${escapeHtml(getExhaustedScript(onExhausted))}"`,
+        `referrerpolicy="${escapeHtml(referrerPolicy)}"`,
     ];
-    if (className) attrs.push(`class="${escapeHtmlAttr(className)}"`);
-    if (style) attrs.push(`style="${escapeHtmlAttr(style)}"`);
+    if (className) attrs.push(`class="${escapeHtml(className)}"`);
+    if (style) attrs.push(`style="${escapeHtml(style)}"`);
     return `<img ${attrs.join(' ')}>`;
 }
 

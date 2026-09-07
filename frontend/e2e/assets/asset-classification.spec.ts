@@ -8,9 +8,10 @@
  * - Database populated (./dev.py test db populate --force)
  */
 
-import {expect, test} from '@playwright/test';
+import {expect, test} from '../fixtures/playwright';
 import {login} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
+import {waitForSettled} from '../fixtures/app-events';
 import {goToAssetsPage, openCreateAssetModal} from './assets-helpers';
 
 /** Helper: create asset, return to detail page, open edit modal */
@@ -29,15 +30,19 @@ async function createAssetAndOpenEdit(page: import('@playwright/test').Page, nam
     await expect(page.getByTestId('asset-modal-form')).not.toBeVisible({timeout: 10_000});
 
     // Navigate to the new asset via search
-    await page.waitForTimeout(1000);
+    await waitForSettled(page.getByTestId('assets-page'), 20_000);
     const searchInput = page.getByTestId('assets-search-input');
     if (await searchInput.isVisible({timeout: 3000}).catch(() => false)) {
         await searchInput.fill(name);
-        await page.waitForTimeout(800);
+        await waitForSettled(page.getByTestId('assets-page'), 20_000);
     }
 
-    // Click the card
-    const card = page.locator('[data-testid^="asset-card-"]').first();
+    // Click *our* card, not whatever happens to be first: other workers create
+    // assets too, and the search filter is debounced, so `.first()` can still be
+    // showing the unfiltered list. Matching on the (unique) name is both the
+    // ownership guarantee and the barrier — it retries until the list catches up.
+    const card = page.locator('[data-testid^="asset-card-"]').filter({hasText: name}).first();
+    await expect(card).toBeVisible({timeout: 15_000});
     await card.click();
     await expect(page.getByTestId('asset-detail-page')).toBeVisible({timeout: 10_000});
 
@@ -46,12 +51,15 @@ async function createAssetAndOpenEdit(page: import('@playwright/test').Page, nam
     await expect(page.getByTestId('asset-modal-form')).toBeVisible({timeout: 5000});
 }
 
-/** Helper: expand "More Info" section if collapsed */
+/** Helper: ensure the "More Info" section is expanded (it is a toggle, not a button). */
 async function expandMoreInfo(page: import('@playwright/test').Page) {
-    const moreInfo = page.getByTestId('asset-modal-more-info');
-    await moreInfo.click();
-    // Wait for the classification section to appear
-    await expect(page.getByTestId('distribution-editor-geographic')).toBeVisible({timeout: 3000});
+    // AssetModal opens this section by itself when the asset already carries
+    // identifiers (`moreInfoExpanded = identifierRows.length > 0`), so clicking
+    // unconditionally would *close* it. Ask for the end state, not the click.
+    const editor = page.getByTestId('distribution-editor-geographic');
+    if (await editor.isVisible({timeout: 1500}).catch(() => false)) return;
+    await page.getByTestId('asset-modal-more-info').click();
+    await expect(editor).toBeVisible({timeout: 5000});
 }
 
 test.describe('Asset Classification Round-Trip', () => {
@@ -72,7 +80,6 @@ test.describe('Asset Classification Round-Trip', () => {
         // Add geographic entry
         const addGeoBtn = page.getByTestId('distribution-add-geographic');
         await addGeoBtn.click();
-        await page.waitForTimeout(500);
 
         // The new entry should appear in the distribution editor
         const geoEditor = page.getByTestId('distribution-editor-geographic');
@@ -80,7 +87,7 @@ test.describe('Asset Classification Round-Trip', () => {
 
         // Verify total badge is visible (entry was added)
         const geoTotal = page.getByTestId('distribution-total-geographic');
-        await expect(geoTotal).toBeVisible({timeout: 3000});
+        await expect(geoTotal).toBeVisible({timeout: 10_000});
 
         // Save
         await page.getByTestId('asset-modal-save').click();
@@ -114,11 +121,10 @@ test.describe('Asset Classification Round-Trip', () => {
         // Add sector entry
         const addSectorBtn = page.getByTestId('distribution-add-sector');
         await addSectorBtn.click();
-        await page.waitForTimeout(500);
 
         // Verify total badge appears
         const sectorTotal = page.getByTestId('distribution-total-sector');
-        await expect(sectorTotal).toBeVisible({timeout: 3000});
+        await expect(sectorTotal).toBeVisible({timeout: 10_000});
 
         // Save
         await page.getByTestId('asset-modal-save').click();
@@ -148,10 +154,13 @@ test.describe('Asset Classification Round-Trip', () => {
         // Expand More Info
         await expandMoreInfo(page);
 
-        // Add geo entry
+        // Add geo entry. The button's handler is async — it loads the country list on
+        // first use — so the row does not exist when the click resolves. Saving before
+        // the row lands saves nothing, and the test then blames the reopen. Wait for
+        // the total badge, which only renders once there is an entry.
         const addGeoBtn = page.getByTestId('distribution-add-geographic');
         await addGeoBtn.click();
-        await page.waitForTimeout(500);
+        await expect(page.getByTestId('distribution-total-geographic')).toBeVisible({timeout: 10_000});
 
         // Save with entry
         await page.getByTestId('asset-modal-save').click();
@@ -173,7 +182,6 @@ test.describe('Asset Classification Round-Trip', () => {
         if (await rowActionsBtn.isVisible({timeout: 2000}).catch(() => false)) {
             await rowActionsBtn.click();
             await page.getByTestId('context-menu-action-delete').click();
-            await page.waitForTimeout(300);
         }
 
         // Save (now empty)

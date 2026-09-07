@@ -12,6 +12,8 @@
  *   donationPopup.forceShow(); // debug-only override, see window.librefolioDebug
  */
 
+import {registerClientSessionReset} from '$lib/stores/app/clientSession';
+
 let shouldShow = $state(false);
 
 function trigger() {
@@ -33,3 +35,5 @@ export const donationPopup = {
     /** Debug-only: force the popup open without a real login (see (app)/+layout.svelte). */
     forceShow: trigger,
 };
+
+registerClientSessionReset('donationPopup', dismiss);

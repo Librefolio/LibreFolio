@@ -37,6 +37,24 @@ backend/test_scripts/
 ./dev.py test --coverage api all   # With coverage tracking
 ```
 
+**Global flags come BEFORE the category**: `./dev.py test -q --coverage services all`.
+Extra positional args after `<category> <action>` are consumed as a pytest `-k` filter.
+
+## ⚠️ Coverage: partial runs report falsely LOW
+
+Coverage accumulates across categories in `.coverage_data/backend`. Measuring only the
+*unit* categories reported **75.65 %** on this repo, with `api/` at 31.6 % and
+`brim_providers/` at 34.8 %. The complete run reports **90.48 %**, 87.2 % and 84.8 %.
+
+- Always declare **which categories were run** next to any coverage number.
+- A comparable figure needs `services` + `schemas` + `utils` + `db` + `api all` +
+  `external {brim,fx,asset}-providers` (~50 min).
+- `coverage-report` reads `/tmp/cov_report.json`; regenerate it from the live DB first.
+- Coverage cannot see `multiprocessing` spawn children (`risk/quant/spawn_worker.py`
+  always reads 0 %) — never infer dead code from that alone.
+
+See skill `testing-backend` for the full command sequence and rationale.
+
 ## Resume Interrupted Runs
 
 When a test fails mid-suite, fix the issue and resume from where it stopped:
@@ -90,6 +108,110 @@ class TestFeatureX:
 - **No side effects**: tests must not depend on execution order
 - **Formatted output**: use `print_section()`, `print_success()` from `test_utils.py`
 - **Timeout**: `TIMEOUT = 30` for API calls
+
+## ⛔ The three rules — normative
+
+Every backend test runs against **one shared database** and **one shared backend**,
+concurrently with its neighbours. A test that assumes it is alone is not "simpler":
+it is broken, and serialisation was only hiding it.
+
+### 1. Never identify data by position
+
+`[0]`, `[-1]`, "the first page", a fixed index into a list. Another test creates a
+row, the order shifts, and the assertion fails somewhere unrelated to its cause.
+
+```python
+# ✘ passes only while nothing else writes
+resp = await client.get(f"{API_BASE}/assets", headers=h)
+asset = resp.json()["items"][0]
+assert asset["display_name"] == name
+
+# ✔ write-safe by construction: identified by what this test created
+name = f"MyTest {unique_id()}"
+created = (await client.post(f"{API_BASE}/assets", json={"display_name": name}, headers=h)).json()
+asset = next(a for a in resp.json()["items"] if a["id"] == created["id"])
+```
+
+If the endpoint pages, **walk the pages** until the id is found, and fail with
+"not found in N pages". Do not assert on page 1 and hope.
+
+### 2. Never assert a count you did not create
+
+```python
+# ✘ a neighbour adding one asset breaks this
+assert len(resp.json()["items"]) == 3
+
+# ✔ says what it means: my three are there
+ids = {a["id"] for a in resp.json()["items"]}
+assert {a1, a2, a3} <= ids
+```
+
+`len(x) == N` is legitimate only when the count **is** the thing under test — a
+paginated `page_size`, a bulk operation's result cardinality — and then it is
+asserted on a collection the test owns entirely.
+
+### 3. Never wait on the clock
+
+`time.sleep()` is not a synchronisation primitive. Poll the condition that
+actually matters, with a deadline:
+
+```python
+# ✘
+await asyncio.sleep(2)
+resp = await client.get(f"{API_BASE}/jobs/{job_id}", headers=h)
+assert resp.json()["status"] == "done"
+
+# ✔
+deadline = time.monotonic() + 30
+while time.monotonic() < deadline:
+    resp = await client.get(f"{API_BASE}/jobs/{job_id}", headers=h)
+    if resp.json()["status"] != "pending":
+        break
+    await asyncio.sleep(0.1)
+assert resp.json()["status"] == "done"
+```
+
+### 4. Tests do not start servers
+
+The backend is an **environment resource**, started once by the runner. A module
+that starts its own uvicorn takes the port from everyone else and makes the
+category serial by construction. `_TestingServerManager` attaches to the shared
+backend when `LIBREFOLIO_TEST_SHARED_SERVER` is set — do not bypass it.
+
+### 5. Needing an exclusive resource requires a written reason
+
+A unit that cannot share the database stays `WRITE_GLOBAL`, but the catalogue
+requires one line saying **what** it mutates that cannot be scoped. "It's easier"
+is not a reason; "it rewrites `global_settings`, a single row shared by every
+user" is.
+
+Declare it where it is true — on the unit, or as `default_isolation=` on the
+category when it holds for the whole category:
+
+```python
+add_test(
+    "auth", ...,
+    exclusive_because="flips global_settings.enable_registration to False; every "
+                      "concurrent user creation fails while it is down",
+)
+```
+
+`exclusive_because` **is** the `WRITE_GLOBAL` declaration, not a comment beside a
+flag — a category default cannot silently promote a unit somebody explained must
+not be promoted.
+
+### 6. Never reach a third party over the network
+
+A test that calls the real ECB is not testing the ECB — it is testing today's
+weather. It fails when the provider is slow, and it makes the whole category
+exclusive to protect a timeout. Use the mock providers that already exist
+(`MOCKFX`, `MOCKFX_FAIL`, and their asset-source equivalents): they return fixed
+values, which lets the assertion be **exact** instead of "some number arrived".
+
+> When a test fails and the cause is not obvious, use the **`test-triage`**
+> skill: it gives the ordered hypotheses, starting with *"was it the shape of the
+> response?"* — which in this codebase is the most common cause and the easiest to
+> misdiagnose as flakiness. **`flaky` is not a verdict.**
 
 ## Key Tests by Feature Area
 

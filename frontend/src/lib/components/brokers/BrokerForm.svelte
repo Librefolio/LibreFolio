@@ -12,6 +12,7 @@
     import SingleDatePicker from '$lib/components/ui/date/SingleDatePicker.svelte';
     import {Info, Plus, Trash2, Upload} from 'lucide-svelte';
 
+    import {numericArrows} from '$lib/actions/numericArrows';
     type _DispatchEvents = {
         submit: {
             name: string;
@@ -355,7 +356,7 @@
                         <div class="flex items-center gap-2">
                             <!-- Amount first (60% width) -->
                             <div class="flex-[6]">
-                                <input type="number" step="0.01" min="0" bind:value={balance.amount} placeholder={$_('brokers.amount')} class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green h-[42px]" />
+                                <input type="number" use:numericArrows step="0.01" min="0" bind:value={balance.amount} placeholder={$_('brokers.amount')} class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green h-[42px]" />
                             </div>
 
                             <!-- Currency Select (40% width, dropdown opens upward) -->

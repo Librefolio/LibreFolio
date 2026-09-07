@@ -115,9 +115,23 @@
                     error = $_('auth.registrationFailed');
                 }
             } else if (typeof detail === 'string') {
-                if (detail.includes('username')) {
+                // Case-folded, and that is the whole fix: the backend answers
+                // "Username already taken" and "Email already registered", with
+                // capitals, so `includes('username')` never matched and every
+                // 400 fell through to `error = detail`. The two keys below were
+                // therefore unreachable — eight translated strings, four
+                // languages by two keys, that nobody could ever read — and a
+                // user in Italian, French or Spanish got raw English instead.
+                const lowered = detail.toLowerCase();
+                if (lowered.includes('registration is disabled')) {
+                    // The administrator has closed sign-ups (`auth.py:191`). It
+                    // is the one string of the three that is not about the values
+                    // the user typed, so it gets its own wording rather than the
+                    // generic failure.
+                    error = $_('auth.registrationDisabled');
+                } else if (lowered.includes('username')) {
                     error = $_('auth.validation.usernameTaken');
-                } else if (detail.includes('email')) {
+                } else if (lowered.includes('email')) {
                     error = $_('auth.validation.emailTaken');
                 } else {
                     error = detail;

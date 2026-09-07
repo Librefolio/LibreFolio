@@ -11,7 +11,7 @@
     import {globalSettings} from '$lib/stores/app/globalSettings';
     import {currentLanguage} from '$lib/stores/app/language';
     import {getEnd, getStart, isMaxSentinel, resolveDateSentinel, setDateRange} from '$lib/stores/dateRangeStore.svelte';
-    import {ArrowLeft, ArrowRightLeft, Briefcase, Crown, ExternalLink, Eye, FileText, Info, Pencil, Plus, RefreshCw, Share2, TrendingUp, Upload, Users, Wallet} from 'lucide-svelte';
+    import {ArrowLeft, ArrowRightLeft, Briefcase, Crown, ExternalLink, Eye, FileText, Info, Pencil, Plus, RefreshCw, Share2, Shield, TrendingUp, Upload, Users, Wallet} from 'lucide-svelte';
     import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
     import BrokerImportFilesModal from '$lib/components/brokers/BrokerImportFilesModal.svelte';
@@ -21,12 +21,15 @@
     import AllocationPanel from '$lib/components/dashboard/AllocationPanel.svelte';
     import GrowthChart from '$lib/components/dashboard/GrowthChart.svelte';
     import PositionsPanel from '$lib/components/dashboard/PositionsPanel.svelte';
+    import RiskAnalysisPanel from '$lib/components/risk/RiskAnalysisPanel.svelte';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
     import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
     import {TransactionFormModal, TransactionsTable, TransactionBulkModal, resolveFormItemsForView, loadPartnerRows, loadEventTooltipMap, type FormModalItems} from '$lib/components/transactions';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import type {TXReadItem, AssetEvent} from '$lib/components/transactions/types';
+    import type {FilterValue} from '$lib/components/table/types';
+    import {buildTransactionsFiltersUrl, applyTransactionColumnFilters} from '../../transactions/filterState';
     import {fetchReport, invalidate, type AllocationHistoryDimensions, type PortfolioHistoryPoint, type PortfolioSummary, type PositionsContribution} from '$lib/stores/portfolio/portfolioStore.svelte';
     import {ensureBrokersLoaded, getAllBrokers, getBrokerRole, brokerStoreVersion} from '$lib/stores/reference/brokerStore';
     import {ensureAssetsLoaded, getAssetInfo, assetStoreVersion} from '$lib/stores/reference/assetStore';
@@ -37,10 +40,14 @@
     import {parseCurrencyAmount, safeCurrency, safeString} from '$lib/types';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import {formatCurrencyAmountHtml} from '$lib/utils/currency/currencyFormat';
-    import {copyAiExport} from '$lib/features/ai-export/aiExportClipboard';
     import AiExportMenu from '$lib/features/ai-export/AiExportMenu.svelte';
-    import {PORTFOLIO_PROMPT_CATALOG, type PromptId} from '$lib/features/ai-export/promptCatalog';
+    import {prepareAiExport, type PreparedAiExport} from '$lib/features/ai-export/aiExportClipboard';
+    import type {AiExportOptionsSelection} from '$lib/features/ai-export/aiExportOptions';
+    import {aiExportCatalogLoader, emptyAiExportCompatibility, type AiExportCatalogCompatibilityResult} from '$lib/features/ai-export/catalog/compatibility';
+    import {buildAiExportMenuLabels, getAiExportErrorMessage, getAiExportSuccessMessages} from '$lib/features/ai-export/ui';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
+
+    const DISABLED_AI_EXPORT_COMPATIBILITY = emptyAiExportCompatibility();
 
     export let data: {brokerId: number};
 
@@ -75,9 +82,11 @@
         bulkOpen = true;
     }
 
-    /** AI export state — dropdown open/position handled internally by AiExportMenu */
-    let aiExportLoading = false;
-    $: aiExportEntries = PORTFOLIO_PROMPT_CATALOG.map((p) => ({id: p.id, label: $_(p.labelKey), description: $_(p.descriptionKey), icon: p.icon}));
+    /** AI export state — dropdown open/position handled internally by AiExportMenu. */
+    let aiExportCompatibility: AiExportCatalogCompatibilityResult = DISABLED_AI_EXPORT_COMPATIBILITY;
+    let aiExportCatalogLoading = true;
+    let aiExportCatalogFailed = false;
+    let aiExportLabels = buildAiExportMenuLabels($_, aiExportCompatibility, $_('dashboard.aiExport'));
 
     // Transactions tab — full paginated history (not just "recent 10").
     let txMainRows: TXReadItem[] = [];
@@ -86,9 +95,19 @@
     let txLoading = false;
     let txLoaded = false;
     let txCurrentPage = 1;
+    let txPageSize = 50;
     let txTableComponent: TransactionsTable | undefined;
+    let txColumnFilters: Record<string, FilterValue> = {};
 
-    const BROKER_TAB_IDS = ['panoramica', 'posizioni', 'transazioni', 'info'] as const;
+    /** Deep-link to the full Transactions page pre-filtered by this broker plus
+     *  whatever header column filters are currently active in the embedded table.
+     *  The broker-detail transactions tab loads by broker only (it ignores the
+     *  toolbar date range), so only broker + column filters are carried over.
+     *  Navigating via a plain link registers on the nav stack, so browser Back
+     *  returns to this exact broker view (see navigationStore.goBack). */
+    $: transactionsPageUrl = broker ? buildTransactionsFiltersUrl({...(applyTransactionColumnFilters({}, txColumnFilters) ?? {}), broker_id: broker.id}) : '/transactions';
+
+    const BROKER_TAB_IDS = ['panoramica', 'posizioni', 'rischio', 'transazioni', 'info'] as const;
     type BrokerTabId = (typeof BROKER_TAB_IDS)[number];
     const DEFAULT_BROKER_TAB: BrokerTabId = 'panoramica';
 
@@ -173,35 +192,53 @@
         if (hadLoadedData && !reportLoading) void loadOverview(true);
     }
 
+    $: aiExportLabels = buildAiExportMenuLabels($_, aiExportCompatibility, $_('dashboard.aiExport'));
+
     $: brokerTabs = [
         {id: 'panoramica', label: $_('brokers.overview'), icon: Briefcase, testId: 'broker-tab-panoramica'},
         {id: 'posizioni', label: $_('brokers.positions'), icon: TrendingUp, testId: 'broker-tab-posizioni'},
+        {id: 'rischio', label: $_('risk.title'), icon: Shield, testId: 'broker-tab-risk'},
         {id: 'transazioni', label: $_('transactions.title'), icon: ArrowRightLeft, testId: 'broker-tab-transazioni'},
         {id: 'info', label: $_('brokers.info'), icon: Info, testId: 'broker-tab-info'},
     ];
 
-    async function handleAiExport(promptId: PromptId) {
-        if (!broker) return;
-        aiExportLoading = true;
+    async function loadAiExportCompatibility() {
+        aiExportCatalogLoading = true;
         try {
-            await copyAiExport(
-                promptId,
-                {
-                    brokerIds: [broker.id],
-                    dateFrom: dateFrom || undefined,
-                    dateTo: dateTo || undefined,
-                    targetCurrency: targetCurrency,
-                    locale: $currentLanguage,
-                },
-                toasts,
-                $_,
-            );
+            aiExportCompatibility = await aiExportCatalogLoader.load();
+            aiExportCatalogFailed = false;
+        } catch {
+            aiExportCatalogFailed = true;
+            toasts.error($_('aiExport.catalogUnavailable'));
         } finally {
-            aiExportLoading = false;
+            aiExportCatalogLoading = false;
         }
     }
 
+    function handleAiExport(options: AiExportOptionsSelection): Promise<PreparedAiExport> {
+        const loadedBroker = broker;
+        if (!loadedBroker || loadedBroker.id !== data.brokerId) return Promise.reject(new Error('Broker is not loaded'));
+        return prepareAiExport({
+            context: {
+                domain: 'broker',
+                brokerId: loadedBroker.id,
+                snapshotAsOf: dateTo,
+                targetCurrency,
+            },
+            options,
+            compatibility: aiExportCompatibility,
+            translate: (key) => $_(key),
+        });
+    }
+
+    function handleAiExportCopied(result: PreparedAiExport) {
+        const messages = getAiExportSuccessMessages($_, result);
+        toasts.success(messages.copied);
+        toasts.info(messages.privacyNotice);
+    }
+
     onMount(() => {
+        void loadAiExportCompatibility();
         void Promise.all([loadBroker(), loadOverview(), ensureBrokersLoaded(), ensureAssetsLoaded()]);
     });
 
@@ -480,8 +517,18 @@
                     {#if showActionLabels}<span>{$_('dashboard.syncData')}</span>{/if}
                 </button>
 
-                <!-- AI Export — reuses the same copyAiExport() utility as the dashboard, scoped to this single broker. -->
-                <AiExportMenu entries={aiExportEntries} loading={aiExportLoading} triggerLabel={$_('dashboard.aiExport')} loadingLabel={$_('dashboard.aiExportBuilding')} showLabel={showActionLabels} onselect={(id) => handleAiExport(id as PromptId)} />
+                <AiExportMenu
+                    domain="broker"
+                    compatibility={aiExportCompatibility}
+                    memoryKey={`broker:${data.brokerId}`}
+                    defaultSelectionId="broker.review"
+                    disabled={aiExportCatalogLoading || aiExportCatalogFailed || broker?.id !== data.brokerId}
+                    labels={aiExportLabels}
+                    showLabel={showActionLabels}
+                    onprepare={handleAiExport}
+                    oncopied={handleAiExportCopied}
+                    onerror={(error) => toasts.error(getAiExportErrorMessage($_, error))}
+                />
             {/snippet}
         </PageToolbar>
 
@@ -527,31 +574,57 @@
             </div>
         {:else if activeTab === 'posizioni'}
             <div data-testid="broker-holdings">
-                <PositionsPanel summary={portfolioSummary} contribution={positionsContribution} loading={reportLoading && !portfolioSummary} {contributionLoading} assetsHref="/assets" brokers={panelBrokers} onRequestContribution={loadContribution} onAnalyze={openAssetPanel} />
-                <LotsAnalysisPanel
-                    open={activeAssetId != null}
-                    assetId={activeAssetId}
-                    brokerIds={[broker.id]}
+                <PositionsPanel
+                    summary={portfolioSummary}
+                    contribution={positionsContribution}
+                    loading={reportLoading && !portfolioSummary}
+                    {contributionLoading}
+                    assetsHref="/assets"
                     brokers={panelBrokers}
-                    {dateFrom}
-                    {dateTo}
-                    isAllPeriod={isMaxPending}
-                    currency={activeAsset?.currency ?? baseCurrency}
-                    assetName={activeAsset?.display_name ?? null}
-                    onClose={closeAssetPanel}
+                    onRequestContribution={loadContribution}
+                    onAnalyze={openAssetPanel}
+                    analyzedAssetId={activeAssetId}
+                />
+                <LotsAnalysisPanel open={activeAssetId != null} assetId={activeAssetId} brokerIds={[broker.id]} brokers={panelBrokers} currency={activeAsset?.currency ?? baseCurrency} assetName={activeAsset?.display_name ?? null} onClose={closeAssetPanel} />
+            </div>
+        {:else if activeTab === 'rischio'}
+            <div data-testid="broker-risk-tab">
+                <RiskAnalysisPanel
+                    scope={{kind: 'portfolio', broker_ids: [broker.id]}}
+                    dateStart={dateFrom}
+                    dateEnd={dateTo}
+                    targetCurrency={targetCurrency || baseCurrency}
+                    assetIds={[...new Set((portfolioSummary?.holdings ?? []).map((holding) => holding.asset_id))]}
+                    title={$_('risk.brokerTitle')}
+                    internalSubset={true}
+                    onsynced={async () => {
+                        invalidate();
+                        await Promise.all([loadBroker(), loadOverview(true)]);
+                    }}
                 />
             </div>
         {:else if activeTab === 'transazioni'}
             <div class="space-y-4" data-testid="broker-transactions-tab">
                 <div class="flex flex-wrap items-center justify-between gap-2" data-testid="broker-transactions-actions">
-                    <button
-                        class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all"
-                        on:click={() => (importFilesModalOpen = true)}
-                        data-testid="broker-show-import-history"
-                    >
-                        <FileText size={15} />
-                        <span class="hidden sm:inline">{$_('brokers.showImportHistory')}</span>
-                    </button>
+                    <div class="flex items-center gap-2">
+                        <button
+                            class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all"
+                            on:click={() => (importFilesModalOpen = true)}
+                            data-testid="broker-show-import-history"
+                        >
+                            <FileText size={15} />
+                            <span class="hidden sm:inline">{$_('brokers.showImportHistory')}</span>
+                        </button>
+                        <a
+                            href={transactionsPageUrl}
+                            class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all"
+                            title={$_('brokers.viewInTransactionsHint')}
+                            data-testid="broker-view-in-transactions"
+                        >
+                            <ArrowRightLeft size={15} />
+                            <span class="hidden sm:inline">{$_('brokers.viewInTransactions')}</span>
+                        </a>
+                    </div>
                     <div class="flex items-center gap-2">
                         <ColumnVisibilityToggle tableRef={txTableComponent?.getTableRef()} />
                         {#if canEdit}
@@ -584,8 +657,14 @@
                             brokers={allBrokersForTable}
                             eventTooltipMap={txEventTooltipMap}
                             currentPage={txCurrentPage}
+                            pageSize={txPageSize}
                             hideActions={true}
+                            onFiltersChange={(f) => (txColumnFilters = f)}
                             onPageChange={(page) => (txCurrentPage = page)}
+                            onPageSizeChange={(size) => {
+                                txPageSize = size;
+                                txCurrentPage = 1;
+                            }}
                             onViewRow={(row) => {
                                 txViewItems = resolveFormItemsForView(row as TXReadItem, () => undefined, getBrokerRole);
                                 txViewOpen = true;

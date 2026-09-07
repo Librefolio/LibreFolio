@@ -48,6 +48,6 @@ Tailwind CSS 4 config lives in `app.css` via `@theme {}` — **not** `tailwind.c
 | Role | Path |
 |------|------|
 | Chart settings store (runes) | `frontend/src/lib/stores/chartSettingsStore.svelte.ts` |
-| Toast store (runes) | `frontend/src/lib/stores/toastStore.svelte.ts` |
+| Toast store (runes) | `frontend/src/lib/stores/app/toastStore.svelte.ts` |
 | App CSS | `frontend/src/app.css` |
 | mkdocs | `mkdocs_src/docs/developer/frontend/state/index.md` |
