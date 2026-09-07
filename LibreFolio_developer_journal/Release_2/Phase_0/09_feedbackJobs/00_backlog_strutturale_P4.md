@@ -4,30 +4,70 @@
 `Release_2/phases/`) · **Natura**: lavoro strutturale rimandato — NON bug, NON urgente,
 ma debito che cresce col tempo. Da pescare al prossimo round di sviluppo.
 
-Questi 8 task sono i "grandi" dell'audit di pulizia (02/09) che non sono stati fatti nella
-tornata P0–P3 perché richiedono un lavoro dedicato. I 26 `TODO(P2-refactor)` marcati nel
-codice al 03/09 (gate C901) sono la loro proiezione puntuale: `grep -rn "TODO(P2-refactor)" backend/ scripts/`.
+Queste 8 aree ereditano il debito dell'audit di pulizia (02/09). La verifica del 07/09 ha
+distinto i refactor ancora aperti dagli alias e dalle voci S6 già risolte nella tornata P0–P3.
+I marker `TODO(P2-refactor)` erano 26 al 03/09 e sono **25** alla baseline `a9138140`:
+`grep -rn "TODO(P2-refactor)" backend/ scripts/`. Non sono 25 task autonomi approvati.
 
 > ⚠️ I report citati sotto sono **archiviati** in `../../phases/08_newCleanAndDocumentation_audit/`
 > (li descrivono con l'evidenza del 02/09; le righe possono essere scivolate da allora).
 
 | # | Task | Perché / cosa comporta | Dimensione | Descritto in |
 |---|------|------------------------|-----------|--------------|
-| P4-1 | **Scissione di `asset_source.py`** (5 162 righe al 02/09, in crescita) in moduli: provider management / prezzi / metadata / bulk ops | Il file più grosso del backend; ogni modifica lo fa crescere. Il report 03 ha la mappa delle sezioni | L | [03 §T8](../../phases/08_newCleanAndDocumentation_audit/03_services_pricing_fx.md) · [14 #6.13](../../phases/08_newCleanAndDocumentation_audit/14_backlog_ed_esecuzione.md) |
-| P4-2 | **Scomposizione di `transaction_service.execute_batch`** (complessità C901 = 115, ~640 righe) in handler per verbo con dispatch tabellare | Il singolo punto più complesso del codice; ogni bugfix lì dentro è a rischio | L | [02 §T8](../../phases/08_newCleanAndDocumentation_audit/02_services_core.md) · [11 #7](../../phases/08_newCleanAndDocumentation_audit/11_crosscutting.md) |
-| P4-3 | **Estrazione helper condivisi BRIM** dai parser, un provider alla volta, partendo da `broker_credit_agricole._parse_account_movements` (C901 = 71) | 35 siti C901 BRIM quasi identici; una volta fattorizzati, i test possono coprire i rami errore oggi irraggiungibili | L | [04 §T2](../../phases/08_newCleanAndDocumentation_audit/04_providers.md) · [17 #4](../../phases/08_newCleanAndDocumentation_audit/17_stabilizzazione.md) |
+| P4-1 | **Scissione di `asset_source.py`** (5 106 righe al 07/09; erano 5 162 al 02/09) in moduli per responsabilità | Separare provider management, prezzi, metadata, CRUD e ricerca; "bulk ops" da solo non è un confine utile | L | [03 §T8](../../phases/08_newCleanAndDocumentation_audit/03_services_pricing_fx.md) · [14 #6.13](../../phases/08_newCleanAndDocumentation_audit/14_backlog_ed_esecuzione.md) |
+| P4-2 | **Scomposizione di `transaction_service.execute_batch`** (C901 = 115, 637 righe) in stage ordinati con contesto esplicito | Il dispatch non può rendere indipendenti split/update/create/promote/link; il commit resta al chiamante | XL | [02 §T8](../../phases/08_newCleanAndDocumentation_audit/02_services_core.md) · [11 #7](../../phases/08_newCleanAndDocumentation_audit/11_crosscutting.md) |
+| P4-3 | **Estrazione mirata BRIM**, partendo da `broker_credit_agricole._parse_account_movements` (C901 storico 71; oggi 692 righe, nove closure) | Helper comuni già presenti; i 35 siti C901 non sono tutti parser annidati equivalenti. Prima fasi locali, poi riuso dimostrato | L | [04 §T2](../../phases/08_newCleanAndDocumentation_audit/04_providers.md) · [17 #4](../../phases/08_newCleanAndDocumentation_audit/17_stabilizzazione.md) |
 | P4-4 | **`get_history_value` di Yahoo Finance** (complessità 31, invariata da un mese) | Il provider più usato e più instabile; i retry/fallback annidati sono il punto caldo | M | [04 §T4](../../phases/08_newCleanAndDocumentation_audit/04_providers.md) |
-| P4-5 | **Migrazione Svelte 5 Runes** di `BrokerSharingPanel.svelte` (24 `$:` legacy) + le due tab settings (9+9) | Il debito `$:` cresce a ogni feature; la migrazione costa di più col tempo | M | [11 #6](../../phases/08_newCleanAndDocumentation_audit/11_crosscutting.md) · [10 §G3](../../phases/08_newCleanAndDocumentation_audit/10_frontend_charts.md) |
-| P4-6 | **Matrice dichiarativa per `validate_status_matrix`** (`schemas/signals.py:1069`, C901 32) | La matrice stato×segnale è una catena di if; una tabella dichiarativa la rende estensibile. Trigger naturale: il prossimo `SignalStatus` | M | [05 §T4](../../phases/08_newCleanAndDocumentation_audit/05_signals_risk.md) |
-| P4-7 | **Ciclo di vita dei cache store frontend** (`removeAssetPriceStore` mai chiamato, registry/pool mai rilasciati) | Le cache in-memory crescono senza tetto; serve una misura e una decisione (LRU? clear on logout?). Collegato alla nota in TODO_FUTURI sull'audit delle cache | M | [08 §T2](../../phases/08_newCleanAndDocumentation_audit/08_frontend_state_api.md) · [14 #9](../../phases/08_newCleanAndDocumentation_audit/14_backlog_ed_esecuzione.md) |
-| P4-8 | **Voci S6 residue del vecchio backlog** (6.2, 6.3, 6.4, 6.7, 6.8, 6.11, 6.12; 6.14 sconsigliata) + **TRY003 congelata** finché TRY non entra nel select ruff | Coda lunga del backlog di agosto; dettaglio nel report 14 | varie | [14 #23/#26](../../phases/08_newCleanAndDocumentation_audit/14_backlog_ed_esecuzione.md) |
+| P4-5 | **Migrazione Svelte 5 Runes** di `BrokerSharingPanel.svelte` (24 `$:`), `PreferencesTab.svelte` (9), `GlobalSettingsTab.svelte` (10) | 43 statement legacy; preservare binding, salvataggi, reset, permessi e caricamenti | M | [11 #6](../../phases/08_newCleanAndDocumentation_audit/11_crosscutting.md) · [10 §G3](../../phases/08_newCleanAndDocumentation_audit/10_frontend_charts.md) |
+| P4-6 | **Matrice dichiarativa per `validate_status_matrix`** (`schemas/signals.py:1050`, C901 32) | Tabella di presenza/assenza più predicati semantici; conservare sottomatrice FAILED e invarianti trasversali | M | [05 §T4](../../phases/08_newCleanAndDocumentation_audit/05_signals_risk.md) |
+| P4-7 | **Ciclo di vita dei cache store frontend** (`removeAssetPriceStore` mai chiamato, registry non completamente collegati al reset sessione) | Confine account già presente; pool limitato a 8 worker. Misurare entry, punti, intervalli e riferimenti prima di scegliere budget/rilascio | L | [08 §T2](../../phases/08_newCleanAndDocumentation_audit/08_frontend_state_api.md) · [14 #9](../../phases/08_newCleanAndDocumentation_audit/14_backlog_ed_esecuzione.md) |
+| P4-8 | **Coda S6 riconciliata**: aperte 6.2/6.4/6.11; 6.7/6.8 alias di P4-6/P4-2; 6.3/6.12 già risolte; 6.14 solo entro P4-3; **TRY003 congelata** | Il report 14 non incorpora tutte le chiusure P2: fa fede la verifica corrente sotto | varie | [14 #23/#26](../../phases/08_newCleanAndDocumentation_audit/14_backlog_ed_esecuzione.md) |
 
 ## Come leggerlo
 
-- **P4-1/2/3** sono i tre colli grossi (L): un round di sviluppo dedicato li può chiudere in
-  sequenza, e ognuno sblocca i test che oggi non si possono scrivere.
-- **P4-4/5/6/7** sono medi (M): entrano in un round misto.
+- **P4-1/2/3** sono i refactor ampi (L/XL), senza dipendenza hard fra loro.
+  Migliorano la testabilità; non sono prerequisiti per qualunque test di errore.
+- **P4-4/5/6** sono medi (M); **P4-7** è L includendo misura, policy e lifecycle completo.
 - **P4-8** è la coda: si spunta quando si tocca l'area.
-- I 26 marker `TODO(P2-refactor)` nel codice (tabella completa nel piano P1 archiviato,
-  `phases/08_newCleanAndDocumentation_audit/plan-phase00P1QuickWins.prompt.md` §P1-2) sono
-  i punti esatti da cui partire per ciascuno.
+- I 26 marker storici sono nel piano P1 archiviato; i **25 attuali** e il loro rapporto
+  con lo scope approvato sono nell'appendice A di [06_piano_sprint.md](06_piano_sprint.md).
+  Il marker scomparso era `compute_wac_iterative_multi_broker`, rimosso in `2572b240`.
+
+## Analisi 2026-09-07
+
+Baseline `a9138140`; superfici, rischi e DoD in [06_piano_sprint.md](06_piano_sprint.md).
+Nessun refactor avviato con questa pubblicazione.
+
+| Task | Nota di analisi | Sprint |
+|---|---|---|
+| P4-1 | Aperto, L: quattro classi vive; non ricreare AssetMetadataService. | SP08 |
+| P4-2 | Aperto, XL: 637 righe/C901 115; stage e transazione condivisa. | SP16 |
+| P4-3 | Aperto, L: caratterizzazione output completo prima dell'estrazione locale. | SP09 |
+| P4-4 | Aperto, M: Yahoo history ancora unico metodo; retry/thread invariati. | SP08 |
+| P4-5 | Aperto, M: inventario 24/9/10; coordinare con onboarding. | SP05 |
+| P4-6 | Aperto, M: validazione dichiarativa senza cambiare il contratto. | SP04 |
+| P4-7 | Parziale, L: misura/ownership prima di eviction e rilascio. | SP10 |
+| P4-8 | Coda deduplicata nella tabella seguente. | Per voce |
+
+| Residuo | Esito 2026-09-07 |
+|---|---|
+| 6.2 | Parziale, M, SP04. `is_chain` nel modello; set provider distinto dal percorso ordinato. |
+| 6.3 | ✅ Chiuso per rimozione dei quattro aggregate; [audit 02](../../phases/08_newCleanAndDocumentation_audit/02_services_core.md), nessun helper da ripristinare. |
+| 6.4 | Aperto, L, SP08: fasi attuali come closure, da estrarre insieme alla scissione. |
+| 6.7 | Alias P4-6, nessuna seconda implementazione. |
+| 6.8 | Alias P4-2, nessuna seconda implementazione. |
+| 6.11 | Aperto, S, SP04: 17 assert strutturali su 51; 34 contestuali fuori scope. |
+| 6.12 | ✅ Risolto P2-9: registry unico, servizi separati per scelta; [piano P2](../../phases/08_newCleanAndDocumentation_audit/plan-phase00P2ProductDecisions.prompt.md). |
+| 6.14 | Nessuna campagna autonoma; limiti incorporati in P4-3. |
+| TRY003 | Congelato: TRY non nel select; nessuna attivazione implicita. |
+
+## Coordinamento — confronto successivo 2026-09-07
+
+La sezione 11 di [06_piano_sprint.md](06_piano_sprint.md) distingue dipendenze hard,
+corsie indipendenti e file/risorse da serializzare. P4-4/5/6, S6 6.2/6.11, BRIM e
+contratti Tool non formano una catena obbligatoria. Scissione asset_source e refresh
+restano sotto un owner; test/backend/DB e rigenerazioni condivise hanno una sola coda.
+
+P4-5 conserva la UI: niente redesign implicito durante la migrazione. Se un refactor
+introduce nuove viste o modifiche visive importanti, prima servono ASCII approvati dal dev
+e dopo walkthrough operativo e feedback, come G-UX-DESIGN/G-UX-REVIEW del piano.

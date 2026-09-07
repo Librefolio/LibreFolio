@@ -7,11 +7,23 @@ di TODO_FUTURI.md (classificazione con l'utente) + gli 8 P4 ereditati dall'audit
 | File | Area | Contenuto |
 |------|------|-----------|
 | [00_backlog_strutturale_P4.md](00_backlog_strutturale_P4.md) | Debito strutturale | Gli 8 task P4 dell'audit (scissione asset_source, execute_batch, BRIM helpers, Yahoo, Runes, status matrix, cache store, coda S6) |
-| [01_ux_dashboard.md](01_ux_dashboard.md) | UX & dashboard | Bug testa-config, modalità privacy, colonna YOC, filtro utente files, tooltip valuta, decisione mode='duplicate' |
-| [02_grafici_avanzati.md](02_grafici_avanzati.md) | Grafici | F8 (P&L assoluto/candele/istogrammi), guadagni per transazione, rendimento a N (asset) |
+| [01_ux_dashboard.md](01_ux_dashboard.md) | UX & dashboard | Provider probe, global privacy, YOC, uploader filter, currency help, support, onboarding, mobile header |
+| [02_grafici_avanzati.md](02_grafici_avanzati.md) | Grafici | F8 (P&L-only, synthetic candles, income histograms), delivered lot analysis, calendar-day asset return |
 | [03_asset_dati_classificazione.md](03_asset_dati_classificazione.md) | Asset & dati | Settori bond Corporate/Governativi, import CSV distribuzioni geo/settore |
-| [04_brim_import.md](04_brim_import.md) | BRIM & import | eToro Withdraw/Conversion Fee, FEE/TAX collegamento asset, link transazioni in delete modal |
-| [05_pac_allocation_tool.md](05_pac_allocation_tool.md) | Feature grande | Tool allocazione PAC multi-ETF (vincolo intero, euro), backend API + frontend, futura esportazione MCP |
+| [04_brim_import.md](04_brim_import.md) | BRIM & import | eToro fee reconciliation, delivered FIFO v4 cost allocation, asset deletion links |
+| [05_pac_allocation_tool.md](05_pac_allocation_tool.md) | Tool platform | Backend plugins, custom-first UI, PAC/rebalancing, per-currency cash and optional buy/sell/FX |
+| [06_piano_sprint.md](06_piano_sprint.md) | Analysis and sprint plan | Current-code evidence, 16 sprints, parallel-work dependency map, shared-resource ownership and developer UI review gates |
+
+**Planning update (2026-09-07):** see [06](06_piano_sprint.md) for the current-code
+assessment and decisions made during review. Global privacy, mobile auto-hide header,
+synthetic P&L candles and the backend Tool plugin platform supersede the original narrower
+scope. The plan is a proposal; implementation has not started.
+
+**Review follow-up (2026-09-07):** YOC now specifies a 365-day window, explained dash states,
+an English theory page and a column-header tooltip. The shared CsvEditor is extended rather
+than duplicated. Tool schemas live in the catalogue; data copying uses domain APIs.
+Section 11 maps parallel work; section 12 requires ASCII mockup approval before substantial
+UI changes and an operational developer walkthrough/feedback round afterward.
 
 ## Regole della cartella
 

@@ -12,13 +12,16 @@ Task su modello dati degli asset e classificazione. Approvati dall'utente il 07/
 Aggiungere tra i settori: **Corporate** (bond di aziende) e **Governativi** (bond statali).
 
 ### Note implementative
-- Il settore vive nella classificazione dell'asset: verificare dov'è l'enum/lista settori
-  (`sector_fin_utils.py` / `FinancialSector` e il selettore nel `DistributionEditor` /
-  nella modale asset) e come valida il backend.
-- Aggiungere le due voci con label i18n ×4. Verificare che la normalizzazione sector→
-  allocazione dashboard le prenda in automatico.
-- Decidere se vale anche per l'auto-classificazione da provider (JustETF/Yahoo mappano già
-  dei settori: mappare i bond segnalati dai provider su queste due classi).
+- **Verifica 2026-09-07**: `FinancialSector` in `sector_fin_utils.py:14` non contiene le
+  due voci. Aggiornare anche fallback `assetTypes.ts`, API settori, selettore, i18n ×4
+  e mappe emoji in utilities/portfolio.
+- Borsa Italiana mappa già tipologie corporate/governative esplicite a `Financials`
+  (`borsa_italiana.py:223-249`): riallineare questi mapping, non solo l'input manuale.
+- JustETF passa le distribuzioni al normalizzatore; Yahoo usa il settore disponibile.
+  Non inferire la classe dal solo tipo BOND, non riclassificare in massa vecchi Financials
+  o dati manuali; sovranazionali/casi ambigui non vanno assimilati senza una decisione.
+- Superfici e DoD nel task A1 di [06_piano_sprint.md](06_piano_sprint.md). S, SP03;
+  nessuna migrazione di colonne DB.
 
 ---
 
@@ -36,6 +39,40 @@ Nell'edit asset, per le distribuzioni geografica e settoriale, la possibilità d
 - Target: il `DistributionEditor` (sector/geographic) nella modale asset: un bottone
   "Importa da CSV" che riempie le righe (nome area/settore + peso %), con validazione
   (totale 100% coerente col totale verde già esistente).
-- Formato CSV minimo: `name,weight` (peso in % o 0-1 da decidere e documentare).
+- **Decisione utente 2026-09-07**: formato minimo `name,weight`, peso in percentuale
+  **0-100**. Niente riconoscimento automatico delle frazioni 0-1.
 - Match dei nomi: contro l'enum/settori noti; le righe non riconosciute vanno in errore
   chiaro, non ignorate.
+- **Verifica 2026-09-07**: `CsvEditor` e `DataImportModal` impongono oggi `date` e
+  consentono import delle sole righe valide. **Estendere proprio quei componenti condivisi**,
+  già usati per prezzi/eventi Asset e tassi FX: non creare un editor/parser indipendente.
+- Rendere configurabili identità primaria e validazione (`date` resta default, `name`
+  per le distribuzioni); preservare i tipi dei caller dated, senza date fittizie.
+  Una wrapper di dominio configura il motore comune, non lo duplica.
+- Modalità distribuzioni strict: niente import delle sole righe valide se restano errori.
+  I default degli import prezzi/eventi/FX non cambiano; coprirli tutti con regressioni.
+- Errori su nomi sconosciuti, duplicati canonici e numeri invalidi; applicare soltanto
+  alla distribuzione del draft scelta, dopo preview valida. Non usare il fallback a Other
+  come riconoscimento di un nome CSV.
+- Il totale verde frontend e la tolleranza backend non coincidono: `BaseDistribution`
+  accetta oggi scarto fino all'1% e rinormalizza, non quanto dice la sua docstring.
+  Fissare la policy dell'import coerente col totale verde senza modificare tacitamente
+  i contratti legacy. Bilanciamento solo esplicito.
+
+### Confronto UI e parallelismo — 2026-09-07
+Prima del codice della vista: ASCII di file/testo, mapping/preview, errori/duplicati e
+totale, con feedback e approvazione del dev. Dopo: percorso da Edit Asset alle due
+distribuzioni e giro dei tre import dated esistenti, risultati attesi e feedback operativo.
+
+Il core CSV può avanzare mentre si chiude il catalogo A1, su codici concordati; l'integrazione
+finale richiede quel catalogo e l'host AssetModal va coordinato con U1/U5. Un solo owner per
+`CsvEditor`/`DataImportModal`, non implementazioni concorrenti per ogni dominio.
+
+## Analisi per task — 2026-09-07
+
+Baseline `a9138140`; dettagli in [06_piano_sprint.md](06_piano_sprint.md).
+
+| ID | Stato, dipendenza e nota | Taglia | Sprint |
+|---|---|---|---|
+| A1 | Aperto; enum/fallback/emoji/API/UI e mapping provider espliciti da allineare. Precede A2. | S | SP03 |
+| A2 | Aperto; estensione del CsvEditor/DataImportModal condiviso, default dated conservati, percentuali e preview strict. | M | SP03 |
