@@ -1,0 +1,132 @@
+{
+  "schema_version": 1,
+  "scalar_cases": [
+    {
+      "id": "range_and_chronological_ties",
+      "bucket": {
+        "start": "2026-01-01",
+        "end": "2026-01-07"
+      },
+      "points": [
+        {"date": "2026-01-05", "value": "15"},
+        {"date": "2026-01-01", "value": "10"},
+        {"date": "2026-01-03", "value": "5"},
+        {"date": "2026-01-02", "value": "5"},
+        {"date": "2026-01-04", "value": "15"},
+        {"date": "2026-01-07", "value": "12"}
+      ],
+      "expected": {
+        "observation_count": 6,
+        "first": {"value": "10", "date": "2026-01-01"},
+        "min": {"value": "5", "date": "2026-01-02"},
+        "max": {"value": "15", "date": "2026-01-04"},
+        "last": {"value": "12", "date": "2026-01-07"},
+        "representatives": {
+          "first_with_range": {"value": "10", "date": "2026-01-01"},
+          "min_with_range": {"value": "5", "date": "2026-01-02"},
+          "max_with_range": {"value": "15", "date": "2026-01-04"},
+          "last_with_range": {"value": "12", "date": "2026-01-07"}
+        }
+      }
+    },
+    {
+      "id": "single_observation",
+      "bucket": {
+        "start": "2026-01-08",
+        "end": "2026-01-08"
+      },
+      "points": [
+        {"date": "2026-01-08", "value": "9.5"}
+      ],
+      "expected": {
+        "observation_count": 1,
+        "first": {"value": "9.5", "date": "2026-01-08"},
+        "min": {"value": "9.5", "date": "2026-01-08"},
+        "max": {"value": "9.5", "date": "2026-01-08"},
+        "last": {"value": "9.5", "date": "2026-01-08"},
+        "representatives": {
+          "first_with_range": {"value": "9.5", "date": "2026-01-08"},
+          "min_with_range": {"value": "9.5", "date": "2026-01-08"},
+          "max_with_range": {"value": "9.5", "date": "2026-01-08"},
+          "last_with_range": {"value": "9.5", "date": "2026-01-08"}
+        }
+      }
+    },
+    {
+      "id": "empty_bucket",
+      "bucket": {
+        "start": "2026-01-09",
+        "end": "2026-01-10"
+      },
+      "points": [],
+      "expected": {
+        "observation_count": 0,
+        "first": null,
+        "min": null,
+        "max": null,
+        "last": null,
+        "representatives": {
+          "first_with_range": null,
+          "min_with_range": null,
+          "max_with_range": null,
+          "last_with_range": null
+        }
+      }
+    }
+  ],
+  "band_case": {
+    "bucket": {
+      "start": "2026-01-01",
+      "end": "2026-01-03"
+    },
+    "points": [
+      {"date": "2026-01-03", "lower": "6", "middle": "9", "upper": "13"},
+      {"date": "2026-01-01", "lower": "8", "middle": "10", "upper": "12"},
+      {"date": "2026-01-02", "lower": "4", "middle": "11", "upper": "15"}
+    ],
+    "expected": {
+      "observation_count": 3,
+      "lower": {
+        "observation_count": 3,
+        "first": {"value": "8", "date": "2026-01-01"},
+        "min": {"value": "4", "date": "2026-01-02"},
+        "max": {"value": "8", "date": "2026-01-01"},
+        "last": {"value": "6", "date": "2026-01-03"}
+      },
+      "middle": {
+        "observation_count": 3,
+        "first": {"value": "10", "date": "2026-01-01"},
+        "min": {"value": "9", "date": "2026-01-03"},
+        "max": {"value": "11", "date": "2026-01-02"},
+        "last": {"value": "9", "date": "2026-01-03"}
+      },
+      "upper": {
+        "observation_count": 3,
+        "first": {"value": "12", "date": "2026-01-01"},
+        "min": {"value": "12", "date": "2026-01-01"},
+        "max": {"value": "15", "date": "2026-01-02"},
+        "last": {"value": "13", "date": "2026-01-03"}
+      },
+      "envelope": {
+        "lower": {"value": "4", "date": "2026-01-02"},
+        "middle": {"value": "9", "date": "2026-01-03"},
+        "upper": {"value": "15", "date": "2026-01-02"}
+      }
+    }
+  },
+  "events_case": {
+    "bucket": {
+      "start": "2026-01-01",
+      "end": "2026-01-03"
+    },
+    "events": [
+      {"date": "2026-01-02", "dedup_key": "event-1", "payload": {"state": "kept"}},
+      {"date": "2026-01-01", "dedup_key": "event-1", "payload": {"state": "duplicate"}},
+      {"date": "2026-01-01", "dedup_key": "event-2", "payload": {"state": "second"}}
+    ],
+    "expected": [
+      {"date": "2026-01-01", "dedup_key": "event-2", "payload": {"state": "second"}},
+      {"date": "2026-01-02", "dedup_key": "event-1", "payload": {"state": "kept"}}
+    ]
+  }
+}

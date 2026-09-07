@@ -18,6 +18,7 @@ Test Coverage:
 
 import sys
 import time
+from contextlib import suppress
 from datetime import date
 from decimal import Decimal
 
@@ -107,7 +108,7 @@ def clean_test_asset():
     yield asset_id
 
     # Cleanup
-    try:
+    with suppress(Exception):  # teardown is best-effort
         with Session(get_sync_engine()) as session:
             asset = session.get(Asset, asset_id)
             if asset:
@@ -122,8 +123,6 @@ def clean_test_asset():
 
                 session.delete(asset)
                 session.commit()
-    except Exception:
-        pass
 
 
 @pytest.fixture
@@ -140,7 +139,7 @@ def clean_test_broker():
     yield broker_id
 
     # Cleanup
-    try:
+    with suppress(Exception):  # teardown is best-effort
         with Session(get_sync_engine()) as session:
             broker = session.get(Broker, broker_id)
             if broker:
@@ -150,8 +149,6 @@ def clean_test_broker():
                     session.delete(tx)
                 session.delete(broker)
                 session.commit()
-    except Exception:
-        pass
 
 
 # ============================================================================

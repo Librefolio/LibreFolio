@@ -13,17 +13,19 @@
   Pattern: Svelte 5 Runes, Tailwind CSS 4, dark mode, data-testid everywhere.
 -->
 <script lang="ts">
-    import {onMount, tick} from 'svelte';
+    import {onMount, tick, untrack} from 'svelte';
     import {page} from '$app/stores';
     import {_} from '$lib/i18n';
-    import {RefreshCw, Briefcase, TrendingUp, ArrowRightLeft, Wallet} from 'lucide-svelte';
-    import {copyAiExport} from '$lib/features/ai-export/aiExportClipboard';
+    import {RefreshCw, Briefcase, TrendingUp, ArrowRightLeft, Wallet, Shield} from 'lucide-svelte';
     import AiExportMenu from '$lib/features/ai-export/AiExportMenu.svelte';
-    import {PORTFOLIO_PROMPT_CATALOG, type PromptId} from '$lib/features/ai-export/promptCatalog';
+    import {prepareAiExport, type PreparedAiExport} from '$lib/features/ai-export/aiExportClipboard';
+    import type {AiExportOptionsSelection} from '$lib/features/ai-export/aiExportOptions';
+    import {aiExportCatalogLoader, emptyAiExportCompatibility, type AiExportCatalogCompatibilityResult} from '$lib/features/ai-export/catalog/compatibility';
+    import {buildAiExportMenuLabels, getAiExportErrorMessage, getAiExportSuccessMessages} from '$lib/features/ai-export/ui';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
 
     import {fetchReport, invalidate, type PortfolioReport, type PortfolioSummary, type PortfolioHistoryPoint, type AllocationHistoryDimensions, type PositionsContribution} from '$lib/stores/portfolio/portfolioStore.svelte';
-    import {ensureBrokersLoaded, getAllBrokers} from '$lib/stores/reference/brokerStore';
+    import {ensureBrokersLoaded, getOwnedBrokers} from '$lib/stores/reference/brokerStore';
     import {ensureAssetsLoaded, getAssetInfo, assetStoreVersion} from '$lib/stores/reference/assetStore';
     import {getAssetPanelAssetId, buildAssetPanelUrl} from '$lib/utils/broker/assetPanelUrl';
     import {buildTabUrl, getResolvedTabParam} from '$lib/utils/url/tabUrl';
@@ -36,6 +38,7 @@
     import AllocationPanel from '$lib/components/dashboard/AllocationPanel.svelte';
     import GrowthChart from '$lib/components/dashboard/GrowthChart.svelte';
     import KpiSection from '$lib/components/dashboard/KpiSection.svelte';
+    import RiskAnalysisPanel from '$lib/components/risk/RiskAnalysisPanel.svelte';
     import PositionsPanel from '$lib/components/dashboard/PositionsPanel.svelte';
     import LotsAnalysisPanel from '$lib/components/brokers/lots/LotsAnalysisPanel.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
@@ -47,11 +50,14 @@
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
     import {getBrokerRole} from '$lib/stores/reference/brokerStore';
+    import {getRoleIcon, getRoleIconColor} from '$lib/utils/broker/brokerRoleHelpers';
     import {currentLanguage} from '$lib/stores/app/language';
     import {goto} from '$app/navigation';
     import {formatCurrencyAmountHtml} from '$lib/utils/currency/currencyFormat';
     import {zodiosApi} from '$lib/api';
     import {buildTransactionsFiltersUrl} from '../transactions/filterState';
+
+    const DISABLED_AI_EXPORT_COMPATIBILITY = emptyAiExportCompatibility();
 
     // =========================================================================
     // State
@@ -68,10 +74,6 @@
     let historyLoading = $derived(reportLoading && history.length === 0);
     let syncLoading = $state(false);
     let syncingCode = $state<string | null>(null);
-
-    /** AI export state — dropdown open/position handled internally by AiExportMenu */
-    let aiExportLoading = $state(false);
-    let aiExportEntries = $derived(PORTFOLIO_PROMPT_CATALOG.map((p) => ({id: p.id, label: $_(p.labelKey), description: $_(p.descriptionKey), icon: p.icon})));
 
     /** Broker IDs selected in the filter (empty = all brokers). */
     let selectedBrokerIds = $state<number[]>([]);
@@ -173,8 +175,19 @@
      */
     const allBrokersSelected = $derived(selectedBrokerIds.length > 0 && selectedBrokerIds.length >= allBrokers.length);
 
-    /** Which broker IDs to pass to the API (undefined = all). */
-    const activeBrokerIds = $derived(!allBrokersSelected && selectedBrokerIds.length > 0 ? selectedBrokerIds : undefined);
+    /** Owned broker IDs (F2: the dashboard only aggregates brokers the user owns,
+     *  scaled by share; a 0% share behaves like editor/viewer and is excluded). */
+    const ownedBrokerIds = $derived(allBrokers.map((b) => b.id));
+
+    /** Which broker IDs to pass to the API — always the explicit owned set, so the
+     *  backend never falls back to "every accessible broker" for the dashboard. */
+    const activeBrokerIds = $derived(!allBrokersSelected && selectedBrokerIds.length > 0 ? selectedBrokerIds : ownedBrokerIds.length > 0 ? ownedBrokerIds : undefined);
+
+    /** AI export state — dropdown open/position handled internally by AiExportMenu. */
+    let aiExportCompatibility = $state<AiExportCatalogCompatibilityResult>(DISABLED_AI_EXPORT_COMPATIBILITY);
+    let aiExportCatalogLoading = $state(true);
+    let aiExportCatalogFailed = $state(false);
+    let aiExportLabels = $derived(buildAiExportMenuLabels($_, aiExportCompatibility, $_('dashboard.aiExport')));
 
     /** Whether the filter is "active" (some but not all brokers selected). */
     const brokerFilterActive = $derived(selectedBrokerIds.length > 0 && !allBrokersSelected);
@@ -186,7 +199,7 @@
 
     /** Tab navigation — mirrors the broker detail page's structure (no "Info" tab
      *  here: there's no portfolio-wide metadata/sharing concept at this level). */
-    const DASHBOARD_TAB_IDS = ['panoramica', 'posizioni', 'transazioni'] as const;
+    const DASHBOARD_TAB_IDS = ['panoramica', 'posizioni', 'rischio', 'transazioni'] as const;
     type DashboardTabId = (typeof DASHBOARD_TAB_IDS)[number];
     const DEFAULT_DASHBOARD_TAB: DashboardTabId = 'panoramica';
 
@@ -198,6 +211,7 @@
     const dashboardTabs = $derived([
         {id: 'panoramica', label: $_('brokers.overview'), icon: Briefcase, testId: 'dashboard-tab-panoramica'},
         {id: 'posizioni', label: $_('brokers.positions'), icon: TrendingUp, testId: 'dashboard-tab-posizioni'},
+        {id: 'rischio', label: $_('risk.title'), icon: Shield, testId: 'dashboard-tab-risk'},
         {id: 'transazioni', label: $_('transactions.title'), icon: ArrowRightLeft, testId: 'dashboard-tab-transazioni'},
     ]);
 
@@ -242,6 +256,12 @@
     });
 
     async function loadTransactions() {
+        // F2: nothing owned → the dashboard (including this tab) shows nothing.
+        if (ownedBrokerIds.length === 0) {
+            txMainRows = [];
+            txPartnerRows = [];
+            return;
+        }
         txLoading = true;
         try {
             // Server-side filter: date range always applied; broker_id per-broker (the endpoint
@@ -404,24 +424,37 @@
         syncLoading = false;
     }
 
-    async function handleAiExport(promptId: PromptId) {
-        aiExportLoading = true;
+    async function loadAiExportCompatibility() {
+        aiExportCatalogLoading = true;
         try {
-            await copyAiExport(
-                promptId,
-                {
-                    brokerIds: activeBrokerIds ?? undefined,
-                    dateFrom: dateRangeCtl.start || undefined,
-                    dateTo: dateRangeCtl.end || undefined,
-                    targetCurrency: targetCurrency,
-                    locale: $currentLanguage,
-                },
-                toasts,
-                $_,
-            );
+            aiExportCompatibility = await aiExportCatalogLoader.load();
+            aiExportCatalogFailed = false;
+        } catch {
+            aiExportCatalogFailed = true;
+            toasts.error($_('aiExport.catalogUnavailable'));
         } finally {
-            aiExportLoading = false;
+            aiExportCatalogLoading = false;
         }
+    }
+
+    function handleAiExport(options: AiExportOptionsSelection): Promise<PreparedAiExport> {
+        return prepareAiExport({
+            context: {
+                domain: 'portfolio',
+                snapshotAsOf: dateRangeCtl.end,
+                targetCurrency,
+                brokerIds: activeBrokerIds,
+            },
+            options,
+            compatibility: aiExportCompatibility,
+            translate: (key) => $_(key),
+        });
+    }
+
+    function handleAiExportCopied(result: PreparedAiExport) {
+        const messages = getAiExportSuccessMessages($_, result);
+        toasts.success(messages.copied);
+        toasts.info(messages.privacyNotice);
     }
 
     async function positionBrokerFilterDropdown() {
@@ -473,16 +506,24 @@
 
     onMount(() => {
         document.addEventListener('click', handleDocumentClick);
+        void loadAiExportCompatibility();
         void (async () => {
             await Promise.all([ensureBrokersLoaded(), ensureAssetsLoaded()]);
-            allBrokers = getAllBrokers();
-            await loadAll();
+            // F2: dashboard scope = owned brokers only (share > 0). A user who owns
+            // nothing (viewer/editor elsewhere, or fresh install) gets an empty
+            // dashboard — no fetch, so viewer/editor data never leaks into totals.
+            allBrokers = getOwnedBrokers();
+            if (allBrokers.length > 0) {
+                await loadAll();
+            } else {
+                reportLoading = false;
+            }
         })();
         return () => document.removeEventListener('click', handleDocumentClick);
     });
 </script>
 
-<div class="space-y-4" data-testid="dashboard-page">
+<div class="space-y-4" data-testid="dashboard-page" aria-busy={reportLoading || contributionLoading || syncLoading} data-busy={reportLoading || contributionLoading || syncLoading ? 'true' : 'false'}>
     <h1 class="sr-only">{$_('nav.dashboard')}</h1>
 
     <PageToolbar
@@ -581,6 +622,8 @@
                             <div class="max-h-52 overflow-y-auto mx-2.5 my-2 space-y-0.5">
                                 {#each allBrokers as broker (broker.id)}
                                     {@const isSelected = selectedBrokerIds.includes(broker.id)}
+                                    {@const role = getBrokerRole(broker.id)}
+                                    {@const RoleIcon = role ? getRoleIcon(role) : null}
                                     <button
                                         type="button"
                                         class="flex items-center gap-2 w-full px-2 py-1.5 text-left text-[13px] rounded hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors {isSelected ? 'text-blue-700 dark:text-blue-300' : 'text-gray-600 dark:text-gray-300'}"
@@ -589,6 +632,9 @@
                                     >
                                         <BrokerIcon brokerId={broker.id} iconUrl={broker.icon_url} portalUrl={broker.portal_url} pluginCode={broker.default_import_plugin} altText={broker.name} size={16} />
                                         <span class="flex-1 truncate">{broker.name}</span>
+                                        {#if RoleIcon}
+                                            <RoleIcon size={14} class={getRoleIconColor(role)} />
+                                        {/if}
                                         {#if isSelected}
                                             <svg class="w-3.5 h-3.5 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
@@ -605,7 +651,18 @@
 
         {#snippet actions({showActionLabels})}
             <!-- AI Export -->
-            <AiExportMenu entries={aiExportEntries} loading={aiExportLoading} triggerLabel={$_('dashboard.aiExport')} loadingLabel={$_('dashboard.aiExportBuilding')} showLabel={showActionLabels} onselect={(id) => handleAiExport(id as PromptId)} />
+            <AiExportMenu
+                domain="portfolio"
+                compatibility={aiExportCompatibility}
+                memoryKey="portfolio"
+                defaultSelectionId="portfolio.pac_planning"
+                disabled={aiExportCatalogLoading || aiExportCatalogFailed}
+                labels={aiExportLabels}
+                showLabel={showActionLabels}
+                onprepare={handleAiExport}
+                oncopied={handleAiExportCopied}
+                onerror={(error) => toasts.error(getAiExportErrorMessage($_, error))}
+            />
 
             <button
                 class="flex items-center justify-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors disabled:opacity-50"
@@ -663,18 +720,23 @@
         </div>
     {:else if activeTab === 'posizioni'}
         <div data-testid="dashboard-positions-tab">
-            <PositionsPanel {summary} contribution={positionsContribution} loading={summaryLoading} {contributionLoading} {assetsHref} brokers={allBrokers} onRequestContribution={loadContribution} onAnalyze={openAssetPanel} />
-            <LotsAnalysisPanel
-                open={activeAssetId != null}
-                assetId={activeAssetId}
-                brokerIds={activeBrokerIds ?? allBrokers.map((b) => b.id)}
-                brokers={allBrokers}
-                dateFrom={dateRangeCtl.start}
-                dateTo={dateRangeCtl.end}
-                isAllPeriod={dateRangeCtl.activePreset === 'MAX'}
-                currency={activeAsset?.currency ?? appliedCurrency}
-                assetName={activeAsset?.display_name ?? null}
-                onClose={closeAssetPanel}
+            <PositionsPanel {summary} contribution={positionsContribution} loading={summaryLoading} {contributionLoading} {assetsHref} brokers={allBrokers} onRequestContribution={loadContribution} onAnalyze={openAssetPanel} analyzedAssetId={activeAssetId} />
+            <LotsAnalysisPanel open={activeAssetId != null} assetId={activeAssetId} brokerIds={activeBrokerIds ?? allBrokers.map((b) => b.id)} brokers={allBrokers} currency={activeAsset?.currency ?? appliedCurrency} assetName={activeAsset?.display_name ?? null} onClose={closeAssetPanel} />
+        </div>
+    {:else if activeTab === 'rischio'}
+        <div data-testid="dashboard-risk-tab">
+            <RiskAnalysisPanel
+                scope={{kind: 'portfolio'}}
+                dateStart={dateRangeCtl.start}
+                dateEnd={dateRangeCtl.end}
+                targetCurrency={appliedCurrency}
+                assetIds={[...new Set((summary?.holdings ?? []).map((holding) => holding.asset_id))]}
+                title={$_('risk.dashboardTitle')}
+                subtitle={brokerFilterActive ? $_('risk.dashboardFullPortfolio') : ''}
+                onsynced={async () => {
+                    invalidate();
+                    await loadAll(true);
+                }}
             />
         </div>
     {:else if activeTab === 'transazioni'}

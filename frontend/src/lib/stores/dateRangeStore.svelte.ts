@@ -12,13 +12,21 @@
  * @module stores/dateRangeStore
  */
 
+import {registerClientSessionReset} from '$lib/stores/app/clientSession';
+import {localIso, todayIso} from '$lib/utils/dateOnly';
+
 const STORAGE_KEY = 'librefolio_dateRange';
 
 function defaultRange(): {start: string; end: string} {
-    const end = new Date().toISOString().slice(0, 10);
+    // Read from the *user's* calendar, not UTC. `toISOString().slice(0, 10)` was
+    // here and answered with yesterday for anyone east of Greenwich between
+    // midnight and their offset — so the dashboard opened on a range ending the
+    // day before, silently, for the two hours a Rome user is most likely to
+    // notice nothing is wrong.
+    const end = todayIso();
     const d = new Date();
     d.setMonth(d.getMonth() - 3);
-    const start = d.toISOString().slice(0, 10);
+    const start = localIso(d);
     return {start, end};
 }
 
@@ -97,6 +105,18 @@ export function setDateRange(start: string, end: string) {
     saveToStorage(start, end);
 }
 
+/** Reset account-local navigation state when the authenticated user changes. */
+export function resetDateRange(): void {
+    const range = defaultRange();
+    _start = range.start;
+    _end = range.end;
+    if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem(STORAGE_KEY);
+    }
+}
+
+registerClientSessionReset('dateRangeStore', resetDateRange);
+
 /**
  * Seed the store from URL params (call on `enter` navigation only).
  * If URL has start/end, use them; otherwise keep current store values.
@@ -123,7 +143,7 @@ export function seedFromUrl(searchParams: URLSearchParams): void {
  */
 export function resolveDateSentinel(value: string): string {
     if (value === 'min') return '2000-01-01';
-    if (value === 'max') return new Date().toISOString().slice(0, 10);
+    if (value === 'max') return todayIso();
     return value;
 }
 
@@ -134,15 +154,4 @@ export function resolveDateSentinel(value: string): string {
  */
 export function isMaxSentinel(value: string): boolean {
     return value === 'min';
-}
-
-/**
- * Get start/end with sentinels resolved for non-sentinel APIs.
- */
-export function getResolvedStart(): string {
-    return resolveDateSentinel(_start);
-}
-
-export function getResolvedEnd(): string {
-    return resolveDateSentinel(_end);
 }

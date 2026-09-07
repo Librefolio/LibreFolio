@@ -1,130 +1,100 @@
-# 🚀 Guida Iniziale
+# 🚀 Per iniziare
 
-Benvenuto in LibreFolio! Questa guida ti accompagnerà nella registrazione di un account, nel login e nell'importazione del tuo primo estratto conto per popolare istantaneamente la tua dashboard.
+Benvenuto in LibreFolio! Questa guida ti accompagna nella registrazione di un account, nell'accesso e nell'importazione del tuo primo estratto conto del broker per popolare immediatamente la tua dashboard.
 
 ---
 
-## 📝 1. Registra il tuo Account
+## 📝 1. Registra il tuo account
 
-Vai all'URL di LibreFolio (ad es. `http://localhost:6040`) e vedrai la pagina di login. Clicca su **Register** per creare un nuovo account.
-
-<div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="auth" data-name="02-register-empty" alt="Registration Form" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
-</div>
-
-Inserisci i tuoi dati:
-
-- 👤 **Username**: Il tuo nome visualizzato (unico all'interno del sistema)
-- 📧 **Email**: Un indirizzo email valido
-- 🔑 **Password**: Una password sicura (l'indicatore di forza ti aiuterà)
+Vai all'URL di LibreFolio (ad es., `http://localhost:6040`) e vedrai la pagina di accesso. Fai clic su **Registrati** per creare un nuovo account.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="auth" data-name="03-register-filled" alt="Registration with Password Strength" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+ <img class="gallery-img" data-category="auth" data-name="02-register-empty" alt="Registration Form" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-!!! info "Primo Utente = Admin"
+Compila i tuoi dati:
 
-    Il primo utente a registrarsi diventa automaticamente l'**amministratore di sistema** (superuser). Questo utente può gestire le impostazioni globali, promuovere altri utenti e accedere a tutte le funzioni di amministrazione.
+- 👤 **Nome utente**: il tuo nome visualizzato (unico nell'intero sistema)
+- 📧 **Email**: un indirizzo email valido
+- 🔑 **Password**: una password robusta (l'indicatore di robustezza ti aiuta)
+
+<div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
+ <img class="gallery-img" data-category="auth" data-name="03-register-filled" alt="Registration with Password Strength" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
+
+!!! info "Primo utente = amministratore"
+
+    Il primo utente che si registra diventa automaticamente **amministratore di sistema** (superutente). Questo utente può gestire le impostazioni globali, promuovere altri utenti e accedere a tutte le funzionalità di amministrazione.
 
 ---
 
 ## 🔐 2. Accedi
 
-Dopo la registrazione, verrai reindirizzato alla pagina di login. Inserisci le tue credenziali per accedere alla tua dashboard.
+Dopo la registrazione, verrai reindirizzato alla pagina di accesso. Inserisci le tue credenziali per accedere alla tua dashboard.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="auth" data-name="01-login" alt="Login Page" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+ <img class="gallery-img" data-category="auth" data-name="01-login" alt="Login Page" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ---
 
-## 🏦 3. Importa il tuo Primo Estratto Conto (Crea Broker e Asset al Volo)
+## 🏦 3. Importa il tuo primo estratto conto (crea broker e asset al volo)
 
-Al tuo primo accesso, sarai accolto da una dashboard completamente vuota e senza dati.
+Al primo accesso, ti accoglierà una dashboard vuota, senza alcun dato.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="dashboard" data-name="empty-state" alt="Dashboard Vuota" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+ <img class="gallery-img" data-category="dashboard" data-name="empty-state" alt="Empty Dashboard" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-In LibreFolio, il modo più rapido per iniziare è importare direttamente la cronologia delle tue transazioni. Non è necessario configurare broker o asset in precedenza: il sistema li creerà automaticamente durante il processo di importazione!
+In LibreFolio, il modo più rapido per iniziare è importare direttamente la cronologia delle tue transazioni. Non è necessario configurare in anticipo broker o asset: il sistema li creerà automaticamente per te durante il processo di importazione!
 
 ### 📋 Passaggi
 
-1. **Carica l'Estratto Conto**: Vai alla pagina delle **[Transazioni](transactions/index.md)** dal menu laterale. Clicca sul pulsante **"Importa"** (:material-file-upload:) oppure trascina e rilascia (**drag & drop**) il file del report del tuo broker (CSV o PDF) direttamente sulla pagina.
-    <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-        <img class="gallery-img" data-category="brokers" data-name="import-wizard-step1" alt="Wizard Step 1: Caricamento" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
-    </div>
+1. **Apri la procedura guidata di importazione**: vai alla pagina **[Transazioni](transactions/index.md)** dalla barra laterale e fai clic sul pulsante **"Importa"** (:material-file-upload:). Puoi anche partire dalla pagina di dettaglio di un broker — in tal caso il broker risulta già preselezionato.
 
-2. **Configurazione Parser**: Il wizard rileverà automaticamente il formato dell'estratto conto. Puoi verificare le impostazioni (come formato date e delimitatori) e configurare le opzioni di fallback se stai caricando un report CSV generico.
-    <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-        <img class="gallery-img" data-category="brokers" data-name="import-wizard-step2" alt="Wizard Step 2: Configurazione Parser" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
-    </div>
-    
-    !!! tip "Ri-processare gli estratti conto esistenti"
-    
-        Puoi anche ri-elaborare (re-process) qualsiasi estratto conto precedentemente caricato direttamente dalla pagina **[File e Caricamenti](files/index.md#broker-reports)**. Questo è particolarmente utile dopo l'aggiornamento di un plugin di importazione o se hai accidentalmente cancellato alcune transazioni e desideri ripristinarle.
+2. **Carica il tuo estratto conto**: trascina il file del report del tuo broker (`.csv`, `.xlsx` o `.xls`) nel primo passaggio della procedura — qui funziona il drag & drop — e assegalo a un broker, creando il broker **al volo** se è nuovo. Questo passaggio è facoltativo: i report caricati nelle sessioni precedenti sono già memorizzati e il passaggio successivo li elenca.
+ <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+ <img class="gallery-img" data-category="brokers" data-name="import-wizard-step1" alt="Wizard Upload Step" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+ </div>
 
-3. **Analisi & Parsing**: Il sistema legge, convalida ed elabora le righe dell'estratto conto. Verrà mostrata una barra di avanzamento che indica lo stato e la velocità di parsing.
-    <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-        <img class="gallery-img" data-category="brokers" data-name="import-wizard-step3" alt="Wizard Step 3: Analisi" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
-    </div>
+3. **Seleziona i file e analizza**: scegli esattamente quali report memorizzati importare. Per ogni file il parser è preselezionato in base al plugin di importazione predefinito del broker (modificabile per file — usa **CSV generico** per un formato sconosciuto); LibreFolio quindi legge e valida ogni riga. Un riepilogo consolidato mostra ciò che verrà effettivamente importato: transazioni, titoli distinti, problemi di validazione, TODO, avvisi e probabili duplicati.
+ <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+ <img class="gallery-img" data-category="brokers" data-name="import-wizard-step3" alt="Wizard Parse Step" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+ </div>
 
-4. **Risoluzione Broker e Asset**: Se il report contiene un conto broker o degli asset (come ETF, azioni) non ancora configurati in LibreFolio, il sistema li segnalerà. Puoi cercarli tra quelli esistenti o crearli **al volo** (on-the-fly) direttamente nel wizard con i dati precompilati. Per maggiori dettagli, consulta la guida **[Importazione da Broker - Asset Mapping](transactions/import/index.md#asset-mapping)**.
-    <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-        <img class="gallery-img" data-category="brokers" data-name="import-wizard-step4-resolution" alt="Wizard Step 4: Risoluzione" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
-    </div>
+4. **Passaggi aggiuntivi, solo quando necessario**: a seconda di ciò che contengono i tuoi file, possono comparire fino a tre passaggi aggiuntivi — **Unifica asset** (lo stesso titolo trovato con nomi o codici diversi), **Correzioni** (righe che il parser non è riuscito a leggere completamente) e **Duplicati** (lo stesso movimento presente in due file importati insieme). Un report pulito composto da un solo file li salta tutti.
 
-5. **Rilevamento Duplicati**: Il wizard confronta le transazioni dell'estratto conto con quelle già presenti nel database. Raggruppa le potenziali corrispondenze in due badge di stato dell'interfaccia utente basandosi su 4 livelli di confidenza:
-    <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-        <img class="gallery-img" data-category="brokers" data-name="import-wizard-duplicate" alt="Wizard Step 5: Rilevamento Duplicati" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
-    </div>
-    
-    | Badge UI | Livello di Confidenza | Criterio / Regole di Abbinamento |
-    | :--- | :--- | :--- |
-    | <span style="background-color: rgba(217, 119, 6, 0.15); color: #d97706; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 0.85em; white-space: nowrap;">⚠️ LIKELY</span> | `LIKELY_WITH_ASSET` | Campi base e descrizione corrispondono, ed asset risolto automaticamente (duplicato altamente probabile). |
-    | <span style="background-color: rgba(217, 119, 6, 0.15); color: #d97706; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 0.85em; white-space: nowrap;">⚠️ LIKELY</span> | `LIKELY` | Campi base e descrizione corrispondono, ma l'asset non è risolto. |
-    | <span style="background-color: rgba(37, 99, 235, 0.15); color: #2563eb; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 0.85em; white-space: nowrap;">ℹ️ POSSIBLE</span> | `POSSIBLE_WITH_ASSET` | Campi base corrispondono, ed asset risolto automaticamente (ma la descrizione differisce o è vuota). |
-    | <span style="background-color: rgba(37, 99, 235, 0.15); color: #2563eb; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 0.85em; white-space: nowrap;">ℹ️ POSSIBLE</span> | `POSSIBLE` | Campi base (tipo, data, quantità, importo) corrispondono, ma l'asset non è risolto. |
-    | <span style="background-color: rgba(16, 185, 129, 0.15); color: #10b981; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 0.85em; white-space: nowrap;">✅ UNICO</span> | — | La transazione non presenta alcuna corrispondenza nel database e viene considerata come nuova (duplicazione esclusa). |
-    | <span style="background-color: rgba(239, 68, 68, 0.15); color: #ef4444; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 0.85em; white-space: nowrap;">❌ NON RISOLTO</span> | — | Il broker o lo strumento finanziario non sono stati abbinati a entità esistenti nel database (richiede risoluzione nello Step 4 prima di poter importare). |
+5. **Revisiona e importa**: abbina ogni strumento alla tua libreria di asset — oppure crealo **al volo** con i dettagli precompilati dall'estratto conto — e controlla le flag per ogni riga: i duplicati (rispetto al tuo registro esistente, o copie esatte in sospeso in questa importazione) arrivano deselezionati e le righe antecedenti alla data di apertura del broker vengono escluse automaticamente. Per maggiori informazioni, consulta la guida **[Importa da broker - Mappatura asset](transactions/import/index.md#asset-mapping)**.
+ <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+ <img class="gallery-img" data-category="brokers" data-name="import-wizard-step4-resolution" alt="Wizard Review Step: Asset Resolution" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+ </div>
 
-    Per maggiori dettagli sulle regole e la configurazione dei duplicati, consulta la sezione **[Import from Broker - Duplicate Detection](transactions/import/index.md#duplicate-detection)**.
+6. **Salva dall'editor in blocco**: facendo clic su **Importa N transazioni**, le righe selezionate vengono passate all'editor in blocco come nuove righe — non viene ancora scritto nulla. Dai loro un'ultima occhiata, poi fai clic su **Salva tutto** per inserirle nel tuo portafoglio.
 
-6. **Staging e Revisione Finale**: Controlla l'anteprima di tutte le transazioni elaborate. Dopo aver verificato che tutto sia corretto, clicca su **Importa** per salvare le transazioni nel tuo portafoglio.
-    <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-        <img class="gallery-img" data-category="brokers" data-name="import-bulk-staging" alt="Wizard Step 6: Revisione Massiva" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
-    </div>
+!!! tip "Non serve ricaricare"
 
-    La tabella di revisione di staging mostra le seguenti colonne:
+    I report caricati nelle sessioni precedenti sono già elencati nel passaggio **Seleziona file** della procedura — basta rispuntarli. Puoi anche visualizzare in anteprima o eliminare i report memorizzati dalla pagina **[File e upload](files/index.md#broker-reports)**.
 
-    - **Date**: La data di esecuzione della transazione.
-    - **Type**: Il tipo di operazione finanziaria (ACQUISTO, VENDITA, DIVIDENDO, VERSAMENTO, ecc.).
-    - **Asset**: L'asset abbinato dalla tua libreria.
-    - **Quantity**: Il numero di quote o unità scambiate.
-    - **Price**: Il prezzo unitario dell'asset.
-    - **Net Amount**: L'impatto di cassa totale (positivo o negativo) sul conto.
-    - **Fees/Taxes**: Commissioni del broker o tasse di transazione incluse.
-
-    Per le impostazioni avanzate o errori di convalida nello staging, consulta la pagina **[Import from Broker](transactions/import/index.md)**.
+Per la guida completa, vedi **[Come importare le transazioni](transactions/import/how-to.md)**; per i broker e i formati di file supportati, vedi **[Importa da broker](transactions/import/index.md)**.
 
 ---
 
-## 📈 4. Ritorno in Dashboard
+## 📈 4. Torna alla dashboard
 
-Dopo aver completato l'importazione con successo, torna alla **Dashboard**.
+Dopo aver importato correttamente il tuo estratto conto, torna alla **dashboard**.
 
-LibreFolio calcolerà in tempo reale tutte le metriche del portafoglio, l'allocazione degli asset (per tipo, settore, area geografica) e lo storico delle performance. Ora puoi finalmente vedere l'intera situazione attuale del tuo portafoglio visualizzata graficamente!
+LibreFolio calcola le metriche del tuo portafoglio, l'allocazione degli asset (per tipo, settore, area geografica) e la cronologia delle performance in tempo reale. Ora puoi vedere l'intera tua situazione finanziaria splendidamente rappresentata in grafici!
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="dashboard" data-name="main" alt="Dashboard View" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+ <img class="gallery-img" data-category="dashboard" data-name="main" alt="Dashboard Main View" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ---
 
-## 🔮 5. E adesso?
+## 🔮 5. Cosa fare dopo?
 
 Ora che il tuo portafoglio è popolato, puoi:
 
-- 🤝 **[Condividere il tuo broker](brokers/sharing.md)** — Concedi l'accesso a familiari o consulenti.
-- 💱 **[Configurare i tassi di cambio](fx/index.md)** — Configura la conversione valutaria per portafogli multi-valuta.
-- ⚙️ **[Personalizzare le impostazioni](../admin/settings.md)** — Regola lingua, tema e preferenze di sistema.
+- 🤝 **[Condividi il tuo broker](brokers/sharing.md)** — concedi l'accesso a familiari o consulenti.
+- 💱 **[Configura i tassi di cambio](fx/index.md)** — configura la conversione valutaria per portafogli multi-valuta.
+- ⚙️ **[Personalizza le impostazioni](../admin/settings.md)** — regola lingua, tema e preferenze di sistema.

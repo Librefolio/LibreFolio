@@ -19,6 +19,9 @@ Para un análisis profundo de cada tipo de evento —incluyendo el impacto en el
 ## 📈 Marcadores de Eventos en el Gráfico
 
 Los eventos aparecen como **marcadores de colores** en el [gráfico de precios](chart.md). Cada tipo de evento tiene un color e icono distintos. Pase el cursor sobre un marcador para ver los detalles del evento (fecha, tipo, valor, moneda).
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="assets" data-name="detail-events" alt="Gráfico del activo con un marcador de evento resaltado">
+</div>
 
 ## ⚙️ Origen de los Eventos
 

@@ -11,6 +11,7 @@ description: "Use this skill when the user needs to build Docker images, deploy 
 ./dev.py docker build                  # Build image (git-versioned tag)
 ./dev.py docker build --tag myimg:v1   # Custom tag
 ./dev.py docker build --no-cache       # Force full rebuild
+./dev.py docker build --light          # Light variant: no docs images (tag *-light)
 ./dev.py docker rebuild                # Build + stop + restart (one command)
 ./dev.py docker up                     # Start containers (detached)
 ./dev.py docker up --no-detach         # Start in foreground
@@ -30,6 +31,19 @@ Tags are auto-generated from git:
 - Dirty on exact tag is **suppressed** (build artifacts cause false dirty)
 
 The `latest` tag is always applied alongside the versioned tag.
+
+## Image Variants
+
+Two variants, selected by the Dockerfile build-arg `DOCS_VARIANT=full|light`:
+
+- **full** (default) — complete image, documentation images included (docs work offline)
+- **light** (`--light`) — documentation text pages only; the docs images (gallery
+  screenshots, hundreds of MB) are pruned in an intermediate build stage and load
+  on demand from the online docs site → viewing them requires internet
+
+Tags get a `-light` suffix (`librefolio:latest-light`, `librefolio:v1.2.3-light`).
+To run the light image via compose, set `LIBREFOLIO_IMAGE=librefolio:latest-light`
+in `.env` (compose defaults to `librefolio:latest`).
 
 ## Pre-Build Steps
 

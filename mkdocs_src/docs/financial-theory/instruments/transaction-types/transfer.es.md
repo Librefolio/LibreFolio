@@ -1,4 +1,4 @@
-# ![](../../../static/icons/transactions/transfer.png){: width="32" style="vertical-align: middle;" } Transferencia de Activos
+# 🔄 ![](../../../static/icons/transactions/transfer.png){: width="32" style="vertical-align: middle;" } Transferencia de Activos
 
 <div class="screenshot-container">
     <img class="gallery-img" data-category="transactions" data-name="form-modal-transfer" alt="Transaction Form — TRANSFER">
@@ -48,6 +48,12 @@ Internamente, una Transferencia se compone de dos entradas de Ajuste. LibreFolio
 | **Promote** (vincular) | Dos Ajustes → Transferencia |
 
 **Restricciones de Promote**: mismo activo, diferentes brókers, cantidades opuestas.
+
+---
+
+## 👵 Sucesión y Brókeres de Origen no Rastreados
+
+Un verdadero `TRANSFER` necesita dos brókeres en LibreFolio: origen y destino. Si el dossier de origen está fuera de LibreFolio, la pierna entrante se modela mejor como un `ADJUSTMENT` positivo sin efectivo con un `cost_basis_override` por unidad, no como una transferencia emparejada. Las filas de sucesión de Crédit Agricole (`GIRO ALTRO DOSSIER`, `VERS.TITOLI`) utilizan este patrón: los valores heredados entran como capital en especie, no se crea ningún `DEPOSIT` de efectivo y la causa de origen permanece en la descripción para fines de auditabilidad.
 
 ---
 

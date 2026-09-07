@@ -1,4 +1,4 @@
-# ![](../../../static/icons/transactions/adjustment.png){: width="32" style="vertical-align: middle;" } Ajustement
+# 🧮 ![](../../../static/icons/transactions/adjustment.png){: width="32" style="vertical-align: middle;" } Ajustement
 
 <div class="screenshot-container">
     <img class="gallery-img" data-category="transactions" data-name="form-modal-adjustment" alt="Transaction Form — Adjustment">
@@ -26,6 +26,7 @@ Les ajustements sont utilisés lorsqu'aucun autre type de transaction ne convien
 - **Correction d'erreurs d'importation** — par exemple, un import de courtier ayant omis une opération sur titres
 - **Divisions / divisions inverses d'actions** — ajuster la quantité sans mouvement de trésorerie
 - **Dons** — réception ou don d'actions
+- **Acquisition gratuite** — airdrops, récompenses de staking, promotions
 - **Configuration du solde initial** — amorçage d'un portefeuille à partir d'un instantané (snapshot)
 - **Opérations sur titres** non couvertes par d'autres types (scissions/spinoffs, fusions, etc.)
 
@@ -50,8 +51,10 @@ Les ajustements avec une quantité positive **augmentent** le nombre de lots (FI
     $$\text{Coût total} = \text{PMP} \times \text{quantité}$$
 
 ### 🏦 Prix de revient automatique sur les transferts
-
 Lors du transfert d'actifs entre courtiers, LibreFolio **calcule automatiquement** le Forçage du prix de revient du côté destinataire en utilisant le **Prix Moyen Pondéré (PMP)** de la position du courtier source.
+
+$$\text{Forçage du prix de revient} = \frac{C}{q}$$
+
 
 !!! tip "En savoir plus"
 

@@ -50,7 +50,7 @@ function handleValueChange(next: {code: string; amount: string} | null) {
 
 | Role | Path |
 |------|------|
-| WacPreviewSection (handleValueChange) | `frontend/src/lib/components/transactions/WacPreviewSection.svelte` |
+| WacPreviewSection (handleValueChange) | `frontend/src/lib/components/transactions/wac/WacPreviewSection.svelte` |
 | formatDecimalForDisplay | `frontend/src/lib/utils/formatters.ts` |
 | Plan | `…/Bugfix-SPD/plan-R3-SP-D-WacFxEnrich.prompt.md` (F10) |
 

@@ -49,6 +49,8 @@ export interface EntityStore<T extends object, Id> {
     ensureLoaded: () => Promise<void>;
     /** Force discard + reload. */
     refreshAll: () => Promise<void>;
+    /** Clear all entries without triggering a reload. */
+    reset: () => void;
     /** Sync lookup. Returns `null` if id is null/undefined or not cached. */
     get: (id: Id | null | undefined) => T | null;
     /** Snapshot of all cached entries. */
@@ -78,6 +80,7 @@ export function createEntityStore<T extends object, Id = number>(opts: EntitySto
     const map = new Map<Id, T>();
     let loaded = false;
     let loadPromise: Promise<void> | null = null;
+    let generation = 0;
 
     const versionStore = writable(0);
     const bump = (): void => versionStore.update((v) => v + 1);
@@ -85,9 +88,11 @@ export function createEntityStore<T extends object, Id = number>(opts: EntitySto
     async function ensureLoaded(): Promise<void> {
         if (loaded) return;
         if (loadPromise) return loadPromise;
-        loadPromise = (async () => {
+        const requestGeneration = generation;
+        const request = (async () => {
             try {
                 const items = (await opts.loader()) as Array<Record<string, unknown>>;
+                if (requestGeneration !== generation) return;
                 map.clear();
                 for (const it of items) {
                     const info = opts.normalize(it);
@@ -96,21 +101,28 @@ export function createEntityStore<T extends object, Id = number>(opts: EntitySto
                 loaded = true;
                 bump();
             } catch (e) {
+                if (requestGeneration !== generation) return;
                 // Fail silently — get() returns null for unknown ids.
                 // eslint-disable-next-line no-console
                 console.error('[entityStore] Failed to load:', e);
             } finally {
-                loadPromise = null;
+                if (requestGeneration === generation) loadPromise = null;
             }
         })();
-        return loadPromise;
+        loadPromise = request;
+        return request;
     }
 
-    async function refreshAll(): Promise<void> {
+    function reset(): void {
+        generation += 1;
         loaded = false;
         loadPromise = null;
         map.clear();
         bump();
+    }
+
+    async function refreshAll(): Promise<void> {
+        reset();
         return ensureLoaded();
     }
 
@@ -183,6 +195,7 @@ export function createEntityStore<T extends object, Id = number>(opts: EntitySto
     return {
         ensureLoaded,
         refreshAll,
+        reset,
         get,
         getAll,
         isLoaded,

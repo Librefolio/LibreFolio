@@ -3,14 +3,18 @@ Backend API endpoint tests and E2E tests.
 """
 
 from . import _common
+from ._backend_db import db_populate
 from ._common import (
     _build_pytest_cmd,
     _get_category_tests_for_all,
     _run_test_suite,
     add_test,
     make_category,
+    print_error,
     print_info,
     print_section,
+    print_success,
+    print_warning,
     run_command,
 )
 
@@ -74,6 +78,62 @@ def api_assets_price(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Assets Price API tests", verbose=verbose)
 
 
+def api_signal_catalogs(verbose: bool = False, test_names: list = None) -> bool:
+    """Run static Asset/FX signal catalog API tests."""
+    print_section("Signal Catalog API Tests")
+    print_info("Testing authenticated static Asset 22 / FX 9 catalogs without DB/history lookup")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_signal_catalogs.py", test_names)
+    return run_command(cmd, "Signal catalog API tests", verbose=verbose)
+
+
+def api_asset_signals(verbose: bool = False, test_names: list = None) -> bool:
+    """Run Asset signal query API tests."""
+    print_section("Asset Signal API Tests")
+    print_info("Testing legacy, signal-only, isolation, annotations and structural validation")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_asset_signals_api.py", test_names)
+    return run_command(cmd, "Asset signal API tests", verbose=verbose)
+
+
+def api_fx_signals(verbose: bool = False, test_names: list = None) -> bool:
+    """Run grouped FX signal conversion tests."""
+    print_section("FX Signal API Tests")
+    print_info("Testing combined bulk conversion, identity/rate mapping, grouping and legacy daily output")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_fx_signals_api.py", test_names)
+    return run_command(cmd, "FX signal API tests", verbose=verbose)
+
+
+def api_signal_request_validation(verbose: bool = False, test_names: list = None) -> bool:
+    """Run signal request validation API tests."""
+    print_section("Signal Request Validation API Tests")
+    print_info("Testing request validation for Asset and FX signal endpoints")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_signal_request_validation_api.py", test_names)
+    return run_command(cmd, "Signal request validation API tests", verbose=verbose)
+
+
+def api_signal_preview(verbose: bool = False, test_names: list = None) -> bool:
+    """Run signal preview API tests (synthetic-data indicator compute)."""
+    print_section("Signal Preview API Tests")
+    print_info("Testing authenticated backend indicator compute on caller-supplied synthetic points")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_signal_preview_api.py", test_names)
+    return run_command(cmd, "Signal preview API tests", verbose=verbose)
+
+
+def api_ai_export(verbose: bool = False, test_names: list = None) -> bool:
+    """Run AI Export API tests."""
+    print_section("AI Export API Tests")
+    print_info("Testing catalog, snapshot, authorization, and typed problem contracts")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_ai_export_api.py", test_names)
+    return run_command(cmd, "AI Export API tests", verbose=verbose)
+
+
+def api_risk(verbose: bool = False, test_names: list = None) -> bool:
+    """Run deterministic risk catalog, query, and populated-DB tests."""
+    print_section("Risk Analysis API Tests")
+    print_info("Testing auth, contracts, error isolation, and real broker analytics")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_risk_api.py", test_names)
+    return run_command(cmd, "Risk Analysis API tests", verbose=verbose)
+
+
 def api_assets_provider(verbose: bool = False, test_names: list = None) -> bool:
     """Run Assets Provider API endpoint tests."""
     print_section("Assets Provider API Endpoint Tests")
@@ -85,6 +145,16 @@ def api_assets_provider(verbose: bool = False, test_names: list = None) -> bool:
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_assets_provider.py", test_names)
     return run_command(cmd, "Assets Provider API tests", verbose=verbose)
+
+
+def api_parametric_provider_semantics(verbose: bool = False, test_names: list = None) -> bool:
+    """Run parametric-provider removal/switch semantics tests."""
+    print_section("Parametric Provider Semantics Tests")
+    print_info("Removal: prices and manual events survive, generated events cascade away")
+    print_info("Switch: the invented series is discarded, the manual event is not")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_parametric_provider_semantics.py", test_names)
+    return run_command(cmd, "Parametric provider semantics tests", verbose=verbose)
 
 
 def api_assets_metadata(verbose: bool = False, test_names: list = None) -> bool:
@@ -131,6 +201,16 @@ def api_assets_crud(verbose: bool = False, test_names: list = None) -> bool:
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_assets_crud.py", test_names)
     return run_command(cmd, "Assets CRUD API tests", verbose=verbose)
+
+
+def api_asset_merge(verbose: bool = False, test_names: list = None) -> bool:
+    """Run Asset Merge API endpoint tests (P3 — asset identity)."""
+    print_section("Asset Merge API Endpoint Tests")
+    print_info("Testing POST /assets/merge: dry-run preview, execution, identifier union, refusals")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_asset_merge_api.py", test_names)
+    return run_command(cmd, "Asset Merge API tests", verbose=verbose)
 
 
 def api_utilities(verbose: bool = False, test_names: list = None) -> bool:
@@ -400,6 +480,18 @@ def api_settings(verbose: bool = False, test_names: list[str] | None = None) -> 
     return run_command(cmd, "Settings API tests", verbose=verbose)
 
 
+def api_cache_admin(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run cache admin API tests."""
+    print_section("Cache Admin API Tests")
+    print_info("Testing REST API endpoints for cache administration")
+    print_info("Tests: GET /settings/cache/status, POST /settings/cache/clear-all, POST /settings/cache/clear/{name}")
+    print_info("Tests: CAPI-001..008 — auth levels, admin-only clears, functional clear verification")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_cache_admin_api.py", test_names)
+    return run_command(cmd, "Cache Admin API tests", verbose=verbose)
+
+
 def api_scheduler(verbose: bool = False, test_names: list[str] | None = None) -> bool:
     """Run scheduler API tests."""
     print_section("Scheduler API Tests")
@@ -479,8 +571,30 @@ def api_portfolio_wac(verbose: bool = False, test_names: list[str] | None = None
     return run_command(cmd, "Portfolio WAC API tests", verbose=verbose)
 
 
+def _api_setup() -> bool:
+    """Reseed the fixture data the API units assert against.
+
+    The `services` category recreates the database empty (see services_all →
+    db_create), so by the time this category runs in a full suite the fixture
+    users seeded by `db populate` are gone. Tests that assert against real
+    portfolio data (risk analytics) look up `e2e_test_user` and would fail with
+    an opaque NoResultFound.
+    """
+    print_info("\n⚙️  Populating test database for API tests...")
+    if db_populate(verbose=False, force=True):
+        print_success("Test database populated\n")
+        return True
+    print_error("Failed to populate test database")
+    print_warning("API tests needing fixture data (risk analytics) will fail")
+    return False
+
+
 def api_test(verbose: bool = False) -> bool:
     """Run all API tests."""
+    if _common.nothing_left_to_run("api"):
+        return _common.consolidated_verdict("api")
+    _common.run_category_setup("api")
+
     return _run_test_suite(
         suite_name="API Tests",
         tests=_get_category_tests_for_all("api", verbose),
@@ -507,6 +621,8 @@ def e2e_brim(verbose: bool = False, test_names: list = None) -> bool:
 
 def e2e_test(verbose: bool = False) -> bool:
     """Run all E2E tests."""
+    if _common.nothing_left_to_run("e2e"):
+        return _common.consolidated_verdict("e2e")
     return _run_test_suite(
         suite_name="E2E Tests",
         tests=_get_category_tests_for_all("e2e", verbose),
@@ -532,6 +648,13 @@ API Endpoint Tests
 Tests for REST API endpoints (server auto-started):
   • FX, Assets, Transactions, Brokers, Auth, Settings, Uploads, System, Backup
 """,
+        setup=_api_setup,
+        # Earned, not assumed: 50 of the 51 units ran concurrently on one shared
+        # backend across two full runs with 4 workers — 579 tests, zero reds —
+        # before this line was written. They are scoped because each creates its
+        # own user and addresses its own rows by id. The two that are not say so
+        # below, each with the run that proved it.
+        default_isolation="write-scoped",
     )
     add_test(api, "fx", api_fx, name="FX API", desc="Conversion, providers, pair sources")
     add_test(api, "fx-compress-errors", api_fx_compress_errors, name="FX Compress Errors", desc="_compress_convert_errors utility")
@@ -539,11 +662,26 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "fx-unit", api_fx_unit, name="FX API Unit", desc="Direct handler unit tests, no live server")
     add_test(api, "fx-sync", api_fx_sync, name="FX Sync API", desc="FX rate synchronization endpoints")
     add_test(api, "assets-price", api_assets_price, name="Assets Price API", desc="Bulk upsert, delete, query, sync")
+    add_test(api, "signal-catalogs", api_signal_catalogs, name="Signal Catalogs", desc="Static authenticated Asset/FX signal definitions")
+    add_test(api, "asset-signals", api_asset_signals, name="Asset Signals", desc="Price-query legacy, signal-only, annotations and isolation")
+    add_test(api, "fx-signals", api_fx_signals, name="FX Signals", desc="Combined conversion, grouped signals, identity/rates and legacy output")
+    add_test(api, "signal-request-validation", api_signal_request_validation, name="Signal Request Validation", desc="Asset/FX signal request validation contracts")
+    add_test(api, "signal-preview", api_signal_preview, name="Signal Preview", desc="Backend indicator compute on synthetic points (global chart preview)")
+    add_test(api, "ai-export", api_ai_export, name="AI Export API", desc="Catalog, snapshots, authorization, and typed problems")
+    add_test(api, "risk", api_risk, name="Risk Analysis API", desc="Catalog, bulk query, isolation, and populated-DB analytics")
     add_test(api, "assets-provider", api_assets_provider, name="Assets Provider API", desc="Provider assignment endpoints")
+    add_test(
+        api,
+        "parametric-provider-semantics",
+        api_parametric_provider_semantics,
+        name="Parametric Provider Semantics",
+        desc="What survives a provider removal and a switch away from a parametric provider",
+    )
     add_test(api, "assets-metadata", api_assets_metadata, name="Assets Metadata API", desc="PATCH metadata, bulk read, refresh")
     add_test(api, "assets-events", api_assets_events, name="Assets Events API", desc="Bulk upsert, delete, query")
     add_test(api, "events-target-currency", api_events_target_currency, name="Events Target Currency", desc="FX conversion on events query (E.8)")
     add_test(api, "assets-crud", api_assets_crud, name="Assets CRUD API", desc="Create, list, filter, delete assets")
+    add_test(api, "asset-merge", api_asset_merge, name="Asset Merge API", desc="POST /assets/merge: dry-run, execution, identifier union, refusals")
     add_test(api, "utilities", api_utilities, name="Utilities API", desc="Sectors, countries")
     add_test(api, "system", api_system, name="System API", desc="parse_pipfile, deps")
     add_test(api, "backup", api_backup, name="Backup API", desc="Placeholder endpoints")
@@ -566,9 +704,17 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "uploads-serve-file", api_uploads_serve_file, name="Uploads Serve File", desc="Preview, download, MIME")
     add_test(api, "brokers", api_brokers, name="Brokers API", desc="CRUD broker endpoints")
     add_test(api, "brim", api_brim, name="BRIM API", desc="Upload, parse, import flow")
-    add_test(api, "auth", api_auth, name="Auth API", desc="Register, login, logout, me")
+    add_test(api, "auth", api_auth, name="Auth API", desc="Register, login, logout, me", exclusive_because="rewrites global_settings.enable_registration, one row shared by every user: a concurrent unit would register against whatever value this one left behind")
     add_test(api, "profile", api_profile, name="Profile API", desc="Username/email update")
     add_test(api, "settings", api_settings, name="Settings API", desc="User and global settings")
+    add_test(
+        api,
+        "cache-admin",
+        api_cache_admin,
+        name="Cache Admin API",
+        desc="Cache status/clear endpoints",
+        exclusive_because="clears the process-wide cache registry (clear-all and clear/{name}): entries other units populated and may assert on (fx_provider_responses, search_results, upload_metadata) would vanish mid-run",
+    )
     add_test(api, "scheduler", api_scheduler, name="Scheduler API", desc="Scheduler state/log endpoints, admin-only auth")
     add_test(api, "uploads", api_uploads, name="Uploads API", desc="Upload, list, download, delete")
     add_test(api, "broker-access", api_broker_access, name="Broker Access API", desc="Access management, roles")

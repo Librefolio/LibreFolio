@@ -5,7 +5,7 @@ Pure math tests — no server, no DB, no async.
 All expected values verified analytically.
 """
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
@@ -15,12 +15,15 @@ from backend.app.utils.financial.roi_utils import (
     MWRRPoint,
     NAVSnapshot,
     SimpleROIPoint,
+    annualized_to_cumulative,
     calculate_mwrr,
     calculate_mwrr_series,
     calculate_simple_roi,
     calculate_simple_roi_series,
     calculate_twrr,
+    calculate_twrr_period_series,
     calculate_twrr_series,
+    cumulative_to_annualized,
 )
 
 # ---------------------------------------------------------------------------
@@ -215,6 +218,80 @@ class TestTWRRSeries:
         navs = [NAVSnapshot(date(2025, 1, 1), Decimal("1000"))]
         assert calculate_twrr_series(navs, []) == []
 
+    def test_raw_period_series_preserves_exact_hpr_and_public_rounding(self):
+        navs = [
+            NAVSnapshot(date(2025, 1, 1), Decimal("1000")),
+            NAVSnapshot(date(2025, 7, 1), Decimal("2100")),
+            NAVSnapshot(date(2025, 12, 31), Decimal("2310")),
+        ]
+        cash_flows = [
+            CashFlowInput(
+                date(2025, 7, 1),
+                Decimal("-1000"),
+            )
+        ]
+
+        raw = calculate_twrr_period_series(navs, cash_flows)
+        public = calculate_twrr_series(navs, cash_flows)
+
+        assert [point.period_return for point in raw] == [
+            Decimal("0.1"),
+            Decimal("0.1"),
+        ]
+        assert [point.wealth_index for point in raw] == [
+            Decimal("1.1"),
+            Decimal("1.21"),
+        ]
+        assert [point.cumulative_twrr for point in raw] == [
+            Decimal("0.1"),
+            Decimal("0.21"),
+        ]
+        assert [point.twrr for point in public] == [
+            Decimal("0.100000"),
+            Decimal("0.210000"),
+        ]
+        assert calculate_twrr(navs, cash_flows).twrr == Decimal("0.210000")
+
+    def test_raw_period_series_keeps_zero_start_cardinality(self):
+        navs = [
+            NAVSnapshot(date(2025, 1, 1), Decimal("0")),
+            NAVSnapshot(date(2025, 1, 2), Decimal("1000")),
+            NAVSnapshot(date(2025, 1, 3), Decimal("1100")),
+        ]
+
+        raw = calculate_twrr_period_series(navs, [])
+        public = calculate_twrr_series(navs, [])
+
+        assert [point.period_return for point in raw] == [
+            Decimal("0"),
+            Decimal("0.1"),
+        ]
+        assert [point.cumulative_twrr for point in raw] == [
+            Decimal("0"),
+            Decimal("0.1"),
+        ]
+        assert [point.date for point in raw] == [
+            date(2025, 1, 2),
+            date(2025, 1, 3),
+        ]
+        assert [point.twrr for point in public] == [
+            Decimal("0.000000"),
+            Decimal("0.100000"),
+        ]
+
+    def test_raw_period_series_sorts_input_and_rounds_half_up_only_at_boundary(self):
+        navs = [
+            NAVSnapshot(date(2025, 1, 2), Decimal("1000000.5")),
+            NAVSnapshot(date(2025, 1, 1), Decimal("1000000")),
+        ]
+
+        raw = calculate_twrr_period_series(navs, [])
+        public = calculate_twrr_series(navs, [])
+
+        assert raw[0].period_return == Decimal("0.0000005")
+        assert raw[0].cumulative_twrr == Decimal("0.0000005")
+        assert public[0].twrr == Decimal("0.000001")
+
 
 # ---------------------------------------------------------------------------
 # TestMWRRSeries
@@ -301,7 +378,7 @@ class TestMWRRSeries:
         warm = calculate_mwrr_series(navs, cfs, use_warm_start=True)
         cold = calculate_mwrr_series(navs, cfs, use_warm_start=False)
         assert len(warm) == len(cold) == 2
-        for w, c in zip(warm, cold):
+        for w, c in zip(warm, cold, strict=True):
             if w.mwrr is not None and c.mwrr is not None:
                 assert w.mwrr == pytest.approx(c.mwrr, abs=Decimal("0.01"))
 
@@ -312,7 +389,6 @@ class TestMWRRSeries:
         synthetic CF creates a large initial NAV, first-day return annualizes to extreme.
         The warm-start guard should prevent propagation.
         """
-        from datetime import timedelta
 
         # Simulate: period starts with NAV=26000, steady growth to 27000 over 90 days
         navs = [NAVSnapshot(date(2025, 1, 1), Decimal("26000"))]
@@ -332,7 +408,6 @@ class TestMWRRSeries:
 
     def test_cold_start_mode(self):
         """use_warm_start=False should never propagate prev_guess."""
-        from datetime import timedelta
 
         navs = [
             NAVSnapshot(date(2025, 1, 1), Decimal("26000")),
@@ -508,25 +583,21 @@ class TestAnnualizedToCumulative:
     """Tests for annualized_to_cumulative helper."""
 
     def test_none_returns_none(self):
-        from backend.app.utils.financial.roi_utils import annualized_to_cumulative
 
         assert annualized_to_cumulative(None, 365) is None
 
     def test_rate_minus_one_returns_none(self):
-        from backend.app.utils.financial.roi_utils import annualized_to_cumulative
 
         assert annualized_to_cumulative(Decimal("-1"), 365) is None
         assert annualized_to_cumulative(Decimal("-1.5"), 365) is None
 
     def test_zero_days_returns_zero(self):
-        from backend.app.utils.financial.roi_utils import annualized_to_cumulative
 
         result = annualized_to_cumulative(Decimal("0.10"), 0)
         assert result == Decimal("0")
 
     def test_one_year_identity(self):
         """For exactly 365 days, cumulative == annualized."""
-        from backend.app.utils.financial.roi_utils import annualized_to_cumulative
 
         result = annualized_to_cumulative(Decimal("0.10"), 365)
         assert result is not None
@@ -534,7 +605,6 @@ class TestAnnualizedToCumulative:
 
     def test_two_years_compounding(self):
         """For 730 days (2 years), cumulative = (1+0.10)^2 - 1 = 0.21."""
-        from backend.app.utils.financial.roi_utils import annualized_to_cumulative
 
         result = annualized_to_cumulative(Decimal("0.10"), 730)
         assert result is not None
@@ -542,7 +612,6 @@ class TestAnnualizedToCumulative:
 
     def test_half_year(self):
         """For 182 days (~half year), cumulative = (1+0.10)^(182/365) - 1 ≈ 0.0488."""
-        from backend.app.utils.financial.roi_utils import annualized_to_cumulative
 
         result = annualized_to_cumulative(Decimal("0.10"), 182)
         assert result is not None
@@ -550,11 +619,83 @@ class TestAnnualizedToCumulative:
 
     def test_negative_rate(self):
         """Negative annualized rate (but > -1) gives negative cumulative."""
-        from backend.app.utils.financial.roi_utils import annualized_to_cumulative
 
         result = annualized_to_cumulative(Decimal("-0.20"), 365)
         assert result is not None
         assert float(result) == pytest.approx(-0.20, abs=0.001)
+
+
+class TestCumulativeToAnnualized:
+    """Tests for cumulative_to_annualized helper (inverse of annualized_to_cumulative)."""
+
+    def test_none_returns_none(self):
+
+        assert cumulative_to_annualized(None, 365) is None
+
+    def test_total_loss_returns_none(self):
+
+        assert cumulative_to_annualized(Decimal("-1"), 365) is None
+        assert cumulative_to_annualized(Decimal("-1.5"), 365) is None
+
+    def test_zero_or_negative_days_returns_none(self):
+        """Unlike the forward helper, a non-positive window is not annualizable."""
+
+        assert cumulative_to_annualized(Decimal("0.10"), 0) is None
+        assert cumulative_to_annualized(Decimal("0.10"), -5) is None
+
+    def test_short_window_below_minimum_returns_none(self):
+        """Sub-month windows are not annualized (avoids exponential blow-up); >= floor is."""
+
+        assert cumulative_to_annualized(Decimal("0.13"), 7) is None
+        assert cumulative_to_annualized(Decimal("0.05"), 29) is None
+        assert cumulative_to_annualized(Decimal("0.05"), 30) is not None
+        assert cumulative_to_annualized(Decimal("0.02"), 45) is not None
+        # explicit override lets a caller opt into shorter windows
+        assert cumulative_to_annualized(Decimal("0.02"), 10, min_days=1) is not None
+
+    def test_one_year_identity(self):
+        """For exactly 365 days, annualized == cumulative."""
+
+        result = cumulative_to_annualized(Decimal("0.10"), 365)
+        assert result is not None
+        assert float(result) == pytest.approx(0.10, abs=0.001)
+
+    def test_two_years_de_compounding(self):
+        """For 730 days, +21% cumulative annualizes to (1.21)^(1/2)-1 = 0.10."""
+
+        result = cumulative_to_annualized(Decimal("0.21"), 730)
+        assert result is not None
+        assert float(result) == pytest.approx(0.10, abs=0.001)
+
+    def test_half_year_scales_up(self):
+        """For 182 days, +2% cumulative annualizes to (1.02)^(365/182)-1 ≈ 0.0405."""
+
+        result = cumulative_to_annualized(Decimal("0.02"), 182)
+        assert result is not None
+        assert float(result) == pytest.approx(0.0405, abs=0.001)
+
+    def test_negative_return(self):
+        """A loss over a short window annualizes to a larger (more negative) loss."""
+
+        result = cumulative_to_annualized(Decimal("-0.20"), 90)
+        assert result is not None
+        assert float(result) == pytest.approx(-0.5954, abs=0.001)
+
+    def test_overflow_returns_none(self):
+        """An enormous return over a valid window overflows -> None (not a crash)."""
+
+        assert cumulative_to_annualized(Decimal("1e30"), 30) is None
+
+    def test_round_trips_with_annualized_to_cumulative(self):
+        """cumulative_to_annualized is the inverse of annualized_to_cumulative."""
+
+        for days in (91, 182, 365, 900):
+            cum = Decimal("0.037")
+            ann = cumulative_to_annualized(cum, days)
+            assert ann is not None
+            back = annualized_to_cumulative(ann, days)
+            assert back is not None
+            assert float(back) == pytest.approx(float(cum), abs=1e-4)
 
 
 # ---------------------------------------------------------------------------
@@ -614,14 +755,12 @@ class TestMWRRSummaryFix:
 
     def test_mwrr_cumulative_zero_at_t0(self):
         """First day: annualized_to_cumulative with 0 days returns 0."""
-        from backend.app.utils.financial.roi_utils import annualized_to_cumulative
 
         result = annualized_to_cumulative(Decimal("0.26"), 0)
         assert result == Decimal("0")
 
     def test_mwrr_cumulative_matches_annualized(self):
         """Verify cumulative = (1 + annualized)^(days/365) - 1."""
-        from backend.app.utils.financial.roi_utils import annualized_to_cumulative
 
         # For 1 year period, annualized = 0.26 → cumulative ≈ 0.26
         ann = Decimal("0.26")

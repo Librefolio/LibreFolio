@@ -79,7 +79,7 @@ def test_server():
 
 
 @pytest.mark.asyncio
-async def test_complete_e2e_flow_justetf(test_server):
+async def test_complete_e2e_flow_justetf(test_server):  # noqa: C901 — sequential E2E step driver
     """
     Test complete E2E flow using JustETF provider.
 

@@ -5,7 +5,8 @@
   - 'create'   → blank form, POST /transactions/commit with 1 item in creates
   - 'edit'     → pre-filled from items[0] (id immutable, type/broker locked),
                  POST /transactions/commit with 1 TXUpdateItem in updates
-  - 'duplicate'→ pre-filled, id stripped, link_uuid regenerated, date=today,
+  - 'duplicate'→ pre-filled (date preserved — it is the point of the
+                 correction workflow), id stripped, link_uuid regenerated,
                  commits as 'create'
   - 'view'     → readonly display (Save button hidden)
 
@@ -31,6 +32,7 @@
   data-testid everywhere.
 -->
 <script lang="ts">
+    import {todayIso} from '$lib/utils/dateOnly';
     import {onDestroy, untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/app/language';
@@ -60,14 +62,16 @@
     import {ensureCurrenciesLoaded} from '$lib/stores/reference/currencyStore';
     import {ensureAssetsLoaded, getAssetInfo, getAllAssets, refreshAllAssets} from '$lib/stores/reference/assetStore';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
-    import {ensureBrokersLoaded, getAllBrokers, getEditableBrokers, brokerStoreVersion, refreshAllBrokers, getBrokerInfo, getBrokerRole, type BrokerInfo} from '$lib/stores/reference/brokerStore';
+    import {ensureBrokersLoaded, getEditableBrokers, brokerStoreVersion, refreshAllBrokers, getBrokerInfo, getBrokerRole, type BrokerInfo} from '$lib/stores/reference/brokerStore';
     import {type TransactionTypeCode, type PairFormLayout, getTransactionTypeIconUrl, getTypeRule, getPairFormLayout, isDraftReadyForValidation, ensureTypesLoaded, getSwapGroup, typesVersion} from '$lib/stores/transactions/transactionTypeStore';
     import {createValidateScheduler} from '$lib/utils/transactions/useValidateScheduler.svelte';
     import {commitTransactions, validateTransactions} from '$lib/utils/transactions/txCommitApi';
     import {resolveIssueMessage, type ResolverContext} from '$lib/utils/transactions/resolveValidationMessage';
     import {generateUUID} from '$lib/utils/core/uuid';
     import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
+    import {decimalArrowStep, normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
     import {computeSignHint} from '$lib/utils/transactions/signHintColor';
+    import {deduplicateIssues, signLabel, signHintKey} from '$lib/utils/transactions/txFormFields';
     import {buildCreatePayload, buildUpdateDiff, diffDualItem, buildDualCreatePayloads, upgradeAutoToDetail, type TxFields, type TxOriginal, type TxDualSide, type PairFormLayout as PayloadPairLayout} from '$lib/utils/transactions/txPayloadHelpers';
     import {lookupFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
     import {computeFxConversionInfo, buildFxTooltipData, buildFxTooltipHtml} from '$lib/utils/currency/fxConversionHelper';
@@ -246,10 +250,6 @@
         cost_basis_override?: {code: string; amount: string} | null;
     }
 
-    function todayIso(): string {
-        return new Date().toISOString().slice(0, 10);
-    }
-
     function emptyDraft(): FormDraft {
         const brokers = getEditableBrokers();
         // Bugfix-2 §C9: only auto-pick a broker if exactly one is available;
@@ -262,7 +262,10 @@
             asset_id: null,
             type: 'BUY',
             date: todayIso(),
-            quantity: '0',
+            // Empty on purpose (T1-b): a pre-filled "0" forces the user to
+            // cursor around it just to type decimals. Validation already
+            // rejects empty/zero until a real quantity is typed.
+            quantity: '',
             cash: null,
             tags: [],
             description: '',
@@ -276,7 +279,7 @@
         return {broker_id: 0, cash: null, date: todayIso()};
     }
 
-    function fromTx(tx: TXReadItem, opts: {regenerateLink?: boolean; resetDate?: boolean} = {}): FormDraft {
+    function fromTx(tx: TXReadItem, opts: {regenerateLink?: boolean} = {}): FormDraft {
         const txRule = getTypeRule(tx.type);
         // Auto-sign: show positive values for auto-negated types
         // Also normalize paired types (transfer_asset, transfer_cash) — the dual
@@ -293,7 +296,10 @@
             broker_id: tx.broker_id,
             asset_id: tx.asset_id ?? null,
             type: tx.type as TransactionTypeCode,
-            date: opts.resetDate ? todayIso() : tx.date,
+            // T3: the date is always preserved — duplicating is how users fix a
+            // misclassified historical row, and resetting to today destroyed
+            // exactly the field they needed to keep.
+            date: tx.date,
             quantity: qty,
             cash,
             tags: [...(tx.tags ?? [])],
@@ -384,7 +390,7 @@
                 // C1-fix: when items[0] is present (e.g. editing a 'new' draft
                 // from BulkModal), populate from it instead of starting blank.
                 if (row) {
-                    draft = fromTx(row, {resetDate: false});
+                    draft = fromTx(row);
                     // Injected partner for paired drafts
                     if (injected) {
                         partnerRow = injected;
@@ -420,7 +426,7 @@
                     costBasisMode = 'auto';
                 }
             } else if (m === 'duplicate' && row) {
-                draft = fromTx(row, {regenerateLink: row.related_transaction_id != null, resetDate: true});
+                draft = fromTx(row, {regenerateLink: row.related_transaction_id != null});
                 costBasisMode = draft.cost_basis_override ? 'manual' : 'auto';
             } else if ((m === 'edit' || m === 'view') && row) {
                 draft = fromTx(row);
@@ -511,7 +517,7 @@
                     } else if (defaultBrokerId != null) {
                         draft = {...draft, broker_id: defaultBrokerId};
                     } else {
-                        const all = getAllBrokers();
+                        const all = getEditableBrokers();
                         if (all.length === 1) draft = {...draft, broker_id: all[0].id};
                     }
                 }
@@ -873,6 +879,10 @@
             upgradeAutoToDetail(payload);
             const sentKey = lastDraftKey;
             const result = await validateTransactions(payload, {fallback: $t('transactions.form.saveFailed')});
+            // Superseded response: the draft moved on while the server was
+            // thinking, so this verdict is about a state that no longer exists.
+            // The change that moved the key already armed a newer run.
+            if (lastDraftKey !== sentKey) return {issuesCount: issues.length};
 
             if (result.networkError) {
                 issues = [{operation: myOperation, index: 0, error: result.networkError}];
@@ -1207,7 +1217,14 @@
     function onQuantityInput(e: Event) {
         const v = (e.currentTarget as HTMLInputElement).value;
         qtyDisplay = v; // preserve raw user input mid-typing
-        setQuantity(v);
+        setQuantity(normalizeDecimalInput(v));
+    }
+    /** The field is a text input (locale-safe), so the arrow keys are wired by hand. */
+    function onQuantityKeydown(e: KeyboardEvent) {
+        const stepped = decimalArrowStep(e, qtyDisplay);
+        if (stepped === null) return;
+        qtyDisplay = stepped;
+        setQuantity(stepped);
     }
     function onDescriptionInput(e: Event) {
         draft = {...draft, description: (e.currentTarget as HTMLTextAreaElement).value};
@@ -1258,33 +1275,10 @@
     // =========================================================================
 
     /** Label suffix for a sign rule: (+), (−), (≠0), or empty. */
-    function signLabel(sign: import('$lib/stores/transactions/transactionTypeStore').SignRule): string {
-        switch (sign) {
-            case 'positive':
-                return '(+)';
-            case 'negative':
-                return '(−)';
-            case 'nonzero':
-                return '(≠0)';
-            default:
-                return '';
-        }
-    }
-
     /** Hint text below the field explaining the sign constraint. */
     function signHintText(sign: import('$lib/stores/transactions/transactionTypeStore').SignRule): string {
-        switch (sign) {
-            case 'positive':
-                return $t('transactions.form.hintSignPositive');
-            case 'negative':
-                return $t('transactions.form.hintSignNegative');
-            case 'zero':
-                return $t('transactions.form.hintSignZero');
-            case 'nonzero':
-                return $t('transactions.form.hintSignNonzero');
-            default:
-                return '';
-        }
+        const key = signHintKey(sign);
+        return key ? $t(key) : '';
     }
 
     let qtyHint = $derived(signHintText(rule.quantityRule));
@@ -1337,23 +1331,13 @@
 
     /** W42: Deduplicate validation issues by `code` — in dual mode both halves
      *  can produce the same error code, showing it once is enough. */
-    function deduplicateIssues(raw: ValidationIssue[]): ValidationIssue[] {
-        const seen = new Set<string>();
-        return raw.filter((iss) => {
-            const key = iss.code ?? iss.error;
-            if (seen.has(key)) return false;
-            seen.add(key);
-            return true;
-        });
-    }
-
     // Bugfix-4 §U16: validate chip removed in favor of the green/warning
     // banners (single source of truth). The footer now shows only an inline
     // "Validating…" indicator while a request is in flight (see template).
 </script>
 
 <ModalBase {open} maxWidth="3xl" onRequestClose={requestClose} testId="tx-form-modal" allowOverflow={true} {zIndex}>
-    <div class="flex flex-col max-h-[90vh] min-h-[50vh]" data-testid="tx-form-modal-root">
+    <div class="flex flex-col max-h-[90vh] min-h-[50vh]" data-testid="tx-form-modal-root" data-busy={scheduler.state.isPending || scheduler.state.isValidating || committing || loadingPartner} data-validate-runs={scheduler.state.validateRuns}>
         <!-- ============================================================= -->
         <!-- Header -->
         <!-- ============================================================= -->
@@ -1549,17 +1533,18 @@
                                 {$t('transactions.table.quantity')} <span class="text-amber-500">(+)</span>
                             </span>
                             <input
-                                type="number"
-                                step="any"
+                                type="text"
                                 inputmode="decimal"
                                 autocomplete="off"
                                 spellcheck="false"
                                 name="qty-{autocompleteNonce}"
+                                placeholder="0"
                                 class="qty-input w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg text-right font-mono tabular-nums disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-libre-green/30"
                                 style:border-color={qtyBorderColor || undefined}
                                 value={qtyDisplay}
                                 disabled={isReadonly}
                                 oninput={onQuantityInput}
+                                onkeydown={onQuantityKeydown}
                                 onblur={() => (qtyDisplay = formatDecimalForDisplay(draft.quantity))}
                                 data-testid="tx-form-quantity"
                             />
@@ -1825,17 +1810,18 @@
                                         <span class="text-amber-500">{qtyLabel}</span>{/if}
                                 </span>
                                 <input
-                                    type="number"
-                                    step="any"
+                                    type="text"
                                     inputmode="decimal"
                                     autocomplete="off"
                                     spellcheck="false"
                                     name="qty-{autocompleteNonce}"
+                                    placeholder="0"
                                     class="qty-input w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg text-right font-mono tabular-nums disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-libre-green/30"
                                     style:border-color={qtyBorderColor || undefined}
                                     value={qtyDisplay}
                                     disabled={isReadonly}
                                     oninput={onQuantityInput}
+                                    onkeydown={onQuantityKeydown}
                                     onblur={() => (qtyDisplay = formatDecimalForDisplay(draft.quantity))}
                                     data-testid="tx-form-quantity"
                                 />
@@ -1869,17 +1855,18 @@
                                         <span class="text-amber-500">{qtyLabel}</span>{/if}
                                 </span>
                                 <input
-                                    type="number"
-                                    step="any"
+                                    type="text"
                                     inputmode="decimal"
                                     autocomplete="off"
                                     spellcheck="false"
                                     name="qty-{autocompleteNonce}"
+                                    placeholder="0"
                                     class="qty-input w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg text-right font-mono tabular-nums disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-libre-green/30"
                                     style:border-color={qtyBorderColor || undefined}
                                     value={qtyDisplay}
                                     disabled={isReadonly}
                                     oninput={onQuantityInput}
+                                    onkeydown={onQuantityKeydown}
                                     onblur={() => (qtyDisplay = formatDecimalForDisplay(draft.quantity))}
                                     data-testid="tx-form-quantity"
                                 />
@@ -2096,7 +2083,7 @@
                         ⚡ <span class="hidden sm:inline">{$t('transactions.validate.now')}</span>
                     </button>
                 {/if}
-                {#if scheduler.state.isValidating}
+                {#if scheduler.state.isValidating || scheduler.state.isPending}
                     <span class="text-[11px] text-gray-500 dark:text-gray-400">{$t('transactions.validate.validating')}</span>
                 {:else if isFreshlyValid}
                     <span class="text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-1" data-testid="tx-form-valid-inline">

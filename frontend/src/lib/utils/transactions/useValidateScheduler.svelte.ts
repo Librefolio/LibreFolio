@@ -39,6 +39,24 @@ export interface ValidateSchedulerOptions {
 export interface ValidateSchedulerState {
     /** True while a validate request is in-flight. */
     isValidating: boolean;
+    /**
+     * True while a `change` trigger is waiting out its debounce window.
+     *
+     * Without this the scheduler looks settled for `debounceMs` after an edit,
+     * while what is on screen is still the *previous* verdict. Both the toolbar
+     * hint and `data-busy` read `isPending || isValidating`, so "the numbers are
+     * being recomputed" covers the queued window too.
+     */
+    isPending: boolean;
+    /**
+     * Monotonic count of *completed* validate runs.
+     *
+     * `isPending`/`isValidating` answer "is it working now?", which a reader can
+     * miss entirely by arriving late. A counter answers "has it worked since I
+     * looked?", which cannot be missed: read it before acting, wait for it to
+     * grow after. Same shape as `data-chart-renders`.
+     */
+    validateRuns: number;
     /** Wall-clock ms of the last successful validate response. `null` until the first call. */
     lastValidatedAt: number | null;
     /** Issue count from the last response. `null` until the first call. */
@@ -63,6 +81,8 @@ export function createValidateScheduler(opts: ValidateSchedulerOptions): Validat
 
     const state = $state<ValidateSchedulerState>({
         isValidating: false,
+        isPending: false,
+        validateRuns: 0,
         lastValidatedAt: null,
         issuesCount: null,
         autoDisabled: !opts.enabled(),
@@ -81,6 +101,7 @@ export function createValidateScheduler(opts: ValidateSchedulerOptions): Validat
             clearTimeout(debounceTimer);
             debounceTimer = null;
         }
+        state.isPending = false;
     }
     function clearIdle() {
         if (idleTimer != null) {
@@ -111,20 +132,29 @@ export function createValidateScheduler(opts: ValidateSchedulerOptions): Validat
             }
         }
         const seq = ++runSeq;
+        // Sample the draft key BEFORE the round-trip: it identifies the state
+        // this run actually validated. Reading it again after the `await` would
+        // credit the run with whatever the user typed while the server was
+        // thinking — and the anti-bounce below would then skip the run that was
+        // supposed to check those very edits, leaving a stale verdict on screen
+        // with nothing queued. Slow server ⇒ the last edit silently loses its
+        // validation. `validateFn` already samples its own key this way.
+        const sentKey = opts.draftKey ? opts.draftKey() : null;
         state.isValidating = true;
         try {
             const res = await opts.validateFn(reason);
             if (seq !== runSeq || disposed) return; // stale response or disposed
             state.lastValidatedAt = Date.now();
             state.issuesCount = res.issuesCount;
-            if (opts.draftKey) lastValidatedDraftKey = opts.draftKey();
+            lastValidatedDraftKey = sentKey;
         } catch {
             if (seq !== runSeq || disposed) return;
             // Leave previous lastValidatedAt/issuesCount as-is; caller surfaces banner.
-            if (opts.draftKey) lastValidatedDraftKey = opts.draftKey();
+            lastValidatedDraftKey = sentKey;
         } finally {
             if (seq === runSeq && !disposed) {
                 state.isValidating = false;
+                state.validateRuns += 1;
             }
         }
     }
@@ -149,7 +179,10 @@ export function createValidateScheduler(opts: ValidateSchedulerOptions): Validat
                 return;
             }
             clearDebounce();
+            state.isPending = true;
             debounceTimer = setTimeout(() => {
+                debounceTimer = null;
+                state.isPending = false;
                 void runValidate('change');
             }, debounceMs);
             // Reset idle timer ONLY on a real change.

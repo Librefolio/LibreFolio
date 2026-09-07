@@ -6,7 +6,7 @@ The **Transactions** tab is the control center for modifying the broker's ledger
     <img class="gallery-img" data-category="brokers" data-name="transactions-tab" alt="Broker Transactions Tab">
 </div>
 
-From this tab, you can perform manual transactions or launch bulk statement imports.
+From this tab, you can record transactions manually or launch bulk statement imports.
 
 ---
 
@@ -24,41 +24,31 @@ For a detailed explanation of transaction fields and validation rules, see the *
 
 ---
 
-## 🧙 BRIM: Broker Report Import Module
+## 🧙 Bulk Import (BRIM)
 
-The **Import** (`Upload` icon) button launches the **BRIM** wizard. This module allows you to import your broker's exported statements (CSV or Excel formats) in bulk, run automatic sanity validations, and map tickers to local assets before final commit.
+The **Import** (`Upload` icon) button launches the **BRIM** (Broker Report Import Module) wizard, which imports your broker's exported statements in bulk: it parses the files, validates every row, unifies the securities found, checks for duplicates, and lets you review everything before anything is written. Approved rows land in the **bulk editor**, where a final **Save All** commits them to the ledger.
 
-### The Import Flow
+The same wizard is also available from the global **[Transactions](../transactions/index.md)** page. For the full walkthrough see the dedicated guides:
 
-<div class="lf-screenshot-carousel" data-carousel="carousel-broker-import" data-carousel-interval="6000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
-  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="import-modal" data-title="📥 Quick Import Modal" alt="Import Modal">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step1" data-title="🧙 Wizard — Step 1: Upload" alt="Import Wizard Step 1">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step2" data-title="⚙️ Wizard — Step 2: Parser Config" alt="Import Wizard Step 2">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step3" data-title="🧠 Wizard — Step 3: Analysis" alt="Import Wizard Step 3">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step4-resolution" data-title="🔍 Wizard — Step 4: Asset Resolution" alt="Import Wizard Asset Resolution">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-duplicate" data-title="⚠️ Duplicate Detection" alt="Import Wizard Duplicate Detection">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-bulk-staging" data-title="📦 Bulk Staging" alt="Import Bulk Staging">
-</div>
-
-The wizard progresses through the following steps:
-
-1.  **Select File & Parser**: Choose the statement file and select the appropriate parser configuration (e.g., Interactive Brokers, Degiro, Directa, Charles Schwab, generic CSV, etc.).
-2.  **Verify Headers & Mapping**: Renders the CSV headers to confirm the parser aligns correctly with the columns.
-3.  **Operation Analysis**: Processes the file and displays a preview grid of parsed actions (Buys, Sells, Dividends, etc.).
-    *   **Badges**: Operations are labeled as `UNIQUE` (new trade), `DUPLICATE` (already exists in database), or `UNRESOLVED` (requires mapping ticker/ISIN).
-    *   **TODO Notes**: Highlight fields requiring attention or items that could not be parsed automatically.
-4.  **Asset Resolution**: If the statement contains tickers or ISINs that do not exist in your local assets registry, BRIM displays a mapping step. You can:
-    *   Map the ticker to an existing asset.
-    *   Create a new asset directly from this screen, pre-filled with details extracted from the statement.
-5.  **Bulk Staging & Commit**: Review the staged checklist of clean, unique transactions. Uncheck any operations you wish to exclude, then click **Commit** to write the records to your portfolio ledger.
+- 📥 **[Import from Broker (BRIM)](../transactions/import/index.md)** — supported brokers, formats, and per-plugin notes.
+- 🧙 **[How to Import Transactions](../transactions/import/how-to.md)** — the wizard, step by step.
 
 ---
 
-## 📑 Import History
+## 🧩 Missing Your Broker?
 
-Click the **Show Import History** (`FileText` icon) button to view a complete ledger of previous import tasks. It displays:
+If your broker has no import plugin yet, you can help:
 
-- Uploaded filename and size.
-- Processed rows and total committed transactions.
-- Upload timestamp.
-- User who performed the import.
+- **Request a plugin** — open a [plugin request](https://github.com/Librefolio/LibreFolio/issues/new?template=plugin_request.yml) on GitHub, attaching an anonymized sample of the broker's export file so the format can be understood. (The wizard's Corrections step also carries an "open an issue" banner for reporting rows that look wrong.)
+- **Write a plugin** — the [BRIM Plugin Guide](../../developer/architecture/patterns/brim_plugin_guide.md) walks developers through the provider contract; see [Contribute](../../community/contribute.md) for the general workflow.
+
+---
+
+## 🗂️ Uploaded Reports
+
+Click the **Uploaded Reports** (`FileText` icon) button to manage the BRIM report files stored for this broker. The modal lets you:
+
+- Review the uploaded reports (name, upload date, size, status), with a quick **preview** of each file's content.
+- **Upload** new reports directly — they are auto-assigned to this broker and become available in the wizard's Select Files step.
+- **Delete** reports you no longer need.
+- Jump to the full **[Files & Uploads](../files/index.md#broker-reports)** page, pre-filtered on this broker.

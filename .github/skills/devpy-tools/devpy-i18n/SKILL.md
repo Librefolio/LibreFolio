@@ -36,6 +36,35 @@ description: "Use this skill when the user needs to manage frontend translations
 - Languages: EN (primary), IT, FR, ES
 - ~1476 keys per language (post 2026-07 cleanup campaign, 2 rounds — removed 194 dead/duplicate keys)
 
+## Locale File Format — canonical form is `indent=2`
+
+The canonical serialization is the one `./dev.py i18n` produces:
+**`indent=2`, `ensure_ascii=False`** (accented characters stay literal), trailing newline.
+Prettier is configured to agree with it byte-for-byte:
+
+- `frontend/.prettierrc` has a `*.json` override setting `tabWidth: 2` (the global
+  `tabWidth` is 4, which is correct for `.ts`/`.svelte` but wrong for these files).
+- `frontend/package.json` includes `json` in the `format`/`format:check` globs, so
+  `./dev.py front format` and `./dev.py front check` actually cover the locale files.
+  (`src/lib/api/openapi.json` is excluded via `.prettierignore`.)
+
+**Why this matters**: before this alignment, `.json` was not in the format glob at all,
+so the locale files were never checked by Prettier. Anyone editing them by hand — rather
+than through `./dev.py i18n` — introduced a different indentation, and the next tool run
+reformatted the whole file, producing a ~5 700-line diff *per language* for a change of a
+few keys. Aligning Prettier to the tool means both paths converge on one form.
+
+**Never hand-reindent these files.** Use `./dev.py i18n add/remove`, or
+`./dev.py front format`; both now produce identical bytes. After any change, sanity-check
+the diff size and key parity:
+
+```bash
+git --no-pager diff --stat -- 'frontend/src/lib/i18n/*.json'   # should be small
+```
+
+A key removed from some languages but not others is worse than an unused key — always
+verify all four locales end up with the same key set.
+
 ## Key Naming Conventions
 
 | Pattern | When to use |

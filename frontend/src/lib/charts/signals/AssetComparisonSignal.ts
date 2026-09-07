@@ -96,6 +96,7 @@ export class AssetComparisonSignal extends ChartSignal {
             assetType: (this.params._assetType as string | undefined) ?? null,
             currency,
             currencyFlag,
+            aggregationProfile: 'last_with_range',
         };
     }
 
@@ -156,6 +157,7 @@ export class AssetComparisonSignal extends ChartSignal {
                         opacity: 0.8,
                         currency: origCurrency,
                         currencyFlag: origFlag,
+                        aggregationProfile: 'last_with_range',
                     });
                 }
             }

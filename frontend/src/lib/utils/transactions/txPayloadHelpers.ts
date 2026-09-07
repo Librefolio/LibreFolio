@@ -7,6 +7,7 @@
  */
 
 import {type TypeRule, getCostBasisRule} from '$lib/stores/transactions/transactionTypeStore';
+import type {BrimEvidence} from '$lib/types/files';
 
 // =============================================================================
 //  Types
@@ -19,6 +20,10 @@ export interface ImportTodo {
     severity: 'blocker' | 'warning';
     reasonCode: string;
     message: string;
+    /** Source-data tables backing this todo (raw file rows + plugin comment). */
+    evidence?: BrimEvidence[];
+    /** Machine-readable numbers behind the todo (e.g. the nominal a purchase was compared to). */
+    context?: Record<string, unknown>;
 }
 
 /** Minimal cash shape used throughout transaction payloads. */
@@ -74,20 +79,56 @@ export const PATCHABLE_FIELDS = new Set(['type', 'date', 'quantity', 'cash', 'ta
 //  Sign-flip helpers
 // =============================================================================
 
-/** Apply sign-flip rules based on the TypeRule. Pure function, no side effects. */
+/** Apply sign-flip rules based on the TypeRule. Pure function, no side effects.
+ *
+ * Both directions are enforced, not just the negative one: a rule that says "positive"
+ * is as binding as one that says "negative", and the backend rejects either violation
+ * the same way. Any other rule (`free`, `any`, `nonzero`) carries real information in
+ * the sign — an ADJUSTMENT or a TRANSFER leg means the opposite thing when flipped —
+ * so those values are passed through untouched.
+ */
 export function applySignRules(qty: string, cash: CashValue | null | undefined, rule: TypeRule): {signedQty: string; signedCash: CashValue | null} {
-    const negQty = rule.quantityRule === 'negative';
-    const negCash = rule.cashSign === 'negative';
-    const signedQty = negQty ? String(-Math.abs(Number(qty))) : qty;
-    const signedCash = buildSignedCash(cash, negCash);
-    return {signedQty, signedCash};
+    return {signedQty: applySign(qty, rule.quantityRule), signedCash: buildSignedCash(cash, rule.cashSign)};
 }
 
-/** Build a cash value with sign applied. */
-export function buildSignedCash(cash: CashValue | null | undefined, negate: boolean): CashValue | null {
+/** Coerce a numeric string to the sign a rule demands, leaving free-sign rules alone. */
+export function applySign(value: string, rule: string): string {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return value;
+    if (rule === 'negative') return String(-Math.abs(n));
+    if (rule === 'positive') return String(Math.abs(n));
+    return value;
+}
+
+/** Build a cash value with the sign its rule demands. Accepts a rule or a legacy boolean. */
+export function buildSignedCash(cash: CashValue | null | undefined, rule: string | boolean): CashValue | null {
     if (!cash) return null;
-    if (negate) return {code: cash.code, amount: String(-Math.abs(Number(cash.amount)))};
-    return {code: cash.code, amount: cash.amount};
+    const resolved = typeof rule === 'boolean' ? (rule ? 'negative' : 'free') : rule;
+    return {code: cash.code, amount: applySign(cash.amount, resolved)};
+}
+
+/** Canonical signed cash amount for a transaction, whatever representation it arrives in.
+ *
+ * Two representations of the same money coexist in the app, and this is what reconciles them:
+ *   - **import pool rows** carry the amount already signed, as parsed from the broker file;
+ *   - **rows read from the DB** are normalised to a magnitude by the edit form (see
+ *     `fieldsFromTx`), because the form shows a magnitude and the *type* carries the sign.
+ *
+ * Applying the type's sign rule is safe on both, because `applySign` is idempotent: `'negative'`
+ * maps to `-Math.abs(n)`, so a value that is already negative comes back unchanged. Free-sign
+ * rules (`free`/`any`/`nonzero` — ADJUSTMENT, TRANSFER legs) pass through untouched, which is
+ * required rather than incidental: there the sign *is* information.
+ *
+ * Anything that compares, sums or pairs cash amounts must go through here. Reading
+ * `fields.cash.amount` directly silently works for one representation and fails for the other.
+ *
+ * @returns the signed amount, or `null` when there is no cash or it is not a finite number.
+ */
+export function signedCashAmount(cash: CashValue | null | undefined, rule: TypeRule): number | null {
+    const signed = buildSignedCash(cash, rule.cashSign);
+    if (!signed) return null;
+    const n = Number(signed.amount);
+    return Number.isFinite(n) ? n : null;
 }
 
 // =============================================================================

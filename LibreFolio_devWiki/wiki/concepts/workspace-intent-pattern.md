@@ -55,5 +55,5 @@ Before `WorkspaceIntent` was introduced, BulkModal had a `mode` prop (`'create' 
 | Role | Path |
 |------|------|
 | BulkModal (primary) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
-| txStore | `frontend/src/lib/stores/txStore.svelte.ts` |
+| txStore | `frontend/src/lib/stores/transactions/txStore.svelte.ts` |
 | mkdocs (transaction draft state) | `mkdocs_src/docs/developer/frontend/state/transaction-draft.md` |

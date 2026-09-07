@@ -115,19 +115,33 @@ function roundOpacity(op: number): number {
     return op >= 1.0 ? 1.0 : 0.5;
 }
 
-export function buildMainSeries(values: number[], staleDays: number[], baseColor: string, greenColor: string, redColor: string, isDark: boolean, areaFill: boolean, lineWidth: number, seriesName: string, useBaseline: boolean, baseline: number, useStale: boolean): any[] {
+export function buildMainSeries(values: Array<number | null>, staleDays: number[], baseColor: string, greenColor: string, redColor: string, isDark: boolean, areaFill: boolean, lineWidth: number, seriesName: string, useBaseline: boolean, baseline: number, useStale: boolean): any[] {
     if (values.length === 0) return [];
 
     const n = values.length;
-
-    // ── Single-point: render as circle marker (no line segment possible) ──
-    if (n === 1) {
-        const color = useBaseline ? (values[0] >= baseline ? greenColor : redColor) : baseColor;
+    const presentValues = values.filter((value): value is number => value !== null);
+    if (presentValues.length === 0) {
         return [
             {
                 name: seriesName,
                 type: 'line',
-                data: [values[0]],
+                data: values,
+                showSymbol: false,
+                symbol: 'none',
+                lineStyle: {width: lineWidth, color: baseColor},
+                areaStyle: undefined,
+            },
+        ];
+    }
+
+    // ── Single-point: render as circle marker (no line segment possible) ──
+    if (presentValues.length === 1) {
+        const color = useBaseline ? (presentValues[0] >= baseline ? greenColor : redColor) : baseColor;
+        return [
+            {
+                name: seriesName,
+                type: 'line',
+                data: values,
                 showSymbol: true,
                 symbol: 'circle',
                 symbolSize: 8,
@@ -147,9 +161,15 @@ export function buildMainSeries(values: number[], staleDays: number[], baseColor
     const pointOpacities: number[] = new Array(n);
 
     for (let i = 0; i < n; i++) {
+        const value = values[i];
+        if (value === null) {
+            pointColors[i] = baseColor;
+            pointOpacities[i] = 1.0;
+            continue;
+        }
         // Determine color
         if (useBaseline) {
-            pointColors[i] = values[i] >= baseline ? greenColor : redColor;
+            pointColors[i] = value >= baseline ? greenColor : redColor;
         } else {
             pointColors[i] = baseColor;
         }
@@ -159,9 +179,30 @@ export function buildMainSeries(values: number[], staleDays: number[], baseColor
 
     // ── Step 2: Build contiguous segments ──
     const segments: Segment[] = [];
-    let segStart = 0;
-    for (let i = 1; i <= n; i++) {
-        const sameGroup = i < n && pointColors[i] === pointColors[segStart] && pointOpacities[i] === pointOpacities[segStart];
+    let segStart: number | null = null;
+    for (let i = 0; i <= n; i++) {
+        const value = i < n ? values[i] : null;
+        if (value === null) {
+            if (segStart !== null) {
+                const isStale = pointOpacities[segStart] < 1.0;
+                segments.push({
+                    start: segStart,
+                    end: i - 1,
+                    color: pointColors[segStart],
+                    opacity: pointOpacities[segStart],
+                    isStale,
+                    staleStart: staleDays[segStart] ?? 0,
+                    staleEnd: staleDays[i - 1] ?? 0,
+                });
+                segStart = null;
+            }
+            continue;
+        }
+        if (segStart === null) {
+            segStart = i;
+            continue;
+        }
+        const sameGroup = pointColors[i] === pointColors[segStart] && pointOpacities[i] === pointOpacities[segStart];
         if (!sameGroup) {
             const isStale = pointOpacities[segStart] < 1.0;
             segments.push({
@@ -359,7 +400,7 @@ export function buildBandSeries(signal: RenderedSignal, dates: string[], isDark:
     if (!signal.bandData) return [];
     const {upper, middle, lower} = signal.bandData;
     const bandColor = signal.color;
-    const bandOpacity = isDark ? 0.18 : 0.12;
+    const bandOpacity = (isDark ? 0.18 : 0.12) * (signal.opacity ?? 1);
 
     const signalDateIdx = new Map(signal.data.map((d, idx) => [d.date, idx]));
 
@@ -422,10 +463,11 @@ export function buildBandSeries(signal: RenderedSignal, dates: string[], isDark:
             smooth: false,
             symbol: 'none',
             yAxisIndex: signal.yAxisIndex ?? 0,
-            lineStyle: {color: bandColor, width: signal.lineWidth, type: signal.lineType},
-            itemStyle: {color: bandColor},
+            lineStyle: {color: bandColor, width: signal.lineWidth, type: signal.lineType, opacity: signal.opacity ?? 1},
+            itemStyle: {color: bandColor, opacity: signal.opacity ?? 1},
             emphasis: {focus: 'none'},
             z: 1,
+            ...buildSignalReferencePrimitives(signal, isDark),
         },
     ];
 }
@@ -440,7 +482,8 @@ export function buildBarSeries(signal: RenderedSignal, signalSeriesData: any[], 
         return {
             value: val,
             itemStyle: {
-                color: val >= 0 ? (isDark ? COLORS.greenDark : COLORS.greenLight) : isDark ? COLORS.redDark : COLORS.redLight,
+                color: signal.barColorMode === 'single' ? signal.color : val >= 0 ? (isDark ? COLORS.greenDark : COLORS.greenLight) : isDark ? COLORS.redDark : COLORS.redLight,
+                opacity: signal.opacity ?? 1,
             },
         };
     });
@@ -451,10 +494,60 @@ export function buildBarSeries(signal: RenderedSignal, signalSeriesData: any[], 
         data: barData,
         yAxisIndex: signal.yAxisIndex ?? 0,
         barWidth: '60%',
-        itemStyle: {color: signal.color},
+        itemStyle: {color: signal.color, opacity: signal.opacity ?? 1},
         emphasis: {focus: 'none'},
         z: 0,
+        ...buildSignalReferencePrimitives(signal, isDark),
     };
+}
+
+/** Build library-independent ECharts primitives for canonical levels and regions. */
+export function buildSignalReferencePrimitives(signal: RenderedSignal, isDark: boolean): {markLine?: Record<string, unknown>; markArea?: Record<string, unknown>} {
+    const primitives: {markLine?: Record<string, unknown>; markArea?: Record<string, unknown>} = {};
+
+    if (signal.referenceLevels?.length) {
+        primitives.markLine = {
+            silent: true,
+            symbol: 'none',
+            lineStyle: {
+                color: signal.color,
+                opacity: isDark ? 0.55 : 0.45,
+                type: 'dashed',
+                width: 1,
+            },
+            label: {
+                show: true,
+                color: isDark ? '#cbd5e1' : '#64748b',
+                fontSize: 9,
+                formatter: (params: {name?: string}) => params.name ?? '',
+            },
+            data: signal.referenceLevels.map((level) => ({
+                name: level.label,
+                yAxis: level.value,
+            })),
+        };
+    }
+
+    if (signal.valueRegions?.length) {
+        primitives.markArea = {
+            silent: true,
+            itemStyle: {
+                color: hexToRgba(signal.color, isDark ? 0.08 : 0.06),
+            },
+            label: {show: false},
+            data: signal.valueRegions.map((region) => [
+                {
+                    name: region.label,
+                    yAxis: region.lower ?? 'min',
+                },
+                {
+                    yAxis: region.upper ?? 'max',
+                },
+            ]),
+        };
+    }
+
+    return primitives;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

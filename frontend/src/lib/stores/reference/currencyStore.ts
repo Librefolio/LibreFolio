@@ -133,8 +133,3 @@ export function getCurrencyInfo(code: string): CurrencyInfo {
 export function isCurrenciesLoaded(): boolean {
     return loaded;
 }
-
-/** Check if currencies are currently being loaded. */
-export function isCurrenciesLoading(): boolean {
-    return loading;
-}

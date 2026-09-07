@@ -6,7 +6,6 @@
  */
 
 // Base components
-export {default as BaseDropdown} from './BaseDropdown.svelte';
 export {default as SimpleSelect} from './SimpleSelect.svelte';
 export {default as SearchSelect} from './SearchSelect.svelte';
 
@@ -16,6 +15,7 @@ export {default as BrokerSearchSelect} from './BrokerSearchSelect.svelte';
 export {default as CurrencySearchSelect} from './CurrencySearchSelect.svelte';
 export {default as CountrySearchSelect} from './CountrySearchSelect.svelte';
 export {default as SectorSearchSelect} from './SectorSearchSelect.svelte';
+export {default as UserSearchSelect} from './UserSearchSelect.svelte';
 export {default as FxProviderSelect} from './FxProviderSelect.svelte';
 
 export * from './types';

@@ -18,6 +18,7 @@
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import {blobToFile, getCroppedImageFromCropper, IMAGE_PRESETS, type PresetName} from '$lib/utils/files/imageCrop';
 
+    import {numericArrows} from '$lib/actions/numericArrows';
     // Props
     export let open: boolean = false;
     export let file: File | null = null;
@@ -82,6 +83,15 @@
     // Track first initialization to auto-resetAll
     let needsInit: boolean = true;
 
+    /**
+     * The cropper reports `data-cropper-ready` as soon as it can paint, but this modal keeps
+     * discarding change events for ~500ms after that while it runs its own `resetAll` pass.
+     * Edits made in that window are silently dropped (`hasChanges` stays false), so the state
+     * has to be observable: `aria-busy` for assistive tech, `data-edit-ready` for anything
+     * that needs to know when an edit will actually be recorded.
+     */
+    let editReady: boolean = false;
+
     // Initialize when file changes
     $: if (file && open) {
         const nameParts = file.name.split('.');
@@ -99,6 +109,7 @@
         showCloseConfirm = false;
         showEllipsePreview = preset === 'avatar' || preset === 'broker-icon';
         needsInit = true;
+        editReady = false;
     }
 
     // Computed config from preset
@@ -199,6 +210,7 @@
                 // Keep suppressing for a bit longer to catch post-resetAll events
                 setTimeout(() => {
                     suppressChanges = false;
+                    editReady = true;
                 }, 300);
             }, 200);
             return;
@@ -309,13 +321,13 @@
 </script>
 
 <ModalBase maxWidth="800px" noTransition={false} onRequestClose={requestClose} open={open && !!imageSrc} zIndex={50}>
-    <div aria-labelledby="modal-title" aria-modal="true" class="modal-content-inner" data-testid="image-edit-modal" role="dialog">
+    <div aria-labelledby="modal-title" aria-modal="true" aria-busy={!editReady} class="modal-content-inner" data-edit-ready={editReady || undefined} data-testid="image-edit-modal" role="dialog">
         <!-- Header -->
         <div class="modal-header">
             <h2 class="modal-title" id="modal-title">{modalTitle}</h2>
             <div class="header-actions">
                 {#if hasChanges}
-                    <button type="button" class="header-btn reset" on:click={() => cropper?.resetAll?.()} title={$_('common.resetAllChanges') || 'Reset All'} data-testid="image-edit-reset">
+                    <button type="button" class="header-btn reset" disabled={!editReady} on:click={() => cropper?.resetAll?.()} title={$_('common.resetAllChanges') || 'Reset All'} data-testid="image-edit-reset">
                         <RefreshCw size={16} />
                     </button>
                 {/if}
@@ -330,18 +342,18 @@
             <!-- Row 1: File name + quality (if JPEG/WebP) -->
             <div class="filename-row">
                 <div class="filename-editor">
-                    <input bind:value={editedFileName} class="filename-input" data-testid="image-edit-filename" on:input={() => (hasChanges = true)} placeholder="image" type="text" />
-                    <select bind:value={outputFormat} class="format-select" on:change={() => (hasChanges = true)}>
+                    <input bind:value={editedFileName} class="filename-input" data-testid="image-edit-filename" disabled={!editReady} on:input={() => (hasChanges = true)} placeholder="image" type="text" />
+                    <select bind:value={outputFormat} class="format-select" data-testid="image-edit-format" disabled={!editReady} on:change={() => (hasChanges = true)}>
                         <option value="png">.png</option>
                         <option value="jpeg">.jpg</option>
                         <option value="webp">.webp</option>
                     </select>
                 </div>
                 {#if outputFormat !== 'png'}
-                    <div class="quality-spinner">
-                        <button type="button" class="spin-btn" on:click={decrementQuality}>−</button>
+                    <div class="quality-spinner" data-testid="image-edit-quality">
+                        <button type="button" class="spin-btn" disabled={!editReady} on:click={decrementQuality}>−</button>
                         <span class="quality-value">{outputQuality}%</span>
-                        <button type="button" class="spin-btn" on:click={incrementQuality}>+</button>
+                        <button type="button" class="spin-btn" disabled={!editReady} on:click={incrementQuality}>+</button>
                     </div>
                 {/if}
             </div>
@@ -349,7 +361,7 @@
             <!-- Cropper with ellipse preview toggle on left -->
             <div class="cropper-section">
                 <!-- Ellipse toggle - LEFT side -->
-                <button class="ellipse-toggle" class:active={showEllipsePreview} data-testid="image-edit-ellipse-toggle" on:click={() => (showEllipsePreview = !showEllipsePreview)} title={showEllipsePreview ? 'Hide preview' : 'Show preview'} type="button">
+                <button class="ellipse-toggle" class:active={showEllipsePreview} data-testid="image-edit-ellipse-toggle" disabled={!editReady} on:click={() => (showEllipsePreview = !showEllipsePreview)} title={showEllipsePreview ? 'Hide preview' : 'Show preview'} type="button">
                     {#if showEllipsePreview}
                         <Eye size={16} />
                     {:else}
@@ -358,6 +370,19 @@
                 </button>
 
                 <ImageCropper aspectRatio={config.aspectRatio} bind:this={cropper} imageSrc={imageSrc || ''} on:change={handleCropperChange} showPreviewEllipse={showEllipsePreview} showRotateControls={true} showZoomSlider={true} />
+
+                <!--
+                    Init guard. handleCropperChange() calls resetAll() ~200 ms after the
+                    cropper first reports, so a crop/rotate/zoom made in that window is
+                    thrown away without a word. The cropper is not a form control, so
+                    `disabled` cannot reach it — an overlay is the only way to say "not
+                    yet". It disappears with editReady (~500 ms).
+                -->
+                {#if !editReady}
+                    <div aria-hidden="true" class="cropper-guard" data-testid="image-edit-init-guard">
+                        <Loader2 class="animate-spin" size={24} />
+                    </div>
+                {/if}
             </div>
 
             <!-- === BOTTOM PANEL (2 columns) === -->
@@ -376,9 +401,9 @@
                     <div class="panel-row">
                         <span class="panel-label">{$_('uploads.outputSize') || 'Output'}:</span>
                         <div class="dimensions-group">
-                            <input class="dim-input" max={selectionWidth || 9999} min="1" on:input={handleOutputWidthInput} type="number" value={effectiveOutputWidth} />
+                            <input class="dim-input" disabled={!editReady} max={selectionWidth || 9999} min="1" on:input={handleOutputWidthInput} type="number" use:numericArrows value={effectiveOutputWidth} />
                             <span class="dim-sep">×</span>
-                            <input class="dim-input" max={selectionHeight || 9999} min="1" on:input={handleOutputHeightInput} type="number" value={effectiveOutputHeight} />
+                            <input class="dim-input" disabled={!editReady} max={selectionHeight || 9999} min="1" on:input={handleOutputHeightInput} type="number" use:numericArrows value={effectiveOutputHeight} />
                             <span class="dim-unit">px</span>
                             <Lock class="lock-icon" size={12} />
                         </div>
@@ -390,7 +415,7 @@
                             <!-- Spacer to align with the Y (second) dim-input -->
                             <span class="scale-spacer"></span>
                             <span class="scale-x">×</span>
-                            <input class="scale-input" max="1" min="0.01" on:input={handleScaleInput} step="0.01" type="number" value={scaleFactor.toFixed(2)} />
+                            <input class="scale-input" disabled={!editReady} max="1" min="0.01" on:input={handleScaleInput} step="0.01" type="number" use:numericArrows={{step: 0.01}} value={scaleFactor.toFixed(2)} />
                         </div>
                     </div>
                 </div>
@@ -400,9 +425,9 @@
                     {#if allowPresetChange}
                         <div class="panel-row">
                             <span class="panel-label">{$_('uploads.outputPreset') || 'Preset'}:</span>
-                            <div class="preset-buttons">
+                            <div class="preset-buttons" data-testid="image-edit-preset-row">
                                 {#each presetOptions as opt}
-                                    <button type="button" class="preset-btn" class:active={currentPreset === opt.value} on:click={() => selectPreset(opt.value)}>
+                                    <button type="button" class="preset-btn" class:active={currentPreset === opt.value} disabled={!editReady} on:click={() => selectPreset(opt.value)}>
                                         {$_(opt.labelKey) || opt.value}
                                     </button>
                                 {/each}
@@ -413,9 +438,9 @@
                     {#if currentPreset === 'custom'}
                         <div class="panel-row">
                             <span class="panel-label">{$_('uploads.aspectRatio') || 'Ratio'}:</span>
-                            <div class="aspect-buttons">
+                            <div class="aspect-buttons" data-testid="image-edit-aspect-row">
                                 {#each aspectOptions as opt}
-                                    <button type="button" class="aspect-btn" class:active={currentAspect === opt.value} on:click={() => selectAspectRatio(opt.value)}>
+                                    <button type="button" class="aspect-btn" class:active={currentAspect === opt.value} disabled={!editReady} on:click={() => selectAspectRatio(opt.value)}>
                                         {opt.label}
                                     </button>
                                 {/each}
@@ -435,7 +460,7 @@
             <button class="btn btn-secondary" data-testid="image-edit-cancel" disabled={isUploading} on:click={requestClose} type="button">
                 {$_('common.cancel') || 'Cancel'}
             </button>
-            <button class="btn btn-primary" data-testid="image-edit-confirm" disabled={isUploading} on:click={handleUpload} type="button">
+            <button class="btn btn-primary" data-testid="image-edit-confirm" disabled={isUploading || !editReady} on:click={handleUpload} type="button">
                 {#if isUploading}
                     <Loader2 size={16} class="animate-spin" />
                     {$_('common.uploading') || 'Uploading...'}
@@ -672,6 +697,36 @@
     /* Cropper section with eye toggle on LEFT */
     .cropper-section {
         position: relative;
+    }
+
+    .cropper-guard {
+        position: absolute;
+        inset: 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 0.5rem;
+        background: rgb(255 255 255 / 0.55);
+        color: var(--color-libre-green, #16a34a);
+        cursor: progress;
+    }
+
+    :global(.dark) .cropper-guard {
+        background: rgb(15 23 42 / 0.55);
+    }
+
+    .filename-input:disabled,
+    .format-select:disabled,
+    .dim-input:disabled,
+    .scale-input:disabled,
+    .spin-btn:disabled,
+    .preset-btn:disabled,
+    .aspect-btn:disabled,
+    .ellipse-toggle:disabled,
+    .header-btn:disabled {
+        cursor: not-allowed;
+        opacity: 0.5;
     }
 
     .ellipse-toggle {

@@ -6,7 +6,11 @@ Click on any asset from the [Asset List](../index.md) to open its detail page. H
     <img class="gallery-img" data-category="assets" data-name="detail-chart" alt="Asset Detail Page" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-The detail page is organized into several features, each accessible from the toolbar:
+The detail page is organized into two tabs: **Overview** (all the features below) and **Risk & Scenarios**.
+
+!!! info "Beta"
+
+    The **Risk & Scenarios** tab belongs to the Risk Analysis subsystem, which is currently in **beta**. It is not covered by this documentation yet — the sections below describe the Overview tab.
 
 ---
 
@@ -18,7 +22,7 @@ The main view — a full ECharts-powered chart with zoom, pan, date range filter
 
 ### 📊 [Signals](signals.md)
 
-Overlay technical indicators (EMA, MACD, RSI, Bollinger Bands, Asset Comparison) on the chart. Each signal is computed in real-time from the price data and can be toggled independently.
+Overlay any of the **22 backend technical indicators** (trend, momentum, volatility, volume, and risk families), comparison series, and synthetic benchmark curves on the chart. Each signal is computed by the backend from the stored price history and can be configured and toggled independently.
 
 ### 📐 [Measures](measures.md)
 

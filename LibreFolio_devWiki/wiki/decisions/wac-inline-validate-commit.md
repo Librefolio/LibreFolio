@@ -75,5 +75,5 @@ After flush, all batch items exist in the DB session (not committed to disk yet)
 |------|------|
 | execute_batch (WAC computation) | `backend/app/services/transaction_service.py` |
 | WAC schemas | `backend/app/schemas/transactions.py` |
-| Frontend validate handler | `frontend/src/lib/components/transactions/TransactionBulkModal.svelte` |
-| WacPreviewSection (display) | `frontend/src/lib/components/transactions/WacPreviewSection.svelte` |
+| Frontend validate handler | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
+| WacPreviewSection (display) | `frontend/src/lib/components/transactions/wac/WacPreviewSection.svelte` |

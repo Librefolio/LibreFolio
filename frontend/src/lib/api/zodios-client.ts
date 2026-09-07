@@ -17,6 +17,7 @@ import {createApiClient} from './generated';
 import {goto} from '$app/navigation';
 import {browser} from '$app/environment';
 import {debug} from '$lib/debug';
+import {notifyPortfolioMutation} from '$lib/stores/portfolio/portfolioMutation';
 
 // =============================================================================
 // CONFIGURATION
@@ -119,7 +120,7 @@ axiosInstance.interceptors.request.use(
  */
 axiosInstance.interceptors.response.use(
     (response) => {
-        // Successful response - return as-is
+        notifyPortfolioMutation(response.config.method, response.config.url);
         return response;
     },
     (error: AxiosError) => {
@@ -206,4 +207,3 @@ export class ApiError extends Error {
 // =============================================================================
 
 export {axiosInstance};
-export default zodiosApi;

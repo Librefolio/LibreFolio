@@ -2,69 +2,65 @@
 applyTo: "frontend/src/lib/charts/signals/**"
 ---
 
-# Chart Signal Library
+# Chart Signal Architecture
 
-## Architecture
+## Technical Indicators: Backend Plugins
 
-All signals extend `ChartSignal` (abstract base in `ChartSignal.ts`) and are registered in `registry.ts`. The UI auto-discovers signals via `getRegisteredSignalTypes()`.
+Technical indicators are Python `SignalPlugin` implementations in
+`backend/app/services/signal_plugins/`. `SignalPluginRegistry` discovers them,
+the backend catalog describes their parameters and outputs, and `SignalService`
+calculates them.
 
-### Base Class
+Frontend code handles technical indicators generically:
 
-The abstract base class is `ChartSignal` in `frontend/src/lib/charts/signals/ChartSignal.ts`. Read that file for the full contract (static fields, abstract methods, `SignalParamDescriptor` interface, marker types, style types).
+- `catalogMapper.ts` and `schemaMapper.ts` map backend catalog metadata.
+- `requestBuilder.ts` creates backend requests.
+- `resultMapper.ts` and `backendRenderer.ts` map canonical backend results into chart series.
+- `backendTypes.ts` contains transport schemas and types.
 
-Key static fields: `signalType`, `displayName`, `icon`, `category`, `paramDescriptors`, `docsPath`.
-Key methods: `render()` (or `renderMulti()` for composite signals like MACD).
+Never add a TypeScript technical-indicator class or calculation. Indicator-specific
+math, parameters, warm-up, outputs, axes, levels, and regions belong to the backend
+plugin.
 
-### Registration
+## Frontend-Local Signals
 
-Signals are registered in `frontend/src/lib/charts/signals/registry.ts` — add an entry to `SIGNAL_REGISTRY` map. The UI auto-discovers via `getRegisteredSignalTypes()`.
+`ChartSignal` subclasses and `registry.ts` are only for frontend-local comparisons
+and synthetic benchmarks:
 
-## Signals
+| Category   | Type               | Class                   |
+| ---------- | ------------------ | ----------------------- |
+| Comparison | `fx-pair`          | `FxPairSignal`          |
+| Comparison | `asset-comparison` | `AssetComparisonSignal` |
+| Benchmark  | `linear`           | `LinearSignal`          |
+| Benchmark  | `compound`         | `CompoundSignal`        |
+| Benchmark  | `sine`             | `SineSignal`            |
 
-### Technical Indicators (`category: 'indicator'`)
+`getLocalSignalDefinitions()` supplies these definitions for merging with the backend
+catalog. `getRegisteredSignalTypes()`, `createSignal()`, and `signalFromConfig()` are
+local-only registry/factory APIs.
 
-| Signal | File | Type | Axis | Params |
-|--------|------|------|------|--------|
-| **EMA** | `EmaSignal.ts` | IIR 1st order | Primary | `period` (days) |
-| **RSI** | `RsiSignal.ts` | Momentum oscillator | Secondary (0-100) | `period` (days) |
-| **MACD** | `MacdSignal.ts` | Composite (3 lines) | Tertiary | `fastPeriod`, `slowPeriod`, `signalPeriod` |
-| **Bollinger** | `BollingerSignal.ts` | Confidence band | Primary | `period`, `multiplier` |
+`MeasureSignal` is separate. It is exported for `MeasurePanel`, but it is not in
+`SIGNAL_REGISTRY` or signal selectors.
 
-### Data Comparison (`category: 'comparison'`)
+## Adding a Technical Signal
 
-| Signal | File | Axis | Params |
-|--------|------|------|--------|
-| **FX Pair** | `FxPairSignal.ts` | Primary | `pairKey` (dynamic options from configured pairs) |
-| **Asset Comparison** | `AssetComparisonSignal.ts` | Primary | `assetId` (dynamic options from configured assets) |
+1. Follow `mkdocs_src/docs/developer/architecture/patterns/signal_plugin_guide.md`.
+2. Implement the Python plugin under `backend/app/services/signal_plugins/` using
+   the contract in `base.py`; shared planning/execution belongs in
+   `backend/app/services/signal_service.py`.
+3. Add backend tests for discovery, contract validation, computation, warm-up, and
+   output metadata.
+4. Add the plugin-declared frontend translation keys and MkDocs indicator docs when
+   applicable.
+5. Change frontend generic catalog/request/result/rendering code only when the
+   canonical backend contract itself expands. Never duplicate the calculation in
+   TypeScript.
 
-### Synthetic Benchmarks (`category: 'benchmark'`)
+## Adding a Local Comparison or Benchmark
 
-| Signal | File | Axis | Params |
-|--------|------|------|--------|
-| **Linear** | `LinearSignal.ts` | Primary | `rate` (%/yr) |
-| **Compound** | `CompoundSignal.ts` | Primary | `rate` (%/yr) |
-| **Sine** | `SineSignal.ts` | Primary | `amplitude`, `period` (test/demo) |
-
-### Measurement (`category: 'measure'`)
-
-| Signal | File | Axis | Params |
-|--------|------|------|--------|
-| **Measure** | `MeasureSignal.ts` | Primary | Two click points → Δabs, Δ%, days |
-
-## Design Principles
-
-- All signals compute in **O(N)** iteratively (no full-array passes)
-- `paramDescriptors` drive the UI: ChartSettingsModal renders controls dynamically
-- `dynamicOptionsKey` in params enables runtime-resolved dropdowns (e.g. configured FX pairs)
-- Colors are chosen to maximize perceptual hue distance from existing signals
-- MACD uses `renderMulti()` for composite output (MACD line + signal line + histogram)
-
-## Adding a New Signal
-
-1. Create `frontend/src/lib/charts/signals/MySignal.ts`
-2. Extend `ChartSignal` (read `ChartSignal.ts` for the full interface)
-3. Set static fields: `signalType`, `displayName`, `icon`, `category`, `paramDescriptors`
-4. Implement `render()` (or `renderMulti()` for composite signals)
-5. Add to `SIGNAL_REGISTRY` in `registry.ts`
-6. Done — UI auto-discovers via `getRegisteredSignalTypes()`
-
+1. Create a `ChartSignal` subclass with local metadata, parameter descriptors, and
+   rendering logic.
+2. Register its constructor in `SIGNAL_REGISTRY`.
+3. Add its local display/description keys to `LOCAL_SIGNAL_I18N_KEYS`.
+4. Export the class from `index.ts`.
+5. Add focused registry, serialization, and rendering tests.

@@ -1,7 +1,5 @@
 # ⏱️ Efecto Timing
 
-*[⬅️ Volver a la Descripción General de las Métricas de Rendimiento](../index.md)*
-
 ## 💡 ¿Qué es?
 
 El **Efecto Timing** mide cuánto influyó el momento y el importe de sus depósitos y retiradas (flujos de efectivo) en el rendimiento personal del inversor en comparación con el rendimiento de la estrategia subyacente, neutralizando el efecto de los flujos de efectivo externos.
@@ -24,11 +22,13 @@ Al comparar el [MWRR Acumulado](mwrr.md#cumulative-mwrr) (que incluye el momento
 - **Efecto Timing Negativo ($< 0$ pp):** Sus flujos de efectivo ocurrieron en momentos desfavorables (por ejemplo, depositando grandes sumas en el máximo del mercado justo antes de una corrección). Su rendimiento personal (MWRR) es inferior al rendimiento de la estrategia pura (TWRR).
 - **Efecto Timing Cercano a Cero ($\approx 0$ pp):** Sus flujos de efectivo tuvieron poco o ningún impacto en el rendimiento (por ejemplo, si realizó depósitos muy pequeños o si el mercado permaneció plano durante sus transacciones).
 
+Ambos lados usan el mismo flujo NAV del motor de cartera y el mismo modelo de flujos de la baseline de capital. Por tanto, los ajustes de capital en especie afectan de forma consistente a los límites del MWRR y del TWRR.
+
 ---
 
 ## 🔢 Ejemplos Numéricos
 
-### Ejemplo 1: Efecto Timing Positivo (Flujos Favorables)
+### 📈 1: Efecto Timing Positivo (Flujos Favorables)
 * **TWRR Acumulado (Rendimiento de la Estrategia):** $+20\%$
 * **MWRR Acumulado (Rendimiento del Inversor):** $+28\%$
 
@@ -38,7 +38,7 @@ $$
 
 * **Interpretación:** La estrategia de activos subyacentes generó un rendimiento del $+20\%$. Sin embargo, debido a que aportó una cantidad significativa de capital a la cartera antes de que el mercado subiera, su rendimiento personal ponderado por dinero aumentó al $+28\%$. El momento y el tamaño de sus aportaciones aportaron **$+8$ puntos porcentuales** de rendimiento adicional.
 
-### Ejemplo 2: Efecto Timing Negativo (Flujos Desfavorables)
+### 📉 2: Efecto Timing Negativo (Flujos Desfavorables)
 * **TWRR Acumulado (Rendimiento de la Estrategia):** $+20\%$
 * **MWRR Acumulado (Rendimiento del Inversor):** $+12\%$
 
@@ -52,12 +52,12 @@ $$
 
 ## ⚖️ Qué Captura y Qué No Captura
 
-### Qué Captura
+### 🎯 Captura
 - **Impacto del momento de depósitos/retiros:** Si aportó capital durante los mínimos del mercado (comprando barato) o máximos (comprando caro).
 - **Impacto del tamaño de los flujos:** Los flujos de efectivo más grandes tienen una mayor ponderación y un mayor impacto en el MWRR, lo que refleja el Efecto Timing.
 - **La "Brecha del Inversor" (Investor Gap):** la distancia entre el rendimiento de la estrategia y el rendimiento realmente obtenido por el inversor, debido al momento y dimensión de los flujos de efectivo.
 
-### Qué No Captura
+### 🚫 No Captura
 - **Beneficio monetario absoluto:** Puede existir un Efecto Timing positivo de $+5$ pp incluso si la cartera está en pérdidas netas (por ejemplo, si el TWRR es del $-20\%$ y el MWRR del $-15\%$). Use el [P&L del Periodo](period-pnl.md) para evaluar las ganancias monetarias.
 - **Riesgo y volatilidad:** No indica el perfil de riesgo ni la volatilidad de los activos.
 - **Impacto desagregado de impuestos/costes:** el Efecto Timing no desglosa impuestos y costes; los posibles costes e impuestos pueden mostrarse por separado en el P&L del periodo.
@@ -87,3 +87,4 @@ LibreFolio muestra el Efecto Timing en la tarjeta de **Rendimientos** del panel 
 - **[TWRR](twrr.md):** Mide el rendimiento de la estrategia o activos subyacentes, ignorando el momento de los flujos de efectivo del inversor.
 - **[MWRR](mwrr.md):** Mide el rendimiento del capital del inversor, teniendo en cuenta tanto el rendimiento de los activos como el momento de los flujos de efectivo.
 - **[P&L del Periodo](period-pnl.md):** Mide el beneficio o pérdida monetaria absoluta generada por la cartera dentro del periodo de tiempo seleccionado.
+- **[Descripción General de Métricas de Rendimiento](../index.md):** Todas las métricas de rendimiento de un vistazo.

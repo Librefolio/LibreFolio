@@ -1,7 +1,5 @@
 # 🔍 Posiciones y Análisis
 
-*[⬅️ Volver a la Descripción General del Panel de Control](index.md)*
-
 La pestaña **Posiciones** del panel de control le permite inspeccionar las posiciones abiertas, analizar el rendimiento y profundizar en los lotes fiscales coincidentes.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-positions-views" data-carousel-interval="6000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
@@ -15,32 +13,35 @@ La pestaña **Posiciones** del panel de control le permite inspeccionar las posi
 
 ## 🔍 Pestaña de Posiciones
 
-La pestaña **Posiciones** proporciona un desglose detallado de todos los instrumentos financieros que actualmente se mantienen en su cartera (Acciones, ETFs, Bonos, Criptomonedas, etc.).
+La pestaña **Posiciones** tiene dos modos semánticos: **Posiciones** y **Rendimiento**.
 
-La pestaña Posiciones le permite cambiar entre dos modos de métrica principales usando el selector de vista, cada uno enfocado en un aspecto diferente de sus posiciones:
+Usa el conmutador de vista para alternar entre ambos, y el de tabla/mapa para cambiar la presentación visual.
 
 #### 📋 Vista de Posiciones
 
-La vista de **Posiciones** se centra en la contabilidad, las cantidades y la valoración actual de los activos. Le ayuda a monitorear su exposición actual de la cartera y las métricas de referencia.
+La vista **Posiciones** muestra la instantánea de las posiciones abiertas. La tabla tiene 13 columnas:
 
-| Métrica | Descripción |
+| Columna | Descripción |
 |:---|:---|
-| **Cantidad** | Acciones, unidades o monedas actuales mantenidas en su cartera. |
-| **Precio de Mercado** | Precio del activo en vivo obtenido del proveedor de datos conectado. |
-| **Valor de Mercado** | Valor total a los precios actuales del mercado (\(\text{Precio} \times \text{Cantidad}\)). |
-| **Precio Medio Ponderado (PMP)** | El precio medio ponderado (PMP) pagado para adquirir la posición abierta actual. |
-| **Peso** | Participación proporcional de este activo en relación con el valor total de la cartera. |
+| **Activo** | Nombre del activo con el icono del tipo — haz clic para abrir la página de detalle del activo. |
+| **Δ1** | Variación del P&L no realizado respecto a ayer, manteniendo constante la cantidad de hoy. |
+| **Δ1%** | La misma variación diaria como porcentaje del valor de mercado de la posición de ayer. |
+| **P&L no realizado** | Ganancia/pérdida abierta: valor actual menos el coste residual. |
+| **P&L %** | P&L no realizado como porcentaje del coste residual. |
+| **Anualizado** | Rendimiento neto anualizado (CAGR) de los lotes aún abiertos, desde la primera transacción hasta hoy — para comparar posiciones mantenidas durante periodos distintos. |
+| **Valor** | Valor total a precios de mercado actuales (\(\text{Precio} \times \text{Cantidad}\)). |
+| **Peso** | Cuota proporcional de esta posición respecto al valor total de la cartera. |
+| **Cant.** | Acciones, unidades o monedas actualmente mantenidas. |
+| **Brókers** | Cuenta(s) de bróker que mantienen la posición. |
+| **Precio** *(oculta por defecto)* | Precio actual del activo del proveedor conectado. |
+| **Coste Medio** *(oculta por defecto)* | Coste medio por unidad de la posición actualmente abierta (Precio Medio de Compra). |
+| **Lote abierto más antiguo** *(oculta por defecto)* | Fecha de apertura del lote FIFO más antiguo aún abierto para esta posición. |
+
+Usa el **icono de ojo** en la barra de herramientas de la tabla para mostrar u ocultar columnas — tus elecciones se recuerdan entre sesiones.
 
 #### 📈 Vista de Rendimiento
 
-La vista de **Rendimiento** se centra en los rendimientos absolutos y relativos. Le ayuda a analizar la rentabilidad de sus posiciones abiertas, teniendo en cuenta las transacciones históricas y los ingresos.
-
-| Métrica | Descripción |
-|:---|:---|
-| **Valor Total** | Valor actual de las posiciones (coincide con el Valor de Mercado). |
-| **PyG No Realizado** | Ganancia o pérdida en papel calculada como \(\text{Valor de Mercado} - \text{Valor Contable}\). |
-| **ROI %** | Tasa de rendimiento relativa a la base de costo de la posición. |
-| **PyG Total** | Rendimientos absolutos acumulados (incluye ventas cerradas pasadas y dividendos). |
+La vista **Rendimiento** se carga bajo demanda y muestra juntas las posiciones abiertas y cerradas. En la tabla/mapa, el **Estado** es filtrable dentro del componente, no como conmutador de primer nivel.
 
 #### 🗺️ Estilo Visual: Tabla vs. Mapa
 
@@ -136,3 +137,7 @@ Elija **Ver detalle del lote** en las acciones de la fila de la tabla para abrir
 La pestaña **Transacciones** en el Panel de Control muestra una lista completa y paginada de todas las operaciones registradas en el ámbito de la cartera activa (órdenes de compra/venta, pagos de dividendos, depósitos en efectivo, transferencias, etc.).
 
 Para una explicación detallada de la lista de transacciones, los filtros y cómo leer los detalles de la transacción de solo lectura, consulte la página dedicada **[Descripción General de Transacciones](../transactions/index.md)**.
+
+---
+
+*[⬅️ Volver a la Descripción General del Panel de Control](index.md)*

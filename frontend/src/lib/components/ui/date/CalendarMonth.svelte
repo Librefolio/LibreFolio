@@ -7,10 +7,12 @@
   Used by: DateRangePicker (×2), SingleDatePicker (×1).
 -->
 <script lang="ts">
+    import {todayIso} from '$lib/utils/dateOnly';
     import {CalendarCheck, ChevronLeft, ChevronRight} from 'lucide-svelte';
     import {_} from '$lib/i18n';
     import {SimpleSelect} from '$lib/components/ui/select';
 
+    import {numericArrows} from '$lib/actions/numericArrows';
     // =========================================================================
     // Types
     // =========================================================================
@@ -52,17 +54,13 @@
     // Helpers
     // =========================================================================
 
-    function todayISO(): string {
-        return new Date().toISOString().slice(0, 10);
-    }
-
     function formatISO(y: number, m: number, d: number): string {
         return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     }
 
     function isFuture(iso: string): boolean {
         if (allowFuture) return false;
-        return iso > todayISO();
+        return iso > todayIso();
     }
 
     // SimpleSelect options (derived)
@@ -129,11 +127,32 @@
     }
 
     function isToday(iso: string): boolean {
-        return iso === todayISO();
+        return iso === todayIso();
     }
 
     function isDisabled(iso: string): boolean {
         return disabledDates?.has(iso) ?? false;
+    }
+
+    /**
+     * The single semantic state of a day cell, published as `data-state`.
+     *
+     * `getDayClasses` below encodes the same information, but as Tailwind classes:
+     * unusable as a test selector (they change with every restyle) and invisible to
+     * anything but a human eye. Publishing the state separately is what lets a test
+     * ask "is this day the range start?" instead of matching on `bg-libre-green`.
+     *
+     * Precedence mirrors the highlight block in `getDayClasses` on purpose — the two
+     * must agree, or the DOM would claim one thing and show another.
+     */
+    function getDayState(iso: string, inMonth: boolean): string {
+        if (isSelected(iso)) return 'selected';
+        if (isRangeStart(iso)) return 'range-start';
+        if (isRangeEnd(iso)) return 'range-end';
+        if (isInRange(iso)) return 'in-range';
+        if (iso === highlights.pending) return 'pending';
+        if (isToday(iso)) return 'today';
+        return inMonth ? 'normal' : 'out-of-month';
     }
 
     function getDayClasses(iso: string, inMonth: boolean): string {
@@ -182,16 +201,18 @@
     }
 </script>
 
-<div class="min-w-[240px]">
+<div class="min-w-[240px]" data-testid="calendar-month" data-year={year} data-month={month}>
     <!-- Month/Year navigation header -->
     <div class="flex items-center justify-between mb-2">
-        <button class="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-gray-400" onclick={onPrevMonth} type="button">
+        <button data-testid="calendar-prev-month" class="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-gray-400" onclick={onPrevMonth} type="button">
             <ChevronLeft size={16} />
         </button>
         <div class="flex items-center gap-1">
             <SimpleSelect class="inline-block w-auto" compact dropdownPosition="auto" onchange={(v) => onSetMonth(parseInt(v))} options={monthSelectOptions} showChevron={false} value={String(month)} />
             <input
                 type="number"
+                use:numericArrows
+                data-testid="calendar-year-input"
                 value={year}
                 min="1900"
                 max="2200"
@@ -204,11 +225,11 @@
         </div>
         <div class="flex items-center gap-0.5">
             {#if onGoToToday}
-                <button type="button" class="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 dark:text-gray-500" title={$_('datePicker.today')} onclick={onGoToToday}>
+                <button data-testid="calendar-go-today" type="button" class="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 dark:text-gray-500" title={$_('datePicker.today')} onclick={onGoToToday}>
                     <CalendarCheck size={14} />
                 </button>
             {/if}
-            <button class="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-gray-400" onclick={onNextMonth} type="button">
+            <button data-testid="calendar-next-month" class="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-gray-400" onclick={onNextMonth} type="button">
                 <ChevronRight size={16} />
             </button>
         </div>
@@ -237,6 +258,10 @@
                         >
                             <button
                                 type="button"
+                                data-testid="calendar-day"
+                                data-iso={cell.iso}
+                                data-state={getDayState(cell.iso, cell.inMonth)}
+                                data-in-month={cell.inMonth ? 'true' : 'false'}
                                 class="w-full aspect-square text-xs leading-none rounded-md transition-colors {getDayClasses(cell.iso, cell.inMonth)}"
                                 disabled={future || disabled}
                                 onclick={() => {

@@ -20,6 +20,8 @@
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {attachChartReady} from '$lib/utils/chartReady';
+    import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS, namedPoint} from '$lib/components/charts/echartsAnimationConfig';
     import {_, locale} from '$lib/i18n';
     import ResolutionBadge from '$lib/components/charts/ResolutionBadge.svelte';
@@ -57,8 +59,10 @@
     let lastRenderedMode: 'eur' | 'pct' | null = null;
     let lastRenderedDark: boolean | null = null;
     let lastHistoryRef: PortfolioHistoryPoint[] | null = null;
-    let resizeObserver: ResizeObserver | null = null;
-    let observedContainer: HTMLDivElement | undefined = undefined;
+    const resizeWatcher = createResizeWatcher(() => {
+        chartInstance?.resize();
+        scheduleResolutionSync();
+    });
     let darkModeObserver: MutationObserver | null = null;
     let visibleStartDate: string | null = null;
     let visibleEndDate: string | null = null;
@@ -579,7 +583,7 @@
             dataZoomCleanup?.();
             tooltipCleanup?.();
             darkModeObserver?.disconnect();
-            resizeObserver?.disconnect();
+            resizeWatcher.disconnect();
             dataZoomTouchPanHandle?.dispose();
             dataZoomTouchPanHandle = null;
             chartInstance?.dispose();
@@ -612,16 +616,7 @@
     // =========================================================================
 
     function setupResizeObserver() {
-        if (!chartContainer) return;
-        // If already observing the same element, nothing to do
-        if (resizeObserver && observedContainer === chartContainer) return;
-        resizeObserver?.disconnect();
-        resizeObserver = new ResizeObserver(() => {
-            chartInstance?.resize();
-            scheduleResolutionSync();
-        });
-        resizeObserver.observe(chartContainer);
-        observedContainer = chartContainer;
+        resizeWatcher.observe(chartContainer);
     }
 
     function renderChart() {
@@ -639,6 +634,7 @@
 
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+            attachChartReady(chartInstance, chartContainer, 'growth');
             needsInitialLayoutStabilityPass = true;
             // Setup mobile tooltip auto-hide
             tooltipCleanup?.();

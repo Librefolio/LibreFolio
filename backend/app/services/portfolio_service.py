@@ -16,12 +16,11 @@ from __future__ import annotations
 
 import asyncio
 import bisect
-from collections import defaultdict
-from dataclasses import dataclass
+from collections import defaultdict, deque
 from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
-from typing import Any, NamedTuple, Optional
+from typing import Any, Optional
 
 import structlog
 from sqlalchemy import func, select
@@ -37,6 +36,7 @@ from backend.app.db.models import (
     PriceHistory,
     Transaction,
     TransactionType,
+    UserRole,
 )
 from backend.app.schemas.common import Currency, FxBackwardFillInfo
 from backend.app.schemas.portfolio import (
@@ -62,7 +62,7 @@ from backend.app.schemas.portfolio import (
 )
 from backend.app.schemas.wac import WACMissingPairInfo, WACPreviewResultItem, WACQualifyingTX
 from backend.app.services.fx import convert_bulk
-from backend.app.services.settings_service import get_global_setting
+from backend.app.services.settings_service import get_effective_base_currency
 from backend.app.utils.cache_utils import get_ttl_cache
 from backend.app.utils.financial.roi_utils import (
     CashFlowInput,
@@ -74,6 +74,7 @@ from backend.app.utils.financial.roi_utils import (
     calculate_simple_roi_series,
     calculate_twrr,
     calculate_twrr_series,
+    cumulative_to_annualized,
 )
 from backend.app.utils.financial.valuation_utils import compute_holding_value
 from backend.app.utils.financial.wac_utils import WACInputTX, compute_wac_from_txlist, determine_target_currency
@@ -91,7 +92,7 @@ _wac_cache = get_ttl_cache("portfolio_wac", maxsize=200, ttl=3600)  # 1h
 # =============================================================================
 
 
-async def compute_wac_iterative(
+async def compute_wac_iterative(  # noqa: C901 — TODO(P2-refactor): staged WAC prep pipeline; extract stage helpers
     session: AsyncSession,
     broker_id: int,
     asset_id: int,
@@ -343,332 +344,6 @@ async def compute_wac_iterative(
     return result
 
 
-async def compute_wac_iterative_multi_broker(
-    session: AsyncSession,
-    broker_ids: list[int],
-    asset_id: int,
-    as_of_date: date_type,
-    asset_currency: str,
-    excluded_tx_ids: list[int] | None = None,
-    target_currency_override: str | None = None,
-) -> WACPreviewResultItem:
-    """Compute unified WAC (PMC) for one asset across multiple brokers.
-
-    Preparation layer: queries DB, handles FX conversion,
-    then delegates to compute_wac_from_txlist() for pure math.
-
-    Transactions from all brokers are treated as one unified position for WAC
-    purposes. This is valid for WAC because it depends on cumulative quantity
-    and cost, but it is NOT equivalent to FIFO lot tracking, which remains
-    strictly per-broker elsewhere in codebase.
-    """
-    excluded = set(excluded_tx_ids or [])
-
-    # 1. Query ALL transactions for this (broker set, asset) with date <= as_of_date and qty != 0
-    stmt = select(Transaction).where(
-        Transaction.broker_id.in_(broker_ids),
-        Transaction.asset_id == asset_id,
-        Transaction.date <= as_of_date,
-        Transaction.quantity.is_not(None),
-        Transaction.quantity != 0,
-    )
-    db_rows = list((await session.execute(stmt)).scalars().all())
-
-    # 1b. Identify which rows are ADJUSTMENT linked to a SPLIT AssetEvent — these
-    # bypass normal add/reduce math in compute_wac_from_txlist (rescale instead).
-    split_event_row_ids = {row.id for row in db_rows if row.asset_event_id is not None}
-    split_linked_row_ids: set[int] = set()
-    if split_event_row_ids:
-        split_stmt = select(Transaction.id).join(AssetEvent, Transaction.asset_event_id == AssetEvent.id).where(Transaction.id.in_(split_event_row_ids)).where(AssetEvent.type == AssetEventType.SPLIT)
-        split_linked_row_ids = set((await session.execute(split_stmt)).scalars().all())
-
-    # WAC cache check: fingerprint from transaction IDs + updated_at
-    import hashlib  # noqa: PLC0415
-
-    wac_h = hashlib.md5(usedforsecurity=False)
-    for row in db_rows:
-        wac_h.update(f"{row.id}:{row.updated_at.isoformat()}".encode())
-    wac_h.update(str(tuple(sorted(split_linked_row_ids))).encode())
-    wac_fp = wac_h.hexdigest()
-    excluded_key = tuple(sorted(excluded)) if excluded else ()
-    broker_ids_key = tuple(sorted(broker_ids))
-    wac_cache_key = (broker_ids_key, asset_id, as_of_date.isoformat(), asset_currency, target_currency_override, excluded_key, wac_fp)
-
-    cached_wac, wac_hit = _wac_cache.get(wac_cache_key)
-    if wac_hit:
-        return cached_wac
-
-    # 2. Build unified row tuples from DB rows (minus excluded)
-    # Tuple: (tx_id, type_str, date, quantity, amount, currency, cbo_amount, cbo_ccy, is_pending, cbm, is_split_linked)
-    unified: list[tuple] = []
-
-    for row in db_rows:
-        if row.id in excluded:
-            continue
-        unified.append(
-            (
-                row.id,
-                row.type.value if hasattr(row.type, "value") else str(row.type),
-                row.date,
-                row.quantity,
-                row.amount,
-                row.currency,
-                row.cost_basis_override,
-                row.cost_basis_currency,
-                False,
-                None,
-                row.id in split_linked_row_ids,
-            )
-        )
-
-    if not unified:
-        return WACPreviewResultItem(
-            wac=Currency(code=asset_currency, amount=Decimal("0")),
-            wac_qualifying_txs=[],
-            wac_missing_pairs=[],
-        )
-
-    # 3. Build WACInputTX list and determine target_currency
-    #    First pass: determine currencies for target_currency selection
-    pre_txs: list[WACInputTX] = []
-    for tid, ttype, dt, qty, _amount, ccy, _cbo_amt, cbo_ccy, is_pend, _cbm, is_split in unified:
-        if qty > 0:
-            orig_ccy = ccy if ttype == "BUY" else (cbo_ccy or asset_currency)
-        else:
-            orig_ccy = ccy or asset_currency
-        pre_txs.append(
-            WACInputTX(
-                tx_id=tid,
-                type=ttype,
-                date=dt,
-                quantity=qty,
-                unit_cost_converted=None,
-                original_currency=orig_ccy,
-                is_pending=is_pend,
-                is_split_linked=is_split,
-            )
-        )
-
-    target_currency = target_currency_override or determine_target_currency(pre_txs, asset_currency)
-
-    # 4. FX conversion for acquisitions with different currency
-    fx_requests: list[tuple[int, Currency, str, date_type]] = []  # (idx, cost_ccy, target, date)
-
-    for i, (_tid, ttype, dt, qty, amount, ccy, cbo_amt, cbo_ccy, _is_pend, _cbm, is_split) in enumerate(unified):
-        if is_split:
-            continue  # split rescale never needs FX-converted unit cost
-        if qty <= 0:
-            continue
-        if ttype == "BUY":
-            tx_ccy = ccy or asset_currency
-            if tx_ccy != target_currency and amount:
-                cost = abs(amount)
-                fx_requests.append((i, Currency(code=tx_ccy, amount=cost), target_currency, dt))
-        elif cbo_amt is not None:
-            tx_ccy = cbo_ccy or asset_currency
-            if tx_ccy != target_currency:
-                cost = qty * cbo_amt
-                fx_requests.append((i, Currency(code=tx_ccy, amount=cost), target_currency, dt))
-
-    fx_converted: dict[int, Decimal] = {}
-    fx_staleness: dict[int, FxBackwardFillInfo] = {}
-    fx_rates: dict[int, Decimal] = {}  # unified_idx → derived FX rate
-    missing_pair_dates: dict[str, list[date_type]] = {}
-
-    if fx_requests:
-        bulk_input = [(amt, to_ccy, dt) for _, amt, to_ccy, dt in fx_requests]
-        fx_results, _fx_errors = await convert_bulk(session, bulk_input, raise_on_error=False)
-        for j, (unified_idx, amt_ccy, _to_ccy, _dt) in enumerate(fx_requests):
-            result = fx_results[j] if j < len(fx_results) else None
-            if result is None:
-                pair_key = f"{amt_ccy.code}/{_to_ccy}"
-                missing_pair_dates.setdefault(pair_key, []).append(_dt)
-            else:
-                converted, rate_date, _bf = result
-                fx_converted[unified_idx] = converted.amount
-                # Derive FX rate from conversion (linear)
-                if amt_ccy.amount and amt_ccy.amount != 0:
-                    fx_rates[unified_idx] = converted.amount / amt_ccy.amount
-                # Track staleness info for qualifying TX enrichment
-                tx_date = unified[unified_idx][2]  # date is at index 2
-                stale_days = (tx_date - rate_date).days if rate_date < tx_date else 0
-                fx_staleness[unified_idx] = FxBackwardFillInfo(fx_rate_date=rate_date, fx_days_back=stale_days)
-
-    if missing_pair_dates:
-        missing_pairs_out = [WACMissingPairInfo(pair=k, dates=sorted(set(v))) for k, v in missing_pair_dates.items()]
-        return WACPreviewResultItem(wac=None, wac_qualifying_txs=[], wac_missing_pairs=missing_pairs_out)
-
-    # 5. Build final WACInputTX list with converted costs
-    input_txs: list[WACInputTX] = []
-    # Track original unit costs (before FX) keyed by unified_idx
-    original_unit_costs: dict[int, tuple[Decimal, str]] = {}  # idx → (unit_cost, currency)
-    for i, (tid, ttype, dt, qty, amount, ccy, cbo_amt, cbo_ccy, is_pend, cbm, is_split) in enumerate(unified):
-        unit_cost: Decimal | None = None
-        orig_ccy = ccy or asset_currency
-
-        if is_split:
-            # Split/reverse split rescale: unit_cost_converted is irrelevant,
-            # compute_wac_from_txlist bypasses it entirely for is_split_linked rows.
-            orig_ccy = asset_currency
-        elif qty > 0:
-            if ttype == "BUY":
-                if i in fx_converted:
-                    unit_cost = fx_converted[i] / qty
-                    # Original unit cost before FX
-                    original_unit_costs[i] = (abs(amount) / qty if amount else Decimal("0"), ccy or asset_currency)
-                elif amount:
-                    unit_cost = abs(amount) / qty
-                else:
-                    unit_cost = Decimal("0")
-                orig_ccy = ccy or asset_currency
-            elif cbo_amt is not None:
-                if i in fx_converted:
-                    unit_cost = fx_converted[i] / qty
-                    # Original unit cost before FX
-                    original_unit_costs[i] = (cbo_amt, cbo_ccy or asset_currency)
-                else:
-                    unit_cost = cbo_amt
-                orig_ccy = cbo_ccy or asset_currency
-            else:
-                unit_cost = None  # will be treated as zero cost (or add_at_wac if cbm == "auto")
-                orig_ccy = asset_currency
-        # For reductions, unit_cost stays None — compute_wac_from_txlist uses current WAC
-
-        input_txs.append(
-            WACInputTX(
-                tx_id=tid,
-                type=ttype,
-                date=dt,
-                quantity=qty,
-                unit_cost_converted=unit_cost,
-                original_currency=orig_ccy,
-                is_pending=is_pend,
-                cost_basis_mode=cbm,
-                is_split_linked=is_split,
-            )
-        )
-
-    # 6. Delegate to pure math function
-    calc_result = compute_wac_from_txlist(input_txs, target_currency)
-
-    # 7. Convert result to schema
-    # Build tx_id → fx_staleness lookup for qualifying TX enrichment
-    tx_fx_info: dict[int, FxBackwardFillInfo] = {}
-    tx_original_costs: dict[int, tuple[Decimal, str]] = {}  # tx_id → (original_unit_cost, original_ccy)
-    tx_fx_rates: dict[int, Decimal] = {}  # tx_id → fx_rate
-    for idx, info in fx_staleness.items():
-        tx_id = unified[idx][0]
-        tx_fx_info[tx_id] = info
-    for idx, (orig_cost, orig_ccy) in original_unit_costs.items():
-        tx_id = unified[idx][0]
-        tx_original_costs[tx_id] = (orig_cost, orig_ccy)
-    for idx, rate in fx_rates.items():
-        tx_id = unified[idx][0]
-        tx_fx_rates[tx_id] = rate
-
-    qualifying_txs = [
-        WACQualifyingTX(
-            tx_id=q.tx_id,
-            type=q.type,
-            date=q.date,
-            quantity=q.quantity,
-            unit_cost=q.unit_cost,
-            currency=q.currency,
-            effect=q.effect,
-            running_wac=q.running_wac,
-            fx_info=tx_fx_info.get(q.tx_id) if q.tx_id is not None else None,
-            original_unit_cost=tx_original_costs[q.tx_id][0] if q.tx_id is not None and q.tx_id in tx_original_costs else None,
-            original_currency=tx_original_costs[q.tx_id][1] if q.tx_id is not None and q.tx_id in tx_original_costs else None,
-            fx_rate_used=tx_fx_rates.get(q.tx_id) if q.tx_id is not None else None,
-        )
-        for q in calc_result.qualifying
-    ]
-
-    result = WACPreviewResultItem(
-        wac=Currency(code=target_currency, amount=calc_result.wac_amount) if calc_result.pool_qty >= 0 else None,
-        wac_qualifying_txs=qualifying_txs,
-        wac_missing_pairs=[],
-    )
-
-    # Store in WAC cache
-    _wac_cache.set(wac_cache_key, result)
-
-    return result
-
-
-# =============================================================================
-# HISTORY SERIES — Pure function (no I/O, fully testable)
-# =============================================================================
-
-
-class _HistoryTxRow(NamedTuple):
-    """Pre-processed transaction row ready for history series computation.
-
-    The async layer (get_history) is responsible for:
-    - Querying the DB
-    - Converting amounts to base currency
-    - Applying share_percentage per broker
-
-    This NamedTuple represents a single already-converted row.
-    """
-
-    date: date_type
-    type: str
-    amount: Decimal  # signed amount, already converted to base currency
-    share: Decimal  # broker ownership fraction (0.0-1.0), applied during aggregation
-
-
-class _HistoryQtyRow(NamedTuple):
-    """Quantity delta for a single BUY or SELL transaction.
-
-    Parallel to _HistoryTxRow but carries per-asset quantity info so that
-    get_history() can compute mark-to-market holdings value.
-    qty_delta is share-adjusted and signed: positive for BUY, negative for SELL.
-    """
-
-    date: date_type
-    asset_id: int
-    qty_delta: Decimal  # share-adjusted signed quantity change
-
-
-@dataclass
-class _HistoryCalcPoint:
-    """Mutable internal history point for backend calculations before API serialization."""
-
-    date: date_type
-    cash_value: Decimal
-    market_value: Decimal
-    nav_value: Decimal
-    twrr: Decimal | None = None
-    mwrr: Decimal | None = None
-    roi: Decimal | None = None
-
-
-# ---------------------------------------------------------------------------
-# Mark-to-market helpers (pure, no I/O)
-# ---------------------------------------------------------------------------
-
-
-def _price_on_date(
-    sorted_prices: list[tuple[date_type, Decimal, str]],
-    query_date: date_type,
-) -> tuple[Decimal, str] | None:
-    """Return the latest (close, currency) with date <= query_date using backward fill.
-
-    sorted_prices must be sorted ascending by date[0].
-    Returns None if no price exists at or before query_date.
-    """
-    if not sorted_prices:
-        return None
-    # bisect_right gives insertion point after all dates == query_date
-    dates = [p[0] for p in sorted_prices]
-    idx = bisect.bisect_right(dates, query_date) - 1
-    if idx < 0:
-        return None
-    _, close, ccy = sorted_prices[idx]
-    return close, ccy
-
-
 def _daily_state_as_of(daily_states: list[Any], as_of: date_type) -> Any | None:
     """Return the last daily state with date <= as_of using backward fill.
 
@@ -687,60 +362,6 @@ def _daily_state_as_of(daily_states: list[Any], as_of: date_type) -> Any | None:
     return daily_states[idx]
 
 
-def _build_history_series(
-    transactions: list[_HistoryTxRow],
-    date_to: date_type | None = None,
-) -> list[_HistoryCalcPoint]:
-    """Build a dense daily cash/NAV baseline series from pre-processed transaction rows.
-
-    Pure function — no I/O, no DB, no async. Deterministic given the same input.
-
-    Rules:
-    - Cash follows the signed transaction ledger exactly.
-    - One output point per calendar day from first transaction to `date_to` (or the
-      last transaction date if `date_to` is omitted).
-    - `market_value`/`nav_value` are temporary placeholders at this stage and
-      are patched later by the mark-to-market layer in `get_history()`.
-
-    Args:
-        transactions: List of _HistoryTxRow, may be in any order (will be sorted).
-        date_to: Optional inclusive end date for dense expansion.
-
-    Returns:
-        List of _HistoryCalcPoint, one per calendar day, sorted ascending.
-    """
-    if not transactions:
-        return []
-
-    cash_delta_by_date: dict[date_type, Decimal] = defaultdict(Decimal)
-
-    for row in sorted(transactions, key=lambda r: r.date):
-        cash_delta_by_date[row.date] += row.amount * row.share
-
-    sorted_rows = sorted(transactions, key=lambda r: r.date)
-    start_date = sorted_rows[0].date
-    final_date = date_to or sorted_rows[-1].date
-    if final_date < start_date:
-        return []
-
-    history: list[_HistoryCalcPoint] = []
-    cumulative_cash = Decimal("0")
-    current_date = start_date
-    while current_date <= final_date:
-        cumulative_cash += cash_delta_by_date.get(current_date, Decimal("0"))
-        history.append(
-            _HistoryCalcPoint(
-                date=current_date,
-                cash_value=cumulative_cash,
-                market_value=Decimal("0"),
-                nav_value=cumulative_cash,
-            )
-        )
-        current_date += timedelta(days=1)
-
-    return history
-
-
 # =============================================================================
 # PORTFOLIO SERVICE — Orchestrator
 # =============================================================================
@@ -749,6 +370,39 @@ _DEPOSIT_TYPES = {TransactionType.DEPOSIT}
 _WITHDRAWAL_TYPES = {TransactionType.WITHDRAWAL}
 _CASH_FLOW_TYPES = _DEPOSIT_TYPES | _WITHDRAWAL_TYPES
 _HOLDING_TYPES = {TransactionType.BUY, TransactionType.SELL}
+# Transaction types that open or consume quantity in a FIFO lot stream (used to derive the
+# oldest still-open lot's opening date per position). ADJUSTMENT/TRANSFER are signed: a
+# positive leg opens a lot, a negative leg consumes oldest-first (per-broker view: a
+# transfer-in opens a lot dated at the receiving broker's transfer date).
+_LOT_AFFECTING_TYPES = {TransactionType.BUY, TransactionType.SELL, TransactionType.ADJUSTMENT, TransactionType.TRANSFER}
+
+
+def _oldest_open_lot_date(txns: list[Transaction]) -> Optional[date_type]:
+    """Opening date of the oldest FIFO lot still open, from one (broker, asset) holding stream.
+
+    Opens (add a lot): positive-quantity BUY / ADJUSTMENT / TRANSFER.
+    Closes (consume oldest-first): negative-quantity SELL / ADJUSTMENT / TRANSFER.
+    Returns None when no lot remains open (fully closed) or the stream is empty. This is the
+    FIFO-exact opening date, which differs from the first-ever position date once partial sells
+    have fully consumed the earliest lots.
+    """
+    open_lots: deque[tuple[date_type, Decimal]] = deque()
+    for tx in sorted(txns, key=lambda t: (t.date, t.id or 0)):
+        qty = tx.quantity or Decimal("0")
+        if qty > 0:
+            open_lots.append((tx.date, qty))
+        elif qty < 0:
+            remaining = -qty
+            while remaining > 0 and open_lots:
+                lot_date, lot_qty = open_lots[0]
+                if lot_qty > remaining:
+                    open_lots[0] = (lot_date, lot_qty - remaining)
+                    remaining = Decimal("0")
+                else:
+                    remaining -= lot_qty
+                    open_lots.popleft()
+    return open_lots[0][0] if open_lots else None
+
 
 # Some instruments (e.g. CROWDFUND real-estate loans redeemed via periodic partial
 # buybacks) accrue a tiny non-zero quantity residual even after the position is
@@ -759,6 +413,34 @@ _HOLDING_TYPES = {TransactionType.BUY, TransactionType.SELL}
 # is not Decimal arithmetic error — it's an artifact of the recorded transaction
 # quantities themselves — so treat anything at or below this threshold as closed.
 _QUANTITY_DUST_THRESHOLD = Decimal("0.00001")
+
+
+def _closed_position_window(txns: list[Transaction]) -> tuple[Optional[date_type], Optional[date_type]]:
+    """Realized flight time of a fully-closed holding stream: (oldest_open, last_close).
+
+    - oldest_open: date the first lot was ever opened (first positive-quantity
+      BUY / ADJUSTMENT / TRANSFER).
+    - last_close: date the running quantity last dropped to (dust-)zero, i.e. when
+      the final open lot was consumed. CROWDFUND-style dust residuals (see
+      ``_QUANTITY_DUST_THRESHOLD``) count as closed.
+
+    Returns ``(open_date, None)`` if the stream never fully closes and
+    ``(None, None)`` if it never opens. Needed because a fully-closed position has
+    no still-open lot, so ``_oldest_open_lot_date`` is ``None`` and there is no end
+    cost basis — leaving the generic annualized path without a window or a base.
+    """
+    open_date: Optional[date_type] = None
+    last_close: Optional[date_type] = None
+    running = Decimal("0")
+    for tx in sorted(txns, key=lambda t: (t.date, t.id or 0)):
+        qty = tx.quantity or Decimal("0")
+        prev = running
+        running += qty
+        if qty > 0 and open_date is None:
+            open_date = tx.date
+        if qty < 0 and prev > _QUANTITY_DUST_THRESHOLD and running <= _QUANTITY_DUST_THRESHOLD:
+            last_close = tx.date
+    return open_date, last_close
 
 
 class PortfolioService:
@@ -779,10 +461,9 @@ class PortfolioService:
     # Private helpers
     # ------------------------------------------------------------------
 
-    async def _get_base_currency(self) -> str:
-        """Return the global base currency (default: EUR)."""
-        setting = await get_global_setting("base_currency", self.db)
-        return setting.value if setting else "EUR"
+    async def _get_base_currency(self, user_id: int) -> str:
+        """Effective base currency: per-user setting, global default, EUR (P0-1)."""
+        return await get_effective_base_currency(self.db, user_id)
 
     async def _get_user_broker_access(
         self,
@@ -832,35 +513,6 @@ class PortfolioService:
             return row.close, row.currency, row.date
         return None
 
-    async def _bulk_load_asset_prices(
-        self,
-        asset_ids: set[int],
-        date_from: date_type,
-        date_to: date_type,
-    ) -> dict[int, list[tuple[date_type, Decimal, str]]]:
-        """Bulk-load PriceHistory for a set of assets over a date range.
-
-        Returns {asset_id: [(date, close, currency)]} with each list sorted ascending.
-        A single SQL query for all assets — avoids N separate round-trips.
-        """
-        if not asset_ids:
-            return {}
-        stmt = (
-            select(PriceHistory.asset_id, PriceHistory.date, PriceHistory.close, PriceHistory.currency)
-            .where(
-                PriceHistory.asset_id.in_(asset_ids),
-                PriceHistory.close.is_not(None),
-                PriceHistory.date >= date_from,
-                PriceHistory.date <= date_to,
-            )
-            .order_by(PriceHistory.asset_id, PriceHistory.date)
-        )
-        rows = (await self.db.execute(stmt)).all()
-        result: dict[int, list[tuple[date_type, Decimal, str]]] = defaultdict(list)
-        for r in rows:
-            result[r.asset_id].append((r.date, r.close, r.currency))
-        return dict(result)
-
     async def _get_asset(self, asset_id: int) -> Asset | None:
         return await self.db.get(Asset, asset_id)
 
@@ -870,13 +522,6 @@ class PortfolioService:
         stmt = select(Asset).where(Asset.id.in_(asset_ids))
         result = await self.db.execute(stmt)
         return {asset.id: asset for asset in result.scalars().all()}
-
-    async def _get_quote_base_map(self, asset_ids: set[int]) -> dict[int, int | None]:
-        if not asset_ids:
-            return {}
-        stmt = select(Asset.id, Asset.quote_base_quantity).where(Asset.id.in_(asset_ids))
-        rows = (await self.db.execute(stmt)).all()
-        return dict(rows)
 
     async def _convert_to_base(
         self,
@@ -1005,7 +650,7 @@ class PortfolioService:
     # Public API
     # ------------------------------------------------------------------
 
-    async def get_summary(
+    async def get_summary(  # noqa: C901 — TODO(P2-refactor): nested broker/tx/asset accumulation; extract per-position builder
         self,
         user_id: int,
         broker_ids: list[int] | None = None,
@@ -1031,7 +676,7 @@ class PortfolioService:
 
         today = date_type.today()
         valuation_date = date_to or today
-        base_currency = target_currency_override or await self._get_base_currency()
+        base_currency = target_currency_override or await self._get_base_currency(user_id)
 
         # ── 1. Run engine for aggregate values + performance ──
         if _precomputed_engine_result is not None:
@@ -1073,17 +718,25 @@ class PortfolioService:
         broker_market_values: dict[int, Decimal] = defaultdict(Decimal)
         broker_total_invested: dict[int, Decimal] = defaultdict(Decimal)
         first_position_dates: dict[tuple[int, int], date_type] = {}
+        # Holding-transaction streams per (broker, asset) for FIFO oldest-open-lot derivation.
+        lot_txns_by_key: dict[tuple[int, int], list[Transaction]] = defaultdict(list)
         _income_accum = Decimal("0")
         _fees_taxes_accum = Decimal("0")
         _fees_accum = Decimal("0")
         _taxes_accum = Decimal("0")
         _realized_accum = Decimal("0")
+        # Per-position all-time (<= date_to) income and fee/tax totals in base currency,
+        # used for the net holding return that feeds the annualized column.
+        income_by_pos: dict[tuple[int, int], Decimal] = defaultdict(Decimal)
+        fees_taxes_by_pos: dict[tuple[int, int], Decimal] = defaultdict(Decimal)
         _INCOME_TYPES = {TransactionType.DIVIDEND, TransactionType.INTEREST}
         _FEE_TAX_TYPES = {TransactionType.FEE, TransactionType.TAX}
 
         for access in accesses:
             broker_id = access.broker_id
-            share = access.share_percentage or Decimal("1")
+            # F2 — OWNER share scales (0% is valid, contributes nothing); EDITOR/VIEWER
+            # always carry share 0 by schema rule but see full data → scale 1 for them.
+            share = (access.share_percentage if access.share_percentage is not None else Decimal("1")) if access.role == UserRole.OWNER else Decimal("1")
             broker = await self._get_broker(broker_id)
             broker_name = broker.name if broker else f"Broker {broker_id}"
             broker_names[broker_id] = broker_name
@@ -1091,6 +744,19 @@ class PortfolioService:
             broker_txns = await self._get_transactions(broker_id, date_to=date_to)
             broker_cash = broker_cash_native.setdefault(broker_id, defaultdict(Decimal))
             for tx in broker_txns:
+                # In-kind ADJUSTMENT capital (opening equity / succession / transfer with
+                # no cash counterpart) injects book value that IS invested capital, not
+                # profit. Mirror the engine's capital-baseline routing at broker level so
+                # per-broker gain stays coherent with the aggregate headline (see
+                # PortfolioCalculationEngine._is_capital_adjustment). Handled before the
+                # cash guard below because these rows carry cost_basis_* but a NULL
+                # tx.currency. SPLIT-linked adjustments (asset_event_id set) redistribute
+                # existing cost and are excluded.
+                if tx.type == TransactionType.ADJUSTMENT and tx.cost_basis_override is not None and tx.quantity and tx.asset_event_id is None:
+                    inkind_ccy = tx.cost_basis_currency or base_currency
+                    inkind_base, _ik_missing = await self._convert_to_base(tx.cost_basis_override * tx.quantity, inkind_ccy, base_currency, tx.date)
+                    if inkind_base is not None:
+                        broker_total_invested[broker_id] += inkind_base * share
                 if tx.amount is None or tx.currency is None:
                     continue
                 broker_cash[tx.currency] += tx.amount * share
@@ -1133,9 +799,19 @@ class PortfolioService:
                     else:
                         _taxes_accum += abs(amount_base_signed) * share
 
+                # Per-position accumulation is NOT period-gated: the net holding return
+                # spans the full life of the position (first transaction -> valuation).
+                if tx.asset_id is not None:
+                    if tx.type in _INCOME_TYPES:
+                        income_by_pos[(broker_id, tx.asset_id)] += abs(amount_base_signed) * share
+                    elif tx.type in _FEE_TAX_TYPES:
+                        fees_taxes_by_pos[(broker_id, tx.asset_id)] += abs(amount_base_signed) * share
+
             # Holding transactions — group by asset
             txns_by_asset: dict[int, list[Transaction]] = defaultdict(list)
             for tx in broker_txns:
+                if tx.asset_id is not None and tx.type in _LOT_AFFECTING_TYPES:
+                    lot_txns_by_key[(broker_id, tx.asset_id)].append(tx)
                 if tx.type not in _HOLDING_TYPES:
                     continue
                 if tx.asset_id is not None:
@@ -1190,6 +866,12 @@ class PortfolioService:
                     cost_sold = sell_qty * wac_at_sell_base
                     _realized_accum += (sell_proceeds - cost_sold) * share
 
+        oldest_open_lot_dates: dict[tuple[int, int], Optional[date_type]] = {key: _oldest_open_lot_date(txns) for key, txns in lot_txns_by_key.items()}
+        # First lot-affecting transaction per position (includes ADJUSTMENT/TRANSFER, so
+        # in-kind/succession/snapshot-seeded positions get a real window start — unlike
+        # first_position_dates which only tracks BUY/SELL). Anchors the net annualized window.
+        first_lot_txn_dates: dict[tuple[int, int], date_type] = {key: min(t.date for t in txns) for key, txns in lot_txns_by_key.items() if txns}
+
         end_positions = [ps for ps in engine_result.position_states_end if ps.quantity > _QUANTITY_DUST_THRESHOLD]
         assets_map = await self._get_assets_map({ps.asset_id for ps in end_positions})
         brokers_map = await self._get_brokers_map({ps.broker_id for ps in end_positions})
@@ -1203,11 +885,16 @@ class PortfolioService:
             broker_name = broker.name if broker else broker_names.get(ps.broker_id, f"Broker {ps.broker_id}")
 
             current_price: Decimal | None = None
-            if ps.valuation_price is not None and ps.valuation_price_ccy is not None:
-                if ps.valuation_price_ccy == base_currency:
-                    current_price = ps.valuation_price
+            if ps.valuation_effective_unit_price is not None and ps.valuation_effective_currency is not None:
+                if ps.valuation_effective_currency == base_currency:
+                    current_price = ps.valuation_effective_unit_price
                 else:
-                    current_price, mp = await self._convert_to_base(ps.valuation_price, ps.valuation_price_ccy, base_currency, ps.date)
+                    current_price, mp = await self._convert_to_base(
+                        ps.valuation_effective_unit_price,
+                        ps.valuation_effective_currency,
+                        base_currency,
+                        ps.date,
+                    )
                     all_missing_pairs.extend(mp)
 
             wac_per_unit: Decimal | None = None
@@ -1247,10 +934,11 @@ class PortfolioService:
                         # inflating the daily delta by quote_base_quantity× for such assets
                         # (reported: a BTP position showed a +93.60% "1-day" P&L swing).
                         # Reuse compute_holding_value for both legs so the scaling matches.
-                        gain_loss_change_1d = compute_holding_value(ps.quantity, current_price, asset.quote_base_quantity) - compute_holding_value(ps.quantity, prev_price_base, asset.quote_base_quantity)
-                        gain_loss_yesterday = gain_loss - gain_loss_change_1d if gain_loss is not None else None
-                        if gain_loss_yesterday is not None and abs(gain_loss_yesterday) > Decimal("0.01"):
-                            gain_loss_change_1d_percent = (gain_loss_change_1d / abs(gain_loss_yesterday) * 100).quantize(Decimal("0.01"))
+                        current_position_value = compute_holding_value(ps.quantity, current_price, asset.quote_base_quantity)
+                        previous_position_value = compute_holding_value(ps.quantity, prev_price_base, asset.quote_base_quantity)
+                        gain_loss_change_1d = current_position_value - previous_position_value
+                        if abs(previous_position_value) > Decimal("0.01"):
+                            gain_loss_change_1d_percent = (gain_loss_change_1d / abs(previous_position_value) * 100).quantize(Decimal("0.01"))
 
             if ps.valuation_source == "MISSING":
                 missing_price_assets.append(
@@ -1267,6 +955,21 @@ class PortfolioService:
                     )
                 )
 
+            # Net annualized return of the still-open position over its full life
+            # (first lot-affecting transaction -> valuation date). Net = unrealized
+            # (valued at cost, i.e. 0 market P&L, when the price is missing) + income
+            # (coupons/dividends) - fees/taxes, normalized by cost basis. This makes a
+            # no-price position with coupons (e.g. an unquoted BTP) show an income-only
+            # return instead of "—", and includes income/costs per the product rule.
+            holding_first_tx = first_lot_txn_dates.get((ps.broker_id, ps.asset_id))
+            holding_annualized = None
+            if ps.cost_basis and ps.cost_basis != 0 and holding_first_tx is not None:
+                market_component = gain_loss if gain_loss is not None else Decimal("0")
+                pos_income = income_by_pos.get((ps.broker_id, ps.asset_id), Decimal("0"))
+                pos_fees = fees_taxes_by_pos.get((ps.broker_id, ps.asset_id), Decimal("0"))
+                net_holding_return = (market_component + pos_income - pos_fees) / ps.cost_basis
+                holding_annualized = cumulative_to_annualized(net_holding_return, (valuation_date - holding_first_tx).days)
+
             all_holdings.append(
                 PortfolioHolding(
                     asset_id=ps.asset_id,
@@ -1279,11 +982,21 @@ class PortfolioService:
                     wac_per_unit=wac_per_unit,
                     current_price=current_price,
                     current_value=current_value,
+                    valuation_source=ps.valuation_source.value,
+                    valuation_effective_unit_price=ps.valuation_effective_unit_price,
+                    valuation_effective_currency=ps.valuation_effective_currency,
+                    valuation_reference_date=ps.valuation_reference_date,
+                    valuation_reference_unit_price=ps.valuation_reference_unit_price,
+                    valuation_reference_currency=ps.valuation_reference_currency,
+                    valuation_split_adjusted=ps.valuation_split_adjusted,
+                    missing_fx_pair=ps.missing_fx_pair,
                     gain_loss=gain_loss,
                     gain_loss_percent=gain_loss_pct,
+                    annualized_return=holding_annualized,
                     price_change_1d=price_change_1d,
                     gain_loss_change_1d=gain_loss_change_1d,
                     gain_loss_change_1d_percent=gain_loss_change_1d_percent,
+                    oldest_open_lot_date=oldest_open_lot_dates.get((ps.broker_id, ps.asset_id)),
                     allocation_percent=None,
                 )
             )
@@ -1349,7 +1062,12 @@ class PortfolioService:
             if period_start_nav_perf > 0:
                 period_cfs = [synthetic_cf] + [cf for cf in cash_flows_perf if cf.date > period_start_date_perf]
             else:
-                period_cfs = [synthetic_cf] + [cf for cf in cash_flows_perf if cf.date >= period_start_date_perf]
+                # Data-less start (e.g. a Sunday): the first NAV snapshot already
+                # contains any flow dated on it, so those flows must be EXCLUDED
+                # from the XIRR input — otherwise the deposit is counted twice
+                # (inside the NAV and as a flow) and the solver is dragged to a
+                # pole (beta report: MWRR cumulative +9.94% on a −1.5% period).
+                period_cfs = [synthetic_cf] + [cf for cf in cash_flows_perf if cf.date > period_start_date_perf]
             period_navs = [s for s in nav_snapshots if s.date >= period_start_date_perf]
         else:
             period_cfs = cash_flows_perf
@@ -1390,7 +1108,17 @@ class PortfolioService:
             mwrr_period_days = ((date_to or today) - period_start_date_perf).days
             mwrr_cumulative = annualized_to_cumulative(mwrr_result, mwrr_period_days) if mwrr_result is not None else None
 
-        total_gl = engine_nav - total_invested
+        # Headline invested capital & P&L come from the engine's capital baseline
+        # (cumulative_external_cash_flow), which folds in priced in-kind ADJUSTMENT
+        # capital (opening equity / succession). Deriving total_gl from a cash-only
+        # "invested" would treat that in-kind capital as pure profit, inflating the
+        # headline gain to thousands of percent on in-kind-seeded portfolios. The
+        # engine's total_pnl = NAV - capital_baseline is the authoritative figure.
+        if last_state is not None:
+            total_invested = last_state.cumulative_external_cash_flow
+            total_gl = last_state.total_pnl
+        else:
+            total_gl = engine_nav - total_invested
         total_gl_pct = (total_gl / total_invested) if total_invested > 0 else Decimal("0")
         cash_balances_list = [Currency(code=ccy, amount=amt) for ccy, amt in all_cash_balances.items()]
 
@@ -1420,24 +1148,25 @@ class PortfolioService:
             period_other_result_val = period_pnl_val - period_ugl_delta - period_realized_val - period_income_val + period_fees_taxes_val
 
         # ── 6. Data quality report ──
-        # Scope transaction-implied assets to the SELECTED date range (like
-        # build_allocation_history's date_from filter) — NOT engine_result.daily_states'
-        # full lifetime (which always starts at t=0 regardless of the requested window,
-        # per the engine.calculate(date_from=None, ...) call above). Also apply a grace
-        # period after first acquisition: brief pre-listing/placement lag (e.g. BTP
-        # collocamento) is expected and not worth flagging as a data-quality issue.
+        # "Valued at cost" is an *as-of* statement (dataQuality.transactionImplied:
+        # "…as of {as_of_date}"): evaluate ONLY the valuation-date state, so an asset that
+        # has since received a real market quote clears the warning even if it was
+        # transaction-implied for most of its earlier history. The previous behaviour
+        # unioned the flag across every day of the asset's lifetime, permanently flagging
+        # any asset ever valued at cost — e.g. funds that only get quotes from their first
+        # provider sync onward stayed flagged forever despite a fresh current price.
+        # The grace period still suppresses a brand-new acquisition whose first market
+        # price simply has not landed yet (e.g. BTP collocamento lag).
         first_position_date_by_asset: dict[int, date_type] = {}
         for (_b_id, a_id), d in first_position_dates.items():
             if a_id not in first_position_date_by_asset or d < first_position_date_by_asset[a_id]:
                 first_position_date_by_asset[a_id] = d
 
         implied_asset_ids: set[int] = set()
-        for s in engine_result.daily_states:
-            if date_from and s.date < date_from:
-                continue
-            for aid in s.transaction_implied_asset_ids:
+        if last_state is not None:
+            for aid in last_state.transaction_implied_asset_ids:
                 first_dt = first_position_date_by_asset.get(aid)
-                if first_dt is not None and (s.date - first_dt).days <= TRANSACTION_IMPLIED_GRACE_DAYS:
+                if first_dt is not None and (last_state.date - first_dt).days <= TRANSACTION_IMPLIED_GRACE_DAYS:
                     continue
                 implied_asset_ids.add(aid)
 
@@ -1484,6 +1213,8 @@ class PortfolioService:
             mwrr_available=mwrr_result is not None,
             configured_fx_pairs=configured_fx_pairs,
             real_provider_fx_pairs=real_provider_fx_pairs,
+            period_from=date_from,
+            period_to=valuation_date,
         )
 
         return PortfolioSummary(
@@ -1532,7 +1263,7 @@ class PortfolioService:
             data_quality=data_quality,
         )
 
-    async def get_history(
+    async def get_history(  # noqa: C901 — sequential engine→metrics→merge pipeline with period-rebase if/else
         self,
         user_id: int,
         broker_ids: list[int] | None = None,
@@ -1552,7 +1283,7 @@ class PortfolioService:
             PortfolioCalculationEngine,
         )
 
-        base_currency = target_currency_override or await self._get_base_currency()
+        base_currency = target_currency_override or await self._get_base_currency(user_id)
         if _precomputed_engine_result is not None:
             result = _precomputed_engine_result
         else:
@@ -1589,11 +1320,13 @@ class PortfolioService:
 
             synthetic_cf = CashFlowInput(date=period_start_date, amount=-period_start_nav)
             # When period_start_nav > 0, CFs on start date are already embedded in starting NAV (exclude with >)
-            # When period_start_nav == 0, CFs on start date must be included (use >=)
+            # When period_start_nav == 0 (data-less start), the first NAV snapshot is
+            # post-flow: flows dated on it are already inside that NAV, so they too are
+            # excluded (>) — including them double-counts the deposit and poles the XIRR.
             if period_start_nav > 0:
                 period_cash_flows = [synthetic_cf] + [cf for cf in cash_flows if cf.date > period_start_date]
             else:
-                period_cash_flows = [synthetic_cf] + [cf for cf in cash_flows if cf.date >= period_start_date]
+                period_cash_flows = [synthetic_cf] + [cf for cf in cash_flows if cf.date > period_start_date]
             period_nav_snapshots = [s for s in nav_snapshots if s.date >= period_start_date]
             # When period_start_nav > 0, ensure first snapshot matches so MWRR series is consistent
             if period_start_nav > 0 and period_nav_snapshots and period_nav_snapshots[0].nav != period_start_nav:
@@ -1669,16 +1402,19 @@ class PortfolioService:
                 )
             )
 
-        # First point always 0% for chart continuity (period starts here)
+        # First point pinned to 0% for the cumulative growth measures (TWRR/MWRR): they are
+        # period-relative returns measured from inception, so they are 0 at the period start by
+        # definition. ROI is NOT pinned — it is an absolute ratio (NAV − net_invested)/net_invested,
+        # so on the very first day it must already reflect any seeded cost-vs-market gap (e.g. an
+        # in-kind succession seeded above/below market shows its day-1 gain/loss instead of a flat 0).
         if history_points:
             history_points[0].twrr = Decimal("0")
             history_points[0].mwrr_annualized = Decimal("0")
             history_points[0].mwrr_cumulative = Decimal("0")
-            history_points[0].roi = Decimal("0")
 
         return history_points
 
-    async def get_positions_contribution(
+    async def get_positions_contribution(  # noqa: C901 — TODO(P2-refactor): nested broker/asset/tx accumulation with FX conversion branches
         self,
         user_id: int,
         broker_ids: list[int] | None = None,
@@ -1701,7 +1437,7 @@ class PortfolioService:
         """
         today = date_type.today()
         effective_end = date_to or today
-        base_currency = target_currency_override or await self._get_base_currency()
+        base_currency = target_currency_override or await self._get_base_currency(user_id)
 
         accesses = await self._get_user_broker_access(user_id, broker_ids)
         if not accesses:
@@ -1709,21 +1445,31 @@ class PortfolioService:
 
         _INCOME_TYPES = {TransactionType.DIVIDEND, TransactionType.INTEREST}
         _FEE_TAX_TYPES = {TransactionType.FEE, TransactionType.TAX}
-        _QTY_TYPES = {TransactionType.BUY, TransactionType.SELL}
+        # Quantity-affecting transactions: BUY/SELL plus in-kind ADJUSTMENT and TRANSFER,
+        # mirroring _LOT_AFFECTING_TYPES / the engine's position model. Restricting this to
+        # {BUY, SELL} made ADJUSTMENT/TRANSFER-seeded positions (e.g. in-kind succession
+        # transfers) collapse to qty 0 at period end -> reported as fully-sold with no value
+        # or annualized return, diverging from the holdings view where they are held.
+        _QTY_TYPES = _LOT_AFFECTING_TYPES
 
         # Per-position accumulators
         per_realized: dict[tuple[int, int], Decimal] = defaultdict(Decimal)
+        per_cost_sold: dict[tuple[int, int], Decimal] = defaultdict(Decimal)
         per_income: dict[tuple[int, int], Decimal] = defaultdict(Decimal)
         per_fees_taxes: dict[tuple[int, int], Decimal] = defaultdict(Decimal)
         unalloc_income: dict[int, Decimal] = defaultdict(Decimal)
         unalloc_fees: dict[int, Decimal] = defaultdict(Decimal)
 
-        # Track all positions with BUY/SELL activity
+        # Track all positions with lot-affecting activity (BUY/SELL/ADJUSTMENT/TRANSFER)
         position_info: dict[tuple[int, int], dict] = {}
+        # Holding-transaction streams per (broker, asset) for FIFO oldest-open-lot derivation.
+        lot_txns_by_key: dict[tuple[int, int], list[Transaction]] = defaultdict(list)
 
         for access in accesses:
             broker_id = access.broker_id
-            share = access.share_percentage or Decimal("1")
+            # F2 — OWNER share scales (0% is valid, contributes nothing); EDITOR/VIEWER
+            # always carry share 0 by schema rule but see full data → scale 1 for them.
+            share = (access.share_percentage if access.share_percentage is not None else Decimal("1")) if access.role == UserRole.OWNER else Decimal("1")
             broker = await self._get_broker(broker_id)
             broker_name = broker.name if broker else f"Broker {broker_id}"
 
@@ -1766,6 +1512,8 @@ class PortfolioService:
             # ── Holdings: group by asset for realized + unrealized ──
             txns_by_asset: dict[int, list[Transaction]] = defaultdict(list)
             for tx in broker_txns:
+                if tx.asset_id is not None and tx.type in _LOT_AFFECTING_TYPES:
+                    lot_txns_by_key[(broker_id, tx.asset_id)].append(tx)
                 if tx.type not in _QTY_TYPES:
                     continue
                 if tx.asset_id is not None:
@@ -1821,9 +1569,12 @@ class PortfolioService:
                         sell_proceeds = sell_amount
                     cost_sold = sell_qty * wac_at_sell_base
                     per_realized[pos_key] += (sell_proceeds - cost_sold) * share
+                    per_cost_sold[pos_key] += cost_sold * share
 
         # ── Unrealized delta: 2-point computation per position ──
         contributions: list[AssetPeriodContribution] = []
+
+        oldest_open_lot_dates: dict[tuple[int, int], Optional[date_type]] = {key: _oldest_open_lot_date(txns) for key, txns in lot_txns_by_key.items()}
 
         for pos_key, info in position_info.items():
             broker_id, asset_id = pos_key
@@ -1846,6 +1597,7 @@ class PortfolioService:
             # Unrealized P&L at start and end
             ug_start: Decimal | None = None
             ug_end: Decimal | None = None
+            cb_end: Decimal | None = None
             start_value: Decimal | None = Decimal("0") if date_from is None or qty_at_start <= _QUANTITY_DUST_THRESHOLD else None
             end_value: Decimal | None = Decimal("0") if qty_at_end <= _QUANTITY_DUST_THRESHOLD else None
 
@@ -1886,22 +1638,25 @@ class PortfolioService:
                 )
                 price_e_data = await self._get_price_at_date(asset_id, effective_end)
 
-                if wac_e_result.wac is not None and price_e_data is not None:
-                    raw_price_e, price_ccy_e, price_date_e = price_e_data
-                    price_e_base = raw_price_e
-                    if price_ccy_e != base_currency:
-                        price_e_base, _ = await self._convert_to_base(raw_price_e, price_ccy_e, base_currency, price_date_e)
+                if wac_e_result.wac is not None:
                     wac_e = wac_e_result.wac.amount
                     wac_e_ccy = wac_e_result.wac.code
                     wac_e_base = wac_e
                     if wac_e_ccy != base_currency:
                         wac_e_base, _ = await self._convert_to_base(wac_e, wac_e_ccy, base_currency, effective_end)
-
-                    if price_e_base is not None and wac_e_base is not None:
-                        mv_end = compute_holding_value(qty_at_end, price_e_base, asset.quote_base_quantity)
+                    # Cost basis at end is price-independent (needs only WAC), so a
+                    # position held with no market price still gets a normalization base.
+                    if wac_e_base is not None:
                         cb_end = wac_e_base * qty_at_end
-                        ug_end = mv_end - cb_end
-                        end_value = mv_end
+                    if price_e_data is not None and wac_e_base is not None:
+                        raw_price_e, price_ccy_e, price_date_e = price_e_data
+                        price_e_base = raw_price_e
+                        if price_ccy_e != base_currency:
+                            price_e_base, _ = await self._convert_to_base(raw_price_e, price_ccy_e, base_currency, price_date_e)
+                        if price_e_base is not None:
+                            mv_end = compute_holding_value(qty_at_end, price_e_base, asset.quote_base_quantity)
+                            ug_end = mv_end - cb_end
+                            end_value = mv_end
 
             unrealized_delta = None
             if ug_end is not None or ug_start is not None:
@@ -1929,6 +1684,43 @@ class PortfolioService:
             period_pnl_pct: Decimal | None = None
             if period_pnl is not None and start_value not in (None, Decimal("0")):
                 period_pnl_pct = (period_pnl / abs(start_value)).quantize(Decimal("0.0001"))
+            # Annualize over the position's actual holding window inside the period:
+            # from the oldest lot opening that falls in the period (clamped to date_from)
+            # to the period end. The normalization base falls back to the end cost basis
+            # when the position was opened mid-period (start_value 0/None), so the column
+            # no longer collapses to empty for positions opened after the period start.
+            # This base is used ONLY for the annualized figure; the displayed
+            # period_pnl_percent keeps its start_value semantics untouched.
+            ann_base: Decimal | None = abs(start_value) if start_value not in (None, Decimal("0")) else (cb_end if cb_end not in (None, Decimal("0")) else None)
+            ann_pct = period_pnl_pct
+            if ann_pct is None and period_pnl is not None and ann_base is not None:
+                ann_pct = (period_pnl / ann_base).quantize(Decimal("0.0001"))
+            window_start = date_from
+            olp = oldest_open_lot_dates.get(pos_key)
+            if olp is not None and (window_start is None or olp > window_start):
+                window_start = olp
+            period_annualized = None
+            if ann_pct is not None and window_start is not None:
+                period_annualized = cumulative_to_annualized(ann_pct, (effective_end - window_start).days)
+
+            # Fully-closed position: its FIFO stream has no still-open lot, so
+            # oldest_open_lot_date is None (no window start) and there is no end
+            # cost basis (no normalization base) — the generic path above collapses
+            # to "—". Annualize the realized net return over the position's real
+            # flight time: oldest lot opened (clamped to the period start) -> the
+            # date the last lot closed. Base = capital actually deployed (cost of
+            # the sold lots). This also fixes the window end for closed positions,
+            # which the generic path would otherwise run to the period end.
+            if is_fully_sold and period_pnl is not None:
+                deployed_cost = per_cost_sold.get(pos_key)
+                if deployed_cost and deployed_cost != 0:
+                    open_date, close_date = _closed_position_window(lot_txns_by_key.get(pos_key, []))
+                    if open_date is not None and close_date is not None:
+                        closed_start = open_date if date_from is None or open_date > date_from else date_from
+                        closed_return = (period_pnl / deployed_cost).quantize(Decimal("0.0001"))
+                        closed_annualized = cumulative_to_annualized(closed_return, (close_date - closed_start).days)
+                        if closed_annualized is not None:
+                            period_annualized = closed_annualized
 
             contributions.append(
                 AssetPeriodContribution(
@@ -1944,9 +1736,11 @@ class PortfolioService:
                     period_fees_taxes=fees if fees else None,
                     period_pnl=period_pnl,
                     period_pnl_percent=period_pnl_pct,
+                    annualized_return=period_annualized,
                     start_value=start_value,
                     end_value=end_value,
                     is_fully_sold=is_fully_sold,
+                    oldest_open_lot_date=oldest_open_lot_dates.get(pos_key),
                 )
             )
 
@@ -1974,6 +1768,7 @@ class PortfolioService:
                         start_value=Decimal("0"),
                         end_value=Decimal("0"),
                         is_fully_sold=True,
+                        oldest_open_lot_date=oldest_open_lot_dates.get((bid, aid)),
                     )
                 )
 
@@ -2060,7 +1855,7 @@ class PortfolioService:
             gross_losses=gross_losses,
         )
 
-    async def get_report(
+    async def get_report(  # noqa: C901 — TODO(P2-refactor): include-flag orchestration + nested MWRR divergence retry
         self,
         user_id: int,
         query: PortfolioReportQuery,
@@ -2079,7 +1874,7 @@ class PortfolioService:
         )
 
         today = date_type.today()
-        base_currency = query.target_currency or await self._get_base_currency()
+        base_currency = query.target_currency or await self._get_base_currency(user_id)
         date_from = query.date_range.resolved_start() if query.date_range else None
         date_to = query.date_range.resolved_end() if query.date_range else None
 
@@ -2091,7 +1886,11 @@ class PortfolioService:
         if broker_ids_for_scope:
             scope_stmt = scope_stmt.where(BrokerUserAccess.broker_id.in_(broker_ids_for_scope))
         scope_result = await self.db.execute(scope_stmt)
-        scope_broker_ids = sorted({a.broker_id for a in scope_result.scalars().all()})
+        scope_accesses = list(scope_result.scalars().all())
+        scope_broker_ids = sorted({a.broker_id for a in scope_accesses})
+        # Role/share edits change every scaled number but not the data
+        # fingerprints — they must bust the cache (F2 follow-up).
+        access_fp = tuple(sorted((a.broker_id, getattr(a.role, "value", a.role), str(a.share_percentage)) for a in scope_accesses))
 
         if scope_broker_ids:
             # Quick fingerprints for cache key (lightweight queries)
@@ -2110,6 +1909,7 @@ class PortfolioService:
             l2_key = (
                 user_id,
                 tuple(scope_broker_ids),
+                access_fp,
                 base_currency,
                 str(date_from),
                 str(date_to),
@@ -2248,6 +2048,8 @@ class PortfolioService:
                 mwrr_available=False,
                 configured_fx_pairs=configured_fx_pairs,
                 real_provider_fx_pairs=real_provider_fx_pairs,
+                period_from=date_from,
+                period_to=date_to,
             )
 
         # Append MWRR series unreliable issue if needed

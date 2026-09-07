@@ -11,6 +11,8 @@
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {attachChartReady} from '$lib/utils/chartReady';
+    import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {goto} from '$app/navigation';
     import {ExternalLink, Layers} from 'lucide-svelte';
     import {t} from '$lib/i18n';
@@ -20,6 +22,9 @@
     import {buildGridColors, buildTooltipDivider, buildTooltipHeader, buildTooltipRow, buildTooltipTheme, setupTooltipAutoHide, scheduleFirstRenderStabilityFix} from '$lib/components/charts/echartsTooltipHelpers';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {truncateName} from '$lib/utils/text';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {translateOr} from '$lib/utils/core/translateOr';
+    import {safeDecimal, safeNumber, safeString} from '$lib/types';
 
     interface AssetPeriodContribution {
         asset_id: number;
@@ -93,7 +98,7 @@
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let scrollWrapper: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | undefined = undefined;
-    let resizeObserver: ResizeObserver | null = null;
+    const resizeWatcher = createResizeWatcher(() => chartInstance?.resize());
     let darkModeObserver: MutationObserver | null = null;
     let tooltipCleanup: (() => void) | null = null;
     let isDark = $state(false);
@@ -141,36 +146,16 @@
     let hoveredRowKey: string | null = null;
     const ROW_HIGHLIGHT_SERIES_ID = 'row-highlight';
 
-    function safeString(value: string | (string | null)[] | null | undefined): string | null {
-        if (value == null) return null;
-        if (typeof value === 'string') return value;
-        return value[0] ?? null;
-    }
-
-    function safeNumber(value: string | (string | null)[] | null | undefined): number {
-        const raw = safeString(value);
-        if (raw == null) return 0;
-        const parsed = Number.parseFloat(raw);
-        return Number.isFinite(parsed) ? parsed : 0;
-    }
-
-    function safeInt(value: number | (number | null)[] | null | undefined): number | null {
-        if (value == null) return null;
-        if (typeof value === 'number') return value;
-        return value[0] ?? null;
-    }
-
-    function escapeHtml(value: string): string {
-        return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-    }
+    // Not `safeNumber` from $lib/types: this one parses a decimal *string*
+    // and substitutes 0 for a missing or unparseable value, because a chart
+    // series cannot carry a null. Keep the two apart.
+    /** Local name for this chart's numeric unwrap, which treats "missing" as
+     *  zero — a chart axis has no room for "unknown". The parsing itself is the
+     *  shared `safeDecimal`; only the fallback is this file's own choice. */
+    const parseNumberOrZero = (value: unknown): number => safeDecimal(value) ?? 0;
 
     function escapeRichText(value: string): string {
         return value.replace(/[{}]/g, '');
-    }
-
-    function tr(key: string, fallback: string): string {
-        const translated = $t(key);
-        return !translated || translated === key ? fallback : translated;
     }
 
     function shortMoney(amount: number, currency: string, showSign = true): string {
@@ -277,9 +262,9 @@
     /** Backend sends the raw enum ("Income"/"Cost"/"Other") — translate it for
      *  tooltip display instead of leaking the untranslated value into the UI. */
     function categoryLabel(category: string): string {
-        if (category === 'Income') return tr('dashboard.categoryIncome', category);
-        if (category === 'Cost') return tr('dashboard.categoryCost', category);
-        if (category === 'Other') return tr('dashboard.categoryOther', category);
+        if (category === 'Income') return translateOr($t, 'dashboard.categoryIncome', category);
+        if (category === 'Cost') return translateOr($t, 'dashboard.categoryCost', category);
+        if (category === 'Other') return translateOr($t, 'dashboard.categoryOther', category);
         return category;
     }
 
@@ -287,9 +272,9 @@
      *  (never localized) — translate the known ones instead of leaking raw English
      *  into other languages. Same mapping as OtherPeriodEffectsTable.svelte. */
     function otherEffectDescriptionLabel(description: string): string {
-        if (description === 'Unallocated income') return tr('dashboard.unallocatedIncome', description);
-        if (description === 'Unallocated costs') return tr('dashboard.unallocatedCosts', description);
-        if (description === 'Other / reconciliation residual') return tr('dashboard.otherReconciliationResidual', description);
+        if (description === 'Unallocated income') return translateOr($t, 'dashboard.unallocatedIncome', description);
+        if (description === 'Unallocated costs') return translateOr($t, 'dashboard.unallocatedCosts', description);
+        if (description === 'Other / reconciliation residual') return translateOr($t, 'dashboard.otherReconciliationResidual', description);
         return description;
     }
 
@@ -301,22 +286,22 @@
     }
 
     let labels = $derived.by(() => ({
-        periodPnl: tr('dashboard.periodPnl', 'Period P&L'),
-        unrealized: tr('dashboard.unrealizedDelta', 'Unrealized Δ'),
-        realized: tr('dashboard.realizedSales', 'Realized Sales'),
-        income: tr('dashboard.income', 'Income'),
-        costs: tr('dashboard.costs', 'Costs'),
-        otherPeriodEffects: tr('dashboard.otherPeriodEffects', 'Other period effects'),
-        status: tr('common.status', 'Status'),
-        openShort: tr('dashboard.openPositions', 'Open'),
-        closedShort: tr('dashboard.closedPositions', 'Closed'),
-        openLong: tr('dashboard.openAtPeriodEnd', 'Open at period end'),
-        closedLong: tr('dashboard.closedByPeriodEnd', 'Closed by period end'),
-        startValue: tr('dashboard.startValue', 'Start Value'),
-        endValue: tr('dashboard.endValue', 'End Value'),
-        broker: tr('common.broker', 'Broker'),
-        category: tr('common.category', 'Category'),
-        noPeriodPnl: tr('dashboard.noPeriodPnl', 'No P&L in selected period'),
+        periodPnl: translateOr($t, 'dashboard.periodPnl', 'Period P&L'),
+        unrealized: translateOr($t, 'dashboard.unrealizedDelta', 'Unrealized Δ'),
+        realized: translateOr($t, 'dashboard.realizedSales', 'Realized Sales'),
+        income: translateOr($t, 'dashboard.income', 'Income'),
+        costs: translateOr($t, 'dashboard.costs', 'Costs'),
+        otherPeriodEffects: translateOr($t, 'dashboard.otherPeriodEffects', 'Other period effects'),
+        status: translateOr($t, 'common.status', 'Status'),
+        openShort: translateOr($t, 'dashboard.openPositions', 'Open'),
+        closedShort: translateOr($t, 'dashboard.closedPositions', 'Closed'),
+        openLong: translateOr($t, 'dashboard.openAtPeriodEnd', 'Open at period end'),
+        closedLong: translateOr($t, 'dashboard.closedByPeriodEnd', 'Closed by period end'),
+        startValue: translateOr($t, 'dashboard.startValue', 'Start Value'),
+        endValue: translateOr($t, 'dashboard.endValue', 'End Value'),
+        broker: translateOr($t, 'common.broker', 'Broker'),
+        category: translateOr($t, 'common.category', 'Category'),
+        noPeriodPnl: translateOr($t, 'dashboard.noPeriodPnl', 'No P&L in selected period'),
     }));
 
     let componentDefs = $derived.by(() => [
@@ -328,7 +313,7 @@
 
     let chartRows = $derived.by<ChartRow[]>(() => {
         const assetRows: AssetRow[] = positions.map((position, index) => {
-            const feesTaxes = safeNumber(position.period_fees_taxes);
+            const feesTaxes = parseNumberOrZero(position.period_fees_taxes);
             return {
                 key: `asset-${position.broker_id}-${position.asset_id}-${index}`,
                 kind: 'asset',
@@ -336,26 +321,26 @@
                 assetId: position.asset_id,
                 assetTicker: safeString(position.asset_ticker),
                 brokerName: position.broker_name,
-                startValue: safeNumber(position.start_value),
-                endValue: safeNumber(position.end_value),
-                net: safeNumber(position.period_pnl),
+                startValue: parseNumberOrZero(position.start_value),
+                endValue: parseNumberOrZero(position.end_value),
+                net: parseNumberOrZero(position.period_pnl),
                 isFullySold: position.is_fully_sold ?? false,
                 components: {
-                    unrealized: safeNumber(position.period_unrealized_delta),
-                    realized: safeNumber(position.period_realized_gain_loss),
-                    income: safeNumber(position.period_income),
+                    unrealized: parseNumberOrZero(position.period_unrealized_delta),
+                    realized: parseNumberOrZero(position.period_realized_gain_loss),
+                    income: parseNumberOrZero(position.period_income),
                     costs: feesTaxes === 0 ? 0 : -Math.abs(feesTaxes),
                 },
             };
         });
 
         const effectRows: OtherRow[] = otherEffects.map((effect, index) => ({
-            key: `effect-${safeInt(effect.broker_id) ?? 'none'}-${index}`,
+            key: `effect-${safeNumber(effect.broker_id) ?? 'none'}-${index}`,
             kind: 'other',
             label: effect.description,
             category: effect.category,
             brokerName: safeString(effect.broker_name),
-            net: safeNumber(effect.period_pnl),
+            net: parseNumberOrZero(effect.period_pnl),
         }));
 
         // Sort by impact (largest movers first, gain or loss) — mirrors the same
@@ -1044,10 +1029,7 @@
     }
 
     function setupResizeObserver() {
-        if (!chartContainer) return;
-        if (resizeObserver) return;
-        resizeObserver = new ResizeObserver(() => chartInstance?.resize());
-        resizeObserver.observe(chartContainer);
+        resizeWatcher.observe(chartContainer);
     }
 
     function renderChart() {
@@ -1057,14 +1039,14 @@
 
         if (chartInstance && chartInstance.getDom() !== chartContainer) {
             tooltipCleanup?.();
-            resizeObserver?.disconnect();
-            resizeObserver = null;
+            resizeWatcher.disconnect();
             chartInstance.dispose();
             chartInstance = undefined;
         }
 
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+            attachChartReady(chartInstance, chartContainer, 'performance');
             needsInitialLayoutStabilityPass = true;
             setupResizeObserver();
             tooltipCleanup?.();
@@ -1117,7 +1099,7 @@
         return () => {
             tooltipCleanup?.();
             darkModeObserver?.disconnect();
-            resizeObserver?.disconnect();
+            resizeWatcher.disconnect();
             chartInstance?.dispose();
         };
     });

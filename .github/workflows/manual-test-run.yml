@@ -3,6 +3,12 @@ run-name: Manual Test Run — ${{ github.ref_name }}
 
 on:
   workflow_dispatch:
+    inputs:
+      workers:
+        description: "Parallel workers for isolation-safe units (N, or 'auto' = half the runner's cores)"
+        required: false
+        default: 'auto'
+        type: string
 
 permissions:
   contents: read      # Required to checkout repository contents
@@ -72,10 +78,19 @@ jobs:
         timeout-minutes: 15
         run: pipenv run ./dev.py install
 
+      # --workers: the E2E suite is `fullyParallel` and specs no longer assume they
+      #   are alone, so the runner can distribute tests across browser workers. 'auto'
+      #   is half the runner's cores, which leaves room for the single shared backend
+      #   and the SvelteKit build — a hosted runner is small, and oversubscribing it
+      #   trades wall time for flakes. Raise it via the workflow input on a bigger runner.
+      # --log-dir: one log file per test unit (front-transaction__tx-wac-mode.log, …)
+      #   plus a compressed snapshot of the test DB. Under parallelism the single
+      #   full-run log interleaves four workers and is nearly unreadable; the per-unit
+      #   files are not. Uploaded as a separate artifact below.
       - name: Run Complete Test Suite
         id: run_tests
         timeout-minutes: 180
-        run: pipenv run ./dev.py test --fresh-run --quiet --log-file /tmp/test-run-cache/full-run.log all
+        run: pipenv run ./dev.py test --fresh-run --quiet --workers "${{ inputs.workers }}" --log-file /tmp/test-run-cache/full-run.log --log-dir /tmp/test-logs all
 
       # Copy the cache to a plain (non-dotfile) name in a dedicated folder before
       # upload. This sidesteps any glob/dotfile-matching quirk in the upload-artifact
@@ -100,6 +115,17 @@ jobs:
           else
             echo "⚠️  /tmp/test-run-cache/full-run.log missing — the run may have crashed before producing it."
           fi
+          if [ -d /tmp/test-logs ]; then
+            echo "✅ Per-unit logs present ($(find /tmp/test-logs -type f | wc -l) files, $(du -sh /tmp/test-logs | cut -f1)):"
+            ls -la /tmp/test-logs || true
+          else
+            echo "⚠️  /tmp/test-logs missing — the run never reached the point where --log-dir is activated."
+          fi
+
+      # Two artifacts, because they answer different questions and have very
+      # different sizes: the cache is what you need to *resume*, the logs are what
+      # you need to *understand*. Keeping them apart means a quick resume does not
+      # drag down megabytes of log.
 
       # Upload resume cache + full log on both pass/fail so dev can download them,
       # place .run_cache.json at scripts/test_runner/.run_cache.json locally, then run:
@@ -112,5 +138,17 @@ jobs:
         with:
           name: test-run-cache-${{ github.run_id }}
           path: /tmp/test-run-cache/
+          if-no-files-found: warn
+          retention-days: 14
+
+      # Per-unit logs + the compressed test DB snapshot. The DB matters more than it
+      # looks: a red is only reproducible with the data that produced it, and by the
+      # time anyone downloads the artifact the runner is long gone.
+      - name: Upload per-unit test logs
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: test-logs-${{ github.run_id }}
+          path: /tmp/test-logs/
           if-no-files-found: warn
           retention-days: 14

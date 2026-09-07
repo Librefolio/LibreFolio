@@ -171,7 +171,7 @@ class CoinbaseBrokerProvider(BRIMProvider):
         except Exception:
             return False
 
-    def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:
+    def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:  # noqa: C901 — flat row loop: validation guards and per-type field mapping, no nested logic
         """Parse Coinbase CSV export file."""
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []

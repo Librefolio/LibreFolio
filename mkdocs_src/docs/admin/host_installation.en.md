@@ -92,8 +92,9 @@ pipenv run ./dev.py install
 Under the hood, this command will:
 
 1. Initialize the Python virtual environment and install packages via `pipenv`.
-2. Install frontend SvelteKit dependencies via `npm`.
-3. Install Playwright browser binaries (used for PDF report generation and E2E tests).
+2. Install the root project tools via `npm install`.
+3. Install frontend SvelteKit dependencies via `npm ci`.
+4. Install Playwright browser binaries (used for PDF report generation and E2E tests).
 
 ### ⚙️ 3. Configure Environment
 
@@ -105,9 +106,11 @@ cp .env.example .env
 
 The default settings work immediately. Below are the key variables:
 
-* **`PORT`**: Server bind port (default: `6040`).
-* **`LIBREFOLIO_DATA_DIR`**: Directory path where the database, uploads, and logs are stored (default: `./backend/data/prod`).
-* **`LOG_LEVEL`**: Logging verbosity (default: `INFO`).
+| Variable | Default | Description |
+| --- | --- | --- |
+| `PORT` | `6040` | Server bind port. |
+| `LIBREFOLIO_DATA_DIR` | `./backend/data/prod` | Directory path where the database, uploads, and logs are stored. |
+| `LOG_LEVEL` | `INFO` | Logging verbosity. |
 
 For a complete description of all supported environment variables, see the [Environment Variables Guide](configuration.md).
 

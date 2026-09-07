@@ -2,7 +2,7 @@
 
 ## What is LibreFolio
 
-LibreFolio is a **self-hosted, open-source financial portfolio tracker** — alternative to Ghostfolio. It supports traditional assets (ETFs, stocks, bonds, crypto), multi-provider FX rates, technical analysis (EMA, MACD, RSI, Bollinger), and import from 11+ brokers.
+LibreFolio is a **self-hosted, open-source financial portfolio tracker** — alternative to Ghostfolio. It supports traditional assets (ETFs, stocks, bonds, crypto), multi-provider FX rates, technical analysis (EMA, MACD, RSI, Bollinger), import from 11+ brokers, and versioned AI Export for factual datasets and analysis-ready prompts.
 
 ## Tech Stack
 
@@ -36,6 +36,7 @@ LibreFolio/
 6. **Zodios API Client** — types from OpenAPI, Zod runtime validation
 7. **Data Separation prod/test** — completely isolated folders
 8. **Dual View** — card grid + DataTable for Assets and FX, toggle persisted in localStorage
+9. **AI Export Boundary** — backend owns deterministic versioned facts; frontend owns safe prompt rendering, localization, clipboard, and contextual draft memory
 
 ## Fundamental Rules
 
@@ -151,13 +152,57 @@ Use the `find-skills` skill when looking for new capabilities to install (see `~
 
 ### Graphify Knowledge Graph
 
-The devWiki is backed by a **graphify knowledge graph** (`LibreFolio_devWiki/graphify-out/graph.json`) — 9259 nodes, 14151 edges, 748 communities covering backend, frontend, wiki, roadmap and docs.
+The devWiki is backed by a **graphify knowledge graph** (`LibreFolio_devWiki/graphify-out/graph.json`). Read its real size from `graphify-out/GRAPH_REPORT.md` rather than from here: as of 2026-09-01 it holds ~1 617 nodes / 2 277 edges / 167 communities, built from **100 files**. A number written in prose ages; the report does not.
+
+> ⚠️ **The graph covers the wiki, not the code.** Its manifest holds ~363 wiki pages against ~91 code files, out of a corpus of ~2 750. So a BFS/DFS query about *accumulated knowledge* is reliable, while one about *the code* answers partially and **looks complete** — which is the dangerous half. A lint on 2026-09-01 found 144 broken source-file references that no graph query would have surfaced, because the graph does not contain the files that were missing; a filesystem check found all of them in a fraction of a second.
+>
+> Before writing a wiki page, run `python3 LibreFolio_devWiki/check_source_paths.py`. Every path cited in a `## Source files` table must exist. And remember that **a plan is not a chronicle**: a path read out of a proposal is not a path that was delivered.
 
 - `wiki-search` uses graphify BFS/DFS as primary lookup (much faster than reading raw files)
 - `./dev.py graph update` — incremental code-only rebuild after code changes (no LLM, ~5s)
 - `./dev.py graph viz` — regenerate `graph.html` for browser visualization
 - `./dev.py graph query "TOPIC"` — quick BFS query from the CLI
 - Full semantic rebuild (new .md files): invoke the `graphify` skill through the AI assistant
+
+## Changelog Rules (CHANGELOG.md)
+
+The repo-root `CHANGELOG.md` is bundled into the app at build time and shown in the
+in-app changelog modal (sidebar version click → foldable panels). Keep it accurate.
+
+**Structure** — Keep a Changelog, SemVer:
+- One chapter per release: `## [x.y.z] - YYYY-MM-DD` (`## [Unreleased]` has no date
+  and is supported — the parser keeps it).
+- Inside a chapter: `###` sections, always with the leading emoji —
+  `### 🧪 Beta` (beta subsystems), `### ✨ Added`, `### 🔄 Changed`, `### 🐛 Fixed`,
+  `### ⚠️ Breaking changes`. Add an optional free-text intro paragraph before the
+  first `###` to present the release in two or three sentences.
+- `####` sub-headings group related items inside a `###` section (e.g.
+  `#### 🧠 Technical Analysis — backend Signals platform`); each carries an emoji too.
+- The modal folds `##` → `###` → `####` progressively, so headlines must be
+  self-explanatory: the detail lives in the bullet list under them.
+
+**Keeping it up to date**:
+- While a release is being prepared, its chapter is the single place that accumulates
+  user-visible changes (features, fixes, breaking notes) — add entries as work lands.
+- On release: set the chapter date, tag `vX.Y.Z`; the next Docker/CI build bundles it.
+- Entries are user-facing: no internal refactors unless they change observable behavior.
+- The in-app modal also links to the remote file; GitHub Releases notes can point here.
+
+## Writing Tests
+
+**Every test runs against one shared database and one shared backend, alongside its
+neighbours.** So a test may never *assume* — it must *verify*: no fixed positions, no
+global counts, no clock waits, no assertions on translated text.
+
+**Agent**: for writing, rewriting or repairing any test (backend or frontend), invoke the
+`test-author` agent — the rules, the isolation classes, the runner registration and the
+definition of done are embedded in `.github/agents/test-author.agent.md`.
+
+| Skill | When |
+|-------|------|
+| `testing-backend` | pytest suites, coverage, catalogue |
+| `testing-frontend` | Playwright E2E, Vitest, parallelism per block |
+| `test-triage` | a red whose cause is not obvious — **before** calling anything "flaky" |
 
 ## Test Users
 
@@ -174,4 +219,3 @@ The devWiki is backed by a **graphify knowledge graph** (`LibreFolio_devWiki/gra
 | 6041 | Backend test mode |
 | 6042 | MkDocs serve |
 | 5173 | Frontend dev (Vite HMR) |
-

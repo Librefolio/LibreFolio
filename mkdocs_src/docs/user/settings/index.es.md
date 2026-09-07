@@ -2,11 +2,12 @@
 
 El panel de Configuración de LibreFolio le permite personalizar la aplicación y, si es administrador, gestionar la configuración global.
 
-La configuración se divide en tres áreas principales:
+La configuración se divide en cuatro pestañas:
 
-- 👤 **[Preferencias de Usuario](preferences.md)** — Idioma, moneda, tema, detalles del perfil y configuración de la contraseña de seguridad.
-- 🛡️ **[Configuración Global](../../admin/settings.md)** — Configuración de toda la instancia, interruptor de autorregistro, tiempos de espera de sesión y el programador de datos de mercado en segundo plano.
-- ℹ️ **[Acerca de](about.md)** — Información de la licencia, números de versión y enlaces a recursos oficiales.
+- 👤 **[Perfil](profile.md)** — Nombre de usuario, correo electrónico, avatar, contraseña y eliminación de la cuenta.
+- 🎛️ **[Preferencias](preferences.md)** — Idioma, moneda base y tema.
+- ℹ️ **[Acerca de](about.md)** — Información de la licencia, números de versión, plugins instalados y el registro de cambios integrado.
+- 🛡️ **[Administración](../../admin/settings.md)** — Configuración de toda la instancia, visible para todos pero editable solo por los superusuarios.
 
 ---
 

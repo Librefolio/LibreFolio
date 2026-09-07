@@ -214,15 +214,24 @@ class TestPortfolioSummaryEndpoint:
         # Cash ledger: 1000 - 400 + 25 - 10 + 150 = 765
         assert data["cash_total"]["amount"].startswith("765")
         assert data["total_invested"]["amount"].startswith("1000")
-        # Holdings: no market price but LAST_BUY_PRICE fallback provides value
-        # last_buy_price = 400/4 = 100 EUR/share, net qty = 3 → current_value = 300
+        # Holdings: no market quote → the unified resolver marks at the most recent *observed trade*.
+        # The last trade is the SELL @ 150 (2025-01-19); net qty = 3 → current_value = 450.
+        # (The legacy LAST_BUY tier ignored SELLs and would have used the BUY @ 100 → 300.)
         holding = data["holdings"][0]
         assert holding["current_value"] is not None
-        assert holding["current_value"].startswith("300")
+        assert holding["current_value"].startswith("450")
+        assert holding["valuation_source"] == "LAST_TRADE_PRICE"
+        assert holding["valuation_effective_unit_price"].startswith("150")
+        assert holding["valuation_effective_currency"] == "EUR"
+        assert holding["valuation_reference_date"] == "2025-01-19"
+        assert holding["valuation_reference_unit_price"].startswith("150")
+        assert holding["valuation_reference_currency"] == "EUR"
+        assert holding["valuation_split_adjusted"] is False
+        assert holding["missing_fx_pair"] is None
         # Asset without market price does NOT appear in missing_price_assets
-        # (LAST_BUY_PRICE gives it a value — appears in data_quality as warning instead)
+        # (the observed-trade mark gives it a value — appears in data_quality as warning instead)
         assert len(data["missing_price_assets"]) == 0
-        print_success("Signed cash ledger and LAST_BUY_PRICE reporting OK")
+        print_success("Signed cash ledger and LAST_TRADE_PRICE reporting OK")
 
     async def test_summary_uses_quote_base_quantity(self, test_server):
         """Summary valuation honors quote_base_quantity for raw market quotes."""
@@ -290,6 +299,58 @@ class TestPortfolioSummaryEndpoint:
         assert data["by_broker"] is not None
         assert isinstance(data["by_broker"], list)
         print_success("include_breakdown OK")
+
+    async def test_breakdown_scales_by_owner_share(self, test_server):
+        """R2-F2b: the brokers LIST page cards read summary.by_broker from
+        POST /portfolio/report (include_breakdown=true). A 30% OWNER must see
+        30%-scaled, NON-ZERO numbers — an intermediate build served zeros there
+        (the per-broker loop dropped the share application)."""
+        print_section("Portfolio Summary: by_broker scaled by owner share")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_broker(client)
+            asset_id = await create_asset(client)
+
+            # DEPOSIT 900 + DIVIDEND 90 → cash 990, net_worth 990, gain 90 at 100%.
+            await commit_batch(
+                client,
+                creates=[
+                    {"broker_id": broker_id, "type": "DEPOSIT", "date": "2025-01-01", "cash": {"code": "EUR", "amount": "900"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "DIVIDEND", "date": "2025-01-02", "quantity": "0", "cash": {"code": "EUR", "amount": "90"}},
+                ],
+            )
+
+            # Cut the caller's share to 30% via the production write path.
+            me = (await client.get(f"{API_BASE}/auth/me", timeout=TIMEOUT)).json()["user"]["id"]
+            resp = await client.put(
+                f"{API_BASE}/brokers/{broker_id}/access",
+                json=[{"user_id": me, "role": "OWNER", "share_percentage": 0.3}],
+                timeout=TIMEOUT,
+            )
+            assert resp.status_code == 200, resp.text
+
+            resp = await post_portfolio_summary(client, {"include_breakdown": True})
+            assert resp.status_code == 200, resp.text
+            data = resp.json()
+
+            mine = [b for b in data["by_broker"] if b["broker_id"] == broker_id]
+            assert len(mine) == 1, f"my broker missing from by_broker: {data['by_broker']}"
+            entry = mine[0]
+
+            net_worth = Decimal(entry["net_worth"]["amount"])
+            cash_total = Decimal(entry["cash_total"]["amount"])
+            gain_loss = Decimal(entry["gain_loss"]["amount"])
+
+            # Scaled to 30% — and non-zero, which is the actual regression guard.
+            assert net_worth == Decimal("297"), f"net_worth must be 990×0.3=297, got {net_worth}"
+            assert cash_total == Decimal("297"), f"cash_total must be 990×0.3=297, got {cash_total}"
+            assert gain_loss == Decimal("27"), f"gain_loss must be 90×0.3=27, got {gain_loss}"
+            assert net_worth != 0 and cash_total != 0 and gain_loss != 0, "by_broker served zeros for a 30% owner"
+
+            # Cleanup: the broker (force-cascades its transactions), then the asset.
+            await client.delete(f"{API_BASE}/brokers", params={"ids": [broker_id], "force": True}, timeout=TIMEOUT)
+            await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+            print_success("by_broker scaled by owner share OK")
 
     async def test_invalid_broker_id_ignored(self, test_server):
         """Non-existent broker_id in body -> empty result (no 500)."""

@@ -20,7 +20,7 @@ Each currency pair is displayed with details including:
 - 📈 The **latest exchange rate** and price trend
 - 🏛️ The **active data provider** (ECB, FED, BOE, SNB, or MANUAL)
 - 📊 A **sparkline chart** showing the rate trend over the past 30 days
-- 🖱️ **Context Menu**: Right-click any row in the table layout for quick actions (Edit, Sync, Delete)
+- 🖱️ **Context Menu**: Right-click any row in the table layout for quick actions (Swap direction, Sync, Reload, Delete)
 
 You can **filter** by currency to quickly find a specific pair:
 

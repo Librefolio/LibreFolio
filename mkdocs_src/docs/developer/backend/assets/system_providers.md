@@ -8,7 +8,7 @@ This section provides the technical deep-dive for each asset pricing provider in
 |:---|:---|:---|:---:|:---:|:---|:---|
 | [**Yahoo Finance**](provider_yahoo_finance.md) | `yfinance` | History, Search, Metadata | ✅ | — | TICKER, ISIN | Beta |
 | [**JustETF**](provider_justetf.md) | `justetf` | History, Search, Metadata | ✅ | — | ISIN | Beta |
-| [**Borsa Italiana**](provider_borsa_italiana.md) | `borsa_italiana` | History, Search, Metadata | ✅ | — | ISIN | Beta |
+| [**Borsa Italiana**](provider_borsa_italiana.md) | `borsa_italiana` | History, Search, Metadata, URL resolution | ✅ | ✅ | ISIN | Beta |
 | [**CSS Scraper**](provider_cssscraper.md) | `cssscraper` | Current Value | ✅ | ✅ | URL | Beta |
 | [**Scheduled Investment**](provider_scheduled_investment.md) | `scheduled_investment` | History (Calc), Events | — | ✅ | AUTO_GENERATED | Beta |
 | **Mock Provider** | `mockprov` | History, Search | — | — | TICKER, ISIN | Alpha |
@@ -62,8 +62,9 @@ Italian market data provider — fetches stocks, bonds (BTP), and ETFs listed on
 
 - **Features**: History, Search, Metadata, Current Value
 - **Identifier types**: `ISIN`
-- **Provider params**: Optional `language` (`"en"` / `"it"`) — controls names, metadata, and search results language
-- **Key details**: Full OHLCV history, dual-language search with flag emojis, instrument page scraping for metadata, geographic/sector inference, shared HTTP session with WAF/JWT handling
+- **Provider params**: Optional `language` (`"en"` / `"it"`) and `codice_fondo` for mutual funds
+- **URL resolution**: `resolvable_url_domains = ["borsaitaliana.it"]`; `resolve_url(url)` returns the canonical IT + EN result set for fund/detail pages, then search flattens and de-dupes by `(identifier, language)`
+- **Key details**: Full OHLCV history for listed instruments, dual-language search with flag emojis, fund NAV pricing by internal `codice_fondo` (not ISIN), current fund NAV only when NAV date is today, fund history as one NAV point at its real date, `identifier_other` stored as a JSON list for alternative technical identifiers
 - 📖 [Technical Details →](provider_borsa_italiana.md)
 
 ---
