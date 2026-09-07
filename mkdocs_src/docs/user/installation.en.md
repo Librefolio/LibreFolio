@@ -214,7 +214,7 @@ LibreFolio is currently in **Beta** (version 1.1.0). Database migrations run aut
 - By using the `:latest` tag in the `docker-compose.yml` file, you will immediately receive the latest features but expose yourself to potential incompatibilities during automatic updates.
 - If you prefer stability and absolute control, we recommend pinning the image by replacing `:latest` with a specific version tag (for example, `ghcr.io/librefolio/librefolio:v1.1.0`).
 
-### 🛠️ 1. Manual Update
+### 🛠️ 1. Manual Update {: #manual-update }
 
 To update LibreFolio manually to the latest available version:
 
