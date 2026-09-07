@@ -9,6 +9,12 @@
 
 ---
 
+> 📦 **Archiviata il 07/09/2026** in `Release_2/phases/08_newCleanAndDocumentation_audit/`.
+> Tornata eseguita e chiusa: P0 (5/5), P1 (18/18), P2 (9/9), P3 (28/28 + ondata docs/gallery/
+> traduzioni validata a zero). **Unico residuo**: gli 8 task strutturali P4, mai iniziati per
+> scelta — tracciati in [`Phase_0/09_feedbackJobs/00_backlog_strutturale_P4.md`](../../Phase_0/09_feedbackJobs/00_backlog_strutturale_P4.md)
+> per il prossimo round di sviluppo.
+
 ## Cos'è questa tornata
 
 Riverifica **integrale** dell'audit di un mese fa contro i sorgenti attuali. Per ogni

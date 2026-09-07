@@ -4,10 +4,7 @@
   Modes:
   - 'create'   → blank form, POST /transactions/commit with 1 item in creates
   - 'edit'     → pre-filled from items[0] (id immutable, type/broker locked),
-                 POST /transactions/commit with 1 TXUpdateItem in updates
-  - 'duplicate'→ pre-filled (date preserved — it is the point of the
-                 correction workflow), id stripped, link_uuid regenerated,
-                 commits as 'create'
+                   POST /transactions/commit with 1 TXUpdateItem in updates
   - 'view'     → readonly display (Save button hidden)
 
   Field gating per type comes from `transactionTypeRules.ts` (UI hint only —
@@ -94,7 +91,7 @@
         loc?: string;
     }
 
-    type Mode = 'create' | 'edit' | 'duplicate' | 'view';
+    type Mode = 'create' | 'edit' | 'view';
 
     interface Props {
         open: boolean;
@@ -151,17 +148,6 @@
         pendingTxIds?: Set<number> | null;
         /** When true, the optional section (description, tags, etc.) is expanded when the modal opens. Default false. */
         initialOptionalOpen?: boolean;
-        /**
-         * List of field wrapper data-testid values to visually highlight (amber ring).
-         * Used by the duplicate compare flow to mark fields that match the parsed transaction.
-         * Example: ['tx-form-date-wrap', 'tx-form-cash-wrap']
-         */
-        highlightFields?: string[];
-        /**
-         * When set, replaces the auto-generated title in the modal header.
-         * Used by the duplicate compare flow to show a custom title.
-         */
-        titleOverride?: string;
     }
 
     let {
@@ -185,8 +171,6 @@
         editingTempId = null,
         pendingTxIds = null,
         initialOptionalOpen = false,
-        highlightFields = [],
-        titleOverride,
     }: Props = $props();
 
     // Internal derived: main row from items[0], partner info from items[1]
@@ -425,9 +409,6 @@
                     draft = emptyDraft();
                     costBasisMode = 'auto';
                 }
-            } else if (m === 'duplicate' && row) {
-                draft = fromTx(row, {regenerateLink: row.related_transaction_id != null});
-                costBasisMode = draft.cost_basis_override ? 'manual' : 'auto';
             } else if ((m === 'edit' || m === 'view') && row) {
                 draft = fromTx(row);
                 // Use injected partner directly instead of fetching from the API.
@@ -726,11 +707,6 @@
     let autoNegateQty = $derived(rule.quantityRule === 'negative');
     let autoNegateCash = $derived(rule.cashSign === 'negative');
     let isReadonly = $derived(mode === 'view');
-    /** Helper: returns CSS classes for highlighted fields in view mode.
-     *  Uses a yellow gradient background + a brief pulse animation on first render. */
-    function hl(testid: string): string {
-        return highlightFields.includes(testid) ? ' hl-match rounded-lg' : '';
-    }
     // Bugfix-5 §A4: `unlockImmutable=true` (deep-edit from BulkModal) overrides
     // the default immutability so the user can change `type`/`broker` on an
     // existing draft. `view` mode always wins (everything stays readonly).
@@ -1343,9 +1319,7 @@
         <!-- ============================================================= -->
         <div class="flex items-center justify-between p-5 pb-4 border-b border-gray-100 dark:border-slate-700 shrink-0">
             <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100" data-testid="tx-form-title">
-                {#if titleOverride}
-                    {titleOverride}
-                {:else if pairLayout}
+                {#if pairLayout}
                     {#if pairLayout === 'fx'}💱{:else if pairLayout === 'transfer_asset'}📦{:else}🏦{/if}
                     {#if mode === 'edit'}
                         ✎ {dualTitle}
@@ -1366,8 +1340,6 @@
                     {:else}{dualTitle}{/if}
                 {:else if mode === 'create'}
                     ➕ {$t('transactions.form.titleCreate')}
-                {:else if mode === 'duplicate'}
-                    📋 {$t('transactions.form.titleDuplicate')}
                 {:else if mode === 'edit'}
                     ✎ {$t('transactions.form.titleEdit')} #{mainRow?.id}
                 {:else}
@@ -1480,7 +1452,7 @@
                     <!-- Type (date is now inside Da/A panels) -->
                     <div class="text-sm">
                         <!-- Type: editable in create dual mode (W41), readonly in edit/view -->
-                        <div class="flex flex-col gap-1{hl('tx-form-type-wrap')}" data-testid="tx-form-type-wrap">
+                        <div class="flex flex-col gap-1" data-testid="tx-form-type-wrap">
                             <span class="text-xs text-gray-500 dark:text-gray-400">{$t('common.type')}</span>
                             {#if typeImmutable}
                                 <!-- Bugfix-4 §U17 + Bugfix-5 §U22: render the
@@ -1553,7 +1525,7 @@
 
                     <!-- Transfer Cash: shared cash -->
                     {#if pairLayout === 'transfer_cash'}
-                        <div class="mt-3 flex flex-col gap-1{hl('tx-form-cash-wrap')}" data-testid="tx-form-cash-wrap">
+                        <div class="mt-3 flex flex-col gap-1" data-testid="tx-form-cash-wrap">
                             <span class="text-xs text-gray-500 dark:text-gray-400">
                                 {$t('transactions.table.cash')} *
                             </span>
@@ -1762,7 +1734,7 @@
                          full-width Cash row when the type forces quantity=0. -->
                     <div class="grid grid-cols-2 gap-3 text-sm">
                         <!-- Date -->
-                        <div class="flex flex-col gap-1{hl('tx-form-date-wrap')}" data-testid="tx-form-date-wrap">
+                        <div class="flex flex-col gap-1" data-testid="tx-form-date-wrap">
                             <span class="text-xs text-gray-500 dark:text-gray-400">{$t('common.date')}</span>
                             {#if isReadonly}
                                 <div class="px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200" data-testid="tx-form-date-readonly">{draft.date || '—'}</div>
@@ -1772,7 +1744,7 @@
                         </div>
 
                         <!-- Type -->
-                        <div class="flex flex-col gap-1{hl('tx-form-type-wrap')}" data-testid="tx-form-type-wrap">
+                        <div class="flex flex-col gap-1" data-testid="tx-form-type-wrap">
                             <span class="text-xs text-gray-500 dark:text-gray-400">{$t('common.type')}</span>
                             {#if typeImmutable}
                                 <!-- Bugfix-4 §U17 + Bugfix-5 §U22: render the
@@ -1829,7 +1801,7 @@
                                     <span class="text-[10px] text-gray-400">{qtyHint}</span>
                                 {/if}
                             </div>
-                            <div class="flex flex-col gap-1{hl('tx-form-cash-wrap')}" data-testid="tx-form-cash-wrap">
+                            <div class="flex flex-col gap-1" data-testid="tx-form-cash-wrap">
                                 <span class="text-xs text-gray-500 dark:text-gray-400">
                                     {$t('transactions.table.cash')}{rule.cashField === 'required' ? ' *' : ''}{#if cashLabel}
                                         <span class="text-amber-500">{cashLabel}</span>{/if}
@@ -1876,7 +1848,7 @@
                             </div>
                         {:else if rule.cashField !== 'forbidden'}
                             <!-- Only cash visible (quantity forbidden) → full width -->
-                            <div class="flex flex-col gap-1 col-span-2{hl('tx-form-cash-wrap')}" data-testid="tx-form-cash-wrap">
+                            <div class="flex flex-col gap-1 col-span-2" data-testid="tx-form-cash-wrap">
                                 <span class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2">
                                     {$t('transactions.table.cash')}{rule.cashField === 'required' ? ' *' : ''}{#if cashLabel}
                                         <span class="text-amber-500">{cashLabel}</span>{/if}
@@ -2020,7 +1992,7 @@
                         </div>
 
                         <!-- 3. Description -->
-                        <label class="flex flex-col gap-1{hl('tx-form-description')}">
+                        <label class="flex flex-col gap-1">
                             <span class="text-xs text-gray-500 dark:text-gray-400">{$t('common.description')}</span>
                             <textarea
                                 autocomplete="off"
@@ -2193,46 +2165,4 @@
     /* Duplicate-compare highlight: soft amber background + smooth entrance.
        Starts transparent → peaks bright yellow → settles to a light tint.
        animation-fill-mode: forwards keeps the resting state after the animation. */
-    @keyframes hl-pulse {
-        0% {
-            background-color: rgba(253, 224, 71, 0);
-        }
-        40% {
-            background-color: rgba(253, 224, 71, 0.65);
-        }
-        50% {
-            background-color: rgba(253, 224, 71, 0.65);
-        }
-        100% {
-            background-color: rgba(253, 224, 71, 0.18);
-        }
-    }
-    :global(.hl-match) {
-        animation: hl-pulse 3s linear 1 forwards;
-        padding: 6px 8px;
-    }
-    /* Inputs inside a highlighted wrapper should be transparent so the
-       yellow background shows through instead of being covered by white bg. */
-    :global(.hl-match input),
-    :global(.hl-match textarea),
-    :global(.hl-match select) {
-        background-color: transparent !important;
-    }
-    :global(.dark .hl-match) {
-        animation: hl-pulse-dark 3s linear 1 forwards;
-    }
-    @keyframes hl-pulse-dark {
-        0% {
-            background-color: rgba(180, 130, 20, 0);
-        }
-        40% {
-            background-color: rgba(180, 130, 20, 0.55);
-        }
-        50% {
-            background-color: rgba(180, 130, 20, 0.55);
-        }
-        100% {
-            background-color: rgba(180, 130, 20, 0.22);
-        }
-    }
 </style>

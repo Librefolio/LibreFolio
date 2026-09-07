@@ -5,25 +5,6 @@ I TODO completati sono in `TODO_Completati.md`.
 
 ---
 
-## 📊 Dashboard — vista P&L assoluto e grafici avanzati (F8)
-
-**Data aggiunta**: 1 Settembre 2026
-**Status**: 📋 FUTURO — emerso dal feedback beta del 30/08/2026, rimandato per consolidamento pre-release
-**Origine**: feedback Alfy 30/08/2026 — classificazione in `LibreFolio_developer_journal/Release_2/Phase_0` (sessione 01/09/2026)
-
-### Richiesta
-
-- Grafico dashboard: vista **solo P&L assoluto** (senza cash, costo asset, ecc.).
-- Possibilità di mostrare il P&L con **grafico a candela** per far capire l'escursione giornaliera.
-- Valutare istogrammi per dividendi e interessi (gli altri parametri della KPI card 1).
-
-### Note
-
-- Va spezzata in sotto-feature: (a) vista P&L-only, (b) candele, (c) istogrammi dividendi/interessi.
-- Da riprendere dopo il consolidamento dei feedback di Release 2.
-
----
-
 ## 🔌 Arricchimento asset da fonti esterne — ESMA FIRDS, OpenFIGI, JustETF (F16)
 
 **Data aggiunta**: 1 Settembre 2026
@@ -98,133 +79,6 @@ costruirci sopra tre funzioni:
   riuso del pattern dei settings con TTL).
 - Valutare dipendenza: `aiosmtplib` (async, non blocca l'event loop — regola Async I/O).
 - Fino a questo task, nessuna promessa UI sulla verifica email (P2-1 chiuso come placeholder).
-
----
-
-## 🔀 `mode='duplicate'` del TransactionFormModal — ricollegare o rimuovere
-
-**Data aggiunta**: 3 Settembre 2026
-**Status**: 📋 DECISIONE APERTA — codice morto di fatto
-**Origine**: fix T3 (02/09) + collaudo 03/09; nota in `Release_2/phases/06_betaTestingReportAndFixing/INDEX.md` §7
- e `plan-phase00TransactionsUxPolish.prompt.md` §Stato
-
-### Il punto
-
-`TransactionFormModal` ha una modalità `duplicate` (pre-compila il form come copia) ma
-**nessuna azione UI la raggiunge**: il "duplica" reale passa da `TransactionBulkModal`
-intent `clone` (workspace). La preservazione della data (T3) è quindi testata solo a
-livello componente per quel ramo.
-
-### Opzioni
-
-- **Ricollegare**: aggiungere un'azione "Duplica" (menu riga o form) che apre il FormModal
-  in `mode='duplicate'` per chi preferisce il singolo form alla bulk workspace.
-- **Rimuovere**: cancellare la modalità, il ramo di codice e i test dedicati, riducendo la
-  superficie del FormModal.
-
-### Note per chi riprende
-
-- I 3 path clone della bulk modal (`resolveInitialRows`, `cloneRow`, `createOpFromClone`)
-  sono quelli vivi — non confonderli con questa modalità.
-- Se si rimuove: eliminare anche l'opzione `resetDate` residua e i test del modo duplicate.
-
----
-
-## 🧪 Test runner — residui della migrazione P8
-
-**Data aggiunta**: 3 Settembre 2026 · **Corretta** il 03/09 dopo verifica sistematica (verify-06)
-**Status**: 📋 FUTURO — ma **molto meno di quanto scritto altrove**: la verifica 03/09 ha trovato
-che il corpo del piano P8 segna già fatte le tappe 1, 2.2–2.4, 3.1–3.3, 4, 5.4, 6.3–6.4 (deliverable
-presenti: `_inventory.py`, `_scheduler.py`, `_executor.py`, flag `--workers`, reachability check) —
-header e INDEX non furono mai riallineati
-**Origine**: `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/plan-phase00TestRunnerMigration.prompt.md`
-
-### Cosa resta davvero (dopo la verifica del 03/09)
-
-- **Tappe 5.1–5.3** — isolamento scritture per worker: **deliberatamente NON eseguite**
-  (premesse false, vedi piano :1041 e :1169+). Sono il vero residuo.
-- **Tappe 0.1–0.2** — fotografia dei timing: probabilmente obsolete, da rivalutare.
-- **Rossi intermittenti sotto `--workers auto`** (broker-detail lot fee, asset-merge AM-001,
-  fx-csv-import editor) — verdi in seriale: sensibilità al carico parallelo; candidati a
-  diventare la checklist d'ingresso quando si riprende 5.x.
-
-### Correzioni fatte il 03/09
-
-- Questa voce inizialmente elencava «tappe 1–6» come aperte: **era stale** (copiato dall'header
-  del piano, mai aggiornato dopo i commit del 13/08). Ora riflette la verifica sul codice.
-- INDEX 06 e header dei piani P7/P8 vanno riallineati quando si tocca quella cartella:
-  - P7 «Fase D aperta» → **fatta** (`scripts/coverage_js.py` + `test coverage-report --lang js`
-    operativo, usato il 03/09 per la misura 72,3%); INDEX §4 vs §5 si contraddicono.
-  - P8 header «tappe 1–6 aperte» → quasi tutto fatto (sopra).
-  - INDEX dice «`_reachability.py`» → implementato dentro `_cli.py` + `_inventory.py`.
-
----
-
-## 🧹 P3-27 — Batch traduzioni IT/FR/ES (debito a due generazioni)
-
-**Data aggiunta**: 3 Settembre 2026
-**Status**: 📋 SOLO SU RICHIESTA ESPLICITA — la pipeline Aphra si avvia solo quando l'utente la chiede
-**Origine**: audit 08 mk1 N8 + mk2 T16; ondata docs P3 del 03/09
-
-### Debito accumulato al 03/09
-
-Pagine EN aggiornate/riscritte con traduzioni IT/FR/ES ora stale:
-- **Riscritture**: `user/brokers/sharing` (sharing moderno), `user/brokers/import`
-  (wizard 7 step), sezione Import di `user/getting-started`, `user/fx/providers/snb`
-  (medie mensili), sezioni nuove di `admin/docker_advanced` (cache build-time, backup WAL).
-- **Correzioni di fatti** (le traduzioni riportano ancora gli errori): transactions/index,
-  files/index, assets/index, transactions/import/how-to + index + etoro, fx/index +
-  fx/detail/chart + signals, assets/detail/chart + signals, ai-export/index|asset|fx,
-  dashboard/kpi-cards, financial-theory day-count/dividend.
-- Per il debito strutturale esatto: `pipenv run python dev.py mkdocs translate-validate`.
-
-### Regola
-
-Le correzioni puramente cosmetiche sono già state stampate (`translate-stamp`) e NON
-verranno ritradotte; tutte le pagine sopra invece DEVONO essere ritradotte alla prossima
-run `./dev.py mkdocs translate` perché i fatti sono cambiati.
-
----
-
-## 🧮 Riduzione complessità cognitiva — i 26 `TODO(P2-refactor)` (da P1-2)
-
-**Data aggiunta**: 3 Settembre 2026
-**Status**: 📋 FUTURO — NON urgente: sono debolezza strutturale, non bug. Lavoro grosso, da pianificare a sé
-**Origine**: piano `LibreFolio_developer_journal/Release_2/Phase_0/08_newCleanAndDocumentation_audit/plan-phase00P1QuickWins.prompt.md` (task P1-2, tabella completa dei 26 con righe e note)
-
-### Contesto
-
-Il 03/09 è stato attivato il gate ruff **C901 a soglia 10** (`pyproject.toml`): misura la
-complessità ciclomatica — conta OGNI punto decisionale (if, ternari, operatori booleani).
-199 funzioni sopra soglia sono state triagiate una a una: **173 "flat packer"** (parser CSV,
-packer di payload: branch meccanici, nessuna logica annidata) hanno ricevuto
-`# noqa: C901 — <giustificazione>`; **26 con logica annidata vera** (if in loop in if, stato
-che si accumula) sono state marcate `# noqa: C901 — TODO(P2-refactor): <motivo>`.
-
-### Come trovarle
-
-```bash
-grep -rn "TODO(P2-refactor)" backend/ scripts/
-```
-
-La tabella completa con complessità e nota per funzione è nel piano P1 citato sopra
-(sezione "P1-2 — esito triage"). I gruppi:
-
-| Gruppo | Esempi (complessità) | Natura |
-|---|---|---|
-| Motori replay/pipeline | `execute_batch` (115), `portfolio_engine.build` (97), `get_summary` (73), `get_positions_contribution` (62) | Loop per-giorno/transazione con rami annidati per tipo evento/FX/edge case |
-| Orchestratori a fasi | `bulk_refresh_prices` (62), `sync_pairs_bulk` (54), `get_prices_bulk` (49), `calculate` (26) | 3-9 fasi con closure annidate che catturano stato |
-| Parser non banali | `broker_credit_agricole._parse_account_movements` (71), `brim_provider.detect_tx_duplicates` (21) | Parse multi-passo con closure di risoluzione annidate |
-| State machine di calcolo | `drawdown_episodes` (15), `calculate_mwrr_series` (15), `_crossings` (11) | Macchine a stati con recovery/retry |
-| Tooling interno (priorità bassa) | 3 in `scripts/test_runner/` | Logistica del runner, non prodotto |
-
-### Cosa fare quando si riprende
-
-- Approccio: **estrazione di helper per stadio** (stage functions a livello modulo), non
-  riscrittura. Ogni funzione ha già il motivo specifico nel commento noqa.
-- Il gate impedisce che ne nascano di nuove: queste 26 sono tutto il debito esistente.
-- Dopo ogni refactor: togliere il noqa e verificare `pipenv run ruff check backend/` verde.
-- Attenzione a `asset_source.py`: ha drift black preesistente — non riformattare tutto il file.
 
 ---
 
@@ -368,28 +222,6 @@ Quando TanStack Table v9 sarà **rilasciato come stabile** con supporto ufficial
 
 
 
-## 👥 Filtro Utente nella Files Page
-
-**Data aggiunta**: 20 Febbraio 2026  
-**Status**: ⏳ IN ATTESA (richiede API backend)  
-**Priorità**: Media  
-**Dipendenza**: Endpoint `/api/v1/users` o `/api/v1/admin/users`  
-**Codice correlato**: `get_upload_by_user()` in `backend/app/services/static_uploads.py` (predisposta per colonna "Uploaded by" + filtro)
-
-### Contesto
-L'UploadedFile ha il campo `uploaded_by_user_id` ma non esiste un endpoint per risolvere gli ID utente in username/email. Serve per:
-- Aggiungere colonna "Uploaded by" nella tabella files (come la colonna Broker in BRIM)
-- Filtro dropdown per utente in modalità grid (accanto al search per nome)
-- Badge colorati come nel BRIM (stessa funzione calcolo colori)
-
-### Azione Futura
-1. Creare endpoint backend `GET /api/v1/admin/users` (lista utenti, admin only)
-2. Nel frontend, colonna utente visibile se `users.length > 1`
-3. Filtro frontend-only con dropdown
-4. Riutilizzare pattern filtri di `FilesTable`/`urlFilters`
-
----
-
 ## 🔒 Ripensare struttura di accesso ai broker Utente-SuperUtente per essere GDPR compliant
 
 **Data aggiunta**: Gennaio 2026  
@@ -404,124 +236,6 @@ La visibilità dei dati di altri utenti da parte del superuser deve essere ripen
 - Log di accesso ai dati di altri utenti
 - Anonimizzazione dei dati visualizzati (solo statistiche aggregate)
 - Meccanismo di "data request" invece di accesso diretto (utente concede accesso all'assistenza per x tempo)
-
----
-
-## 📈 Asset Page — Prezzo e Transazioni
-
-**Data aggiunta**: 20 Febbraio 2026  
-**Status**: 🔄 PARZIALMENTE COMPLETATO (Phase 6 + Phase 7 done)  
-**Priorità**: Media (Phase 8 Dashboard)
-
-### Contesto
-~~La pagina dell'asset dovrebbe mostrare il prezzo corrente in alto~~ ✅ con ~~la possibilità, cliccando su un punto del grafico, di aprire un'interfaccia piccola per modificare il valore di quel giorno.~~ ✅ Data Editor implementato. ~~Sotto il grafico, per ogni transazione (slot per slot), mostrare il prezzo d'acquisto e la variazione rispetto ad oggi (guadagno/perdita), con uno storico del guadagno di quella transazione.~~ ⏳ Phase 7 completata — ora implementabile come feature Phase 8.
-
-### Dettagli UI — Parti mancanti
-- Lista slot transazioni con prezzo d'acquisto, variazione %, storico guadagno
-- Richiede: aggregazione portfolio + calcolo P&L (Phase 8 Dashboard scope)
-
----
-
----
-
-## 💸 BRIM: FEE/TAX non collegati all'asset — verifica e consolidamento transazioni
-
-**Data aggiunta**: 17 Luglio 2026
-**Status**: ✅ Fase 1 (import) COMPLETATA il 18 Luglio 2026 — Fase 2 (motore FIFO/lotti) ancora da fare, rimandata dall'utente
-**Priorità**: Alta (Fase 2 residua)
-**Scope**: Fase 1 fatta su 4 plugin BRIM (Directa, Schwab, Finpension, Revolut) — Fase 2 residua su Motore FIFO/Lotti + Portfolio Engine
-
-### Contesto
-
-I plugin BRIM, quando generano transazioni `FEE`/`TAX`, in molti casi **non collegano `asset_id`** anche quando il broker fornisce ISIN/ticker sulla stessa riga — il costo finisce "generico di broker" invece che attribuito all'asset che lo ha causato (es. ritenuta su cedola obbligazionaria, commissione di vendita).
-
-### Evidenza concreta (Directa — confermato con export reale dell'utente)
-
-CSV reale (`Movimenti_K6245_15-6-2026.csv`), righe cedola BTP:
-```
-20-05-2026;25-05-2026;Cedola obb.;M.511743;IT0005634792;65035044;BTP PIU SC FB33 EUR CUM;0;71,25;0;EUR;
-20-05-2026;25-05-2026;Rit.cedola obb.;M.511743;IT0005634792;65035045;BTP PIU SC FB33 EUR CUM;0;-8,91;0;EUR;
-```
-Il ticker (`M.511743`) e l'ISIN (`IT0005634792`) sono presenti e identici a quelli della riga di acquisto originale (`17-02-2025;25-02-2025;Acquisto;M.511743;IT0005634792;...;10000;-10000;...`). Nonostante questo, `backend/app/services/brim_providers/broker_directa.py:306-312` esclude esplicitamente `FEE`/`TAX` (e anche `TRANSFER`/`ADJUSTMENT`/`WITHDRAWAL`/ecc.) dalla lista `asset_required`:
-```python
-asset_required = tx_type in [
-    TransactionType.BUY,
-    TransactionType.SELL,
-    TransactionType.DIVIDEND,
-    TransactionType.INTEREST,
-]
-```
-`ticker`/`isin` vengono letti dalla riga (righe 300-301) ma **buttati via** per FEE/TAX — `asset_id` resta sempre `None` per questi tipi, anche quando il dato sorgente lo renderebbe risolvibile 1:1.
-
-### Verifica sugli altri 10 plugin BRIM — **CORRETTA il 18 Luglio 2026**
-
-⚠️ **La verifica del 17/07 sotto era imprecisa**: elencava 7 plugin come affetti dallo stesso bug solo in base al pattern `asset_required` che esclude FEE/TAX, senza verificare se quei tipi (a) vengono davvero prodotti dal plugin e (b) se il CSV sorgente porta davvero ISIN/ticker su quelle righe. Riverifica riga-per-riga (18/07) contro i CSV campione bundled nel repo (`sample_reports/`), risultato **molto più circoscritto**:
-
-| Plugin | Verificato (18/07) |
-|---|---|
-| **Directa** | 🐛 Bug reale confermato (CSV utente + sample bundled: `Rit.cedola obb.`/`Rit.provento etf` con ISIN) |
-| **Schwab** | 🐛 Bug reale confermato — prova nel sample bundled (`schwab-export.csv:105-106`): `ADR Mgmt Fee`/`Foreign Tax Paid` con `Symbol=IBN` popolato, oggi scartato |
-| **Finpension** | ⚠️ FEE esiste (`flat-rate administrative fee`) ma è strutturalmente di conto — il sample bundled mostra ISIN/Asset Name sempre vuoti per questo tipo; fix applicato in modo difensivo (no-op con dati reali odierni) |
-| **Revolut** | ⚠️ FEE esiste (`custody fee`), stesso discorso — sample bundled mostra Ticker sempre vuoto; fix difensivo |
-| **eToro** | ✅ **Non è questo bug** — "Withdraw Fee"/"Conversion Fee" sono in `SKIP_TYPES`: mai creati come transazione FEE/TAX, scartati a monte. La docstring del file (riga 20) dice "→ FEE" ma il codice fa altro — **bug diverso** (transazioni perse, non solo non collegate), segnalato in una voce separata sotto, non corretto qui |
-| **Freetrade** | ✅ Non affetto — nessun tipo FEE/TAX esiste nel `TYPE_MAPPINGS` |
-| **Trading212** | ✅ Non affetto — la ritenuta (`TAX`) è già creata riusando `asset_id` della transazione madre, stesso pattern corretto di IBKR/Coinbase; nessun FEE nel mapping principale |
-
-Al contrario, i pattern di riferimento restano validi:
-- `broker_ibkr.py:229-247` — la commissione generata riusa **lo stesso `asset_id`** già risolto per la riga BUY/SELL genitrice (stesso ISIN, stessa riga sorgente)
-- `broker_coinbase.py:283-303` — stesso pattern: FEE riusa l'`asset_id` della transazione principale sulla stessa riga
-- `broker_degiro.py:87-103` — il più sofisticato: la mappa tipo→`(TransactionType, requires_asset: bool)` distingue già caso per caso
-- `broker_generic_csv.py:563-576` — non esclude FEE/TAX per tipo: collega l'asset se il campo "asset" della riga CSV è popolato, altrimenti no. **Nota dell'utente**: per questo plugin il gap osservato potrebbe essere dovuto a come l'utente ha generato/compilato il proprio CSV, non necessariamente a un bug di codice — da verificare caso per caso, non presumere colpa del plugin.
-
-### Perché conta (lato calcolo, non solo dato)
-
-Anche quando `asset_id` **è già** popolato correttamente, oggi il beneficio si ferma a metà strada:
-- ✅ **Portfolio Engine** (`portfolio_service.py:1698-1700`, funzione period P&L per posizione) **già** distingue FEE/TAX con `asset_id` (attribuiti alla posizione, riga `per_fees_taxes[(broker_id, tx.asset_id)]`) da FEE/TAX senza (`unalloc_fees[broker_id]`, costo generico di broker) — la docstring lo dice esplicitamente: *"Fees/taxes without asset_id go to raw unallocated buckets"* (riga 1637). Questa metà del lavoro richiesto **esiste già**.
-- ❌ **Motore FIFO / Lotti** (`fifo_utils.py`, `_HOLDING_TYPES = {BUY, SELL}` in `portfolio_service.py:732`) **ignora sempre** FEE/TAX, anche quelli con `asset_id` popolato — non entrano nel calcolo del cost basis/WAC del lotto (`compute_wac_iterative`, righe 1111/1736/1791/1818 — tutte alimentate da transazioni filtrate a `_HOLDING_TYPES`). Una ritenuta su cedola o una commissione di acquisto oggi **non altera mai** il prezzo medio di carico del lotto, nemmeno quando sappiamo con certezza a quale asset appartiene.
-
-### Direzione della richiesta (definita dall'utente, 17 Luglio 2026)
-
-Il TODO **non è solo "fixare i plugin"**, ma un lavoro di verifica e consolidamento in 2 fasi:
-
-1. **Verifica/consolidamento import** — ✅ **FATTO il 18 Luglio 2026** (vedi sotto).
-2. **Integrazione nel calcolo**: quando `asset_id` è dichiarato, il costo (FEE/TAX) deve confluire nella FIFO/analisi lotti (impattare cost basis/WAC del lotto specifico) — non solo nel report di periodo per-posizione come oggi. Quando `asset_id` non è dichiarato (davvero generico), deve **restare** un costo di broker nel Portfolio Engine, esattamente come già accade oggi in `positions_contribution`. **Ancora da fare** — rimandata dall'utente, verrà affrontata a parte dopo il lavoro principale in corso (tocca il motore FIFO/lotti appena riscritto, serve un piano dedicato).
-
-### ✅ Fase 1 completata — 18 Luglio 2026
-
-Fix applicato a Directa e Schwab (bug reale) + Finpension e Revolut (fix difensivo, no-op con dati reali odierni). Pattern: nuova categoria `asset_optional` per FEE/TAX accanto alla `asset_required` esistente — collega se ISIN/ticker/symbol presente sulla riga, mai skip della riga né placeholder fittizio se assente (attenzione: una prima versione naive "aggiungi FEE/TAX ad `asset_required`" avrebbe rotto il comportamento — in Directa avrebbe creato un asset fittizio per ogni fee di conto senza ISIN, negli altri 5 plugin con pattern skip-on-missing avrebbe **scartato l'intera transazione** invece di lasciarla solo non collegata).
-
-4 nuovi test in `test_brim_providers.py` (tutti su sample CSV già bundled, nessuna fixture sintetica necessaria — i sample di Directa e Schwab contenevano già righe reali col bug, semplicemente non testate). 199/199 test passano (195 preesistenti + 4 nuovi).
-
-eToro/Freetrade/Trading212 non toccati (non affetti da questo bug specifico). `broker_generic_csv.py` non toccato (già corretto).
-
-### File coinvolti (Fase 1, completata)
-
-- `backend/app/services/brim_providers/{broker_directa,broker_schwab,broker_finpension,broker_revolut}.py`
-- `backend/test_scripts/test_external/test_brim_providers.py` (+4 test)
-
-### File coinvolti (Fase 2, da pianificare a parte)
-
-- `backend/app/utils/financial/fifo_utils.py` / `backend/app/services/fifo_lot_engine.py` — motore lotti event-sourced, oggi senza alcun concetto di FEE/TAX
-- `backend/app/utils/financial/wac_utils.py` — motore WAC/PMC a pool, alternativa più leggera
-- `backend/app/services/portfolio_service.py` — `_HOLDING_TYPES`, `compute_wac_iterative()`
-- Nota tecnica (18/07): esistono 3 motori di calcolo separati nel backend (pool WAC, lotti event-sourced, allocazione pro-rata dividendi appena scritta per `_allocate_asset_income`) — la scelta del meccanismo (mutare il costo base del lotto vs. metrica ausiliaria pro-rata mirror di `asset_income`) va decisa nel piano dedicato, non qui.
-
----
-
-## 🔍 eToro — "Withdraw Fee"/"Conversion Fee" scartate invece di importate come FEE
-
-**Data aggiunta**: 18 Luglio 2026 (scoperto durante la verifica del bug BRIM FEE/TAX sopra)
-**Status**: 🐛 Bug sospetto, **non corretto** — segnalato per decisione separata, come da preferenza dell'utente di non correggere bug fuori scope silenziosamente
-**Priorità**: Da valutare
-
-### Contesto
-
-`backend/app/services/brim_providers/broker_etoro.py` riga 20 (docstring): *"Withdraw Fee / Conversion Fee → FEE"* — ma il codice (righe 72-78, `SKIP_TYPES`) le mette tra i tipi **scartati a monte**, prima ancora di arrivare al mapping tipo. Queste righe non diventano mai una transazione `FEE`: vengono semplicemente perse durante l'import, non solo "non collegate a un asset" (bug diverso da quello appena risolto sopra).
-
-### Da valutare
-
-- Se l'utente vuole effettivamente importare questi costi (coerente con la docstring), serve spostarli da `SKIP_TYPES` a `TYPE_MAPPINGS` con `TransactionType.FEE`, verificando prima il formato reale delle righe eToro per queste 2 voci (non presente nel sample bundled `etoro-export.csv` — servirebbe un export reale o quantomeno la conferma dell'utente sul formato).
-- Se invece lo scarto è intenzionale (es. per evitare doppio conteggio con un'altra riga), la docstring va corretta per riflettere il comportamento reale.
 
 ---
 
@@ -556,30 +270,6 @@ Diverse giurisdizioni usano metodi diversi per determinare quale lotto vendere i
 - Il vincolo di over-sell va esteso nell'import
 
 ---
-
----
-
-## 📉 Grafico Guadagni per Transazione
-
-**Data aggiunta**: 20 Febbraio 2026  
-**Status**: 📋 PIANIFICATO  
-**Priorità**: Media (Phase 8)
-
-### Contesto
-Nel diagramma dei guadagni dalle varie transazioni:
-
-- **Asse Y sinistra**: scala dei valori/percentuali dell'asset
-- **Asse Y destra**: scala di guadagno/perdita delle singole transazioni di buy
-- Per ogni evento di buy, un nuovo grafico parte da 0 in y a quella data
-- Una linea con area che rappresenta la sommatoria cumulativa dei guadagni
-- Evento di vendita + tasse + commissione: doppia freccia verso il basso (da definire)
-
-### Sotto al Grafico
-- Tabella con i buy in ogni riga
-- Colonne: valore attualmente investito
-- Sotto: barra con valore stimato + guadagnato
-- Deve distinguere tra valore potenziale e realizzato (vendite parziali/totali)
-- Selettore metodo di analisi (FIFO, LIFO, PMC, etc.)
 
 ---
 
@@ -621,82 +311,11 @@ Creare un assistente AI basato su MCP server chiamato "QuarkAI".
 ---
 
 
-## 📊 Grafico Asset con rendimento a N
-
-**Data aggiunta**: 22 Luglio 2026 (Promosso)
-**Status**: 📋 PIANIFICATO (Fase 0.1)
-**Priorità**: Media
-
-### Contesto
-Con i dati degli asset ha senso mostrare i grafici oltre che per abs e % da P0, anche il rendimento a N (anni o giorni, parametrico) con il significato che ogni punto rappresenta il guadagno/perdita di valore percentuale dell'asset se vosse stato comprato N giorni prima e venduto nel giorno attuale.
-Questo da applicare sia all'asset principale che a quelli di confronto messi nel grafico, da mettere nella pagina di detail per le analisi di dettaglio.
-
-### Azione Futura
-Vedere il file `LibreFolio_developer_journal/Release_2/Ai_ideas/phase_0_detailed_roadmap.md` per i dettagli di implementazione e posizionamento UI.
-
----
-
 ## 🔍 BRIM Auto-Detect Broker via Account Code
 
-**Data aggiunta**: 8 Giugno 2026  
-**Status**: 📋 PIANIFICATO  
-**Priorità**: Alta (UX import flow)
-
-### Contesto
-
-Molti broker export includono un identificativo di conto nella prima riga o header del file (es. Directa: `Conto : CONTO COGNOME NOME`). Se il plugin BRIM durante il `detect()` ritorna anche un `account_code` estratto dal file, e se un broker dell'utente ha un campo `account_code` configurato che matcha, il sistema può pre-popolare automaticamente il broker nel wizard di import.
-
-### Design
-
-1. **BRIMProvider.detect()** — estendere il return type per includere `account_code: str | None` (opzionale, backward-compatible)
-2. **Broker model** — aggiungere campo opzionale `account_code: str | None` (configurabile dall'utente nelle settings del broker)
-3. **Frontend Import Wizard Step 1** — quando un file viene uploadato:
-   - Chiama detect endpoint → riceve `{plugin, confidence, account_code?}`
-   - Se `account_code` matcha con un broker dell'utente → pre-popola il dropdown broker
-   - Se non matcha → user sceglie manualmente (comportamento attuale)
-4. **Esempio Directa**: plugin legge riga 1, estrae "CONTO" → `account_code = "CONTO"` → matcha con broker Directa dell'utente che ha `account_code = "CONTO"`
-
-### File coinvolti
-
-- `backend/app/services/brim_provider.py` — `detect()` return type
-- `backend/app/db/models.py` — `Broker.account_code`
-- `backend/app/services/brim_providers/broker_directa.py` — implementa estrazione account_code
-- `frontend/` — Import wizard Step 1 auto-fill logic
-
-### Note
-
-- Non bloccante per il wizard MVP — è un enhancement post-lancio
-- Ogni plugin implementa l'estrazione solo se il formato lo supporta
-- Il match è case-insensitive, trimmed
-
----
-
-
-
-
-## 🔗 Link Transazioni in Asset Delete Modal
-
-**Data aggiunta**: 26 Marzo 2026  
-**Status**: 📋 ACTIONABLE (Phase 7 completata)  
-**Priorità**: Bassa (UX polish)
-
-### Contesto
-
-Quando un asset non può essere eliminato perché ha transazioni esistenti (`error_code: HAS_TRANSACTIONS`), il messaggio è generico. Ora che la pagina transazioni esiste:
-
-1. **Delete modal**: mostrare il conteggio transazioni e un link diretto alla pagina transazioni filtrata (es. "This asset has 3 transactions: [View → /transactions?asset_id=123]")
-2. **Pagina dettaglio asset**: sezione con link alle transazioni collegate
-3. **Backend**: aggiungere `transaction_count` a `FAAssetDeleteResult` quando `error_code == "HAS_TRANSACTIONS"`
-
-### Azione Futura
-
-- Aggiungere `transaction_count: int` a `FAAssetDeleteResult` quando `error_code == "HAS_TRANSACTIONS"`
-- Nel frontend, renderizzare un link cliccabile nella ConfirmModal results e nei toast
-- ~~Implementare il filtro `?asset_id=` nella pagina transazioni~~ ✅ **già esiste** — `filters.asset_id`/`asset_ids` già supportati in `/transactions` (`+page.svelte:178-179,744`), verificato 17 Luglio 2026. Scope residuo ridotto a solo campo backend + link FE.
-
----
-
----
+**Status**: ❌ SCARTATA (07/09/2026, decisione utente) — pochi broker rilasciano dati che
+identificano il conto, e l'utente divide già da sé i file in fase di upload. Nessuna azione;
+registrata qui solo perché l'idea non ritorni.
 
 ## 💰 Futura policy cedola (coupon_policy)
 
@@ -723,6 +342,14 @@ Prima di investire nella condivisione multi-worker, vale la pena spendere tempo 
 servono tutte o se ci sono refusi storici (cache aggiunte per colli di bottiglia poi spariti,
 TTL mai rivisti, cache mai popolate davvero). Il pannello "Server Caches" in Global Settings
 è lo strumento di osservazione già pronto per questa analisi (size/TTL/hit per nome).
+
+**Fuse qui (07/09) le code residue della voce "Web search / link-finder"** (voce eliminata:
+la parte search è completa con `ddgs`): (a) la cache dei risultati del link-finder
+(`web_link_finder._cache`) è un dict in-process → non condivisa tra worker: valutarla dentro
+questo stesso studio (TTL/invalidazione, degradazione graceful al dict in-process se nessuna
+cache esterna è configurata); (b) la Fase B SearXNG resta archiviata
+(`phases/04_webSearchEngine/`) come riferimento se mai servisse un primario self-hosted —
+nessuna azione finché `ddgs` regge.
 **Nota**: questa voce chiede l'analisi, non la soluzione.
 
 **Data aggiunta**: 14 Aprile 2026  
@@ -923,38 +550,6 @@ di emissione prezzo, che nel modello disaccoppiato non vale più.
 
 ---
 
-## 🏷️ Transaction Form — Conteggio Asset/Cash per Broker
-
-**Data aggiunta**: 1 Maggio 2026  
-**Status**: 📋 PIANIFICATO  
-**Priorità**: Bassa
-
-### Contesto
-
-Nel form di creazione/modifica transazione, quando l'utente seleziona un broker e un tipo di operazione (BUY, SELL, DIVIDEND, ecc.), sarebbe utile mostrare **accanto al nome del broker** un badge con il conteggio degli asset o del cash già presenti per quel broker, filtrati per il tipo di strumento selezionato.
-
-Esempio: se l'utente sta facendo un SELL di un ETF, accanto al broker "Directa" mostrare `3 ETF` per indicare che quel broker ha già 3 ETF in portafoglio. Per operazioni cash (CASH_IN/CASH_OUT), mostrare il saldo cash disponibile nella valuta selezionata.
-
-### Benefici
-
-- **Contesto immediato**: l'utente capisce subito se il broker scelto ha già posizioni dello stesso tipo
-- **Prevenzione errori**: riduce la probabilità di selezionare il broker sbagliato
-- **Guida al SELL**: per le vendite, sapere quanti lotti sono disponibili aiuta a non creare over-sell
-
-### Implementazione
-
-1. **Backend**: endpoint o estensione di uno esistente che restituisca per ogni broker il conteggio asset raggruppato per `asset_type` e il saldo cash per valuta
-2. **Frontend**: nel selettore broker del transaction form, mostrare un badge inline (es. `Directa (3 ETF)` o `Directa (€ 1.250,00)`) usando i dati caricati al cambio di asset type / valuta
-3. Il conteggio deve aggiornarsi reattivamente al cambio di operazione o tipo strumento
-
-### Note
-
-- Il dato è derivato dalle transazioni già importate → richiede Phase 7 completata
-- Valutare se il conteggio deve considerare solo posizioni aperte (qty > 0) o tutte le storiche
-- Per SELL: potrebbe mostrare anche la quantità totale disponibile (somma qty dei lotti aperti)
-- Già la summary del broker potrebbe bastare, da vedere
----
-
 ## ⚡ Migrazione a ORJSONResponse per performance JSON
 
 **Data aggiunta**: 11 Giugno 2026
@@ -1005,36 +600,6 @@ Aggiungere un calcolatore FIRE non solo da oggi al futuro, ma anche fissando una
 
 ---
 
-## Web search / link-finder
-
-### SearXNG metasearch — Fase B (deferred 2026-07-28)
-- **What**: self-hosted, anonymized, multi-engine metasearch as an *opt-in primary* engine for
-  the asset web link-finder, in front of the `ddgs` fallback (runtime chain `[searxng → ddgs]`).
-- **Why deferred**: `ddgs` (pip, multi-engine, zero-infra) already solves the DDG 202-anomaly
-  rate-limiting with no new infrastructure. SearXNG adds a container + config for marginal gain
-  today.
-- **Trigger to revisit**: search usage grows beyond what `ddgs` covers — heavier/aggregate
-  querying, need for true upstream anonymization, or `ddgs` itself gets rate-limited/broken.
-- **Detailed plan (already written)**:
-  `Phase_0/04_webSearchEngine/plan-phase00SearxngMetasearch.prompt.md`
-- **Deploy shape**: sidecar container (no Redis — limiter off), dev lifecycle via
-  `dev.py` (`docker compose up -d searxng`), internal-only in prod. Best-effort (boot never
-  waits for it). See the plan for D1–D10.
-
-### External shared cache across uvicorn workers (study — 2026-07-28)
-- **What**: the link-finder result cache (`web_link_finder._cache`) is an **in-process TTL dict**
-  → not shared across uvicorn workers (each worker re-queries the same URL). Study whether an
-  **external cache** (e.g. Redis/Valkey) shared by all workers is worth it.
-- **Synergy with SearXNG**: if/when the SearXNG Fase B lands it may ship a Redis anyway →
-  **reuse the same Redis** for this cross-worker cache instead of standing up a second store.
-- **Scope of the study**: which caches benefit (link-finder results, FX rates, provider probes?),
-  TTL/invalidation, single-worker dev vs multi-worker prod, and it MUST degrade gracefully to the
-  in-process dict when no external cache is configured (optional dependency).
-- **Trigger to revisit**: together with the SearXNG Fase B decision (shared Redis), or if prod
-  moves to multi-worker uvicorn.
-
----
-
 ## Risk Analysis
 
 ### RQMC with explicit scrambling contract (low priority — 2026-07-28)
@@ -1069,14 +634,3 @@ Aggiungere un calcolatore FIRE non solo da oggi al futuro, ma anche fissando una
   automatic or silent substitution is forbidden.
 - **Trigger to revisit**: repeated replay use demonstrates stable, auditable proxy
   mappings and the persistence UX has been designed.
-
-
-## Realizzare un tool per aiutare nell'allocazione del pac
-usando l'esempio studio di LibreFolio_developer_journal/Release_2/guida_allocazione_pac_multi_etf.md pensato per directa che ha vincolo di acquisto intero e allocazione in euro,
-creare un tool che prenda vari parametri in input, risultanti dalla decisione nell'allocazione pac e creare vari flag per attivare la variante intera, il metodo di inserimento (numero quote o ammontare massimo), etc...
-Il tutto deve confluire in una funzionalità backend esposta tramite API e un frontend che consenta all'utente di interagire con il tool. In seguito lo stesso tool mi aspetto potrà essere esportato a un agente AI tramite server MCP così che dopo aver fatto l'analisi pac possa far eseguire al backed, possibilmente in forma ottimizzata i calcoli riportando tutte le colonne e le informazion e facendo poi cedicere all'ia o all'utente.
-
-## Aggiungere la colonna Yield on Cost (YOC) nelle tabelle delle posizioni in dashboard e broker
-L'utente @ExpectChaos ha manifestato interesse nella possibilità di avere una colonna che mostri il rendimento attuale dell'asset rispetto al costo di acquisto (Yield on Cost, YOC). Questa metrica è particolarmente utile per gli investitori che vogliono monitorare il rendimento delle loro posizioni nel tempo, indipendentemente dalle fluttuazioni del mercato, specie quando si usano strumenti a distribuzione.
-
-## Mettere una modalità privacy nella dashboard che permetta di nascondere i valori numerici e mostrare solo le percentuali, utile per chi vuole condividere screenshot senza rivelare il valore del portafoglio.

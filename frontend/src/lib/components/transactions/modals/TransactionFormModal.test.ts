@@ -8,11 +8,10 @@
  *   T1-b — create mode starts with an EMPTY quantity (`emptyDraft().quantity`
  *     is `''`, not `'0'`): a pre-filled zero forced the user to cursor around
  *     it just to type decimals.
- *   T3 — duplicate mode preserves the source row's date. Duplicating is how a
- *     misclassified historical row gets corrected; resetting the date to today
- *     destroyed exactly the field being corrected. The bulk-workspace *clone*
- *     paths (resolveInitialRows / createOpFromClone / cloneRow) preserve the
- *     date too since the real T3 fix — the E2E coverage for those is tx-clone.
+ *   T3 — clone preserves the source row's date. The duplicate *mode* of this
+ *     modal was removed as dead code (nothing reachable set it): the real clone
+ *     paths live in the bulk workspace (resolveInitialRows / createOpFromClone /
+ *     cloneRow) and are covered by the tx-clone E2E.
  *
  * Duplicate mode is currently not reachable from any page action (rows clone
  * through the bulk workspace), which is exactly why this is a component test
@@ -87,19 +86,6 @@ import TransactionFormModal from './TransactionFormModal.svelte';
 import type {TXReadItem} from '../types';
 
 /** A standalone BUY row, dated deliberately far from "today". */
-const SOURCE_ROW: TXReadItem = {
-    id: 77,
-    broker_id: 1,
-    asset_id: 5,
-    type: 'BUY',
-    date: '2024-03-15',
-    quantity: '5',
-    cash: {code: 'EUR', amount: '100'},
-    related_transaction_id: null,
-    tags: [],
-    description: 'duplicate source',
-};
-
 function mount(props: Record<string, unknown> = {}) {
     const onClose = vi.fn();
     return {onClose, ...render(TransactionFormModal, {open: true, mode: 'create', items: null, onClose, ...props})};
@@ -115,22 +101,5 @@ describe('TransactionFormModal — draft seeding (T1-b, T3)', () => {
 
         const qty = (await screen.findByTestId('tx-form-quantity')) as HTMLInputElement;
         expect(qty.value).toBe('');
-    });
-
-    it('T3: duplicate mode preserves the source date (and the rest of the draft)', async () => {
-        mount({mode: 'duplicate', items: [SOURCE_ROW]});
-
-        // The date input lives inside the date wrapper; it shows the ISO value as-is.
-        const dateWrap = await screen.findByTestId('tx-form-date-wrap');
-        const dateInput = dateWrap.querySelector('input') as HTMLInputElement;
-        expect(dateInput, 'duplicate mode must render an editable date field').toBeTruthy();
-        expect(dateInput.value, 'duplicate must keep the historical date, not reset to today').toBe('2024-03-15');
-
-        // The rest of the draft comes through too (spot-check the two fields the
-        // correction workflow edits around).
-        const qty = (await screen.findByTestId('tx-form-quantity')) as HTMLInputElement;
-        expect(qty.value).toBe('5');
-        const cash = (await screen.findByTestId('tx-form-cash-amount')) as HTMLInputElement;
-        expect(cash.value).toBe('100');
     });
 });

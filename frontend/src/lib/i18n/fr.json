@@ -2005,7 +2005,6 @@
     "form": {
       "titleCreate": "Nouvelle transaction",
       "titleEdit": "Modifier la transaction",
-      "titleDuplicate": "Dupliquer la transaction",
       "titleView": "Voir la transaction",
       "sectionRequired": "Obligatoire",
       "sectionOptional": "Optionnel",

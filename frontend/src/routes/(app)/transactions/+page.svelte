@@ -209,7 +209,7 @@
 
     // Form modal (single tx: create / edit / duplicate / view).
     let formOpen = $state(false);
-    let formMode = $state<'create' | 'edit' | 'duplicate' | 'view'>('create');
+    let formMode = $state<'create' | 'edit' | 'view'>('create');
     let formItems = $state<FormModalItems | null>(null);
     let highlightDrivenViewTxId = $state<number | null>(null);
     let lastHighlightParam = $state<string | null>(null);
