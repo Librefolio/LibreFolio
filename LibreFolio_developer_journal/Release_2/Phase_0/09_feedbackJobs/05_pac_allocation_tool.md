@@ -1,30 +1,149 @@
-# 05 — PAC Allocation Tool (feature grande)
+# 05 — Piattaforma Tool e allocatore PAC / ribilanciamento
 
-**Complessità**: M–L · **Tipo**: la "feature-faro" del round (self-contained)
+**Complessità**: L piattaforma + XL allocatore completo · **Tipo**: feature-faro del round
 **Origine**: nota utente · **Studio di riferimento**: `Release_2/guida_allocazione_pac_multi_etf.md`
 
-## Richiesta (dalla nota utente)
+> **Analisi e decisioni 2026-09-07**: lo scope è stato ampliato durante la pianificazione.
+> La stima M–L del solo PAC euro buy-only non descrive più la richiesta completa.
+> Fonte operativa: [06_piano_sprint.md](06_piano_sprint.md), T0/T1/T2 e SP12–14.
+> Nessuna implementazione avviata.
+
+## Motivazione originale
 
 Un tool per aiutare nell'allocazione del PAC (Piano di Accumulo), usando lo studio di riferimento
 pensato per Directa — che ha **vincolo di acquisto intero** (quote intere) e **allocazione in euro**.
 
-Il tool:
-- Prende in input vari parametri risultanti dalla decisione di allocazione PAC.
-- Flag per attivare la **variante intera** (quote intere), il **metodo di inserimento**
-  (numero quote oppure ammontare massimo in euro), ecc.
-- Deve confluire in una **funzionalità backend esposta via API** + un **frontend** con cui
-  l'utente interagisce.
-- In seguito (fase successiva): lo stesso tool esportabile a un agente AI via **server MCP**,
-  così che dopo l'analisi PAC possa far eseguire al backend — possibilmente in forma
-  ottimizzata — i calcoli, riportando tutte le colonne e le informazioni, facendo poi decidere
-  all'AI o all'utente.
+Lo studio resta la base numerica, non una lista di costanti di prodotto. La sua parte finale
+modifica obiettivi, budget e pesi rispetto all'inizio: esempi originari e criterio aggiornato
+vanno distinti.
 
-## Note per chi la pianifica
+## T0 — Piattaforma backend a plugin
 
-- Leggere prima lo studio `guida_allocazione_pac_multi_etf.md` (vincolo intero Directa,
-  allocazione in euro, esempi numerici).
-- È una feature self-contained: nessuna dipendenza dai task in corso; va bene come "la cosa
-  grossa" di un round, con piano dedicato in `Phase_0/<NN>/`.
-- La fase MCP è un'estensione futura della stessa feature: progettare l'API del backend in
-  modo che sia già pulita e documentabile (response_model, tipi espliciti) per non doverla
-  riaprire quando arriverà il server MCP.
+- Tutti i tool vivono come **plugin backend**, con modelli input/output, JSON Schema completi,
+  versioni, capacità e limiti espliciti.
+- **Revisione 2026-09-07**: catalogo completo, **compute bulk** e diagnostics; tutti
+  autenticati, diagnostica dettagliata solo amministratore. Schemi già nel catalogo:
+  nessun endpoint schema separato, nessun prefill sotto `/tools`.
+- **Custom-first approvato**: il descriptor indica una chiave UI conosciuta; frontend
+  seleziona componenti compilati, mai codice/URL/path arbitrari dal backend. UI standard
+  automatica rinviata finché un secondo tool concreto non la giustifica.
+- Servizio di esecuzione condiviso: validazione per item, correlation ID e ordine,
+  risultati/errori isolati, output validato, CPU/queue/timeout/cancel limitati e dichiarati.
+- Il futuro **MCP** chiamerà gli stessi servizi passando parametri e principal autenticato.
+  Server e librerie MCP non fanno parte di questo round.
+- Plugin matematico separato dagli adapter di accesso al portafoglio: niente DB, HTTP,
+  ricerca provider o scritture finanziarie durante il calcolo puro.
+
+### Catalogo e letture dei dati
+`GET /api/v1/tools/catalog` contiene ciò che serve per popolare hub/selettori e configurare
+le UI custom: identità/versioni, nomi/descrizioni e chiavi i18n, icona/categoria, capacità,
+schemi input/output completi, parametri/default/enum/unità/vincoli, limiti e chiave/versione
+del renderer compilato. I default non sono prezzi correnti o dati personali.
+
+I pulsanti "copia dal portafoglio" della UI interrogano **gli endpoint esistenti dei domini**
+Portfolio/Broker/Asset/FX. Se manca un dato o un raggruppamento riusabile, estendere quella
+API/servizio, non creare un secondo accesso Tool al portafoglio. Aggregazione economica,
+conversioni e normalizzazione dei target restano backend; UI orchestra richieste e copia.
+Questo stesso confine è riusabile dal futuro MCP.
+
+### Compute eterogeneo e riuso
+`POST /api/v1/tools/compute` accetta anche più istanze dello stesso tool, con correlation ID
+distinti. Una sola richiesta non equivale a un unico problema matematico: scenari diversi
+richiedono calcoli distinti, isolati e limitati.
+
+Prevedere riuso di preparazioni immutabili e deduplica **esatta** nel batch autorizzato,
+per plugin puri/deterministici e chiave completa di versione/modalità/input/snapshot/opzioni.
+Restituzione sempre uno-a-uno degli item originari, con relativo ID e stato; nessuna cache
+cross-user implicita o fusione approssimata di scenari differenti.
+
+### Diagnostics: cosa farebbe
+`GET /api/v1/tools/diagnostics`, proposta read-only admin, mostrerebbe plugin caricati/scartati,
+errori di import/registrazione, codici duplicati o schemi non validi, versioni/capacità e
+stato/limiti del pool (attivi/coda/disponibilità). Riusa i dati di discovery e dell'executor.
+
+Non esegue tool o probe, non scarica prezzi, non resetta o ripara nulla; niente input/output
+personali, credenziali o log grezzi dei job. Statistiche locali al worker dichiarate come
+tali in deployment multi-processo, non spacciate per totali globali. Il backend non può
+certificare da solo la presenza di un renderer nel bundle frontend.
+
+## T1 — Un solo modello matematico
+
+- **PAC puro**: patrimonio iniziale zero e target scelto dall'utente.
+- **Ribilanciamento**: patrimonio iniziale valorizzato.
+- **PAC ribilanciante**: patrimonio iniziale più nuovo versamento.
+- Stesso asset posseduto da più broker → posizione aggregata per identità canonica.
+  Non fondere strumenti soltanto perché hanno lo stesso nome.
+- Liquidità aggregata **per valuta**: EUR dai broker con EUR, USD dai broker con USD, ecc.
+  Nessun vincolo di instradamento per broker; non trasformare tutto in una sola cassa.
+- Liquidità aggiuntiva non ancora nel sistema: **lista valuta/importo**, separata da quella
+  copiata dal portafoglio.
+- Quote intere/frazionarie con passo esplicito; inserimento in quantità/valori con unità
+  chiare. Percentuali iniziali richiedono un totale, non bastano da sole.
+- **Vendite opzionali**, con minimo/massimo per titolo; distinguere minimo obbligatorio da
+  minimo applicato soltanto se si vende. Nessuno short/leva implicito.
+- **Conversioni FX opzionali** fra casse, con tassi, costi/margini, importi debitati/accreditati
+  e liquidità finale per valuta. Disabilitate → nessun finanziamento incrociato implicito.
+- Costi, buffer, riserve, bande target e vincoli non vanno inventati o rilassati silenziosamente.
+  Nessun acquisto/vendita simultaneo dello stesso titolo o arbitraggio FX artificiale.
+- Gate numerico prima del solver: target/turnover, precisione/quantizzazione, limiti,
+  commissioni e modello FX, fattibilità, no-trade, ottimalità provata e limiti operativi.
+  Massimizzare gli acquisti non è un obiettivo corretto quando le vendite li possono finanziare.
+
+## T2 — Hub, copie dal portafoglio e UI custom
+
+- Voce **Tool sotto Transazioni** nel primo blocco della sidebar, quello dell'utente.
+  `/tools` con griglia di card da catalogo; pagine dei singoli tool, senza una gallery vuota
+  presentata come calcolatore funzionante.
+- Input manuale sempre possibile, anche senza asset DB. Pulsanti espliciti e indipendenti
+  per copiare situazione iniziale, prezzi o distribuzione corrente come base del target.
+- Snapshot modificabili con preview delle sostituzioni; niente binding live, polling o
+  risposte tardive che sovrascrivono modifiche dell'utente.
+- Le copie usano i client delle API di dominio descritti sopra, senza route Tool di prefill.
+- Scelta esplicita della base: quota economica personale e inventario intero dei broker
+  non sono intercambiabili. Scope richiesto autorizzato integralmente; dati mancanti
+  non diventano zero e titoli non vengono esclusi silenziosamente.
+- Stessa identità aggregata dai valori non arrotondati, denominatore del target chiaro,
+  prezzo/valuta/quote-base/fonte/data conservati.
+- Grafici prima/target/dopo, scostamenti/bande, buy/sell e flussi cash/FX, accompagnati
+  da tabella completa e diagnostica. Tutti i calcoli economici restano backend.
+- Privacy globale sui valori personali del tool; nessun pulsante di esecuzione ordini,
+  stima fiscale o raccomandazione automatica della strategia.
+
+### Confronto UI obbligatorio — 2026-09-07
+Prima della realizzazione: viste ASCII di hub/card, incompatibilità, editor, copie dal
+portafoglio, vincoli, contributi per valuta, report/grafici e stati invalid/infeasible/busy/stale,
+desktop/mobile. Annotare controlli e interazioni; raccogliere feedback misurato e ottenere
+approvazione del dev prima del codice delle viste.
+
+Dopo implementazione integrata: runbook dalla sidebar Tool agli scenari manuali/copiati,
+calcolo e lettura del risultato, con ambiente/ruolo/dati di test e risultati attesi.
+Raccogliere feedback operativo, correggere e riproporre prima di dichiarare conclusa la UI.
+Non basta mostrare un mock funzionante o un esito dei test.
+
+### Parallelismo
+Concordati catalogo/compute e I/O PAC, possono procedere separatamente piattaforma backend,
+modello/evaluator/solver, hub e UI/copiatore su fixture di contratto. Integrazione finale
+su backend reale; un owner per file condivisi, client generato e i18n. Il calcolatore non
+attende P4-1/BRIM/execute_batch. Mappa e risorse condivise nella sezione 11 del [piano](06_piano_sprint.md).
+
+## Stato reale e dipendenze — 2026-09-07
+
+Il PAC Planning di AI Export è un prompt, l'optimizer risk produce pesi continui da storia
+rendimenti, Scheduled Investment è pricing di strumenti a rendimento programmato:
+**nessuno è questo allocatore**.
+
+Le primitive registry/schema/bulk/worker/controlli UI sono riusabili, non la semantica di quei
+tre sottosistemi. Il tool non dipende dai grandi refactor P4; dipende dal suo contratto plugin,
+dal modello numerico e dagli adapter di copia autorizzati.
+
+| ID | Esito e taglia | Sprint |
+|---|---|---|
+| T0 | Piattaforma nuova, L; custom-first e schemi completi approvati. | SP12 |
+| T1 — specifica/evaluator | Modello ampliato da formalizzare, casse per valuta e FX opzionale. | SP13 |
+| T2 — snapshot | Copie esplicite, aggregazione/ownership/prezzi da rendere coerenti. | SP13 |
+| T1 — solver | Nuovo, XL con buy/sell/FX e stati di ottimalità verificabili. | SP14 |
+| T2 — editor/report | UI custom e grafici nuovi, L; dipendono dal contratto completo. | SP14 |
+
+DoD, esempi numerici, superfici file:riga, rischi e oracoli indipendenti sono nel
+[piano sprint](06_piano_sprint.md). Nessun server MCP o cambiamento dei motori FIFO/WAC
+richiesto per consegnare il tool.

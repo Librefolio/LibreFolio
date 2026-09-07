@@ -12,23 +12,27 @@ Skill di riferimento per chi esegue: `brim-plugin`.
 ### Contesto
 `backend/app/services/brim_providers/broker_etoro.py` — la docstring (riga ~20) dice
 *"Withdraw Fee / Conversion Fee → FEE"* ma il codice (righe 72-78, `SKIP_TYPES`) le mette tra
-i tipi **scartati a monte**: queste righe non diventano mai una transazione `FEE`, vengono
-perse in import. Bug diverso dal FEE/TAX-non-collegato: qui la transazione non nasce proprio.
-Ha senso anche estendere la ricerca a gli altri plugin per vedere se bug simili sono presenti.
+i tipi **scartati a monte**: queste righe non diventano una transazione `FEE`.
+Lo scarto è confermato; il fatto che manchi un ulteriore addebito economico va provato,
+perché la riga potrebbe descrivere un costo già compreso nel prelievo.
 
 ### Da valutare (decisione prima del codice)
-- Se vogliamo importarle (coerente con la docstring): spostarle da `SKIP_TYPES` a
-  `TYPE_MAPPINGS` con `TransactionType.FEE`, **prima** verificando il formato reale di queste
-  righe in un export eToro vero (il sample bundled `etoro-export.csv` non le contiene — serve
-  un export reale o la conferma dell'utente sul formato).
+- **Verifica 2026-09-07**: il sample `etoro-export.csv:6-8` **contiene** le righe:
+  Withdraw Fee `0.00`, Withdrawal Conversion Fee Amount `-1.36` con Realized Equity Change
+  `0.00`, accanto a un Withdraw Request. La precedente nota "sample assente" era errata.
+- Prima di spostarle in `TYPE_MAPPINGS`, riconciliare addebito effettivo, prelievo associato
+  e valuta di regolamento. Serve un esempio non-zero di Withdraw Fee o conferma del formato;
+  una FEE zero non soddisfa il contratto cash strettamente negativo.
 - Se lo scarto è intenzionale (es. per evitare doppio conteggio): correggere la docstring per
   riflettere il comportamento reale.
+- Nella ricognizione mirata degli altri skip list non sono emersi altri bug confermati
+  dello stesso tipo. Nessuna campagna speculativa; B1 resta condizionale all'evidenza.
 
 ---
 
-## 💸 BRIM: FEE/TAX non collegati all'asset — verifica e consolidamento
+## 💸 BRIM: FEE/TAX e lotti — ✅ ALLOCAZIONE ECONOMICA GIÀ CONSEGNATA
 
-**Complessità**: M · **Origine**: TODO_FUTURI (Fase 1 completata il 18/07)
+**Complessità residua**: XS documentale · **Origine**: TODO_FUTURI (Fase 1 completata il 18/07)
 
 ### Stato (dalla nota)
 - **Fase 1 (fatta)**: Directa e Schwab corrette (bug reale confermato sui sample bundled);
@@ -38,25 +42,23 @@ Ha senso anche estendere la ricerca a gli altri plugin per vedere se bug simili 
   riga madre), `broker_coinbase.py:283-303`, `broker_degiro.py:87-103` (mappa tipo→
   requires_asset caso per caso), `broker_generic_csv.py` (collega se il campo asset è pieno).
 
-### Cosa resta (Fase 2, da pianificare)
-- **Motore FIFO/lotti** ignora sempre FEE/TAX anche quando hanno `asset_id`: non entrano nel
-  cost basis/WAC del lotto. Una ritenuta su cedola o una commissione d'acquisto oggi non
-  altera mai il prezzo medio di carico.
-- Il **Portfolio Engine** invece già distingue (period P&L per posizione: FEE/TAX con
-  asset_id attribuiti, senza → bucket non allocato) — metà del lavoro esiste.
-- Nota tecnica (18/07): esistono 3 motori separati (pool WAC, lotti event-sourced, allocazione
-  pro-rata di `asset_income`) — la scelta del meccanismo (mutare il costo base del lotto vs
-  metrica ausiliaria pro-rata) va decisa nel piano dedicato.
-- File: `backend/app/services/fifo_lot_engine.py`, `backend/app/utils/financial/wac_utils.py`,
-  `backend/app/services/portfolio_service.py` (`_HOLDING_TYPES`, `compute_wac_iterative`).
-- Cross-link: tocca la stessa area del regime fiscale (in TODO_FUTURI, futuro) — coordinare
-  se pianificati insieme.
+### Stato reale verificato — 2026-09-07
+- **FIFO v4 alloca già FEE/TAX collegati all'asset** e produce metriche nette:
+  `fifo_lot_engine.py:1038,1199,1281`; `lots_analysis_service.py:616,1335-1393`.
+- FEE usa trade stesso giorno, precedente, holdings, orphan; TAX privilegia prima i redditi.
+  Niente D+1; i costi senza asset restano al livello broker/portfolio.
+- L'allocazione economica non muta quantità, frammenti e closure. **WAC di acquisizione
+  lordo e metriche nette restano separati per scelta**: non è prova di costi ignorati.
+- Non implementare una nuova Fase 2 dalla nota del 18/07. Capitalizzare ritenute, custodia
+  o ratei nel WAC sarebbe un'altra policy, con rischio di doppia sottrazione, fuori scope.
+- Rimandi: [piano FIFO v4](../../../RoadmapV4_UI/fifo-engine/v4-fee_tax_integration/implementation-plan-v5.md)
+  e [analisi B2](06_piano_sprint.md). Regime fiscale futuro non riaperto.
 
 ---
 
 ## 🔗 Link transazioni nella Asset Delete Modal
 
-**Complessità**: S · **Origine**: 26/03/2026, scope ridotto 17/07
+**Complessità**: M · **Origine**: 26/03/2026, scope riesaminato 2026-09-07
 
 ### Richiesta
 Quando un asset non si può eliminare perché ha transazioni (`error_code: HAS_TRANSACTIONS`),
@@ -67,5 +69,34 @@ il messaggio è generico. Ora che la pagina transazioni esiste:
 3. Backend: `transaction_count: int` in `FAAssetDeleteResult` quando `error_code == "HAS_TRANSACTIONS"`.
 
 ### Nota
-Il filtro `?asset_id=` nella pagina transazioni **esiste già** (`+page.svelte`, verificato
-17/07) — scope residuo ridotto a campo backend + link nel frontend.
+Il filtro `?asset_id=` **esiste già**; riusare `buildTransactionsFiltersUrl` senza
+trascinare filtri precedenti. Il dettaglio asset non ha ancora il link richiesto.
+
+**Analisi 2026-09-07**: la UI è in `assets/+page.svelte` e usa `ConfirmModal`, non un
+componente autonomo AssetDeleteModal. Il ramo singolo chiude anche se bloccato; la bulk
+mostra solo testo per risultato. Servono risultati persistenti con azione-link tipizzata.
+
+Il backend ha difetti strettamente accoppiati da includere: NOT_FOUND senza `deleted_count`
+richiesto; rollback di un item che può annullare successi già dichiarati; commit finale
+fallito soltanto loggato. Verificare cancellazione reale, non solo contatori response.
+
+Il conteggio bloccante globale può superare le transazioni accessibili al chiamante:
+questa distinzione è già prevista dalla policy degli asset. Non usare `tx_count_own`
+come equivalente dei permessi VIEWER/EDITOR e non esporre record privati tramite il link.
+API sync prima della UI; coordinare col successivo spostamento di `asset_source.py`.
+
+**Gate UX 2026-09-07:** prima ASCII del risultato bloccato singolo/bulk e del link nel
+dettaglio, con approvazione del dev. Dopo: istruzioni per raggiungere la modale e provare
+fixture eliminabili/bloccate, conteggi e navigazione filtrata, raccogliendo feedback
+operativo senza cancellare dati reali. Backend e UI possono avanzare su DTO concordati;
+il raccordo in asset_source precede il trasloco P4-1.
+
+## Analisi per task — 2026-09-07
+
+Baseline `a9138140`; rischi, dipendenze e DoD in [06_piano_sprint.md](06_piano_sprint.md).
+
+| ID | Esito | Sprint |
+|---|---|---|
+| B1 | Scarto confermato, effetto economico da provare; S–M se cambia parser, blocco esplicito altrimenti. | SP09 condizionale |
+| B2 | ✅ Allocazione/net FIFO v4 già consegnati; WAC lordo separato intenzionalmente. | Nessun codice |
+| B3 | Aperto, M con correttezza della persistenza, count e link singolo/bulk/dettaglio. | SP03 |
