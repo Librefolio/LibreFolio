@@ -14,8 +14,22 @@
     'use strict';
 
     var FALLBACK_LANG = 'en';
-    // GitHub Pages URL for remote fallback when screenshots are not built locally
-    var GITHUB_PAGES_BASE = 'https://alfystar.github.io/LibreFolio';
+
+    /**
+     * Public documentation site, used to fetch screenshots that are missing locally.
+     *
+     * Screenshots are gitignored build artefacts (`./dev.py mkdocs gallery`), so a
+     * self-hosted or nightly image legitimately ships without them — this fallback is
+     * the only thing standing between that and a page full of broken images.
+     *
+     * The value is injected from `config.site_url` by `overrides/main.html`, so it
+     * cannot drift from the real address. The literal below is only a safety net for
+     * a page rendered without that template; it must stay in sync with `site_url`.
+     */
+    var GITHUB_PAGES_BASE = (function () {
+        var injected = typeof window !== 'undefined' ? window.LF_GALLERY_FALLBACK_BASE : null;
+        return String(injected || 'https://librefolio.github.io/LibreFolio').replace(/\/+$/, '');
+    })();
 
     /**
      * Detect site base path from the current page URL.
