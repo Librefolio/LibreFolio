@@ -7,7 +7,10 @@
                    POST /transactions/commit with 1 TXUpdateItem in updates
   - 'view'     → readonly display (Save button hidden)
 
-  Field gating per type comes from `transactionTypeRules.ts` (UI hint only —
+  With commitOnSave=false, Apply only emits the local draft to BulkModal;
+  the parent owns batch validation and commit.
+
+  Field gating per type comes from `transactionTypeStore.ts` (UI hint only —
   authoritative validation is server-side via POST /transactions/validate).
 
   Sections:
@@ -226,7 +229,7 @@
         broker_id: number;
         /** For fx: the "To" cash (different currency). */
         cash: {code: string; amount: string} | null;
-        /** "To" side date — may differ from "From" side (e.g. wire transfer arrival). */
+        /** Destination date, which may differ from the source date. */
         date: string;
         /** Quantity for the "To" side (transfer_asset: receiver qty). */
         quantity?: string;
@@ -273,8 +276,9 @@
             qty = String(Math.abs(Number(qty)));
         }
         let cash = tx.cash ? {code: tx.cash.code, amount: tx.cash.amount} : null;
-        if (cash && txRule.cashSign === 'negative' && Number(cash.amount) < 0) {
-            cash = {code: cash.code, amount: String(Math.abs(Number(cash.amount)))};
+        // Paired cash editors show magnitudes; the collector signs the two legs.
+        if (cash && (txRule.cashSign === 'negative' || (txRule.requiresPair && mode !== 'view')) && Number(cash.amount) < 0) {
+            cash = {code: cash.code, amount: cash.amount.replace(/^-/, '')};
         }
         return {
             broker_id: tx.broker_id,
@@ -703,6 +707,9 @@
         }
         return null;
     });
+    /** FX has one broker, including presets, late hydration and type switches.
+     *  Keep the stored partner untouched in view mode so historical facts stay visible. */
+    let effectiveDualTo = $derived<DualDraftTo>(pairLayout === 'fx' && mode !== 'view' ? {...dualTo, broker_id: draft.broker_id} : dualTo);
     /** Auto-sign: user enters positive, backend expects negative. */
     let autoNegateQty = $derived(rule.quantityRule === 'negative');
     let autoNegateCash = $derived(rule.cashSign === 'negative');
@@ -731,12 +738,17 @@
      *  In paired mode also requires the partner side fields (broker, cash for FX). */
     let isFormComplete = $derived.by(() => {
         void $typesVersion; // re-derive when server type rules load
-        if (!isDraftReadyForValidation(draft)) return false;
+        if (!draft.date || !isDraftReadyForValidation(draft)) return false;
         // Paired mode: partner side must also be populated
         if (pairLayout != null) {
-            if (!dualTo.broker_id || dualTo.broker_id <= 0) return false;
-            // FX layout requires partner cash amount
-            if (pairLayout === 'fx' && (!dualTo.cash || !dualTo.cash.amount || dualTo.cash.amount.trim() === '' || dualTo.cash.amount === '0')) return false;
+            if (!effectiveDualTo.broker_id || effectiveDualTo.broker_id <= 0 || !effectiveDualTo.date) return false;
+            if (pairLayout === 'fx') {
+                return [draft.cash, effectiveDualTo.cash].every((cash) => {
+                    if (!cash?.code.trim() || !cash.amount.trim()) return false;
+                    const amount = Number(cash.amount);
+                    return Number.isFinite(amount) && amount !== 0;
+                });
+            }
         }
         return true;
     });
@@ -824,8 +836,7 @@
 
     const scheduler = createValidateScheduler({
         // Auto-fire only when the form is fully complete (both sides for paired).
-        // Bugfix-2 §C5 + W3-fix: uses isFormComplete which checks dualTo fields.
-        // Manual ⚡ Validate now always fires regardless.
+        // Manual dispatch bypasses debounce; its button uses the same completeness gate.
         enabled: () => !isReadonly && isFormComplete,
         draftKey: () => lastDraftKey,
         validateFn: async () => {
@@ -933,7 +944,7 @@
     });
     $effect(() => {
         if (!open || isReadonly) return;
-        const key = JSON.stringify(draft) + JSON.stringify(dualTo) + (wacCurrencyHint ?? '');
+        const key = JSON.stringify(draft) + JSON.stringify(effectiveDualTo) + (wacCurrencyHint ?? '') + `:${$typesVersion}`;
         if (key === lastDraftKey) return;
         lastDraftKey = key;
         commitFailed = false;
@@ -1018,11 +1029,11 @@
         if (!pairLayout) return [collectCreate()];
 
         const toSide: TxDualSide = {
-            broker_id: dualTo.broker_id,
-            date: dualTo.date,
-            cash: dualTo.cash,
-            quantity: dualTo.quantity,
-            cost_basis_override: dualTo.cost_basis_override,
+            broker_id: effectiveDualTo.broker_id,
+            date: effectiveDualTo.date,
+            cash: effectiveDualTo.cash,
+            quantity: effectiveDualTo.quantity,
+            cost_basis_override: effectiveDualTo.cost_basis_override,
         };
         return buildDualCreatePayloads(pairLayout as PayloadPairLayout, draftToTxFields(), toSide, linkUuid);
     }
@@ -1081,9 +1092,9 @@
                 const payload: Record<string, unknown> = {
                     _dual: true,
                     _items: items,
-                    _partnerBrokerId: dualTo.broker_id,
-                    _partnerCash: dualTo.cash,
-                    _partnerDate: dualTo.date,
+                    _partnerBrokerId: effectiveDualTo.broker_id,
+                    _partnerCash: effectiveDualTo.cash,
+                    _partnerDate: effectiveDualTo.date,
                     _cost_basis_mode: costBasisMode,
                     _wac_currency_hint: wacCurrencyHint,
                 };
@@ -1141,14 +1152,15 @@
     }
     function setBroker(v: number) {
         draft = {...draft, broker_id: v};
-        // FX layout: shared broker — keep dualTo in sync (constraint: broker_id equal)
-        if (pairLayout === 'fx') dualTo = {...dualTo, broker_id: v};
     }
     function setBrokerTo(v: number) {
         dualTo = {...dualTo, broker_id: v};
     }
     function setDate(v: string) {
         draft = {...draft, date: v};
+    }
+    function setDateTo(v: string) {
+        dualTo = {...dualTo, date: v};
     }
     function setAsset(v: number | null) {
         draft = {...draft, asset_id: v};
@@ -1170,15 +1182,14 @@
     /** W36: Swap Da↔A sides in dual form. */
     function swapDualSides() {
         if (!pairLayout) return;
-        // Always swap dates
         const tmpDate = draft.date;
         if (pairLayout === 'fx') {
-            // Swap cash (currencies)
+            // FX shares a broker, not necessarily a settlement date.
             const tmpCash = draft.cash;
             draft = {...draft, cash: dualTo.cash, date: dualTo.date};
             dualTo = {...dualTo, cash: tmpCash, date: tmpDate};
         } else {
-            // transfer_asset / transfer_cash: swap brokers
+            // transfer_asset / transfer_cash: swap brokers and dates
             const tmpBroker = draft.broker_id;
             draft = {...draft, broker_id: dualTo.broker_id, date: dualTo.date};
             dualTo = {...dualTo, broker_id: tmpBroker, date: tmpDate};
@@ -1275,10 +1286,11 @@
     // Single mode uses the type's cashSign rule.
     let effectiveCashRule = $derived(pairLayout != null ? 'positive' : rule.cashSign);
     let cashSignResult = $derived(computeSignHint(parseFloat(draft.cash?.amount ?? '0'), effectiveCashRule));
+    let cashToSignViolation = $derived(pairLayout === 'fx' && computeSignHint(parseFloat(dualTo.cash?.amount ?? '0'), 'positive').bad);
 
     // Block submit when any sign rule is violated (red border = bad).
     // Only active when the field has a meaningful value (not empty/NaN).
-    let hasSignViolation = $derived(qtySignHint.bad || cashSignResult.bad);
+    let hasSignViolation = $derived(qtySignHint.bad || cashSignResult.bad || cashToSignViolation);
 
     // =========================================================================
     // W39: Inline broker / asset creation modals
@@ -1592,16 +1604,9 @@
                                 <div class="flex flex-col gap-1 mb-2">
                                     <span class="text-xs text-gray-500 dark:text-gray-400">{$t('common.date')}</span>
                                     {#if isReadonly}
-                                        <div class="px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200">{dualTo.date || '—'}</div>
+                                        <div class="px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200">{effectiveDualTo.date || '—'}</div>
                                     {:else}
-                                        <SingleDatePicker
-                                            bind:value={dualTo.date}
-                                            label=""
-                                            inputStyle={true}
-                                            onchange={(d) => {
-                                                dualTo = {...dualTo, date: d};
-                                            }}
-                                        />
+                                        <SingleDatePicker value={effectiveDualTo.date} label="" inputStyle={true} onchange={setDateTo} />
                                     {/if}
                                 </div>
                             {/if}

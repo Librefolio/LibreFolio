@@ -10,6 +10,7 @@
   Svelte 5 runes.
 -->
 <script lang="ts">
+    import {onDestroy, untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
     import {SimpleSelect} from '$lib/components/ui/select';
@@ -24,6 +25,9 @@
     import {currentLanguage} from '$lib/stores/app/language';
     import {isSoftProbeFailure, summarizeProbeError, formatCurrencyForTooltip, buildProbeTooltipHtml} from './providerProbe';
     import {resolveProviderError} from './resolveProviderError';
+    import {createProviderProbeState, providerConfigurationKey, type ProviderConfiguration, type ProviderProbeState} from './providerProbeState.svelte';
+    import {safeScalar, safeString} from '$lib/types/common';
+    import {extractErrorMessage} from '$lib/utils/trySave';
 
     import {numericArrows} from '$lib/actions/numericArrows';
     // =========================================================================
@@ -87,10 +91,11 @@
         noProvider?: boolean;
         disabled?: boolean;
         readonly?: boolean;
+        probeState?: ProviderProbeState;
         onchange?: (data: {providerCode: string; identifier: string; identifierType: string; providerParams: Record<string, any> | null; noProvider: boolean; testStatus: TestStatus}) => void;
     }
 
-    let {providerCode = $bindable(''), identifier = $bindable(''), identifierType = $bindable('TICKER'), providerParams = $bindable(null), providerUrl = $bindable(null), noProvider = $bindable(false), disabled = false, readonly = false, onchange}: Props = $props();
+    let {providerCode = $bindable(''), identifier = $bindable(''), identifierType = $bindable('TICKER'), providerParams = $bindable(null), providerUrl = $bindable(null), noProvider = $bindable(false), disabled = false, readonly = false, probeState, onchange}: Props = $props();
 
     // =========================================================================
     // State
@@ -98,10 +103,19 @@
 
     let providers: ProviderInfo[] = $state([]);
     let providersLoaded = $state(false);
-    let testStatus: TestStatus = $state('not_tested');
-    let testResults: TestResult[] = $state([]);
-    let totalExecutionMs = $state(0);
-    let paramsValues: Record<string, any> = $state({});
+    const localProbe = createProviderProbeState(currentConfiguration);
+    let probe = $derived(probeState ?? localProbe);
+    let localProbeInitialized = false;
+    let testStatus: TestStatus = $derived(probe.status);
+    let testResults = $derived.by(buildTestResults);
+    let totalExecutionMs = $derived(probe.source === 'manual' ? (probe.response?.total_execution_time_ms ?? 0) : 0);
+    let paramsValues = $derived(providerParams ?? {});
+
+    function currentConfiguration(): ProviderConfiguration {
+        return {providerCode, identifier, identifierType, providerParams, noProvider};
+    }
+
+    onDestroy(() => localProbe.dispose());
 
     /**
      * Localized provider-param text. The backend ships labels/descriptions in English
@@ -220,11 +234,20 @@
         ensureCurrenciesLoaded($currentLanguage);
     });
 
-    // Sync providerParams → paramsValues
     $effect(() => {
-        if (providerParams && typeof providerParams === 'object') {
-            paramsValues = {...providerParams};
-        }
+        providerConfigurationKey(currentConfiguration());
+        untrack(() => {
+            if (!probeState && !localProbeInitialized) {
+                localProbe.reset(providerUrl);
+                localProbeInitialized = true;
+            } else {
+                probe.configure();
+            }
+        });
+    });
+
+    $effect(() => {
+        providerUrl = probe.url;
     });
 
     // Auto-set identifier type when provider has exactly 1 accepted type
@@ -251,12 +274,13 @@
     // =========================================================================
 
     function emitChange() {
-        const computedParams = uiComponent === 'scheduled_investment' ? providerParams : paramsSchema.length > 0 ? {...paramsValues} : null;
+        probe.configure();
+        providerUrl = probe.url;
         onchange?.({
             providerCode,
             identifier,
             identifierType,
-            providerParams: computedParams,
+            providerParams,
             noProvider,
             testStatus,
         });
@@ -264,17 +288,13 @@
 
     function handleProviderChange(code: string) {
         providerCode = code;
-        paramsValues = {};
         providerParams = null;
         identifier = '';
-        testStatus = 'not_tested';
-        testResults = [];
         emitChange();
     }
 
     function handleParamChange(key: string, value: any) {
-        paramsValues = {...paramsValues, [key]: value};
-        providerParams = {...paramsValues};
+        providerParams = {...paramsValues, [key]: value};
         emitChange();
     }
 
@@ -284,93 +304,70 @@
 
     async function testConfiguration() {
         if (!providerCode || (!identifier && !isAutoGenerated)) return;
-        testStatus = 'testing';
-        testResults = [];
-        totalExecutionMs = 0;
+        if (await probe.run('manual')) emitChange();
+    }
 
-        try {
-            const computedParams = uiComponent === 'scheduled_investment' ? providerParams : paramsSchema.length > 0 ? {...paramsValues} : null;
-            const response = (await zodiosApi.probe_provider_config_api_v1_assets_provider_probe_post({
-                provider_code: providerCode,
-                identifier: identifier || '__auto__',
-                identifier_type: identifierType as any,
-                provider_params: computedParams,
-                operations: ['current_price', 'history'],
-            })) as any;
-
-            const items: TestResult[] = [];
-
-            // Resolve display currency: from current_price response, or from params, or empty
-            const displayCurrency = response.current_price?.currency ?? paramsValues['currency'] ?? '';
-
-            // Current price
-            if (response.current_price) {
-                const cp = response.current_price;
-                const ccyLabel = formatCurrencyForTooltip(cp.currency);
-                // I3: failures resolve code+details to a localized message; the
-                // raw English `error` stays as fallback for unmapped codes.
-                const cpError = cp.success ? null : resolveProviderError(cp, $t);
-                const detail = cp.success ? `${Number(cp.value).toFixed(2)} ${ccyLabel}${cp.as_of_date ? ` (${cp.as_of_date})` : ''}` : (cpError ?? undefined);
-                items.push({
-                    success: cp.success,
-                    status: cp.success ? 'success' : isSoftProbeFailure(cp.error, cp.error_code) ? 'warning' : 'error',
-                    label: $t('common.currentPrice'),
-                    detail,
-                    summary: cp.success ? detail : summarizeProbeError(cpError ?? undefined),
-                    execution_time_ms: cp.execution_time_ms,
-                    priceValue: cp.success ? cp.value : undefined,
-                    priceCurrency: cp.success ? cp.currency : undefined,
-                    priceDate: cp.success ? cp.as_of_date : undefined,
-                });
-            }
-
-            // History
-            if (response.history) {
-                const h = response.history;
-                const ccyLabel = formatCurrencyForTooltip(displayCurrency || undefined);
-                const hError = h.success ? null : resolveProviderError(h, $t);
-                const detail = h.success ? `${h.points_count} points${ccyLabel ? ` (${ccyLabel})` : ''}${h.date_range ? ` — ${h.date_range}` : ''}` : (hError ?? undefined);
-                items.push({
-                    success: h.success,
-                    status: h.success ? 'success' : isSoftProbeFailure(h.error, h.error_code) ? 'warning' : 'error',
-                    label: $t('assets.probe.history'),
-                    detail,
-                    summary: h.success ? detail : summarizeProbeError(hError ?? undefined),
-                    execution_time_ms: h.execution_time_ms,
-                    samplePrices: h.success && h.sample_prices ? h.sample_prices : undefined,
-                });
-            }
-
-            // Propagate currency from current_price to history (for tooltip display)
-            const cpCurrency = items.find((r) => r.priceCurrency)?.priceCurrency ?? '';
-            for (const item of items) {
-                if (item.samplePrices && !item.priceCurrency) item.priceCurrency = cpCurrency;
-            }
-
-            testResults = items;
-            totalExecutionMs = response.total_execution_time_ms ?? 0;
-            // passed = all success OR all non-success are just warnings
-            const hasRealError = items.some((r) => r.status === 'error');
-            testStatus = hasRealError ? 'failed' : 'passed';
-
-            // Update providerUrl from probe response
-            if (response.provider_url) {
-                providerUrl = response.provider_url;
-            }
-        } catch (e: any) {
-            testResults = [
-                {
-                    success: false,
-                    status: 'error',
-                    label: 'Error',
-                    detail: e?.message || 'Test failed',
-                    summary: summarizeProbeError(e?.message),
-                    execution_time_ms: 0,
-                },
-            ];
-            testStatus = 'failed';
+    function buildTestResults(): TestResult[] {
+        if (probe.source !== 'manual') return [];
+        if (probe.error) {
+            const detail = extractErrorMessage(probe.error, $t('common.errorOccurred'));
+            return [{success: false, status: 'error', label: $t('common.error'), detail, summary: summarizeProbeError(detail), execution_time_ms: 0}];
         }
-        emitChange();
+        const response = probe.response;
+        if (!response) return [];
+        const items: TestResult[] = [];
+        const currentPrice = safeScalar(response.current_price);
+        const history = safeScalar(response.history);
+        const displayCurrency = safeString(currentPrice?.currency) ?? safeString(paramsValues['currency']) ?? '';
+
+        // Current price
+        if (currentPrice) {
+            const cp = currentPrice;
+            const cpCurrency = safeString(cp.currency) ?? undefined;
+            const cpDate = safeString(cp.as_of_date) ?? undefined;
+            const cpValue = safeScalar(cp.value);
+            const ccyLabel = formatCurrencyForTooltip(cpCurrency);
+            // I3: failures resolve code+details to a localized message; the
+            // raw English `error` stays as fallback for unmapped codes.
+            const cpError = cp.success ? null : resolveProviderError({error: safeString(cp.error), error_code: safeString(cp.error_code), error_details: safeScalar(cp.error_details)}, $t);
+            const detail = cp.success ? `${Number(cpValue).toFixed(2)} ${ccyLabel}${cpDate ? ` (${cpDate})` : ''}` : (cpError ?? undefined);
+            items.push({
+                success: cp.success,
+                status: cp.success ? 'success' : isSoftProbeFailure(safeString(cp.error) ?? undefined, safeString(cp.error_code)) ? 'warning' : 'error',
+                label: $t('common.currentPrice'),
+                detail,
+                summary: cp.success ? detail : summarizeProbeError(cpError ?? undefined),
+                execution_time_ms: cp.execution_time_ms,
+                priceValue: cp.success && cpValue !== null ? Number(cpValue) : undefined,
+                priceCurrency: cp.success ? cpCurrency : undefined,
+                priceDate: cp.success ? cpDate : undefined,
+            });
+        }
+
+        // History
+        if (history) {
+            const h = history;
+            const ccyLabel = formatCurrencyForTooltip(displayCurrency || undefined);
+            const hError = h.success ? null : resolveProviderError({error: safeString(h.error), error_code: safeString(h.error_code), error_details: safeScalar(h.error_details)}, $t);
+            const detail = h.success ? `${h.points_count} points${ccyLabel ? ` (${ccyLabel})` : ''}${h.date_range ? ` — ${h.date_range}` : ''}` : (hError ?? undefined);
+            items.push({
+                success: h.success,
+                status: h.success ? 'success' : isSoftProbeFailure(safeString(h.error) ?? undefined, safeString(h.error_code)) ? 'warning' : 'error',
+                label: $t('assets.probe.history'),
+                detail,
+                summary: h.success ? detail : summarizeProbeError(hError ?? undefined),
+                execution_time_ms: h.execution_time_ms,
+                samplePrices: h.success && h.sample_prices ? h.sample_prices.filter((point): point is {date: string; close: string} => point !== null && !Array.isArray(point)).map((point) => ({date: point.date, close: Number(point.close)})) : undefined,
+            });
+        }
+
+        // Propagate currency from current_price to history (for tooltip display)
+        const cpCurrency = items.find((r) => r.priceCurrency)?.priceCurrency ?? '';
+        for (const item of items) {
+            if (item.samplePrices && !item.priceCurrency) item.priceCurrency = cpCurrency;
+        }
+
+        return items;
     }
 </script>
 
@@ -444,8 +441,8 @@
                         data-testid="provider-identifier"
                         type="text"
                         bind:value={identifier}
-                        oninput={() => {
-                            testStatus = 'not_tested';
+                        oninput={(event) => {
+                            identifier = event.currentTarget.value;
                             emitChange();
                         }}
                         disabled={disabled || readonly}

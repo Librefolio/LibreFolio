@@ -36,6 +36,7 @@
     import {ensureSectorsLoaded, getSectorEmoji} from '$lib/stores/reference/sectorStore';
     import {CountrySearchSelect, SectorSearchSelect} from '$lib/components/ui/select';
     import {generateUUID} from '$lib/utils/core/uuid';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
 
     // =========================================================================
     // Types
@@ -61,9 +62,10 @@
         hasProvider?: boolean;
         askingProvider?: boolean;
         onAskProvider?: () => void;
+        zIndex?: number;
     }
 
-    let {kind, value = $bindable({}), readonly: isReadonly = false, disabled = false, onchange, hasProvider = false, askingProvider = false, onAskProvider}: Props = $props();
+    let {kind, value = $bindable({}), readonly: isReadonly = false, disabled = false, onchange, hasProvider = false, askingProvider = false, onAskProvider, zIndex = 80}: Props = $props();
 
     // =========================================================================
     // State
@@ -314,7 +316,7 @@
             type: 'custom',
             cell: (row) => ({
                 type: 'html' as const,
-                html: `<div class="h-3 bg-gray-100 dark:bg-slate-700 rounded-full overflow-hidden"><div class="h-full rounded-full transition-all ${validBarClass}" style="width: ${Math.min(100, (row.weight / maxWeight) * 100)}%"></div></div>`,
+                html: `<div data-testid="distribution-entry-${kind}-${escapeHtml(row.key)}" data-weight="${row.weight}" class="h-3 bg-gray-100 dark:bg-slate-700 rounded-full overflow-hidden"><div class="h-full rounded-full transition-all ${validBarClass}" style="width: ${Math.min(100, (row.weight / maxWeight) * 100)}%"></div></div>`,
             }),
             sortable: false,
             filterable: false,
@@ -419,6 +421,7 @@
                     type="button"
                     onclick={onAskProvider}
                     disabled={!hasProvider || askingProvider}
+                    data-testid="distribution-ask-provider-{kind}"
                     class="flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded
                                text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200
                                disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
@@ -491,5 +494,5 @@
         showDeleteConfirm = false;
         pendingDeleteIds = [];
     }}
-    zIndex={80}
+    {zIndex}
 />

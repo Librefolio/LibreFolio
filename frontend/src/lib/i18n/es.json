@@ -187,7 +187,10 @@
       "bondQuoteBaseHint": "Los bonos suelen cotizarse por cada 100 de nominal (p. ej. BTP): verifica este valor — normalmente es 100.",
       "activeTooltip": "Si está activo, el activo se actualizará automáticamente por el programador y seguirá visible en los selectores. Desactívelo para ocultarlo cuando ya no lo posea y no quiera seguir descargando precios.",
       "quoteBaseMin": "Debe ser al menos 1",
-      "quoteBaseInteger": "Solo números enteros"
+      "quoteBaseInteger": "Solo números enteros",
+      "currencyHelp": "Divisa en la que se guardan los precios de este activo.",
+      "currencyHelpLabel": "Información sobre la divisa del activo",
+      "nameRequired": "Introduce el nombre del activo para continuar."
     },
     "provider": {
       "assignment": "Asignación de Proveedor",
@@ -707,7 +710,12 @@
       "sectionArchive": "En el archivo",
       "create": "Crear un activo nuevo",
       "createNamed": "Crear «{name}»"
-    }
+    },
+    "manualAssets": {
+      "title": "Activos para crear manualmente",
+      "body": "Vincula un activo existente o créalo manualmente. Las próximas importaciones reconocerán su identificador guardado si la coincidencia es única."
+    },
+    "selectionChangedReview": "La comprobación final de duplicados ha cambiado la selección. Revísala antes de importar."
   },
   "brokers": {
     "title": "Brókeres",
@@ -1018,7 +1026,14 @@
     "deleteBlockedMessage": "No se puede eliminar: este bróker tiene {count} transacción(es).",
     "forceCascadeDelete": "Eliminar bróker y transacciones",
     "goToTransactions": "Ir a transacciones",
-    "deleteFailed": "No se pudo eliminar el bróker"
+    "deleteFailed": "No se pudo eliminar el bróker",
+    "duplicateNameRecovery": "Para resolverlo, cambia el nombre del bróker existente o elige otro nombre para el que estás intentando añadir.",
+    "duplicateNameOwn": "Ya tienes un bróker llamado \"{name}\".",
+    "duplicateNameOwned": "El bróker \"{name}\" ya existe (propietario: \"{owner}\").",
+    "duplicateNameExists": "Ya existe un bróker llamado \"{name}\".",
+    "deleted": "Bróker \"{name}\" eliminado.",
+    "deletedWithTransactions": "Bróker \"{name}\" y {count} transacciones eliminados.",
+    "created": "Bróker \"{name}\" creado."
   },
   "chart": {
     "tooltip": {
@@ -2056,7 +2071,12 @@
       "suggestLightbulb": "Mostrar sugerencia",
       "partnerInaccessible": "Contraparte en bróker inaccesible",
       "eventTooltipAmount": "Importe",
-      "splitHint": "Para eliminar solo un lado, primero usa Dividir para desvincular el par."
+      "splitHint": "Para eliminar solo un lado, primero usa Dividir para desvincular el par.",
+      "workspaceRows": "Filas del espacio de trabajo: {rows}",
+      "dateSortHint": "La fecha es el criterio principal. Los pares se mantienen unidos: primero la fecha más antigua de las dos operaciones, después la más reciente y el ID estable de la fila.",
+      "balanceGroupOutsideWorkspace": "Ninguna fila de este espacio de trabajo contribuye a este grupo. Consulta el historial del bróker.",
+      "workspaceRowHint": "Posición en el orden actual. a/b son los dos lados de un par, no identificadores de transacción.",
+      "issueRowsHidden": "Las filas afectadas están ocultas por los filtros de la tabla."
     },
     "commit": {
       "serverError": "Guardado imposible — error del servidor"
@@ -2298,7 +2318,11 @@
     "size": "Tamaño",
     "zoomIn": "Ampliar",
     "zoomOut": "Reducir",
-    "previewAutofitHint": "Haz doble clic en la cabecera de una columna para ajustar su ancho"
+    "previewAutofitHint": "Haz doble clic en la cabecera de una columna para ajustar su ancho",
+    "uploader": "Subido por",
+    "uploaderHint": "Usuario que subió el archivo.",
+    "noUploader": "Usuario no indicado",
+    "uploaderLookupFailed": "No se pudieron cargar los nombres de usuario. Los archivos siguen disponibles con los ID de usuario."
   },
   "donationPopup": {
     "title": "¡LibreFolio crece gracias a usuarios como tú!",
@@ -3090,13 +3114,19 @@
     "expandAll": "Expandir todo",
     "collapseAll": "Contraer todo",
     "checkNow": "Buscar actualizaciones",
-    "upToDate": "Estás usando la última versión.",
+    "upToDate": "¡Tienes la versión más reciente!",
     "askAdmin": "Existe una versión más reciente. Pide a un administrador que actualice:",
     "searchResults": "Resultados:",
     "copyEmail": "Copiar email",
     "copied": "¡Copiado!",
     "askAdminTitle": "Actualización disponible — contacta a un administrador",
-    "emailCopied": "Email copiado al portapapeles"
+    "emailCopied": "Email copiado al portapapeles",
+    "detectedRemoteVersion": "Versión detectada en línea: {version}",
+    "checkFailed": "No se pudo completar la búsqueda de actualizaciones. Inténtalo de nuevo.",
+    "noStableRelease": "No se ha encontrado ninguna versión estable en GitHub.",
+    "imagePending": "Se ha detectado una versión estable más reciente, pero su imagen Docker aún no está disponible.",
+    "imageCheckFailed": "Se ha detectado una versión estable más reciente, pero no se ha podido verificar su imagen Docker. Inténtalo de nuevo.",
+    "adminLookupFailed": "Hay una actualización disponible, pero no se ha podido cargar la lista de administradores."
   },
   "providerErrors": {
     "NO_DATA": "No hay datos disponibles para este instrumento en el proveedor.",
@@ -3109,5 +3139,42 @@
     "PARSE_ERROR": "No se pudo interpretar la respuesta del proveedor.",
     "SCRAPE_ERROR": "No se pudo leer la página del proveedor.",
     "UNSUPPORTED_PAGE": "El proveedor encontró este instrumento pero su página de mercado aún no se puede leer. Abre un issue en GitHub (Librefolio/LibreFolio) indicando este ISIN para que se añada el soporte."
+  },
+  "support": {
+    "title": "Apoya LibreFolio",
+    "description": "Invita a un café o ayuda a dar a conocer el proyecto.",
+    "shareDivider": "O comparte",
+    "shareOn": "Compartir en",
+    "share": {
+      "titleLabel": "Título sugerido",
+      "x": {
+        "message": "¡Hola! Estoy siguiendo mis inversiones con LibreFolio y me encanta. ¡Pruébala tú también!\n#LibreFolio #CodigoAbierto #Autoalojado #Inversiones #Privacidad",
+        "hint": "El enlace del proyecto se añade a la copia y a la publicación. X se abre en una nueva pestaña."
+      },
+      "reddit": {
+        "title": "Estoy probando LibreFolio para seguir mi cartera en mi propio servidor",
+        "message": "Llevaba un tiempo buscando una forma más sencilla de seguir mis inversiones sin entregar todos los datos de mi cartera a un servicio externo. Estos días estoy probando LibreFolio y me está gustando tenerlo todo en un mismo sitio.\n\nEs un programa de código abierto que puedes instalar en tu propio servidor para organizar tu cartera y analizar su evolución, manteniendo el control de tus datos. Si buscas algo parecido, ¡échale un vistazo!",
+        "hint": "Abrimos una publicación de texto con título y cuerpo separados. Si Reddit deja el cuerpo vacío, pega el texto ya copiado."
+      },
+      "facebook": {
+        "message": "Últimamente estoy usando LibreFolio para seguir mis inversiones y me gusta tenerlo todo en un mismo sitio sin perder el control de mis datos.\n\nSi buscas un gestor de carteras de código abierto que puedas alojar en tu propio servidor, ¡échale un vistazo!",
+        "hint": "Facebook prepara solo la vista previa del enlace. Cuando se abra, pega el texto copiado en el mensaje de la publicación.",
+        "afterCopy": "Texto y enlace copiados. Pega el texto en el mensaje de tu publicación de Facebook."
+      },
+      "instagram": {
+        "message": "Un poco más de orden en mis inversiones, sin dejar mis datos en otro sitio. Estoy probando LibreFolio: un gestor de carteras de código abierto para alojar en tu propio servidor.\n\n#LibreFolio #CodigoAbierto #Autoalojado #Inversiones #Privacidad",
+        "hint": "Instagram no prepara una publicación desde este enlace. Cuando se abra, elige Crear (+), selecciona una foto o un vídeo y pega el pie de foto copiado.",
+        "afterCopy": "Pie de foto y enlace copiados. En Instagram: Crear (+), elegir foto/vídeo y pegar el pie de foto."
+      },
+      "tiktok": {
+        "message": "Mi nuevo aliado para seguir mi cartera: LibreFolio. Código abierto, en mi servidor y con mis datos bajo control. Si te gusta trastear, ¡descúbrelo!\n\n#LibreFolio #CodigoAbierto #Autoalojado #FinanzasPersonales",
+        "hint": "Abrimos la página de subida de TikTok; inicia sesión si se solicita. Selecciona tu vídeo y pega la descripción copiada. No subimos vídeos ni textos automáticamente.",
+        "afterCopy": "Descripción y enlace copiados. En la página de subida de TikTok, selecciona el vídeo y pega la descripción."
+      }
+    },
+    "shareMessageLabel": "Mensaje sugerido",
+    "clipboardUnavailable": "No se pudo copiar al portapapeles. Permite el acceso al portapapeles y vuelve a intentarlo.",
+    "copyAndGo": "Copiar y abrir",
+    "navigationFailed": "Texto y enlace copiados, pero no se pudo abrir la red social. Permite las ventanas emergentes y vuelve a intentarlo."
   }
 }
