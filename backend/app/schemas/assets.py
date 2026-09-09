@@ -822,8 +822,9 @@ class FAAssetPatchItem(StrictModel):
     - Field absent in patch: IGNORE (keep existing value)
 
     For classification_params:
-    - If None: Set DB column to NULL
-    - If present: Full replace (no merge of subfields)
+    - If None or an empty object: Set DB column to NULL
+    - Otherwise: Replace provided fields atomically, preserve omitted fields
+    - Explicit null subfields remove only that classification block
     """
 
     asset_id: int = Field(..., description="Asset ID to update")

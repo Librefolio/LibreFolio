@@ -61,6 +61,6 @@ Backend BRIM plugins emit `field_todos` inside `BRIMParseResponse` for each row 
 |------|------|
 | Import Wizard Modal | `frontend/src/lib/components/transactions/modals/ImportWizardModal.svelte` |
 | BRIM API schemas | `backend/app/schemas/brim.py` |
-| BRIM parse API | `backend/app/api/v1/brim.py` |
+| BRIM parse API | `backend/app/api/v1/brokers.py` |
 | Coinbase plugin (example) | `backend/app/services/brim_providers/broker_coinbase.py` |
 | mkdocs (transaction draft) | `mkdocs_src/docs/developer/frontend/state/transaction-draft.md` |

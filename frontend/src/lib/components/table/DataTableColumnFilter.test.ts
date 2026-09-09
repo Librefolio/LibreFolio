@@ -80,6 +80,42 @@ async function choose(el: HTMLElement, value: string) {
 }
 
 describe('DataTableColumnFilter', () => {
+    it('cancels the queued anchor measurement when the popover is unmounted', async () => {
+        await setupI18n();
+        const anchor = document.createElement('button');
+        document.body.append(anchor);
+        const frames = new Map<number, FrameRequestCallback>();
+        let nextFrame = 0;
+        const request = vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation((callback) => {
+            const id = ++nextFrame;
+            frames.set(id, callback);
+            return id;
+        });
+        const cancel = vi.spyOn(globalThis, 'cancelAnimationFrame').mockImplementation((id) => {
+            frames.delete(id);
+        });
+        const measure = vi.spyOn(anchor, 'getBoundingClientRect');
+        const view = mount({type: 'enum', enumOptions: OPTIONS, anchorElement: anchor});
+        let unmounted = false;
+        try {
+            expect(measure).toHaveBeenCalledTimes(1);
+            expect(frames.size).toBe(1);
+            const pendingFrames = [...frames.keys()];
+            await view.unmount();
+            unmounted = true;
+            anchor.remove();
+            for (const id of pendingFrames) expect(cancel).toHaveBeenCalledWith(id);
+            expect(frames.size).toBe(0);
+            expect(measure).toHaveBeenCalledTimes(1);
+        } finally {
+            if (!unmounted) await view.unmount();
+            anchor.remove();
+            measure.mockRestore();
+            request.mockRestore();
+            cancel.mockRestore();
+        }
+    });
+
     it('publishes the mode it is rendering', async () => {
         await setupI18n();
         mount({type: 'multi-enum', enumOptions: OPTIONS});

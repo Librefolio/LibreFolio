@@ -187,7 +187,10 @@
       "bondQuoteBaseHint": "Les obligations sont généralement cotées pour 100 de nominal (ex. BTP) : vérifiez cette valeur — elle est généralement de 100.",
       "activeTooltip": "Si l'actif est actif, il sera mis à jour automatiquement par le planificateur et restera visible dans les sélecteurs. Désactivez-le pour le masquer lorsque vous ne le détenez plus et que vous ne souhaitez plus télécharger ses prix.",
       "quoteBaseMin": "Doit être au moins 1",
-      "quoteBaseInteger": "Nombres entiers uniquement"
+      "quoteBaseInteger": "Nombres entiers uniquement",
+      "currencyHelp": "Devise utilisée pour enregistrer les prix de cet actif.",
+      "currencyHelpLabel": "À propos de la devise de l’actif",
+      "nameRequired": "Saisissez le nom de l'actif pour continuer."
     },
     "provider": {
       "assignment": "Attribution du Fournisseur",
@@ -707,7 +710,12 @@
       "sectionArchive": "Dans l’archive",
       "create": "Créer un nouvel actif",
       "createNamed": "Créer « {name} »"
-    }
+    },
+    "manualAssets": {
+      "title": "Actifs à créer manuellement",
+      "body": "Associez un actif existant ou créez-le manuellement. Les prochains imports reconnaîtront son identifiant enregistré si la correspondance est unique."
+    },
+    "selectionChangedReview": "Le dernier contrôle des doublons a modifié la sélection. Vérifiez-la avant l'import."
   },
   "brokers": {
     "title": "Courtiers",
@@ -1018,7 +1026,14 @@
     "deleteBlockedMessage": "Impossible de supprimer : ce courtier a {count} transaction(s).",
     "forceCascadeDelete": "Supprimer le courtier et les transactions",
     "goToTransactions": "Aller aux transactions",
-    "deleteFailed": "Impossible de supprimer le courtier"
+    "deleteFailed": "Impossible de supprimer le courtier",
+    "duplicateNameRecovery": "Pour résoudre ce problème, renommez le courtier existant ou choisissez un autre nom pour celui que vous essayez d’ajouter.",
+    "duplicateNameOwn": "Vous avez déjà un courtier nommé « {name} ».",
+    "duplicateNameOwned": "Le courtier « {name} » existe déjà (propriétaire : « {owner} »).",
+    "duplicateNameExists": "Un courtier nommé « {name} » existe déjà.",
+    "deleted": "Courtier « {name} » supprimé.",
+    "deletedWithTransactions": "Courtier « {name} » et {count} transactions supprimés.",
+    "created": "Courtier « {name} » créé."
   },
   "chart": {
     "tooltip": {
@@ -2056,7 +2071,12 @@
       "suggestLightbulb": "Afficher suggestion",
       "partnerInaccessible": "Partenaire sur courtier inaccessible",
       "eventTooltipAmount": "Montant",
-      "splitHint": "Pour supprimer un seul côté, utilisez d'abord Scinder pour dissocier la paire."
+      "splitHint": "Pour supprimer un seul côté, utilisez d'abord Scinder pour dissocier la paire.",
+      "workspaceRows": "Lignes de l’espace de travail : {rows}",
+      "dateSortHint": "La date est le critère principal. Les paires restent groupées : date de l’opération la plus ancienne, puis la plus récente et identifiant stable de la ligne.",
+      "balanceGroupOutsideWorkspace": "Aucune ligne de cet espace de travail ne contribue à ce groupe. Consultez l’historique du courtier.",
+      "workspaceRowHint": "Position dans le tri actuel. a/b désignent les deux côtés d'une paire, pas des identifiants de transaction.",
+      "issueRowsHidden": "Les lignes concernées sont masquées par les filtres du tableau."
     },
     "commit": {
       "serverError": "Sauvegarde impossible — erreur serveur"
@@ -2298,7 +2318,11 @@
     "size": "Taille",
     "zoomIn": "Zoom avant",
     "zoomOut": "Zoom arrière",
-    "previewAutofitHint": "Double-cliquez sur l’en-tête d’une colonne pour ajuster sa largeur"
+    "previewAutofitHint": "Double-cliquez sur l’en-tête d’une colonne pour ajuster sa largeur",
+    "uploader": "Téléversé par",
+    "uploaderHint": "Utilisateur ayant téléversé le fichier.",
+    "noUploader": "Utilisateur non indiqué",
+    "uploaderLookupFailed": "Impossible de charger les noms des utilisateurs. Les fichiers restent accessibles avec leurs identifiants."
   },
   "donationPopup": {
     "title": "LibreFolio grandit grâce à des utilisateurs comme vous !",
@@ -3090,13 +3114,19 @@
     "expandAll": "Tout déplier",
     "collapseAll": "Tout replier",
     "checkNow": "Vérifier les mises à jour",
-    "upToDate": "Vous utilisez la dernière version.",
+    "upToDate": "Vous utilisez la dernière version !",
     "askAdmin": "Une version plus récente existe. Demandez à un administrateur de mettre à jour :",
     "searchResults": "Résultats :",
     "copyEmail": "Copier l'email",
     "copied": "Copié !",
     "askAdminTitle": "Mise à jour disponible — contactez un administrateur",
-    "emailCopied": "Email copiée dans le presse-papiers"
+    "emailCopied": "Email copiée dans le presse-papiers",
+    "detectedRemoteVersion": "Version détectée en ligne : {version}",
+    "checkFailed": "Impossible de terminer la recherche de mises à jour. Réessayez.",
+    "noStableRelease": "Aucune version stable n’a été trouvée sur GitHub.",
+    "imagePending": "Une version stable plus récente a été détectée, mais son image Docker n’est pas encore disponible.",
+    "imageCheckFailed": "Une version stable plus récente a été détectée, mais son image Docker n’a pas pu être vérifiée. Réessayez.",
+    "adminLookupFailed": "Une mise à jour est disponible, mais la liste des administrateurs n’a pas pu être chargée."
   },
   "providerErrors": {
     "NO_DATA": "Aucune donnée disponible pour cet instrument chez le fournisseur.",
@@ -3109,5 +3139,42 @@
     "PARSE_ERROR": "La réponse du fournisseur n'a pas pu être analysée.",
     "SCRAPE_ERROR": "La page du fournisseur n'a pas pu être lue.",
     "UNSUPPORTED_PAGE": "Le fournisseur a trouvé cet instrument mais sa page de marché n'est pas encore lisible. Ouvrez une issue sur GitHub (Librefolio/LibreFolio) en indiquant cet ISIN pour que le support soit ajouté."
+  },
+  "support": {
+    "title": "Soutenir LibreFolio",
+    "description": "Offrez un café ou faites découvrir le projet.",
+    "shareDivider": "Ou partagez",
+    "shareOn": "Partager sur",
+    "share": {
+      "titleLabel": "Titre suggéré",
+      "x": {
+        "message": "Salut ! Je suis mes investissements avec LibreFolio et j'adore. Essaie-la aussi !\n#LibreFolio #OpenSource #AutoHebergement #Investissement #ViePrivee",
+        "hint": "Le lien du projet est ajouté à la copie et au post. X s'ouvre dans un nouvel onglet."
+      },
+      "reddit": {
+        "title": "Je teste LibreFolio pour suivre mon portefeuille sur mon serveur",
+        "message": "Je cherchais une façon plus simple de suivre mes investissements sans confier toutes les données de mon portefeuille à un service externe. Ces derniers jours, je teste LibreFolio et j'apprécie de tout retrouver au même endroit.\n\nC'est un logiciel open source à installer sur son propre serveur pour organiser son portefeuille et en explorer les performances, tout en gardant le contrôle de ses données. Si cela peut vous être utile, jetez-y un œil !",
+        "hint": "Nous ouvrons un post texte avec un titre et un corps séparés. Si Reddit laisse le corps vide, collez le texte déjà copié."
+      },
+      "facebook": {
+        "message": "Ces derniers temps, j'utilise LibreFolio pour garder un œil sur mes investissements. J'aime retrouver toutes les informations au même endroit sans renoncer au contrôle de mes données.\n\nSi vous cherchez un outil de suivi de portefeuille open source à héberger sur votre serveur, découvrez-le !",
+        "hint": "Facebook prépare uniquement l'aperçu du lien. Après l'ouverture, collez le texte copié dans le message de la publication.",
+        "afterCopy": "Texte et lien copiés. Collez le texte dans le message de votre publication Facebook."
+      },
+      "instagram": {
+        "message": "Un peu plus d'ordre dans mes investissements, sans laisser mes données ailleurs. Je teste LibreFolio : un outil open source de suivi de portefeuille à héberger sur son propre serveur.\n\n#LibreFolio #OpenSource #AutoHebergement #Investissement #ViePrivee",
+        "hint": "Instagram ne peut pas préparer une publication à partir de ce lien. Après l'ouverture, choisissez Créer (+), sélectionnez une photo ou une vidéo, puis collez la légende copiée.",
+        "afterCopy": "Légende et lien copiés. Sur Instagram : Créer (+), choisir la photo/vidéo, puis coller la légende."
+      },
+      "tiktok": {
+        "message": "Mon nouvel allié pour suivre mon portefeuille : LibreFolio. Open source, sur mon serveur, avec mes données sous mon contrôle. Si vous aimez bidouiller, découvrez-le !\n\n#LibreFolio #OpenSource #AutoHebergement #FinancesPersonnelles",
+        "hint": "Nous ouvrons la page d'importation de TikTok ; connectez-vous si nécessaire. Sélectionnez votre vidéo, puis collez la légende copiée. Aucune vidéo ni aucun texte n'est envoyé automatiquement.",
+        "afterCopy": "Légende et lien copiés. Sur la page d'importation TikTok, sélectionnez la vidéo et collez la légende."
+      }
+    },
+    "shareMessageLabel": "Message suggéré",
+    "clipboardUnavailable": "Impossible de copier dans le presse-papiers. Autorise son accès et réessaie.",
+    "copyAndGo": "Copier et ouvrir",
+    "navigationFailed": "Texte et lien copiés, mais le réseau social n'a pas pu être ouvert. Autorise les fenêtres pop-up et réessaie."
   }
 }
