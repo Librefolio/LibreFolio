@@ -702,8 +702,9 @@
 
         // Calculate fixed position from anchor element
         if (anchorElement) {
+            const anchor = anchorElement;
             const updatePosition = () => {
-                const rect = anchorElement!.getBoundingClientRect();
+                const rect = anchor.getBoundingClientRect();
                 // Never let the popover be wider than the viewport (minus a safety
                 // margin on each side) — narrow/mobile screens otherwise get a
                 // popover wider than the screen itself.
@@ -724,11 +725,11 @@
             };
             updatePosition();
             // Re-measure after first render to get actual popover height
-            requestAnimationFrame(updatePosition);
+            const measureFrame = requestAnimationFrame(updatePosition);
             // Close on scroll (parent containers + window)
-            const scrollParent = anchorElement!.closest('.table-wrapper');
+            const scrollParent = anchor.closest('.table-wrapper');
             const handleScroll = () => {
-                const rect = anchorElement!.getBoundingClientRect();
+                const rect = anchor.getBoundingClientRect();
                 if (rect.bottom < 0 || rect.top > window.innerHeight) {
                     onClose();
                 } else {
@@ -744,6 +745,7 @@
             }, 100);
 
             return () => {
+                cancelAnimationFrame(measureFrame);
                 clearTimeout(timer);
                 document.removeEventListener('click', handleClickOutside, true);
                 scrollParent?.removeEventListener('scroll', handleScroll);

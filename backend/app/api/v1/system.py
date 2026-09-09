@@ -10,12 +10,16 @@ import re
 import sys
 from importlib.metadata import version as pkg_version
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Query
 
+from backend.app.api.v1.auth import get_current_user
 from backend.app.config import PROJECT_ROOT
+from backend.app.db.models import User
 from backend.app.logging_config import get_logger
-from backend.app.schemas.system import DependencyInfo, HealthCheckResponse, PluginDiagnosticsResponse, PluginDiscoveryFailureInfo, SystemInfoResponse
+from backend.app.schemas.system import ContainerImageStatusResponse, DependencyInfo, HealthCheckResponse, PluginDiagnosticsResponse, PluginDiscoveryFailureInfo, SystemInfoResponse
+from backend.app.services.container_registry import probe_container_image
 from backend.app.services.provider_registry import AssetProviderRegistry, BRIMProviderRegistry, FXProviderRegistry, SignalPluginRegistry
 from backend.app.utils.version import get_git_version
 
@@ -193,6 +197,15 @@ def get_plugin_diagnostics() -> PluginDiagnosticsResponse:
             *_plugin_discovery_failures("signals", SignalPluginRegistry),
         ]
     )
+
+
+@router.get("/container-image-status", response_model=ContainerImageStatusResponse)
+async def get_container_image_status(
+    tag: Annotated[str, Query(pattern=r"^\d+\.\d+\.\d+$", description="Normalized stable image tag, without a leading v")],
+    _current_user: Annotated[User, Depends(get_current_user)],
+) -> ContainerImageStatusResponse:
+    """Check whether a stable LibreFolio image tag is pullable from GHCR."""
+    return await probe_container_image(tag)
 
 
 @router.get("/health", response_model=HealthCheckResponse)

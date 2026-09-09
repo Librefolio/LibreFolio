@@ -59,6 +59,17 @@ def utils_version(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Version utility tests", verbose=verbose)
 
 
+def utils_container_registry(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the GHCR manifest/token flow without DB, server, or network."""
+    print_section("Utils: Container Registry")
+    print_info("Testing: trusted GHCR challenge parsing, token flow, status mapping, endpoint guards")
+    cmd = _build_pytest_cmd(
+        "backend/test_scripts/test_services/test_container_registry.py",
+        test_names,
+    )
+    return run_command(cmd, "Container registry tests", verbose=verbose)
+
+
 def utils_coverage_js_adapter(verbose: bool = False, test_names: list = None) -> bool:
     """Test the JS/Svelte coverage adapter that feeds coverage_analysis."""
     print_section("Utils: JS Coverage Adapter")
@@ -190,6 +201,14 @@ Tests for utility modules and helper functions:
     add_test(cat, "sector-normalization", utils_sector_normalization, name="Sector Normalization", desc="FinancialSector enum, aliases")
     add_test(cat, "currency-utils", utils_currency_utils, name="Currency Utils", desc="Currency listing, flag mapping")
     add_test(cat, "cache-utils", utils_cache_utils, name="Cache Utils", desc="NamedCache, TTL, registry, stats")
+    add_test(
+        cat,
+        "container-registry",
+        utils_container_registry,
+        name="Container Registry",
+        desc="Trusted GHCR challenge/token flow, result mapping, endpoint guards, secret redaction",
+        isolation="pure",
+    )
     add_test(cat, "provider-core-cache", utils_provider_core_cache, name="Provider Core Cache", desc="Thread isolation, timeout, caches")
     add_test(cat, "roi-utils", utils_roi_utils, name="ROI Utils", desc="annualized_to_cumulative, calculate_mwrr/_series")
     add_test(cat, "translation-utils", utils_translation_utils, name="Translation Utils", desc="get_babel_locale + English fallback")

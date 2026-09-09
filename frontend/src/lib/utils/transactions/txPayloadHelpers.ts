@@ -297,8 +297,8 @@ export function buildDualCreatePayloads(layout: PairFormLayout, from: TxFields, 
     const sharedDesc = (from.description ?? '').trim() || undefined;
 
     if (layout === 'fx') {
-        const fromCashAmt = from.cash?.amount ? String(-Math.abs(Number(from.cash.amount))) : '0';
-        const toCashAmt = to.cash?.amount ? String(Math.abs(Number(to.cash.amount))) : '0';
+        const fromCashAmt = from.cash?.amount ? `-${from.cash.amount.replace(/^[+-]/, '')}` : '0';
+        const toCashAmt = to.cash?.amount ? to.cash.amount.replace(/^[+-]/, '') : '0';
         const fromItem: Record<string, unknown> = {
             broker_id: from.broker_id,
             type: 'FX_CONVERSION',

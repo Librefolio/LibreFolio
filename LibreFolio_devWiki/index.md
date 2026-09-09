@@ -92,10 +92,10 @@
 | [[decisions/fifo-v4-gross-net-status-model]] | Gross metrics untouched, net is additive; split analysis_status/LotNetMetricsStatus reliability model | 2026-07-22 | backend, frontend, fifo, net-metrics |
 | [[decisions/fifo-v4-validation-and-scope]] | API-layer sign validation over DB CHECK; Portfolio Engine reconciliation deferred | 2026-07-22 | backend, validation, scope |
 | [[decisions/fx-sync-pair-based]] | FX sync redesigned from currency-list to pair-list (GET→POST) | 2026-03-06 | fx, api, breaking-change |
-| [[decisions/brim-broker-scoped]] | BRIM upload moved to broker scope for proper access control | 2026-01-22 | brim, brokers, multiuser |
+| [[decisions/brim-broker-scoped]] | Each BRIM file gets one broker at upload through the shared multipart endpoint; multi-file/multi-broker sessions remain supported | 2026-01-22 | brim, brokers, multiuser, upload |
 | [[decisions/provider-shutdown-generic]] | Generic shutdown() in ABCs replaces hardcoded JustETF cleanup | 2026-04-10 | backend, providers, lifecycle |
 | [[decisions/prod-test-data-separation]] | Complete prod/test directory isolation for all data | 2026-01-26 | backend, testing, isolation |
-| [[decisions/brim-fake-asset-id]] | BRIM plugins emit negative integers as fake asset IDs during parse | 2026 | brim, brokers, transactions |
+| [[decisions/brim-fake-asset-id]] | BRIM plugins reserve positive high fake asset IDs and the wizard remaps them across files before explicit resolution | 2026 | brim, brokers, transactions |
 | [[decisions/manual-fx-sentinel]] | MANUAL is a sentinel FX provider that auto-inserts when no real provider covers a pair | 2026 | fx, providers, sentinel |
 | [[decisions/fifo-runtime-decision]] | FIFO cost basis computed at query time, never persisted to DB | 2026 | backend, calculations, fifo |
 | [[decisions/provider-registry-decision]] | `@register_provider` decorator for auto-discovery of all provider families | 2026 | backend, providers, architecture |
@@ -133,7 +133,7 @@
 | [[decisions/wac-inline-validate-commit]] | WAC computed in /validate response (preview) and applied in /commit post-flush — no standalone endpoint in editing flow | 2026-05-28 | backend, frontend, transactions, wac, architecture, api |
 | [[decisions/port-6040-scheme]] | All ports migrated from 8000/8001/8002 to 6040/6041/6042 — "60/40 rule" mnemonic | 2026-05-27 | infrastructure, ports, developer-ergonomics |
 | [[decisions/batch-only-split-promote]] | Standalone /split and /promote endpoints eliminated — batch-only via execute_batch | 2026-05-12 | backend, transactions, split, promote, batch-pipeline |
-| [[decisions/import-wizard-v5-paradigm]] | Import Wizard v4→v5 paradigm: single-file modal → multi-file 4-step stepper | 2026-06-08 | frontend, brim, import-wizard, ux, stepper |
+| [[decisions/import-wizard-v5-paradigm]] | Import Wizard v4→v5: multi-file, multi-broker flow with four macro stages and conditional asset/fix/duplicate review | 2026-06-08 | frontend, brim, import-wizard, ux, stepper |
 | [[decisions/mwrr-boundary-fix]] | MWRR XIRR double-counting deposits fix: initial_nav = nav_snapshots[0].nav | 2026-06-30 | backend, portfolio, mwrr, xirr, financial-math |
 | [[decisions/mwrr-solver-newton-cap]] | Newton-Raphson-only XIRR solver + ±10000% result cap are deliberate design choices, not bugs (rejected Brent/hybrid) | 2026-07-07 | backend, portfolio, mwrr, xirr, financial-math, design-decision |
 | [[decisions/portfolio-summary-direct-wiring]] | `get_summary()` wired directly to `PortfolioCalculationEngine` (no separate `DerivedViewsBuilder.build_summary()`); unified `/portfolio/report` replaces planned `/allocation-history`; `net_worth` field name kept | 2026-07-07 | backend, portfolio, architecture, api, design-decision |
@@ -203,7 +203,7 @@
 | [[concepts/import-todo-signals]] | Plugin-emitted field blanks (severity: blocker/warning) — wizard-local, never touch PendingOp | frontend, brim, import, wizard, signals |
 | [[concepts/3-pool-cash-model]] | Cash decomposed into deposited/invested/realized — powers GrowthChart 3-line visualization | backend, portfolio, cash, decomposition, dashboard |
 | [[concepts/portfolio-report-unified]] | /portfolio/report runs engine once and returns all dashboard data — prevents race conditions + double runs | backend, api, portfolio, performance, cache |
-| [[concepts/ci-release-pipeline]] | GitHub Actions full pipeline: build→test→docker→push→release. Node 24, Vite 7.3.5, package-lock, 8 workers. Incl. F14 release-tag convention (SemVer vX.Y.Z, stable only) | ci, github-actions, release, docker, playwright |
+| [[concepts/ci-release-pipeline]] | GitHub Actions build→test→docker→push→release pipeline; update readiness is two probes: stable release metadata plus pullable GHCR image | ci, github-actions, release, docker, ghcr, update-check |
 | [[concepts/inline-wac-computation]] | Single-pass inline WAC replacing N×M `compute_wac_iterative` DB calls — pool_qty/pool_cost accumulators in per-tx loop | backend, portfolio, wac, performance, engine |
 | [[concepts/pre-frame-frame-separation]] | No market eval before t0; pre-frame builds accounting state (qty/WAC/cash/K/R/W pools) from historical transactions | backend, portfolio, engine, performance, pre-frame |
 | [[concepts/holdings-performance-panel]] | Holdings/Performance tabs (renamed Exposure/Contribution), date-aware `get_summary()`, reconciliation invariant row, treemap zoom/pan fix | frontend, backend, dashboard, portfolio, treemap, echarts |
@@ -213,6 +213,7 @@
 
 | Page | Summary | Status | Tags |
 |------|---------|--------|------|
+| [[problems/ghcr-browser-cors-auth-flow]] | Anonymous GHCR manifests require a Bearer exchange that browser CORS cannot reliably complete; a fixed-target same-origin probe now gates update prompts and fails closed | resolved | backend, frontend, ghcr, auth, cors, update-check |
 | [[problems/compactcashcell-decimal-separator-feedback-loop]] | Sync-down `$effect` compared display strings, so the field's own echo erased `,` mid-typing; fix = numeric compare; plus the `isVisible({timeout})` probe trap with delayed tooltips | resolved | frontend, transactions, decimal, svelte5, ux, testing |
 | [[problems/sitecustomize-shadows-homebrew-python]] | A project `sitecustomize.py` on PYTHONPATH shadows Homebrew Python's own (one per interpreter, first wins) → prefix fixup lost → `pipenv` unimportable → test backend bootstrap dead; fix = chain-exec the shadowed file + guarded coverage import | resolved | testing, coverage, macos, homebrew, python, environment |
 | [[problems/svelte-template-branches-not-instrumented]] | Istanbul emits an empty `branchMap` for `{#if}` in Svelte markup; `.svelte` branch percentages are indicative only | accepted | frontend, coverage, svelte, measurement |
@@ -290,7 +291,7 @@
 | [[entities/backup-router]] | `/api/v1/backup` read-only export router (asset prices/events, FX rates) — Policy D pre-wipe snapshot |
 | [[entities/db-models]] | All SQLModel ORM models — tables, enums, constraints, design notes |
 | [[entities/devpy-cli]] | `dev.py` — single CLI entry point for all developer operations |
-| [[entities/import-wizard-modal]] | 4-step BRIM Import Wizard (wide modal, z:70) — UploadedFileEntry→FileSelection→ParsedFileResult→MergedTransaction pipeline |
+| [[entities/import-wizard-modal]] | Conditional BRIM import state machine — multi-file/broker parsing, explicit asset resolution, final duplicate recheck, and guarded bulk-editor handoff |
 | [[entities/market-data-scheduler]] | Embedded FastAPI scheduler daemon — current-price + history-sync jobs, leader election, JSONL log |
 | [[entities/portfolio-engine]] | 4-layer portfolio engine (1603 lines) — ScopeAwareClassifier→DailyStateBuilder→DerivedViewsBuilder→PortfolioCalculationEngine |
 | [[entities/portfolio-service]] | PortfolioService (1946 lines) — orchestration, L2 TTL cache, get_report/summary/history/contribution |

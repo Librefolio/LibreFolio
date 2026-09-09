@@ -4,6 +4,7 @@ category: concept
 tags: [ci, github-actions, release, docker, playwright, nodejs, vite, deployment, automation]
 related:
   - decisions/single-docker-image
+  - problems/ghcr-browser-cors-auth-flow
   - sources/ci-release-pipeline-2026-06
 ---
 
@@ -53,6 +54,29 @@ numerically against the running version:
 - GHCR image tags follow the same SemVer tag (plus `latest` and the `-light` variants), keeping the prompt and the published images aligned.
 - Full rules: `mkdocs_src/docs/developer/docs/release-pipeline.md` → "Release Tag Convention"; changelog structure rules in `.github/copilot-instructions.md` → "Changelog Rules".
 
+### Update readiness is a two-probe contract
+
+Release publication and image publication are related but not simultaneous:
+
+1. The browser obtains **stable release metadata** from GitHub Releases,
+   validates the tag, and compares it with the running version.
+2. For a newer release, the browser asks LibreFolio's authenticated same-origin
+   endpoint whether the fixed GHCR image tag is **pullable**.
+
+Only the conjunction "newer stable release + published image" produces
+`update-available`. A missing manifest is `image-pending`, not "no release".
+Authentication/protocol/transport failures fail closed and never make the
+frontend announce an update.
+
+The backend step exists because GHCR's anonymous public-manifest flow still
+requires a Bearer challenge and token-backed retry, which cannot be completed
+reliably by the browser through CORS. The endpoint is narrowly bounded to the
+LibreFolio repository and normalized stable tags, validates the expected realm,
+service, and pull scope, requests the public token without credentials, and
+uses it only for the manifest retry. See
+[[problems/ghcr-browser-cors-auth-flow]] for the solved failure mode and trust
+boundary.
+
 ### Reproducible Frontend Builds
 - `package-lock.json` committed to repo
 - CI uses `npm ci` (not `npm install`) — installs exactly from lockfile
@@ -78,3 +102,8 @@ numerically against the running version:
 | Package lock | `package-lock.json` |
 | Docker compose | `docker-compose.yml` |
 | Dockerfile | `Dockerfile` |
+| GHCR image-availability probe | `backend/app/services/container_registry.py` |
+| Same-origin system endpoint | `backend/app/api/v1/system.py` |
+| Image status schema | `backend/app/schemas/system.py` |
+| Release metadata and image gating | `frontend/src/lib/features/update-check/updateCheck.ts` |
+| GHCR probe regressions | `backend/test_scripts/test_services/test_container_registry.py` |
