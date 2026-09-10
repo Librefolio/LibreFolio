@@ -95,7 +95,7 @@ class OwnedProcessTree:
             try:
                 if os.getpgid(process.pid) == self.group_id:
                     self.known[process.pid] = ProcessIdentity(process.pid, process.create_time())
-            except (ProcessLookupError, psutil.NoSuchProcess):
+            except (ProcessLookupError, psutil.NoSuchProcess, psutil.AccessDenied, PermissionError):
                 continue
 
     def running_members(self) -> list[psutil.Process]:
@@ -125,7 +125,7 @@ class OwnedProcessTree:
         if self._group_is_owned():
             try:
                 os.killpg(self.group_id, signal.SIGKILL if force else signal.SIGTERM)
-            except ProcessLookupError:
+            except (ProcessLookupError, PermissionError):
                 pass
         for process in self.running_members():
             identity = self.known[process.pid]

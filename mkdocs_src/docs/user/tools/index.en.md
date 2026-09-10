@@ -7,7 +7,7 @@ description: Standalone calculations, compatibility, diagnostics, and timing in 
 
 A **Tool** is a standalone calculation: you supply the data for one operation, and it returns a result or a structured error. It is not an instruction to modify your portfolio.
 
-The Tool platform is **experimental**. Backend route mounting, execution supervision, and startup/shutdown handling are configured in source; this does not establish runtime-validated availability of a complete calculator and its interface. The real periodic investment plan (PAC) pilot is not yet a complete end-to-end calculator. This guide does not describe a PAC solver, an optimization workflow, or a new PAC interface.
+The Tool platform is **experimental**. Its implemented [PAC allocator](pac-allocator/index.md) pilot provides a manual interface for analyzing an exact initial allocation state. It is intentionally narrower than a solver: it does not propose trades, optimize an allocation, or assess trade feasibility. Any future solver would be a separate capability with its own contract and interface.
 
 ## 🧭 Availability and compatibility
 
