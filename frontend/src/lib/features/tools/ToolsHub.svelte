@@ -6,25 +6,9 @@
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
     import {notify} from '$lib/stores/app/notify.svelte';
     import {fetchToolCatalog} from './client';
-    import {
-        getToolAccountState,
-        observeToolAccount,
-        type ToolAccountState,
-        type ToolClientError,
-        type ToolDescriptor,
-        type VerifiedToolCatalog,
-    } from './contracts';
+    import {getToolAccountState, observeToolAccount, type ToolAccountState, type ToolClientError, type ToolDescriptor, type VerifiedToolCatalog} from './contracts';
     import {resolveToolRenderer, type ToolRendererResolution} from './registry';
-    import {
-        toolDescription,
-        toolDocumentationPath,
-        toolErrorMessage,
-        toolIcon,
-        toolName,
-        toolRoute,
-        toolViewError,
-        unavailableMessage,
-    } from './presentation';
+    import {toolDescription, toolDocumentationPath, toolErrorMessage, toolIcon, toolName, toolRoute, toolViewError, unavailableMessage} from './presentation';
 
     interface HubEntry {
         descriptor: ToolDescriptor;
@@ -44,17 +28,13 @@
 
     const frontendUnavailable = $derived(entries.filter((entry) => entry.resolution.status === 'unavailable').length);
     const errorCopy = $derived(error ? toolErrorMessage(error) : null);
-    const state = $derived(
-        loading ? 'loading' : !account.authenticated ? 'anonymous' : error ? 'error' : !catalog ? 'idle'
-            : catalog.unavailable.length || frontendUnavailable ? 'degraded' : entries.length ? 'ready' : 'empty',
-    );
+    const viewState = $derived(loading ? 'loading' : !account.authenticated ? 'anonymous' : error ? 'error' : !catalog ? 'idle' : catalog.unavailable.length || frontendUnavailable ? 'degraded' : entries.length ? 'ready' : 'empty');
 
     afterNavigate(() => heading?.focus({preventScroll: true}));
 
     function current(requestSequence: number, generation: number, request: AbortController): boolean {
         const session = getToolAccountState();
-        return alive && sequence === requestSequence && !request.signal.aborted
-            && session.authenticated && session.generation === generation;
+        return alive && sequence === requestSequence && !request.signal.aborted && session.authenticated && session.generation === generation;
     }
 
     async function loadCatalog(): Promise<void> {
@@ -70,10 +50,12 @@
         try {
             const loaded = await fetchToolCatalog({signal: request.signal});
             if (!current(requestSequence, generation, request)) return;
-            const nextEntries = loaded.items.map((descriptor): HubEntry => ({
-                descriptor,
-                resolution: resolveToolRenderer(loaded, descriptor.tool_code),
-            }));
+            const nextEntries = loaded.items.map(
+                (descriptor): HubEntry => ({
+                    descriptor,
+                    resolution: resolveToolRenderer(loaded, descriptor.tool_code),
+                }),
+            );
             catalog = loaded;
             entries = nextEntries;
             const incompatible = nextEntries.filter((entry) => entry.resolution.status === 'unavailable').length;
@@ -81,12 +63,14 @@
             notify({
                 name: degraded ? 'tool.catalog.degraded' : 'tool.catalog.loaded',
                 detail: {loaded: loaded.items.length, unavailable: loaded.unavailable.length, incompatible},
-                toast: degraded ? {
-                    variant: 'warning',
-                    message: $t('tools.catalog.degradedToast', {
-                        default: 'Tools loaded with unavailable entries or interfaces. See the catalogue for details.',
-                    }),
-                } : undefined,
+                toast: degraded
+                    ? {
+                          variant: 'warning',
+                          message: $t('tools.catalog.degradedToast', {
+                              default: 'Tools loaded with unavailable entries or interfaces. See the catalogue for details.',
+                          }),
+                      }
+                    : undefined,
             });
         } catch (caught) {
             if (!current(requestSequence, generation, request)) return;
@@ -132,7 +116,7 @@
     });
 </script>
 
-<section class="min-w-0 space-y-6" data-testid="tools-hub" data-state={state} data-busy={loading ? 'true' : 'false'} aria-busy={loading}>
+<section class="min-w-0 space-y-6" data-testid="tools-hub" data-state={viewState} data-busy={loading ? 'true' : 'false'} aria-busy={loading}>
     <header class="flex flex-wrap items-start justify-between gap-4">
         <div class="min-w-0">
             <h1 bind:this={heading} tabindex="-1" class="flex items-center gap-2 text-2xl font-bold text-gray-900 outline-none dark:text-gray-100">
@@ -220,7 +204,11 @@
                         {/if}
                         <div class="mt-auto flex flex-wrap items-center justify-between gap-3">
                             {#if entry.resolution.status === 'ready'}
-                                <a href={toolRoute(descriptor)} class="inline-flex items-center gap-2 rounded-lg bg-libre-green px-3 py-2 text-sm font-medium text-white hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green dark:focus-visible:outline-green-400" data-testid="tool-open">
+                                <a
+                                    href={toolRoute(descriptor)}
+                                    class="inline-flex items-center gap-2 rounded-lg bg-libre-green px-3 py-2 text-sm font-medium text-white hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green dark:focus-visible:outline-green-400"
+                                    data-testid="tool-open"
+                                >
                                     {$t('tools.open', {default: 'Open tool'})}
                                     <ArrowRight size={16} aria-hidden="true" />
                                 </a>

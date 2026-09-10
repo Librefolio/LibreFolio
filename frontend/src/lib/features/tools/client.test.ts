@@ -164,10 +164,12 @@ vi.mock('$lib/api/tool-contract-map.generated', async () => {
                     schemaFingerprint: STRICT.schemaFingerprint,
                     componentKey: STRICT.componentKey,
                     uiContractVersion: STRICT.uiContractVersion,
-                    input: z.object({
-                        mode: z.literal('plain'),
-                        nested: z.object({value: z.string()}),
-                    }).strict(),
+                    input: z
+                        .object({
+                            mode: z.literal('plain'),
+                            nested: z.object({value: z.string()}),
+                        })
+                        .strict(),
                     output: z.any(),
                     operations: [STRICT.operation],
                 },
@@ -182,23 +184,19 @@ import {getClientSessionUserId, transitionClientSession} from '$lib/stores/app/c
 import {ToolClientError, fetchToolCatalog, runTool} from './client';
 import {verifyToolDescriptor} from './contracts';
 
-type DemoResult =
-    | {status: 'success'; correlation_id: string; result: unknown}
-    | {status: 'error'; correlation_id: string};
+type DemoResult = {status: 'success'; correlation_id: string; result: unknown} | {status: 'error'; correlation_id: string};
 
-const verifyDescriptorForTest = verifyToolDescriptor as unknown as (
-    catalog: unknown,
-    code: string,
-    version: string,
-) => unknown;
-const runToolForTest = runTool as unknown as (
-    code: string,
-    version: string,
-    options: {descriptor: unknown; correlationId: string; parameters: unknown},
-) => Promise<DemoResult>;
-const toolContractMapForTest = toolContractMap as unknown as Record<string, Record<string, {
-    input: {safeParse: (value: unknown) => {success: boolean}};
-}>>;
+const verifyDescriptorForTest = verifyToolDescriptor as unknown as (catalog: unknown, code: string, version: string) => unknown;
+const runToolForTest = runTool as unknown as (code: string, version: string, options: {descriptor: unknown; correlationId: string; parameters: unknown}) => Promise<DemoResult>;
+const toolContractMapForTest = toolContractMap as unknown as Record<
+    string,
+    Record<
+        string,
+        {
+            input: {safeParse: (value: unknown) => {success: boolean}};
+        }
+    >
+>;
 
 /** Raw `/api/v1/tools/catalog` payload describing the compatible tools exercised in this file. */
 function rawCatalog() {
@@ -337,15 +335,9 @@ describe('tools client — generated codec regressions', () => {
         const adapted = adaptGeneratedToolSchemas(source, prepared, 'recursive-safe-regression', recordRuntime);
 
         expect(adapted).toContain('z.number().finite().int().safe()');
-        expect(adapted).toContain(
-            'export type RecursiveIntNode = { "count": number; "next"?: (RecursiveIntNode | undefined) };',
-        );
-        expect(adapted).toContain(
-            'export type RecursiveIntNodeInput = { "count": number; "next"?: (RecursiveIntNodeInput | undefined) };',
-        );
-        expect(adapted).toContain(
-            'export const RecursiveIntNode: z.ZodType<RecursiveIntNode, z.ZodTypeDef, RecursiveIntNodeInput> =',
-        );
+        expect(adapted).toContain('export type RecursiveIntNode = { "count": number; "next"?: (RecursiveIntNode | undefined) };');
+        expect(adapted).toContain('export type RecursiveIntNodeInput = { "count": number; "next"?: (RecursiveIntNodeInput | undefined) };');
+        expect(adapted).toContain('export const RecursiveIntNode: z.ZodType<RecursiveIntNode, z.ZodTypeDef, RecursiveIntNodeInput> =');
     });
 });
 
@@ -595,7 +587,7 @@ describe('tools client — compute request wire contract', () => {
                 },
             ],
         });
-        expect(directlyParsed.protocol_hint).toBe('v1');
+        expect(Reflect.get(directlyParsed, 'protocol_hint')).toBe('v1');
 
         mockSuccessfulCompute({ok: true});
         await runDemo({}, 'corr-default');

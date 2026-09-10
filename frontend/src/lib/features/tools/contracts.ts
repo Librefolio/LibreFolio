@@ -1,18 +1,7 @@
 import type {z} from 'zod';
 import {toolTransportSchemas} from '$lib/api/generated-tools';
-import {
-    toolContractMap,
-    type ToolCode,
-    type ToolInput,
-    type ToolOutput,
-    type ToolVersion,
-} from '$lib/api/tool-contract-map.generated';
-import {
-    clientSessionUserId,
-    getClientSessionGeneration,
-    getClientSessionUserId,
-    registerClientSessionReset,
-} from '$lib/stores/app/clientSession';
+import {toolContractMap, type ToolCode, type ToolInput, type ToolOutput, type ToolVersion} from '$lib/api/tool-contract-map.generated';
+import {clientSessionUserId, getClientSessionGeneration, getClientSessionUserId, registerClientSessionReset} from '$lib/stores/app/clientSession';
 
 export type {ToolCode, ToolContractMap, ToolInput, ToolOutput, ToolVersion} from '$lib/api/tool-contract-map.generated';
 
@@ -27,28 +16,9 @@ export type ToolItemMetrics = ToolWireResult['metrics'];
 export type ToolBatchMetrics = ToolComputeResponse['metrics'];
 export type ToolBatchSummary = Omit<ToolComputeResponse, 'results'>;
 
-export type ToolClientErrorKind =
-    | 'authentication'
-    | 'session'
-    | 'aborted'
-    | 'timeout'
-    | 'network'
-    | 'http'
-    | 'internal'
-    | 'validation'
-    | 'protocol'
-    | 'compatibility'
-    | 'renderer'
-    | 'environment';
+export type ToolClientErrorKind = 'authentication' | 'session' | 'aborted' | 'timeout' | 'network' | 'http' | 'internal' | 'validation' | 'protocol' | 'compatibility' | 'renderer' | 'environment';
 
-export type ToolCompatibilityCode =
-    | 'tool_not_installed'
-    | 'tool_unavailable'
-    | 'contract_not_compiled'
-    | 'contract_mismatch'
-    | 'schema_mismatch'
-    | 'ui_mismatch'
-    | 'operation_mismatch';
+export type ToolCompatibilityCode = 'tool_not_installed' | 'tool_unavailable' | 'contract_not_compiled' | 'contract_mismatch' | 'schema_mismatch' | 'ui_mismatch' | 'operation_mismatch';
 
 export type ToolClientErrorCode =
     | ToolCompatibilityCode
@@ -91,11 +61,7 @@ export class ToolClientError extends Error {
     readonly issues: readonly ToolClientIssue[];
     readonly issueCount: number;
 
-    constructor(
-        kind: ToolClientErrorKind,
-        code: ToolClientErrorCode,
-        options: {httpStatus?: number; issues?: readonly ToolClientIssue[]; issueCount?: number} = {},
-    ) {
+    constructor(kind: ToolClientErrorKind, code: ToolClientErrorCode, options: {httpStatus?: number; issues?: readonly ToolClientIssue[]; issueCount?: number} = {}) {
         super(code);
         this.name = 'ToolClientError';
         this.kind = kind;
@@ -106,22 +72,17 @@ export class ToolClientError extends Error {
     }
 }
 
-export function parseToolCodec<Output, Input>(
-    codec: z.ZodType<Output, z.ZodTypeDef, Input>,
-    value: unknown,
-    kind: 'protocol' | 'validation',
-    code: ToolClientErrorCode,
-): Output {
+export function parseToolCodec<Output, Input>(codec: z.ZodType<Output, z.ZodTypeDef, Input>, value: unknown, kind: 'protocol' | 'validation', code: ToolClientErrorCode): Output {
     try {
         const parsed = codec.safeParse(value);
         if (parsed.success) return parsed.data;
-        const issues = parsed.error.issues.slice(0, 32).map((issue): ToolClientIssue => ({
-            code: issue.code,
-            // Dictionary keys and Zod messages can contain scenario values.
-            path: Object.freeze(issue.path.slice(0, 16).map((part): number | '$field' =>
-                typeof part === 'number' && Number.isSafeInteger(part) && part >= 0 ? part : '$field',
-            )),
-        }));
+        const issues = parsed.error.issues.slice(0, 32).map(
+            (issue): ToolClientIssue => ({
+                code: issue.code,
+                // Dictionary keys and Zod messages can contain scenario values.
+                path: Object.freeze(issue.path.slice(0, 16).map((part): number | '$field' => (typeof part === 'number' && Number.isSafeInteger(part) && part >= 0 ? part : '$field'))),
+            }),
+        );
         throw new ToolClientError(kind, code, {issues, issueCount: parsed.error.issues.length});
     } catch (error) {
         if (error instanceof ToolClientError) throw error;
@@ -140,8 +101,7 @@ export type VerifiedToolDescriptor = Readonly<ToolDescriptor> & {
     readonly [descriptorBrand]: number;
 };
 
-export type CompatibleToolDescriptor<C extends ToolCode, V extends ToolVersion<C>> =
-    VerifiedToolDescriptor & {readonly tool_code: C; readonly contract_version: V};
+export type CompatibleToolDescriptor<C extends ToolCode, V extends ToolVersion<C>> = VerifiedToolDescriptor & {readonly tool_code: C; readonly contract_version: V};
 
 // A read-only view of compiled entries, not a replacement transport/domain schema.
 export interface CompiledToolContract {
@@ -216,11 +176,7 @@ export function observeToolAccount(listener: (account: ToolAccountState) => void
     };
 }
 
-export async function runToolSessionTask<T>(
-    accountGeneration: number,
-    operation: (signal: AbortSignal) => Promise<T>,
-    signal?: AbortSignal,
-): Promise<T> {
+export async function runToolSessionTask<T>(accountGeneration: number, operation: (signal: AbortSignal) => Promise<T>, signal?: AbortSignal): Promise<T> {
     assertToolAccount(accountGeneration);
     if (signal?.aborted) throw new ToolClientError('aborted', 'waiting_stopped');
     const controller = new AbortController();
@@ -313,9 +269,7 @@ export function getCompiledToolContract(code: string, version: string): Compiled
     return contract;
 }
 
-export type ToolCompatibility =
-    | {readonly status: 'compatible'; readonly descriptor: ToolDescriptor; readonly contract: CompiledToolContract}
-    | {readonly status: 'unavailable'; readonly reason: ToolCompatibilityCode};
+export type ToolCompatibility = {readonly status: 'compatible'; readonly descriptor: ToolDescriptor; readonly contract: CompiledToolContract} | {readonly status: 'unavailable'; readonly reason: ToolCompatibilityCode};
 
 export function inspectToolCompatibility(catalog: VerifiedToolCatalog, toolCode: string): ToolCompatibility {
     requireCatalog(catalog);
@@ -329,25 +283,17 @@ export function inspectToolCompatibility(catalog: VerifiedToolCatalog, toolCode:
     const contract = getCompiledToolContract(descriptor.tool_code, descriptor.contract_version);
     if (!contract) return {status: 'unavailable', reason: 'contract_not_compiled'};
     if (descriptor.schema_fingerprint !== contract.schemaFingerprint) return {status: 'unavailable', reason: 'schema_mismatch'};
-    if (descriptor.ui.kind !== 'custom'
-        || descriptor.ui.component_key !== contract.componentKey
-        || descriptor.ui.ui_contract_version !== contract.uiContractVersion) {
+    if (descriptor.ui.kind !== 'custom' || descriptor.ui.component_key !== contract.componentKey || descriptor.ui.ui_contract_version !== contract.uiContractVersion) {
         return {status: 'unavailable', reason: 'ui_mismatch'};
     }
     const operations = new Set(descriptor.operations.map((operation) => operation.operation));
-    if (operations.size !== descriptor.operations.length
-        || operations.size !== contract.operations.length
-        || !contract.operations.every((operation) => operations.has(operation))) {
+    if (operations.size !== descriptor.operations.length || operations.size !== contract.operations.length || !contract.operations.every((operation) => operations.has(operation))) {
         return {status: 'unavailable', reason: 'operation_mismatch'};
     }
     return {status: 'compatible', descriptor, contract};
 }
 
-export function verifyToolDescriptor<C extends ToolCode, V extends ToolVersion<C>>(
-    catalog: VerifiedToolCatalog,
-    code: C,
-    version: V,
-): CompatibleToolDescriptor<C, V> {
+export function verifyToolDescriptor<C extends ToolCode, V extends ToolVersion<C>>(catalog: VerifiedToolCatalog, code: C, version: V): CompatibleToolDescriptor<C, V> {
     const policy = requireCatalog(catalog);
     const compatibility = inspectToolCompatibility(catalog, code);
     if (compatibility.status === 'unavailable') throw new ToolClientError('compatibility', compatibility.reason);

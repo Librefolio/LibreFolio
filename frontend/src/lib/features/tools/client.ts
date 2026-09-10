@@ -44,10 +44,8 @@ type ResultContext<C extends ToolCode, V extends ToolVersion<C>> = {
 };
 
 export type ToolItemResult<C extends ToolCode, V extends ToolVersion<C>> =
-    | (Omit<Extract<ToolWireResult, {status: 'success'}>, 'tool_code' | 'contract_version' | 'result'>
-        & ResultContext<C, V> & {readonly result: ToolOutput<C, V>})
-    | (Omit<Extract<ToolWireResult, {status: 'error'}>, 'tool_code' | 'contract_version'>
-        & ResultContext<C, V>);
+    | (Omit<Extract<ToolWireResult, {status: 'success'}>, 'tool_code' | 'contract_version' | 'result'> & ResultContext<C, V> & {readonly result: ToolOutput<C, V>})
+    | (Omit<Extract<ToolWireResult, {status: 'error'}>, 'tool_code' | 'contract_version'> & ResultContext<C, V>);
 
 type ExpectedBatch = Pick<ToolComputeRequest, 'request_id'> & {
     items: readonly Omit<ToolComputeRequest['items'][number], 'parameters'>[];
@@ -81,11 +79,15 @@ function safeTransportError(error: unknown, accountGeneration: number): ToolClie
 export async function fetchToolCatalog({signal}: ToolReadOptions = {}): Promise<VerifiedToolCatalog> {
     const {generation} = getToolAccountState();
     try {
-        return await runToolSessionTask(generation, async (requestSignal) => {
-            const response = await axiosInstance.get<unknown>('/api/v1/tools/catalog', {signal: requestSignal});
-            assertResponseCurrent(generation, requestSignal);
-            return validateToolCatalog(response.data, generation);
-        }, signal);
+        return await runToolSessionTask(
+            generation,
+            async (requestSignal) => {
+                const response = await axiosInstance.get<unknown>('/api/v1/tools/catalog', {signal: requestSignal});
+                assertResponseCurrent(generation, requestSignal);
+                return validateToolCatalog(response.data, generation);
+            },
+            signal,
+        );
     } catch (error) {
         throw safeTransportError(error, generation);
     }
@@ -94,11 +96,15 @@ export async function fetchToolCatalog({signal}: ToolReadOptions = {}): Promise<
 export async function fetchToolDiagnostics({signal}: ToolReadOptions = {}): Promise<ToolDiagnosticsResponse> {
     const {generation} = getToolAccountState();
     try {
-        return await runToolSessionTask(generation, async (requestSignal) => {
-            const response = await axiosInstance.get<unknown>('/api/v1/tools/diagnostics', {signal: requestSignal});
-            assertResponseCurrent(generation, requestSignal);
-            return validateToolDiagnostics(response.data, generation);
-        }, signal);
+        return await runToolSessionTask(
+            generation,
+            async (requestSignal) => {
+                const response = await axiosInstance.get<unknown>('/api/v1/tools/diagnostics', {signal: requestSignal});
+                assertResponseCurrent(generation, requestSignal);
+                return validateToolDiagnostics(response.data, generation);
+            },
+            signal,
+        );
     } catch (error) {
         throw safeTransportError(error, generation);
     }
@@ -118,6 +124,7 @@ function validUnicode(value: string): boolean {
     for (let index = 0; index < value.length; index += 1) {
         const unit = value.charCodeAt(index);
         if (unit >= 0xd800 && unit <= 0xdbff) {
+            if (index + 1 >= value.length) return false;
             const next = value.charCodeAt(index + 1);
             if (next < 0xdc00 || next > 0xdfff) return false;
             index += 1;
@@ -194,12 +201,7 @@ function validateBatchResponse(raw: unknown, expected: ExpectedBatch): ToolCompu
     const executions = new Set<string>();
     for (const [index, result] of batch.results.entries()) {
         const item = expected.items[index];
-        if (!item
-            || result.correlation_id !== item.correlation_id
-            || result.tool_code !== item.tool_code
-            || result.contract_version !== item.contract_version
-            || result.implementation_version !== item.implementation_version
-            || result.schema_fingerprint !== item.schema_fingerprint) {
+        if (!item || result.correlation_id !== item.correlation_id || result.tool_code !== item.tool_code || result.contract_version !== item.contract_version || result.implementation_version !== item.implementation_version || result.schema_fingerprint !== item.schema_fingerprint) {
             throw new ToolClientError('protocol', 'response_identity_mismatch');
         }
         if (result.execution_id !== null) {
@@ -220,24 +222,22 @@ function validateBatchResponse(raw: unknown, expected: ExpectedBatch): ToolCompu
 }
 
 /** A stopped wait is not a server cancellation acknowledgement. No retries or toasts are performed here. */
-export async function runTool<const C extends ToolCode, const V extends ToolVersion<C>>(
-    code: C,
-    version: V,
-    options: ToolRunOptions<NoInfer<C>, NoInfer<V>>,
-): Promise<ToolItemResult<C, V>> {
+export async function runTool<const C extends ToolCode, const V extends ToolVersion<C>>(code: C, version: V, options: ToolRunOptions<NoInfer<C>, NoInfer<V>>): Promise<ToolItemResult<C, V>> {
     const {descriptor, correlationId, parameters, signal} = options;
     if (signal?.aborted) throw new ToolClientError('aborted', 'waiting_stopped');
     const context = prepareToolRun(code, version, descriptor);
     const request = {
         request_id: newRequestId(),
-        items: [{
-            correlation_id: correlationId,
-            tool_code: code,
-            contract_version: version,
-            implementation_version: descriptor.implementation_version,
-            schema_fingerprint: descriptor.schema_fingerprint,
-            parameters,
-        }],
+        items: [
+            {
+                correlation_id: correlationId,
+                tool_code: code,
+                contract_version: version,
+                implementation_version: descriptor.implementation_version,
+                schema_fingerprint: descriptor.schema_fingerprint,
+                parameters,
+            },
+        ],
     };
     // Snapshot plain JSON once, validate that exact wire value, then reuse its bytes.
     const snapshot = snapshotRequest(request);
@@ -254,29 +254,33 @@ export async function runTool<const C extends ToolCode, const V extends ToolVers
         })),
     };
     try {
-        return await runToolSessionTask(context.accountGeneration, async (requestSignal) => {
-            const response = await axiosInstance.post<unknown>('/api/v1/tools/compute', snapshot.value, {
-                signal: requestSignal,
-                timeout: context.clientTimeoutMs,
-                headers: {'Content-Type': 'application/json'},
-                // Keep the raw-wire snapshot stable across asynchronous request interceptors.
-                transformRequest: [() => snapshot.body],
-            });
-            assertResponseCurrent(context.accountGeneration, requestSignal);
-            const {results, ...batch} = validateBatchResponse(response.data, expected);
-            const item = results[0];
-            if (!item) throw new ToolClientError('protocol', 'response_count_mismatch');
-            const identity = {
-                tool_code: code,
-                contract_version: version,
-                accountGeneration: context.accountGeneration,
-                batch,
-            };
-            if (item.status === 'success') {
-                return {...item, ...identity, result: context.decodeOutput(item.result)};
-            }
-            return {...item, ...identity};
-        }, signal);
+        return await runToolSessionTask(
+            context.accountGeneration,
+            async (requestSignal) => {
+                const response = await axiosInstance.post<unknown>('/api/v1/tools/compute', snapshot.value, {
+                    signal: requestSignal,
+                    timeout: context.clientTimeoutMs,
+                    headers: {'Content-Type': 'application/json'},
+                    // Keep the raw-wire snapshot stable across asynchronous request interceptors.
+                    transformRequest: [() => snapshot.body],
+                });
+                assertResponseCurrent(context.accountGeneration, requestSignal);
+                const {results, ...batch} = validateBatchResponse(response.data, expected);
+                const item = results[0];
+                if (!item) throw new ToolClientError('protocol', 'response_count_mismatch');
+                const identity = {
+                    tool_code: code,
+                    contract_version: version,
+                    accountGeneration: context.accountGeneration,
+                    batch,
+                };
+                if (item.status === 'success') {
+                    return {...item, ...identity, result: context.decodeOutput(item.result)};
+                }
+                return {...item, ...identity};
+            },
+            signal,
+        );
     } catch (error) {
         throw safeTransportError(error, context.accountGeneration);
     }

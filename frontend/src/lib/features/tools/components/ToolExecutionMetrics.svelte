@@ -40,19 +40,13 @@
         return value === null
             ? $t('common.noData')
             : $t('tools.metrics.milliseconds', {
-                default: '{value} ms',
-                values: {value: numberFormat.format(value)},
-            });
+                  default: '{value} ms',
+                  values: {value: numberFormat.format(value)},
+              });
     }
 </script>
 
-<section
-    class="min-w-0 rounded-xl border border-gray-200 bg-white p-4 text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-    aria-label={$t('tools.metrics.title', {default: 'Backend timings'})}
-    data-testid="tool-execution-metrics"
-    data-busy="false"
-    aria-busy={false}
->
+<section class="min-w-0 rounded-xl border border-gray-200 bg-white p-4 text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100" aria-label={$t('tools.metrics.title', {default: 'Backend timings'})} data-testid="tool-execution-metrics" data-busy="false" aria-busy={false}>
     <h3 class="flex items-center gap-2 text-sm font-semibold">
         <Clock3 size={16} aria-hidden="true" class="shrink-0" />
         {$t('tools.metrics.title', {default: 'Backend timings'})}
@@ -96,10 +90,7 @@
     </dl>
 
     <details class="mt-4 border-t border-gray-200 pt-3 dark:border-gray-700" data-testid="tool-metrics-details">
-        <summary
-            class="cursor-pointer rounded text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-green-700 dark:focus-visible:outline-green-400"
-            data-testid="tool-metrics-details-toggle"
-        >
+        <summary class="cursor-pointer rounded text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-green-700 dark:focus-visible:outline-green-400" data-testid="tool-metrics-details-toggle">
             {$t('common.detail')}
         </summary>
         <dl class="mt-3 grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
