@@ -306,7 +306,7 @@ class SignalPluginRegistry(AbstractPluginRegistry):
     def list_definitions(cls):
         """Return stable static catalog definitions sorted by signal code."""
         cls.auto_discover()
-        return [plugin_class.catalog_definition() for _code, plugin_class in sorted(cls._plugins.items())]
+        return [plugin_class.catalog_definition() for _code, plugin_class in sorted(cls._plugins.items()) if plugin_class.catalog_visible]
 
 
 class RiskAnalyticRegistry(AbstractPluginRegistry):

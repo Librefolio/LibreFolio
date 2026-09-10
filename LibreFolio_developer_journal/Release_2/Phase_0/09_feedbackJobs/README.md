@@ -93,10 +93,11 @@ integration policy, not the older execution lease.
 [SP06 G3/G1c and SP07 G1a/G1b](../20_performanceCharts/plan-phase00PerformanceCharts.prompt.md)
 have a durable final product contract, ASCII v2 storyboards, file ownership and
 dependency-safe XL phase split. The developer authorized **planning only**.
-Implementation remains frozen behind hard Gate 0: integrate workstream F, refresh
-the resolver/portfolio-engine/Asset-detail analysis on the new target SHA, reserve
-writers, then obtain explicit implementation authorization. No task is marked
-implemented or integrated by this checkpoint.
+The post-F technical refresh is recorded at `0af66da5`; implementation remains
+frozen except for explicitly authorized I10: its signal-only calendar-return
+backend is complete and awaiting integration. H/YOC owns the shared portfolio
+service/schema/tests before I, which must re-read the post-H target before I20.
+UI G3 and every portfolio phase remain unimplemented.
 
 ## Regole della cartella
 
