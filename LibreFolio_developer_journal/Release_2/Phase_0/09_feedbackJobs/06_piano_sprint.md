@@ -556,6 +556,11 @@ Non esiste un componente autonomo AssetDeleteModal: si usa ConfirmModal. La canc
 
 ### T0 - Piattaforma Tool backend, estensione approvata
 
+**Piano C attivo:** [Piattaforma Tool atomica](../16_toolPlatform/plan-phase00ToolPlatform.prompt.md).
+Il merge runtime, i gate backend, codec e frontend generici C sono completati.
+Il [contratto PAC per D](../16_toolPlatform/handoff-pac-D.md) definisce il primo
+plugin/renderer reale, che resta condizione di chiusura del pilot.
+
 **Stato:** nuova. **Taglia:** L per piattaforma custom-first; non richiede UI generica schema-driven.
 
 **Non confondere con cio che esiste:** PAC Planning in AI Export e una richiesta di analisi, non un solver; optimizer risk calcola pesi continui da rendimenti storici; Scheduled Investment e pricing di strumenti a rendimento programmato. Nessuno implementa questo tool.
@@ -841,6 +846,15 @@ Docs MkDocs in esecuzione tramite **docs-writer**: inglese, pipeline di traduzio
 La pubblicazione di questo documento aggiorna README e aggiunge note datate per ogni voce nei file 00-05; non significa che i task aperti siano implementati.
 
 Primo piano preso in carico: [SP04-SP05 - Contratti e Runes](../11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md), approvato dal dev il 2026-09-07. I backlink dal piano 11 puntano a questo master e al backlog strutturale. Stato operativo e note per-step non vengono duplicati qui.
+
+**Pianificazione SP06/SP07 autorizzata, 2026-09-10:** il
+[piano performance charts](../20_performanceCharts/plan-phase00PerformanceCharts.prompt.md)
+registra il contratto chiuso per G3/G1a/G1b/G1c, gli storyboard ASCII v2 e lo
+split per owner. Stato **PLANNED / implementation frozen**: il refresh tecnico
+post-F e' registrato su `0af66da5`; il dev ha autorizzato e I ha completato la
+sola slice I10 backend signal, ora in attesa di integrazione. H/YOC precede I
+su service/schema/test portfolio; UI G3 e I20+ restano congelati e I dovra'
+rileggere il target post-H. Il link non marca gli altri task implementati.
 
 All'avvio effettivo di uno sprint: scegliere il prossimo `<NN_area>` libero in `Phase_0/`, aprire il piano `.prompt.md`, cross-linkare il task originale e marcare la presa in carico secondo la regola del backlog. Non creare oggi sedici piani vuoti. Dopo ogni step eseguito, aggiornare immediatamente quel piano con stato, data, nota di implementazione ed eventuale fuori pista.
 

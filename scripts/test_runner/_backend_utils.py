@@ -151,6 +151,15 @@ def utils_js_cache_fail_loud(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "JS cache fail-loud tests", verbose=verbose)
 
 
+def utils_tools_wire(verbose: bool = False, test_names: list = None) -> bool:
+    """Test bounded Tool JSON encoding and sanitized validation errors."""
+    print_section("Utils: Tool Wire")
+    print_info("Testing: Unicode scalars, JSON limits, raw values and error redaction")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_tools_wire.py", test_names)
+    return run_command(cmd, "Tool wire tests", verbose=verbose)
+
+
 def utils_runtime_isolation(verbose: bool = False, test_names: list = None) -> bool:
     """Test the runtime-isolation contract (test-mode data-dir override + CLI shapes)."""
     print_section("Utils: Runtime Isolation")
@@ -158,6 +167,15 @@ def utils_runtime_isolation(verbose: bool = False, test_names: list = None) -> b
     print_info("Tests: prod guards, dotenv/Pipenv boundaries, port collisions, symlink escapes, server/test parser shapes")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_runtime_isolation.py", test_names)
     return run_command(cmd, "Runtime isolation tests", verbose=verbose)
+
+
+def utils_test_runner_cli(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the test-runner CLI's own command-building contract."""
+    print_section("Utils: Test Runner CLI")
+    print_info("Testing: scripts/test_runner/_backend_utils.py, _cli.py (registry dispatch)")
+    print_info("Tests: test_names → pytest -k semantics, registry forwarding, coverage_js_adapter link")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_test_runner_cli.py", test_names)
+    return run_command(cmd, "Test runner CLI contract tests", verbose=verbose)
 
 
 def utils_all(verbose: bool = False) -> bool:
@@ -185,6 +203,7 @@ Tests for utility modules and helper functions:
   • Geographic area normalization, Sector normalization
   • Currency utilities, Cache utilities
   • Provider core cache & thread isolation
+  • Test-runner CLI contract (coverage-js-adapter command building, registry dispatch)
 """,
         # These are functions over values. The three the static classifier could
         # not prove pure only touch a database because they import a helper that
@@ -233,12 +252,30 @@ Tests for utility modules and helper functions:
     )
     add_test(
         cat,
+        "tools-wire",
+        utils_tools_wire,
+        name="Tool Wire",
+        desc="Strict UTF-8 JSON, byte/depth boundaries and sanitized validation issues",
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "runtime-isolation",
         utils_runtime_isolation,
         name="Runtime Isolation",
         desc="Per-lane port/data propagation, production guards, readiness identity and process ownership",
         # Only monkeypatches os.environ/sys.argv and builds argparse parsers;
         # no DB, no server, no filesystem writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "test-runner-cli",
+        utils_test_runner_cli,
+        name="Test Runner CLI Contract",
+        desc="test_names → pytest -k semantics on the real coverage-js-adapter action, registry dispatch forwarding, coverage_js.py compile check",
+        # Monkeypatches run_command/subprocess.run and reads source text only;
+        # no DB, no server, no network, no repo writes.
         isolation="pure",
     )
     add_test(cat, "all", utils_all, test_names=False, name="All Utils Tests", desc="Run all utility tests")

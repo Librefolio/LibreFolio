@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from collections import Counter
 from copy import deepcopy
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from itertools import product
 from typing import Any, Literal
@@ -33,6 +33,9 @@ from backend.app.schemas.signals import (
     SignalBandPoint,
     SignalBandSeries,
     SignalBandValueSource,
+    SignalCalendarReturnPointStatus,
+    SignalCalendarReturnProvenance,
+    SignalCalendarReturnValuePoint,
     SignalCatalogDefinition,
     SignalCatalogResponse,
     SignalCategory,
@@ -102,6 +105,79 @@ def make_line_series(
         axis=make_axis(),
         view_transform=SignalViewTransform.BASE_PERCENTAGE,
         points=[SignalValuePoint(date=point_date, value=value) for point_date, value in zip(dates, values, strict=True)],
+    )
+
+
+# I10 — additive, sparse provenance for ASSET_CALENDAR_ROLLING_RETURN. The
+# public field names are pinned here on purpose: they are the wire contract the
+# frontend and the AI Export layer read, and nothing else in the suite would
+# notice a silent rename.
+CALENDAR_PROVENANCE_FIELDS = (
+    "status",
+    "reference_target_date",
+    "current_price_date",
+    "current_price_days_back",
+    "reference_price_date",
+    "reference_price_days_back",
+    "current_fx_date",
+    "current_fx_days_back",
+    "reference_fx_date",
+    "reference_fx_days_back",
+)
+
+
+def make_calendar_provenance(
+    status: SignalCalendarReturnPointStatus = SignalCalendarReturnPointStatus.AVAILABLE,
+    *,
+    reference_target_date: date = DAY_1,
+    current_price_date: date = DAY_3,
+    with_fx: bool = False,
+) -> SignalCalendarReturnProvenance:
+    fx_fields = (
+        {
+            "current_fx_date": DAY_2,
+            "current_fx_days_back": 1,
+            "reference_fx_date": DAY_1,
+            "reference_fx_days_back": 2,
+        }
+        if with_fx
+        else {}
+    )
+    return SignalCalendarReturnProvenance(
+        status=status,
+        reference_target_date=reference_target_date,
+        current_price_date=current_price_date,
+        current_price_days_back=0,
+        reference_price_date=(None if status == SignalCalendarReturnPointStatus.MISSING_REFERENCE else reference_target_date),
+        reference_price_days_back=(None if status == SignalCalendarReturnPointStatus.MISSING_REFERENCE else 0),
+        **fx_fields,
+    )
+
+
+def make_calendar_series(
+    key: str = "calendar_return",
+    dates: tuple[date, ...] = (DAY_1, DAY_2),
+    values: tuple[float | None, ...] = (None, 2.5),
+) -> SignalLineSeries:
+    return SignalLineSeries(
+        key=key,
+        label_key=f"signals.{key}.label",
+        semantic_id=f"test.{key}",
+        semantic_description=f"Test calendar semantic value for {key}.",
+        unit=SignalUnit.PERCENTAGE,
+        axis=SignalAxisSpec(key="calendar_return", role=SignalAxisRole.INDEPENDENT),
+        points=[
+            SignalCalendarReturnValuePoint(
+                date=point_date,
+                value=value,
+                provenance=make_calendar_provenance(
+                    status=(SignalCalendarReturnPointStatus.MISSING_REFERENCE if value is None else SignalCalendarReturnPointStatus.AVAILABLE),
+                    reference_target_date=point_date - timedelta(days=30),
+                    current_price_date=point_date,
+                ),
+            )
+            for point_date, value in zip(dates, values, strict=True)
+        ],
     )
 
 
@@ -2072,3 +2148,173 @@ class TestResultPublicShape:
         field_order = list(dict.fromkeys(loc[0] for loc, _, _ in errors))
         assert field_order == ["series", "availability", "warmup", "risk_metadata", "unexpected"]
         assert errors[-1] == (("unexpected",), "extra_forbidden", "Extra inputs are not permitted")
+
+
+# =============================================================================
+# I10 — typed, sparse calendar-return provenance
+#
+# The provenance is ADDITIVE: it exists only on the points of the calendar
+# series. Every other point in the system must keep serializing as exactly
+# `date` + `value`, with no null provenance field appearing anywhere — that is
+# what "sparse" means on the wire, and it is the only reason the addition is
+# backward compatible for existing consumers.
+# =============================================================================
+
+
+class TestCalendarReturnProvenance:
+    def test_ordinary_value_point_wire_dump_stays_date_and_value_only(self) -> None:
+        point = SignalValuePoint(date=DAY_1, value=100.0)
+
+        assert point.model_dump(mode="json") == {"date": "2026-01-01", "value": 100.0}
+        assert set(point.model_dump(mode="python")) == {"date", "value"}
+        assert set(SignalValuePoint.model_fields) == {"date", "value"}
+        # A null-valued legacy point stays two keys too — no empty metadata.
+        assert SignalValuePoint(date=DAY_2, value=None).model_dump(mode="json") == {"date": "2026-01-02", "value": None}
+
+    def test_calendar_provenance_pins_public_fields_and_statuses(self) -> None:
+        assert set(SignalCalendarReturnProvenance.model_fields) == set(CALENDAR_PROVENANCE_FIELDS)
+        assert {status.value for status in SignalCalendarReturnPointStatus} == {
+            "available",
+            "missing_reference",
+            "invalid_current_price",
+            "invalid_reference_price",
+        }
+        assert set(SignalCalendarReturnValuePoint.model_fields) == {"date", "value", "provenance"}
+
+    def test_calendar_value_point_serializes_full_typed_provenance(self) -> None:
+        point = SignalCalendarReturnValuePoint(
+            date=DAY_3,
+            value=2.5,
+            provenance=make_calendar_provenance(with_fx=True),
+        )
+
+        assert point.model_dump(mode="json") == {
+            "date": "2026-01-03",
+            "value": 2.5,
+            "provenance": {
+                "status": "available",
+                "reference_target_date": "2026-01-01",
+                "current_price_date": "2026-01-03",
+                "current_price_days_back": 0,
+                "reference_price_date": "2026-01-01",
+                "reference_price_days_back": 0,
+                "current_fx_date": "2026-01-02",
+                "current_fx_days_back": 1,
+                "reference_fx_date": "2026-01-01",
+                "reference_fx_days_back": 2,
+            },
+        }
+
+    def test_calendar_value_point_keeps_fx_provenance_optional(self) -> None:
+        """No conversion happened → the FX half is null, the price half is not.
+
+        The point still carries a status and a reference target date: a null
+        value without a reason is exactly what this contract removes.
+        """
+        point = SignalCalendarReturnValuePoint(
+            date=DAY_3,
+            value=None,
+            provenance=SignalCalendarReturnProvenance(
+                status=SignalCalendarReturnPointStatus.MISSING_REFERENCE,
+                reference_target_date=DAY_1,
+                current_price_date=DAY_3,
+                current_price_days_back=0,
+            ),
+        )
+        dumped = point.model_dump(mode="json")
+
+        assert dumped["value"] is None
+        assert dumped["provenance"]["status"] == "missing_reference"
+        assert dumped["provenance"]["reference_target_date"] == "2026-01-01"
+        assert dumped["provenance"]["current_price_date"] == "2026-01-03"
+        assert dumped["provenance"]["current_price_days_back"] == 0
+        assert set(dumped["provenance"]) == set(CALENDAR_PROVENANCE_FIELDS)
+        assert all(
+            dumped["provenance"][field] is None
+            for field in (
+                "reference_price_date",
+                "reference_price_days_back",
+                "current_fx_date",
+                "current_fx_days_back",
+                "reference_fx_date",
+                "reference_fx_days_back",
+            )
+        )
+
+    def test_calendar_provenance_rejects_unknown_fields_and_missing_identity(self) -> None:
+        with pytest.raises(ValidationError, match="extra_forbidden|Extra inputs"):
+            SignalCalendarReturnProvenance(
+                status=SignalCalendarReturnPointStatus.AVAILABLE,
+                reference_target_date=DAY_1,
+                current_price_lag=3,
+            )
+        with pytest.raises(ValidationError):
+            SignalCalendarReturnProvenance(reference_target_date=DAY_1)
+        with pytest.raises(ValidationError):
+            SignalCalendarReturnProvenance(status=SignalCalendarReturnPointStatus.AVAILABLE)
+        with pytest.raises(ValidationError):
+            SignalCalendarReturnProvenance(
+                status=SignalCalendarReturnPointStatus.AVAILABLE,
+                reference_target_date=DAY_1,
+                current_price_days_back=0,
+            )
+        with pytest.raises(ValidationError):
+            SignalCalendarReturnProvenance(
+                status=SignalCalendarReturnPointStatus.AVAILABLE,
+                reference_target_date=DAY_1,
+                current_price_date=DAY_3,
+            )
+        with pytest.raises(ValidationError):
+            SignalCalendarReturnProvenance(
+                status="stale_reference",
+                reference_target_date=DAY_1,
+                current_price_date=DAY_3,
+                current_price_days_back=0,
+            )
+        with pytest.raises(ValidationError):
+            SignalCalendarReturnValuePoint(date=DAY_1, value=1.0)
+
+    def test_signal_result_round_trips_sparse_provenance_without_touching_legacy_points(self) -> None:
+        """One result, two series: only the calendar one carries provenance.
+
+        The service re-validates its own output (normalization, then
+        `slice_signal_series`), so a union that silently degrades a calendar
+        point back to `SignalValuePoint` would lose the provenance without
+        raising anywhere. Round-tripping the public dump is what catches it.
+        """
+        result = make_result(
+            SignalStatus.PARTIAL,
+            series=[make_line_series(), make_calendar_series()],
+            availability=make_availability(
+                reason=SignalAvailabilityReason.PARTIAL_UNDEFINED_METRIC,
+            ),
+            warnings=[
+                SignalWarning(
+                    code=SignalWarningCode.UNDEFINED_METRIC_WINDOW,
+                    message="One calendar-return reference is unavailable",
+                )
+            ],
+        )
+        dumped = result.model_dump(mode="json")
+        legacy_dump = next(item for item in dumped["series"] if item["key"] == "ema")
+        calendar_dump = next(item for item in dumped["series"] if item["key"] == "calendar_return")
+
+        assert all(set(point) == {"date", "value"} for point in legacy_dump["points"])
+        assert all(set(point) == {"date", "value", "provenance"} for point in calendar_dump["points"])
+        first_calendar_point = next(point for point in calendar_dump["points"] if point["date"] == "2026-01-01")
+        assert first_calendar_point["value"] is None
+        assert first_calendar_point["provenance"]["status"] == "missing_reference"
+        assert first_calendar_point["provenance"]["reference_target_date"] == "2025-12-02"
+
+        reparsed = SignalResult.model_validate(dumped)
+        reparsed_calendar = next(item for item in reparsed.series if item.key == "calendar_return")
+        reparsed_legacy = next(item for item in reparsed.series if item.key == "ema")
+
+        assert reparsed.model_dump(mode="json") == dumped
+        assert all(isinstance(point, SignalCalendarReturnValuePoint) for point in reparsed_calendar.points)
+        assert {point.date: point.provenance.status for point in reparsed_calendar.points} == {
+            DAY_1: SignalCalendarReturnPointStatus.MISSING_REFERENCE,
+            DAY_2: SignalCalendarReturnPointStatus.AVAILABLE,
+        }
+        assert all(not isinstance(point, SignalCalendarReturnValuePoint) for point in reparsed_legacy.points)
+        assert json.loads(result.model_dump_json()) == dumped
