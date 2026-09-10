@@ -38,6 +38,7 @@ from typing import AsyncGenerator, Dict, List, Literal, Optional
 import structlog
 from sqlalchemy import String, and_, case, cast, delete, func, or_, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import (
@@ -4178,76 +4179,104 @@ class AssetCRUDService:
         Returns:
             FABulkAssetDeleteResponse with per-item results
         """
-        results = []
+        unique_ids = list(dict.fromkeys(asset_ids))
+        asset_rows = await session.execute(select(Asset).where(Asset.id.in_(unique_ids)))
+        assets_by_id = {asset.id: asset for asset in asset_rows.scalars().all()}
+        count_rows = await session.execute(select(Transaction.asset_id, func.count(Transaction.id)).where(Transaction.asset_id.in_(unique_ids)).group_by(Transaction.asset_id))
+        transaction_counts = dict(count_rows.all())
 
+        # SQLite defers BEGIN across reads; without a write, releasing the first
+        # SAVEPOINT commits it and a later outer rollback cannot undo the delete.
+        await session.execute(update(Asset).where(Asset.id.in_([])).values(active=Asset.active))
+
+        results: list[FAAssetDeleteResult] = []
+        prior_results: dict[int, FAAssetDeleteResult] = {}
         for asset_id in asset_ids:
-            asset_name = None
-            try:
-                # Check if asset exists
-                stmt = select(Asset).where(Asset.id == asset_id)
-                result = await session.execute(stmt)
-                asset = result.scalar_one_or_none()
-
-                if not asset:
-                    results.append(
-                        FAAssetDeleteResult(
-                            asset_id=asset_id,
-                            success=False,
-                            display_name=None,
-                            error_code="NOT_FOUND",
-                            message=f"Asset with ID {asset_id} not found",
-                        )
-                    )
-                    continue
-
-                asset_name = asset.display_name
-
-                # Try to delete (will fail if transactions exist due to FK constraint)
-                await session.delete(asset)
-                await session.flush()  # Check FK constraints before commit
-
-                results.append(
-                    FAAssetDeleteResult(
-                        asset_id=asset_id,
-                        success=True,
-                        deleted_count=1,
-                        display_name=asset_name,
-                        message="Asset deleted successfully",
-                    )
+            prior = prior_results.get(asset_id)
+            if prior is not None and not prior.success:
+                results.append(prior.model_copy(deep=True))
+                continue
+            asset = assets_by_id.get(asset_id) if prior is None else None
+            if asset is None:
+                item_result = FAAssetDeleteResult(
+                    asset_id=asset_id,
+                    success=False,
+                    deleted_count=0,
+                    display_name=None,
+                    error_code="NOT_FOUND",
+                    message=f"Asset with ID {asset_id} not found",
                 )
+                results.append(item_result)
+                prior_results[asset_id] = item_result
+                continue
+
+            asset_name = asset.display_name
+            transaction_count = transaction_counts.get(asset_id, 0)
+            if transaction_count:
+                item_result = FAAssetDeleteResult(
+                    asset_id=asset_id,
+                    success=False,
+                    deleted_count=0,
+                    display_name=asset_name,
+                    error_code="HAS_TRANSACTIONS",
+                    transaction_count=transaction_count,
+                    message=f"Cannot delete asset {asset_id}: has {transaction_count} existing transactions",
+                )
+                results.append(item_result)
+                prior_results[asset_id] = item_result
+                continue
+
+            try:
+                async with session.begin_nested():
+                    await session.delete(asset)
+                    await session.flush()
+
+                item_result = FAAssetDeleteResult(
+                    asset_id=asset_id,
+                    success=True,
+                    deleted_count=1,
+                    display_name=asset_name,
+                    message="Asset deleted successfully",
+                )
+                results.append(item_result)
+                prior_results[asset_id] = item_result
 
                 logger.info(f"Asset deleted: id={asset_id}")
 
-            except Exception as e:
-                await session.rollback()
-                error_msg = str(e)
-
-                # Check if error is due to FK constraint (transactions exist)
-                if "FOREIGN KEY constraint failed" in error_msg or "foreign key" in error_msg.lower():
-                    message = f"Cannot delete asset {asset_id}: has existing transactions"
-                    error_code = "HAS_TRANSACTIONS"
-                else:
-                    message = f"Error deleting asset {asset_id}: {error_msg}"
-                    error_code = None
-
-                results.append(
-                    FAAssetDeleteResult(
-                        asset_id=asset_id,
-                        success=False,
-                        deleted_count=0,
-                        display_name=asset_name,
-                        error_code=error_code,
-                        message=message,
-                    )
+            except IntegrityError as e:
+                race_count = await session.scalar(select(func.count(Transaction.id)).where(Transaction.asset_id == asset_id))
+                transaction_count = int(race_count or 0)
+                blocked = transaction_count > 0
+                item_result = FAAssetDeleteResult(
+                    asset_id=asset_id,
+                    success=False,
+                    deleted_count=0,
+                    display_name=asset_name,
+                    error_code="HAS_TRANSACTIONS" if blocked else None,
+                    transaction_count=transaction_count or None,
+                    message=(f"Cannot delete asset {asset_id}: has {transaction_count} existing transactions" if blocked else f"Error deleting asset {asset_id}: {e}"),
                 )
+                results.append(item_result)
+                prior_results[asset_id] = item_result
+                logger.warning("Asset deletion blocked by integrity constraint", asset_id=asset_id, error=str(e))
+            except Exception as e:
+                item_result = FAAssetDeleteResult(
+                    asset_id=asset_id,
+                    success=False,
+                    deleted_count=0,
+                    display_name=asset_name,
+                    message=f"Error deleting asset {asset_id}: {e}",
+                )
+                results.append(item_result)
+                prior_results[asset_id] = item_result
                 logger.exception(f"Error deleting asset {asset_id}: {e}")
 
-        # Commit successful deletions
         try:
             await session.commit()
         except Exception as e:
             logger.exception(f"Error committing asset deletion: {e}")
             await session.rollback()
+            raise
 
         success_count = sum(1 for r in results if r.success)
         return FABulkAssetDeleteResponse(
