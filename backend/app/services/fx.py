@@ -1656,4 +1656,10 @@ async def delete_rates_bulk(  # noqa: C901 — flat batch delete: normalize, cou
     # Single commit for all deletions
     await session.commit()
 
+    if deleted_count_total > 0:
+        from backend.app.utils.cache_utils import clear_cache  # noqa: PLC0415 — avoids a utils→services import cycle at module load
+
+        clear_cache("portfolio_layer2")
+        clear_cache("portfolio_blob")
+
     return results

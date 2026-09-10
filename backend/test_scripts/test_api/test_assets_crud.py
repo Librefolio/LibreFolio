@@ -4,6 +4,7 @@ Asset CRUD API Tests.
 Tests for asset creation, listing, and deletion endpoints.
 """
 
+import uuid
 from datetime import date
 
 import httpx
@@ -618,6 +619,334 @@ async def test_delete_partial_success(test_server):
         print_success("✓ Partial success on delete works")
         print_info(f"  Valid ID deleted: {valid_result.success}")
         print_info(f"  Invalid ID failed: {not invalid_result.success}")
+
+
+# ============================================================================
+# B3: AssetCRUDService.delete_assets_bulk contracts
+# ============================================================================
+# - transaction_count is optional and global (only meaningful when blocked)
+# - NOT_FOUND validates with deleted_count=0
+# - a blocked asset reports the global transaction_count and stays persisted
+# - each attempted delete is isolated by its own nested savepoint: a blocked or
+#   missing entry anywhere in the batch must not roll back a valid delete that
+#   comes before or after it
+# - a duplicate asset_id in one request is not silently merged away
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_delete_not_found_reports_zero_deleted_count_and_no_transaction_count(test_server):
+    """B3: NOT_FOUND validates with deleted_count=0 and leaves transaction_count unset."""
+    print_section("Test B3-1: DELETE /assets - NOT_FOUND shape")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+
+        # Unique sentinel far above the test database's autoincrement range.
+        missing_id = 1_000_000_000 + (uuid.uuid4().int % 1_000_000_000)
+
+        response = await client.delete(f"{API_BASE}/assets", params={"asset_ids": [missing_id]}, timeout=TIMEOUT)
+        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+
+        data = FABulkAssetDeleteResponse(**response.json())
+        assert len(data.results) == 1
+        result = data.results[0]
+        assert result.asset_id == missing_id
+        assert result.success is False
+        assert result.deleted_count == 0, f"NOT_FOUND must validate with deleted_count=0, got {result.deleted_count}"
+        assert result.error_code == "NOT_FOUND"
+        assert result.display_name is None
+        assert result.transaction_count is None, "transaction_count is only meaningful when blocked by transactions"
+        assert data.success_count == 0
+
+        print_success("✓ NOT_FOUND result validates with deleted_count=0 and no transaction_count")
+
+
+@pytest.mark.asyncio
+async def test_delete_blocked_asset_reports_global_transaction_count_and_persists(test_server):
+    """B3: HAS_TRANSACTIONS carries the *global* transaction_count and the asset stays intact."""
+    print_section("Test B3-2: DELETE /assets - HAS_TRANSACTIONS carries global transaction_count")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+
+        item = FAAssetCreateItem(display_name=f"Blocked Delete {unique_id('BLOCKDEL')}", currency="USD")
+        create_resp = await client.post(f"{API_BASE}/assets", json=[item.model_dump(mode="json")], timeout=TIMEOUT)
+        assert create_resp.status_code == 201, create_resp.text
+        asset_id = FABulkAssetCreateResponse(**create_resp.json()).results[0].asset_id
+
+        broker_ids = []
+        for label in ("A", "B"):
+            broker_name = f"Blocked Delete Broker {label} {unique_id('BLOCKBR')}"
+            br_resp = await client.post(
+                f"{API_BASE}/brokers",
+                json=[{"name": broker_name, "allow_cash_overdraft": True}],
+                timeout=TIMEOUT,
+            )
+            assert br_resp.status_code == 200, br_resp.text
+            broker_results = br_resp.json()["results"]
+            assert len(broker_results) == 1
+            broker_ids.append(broker_results[0]["broker_id"])
+
+        # One asset transaction in each independently owned broker. The count
+        # must aggregate both rather than reporting a broker-local subset.
+        seed_resp = await client.post(
+            f"{API_BASE}/transactions/commit",
+            json={
+                "creates": [
+                    {"broker_id": broker_ids[0], "type": "DEPOSIT", "date": date.today().isoformat(), "cash": {"code": "USD", "amount": "1000"}},
+                    {"broker_id": broker_ids[0], "asset_id": asset_id, "type": "BUY", "date": date.today().isoformat(), "quantity": "1", "cash": {"code": "USD", "amount": "-100"}},
+                    {"broker_id": broker_ids[1], "type": "DEPOSIT", "date": date.today().isoformat(), "cash": {"code": "USD", "amount": "1000"}},
+                    {"broker_id": broker_ids[1], "asset_id": asset_id, "type": "BUY", "date": date.today().isoformat(), "quantity": "1", "cash": {"code": "USD", "amount": "-100"}},
+                ]
+            },
+            timeout=TIMEOUT,
+        )
+        assert seed_resp.status_code == 200, seed_resp.text
+        seed_data = seed_resp.json()
+        assert seed_data["committed"] is True, seed_data
+        seed_results = seed_data["results"]
+        assert len(seed_results) == 4
+        # Correlate by the request's own index field, not response position.
+        tx_ids = [next(r["ids"][0] for r in seed_results if r["index"] == i) for i in range(4)]
+
+        delete_resp = await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+        assert delete_resp.status_code == 200, delete_resp.text
+        delete_data = FABulkAssetDeleteResponse(**delete_resp.json())
+        result = next(r for r in delete_data.results if r.asset_id == asset_id)
+        assert result.success is False
+        assert result.error_code == "HAS_TRANSACTIONS"
+        assert result.deleted_count == 0
+        assert result.transaction_count == 2, f"Expected global transaction_count=2, got {result.transaction_count}"
+        assert delete_data.success_count == 0
+
+        # Persistence, not just the response shape: the asset must still be there.
+        list_resp = await client.get(f"{API_BASE}/assets/query", timeout=TIMEOUT)
+        assets = [FAinfoResponse(**a) for a in list_resp.json()]
+        persisted = next((a for a in assets if a.id == asset_id), None)
+        assert persisted is not None, "a blocked asset must remain persisted after a refused delete"
+        assert persisted.display_name == item.display_name
+
+        print_success("✓ HAS_TRANSACTIONS carries the global transaction_count; asset persists")
+
+        # Cleanup: whoever writes, cleans up.
+        cleanup_tx = await client.post(f"{API_BASE}/transactions/commit", json={"deletes": tx_ids}, timeout=TIMEOUT)
+        assert cleanup_tx.status_code == 200, cleanup_tx.text
+        final_delete = await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+        assert final_delete.status_code == 200
+        assert FABulkAssetDeleteResponse(**final_delete.json()).results[0].success is True
+        cleanup_brokers = await client.delete(f"{API_BASE}/brokers", params={"ids": broker_ids}, timeout=TIMEOUT)
+        assert cleanup_brokers.status_code == 200, cleanup_brokers.text
+
+
+@pytest.mark.asyncio
+async def test_delete_mixed_valid_missing_blocked_isolated_by_savepoint(test_server):
+    """B3: each attempted delete is isolated — a NOT_FOUND or HAS_TRANSACTIONS entry
+    anywhere in the batch must not roll back a valid deletion before or after it."""
+    print_section("Test B3-3: DELETE /assets - mixed batch isolation")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+
+        before_item = FAAssetCreateItem(display_name=f"Isolate Before {unique_id('ISOBEFORE')}", currency="USD")
+        blocked_item = FAAssetCreateItem(display_name=f"Isolate Blocked {unique_id('ISOBLOCK')}", currency="USD")
+        after_item = FAAssetCreateItem(display_name=f"Isolate After {unique_id('ISOAFTER')}", currency="USD")
+
+        create_resp = await client.post(
+            f"{API_BASE}/assets",
+            json=[a.model_dump(mode="json") for a in (before_item, blocked_item, after_item)],
+            timeout=TIMEOUT,
+        )
+        assert create_resp.status_code == 201, create_resp.text
+        created = FABulkAssetCreateResponse(**create_resp.json()).results
+        before_id, blocked_id, after_id = (r.asset_id for r in created)
+
+        broker_name = f"Isolate Broker {unique_id('ISOBR')}"
+        br_resp = await client.post(f"{API_BASE}/brokers", json=[{"name": broker_name, "allow_cash_overdraft": True}], timeout=TIMEOUT)
+        assert br_resp.status_code == 200, br_resp.text
+        broker_id = br_resp.json()["results"][0]["broker_id"]
+
+        seed_resp = await client.post(
+            f"{API_BASE}/transactions/commit",
+            json={
+                "creates": [
+                    {"broker_id": broker_id, "type": "DEPOSIT", "date": date.today().isoformat(), "cash": {"code": "USD", "amount": "1000"}},
+                    {"broker_id": broker_id, "asset_id": blocked_id, "type": "BUY", "date": date.today().isoformat(), "quantity": "1", "cash": {"code": "USD", "amount": "-100"}},
+                ]
+            },
+            timeout=TIMEOUT,
+        )
+        assert seed_resp.status_code == 200, seed_resp.text
+        seed_data = seed_resp.json()
+        assert seed_data["committed"] is True, seed_data
+        # Correlate by the request's own "index" field (the BUY create was at
+        # position 1), not by raw list position.
+        tx_ids = [next(r["ids"][0] for r in seed_data["results"] if r["index"] == i) for i in range(2)]
+
+        missing_id = 1_000_000_000 + (uuid.uuid4().int % 1_000_000_000)
+
+        # Order deliberately interleaves valid / missing / blocked / valid so a
+        # rollback of the failing entries would be visible on either neighbour.
+        delete_resp = await client.delete(
+            f"{API_BASE}/assets",
+            params={"asset_ids": [before_id, missing_id, blocked_id, after_id]},
+            timeout=TIMEOUT,
+        )
+        assert delete_resp.status_code == 200, delete_resp.text
+        delete_data = FABulkAssetDeleteResponse(**delete_resp.json())
+        assert len(delete_data.results) == 4
+        by_id = {r.asset_id: r for r in delete_data.results}
+
+        assert by_id[before_id].success is True and by_id[before_id].deleted_count == 1
+        assert by_id[before_id].transaction_count is None
+
+        assert by_id[missing_id].success is False
+        assert by_id[missing_id].error_code == "NOT_FOUND"
+        assert by_id[missing_id].deleted_count == 0
+        assert by_id[missing_id].transaction_count is None
+
+        assert by_id[blocked_id].success is False
+        assert by_id[blocked_id].error_code == "HAS_TRANSACTIONS"
+        assert by_id[blocked_id].deleted_count == 0
+        assert by_id[blocked_id].transaction_count == 1
+
+        assert by_id[after_id].success is True and by_id[after_id].deleted_count == 1
+        assert by_id[after_id].transaction_count is None
+
+        assert delete_data.success_count == 2
+
+        # Prove isolation against the DB, not just the response shape.
+        list_resp = await client.get(f"{API_BASE}/assets/query", timeout=TIMEOUT)
+        remaining_ids = {a.id for a in (FAinfoResponse(**a) for a in list_resp.json())}
+        assert before_id not in remaining_ids, "the valid delete before the blocked entry must have committed"
+        assert after_id not in remaining_ids, "the valid delete after the blocked entry must have committed"
+        assert blocked_id in remaining_ids, "the blocked entry must remain persisted, not rolled back into limbo"
+
+        print_success("✓ Nested savepoints isolate each attempt: neighbours are untouched by a blocked/missing entry")
+
+        # Cleanup: remove both owned transactions, then the asset and broker.
+        cleanup_tx = await client.post(f"{API_BASE}/transactions/commit", json={"deletes": tx_ids}, timeout=TIMEOUT)
+        assert cleanup_tx.status_code == 200, cleanup_tx.text
+        cleanup = await client.delete(f"{API_BASE}/assets", params={"asset_ids": [blocked_id]}, timeout=TIMEOUT)
+        assert cleanup.status_code == 200, cleanup.text
+        assert FABulkAssetDeleteResponse(**cleanup.json()).results[0].success is True
+        cleanup_broker = await client.delete(f"{API_BASE}/brokers", params={"ids": [broker_id]}, timeout=TIMEOUT)
+        assert cleanup_broker.status_code == 200, cleanup_broker.text
+
+
+@pytest.mark.asyncio
+async def test_delete_duplicate_asset_id_reports_truthfully_once(test_server):
+    """B3: a duplicate ID in the same request is not double-deleted; the repeat entry
+    is reported truthfully (NOT_FOUND) rather than silently merged into the first."""
+    print_section("Test B3-4: DELETE /assets - duplicate asset_id in one request")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+
+        item = FAAssetCreateItem(display_name=f"Duplicate Delete {unique_id('DUPDEL')}", currency="USD")
+        create_resp = await client.post(f"{API_BASE}/assets", json=[item.model_dump(mode="json")], timeout=TIMEOUT)
+        assert create_resp.status_code == 201, create_resp.text
+        asset_id = FABulkAssetCreateResponse(**create_resp.json()).results[0].asset_id
+
+        delete_resp = await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id, asset_id]}, timeout=TIMEOUT)
+        assert delete_resp.status_code == 200, delete_resp.text
+        delete_data = FABulkAssetDeleteResponse(**delete_resp.json())
+
+        # One result per requested occurrence — the response is not deduped away.
+        # (These two entries share one asset_id by construction — this is the one
+        # place an index is the point of the test, not an assumption about it.)
+        assert len(delete_data.results) == 2
+        first, second = delete_data.results
+        assert first.asset_id == asset_id and second.asset_id == asset_id
+
+        assert first.success is True, f"the first occurrence should perform the real delete: {first.message}"
+        assert first.deleted_count == 1
+        assert first.display_name == item.display_name
+
+        assert second.success is False, "a repeated id must not report a second success"
+        assert second.error_code == "NOT_FOUND"
+        assert second.deleted_count == 0
+        assert second.display_name is None
+
+        assert delete_data.success_count == 1
+
+        # Verify only one deletion actually happened — no double-delete error, no residue.
+        list_resp = await client.get(f"{API_BASE}/assets/query", timeout=TIMEOUT)
+        remaining_ids = {a["id"] for a in list_resp.json()}
+        assert asset_id not in remaining_ids
+
+        print_success("✓ Duplicate asset_id in one request: one real delete, one truthful NOT_FOUND")
+
+
+@pytest.mark.asyncio
+async def test_delete_duplicate_blocked_asset_id_replays_truthful_has_transactions(test_server):
+    """B3: a duplicate ID that is blocked by transactions must NOT collapse into
+    NOT_FOUND on its second occurrence — the asset was never removed, so replaying
+    a stale NOT_FOUND would be a lie. Both occurrences must report HAS_TRANSACTIONS
+    with the same global transaction_count, and the asset must remain persisted."""
+    print_section("Test B3-5: DELETE /assets - duplicate asset_id that is blocked")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+
+        item = FAAssetCreateItem(display_name=f"Duplicate Blocked {unique_id('DUPBLOCK')}", currency="USD")
+        create_resp = await client.post(f"{API_BASE}/assets", json=[item.model_dump(mode="json")], timeout=TIMEOUT)
+        assert create_resp.status_code == 201, create_resp.text
+        asset_id = FABulkAssetCreateResponse(**create_resp.json()).results[0].asset_id
+
+        broker_name = f"Duplicate Blocked Broker {unique_id('DUPBLOCKBR')}"
+        br_resp = await client.post(f"{API_BASE}/brokers", json=[{"name": broker_name, "allow_cash_overdraft": True}], timeout=TIMEOUT)
+        assert br_resp.status_code == 200, br_resp.text
+        broker_id = br_resp.json()["results"][0]["broker_id"]
+
+        seed_resp = await client.post(
+            f"{API_BASE}/transactions/commit",
+            json={
+                "creates": [
+                    {"broker_id": broker_id, "type": "DEPOSIT", "date": date.today().isoformat(), "cash": {"code": "USD", "amount": "1000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": date.today().isoformat(), "quantity": "1", "cash": {"code": "USD", "amount": "-100"}},
+                ]
+            },
+            timeout=TIMEOUT,
+        )
+        assert seed_resp.status_code == 200, seed_resp.text
+        seed_data = seed_resp.json()
+        assert seed_data["committed"] is True, seed_data
+        tx_ids = [next(r["ids"][0] for r in seed_data["results"] if r["index"] == i) for i in range(2)]
+
+        delete_resp = await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id, asset_id]}, timeout=TIMEOUT)
+        assert delete_resp.status_code == 200, delete_resp.text
+        delete_data = FABulkAssetDeleteResponse(**delete_resp.json())
+
+        assert len(delete_data.results) == 2
+        first, second = delete_data.results
+        assert first.asset_id == asset_id and second.asset_id == asset_id
+
+        # Both occurrences must tell the same truth: the asset is blocked, not gone.
+        for occurrence, label in ((first, "first"), (second, "second")):
+            assert occurrence.success is False, f"{label} occurrence must not report success"
+            assert occurrence.error_code == "HAS_TRANSACTIONS", f"{label} occurrence must replay HAS_TRANSACTIONS, not NOT_FOUND — got {occurrence.error_code}"
+            assert occurrence.deleted_count == 0
+            assert occurrence.transaction_count == 1, f"{label} occurrence must carry the real global transaction_count, got {occurrence.transaction_count}"
+            assert occurrence.display_name == item.display_name, f"{label} occurrence must not fall back to NOT_FOUND's null display_name"
+
+        assert delete_data.success_count == 0
+
+        # Persistence: a blocked duplicate must never have been removed.
+        list_resp = await client.get(f"{API_BASE}/assets/query", timeout=TIMEOUT)
+        remaining_ids = {a["id"] for a in list_resp.json()}
+        assert asset_id in remaining_ids, "a duplicate blocked delete must not remove the asset"
+
+        print_success("✓ Duplicate blocked asset_id: both occurrences replay truthful HAS_TRANSACTIONS with the real count")
+
+        # Cleanup: whoever writes, cleans up.
+        cleanup_tx = await client.post(f"{API_BASE}/transactions/commit", json={"deletes": tx_ids}, timeout=TIMEOUT)
+        assert cleanup_tx.status_code == 200, cleanup_tx.text
+        final_delete = await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+        assert final_delete.status_code == 200
+        assert FABulkAssetDeleteResponse(**final_delete.json()).results[0].success is True
+        cleanup_broker = await client.delete(f"{API_BASE}/brokers", params={"ids": [broker_id]}, timeout=TIMEOUT)
+        assert cleanup_broker.status_code == 200, cleanup_broker.text
 
 
 @pytest.mark.asyncio

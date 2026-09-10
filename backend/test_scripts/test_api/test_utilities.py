@@ -78,9 +78,9 @@ async def test_list_sectors_with_other(test_server):
         data = response.json()
 
         assert "items" in data
-        assert len(data["items"]) == 12  # 11 standard + Other
-        keys = [item["key"] for item in data["items"]]
-        assert "Other" in keys
+        assert len(data["items"]) == 14  # 13 standard + Other
+        items_by_key = {item["key"]: item for item in data["items"]}
+        assert "Other" in items_by_key
 
         # Verify all expected sectors are present
         expected = [
@@ -95,10 +95,15 @@ async def test_list_sectors_with_other(test_server):
             "Consumer Staples",
             "Telecommunication",
             "Utilities",
+            "Corporate Bonds",
+            "Government Bonds",
             "Other",
         ]
         for sector in expected:
-            assert sector in keys, f"Missing sector: {sector}"
+            assert sector in items_by_key, f"Missing sector: {sector}"
+
+        assert items_by_key["Corporate Bonds"]["emoji"] == "🏢"
+        assert items_by_key["Government Bonds"]["emoji"] == "🏛️"
 
         print_info(f"  Found {len(data['items'])} sectors")
         print_success("✓ Sectors list with Other returned correctly")
@@ -116,9 +121,11 @@ async def test_list_sectors_without_other(test_server):
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
         data = response.json()
 
-        assert len(data["items"]) == 11  # 11 standard (without Other)
-        keys = [item["key"] for item in data["items"]]
-        assert "Other" not in keys
+        assert len(data["items"]) == 13  # 13 standard (without Other)
+        items_by_key = {item["key"]: item for item in data["items"]}
+        assert "Other" not in items_by_key
+        assert items_by_key["Corporate Bonds"]["emoji"] == "🏢"
+        assert items_by_key["Government Bonds"]["emoji"] == "🏛️"
 
         print_info(f"  Found {len(data['items'])} sectors (excluding Other)")
         print_success("✓ Sectors list without Other returned correctly")

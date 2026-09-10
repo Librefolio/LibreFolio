@@ -213,6 +213,7 @@
 
 | Page | Summary | Status | Tags |
 |------|---------|--------|------|
+| [[problems/sqlite-savepoint-without-write-begins-as-transaction]] | SQLite can release the first savepoint as the effective outer transaction after read-only setup; start a no-op write before per-item savepoints so final rollback remains real | resolved | backend, sqlite, sqlalchemy, transactions, savepoint, rollback |
 | [[problems/ghcr-browser-cors-auth-flow]] | Anonymous GHCR manifests require a Bearer exchange that browser CORS cannot reliably complete; a fixed-target same-origin probe now gates update prompts and fails closed | resolved | backend, frontend, ghcr, auth, cors, update-check |
 | [[problems/compactcashcell-decimal-separator-feedback-loop]] | Sync-down `$effect` compared display strings, so the field's own echo erased `,` mid-typing; fix = numeric compare; plus the `isVisible({timeout})` probe trap with delayed tooltips | resolved | frontend, transactions, decimal, svelte5, ux, testing |
 | [[problems/sitecustomize-shadows-homebrew-python]] | A project `sitecustomize.py` on PYTHONPATH shadows Homebrew Python's own (one per interpreter, first wins) → prefix fixup lost → `pipenv` unimportable → test backend bootstrap dead; fix = chain-exec the shadowed file + guarded coverage import | resolved | testing, coverage, macos, homebrew, python, environment |

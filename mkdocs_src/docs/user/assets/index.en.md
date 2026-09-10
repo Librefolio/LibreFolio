@@ -32,6 +32,16 @@ Navigate to **Assets** in the sidebar to see all your assets. The list page prov
 
 Click on any asset card to navigate to its **[detail page](detail/index.md)**.
 
+### 🗑️ Deleting an Asset
+
+LibreFolio blocks deletion when **any transaction anywhere in the database** still uses the
+asset, including transactions in brokers you cannot access. The blocked result includes a
+**Transactions** link already filtered to that asset.
+
+The Transactions page still applies normal broker access: the link shows only matching
+transactions in brokers you can view. Its visible rows may therefore be fewer than the global
+transaction count reported by the deletion blocker.
+
 ## 🧭 Features
 
 ### ➕ [Create & Edit](create-edit.md)
