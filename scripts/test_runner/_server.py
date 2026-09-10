@@ -23,18 +23,24 @@ import atexit
 import contextlib
 import math
 import os
+import secrets
 import signal
 import subprocess
+import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
+
+from backend.app.config import TEST_LANE_HEADER
+from scripts.cli_base import ensure_test_lane_id
 
 from ._common import PROJECT_ROOT, Colors, apply_subprocess_coverage_env, print_error, print_info, print_success
 
 #: Read by backend/test_scripts/test_server_helper.py — see shared_server_mode().
 SHARED_SERVER_ENV = "LIBREFOLIO_TEST_SHARED_SERVER"
 
-STARTUP_TIMEOUT = 120
+STARTUP_TIMEOUT = 300 if os.environ.get("CI") else 120
 #: Flushing coverage takes real time; a SIGKILL during it loses everything.
 SHUTDOWN_GRACE_COVERAGE = 30
 SHUTDOWN_GRACE_PLAIN = 5
@@ -45,6 +51,38 @@ SHUTDOWN_GRACE_PLAIN = 5
 #: harder, hence one per two.
 CLIENTS_PER_SERVER_WORKER = 2
 CLIENTS_PER_SERVER_WORKER_GALLERY = 4
+_SPAWN_SIGNALS = {signal.SIGINT, signal.SIGTERM, signal.SIGHUP}
+_spawn_publication_active = False
+_deferred_spawn_signal: int | None = None
+UNMASKED_EXEC = PROJECT_ROOT / "scripts" / "exec_unmasked.py"
+
+
+@contextlib.contextmanager
+def _publish_spawn_ownership():
+    """Defer process-directed teardown until the detached child is owned."""
+    global _spawn_publication_active, _deferred_spawn_signal
+    _spawn_publication_active = True
+    try:
+        yield
+    finally:
+        _spawn_publication_active = False
+        deferred = _deferred_spawn_signal
+        _deferred_spawn_signal = None
+    if deferred is not None:
+        _signal_teardown(deferred, None)
+
+
+@contextlib.contextmanager
+def _block_spawn_signals():
+    """Publish child ownership before teardown signals can be delivered."""
+    if not hasattr(signal, "pthread_sigmask"):
+        yield
+        return
+    previous = signal.pthread_sigmask(signal.SIG_BLOCK, _SPAWN_SIGNALS)
+    try:
+        yield
+    finally:
+        signal.pthread_sigmask(signal.SIG_SETMASK, previous)
 
 
 def server_workers_for(client_workers: int, per_server: int = CLIENTS_PER_SERVER_WORKER) -> int:
@@ -62,7 +100,7 @@ def server_workers_for(client_workers: int, per_server: int = CLIENTS_PER_SERVER
 
 def test_port() -> int:
     try:
-        from backend.app.config import Settings
+        from backend.app.config import Settings  # noqa: PLC0415 — read after lane env is normalized
 
         return int(Settings().TEST_PORT)
     except Exception:
@@ -70,22 +108,38 @@ def test_port() -> int:
 
 
 def health_url(port: int | None = None) -> str:
-    return f"http://localhost:{port or test_port()}/api/v1/system/health"
+    query = urllib.parse.urlencode({"token": ensure_test_lane_id()})
+    return (
+        f"http://localhost:{port or test_port()}"
+        f"/api/v1/system/test-lane-health?{query}"
+    )
 
 
 def is_healthy(port: int | None = None, timeout: float = 2.0) -> bool:
+    lane_id = ensure_test_lane_id()
+
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            return None
+
     try:
-        with urllib.request.urlopen(health_url(port), timeout=timeout) as resp:
-            return resp.status == 200
+        opener = urllib.request.build_opener(NoRedirect())
+        with opener.open(health_url(port), timeout=timeout) as resp:
+            returned_lane = resp.headers.get(TEST_LANE_HEADER, "")
+            return (
+                resp.status == 200
+                and bool(returned_lane)
+                and secrets.compare_digest(returned_lane, lane_id)
+            )
     except (urllib.error.URLError, OSError, ValueError):
         return False
 
 
 def port_holders(port: int | None = None) -> list[str]:
-    """PIDs currently holding the port, as strings. Empty when it is free."""
+    """PIDs listening on the port, as strings. Empty when it is free."""
     try:
         out = subprocess.run(
-            ["lsof", "-ti", f":{port or test_port()}"],
+            ["lsof", "-nP", f"-iTCP:{port or test_port()}", "-sTCP:LISTEN", "-t"],
             capture_output=True,
             text=True,
             timeout=10,
@@ -118,10 +172,39 @@ class SharedTestServer:
         self.verbose = verbose
         self.port = test_port()
         self.proc: subprocess.Popen | None = None
+        self.process_group_id: int | None = None
         self.started_here = False
 
-    def _command(self) -> str:
-        cov = " --coverage" if self.coverage else ""
+    def _owned_listeners(self, holders: list[str]) -> list[str]:
+        """Return only listeners that belong to the spawned process group."""
+        if self.process_group_id is None:
+            return []
+        owned = []
+        for pid in holders:
+            try:
+                if os.getpgid(int(pid)) == self.process_group_id:
+                    owned.append(pid)
+            except (OSError, ValueError):
+                continue
+        return owned
+
+    def _owns_listener(self, holders: list[str]) -> bool:
+        """True only when every listening PID belongs to our process group."""
+        return bool(holders) and len(self._owned_listeners(holders)) == len(holders)
+
+    def _process_group_alive(self) -> bool:
+        """Check the spawned process group without signalling its members."""
+        if self.process_group_id is None:
+            return False
+        try:
+            os.killpg(self.process_group_id, 0)
+            return True
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+
+    def _command(self) -> list[str]:
         # No reloader: it forks a supervisor that survives a signal aimed at the
         # front of the exec chain, and an ephemeral test server has nothing to
         # reload anyway.
@@ -134,27 +217,37 @@ class SharedTestServer:
         # into the suite — one run recorded the Bank of England answering HTML.
         # None of it is attributable to a test. The gallery already disables the
         # scheduler for the same reason: it must not change data mid-run.
-        return (
-            "exec ./dev.py server --test --force --no-reload --no-scheduler "
-            f"--workers {self.workers}{cov}"
-        )
+        command = [
+            sys.executable,
+            "dev.py",
+            "server",
+            "--test",
+            "--no-reload",
+            "--no-scheduler",
+            "--workers",
+            str(self.workers),
+        ]
+        if self.coverage:
+            command.append("--coverage")
+        return command
 
     def start(self) -> bool:
-        if is_healthy(self.port) and not self.coverage:
-            print_info(f"Reusing backend already healthy on port {self.port}")
-            return True
+        holders = port_holders(self.port)
+        if holders:
+            print_error(
+                f"Test port {self.port} is already owned by PID(s) "
+                f"{', '.join(holders)}; refusing to reuse or terminate another lane"
+            )
+            return False
 
         print_info(
             f"Starting shared test backend on port {self.port}"
             f"{' (coverage)' if self.coverage else ''}"
             f" — {self.workers} uvicorn worker(s) for {self.client_workers} client(s)"
         )
-        # Its own process group: outside coverage mode dev.py starts uvicorn with
-        # --reload, which spawns a supervisor plus the actual server. Signalling
-        # only our direct child kills the front of that chain and leaves the rest
-        # reparented to init, still holding the port — which is exactly the
-        # "zombie server" that --force was invented to clean up afterwards.
-        # Owning the group lets us take the whole tree down properly instead.
+        # Its own process group keeps teardown scoped to the server this runner
+        # created. An occupied port is rejected above; the runner never reuses or
+        # force-kills a process that may belong to another worktree.
         # Under coverage the spawn workers (risk/quant/spawn_worker.py) started
         # by uvicorn need COVERAGE_PROCESS_START + the sitecustomize PYTHONPATH
         # entry to measure themselves; dev.py's coverage branch preserves the
@@ -162,57 +255,81 @@ class SharedTestServer:
         # `.coverage.<host>.<pid>.<rand>` files land in PROJECT_ROOT, where
         # _finalize_coverage's `.coverage.*` glob collects them.
         server_env = apply_subprocess_coverage_env(os.environ.copy()) if self.coverage else None
-        self.proc = subprocess.Popen(
-            self._command(),
-            shell=True,
-            cwd=PROJECT_ROOT,
-            stdout=None if self.verbose else subprocess.DEVNULL,
-            stderr=None if self.verbose else subprocess.DEVNULL,
-            start_new_session=True,
-            env=server_env,
-        )
-        self.started_here = True
+        try:
+            with _publish_spawn_ownership():
+                with _block_spawn_signals():
+                    self.proc = subprocess.Popen(
+                        [
+                            sys.executable,
+                            str(UNMASKED_EXEC),
+                            *self._command(),
+                        ],
+                        shell=False,
+                        cwd=PROJECT_ROOT,
+                        stdout=None if self.verbose else subprocess.DEVNULL,
+                        stderr=None if self.verbose else subprocess.DEVNULL,
+                        start_new_session=True,
+                        env=server_env,
+                    )
+                    self.process_group_id = os.getpgid(self.proc.pid)
+                    self.started_here = True
 
-        deadline = time.time() + STARTUP_TIMEOUT
-        while time.time() < deadline:
-            if is_healthy(self.port):
-                print_success(f"Shared backend ready on port {self.port}")
-                return True
-            if self.proc.poll() is not None:
-                print_error(f"Shared backend exited during startup (code {self.proc.returncode})")
-                return False
-            time.sleep(0.5)
+            deadline = time.time() + STARTUP_TIMEOUT
+            while time.time() < deadline:
+                if self.proc.poll() is not None:
+                    print_error(f"Shared backend exited during startup (code {self.proc.returncode})")
+                    self.stop()
+                    return False
+                if is_healthy(self.port):
+                    holders = port_holders(self.port)
+                    if (
+                        (not holders or self._owns_listener(holders))
+                        and self.proc.poll() is None
+                    ):
+                        print_success(f"Shared backend ready on port {self.port}")
+                        return True
+                    print_error(
+                        f"Port {self.port} became healthy under an unowned PID; "
+                        "refusing to attach to another lane"
+                    )
+                    self.stop()
+                    return False
+                time.sleep(0.5)
 
-        print_error(f"Shared backend did not answer within {STARTUP_TIMEOUT}s")
-        self.stop()
-        return False
+            print_error(f"Shared backend did not answer within {STARTUP_TIMEOUT}s")
+            self.stop()
+            return False
+        except BaseException:
+            self.stop()
+            raise
 
     def stop(self) -> None:  # noqa: C901 — flat shutdown pipeline, guard/error handling, no nested logic
         """SIGTERM the whole group and wait, so ``coverage run`` writes its data."""
-        if not self.proc or not self.started_here:
-            return
-        if self.proc.poll() is not None:
-            self.proc = None
+        if self.proc is None and self.process_group_id is None:
             return
 
         grace = SHUTDOWN_GRACE_COVERAGE if self.coverage else SHUTDOWN_GRACE_PLAIN
-        if not self._signal_group(signal.SIGTERM):
-            self.proc = None
-            return
+        self._signal_group(signal.SIGTERM)
+        if self.proc is not None and self.proc.poll() is None:
+            try:
+                self.proc.wait(timeout=grace)
+            except subprocess.TimeoutExpired:
+                pass
 
-        try:
-            self.proc.wait(timeout=grace)
-        except subprocess.TimeoutExpired:
-            print_error(f"Shared backend ignored SIGTERM for {grace}s — killing it")
+        deadline = time.time() + grace
+        while time.time() < deadline and self._process_group_alive():
+            time.sleep(0.25)
+
+        if self._process_group_alive():
+            print_error(f"Shared backend ignored SIGTERM for {grace}s — killing its process group")
             if self.coverage:
                 print(f"   {Colors.YELLOW}⚠️  Backend coverage for this run is likely lost{Colors.NC}")
             self._signal_group(signal.SIGKILL)
-            try:
-                self.proc.wait(timeout=5)
-            except Exception as exc:  # noqa: S110 — process may already be gone after SIGKILL
-                _ = exc
-        finally:
-            self.proc = None
+            if self.proc is not None:
+                try:
+                    self.proc.wait(timeout=5)
+                except Exception as exc:  # noqa: S110 — process may already be gone after SIGKILL
+                    _ = exc
 
         # Health going away is not enough: what the next run needs is the *port*
         # back. A process on its way out can stop answering while still holding
@@ -222,44 +339,41 @@ class SharedTestServer:
         while time.time() < deadline and port_holders(self.port):
             time.sleep(0.25)
 
-        # `self.proc.wait()` above only reaps the parent. With several uvicorn workers
-        # the children can outlive it and keep the listening socket, and simply
-        # reporting that is not enough: the very next step of an `all` run recreates
-        # the test database, refuses to touch it while anything is on the port, and the
-        # whole category fails for a reason that has nothing to do with any test.
-        # Measured twice in a row on this exact path. These are processes this runner
-        # started, so finishing them off is ours to do.
+        # Diagnostics are LISTEN-only. A different PID on the port is another
+        # lane, never cleanup.
         holders = port_holders(self.port)
         if holders:
-            print(f"   {Colors.YELLOW}⚠️  Port {self.port} still held after SIGTERM — closing PID(s) {', '.join(holders)}{Colors.NC}")
-            for pid in holders:
-                try:
-                    os.kill(int(pid), signal.SIGKILL)
-                except (ProcessLookupError, PermissionError, ValueError):
-                    pass
-            second_deadline = time.time() + 5
-            while time.time() < second_deadline and port_holders(self.port):
-                time.sleep(0.25)
-
-        holders = port_holders(self.port)
-        if holders:
-            print_error(f"Port {self.port} still held by PID(s) {', '.join(holders)} after shutdown")
+            owned_holders = self._owned_listeners(holders)
+            owner = (
+                "owned PID(s)"
+                if len(owned_holders) == len(holders)
+                else "foreign PID(s) or mixed ownership"
+            )
+            print_error(
+                f"Port {self.port} still held by {owner}: "
+                f"{', '.join(holders)} after shutdown"
+            )
         elif self.coverage:
             print_success("Shared backend stopped; coverage flushed")
+        self.proc = None
+        self.process_group_id = None
+        self.started_here = False
 
     def _signal_group(self, sig) -> bool:
         """Signal the server's whole process group; fall back to the child alone."""
-        if not self.proc:
+        if self.process_group_id is not None:
+            try:
+                os.killpg(self.process_group_id, sig)
+                return True
+            except (ProcessLookupError, PermissionError, OSError):
+                pass
+        if self.proc is None:
             return False
         try:
-            os.killpg(os.getpgid(self.proc.pid), sig)
+            self.proc.send_signal(sig)
             return True
-        except (ProcessLookupError, PermissionError, OSError):
-            try:
-                self.proc.send_signal(sig)
-                return True
-            except ProcessLookupError:
-                return False
+        except ProcessLookupError:
+            return False
 
     def env(self) -> dict:
         """Environment that tells test modules to attach instead of starting one."""
@@ -268,18 +382,26 @@ class SharedTestServer:
         return env
 
     def __enter__(self):
-        if not self.start():
-            raise RuntimeError("shared test backend failed to start")
-        os.environ[SHARED_SERVER_ENV] = "1"
         _set_active(self)
         _install_last_resort_teardown()
+        try:
+            if not self.start():
+                raise RuntimeError("shared test backend failed to start")
+        except BaseException:
+            self.stop()
+            _set_active(None)
+            _remove_last_resort_teardown()
+            raise
+        os.environ[SHARED_SERVER_ENV] = "1"
         return self
 
     def __exit__(self, *exc):
-        _set_active(None)
         os.environ.pop(SHARED_SERVER_ENV, None)
-        self.stop()
-        _remove_last_resort_teardown()
+        try:
+            self.stop()
+        finally:
+            _set_active(None)
+            _remove_last_resort_teardown()
         return False
 
 
@@ -290,7 +412,7 @@ class SharedTestServer:
 #: it is deliberately outside the terminal's foreground group: nothing else will
 #: reach it. That is the whole of how a backend ends up reparented to init and
 #: sitting on port 6041 for hours, serving stale code to every later run.
-_TEARDOWN_SIGNALS = (signal.SIGTERM, signal.SIGHUP)
+_TEARDOWN_SIGNALS = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
 
 _previous_handlers: dict = {}
 _atexit_registered = False
@@ -303,6 +425,10 @@ def _teardown_active(*_args) -> None:
 
 
 def _signal_teardown(signum, _frame):
+    global _deferred_spawn_signal
+    if _spawn_publication_active:
+        _deferred_spawn_signal = _deferred_spawn_signal or signum
+        return
     _teardown_active()
     # Restore the default and re-raise, so the exit status still says "killed by
     # this signal" instead of pretending the run ended on its own terms.
