@@ -142,7 +142,7 @@ def _execute(job: ToolWorkerJob, cancellation: CancellationSignal, registry_clas
         phase = "serialization"
         started = time.monotonic_ns()
         try:
-            output = definition.output_adapter.dump_python(result, mode="json", warnings="error")
+            output = definition.output_adapter.dump_python(result, mode="json", by_alias=True, warnings="error")
             payload = encode_json(output, max_depth=job.max_json_depth, max_bytes=job.max_result_bytes, limit_code="output_limit_exceeded")
         finally:
             metrics["serialization_ms"] = _elapsed_ms(started)

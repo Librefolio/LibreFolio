@@ -1,10 +1,10 @@
 # Manifest checkpoint C — Piattaforma Tool
 
 **Data:** 2026-09-10
-**Stato:** ready per commit manuale · non integrato · non archiviato
+**Stato:** merge `916f12bd` risolto · backend validato · commit merge manuale atteso
 **Piano:** [plan-phase00ToolPlatform.prompt.md](plan-phase00ToolPlatform.prompt.md)
 
-## 1. Fotografia esatta del delta
+## 1. Fotografia esatta del checkpoint `1656aff6` pre-merge
 
 Worktree C:
 
@@ -95,19 +95,19 @@ LibreFolio_developer_journal/Release_2/Phase_0/16_toolPlatform/manifest-integraz
 | Path / gruppo | Stato | Trattamento |
 |---------------|-------|-------------|
 | `.testLog/` | Presente e ignorato; contiene log DTO | Escludere dal commit |
-| `frontend/src/lib/api/tool-contracts.openapi.json` | Assente; ignorato dalla nuova `.gitignore` locale | Generare dopo merge/VIA, non committare |
+| `frontend/src/lib/api/tool-contracts.openapi.json` | Presente dopo export schema; ignorato dalla `.gitignore` locale | Non committare |
 | `frontend/src/lib/api/generated-tools.ts` | Assente; ignorato | Generare, non committare |
 | `frontend/src/lib/api/tool-contract-map.generated.ts` | Assente; ignorato | Generare, non committare |
 | `.tools-codegen.lock`, `*.pending`, `*.previous` | Assenti | Artefatti transitori, mai committare |
 | `tool-ui-i18n.json` | Artifact sessione esterno al repo | Input per writer i18n, non fonte runtime |
-| `tool-test-registration.patch` | Artifact sessione esterno al repo | Solo proposta lifecycle esclusiva, non committare |
+| `tool-test-registration.patch` | Artifact sessione esterno al repo, ormai superato | Lifecycle registrato nel source; non committare |
 | `/tmp/libreFolio_c_*` | Log/fingerprint fuori repo | Evidenza locale, non committare |
 | `__pycache__`, `.pyc`, cache tool | Ignorati | Escludere |
 
 `frontend/src/lib/api/.gitignore` e' invece un file sorgente voluto: rende espliciti
 i tre output Tool non committabili.
 
-## 3. Evidenze disponibili
+## 3. Evidenze disponibili al checkpoint pre-merge
 
 | Evidenza | Esito |
 |----------|-------|
@@ -118,12 +118,16 @@ i tre output Tool non committabili.
 | Fingerprint readset test | Identico pre/post |
 | DB C test/prod | Assenti pre/post |
 
-Non eseguiti: registry/wire/lifecycle, API, codegen, type-check, Vitest/build/E2E,
-MkDocs build/check-links, PAC integrato.
+Le evidenze post-merge sostitutive sono nella sezione6.
 
 ## 4. Conflitti con `dev_release2/916f12bd`
 
 Overlap Git esatto: **3 file**.
+
+**Esito:** unico conflitto testuale in `_backend_utils.py`, risolto e staged.
+`dev.py` e `cli_base.py` sono auto-merge verificati semanticamente.
+Indice merge finale:192 path staged, nessun `UU` e nessuna modifica unstaged.
+L'agente non ha creato il merge commit.
 
 ### `dev.py`
 
@@ -163,19 +167,65 @@ Risoluzione semantica:
 - non spostare registry/lifecycle nella categoria utils per evitare il setup services;
 - verificare `utils all` soltanto nella lane isolata dopo merge.
 
-## 5. Conflitti semantici successivi, non nel commit runtime
+Gate mirati confermano `runtime-isolation`133/134, `container-registry`30 e
+`tools-wire`190/196 durante i giri successivi; l'ultimo stato e' riportato sotto.
 
-- **Pacchetto E:** `AboutTab.svelte` e i quattro JSON i18n. Applicare il pannello Tool
-  sul details Plugin diagnostics definitivo, preservando SupportActions,
-  SocialShareModal e currentVersion backend. Importare le102 chiavi via writer/CLI.
+## 5. Integrazioni semantiche applicate dopo il merge
+
+- Mount `ToolAboutPanel` nel details Plugin diagnostics E, senza rimuovere
+  SupportActions, SocialShareModal o currentVersion backend.
+-102 chiavi Tool aggiunte con `dev.py i18n add`; audit completo2668/2668 x4.
+- Nav MkDocs user/developer aggiunta; build e check-links verdi.
+- Lifecycle registrato come action esclusiva; orfani tutti risolti.
+- `list_api_endpoints.py` usa OpenAPI materializzato:121 endpoint, inclusi i3 Tool.
+- Boundary hardening dopo due review: frame deadline-aware, PGID fail-closed,
+  output round-trip/alias, nested strict types, schema frontend-compatible,
+  safe integers e snapshot client immutabile.
+
+## 6. Evidenze post-merge
+
+| Gate | Ultimo esito |
+|------|--------------|
+| Ruff `dev.py lint` | pass |
+| Runtime isolation |134 passed |
+| Container registry |30 passed |
+| Tool schema |214 passed |
+| Tool wire |196 passed |
+| Tool registry |82 passed |
+| Tool lifecycle |63 passed |
+| Orphan/reachability | pass |
+| i18n |2668/2668 EN/IT/FR/ES |
+| MkDocs build / links | pass /12 |
+| OpenAPI listing |121 endpoint,3 Tool |
+
+### Gate bloccati
+
+- `api sync --tools-only`: export Python riuscito; generatore Node fermo su
+  `ERR_MODULE_NOT_FOUND: openapi-zod-client` per `frontend/node_modules` assente.
+  Nessuna installazione o lettura del checkout principale.
+- `front check`, Vitest e build: stessa dipendenza ambiente.
+- `api system`: shared backend non ha raggiunto i test; il server esegue
+  l'auto-build frontend stale, bloccata dalle dipendenze Node assenti.
+  OpenAPI/import route sono stati verificati separatamente.
+- Nessun plugin/renderer PAC reale integrato.
+
+> **⚠️ Detour ambiente**: un primo `pipenv run` senza custom venv ha creato il
+> virtualenv vuoto del worktree e si e' fermato prima dei test. L'ambiente e'
+> rimasto intatto; i run validi usano `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc`.
+
+Due review read-only boundary completate. I residui trovati sono stati corretti
+su frame deadline, PGID, output aliases/shape, schema supportato, interi safe e
+snapshot client. Le regressioni backend sono verdi; client/AST resta da eseguire
+dopo la generazione dei codec.
+
+## 7. Conflitti semantici ancora aperti
+
 - **D/PAC:** i tre initializer lazy sono condivisi; evitare una seconda copia del delta.
   Integrare modelli/core/thin plugin/renderer reali, non fixture o formule duplicate.
-- **Backlog 05/06:** `916f12bd` contiene versioni piu' recenti. Dopo merge aggiungere
-  il link a questo piano su quelle versioni, non sovrascriverle con la base C.
 - **Generated API:** target/E possono avere altri contratti. Eseguire un solo
   `api sync` integrato nella lane C, non scegliere generated output di un lato.
 
-## 6. Messaggio commit proposto
+## 8. Commit
 
 ```text
 feat(tools): add atomic Tool foundation
@@ -184,4 +234,5 @@ Run each item in an owned process tree and derive client codecs from
 Pydantic contracts so plugins remain reusable without ambient authority.
 ```
 
-Nessun commit, staging o mutazione della storia e' stato eseguito dall'agente.
+Checkpoint C: `1656aff6937f08935a902726884fdda4102f46ec`.
+Il merge commit resta manuale; l'agente non lo crea.

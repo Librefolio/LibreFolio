@@ -4,6 +4,7 @@
 <script lang="ts">
     import {t} from '$lib/i18n';
     import {ChevronDown, ChevronLeft, ChevronRight} from 'lucide-svelte';
+    import {getFixedDropdownPosition} from '$lib/utils/layout/dropdownPosition';
 
     interface Props {
         pageIndex: number;
@@ -25,6 +26,24 @@
     // Custom dropdown state
     let showDropdown = $state(false);
     let dropdownRef: HTMLDivElement | null = $state(null);
+    let dropdownPanel: HTMLDivElement | null = $state(null);
+    let dropdownPosition = $state({left: 0, top: 0});
+
+    $effect(() => {
+        if (!showDropdown || !dropdownRef || !dropdownPanel) return;
+        const anchor = dropdownRef;
+        const panel = dropdownPanel;
+        const updatePosition = () => {
+            dropdownPosition = getFixedDropdownPosition(anchor, panel, 'start');
+        };
+        updatePosition();
+        window.addEventListener('resize', updatePosition);
+        window.addEventListener('scroll', updatePosition, true);
+        return () => {
+            window.removeEventListener('resize', updatePosition);
+            window.removeEventListener('scroll', updatePosition, true);
+        };
+    });
 
     $effect(() => {
         pageInputValue = String(currentPage);
@@ -95,14 +114,14 @@
         <!-- Row 1: Page size + label + total (groups together on mobile) -->
         <div class="pagination-row-top">
             <div bind:this={dropdownRef} class="page-size-selector">
-                <button class="page-size-btn" onclick={() => (showDropdown = !showDropdown)} type="button">
+                <button class="page-size-btn" onclick={() => (showDropdown = !showDropdown)} type="button" data-testid="pagination-size-trigger" aria-expanded={showDropdown}>
                     <span>{formatPageSize(getDisplayPageSize())}</span>
                     <ChevronDown size={14} />
                 </button>
                 {#if showDropdown}
-                    <div class="page-size-dropdown">
+                    <div class="page-size-dropdown" bind:this={dropdownPanel} style:left={`${dropdownPosition.left}px`} style:top={`${dropdownPosition.top}px`} data-testid="pagination-size-menu">
                         {#each pageSizeOptions as size}
-                            <button type="button" class="dropdown-option" class:selected={getDisplayPageSize() === size} onclick={() => selectPageSize(size)}>
+                            <button type="button" class="dropdown-option" class:selected={getDisplayPageSize() === size} onclick={() => selectPageSize(size)} data-testid={`pagination-size-option-${size}`}>
                                 {formatPageSize(size)}
                             </button>
                         {/each}
@@ -155,7 +174,7 @@
         justify-content: center;
         padding: 0.5rem 0;
         pointer-events: none;
-        z-index: 5;
+        z-index: 30;
     }
 
     .pagination-balloon {
@@ -229,16 +248,14 @@
     }
 
     .page-size-dropdown {
-        position: absolute;
-        bottom: 100%;
-        left: 0;
-        margin-bottom: 0.25rem;
+        position: fixed;
         min-width: 60px;
         background: white;
         border: 1px solid #e2e8f0;
         border-radius: 8px;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        overflow: hidden;
+        max-height: calc(100vh - 1rem);
+        overflow-y: auto;
         z-index: 10;
     }
 

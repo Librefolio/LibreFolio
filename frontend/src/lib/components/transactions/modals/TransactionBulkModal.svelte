@@ -25,7 +25,7 @@
 -->
 <script lang="ts">
     import {todayIso} from '$lib/utils/dateOnly';
-    import {onDestroy, untrack} from 'svelte';
+    import {onDestroy, tick, untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/app/language';
     import {X, Plus, Pencil, Copy, Trash2, Check, Undo2, Save, Unlink, Link2, Lightbulb, Upload, ChevronDown, ChevronRight} from 'lucide-svelte';
@@ -50,7 +50,21 @@
     import PromoteMergeModal from './PromoteMergeModal.svelte';
     import {createValidateScheduler} from '$lib/utils/transactions/useValidateScheduler.svelte';
     import {commitTransactions, validateTransactions} from '$lib/utils/transactions/txCommitApi';
-    import {buildCreatePayload, buildUpdateDiff, buildBatchPayload, diffDualItem, applySignRules, upgradeAutoToDetail, type TxFields, type TxOriginal, type ResolvedOp, type ImportTodo} from '$lib/utils/transactions/txPayloadHelpers';
+    import {buildCreatePayload, buildUpdateDiff, buildBatchPayload, diffDualItem, applySignRules, upgradeAutoToDetail, type TxFields, type TxOriginal, type ImportTodo} from '$lib/utils/transactions/txPayloadHelpers';
+    import {
+        buildBulkOperationIndex,
+        buildBulkRowLabels,
+        createBulkDateComparator,
+        isBulkBalanceIssue,
+        resolveBulkIssueRows,
+        settleBulkIssueSnapshot,
+        type BulkBatchResult,
+        type BulkIssueRow,
+        type BulkIssueSnapshotEntry,
+        type BulkOperationIndex,
+        type IdentifiedBulkOp,
+    } from '$lib/utils/transactions/bulkDisplay';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {cashAmountsCancel} from '$lib/utils/transactions/promoteHelpers';
     import {resolveIssueMessage, type ResolverContext} from '$lib/utils/transactions/resolveValidationMessage';
     import {generateUUID} from '$lib/utils/core/uuid';
@@ -65,6 +79,7 @@
     import ImportWizardModal from './ImportWizardModal.svelte';
     import {txStoreGet, txStoreCount} from '$lib/stores/transactions/txStore.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {notify} from '$lib/stores/app/notify.svelte';
     import {resolveFormItemsFromOps, type FormModalItems} from '../shared/resolveFormItems';
     import type {TXReadItem, ValidationIssue} from '../types';
     import type {TransactionCreateItem} from '$lib/types';
@@ -257,15 +272,25 @@
     // =========================================================================
 
     let ops = $state<PendingOp[]>([]);
-    /** Visible ops: excludes hidden partner ops (pairedWith set). Used by DataTable. */
-    let visibleOps = $derived(ops.filter((o) => !o.pairedWith));
+    let dateSortDirection = $state<'asc' | 'desc'>('asc');
+    let compareBulkDates = $derived(createBulkDateComparator(ops));
+    /** Sort display groups only. The ledger and payload retain their original order. */
+    let visibleOps = $derived(ops.filter((o) => !o.pairedWith).sort((a, b) => (dateSortDirection === 'asc' ? 1 : -1) * compareBulkDates(a, b)));
+    let visualRowLabels = $derived(buildBulkRowLabels(ops, visibleOps));
     /** Find the hidden partner op for a given main op's tempId. */
     function getPartnerOp(mainTempId: string): PendingOp | undefined {
         return ops.find((o) => o.pairedWith === mainTempId);
     }
     let issues = $state<ValidationIssue[]>([]);
-    /** Maps "operation:index" (from backend) → tempId. Built after each validate. */
-    let lastOpsIndexMap = $state<Map<string, string>>(new Map());
+    /** API-array indices map to stable op IDs, never to display/file row numbers. */
+    let lastOpsIndexMap = $state<BulkOperationIndex>(new Map());
+    let lastIssueRows = $state<BulkIssueRow[]>([]);
+    let lastBalanceRows = $state<BulkIssueRow[]>([]);
+    let lastIssueDraftKey = $state('');
+    let lastDraftKey = $state('');
+    let activeIssue = $state<ValidationIssue | null>(null);
+    let activeIssueRows = $derived(activeIssue && lastIssueDraftKey === lastDraftKey ? getIssueRows(activeIssue) : []);
+    let highlightedIssueIds = $derived(new Set(activeIssueRows.map((row) => row.pairedWith ?? row.tempId)));
     let formError = $state<string | null>(null);
     let commitFailed = $state(false);
     let committing = $state(false);
@@ -397,6 +422,11 @@
         const {rows, status: initSt, autoForm} = resolveInitialRows();
         untrack(() => {
             issues = [];
+            lastOpsIndexMap = new Map();
+            lastIssueRows = [];
+            lastBalanceRows = [];
+            lastIssueDraftKey = '';
+            activeIssue = null;
             formError = null;
             commitFailed = false;
             confirmCloseOpen = false;
@@ -1001,11 +1031,11 @@
      * Resolve all PendingOps into ResolvedOp[] for batch payload building.
      * Handles split-queued type stripping and promote-queued row skipping.
      */
-    function resolveOps(opts?: {excludeTempId?: string | null; splitTxIds?: Set<number>; promoteTxIds?: Set<number>}): ResolvedOp[] {
+    function resolveOps(opts?: {excludeTempId?: string | null; splitTxIds?: Set<number>; promoteTxIds?: Set<number>}): IdentifiedBulkOp[] {
         const excludeTempId = opts?.excludeTempId ?? null;
         const splitTxIds = opts?.splitTxIds ?? new Set<number>();
         const promoteTxIds = opts?.promoteTxIds ?? new Set<number>();
-        const resolved: ResolvedOp[] = [];
+        const resolved: IdentifiedBulkOp[] = [];
 
         for (const d of ops) {
             if (d.pairedWith) continue; // hidden partners are handled via their main op
@@ -1027,7 +1057,7 @@
             if (d.op === 'edit' && promoteTxIds.has((d as any).txId)) {
                 const hidden = getPartnerOp(d.tempId);
                 if (hidden && hidden.op === 'create') {
-                    resolved.push({intent: 'create', payload: collectCreate(hidden), partnerPayload: null});
+                    resolved.push({intent: 'create', tempId: hidden.tempId, payload: collectCreate(hidden), partnerPayload: null});
                 }
                 continue;
             }
@@ -1043,7 +1073,7 @@
                 if (pOp && pOp.op === 'create') {
                     partnerPayload = collectCreate(pOp);
                 }
-                resolved.push({intent: 'create', payload: collectCreate(d), partnerPayload});
+                resolved.push({intent: 'create', tempId: d.tempId, partnerTempId: pOp?.tempId, payload: collectCreate(d), partnerPayload});
             } else if (st === 'edited') {
                 const upd = collectUpdate(d);
                 // For split-queued rows, strip type (split handles type change)
@@ -1060,11 +1090,13 @@
                     }
                 }
                 if (payload || partnerPayload) {
-                    resolved.push({intent: 'update', payload: payload ?? undefined, partnerPayload});
+                    resolved.push({intent: 'update', tempId: d.tempId, partnerTempId: pOp?.tempId, payload: payload ?? undefined, partnerPayload});
                 }
             } else if (st === 'delete' && d.op === 'edit') {
                 resolved.push({
                     intent: 'delete',
+                    tempId: d.tempId,
+                    partnerTempId: pOp?.tempId,
                     deleteId: d.txId,
                     partnerDeleteId: pOp?.op === 'edit' ? pOp.txId : null,
                 });
@@ -1115,57 +1147,66 @@
     // Validate scheduler
     // =========================================================================
 
-    /** Map a ResolvedOp back to the tempId of the PendingOp that produced it.
-     *  Uses the resolved ops array to find the source PendingOp by intent match.
-     *  `resolvedIdx` is the index within the `resolved` array. */
-    function buildOpsIndexMap(resolved: ResolvedOp[]): Map<string, string> {
-        // Replicate buildBatchPayload ordering to map "operation:index" → tempId.
-        // The resolved array mirrors ops ordering (pairedWith skipped, same filter).
-        const opsMap = new Map<string, string>(); // "create:0" → tempId
-        let createIdx = 0;
-        let updateIdx = 0;
+    function buildOpsIndexMap(resolved: IdentifiedBulkOp[]): BulkOperationIndex {
+        return buildBulkOperationIndex(resolved, {
+            splits: pendingSplits.map((split) => ops.filter((op) => op.op === 'edit' && (op.txId === split.id_a || op.txId === split.id_b)).map((op) => op.tempId)),
+            promotes: pendingPromotes.map((promote) => ops.filter((op) => (op.op === 'edit' && (op.txId === promote.id_a || op.txId === promote.id_b)) || (op.op === 'create' && !!op.link_uuid && (op.link_uuid === promote.link_uuid_a || op.link_uuid === promote.link_uuid_b))).map((op) => op.tempId)),
+        });
+    }
 
-        // Track which resolved op came from which visible PendingOp.
-        // resolveOps iterates ops in order, skipping pairedWith. We do the same.
-        const splitTxIds = new Set(pendingSplits.flatMap((s) => [s.id_a, s.id_b]));
-        const promoteTxIds = new Set(pendingPromotes.flatMap((p) => [p.id_a, p.id_b].filter(Boolean) as number[]));
-        let resolvedI = 0;
+    function toIssueRow(op: PendingOp, fields: Pick<TxFields, 'type' | 'broker_id' | 'date' | 'quantity' | 'asset_id' | 'cash'>): BulkIssueRow {
+        const {signedQty, signedCash} = applySignRules(fields.quantity, fields.cash, getTypeRule(fields.type));
+        return {
+            tempId: op.tempId,
+            pairedWith: op.pairedWith,
+            txId: opTxId(op),
+            inaccessible: op.inaccessible,
+            fields: {type: fields.type, broker_id: fields.broker_id, date: fields.date, asset_id: fields.asset_id ?? null, quantity: signedQty, cash: signedCash},
+        };
+    }
 
-        for (const d of ops) {
-            if (d.pairedWith) continue;
-            const st = deriveStatus(d);
-            // Same skip logic as resolveOps
-            if (d.op === 'edit' && splitTxIds.has((d as any).txId) && st !== 'edited') continue;
-            if (d.op === 'edit' && promoteTxIds.has((d as any).txId)) continue;
-
-            if (resolvedI >= resolved.length) break;
-            const rOp = resolved[resolvedI];
-
-            if (st === 'new' && rOp.intent === 'create') {
-                opsMap.set(`create:${createIdx}`, d.tempId);
-                createIdx++;
-                const pOp = getPartnerOp(d.tempId);
-                if (rOp.partnerPayload && pOp) {
-                    opsMap.set(`create:${createIdx}`, pOp.tempId);
-                    createIdx++;
-                }
-                resolvedI++;
-            } else if (st === 'edited' && rOp.intent === 'update') {
-                opsMap.set(`update:${updateIdx}`, d.tempId);
-                updateIdx++;
-                const pOp = getPartnerOp(d.tempId);
-                if (rOp.partnerPayload && pOp) {
-                    opsMap.set(`update:${updateIdx}`, pOp.tempId);
-                    updateIdx++;
-                }
-                resolvedI++;
-            } else if (st === 'delete' && rOp.intent === 'delete') {
-                resolvedI++;
-            } else {
-                // Mismatch — skip this op (original/no-change)
-            }
+    /** Capture the state actually sent. Failed operations fall back to their saved row;
+     *  successful deletes disappear from balance groups, but retain field-issue links. */
+    function captureIssueSnapshot(resolved: IdentifiedBulkOp[], indexMap: BulkOperationIndex): BulkIssueSnapshotEntry[] {
+        const payloads = new Map<string, Record<string, unknown>>();
+        const deleted = new Set<string>();
+        for (const op of resolved) {
+            if (op.payload) payloads.set(op.tempId, op.payload);
+            if (op.partnerPayload && op.partnerTempId) payloads.set(op.partnerTempId, op.partnerPayload);
+            if (op.deleteId != null) deleted.add(op.tempId);
+            if (op.partnerDeleteId != null && op.partnerTempId) deleted.add(op.partnerTempId);
         }
-        return opsMap;
+        const keysById = new Map<string, string[]>();
+        for (const [key, ids] of indexMap) {
+            for (const id of ids) keysById.set(id, [...(keysById.get(id) ?? []), key]);
+        }
+        return ops.map((op) => {
+            const original = op.op === 'edit' ? txStoreGet(op.txId) : undefined;
+            const draft = toIssueRow(op, opToTxFields(op));
+            const before = original ? toIssueRow(op, original) : null;
+            const operationKeys = keysById.get(op.tempId) ?? [];
+            const atomic = operationKeys.some((key) => key.startsWith('split:') || key.startsWith('promote:'));
+            const fields = {...(original ?? opToTxFields(op)), ...payloads.get(op.tempId)};
+            const ordinaryAfter = deleted.has(op.tempId) ? null : toIssueRow(op, fields);
+            let atomicFallback = before;
+            if (before && operationKeys.some((key) => key.startsWith('split:'))) {
+                const types = SPLIT_TYPE_MAP[before.fields.type];
+                if (types) {
+                    const sender = Number(before.fields.quantity) < 0 || Number(before.fields.cash?.amount ?? 0) < 0;
+                    atomicFallback = toIssueRow(op, {...before.fields, type: types[sender ? 0 : 1]});
+                }
+            }
+            return {before, after: atomic ? toIssueRow(op, op.fields) : ordinaryAfter, ordinaryAfter, atomicFallback, draft, operationKeys};
+        });
+    }
+
+    function applyIssueSnapshot(snapshot: BulkIssueSnapshotEntry[], indexMap: BulkOperationIndex, rawResponse: unknown, sentKey: string) {
+        lastOpsIndexMap = indexMap;
+        lastIssueRows = snapshot.map((entry) => entry.draft);
+        const results = (rawResponse as {results?: BulkBatchResult[]} | null)?.results ?? [];
+        lastBalanceRows = settleBulkIssueSnapshot(snapshot, results);
+        lastIssueDraftKey = sentKey;
+        activeIssue = null;
     }
 
     const scheduler = createValidateScheduler({
@@ -1189,26 +1230,19 @@
                 return {issuesCount: 0};
             }
             const splitTxIds = new Set(pendingSplits.flatMap((s) => [s.id_a, s.id_b]));
-            // `promoteTxIds` has to be here for the same reason it is in commit():
-            // `buildOpsIndexMap` below derives it from `pendingPromotes` regardless
-            // and skips those rows *without advancing its cursor*. Leaving it out
-            // here made `resolveOps` keep them, so the two walked the same list at
-            // different speeds and every entry after a queued promote mapped to the
-            // wrong row — which is what `lastOpsIndexMap` is then read through to
-            // attach WAC previews and validation issues. The user saw the preview
-            // pinned to a neighbouring transaction.
-            //
-            // It also validated rows the commit will not send, which is the wrong
-            // question to ask: a preview should simulate the commit, not something
-            // adjacent to it.
+            // Resolve the same CUD and atomic commands as commit: indices and balance
+            // groups must describe the ledger that Save will actually submit.
             const promoteTxIds = new Set(pendingPromotes.flatMap((p) => [p.id_a, p.id_b].filter(Boolean) as number[]));
             const resolved = resolveOps({splitTxIds, promoteTxIds});
             const payload = buildBatchPayload({
                 ops: resolved,
                 splits: pendingSplits.length > 0 ? pendingSplits.map((s) => ({id_a: s.id_a, id_b: s.id_b})) : undefined,
+                promotes: pendingPromotes.length > 0 ? pendingPromotes : undefined,
             });
             upgradeAutoToDetail(payload);
             const sentKey = lastDraftKey;
+            const opsMap = buildOpsIndexMap(resolved);
+            const issueSnapshot = captureIssueSnapshot(resolved, opsMap);
             const result = await validateTransactions(payload, {fallback: $t('transactions.bulk.saveFailed')});
             // A response that lands after the draft moved on describes a state
             // that no longer exists: applying it overwrites fresher numbers
@@ -1217,12 +1251,13 @@
             // run, so dropping this one loses nothing.
             if (lastDraftKey !== sentKey) return {issuesCount: issues.length};
             if (result.networkError) {
-                issues = [{operation: 'create', index: 0, error: result.networkError}];
+                issues = [{operation: 'create', index: -1, error: result.networkError}];
             } else {
                 issues = result.issues as unknown as ValidationIssue[];
             }
             lastValidatedDraftKey = sentKey;
             issuesDismissed = false;
+            applyIssueSnapshot(issueSnapshot, opsMap, result.rawResponse, sentKey);
 
             // ── Phase C: extract wac_results from validate response ──
             const rawResp = result.rawResponse as Record<string, unknown> | null;
@@ -1236,10 +1271,6 @@
             }
             if (pendingIdOps.size > 0) pendingTxIds = new Set(pendingIdOps.keys());
 
-            // Always build the ops index map (needed for issue row mapping + WAC)
-            const opsMap = buildOpsIndexMap(resolved);
-            lastOpsIndexMap = opsMap;
-
             const rawWacResults = (rawResp?.wac_results as Array<Record<string, unknown>> | null | undefined) ?? null;
             if (rawWacResults && rawWacResults.length > 0) {
                 // Map wac_results to tempIds using the opsMap
@@ -1249,7 +1280,7 @@
                     const idx = wr.index as number | null;
                     if (op == null || idx == null) continue;
                     const key = `${op}:${idx}`;
-                    const tempId = opsMap.get(key);
+                    const tempId = opsMap.get(key)?.[0];
                     if (!tempId) continue;
                     const wacVal = (wr.wac as {code: string; amount: string} | null) ?? null;
                     // Annotate qualifying_txs entries that belong to this batch (pending)
@@ -1325,7 +1356,6 @@
         if (suggestTimer) clearTimeout(suggestTimer);
     });
 
-    let lastDraftKey = $state('');
     /** Bugfix-4 §U16: track which draft state we last validated, so the UI
      *  can show a "fresh" valid banner only when no edits happened since. */
     let lastValidatedDraftKey = $state('');
@@ -1334,9 +1364,8 @@
 
     let isFreshlyValid = $derived(scheduler.state.lastValidatedAt != null && issues.length === 0 && lastValidatedDraftKey === lastDraftKey && lastDraftKey !== '');
     let showIssuesBanner = $derived(issues.length > 0 && !issuesDismissed);
-    const BALANCE_CODES = new Set(['balanceAssetNegative', 'balanceCashNegative']);
-    let fieldIssues = $derived(issues.filter((i) => !BALANCE_CODES.has(i.code ?? '')));
-    let balanceIssues = $derived(issues.filter((i) => BALANCE_CODES.has(i.code ?? '')));
+    let fieldIssues = $derived(issues.filter((i) => !isBulkBalanceIssue(i)));
+    let balanceIssues = $derived(issues.filter(isBulkBalanceIssue));
     let hasWacFxIssues = $derived(fieldIssues.some((i) => i.code === 'wacFxUnavailable'));
 
     /** Sync FX rates for missing pairs referenced in issues, then re-validate. */
@@ -1351,7 +1380,7 @@
         const dates: string[] = [];
         for (const issue of fxIssues) {
             const key = `${issue.operation}:${issue.index}`;
-            const tempId = lastOpsIndexMap.get(key);
+            const tempId = lastOpsIndexMap.get(key)?.[0];
             const op = tempId ? ops.find((o) => o.tempId === tempId) : null;
             if (op?.fields.date) dates.push(op.fields.date);
         }
@@ -1393,6 +1422,7 @@
         if (key === lastDraftKey) return;
         lastDraftKey = key;
         commitFailed = false;
+        activeIssue = null;
         scheduler.trigger('change');
     });
 
@@ -1442,6 +1472,8 @@
                 promotes: pendingPromotes.length > 0 ? pendingPromotes : undefined,
             });
 
+            const opsMap = buildOpsIndexMap(resolved);
+            const issueSnapshot = captureIssueSnapshot(resolved, opsMap);
             const result = await commitTransactions(payload, {fallback: $t('transactions.bulk.saveFailed')});
             if (result.networkError) {
                 formError = result.networkError;
@@ -1450,8 +1482,7 @@
             }
             if (!result.committed) {
                 issues = result.issues as unknown as ValidationIssue[];
-                // Rebuild index map for the commit payload (same resolved ops)
-                lastOpsIndexMap = buildOpsIndexMap(resolved);
+                applyIssueSnapshot(issueSnapshot, opsMap, result.rawResponse, currentKey);
                 issuesDismissed = false;
                 commitFailed = true;
                 return;
@@ -1538,6 +1569,22 @@
     let columns = $derived.by<ColumnDef<PendingOp>[]>(() => {
         return [
             {
+                id: 'workspace_row',
+                header: () => $t('common.rowN', {values: {n: ''}}).trim(),
+                displayName: () => $t('common.rowN', {values: {n: ''}}).trim(),
+                headerTooltip: () => $t('transactions.bulk.workspaceRowHint'),
+                type: 'text',
+                width: 70,
+                sortable: false,
+                filterable: false,
+                cell: (row): CellContent => {
+                    const partner = getPartnerOp(row.tempId);
+                    const label = visualRowLabels.get(row.tempId) ?? '—';
+                    const content = partner ? renderDualHtml(label, visualRowLabels.get(partner.tempId) ?? '—') : label;
+                    return {type: 'html', html: `<div data-testid="tx-bulk-row-label" data-row-id="${row.tempId}" data-issue-highlighted="${highlightedIssueIds.has(row.tempId)}">${content}</div>`};
+                },
+            },
+            {
                 id: 'status',
                 header: () => $t('common.status'),
                 type: 'text',
@@ -1589,16 +1636,16 @@
                 header: () => $t('common.date'),
                 type: 'text',
                 width: 140,
-                sortable: false,
+                sortable: true,
                 filterable: false,
+                getValue: (row) => row.fields.date,
+                sortFn: compareBulkDates,
+                headerTooltip: () => bulkDisplayText('transactions.bulk.dateSortHint', 'Date is primary. Pairs stay together, ordered by earliest leg date, then latest leg date and stable row ID.'),
                 cell: (row): CellContent => {
-                    const rule = getTypeRule(row.fields.type);
                     // Paired rows with different dates → Da:/A:
                     const pOp = getPartnerOp(row.tempId);
-                    if (rule.requiresPair && pOp && pOp.fields.date !== row.fields.date) {
-                        return {type: 'html', html: renderDualHtml(row.fields.date, pOp.fields.date)};
-                    }
-                    return {type: 'html', html: `<span class="font-mono text-sm text-gray-700 dark:text-gray-200">${row.fields.date}</span>`};
+                    const content = pOp && pOp.fields.date !== row.fields.date ? renderDualHtml(row.fields.date, pOp.fields.date) : `<span class="font-mono text-sm text-gray-700 dark:text-gray-200">${escapeHtml(row.fields.date)}</span>`;
+                    return {type: 'html', html: `<div data-testid="tx-bulk-date" data-row-id="${row.tempId}" data-date="${escapeHtml(row.fields.date)}" data-partner-date="${escapeHtml(pOp?.fields.date ?? '')}">${content}</div>`};
                 },
             },
             {
@@ -2024,20 +2071,40 @@
     // Issue → row navigation
     // =========================================================================
 
+    function bulkDisplayText(key: string, fallback: string, values?: Record<string, string | number>): string {
+        const translated = $t(key, {values});
+        return translated === key ? fallback : translated;
+    }
+
+    function getIssueRows(issue: ValidationIssue): BulkIssueRow[] {
+        const rows = resolveBulkIssueRows(issue, isBulkBalanceIssue(issue) ? lastBalanceRows : lastIssueRows, lastOpsIndexMap);
+        const positions = new Map([...visualRowLabels.keys()].map((id, index) => [id, index]));
+        return rows.filter((row) => positions.has(row.tempId)).sort((a, b) => positions.get(a.tempId)! - positions.get(b.tempId)!);
+    }
+
+    function issueRowsLabel(issue: ValidationIssue): string {
+        const rows = getIssueRows(issue)
+            .map((row) => visualRowLabels.get(row.tempId)!)
+            .join(', ');
+        return bulkDisplayText('transactions.bulk.workspaceRows', `Workspace rows: ${rows}`, {rows});
+    }
+
     function jumpToIssue(issue: ValidationIssue) {
-        if (issue.index < 0) return; // broker-level error, no specific row
-        const key = `${issue.operation}:${issue.index}`;
-        const tempId = lastOpsIndexMap.get(key);
-        if (!tempId) {
-            // Fallback: try direct ops index
-            const draft = ops[issue.index];
-            if (draft) tableRef?.navigateToRowId(draft.tempId);
+        if (lastIssueDraftKey !== lastDraftKey) return;
+        const rows = getIssueRows(issue);
+        if (rows.length === 0) return;
+        const affectedIds = new Set(rows.map((row) => row.pairedWith ?? row.tempId));
+        activeIssue = isBulkBalanceIssue(issue) ? issue : null;
+        const firstVisibleId = tableRef?.getSortedRowIds().find((id) => affectedIds.has(id));
+        if (!firstVisibleId) {
+            notify({
+                name: 'tx.bulk.issue.rows-hidden',
+                detail: {code: issue.code, rowIds: [...affectedIds]},
+                toast: {variant: 'warning', message: $t('transactions.bulk.issueRowsHidden')},
+            });
             return;
         }
-        // If this is a partner (hidden), navigate to its main row
-        const op = ops.find((o) => o.tempId === tempId);
-        const mainTempId = op?.pairedWith ?? tempId;
-        tableRef?.navigateToRowId(mainTempId);
+        tableRef?.navigateToRowId(firstVisibleId);
     }
 
     /** Get visual row label for an issue (e.g. "3", "5a", "5b"). */
@@ -2050,19 +2117,11 @@
             }
             return '⚠️';
         }
-        const key = `${issue.operation}:${issue.index}`;
-        const tempId = lastOpsIndexMap.get(key);
-        if (!tempId) return String(issue.index + 1); // fallback
-        const op = ops.find((o) => o.tempId === tempId);
-        // Determine main row (for visual position) and suffix
-        const isPartner = !!op?.pairedWith;
-        const mainTempId = isPartner ? op.pairedWith! : tempId;
-        const visIdx = visibleOps.findIndex((o) => o.tempId === mainTempId);
-        const rowNum = visIdx >= 0 ? visIdx + 1 : issue.index + 1;
-        // Suffix: "a" if main of a pair, "b" if partner
-        const hasPair = isPartner || getPartnerOp(tempId) != null;
-        const suffix = hasPair ? (isPartner ? 'b' : 'a') : '';
-        return `${rowNum}${suffix}`;
+        return (
+            getIssueRows(issue)
+                .map((row) => visualRowLabels.get(row.tempId))
+                .join(', ') || '—'
+        );
     }
 
     // =========================================================================
@@ -2081,7 +2140,7 @@
     let hasTodoBlockers = $derived(ops.some((op) => op.todos?.some((t) => t.severity === 'blocker')));
     /** Blocker todos with their row position, so the banner can name the offending rows.
      *  Without this the user only sees a red row and a disabled Save, never the reason. */
-    let todoBlockerEntries = $derived(ops.flatMap((op, rowIdx) => (op.todos ?? []).filter((t) => t.severity === 'blocker').map((todo) => ({rowNumber: rowIdx + 1, date: op.fields.date, todo}))));
+    let todoBlockerEntries = $derived(ops.flatMap((op) => (op.todos ?? []).filter((t) => t.severity === 'blocker').map((todo) => ({rowNumber: visualRowLabels.get(op.tempId) ?? '—', date: op.fields.date, todo}))));
     // Folded by default: with evidence tables attached, an expanded banner can be taller
     // than the viewport and push the grid — the thing the user has to fix — off-screen.
     let todoBlockersExpanded = $state(false);
@@ -2411,12 +2470,13 @@
     /** Row background tint by status for immediate visual recognition.
      *  Color is purely status-based — paired nature is visible from Da:/A: rendering. */
     function getRowClass(row: PendingOp): string {
-        if (row.todos?.some((t) => t.severity === 'blocker')) return 'row-todo-blocker';
+        const highlight = highlightedIssueIds.has(row.tempId) ? 'highlighted ' : '';
+        if (row.todos?.some((t) => t.severity === 'blocker')) return `${highlight}row-todo-blocker`;
         const st = deriveStatus(row);
-        if (st === 'delete') return 'row-deleted';
-        if (st === 'new') return 'row-appended';
-        if (st === 'edited') return 'row-edited';
-        return '';
+        if (st === 'delete') return `${highlight}row-deleted`;
+        if (st === 'new') return `${highlight}row-appended`;
+        if (st === 'edited') return `${highlight}row-edited`;
+        return highlight;
     }
 
     /** Bulk actions for selected rows. */
@@ -2892,15 +2952,16 @@
                     {/if}
                     {#if balanceIssues.length > 0}
                         <p class="font-semibold text-sm mt-2 mb-1">{$t('transactions.validate.balanceIssuesHeader')}</p>
-                        <ul class="list-disc pl-4 space-y-0.5 text-sm text-left">
+                        <ul class="list-disc pl-4 space-y-0.5 text-sm text-left" data-testid="tx-bulk-balance-issues">
                             {#each balanceIssues as issue}
-                                <li>
-                                    {#if issue.index >= 0}
-                                        <button type="button" class="underline hover:opacity-80 text-left" onclick={() => jumpToIssue(issue)}>
-                                            {$t('common.rowN', {values: {n: getVisualRowLabel(issue)}})}: {@html resolveIssueMessage(issue, $t, resolverCtx)}
+                                <li data-testid="tx-bulk-balance-issue">
+                                    {@html resolveIssueMessage(issue, $t, resolverCtx)}
+                                    {#if getIssueRows(issue).length > 0}
+                                        <button type="button" class="block underline hover:opacity-80 text-left disabled:opacity-50" disabled={lastIssueDraftKey !== lastDraftKey} onclick={() => jumpToIssue(issue)} data-testid="tx-bulk-balance-rows">
+                                            {issueRowsLabel(issue)}
                                         </button>
                                     {:else}
-                                        {getVisualRowLabel(issue)}: {@html resolveIssueMessage(issue, $t, resolverCtx)}
+                                        <span class="block text-xs">{bulkDisplayText('transactions.bulk.balanceGroupOutsideWorkspace', "No contributing rows from this workspace match this group. Check the broker's history.")}</span>
                                     {/if}
                                 </li>
                             {/each}
@@ -2932,15 +2993,16 @@
                     {/if}
                     {#if balanceIssues.length > 0}
                         <p class="font-semibold text-sm {fieldIssues.length > 0 ? 'mt-2' : ''} mb-1">{$t('transactions.validate.balanceIssuesHeader')}</p>
-                        <ul class="list-disc pl-4 space-y-0.5 text-sm text-left">
+                        <ul class="list-disc pl-4 space-y-0.5 text-sm text-left" data-testid="tx-bulk-balance-issues">
                             {#each balanceIssues as issue}
-                                <li>
-                                    {#if issue.index >= 0}
-                                        <button type="button" class="underline hover:opacity-80 text-left" onclick={() => jumpToIssue(issue)}>
-                                            {$t('common.rowN', {values: {n: getVisualRowLabel(issue)}})}: {@html resolveIssueMessage(issue, $t, resolverCtx)}
+                                <li data-testid="tx-bulk-balance-issue">
+                                    {@html resolveIssueMessage(issue, $t, resolverCtx)}
+                                    {#if getIssueRows(issue).length > 0}
+                                        <button type="button" class="block underline hover:opacity-80 text-left disabled:opacity-50" disabled={lastIssueDraftKey !== lastDraftKey} onclick={() => jumpToIssue(issue)} data-testid="tx-bulk-balance-rows">
+                                            {issueRowsLabel(issue)}
                                         </button>
                                     {:else}
-                                        {getVisualRowLabel(issue)}: {@html resolveIssueMessage(issue, $t, resolverCtx)}
+                                        <span class="block text-xs">{bulkDisplayText('transactions.bulk.balanceGroupOutsideWorkspace', "No contributing rows from this workspace match this group. Check the broker's history.")}</span>
                                     {/if}
                                 </li>
                             {/each}
@@ -3215,7 +3277,8 @@
                 alwaysShowPagination={true}
                 defaultPageSize={25}
                 pageSizeOptions={[5, 10, 25, 50, 0]}
-                enableSorting={false}
+                enableSorting={true}
+                onSortChange={(sort) => (dateSortDirection = sort?.direction ?? 'asc')}
                 enableColumnVisibility={true}
                 enableActions={true}
                 actionsColumnWidth="64px"

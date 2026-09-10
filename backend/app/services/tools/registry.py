@@ -17,7 +17,7 @@ from backend.app.logging_config import get_logger
 from backend.app.schemas.tools import ToolDescriptor, ToolDiscoveryFailure, ToolDiscoveryReason
 from backend.app.services.provider_registry import AbstractPluginRegistry
 from backend.app.services.tools.base import ToolDefinitionError, ToolPlugin
-from backend.app.services.tools.schema import declared_operations, generate_tool_schema, schema_fingerprint
+from backend.app.services.tools.schema import declared_operations, generate_tool_schema, require_roundtrip_output, schema_fingerprint
 from backend.app.services.tools.wire import encode_json
 
 logger = get_logger(__name__)
@@ -83,6 +83,7 @@ def build_tool_definition(plugin_class: type[ToolPlugin]) -> ToolDefinition:
         input_adapter = TypeAdapter(plugin_class.input_type)
         input_schema = generate_tool_schema(input_adapter, "validation")
         output_adapter = TypeAdapter(plugin_class.output_type)
+        require_roundtrip_output(output_adapter)
         output_schema = generate_tool_schema(output_adapter, "serialization")
     except ToolDefinitionError:
         raise

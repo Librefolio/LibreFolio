@@ -47,6 +47,8 @@ os.chdir(PROJECT_ROOT)
 from scripts.cli_base import (
     Colors,
     check_server_running,
+    configure_server_runtime,
+    configure_test_runtime,
     get_data_dir,
     get_database_path,
     get_server_host,
@@ -164,52 +166,37 @@ def cmd_server(args):
         return 1
     host_override = getattr(args, 'host', None)
     port_override = getattr(args, 'port', None)
+    data_dir_override = getattr(args, 'data_dir', None)
     coverage_mode = getattr(args, 'coverage', False)
     no_scheduler = getattr(args, 'no_scheduler', False)
     no_reload = getattr(args, 'no_reload', False)
 
     if test_mode:
-        port = get_test_server_port()
+        try:
+            port, _ = configure_test_runtime(
+                port=port_override,
+                data_dir=data_dir_override,
+            )
+        except ValueError as exc:
+            print_error(str(exc))
+            return 1
         db = get_database_path(test_mode=True)
         debug_mode = True
     else:
-        port = get_server_port()
+        try:
+            port, _ = configure_server_runtime(
+                port=port_override,
+                data_dir=data_dir_override,
+            )
+        except ValueError as exc:
+            print_error(str(exc))
+            return 1
         db = get_database_path(test_mode=False)
 
     # Apply --host / --port overrides (take priority over env vars)
     host = host_override if host_override else get_server_host()
-    if port_override:
+    if port_override is not None:
         port = port_override
-
-    # Check if port is already in use
-    processes_using_port = check_port_in_use(port)
-    if processes_using_port:
-        if force:
-            # --force: kill blocking processes and continue
-            pids = [pid for pid, _ in processes_using_port]
-            print_warning(f"Port {port} is in use — killing {len(pids)} blocking process(es)...")
-            for pid, proc_name in processes_using_port:
-                try:
-                    os.kill(pid, signal.SIGKILL)
-                    print(f"  ✗ Killed PID {pid} ({proc_name})")
-                except ProcessLookupError:
-                    pass  # already dead
-                except PermissionError:
-                    print_error(f"  Cannot kill PID {pid} ({proc_name}) — permission denied")
-                    return 1
-            # Wait briefly for port to be released
-            time.sleep(1)
-            # Verify port is now free
-            still_in_use = check_port_in_use(port)
-            if still_in_use:
-                print_error(f"Port {port} still in use after killing processes!")
-                _print_port_help(port, still_in_use)
-                return 1
-            print_success(f"Port {port} is now free")
-        else:
-            print_error(f"Port {port} is already in use!")
-            _print_port_help(port, processes_using_port)
-            return 1
 
     # Handle frontend rebuild
     if rebuild:
@@ -232,6 +219,35 @@ def cmd_server(args):
 
     auto_build_mkdocs()
     update_js_cache()
+
+    # Check immediately before binding. Builds can take minutes, so checking
+    # before them left a large race in which another worktree could claim the
+    # supposedly free lane.
+    processes_using_port = check_port_in_use(port)
+    if processes_using_port:
+        if force:
+            pids = [pid for pid, _ in processes_using_port]
+            print_warning(f"Port {port} is in use — killing {len(pids)} blocking process(es)...")
+            for pid, proc_name in processes_using_port:
+                try:
+                    os.kill(pid, signal.SIGKILL)
+                    print(f"  ✗ Killed PID {pid} ({proc_name})")
+                except ProcessLookupError:
+                    pass
+                except PermissionError:
+                    print_error(f"  Cannot kill PID {pid} ({proc_name}) — permission denied")
+                    return 1
+            time.sleep(1)
+            still_in_use = check_port_in_use(port)
+            if still_in_use:
+                print_error(f"Port {port} still in use after killing processes!")
+                _print_port_help(port, still_in_use)
+                return 1
+            print_success(f"Port {port} is now free")
+        else:
+            print_error(f"Port {port} is already in use!")
+            _print_port_help(port, processes_using_port)
+            return 1
 
     mode_str = " (TEST MODE)" if test_mode else " (DEBUG MODE)" if debug_mode else ""
     print(Colors.success(f"Starting LibreFolio API server{mode_str}..."))
@@ -274,6 +290,8 @@ def cmd_server(args):
         # Frontend E2E tests (Playwright) log in repeatedly against shared test users —
         # never let the donation popup signal fire and interfere with test assertions.
         env["LIBREFOLIO_DISABLE_DONATION_POPUP"] = "1"
+    else:
+        env["LIBREFOLIO_TEST_MODE"] = "0"
     if debug_mode:
         env["LIBREFOLIO_LOG_LEVEL"] = "DEBUG"
     if no_scheduler:
@@ -2200,6 +2218,8 @@ Examples:
     p.add_argument("--workers", "-w", metavar="N|auto", default=1, help="Number of uvicorn workers, or 'auto' for 2 × (CPU-1) (default: 1)")
     p.add_argument("--host", type=str, default=None, help="Bind host (default: HOST env or 0.0.0.0)")
     p.add_argument("--port", "-p", type=int, default=None, help="Bind port (default: PORT env or 6040)")
+    p.add_argument("--data-dir", metavar="PATH", default=None,
+                   help="Data root for this server (test mode uses LIBREFOLIO_TEST_DATA_DIR)")
     p.add_argument("--coverage", action="store_true", help="Enable backend code coverage tracking (writes .coverage.<pid>)")
     p.add_argument("--no-scheduler", action="store_true", dest="no_scheduler",
                    help="Disable the market data scheduler (no background sync jobs)")

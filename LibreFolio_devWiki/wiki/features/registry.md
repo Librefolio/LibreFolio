@@ -49,7 +49,7 @@
 | [[F-010]] | Broker Sharing (Owner/Editor/Viewer roles) | fullstack | `documented` | `user/brokers/sharing.en.md` |
 | [[F-011]] | File Management (upload/list/delete broker reports) | fullstack | `documented` | `user/files/index.en.md` |
 | [[F-012]] | BRIM Framework (broker report import pipeline) | fullstack | `implemented` | [`dev/be/brim/architecture.md`](developer/backend/brim/architecture.md) |
-| [[F-013]] | BRIM Plugins (11 broker parsers) | backend | `implemented` | [`dev/be/brim/providers_list.md`](developer/backend/brim/providers_list.md) |
+| [[F-013]] | BRIM Broker Parser Plugins | backend | `documented` | [`dev/be/brim/providers_list.md`](developer/backend/brim/providers_list.md) |
 | [[F-014]] | Image Upload & Crop (broker icon) | fullstack | `implemented` | — |
 
 ---
@@ -113,7 +113,7 @@
 | [[F-046]] | Transaction Model & Unified Batch API (validate + commit) | fullstack | `implemented` | [`dev/arch/database/brokers_transactions.md`](developer/architecture/database/brokers_transactions.md) |
 | [[F-047]] | Transaction List Page (DataTable + filters + dual-form modals) | frontend | `implemented` | — |
 | [[F-048]] | Transaction Modals — Form / Bulk / Delete / Promote / Split (mode-less, Round 6 Plan D done) | fullstack | `in-progress` | — |
-| [[F-049]] | BRIM Import UI (asset matching wizard, bulk commit) | frontend | `in-progress` | — |
+| [[F-049]] | BRIM Import UI (asset matching and review wizard) | fullstack | `documented` | [`dev/fe/import-wizard.md`](developer/frontend/components/features/import-wizard.md) |
 | [[F-050]] | File Preview System (image/text/table/md/code) | fullstack | `planned` | — |
 | [[F-051]] | Transaction ↔ AssetEvent Link | backend | `implemented` | — |
 
@@ -182,7 +182,7 @@
 | [[F-080]] | Candlestick Chart / Volume Bars | frontend | `implemented` | — |
 | [[F-081]] | Fiscal Sale Method (FIFO/LIFO/PMC/SelectID) | fullstack | `planned` | — |
 | [[F-082]] | Cash Split Transactions | fullstack | `planned` | — |
-| [[F-083]] | Multi-File Multi-Broker Import | fullstack | `planned` | — |
+| [[F-083]] | Multi-File Multi-Broker Import | fullstack | `documented` | [`dev/fe/import-wizard.md`](developer/frontend/components/features/import-wizard.md) |
 | [[F-084]] | Transaction Gain Chart | frontend | `planned` | — |
 | [[F-085]] | QuarkAI AI Assistant | fullstack | `idea` | — |
 | [[F-086]] | Client-side Image Preview Cache (LazyImage) | frontend | `implemented` | — |

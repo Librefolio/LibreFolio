@@ -8,7 +8,7 @@ const factory = ts.factory;
 const printer = ts.createPrinter({newLine: ts.NewLineKind.LineFeed});
 const emptyFile = ts.createSourceFile('tools-codec.ts', '', ts.ScriptTarget.ES2022, true);
 const chainMethods = new Set([
-    'min', 'max', 'regex', 'int', 'gte', 'lte', 'gt', 'lt', 'multipleOf', 'finite',
+    'min', 'max', 'regex', 'int', 'safe', 'gte', 'lte', 'gt', 'lt', 'multipleOf', 'finite',
     'email', 'url', 'uuid', 'date', 'datetime', 'strict', 'passthrough', 'partial',
     'optional', 'nullable', 'nullish', 'default', 'describe', 'and',
 ]);
@@ -205,7 +205,7 @@ function adaptExpression(expression, schema, schemas, required = true, allowLazy
     } else if (schema.type === 'number' || schema.type === 'integer') {
         invariant(zodCall(base, 'number'), 'number was widened by the generator');
         result = callMethod(base, 'finite');
-        if (schema.type === 'integer') result = callMethod(result, 'int');
+        if (schema.type === 'integer') result = callMethod(callMethod(result, 'int'), 'safe');
         for (const [keyword, method] of [
             ['minimum', 'gte'], ['maximum', 'lte'], ['exclusiveMinimum', 'gt'],
             ['exclusiveMaximum', 'lt'], ['multipleOf', 'multipleOf'],

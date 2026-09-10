@@ -10,25 +10,31 @@ after the assertions about production cleanup.
 from __future__ import annotations
 
 import asyncio
+import errno
 import os
 import signal
+import struct
 import threading
 import time
 from collections import deque
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from types import SimpleNamespace
+from typing import Literal
 from uuid import uuid4
 
 import psutil
 import pytest
 import pytest_asyncio
+from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.schemas.tools import ToolComputeBatchRequest, ToolComputeItem, ToolError, ToolItemMetrics, ToolPlatformPolicy
 from backend.app.services.tools import executor as executor_module
 from backend.app.services.tools import process_tree as tree_module
+from backend.app.services.tools import worker as worker_module
 from backend.app.services.tools.base import ToolExecutionError
 from backend.app.services.tools.executor import ToolExecutor
+from backend.app.services.tools.registry import build_tool_definition
 from backend.app.services.tools.wire import decode_json, encode_json
 from backend.app.services.tools.worker import PipeCancellation, ToolWorkerJob
 from backend.test_scripts.test_services._tools_executor_fixtures import (
@@ -41,6 +47,21 @@ from backend.test_scripts.test_services._tools_executor_fixtures import (
 
 pytestmark = pytest.mark.skipif(os.name != "posix", reason="Tool lifecycle ownership requires POSIX process sessions")
 _WAIT = 30.0
+
+
+class _AliasedWorkerOutput(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid")
+
+    status: Literal["ready"]
+    text: str = Field(validation_alias="wire_text", serialization_alias="wire_text")
+
+
+class _AliasedWorkerPlugin(FixturePlugin):
+    tool_code = "private_worker_alias"
+    output_type = _AliasedWorkerOutput
+
+    def compute(self, parameters, context):
+        return _AliasedWorkerOutput.model_validate({"status": "ready", "wire_text": parameters.text})
 
 
 def _policy(**changes) -> ToolPlatformPolicy:
@@ -504,6 +525,33 @@ async def test_cold_start_is_inside_the_absolute_hard_deadline(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_partial_raw_frame_honors_hard_deadline_and_releases_owned_lane(runtime, monkeypatch):
+    clock = _Clock(time.monotonic())
+    monkeypatch.setattr(executor_module, "time", clock)
+    executor = runtime.executor(workers=1)
+    task = runtime.compute(executor, _batch(_item("owned", "partial_frame")))
+    handle = await _begin_worker(runtime.harness, stage="partial-frame")
+    job = executor._jobs[handle.execution_id]
+
+    assert not task.done(), "A partial frame must keep the physical reader pending"
+    clock.now = job.spec.hard_deadline + 1
+    response = await asyncio.wait_for(task, timeout=_WAIT)
+    (result,) = response.results
+
+    assert result.status == "error"
+    assert result.error.code == "execution_timeout"
+    assert result.error.retryable is True
+    assert result.metrics.cleanup_ms is not None
+    await asyncio.to_thread(_assert_native_termination, handle)
+    await _until(lambda: executor.snapshot().pending == 0, "partial-frame timeout completed physical cleanup")
+    assert job.io_task is not None and job.io_task.done()
+    assert job.tree is not None and job.tree.closed is True
+    snapshot = executor.snapshot()
+    assert (snapshot.pending, snapshot.active, snapshot.degraded_lanes, snapshot.available) == (0, 0, 0, True)
+    assert executor._available.qsize() == 1
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("scenario", "parameters", "expected_code"),
     [
@@ -729,19 +777,31 @@ async def test_physical_owner_callback_never_releases_an_unproven_job(terminal):
 
 class _Frames:
     def __init__(self, frames, events):
-        self.frames = deque(frames)
+        self._reader, writer = os.pipe()
+        self._kinds = deque(frame["kind"] for frame in frames)
+        self._fileno_calls = 0
         self.events = events
+        try:
+            for frame in frames:
+                payload = encode_json(frame)
+                framed = struct.pack("!i", len(payload)) + payload
+                written = os.write(writer, framed)
+                assert written == len(framed)
+        finally:
+            os.close(writer)
 
-    def poll(self, timeout):
-        assert self.frames, "Protocol fixture exhausted before the expected terminal state"
-        return True
+    def __enter__(self):
+        return self
 
-    def recv_bytes(self, maxlength):
-        frame = self.frames.popleft()
-        self.events.append(("read", frame["kind"]))
-        payload = encode_json(frame)
-        assert len(payload) <= maxlength
-        return payload
+    def __exit__(self, *_exc):
+        os.close(self._reader)
+
+    def fileno(self):
+        if self._fileno_calls % 2 == 0:
+            assert self._kinds, "Protocol fixture exhausted before the expected terminal state"
+            self.events.append(("read", self._kinds.popleft()))
+        self._fileno_calls += 1
+        return self._reader
 
 
 class _Commands:
@@ -779,7 +839,8 @@ def test_ready_is_adopted_before_ack_and_result_consumption():
     job = _owned_job()
     events = []
     job.tree = _SessionWitness(events)
-    value, error = executor_module._wait_result(_Frames([_ready(job), _result(job)], events), _Commands(events), job)
+    with _Frames([_ready(job), _result(job)], events) as frames:
+        value, error = executor_module._wait_result(frames, _Commands(events), job)
 
     assert error is None
     assert value == {"private": True}
@@ -809,8 +870,9 @@ def test_malformed_handshake_cannot_authorize_or_publish_a_result(fault):
         ready["unexpected"] = "private"
     else:
         ready["pid"] = True
-    with pytest.raises(ToolExecutionError) as caught:
-        executor_module._wait_result(_Frames(frames, events), _Commands(events), job)
+    with _Frames(frames, events) as response:
+        with pytest.raises(ToolExecutionError) as caught:
+            executor_module._wait_result(response, _Commands(events), job)
     assert caught.value.code == "worker_crashed"
     commands = [value for kind, value in events if kind == "command"]
     assert commands == ([b"\x00"] if fault == "duplicate-ready" else [])
@@ -827,6 +889,78 @@ def test_parent_rechecks_result_byte_limit_instead_of_truncating():
     with pytest.raises(ToolExecutionError) as caught:
         executor_module._accept_result(frame, job)
     assert caught.value.code == "output_limit_exceeded"
+
+
+def test_raw_frame_length_over_the_owned_limit_is_rejected_before_payload_read():
+    job = _owned_job(max_result_bytes=4)
+    reader, writer = os.pipe()
+    try:
+        declared_length = (1 << 31) - 1
+        assert os.write(writer, struct.pack("!i", declared_length)) == 4
+    finally:
+        os.close(writer)
+
+    with os.fdopen(reader, "rb") as response:
+        with pytest.raises(ToolExecutionError) as caught:
+            executor_module._read_frame(response, job)
+
+    assert caught.value.code == "output_limit_exceeded"
+
+
+def test_frame_completed_at_deadline_is_not_published_after_decode(monkeypatch):
+    job = _owned_job()
+    clock = _Clock(job.spec.hard_deadline - 1)
+    decode = executor_module.decode_json
+
+    def decode_then_expire(payload, *, max_depth):
+        value = decode(payload, max_depth=max_depth)
+        clock.now = job.spec.hard_deadline
+        return value
+
+    monkeypatch.setattr(executor_module, "time", clock)
+    monkeypatch.setattr(executor_module, "decode_json", decode_then_expire)
+    with _Frames([_result(job)], []) as response:
+        with pytest.raises(ToolExecutionError) as caught:
+            executor_module._read_frame(response, job)
+
+    assert caught.value.code == "execution_timeout"
+    assert caught.value.retryable is True
+
+
+def test_worker_serializes_aliases_and_revalidates_the_exact_wire_payload():
+    definition = build_tool_definition(_AliasedWorkerPlugin)
+
+    class AliasedRegistry:
+        @classmethod
+        def get_definition(cls, code):
+            return definition if code == definition.descriptor.tool_code else None
+
+    class NeverCancelled:
+        @staticmethod
+        def is_set():
+            return False
+
+    now = time.monotonic()
+    descriptor = definition.descriptor
+    job = ToolWorkerJob(
+        execution_id=uuid4().hex,
+        tool_code=descriptor.tool_code,
+        contract_version=descriptor.contract_version,
+        implementation_version=descriptor.implementation_version,
+        schema_fingerprint=descriptor.schema_fingerprint,
+        parameters=encode_json({"operation": "exercise", "scenario": "echo", "text": "private"}),
+        soft_deadline=now + 50,
+        hard_deadline=now + 60,
+        max_parameter_bytes=131_072,
+        max_result_bytes=262_144,
+        max_json_depth=32,
+    )
+
+    frame = worker_module._execute(job, NeverCancelled(), AliasedRegistry)
+
+    assert frame["status"] == "success"
+    assert frame["result"] == {"status": "ready", "wire_text": "private"}
+    assert definition.output_adapter.validate_json(encode_json(frame["result"]), strict=True) == _AliasedWorkerOutput.model_validate({"status": "ready", "wire_text": "private"})
 
 
 class _CancellationPipe:
@@ -1028,8 +1162,103 @@ def test_tree_tracks_recursive_children_and_group_members_after_leader_exit(monk
     assert unrelated.signals == []
 
 
+def test_wait_empty_requires_kernel_confirmation_after_process_snapshot_is_empty(monkeypatch):
+    handle = _ProcessHandle(exitcode=0)
+    _native_view(monkeypatch, {})
+    events = []
+    probes = iter([None, ProcessLookupError(errno.ESRCH, "No such process")])
+
+    def killpg(group_id, signal_number):
+        assert (group_id, signal_number) == (101, 0)
+        outcome = next(probes)
+        events.append("group-alive" if outcome is None else "group-gone")
+        if outcome is not None:
+            raise outcome
+
+    monkeypatch.setattr(tree_module.os, "killpg", killpg)
+    monkeypatch.setattr(
+        tree_module,
+        "time",
+        SimpleNamespace(
+            monotonic=lambda: 100.0,
+            sleep=lambda _duration: events.append("recheck"),
+        ),
+    )
+    tree = tree_module.OwnedProcessTree(handle)
+    tree.root = tree_module.ProcessIdentity(101, 1.25)
+    tree.known[101] = tree.root
+    tree.group_id = 101
+
+    assert tree._wait_empty(101.0) is True
+    assert events == ["group-alive", "recheck", "group-gone"]
+
+
+@pytest.mark.asyncio
+async def test_leaderless_reused_group_is_not_signalled_and_quarantines_its_lane(monkeypatch):
+    handle = _ProcessHandle(exitcode=0)
+    _native_view(monkeypatch, {})
+    now = [100.0]
+    group_calls = []
+
+    def killpg(group_id, signal_number):
+        group_calls.append((group_id, signal_number))
+
+    def advance_clock(_duration):
+        now[0] = 101.0
+
+    monkeypatch.setattr(tree_module.os, "killpg", killpg)
+    monkeypatch.setattr(
+        tree_module,
+        "time",
+        SimpleNamespace(monotonic=lambda: now[0], sleep=advance_clock),
+    )
+    tree = tree_module.OwnedProcessTree(handle)
+    tree.root = tree_module.ProcessIdentity(101, 1.25)
+    tree.known[101] = tree.root
+    tree.group_id = 101
+
+    cleaned = tree.cleanup(100.03)
+
+    assert cleaned is False
+    assert group_calls
+    assert all(call == (101, 0) for call in group_calls)
+    assert tree.closed is False
+    assert handle.closed is False
+    assert handle.calls == []
+
+    executor = ToolExecutor(_policy(workers=1), FixtureRegistry)
+    executor._admit("leaderless-owner", 1)
+    job = _owned_job()
+    job.principal_key = "leaderless-owner"
+    job.lane = executor._available.get_nowait()
+    job.tree = tree
+    executor._jobs[job.spec.execution_id] = job
+    future = asyncio.get_running_loop().create_future()
+    future.set_result(
+        executor_module._Outcome(
+            None,
+            ToolError(code="cleanup_failed", retryable=False),
+            ToolItemMetrics(),
+            cleaned,
+        )
+    )
+    job.io_task = future
+    try:
+        executor._job_finished(job, future)
+
+        snapshot = executor.snapshot()
+        assert job.quarantined is True
+        assert (snapshot.pending, snapshot.active, snapshot.degraded_lanes, snapshot.available) == (1, 1, 1, False)
+        assert executor._available.qsize() == 0
+    finally:
+        tree.group_id = None
+        await executor.shutdown()
+
+    assert executor.snapshot().pending == 0
+
+
 @pytest.mark.parametrize("with_child", [False, True], ids=["root-only", "surviving-child"])
-def test_root_exit_between_identity_check_and_child_scan_is_a_completed_cleanup(with_child, monkeypatch):
+def test_root_exit_between_identity_check_and_child_scan_fails_closed_for_unknown_survivors(with_child, monkeypatch):
     handle = _ProcessHandle(exitcode=None)
     processes = {}
 
@@ -1059,17 +1288,28 @@ def test_root_exit_between_identity_check_and_child_scan_is_a_completed_cleanup(
     tree.root = tree_module.ProcessIdentity(101, 1.25)
     tree.known[101] = tree.root
     tree.group_id = 101
-    # Native waiting is covered by the real-tree tests. Here the exit race and
-    # remaining membership, not elapsed grace time, decide whether teardown ends.
-    monkeypatch.setattr(tree, "_wait_empty", lambda deadline: not tree.running_members() and handle.exitcode is not None)
+    now = [100.0]
 
-    assert tree.cleanup(time.monotonic() + 5) is True
-    assert tree.closed is True
-    assert handle.closed is True
+    def killpg(group_id, signal_number):
+        if signal_number != 0:
+            events.append((group_id, signal_number))
+            return
+        if any(process.running for process in processes.values()):
+            return
+        raise ProcessLookupError(errno.ESRCH, "No such process")
+
+    monkeypatch.setattr(tree_module.os, "killpg", killpg)
+    monkeypatch.setattr(tree_module.time, "monotonic", lambda: now[0])
+    monkeypatch.setattr(tree_module.time, "sleep", lambda _duration: now.__setitem__(0, 101.0))
+
+    assert tree.cleanup(100.05) is (not with_child)
+    assert tree.closed is (not with_child)
+    assert handle.closed is (not with_child)
     assert root.signals == []
     if with_child:
-        assert child.running is False
-        assert child.signals
+        assert child.running is True
+        assert child.signals == []
+        assert handle.calls == []
     else:
         assert events == []
 

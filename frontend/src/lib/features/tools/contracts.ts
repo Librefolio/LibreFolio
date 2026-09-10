@@ -380,18 +380,25 @@ export function prepareToolRun<C extends ToolCode, V extends ToolVersion<C>>(
     code: C,
     version: V,
     descriptor: CompatibleToolDescriptor<C, V>,
-    parameters: ToolInput<C, V>,
-): {accountGeneration: number; clientTimeoutMs: number; decodeOutput: (raw: unknown) => ToolOutput<C, V>} {
+): {
+    accountGeneration: number;
+    clientTimeoutMs: number;
+    validateInput: (raw: unknown) => void;
+    decodeOutput: (raw: unknown) => ToolOutput<C, V>;
+} {
     const accountGeneration = getToolDescriptorGeneration(descriptor);
     const context = descriptors.get(descriptor);
     if (!context) throw new ToolClientError('compatibility', 'descriptor_unverified');
     if (descriptor.tool_code !== code || descriptor.contract_version !== version) {
         throw new ToolClientError('compatibility', 'contract_mismatch');
     }
-    parseToolCodec(context.contract.input, parameters, 'validation', 'invalid_parameters');
     return {
         accountGeneration,
         clientTimeoutMs: context.policy.client_timeout_ms,
+        validateInput(raw) {
+            assertToolAccount(accountGeneration);
+            parseToolCodec(context.contract.input, raw, 'validation', 'invalid_parameters');
+        },
         decodeOutput(raw) {
             assertToolAccount(accountGeneration);
             const output = parseToolCodec(context.contract.output, raw, 'protocol', 'invalid_output');

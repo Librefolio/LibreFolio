@@ -566,7 +566,7 @@ _METRIC_PHASES = (
 
 
 def test_unobserved_metric_phases_serialize_as_null_not_zero():
-    expected = {phase: None for phase in _METRIC_PHASES}
+    expected = dict.fromkeys(_METRIC_PHASES)
     assert ToolItemMetrics().model_dump(mode="json") == expected
     assert ToolItemMetrics.model_validate(expected).model_dump(mode="json") == expected
 

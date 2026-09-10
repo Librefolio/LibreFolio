@@ -21,6 +21,7 @@
     import {numericArrows} from '$lib/actions/numericArrows';
     // Props
     export let open: boolean = false;
+    export let zIndex: number = 50;
     export let file: File | null = null;
     export let preset: PresetName = 'custom';
     export let customConfig: Partial<{aspectRatio: number; outputWidth: number | null; outputHeight: number | null; outputQuality: number}> | null = null;
@@ -320,7 +321,7 @@
     $: modalTitle = $_(config.titleKey) || $_('uploads.editImage') || 'Edit Image';
 </script>
 
-<ModalBase maxWidth="800px" noTransition={false} onRequestClose={requestClose} open={open && !!imageSrc} zIndex={50}>
+<ModalBase maxWidth="800px" noTransition={false} onRequestClose={requestClose} open={open && !!imageSrc} {zIndex}>
     <div aria-labelledby="modal-title" aria-modal="true" aria-busy={!editReady} class="modal-content-inner" data-edit-ready={editReady || undefined} data-testid="image-edit-modal" role="dialog">
         <!-- Header -->
         <div class="modal-header">
@@ -478,7 +479,7 @@
 </ModalBase>
 
 <!-- Confirmation dialog for closing with unsaved changes -->
-<ModalBase maxWidth="sm" onRequestClose={cancelClose} open={showCloseConfirm} zIndex={60}>
+<ModalBase maxWidth="sm" onRequestClose={cancelClose} open={showCloseConfirm} zIndex={zIndex + 10}>
     <div class="confirm-dialog" data-testid="image-edit-confirm-dialog">
         <div class="confirm-header">
             <span class="confirm-icon">⚠️</span>
