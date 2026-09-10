@@ -14,9 +14,15 @@
 
 Assets traded on Borsa Italiana include Italian stocks (MTA/MIL segment), ETFs (ETFplus), bonds (MOT, ExtraMOT, and EuroTLX), certificates (SeDeX), closed-end funds (MIV), and mutual funds/SICAVs.
 
-!!! note "Sector and geographic area for government bonds"
+!!! note "Bond classification"
 
-    Government bonds (Italian BTPs, US T-Bonds, and other sovereign issuers) are classified automatically: **sector = Financials (100%)**, and the issuer's country as the geographic area (e.g. *United States of America* → **USA**).
+    Borsa Italiana metadata uses the canonical sectors **Government Bonds** for sovereign
+    bonds and **Corporate Bonds** for corporate bonds. Supranational bonds use
+    **Financials**. When the issuer can be identified, its country is also stored as the
+    geographic area (for example, *United States of America* becomes **USA**).
+
+    This mapping is applied when provider metadata is inferred; it does not retroactively
+    migrate sector values already stored for existing assets.
 
 ---
 
