@@ -347,7 +347,33 @@ def print_info(msg: str):
 # an *instrumented* build it became destructive: Playwright's webServer rebuilt
 # a plain bundle on top of the instrumented one, and the run then reported no JS
 # coverage at all while every test passed.
-_BUILD_GENERATED_SOURCES = {"generated.ts", "openapi.json"}
+_BUILD_GENERATED_SOURCES = {
+    "generated.ts", "openapi.json", "tool-contracts.openapi.json",
+    "generated-tools.ts", "tool-contract-map.generated.ts",
+}
+
+
+def _tool_contract_sources(project_root: Path) -> list[Path]:
+    """Enumerate Tool codegen inputs, including newly bundled plugins."""
+    sources = [
+        project_root / "dev.py",
+        project_root / "scripts" / "list_api_endpoints.py",
+        project_root / "scripts" / "export_tool_contracts.py",
+        project_root / "frontend" / "scripts" / "generate-tools-client.mjs",
+        *sorted((project_root / "frontend" / "scripts").glob("tools-*")),
+    ]
+    for directory in (
+        project_root / "backend" / "app" / "schemas",
+        project_root / "backend" / "app" / "services" / "tools",
+        project_root / "backend" / "app" / "services" / "tool_plugins",
+    ):
+        if directory.exists():
+            sources.append(directory)
+            sources.extend(
+                source for source in directory.rglob("*")
+                if "__pycache__" not in source.parts and (source.is_dir() or source.suffix == ".py")
+            )
+    return sources
 
 
 def check_frontend_needs_build() -> bool:
@@ -383,6 +409,12 @@ def check_frontend_needs_build() -> bool:
         ]
         for f in config_files:
             if f.exists() and f.stat().st_mtime > build_time:
+                return True
+
+        # Tool codecs are derived from these inputs, not from the generated files'
+        # timestamps. New bundled plugins are discovered without a handwritten list.
+        for source in _tool_contract_sources(project_root):
+            if source.exists() and source.stat().st_mtime > build_time:
                 return True
 
     except Exception as exc:  # noqa: S110 — staleness probe must never break a build check
