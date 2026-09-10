@@ -30,6 +30,7 @@ from backend.test_scripts.test_db_config import setup_test_database
 setup_test_database()
 
 # Standard library and SQLAlchemy imports
+from alembic import command
 from sqlalchemy import CheckConstraint, ForeignKeyConstraint, UniqueConstraint, inspect, text
 
 from backend.alembic.check_constraints_hook import LogLevel, check_and_add_missing_constraints
@@ -389,6 +390,187 @@ def test_transactions_has_asset_event_fk_restrict():
     assert "idx_transactions_asset_event" in index_names, f"Expected index idx_transactions_asset_event, got: {index_names}"
 
     print("✅ transactions.asset_event_id FK RESTRICT + index verified")
+
+
+# ============================================================================
+# ONBOARDING MIGRATION TESTS (Workstream J foundation, 003_user_onboarding_progress)
+# ============================================================================
+#
+# These run the REAL Alembic upgrade/downgrade chain against a private,
+# throwaway SQLite file (pytest's per-test `tmp_path`) — never against the
+# shared lane's test database. This is required because the backfill
+# migration must be observed against a *pre-migration* state (existing users,
+# no onboarding rows yet); a lane whose migrations already ran to head cannot
+# reproduce that starting point, and mutating the shared database's Alembic
+# history would break every other test that depends on it. Nothing here
+# touches TEST_PORT, the shared data dir, or the app's own DATABASE_URL.
+
+_ALEMBIC_INI = PROJECT_ROOT / "backend" / "alembic.ini"
+_ALEMBIC_SCRIPT_LOCATION = PROJECT_ROOT / "backend" / "alembic"
+_PRE_ONBOARDING_REVISION = "5b1333fa6b07"
+_ONBOARDING_REVISION = "003_user_onboarding_progress"
+_ONBOARDING_MIGRATION_FLOWS = ("welcome", "intro_tour", "import_guide")
+
+
+def _onboarding_migration_config(db_path):
+    """Build an Alembic Config pointed at a private SQLite file.
+
+    `backend/alembic/env.py` only honours a URL override passed as
+    `-x sqlalchemy.url=...`: setting `sqlalchemy.url` on the Config object
+    alone is silently ignored and falls back to the app's own configured
+    DATABASE_URL, which would run the migration against the live/shared
+    database instead of this throwaway file. `cmd_opts.x` is normally
+    populated by the `alembic` CLI; it is set explicitly here to get the
+    override while driving Alembic from Python.
+    """
+    import argparse  # noqa: PLC0415 — test-only, private migration harness
+
+    from alembic.config import Config  # noqa: PLC0415 — test-only, private migration harness
+
+    url = f"sqlite:///{db_path}"
+    cfg = Config(str(_ALEMBIC_INI))
+    cfg.set_main_option("script_location", str(_ALEMBIC_SCRIPT_LOCATION))
+    cfg.set_main_option("sqlalchemy.url", url)
+    cfg.cmd_opts = argparse.Namespace(x=[f"sqlalchemy.url={url}"])
+    return cfg
+
+
+def _insert_migration_test_user(db_path, username: str) -> int:
+    """Insert a minimal user row directly via sqlite3 (no ORM/session involved)."""
+    import sqlite3  # noqa: PLC0415 — test-only, private migration harness
+
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            "INSERT INTO users (username, email, hashed_password, created_at, updated_at) " "VALUES (?, ?, 'fakehash', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            (username, f"{username}@test.invalid"),
+        )
+        conn.commit()
+        return conn.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()[0]
+    finally:
+        conn.close()
+
+
+def _fetch_onboarding_migration_rows(db_path, user_id: int):
+    import sqlite3  # noqa: PLC0415 — test-only, private migration harness
+
+    conn = sqlite3.connect(db_path)
+    try:
+        return conn.execute(
+            "SELECT flow, status, version, completed_at, skipped_at FROM user_onboarding_progress WHERE user_id = ? ORDER BY flow",
+            (user_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+
+
+@pytest.fixture()
+def onboarding_migration_db(tmp_path):
+    """A fresh private SQLite file migrated up to (but not including) 003."""
+    db_path = tmp_path / "onboarding_migration.db"
+    cfg = _onboarding_migration_config(db_path)
+    command.upgrade(cfg, _PRE_ONBOARDING_REVISION)
+    return db_path, cfg
+
+
+def test_onboarding_migration_backfills_existing_users_as_completed_current(onboarding_migration_db):
+    """Every pre-existing user gets all three flows as completed/current-version."""
+    db_path, cfg = onboarding_migration_db
+    user_a = _insert_migration_test_user(db_path, "mig_backfill_user_a")
+    user_b = _insert_migration_test_user(db_path, "mig_backfill_user_b")
+
+    command.upgrade(cfg, _ONBOARDING_REVISION)
+
+    for user_id in (user_a, user_b):
+        rows = _fetch_onboarding_migration_rows(db_path, user_id)
+        assert len(rows) == 3, f"user {user_id}: expected exactly the 3 registered flows, got {rows}"
+        assert {row[0] for row in rows} == set(_ONBOARDING_MIGRATION_FLOWS)
+        for flow, status, version, completed_at, skipped_at in rows:
+            assert status == "completed", f"{flow}: expected completed, got {status}"
+            assert version == 1
+            assert completed_at is not None
+            assert skipped_at is None
+
+    print("✅ Onboarding migration backfilled existing users as completed/current")
+
+
+def test_onboarding_migration_backfill_is_idempotent_at_insert_level(onboarding_migration_db):
+    """Re-running the exact backfill INSERT (INSERT OR IGNORE on the unique
+    (user_id, flow) constraint) must not duplicate or overwrite rows."""
+    db_path, cfg = onboarding_migration_db
+    user_id = _insert_migration_test_user(db_path, "mig_idempotent_user")
+
+    command.upgrade(cfg, _ONBOARDING_REVISION)
+    before = _fetch_onboarding_migration_rows(db_path, user_id)
+    assert len(before) == 3
+
+    import sqlite3  # noqa: PLC0415 — test-only, private migration harness
+
+    conn = sqlite3.connect(db_path)
+    try:
+        # Mirrors the backfill INSERT in 003_user_onboarding_progress.py's upgrade();
+        # keep in sync if that migration's backfill SQL ever changes.
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO user_onboarding_progress
+                (user_id, flow, status, version, created_at, updated_at, completed_at)
+            SELECT users.id, flows.flow, 'completed', 1,
+                   CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+            FROM users
+            CROSS JOIN (
+                SELECT 'welcome' AS flow
+                UNION ALL SELECT 'intro_tour'
+                UNION ALL SELECT 'import_guide'
+            ) AS flows
+            WHERE users.id = ?
+            """,
+            (user_id,),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    after = _fetch_onboarding_migration_rows(db_path, user_id)
+    assert after == before, "Re-running the backfill INSERT must be a byte-identical no-op"
+
+    print("✅ Onboarding migration backfill is idempotent at the INSERT level")
+
+
+def test_onboarding_migration_new_user_after_migration_has_no_rows(onboarding_migration_db):
+    """A user created after the migration gets no onboarding rows until the
+    service's ensure() lazily creates them as pending."""
+    db_path, cfg = onboarding_migration_db
+    command.upgrade(cfg, _ONBOARDING_REVISION)
+
+    user_id = _insert_migration_test_user(db_path, "mig_post_migration_user")
+    rows = _fetch_onboarding_migration_rows(db_path, user_id)
+
+    assert rows == [], "A brand-new post-migration user must get no rows from the migration itself"
+
+    print("✅ Post-migration user has no onboarding rows until the service creates them")
+
+
+def test_onboarding_migration_downgrade_drops_table_without_touching_users(onboarding_migration_db):
+    """Downgrade removes only user_onboarding_progress; users are untouched."""
+    db_path, cfg = onboarding_migration_db
+    user_id = _insert_migration_test_user(db_path, "mig_downgrade_user")
+    command.upgrade(cfg, _ONBOARDING_REVISION)
+
+    command.downgrade(cfg, _PRE_ONBOARDING_REVISION)
+
+    import sqlite3  # noqa: PLC0415 — test-only, private migration harness
+
+    conn = sqlite3.connect(db_path)
+    try:
+        tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+        user_row = conn.execute("SELECT id FROM users WHERE id = ?", (user_id,)).fetchone()
+    finally:
+        conn.close()
+
+    assert "user_onboarding_progress" not in tables
+    assert user_row is not None, "Downgrade must not cascade into the users table"
+
+    print("✅ Downgrade drops user_onboarding_progress without touching users")
 
 
 if __name__ == "__main__":
