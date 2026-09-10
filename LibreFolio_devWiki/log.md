@@ -4,6 +4,11 @@
 > Format: `## [YYYY-MM-DD] {operation} | {title}`
 > Parse: `grep "^## \[" log.md | tail -10`
 
+## [2026-09-10] file | SQLite savepoint without an outer write transaction commits on release
+Recorded the deferred-BEGIN trap found by the asset deletion commit-failure
+regression and the no-op-write fix that restores real outer rollback semantics.
+Filed: [[problems/sqlite-savepoint-without-write-begins-as-transaction]].
+
 ## [2026-09-09] file | Browser GHCR image probe could not complete the anonymous Bearer flow
 Filed the integrated update-check lesson: stable release metadata and image
 pullability are separate probes; GHCR's anonymous challenge is completed by a

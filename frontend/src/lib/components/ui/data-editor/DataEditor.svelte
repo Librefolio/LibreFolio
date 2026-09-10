@@ -519,6 +519,7 @@
 
     function handleImport(importedRows: ParsedRow[]) {
         for (const pr of importedRows) {
+            if (pr.kind !== 'dated') continue;
             const existingIdx = rows.findIndex((r) => r.date === pr.date);
             if (existingIdx >= 0) {
                 const existing = rows[existingIdx];
