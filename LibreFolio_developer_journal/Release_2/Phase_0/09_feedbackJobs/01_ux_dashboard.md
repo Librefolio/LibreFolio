@@ -73,7 +73,7 @@ Regola comune G-UX-DESIGN/G-UX-REVIEW nel [piano](06_piano_sprint.md).
 
 ## 📈 Colonna Yield on Cost (YOC) nelle tabelle posizioni
 
-**Complessità**: L per metrica/fonti + S per colonna · **Origine**: feedback @ExpectChaos (utente esterno)
+**Complessità raffinata 2026-09-10**: M per metrica/fonti + S per colonna/docs · **Origine**: feedback @ExpectChaos (utente esterno)
 
 ### Richiesta
 Una colonna che mostri il **rendimento corrente dell'asset rispetto al costo di acquisto**
@@ -92,6 +92,10 @@ rendimento nel tempo, indipendente dalle fluttuazioni di mercato.
   garantiscono una storia per-quota completa: mancanza di dati → non disponibile con motivo,
   non zero o annualizzazione di pochi incassi.
 - Fonte, split, quote-base bond, FX e completezza TTM sono il gate prima del calcolo backend.
+- La verifica corrente riduce la stima: `PortfolioHolding.wac_per_unit` e la tabella
+  condivisa esistono; Yahoo/JustETF persistono eventi DIVIDEND per quota. Non e' pero
+  una semplice divisione finche non sono espliciti split intervenuti, conversione FX,
+  duplicati/manuali e lo stato di completezza. Primo incremento raccomandato di SP06.
 
 ### Dato mancante, zero e titolo giovane — decisione 2026-09-07
 - UI **`-`** sia per nessun reddito sia per storia insufficiente, con spiegazione distinta.

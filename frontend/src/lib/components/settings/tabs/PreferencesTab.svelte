@@ -38,18 +38,18 @@
     };
 
     // Global defaults (loaded from server's global settings)
-    let globalDefaults = {...FALLBACK_DEFAULTS};
+    let globalDefaults = $state({...FALLBACK_DEFAULTS});
 
     // Original values (from API - user's current settings)
-    let originalValues = {...FALLBACK_DEFAULTS};
+    let originalValues = $state({...FALLBACK_DEFAULTS});
 
     // Edited values
-    let editedValues = {...FALLBACK_DEFAULTS};
+    let editedValues = $state({...FALLBACK_DEFAULTS});
 
-    let isLoading = true;
-    let isSaving = false;
-    let error: string | null = null;
-    let selectedCategory: string = '';
+    let isLoading = $state(true);
+    let isSaving = $state(false);
+    let error: string | null = $state(null);
+    let selectedCategory: string = $state('');
 
     // Language options
     const languageOptions: SelectOption[] = availableLanguages.map((l) => ({
@@ -111,18 +111,18 @@
     }
 
     // Check if a field has been modified (reactive computed)
-    $: languageModified = editedValues.language !== originalValues.language;
-    $: currencyModified = editedValues.default_currency !== originalValues.default_currency;
-    $: themeModified = editedValues.theme !== originalValues.theme;
+    let languageModified = $derived(editedValues.language !== originalValues.language);
+    let currencyModified = $derived(editedValues.default_currency !== originalValues.default_currency);
+    let themeModified = $derived(editedValues.theme !== originalValues.theme);
 
     // Check if a field is non-default (compared to global defaults)
-    $: languageNonDefault = originalValues.language !== globalDefaults.language;
-    $: currencyNonDefault = originalValues.default_currency !== globalDefaults.default_currency;
-    $: themeNonDefault = originalValues.theme !== globalDefaults.theme;
+    let languageNonDefault = $derived(originalValues.language !== globalDefaults.language);
+    let currencyNonDefault = $derived(originalValues.default_currency !== globalDefaults.default_currency);
+    let themeNonDefault = $derived(originalValues.theme !== globalDefaults.theme);
 
     // Check if any field is modified
-    $: hasChanges = languageModified || currencyModified || themeModified;
-    $: hasNonDefaults = languageNonDefault || currencyNonDefault || themeNonDefault;
+    let hasChanges = $derived(languageModified || currencyModified || themeModified);
+    let hasNonDefaults = $derived(languageNonDefault || currencyNonDefault || themeNonDefault);
 
     // Filter settings by category
     // Avatar is always shown at the top, regardless of category selection
@@ -140,7 +140,7 @@
     }
 
     // Get visible fields (avatar is always visible, handled separately in template)
-    $: visibleFields = selectedCategory === '' ? (['language', 'default_currency', 'theme'] as const) : (getCategoryFields(selectedCategory) as (keyof typeof editedValues)[]);
+    let visibleFields = $derived(selectedCategory === '' ? (['language', 'default_currency', 'theme'] as const) : (getCategoryFields(selectedCategory) as (keyof typeof editedValues)[]));
 
     type PreferenceField = keyof typeof editedValues;
 

@@ -63,7 +63,7 @@ frontend/
 ./dev.py test --coverage js front-transaction all    # frontend JS/Svelte only
 
 # Dedicated lane for a concurrent worktree
-./dev.py test --test-port 6142 --data-dir /tmp/librefolio-r2-c front-asset all
+./dev.py test --test-port 6152 --data-dir /tmp/librefolio-r2-c front-asset all
 
 # Gallery screenshots
 ./dev.py mkdocs gallery
@@ -99,6 +99,11 @@ what the 8 categories are verified against (629 Playwright + 687 vitest passing)
     they share one backend, one database and one set of E2E users, so a second invocation corrupts
     both. Separate worktrees may run concurrently only with unique `--test-port` **and**
     `--data-dir` values. Frontend parallelism inside one lane lives in Playwright (`fullyParallel`).
+
+!!! info "App-managed worktrees reuse the main Pipenv"
+    Prefix the runner with
+    `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py`.
+    Otherwise Pipenv may create an empty environment keyed to the worktree path.
 
 ## Playwright Config
 

@@ -15,7 +15,7 @@
     import type {Snippet} from 'svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
-    import type {ParsedRow, CsvColumnDef} from './CsvEditor.svelte';
+    import type {ParsedRow, CsvColumnDef, CsvIdentityDef} from './CsvEditor.svelte';
     import CsvEditor from './CsvEditor.svelte';
     import {FileText, HelpCircle, Upload} from 'lucide-svelte';
     import {t} from '$lib/i18n';
@@ -31,6 +31,12 @@
         title?: string;
         /** Column definitions for CSV parsing */
         columns: CsvColumnDef[];
+        /** Optional non-date primary identity column. */
+        identity?: CsvIdentityDef;
+        /** Require every non-empty row to be valid and unique. */
+        strict?: boolean;
+        /** Optional cross-row domain validation. */
+        validateRows?: (rows: ParsedRow[]) => string | null;
         /** Optional snippet rendered between drop zone and CsvEditor */
         headerSlot?: Snippet;
         /** Optional snippet for help section content */
@@ -43,7 +49,7 @@
         oncsvtextchange?: (text: string) => void;
     }
 
-    let {open = $bindable(false), title = 'Import CSV Data', columns, headerSlot, helpContent, onimport, onclose, oncsvtextchange}: Props = $props();
+    let {open = $bindable(false), title = 'Import CSV Data', columns, identity, strict = false, validateRows, headerSlot, helpContent, onimport, onclose, oncsvtextchange}: Props = $props();
 
     // =========================================================================
     // State
@@ -67,7 +73,9 @@
     // =========================================================================
 
     /** Expected header for pre-population */
-    let expectedHeader = $derived('date;' + columns.map((c) => c.label).join(';'));
+    let expectedHeader = $derived((identity?.label ?? 'date') + ';' + columns.map((c) => c.label).join(';'));
+    let domainError = $derived(validRows.length > 0 ? (validateRows?.(validRows) ?? null) : null);
+    let canImport = $derived(validRows.length > 0 && !domainError && (!strict || (errorCount === 0 && !hasDuplicates)));
 
     /** True when user has typed/pasted/dropped something beyond the initial header */
     let isDirty = $derived.by(() => {
@@ -144,7 +152,7 @@
     }
 
     function handleConfirm() {
-        if (validRows.length === 0) return;
+        if (!canImport) return;
         onimport?.(validRows);
         doClose();
     }
@@ -247,7 +255,10 @@
         {/if}
 
         <!-- CSV Editor -->
-        <CsvEditor {columns} bind:value={csvValue} minHeight="250px" onvalidchange={handleValidChange} oninput={oncsvtextchange} placeholder="Paste CSV data here or drop a file above..." />
+        <CsvEditor {columns} {identity} bind:value={csvValue} minHeight="250px" onvalidchange={handleValidChange} oninput={oncsvtextchange} placeholder="Paste CSV data here or drop a file above..." />
+        {#if domainError}
+            <p class="text-sm text-red-600 dark:text-red-400" data-testid="csv-domain-error">{domainError}</p>
+        {/if}
     </div>
 
     <!-- Footer -->
@@ -267,7 +278,18 @@
         </div>
         <div class="flex gap-2">
             <button class="px-4 py-2 text-sm bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors" onclick={requestClose}>{$t('common.cancel')}</button>
-            <button class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled={validRows.length === 0} onclick={handleConfirm}>{$t('csvImport.import', {values: {n: validRows.length}})}</button>
+            <button
+                class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                data-domain-error={domainError ? 'true' : 'false'}
+                data-error-count={errorCount}
+                data-has-duplicates={hasDuplicates ? 'true' : 'false'}
+                data-testid="data-import-confirm"
+                data-valid-rows={validRows.length}
+                disabled={!canImport}
+                onclick={handleConfirm}
+            >
+                {$t('csvImport.import', {values: {n: validRows.length}})}
+            </button>
         </div>
     </div>
 </ModalBase>

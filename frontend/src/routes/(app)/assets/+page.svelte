@@ -26,6 +26,8 @@
     import type {LivePriceDirection} from '$lib/services/livePriceService';
     import AssetSyncModal from '$lib/components/assets/AssetSyncModal.svelte';
     import AssetModal from '$lib/components/assets/AssetModal.svelte';
+    import {entityDetailLinkHtml} from '$lib/utils/core/entityLink';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {loadAssetEditData, type AssetEditData} from '$lib/components/assets/assetEditData';
     import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
     import {extractErrorMessage} from '$lib/utils/trySave';
@@ -57,6 +59,7 @@
     import {signalCatalogStore} from '$lib/stores/signalCatalogStore.svelte';
     import {globalSettings} from '$lib/stores/app/globalSettings';
     import {buildTabUrl, getResolvedTabParam} from '$lib/utils/url/tabUrl';
+    import {buildTransactionsFiltersUrl} from '../transactions/filterState';
 
     // =========================================================================
     // Types
@@ -121,11 +124,12 @@
     let mergeModalOpen = $state(false);
     let mergingAsset: AssetRow | null = $state(null);
     let deleteLoading = $state(false);
+    let singleDeleteResults = $state<{label: string; success: boolean; detail?: string; action?: {href: string; label: string; testId?: string}}[]>([]);
 
     // Bulk delete confirmation dialog
     let bulkDeleteDialogOpen = $state(false);
     let deletingAssets = $state<AssetRow[]>([]);
-    let bulkDeleteResults = $state<{label: string; success: boolean; detail?: string}[]>([]);
+    let bulkDeleteResults = $state<{label: string; success: boolean; detail?: string; action?: {href: string; label: string; testId?: string}}[]>([]);
 
     // Sync modal
     let syncModalOpen = $state(false);
@@ -782,7 +786,7 @@
         }
     }
 
-    async function handleSyncAsset(asset: any) {
+    async function handleSyncAsset(asset: any, linkCreatedAsset = false) {
         syncingAssetIds = new Set([...syncingAssetIds, asset.id]);
         try {
             const response = await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([
@@ -799,7 +803,7 @@
                 const changed = inserted + updated;
                 toasts.success(
                     $t('assets.sync.toastOk', {
-                        values: {name: asset.display_name, fetched, changed},
+                        values: {name: linkCreatedAsset ? entityDetailLinkHtml({kind: 'asset', id: asset.id}, asset.display_name) : escapeHtml(asset.display_name), fetched, changed},
                     }),
                 );
             } else {
@@ -839,6 +843,7 @@
 
     function handleDeleteAsset(asset: any) {
         deletingAsset = asset;
+        singleDeleteResults = [];
         deleteDialogOpen = true;
     }
 
@@ -861,17 +866,34 @@
                 invalidateAfterMutation(deletingAsset.id);
                 assets = assets.filter((a) => a.id !== deletingAsset!.id);
                 toasts.success($t('assets.delete.toastOk', {values: {name: deletingAsset!.display_name}}));
+                deleteDialogOpen = false;
+                deletingAsset = null;
             } else if (r?.error_code === 'HAS_TRANSACTIONS') {
+                const count = Number(r.transaction_count ?? 0);
+                singleDeleteResults = [
+                    {
+                        label: r.display_name || deletingAsset.display_name,
+                        success: false,
+                        detail: `${$t('assets.delete.resultHasTransactions')} (${count})`,
+                        action: {
+                            href: buildTransactionsFiltersUrl({asset_id: deletingAsset.id}),
+                            label: $t('transactions.title'),
+                            testId: 'asset-delete-transactions-link',
+                        },
+                    },
+                ];
                 toasts.error($t('assets.delete.hasTransactions', {values: {name: deletingAsset!.display_name}}));
             } else {
                 toasts.error(r?.message || $t('assets.delete.toastFailed', {values: {name: deletingAsset!.display_name}}));
+                deleteDialogOpen = false;
+                deletingAsset = null;
             }
         } catch (e: any) {
             toasts.error($t('assets.delete.toastFailed', {values: {name: deletingAsset!.display_name}}));
-        } finally {
-            deleteLoading = false;
             deleteDialogOpen = false;
             deletingAsset = null;
+        } finally {
+            deleteLoading = false;
         }
     }
 
@@ -910,11 +932,21 @@
             assets = assets.filter((a) => !succeeded.includes(a.id));
 
             // Populate results for the ConfirmModal
-            bulkDeleteResults = (res.results ?? []).map((r: any) => ({
-                label: r.display_name || `Asset #${r.asset_id}`,
-                success: r.success,
-                detail: r.success ? $t('assets.delete.resultDeleted') : r.error_code === 'HAS_TRANSACTIONS' ? $t('assets.delete.resultHasTransactions') : r.message || 'Error',
-            }));
+            bulkDeleteResults = (res.results ?? []).map((r: any) => {
+                const blocked = r.error_code === 'HAS_TRANSACTIONS';
+                return {
+                    label: r.display_name || `Asset #${r.asset_id}`,
+                    success: r.success,
+                    detail: r.success ? $t('assets.delete.resultDeleted') : blocked ? `${$t('assets.delete.resultHasTransactions')} (${Number(r.transaction_count ?? 0)})` : r.message || 'Error',
+                    action: blocked
+                        ? {
+                              href: buildTransactionsFiltersUrl({asset_id: r.asset_id}),
+                              label: $t('transactions.title'),
+                              testId: `asset-bulk-delete-transactions-${r.asset_id}`,
+                          }
+                        : undefined,
+                };
+            });
         } catch (e: any) {
             toasts.error('Delete failed: ' + (e?.message || 'unknown'));
             bulkDeleteDialogOpen = false;
@@ -1621,9 +1653,11 @@
     onCancel={() => {
         deleteDialogOpen = false;
         deletingAsset = null;
+        singleDeleteResults = [];
     }}
     onConfirm={confirmDeleteAsset}
     open={deleteDialogOpen}
+    results={singleDeleteResults}
     title={$t('common.confirmDelete')}
 />
 
@@ -1662,12 +1696,13 @@
     bind:open={assetModalOpen}
     editMode={assetModalEditMode}
     editData={assetModalEditData}
+    linkCreatedAsset
     oncreated={async (assetId) => {
         await loadAssets();
         // Auto-sync the newly created asset to fetch initial price data
         const newAsset = assets.find((a) => a.id === assetId);
         if (newAsset?.provider_code) {
-            await handleSyncAsset(newAsset);
+            await handleSyncAsset(newAsset, true);
         }
     }}
     onupdated={() => loadAssets()}

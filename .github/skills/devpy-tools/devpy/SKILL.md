@@ -43,7 +43,7 @@ dev.py [-h]
 |----------|---------|
 | Start for development | `./dev.py server` |
 | Test mode | `./dev.py server --test` |
-| Isolated worktree tests | `./dev.py test --test-port 6141 --data-dir /tmp/librefolio-r2-b api all` |
+| Isolated worktree tests | `./dev.py test --test-port 6151 --data-dir /tmp/librefolio-r2-b api all` |
 | Kill zombie + start | `./dev.py server --force` |
 | Frontend with HMR | T1: `./dev.py server` — T2: `./dev.py front dev` |
 | After modifying models | `./dev.py db migrate "…"` (incremental migration; `db create-clean` only for fresh/test DBs) |
@@ -94,3 +94,13 @@ change IP before suspecting the code.
 Concurrent worktrees also need distinct `--data-dir` values. A unique port
 alone isolates sockets, not SQLite/uploads/logs. Global `test` options precede
 the category.
+
+App-managed worktrees should reuse the main locked virtualenv:
+
+```bash
+PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc \
+  pipenv run python dev.py test --test-port 6151 --data-dir /tmp/librefolio-r2-b api all
+```
+
+Without `PIPENV_CUSTOM_VENV_NAME`, Pipenv keys the environment from the worktree
+path and may create a new empty virtualenv.

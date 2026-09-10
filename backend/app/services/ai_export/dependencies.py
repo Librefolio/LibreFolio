@@ -101,6 +101,11 @@ T = TypeVar("T")
 # future divergence between the two silently miscompute a `BucketPlan`. This
 # explicit, total mapping is the single seam where the two are reconciled.
 
+
+class DetailLevelMappingError(ValueError):
+    """Raised when the declared detail mapping does not cover both enums."""
+
+
 _DETAIL_LEVEL_TO_BUCKET_DETAIL_LEVEL: Mapping[DetailLevel, BucketDetailLevel] = {
     DetailLevel.COMPACT: BucketDetailLevel.COMPACT,
     DetailLevel.STANDARD: BucketDetailLevel.STANDARD,
@@ -109,8 +114,10 @@ _DETAIL_LEVEL_TO_BUCKET_DETAIL_LEVEL: Mapping[DetailLevel, BucketDetailLevel] = 
 
 # Fails loudly at import time (not silently at runtime) if either enum ever
 # gains/loses a member without updating the mapping above.
-assert set(_DETAIL_LEVEL_TO_BUCKET_DETAIL_LEVEL) == set(DetailLevel), "DETAIL_LEVEL_TO_BUCKET_DETAIL_LEVEL mapping must cover every DetailLevel member"
-assert set(_DETAIL_LEVEL_TO_BUCKET_DETAIL_LEVEL.values()) == set(BucketDetailLevel), "DETAIL_LEVEL_TO_BUCKET_DETAIL_LEVEL mapping must cover every BucketDetailLevel member"
+if set(_DETAIL_LEVEL_TO_BUCKET_DETAIL_LEVEL) != set(DetailLevel):
+    raise DetailLevelMappingError("DETAIL_LEVEL_TO_BUCKET_DETAIL_LEVEL mapping must cover every DetailLevel member")
+if set(_DETAIL_LEVEL_TO_BUCKET_DETAIL_LEVEL.values()) != set(BucketDetailLevel):
+    raise DetailLevelMappingError("DETAIL_LEVEL_TO_BUCKET_DETAIL_LEVEL mapping must cover every BucketDetailLevel member")
 
 
 def map_detail_level_to_bucket_detail_level(detail_level: DetailLevel) -> BucketDetailLevel:

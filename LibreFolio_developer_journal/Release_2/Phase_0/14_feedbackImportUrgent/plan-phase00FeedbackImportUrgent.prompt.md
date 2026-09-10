@@ -9,13 +9,16 @@
 The developer explicitly authorized P0/P1 investigation and fixes. U4/U7/U9 received
 design approval on 2026-09-08 at 17:08, with the variants recorded in Round 1.
 Le review operative successive sono registrate nei Round 1-4 e nel manifest.
-**Stato aggiornato (2026-09-09):** ✅ esecuzione tecnica completata e pacchetto
+**Stato aggiornato (2026-09-10):** ✅ esecuzione tecnica completata e pacchetto
 applicato al checkout target `dev_release2`; il dev ha
 approvato badge e sottotesti R4 alle 15:51. La richiesta finale di ingresso
 diretto a Crea su Instagram e' valutata nel
 [Round 4, sezione 4](plan-phase00FeedbackImportUrgentRound4-SocialBoundaries.prompt.md#4-ingresso-diretto-a-crea-su-instagram---verifica-conclusa-2026-09-09).
-Commit/SHA e archiviazione restano in attesa del commit manuale. Le note datate dei
-singoli passi descrivono la loro fase storica, non nuovi task rimasti da eseguire.
+Integrazione committata in `ef722b552433028c051ccb1207c84f1072e51bb7`;
+sessione e worktree E archiviati localmente il 2026-09-10. Il piano versionato
+resta in `Phase_0` finche' il coordinatore non esegue l'eventuale archivio
+documentale separato. Le note datate dei singoli passi descrivono la loro fase
+storica, non nuovi task rimasti da eseguire.
 
 **Additional feedback (2026-09-08):** E7/E8 concern the bulk workspace's affected-row
 references and chronological ordering. The developer observed them on production;
