@@ -36,6 +36,8 @@ class TestFinancialSectorEnum:
             "Consumer Staples",
             "Telecommunication",
             "Utilities",
+            "Corporate Bonds",
+            "Government Bonds",
             "Other",
         ]
         actual = [s.value for s in FinancialSector]
@@ -46,13 +48,17 @@ class TestFinancialSectorEnum:
         """list_all() should exclude OTHER."""
         sectors = FinancialSector.list_all()
         assert "Other" not in sectors
-        assert len(sectors) == 11  # 12 total - 1 (Other)
+        assert "Corporate Bonds" in sectors
+        assert "Government Bonds" in sectors
+        assert len(sectors) == 13  # 14 total - 1 (Other)
 
     def test_list_all_with_other_includes_all(self):
         """list_all_with_other() should include all sectors."""
         sectors = FinancialSector.list_all_with_other()
         assert "Other" in sectors
-        assert len(sectors) == 12
+        assert "Corporate Bonds" in sectors
+        assert "Government Bonds" in sectors
+        assert len(sectors) == 14
 
 
 # ============================================================
@@ -82,6 +88,10 @@ class TestFinancialSectorFromString:
             ("Consumer Staples", FinancialSector.CONSUMER_STAPLES),
             ("Telecommunication", FinancialSector.TELECOMMUNICATION),
             ("Utilities", FinancialSector.UTILITIES),
+            ("Corporate Bonds", FinancialSector.CORPORATE_BONDS),
+            ("corporate bonds", FinancialSector.CORPORATE_BONDS),
+            ("Government Bonds", FinancialSector.GOVERNMENT_BONDS),
+            ("government bonds", FinancialSector.GOVERNMENT_BONDS),
             ("Other", FinancialSector.OTHER),
         ],
     )
@@ -102,6 +112,11 @@ class TestFinancialSectorFromString:
             ("Communication Services", FinancialSector.TELECOMMUNICATION),
             ("Consumer Cyclical", FinancialSector.CONSUMER_DISCRETIONARY),
             ("Consumer Defensive", FinancialSector.CONSUMER_STAPLES),
+            # Bond aliases
+            ("corporate", FinancialSector.CORPORATE_BONDS),
+            ("corporate bond", FinancialSector.CORPORATE_BONDS),
+            ("government", FinancialSector.GOVERNMENT_BONDS),
+            ("government bond", FinancialSector.GOVERNMENT_BONDS),
         ],
     )
     def test_aliases(self, input_val, expected):
@@ -167,6 +182,12 @@ class TestNormalizeSector:
         assert normalize_sector("healthcare") == "Health Care"
         assert normalize_sector("materials") == "Basic Materials"
         assert normalize_sector("telecom") == "Telecommunication"
+        assert normalize_sector("corporate") == "Corporate Bonds"
+        assert normalize_sector("corporate bond") == "Corporate Bonds"
+        assert normalize_sector("corporate bonds") == "Corporate Bonds"
+        assert normalize_sector("government") == "Government Bonds"
+        assert normalize_sector("government bond") == "Government Bonds"
+        assert normalize_sector("government bonds") == "Government Bonds"
 
     def test_yahoo_finance_alias_normalization(self):
         """Yahoo Finance sector names should normalize to standard GICS names."""
@@ -193,7 +214,16 @@ class TestValidateSector:
         """Known sectors should return True."""
         assert validate_sector("Technology") is True
         assert validate_sector("Financials") is True
+        assert validate_sector("Corporate Bonds") is True
+        assert validate_sector("Government Bonds") is True
         assert validate_sector("healthcare") is True  # Alias
+
+    def test_bond_aliases_return_true(self):
+        """Bond aliases should be recognized as valid sectors."""
+        assert validate_sector("corporate") is True
+        assert validate_sector("corporate bond") is True
+        assert validate_sector("government") is True
+        assert validate_sector("government bond") is True
 
     def test_yahoo_finance_aliases_return_true(self):
         """Yahoo Finance sector names should be recognized as valid."""
