@@ -3,6 +3,12 @@
 Task sui plugin di import e sul wizard. Approvati dall'utente il 07/09/2026.
 Skill di riferimento per chi esegue: `brim-plugin`.
 
+> **Chiusura urgente E — 2026-09-09:** matching/refresh degli asset nel wizard
+> Generic CSV e vincolo "un file piatto per broker" sono stati corretti e
+> documentati in [14_feedbackImportUrgent](../14_feedbackImportUrgent/manifest-integrazione-E.md).
+> Il parser resta verbatim, non genera FX e il primo asset resta una scelta
+> esplicita. Le voci eToro B1 e delete-asset B3 sotto restano aperte.
+
 ---
 
 ## 🔍 eToro — "Withdraw Fee" / "Conversion Fee" scartate invece di importate come FEE

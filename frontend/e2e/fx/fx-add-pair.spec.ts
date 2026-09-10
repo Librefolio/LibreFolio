@@ -146,9 +146,7 @@ test.describe('FX Add Pair Modal', () => {
                     }
                     await route.fulfill({
                         json: {
-                            results: syncReleased
-                                ? [{from_amount: {code: 'EUR', amount: '1'}, to_amount: {code: 'GBP', amount: '0.85'}, conversion_date: range.end, rate: '0.85'}]
-                                : [],
+                            results: syncReleased ? [{from_amount: {code: 'EUR', amount: '1'}, to_amount: {code: 'GBP', amount: '0.85'}, conversion_date: range.end, rate: '0.85'}] : [],
                             success_count: syncReleased ? 1 : 0,
                             signal_results: [],
                         },
@@ -196,10 +194,7 @@ test.describe('FX Add Pair Modal', () => {
                     if (detailRace === 'none') await expect(fxPage).toHaveAttribute('data-busy', 'false');
 
                     const success = page.getByTestId('toast-success').filter({has: page.getByTestId('toast-fx-link').filter({hasText: 'EUR / GBP'})});
-                    const completionToast =
-                        detailRace === 'refresh-error'
-                            ? page.getByTestId('toast-warning').filter({has: page.getByTestId('toast-fx-link').filter({hasText: 'EUR / GBP'})})
-                            : success;
+                    const completionToast = detailRace === 'refresh-error' ? page.getByTestId('toast-warning').filter({has: page.getByTestId('toast-fx-link').filter({hasText: 'EUR / GBP'})}) : success;
                     if (mode === 'provider') {
                         await expect.poll(() => syncBodies.length).toBe(1);
                         // The request is blocked by this test, not merely slow.
@@ -369,24 +364,44 @@ test.describe('FX Add Pair Modal', () => {
     // Test 5: Selecting currencies shows route section
     // ========================================================================
     test('selecting currencies shows route section', async ({page}) => {
-        await goToFxPage(page);
-        await openAddPairModal(page);
-        const modal = page.getByTestId('fx-add-pair-modal');
+        await page.route('**/api/v1/fx/providers', async (route) => {
+            expect(route.request().method()).toBe('GET');
+            await route.fulfill({
+                json: [
+                    {
+                        code: 'MOCKFX',
+                        name: 'Owned route provider',
+                        base_currency: 'EUR',
+                        base_currencies: ['EUR'],
+                        target_currencies: ['CAD'],
+                        description: 'Browser-local deterministic fixture',
+                    },
+                ],
+            });
+        });
+        await page.route('**/api/v1/fx/providers/routes', async (route) => {
+            expect(route.request().method()).toBe('GET');
+            await route.fulfill({json: {items: []}});
+        });
+        try {
+            await goToFxPage(page);
+            await openAddPairModal(page);
+            const modal = page.getByTestId('fx-add-pair-modal');
 
-        // Select EUR as base
-        const baseContainer = modal.locator('[data-testid="fx-add-pair-base"]');
-        if (await baseContainer.isVisible()) {
-            await selectCurrency(page, baseContainer, 'EUR');
-        }
-
-        // Select CAD as quote (should have ECB route)
-        const quoteContainer = modal.locator('[data-testid="fx-add-pair-quote"]');
-        if (await quoteContainer.isVisible()) {
+            // Quote first avoids the base selector's automatic "open the empty
+            // quote" focus shortcut overlapping two dropdown interactions.
+            const quoteContainer = modal.getByTestId('fx-add-pair-quote');
+            await expect(quoteContainer).toBeVisible();
             await selectCurrency(page, quoteContainer, 'CAD');
 
+            const baseContainer = modal.getByTestId('fx-add-pair-base');
+            await expect(baseContainer).toBeVisible();
+            await selectCurrency(page, baseContainer, 'EUR');
+
             // Route section should appear
-            const routeSection = page.getByTestId('fx-route-select');
-            await expect(routeSection).toBeVisible({timeout: 5000});
+            await expect(modal.getByTestId('fx-route-select')).toBeVisible({timeout: 5000});
+        } finally {
+            await page.unrouteAll({behavior: 'wait'});
         }
     });
 });

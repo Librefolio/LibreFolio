@@ -2,7 +2,10 @@
 
 **Approved plan:** revision 2, 2026-09-07.
 **Execution baseline:** `4a73f5f63447e01b51993afb2e3c73e2c22a9a28`.
-**Status:** B00-B09 delivered; manual review received, `changes_requested`.
+**Integration baseline:** B checkpoint `74bfd9cf` plus `dev_release2`
+`916f12bddf3eb9b8e834e4b9033eb52ce4bde25a`.
+**Status:** B00-B09 delivered; B10 Round 1 integrated and combined automated
+acceptance complete; final developer visual review remains open.
 
 Previous/master: [sprint plan, sections 4/10-12](../09_feedbackJobs/06_piano_sprint.md).
 Scope source: [structural backlog](../09_feedbackJobs/00_backlog_strutturale_P4.md).
@@ -54,7 +57,7 @@ Shared runtime/generated/runner ownership still requires coordinator slots.
 | B07 | GlobalSettingsTab Runes | ✅ 2026-09-08 - component and owned-data E2E parity |
 | B08 | BrokerSharingPanel Runes | ✅ 2026-09-08 - component, F3 and modal/Info E2E parity |
 | B09 | Shared registration, targeted runtime and FX documentation | ✅ 2026-09-08 - integrated automated acceptance and backend review |
-| B10 | Real UI walkthrough, developer feedback and corrections | Partial acceptance 2026-09-09; corrective Round 1 open |
+| B10 | Real UI walkthrough, developer feedback and corrections | Round 1 integrated and automated acceptance complete 2026-09-10; final visual review open |
 
 > **Note implementazione** (B00, 2026-09-07): approved contracts and evidence
 > consolidated here; source baseline and production-data prohibition retained.
@@ -525,3 +528,17 @@ record this feedback.
 
 Follow-up:
 [Round 1 - manual review corrections](plan-phase00FeedbackContractsRunesBugfixRound1.prompt.md).
+
+## 12. Combined-base handoff - 2026-09-10
+
+The developer checkpointed B as `74bfd9cf` and started the merge from
+`dev_release2` commit `916f12bd`. The five textual conflicts are resolved and
+staged; `_frontend_utility.py` was also inspected semantically. AssetModal and
+the asset list retain E's provider/edit lifecycle and receive only B's
+default-off creation-link delta. The agent has not created the merge commit.
+
+Combined acceptance is recorded in the Round 1 plan. Runtime isolation,
+registration, backend contracts/lint, frontend type checking and production
+build, all core and component units, the physical last-owner cascade, and
+targeted Settings, Sharing and FX creation E2E are green. The real UI/viewport
+review remains a developer gate and is not replaced by these automated results.

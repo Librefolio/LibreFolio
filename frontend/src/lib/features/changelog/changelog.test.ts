@@ -232,12 +232,19 @@ describe('splitSections (round-3 F12)', () => {
 });
 
 describe('the bundled changelog (F12)', () => {
-    it('parses the repo CHANGELOG.md into at least one dated chapter', () => {
+    it('parses the repo CHANGELOG.md with one canonical undated Unreleased chapter', () => {
         // The modal renders this list: an unparsable shipped file means an empty
         // modal in production, which is exactly the failure this test exists to
         // catch before release.
         expect(changelogChapters.length).toBeGreaterThan(0);
-        expect(changelogChapters.every((c) => c.version.length > 0 && c.date.length > 0)).toBe(true);
+
+        const unreleased = changelogChapters.filter((c) => c.version === 'Unreleased');
+        expect(unreleased).toHaveLength(1);
+        expect(unreleased[0].date).toBe('');
+
+        const released = changelogChapters.filter((c) => c.version !== 'Unreleased');
+        expect(released.length).toBeGreaterThan(0);
+        expect(released.every((c) => c.version.length > 0 && c.date.length > 0)).toBe(true);
     });
 
     it('points the remote link at the repository CHANGELOG.md', () => {

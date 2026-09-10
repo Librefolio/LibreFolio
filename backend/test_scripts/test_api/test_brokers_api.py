@@ -233,7 +233,13 @@ class TestBrokerCreate:
 
             # Create first
             payload1 = [{"name": name}]
-            await client.post(f"{API_BASE}/brokers", json=payload1, timeout=TIMEOUT)
+            create_response = await client.post(f"{API_BASE}/brokers", json=payload1, timeout=TIMEOUT)
+            assert create_response.status_code == 200, create_response.text
+            create_data = create_response.json()
+            assert create_data["success_count"] == 1
+            assert create_data["results"][0]["success"] is True
+            assert create_data["results"][0]["name"] == name
+            assert create_data["results"][0]["broker_id"] is not None
 
             # Try duplicate
             payload2 = [{"name": name}]
@@ -245,12 +251,55 @@ class TestBrokerCreate:
 
             assert response.status_code == 200
             data = response.json()
+            assert data["success_count"] == 0
+            assert len(data["results"]) == 1
             assert data["results"][0]["success"] is False
-            # Error message can be "already exists" or "already have a broker named"
-            error_msg = data["results"][0]["error"].lower()
-            assert "already" in error_msg and ("exists" in error_msg or "have" in error_msg)
+            assert data["results"][0]["broker_id"] is None
+            assert data["results"][0]["name"] == name
+            assert data["results"][0]["deposits_created"] == 0
+            assert set(data["results"][0].keys()) == {"success", "broker_id", "name", "deposits_created", "error"}
+
+            error_msg = data["results"][0]["error"]
+            assert error_msg.startswith(f"You already have a broker named '{name}'")
+            assert error_msg.endswith(
+                "To resolve this, rename the existing broker or choose a different name for the broker you are adding."
+            )
 
             print_success("✓ Got error for duplicate name")
+
+    @pytest.mark.asyncio
+    async def test_post_brokers_duplicate_other_owner(self, test_server):
+        """BR-A-003B: Duplicate broker names report the owning user's prefix."""
+        print_section("Test BR-A-003B: POST /brokers - duplicate name across owners")
+
+        async with httpx.AsyncClient() as owner_client, httpx.AsyncClient() as other_client:
+            owner_username, _, _ = await create_test_user(owner_client)
+            await create_test_user(other_client)
+            name = unique_name("Cross Owner Broker")
+
+            create_response = await owner_client.post(f"{API_BASE}/brokers", json=[{"name": name}], timeout=TIMEOUT)
+            assert create_response.status_code == 200, create_response.text
+            assert create_response.json()["success_count"] == 1
+
+            response = await other_client.post(f"{API_BASE}/brokers", json=[{"name": name}], timeout=TIMEOUT)
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["success_count"] == 0
+            assert len(data["results"]) == 1
+            assert data["results"][0]["success"] is False
+            assert data["results"][0]["broker_id"] is None
+            assert data["results"][0]["name"] == name
+            assert data["results"][0]["deposits_created"] == 0
+            assert set(data["results"][0].keys()) == {"success", "broker_id", "name", "deposits_created", "error"}
+
+            error_msg = data["results"][0]["error"]
+            assert error_msg.startswith(f"Broker '{name}' already exists (owned by '{owner_username}')")
+            assert error_msg.endswith(
+                "To resolve this, rename the existing broker or choose a different name for the broker you are adding."
+            )
+
+            print_success("✓ Got owner-specific duplicate error for another user")
 
     @pytest.mark.asyncio
     async def test_creator_becomes_owner(self, test_server):

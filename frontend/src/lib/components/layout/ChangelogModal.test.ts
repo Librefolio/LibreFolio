@@ -18,10 +18,11 @@
  *    is capped at 8; the fixture's v1.0.0 chapter carries ten `### Zed NN`
  *    sections so a single needle can exceed the cap.
  *  - the manual update check in the header (`changelog-check-update`): the same
- *    `checkForNewerRelease()` the login flow uses, with the outcome rendered as
- *    `changelog-up-to-date` (none), delegated to `updateAvailable.show` (admin
- *    + newer) or shown as the `changelog-ask-admin` banner with the admin list
- *    fetched from the users search (non-admin + newer).
+ *    `checkForUpdates()` contract the login flow now uses, with the outcome
+ *    reported only through the `app.update.checked` notification, with no
+ *    persistent result/remote-version panel. Admin + newer delegates to
+ *    `updateAvailable.show`; non-admin + newer shows the ask-admin modal with
+ *    the admin list fetched from the users search.
  *
  * The feature module imports the repo-root CHANGELOG.md via vite's `?raw`,
  * which the jsdom pipeline refuses (fs strictness on a path outside
@@ -32,7 +33,7 @@
  *
  * Fold state is read from `aria-expanded` (the a11y contract) cross-checked
  * against DOM presence of the bodies. Translated copy is never asserted; the
- * admin usernames asserted in the banner are this test's own fixture data.
+ * admin usernames asserted in the modal are this test's own fixture data.
  */
 import {beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 
@@ -118,33 +119,54 @@ const authStore = vi.hoisted(() => {
 });
 vi.mock('$lib/stores/app/auth', () => ({auth: authStore}));
 
-// The update probe (round 5): the modal must use THE SAME checkForNewerRelease
-// as the login flow — so it is mocked here, and every test programs its answer.
-const checkForNewerReleaseMock = vi.hoisted(() => vi.fn());
+// The update probe (round 5): the modal must use THE SAME checkForUpdates
+// contract as the login flow — so it is mocked here, and every test programs
+// its answer.
+const checkForUpdatesMock = vi.hoisted(() => vi.fn());
 vi.mock('$lib/features/update-check/updateCheck', () => ({
-    checkForNewerRelease: checkForNewerReleaseMock,
+    checkForUpdates: checkForUpdatesMock,
 }));
 
 // The F14 modal takeover: admin + newer delegates to updateAvailable.show.
 const updateAvailableMock = vi.hoisted(() => ({show: vi.fn(), close: vi.fn(), skipVersion: vi.fn()}));
 vi.mock('$lib/features/update-check/updateCheckStore.svelte', () => ({updateAvailable: updateAvailableMock}));
 
-// Round 6: "up to date" is a toast, not a banner — toasts is mocked so the
-// toast content and the no-banner invariant are both observable.
-const toastsMock = vi.hoisted(() => ({success: vi.fn(), error: vi.fn(), warning: vi.fn()}));
-vi.mock('$lib/stores/app/toastStore.svelte', () => ({toasts: toastsMock}));
+const notifyMock = vi.hoisted(() => vi.fn());
+vi.mock('$lib/stores/app/notify.svelte', () => ({notify: notifyMock}));
+
+// Keep the real i18n initialization, but expose keys/parameters as test-owned
+// tokens. Toast assertions pin localization calls, not any language's prose.
+const translateMock = vi.hoisted(() => vi.fn());
+vi.mock('$lib/i18n', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('$lib/i18n')>();
+    const {readable} = await import('svelte/store');
+    return {...actual, _: readable(translateMock)};
+});
 
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
+import {tick} from 'svelte';
 import ChangelogModal from './ChangelogModal.svelte';
 import {CHANGELOG_REMOTE_URL} from '$lib/features/changelog/changelog';
 import {zodiosApi} from '$lib/api';
+import type {UpdateCheckResult} from '$lib/features/update-check/updateCheck';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const api = zodiosApi as any;
 const SEARCH = 'search_users_endpoint_api_v1_users_search_get';
+const GET_INFO = 'get_system_info_api_v1_system_info_get';
 
 /** The release the probe reports when "newer" is the programmed answer. */
-const RELEASE = {version: '9.9.9', url: 'https://example.com/release-9.9.9', name: 'Test release'};
+const RELEASE = {version: '1.2.4', tag: 'v1.2.4', url: 'https://example.com/release-1.2.4', name: 'Test release'};
+
+function deferred<T>() {
+    let resolve!: (value: T) => void;
+    let reject!: (reason: unknown) => void;
+    const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+        resolve = resolvePromise;
+        reject = rejectPromise;
+    });
+    return {promise, resolve, reject};
+}
 
 function chapterExpanded(i: number): string | null {
     return screen.queryByTestId(`changelog-chapter-toggle-${i}`)?.getAttribute('aria-expanded') ?? null;
@@ -170,11 +192,18 @@ beforeAll(async () => {
 });
 
 beforeEach(() => {
+    api[GET_INFO].mockReset();
+    api[GET_INFO].mockResolvedValue({app_version: '1.2.3'});
     api[SEARCH].mockReset();
     api[SEARCH].mockResolvedValue({items: []});
-    checkForNewerReleaseMock.mockReset();
+    checkForUpdatesMock.mockReset();
     updateAvailableMock.show.mockClear();
-    toastsMock.success.mockClear();
+    notifyMock.mockClear();
+    translateMock.mockReset();
+    translateMock.mockImplementation((key: string, options?: {values?: {version?: string}}) => {
+        const version = options?.values?.version;
+        return version === undefined ? key : `${key}(${version})`;
+    });
     authStore.set({user: null});
 });
 
@@ -473,149 +502,435 @@ describe('ChangelogModal — search hits (round 5)', () => {
 // Round 5 — manual update check in the modal header (`changelog-check-update`)
 // =========================================================================
 //
-// The button runs the same `checkForNewerRelease()` as the login flow (mocked
-// here — jsdom never reaches GitHub) and renders one of three outcomes:
-// `changelog-up-to-date`, a delegation to the F14 UpdateAvailableModal for
-// admins (`updateAvailable.show`), or the `changelog-ask-admin` banner listing
-// the administrators fetched from the users search. Every test ends on the
-// state the click produced — never on a timer.
+// The button runs the same `checkForUpdates()` contract as the login flow
+// (mocked here — jsdom never reaches GitHub) and reports the result through
+// notify. There is no persistent result panel. A newer release still opens the
+// F14 UpdateAvailableModal for admins (`updateAvailable.show`) or the
+// `ask-admin-modal` listing administrators fetched from the users search.
+// Every test ends on the state the click produced — never on a timer.
 
 describe('ChangelogModal — manual update check (round 5)', () => {
     const checkBtn = () => screen.getByTestId('changelog-check-update') as HTMLButtonElement;
 
-    it('the header offers the check, and clicking it probes with the running version', async () => {
-        checkForNewerReleaseMock.mockResolvedValue(null);
-        render(ChangelogModal, {open: true, onClose: vi.fn(), currentVersion: '1.2.3'});
-        await waitFor(() => expect(screen.getByTestId('changelog-modal')).toBeInTheDocument());
+    function expectNoResultPanel() {
+        // A missing modal must not satisfy the negative result assertions.
+        expect(screen.getByTestId('changelog-modal')).toBeInTheDocument();
+        expect(screen.getByTestId('changelog-search')).toBeInTheDocument();
+        expect(screen.queryByTestId('changelog-update-result')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('changelog-remote-version')).not.toBeInTheDocument();
+    }
 
-        expect(checkBtn()).toBeEnabled();
-        await fireEvent.click(checkBtn());
+    function expectChecked(result: UpdateCheckResult, toast?: {variant: 'success' | 'warning' | 'error'; message: string}, currentVersion = '1.2.3') {
+        expect(notifyMock).toHaveBeenCalledWith({
+            name: 'app.update.checked',
+            detail: {
+                status: result.status,
+                source: result.source,
+                checkedAt: result.checkedAt,
+                currentVersion,
+                reportedVersion: '9.9.9',
+                remoteVersion: result.latest?.version ?? null,
+                remoteTag: result.latest?.tag ?? null,
+                reason: result.reason,
+            },
+            toast,
+        });
+    }
 
-        await waitFor(() => expect(checkForNewerReleaseMock).toHaveBeenCalledWith('1.2.3'));
-        // The probe answered: the button is usable again (not stuck in 'checking').
-        await waitFor(() => expect(checkBtn()).toBeEnabled());
-    });
-
-    it('no newer release → the up-to-date line, and nothing else is touched', async () => {
-        checkForNewerReleaseMock.mockResolvedValue(null);
-        render(ChangelogModal, {open: true, onClose: vi.fn(), currentVersion: '1.2.3'});
-        await waitFor(() => expect(screen.getByTestId('changelog-modal')).toBeInTheDocument());
-
-        await fireEvent.click(checkBtn());
-
-        await waitFor(() => expect(toastsMock.success).toHaveBeenCalled());
-        expect(screen.queryByTestId('changelog-ask-admin')).not.toBeInTheDocument();
-        expect(updateAvailableMock.show).not.toHaveBeenCalled();
-        // Up-to-date is decided before any admin lookup — no users search fires.
-        expect(api[SEARCH]).not.toHaveBeenCalled();
-    });
-
-    it('admin + newer release → delegates to updateAvailable.show, with no banner', async () => {
+    it('probes with the backend app version and reports the metadata without a result panel or toast', async () => {
         authStore.set({user: {id: 1, username: 'root', is_superuser: true}});
-        checkForNewerReleaseMock.mockResolvedValue(RELEASE);
-        render(ChangelogModal, {open: true, onClose: vi.fn(), currentVersion: '1.2.3'});
+        const result: UpdateCheckResult = {
+            status: 'update-available',
+            latest: RELEASE,
+            source: 'network',
+            checkedAt: 1_700_000_000_000,
+        };
+        checkForUpdatesMock.mockResolvedValue(result);
+        render(ChangelogModal, {open: true, onClose: vi.fn(), currentVersion: '9.9.9'});
+        await waitFor(() => expect(screen.getByTestId('changelog-modal')).toBeInTheDocument());
+        expectNoResultPanel();
+
+        await fireEvent.click(checkBtn());
+
+        await waitFor(() => expect(updateAvailableMock.show).toHaveBeenCalledWith(RELEASE));
+        expect(api[GET_INFO]).toHaveBeenCalledTimes(1);
+        expect(checkForUpdatesMock).toHaveBeenCalledTimes(1);
+        expect(checkForUpdatesMock).toHaveBeenCalledWith('1.2.3', {force: true, ignoreDismissed: true});
+        expect(notifyMock).toHaveBeenCalledTimes(1);
+        expectChecked(result);
+        expectNoResultPanel();
+    });
+
+    it.each([
+        {tag: 'v1.2.3', source: 'network'},
+        {tag: 'V1.2.3', source: 'network'},
+        {tag: undefined, source: 'cache'},
+    ] as const)('reports up-to-date as a two-line success toast, preserving tag $tag from $source', async ({tag, source}) => {
+        const result: UpdateCheckResult = {
+            status: 'up-to-date',
+            latest: {version: '1.2.3', ...(tag === undefined ? {} : {tag}), url: 'https://example.com/release-1.2.3', name: 'Current release'},
+            source,
+            checkedAt: 1_700_000_000_001,
+        };
+        checkForUpdatesMock.mockResolvedValue(result);
+        render(ChangelogModal, {open: true, onClose: vi.fn(), currentVersion: '9.9.9'});
         await waitFor(() => expect(screen.getByTestId('changelog-modal')).toBeInTheDocument());
 
         await fireEvent.click(checkBtn());
 
-        // The F14 modal takes over: the release is handed over verbatim.
+        await waitFor(() => expect(notifyMock).toHaveBeenCalledTimes(1));
+        expectChecked(result, {
+            variant: 'success',
+            message: `changelog.upToDate\nchangelog.detectedRemoteVersion(${tag ?? '1.2.3'})`,
+        });
+        expect(translateMock).toHaveBeenCalledWith('changelog.upToDate');
+        expect(translateMock).toHaveBeenCalledWith('changelog.detectedRemoteVersion', {values: {version: tag ?? '1.2.3'}});
+        expect(checkForUpdatesMock).toHaveBeenCalledTimes(1);
+        expect(checkForUpdatesMock).toHaveBeenCalledWith('1.2.3', {force: true, ignoreDismissed: true});
+        expect(checkBtn()).toBeEnabled();
+        expectNoResultPanel();
+        expect(updateAvailableMock.show).not.toHaveBeenCalled();
+        expect(api[SEARCH]).not.toHaveBeenCalled();
+        expect(screen.queryByTestId('ask-admin-modal')).not.toBeInTheDocument();
+    });
+
+    it('escapes both localized toast lines once while retaining raw remote metadata in the event', async () => {
+        // Synthetic formatter output, not catalogue prose. Both lines contain
+        // HTML-sensitive characters so escaping only the remote tag cannot pass.
+        translateMock.mockImplementation((key: string, options?: {values?: {version?: string}}) => {
+            if (key === 'changelog.upToDate') return `${key}<&>"'`;
+            if (key === 'changelog.detectedRemoteVersion') return `${key}<&>"'(${options?.values?.version})`;
+            return key;
+        });
+        const tag = `v1.2.3<&>"'`;
+        const result: UpdateCheckResult = {
+            status: 'up-to-date',
+            latest: {version: '1.2.3', tag, url: RELEASE.url, name: RELEASE.name},
+            source: 'network',
+            checkedAt: 1_700_000_000_001,
+        };
+        checkForUpdatesMock.mockResolvedValue(result);
+        render(ChangelogModal, {open: true, onClose: vi.fn(), currentVersion: '9.9.9'});
+        await waitFor(() => expect(screen.getByTestId('changelog-modal')).toBeInTheDocument());
+
+        await fireEvent.click(checkBtn());
+
+        await waitFor(() => expect(notifyMock).toHaveBeenCalledTimes(1));
+        expectChecked(result, {
+            variant: 'success',
+            message: 'changelog.upToDate&lt;&amp;&gt;&quot;&#39;\nchangelog.detectedRemoteVersion&lt;&amp;&gt;&quot;&#39;(v1.2.3&lt;&amp;&gt;&quot;&#39;)',
+        });
+        expect(translateMock).toHaveBeenCalledWith('changelog.detectedRemoteVersion', {values: {version: tag}});
+        expectNoResultPanel();
+    });
+
+    it.each(['null', 'missing'] as const)('does not invent a remote version when latest is %s', async (latestShape) => {
+        const result: UpdateCheckResult = {
+            status: 'up-to-date',
+            latest: null,
+            source: 'none',
+            checkedAt: null,
+        };
+        // A missing latest is outside the typed producer contract, but the
+        // notification boundary must still not substitute either local version.
+        const withoutLatest = {status: result.status, source: result.source, checkedAt: result.checkedAt};
+        checkForUpdatesMock.mockResolvedValue(latestShape === 'null' ? result : withoutLatest);
+        render(ChangelogModal, {open: true, onClose: vi.fn(), currentVersion: '9.9.9'});
+        await waitFor(() => expect(screen.getByTestId('changelog-modal')).toBeInTheDocument());
+
+        await fireEvent.click(checkBtn());
+
+        await waitFor(() => expect(notifyMock).toHaveBeenCalledTimes(1));
+        expectChecked(result, {variant: 'success', message: 'changelog.upToDate'});
+        expect(translateMock).not.toHaveBeenCalledWith('changelog.detectedRemoteVersion', expect.anything());
+        expect(updateAvailableMock.show).not.toHaveBeenCalled();
+        expect(api[SEARCH]).not.toHaveBeenCalled();
+        expectNoResultPanel();
+    });
+
+    it('admin + newer release delegates to updateAvailable.show, with no banner and the backend version', async () => {
+        authStore.set({user: {id: 1, username: 'root', is_superuser: true}});
+        checkForUpdatesMock.mockResolvedValue({
+            status: 'update-available',
+            latest: RELEASE,
+            source: 'network',
+            checkedAt: 1_700_000_000_002,
+        });
+        render(ChangelogModal, {open: true, onClose: vi.fn(), currentVersion: '9.9.9'});
+        await waitFor(() => expect(screen.getByTestId('changelog-modal')).toBeInTheDocument());
+
+        await fireEvent.click(checkBtn());
+
         await waitFor(() => expect(updateAvailableMock.show).toHaveBeenCalledWith(RELEASE));
-        expect(screen.queryByTestId('changelog-ask-admin')).not.toBeInTheDocument();
-        // An admin needs no admin list — the search endpoint is never hit.
+        expect(notifyMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                name: 'app.update.checked',
+                detail: expect.objectContaining({
+                    status: 'update-available',
+                    currentVersion: '1.2.3',
+                    reportedVersion: '9.9.9',
+                }),
+            }),
+        );
+        expect(notifyMock).toHaveBeenCalledTimes(1);
+        expect(notifyMock).toHaveBeenCalledWith(expect.objectContaining({toast: undefined}));
+        expect(updateAvailableMock.show).toHaveBeenCalledTimes(1);
+        expectNoResultPanel();
+        expect(screen.queryByTestId('ask-admin-modal')).not.toBeInTheDocument();
         expect(api[SEARCH]).not.toHaveBeenCalled();
     });
 
     it('non-admin + newer release → the ask-admin modal lists the admins from the users search', async () => {
         authStore.set({user: {id: 5, username: 'carol', is_superuser: false}});
-        checkForNewerReleaseMock.mockResolvedValue(RELEASE);
+        const result: UpdateCheckResult = {
+            status: 'update-available',
+            latest: RELEASE,
+            source: 'network',
+            checkedAt: 1_700_000_000_003,
+        };
+        checkForUpdatesMock.mockResolvedValue(result);
         api[SEARCH].mockResolvedValue({items: [{username: 'rooty'}, {username: 'boss'}]});
-        render(ChangelogModal, {open: true, onClose: vi.fn(), currentVersion: '1.2.3'});
+        render(ChangelogModal, {open: true, onClose: vi.fn(), currentVersion: '9.9.9'});
         await waitFor(() => expect(screen.getByTestId('changelog-modal')).toBeInTheDocument());
 
         await fireEvent.click(checkBtn());
 
-        // Round 7: the ask-admin hint is its own modal, not a banner row.
         await waitFor(() => expect(screen.getByTestId('ask-admin-modal')).toBeInTheDocument());
-        // The admin list comes from the dedicated query, not from a hardcode.
         expect(api[SEARCH]).toHaveBeenCalledWith({queries: {q: '', admins: true}});
-        // One row per admin, in the search's order (this test's own data).
         const rows = screen.getAllByTestId('ask-admin-row').map((r) => r.textContent);
         expect(rows.join(' ')).toContain('rooty');
         expect(rows.join(' ')).toContain('boss');
-        // The F14 modal is NOT triggered for non-admins.
         expect(updateAvailableMock.show).not.toHaveBeenCalled();
-        // The up-to-date toast is NOT shown on this path.
-        expect(toastsMock.success).not.toHaveBeenCalled();
+        expect(notifyMock).toHaveBeenCalledTimes(1);
+        expectChecked(result);
+        expectNoResultPanel();
     });
 
-    it('a second click while the probe is in flight is a no-op', async () => {
-        let resolveProbe!: (v: null) => void;
-        checkForNewerReleaseMock.mockImplementation(
-            () =>
-                new Promise<null>((res) => {
-                    resolveProbe = res;
-                }),
-        );
-        render(ChangelogModal, {open: true, onClose: vi.fn(), currentVersion: '1.2.3'});
-        await waitFor(() => expect(screen.getByTestId('changelog-modal')).toBeInTheDocument());
-
-        await fireEvent.click(checkBtn());
-        // 'checking' is visible to the user as a disabled button.
-        await waitFor(() => expect(checkBtn()).toBeDisabled());
-
-        await fireEvent.click(checkBtn());
-        expect(checkForNewerReleaseMock).toHaveBeenCalledTimes(1);
-
-        // Settle the probe: the outcome renders and the button recovers.
-        resolveProbe(null);
-        await waitFor(() => expect(toastsMock.success).toHaveBeenCalled());
-        await waitFor(() => expect(checkBtn()).toBeEnabled());
-    });
-
-    it('a failed probe returns to idle — nothing stuck, and the next click works', async () => {
-        checkForNewerReleaseMock.mockRejectedValueOnce(new Error('NEEDLE-OFFLINE'));
-        checkForNewerReleaseMock.mockResolvedValue(null);
-        render(ChangelogModal, {open: true, onClose: vi.fn(), currentVersion: '1.2.3'});
+    it.each([
+        {status: 'image-pending', latest: RELEASE, reason: undefined, variant: 'warning', key: 'changelog.imagePending'},
+        {status: 'no-release', latest: null, reason: undefined, variant: 'warning', key: 'changelog.noStableRelease'},
+        {status: 'error', latest: null, reason: 'release-request-failed', variant: 'error', key: 'changelog.checkFailed'},
+        {status: 'error', latest: null, reason: 'invalid-release', variant: 'error', key: 'changelog.checkFailed'},
+        {status: 'error', latest: RELEASE, reason: 'image-auth-request-failed', variant: 'error', key: 'changelog.imageCheckFailed'},
+        {status: 'error', latest: RELEASE, reason: 'image-request-failed', variant: 'error', key: 'changelog.imageCheckFailed'},
+    ] as const)('reports $status / $reason through a $variant toast without offering an update', async ({status, latest, reason, variant, key}) => {
+        authStore.set({user: {id: 1, username: 'root', is_superuser: true}});
+        const result: UpdateCheckResult = {
+            status,
+            latest,
+            reason,
+            source: 'network',
+            checkedAt: 1_700_000_000_004,
+        };
+        checkForUpdatesMock.mockResolvedValue(result);
+        render(ChangelogModal, {open: true, onClose: vi.fn(), currentVersion: '9.9.9'});
         await waitFor(() => expect(screen.getByTestId('changelog-modal')).toBeInTheDocument());
 
         await fireEvent.click(checkBtn());
 
-        // Back to idle: button usable again, no outcome bar, no delegation.
-        await waitFor(() => expect(checkBtn()).toBeEnabled());
-        expect(screen.queryByTestId('changelog-ask-admin')).not.toBeInTheDocument();
+        await waitFor(() => expect(notifyMock).toHaveBeenCalledTimes(1));
+        expectChecked(result, {variant, message: key});
+        expect(translateMock).toHaveBeenCalledWith(key);
+        expect(translateMock).not.toHaveBeenCalledWith('changelog.detectedRemoteVersion', expect.anything());
+        expect(checkBtn()).toBeEnabled();
+        expectNoResultPanel();
         expect(updateAvailableMock.show).not.toHaveBeenCalled();
-
-        // Not stuck: a retry really probes again and can succeed.
-        await fireEvent.click(checkBtn());
-        await waitFor(() => expect(checkForNewerReleaseMock).toHaveBeenCalledTimes(2));
-        await waitFor(() => expect(toastsMock.success).toHaveBeenCalled());
+        expect(api[SEARCH]).not.toHaveBeenCalled();
+        expect(screen.queryByTestId('ask-admin-modal')).not.toBeInTheDocument();
     });
 
-    it('a failed admin search after a hit also returns to idle — the banner does not stay', async () => {
+    it.each(['system-info', 'probe'] as const)('reports a rejected %s as an error without fabricating remote metadata', async (stage) => {
+        if (stage === 'system-info') api[GET_INFO].mockRejectedValue(new Error('system-info fixture failure'));
+        else checkForUpdatesMock.mockRejectedValue(new Error('probe fixture failure'));
+        render(ChangelogModal, {open: true, onClose: vi.fn(), currentVersion: '9.9.9'});
+        await waitFor(() => expect(screen.getByTestId('changelog-modal')).toBeInTheDocument());
+
+        await fireEvent.click(checkBtn());
+
+        await waitFor(() => expect(notifyMock).toHaveBeenCalledTimes(1));
+        expectChecked({status: 'error', latest: null, source: 'none', checkedAt: null, reason: 'check-failed'}, {variant: 'error', message: 'changelog.checkFailed'}, stage === 'system-info' ? '' : '1.2.3');
+        if (stage === 'system-info') {
+            expect(checkForUpdatesMock).not.toHaveBeenCalled();
+        } else {
+            expect(checkForUpdatesMock).toHaveBeenCalledTimes(1);
+            expect(checkForUpdatesMock).toHaveBeenCalledWith('1.2.3', {force: true, ignoreDismissed: true});
+        }
+        expect(checkBtn()).toBeEnabled();
+        expectNoResultPanel();
+        expect(updateAvailableMock.show).not.toHaveBeenCalled();
+        expect(api[SEARCH]).not.toHaveBeenCalled();
+    });
+
+    it('reports admin lookup failure separately without rewriting the successful update check', async () => {
         authStore.set({user: {id: 5, username: 'carol', is_superuser: false}});
-        checkForNewerReleaseMock.mockResolvedValue(RELEASE);
-        api[SEARCH].mockRejectedValue(new Error('NEEDLE-SEARCH-DOWN'));
-        render(ChangelogModal, {open: true, onClose: vi.fn(), currentVersion: '1.2.3'});
+        const result: UpdateCheckResult = {
+            status: 'update-available',
+            latest: RELEASE,
+            source: 'network',
+            checkedAt: 1_700_000_000_005,
+        };
+        checkForUpdatesMock.mockResolvedValue(result);
+        api[SEARCH].mockRejectedValue(new Error('admin lookup fixture failure'));
+        render(ChangelogModal, {open: true, onClose: vi.fn(), currentVersion: '9.9.9'});
         await waitFor(() => expect(screen.getByTestId('changelog-modal')).toBeInTheDocument());
 
         await fireEvent.click(checkBtn());
 
-        // The ask-admin branch WAS entered (the search fired)...
-        await waitFor(() => expect(api[SEARCH]).toHaveBeenCalledTimes(1));
-        // ...and its failure drops the state back to idle: banner gone (the
-        // enabled button is the positive barrier for this negative), no delegation.
-        await waitFor(() => expect(checkBtn()).toBeEnabled());
-        expect(screen.queryByTestId('changelog-ask-admin')).not.toBeInTheDocument();
+        await waitFor(() => expect(notifyMock).toHaveBeenCalledTimes(2));
+        expectChecked(result);
+        expect(notifyMock).toHaveBeenLastCalledWith({
+            name: 'app.update.admin-lookup-failed',
+            toast: {variant: 'error', message: 'changelog.adminLookupFailed'},
+        });
+        expect(api[SEARCH]).toHaveBeenCalledWith({queries: {q: '', admins: true}});
+        expect(checkBtn()).toBeEnabled();
+        expectNoResultPanel();
+        expect(screen.queryByTestId('ask-admin-modal')).not.toBeInTheDocument();
         expect(updateAvailableMock.show).not.toHaveBeenCalled();
     });
 
-    it('without a running version the probe is skipped and the answer is up-to-date', async () => {
-        render(ChangelogModal, {open: true, onClose: vi.fn()});
+    it('blocks duplicate in-flight checks and rereads the backend version on every forced retry', async () => {
+        const pending = deferred<UpdateCheckResult>();
+        const first: UpdateCheckResult = {
+            status: 'up-to-date',
+            latest: {version: '1.2.3', tag: 'v1.2.3', url: RELEASE.url, name: RELEASE.name},
+            source: 'network',
+            checkedAt: 1_700_000_000_006,
+        };
+        const second: UpdateCheckResult = {...first, latest: RELEASE, checkedAt: 1_700_000_000_007};
+        api[GET_INFO].mockResolvedValueOnce({app_version: '1.2.3'}).mockResolvedValueOnce({app_version: '1.2.4'});
+        checkForUpdatesMock.mockReturnValueOnce(pending.promise).mockResolvedValueOnce(second);
+        render(ChangelogModal, {open: true, onClose: vi.fn(), currentVersion: '9.9.9'});
         await waitFor(() => expect(screen.getByTestId('changelog-modal')).toBeInTheDocument());
 
         await fireEvent.click(checkBtn());
+        await waitFor(() => expect(checkForUpdatesMock).toHaveBeenCalledTimes(1));
+        expect(checkBtn()).toBeDisabled();
+        expect(notifyMock).not.toHaveBeenCalled();
+        expectNoResultPanel();
+        await fireEvent.click(checkBtn());
+        expect(api[GET_INFO]).toHaveBeenCalledTimes(1);
+        expect(checkForUpdatesMock).toHaveBeenCalledTimes(1);
 
-        await waitFor(() => expect(toastsMock.success).toHaveBeenCalled());
-        expect(checkForNewerReleaseMock).not.toHaveBeenCalled();
+        pending.resolve(first);
+        await waitFor(() => expect(checkBtn()).toBeEnabled());
+        expectChecked(first, {variant: 'success', message: 'changelog.upToDate\nchangelog.detectedRemoteVersion(v1.2.3)'});
+        await fireEvent.click(checkBtn());
+
+        await waitFor(() => expect(notifyMock).toHaveBeenCalledTimes(2));
+        expect(api[GET_INFO]).toHaveBeenCalledTimes(2);
+        expect(checkForUpdatesMock).toHaveBeenNthCalledWith(1, '1.2.3', {force: true, ignoreDismissed: true});
+        expect(checkForUpdatesMock).toHaveBeenNthCalledWith(2, '1.2.4', {force: true, ignoreDismissed: true});
+        expectChecked(second, {variant: 'success', message: 'changelog.upToDate\nchangelog.detectedRemoteVersion(v1.2.4)'}, '1.2.4');
+        expect(checkBtn()).toBeEnabled();
+        expectNoResultPanel();
+    });
+
+    it('a late response is ignored after the modal closes and reopens', async () => {
+        authStore.set({user: {id: 1, username: 'root', is_superuser: true}});
+        const pending = deferred<UpdateCheckResult>();
+        checkForUpdatesMock.mockReturnValue(pending.promise);
+
+        const view = render(ChangelogModal, {open: true, onClose: vi.fn(), currentVersion: '9.9.9'});
+        await waitFor(() => expect(screen.getByTestId('changelog-modal')).toBeInTheDocument());
+
+        await fireEvent.click(checkBtn());
+        await waitFor(() => expect(checkForUpdatesMock).toHaveBeenCalledTimes(1));
+
+        await view.rerender({open: false, onClose: vi.fn(), currentVersion: '9.9.9'});
+        pending.resolve({
+            status: 'update-available',
+            latest: RELEASE,
+            source: 'network',
+            checkedAt: 1_700_000_000_004,
+        });
+        await pending.promise;
+        await tick();
+        await view.rerender({open: true, onClose: vi.fn(), currentVersion: '9.9.9'});
+        await waitFor(() => expect(screen.getByTestId('changelog-modal')).toBeInTheDocument());
+
+        expect(updateAvailableMock.show).not.toHaveBeenCalled();
+        expect(notifyMock).not.toHaveBeenCalled();
+        expect(api[SEARCH]).not.toHaveBeenCalled();
+        expectNoResultPanel();
+        expect(checkBtn()).toBeEnabled();
+    });
+
+    it.each(['resolve', 'reject'] as const)('ignores an old probe that settles via %s after a reopened modal completes a fresh check', async (settlement) => {
+        authStore.set({user: {id: 1, username: 'root', is_superuser: true}});
+        const stale = deferred<UpdateCheckResult>();
+        const fresh: UpdateCheckResult = {status: 'no-release', latest: null, source: 'network', checkedAt: 1_700_000_000_009};
+        checkForUpdatesMock.mockReturnValueOnce(stale.promise).mockResolvedValueOnce(fresh);
+        const view = render(ChangelogModal, {open: true, onClose: vi.fn(), currentVersion: '9.9.9'});
+        await waitFor(() => expect(screen.getByTestId('changelog-modal')).toBeInTheDocument());
+
+        await fireEvent.click(checkBtn());
+        await waitFor(() => expect(checkForUpdatesMock).toHaveBeenCalledTimes(1));
+        await view.rerender({open: false, onClose: vi.fn(), currentVersion: '9.9.9'});
+        await view.rerender({open: true, onClose: vi.fn(), currentVersion: '9.9.9'});
+        await waitFor(() => expect(checkBtn()).toBeEnabled());
+        await fireEvent.click(checkBtn());
+        await waitFor(() => expect(notifyMock).toHaveBeenCalledTimes(1));
+        expectChecked(fresh, {variant: 'warning', message: 'changelog.noStableRelease'});
+
+        // open is true again: only the generation guard can reject this result.
+        if (settlement === 'resolve') stale.resolve({status: 'update-available', latest: RELEASE, source: 'network', checkedAt: 1_700_000_000_008});
+        else stale.reject(new Error('stale probe fixture failure'));
+        await stale.promise.catch(() => undefined);
+        await tick();
+
+        expect(notifyMock).toHaveBeenCalledTimes(1);
+        expectChecked(fresh, {variant: 'warning', message: 'changelog.noStableRelease'});
+        expect(updateAvailableMock.show).not.toHaveBeenCalled();
+        expect(api[SEARCH]).not.toHaveBeenCalled();
+        expect(checkBtn()).toBeEnabled();
+        expectNoResultPanel();
+    });
+
+    it('does not start a probe when an obsolete backend-version lookup completes after reopening', async () => {
+        const pending = deferred<{app_version: string}>();
+        api[GET_INFO].mockReturnValueOnce(pending.promise);
+        const view = render(ChangelogModal, {open: true, onClose: vi.fn(), currentVersion: '9.9.9'});
+        await waitFor(() => expect(screen.getByTestId('changelog-modal')).toBeInTheDocument());
+
+        await fireEvent.click(checkBtn());
+        await waitFor(() => expect(api[GET_INFO]).toHaveBeenCalledTimes(1));
+        expect(checkBtn()).toBeDisabled();
+        await view.rerender({open: false, onClose: vi.fn(), currentVersion: '9.9.9'});
+        await view.rerender({open: true, onClose: vi.fn(), currentVersion: '9.9.9'});
+        pending.resolve({app_version: '1.2.3'});
+        await pending.promise;
+        await tick();
+
+        expect(checkForUpdatesMock).not.toHaveBeenCalled();
+        expect(notifyMock).not.toHaveBeenCalled();
+        expect(updateAvailableMock.show).not.toHaveBeenCalled();
+        expect(checkBtn()).toBeEnabled();
+        expectNoResultPanel();
+    });
+
+    it('does not reopen the ask-admin modal when an obsolete admin lookup completes', async () => {
+        authStore.set({user: {id: 5, username: 'carol', is_superuser: false}});
+        const pending = deferred<{items: Array<{username: string}>}>();
+        const result: UpdateCheckResult = {status: 'update-available', latest: RELEASE, source: 'network', checkedAt: 1_700_000_000_010};
+        checkForUpdatesMock.mockResolvedValue(result);
+        api[SEARCH].mockReturnValueOnce(pending.promise);
+        const view = render(ChangelogModal, {open: true, onClose: vi.fn(), currentVersion: '9.9.9'});
+        await waitFor(() => expect(screen.getByTestId('changelog-modal')).toBeInTheDocument());
+
+        await fireEvent.click(checkBtn());
+        await waitFor(() => expect(api[SEARCH]).toHaveBeenCalledWith({queries: {q: '', admins: true}}));
+        expectChecked(result);
+        await view.rerender({open: false, onClose: vi.fn(), currentVersion: '9.9.9'});
+        await view.rerender({open: true, onClose: vi.fn(), currentVersion: '9.9.9'});
+        pending.resolve({items: [{username: 'late-admin'}]});
+        await pending.promise;
+        await tick();
+
+        expect(notifyMock).toHaveBeenCalledTimes(1);
+        expect(screen.queryByTestId('ask-admin-modal')).not.toBeInTheDocument();
+        expect(updateAvailableMock.show).not.toHaveBeenCalled();
+        expect(checkBtn()).toBeEnabled();
+        expectNoResultPanel();
     });
 });

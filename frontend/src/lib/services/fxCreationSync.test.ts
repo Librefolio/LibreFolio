@@ -436,7 +436,10 @@ describe('finishFxPairCreation — lifecycle and host refresh ordering', () => {
                 const current = context();
                 await finishFxPairCreation(current);
                 expect(listener).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({sessionGeneration: current.sessionGeneration}));
-                expect(syncRates.mock.calls.map(([body]) => body)).toEqual([{pairs: [MAIN], ...RANGE}, {pairs: [MAIN], ...RANGE}]);
+                expect(syncRates.mock.calls.map(([body]) => body)).toEqual([
+                    {pairs: [MAIN], ...RANGE},
+                    {pairs: [MAIN], ...RANGE},
+                ]);
             } finally {
                 pending.resolve(response([result(MAIN)]));
                 await done;

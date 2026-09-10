@@ -62,6 +62,9 @@ frontend/
 ./dev.py test --coverage py front-transaction all    # backend Python only
 ./dev.py test --coverage js front-transaction all    # frontend JS/Svelte only
 
+# Dedicated lane for a concurrent worktree
+./dev.py test --test-port 6142 --data-dir /tmp/librefolio-r2-c front-asset all
+
 # Gallery screenshots
 ./dev.py mkdocs gallery
 ./dev.py mkdocs gallery --desktop-only
@@ -91,17 +94,19 @@ what the 8 categories are verified against (629 Playwright + 687 vitest passing)
     specs. If a run starts dying again, lower that constant; do **not** raise
     `--max-old-space-size`, which only postpones the crash.
 
-!!! warning "Never run two Playwright invocations at once"
-    Consolidation reduces the number of invocations; it does not make them concurrent. They share one
-    backend, one database and one set of E2E users, so a second simultaneous invocation corrupts
-    both. Frontend parallelism lives **inside** Playwright (`fullyParallel`), never above it.
+!!! warning "Never run two Playwright invocations in one lane"
+    Consolidation reduces the number of invocations; it does not make them concurrent. Within a lane
+    they share one backend, one database and one set of E2E users, so a second invocation corrupts
+    both. Separate worktrees may run concurrently only with unique `--test-port` **and**
+    `--data-dir` values. Frontend parallelism inside one lane lives in Playwright (`fullyParallel`).
 
 ## Playwright Config
 
 - **2 projects**: `desktop` (1280×720, Chrome) + `mobile` (iPhone 14 Pro Max viewport, Chromium)
 - **Workers**: 1 (sequential — shared DB state)
 - **Timeout**: 15s per test (localhost — fast responses expected)
-- **Web Server auto-start**: `./dev.py server --test --force` (port 6041)
+- **Web Server**: owned by `./dev.py test`, started without `--force` on the
+  lane `TEST_PORT` (default 6041); an occupied lane fails closed
 - **Retry**: 0 local, 2 in CI
 
 ## Fixtures
@@ -491,5 +496,3 @@ can exist. (It used to: six registered actions worth ~259 tests were never execu
 | `add_test(cat, action, func, ...)` | `_common.py` | Registers a test entry in a category dict |
 | `make_category(help, desc)` | `_common.py` | Creates the `_meta` entry for a new category |
 | `_run_test_suite(tests, ...)` | `_common.py` | Runs tests sequentially with summary report |
-
-

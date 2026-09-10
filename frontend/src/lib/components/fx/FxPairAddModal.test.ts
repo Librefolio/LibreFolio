@@ -107,6 +107,7 @@ function deferred<T>() {
 }
 
 type SyncResponse = Awaited<ReturnType<typeof zodiosApi.sync_rates_api_v1_fx_currencies_sync_post>>;
+type CreationResponse = Awaited<ReturnType<typeof zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post>>;
 
 function syncResponse(...pairs: string[]): SyncResponse {
     return {
@@ -117,10 +118,11 @@ function syncResponse(...pairs: string[]): SyncResponse {
     };
 }
 
-function creationResponse(items: Parameters<typeof zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post>[0]) {
+function creationResponse(items: Parameters<typeof zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post>[0]): CreationResponse {
     return {
         results: items.map((item) => ({
             ...item,
+            chain_steps: item.chain_steps.map((step) => ({...step})),
             success: true,
             action: 'created',
             is_chain: item.chain_steps.length > 1,
@@ -179,7 +181,9 @@ function onlyNotice() {
 function expectLinkedPair(message: string, slug: string) {
     const html = document.createElement('div');
     html.innerHTML = message;
-    const links = within(html).getAllByTestId('toast-fx-link').filter((candidate) => candidate.getAttribute('href') === `/fx/${slug}`);
+    const links = within(html)
+        .getAllByTestId('toast-fx-link')
+        .filter((candidate) => candidate.getAttribute('href') === `/fx/${slug}`);
     expect(links).toHaveLength(1);
     const [link] = links;
     expect(link).toHaveAttribute('href', `/fx/${slug}`);
@@ -299,14 +303,7 @@ describe('FxPairAddModal — configuration before background sync', () => {
             expect(syncRates).toHaveBeenCalledTimes(1);
             expect(onlyNotice().variant).toBe('success');
             expectLinkedPair(onlyNotice().message, 'EUR-GBP');
-            expect(buildFxSyncToast).toHaveBeenCalledWith(
-                expect.objectContaining({pair: 'EUR-GBP', status: 'ok'}),
-                'EUR-GBP',
-                expect.any(Function),
-                undefined,
-                expect.any(Function),
-                {outerFlags: true, linkToDetail: true},
-            );
+            expect(buildFxSyncToast).toHaveBeenCalledWith(expect.objectContaining({pair: 'EUR-GBP', status: 'ok'}), 'EUR-GBP', expect.any(Function), undefined, expect.any(Function), {outerFlags: true, linkToDetail: true});
         } finally {
             pending.resolve(syncResponse('EUR-GBP', 'EUR-USD', 'GBP-USD'));
             await pending.promise;
@@ -347,9 +344,7 @@ describe('FxPairAddModal — configuration before background sync', () => {
         expect(buildFxSyncToast).not.toHaveBeenCalled();
         expect(onlyNotice().variant).toBe('success');
         expectLinkedPair(onlyNotice().message, 'EUR-GBP');
-        expect(createRoutes.mock.calls.map(([body]) => body)).toEqual([
-            [{base: 'EUR', quote: 'GBP', chain_steps: route ? DIRECT : [{from: 'EUR', to: 'GBP', provider: 'MANUAL'}], priority: route ? 1 : 999}],
-        ]);
+        expect(createRoutes.mock.calls.map(([body]) => body)).toEqual([[{base: 'EUR', quote: 'GBP', chain_steps: route ? DIRECT : [{from: 'EUR', to: 'GBP', provider: 'MANUAL'}], priority: route ? 1 : 999}]]);
     });
 
     it('editing a provider does not start creation-time sync or creation feedback', async () => {
@@ -408,10 +403,7 @@ describe('FxPairAddModal — configuration before background sync', () => {
 
             await save();
             await closed();
-            expect(createRoutes.mock.calls.map(([body]) => body)).toEqual([
-                [{base: 'EUR', quote: 'GBP', chain_steps: DIRECT, priority: 1}],
-                [{base: 'JPY', quote: 'USD', chain_steps: [{from: 'JPY', to: 'USD', provider: 'MANUAL'}], priority: 999}],
-            ]);
+            expect(createRoutes.mock.calls.map(([body]) => body)).toEqual([[{base: 'EUR', quote: 'GBP', chain_steps: DIRECT, priority: 1}], [{base: 'JPY', quote: 'USD', chain_steps: [{from: 'JPY', to: 'USD', provider: 'MANUAL'}], priority: 999}]]);
             expect(syncRates.mock.calls.map(([body]) => body)).toEqual([{pairs: ['EUR-GBP'], start: RANGE.dateStart, end: RANGE.dateEnd}]);
         } finally {
             pending.resolve(syncResponse('EUR-GBP'));
@@ -468,10 +460,7 @@ describe('FxPairAddModal — configuration before background sync', () => {
             expect(old.onclose).not.toHaveBeenCalled();
             expect(old.onsynced).not.toHaveBeenCalled();
             expect(syncRates).not.toHaveBeenCalled();
-            expect(createRoutes.mock.calls.map(([body]) => body)).toEqual([
-                [{base: 'EUR', quote: 'GBP', chain_steps: DIRECT, priority: 1}],
-                [{base: 'JPY', quote: 'USD', chain_steps: [{from: 'JPY', to: 'USD', provider: 'MANUAL'}], priority: 999}],
-            ]);
+            expect(createRoutes.mock.calls.map(([body]) => body)).toEqual([[{base: 'EUR', quote: 'GBP', chain_steps: DIRECT, priority: 1}], [{base: 'JPY', quote: 'USD', chain_steps: [{from: 'JPY', to: 'USD', provider: 'MANUAL'}], priority: 999}]]);
             expectLinkedPair(onlyNotice().message, 'JPY-USD');
         } finally {
             posted.resolve(creationResponse([{base: 'EUR', quote: 'GBP', chain_steps: DIRECT, priority: 1}]));
@@ -522,10 +511,7 @@ describe('FxPairAddModal — configuration before background sync', () => {
             await save();
             await closed();
             expect(fresh.oncreated).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({slug: 'JPY-USD', autoSyncStarted: false}));
-            expect(createRoutes.mock.calls.map(([body]) => body)).toEqual([
-                items,
-                [{base: 'JPY', quote: 'USD', chain_steps: [{from: 'JPY', to: 'USD', provider: 'MANUAL'}], priority: 999}],
-            ]);
+            expect(createRoutes.mock.calls.map(([body]) => body)).toEqual([items, [{base: 'JPY', quote: 'USD', chain_steps: [{from: 'JPY', to: 'USD', provider: 'MANUAL'}], priority: 999}]]);
             expect(syncRates).toHaveBeenCalledTimes(1);
         } finally {
             posted.resolve(creationResponse(items));

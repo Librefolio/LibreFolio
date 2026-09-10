@@ -17,7 +17,8 @@ Data Directory Structure:
 
 Environment Variables (see .env):
     LIBREFOLIO_DATA_DIR: Override production data directory (default: ./backend/data/prod)
-    LIBREFOLIO_TEST_MODE: When "1", use test data directory (backend/data/test/)
+    LIBREFOLIO_TEST_DATA_DIR: Override test data directory (default: ./backend/data/test)
+    LIBREFOLIO_TEST_MODE: When "1", use the test data directory
     PORT: Production server port (default: 6040)
     TEST_PORT: Test server port (default: 6041)
     LOG_LEVEL: Logging level (default: INFO)
@@ -47,6 +48,8 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 # Default data directories (relative to project root)
 DEFAULT_PROD_DATA_DIR = PROJECT_ROOT / "backend" / "data" / "prod"
 DEFAULT_TEST_DATA_DIR = PROJECT_ROOT / "backend" / "data" / "test"
+PRODUCTION_DATA_MARKER = ".librefolio-production-data"
+TEST_LANE_HEADER = "X-LibreFolio-Test-Lane"
 
 
 # =============================================================================
@@ -132,24 +135,187 @@ class Settings(BaseSettings):
 # =============================================================================
 
 
+def _resolve_data_dir(path: str | os.PathLike[str]) -> Path:
+    raw = os.fspath(path).strip()
+    if not raw:
+        raise ValueError("Data directory cannot be empty")
+    if "?" in raw or "#" in raw:
+        raise ValueError("Data directory cannot contain '?' or '#'")
+    resolved = Path(raw).expanduser()
+    if not resolved.is_absolute():
+        resolved = PROJECT_ROOT / resolved
+    resolved = resolved.resolve()
+    if "?" in str(resolved) or "#" in str(resolved):
+        raise ValueError("Resolved data directory cannot contain '?' or '#'")
+    return resolved
+
+
+def _same_filesystem_location(left: Path, right: Path) -> bool:
+    try:
+        return left.samefile(right)
+    except OSError:
+        if left == right:
+            return True
+
+    def nearest_existing(path: Path) -> Path:
+        current = path
+        while not current.exists() and current != current.parent:
+            current = current.parent
+        return current
+
+    def is_case_insensitive(path: Path) -> bool:
+        current = nearest_existing(path)
+        while current != current.parent:
+            swapped = current.with_name(current.name.swapcase())
+            if swapped != current:
+                try:
+                    return swapped.samefile(current)
+                except OSError:
+                    pass
+            current = current.parent
+        return False
+
+    left_parent = nearest_existing(left)
+    right_parent = nearest_existing(right)
+    try:
+        same_filesystem = left_parent.stat().st_dev == right_parent.stat().st_dev
+    except OSError:
+        same_filesystem = False
+    return (
+        same_filesystem
+        and (is_case_insensitive(left_parent) or is_case_insensitive(right_parent))
+        and str(left).casefold() == str(right).casefold()
+    )
+
+
+def _paths_overlap(left: Path, right: Path) -> bool:
+    """Return whether either root contains the other on the active filesystem."""
+    if _same_filesystem_location(left, right):
+        return True
+
+    left_parent = left
+    while not left_parent.exists() and left_parent != left_parent.parent:
+        left_parent = left_parent.parent
+    right_parent = right
+    while not right_parent.exists() and right_parent != right_parent.parent:
+        right_parent = right_parent.parent
+    try:
+        case_insensitive = (
+            left_parent.stat().st_dev == right_parent.stat().st_dev
+            and (
+                _same_filesystem_location(
+                    left_parent,
+                    left_parent.with_name(left_parent.name.swapcase()),
+                )
+                or _same_filesystem_location(
+                    right_parent,
+                    right_parent.with_name(right_parent.name.swapcase()),
+                )
+            )
+        )
+    except (OSError, ValueError):
+        case_insensitive = False
+
+    left_parts = left.parts
+    right_parts = right.parts
+    if case_insensitive:
+        left_parts = tuple(part.casefold() for part in left_parts)
+        right_parts = tuple(part.casefold() for part in right_parts)
+    shortest = min(len(left_parts), len(right_parts))
+    return left_parts[:shortest] == right_parts[:shortest]
+
+
+def validate_test_data_dir(  # noqa: C901 — ordered safety boundary: identity, markers, managed paths
+    data_dir: str | os.PathLike[str],
+    *,
+    production_data_dir: str | os.PathLike[str] | None = None,
+) -> Path:
+    """Reject a test root that aliases canonical or configured production data."""
+    candidate = _resolve_data_dir(data_dir)
+    configured_prod = production_data_dir
+    if configured_prod is None:
+        configured_prod = os.environ.get("LIBREFOLIO_DATA_DIR")
+
+    production_dirs = [DEFAULT_PROD_DATA_DIR.resolve()]
+    if configured_prod:
+        production_dirs.append(_resolve_data_dir(configured_prod))
+    if any(_paths_overlap(candidate, prod) for prod in production_dirs):
+        raise ValueError("Test data directory must not overlap the production data directory")
+    if any((ancestor / PRODUCTION_DATA_MARKER).exists() for ancestor in (candidate, *candidate.parents)):
+        raise ValueError("Test data directory is inside a marked production data directory")
+
+    for relative in (
+        Path("sqlite"),
+        Path("custom-uploads"),
+        Path("broker_reports"),
+        Path("logs"),
+        Path("scenario_catalog"),
+    ):
+        managed_root = candidate / relative
+        if not managed_root.is_dir():
+            continue
+        try:
+            marker = next(managed_root.rglob(PRODUCTION_DATA_MARKER), None)
+        except OSError as exc:
+            raise ValueError(
+                f"Cannot verify test data subtree: {relative}"
+            ) from exc
+        if marker is not None:
+            raise ValueError(
+                f"Test data subtree contains a marked production root: {relative}"
+            )
+
+    managed_paths = (
+        Path("sqlite"),
+        Path("sqlite/app.db"),
+        Path("custom-uploads"),
+        Path("broker_reports"),
+        Path("broker_reports/uploaded"),
+        Path("broker_reports/parsed"),
+        Path("broker_reports/failed"),
+        Path("logs"),
+        Path("scheduler_state.json"),
+        Path("scenario_catalog"),
+    )
+    for relative in managed_paths:
+        test_target = (candidate / relative).resolve()
+        if not test_target.is_relative_to(candidate):
+            raise ValueError(
+                f"Test data path escapes its configured root: {relative}"
+            )
+        if any(
+            _same_filesystem_location(test_target, (prod / relative).resolve())
+            for prod in production_dirs
+        ):
+            raise ValueError(
+                f"Test data path aliases production data: {relative}"
+            )
+    return candidate
+
+
+def get_test_data_dir() -> Path:
+    """Get the test data directory, including an explicit lane override."""
+    return validate_test_data_dir(
+        os.environ.get("LIBREFOLIO_TEST_DATA_DIR") or DEFAULT_TEST_DATA_DIR
+    )
+
+
 def get_data_dir() -> Path:
     """
     Get the current data directory based on environment and test mode.
 
     Priority:
-    1. Test mode → ALWAYS backend/data/test/ (no override)
-    2. LIBREFOLIO_DATA_DIR env var → custom path
-    3. Default → backend/data/prod/
+    1. Test mode + LIBREFOLIO_TEST_DATA_DIR → custom test path
+    2. Test mode → backend/data/test/
+    3. LIBREFOLIO_DATA_DIR env var → custom production path
+    4. Default → backend/data/prod/
     """
     if is_test_mode():
-        return DEFAULT_TEST_DATA_DIR
+        return get_test_data_dir()
 
     env_data_dir = os.environ.get("LIBREFOLIO_DATA_DIR")
     if env_data_dir:
-        path = Path(env_data_dir)
-        if not path.is_absolute():
-            path = PROJECT_ROOT / path
-        return path
+        return _resolve_data_dir(env_data_dir)
 
     return DEFAULT_PROD_DATA_DIR
 
@@ -202,3 +368,8 @@ def ensure_data_dirs() -> None:
         "logs",
     ]:
         (data_dir / subdir).mkdir(parents=True, exist_ok=True)
+    if not is_test_mode():
+        (data_dir / PRODUCTION_DATA_MARKER).write_text(
+            "LibreFolio production data root\n",
+            encoding="utf-8",
+        )

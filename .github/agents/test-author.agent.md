@@ -7,9 +7,13 @@ name: test-author
 
 ## The one idea
 
-Every test in this repository runs against **one shared database** and **one shared
+Every test in one runtime lane runs against **one shared database** and **one shared
 backend**, at the same time as its neighbours. Backend units run in parallel
-processes; frontend blocks run in parallel browser contexts.
+processes; frontend blocks run in parallel browser contexts. Independent worktrees
+may run concurrently only when each command has a unique `--test-port` **and**
+`--data-dir`; that separation never relaxes row-level isolation inside a lane.
+The runner owns its backend and fails closed on an occupied port: never add
+implicit reuse or `--force` cleanup for an unidentified listener.
 
 So a test may **never assume**. It must **verify**. Every rule below is that one
 sentence applied somewhere:

@@ -9,13 +9,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+**Preparing v1.1.1.** These fixes and refinements are in preparation; this version has not been released.
+
 ### ✨ Added
 
+- Shared support actions in the donation popup and About page: coffee links and X, Reddit, Facebook, Instagram and TikTok icons, with platform-specific messages in the active interface language. **Copy and go** includes the public project link and opens a new tab, leaving the original screen open. Reddit separates title and body; platforms without text-prefill support explain how to paste the copied caption. TikTok opens its upload page rather than the feed. Clipboard and pop-up failures are reported explicitly; nothing is published automatically.
 - **FX route metadata in the API** — route responses expose `is_chain` and a sorted, unique `providers_used` list of configured providers. Ordered `chain_steps` still preserves direction and repeated providers; request payloads remain unchanged, with no database migration required.
+
+### 🐛 Fixed
+
+#### 📥 Imports and transaction editing
+
+- Editing an asset from the import wizard now loads its complete saved metadata. Saving unrelated fields preserves descriptions and sector/geographic distributions; explicit clears remain possible.
+- Currency-change confirmations and nested asset dialogs remain reachable above the wizard. Price and linked-transaction warnings now display their counts and dates correctly.
+- Manual FX conversions no longer remain incomplete because of a hidden destination broker. Separate leg dates, exact decimal amounts and balance/sign validation are preserved.
+- Import matching refreshes current candidates and the asset catalog together, including assets created after parsing. A single distinct match can be selected automatically; ambiguous matches still require a choice.
+- A final duplicate check that changes the selected transactions returns to review instead of silently importing a smaller or empty batch.
+- Balance diagnostics identify all contributing workspace rows and navigate to the first affected row in the current display order. Backdated FX pairs sort with their dates without changing operation identity or submission order.
+- Non-sticky bulk-table action headers stay at the end of the table rather than covering the rightmost visible columns.
+- Page-size menus remain reachable in short, scrollable modal tables instead of clipping their first options.
+
+#### 🧩 Asset providers and feedback
+
+- Provider tests and metadata requests ignore stale responses after the asset or provider configuration changes. Late metadata cannot silently overwrite manual edits.
+- Equivalent distributions no longer appear different merely because their entries arrived in another order.
+- Duplicate broker-name errors include localized recovery guidance and reset when a new dialog is opened. Successful broker creation and deletion receive confirmation toasts.
+- Manual update checks refresh release metadata and compare against the running server version. Failed or unavailable checks no longer report “up to date”; a positive success message includes the version detected online.
+- Docker image availability checks now complete GHCR's public authentication handshake through the LibreFolio backend, so a published release is no longer rejected because the registry first returns an authentication challenge. Invalid or untrusted challenges still fail closed.
+- Social-dialog logos retain a circular, fixed-size background even beside long translated instructions.
+- Global settings use the standard amber in-app confirmation before discarding an unsaved draft; cancel and Escape keep the draft unlocked.
 
 ### 🔄 Changed
 
-- **Preferences and broker-sharing compatibility** — the updated forms retain staged Save/Undo/Reset, persisted preferences and role-based access. Successful sharing saves close the list-page modal without another discard prompt; saving from the broker's Info tab keeps the inline editor open.
+- Import file tables paginate from five rows. After uploading, only the brokers that received those files start expanded.
+- First-time asset creation is explained briefly; known ISINs or tickers can prefill a missing asset name. The currency tooltip now describes the currency used to store asset prices.
+- The Generic CSV guide clarifies one file per broker—not one file per currency—and keeps its column reference in a single table.
+- Files show who uploaded them in a sortable column, with an avatar/name multi-select filter. Uploader filters survive switching between list and grid.
+- The header hides while scrolling down and returns while scrolling up on desktop and mobile. Focus, open menus and dialogs keep it visible.
+- Preferences and broker-sharing forms retain staged Save/Undo/Reset, persisted values and role-based access after their Svelte 5 migration. Successful sharing saves close the list-page modal without another discard prompt; saving from the broker's Info tab keeps the inline editor open.
+- New FX-pair configuration closes immediately while automatic synchronization continues in the background. Creation and sync results use flagged, clickable pair links; asset-library creation success links point to the new asset without changing contextual import or transaction flows.
+
+---
 
 ## [1.1.0] - 2026-09-07
 

@@ -167,14 +167,25 @@ export function getRegisteredPairs(): string[] {
  *
  * @param result - Single conversion result from POST /fx/currencies/convert
  */
-export function apiResultToFxDataPoint(result: {
+type FxApiDataPoint = {
     conversion_date: string;
-    rate?: string | null;
-    backward_fill_info?: {
-        actual_rate_date: string;
-        days_back: number;
-    } | null;
-}): FxDataPoint {
+    rate?: string | null | Array<string | null>;
+    backward_fill_info?:
+        | {
+              actual_rate_date: string;
+              days_back: number;
+          }
+        | null
+        | Array<{
+              actual_rate_date: string;
+              days_back: number;
+          } | null>;
+};
+
+export function apiResultToFxDataPoint(result: FxApiDataPoint): FxDataPoint {
+    if (Array.isArray(result.rate) || Array.isArray(result.backward_fill_info)) {
+        throw new TypeError('Expected one FX conversion result per requested date');
+    }
     return {
         date: result.conversion_date,
         rate: parseFxRate(result.rate),

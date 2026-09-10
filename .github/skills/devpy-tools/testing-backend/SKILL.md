@@ -42,6 +42,9 @@ backend/test_scripts/
 # With verbose output
 ./dev.py test --verbose api all
 
+# Dedicated lane for a concurrent worktree
+./dev.py test --test-port 6141 --data-dir /tmp/librefolio-r2-b api all
+
 # Filter external providers (useful when a service is down)
 ./dev.py test --exclude-providers yfinance external asset-providers 
 ./dev.py test --exclude-providers yfinance all 
@@ -58,9 +61,16 @@ pipenv run pytest backend/test_scripts/test_api/test_transactions_api.py::test_g
 API tests use `_TestingServerManager` from `test_server_helper.py`:
 
 1. **Server as thread**: uvicorn runs in a thread within pytest process → enables `pytest-cov` coverage tracking
-2. **Test port**: `TEST_PORT` (default 6041)
-3. **Isolated test DB**: `backend/data/test/sqlite/app.db`
+2. **Test port**: `TEST_PORT` (default 6041; set by `--test-port`)
+3. **Isolated test DB**: `backend/data/test/sqlite/app.db` by default, or
+   `<--data-dir>/sqlite/app.db`
 4. **HTTP Client**: `httpx.AsyncClient`
+
+Each active worktree needs its own port and data directory. The runner exports
+both to every child process. Tests inside one lane still share that backend and
+database, so unique ids, cleanup and ownership rules remain unchanged. An
+occupied lane is rejected; the runner never reuses or force-kills an
+unidentified listener.
 
 ### Pattern for an API test
 
@@ -389,4 +399,3 @@ For a new **category** (not just a new test), create `_backend_{name}.py` with `
 | `add_test(cat, action, func, ...)` | `_common.py` | Registers a named test in a category dict |
 | `make_category(help, desc)` | `_common.py` | Creates `_meta` entry for a new category |
 | `_run_test_suite(tests, ...)` | `_common.py` | Runs tests sequentially with pass/fail summary |
-

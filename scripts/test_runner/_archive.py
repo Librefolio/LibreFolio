@@ -192,9 +192,9 @@ def snapshot_test_db(log_dir: Path, label: str = "test-db") -> Path | None:
     moved on since" dead end.
     """
     try:
-        from backend.test_scripts.test_db_config import TEST_DB_PATH
+        from backend.test_scripts.test_db_config import get_test_db_path
 
-        db = Path(TEST_DB_PATH)
+        db = get_test_db_path()
         if not db.exists():
             return None
         return archive_path(db, target_dir=Path(log_dir), label=label, quiet=True)
