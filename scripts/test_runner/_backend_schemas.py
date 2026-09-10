@@ -99,6 +99,15 @@ def schemas_ai_export(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "AI Export schemas tests", verbose=verbose)
 
 
+def schemas_tools(verbose: bool = False, test_names: list = None) -> bool:
+    """Test strict Tool transport contracts with private Pydantic fixtures."""
+    print_section("Schemas: Tools")
+    print_info("Testing: Tool envelopes, discriminators, policies and metrics")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_schemas/test_tools_schemas.py", test_names)
+    return run_command(cmd, "Tool schemas tests", verbose=verbose)
+
+
 def schemas_all(verbose: bool = False) -> bool:
     """Run all schema validation tests."""
     if _common.nothing_left_to_run("schemas"):
@@ -137,5 +146,13 @@ Tests for Pydantic/SQLModel schema validation:
     add_test(cat, "risk", schemas_risk, name="Risk Schemas", desc="Canonical valuations, returns, metadata and data-quality contracts")
     add_test(cat, "pac-analyze", schemas_pac_analyze, name="PAC Analyze Schemas", desc="Strict P1 draft/result codecs, availability, exact string facts and wire bounds", isolation="pure")
     add_test(cat, "ai-export", schemas_ai_export, name="AI Export Schemas", desc="Strict requests, responses, catalog, and typed problem contracts")
+    add_test(
+        cat,
+        "tools",
+        schemas_tools,
+        name="Tool Schemas",
+        desc="Strict transport, required metadata, correlation IDs, resource policies and platform outcomes",
+        isolation="pure",
+    )
     add_test(cat, "all", schemas_all, test_names=False, name="All Schema Tests", desc="Run all schema tests")
     registry["schemas"] = cat

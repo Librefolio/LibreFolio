@@ -17,6 +17,7 @@ from backend.app.api.v1 import (
     settings,
     signals,
     system,
+    tools,
     transactions,
     uploads,
     users,
@@ -43,4 +44,5 @@ router.include_router(backup.backup_router)
 router.include_router(portfolio_api.portfolio_router)
 router.include_router(risk.router)
 router.include_router(signals.signals_router)
+router.include_router(tools.router)
 router.include_router(utilities_router)
