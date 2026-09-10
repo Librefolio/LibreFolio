@@ -9,11 +9,78 @@
  */
 
 import {expect, test} from '../fixtures/playwright';
-import {login} from '../fixtures/auth-helpers';
+import type {Page} from '../fixtures/playwright';
+import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {waitForSettled} from '../fixtures/app-events';
 import {goToAssetsPage} from './assets-helpers';
 import {uniqueToken} from '../fixtures/unique';
+import {t} from '../fixtures/i18n-data';
+
+type SyntheticAsset = {
+    id: number;
+    display_name: string;
+    currency: string;
+    asset_type: 'STOCK';
+    active: boolean;
+    has_metadata: boolean;
+    provider_code: null;
+    tx_count: number;
+    tx_count_own: number;
+};
+
+function syntheticAsset(id: number, txCount = 0, txCountOwn = 0): SyntheticAsset {
+    return {
+        id,
+        display_name: `Synthetic asset ${id}`,
+        currency: 'EUR',
+        asset_type: 'STOCK',
+        active: true,
+        has_metadata: false,
+        provider_code: null,
+        tx_count: txCount,
+        tx_count_own: txCountOwn,
+    };
+}
+
+async function mockAssets(page: Page, assets: SyntheticAsset[]) {
+    await page.route('**/api/v1/assets/query*', async (route) => {
+        await route.fulfill({json: assets});
+    });
+    await page.route('**/api/v1/assets/prices/query', async (route) => {
+        const requested = (route.request().postDataJSON() as Array<{asset_id: number}> | null) ?? [];
+        await route.fulfill({
+            json: {
+                items: requested.map(({asset_id}) => ({
+                    asset_id,
+                    prices: [],
+                    events: [],
+                    errors: [],
+                    signals: [],
+                })),
+            },
+        });
+    });
+    await page.route('**/api/v1/assets/prices/current', async (route) => {
+        await route.fulfill({json: {results: [], success_count: 0, errors: []}});
+    });
+}
+
+async function goToMockedAssets(page: Page, assets: SyntheticAsset[]) {
+    await mockAssets(page, assets);
+    // Irrelevant source-page filters are deliberate: result actions must build
+    // a fresh transaction URL rather than inheriting them.
+    await navigateTo(page, '/assets?broker_id=88001&date_start=1999-01-01');
+    await expect(page.getByTestId('assets-page')).toHaveAttribute('data-busy', 'false', {timeout: 20_000});
+}
+
+async function openSingleDelete(page: Page, assetId: number) {
+    await page.getByTestId('view-mode-list').click();
+    await waitForSettled(page.getByTestId('assets-page'), 20_000);
+    await page.getByTestId(`row-actions-${assetId}`).click();
+    await page.getByTestId('context-menu-action-delete').click();
+    await expect(page.getByTestId('confirm-modal-confirm')).toBeVisible();
+}
 
 test.describe('Asset List Page', () => {
     test.beforeEach(async ({page}) => {
@@ -359,6 +426,165 @@ test.describe('Asset List Page', () => {
                 await page.request.delete(`/api/v1/assets?asset_ids=${id}`).catch(() => {});
             }
         }
+    });
+
+    test('blocked single delete stays open with the returned global count and a clean transaction link', async ({page}) => {
+        const asset = syntheticAsset(910_031);
+        await goToMockedAssets(page, [asset]);
+        await page.route('**/api/v1/assets?*', async (route) => {
+            await route.fulfill({
+                json: {
+                    results: [
+                        {
+                            success: false,
+                            deleted_count: 0,
+                            asset_id: asset.id,
+                            display_name: asset.display_name,
+                            error_code: 'HAS_TRANSACTIONS',
+                            transaction_count: 17,
+                            message: '<a href="/backend-link">backend-supplied link</a>',
+                        },
+                    ],
+                    success_count: 0,
+                    errors: [],
+                },
+            });
+        });
+
+        await openSingleDelete(page, asset.id);
+        await page.getByTestId('confirm-modal-confirm').click();
+
+        const link = page.getByTestId('asset-delete-transactions-link');
+        await expect(link).toBeVisible();
+        await expect(link).toHaveAttribute('href', `/transactions?asset_id=${asset.id}`);
+        await expect(page.getByTestId('asset-delete-transactions-link-detail')).toContainText('(17)');
+        // The link's own label must be the real transactions.title catalogue entry —
+        // never the missing `nav.transactions` key, and never a raw key at all
+        // (svelte-i18n renders a missing key as the literal key string, so this
+        // check catches that regression by construction rather than by name).
+        await expect(link).toHaveText(t('en', 'transactions.title'));
+        await expect(link).not.toContainText('nav.transactions');
+        await expect(link).not.toContainText('transactions.title');
+        await expect(page.getByTestId('confirm-modal-close')).toBeVisible();
+    });
+
+    test('successful single delete closes its confirmation', async ({page}) => {
+        const asset = syntheticAsset(910_032);
+        await goToMockedAssets(page, [asset]);
+        await page.route('**/api/v1/assets?*', async (route) => {
+            await route.fulfill({
+                json: {
+                    results: [
+                        {
+                            success: true,
+                            deleted_count: 1,
+                            asset_id: asset.id,
+                            display_name: asset.display_name,
+                            error_code: null,
+                            transaction_count: null,
+                            message: null,
+                        },
+                    ],
+                    success_count: 1,
+                    errors: [],
+                },
+            });
+        });
+
+        await openSingleDelete(page, asset.id);
+        await page.getByTestId('confirm-modal-confirm').click();
+
+        await expect(page.getByTestId('confirm-modal-confirm')).toHaveCount(0);
+        await expect(page.getByTestId(`dt-row-checkbox-${asset.id}`)).toHaveCount(0);
+    });
+
+    test('bulk blocked results keep each returned global count with its own clean transaction link', async ({page}) => {
+        const blocked = [
+            {asset: syntheticAsset(910_041), count: 23},
+            {asset: syntheticAsset(910_042), count: 41},
+        ];
+        const assets = blocked.map(({asset}) => asset);
+        await goToMockedAssets(page, assets);
+        await page.route('**/api/v1/assets?*', async (route) => {
+            await route.fulfill({
+                json: {
+                    results: blocked.map(({asset, count}) => ({
+                        success: false,
+                        deleted_count: 0,
+                        asset_id: asset.id,
+                        display_name: asset.display_name,
+                        error_code: 'HAS_TRANSACTIONS',
+                        transaction_count: count,
+                        message: null,
+                    })),
+                    success_count: 0,
+                    errors: [],
+                },
+            });
+        });
+
+        await page.getByTestId('view-mode-list').click();
+        await waitForSettled(page.getByTestId('assets-page'), 20_000);
+        for (const asset of assets) {
+            await page.getByTestId(`dt-row-checkbox-${asset.id}`).click();
+        }
+        await expect(page.getByTestId('selection-toolbar')).toHaveAttribute('data-selected-count', String(assets.length));
+        await page.getByTestId('toolbar-action-delete').click();
+        await page.getByTestId('confirm-modal-confirm').click();
+
+        for (const {asset, count} of blocked) {
+            const testId = `asset-bulk-delete-transactions-${asset.id}`;
+            const link = page.getByTestId(testId);
+            await expect(link).toHaveAttribute('href', `/transactions?asset_id=${asset.id}`);
+            await expect(page.getByTestId(`${testId}-detail`)).toContainText(`(${count})`);
+            // Same catalogue-key contract as the single-delete case, checked once
+            // per row so a per-asset action never falls back to a raw key either.
+            await expect(link).toHaveText(t('en', 'transactions.title'));
+            await expect(link).not.toContainText('transactions.title');
+        }
+        await expect(page.getByTestId('confirm-modal-close')).toBeVisible();
+    });
+
+    test('bulk delete failure without HAS_TRANSACTIONS omits the transaction link and count', async ({page}) => {
+        // B3/F16: a failure that is NOT the HAS_TRANSACTIONS contract (a generic
+        // DB error, a permissions error, whatever else the backend may return)
+        // must not be dressed up with a transaction link or a "(N)" count it never
+        // received — that action and that number are only truthful when error_code
+        // really is HAS_TRANSACTIONS.
+        const asset = syntheticAsset(910_051);
+        await goToMockedAssets(page, [asset]);
+        await page.route('**/api/v1/assets?*', async (route) => {
+            await route.fulfill({
+                json: {
+                    results: [
+                        {
+                            success: false,
+                            deleted_count: 0,
+                            asset_id: asset.id,
+                            display_name: asset.display_name,
+                            error_code: null,
+                            transaction_count: null,
+                            message: 'Deletion refused by a non-transaction constraint',
+                        },
+                    ],
+                    success_count: 0,
+                    errors: [],
+                },
+            });
+        });
+
+        await page.getByTestId('view-mode-list').click();
+        await waitForSettled(page.getByTestId('assets-page'), 20_000);
+        await page.getByTestId(`dt-row-checkbox-${asset.id}`).click();
+        await expect(page.getByTestId('selection-toolbar')).toHaveAttribute('data-selected-count', '1');
+        await page.getByTestId('toolbar-action-delete').click();
+        await page.getByTestId('confirm-modal-confirm').click();
+
+        await expect(page.getByTestId('confirm-modal-close')).toBeVisible();
+        await expect(page.getByTestId(`asset-bulk-delete-transactions-${asset.id}`)).toHaveCount(0);
+        // The raw backend message is shown as-is (no synthesized count suffix).
+        await expect(page.getByText('Deletion refused by a non-transaction constraint')).toBeVisible();
+        await expect(page.getByText('Deletion refused by a non-transaction constraint (', {exact: false})).toHaveCount(0);
     });
 
     // ========================================================================

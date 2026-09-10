@@ -3,4 +3,6 @@ build/
 node_modules/
 src/lib/api/generated.ts
 src/lib/api/openapi.json
-
+src/lib/api/generated-tools.ts
+src/lib/api/tool-contract-map.generated.ts
+src/lib/api/tool-contracts.openapi.json

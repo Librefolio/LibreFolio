@@ -21,7 +21,7 @@ import sys
 import threading
 import urllib.parse
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 
 import pytest
 
@@ -29,6 +29,7 @@ import backend.app.config as backend_config
 import dev
 import scripts.cli_base as cli_base
 import scripts.exec_unmasked as exec_unmasked
+import scripts.list_api_endpoints as endpoint_listing
 from backend.test_scripts import test_db_config
 from backend.test_scripts import test_server_helper as test_server_helper_module
 from scripts.test_runner import _backend_db as test_runner_backend_db
@@ -195,6 +196,57 @@ def patch_fake_server_thread(monkeypatch, *, alive: bool) -> list:
 
     monkeypatch.setattr(test_server_helper_module, "threading", SimpleNamespace(Thread=FakeThread))
     return created
+
+
+def test_endpoint_listing_uses_lazy_openapi_operations_instead_of_route_markers(monkeypatch, capsys):
+    class LazyOpenAPIApp:
+        def __init__(self):
+            self.openapi_calls = 0
+
+        @property
+        def routes(self):
+            raise AssertionError("Endpoint listing must not inspect pre-OpenAPI route markers")
+
+        def openapi(self):
+            self.openapi_calls += 1
+            return {
+                "paths": {
+                    "/api/v1/tools/catalog": {
+                        "get": {"tags": ["Tools"], "summary": "List Tools"},
+                        "parameters": [{"name": "ignored-path-parameter"}],
+                    },
+                    "/api/v1/tools/compute": {
+                        "post": {"tags": ["Tools"], "description": "Run Tools\nMore detail"},
+                    },
+                    "/api/v1/tools/diagnostics": {
+                        "get": {"tags": ["Tools"], "summary": "Inspect Tools"},
+                    },
+                    "/health": {
+                        "head": {"description": "Health probe"},
+                        "x-private": {"tags": ["Ignored"]},
+                    },
+                }
+            }
+
+    app = LazyOpenAPIApp()
+    fake_main = ModuleType("backend.app.main")
+    fake_main.app = app
+    monkeypatch.setitem(sys.modules, "backend.app.main", fake_main)
+
+    endpoint_listing.list_endpoints()
+
+    output = capsys.readouterr().out
+    assert app.openapi_calls == 1
+    assert "[TOOLS]" in output
+    assert "GET        /api/v1/tools/catalog" in output
+    assert "POST       /api/v1/tools/compute" in output
+    assert "GET        /api/v1/tools/diagnostics" in output
+    assert output.count("/api/v1/tools/") == 3
+    assert "[DEFAULT]" in output
+    assert "HEAD       /health" in output
+    assert "ignored-path-parameter" not in output
+    assert "X-PRIVATE" not in output
+    assert "Total endpoints: 4" in output
 
 
 # ── Contracts 1 and 9 — data directories, production guards, markers ───────

@@ -73,17 +73,17 @@ subsystem.
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass, field
 from datetime import timedelta
 from decimal import Decimal
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 
 import structlog
 
 from backend.app.db.models import TransactionType
 from backend.app.schemas.brim import (
     FAKE_ASSET_ID_BASE,
-    BRIMAssetNotice,
     BRIMEvidence,
     BRIMExtractedAssetInfo,
     BRIMFieldTodo,
@@ -95,6 +95,7 @@ from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.brim_providers import _brim_io as io
+from backend.app.services.brim_providers._brim_output import attach_maturity_notices
 from backend.app.services.provider_registry import BRIMProviderRegistry, register_provider
 
 logger = structlog.get_logger(__name__)
@@ -416,25 +417,408 @@ def _prefix_matches(a: str, b: str) -> bool:
     return a.startswith(b) or b.startswith(a)
 
 
-def _attach_maturity_notices(transactions: List[TXCreateItem], extracted_assets: Dict[int, BRIMExtractedAssetInfo]) -> None:
-    """Flag assets whose transactions include a maturity/redemption (``TITOLI SCADUTI``,
-    ``FONDI: RIMBORSO``) so the create-asset UI can warn that the security is probably
-    delisted and will not be found by any price provider.
+_CA_MATURITY_NOTICE_REASON = "Rilevata almeno una transazione di scadenza/rimborso (es. «TITOLI SCADUTI» o «FONDI: RIMBORSO»)."
 
-    Advisory only — never changes import behaviour. Both layouts need it: the securities
-    export and the account statement each book redemptions, and an asset created from the
-    account statement is exactly the one the user has no other way of recognising as expired.
-    """
-    for asset_id, idxs in io.detect_maturity_hits(transactions).items():
-        info = extracted_assets.get(asset_id)
-        if info is not None:
-            info.notices.append(
-                BRIMAssetNotice(
-                    kind=io.MATURITY_NOTICE_KIND,
-                    reason="Rilevata almeno una transazione di scadenza/rimborso (es. «TITOLI SCADUTI» o «FONDI: RIMBORSO»).",
-                    transaction_indexes=idxs,
+
+@dataclass
+class _CAAccountParseContext:
+    """Mutable state shared by the named phases of one account-report parse."""
+
+    provider: CreditAgricoleBrokerProvider
+    broker_id: int
+    col: Dict[str, int]
+    evidence_cols: List[tuple[str, int]]
+    transactions: List[TXCreateItem] = field(default_factory=list)
+    warnings: List[BRIMNotice] = field(default_factory=list)
+    validation_issues: List[BRIMValidationIssue] = field(default_factory=list)
+    field_todos: List[BRIMFieldTodo] = field(default_factory=list)
+    extracted_assets: Dict[int, BRIMExtractedAssetInfo] = field(default_factory=dict)
+    asset_to_fake_id: Dict[str, int] = field(default_factory=dict)
+    next_fake_id: int = FAKE_ASSET_ID_BASE
+    income_identity_by_date: Dict[Any, List[Dict[str, Any]]] = field(default_factory=dict)
+    nominal_by_isin: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    charge_rows_by_date: Dict[Any, List[Dict[str, Any]]] = field(default_factory=dict)
+    unknown_causali: Dict[str, List[tuple[int, Sequence]]] = field(default_factory=dict)
+
+    @property
+    def evidence_headers(self) -> List[str]:
+        return [label for label, _ in self.evidence_cols]
+
+    def asset_id_for(self, *, key: str, name: str, isin: Optional[str]) -> int:
+        """Return stable fake ID, upgrading placeholder/truncated names in place."""
+        if key in self.asset_to_fake_id:
+            existing_id = self.asset_to_fake_id[key]
+            known = self.extracted_assets[existing_id]
+            current = known.extracted_name or ""
+            if (current == isin and name != isin) or _is_truncation_of(current, name):
+                self.extracted_assets[existing_id] = BRIMExtractedAssetInfo(
+                    extracted_symbol=known.extracted_symbol,
+                    extracted_isin=known.extracted_isin,
+                    extracted_name=name,
+                )
+            return existing_id
+
+        new_id = self.next_fake_id
+        self.asset_to_fake_id[key] = new_id
+        self.extracted_assets[new_id] = BRIMExtractedAssetInfo(
+            extracted_symbol=None,
+            extracted_isin=isin,
+            extracted_name=name,
+        )
+        self.next_fake_id -= 1
+        return new_id
+
+    def income_asset_id(self, description: str) -> Optional[int]:
+        match = _ISIN_RE.search(description.upper())
+        if match is None:
+            return None
+        isin = match.group(0)
+        return self.asset_id_for(
+            key=f"isin:{isin}",
+            name=_income_asset_name(description, isin),
+            isin=isin,
+        )
+
+    def charge_asset_id(self, description: str) -> Optional[int]:
+        match = _ISIN_RE.search(description.upper())
+        if match is None:
+            return None
+        isin = match.group(0)
+        return self.asset_id_for(
+            key=f"isin:{isin}",
+            name=_charge_asset_name(description, isin),
+            isin=isin,
+        )
+
+    def source_row_evidence(
+        self,
+        row: Sequence,
+        row_num: int,
+        *,
+        comment: Optional[str] = None,
+        title: str = "Riga del file",
+    ) -> BRIMEvidence:
+        return BRIMEvidence(
+            title=title,
+            headers=self.evidence_headers,
+            rows=[[io.cell_str(row[column]) if column < len(row) else "" for _, column in self.evidence_cols]],
+            row_numbers=[row_num],
+            comment=comment,
+        )
+
+    def build_identity_indexes(self, rows: Sequence[Sequence], header_idx: int) -> None:  # noqa: C901 — explicit prepass guards preserve source-row evidence
+        """Prepass: index charges plus coupon-derived ISIN/name/nominal identities."""
+        for row_num, row in enumerate(
+            rows[header_idx + 1 :],
+            start=header_idx + 2,
+        ):
+            if io.is_blank_row(row):
+                continue
+            tx_date = io.to_date(io.row_get(row, self.col, "date"))
+            causale = io.cell_str(io.row_get(row, self.col, "causale")).upper()
+            description = io.cell_str(io.row_get(row, self.col, "descrizione"))
+            if tx_date is None:
+                continue
+            if causale in _ACCT_FEETAX_CAUSALI_SECURITIES:
+                amount = io.to_decimal_it(io.row_get(row, self.col, "importo"))
+                if amount is not None and amount != 0:
+                    self.charge_rows_by_date.setdefault(tx_date, []).append(
+                        {
+                            "row": row,
+                            "row_num": row_num,
+                            "amount": amount,
+                            "description": description,
+                        }
+                    )
+            if causale not in _ACCT_INCOME_CAUSALI:
+                continue
+            isin_match = _ISIN_RE.search(description.upper())
+            nominal_match = _ACCOUNT_NOMINALE_RE.search(description)
+            if isin_match is None or nominal_match is None:
+                continue
+            isin = isin_match.group(0)
+            nominal = io.to_decimal_it(nominal_match.group("nominale"))
+            if nominal is None or nominal <= 0:
+                continue
+            name = _income_asset_name(description, isin)
+            self.income_identity_by_date.setdefault(tx_date, []).append(
+                {
+                    "isin": isin,
+                    "isin_digits": _digits_only(isin),
+                    "name": name,
+                    "nominale": nominal,
+                }
+            )
+            entry = self.nominal_by_isin.setdefault(
+                isin,
+                {
+                    "isin": isin,
+                    "name": name,
+                    "nominals": set(),
+                    "row": row,
+                    "row_num": row_num,
+                },
+            )
+            if len(name) > len(entry["name"]):
+                entry["name"] = name
+            entry["nominals"].add(nominal)
+
+        for entry in self.nominal_by_isin.values():
+            entry["norm"] = _normalize_trade_name(entry["name"])
+
+    def nominal_candidates_for(self, trade_name: str) -> List[Dict[str, Any]]:
+        normalized = _normalize_trade_name(trade_name)
+        if not normalized:
+            return []
+        return [entry for entry in self.nominal_by_isin.values() if _prefix_matches(normalized, entry["norm"])]
+
+    def charge_rows_near(self, tx_date: Any, *, days: int = 3) -> List[Dict[str, Any]]:
+        found: List[Dict[str, Any]] = []
+        for delta_days in range(-days, days + 1):
+            found.extend(
+                self.charge_rows_by_date.get(
+                    tx_date + timedelta(days=delta_days),
+                    [],
                 )
             )
+        return sorted(found, key=lambda item: item["row_num"])
+
+    def split_suggestions_for(
+        self,
+        *,
+        tx_date: Any,
+        is_buy: bool,
+        amount: Decimal,
+        currency: str,
+        description: str,
+        nominal: Optional[Decimal] = None,
+    ) -> List[str]:
+        hints: List[str] = []
+        nearby = self.charge_rows_near(tx_date)
+        if nearby:
+            listed = ", ".join(f"riga {item['row_num']} ({_fmt_money(abs(item['amount']))} {currency})" for item in nearby[:3])
+            hints.append("Il file registra già delle spese su titoli a ridosso di questa data — " f"{listed}. Sono transazioni a sé: se le scorpori anche da qui le conti " "due volte.")
+        else:
+            hints.append("Nei giorni intorno a questa operazione il file non registra nessuna " "riga di commissioni: se una commissione c'è stata, è dentro questo totale.")
+        upper = (description or "").upper()
+        is_fund = any(token in upper for token in ("SICAV", "FONDO", "FUND", "ETF"))
+        if is_fund:
+            hints.append("È un fondo, non un'obbligazione: non ci sono ratei cedolari da " "scorporare, quindi la differenza rispetto al prezzo sono commissioni o imposte.")
+        elif is_buy:
+            hints.append("Se è un'obbligazione e non l'hai comprata all'emissione, il totale " "contiene anche il rateo cedolare che hai rimborsato al venditore: " "registralo come voce a parte, non fa parte del costo del titolo.")
+        if nominal is not None and abs(amount) == nominal:
+            hints.append("Il totale coincide al centesimo con il valore nominale: è il caso " "tipico dell'acquisto all'emissione, alla pari e senza oneri. Se è " "andata così, non c'è nulla da scorporare.")
+        if not is_buy:
+            hints.append("Su una vendita l'importo accreditato è già netto: per registrare il " "ricavo lordo scorpora qui le spese trattenute, l'incasso sul conto non cambia.")
+        hints.append("I numeri esatti sono sulla nota informativa dell'operazione: da lì leggi " "il controvalore del solo titolo e le singole voci di spesa.")
+        return hints
+
+    def try_account_trade(
+        self,
+        *,
+        row: Sequence,
+        offset: int,
+        tx_date: Any,
+        causale: str,
+        description: str,
+        amount: Decimal,
+        currency: str,
+        context: str,
+    ) -> Optional[Dict[str, Any]]:
+        """Resolve one account cash row into a trade when in-file evidence permits."""
+        trade_type, direction_reason = _classify_trade_direction(description, amount)
+        if trade_type is None:
+            return {"reason": direction_reason}
+
+        trade_name = _trade_asset_name(description)
+        if not trade_name:
+            return {"reason": "no_name", "type": trade_type}
+
+        candidates = self.nominal_candidates_for(trade_name)
+        if not candidates:
+            return {"reason": "no_quantity", "type": trade_type, "name": trade_name}
+        if len(candidates) > 1:
+            return {
+                "reason": "ambiguous_name",
+                "type": trade_type,
+                "name": trade_name,
+                "candidates": candidates,
+            }
+        identity = candidates[0]
+        if len(identity["nominals"]) > 1:
+            return {
+                "reason": "ambiguous_nominal",
+                "type": trade_type,
+                "name": trade_name,
+                "candidates": candidates,
+            }
+
+        nominal: Decimal = next(iter(identity["nominals"]))
+        best_name = identity["name"] if len(identity["name"]) >= len(trade_name) else trade_name
+        asset_id = self.asset_id_for(
+            key=f"isin:{identity['isin']}",
+            name=best_name,
+            isin=identity["isin"],
+        )
+        is_buy = trade_type == TransactionType.BUY
+        created = self.provider._create_transaction(
+            row_num=offset,
+            transactions=self.transactions,
+            validation_issues=self.validation_issues,
+            context=context,
+            broker_id=self.broker_id,
+            asset_id=asset_id,
+            type=trade_type,
+            date=tx_date,
+            quantity=nominal if is_buy else -nominal,
+            cash=Currency(
+                code=currency,
+                amount=-abs(amount) if is_buy else abs(amount),
+            ),
+            description=(description or causale)[:500],
+            tags=[
+                "import",
+                "credit_agricole",
+                _slug_causale(causale),
+                "account_trade",
+            ],
+        )
+        if created is None:
+            return None
+
+        delta = abs(amount) - nominal
+        verb = "acquisto" if is_buy else "vendita"
+        if not is_buy:
+            self.field_todos.append(
+                BRIMFieldTodo(
+                    tx_index=len(self.transactions) - 1,
+                    field="quantity",
+                    severity="warning",
+                    reason_code="ca_account_trade_sell_quantity_presumed",
+                    message=(f"Riga {offset}: vendita di {best_name}. Ho usato " f"{_fmt_money(nominal)} come quantità, cioè il valore nominale " "che risulta dalle cedole. Se hai venduto solo una parte, correggila."),
+                    context={
+                        "causale": causale,
+                        "row": offset,
+                        "isin": identity["isin"],
+                        "nominale": str(nominal),
+                    },
+                    evidence=[
+                        self.source_row_evidence(
+                            row,
+                            offset,
+                            comment=("Il file dice quanto denaro è entrato, non quante quote " f"sono uscite. Le cedole di {identity['isin']} riportano " f"un nominale di {nominal}: è la posizione, quindi è " "giusto solo se hai venduto tutto."),
+                        )
+                    ],
+                )
+            )
+        if not is_buy:
+            trade_comment = f"Sul conto sono entrati {_fmt_money(abs(amount))} {currency}, ed è un " "importo netto: le spese sulla vendita sono già state trattenute e il file " "non le espone. Il ricavo lordo e le singole spese non sono quindi " "ricavabili da questa riga."
+        elif delta != 0:
+            trade_comment = (
+                f"Dal conto sono usciti {_fmt_money(abs(amount))} {currency}. Guardando "
+                "il resto del file ho trovato una cedola dello stesso titolo "
+                f"(riga {identity['row_num']}) che dichiara {_fmt_money(nominal)} di "
+                "valore nominale, cioè il capitale del titolo. I due numeri non "
+                f"coincidono ({_fmt_money(abs(delta))} {currency} di differenza): il "
+                "totale di questa riga mette insieme il prezzo del titolo, il rateo "
+                "cedolare maturato e le eventuali commissioni, e il file non li separa. "
+                "La cassa è comunque giusta; è il costo di carico a essere approssimato."
+            )
+        else:
+            trade_comment = (
+                f"Dal conto sono usciti {_fmt_money(abs(amount))} {currency}, esattamente "
+                "quanto il valore nominale dichiarato dalla cedola alla riga "
+                f"{identity['row_num']}. È il caso dell'acquisto all'emissione, alla pari "
+                "e senza oneri: se è andata così non c'è nulla da correggere. Se invece "
+                "la nota informativa espone commissioni o rateo, il file li ha inglobati "
+                "qui dentro."
+            )
+        self.field_todos.append(
+            BRIMFieldTodo(
+                tx_index=len(self.transactions) - 1,
+                field="cash",
+                severity="warning",
+                reason_code="ca_account_trade_bundled_amount",
+                message=(f"Riga {offset}: {verb} di {best_name} — l'importo di questa riga " "potrebbe raggruppare più voci insieme."),
+                context={
+                    "causale": causale,
+                    "row": offset,
+                    "isin": identity["isin"],
+                    "cash": str(abs(amount)),
+                    "nominale": str(nominal),
+                    "delta": str(delta),
+                    "currency": currency,
+                    "nominale_row": identity["row_num"],
+                    "compare_nominal": is_buy,
+                    "split_hint": "trade_charges",
+                    "split_suggestions": self.split_suggestions_for(
+                        tx_date=tx_date,
+                        is_buy=is_buy,
+                        amount=amount,
+                        currency=currency,
+                        description=description,
+                        nominal=nominal,
+                    ),
+                },
+                evidence=[
+                    self.source_row_evidence(
+                        row,
+                        offset,
+                        title=f"Riga di {verb}",
+                        comment=trade_comment,
+                    ),
+                    self.source_row_evidence(
+                        identity["row"],
+                        identity["row_num"],
+                        title="Cedola che ha fornito il nominale",
+                        comment=(f"L'ISIN {identity['isin']} e il valore nominale " f"{_fmt_money(nominal)} vengono da qui: è il capitale del " "titolo, cioè quanto la banca rimborsa a scadenza, non quanto " "hai pagato."),
+                    ),
+                ],
+            )
+        )
+        return None
+
+    @staticmethod
+    def trade_fallback_message(
+        offset: int,
+        info: Dict[str, Any],
+        booked_as: str,
+    ) -> tuple[str, str]:
+        reason = info.get("reason")
+        name = info.get("name") or ""
+        if reason == "sign_mismatch":
+            return (
+                f"Riga {offset}: la descrizione e il segno dell'importo si contraddicono. Verifica l'operazione e completala.",
+                "La descrizione parla di acquisto ma il denaro entra (o viceversa). Non tipizzo su un dato che si contraddice: " f"l'ho registrata come {booked_as} di cassa. Apri la transazione, scegli il tipo giusto e il titolo.",
+            )
+        if reason == "ambiguous_name":
+            names = ", ".join(f"{candidate['name']} ({candidate['isin']})" for candidate in info.get("candidates", []))
+            return (
+                f"Riga {offset}: '{name}' corrisponde a più titoli. Scegli quello giusto e la quantità.",
+                f"Il nome nella riga combacia con più titoli presenti nel file: {names}. Scegliere al posto tuo significherebbe " f"rischiare una posizione sbagliata, quindi l'ho registrata come {booked_as} di cassa.",
+            )
+        if reason == "ambiguous_nominal":
+            return (
+                f"Riga {offset}: per '{name}' le cedole riportano nominali diversi. Inserisci la quantità giusta.",
+                "Le cedole di questo titolo non concordano su un unico nominale (la posizione è cambiata nel tempo), quindi non " f"posso ricavarne la quantità dell'operazione. L'ho registrata come {booked_as} di cassa.",
+            )
+        if reason == "no_quantity":
+            return (
+                f"Riga {offset}: operazione su '{name}' senza quantità ricavabile. Scegli il titolo e inserisci la quantità.",
+                f"Questa riga è un'operazione su titoli e il titolo si legge ('{name}'), ma la quantità no: nel file non ci sono " f"cedole di questo strumento da cui ricavarla (i fondi non ne staccano). L'importo è giusto, l'ho registrata come {booked_as} di cassa.",
+            )
+        if reason == "fund_redemption":
+            return (
+                f"Riga {offset}: sembra il disinvestimento di '{name}', arrivato come bonifico. Scegli il fondo e inserisci le quote vendute.",
+                f"Il denaro arriva da '{name}' e la causale parla di rimborso sullo stesso fondo: è un disinvestimento pagato per bonifico, "
+                f"non un accredito qualsiasi. Le quote vendute il file non le dice — un fondo riporta il controvalore, non il numero di quote — "
+                f"quindi l'ho registrata come {booked_as} di cassa. Cambiala in vendita, scegli il fondo e inserisci le quote: "
+                "altrimenti la posizione resta aperta per sempre.",
+            )
+        return (
+            f"Riga {offset}: operazione su titoli registrata come movimento di cassa perché da questo file non ricavo quantità e strumento. Verificala e completala.",
+            "Questa riga è un'operazione su titoli, ma la descrizione non riporta quantità né codice del titolo. " f"L'ho registrata come {booked_as} di cassa: l'importo è giusto, il titolo manca. " "Apri la transazione, cambia il tipo in acquisto o vendita e scegli il titolo.",
+        )
 
 
 @register_provider(BRIMProviderRegistry)
@@ -847,7 +1231,7 @@ class CreditAgricoleBrokerProvider(BRIMProvider):
         if not transactions:
             warnings.append(BRIMNotice(severity="warning", code="ca_securities_empty", message="Nessuna transazione valida trovata nel file"))
 
-        _attach_maturity_notices(transactions, extracted_assets)
+        attach_maturity_notices(transactions, extracted_assets, reason=_CA_MATURITY_NOTICE_REASON)
 
         logger.info(
             "Crédit Agricole file parsed",
@@ -937,61 +1321,6 @@ class CreditAgricoleBrokerProvider(BRIMProvider):
         linked to fake assets keyed by that ISIN so the income appears under the
         asset in the FIFO lot detail.
         """
-        transactions: List[TXCreateItem] = []
-        warnings: List[BRIMNotice] = []
-        validation_issues: List[BRIMValidationIssue] = []
-        field_todos: List[BRIMFieldTodo] = []
-        extracted_assets: Dict[int, BRIMExtractedAssetInfo] = {}
-        asset_to_fake_id: Dict[str, int] = {}
-        next_fake_id = FAKE_ASSET_ID_BASE
-
-        def asset_id_for(*, key: str, name: str, isin: Optional[str]) -> int:
-            nonlocal next_fake_id
-            if key in asset_to_fake_id:
-                existing_id = asset_to_fake_id[key]
-                # Rows arrive in file order, so a charge on a security can be read before
-                # the coupon that actually names it. The charge can only offer the ISIN as
-                # a placeholder, so let a real name take its place when one turns up.
-                known = extracted_assets[existing_id]
-                current = known.extracted_name or ""
-                upgrade = (current == isin and name != isin) or _is_truncation_of(current, name)
-                if upgrade:
-                    extracted_assets[existing_id] = BRIMExtractedAssetInfo(extracted_symbol=known.extracted_symbol, extracted_isin=known.extracted_isin, extracted_name=name)
-                return existing_id
-            new_id = next_fake_id
-            asset_to_fake_id[key] = new_id
-            extracted_assets[new_id] = BRIMExtractedAssetInfo(
-                extracted_symbol=None,
-                extracted_isin=isin,
-                extracted_name=name,
-            )
-            next_fake_id -= 1
-            return new_id
-
-        def income_asset_id(desc: str) -> Optional[int]:
-            """Link an income row (bond coupon or dividend) to a fake asset keyed by its
-            ISIN. Returns None when the row names no security (e.g. bank credit interest)."""
-            match = _ISIN_RE.search(desc.upper())
-            if match is None:
-                return None
-            isin = match.group(0)
-            return asset_id_for(key=f"isin:{isin}", name=_income_asset_name(desc, isin), isin=isin)
-
-        def charge_asset_id(desc: str) -> Optional[int]:
-            """Link a securities charge to the instrument it was charged for, by ISIN.
-
-            Keyed exactly like an income row so the fee joins the same security. The name
-            is read from the fragment that follows the ISIN, never from the head of the
-            line: a charge line opens by describing the *charge* ("SPESE STACCO CEDOLA
-            DEL 21/05/2026 DOSSIER: ..."), and taking that text as a name would put the
-            fee's own wording in the user's asset list.
-            """
-            match = _ISIN_RE.search(desc.upper())
-            if match is None:
-                return None
-            isin = match.group(0)
-            return asset_id_for(key=f"isin:{isin}", name=_charge_asset_name(desc, isin), isin=isin)
-
         header_idx = io.find_header_row(rows, ["Data Op.", "Descrizione", "Importo"])
         if header_idx is None:
             raise BRIMParseError("Crédit Agricole account-movements header row not found")
@@ -1006,320 +1335,30 @@ class CreditAgricoleBrokerProvider(BRIMProvider):
             },
         )
 
-        # Column labels of the real header row, used to render the source row back
-        # to the user as a navigable table. Only the mapped columns are kept, in a
-        # stable order: the raw header also carries the export's filler columns.
         evidence_cols = [(label, col[key]) for label, key in (("Data Op.", "date"), ("Causale", "causale"), ("Descrizione", "descrizione"), ("Importo", "importo"), ("Divisa", "divisa")) if col.get(key) is not None]
         evidence_headers = [label for label, _ in evidence_cols]
+        parse_context = _CAAccountParseContext(
+            provider=self,
+            broker_id=broker_id,
+            col=col,
+            evidence_cols=evidence_cols,
+        )
+        parse_context.build_identity_indexes(rows, header_idx)
 
-        def source_row_evidence(row: Sequence, row_num: int, *, comment: Optional[str] = None, title: str = "Riga del file") -> BRIMEvidence:
-            """The originating file row as a one-row table, so the user can check us.
+        transactions = parse_context.transactions
+        warnings = parse_context.warnings
+        validation_issues = parse_context.validation_issues
+        field_todos = parse_context.field_todos
+        extracted_assets = parse_context.extracted_assets
+        income_identity_by_date = parse_context.income_identity_by_date
+        unknown_causali = parse_context.unknown_causali
+        asset_id_for = parse_context.asset_id_for
+        income_asset_id = parse_context.income_asset_id
+        charge_asset_id = parse_context.charge_asset_id
+        source_row_evidence = parse_context.source_row_evidence
+        split_suggestions_for = parse_context.split_suggestions_for
 
-            Attached to the todo at the moment the plugin gives up, which is the only
-            moment the row is still in hand: re-reading the file preview later would
-            cost a second fetch and, worse, misalign the indexes if the preview
-            truncates or paginates.
-            """
-            return BRIMEvidence(
-                title=title,
-                headers=evidence_headers,
-                rows=[[io.cell_str(row[cidx]) if cidx < len(row) else "" for _, cidx in evidence_cols]],
-                row_numbers=[row_num],
-                comment=comment,
-            )
-
-        income_identity_by_date: Dict = {}
-        # ISIN -> {name, nominals} built from the income rows (B2, filled in the pre-pass below).
-        nominal_by_isin: Dict[str, Dict] = {}
-        # Securities charges already booked as rows of their own, by date. Used to tell the
-        # user whether a commission is *inside* a trade total or *beside* it: extracting a
-        # charge that the file already books separately would count it twice.
-        charge_rows_by_date: Dict = {}
-        # Tier-4 rows, grouped by causale, so an unregistered causale is reported once
-        # with its rows rather than once per row.
-        unknown_causali: Dict[str, List[tuple[int, Sequence]]] = {}
-
-        for identity_offset, row in enumerate(rows[header_idx + 1 :], start=header_idx + 2):
-            if io.is_blank_row(row):
-                continue
-            identity_date = io.to_date(io.row_get(row, col, "date"))
-            identity_causale = io.cell_str(io.row_get(row, col, "causale")).upper()
-            identity_description = io.cell_str(io.row_get(row, col, "descrizione"))
-            if identity_date is None:
-                continue
-            if identity_causale in _ACCT_FEETAX_CAUSALI_SECURITIES:
-                charge_amount = io.to_decimal_it(io.row_get(row, col, "importo"))
-                if charge_amount is not None and charge_amount != 0:
-                    charge_rows_by_date.setdefault(identity_date, []).append({"row": row, "row_num": identity_offset, "amount": charge_amount, "description": identity_description})
-            if identity_causale not in _ACCT_INCOME_CAUSALI:
-                continue
-            isin_match = _ISIN_RE.search(identity_description.upper())
-            nominale_match = _ACCOUNT_NOMINALE_RE.search(identity_description)
-            if isin_match is None or nominale_match is None:
-                continue
-            isin = isin_match.group(0)
-            nominale = io.to_decimal_it(nominale_match.group("nominale"))
-            if nominale is None or nominale <= 0:
-                continue
-            income_identity_by_date.setdefault(identity_date, []).append(
-                {
-                    "isin": isin,
-                    "isin_digits": _digits_only(isin),
-                    "name": _income_asset_name(identity_description, isin),
-                    "nominale": nominale,
-                }
-            )
-            # B2 — name -> (ISIN, nominal) index over the whole file. A trade row names
-            # its instrument but never its quantity; the coupons of that same bond carry
-            # both the ISIN and the NOMINALE, i.e. exactly what the trade is missing.
-            # Same mechanism as income_identity_by_date, keyed by name instead of date
-            # because a purchase and its coupons never share one.
-            identity_name = _income_asset_name(identity_description, isin)
-            entry = nominal_by_isin.setdefault(isin, {"isin": isin, "name": identity_name, "nominals": set(), "row": row, "row_num": identity_offset})
-            if len(identity_name) > len(entry["name"]):
-                entry["name"] = identity_name  # keep the least truncated form seen
-            entry["nominals"].add(nominale)
-
-        for entry in nominal_by_isin.values():
-            entry["norm"] = _normalize_trade_name(entry["name"])
-
-        def nominal_candidates_for(trade_name: str) -> List[Dict]:
-            """Coupon-derived identities whose name is the same instrument as ``trade_name``."""
-            norm = _normalize_trade_name(trade_name)
-            if not norm:
-                return []
-            return [entry for entry in nominal_by_isin.values() if _prefix_matches(norm, entry["norm"])]
-
-        def charge_rows_near(tx_date, *, days: int = 3) -> List[Dict]:
-            """Securities-charge rows the file books on its own within ``days`` of a trade.
-
-            The window is deliberately wide: a commission is often value-dated a day or
-            two off the trade. False positives are harmless here — the suggestion only
-            *warns* the user not to extract a charge twice, it never moves money.
-            """
-            found: List[Dict] = []
-            for delta_days in range(-days, days + 1):
-                found.extend(charge_rows_by_date.get(tx_date + timedelta(days=delta_days), []))
-            return sorted(found, key=lambda item: item["row_num"])
-
-        def split_suggestions_for(*, tx_date, is_buy: bool, amount: Decimal, currency: str, description: str, nominal: Optional[Decimal] = None) -> List[str]:
-            """What the *rest of the file* can say about a bundled trade total.
-
-            Every line is read off the export, never inferred from market data: the point
-            is to narrow down what the total contains, so the user splits it from their
-            contract note instead of guessing. Order matters — the double-counting warning
-            comes first because it is the only one that can cause a wrong import.
-            """
-            hints: List[str] = []
-            nearby = charge_rows_near(tx_date)
-            if nearby:
-                listed = ", ".join(f"riga {item['row_num']} ({_fmt_money(abs(item['amount']))} {currency})" for item in nearby[:3])
-                hints.append(f"Il file registra già delle spese su titoli a ridosso di questa data — {listed}. Sono transazioni a sé: se le scorpori anche da qui le conti due volte.")
-            else:
-                hints.append("Nei giorni intorno a questa operazione il file non registra nessuna riga di commissioni: se una commissione c'è stata, è dentro questo totale.")
-            upper = (description or "").upper()
-            is_fund = any(token in upper for token in ("SICAV", "FONDO", "FUND", "ETF"))
-            if is_fund:
-                hints.append("È un fondo, non un'obbligazione: non ci sono ratei cedolari da scorporare, quindi la differenza rispetto al prezzo sono commissioni o imposte.")
-            elif is_buy:
-                hints.append("Se è un'obbligazione e non l'hai comprata all'emissione, il totale contiene anche il rateo cedolare che hai rimborsato al venditore: registralo come voce a parte, non fa parte del costo del titolo.")
-            if nominal is not None and abs(amount) == nominal:
-                hints.append("Il totale coincide al centesimo con il valore nominale: è il caso tipico dell'acquisto all'emissione, alla pari e senza oneri. Se è andata così, non c'è nulla da scorporare.")
-            if not is_buy:
-                hints.append("Su una vendita l'importo accreditato è già netto: per registrare il ricavo lordo scorpora qui le spese trattenute, l'incasso sul conto non cambia.")
-            hints.append("I numeri esatti sono sulla nota informativa dell'operazione: da lì leggi il controvalore del solo titolo e le singole voci di spesa.")
-            return hints
-
-        def try_account_trade(
-            *,
-            row: Sequence,
-            offset: int,
-            tx_date,
-            causale: str,
-            description: str,
-            amount: Decimal,
-            currency: str,
-            context: str,
-        ) -> Optional[Dict]:
-            """Book a ``COMPRAVENDITA`` row as a real BUY/SELL when the file allows it.
-
-            Returns ``None`` once the row is dealt with (trade created, or dropped with a
-            validation issue), or a ``{"reason", ...}`` dict saying why it could not be
-            typed, so the caller falls back to cash and explains the gap in the user's terms.
-
-            ⚠️ **No cash counterpart here.** In the securities-only export the cash side is
-            absent and has to be synthesised; on the account statement *the row itself is
-            the cash*, so adding a counterpart would double the movement.
-            """
-            trade_type, direction_reason = _classify_trade_direction(description, amount)
-            if trade_type is None:
-                return {"reason": direction_reason}
-
-            trade_name = _trade_asset_name(description)
-            if not trade_name:
-                return {"reason": "no_name", "type": trade_type}
-
-            candidates = nominal_candidates_for(trade_name)
-            if not candidates:
-                return {"reason": "no_quantity", "type": trade_type, "name": trade_name}
-            if len(candidates) > 1:
-                return {"reason": "ambiguous_name", "type": trade_type, "name": trade_name, "candidates": candidates}
-            identity = candidates[0]
-            if len(identity["nominals"]) > 1:
-                return {"reason": "ambiguous_nominal", "type": trade_type, "name": trade_name, "candidates": candidates}
-
-            nominal: Decimal = next(iter(identity["nominals"]))
-            best_name = identity["name"] if len(identity["name"]) >= len(trade_name) else trade_name
-            asset_id = asset_id_for(key=f"isin:{identity['isin']}", name=best_name, isin=identity["isin"])
-            is_buy = trade_type == TransactionType.BUY
-            created = self._create_transaction(
-                row_num=offset,
-                transactions=transactions,
-                validation_issues=validation_issues,
-                context=context,
-                broker_id=broker_id,
-                asset_id=asset_id,
-                type=trade_type,
-                date=tx_date,
-                quantity=nominal if is_buy else -nominal,
-                cash=Currency(code=currency, amount=-abs(amount) if is_buy else abs(amount)),
-                description=(description or causale)[:500],
-                tags=["import", "credit_agricole", _slug_causale(causale), "account_trade"],
-            )
-            if created is None:
-                return None
-
-            # B3 — the row carries one net number that packs several events together.
-            # The flag does not wait for a contradiction: this layout *never* separates
-            # the price of a security from the charges levied on it, so every trade it
-            # books is potentially bundled and every trade is flagged. Making the warning
-            # depend on a coupon being present would make it depend on what else happens
-            # to sit in the same export — import the purchase alone, in a period with no
-            # coupon, and the identical row would pass unflagged.
-            #
-            # Deriving the breakdown ourselves was tried on the real data and does not
-            # reconcile (one of the two residues comes out negative), so the plugin states
-            # the problem instead of inventing an answer. It goes out as a field todo
-            # rather than a notice because the user *can* answer it: the numbers are on
-            # their contract note, and the correction step turns the row into a trade at
-            # the clean price plus one leg per charge.
-            delta = abs(amount) - nominal
-            verb = "acquisto" if is_buy else "vendita"
-            if not is_buy:
-                # The coupon says how much of the bond was *held*, not how much was sold.
-                # For a full sale the two coincide, for a partial one they do not, and the
-                # file never says which — so the quantity is declared as presumed rather
-                # than passed off as read. Kept separate from the bundled-amount todo
-                # below: they ask the user two different questions (how many, how much of
-                # what), and merging them would make answering one look like answering both.
-                field_todos.append(
-                    BRIMFieldTodo(
-                        tx_index=len(transactions) - 1,
-                        field="quantity",
-                        severity="warning",
-                        reason_code="ca_account_trade_sell_quantity_presumed",
-                        message=f"Riga {offset}: vendita di {best_name}. Ho usato {_fmt_money(nominal)} come quantità, cioè il valore nominale che risulta dalle cedole. Se hai venduto solo una parte, correggila.",
-                        context={"causale": causale, "row": offset, "isin": identity["isin"], "nominale": str(nominal)},
-                        evidence=[
-                            source_row_evidence(
-                                row,
-                                offset,
-                                comment=(f"Il file dice quanto denaro è entrato, non quante quote sono uscite. Le cedole di {identity['isin']} " f"riportano un nominale di {nominal}: è la posizione, quindi è giusto solo se hai venduto tutto."),
-                            )
-                        ],
-                    )
-                )
-            if not is_buy:
-                trade_comment = f"Sul conto sono entrati {_fmt_money(abs(amount))} {currency}, ed è un importo netto: le spese sulla vendita sono già state " "trattenute e il file non le espone. Il ricavo lordo e le singole spese non sono quindi ricavabili da questa riga."
-            elif delta != 0:
-                trade_comment = (
-                    f"Dal conto sono usciti {_fmt_money(abs(amount))} {currency}. Guardando il resto del file ho trovato una cedola dello stesso "
-                    f"titolo (riga {identity['row_num']}) che dichiara {_fmt_money(nominal)} di valore nominale, cioè il capitale del titolo. "
-                    f"I due numeri non coincidono ({_fmt_money(abs(delta))} {currency} di differenza): il totale di questa riga mette insieme il "
-                    "prezzo del titolo, il rateo cedolare maturato e le eventuali commissioni, e il file non li separa. La cassa è comunque "
-                    "giusta; è il costo di carico a essere approssimato."
-                )
-            else:
-                trade_comment = (
-                    f"Dal conto sono usciti {_fmt_money(abs(amount))} {currency}, esattamente quanto il valore nominale dichiarato dalla cedola "
-                    f"alla riga {identity['row_num']}. È il caso dell'acquisto all'emissione, alla pari e senza oneri: se è andata così non c'è "
-                    "nulla da correggere. Se invece la nota informativa espone commissioni o rateo, il file li ha inglobati qui dentro."
-                )
-            field_todos.append(
-                BRIMFieldTodo(
-                    tx_index=len(transactions) - 1,
-                    field="cash",
-                    severity="warning",
-                    reason_code="ca_account_trade_bundled_amount",
-                    message=f"Riga {offset}: {verb} di {best_name} — l'importo di questa riga potrebbe raggruppare più voci insieme.",
-                    context={
-                        "causale": causale,
-                        "row": offset,
-                        "isin": identity["isin"],
-                        "cash": str(abs(amount)),
-                        "nominale": str(nominal),
-                        "delta": str(delta),
-                        "currency": currency,
-                        "nominale_row": identity["row_num"],
-                        # The nominal is the quantity in both directions, but it is a *term
-                        # of comparison* only on a purchase: on a sale the proceeds have no
-                        # reason to resemble the face value, and showing them side by side
-                        # would invite the user to read a gap that means nothing.
-                        "compare_nominal": is_buy,
-                        "split_hint": "trade_charges",
-                        "split_suggestions": split_suggestions_for(tx_date=tx_date, is_buy=is_buy, amount=amount, currency=currency, description=description, nominal=nominal),
-                    },
-                    evidence=[
-                        source_row_evidence(row, offset, title=f"Riga di {verb}", comment=trade_comment),
-                        source_row_evidence(
-                            identity["row"],
-                            identity["row_num"],
-                            title="Cedola che ha fornito il nominale",
-                            comment=(f"L'ISIN {identity['isin']} e il valore nominale {_fmt_money(nominal)} vengono da qui: è il capitale del titolo, " "cioè quanto la banca rimborsa a scadenza, non quanto hai pagato."),
-                        ),
-                    ],
-                )
-            )
-            return None
-
-        def trade_fallback_message(offset: int, info: Dict, booked_as: str) -> tuple[str, str]:
-            """User-facing message + evidence comment for a trade that stayed cash."""
-            reason = info.get("reason")
-            name = info.get("name") or ""
-            if reason == "sign_mismatch":
-                return (
-                    f"Riga {offset}: la descrizione e il segno dell'importo si contraddicono. Verifica l'operazione e completala.",
-                    "La descrizione parla di acquisto ma il denaro entra (o viceversa). Non tipizzo su un dato che si contraddice: " f"l'ho registrata come {booked_as} di cassa. Apri la transazione, scegli il tipo giusto e il titolo.",
-                )
-            if reason == "ambiguous_name":
-                names = ", ".join(f"{c['name']} ({c['isin']})" for c in info.get("candidates", []))
-                return (
-                    f"Riga {offset}: '{name}' corrisponde a più titoli. Scegli quello giusto e la quantità.",
-                    f"Il nome nella riga combacia con più titoli presenti nel file: {names}. Scegliere al posto tuo significherebbe " f"rischiare una posizione sbagliata, quindi l'ho registrata come {booked_as} di cassa.",
-                )
-            if reason == "ambiguous_nominal":
-                return (
-                    f"Riga {offset}: per '{name}' le cedole riportano nominali diversi. Inserisci la quantità giusta.",
-                    "Le cedole di questo titolo non concordano su un unico nominale (la posizione è cambiata nel tempo), quindi non " f"posso ricavarne la quantità dell'operazione. L'ho registrata come {booked_as} di cassa.",
-                )
-            if reason == "no_quantity":
-                return (
-                    f"Riga {offset}: operazione su '{name}' senza quantità ricavabile. Scegli il titolo e inserisci la quantità.",
-                    f"Questa riga è un'operazione su titoli e il titolo si legge ('{name}'), ma la quantità no: nel file non ci sono " f"cedole di questo strumento da cui ricavarla (i fondi non ne staccano). L'importo è giusto, l'ho registrata come {booked_as} di cassa.",
-                )
-            if reason == "fund_redemption":
-                return (
-                    f"Riga {offset}: sembra il disinvestimento di '{name}', arrivato come bonifico. Scegli il fondo e inserisci le quote vendute.",
-                    f"Il denaro arriva da '{name}' e la causale parla di rimborso sullo stesso fondo: è un disinvestimento pagato per bonifico, "
-                    f"non un accredito qualsiasi. Le quote vendute il file non le dice — un fondo riporta il controvalore, non il numero di quote — "
-                    f"quindi l'ho registrata come {booked_as} di cassa. Cambiala in vendita, scegli il fondo e inserisci le quote: "
-                    "altrimenti la posizione resta aperta per sempre.",
-                )
-            # no_keyword / no_name — the description does not say what happened.
-            return (
-                f"Riga {offset}: operazione su titoli registrata come movimento di cassa perché da questo file non ricavo quantità e strumento. Verificala e completala.",
-                "Questa riga è un'operazione su titoli, ma la descrizione non riporta quantità né codice del titolo. " f"L'ho registrata come {booked_as} di cassa: l'importo è giusto, il titolo manca. " "Apri la transazione, cambia il tipo in acquisto o vendita e scegli il titolo.",
-            )
+        trade_fallback_message = parse_context.trade_fallback_message
 
         for offset, row in enumerate(rows[header_idx + 1 :], start=header_idx + 2):
             if io.is_blank_row(row):
@@ -1431,7 +1470,7 @@ class CreditAgricoleBrokerProvider(BRIMProvider):
 
             trade_fallback: Optional[Dict] = None
             if causale in _ACCT_UNRESOLVED_CAUSALI:
-                trade_fallback = try_account_trade(
+                trade_fallback = parse_context.try_account_trade(
                     row=row,
                     offset=offset,
                     tx_date=tx_date,
@@ -1602,7 +1641,7 @@ class CreditAgricoleBrokerProvider(BRIMProvider):
         if not transactions:
             warnings.append(BRIMNotice(severity="warning", code="ca_account_empty", message="Nessun movimento di conto trovato nel file"))
 
-        _attach_maturity_notices(transactions, extracted_assets)
+        attach_maturity_notices(transactions, extracted_assets, reason=_CA_MATURITY_NOTICE_REASON)
 
         logger.info(
             "Crédit Agricole account movements parsed",

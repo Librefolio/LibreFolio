@@ -225,18 +225,18 @@ def _infer_country_from_issuer(issuer: str | None) -> str | None:
 # Keys in both EN and IT (case-insensitive lookup).
 _TIPOLOGIA_TO_SECTOR: dict[str, str] = {
     # English
-    "italian government bonds": "Financials",
-    "government bonds": "Financials",
-    "corporate": "Financials",
-    "corporate bonds": "Financials",
+    "italian government bonds": "Government Bonds",
+    "government bonds": "Government Bonds",
+    "corporate": "Corporate Bonds",
+    "corporate bonds": "Corporate Bonds",
     "supranational bonds": "Financials",
     # EuroTLX government paper (t-bonds, bund, ...); surfaced in the IT page
-    "t-bonds": "Financials",
-    "government": "Financials",
+    "t-bonds": "Government Bonds",
+    "government": "Government Bonds",
     # Italian
-    "titoli di stato italiani": "Financials",
-    "titoli di stato": "Financials",
-    "obbligazioni corporate": "Financials",
+    "titoli di stato italiani": "Government Bonds",
+    "titoli di stato": "Government Bonds",
+    "obbligazioni corporate": "Corporate Bonds",
     "obbligazioni sovranazionali": "Financials",
 }
 

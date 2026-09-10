@@ -623,22 +623,27 @@ def cmd_fe_preview(args):
 # =============================================================================
 
 def cmd_api_schema(args):
-    """Export OpenAPI schema."""
-    print(Colors.success("Exporting OpenAPI schema..."))
-    return run_pipenv(["python", "scripts/list_api_endpoints.py", "--openapi-file", "frontend/src/lib/api/openapi.json"])
+    """Export API and build-only Tool schemas."""
+    print(Colors.success("Exporting OpenAPI contracts..."))
+    command = ["python", "scripts/list_api_endpoints.py"]
+    if not getattr(args, "tools_only", False):
+        command.extend(["--openapi-file", "frontend/src/lib/api/openapi.json"])
+    command.extend(["--tool-contracts-file", "frontend/src/lib/api/tool-contracts.openapi.json"])
+    return run_pipenv(command)
 
 
 def cmd_api_client(args):
-    """Generate TypeScript client from OpenAPI schema."""
-    print(Colors.success("Generating TypeScript client..."))
+    """Generate the API client and exact Tool codecs from exported schemas."""
+    print(Colors.success("Generating TypeScript contracts..."))
+    script = "generate-tools" if getattr(args, "tools_only", False) else "generate-api"
     return run_command_live(
-        ["npm", "run", "generate-api"],
+        ["npm", "run", script],
         cwd=PROJECT_ROOT / "frontend"
         )
 
 
 def cmd_api_sync(args):
-    """Export schema and generate client."""
+    """Export schemas and generate API/Tool clients, stopping on any failure."""
     result = cmd_api_schema(args)
     if result != 0:
         return result
@@ -2368,12 +2373,15 @@ Examples:
     api_sub = p.add_subparsers(dest="api_cmd", metavar="action")
 
     api_p = api_sub.add_parser("schema", help="Export OpenAPI schema")
+    api_p.add_argument("--tools-only", action="store_true", help="Export only Tool schemas without importing the API application")
     api_p.set_defaults(func=cmd_api_schema)
 
     api_p = api_sub.add_parser("client", help="Generate TypeScript client")
+    api_p.add_argument("--tools-only", action="store_true", help="Generate only Tool codecs from their exported schema")
     api_p.set_defaults(func=cmd_api_client)
 
     api_p = api_sub.add_parser("sync", help="Export schema + generate client")
+    api_p.add_argument("--tools-only", action="store_true", help="Sync only Tool contracts without importing the API application")
     api_p.set_defaults(func=cmd_api_sync)
 
     # i18n - Import from frontend/scripts/i18n-audit.py

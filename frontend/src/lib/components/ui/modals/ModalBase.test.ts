@@ -1,9 +1,14 @@
 // @vitest-environment jsdom
-import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import {cleanup, fireEvent, render, screen, waitFor} from '$test/component';
+import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
+import {cleanup, fireEvent, render, screen, setupI18n, waitFor} from '$test/component';
 import Harness from '$test/harness/ReviewSupportModalBaseHarness.svelte';
+import ConfirmModal from './ConfirmModal.svelte';
 
 vi.mock('$app/environment', () => ({browser: true, dev: true, building: false, version: 'test'}));
+
+beforeAll(async () => {
+    await setupI18n();
+});
 
 function mount(props: Partial<{open: boolean; trapFocus: boolean; restoreFocus: boolean; onRequestClose: () => void}> = {}) {
     const onRequestClose = vi.fn();
@@ -83,5 +88,35 @@ describe('ModalBase — optional focus management', () => {
         await view.rerender({open: false, trapFocus: true, restoreFocus: true, onRequestClose: view.onRequestClose});
         await waitFor(() => expect(opener).toHaveFocus());
         opener.remove();
+    });
+});
+
+describe('ConfirmModal — typed result actions', () => {
+    it('renders the typed safe action as a link and keeps backend HTML inert', () => {
+        render(ConfirmModal, {
+            open: true,
+            title: 'Synthetic title',
+            message: 'Synthetic message',
+            onConfirm: vi.fn(),
+            onCancel: vi.fn(),
+            testId: 'confirm-safe-action',
+            results: [
+                {
+                    label: 'Synthetic asset',
+                    success: false,
+                    detail: 'Blocked <a href="/backend-supplied">backend markup</a>',
+                    action: {
+                        href: '/transactions?asset_id=74001',
+                        label: 'Synthetic action',
+                        testId: 'confirm-safe-action-link',
+                    },
+                },
+            ],
+        });
+
+        const action = screen.getByTestId('confirm-safe-action-link');
+        expect(action.tagName).toBe('A');
+        expect(action).toHaveAttribute('href', '/transactions?asset_id=74001');
+        expect(screen.getByTestId('confirm-safe-action-link-detail')).toHaveTextContent('Blocked <a href="/backend-supplied">backend markup</a>');
     });
 });

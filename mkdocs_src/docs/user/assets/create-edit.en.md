@@ -101,14 +101,38 @@ For each distribution you can:
 
 - **Add a row** and pick the area/sector from the dropdown, then type the weight.
 - **Edit weights inline**; the running **total** sits at the bottom of the editor and turns
-  **green at exactly 100%** — amber when something is missing, red when you overshoot.
+  **green when it is less than 0.005 percentage points away from 100%** — amber when
+  something is missing, red when you overshoot.
 - **Remove** a row with its delete button.
+
+### 📥 Importing a Distribution CSV
+
+The import button accepts the same two-column format for geographic and sector data:
+
+```csv
+name,weight
+USA,60
+Italy,40
+```
+
+`weight` is a percentage from `0` through `100`. Names are matched exactly after trimming
+surrounding whitespace and normalizing letter case:
+
+- geographic names may be an ISO 2-letter code, an ISO 3-letter code, or the country's
+  currently localized name;
+- sector names may be a canonical sector key (such as `Government Bonds`) or the sector's
+  currently localized label.
+
+There is no fuzzy matching. The import is all-or-nothing: an invalid or duplicate name, an
+out-of-range weight, or a total outside the green tolerance blocks the whole import. Imported
+weights are not auto-balanced. On acceptance, each percentage is converted once to its stored
+fraction (`60` becomes `0.6`).
 
 !!! tip "The 100% rule"
 
-    The dashboard normalizes partial distributions, but a clean 100% gives the most meaningful
-    allocation rings. If the instrument is 100% one country or sector, a single row at 100 is
-    both valid and the clearest choice.
+    Aim for a clean 100%. The editor and CSV importer accept totals only when the difference
+    from 100% is strictly less than 0.005 percentage points. If the instrument is 100% one
+    country or sector, a single row at 100 is both valid and the clearest choice.
 
 *(Screenshots of the two distribution editors — `assets/detail-classification` already exists and shows the area; dedicated close-ups of the editors are planned for the next gallery run.)*
 
@@ -196,4 +220,3 @@ The operation is **destructive**, so it happens in two deliberate steps:
 
 - 📊 **[Asset Detail Page](detail/index.md)** — View and analyze asset data
 - 🔌 **[Providers](providers/index.md)** — Available pricing providers
-

@@ -25,9 +25,9 @@ from enum import StrEnum
 from typing import Literal, Optional
 
 import structlog
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 
-from backend.app.db.models import Asset, AssetEvent, AssetEventType, BrokerUserAccess, PriceHistory, Transaction, TransactionType, UserRole
+from backend.app.db.models import Asset, AssetEvent, AssetEventType, BrokerUserAccess, FxConversionRoute, FxRate, PriceHistory, Transaction, TransactionType, UserRole
 from backend.app.schemas.common import Currency as CurrencySchema
 from backend.app.schemas.portfolio import (
     DataQualityIssue,
@@ -74,6 +74,8 @@ SECTOR_EMOJIS: dict[str, str] = {
     "Telecommunication": "📡",
     "Real Estate": "🏢",
     "Utilities": "🔌",
+    "Corporate Bonds": "🏢",
+    "Government Bonds": "🏛️",
     "Other": "📦",
     "Unknown": "❓",
     "Liquidity": "💵",
@@ -1886,6 +1888,81 @@ def _compute_tx_fingerprint(transactions: list[Transaction]) -> str:
     return h.hexdigest()
 
 
+async def compute_portfolio_fx_cache_identity(
+    db,
+    scope_broker_ids: set[int],
+    target_currency: str,
+    date_to: date_type,
+) -> str:
+    """Fingerprint all FX data/config that can affect a portfolio scope.
+
+    This is the shared identity contract for both portfolio cache layers.
+    Dependencies are limited to cash and cost-basis currencies present in
+    scoped transactions, held assets, and their price history, paired with the
+    target currency.
+    """
+    if not scope_broker_ids:
+        return "no_fx"
+
+    tx_rows = (
+        await db.execute(
+            select(
+                Transaction.currency,
+                Transaction.cost_basis_currency,
+                Transaction.asset_id,
+                Transaction.quantity,
+            ).where(Transaction.broker_id.in_(scope_broker_ids))
+        )
+    ).all()
+    source_currencies = {currency for cash_currency, cost_basis_currency, _, _ in tx_rows for currency in (cash_currency, cost_basis_currency) if currency}
+    held_asset_ids = {asset_id for _, _, asset_id, quantity in tx_rows if asset_id is not None and quantity and quantity != 0}
+
+    if held_asset_ids:
+        asset_currency_rows = (await db.execute(select(Asset.currency).where(Asset.id.in_(held_asset_ids)).distinct())).scalars()
+        source_currencies.update(currency for currency in asset_currency_rows if currency)
+
+        price_currency_rows = (await db.execute(select(PriceHistory.currency).where(PriceHistory.asset_id.in_(held_asset_ids)).where(PriceHistory.date <= date_to).distinct())).scalars()
+        source_currencies.update(currency for currency in price_currency_rows if currency)
+
+    normalized_target = target_currency.strip().upper()
+    pairs = sorted({tuple(sorted((currency.strip().upper(), normalized_target))) for currency in source_currencies if currency.strip().upper() != normalized_target})
+    if not pairs:
+        return "no_fx"
+
+    pair_conditions = [and_(FxRate.base == base, FxRate.quote == quote) for base, quote in pairs]
+    rate_rows = (await db.execute(select(FxRate).where(or_(*pair_conditions)).where(FxRate.date <= date_to).order_by(FxRate.base, FxRate.quote, FxRate.date, FxRate.id))).scalars()
+
+    route_conditions = [and_(FxConversionRoute.base == base, FxConversionRoute.quote == quote) for base, quote in pairs]
+    route_rows = (await db.execute(select(FxConversionRoute).where(or_(*route_conditions)).order_by(FxConversionRoute.base, FxConversionRoute.quote, FxConversionRoute.priority, FxConversionRoute.id))).scalars()
+
+    payload = {
+        "pairs": pairs,
+        "rates": [
+            (
+                rate.base,
+                rate.quote,
+                rate.date.isoformat(),
+                str(rate.rate),
+                rate.source,
+                rate.fetched_at.isoformat(),
+            )
+            for rate in rate_rows
+        ],
+        "routes": [
+            (
+                route.base,
+                route.quote,
+                route.priority,
+                route.parsed_steps,
+                route.updated_at.isoformat(),
+            )
+            for route in route_rows
+        ],
+    }
+    serialized = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(serialized.encode()).hexdigest()
+
+
 class PortfolioCalculationEngine:
     """Async orchestrator that loads data from DB and runs the calculation pipeline.
 
@@ -1996,6 +2073,12 @@ class PortfolioCalculationEngine:
         tx_fingerprint = _compute_tx_fingerprint(all_txs)
         held_asset_ids = {tx.asset_id for tx in all_txs if tx.asset_id and tx.quantity and tx.quantity != 0}
         price_fingerprint = await self._compute_price_fingerprint(held_asset_ids, actual_to)
+        fx_fingerprint = await compute_portfolio_fx_cache_identity(
+            self.db,
+            scope_broker_ids,
+            target_currency,
+            actual_to,
+        )
         # Split events influence valuation without necessarily changing scope
         # Transaction.updated_at values.
         split_fingerprint = (
@@ -2016,6 +2099,7 @@ class PortfolioCalculationEngine:
             target_currency,
             tx_fingerprint,
             price_fingerprint,
+            fx_fingerprint,
             split_fingerprint,
         )
 
