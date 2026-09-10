@@ -19,36 +19,36 @@
     type DiscoveryReason = ToolDiagnosticsResponse['failures'][number]['reason'];
 
     const poolCounters = [
-        {field: 'active', label: 'tools.diagnostics.pool.active', fallback: 'Active jobs'},
-        {field: 'queued', label: 'tools.diagnostics.pool.queued', fallback: 'Queued jobs'},
-        {field: 'pending', label: 'tools.diagnostics.pool.pending', fallback: 'Pending jobs'},
-        {field: 'degraded_lanes', label: 'tools.diagnostics.pool.degradedLanes', fallback: 'Degraded lanes'},
-        {field: 'completed', label: 'tools.diagnostics.pool.completed', fallback: 'Completed jobs'},
-        {field: 'failed', label: 'tools.diagnostics.pool.failed', fallback: 'Failed jobs'},
-    ] as const satisfies readonly {field: Exclude<keyof Pool, 'available'>; label: string; fallback: string}[];
+        {field: 'active', key: 'active', fallback: 'Active jobs'},
+        {field: 'queued', key: 'queued', fallback: 'Queued jobs'},
+        {field: 'pending', key: 'pending', fallback: 'Pending jobs'},
+        {field: 'degraded_lanes', key: 'degradedLanes', fallback: 'Degraded lanes'},
+        {field: 'completed', key: 'completed', fallback: 'Completed jobs'},
+        {field: 'failed', key: 'failed', fallback: 'Failed jobs'},
+    ] as const satisfies readonly {field: Exclude<keyof Pool, 'available'>; key: string; fallback: string}[];
 
     const policyFields = [
-        {field: 'workers', label: 'tools.diagnostics.policy.workers', fallback: 'Worker lanes', unit: 'count'},
-        {field: 'max_batch_items', label: 'tools.diagnostics.policy.maxBatchItems', fallback: 'Maximum items per batch', unit: 'count'},
-        {field: 'max_pending_items', label: 'tools.diagnostics.policy.maxPendingItems', fallback: 'Maximum pending jobs', unit: 'count'},
-        {field: 'max_pending_per_principal', label: 'tools.diagnostics.policy.maxPendingPerPrincipal', fallback: 'Maximum pending jobs per account', unit: 'count'},
-        {field: 'max_batches_per_principal', label: 'tools.diagnostics.policy.maxBatchesPerPrincipal', fallback: 'Maximum concurrent batches per account', unit: 'count'},
-        {field: 'max_json_depth', label: 'tools.diagnostics.policy.maxJsonDepth', fallback: 'Maximum JSON depth', unit: 'count'},
-        {field: 'max_request_bytes', label: 'tools.diagnostics.policy.maxRequestBytes', fallback: 'Maximum request size', unit: 'bytes'},
-        {field: 'max_parameter_bytes', label: 'tools.diagnostics.policy.maxParameterBytes', fallback: 'Maximum parameter size per item', unit: 'bytes'},
-        {field: 'max_result_bytes', label: 'tools.diagnostics.policy.maxResultBytes', fallback: 'Maximum result size per item', unit: 'bytes'},
-        {field: 'max_response_bytes', label: 'tools.diagnostics.policy.maxResponseBytes', fallback: 'Maximum response size', unit: 'bytes'},
-        {field: 'envelope_reserve_bytes', label: 'tools.diagnostics.policy.envelopeReserveBytes', fallback: 'Envelope size reserve', unit: 'bytes'},
-        {field: 'queue_timeout_ms', label: 'tools.diagnostics.policy.queueTimeout', fallback: 'Queue timeout', unit: 'ms'},
-        {field: 'job_timeout_ms', label: 'tools.diagnostics.policy.jobTimeout', fallback: 'Job hard timeout', unit: 'ms'},
-        {field: 'soft_timeout_ms', label: 'tools.diagnostics.policy.softTimeout', fallback: 'Job soft timeout', unit: 'ms'},
-        {field: 'output_reserve_ms', label: 'tools.diagnostics.policy.outputReserve', fallback: 'Output time reserve', unit: 'ms'},
-        {field: 'cleanup_timeout_ms', label: 'tools.diagnostics.policy.cleanupTimeout', fallback: 'Cleanup timeout', unit: 'ms'},
-        {field: 'ingress_timeout_ms', label: 'tools.diagnostics.policy.ingressTimeout', fallback: 'Ingress timeout', unit: 'ms'},
-        {field: 'response_reserve_ms', label: 'tools.diagnostics.policy.responseReserve', fallback: 'Response time reserve', unit: 'ms'},
-        {field: 'request_timeout_ms', label: 'tools.diagnostics.policy.requestTimeout', fallback: 'Server request timeout', unit: 'ms'},
-        {field: 'client_timeout_ms', label: 'tools.diagnostics.policy.clientTimeout', fallback: 'Tool client timeout', unit: 'ms'},
-    ] as const satisfies readonly {field: keyof Policy; label: string; fallback: string; unit: 'count' | 'bytes' | 'ms'}[];
+        {field: 'workers', key: 'workers', fallback: 'Worker lanes', unit: 'count'},
+        {field: 'max_batch_items', key: 'maxBatchItems', fallback: 'Maximum items per batch', unit: 'count'},
+        {field: 'max_pending_items', key: 'maxPendingItems', fallback: 'Maximum pending jobs', unit: 'count'},
+        {field: 'max_pending_per_principal', key: 'maxPendingPerPrincipal', fallback: 'Maximum pending jobs per account', unit: 'count'},
+        {field: 'max_batches_per_principal', key: 'maxBatchesPerPrincipal', fallback: 'Maximum concurrent batches per account', unit: 'count'},
+        {field: 'max_json_depth', key: 'maxJsonDepth', fallback: 'Maximum JSON depth', unit: 'count'},
+        {field: 'max_request_bytes', key: 'maxRequestBytes', fallback: 'Maximum request size', unit: 'bytes'},
+        {field: 'max_parameter_bytes', key: 'maxParameterBytes', fallback: 'Maximum parameter size per item', unit: 'bytes'},
+        {field: 'max_result_bytes', key: 'maxResultBytes', fallback: 'Maximum result size per item', unit: 'bytes'},
+        {field: 'max_response_bytes', key: 'maxResponseBytes', fallback: 'Maximum response size', unit: 'bytes'},
+        {field: 'envelope_reserve_bytes', key: 'envelopeReserveBytes', fallback: 'Envelope size reserve', unit: 'bytes'},
+        {field: 'queue_timeout_ms', key: 'queueTimeout', fallback: 'Queue timeout', unit: 'ms'},
+        {field: 'job_timeout_ms', key: 'jobTimeout', fallback: 'Job hard timeout', unit: 'ms'},
+        {field: 'soft_timeout_ms', key: 'softTimeout', fallback: 'Job soft timeout', unit: 'ms'},
+        {field: 'output_reserve_ms', key: 'outputReserve', fallback: 'Output time reserve', unit: 'ms'},
+        {field: 'cleanup_timeout_ms', key: 'cleanupTimeout', fallback: 'Cleanup timeout', unit: 'ms'},
+        {field: 'ingress_timeout_ms', key: 'ingressTimeout', fallback: 'Ingress timeout', unit: 'ms'},
+        {field: 'response_reserve_ms', key: 'responseReserve', fallback: 'Response time reserve', unit: 'ms'},
+        {field: 'request_timeout_ms', key: 'requestTimeout', fallback: 'Server request timeout', unit: 'ms'},
+        {field: 'client_timeout_ms', key: 'clientTimeout', fallback: 'Tool client timeout', unit: 'ms'},
+    ] as const satisfies readonly {field: keyof Policy; key: string; fallback: string; unit: 'count' | 'bytes' | 'ms'}[];
 
     const reasonFallbacks = {
         import_failed: 'Plugin import failed',
@@ -127,7 +127,7 @@
             <dl class="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2 lg:grid-cols-3">
                 {#each poolCounters as counter (counter.field)}
                     <div class="min-w-0">
-                        <dt class="text-gray-500 dark:text-gray-400">{$t(counter.label, {default: counter.fallback})}</dt>
+                        <dt class="text-gray-500 dark:text-gray-400">{$t(`tools.diagnostics.pool.${counter.key}`, {default: counter.fallback})}</dt>
                         <dd class="mt-1 break-words font-medium tabular-nums text-gray-900 dark:text-gray-100" data-testid={`tool-pool-${counter.field}`}>{numberFormat.format(snapshot.pool[counter.field])}</dd>
                     </div>
                 {/each}
@@ -188,7 +188,7 @@
             <dl class="mt-3 grid grid-cols-1 gap-3 text-xs sm:grid-cols-2 lg:grid-cols-3">
                 {#each policyFields as field (field.field)}
                     <div class="min-w-0">
-                        <dt class="text-gray-500 dark:text-gray-400">{$t(field.label, {default: field.fallback})}</dt>
+                        <dt class="text-gray-500 dark:text-gray-400">{$t(`tools.diagnostics.policy.${field.key}`, {default: field.fallback})}</dt>
                         <dd class="mt-1 break-words font-medium tabular-nums text-gray-900 dark:text-gray-100" data-testid={`tool-policy-${field.field}`}>{policyValue(snapshot.policy[field.field], field.unit)}</dd>
                     </div>
                 {/each}

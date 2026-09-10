@@ -14,14 +14,18 @@ from backend.app.services.tools.base import ToolExecutionError
 
 _SAFE_PATH_TOKEN = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,63}")
 _SAFE_VALIDATION_CODE = re.compile(r"[A-Za-z0-9_.-]{1,64}")
+MAX_SAFE_JSON_INTEGER = (1 << 53) - 1
 
 
 def _validate_scalar(node: object) -> None:
     if isinstance(node, str):
         if any(0xD800 <= ord(character) <= 0xDFFF for character in node):
             raise ValueError("Tool JSON must contain valid Unicode scalars")
-    elif node is None or type(node) in (bool, int):
+    elif node is None or type(node) is bool:
         return
+    elif type(node) is int:
+        if abs(node) > MAX_SAFE_JSON_INTEGER:
+            raise ValueError("Tool JSON integers must be exactly representable in JavaScript")
     elif type(node) is float:
         if not math.isfinite(node):
             raise ValueError("Tool JSON numbers must be finite")

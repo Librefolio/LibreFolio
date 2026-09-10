@@ -718,6 +718,15 @@ def services_tools_registry(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Tool registry tests", verbose=verbose)
 
 
+def services_tools_lifecycle(verbose: bool = False, test_names: list = None) -> bool:
+    """Test owned Tool worker lifecycles in a separately authorized resource slot."""
+    print_section("Services: Tool Lifecycle")
+    print_info("Testing: real POSIX spawn, pipes, quotas, cancellation and descendant teardown")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_tools_executor.py", test_names)
+    return run_command(cmd, "Tool lifecycle tests", verbose=verbose)
+
+
 def services_all(verbose: bool = False) -> bool:
     """Run all backend service tests."""
     if _common.nothing_left_to_run("services"):
@@ -922,6 +931,17 @@ Note: No backend server required.
         name="Tool Registry",
         desc="Typed plugins, transactional discovery, quarantine and read-only catalog",
         isolation="pure",
+    )
+    add_test(
+        cat,
+        "tools-lifecycle",
+        services_tools_lifecycle,
+        name="Tool Lifecycle",
+        desc="Owned spawn workers, quotas, ready/ACK, cancellation, PID identity and full-tree cleanup",
+        exclusive_because=(
+            "owns native POSIX process groups and exercises forceful teardown and executor quarantine; "
+            "requires an explicitly leased lifecycle run rather than concurrent shared-backend manual review"
+        ),
     )
     add_test(cat, "all", services_all, test_names=False, name="All Services Tests", desc="Run all service tests")
     registry["services"] = cat

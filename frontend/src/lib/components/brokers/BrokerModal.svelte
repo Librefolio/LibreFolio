@@ -3,14 +3,18 @@
      * BrokerModal - Modal wrapper for broker create/edit form
      */
     import {_} from '$lib/i18n';
+    import {onDestroy} from 'svelte';
     import {AlertTriangle, X} from 'lucide-svelte';
     import BrokerForm from './BrokerForm.svelte';
     import {zodiosApi} from '$lib/api';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
-    import {trySave} from '$lib/utils/trySave';
+    import {extractErrorMessage, trySave} from '$lib/utils/trySave';
+    import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {notify} from '$lib/stores/app/notify.svelte';
     import {mergeBrokers} from '$lib/stores/reference/brokerStore';
     import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
 
     interface Props {
         isOpen?: boolean;
@@ -40,6 +44,42 @@
     let error: string | null = $state(null);
     let formTouched = $state(false);
     let showDiscardConfirm = $state(false);
+    let openingContext: string | null = null;
+    let openingEpoch = 0;
+    let alive = true;
+    const brokerNameRecovery = 'To resolve this, rename the existing broker or choose a different name for the broker you are adding.';
+
+    $effect(() => {
+        const context = isOpen ? `${mode}:${brokerId ?? 'new'}` : null;
+        if (context === openingContext) return;
+        openingContext = context;
+        openingEpoch++;
+        error = null;
+        formTouched = false;
+        showDiscardConfirm = false;
+        loading = false;
+    });
+
+    onDestroy(() => {
+        alive = false;
+        openingEpoch++;
+    });
+
+    function localizeDuplicateName(message: string, name: string): string | null {
+        const suffix = `. ${brokerNameRecovery}`;
+        const base = message.endsWith(suffix) ? message.slice(0, -suffix.length) : message;
+        let localized: string;
+        if (base === `You already have a broker named '${name}'`) {
+            localized = $_('brokers.duplicateNameOwn', {values: {name}});
+        } else if (base === `Broker with name '${name}' already exists` || base === 'A broker with that name already exists') {
+            localized = $_('brokers.duplicateNameExists', {values: {name}});
+        } else {
+            const ownerPrefix = `Broker '${name}' already exists (owned by '`;
+            if (!base.startsWith(ownerPrefix) || !base.endsWith("')")) return null;
+            localized = $_('brokers.duplicateNameOwned', {values: {name, owner: base.slice(ownerPrefix.length, -2)}});
+        }
+        return `${localized} ${$_('brokers.duplicateNameRecovery')}`;
+    }
 
     // Track if form has been modified
     function handleFormChange() {
@@ -61,6 +101,8 @@
         }>,
     ) {
         const sessionGeneration = getClientSessionGeneration();
+        const epoch = openingEpoch;
+        const isCurrent = () => alive && isOpen && epoch === openingEpoch && isClientSessionCurrent(sessionGeneration);
         loading = true;
         error = null;
 
@@ -70,12 +112,23 @@
         // closing silently with only a console.error.
         try {
             if (mode === 'create') {
-                const result = await trySave(() => zodiosApi.create_brokers_api_v1_brokers_post([event.detail]), {fallback: $_('brokers.createFailed')});
+                const result = await trySave(() => zodiosApi.create_brokers_api_v1_brokers_post([event.detail]), {
+                    fallback: $_('brokers.createFailed'),
+                    onError: (failure) => {
+                        if (!isCurrent()) return true;
+                        const message = extractErrorMessage(failure, $_('brokers.createFailed'));
+                        const localized = localizeDuplicateName(message, event.detail.name);
+                        if (!localized) return false;
+                        error = localized;
+                        toasts.error(escapeHtml(error));
+                        return true;
+                    },
+                });
+                if (!isCurrent()) return;
                 if (result.status === 'error') {
-                    error = result.message;
+                    error ??= result.message;
                     return;
                 }
-                if (!isClientSessionCurrent(sessionGeneration)) return;
                 const apiResult = result.data.results[0];
                 const createdId = Array.isArray(apiResult?.broker_id) ? apiResult.broker_id[0] : apiResult?.broker_id;
                 const errorMsg = Array.isArray(apiResult?.error) ? apiResult.error[0] : apiResult?.error;
@@ -86,10 +139,15 @@
                     // we merge the fields the FE just submitted.
                     mergeBrokers([{id: createdId, ...event.detail}]);
                     formTouched = false;
+                    notify({
+                        name: 'broker.created',
+                        detail: {brokerId: createdId},
+                        toast: {variant: 'success', message: escapeHtml($_('brokers.created', {values: {name: event.detail.name}}))},
+                    });
                     oncreated?.({id: createdId});
                     onclose?.();
                 } else {
-                    error = errorMsg ?? $_('brokers.createFailed');
+                    error = errorMsg ? (localizeDuplicateName(errorMsg, event.detail.name) ?? errorMsg) : $_('brokers.createFailed');
                 }
             } else if (brokerId) {
                 const result = await trySave(
@@ -108,13 +166,13 @@
                             },
                             {params: {broker_id: brokerId}},
                         ),
-                    {fallback: $_('brokers.updateFailed')},
+                    {fallback: $_('brokers.updateFailed'), onError: () => !isCurrent()},
                 );
+                if (!isCurrent()) return;
                 if (result.status === 'error') {
                     error = result.message;
                     return;
                 }
-                if (!isClientSessionCurrent(sessionGeneration)) return;
                 // Sync the patched fields into the cache so other pages
                 // (e.g. icon refresh) reflect the change immediately.
                 mergeBrokers([
@@ -136,7 +194,7 @@
                 onclose?.();
             }
         } finally {
-            loading = false;
+            if (isCurrent()) loading = false;
         }
     }
 
@@ -169,7 +227,7 @@
             <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-100">
                 {mode === 'create' ? $_('brokers.addBroker') : $_('brokers.editBroker')}
             </h2>
-            <button class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50" disabled={loading} onclick={handleClose}>
+            <button type="button" class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50" disabled={loading} onclick={handleClose} aria-label={$_('common.close')} data-testid="broker-modal-close">
                 <X size={20} />
             </button>
         </div>
@@ -187,7 +245,7 @@
 </ModalBase>
 
 <!-- Discard Changes Confirmation Modal -->
-<ModalBase maxWidth="sm" onRequestClose={cancelDiscard} open={showDiscardConfirm} zIndex={zIndex + 10}>
+<ModalBase maxWidth="sm" onRequestClose={cancelDiscard} open={showDiscardConfirm} zIndex={zIndex + 10} testId="broker-modal-discard-confirm">
     <div class="p-6">
         <div class="flex items-center gap-3 mb-3">
             <div class="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-full">
@@ -201,10 +259,10 @@
             {$_('brokers.discardChangesWarning')}
         </p>
         <div class="flex justify-end gap-3">
-            <button class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors" onclick={cancelDiscard}>
+            <button type="button" class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors" onclick={cancelDiscard} data-testid="broker-modal-continue-editing">
                 {$_('common.continueEditing')}
             </button>
-            <button class="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors" onclick={confirmDiscard}>
+            <button type="button" class="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors" onclick={confirmDiscard} data-testid="broker-modal-discard">
                 {$_('common.discardAndClose')}
             </button>
         </div>

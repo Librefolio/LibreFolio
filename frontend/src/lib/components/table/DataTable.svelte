@@ -887,6 +887,11 @@
     export function getPageRowIds(): string[] {
         return paginatedData.map((row) => getRowId(row));
     }
+
+    /** All matching row IDs in display order, before pagination. */
+    export function getSortedRowIds(): string[] {
+        return sortedData.map((row) => getRowId(row));
+    }
 </script>
 
 <div class="datatable-container" bind:this={containerEl}>
@@ -1561,9 +1566,12 @@
     }
 
     .th-actions {
-        right: 0;
         text-align: center;
         text-transform: none !important;
+    }
+
+    .th-actions.th-fixed {
+        right: 0;
     }
 
     .th-data.sortable {
@@ -1915,8 +1923,7 @@
         border-radius: 0.25rem;
         background: #f1f5f9;
         flex-shrink: 0;
-        /* Fixed size ensures text labels align in a column */
-        min-width: 32px;
+        min-width: 0;
     }
 
     .cell-image.circle {
