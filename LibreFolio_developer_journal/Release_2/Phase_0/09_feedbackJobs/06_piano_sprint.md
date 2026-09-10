@@ -845,9 +845,11 @@ Primo piano preso in carico: [SP04-SP05 - Contratti e Runes](../11_feedbackContr
 **Pianificazione SP06/SP07 autorizzata, 2026-09-10:** il
 [piano performance charts](../20_performanceCharts/plan-phase00PerformanceCharts.prompt.md)
 registra il contratto chiuso per G3/G1a/G1b/G1c, gli storyboard ASCII v2 e lo
-split per owner. Stato **PLANNED / implementation frozen**: Gate 0 richiede prima
-l'integrazione F, una nuova lettura dei resolver/engine/Asset detail e una
-successiva autorizzazione esplicita del dev. Il link non marca i task implementati.
+split per owner. Stato **PLANNED / implementation frozen**: il refresh tecnico
+post-F e' registrato su `0af66da5`; il dev ha autorizzato e I ha completato la
+sola slice I10 backend signal, ora in attesa di integrazione. H/YOC precede I
+su service/schema/test portfolio; UI G3 e I20+ restano congelati e I dovra'
+rileggere il target post-H. Il link non marca gli altri task implementati.
 
 All'avvio effettivo di uno sprint: scegliere il prossimo `<NN_area>` libero in `Phase_0/`, aprire il piano `.prompt.md`, cross-linkare il task originale e marcare la presa in carico secondo la regola del backlog. Non creare oggi sedici piani vuoti. Dopo ogni step eseguito, aggiornare immediatamente quel piano con stato, data, nota di implementazione ed eventuale fuori pista.
 

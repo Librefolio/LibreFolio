@@ -1,12 +1,17 @@
 # Performance charts - SP06 G3/G1c and SP07 G1a/G1b
 
-**Status:** PLANNED - plan-only authorization recorded on 2026-09-10.
-**Implementation:** FROZEN. No production/test code is authorized by this plan.
-**Revision:** 2 - developer control-hierarchy correction, 2026-09-10.
+**Status:** I10 calendar-return backend COMPLETE / integration pending.
+**Implementation:** I10 was explicitly authorized and completed on 2026-09-10.
+All portfolio and frontend phases remain FROZEN.
+**Revision:** 4 - I10 signal-only implementation and evidence, 2026-09-10.
 **Analysis baseline:** `f90d9801bd7a2d74aac6a27efe305314c6c004cc`
 (`refs/heads/dev_release2`).
-**Execution baseline:** to be written only after hard Gate 0, when workstream F is
-integrated and the code is re-read.
+**Gate-0 execution baseline:** `0af66da5f366a9559549154631a4ee15ca620915`,
+containing `dev_release2@973968ed2` and workstream F commit `e50d66408`.
+**I10 implementation baseline:** `0af66da5f366a9559549154631a4ee15ca620915`;
+developer authorization is limited to the signal-only I10 slice.
+**Portfolio implementation baseline:** not yet authorized. It will be the later
+post-H target SHA supplied after the H-before-I integration gate.
 **Coordinator:** Release 2 coordinator, session
 `c8328a01-f208-4ade-a352-0486d1f14de2`.
 **Future runtime lane:** port `6157`, absolute data directory
@@ -17,6 +22,7 @@ Previous/master:
 - [Advanced charts backlog](../09_feedbackJobs/02_grafici_avanzati.md)
 - [Sprint analysis and dependency map](../09_feedbackJobs/06_piano_sprint.md)
 - [Feedback-jobs index](../09_feedbackJobs/README.md)
+- [Workstream F plan](../17_assetDataOperations/plan-phase00AssetDataOperations.prompt.md)
 
 This plan is the durable record of the final product decisions and the
 dependency-safe split for an XL integration. It does not claim that any chart,
@@ -48,8 +54,8 @@ shared theme is temporal performance; the real code ownership splits into:
 - Backend-owned financial transformations.
 - Existing target-currency and broker-scope controls.
 - Existing daily/weekly/monthly semantic zoom.
-- Existing price/FX lookup, fallback, provenance and faded-line semantics after
-  workstream F is integrated.
+- Existing price/FX lookup, fallback, provenance and faded-line semantics in
+  the now-integrated post-F source.
 - Explicit data-quality states without silent zero-shaped fallbacks.
 - Dashboard and Broker-detail GrowthChart behavior.
 - Asset-detail primary chart mode.
@@ -65,19 +71,22 @@ shared theme is temporal performance; the real code ownership splits into:
 - A second broker, currency or resolution selector inside a chart.
 - Standalone transfer-adjusted broker performance.
 - New transaction-create semantics for negative DIVIDEND/INTEREST.
-- New short-accounting support. If the final post-F engine still does not value
-  negative positions canonically, candle output fails closed for that state.
+- New short-accounting support. The verified post-F engine does not value
+  negative positions canonically, so candle output fails closed for that state.
 - Feeding synthetic candles into risk, statistical-volatility or factual AI
   Export inputs.
 - Database schema changes unless Gate 0 proves one is unavoidable; none is
   expected from the current analysis.
 
-## 2. Hard Gate 0 - workstream F integration and code refresh
+## 2. Hard Gate 0 - post-F code refresh and implementation authorization
 
 **Gate 0 blocks every production/test implementation step in this plan.**
 
-The coordinator must provide the integrated F checkpoint on `dev_release2`.
-Then the assigned owners must:
+The F checkpoint is now present in the technical-refresh HEAD. The source
+refresh items below are complete, but Gate 0 remains **BLOCKED** because the
+developer has not authorized implementation.
+
+The assigned owners must:
 
 1. Verify exact target HEAD and clean worktree.
 2. Read F's execution plan/checkpoint manifest and its final intended paths.
@@ -94,16 +103,109 @@ Then the assigned owners must:
    - portfolio/asset stores and current tests.
 4. Confirm how F preserves observation date, price/FX backward-fill metadata,
    split handling, quote base, ownership and current fallback provenance.
-5. Replace this plan's analysis baseline with the real post-F execution
-   baseline and record any changed symbols/paths.
-6. Reconfirm the short-position behavior. If no canonical short valuation
-   exists, retain the fail-closed candle contract; do not create one here.
+5. Record the post-F technical-refresh HEAD and changed symbols/paths.
+6. Preserve the confirmed short-position result: no canonical short valuation
+   exists, so retain the fail-closed candle contract; do not create one here.
 7. Obtain a new **explicit developer implementation authorization**. The
    current authorization permits this Markdown plan only.
 
-Gate 0 is complete only when the plan contains a dated implementation note with
-the post-F SHA, final resolver contract, file reservations and developer
-authorization. A coordinator-only approval is insufficient.
+Gate 0 is released only for a phase whose dated note contains the exact
+execution SHA, final resolver contract, file reservations and verbatim
+developer authorization. I10 now satisfies that condition. Portfolio phases
+remain blocked by H0, F engine release, a new post-H baseline and their own
+explicit authorization.
+
+### 2.1 Gate 0 technical refresh - 2026-09-10
+
+> **Note implementazione (G0 technical refresh, 2026-09-10):** verified clean
+> HEAD `0af66da5f366a9559549154631a4ee15ca620915` on
+> `e-alfy-performance-charts-plan`. It merges current
+> `dev_release2@973968ed2`, including F commit `e50d66408`. Read F's durable
+> plan and exact committed diffs, then re-read the final engine, portfolio
+> service/schema, resolver, Asset detail/query/cache path, GrowthChart,
+> PriceChartFull, temporal reducers, stores and relevant tests. No production
+> or test implementation and no runtime command was executed.
+
+F's relevant delivered delta is narrower than the original conflict forecast:
+
+- `portfolio_engine.py` now exports
+  `compute_portfolio_fx_cache_identity(...)` and includes its result in the L1
+  blob key.
+- F did not change `price_resolver.py`, `portfolio_service.py`,
+  `schemas/portfolio.py`, `GrowthChart.svelte`, `PriceChartFull.svelte`,
+  `timeSeriesAggregation.ts`, portfolio store or Asset price-cache adapter.
+- F's Asset-detail edit adds the transactions link in the header, outside the
+  chart state/render block. G3 must preserve it.
+- F's `asset_source.py` edits are in Asset deletion, not
+  `get_prices_bulk()`/backward-fill/signal execution.
+- F added FX-identity/invalidation tests to
+  `test_financial/test_portfolio_service.py` and `test_fx_core.py`, plus an
+  Asset-detail link test. Future tests extend these files without replacing
+  F's coverage.
+
+Final source reality:
+
+- `AssetPriceSeries` remains the single close resolver:
+  `MARKET -> TRADE_AVG -> CARRIED (LOCF) -> MISSING`. It carries native
+  currency, actual observation date, estimated origin and price
+  `BackwardFillInfo`; FX is still applied by the engine adoption layer.
+- Asset `get_prices_bulk()` already emits a dense daily backward-filled OHLC
+  series, applies target-currency FX to all OHLC fields, and retains price +
+  FX provenance on a fresh API response.
+- The frontend Asset cache adapter still stores only `originalClose` and price
+  `daysBack`. A cache-hit reconstruction drops original O/H/L and FX
+  provenance. G3 cannot claim full fade/tooltip parity until that existing
+  cache representation is widened or the signal response carries the needed
+  provenance independently.
+- Existing `RISK_ROLLING_RETURN` remains prepared-observation based. Its
+  `window` counts prepared returns, not calendar dates.
+- `DailyStateBuilder` still keeps aggregate cash/capital state, per-broker
+  quantities, no daily broker P&L DTO, and filters `qty <= 0`. True shorts
+  remain unsupported.
+- `InTransitInterval.share` is still hardcoded to `1` in the classifier helper.
+  The additive broker/candle implementation must correct this before claiming
+  ownership-scaled in-transit values.
+- Portfolio engine price preload and `AssetPriceSeries` remain close-only even
+  though `PriceHistory` stores OHLC. Candles must extend the existing resolver
+  data shape, not create a parallel resolver.
+- `PortfolioReportQuery/Response` contains none of the proposed broker-history,
+  candle or income fields/flags.
+- L2 report cache still keys access + transaction + price state only. It does
+  not yet consume F's shared FX identity and still lacks split-event identity.
+- Frontend `fetchReport(...)` still uses nine positional parameters and manually
+  concatenated feature-key suffixes. Adding three more positional booleans
+  would be unsafe; use one typed feature-options object/canonical feature key
+  while preserving compatibility wrappers for existing callers.
+- `PortfolioSummary.period_income`, engine income pools and contribution
+  service still use `abs()`; signed legacy corrections are not canonical yet.
+- GrowthChart remains `eur|pct`, with total P&L mapped only for the ABS tooltip;
+  unused `periodBasePnl` must not be adopted because the approved P&L line is
+  never rebased.
+- `aggregateOHLCV()` is ready and tested; no flow-sum reducer exists.
+- PriceChartFull already owns line/candle, absolute/percentage, semantic zoom
+  and `disableCandlestick`, but lacks percentage-unit primary-series and
+  hide-view-control props needed by G3.
+
+### 2.2 H-before-I shared-surface gate
+
+Coordinator decision: H/YOC integrates before I on shared portfolio surfaces.
+Until H is merged and I re-reads the new target:
+
+- H exclusively owns `portfolio_service.py`, `schemas/portfolio.py`, relevant
+  portfolio service/API tests, any approved minimal FIFO eligibility seam, and
+  `ExposureTable.svelte` plus its test.
+- F retains `portfolio_engine.py` until the coordinator declares its integration
+  stable.
+- I20 and every dependent portfolio/candle/report/GrowthChart phase remain
+  blocked.
+- Only the isolated G3 **backend signal** slice may be considered for execution
+  after explicit developer authorization, and only if its final file set avoids
+  all H/F-owned surfaces.
+
+After H integration, I must merge/rebase only through the developer/coordinator
+workflow, verify the new exact SHA, re-read H/F changes and update reservations
+before portfolio implementation. H is a sequence dependency, not a reason to
+duplicate its YOC calculations or cache changes.
 
 ## 3. Final product contract
 
@@ -216,9 +318,10 @@ authorization. A coordinator-only approval is insufficient.
   The asset/day is not dropped and no new resolver is invented.
 - Reuse existing data-quality and faded semantics for carried/fallback values.
 - Daily total candle close must equal canonical total P&L exactly.
-- If final F still cannot value a true negative position, the candle series is
-  unavailable for that unsupported state. Do not omit the short or fabricate a
-  liability. Revisit only if F supplies canonical short valuation.
+- The verified post-F engine still cannot value a true negative position.
+  Therefore the candle series is unavailable for that unsupported state. Do
+  not omit the short or fabricate a liability; broader short accounting needs
+  separate authorization.
 - Synthetic candles are presentation-only. They are not an intraday series,
   statistical-volatility input or factual AI Export dataset.
 
@@ -304,9 +407,16 @@ All optional flags must enter:
 - report metadata `included_features`;
 - L1 result key if the engine result shape or preload differs.
 
-The current L2 key lacks split-event fingerprinting while the L1 key includes
-it. Gate 0 must verify F's state; if still true, add split fingerprint or
-central backend invalidation before shipping split-sensitive candles.
+Frontend feature selection must move behind a typed options object and one
+canonical cache-key serialization. Keep existing positional exports as
+compatibility wrappers if current callers cannot migrate atomically; do not
+append more order-sensitive boolean arguments.
+
+Post-F, L1 already includes F's bounded
+`compute_portfolio_fx_cache_identity(...)`; preserve and reuse it. L2 still
+lacks both this FX identity and split-event identity. H owns L2's current file
+until integration, so I must first consume H's result, then add only whatever
+FX/split/feature-key coverage remains. Do not duplicate F's helper.
 
 ### 4.2 Additive broker contribution state
 
@@ -340,8 +450,14 @@ unrounded and serialize all lines with the same policy.
 
 ### 4.3 Daily synthetic candle composition
 
+Post-F confirms that `AssetPriceSeries` is the single resolver but currently
+carries close only, while `PriceHistory` and Asset query responses carry OHLC.
+The candle phase must widen the existing `PriceObservation`/`ResolvedMark`
+family (or an equivalent same-resolver envelope) with optional OHLC. It must
+not add a second lookup/fallback class.
+
 The final implementation should expose one resolved per-asset/day valuation
-record from F's existing path, carrying:
+record from that same path, carrying:
 
 - resolved O/H/L/C or resolved close-only fallback;
 - native/target currency provenance;
@@ -364,8 +480,9 @@ asset_high = factor * low
 asset_low  = factor * high
 ```
 
-This formula is used only if Gate 0 proves the final engine supports negative
-positions. Otherwise the series fails closed for that state.
+This formula is retained as the future orientation rule, but the verified
+engine does not support negative-position valuation. This plan therefore fails
+closed before composing a short candle; it does not execute this branch.
 
 Compose all resolved asset contributions for the day. Then add one common
 non-price offset:
@@ -405,12 +522,15 @@ same value from "Other / reconciliation residual" into canonical Income.
 
 ### 4.5 Calendar-return signal
 
-After Gate 0, choose the smallest compatible signal integration based on F's
-final code:
+The technical refresh favors a dedicated calendar-return plugin because the
+existing `RISK_ROLLING_RETURN` is statically coupled to prepared observation
+returns. The isolated plugin can consume the already-resolved dense daily
+`SignalPricePoint` input without changing `asset_source.py`, the price resolver,
+portfolio engine/service/schema or H-owned tests.
 
-- either a dedicated calendar-return signal;
-- or a backward-compatible explicit calendar mode whose default leaves the
-  existing observation-based signal unchanged.
+If implementation evidence proves a smaller backward-compatible extension is
+safer, it must still leave the existing signal's default and saved instances
+unchanged.
 
 Whichever is chosen:
 
@@ -419,7 +539,9 @@ Whichever is chosen:
 - produce one output state per visible chart date;
 - include N=30 in normalized/default params;
 - carry reference target date and actual observation provenance through an
-  additive signal-point metadata contract if the final contract lacks it;
+  additive `SignalValuePoint` metadata contract (currently absent), or an
+  equally typed signal-owned companion that does not depend on the lossy Asset
+  price cache;
 - use the existing signal status/warmup/availability structure;
 - never duplicate price lookup, FX conversion, backward fill or finance math
   in TypeScript.
@@ -491,19 +613,20 @@ A separate owner integrates G3 after F and the backend calendar signal:
 
 ## 6. Dependency-safe phases and owners
 
-| Phase | Owner | Dependency | Deliverable | Status |
-|---|---|---|---|---|
-| I00 | Workstream I planner | Plan-only developer authorization | Durable product contract, split, storyboards and backlog links | COMPLETE 2026-09-10 |
-| G0 | Coordinator + assigned integrators | F integrated on `dev_release2` | Post-F source refresh, SHA/path reservations, implementation authorization | BLOCKED |
-| I10 | G3 backend owner | G0 | Calendar-return backend series + provenance, no resolver duplication | PENDING |
-| I20 | Portfolio backend integrator | G0 | Additive daily broker P&L + signed canonical income | PENDING |
-| I30 | Portfolio backend integrator | I20 + final F resolver | Daily total candles + flat fallback + strict close identity | PENDING |
-| I40 | Portfolio backend integrator + coordinator | I20 + I30 | DTO/report/cache wiring, then coordinator API sync | PENDING |
-| I50 | GrowthChart owner | I40 | Value/Return/P&L core modes; Line/Candles/Income P&L submodes; broker lines and sum aggregation | PENDING |
-| I60 | G3 Asset UI owner | I10 + G0 | Historical N-day primary mode in final Asset detail | PENDING |
-| I70 | Test author + owners | Relevant implementation phases | Targeted backend/frontend regressions and integration gates | PENDING |
-| I80 | Docs writer + coordinator | Stable integrated UI | English docs, coordinator i18n/runner/changelog records | PENDING |
-| I90 | Developer + coordinator | I50 + I60 + I70 + I80 | Desktop/mobile operational review, corrections, integration handoff | PENDING |
+| Phase | Size | Owner | Dependency | Deliverable | Status |
+|---|---:|---|---|---|---|
+| I00 | XS | Workstream I planner | Plan-only developer authorization | Durable product contract, split, storyboards and backlog links | COMPLETE 2026-09-10 |
+| G0 | M analysis | Coordinator + assigned integrators | F integrated on `dev_release2` | Post-F technical refresh + phase-specific implementation authorization | I10 RELEASED ONLY 2026-09-10; PORTFOLIO BLOCKED |
+| H0 | external | H + coordinator | H/YOC accepted and integrated | Release portfolio service/schema/tests, provide exact target SHA, I re-read | BLOCKED |
+| I10 | M | G3 backend owner | G0 developer authorization; no H/F files | Calendar-return backend series + provenance, no resolver duplication | COMPLETE 2026-09-10 / INTEGRATION PENDING |
+| I20 | L | Portfolio backend integrator | G0 + H0 + F engine released | Additive daily broker P&L + signed canonical income | BLOCKED |
+| I30 | L | Portfolio backend integrator | I20 + same-resolver OHLC envelope | Daily total candles + flat fallback + strict close identity | BLOCKED |
+| I40 | M | Portfolio backend integrator + coordinator | I20 + I30 + post-H report contract | DTO/report/cache wiring, then coordinator API sync | BLOCKED |
+| I50 | L | GrowthChart owner | I40 | Value/Return/P&L core modes; Line/Candles/Income P&L submodes; broker lines and sum aggregation | BLOCKED |
+| I60 | M | G3 Asset UI owner | I10 + coordinator release after shared integration | Historical N-day primary mode in final Asset detail | BLOCKED |
+| I70 | L | Test author + owners | Relevant implementation phases; H test ownership released | Targeted backend/frontend regressions and integration gates | BLOCKED |
+| I80 | S | Docs writer + coordinator | Stable integrated UI | English docs, coordinator i18n/runner/changelog records | BLOCKED |
+| I90 | M | Developer + coordinator | I50 + I60 + I70 + I80 | Desktop/mobile operational review, corrections, integration handoff | BLOCKED |
 
 > **Note implementazione (I00, 2026-09-10):** only the durable plan, final
 > product decisions, updated ASCII v2 storyboards and minimal feedback-job
@@ -517,27 +640,160 @@ A separate owner integrates G3 after F and the backend calendar signal:
 > frontend test plan, phase I50 and DoD were realigned; implementation stayed
 > frozen.
 
+> **Note implementazione (G0 technical refresh, 2026-09-10):** F's merged
+> source was re-read at `0af66da5...`; final findings and the H-before-I gate
+> are recorded in section 2. Gate 0 is not complete because implementation
+> authorization is absent. No implementation/test/runtime action was taken.
+
+> **Note implementazione (G0 I10 release, 2026-09-10):** developer explicitly
+> authorized only the signal-owned calendar rolling-return slice on
+> `0af66da5f366a9559549154631a4ee15ca620915`. Authorized production boundary:
+> dedicated plugin/helper plus minimal signal schema/catalog/service seam.
+> Excluded: Asset/portfolio/UI/F/H/shared generated surfaces. Portfolio Gate 0
+> remains blocked.
+
 ### 6.1 Parallel work after Gate 0
 
-I10 and I20 may proceed in parallel because their owned backend files are
-separate after reservations are confirmed. I30 waits for I20 and F's final
-resolver. I50 waits for the integrated report contract. I60 waits for I10 and
-F's Asset-detail result.
+Before H integration, only I10 may be considered independently, after explicit
+developer authorization. Its implementation file set must remain within the
+signal layer and avoid `asset_source.py`, `price_resolver.py`,
+`portfolio_engine.py`, `portfolio_service.py`, `schemas/portfolio.py` and
+H-owned portfolio tests.
+
+After H0, the portfolio backend integrator re-reads/re-reserves shared files,
+then I20 starts. I30 waits for I20 and extends the same resolver path. I50 waits
+for the integrated report contract. I60 waits for I10 plus an explicit
+coordinator release so Asset UI work cannot outrun shared integration.
 
 ### 6.2 File reservations
 
 | Owner | Reserved surfaces |
 |---|---|
-| G3 backend | Calendar signal plugin/helper; signal schema/service/asset-query integration only as required |
-| Portfolio backend integrator | `portfolio_engine.py`, `portfolio_service.py`, `schemas/portfolio.py`, portfolio cache behavior |
+| H until integration | `portfolio_service.py`, `schemas/portfolio.py`, relevant portfolio service/API tests, approved FIFO eligibility seam, `ExposureTable.svelte` and test |
+| F until coordinator release | `portfolio_engine.py`; preserve its shared FX cache-identity helper and current tests |
+| G3 backend | New calendar signal plugin/helper plus signal-owned schema/service tests only; no H/F surface |
+| Future portfolio backend integrator | After H/F release: `portfolio_engine.py`, `price_resolver.py`, `portfolio_service.py`, `schemas/portfolio.py`, portfolio cache behavior |
 | GrowthChart owner | `GrowthChart.svelte`, `timeSeriesAggregation.ts`, portfolio store, Dashboard/Broker mounts |
 | G3 Asset UI | Asset detail page and additive PriceChartFull props/helpers |
 | Coordinator | API client generation, i18n catalogues, test runner, nav, changelog, master records |
-| Test author | Distinct new/repaired tests assigned after implementation authorization |
+| Test author | Distinct new/repaired tests only after authorization; portfolio service/API files wait for H release |
 | Docs writer | English MkDocs pages after UI/contract stability |
 
-Any final F overlap overrides this provisional table and must be recorded at
-Gate 0 before editing.
+The post-F overlap is now known: preserve the F transactions link in Asset
+detail, F's L1 FX identity in the engine and F's tests. H remains the active
+shared-file blocker. No I owner edits a reserved file before the coordinator
+records its release.
+
+### 6.3 Remaining developer/coordinator gates
+
+No product decision remains open. Readiness still requires:
+
+1. Explicit developer authorization to implement I10 or any later phase.
+2. Coordinator confirmation that I10's final file set is signal-only.
+3. H accepted/integrated SHA and release of service/schema/portfolio tests.
+4. F release of `portfolio_engine.py` as integration-stable.
+5. A new post-H exact baseline and conflict refresh before I20.
+
+### 6.4 I10 execution progress
+
+| Step | Scope | Status |
+|---|---|---|
+| I10.0 | Baseline, post-F resolver verification, authorization and exact file ownership | COMPLETE 2026-09-10 |
+| I10.1 | Test-author characterization/regressions in assigned signal test files | COMPLETE 2026-09-10 |
+| I10.2 | Sparse typed provenance + internal-catalog execution seam | COMPLETE 2026-09-10 |
+| I10.3 | Dedicated calendar-day rolling-return plugin/helper | COMPLETE 2026-09-10 |
+| I10.4 | Targeted schema/registry/plugin/asset-signal gates and lint/format | COMPLETE 2026-09-10 |
+| I10.5 | Plan evidence, exact manifest and frozen integration handoff | COMPLETE 2026-09-10 |
+
+> **Note implementazione (I10.0, 2026-09-10):** clean exact baseline
+> `0af66da5...` verified. `AssetPriceSeries` and Asset query provide the
+> approved existing resolution semantics; no new resolver is required.
+> Signal-only implementation can avoid every H/F-reserved production file.
+> Tests are delegated only in
+> `test_signal_registry.py`, `test_risk_signal_plugins.py`,
+> `test_asset_signals.py` and `test_signal_schemas.py`; no runner edit is
+> required because all four files are already registered.
+
+> **Note implementazione (I10.1, 2026-09-10):** `test-author` added
+> contract-first coverage only to the four assigned, already-registered files:
+> `test_signal_registry.py`, `test_risk_signal_plugins.py`,
+> `test_asset_signals.py` and `test_signal_schemas.py`. Cases cover hidden but
+> executable registration, sparse typed provenance, calendar-vs-observation
+> windows, all four N values/default 30, target-currency integration,
+> backward-resolved references, missing/invalid states and unchanged legacy
+> rolling return. It ran no command and requested no runner edit.
+
+> **Note implementazione (I10.2, 2026-09-10):** added strict
+> `SignalCalendarReturnPointStatus`, typed provenance and a calendar-specific
+> value-point subtype. Existing `SignalValuePoint` remains exactly
+> `date + value`; provenance appears only on the new subtype. Added
+> `SignalPlugin.catalog_visible=True` and filtered only
+> `SignalPluginRegistry.list_definitions()`: hidden plugins remain
+> auto-discovered/executable through `get_plugin()`, while public Asset/FX
+> overlay catalogs and their existing 22/9 cardinalities stay unchanged.
+
+> **Note implementazione (I10.3, 2026-09-10):** added hidden
+> `ASSET_CALENDAR_ROLLING_RETURN`. Params are exactly
+> `window_days=7|30|90|365`, default 30. The plugin consumes the existing
+> target-currency dense daily `SignalPricePoint` series, performs exact
+> `t-N` calendar lookup, emits one typed value/null point per input date and
+> reports current/reference price plus available FX observation provenance.
+> No resolver, staleness threshold, Asset/portfolio/UI or legacy
+> `RISK_ROLLING_RETURN` behavior changed.
+
+> **Fuori pista (I10.4 lint, 2026-09-10):** the first exact-file Ruff check
+> stopped before test collection on one `I001` import-order finding in the new
+> plugin. No DB, file generation or server was touched. Reordered the one
+> import manually; no broad autofix was used.
+
+> **Fuori pista (I10.4 risk selector, 2026-09-10):** command
+> `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test
+> --test-port 6157 --data-dir /tmp/librefolio-r2-i-charts services risk-all
+> calendar` recreated only the assigned TEST DB, started no server, selected
+> 16 tests and returned 15 pass / 1 fail. The sole mismatch was
+> `RiskResultMetadata.computed_at`, correctly different between two sequential
+> service calls; every reported stable field matched. A required test-author
+> follow-up produced no patch, so the integrator normalized only `computed_at`
+> in that one equality assertion without weakening any stable payload check.
+
+> **Fuori pista (I10.4 exact-N warm-up, 2026-09-10):** tightening warm-up from
+> N+1 to the exact required N calendar days correctly avoided false partial
+> status at a boundary, but the targeted risk selector then returned
+> 22 pass / 2 fail: with no resolvable visible reference, the plugin attempted
+> to construct an all-null series and central schema validation classified it
+> as FAILED before SignalService could produce UNAVAILABLE. The command touched
+> only the assigned TEST DB and started no server. Added signal-owned
+> `validate_input()` that raises typed `INSUFFICIENT_HISTORY` only when no
+> visible date has its exact `t-N` point; exact-N warm-up remains unchanged.
+
+> **Fuori pista (I10.4 code review, 2026-09-10):** final read-only code review
+> found that unavoidable pre-visible warm-up nulls were counted in
+> `UNDEFINED_METRIC_WINDOW` even though SignalService slices those points before
+> returning the visible series. This could produce an OK visible result with a
+> false warning. Restricted warning counts to `context.requested_range`;
+> `test-author` added the focused no-warning assertion to the existing Asset
+> warm-up integration case.
+
+> **Note implementazione (I10.4, 2026-09-10):** all commands used
+> `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc` and the assigned lane
+> `--test-port 6157 --data-dir /tmp/librefolio-r2-i-charts`. Final evidence:
+> Black exact-file pass; Ruff exact-file pass; `schemas signals` 477/477;
+> `services signal-registry` 68/68; `services signal-service` 45/45;
+> `services asset-signals` 18/18; `services signal-plugin-matrix` 65/65;
+> final `services risk-all` 134/134. Earlier targeted selectors also proved
+> six provenance schemas, all calendar windows/statuses, target-currency
+> integration and the unchanged legacy sibling. Services commands recreated
+> only the isolated TEST DB; no backend server was started.
+
+> **Note implementazione (I10.5, 2026-09-10):** production delta is confined
+> to `schemas/signals.py`, `provider_registry.py`, `signal_plugins/base.py`
+> and new `signal_plugins/calendar_rolling_return.py`; test delta is confined
+> to the four assigned registered files. Final read-only code review found one
+> false warm-up-warning leak; its fix and focused regression are green. No
+> runner, Asset/portfolio/UI, i18n, generated client, docs, nav or changelog
+> file changed. Port 6157 is free. The hidden plugin is ready for integration;
+> UI consumption and coordinator-owned API client generation remain deferred
+> to authorized I60/shared integration.
 
 ## 7. ASCII storyboards v2
 
@@ -768,6 +1024,11 @@ No missing/partial state is represented by invented zero.
 
 Tests are not authorized in the current plan-only checkpoint. When
 implementation is authorized, invoke `test-author` and give it distinct files.
+F has already added FX-identity cases to
+`test_financial/test_portfolio_service.py` and cache-clear cases to
+`test_fx_core.py`; H now owns relevant portfolio service/API tests until
+integration. I test work must append to the integrated tests, never replace
+those contracts.
 
 ### 9.1 Backend cases
 
@@ -872,7 +1133,8 @@ Only after stable implementation:
 - Missing OHLC uses flat final-resolver fallback.
 - Synthetic label is persistent; no volume or factual-risk reuse.
 - Daily composition precedes temporal aggregation.
-- Unsupported short fails closed unless F establishes canonical support.
+- Unsupported short fails closed; broader short accounting is separately
+  authorized work.
 
 ### 11.4 G1c
 
