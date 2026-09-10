@@ -7,7 +7,7 @@
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
     import {userSettings} from '$lib/stores/app/settings';
     import {resetNavDepth} from '$lib/stores/app/navigationStore';
-    import {ArrowRightLeft, BarChart3, Briefcase, Coins, Files, LayoutDashboard, LogOut, Settings, User, X} from 'lucide-svelte';
+    import {ArrowRightLeft, BarChart3, Briefcase, Coins, Files, LayoutDashboard, LogOut, Settings, User, Wrench, X} from 'lucide-svelte';
     import {APP_VERSION} from '$lib/version';
     import ChangelogModal from './ChangelogModal.svelte';
 
@@ -37,6 +37,7 @@
         {href: '/dashboard', icon: LayoutDashboard, labelKey: 'nav.dashboard'},
         {href: '/brokers', icon: Briefcase, labelKey: 'brokers.title'},
         {href: '/transactions', icon: ArrowRightLeft, labelKey: 'transactions.title'},
+        {href: '/tools', icon: Wrench, labelKey: 'tools.title'},
     ];
 
     // Group 2: Market Data (global/shared data)
@@ -114,6 +115,7 @@
                 <li>
                     <a
                         href={item.href}
+                        data-testid={item.href === '/tools' ? 'nav-tools' : undefined}
                         on:click={() => {
                             closeSidebar();
                             resetNavDepth();
