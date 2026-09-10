@@ -1718,7 +1718,9 @@
     "Utilities": "Servizi pubblici",
     "Other": "Altro",
     "Unknown": "Non classificato",
-    "Liquidity": "Liquidità"
+    "Liquidity": "Liquidità",
+    "CorporateBonds": "Obbligazioni societarie",
+    "GovernmentBonds": "Titoli di Stato"
   },
   "settings": {
     "profile": "Profilo",
