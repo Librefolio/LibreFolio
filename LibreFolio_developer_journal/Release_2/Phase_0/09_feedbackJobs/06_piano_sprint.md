@@ -535,8 +535,9 @@ Non esiste un componente autonomo AssetDeleteModal: si usa ConfirmModal. La canc
 ### T0 - Piattaforma Tool backend, estensione approvata
 
 **Piano C attivo:** [Piattaforma Tool atomica](../16_toolPlatform/plan-phase00ToolPlatform.prompt.md).
-Il merge runtime e i gate backend generici sono completati; codec/frontend integrati
-e primo pilot PAC reale restano condizioni di chiusura.
+Il merge runtime, i gate backend, codec e frontend generici C sono completati.
+Il [contratto PAC per D](../16_toolPlatform/handoff-pac-D.md) definisce il primo
+plugin/renderer reale, che resta condizione di chiusura del pilot.
 
 **Stato:** nuova. **Taglia:** L per piattaforma custom-first; non richiede UI generica schema-driven.
 

@@ -1,17 +1,19 @@
 # Piano — Piattaforma Tool atomica
 
-**Stato:** 🟡 MERGE RISOLTO · BACKEND VALIDATO · FRONTEND/PILOT APERTI
+**Stato:** ✅ BASE C COMPLETA · HANDOFF D PRONTO · CHECKPOINT FINALE DA COMMITTARE
 **Data aggiornamento:** 2026-09-10
 **Owner:** C — Piattaforma Tool
 **Branch/worktree al checkpoint:** `e-alfy-tool-platform-c-r2` /
 `e-alfy-turbo-fortnight`
 **Primo commit C:** `1656aff6937f08935a902726884fdda4102f46ec`
-**MERGE_HEAD risolto, non committato dall'agente:**
-`916f12bddf3eb9b8e834e4b9033eb52ce4bde25a`
+**Merge runtime completato dal developer:**
+`bb0cdc3348971d118cc12d7e5a4a5e7f6f7ccfe7`
+(`1656aff6` + `916f12bd`)
 
 ← Backlog: [05 — Piattaforma Tool e allocatore PAC](../09_feedbackJobs/05_pac_allocation_tool.md)
 ← Piano sprint: [06 — SP12–14](../09_feedbackJobs/06_piano_sprint.md)
 → Inventario checkpoint: [manifest-integrazione-C.md](manifest-integrazione-C.md)
+→ Handoff D: [primo plugin PAC reale](handoff-pac-D.md)
 
 ## 1. Scopo e decisioni chiuse
 
@@ -71,12 +73,12 @@ discendenti, route autenticate e mount router/lifespan.
 > Il gruppo leaderless senza identita' viva nota non viene segnalato: resta
 > quarantinato finche' il kernel non conferma l'assenza del PGID.
 >
-> **Limite integrazione**: i tre endpoint sono presenti nell'OpenAPI (121 endpoint
-> totali; catalog/compute/diagnostics Tool), ma la suite API condivisa non ha
-> raggiunto i test perche' l'avvio server richiede la build frontend e il worktree
-> non possiede `node_modules`.
+> **Evidenza API**:121 endpoint OpenAPI, inclusi catalog/compute/diagnostics Tool.
+> `api system`24pass e `api tools`5pass sulla lane C; quest'ultimo verifica auth,
+> catalogo sano, unknown-tool correlato, envelope sanitizzato e diagnostics per
+> utente normale senza dipendere da una registry vuota.
 
-### 🟡 Passo 3 — Export e codec (schema esportato; generazione TS bloccata)
+### ✅ Passo 3 — Export e codec
 
 Preparati documento OpenAPI build-only `paths: {}`, generatore Zod strict, mappa
 letterale code/version/fingerprint/UI, adattamento Unicode codepoint, rimozione dei
@@ -92,12 +94,12 @@ default soltanto dagli output, type-check virtuale e pubblicazione atomica con l
 > build-only ignorato. Il generatore impone interi safe JS, Unicode codepoint,
 > strict objects, discriminatori e rollback atomico.
 >
-> **Blocco reale**: `api sync --tools-only` si ferma su
-> `ERR_MODULE_NOT_FOUND: openapi-zod-client`; `frontend/node_modules` e' assente.
-> Nessuna installazione o lettura dell'ambiente Node del checkout principale e'
-> stata eseguita. Codec TS, type-check e round-trip restano aperti.
+> **Evidenza**: dopo un solo `npm ci` dal lock, `api sync --tools-only` e
+> `api sync` completo passano. Generati codec trasporto strict e mappa vuota
+> (`ToolCode=never`) coerente con l'assenza intenzionale di plugin C.
+> `JsonValue` e' una ricorsione tipizzata, non `any`; gli interi usano `.safe()`.
 
-### 🟡 Passo 4 — Frontend generico (integrato nei sorgenti; type-check bloccato)
+### ✅ Passo 4 — Frontend generico
 
 Creati client tipizzato, compatibilita' descriptor/codec, registry renderer compilati,
 hub, host, route `/tools`, metriche e pannelli About/diagnostica. L'allowlist renderer
@@ -115,8 +117,10 @@ resta vuota: nessun PAC fittizio viene dichiarato disponibile.
 > specifico e invia gli stessi byte; getter, Proxy, `toJSON`, cicli, surrogate e
 > interi unsafe non possono cambiare lo scenario tra validazione e trasporto.
 >
-> **Blocco reale**: codec generati assenti; nessun `svelte-check`, Vitest o build
-> senza `node_modules`.
+> **Evidenza**: `svelte-check`0/0, Prettier pass, Vitest client17pass e build
+> produzione pass. Gli script AST build-time sono esclusi dal type-check app via
+> direttiva file, ma il generatore applica invariant runtime e type-check virtuale
+> ai codec/map prima della pubblicazione.
 
 ### ✅ Passo 5 — Test backend e documentazione EN
 
@@ -133,11 +137,17 @@ Scritti test DTO, registry, wire e lifecycle. Registrate le unita `schemas tools
 | `services tools-registry` |82 passed |
 | `services tools-lifecycle` |63 passed |
 | `utils container-registry` | 30 passed |
+| `api system` |24 passed |
+| `api tools` |5 passed |
 | `test check-orphans` | tutti i file registrati e raggiungibili |
 | `lint` | pass |
 | `i18n audit` |2668/2668 per tutte le quattro lingue |
 | `mkdocs build` / `check-links` | pass /12 link validi |
 | `info api` |121 endpoint, inclusi i3 Tool |
+| `api sync --tools-only` / completo | pass /pass |
+| `svelte-check` |0 errori /0 warning |
+| Vitest Tool client |17 passed |
+| Prettier / frontend build | pass /pass |
 
 Scritte guide EN utente/developer e skill plugin. Nav e build sono integrate;
 le traduzioni MkDocs utente IT/FR/ES non sono state avviate.
@@ -145,7 +155,7 @@ le traduzioni MkDocs utente IT/FR/ES non sono state avviate.
 > **Limite**: backend unit/lifecycle verificato; API HTTP, codec TypeScript,
 > UI e pilot PAC non sono validati.
 
-### ⏳ Passo 6 — Primo pilot PAC reale
+### ↗️ Passo 6 — Primo pilot PAC reale, trasferito a D
 
 Dipende dall'handoff D dei modelli/core/thin plugin e dal renderer PAC approvato:
 
@@ -160,6 +170,7 @@ PacAnalyzeInput reale
 ```
 
 Nessuna registry vuota o demo plugin puo' chiudere questo passo.
+Il contratto esatto e i selector sono in [handoff-pac-D.md](handoff-pac-D.md).
 
 ## 3. Politica iniziale da verificare dopo integrazione
 
@@ -179,14 +190,14 @@ ASGI la capacita' e' per-processo.
 
 ## 4. Merge di `dev_release2/916f12bd`
 
-Il developer ha avviato il merge. C ha risolto l'unico UU
+Il developer ha completato il merge in `bb0cdc33`. C ha risolto l'unico UU
 `scripts/test_runner/_backend_utils.py` in modo additivo:
 `container-registry` + `runtime-isolation` + `tools-wire`.
 
 Gli auto-merge `dev.py` e `scripts/cli_base.py` conservano runtime isolation,
 dotenv/lane ID/data-dir/fail-closed ed estensioni Tool per export/freshness.
-Indice finale senza conflitti:192 path staged, nessun file unstaged.
-Nessun merge commit e' stato creato dall'agente.
+Il checkpoint successivo al merge contiene21 path staged e nessun file unstaged.
+Nessun commit finale e' stato creato dall'agente.
 
 Lane usata:
 
@@ -222,18 +233,18 @@ Due review read-only hanno prodotto correzioni e regressioni:
 - elenco endpoint derivato dall'OpenAPI materializzato.
 
 La review successiva ha trovato quattro residui sui confini sopra; sono stati
-corretti e coperti da regressioni backend. Il test frontend client/AST resta
-pendente per l'assenza delle dipendenze/codecs generati.
+corretti. Regressioni backend e frontend sono verdi.
 
 ## 5. Definition of done residua
 
 - [x] Merge semantico con `916f12bd` risolto senza perdere runtime isolation,
       container registry o registrazioni Tool; merge commit manuale ancora atteso.
-- [ ] Handoff D dei modelli/core/plugin e renderer P1 reali.
-- [ ] Export/codegen reale + conformance Unicode/defaults/fingerprint.
+- [x] Contratto handoff D per modelli/core/plugin/renderer P1 pubblicato.
+- [x] Export/codegen base reale + conformance Unicode/defaults/fingerprint.
+- [ ] Rigenerazione con il vero plugin D.
 - [x] Test registry, wire e lifecycle esclusivi.
-- [ ] API auth/bulk/diagnostics su server integrato.
-- [ ] Type-check, Vitest/build e test host/client.
+- [x] API auth/bulk/diagnostics su server integrato.
+- [x] Type-check, Vitest client e build frontend C.
 - [x] Mount About sul file E definitivo e applicazione i18n via CLI.
 - [ ] MkDocs traduzioni utente richieste; nav/build/check-links completati.
 - [ ] Pilot reale e review operativa desktop/mobile/errori.
@@ -241,5 +252,5 @@ pendente per l'assenza delle dipendenze/codecs generati.
 - [ ] Debug finale, stato integrato e solo allora archiviazione sotto
       `Release_2/phases/16_toolPlatform/`.
 
-Questo piano e' **merge-resolved e backend-validated**, ma non chiudibile:
-codegen/frontend/API e pilot PAC restano aperti.
+Questo piano C e' **base completa e validata**, pronta per il commit manuale e
+la fusione nel branch D. Il pilot PAC resta esplicitamente fuori da C.
