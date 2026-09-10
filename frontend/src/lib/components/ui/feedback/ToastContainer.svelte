@@ -41,9 +41,9 @@
     let drag = $state<{id: string; startX: number; startY: number; dx: number; dy: number} | null>(null);
 
     function onPointerDown(event: PointerEvent, id: string) {
-        // Ignore secondary buttons and anything starting on the dismiss button.
+        // Native links must retain their click instead of becoming swipe gestures.
         if (event.button !== 0) return;
-        if ((event.target as HTMLElement | null)?.closest('button')) return;
+        if ((event.target as HTMLElement | null)?.closest('button, a')) return;
         drag = {id, startX: event.clientX, startY: event.clientY, dx: 0, dy: 0};
         (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
     }
@@ -95,7 +95,7 @@
                         <Icon size={15} class="shrink-0 mt-0.5" />
                         <span class="flex-1 whitespace-pre-line text-left">{@html toast.message}</span>
                     </div>
-                    <button class="shrink-0 p-0.5 rounded hover:bg-white/20 transition-colors absolute top-1.5 right-1.5" onclick={() => toasts.dismiss(toast.id)} aria-label="Dismiss">
+                    <button class="shrink-0 p-0.5 rounded hover:bg-white/20 transition-colors absolute top-1.5 right-1.5" onclick={() => toasts.dismiss(toast.id)} aria-label="Dismiss" data-testid="toast-dismiss">
                         <X size={12} />
                     </button>
                 </div>

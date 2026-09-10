@@ -62,6 +62,14 @@ def schemas_brokers(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Broker schemas tests", verbose=verbose)
 
 
+def schemas_fx_routes(verbose: bool = False, test_names: list = None) -> bool:
+    """Test FX route request and response metadata contracts."""
+    print_section("Schemas: FX Routes")
+    print_info("Testing: backend/app/schemas/fx.py route input/output separation")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_schemas/test_fx_route_schemas.py", test_names)
+    return run_command(cmd, "FX route schema tests", verbose=verbose)
+
+
 def schemas_signals(verbose: bool = False, test_names: list = None) -> bool:
     """Test library-independent technical signal schemas."""
     print_section("Schemas: Technical Signals")
@@ -142,6 +150,7 @@ Tests for Pydantic/SQLModel schema validation:
     add_test(cat, "assets", schemas_assets, name="Asset Schemas", desc="FAGeographicArea, FAInterestRatePeriod")
     add_test(cat, "transactions", schemas_transactions, name="Transaction Schemas", desc="TXCreateItem, TXReadItem")
     add_test(cat, "brokers", schemas_brokers, name="Broker Schemas", desc="BRCreateItem, BRReadItem")
+    add_test(cat, "fx-routes", schemas_fx_routes, name="FX Route Schemas", desc="Request validation and response-only chain/provider membership metadata")
     add_test(cat, "signals", schemas_signals, name="Signal Schemas", desc="Plugin, catalog, canonical output, status and availability contracts")
     add_test(cat, "risk", schemas_risk, name="Risk Schemas", desc="Canonical valuations, returns, metadata and data-quality contracts")
     add_test(cat, "pac-analyze", schemas_pac_analyze, name="PAC Analyze Schemas", desc="Strict P1 draft/result codecs, availability, exact string facts and wire bounds", isolation="pure")

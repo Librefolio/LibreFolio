@@ -475,7 +475,7 @@ class FASectorArea(BaseDistribution):
     Validates sector names against FinancialSector enum:
     - Industrials, Technology, Financials, Consumer Discretionary,
       Health Care, Real Estate, Basic Materials, Energy, Consumer Staples,
-      Telecommunication, Utilities, Other
+      Telecommunication, Utilities, Corporate Bonds, Government Bonds, Other
 
     Unknown sectors are mapped to "Other" with warning log.
     Weights are automatically merged if multiple input keys map to same sector.
@@ -799,6 +799,7 @@ class FAAssetDeleteResult(BaseDeleteResult):
     asset_id: int = Field(..., description="Asset ID")
     display_name: Optional[str] = Field(None, description="Asset display name (for UI feedback)")
     error_code: Optional[str] = Field(None, description="Structured error code: 'HAS_TRANSACTIONS' | 'NOT_FOUND' | None")
+    transaction_count: Optional[int] = Field(None, ge=0, description="Global transaction count when deletion is blocked")
     # Inherits from BaseDeleteResult:
     # - success: bool
     # - deleted_count: int (always 0 or 1 for single asset)

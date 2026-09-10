@@ -32,11 +32,12 @@
  *     box) and only the tab's reaction is asserted.
  *   - the scheduler modals' contents. Opening them is asserted, their behaviour is
  *     their own.
- *   - the mobile dropdown's click-outside listener, which is a document-level
- *     concern of `clickOutside`.
+ *   - clickOutside's detection algorithm. The Runes cases below exercise only
+ *     this tab's listener lifetime and its bound mobile dropdown reference.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import {readable, writable} from 'svelte/store';
+import {tick} from 'svelte';
+import {get, readable, writable, type Writable} from 'svelte/store';
 import {fireEvent, render, screen, waitFor, within} from '$test/component';
 
 // --- Mocks --------------------------------------------------------------
@@ -59,7 +60,7 @@ const DICT: Record<string, string> = {
 };
 
 vi.mock('$lib/i18n', () => {
-    const dictionary = readable((key: string) => DICT[key] ?? key);
+    const dictionary = writable((key: string) => DICT[key] ?? key);
     return {
         _: dictionary,
         t: dictionary,
@@ -80,6 +81,10 @@ vi.mock('$lib/i18n', () => {
         saveLocalePreference: () => undefined,
     };
 });
+
+// Independent stores let a regression distinguish the explicit locale dependency
+// from a translator replacement; changing both at once would hide either gap.
+vi.mock('$lib/stores/app/language', () => ({currentLanguage: writable('en')}));
 
 const axiosGet = vi.fn(async (_url: string) => ({data: null}) as {data: unknown});
 const axiosPatch = vi.fn(async (_url: string, _body?: unknown) => ({data: null}) as {data: unknown});
@@ -121,6 +126,9 @@ vi.mock('$lib/stores/reference/currencyStore', () => ({
 
 import GlobalSettingsTab from './GlobalSettingsTab.svelte';
 import {zodiosApi} from '$lib/api';
+import {_, locale} from '$lib/i18n';
+import {currentLanguage} from '$lib/stores/app/language';
+import * as clickOutside from '$lib/utils/core/clickOutside';
 
 // --- Fixtures & helpers -------------------------------------------------
 
@@ -129,6 +137,9 @@ type Fixture = {key: string; value: string; value_type: string; updated_at?: str
 const listFn = () => vi.mocked(zodiosApi.list_global_settings_api_v1_settings_global_get as never) as ReturnType<typeof vi.fn>;
 
 const setting = (key: string, value: string, value_type = 'string', extra: Partial<Fixture> = {}): Fixture => ({key, value, value_type, updated_at: null, ...extra});
+const translator = _ as unknown as Writable<(key: string) => string>;
+const SCHEDULER_STATE = '/api/v1/settings/scheduler/state';
+const schedulerReads = () => axiosGet.mock.calls.filter(([url]) => url === SCHEDULER_STATE);
 
 /** An axios-shaped rejection with a status. */
 function axiosError(status: number, message = `Request failed with status code ${status}`): Error {
@@ -152,7 +163,7 @@ async function mount(items: Fixture[], props: {canEdit?: boolean} = {}) {
     // copy of the rows it asked for.
     listFn().mockResolvedValue({items: items.map((item) => ({...item}))} as never);
     const utils = render(GlobalSettingsTab, {props: {canEdit: true, ...props}});
-    await waitFor(() => expect(screen.queryByTestId('global-settings-tab')).not.toBeNull());
+    await waitFor(() => expect(screen.getByTestId('global-settings-tab')).toHaveAttribute('data-busy', 'false'));
     await waitFor(() => expect(listFn()).toHaveBeenCalled());
     return utils;
 }
@@ -182,6 +193,9 @@ const lastPatchBody = () => axiosPatch.mock.calls.at(-1)?.[1] as {items: {key: s
 const textInput = (key: string) => document.getElementById(key) as HTMLInputElement;
 
 beforeEach(() => {
+    currentLanguage.set('en');
+    locale.set('en');
+    translator.set((key: string) => DICT[key] ?? key);
     vi.clearAllMocks();
     axiosGet.mockResolvedValue({data: {server_tz: 'Europe/Rome'}} as never);
     axiosPatch.mockResolvedValue({data: null} as never);
@@ -229,38 +243,113 @@ describe('GlobalSettingsTab — who is allowed to touch it', () => {
 
 // =========================================================================
 describe('GlobalSettingsTab — closing the lock over pending edits', () => {
+    const discardHeader = () => screen.getByTestId('global-settings-discard-confirm');
+    const editedNumber = () => within(screen.getByTestId('global-setting-session_ttl_hours')).getByRole('spinbutton');
+
+    async function requestDiscard() {
+        await fireEvent.click(lockToggle());
+        const header = await screen.findByTestId('global-settings-discard-confirm');
+        const dialog = header.closest<HTMLElement>('[role="dialog"]');
+        expect(dialog).not.toBeNull();
+        expect(window.confirm).not.toHaveBeenCalled();
+        return dialog!;
+    }
+
     it('closes without asking when nothing was changed', async () => {
         await mountUnlocked([setting('session_ttl_hours', '24', 'int')]);
+        expect(editedNumber()).toBeEnabled();
+        expect(screen.queryByTestId('global-settings-discard-confirm')).not.toBeInTheDocument();
 
         await fireEvent.click(lockToggle());
 
-        await waitFor(() => expect(screen.getByRole('spinbutton')).toBeDisabled());
+        await waitFor(() => expect(editedNumber()).toBeDisabled());
+        expect(screen.queryByTestId('global-settings-discard-confirm')).not.toBeInTheDocument();
+        await fireEvent.click(lockToggle());
+        expect(editedNumber()).toBeEnabled();
+        expect(editedNumber()).toHaveValue(24);
+        expect(screen.queryByTestId('global-settings-discard-confirm')).not.toBeInTheDocument();
         expect(window.confirm).not.toHaveBeenCalled();
-    });
-
-    it('asks, and throws the edit away when the answer is yes', async () => {
-        await mountUnlocked([setting('session_ttl_hours', '24', 'int')]);
-        await fireEvent.input(screen.getByRole('spinbutton'), {target: {value: '48'}});
-        await waitFor(() => expect(screen.queryByTitle('common.save')).not.toBeNull());
-
-        await fireEvent.click(lockToggle());
-
-        expect(window.confirm).toHaveBeenCalledTimes(1);
-        await waitFor(() => expect(screen.getByRole('spinbutton')).toHaveValue(24));
-        expect(screen.getByRole('spinbutton')).toBeDisabled();
         expect(axiosPatch).not.toHaveBeenCalled();
     });
 
-    it('keeps the edit and stays unlocked when the answer is no', async () => {
-        vi.mocked(window.confirm).mockReturnValue(false);
-        await mountUnlocked([setting('session_ttl_hours', '24', 'int')]);
-        await fireEvent.input(screen.getByRole('spinbutton'), {target: {value: '48'}});
-        await waitFor(() => expect(screen.queryByTitle('common.save')).not.toBeNull());
+    it('asks in the amber modal and discards all edits only after confirmation', async () => {
+        await mountUnlocked([setting('session_ttl_hours', '24', 'int'), setting('max_file_upload_mb', '10', 'int')]);
+        const uploadLimit = within(screen.getByTestId('global-setting-max_file_upload_mb')).getByRole('spinbutton');
+        await fireEvent.input(editedNumber(), {target: {value: '48'}});
+        await fireEvent.input(uploadLimit, {target: {value: '20'}});
+        expect(screen.getByTestId('settings-save-all')).toBeEnabled();
 
+        const dialog = await requestDiscard();
+        const confirm = within(dialog).getByTestId('confirm-modal-confirm');
+        // These are keys from this file's mock translator, not catalogue text.
+        expect(discardHeader()).toHaveTextContent('common.discardChanges');
+        expect(within(dialog).getByTestId('confirm-modal-message')).toHaveTextContent('settings.discardChangesConfirm');
+        expect(within(dialog).getByTestId('confirm-modal-cancel')).toHaveTextContent('common.cancel');
+        expect(confirm).toHaveTextContent('common.discard');
+        // Approved feature assertion: selection uses testid; amber is the subject.
+        expect(confirm).toHaveClass('btn-warning');
+        expect(confirm).not.toHaveClass('btn-danger');
+        expect(confirm).not.toHaveClass('btn-primary');
+        expect(editedNumber()).toHaveValue(48);
+        expect(uploadLimit).toHaveValue(20);
+        expect(editedNumber()).toBeEnabled();
+        expect(axiosPatch).not.toHaveBeenCalled();
+
+        await fireEvent.click(confirm);
+        await waitFor(() => expect(screen.queryByTestId('global-settings-discard-confirm')).not.toBeInTheDocument());
+        expect(editedNumber()).toHaveValue(24);
+        expect(uploadLimit).toHaveValue(10);
+        expect(editedNumber()).toBeDisabled();
+        expect(uploadLimit).toBeDisabled();
+        expect(screen.queryByTestId('settings-save-all')).not.toBeInTheDocument();
+        expect(window.confirm).not.toHaveBeenCalled();
+        expect(axiosPatch).not.toHaveBeenCalled();
+        expect(setGlobalDirect).not.toHaveBeenCalled();
+
+        // Undo restored the baseline, rather than merely hiding dirty controls.
         await fireEvent.click(lockToggle());
+        expect(editedNumber()).toBeEnabled();
+        expect(editedNumber()).toHaveValue(24);
+        expect(uploadLimit).toHaveValue(10);
+        expect(screen.queryByTestId('settings-save-all')).not.toBeInTheDocument();
+    });
 
-        expect(screen.getByRole('spinbutton')).toHaveValue(48);
-        expect(screen.getByRole('spinbutton')).toBeEnabled();
+    it.each(['cancel', 'escape', 'dismiss', 'backdrop'] as const)('keeps the edit and stays unlocked on modal %s', async (action) => {
+        await mountUnlocked([setting('session_ttl_hours', '24', 'int')]);
+        await fireEvent.input(editedNumber(), {target: {value: '48'}});
+        expect(screen.getByTestId('settings-save-all')).toBeEnabled();
+
+        const dialog = await requestDiscard();
+        if (action === 'cancel') {
+            await fireEvent.click(within(dialog).getByTestId('confirm-modal-cancel'));
+        } else if (action === 'escape') {
+            await fireEvent.keyDown(dialog, {key: 'Escape'});
+        } else if (action === 'dismiss') {
+            // The testid identifies this confirmation's header; its sole button
+            // is the close control, independent of its accessible translation.
+            await fireEvent.click(within(discardHeader()).getByRole('button'));
+        } else {
+            // ModalBase requires both press and release to start on the backdrop.
+            await fireEvent.mouseDown(dialog);
+            await fireEvent.click(dialog);
+        }
+
+        await waitFor(() => expect(screen.queryByTestId('global-settings-discard-confirm')).not.toBeInTheDocument());
+        expect(editedNumber()).toHaveValue(48);
+        expect(editedNumber()).toBeEnabled();
+        expect(screen.getByTestId('settings-save-all')).toBeEnabled();
+        expect(window.confirm).not.toHaveBeenCalled();
+        expect(axiosPatch).not.toHaveBeenCalled();
+        expect(setGlobalDirect).not.toHaveBeenCalled();
+
+        // The next lock request must still see that same unsaved draft.
+        const reopened = await requestDiscard();
+        expect(editedNumber()).toHaveValue(48);
+        await fireEvent.click(within(reopened).getByTestId('confirm-modal-cancel'));
+        await waitFor(() => expect(screen.queryByTestId('global-settings-discard-confirm')).not.toBeInTheDocument());
+        expect(editedNumber()).toBeEnabled();
+        expect(editedNumber()).toHaveValue(48);
+        expect(axiosPatch).not.toHaveBeenCalled();
     });
 });
 
@@ -985,5 +1074,207 @@ describe('GlobalSettingsTab — the mobile category dropdown', () => {
         await fireEvent.click(within(mobileSection()).getByRole('button', {name: /^All/}));
 
         await waitFor(() => expect(screen.queryByRole('spinbutton')).not.toBeNull());
+    });
+});
+
+// =========================================================================
+describe('GlobalSettingsTab — Runes reactive and lifecycle boundaries', () => {
+    const mobileTrigger = () => screen.getByTestId('global-settings-mobile-category-trigger');
+    const mobileMenu = () => screen.getByTestId('global-settings-mobile-category-menu');
+    const mobileOption = (id: string) => within(mobileMenu()).getByTestId(`global-settings-mobile-category-${id}`);
+    const row = (key: string) => screen.getByTestId(`global-setting-${key}`);
+
+    it('updates desktop and open mobile labels on locale-only and translator-only changes without GETs', async () => {
+        // The translator function stays identical during the first change.
+        // Only the explicit $currentLanguage dependency can invalidate the map.
+        translator.set((key: string) => `RUNES-${get(currentLanguage)}-${key}`);
+        await mount([setting('session_ttl_hours', '24', 'int')]);
+        await waitFor(() => expect(schedulerReads()).toEqual([[SCHEDULER_STATE]]));
+        await fireEvent.click(screen.getByTestId('global-settings-category-session'));
+        await fireEvent.click(mobileTrigger());
+        expect(mobileMenu()).toBeInTheDocument();
+
+        const expectLabels = (prefix: string) => {
+            expect(screen.getByTestId('global-settings-category-session')).toHaveTextContent(`${prefix}-settings.globalSettingCategories.session`);
+            expect(screen.getByTestId('global-settings-category-security')).toHaveTextContent(`${prefix}-settings.security`);
+            expect(mobileTrigger()).toHaveTextContent(`${prefix}-settings.globalSettingCategories.session`);
+            expect(mobileOption('session')).toHaveTextContent(`${prefix}-settings.globalSettingCategories.session`);
+            expect(mobileOption('security')).toHaveTextContent(`${prefix}-settings.security`);
+            expect(mobileOption('all')).toHaveTextContent(`${prefix}-settings.all`);
+        };
+        expectLabels('RUNES-en');
+        const initialGets = axiosGet.mock.calls.map(([url]) => url);
+
+        currentLanguage.set('it');
+        locale.set('it');
+        await tick();
+        expectLabels('RUNES-it');
+        expect(listFn().mock.calls).toEqual([[]]);
+        expect(axiosGet.mock.calls.map(([url]) => url)).toEqual(initialGets);
+
+        // Now replace only the translator. Locale and category do not change.
+        translator.set((key: string) => `REPLACED-${key}`);
+        await tick();
+        expect(get(currentLanguage)).toBe('it');
+        expectLabels('REPLACED');
+        expect(listFn().mock.calls).toEqual([[]]);
+        expect(axiosGet.mock.calls.map(([url]) => url)).toEqual(initialGets);
+        expect(axiosPatch).not.toHaveBeenCalled();
+
+        await fireEvent.click(mobileOption('security'));
+        await waitFor(() => expect(screen.queryByTestId('global-settings-mobile-category-menu')).not.toBeInTheDocument());
+        expect(mobileTrigger()).toHaveTextContent('REPLACED-settings.security');
+        expect(listFn().mock.calls).toEqual([[]]);
+        expect(axiosGet.mock.calls.map(([url]) => url)).toEqual(initialGets);
+    });
+
+    it('tracks nested draft edits independently and keeps bulk dirty until the last edited field is restored', async () => {
+        await mountUnlocked([setting('session_ttl_hours', '24', 'int'), setting('default_language', 'en')]);
+        await waitFor(() => expect(schedulerReads()).toEqual([[SCHEDULER_STATE]]));
+        const initialGets = axiosGet.mock.calls.map(([url]) => url);
+        const number = within(row('session_ttl_hours')).getByRole('spinbutton');
+        const language = within(row('default_language')).getByRole('combobox');
+
+        expect(screen.queryByTestId('settings-save-all')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('settings-reset-all')).not.toBeInTheDocument();
+        await fireEvent.input(number, {target: {value: '48'}});
+        expect(within(row('session_ttl_hours')).getByTestId('setting-save')).toBeEnabled();
+        expect(screen.getByTestId('settings-reset-all')).toBeEnabled();
+
+        await fireEvent.click(language);
+        await fireEvent.click(await within(row('default_language')).findByRole('option', {name: /Italiano/}));
+        expect(within(row('default_language')).getByTestId('setting-save')).toBeEnabled();
+
+        // Editing back, not an undo helper, exercises two nested record writes.
+        await fireEvent.input(number, {target: {value: '24'}});
+        expect(number).toHaveValue(24);
+        expect(within(row('session_ttl_hours')).queryByTestId('setting-save')).not.toBeInTheDocument();
+        expect(screen.getByTestId('settings-save-all')).toBeEnabled();
+        expect(screen.getByTestId('settings-reset-all')).toBeEnabled();
+
+        await fireEvent.click(language);
+        await fireEvent.click(await within(row('default_language')).findByRole('option', {name: /English/}));
+        expect(language).toHaveTextContent('English');
+        expect(within(row('default_language')).queryByTestId('setting-save')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('settings-save-all')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('settings-reset-all')).not.toBeInTheDocument();
+        expect(listFn().mock.calls).toEqual([[]]);
+        expect(axiosGet.mock.calls.map(([url]) => url)).toEqual(initialGets);
+        expect(axiosPatch).not.toHaveBeenCalled();
+    });
+
+    it('owns one clickoutside listener per mount and removes it on destroy', async () => {
+        const outside = vi.spyOn(clickOutside, 'isOutsideClick');
+        // Empty settings exclude child picker/cache listeners from this test.
+        const first = await mount([]);
+        await fireEvent.click(mobileTrigger());
+        expect(mobileMenu()).toBeInTheDocument();
+        await fireEvent.click(mobileMenu());
+        expect(mobileMenu()).toBeInTheDocument(); // bind:this recognises an inside click
+
+        outside.mockClear();
+        await fireEvent.click(document.body);
+        expect(outside).toHaveBeenCalledTimes(1);
+        expect(screen.queryByTestId('global-settings-mobile-category-menu')).not.toBeInTheDocument();
+
+        first.unmount();
+        expect(screen.queryByTestId('global-settings-tab')).not.toBeInTheDocument();
+        outside.mockClear();
+        await fireEvent.click(document.body);
+        expect(outside).not.toHaveBeenCalled();
+
+        const second = await mount([]);
+        await fireEvent.click(mobileTrigger());
+        expect(mobileMenu()).toBeInTheDocument();
+        outside.mockClear();
+        await fireEvent.click(document.body);
+        expect(outside).toHaveBeenCalledTimes(1); // no listener retained from mount one
+        expect(screen.queryByTestId('global-settings-mobile-category-menu')).not.toBeInTheDocument();
+
+        second.unmount();
+        outside.mockClear();
+        await fireEvent.click(document.body);
+        expect(outside).not.toHaveBeenCalled();
+    });
+
+    it('waits for the initial settings read before requesting scheduler state', async () => {
+        const settings = deferred<{items: Fixture[]}>();
+        const scheduler = deferred<{data: unknown}>();
+        const order: string[] = [];
+        listFn().mockImplementation(() => {
+            order.push('settings');
+            return settings.promise;
+        });
+        axiosGet.mockImplementation(async (url: string) => {
+            if (url === SCHEDULER_STATE) {
+                order.push('scheduler');
+                return scheduler.promise;
+            }
+            return {data: null};
+        });
+        render(GlobalSettingsTab, {canEdit: true});
+        await tick();
+
+        expect(screen.getByTestId('global-settings-tab')).toHaveAttribute('data-busy', 'true');
+        expect(order).toEqual(['settings']);
+        expect(schedulerReads()).toEqual([]);
+
+        settings.resolve({items: [setting('session_ttl_hours', '24', 'int')]});
+        await waitFor(() => expect(order).toEqual(['settings', 'scheduler']));
+        expect(screen.getByTestId('global-settings-tab')).toHaveAttribute('data-busy', 'false');
+        scheduler.resolve({data: {server_tz: 'UTC', current_price: {last_run_at: '2024-06-01T08:00:00Z', last_status: 'ok'}}});
+        await waitFor(() => expect(screen.getByTestId('scheduler-status-row')).toHaveTextContent('settings.global.scheduler.status.lastRun'));
+        expect(listFn().mock.calls).toEqual([[]]);
+        expect(schedulerReads()).toEqual([[SCHEDULER_STATE]]);
+    });
+
+    it('reloads settings only after scheduler save succeeds, not on open, edit or cancel', async () => {
+        const items = [setting('session_ttl_hours', '24', 'int'), setting('scheduler_current_price_frequency_minutes', '17')];
+        await mountUnlocked(items);
+        await waitFor(() => expect(schedulerReads()).toEqual([[SCHEDULER_STATE]]));
+        await fireEvent.click(screen.getByTestId('scheduler-config-btn'));
+        expect(await screen.findByTestId('scheduler-config-modal')).toBeInTheDocument();
+        await fireEvent.click(screen.getByTestId('scheduler-config-cancel'));
+        await waitFor(() => expect(screen.queryByTestId('scheduler-config-modal')).not.toBeInTheDocument());
+        expect(listFn().mock.calls).toEqual([[]]);
+        expect(schedulerReads()).toEqual([[SCHEDULER_STATE]]);
+
+        await fireEvent.click(screen.getByTestId('scheduler-config-btn'));
+        const frequency = within(await screen.findByTestId('scheduler-config-frequency')).getByRole('spinbutton');
+        expect(frequency).toHaveValue(17);
+        await fireEvent.input(frequency, {target: {value: '23'}});
+        expect(frequency).toHaveValue(23);
+        expect(listFn().mock.calls).toEqual([[]]);
+        expect(screen.getByTestId('scheduler-config-save')).toBeEnabled();
+
+        const saveFlight = deferred<{data: null}>();
+        const reload = deferred<{items: Fixture[]}>();
+        axiosPatch.mockReturnValueOnce(saveFlight.promise);
+        listFn().mockReturnValueOnce(reload.promise);
+        await fireEvent.click(screen.getByTestId('scheduler-config-save'));
+        expect(axiosPatch).toHaveBeenCalledTimes(1);
+        expect(lastPatchBody().items).toContainEqual({key: 'scheduler_current_price_frequency_minutes', value: '23'});
+        expect(screen.getByTestId('scheduler-config-save')).toBeDisabled();
+        expect(listFn().mock.calls).toEqual([[]]);
+        expect(schedulerReads()).toEqual([[SCHEDULER_STATE]]);
+
+        saveFlight.resolve({data: null});
+        await waitFor(() => expect(listFn().mock.calls).toEqual([[], []]));
+        await waitFor(() => expect(screen.queryByTestId('scheduler-config-modal')).not.toBeInTheDocument());
+        expect(screen.getByTestId('global-settings-tab')).toHaveAttribute('data-busy', 'true');
+        expect(setGlobalDirect).not.toHaveBeenCalled();
+        // Baseline onsave calls loadSettings + syncGlobalSettingsStore, NOT
+        // loadSchedulerState. Keep those explicit triggers distinct.
+        expect(schedulerReads()).toEqual([[SCHEDULER_STATE]]);
+
+        reload.resolve({items: [setting('session_ttl_hours', '24', 'int'), setting('scheduler_current_price_frequency_minutes', '23')]});
+        await waitFor(() => expect(setGlobalDirect).toHaveBeenCalledWith(expect.objectContaining({scheduler_current_price_frequency_minutes: 23})));
+        expect(screen.getByTestId('global-settings-tab')).toHaveAttribute('data-busy', 'false');
+        await fireEvent.click(screen.getByTestId('scheduler-config-btn'));
+        expect(within(await screen.findByTestId('scheduler-config-frequency')).getByRole('spinbutton')).toHaveValue(23);
+        await fireEvent.click(screen.getByTestId('scheduler-config-cancel'));
+        await waitFor(() => expect(screen.queryByTestId('scheduler-config-modal')).not.toBeInTheDocument());
+        expect(listFn().mock.calls).toEqual([[], []]);
+        expect(schedulerReads()).toEqual([[SCHEDULER_STATE]]);
     });
 });

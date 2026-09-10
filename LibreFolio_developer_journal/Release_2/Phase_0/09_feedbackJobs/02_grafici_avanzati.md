@@ -5,6 +5,12 @@ Task su visualizzazioni. Approvati dall'utente il 07/09/2026. La nota dell'utent
 Analisi del codice e decisioni successive del 2026-09-07 in
 [06_piano_sprint.md](06_piano_sprint.md); nessuna implementazione avviata.
 
+**Raggruppamento raffinato 2026-09-10:** F8a P&L-only e F8b candele sintetiche
+formano SP07 perche condividono `PortfolioHistory`, backend portfolio e
+`GrowthChart`. F8c istogrammi DIVIDEND/INTEREST passa in SP06 insieme al rendimento
+rolling a giorni calendario e a YOC: stesso dominio di finestre/redditi/completeness,
+pur mantenendo writer separati per dashboard e dettaglio Asset.
+
 ---
 
 ## 📊 F8 — Dashboard: vista P&L assoluto e grafici avanzati

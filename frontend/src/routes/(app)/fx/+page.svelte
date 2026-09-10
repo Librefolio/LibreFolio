@@ -6,7 +6,7 @@
      * Features: currency filter (SearchSelect), unified date range picker with presets,
      * global abs/% slider toggle, Sync All, Refresh All, Add Pair.
      */
-    import {onMount} from 'svelte';
+    import {onDestroy, onMount} from 'svelte';
     import {goto} from '$app/navigation';
     import {_} from '$lib/i18n';
     import {get} from 'svelte/store';
@@ -38,6 +38,8 @@
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
     import {gotoDateRange} from '$lib/utils/url/dateRangeUrl';
     import {signalCatalogStore} from '$lib/stores/signalCatalogStore.svelte';
+    import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
+    import type {FxPairSyncCompleteDetail} from '$lib/services/fxCreationSync';
 
     // =========================================================================
     // Types
@@ -54,6 +56,10 @@
     // =========================================================================
 
     let pairs = $state<FxPairState[]>([]);
+    let pageAlive = true;
+    onDestroy(() => {
+        pageAlive = false;
+    });
     let loading = $state(true);
     let error = $state<string | null>(null);
 
@@ -288,12 +294,16 @@
     // Data Loading
     // =========================================================================
 
-    async function loadPairSources() {
+    async function loadPairSources(propagateError = false) {
+        const sessionGeneration = getClientSessionGeneration();
+        const current = () => pageAlive && isClientSessionCurrent(sessionGeneration);
+        if (!current()) return;
         loading = true;
         error = null;
         try {
             const response = await zodiosApi.list_routes_api_v1_fx_providers_routes_get();
-            const items = (response as any)?.items || [];
+            if (!current()) return;
+            const items = response?.items ?? [];
 
             // Group by unique pair (base/quote)
             const pairMap = new Map<string, FxPairConfig>();
@@ -308,7 +318,7 @@
                     });
                 }
                 const steps = item.chain_steps ?? [];
-                const providerCode = steps.length === 1 ? steps[0].provider : 'CHAIN:' + steps.map((s: any) => s.provider).join('+');
+                const providerCode = item.is_chain ? 'CHAIN:' + steps.map((s) => s.provider).join('+') : steps[0].provider;
                 pairMap.get(slug)!.providers.push({
                     providerCode,
                     priority: item.priority,
@@ -330,10 +340,12 @@
                 loading: true,
             }));
         } catch (e: any) {
+            if (!current()) return;
             console.error('Failed to load pair sources:', e);
             error = e?.message || 'Failed to load FX pairs';
+            if (propagateError) throw e;
         } finally {
-            loading = false;
+            if (current()) loading = false;
         }
 
         // Wave 2 — rates, signals, "All" resolution — deliberately OUTSIDE the
@@ -341,7 +353,7 @@
         // renders as soon as the pairs are known and each card fills in on its
         // own (loading={pair.loading}). fetchAllPairData() owns its own errors
         // and clears `loading` on every path.
-        if (!error) await fetchAllPairData();
+        if (current() && !error) await fetchAllPairData(propagateError);
     }
 
     /**
@@ -379,8 +391,10 @@
         displayDateStart = 'min';
     }
 
-    async function fetchAllPairData() {
-        if (pairs.length === 0) return;
+    async function fetchAllPairData(propagateError = false) {
+        const sessionGeneration = getClientSessionGeneration();
+        const current = () => pageAlive && isClientSessionCurrent(sessionGeneration);
+        if (!current() || pairs.length === 0) return;
         void getSettingsVersion();
 
         const bulkRequests: Array<{
@@ -452,6 +466,7 @@
         signalRequestFailed = false;
         try {
             const bulkResult = await loadFxRatesAndSignalsBulk(bulkRequests);
+            if (!current()) return;
             for (const [slug, context] of requestContexts) {
                 const state = resultStateForPair(slug);
                 const mapped = mapSignalInstanceResults(context.configs, context.plan, bulkResult.signalsBySlug.get(slug) ?? []);
@@ -467,6 +482,7 @@
             }));
             resolveMaxStartFromPairs();
         } catch (requestError) {
+            if (!current()) return;
             console.error('Failed to fetch FX rates/signals bulk:', requestError);
             signalRequestFailed = [...requestContexts.values()].some((context) => context.plan.requests.length > 0);
             // Fallback: update with whatever is cached
@@ -474,6 +490,7 @@
                 const existingData = getFxStore(nf.slug).getRange(dateStart, dateEnd).data;
                 pairs[nf.index] = {...pairs[nf.index], data: existingData, loading: false};
             }
+            if (propagateError) throw requestError;
         }
     }
 
@@ -884,11 +901,16 @@
         }
     }
 
-    async function handlePairCreated(detail: {base: string; quote: string; hasRealProvider: boolean}) {
+    async function handlePairCreated() {
+        if (!pageAlive) return;
         addModalOpen = false;
-        // Reload pair sources and fetch data (sync already done by modal)
         await loadPairSources();
-        await fetchAllPairData();
+    }
+
+    async function handlePairCreationSynced(detail: FxPairSyncCompleteDetail) {
+        if (!pageAlive || !isClientSessionCurrent(detail.sessionGeneration)) return;
+        // Creation refresh has settled; the helper invalidated only the new pairs.
+        await loadPairSources(true);
     }
 
     async function handleSynced() {
@@ -1076,7 +1098,7 @@
     {:else if error}
         <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-6 text-center">
             <p class="text-red-600 dark:text-red-400">{error}</p>
-            <button class="mt-3 px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors" onclick={loadPairSources}>
+            <button class="mt-3 px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors" onclick={() => loadPairSources()}>
                 {$_('common.retry')}
             </button>
         </div>
@@ -1172,7 +1194,7 @@
 />
 
 <!-- Add Pair Modal -->
-<FxPairAddModal bind:open={addModalOpen} {dateEnd} {dateStart} onclose={() => (addModalOpen = false)} oncreated={handlePairCreated} />
+<FxPairAddModal bind:open={addModalOpen} {dateEnd} {dateStart} onclose={() => (addModalOpen = false)} oncreated={handlePairCreated} onsynced={handlePairCreationSynced} />
 
 <!-- Sync Modal -->
 <FxSyncModal bind:open={syncModalOpen} {dateEnd} dateStart={syncDateStart} onclose={() => (syncModalOpen = false)} onsynced={handleSynced} pairs={syncModalPairs} />

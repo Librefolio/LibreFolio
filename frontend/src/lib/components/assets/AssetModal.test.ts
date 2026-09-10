@@ -30,13 +30,17 @@
  *   - the online-search flow (`AssetSearchAutocomplete`) — covered by its own
  *     component test.
  */
-import {beforeEach, describe, expect, it, vi} from 'vitest';
-import {fireEvent, render, screen, setupI18n, waitFor} from '$test/component';
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
+import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
+import * as navigation from '$app/navigation';
 
 // --- Mocks --------------------------------------------------------------
 // zodiosApi has dozens of methods; a Proxy lazily mints (and caches) a spy per
 // property, so `vi.mocked(zodiosApi.foo)` retrieves the same fn to program.
-vi.mock('$lib/api', () => {
+vi.mock('$lib/api', async () => {
+    // Keep schema exports available to real child components while every API
+    // request remains a local spy; importing generated schemas performs no I/O.
+    const {schemas} = await import('$lib/api/generated');
     const cache = new Map<string, ReturnType<typeof vi.fn>>();
     const zodiosApi = new Proxy(
         {},
@@ -51,7 +55,7 @@ vi.mock('$lib/api', () => {
             },
         },
     );
-    return {zodiosApi, ApiError: class ApiError extends Error {}, axiosInstance: {}};
+    return {zodiosApi, schemas, ApiError: class ApiError extends Error {}, axiosInstance: {}};
 });
 vi.mock('$lib/utils/providerHelpers', () => ({
     ensureAssetProvidersCached: vi.fn(() => Promise.resolve()),
@@ -66,6 +70,7 @@ vi.mock('$lib/stores/reference/assetStore', () => ({mergeAssets: vi.fn(), invali
 
 import AssetModal from './AssetModal.svelte';
 import {zodiosApi} from '$lib/api';
+import {toasts} from '$lib/stores/app/toastStore.svelte';
 
 // --- Helpers ------------------------------------------------------------
 const createFn = () => vi.mocked(zodiosApi.create_assets_bulk_api_v1_assets_post as never) as ReturnType<typeof vi.fn>;
@@ -90,8 +95,18 @@ beforeEach(async () => {
     vi.clearAllMocks();
     // Default: no other assets → duplicate-name check finds nothing.
     listFn().mockResolvedValue([] as never);
+    vi.mocked(zodiosApi.list_providers_api_v1_assets_provider_get).mockResolvedValue([]);
+    vi.mocked(zodiosApi.list_currencies_api_v1_utilities_currencies_get).mockResolvedValue({items: [], language: 'en'});
     // A fake fetch for the embedded AssetSearchAutocomplete (never streamed here).
-    global.fetch = vi.fn(async () => ({ok: false, body: null})) as never;
+    vi.stubGlobal(
+        'fetch',
+        vi.fn<typeof fetch>(async () => new Response(null, {status: 503})),
+    );
+});
+
+afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
 });
 
 // =========================================================================
@@ -248,6 +263,272 @@ describe('AssetModal — create submit', () => {
 
         await waitFor(() => expect(oncreated).toHaveBeenCalled());
         expect(createFn()).toHaveBeenCalledWith([expect.objectContaining({active: false})]);
+    });
+});
+
+// =========================================================================
+describe('AssetModal — opt-in creation success links', () => {
+    type CreateResponse = Awaited<ReturnType<typeof zodiosApi.create_assets_bulk_api_v1_assets_post>>;
+    type SyncResponse = Awaited<ReturnType<typeof zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post>>;
+
+    const PROVIDER_CODE = 'fixture_price_source';
+    const PROVIDER_IDENTIFIER = 'OWNED';
+    const providerFixture: Awaited<ReturnType<typeof zodiosApi.list_providers_api_v1_assets_provider_get>> = [
+        {
+            code: PROVIDER_CODE,
+            name: 'Owned price source',
+            description: 'Synthetic provider metadata; no network implementation',
+            kind: 'online_scraper',
+            supports_search: false,
+            params_schema: [],
+            accepted_identifier_types: ['TICKER', 'ISIN'],
+        },
+    ];
+
+    afterEach(() => {
+        // Discard any unconsumed one-shot response after an early assertion
+        // failure; the next test must never inherit another asset's result.
+        vi.mocked(zodiosApi.create_assets_bulk_api_v1_assets_post).mockReset();
+        vi.mocked(zodiosApi.assign_providers_bulk_api_v1_assets_provider_post).mockReset();
+        vi.mocked(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post).mockReset();
+        vi.mocked(zodiosApi.patch_assets_bulk_api_v1_assets_patch).mockReset();
+        vi.mocked(zodiosApi.remove_providers_bulk_api_v1_assets_provider_delete).mockReset();
+    });
+
+    function createdResponse(id: number, name: string): CreateResponse {
+        return {results: [{asset_id: id, success: true, message: '[[created-response]]', display_name: name}], success_count: 1};
+    }
+
+    function toastMarkup(variant: 'success' | 'warning'): HTMLDivElement {
+        const spy = vi.mocked(toasts[variant]);
+        expect(spy).toHaveBeenCalledTimes(1);
+        const call = spy.mock.calls.at(-1);
+        if (!call) throw new Error(`No ${variant} toast was emitted`);
+        const [message] = call;
+        const content = document.createElement('div');
+        content.innerHTML = message;
+        return content;
+    }
+
+    function expectOnlySuccessToast() {
+        expect(toasts.success).toHaveBeenCalledTimes(1);
+        expect(toasts.warning).not.toHaveBeenCalled();
+        expect(toasts.error).not.toHaveBeenCalled();
+        expect(toasts.info).not.toHaveBeenCalled();
+    }
+
+    async function mountCreation(id: number, name: string, linkCreatedAsset?: boolean) {
+        vi.mocked(zodiosApi.create_assets_bulk_api_v1_assets_post).mockResolvedValueOnce(createdResponse(id, name));
+        const oncreated = vi.fn<(assetId: number) => void>();
+        const goto = vi.spyOn(navigation, 'goto');
+        const hrefBefore = window.location.href;
+        render(AssetModal, {open: true, oncreated, ...(linkCreatedAsset === undefined ? {} : {linkCreatedAsset})});
+        await waitForForm();
+        await fill('asset-modal-display-name', name);
+        await waitFor(() => expect(nameInput()).toHaveValue(name));
+        await waitFor(() => expect(saveBtn()).toBeEnabled());
+        return {oncreated, goto, hrefBefore};
+    }
+
+    async function expectCreationClosed(oncreated: (assetId: number) => void, id: number) {
+        await waitFor(() => expect(oncreated).toHaveBeenCalledWith(id));
+        await waitFor(() => expect(screen.queryByTestId('asset-modal-form')).toBeNull());
+        expect(oncreated).toHaveBeenCalledTimes(1);
+    }
+
+    async function chooseProviderWithoutProbing() {
+        // Fresh create forms start collapsed. Open that known state, then wait
+        // for the owned provider option rather than guessing when metadata loaded.
+        expect(screen.queryByTestId('provider-code-select-button')).toBeNull();
+        await fireEvent.click(screen.getByTestId('asset-modal-provider-header'));
+        await fireEvent.click(await screen.findByTestId('provider-code-select-button'));
+        await fireEvent.click(await screen.findByTestId(`provider-option-${PROVIDER_CODE}`));
+        await waitFor(() => expect(screen.queryByTestId(`provider-option-${PROVIDER_CODE}`)).toBeNull());
+        await fill('provider-identifier', PROVIDER_IDENTIFIER);
+        await waitFor(() => expect(screen.getByTestId('provider-identifier')).toHaveValue(PROVIDER_IDENTIFIER));
+        await waitFor(() => expect(saveBtn()).toBeEnabled());
+    }
+
+    async function saveWithUntestedProvider() {
+        await fireEvent.click(saveBtn());
+        const confirm = await screen.findByTestId('confirm-modal-confirm');
+        expect(confirm).toBeEnabled();
+        // This is the existing deliberate "save without testing" path. Do not
+        // run a provider probe merely to test creation feedback.
+        expect(zodiosApi.create_assets_bulk_api_v1_assets_post).not.toHaveBeenCalled();
+        await fireEvent.click(confirm);
+    }
+
+    it('links the existing creation success toast only when opted in and returns the same created ID', async () => {
+        const id = 4201;
+        const name = 'Owned linked asset';
+        const {oncreated, goto, hrefBefore} = await mountCreation(id, name, true);
+
+        await fireEvent.click(saveBtn());
+
+        await expectCreationClosed(oncreated, id);
+        const content = toastMarkup('success');
+        const anchor = within(content).getByTestId('toast-asset-link');
+        expect(anchor).toBeInstanceOf(HTMLAnchorElement);
+        expect(anchor).toHaveAttribute('href', `/assets/${id}`);
+        expect(anchor).toHaveTextContent(name);
+        expect(content.getElementsByTagName('a')).toHaveLength(1);
+        expectOnlySuccessToast();
+        expect(zodiosApi.create_assets_bulk_api_v1_assets_post).toHaveBeenCalledTimes(1);
+        expect(zodiosApi.assign_providers_bulk_api_v1_assets_provider_post).not.toHaveBeenCalled();
+        expect(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post).not.toHaveBeenCalled();
+        expect(goto).not.toHaveBeenCalled();
+        expect(window.location.href).toBe(hrefBefore);
+    });
+
+    it('keeps default contextual creation as one plain-name success toast with no anchor or navigation', async () => {
+        const id = 4202;
+        const name = 'Owned contextual asset';
+        // Deliberately omit the new prop: this is the shared-component default.
+        const {oncreated, goto, hrefBefore} = await mountCreation(id, name);
+
+        await fireEvent.click(saveBtn());
+
+        await expectCreationClosed(oncreated, id);
+        const content = toastMarkup('success');
+        expect(content).toHaveTextContent(name);
+        expect(content.getElementsByTagName('a')).toHaveLength(0);
+        expectOnlySuccessToast();
+        expect(goto).not.toHaveBeenCalled();
+        expect(window.location.href).toBe(hrefBefore);
+    });
+
+    it.each([
+        {mode: 'opted-in link', linkCreatedAsset: true},
+        {mode: 'default plain name', linkCreatedAsset: undefined},
+    ])('escapes a malicious asset name exactly once in the $mode success toast', async ({linkCreatedAsset}) => {
+        const id = 4203;
+        const name = `<img src=x onerror="alert('x')"> & owned`;
+        const {oncreated, goto, hrefBefore} = await mountCreation(id, name, linkCreatedAsset);
+
+        await fireEvent.click(saveBtn());
+
+        await expectCreationClosed(oncreated, id);
+        const content = toastMarkup('success');
+        expect(content).toHaveTextContent(name);
+        expect(content.getElementsByTagName('img')).toHaveLength(0);
+        expect(content.innerHTML).toContain('&lt;img');
+        expect(content.innerHTML).not.toContain('&amp;lt;img');
+        if (linkCreatedAsset) {
+            const anchor = within(content).getByTestId('toast-asset-link');
+            expect(anchor).toHaveTextContent(name);
+            expect(anchor).toHaveAttribute('href', `/assets/${id}`);
+            expect(content.getElementsByTagName('a')).toHaveLength(1);
+        } else {
+            expect(content.getElementsByTagName('a')).toHaveLength(0);
+        }
+        expectOnlySuccessToast();
+        expect(goto).not.toHaveBeenCalled();
+        expect(window.location.href).toBe(hrefBefore);
+    });
+
+    it('preserves provider assignment and closes with one linked success while background sync is pending', async () => {
+        const id = 4204;
+        const name = 'Owned provider-linked asset';
+        vi.mocked(zodiosApi.list_providers_api_v1_assets_provider_get).mockResolvedValue(providerFixture);
+        vi.mocked(zodiosApi.assign_providers_bulk_api_v1_assets_provider_post).mockResolvedValueOnce({
+            results: [{asset_id: id, success: true, message: '[[assigned-response]]'}],
+            success_count: 1,
+        });
+        let finishSync!: (response: SyncResponse) => void;
+        const pendingSync = new Promise<SyncResponse>((resolve) => {
+            finishSync = resolve;
+        });
+        const syncResponse: SyncResponse = {results: [{asset_id: id, status: 'ok', points_fetched: 3, points_changed: 3}], success_count: 1};
+        vi.mocked(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post).mockReturnValueOnce(pendingSync);
+        try {
+            const {oncreated, goto, hrefBefore} = await mountCreation(id, name, true);
+            await chooseProviderWithoutProbing();
+
+            await saveWithUntestedProvider();
+
+            await expectCreationClosed(oncreated, id);
+            expect(zodiosApi.assign_providers_bulk_api_v1_assets_provider_post).toHaveBeenCalledTimes(1);
+            expect(zodiosApi.assign_providers_bulk_api_v1_assets_provider_post).toHaveBeenCalledWith([{asset_id: id, provider_code: PROVIDER_CODE, identifier: PROVIDER_IDENTIFIER, identifier_type: 'TICKER', provider_params: null}]);
+            expect(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post).toHaveBeenCalledTimes(1);
+            expect(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post).toHaveBeenCalledWith([{asset_id: id, date_range: {start: 'resume', end: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/)}}]);
+            expect(within(toastMarkup('success')).getByTestId('toast-asset-link')).toHaveAttribute('href', `/assets/${id}`);
+            expectOnlySuccessToast();
+            expect(goto).not.toHaveBeenCalled();
+            expect(window.location.href).toBe(hrefBefore);
+
+            finishSync(syncResponse);
+            await pendingSync;
+            expectOnlySuccessToast();
+            expect(oncreated).toHaveBeenCalledTimes(1);
+        } finally {
+            // Always settle the test-owned promise, even after an assertion fails.
+            finishSync(syncResponse);
+            await pendingSync;
+        }
+    });
+
+    it('keeps provider-assignment failure as one warning without a success link or background sync', async () => {
+        const id = 4205;
+        const name = 'Owned assignment-warning asset';
+        vi.mocked(zodiosApi.list_providers_api_v1_assets_provider_get).mockResolvedValue(providerFixture);
+        vi.mocked(zodiosApi.assign_providers_bulk_api_v1_assets_provider_post).mockRejectedValueOnce(new Error('[[assignment-failed]]'));
+        const {oncreated, goto, hrefBefore} = await mountCreation(id, name, true);
+        await chooseProviderWithoutProbing();
+
+        await saveWithUntestedProvider();
+
+        await expectCreationClosed(oncreated, id);
+        expect(zodiosApi.assign_providers_bulk_api_v1_assets_provider_post).toHaveBeenCalledTimes(1);
+        const content = toastMarkup('warning');
+        expect(content).toHaveTextContent(name);
+        expect(content.getElementsByTagName('a')).toHaveLength(0);
+        expect(toasts.success).not.toHaveBeenCalled();
+        expect(toasts.info).not.toHaveBeenCalled();
+        expect(toasts.error).not.toHaveBeenCalled();
+        expect(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post).not.toHaveBeenCalled();
+        expect(goto).not.toHaveBeenCalled();
+        expect(window.location.href).toBe(hrefBefore);
+    });
+
+    it('leaves edit-save feedback and onupdated unchanged even when the creation-link prop is true', async () => {
+        const id = 4206;
+        const oncreated = vi.fn();
+        const onupdated = vi.fn();
+        const goto = vi.spyOn(navigation, 'goto');
+        vi.mocked(zodiosApi.patch_assets_bulk_api_v1_assets_patch).mockResolvedValueOnce({
+            results: [{asset_id: id, success: true, message: '[[patched-response]]'}],
+            success_count: 1,
+        });
+        vi.mocked(zodiosApi.remove_providers_bulk_api_v1_assets_provider_delete).mockResolvedValueOnce({
+            results: [{asset_id: id, success: true, deleted_count: 0}],
+            success_count: 1,
+        });
+        render(AssetModal, {
+            open: true,
+            editMode: true,
+            editData: {id, display_name: 'Owned previous name', currency: 'USD', asset_type: 'STOCK'},
+            linkCreatedAsset: true,
+            oncreated,
+            onupdated,
+        });
+        await waitForForm();
+        await waitFor(() => expect(nameInput()).toHaveValue('Owned previous name'));
+        await fill('asset-modal-display-name', 'Owned edited name');
+        await waitFor(() => expect(saveBtn()).toBeEnabled());
+
+        await fireEvent.click(saveBtn());
+
+        await waitFor(() => expect(onupdated).toHaveBeenCalledTimes(1));
+        await waitFor(() => expect(screen.queryByTestId('asset-modal-form')).toBeNull());
+        const content = toastMarkup('success');
+        expect(content).toHaveTextContent('Owned edited name');
+        expect(content.getElementsByTagName('a')).toHaveLength(0);
+        expectOnlySuccessToast();
+        expect(oncreated).not.toHaveBeenCalled();
+        expect(zodiosApi.create_assets_bulk_api_v1_assets_post).not.toHaveBeenCalled();
+        expect(zodiosApi.patch_assets_bulk_api_v1_assets_patch).toHaveBeenCalledWith([expect.objectContaining({asset_id: id, display_name: 'Owned edited name'})]);
+        expect(goto).not.toHaveBeenCalled();
     });
 });
 

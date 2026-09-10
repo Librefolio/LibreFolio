@@ -36,7 +36,10 @@ I marker `TODO(P2-refactor)` erano 26 al 03/09 e sono **25** alla baseline `a913
 ## Analisi 2026-09-07
 
 Baseline `a9138140`; superfici, rischi e DoD in [06_piano_sprint.md](06_piano_sprint.md).
-Nessun refactor avviato con questa pubblicazione.
+La pubblicazione iniziale non avviava refactor. Successivamente il dev ha approvato
+il solo Gruppo B r2 (SP04-SP05), in esecuzione dal 2026-09-07 nel
+[piano dedicato](../11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md).
+Le spunte di presa in carico sotto non attestano il completamento dell'implementazione.
 
 | Task | Nota di analisi | Sprint |
 |---|---|---|
@@ -44,19 +47,19 @@ Nessun refactor avviato con questa pubblicazione.
 | P4-2 | Aperto, XL: 637 righe/C901 115; stage e transazione condivisa. | SP16 |
 | P4-3 | Aperto, L: caratterizzazione output completo prima dell'estrazione locale. | SP09 |
 | P4-4 | Aperto, M: Yahoo history ancora unico metodo; retry/thread invariati. | SP08 |
-| P4-5 | Aperto, M: inventario 24/9/10; coordinare con onboarding. | SP05 |
-| P4-6 | Aperto, M: validazione dichiarativa senza cambiare il contratto. | SP04 |
+| P4-5 | ✅ Preso in carico nel [piano B](../11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md), M; inventario baseline 24/9/10, codice pronto al 2026-09-08, review dev pendente. | SP05 |
+| P4-6 | ✅ Preso in carico nel [piano B](../11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md), M; codice pronto al 2026-09-08, chiusura del gruppo in attesa della review dev. | SP04 |
 | P4-7 | Parziale, L: misura/ownership prima di eviction e rilascio. | SP10 |
 | P4-8 | Coda deduplicata nella tabella seguente. | Per voce |
 
 | Residuo | Esito 2026-09-07 |
 |---|---|
-| 6.2 | Parziale, M, SP04. `is_chain` nel modello; set provider distinto dal percorso ordinato. |
+| 6.2 | ✅ Preso in carico, M, SP04 nel [piano B](../11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md). Decisione dev: `is_chain` e `providers_used` sorted/unico solo output; membership configurata distinta dal percorso e dalla provenance di fetch. |
 | 6.3 | ✅ Chiuso per rimozione dei quattro aggregate; [audit 02](../../phases/08_newCleanAndDocumentation_audit/02_services_core.md), nessun helper da ripristinare. |
 | 6.4 | Aperto, L, SP08: fasi attuali come closure, da estrarre insieme alla scissione. |
-| 6.7 | Alias P4-6, nessuna seconda implementazione. |
+| 6.7 | ✅ Preso in carico come alias P4-6 nello stesso [piano B](../11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md), nessuna seconda implementazione. |
 | 6.8 | Alias P4-2, nessuna seconda implementazione. |
-| 6.11 | Aperto, S, SP04: 17 assert strutturali su 51; 34 contestuali fuori scope. |
+| 6.11 | ✅ Preso in carico, S, SP04 nel [piano B](../11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md): 17 guardie Python in memoria, nessuna bonifica DB; 34 assert contestuali fuori scope. |
 | 6.12 | ✅ Risolto P2-9: registry unico, servizi separati per scelta; [piano P2](../../phases/08_newCleanAndDocumentation_audit/plan-phase00P2ProductDecisions.prompt.md). |
 | 6.14 | Nessuna campagna autonoma; limiti incorporati in P4-3. |
 | TRY003 | Congelato: TRY non nel select; nessuna attivazione implicita. |
@@ -71,3 +74,13 @@ restano sotto un owner; test/backend/DB e rigenerazioni condivise hanno una sola
 P4-5 conserva la UI: niente redesign implicito durante la migrazione. Se un refactor
 introduce nuove viste o modifiche visive importanti, prima servono ASCII approvati dal dev
 e dopo walkthrough operativo e feedback, come G-UX-DESIGN/G-UX-REVIEW del piano.
+
+> **Presa in carico 2026-09-07**: soltanto Gruppo B autorizzato a implementare r2.
+> Avanzamento per-step e accettazione nel piano 11; runtime/test/build/API sync e writer
+> condivisi riservati al suo integratore, una suite alla volta. A/C/D restano in planning.
+> Nessuna correzione persistente di produzione, migrazione, staging, commit o push.
+
+> **Aggiornamento 2026-09-08**: B00-B09 completati nel piano 11; B10 resta
+> `awaiting_dev_review`, rinviato dal dev alla propria disponibilità. La chiusura
+> complessiva non è attestata dalle spunte di presa in carico. Server TEST B fermato
+> e coda runtime restituita; nessun avvio automatico di A/C/D.

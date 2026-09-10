@@ -31,21 +31,43 @@ assegnati separatamente, una suite alla volta e senza setup DB o server implicit
 pacchetto verificato e' stato applicato al checkout locale `dev_release2`.
 La review indipendente ha aperto e chiuso il Round 5 sul challenge pubblico GHCR.
 Manifest e prove: [14_feedbackImportUrgent](../14_feedbackImportUrgent/manifest-integrazione-E.md).
-Commit/SHA e archivio restano in attesa del commit manuale del dev. U2, U3, U8,
-gli sprint non inclusi e F-MC-1/2/3 restano aperti.
+Integrazione committata in `ef722b552433028c051ccb1207c84f1072e51bb7`;
+sessione/worktree E archiviati localmente il 2026-09-10. L'eventuale spostamento
+versionato del piano resta separato. U2, U3, U8, gli sprint non inclusi e
+F-MC-1/2/3 restano aperti.
 
 **Infrastruttura di parallelismo, 2026-09-09:** prima di riallineare B/C/D e'
 stato aperto il piano
 [15_parallelRuntimeIsolation](../15_parallelRuntimeIsolation/plan-phase00ParallelRuntimeIsolation.prompt.md).
 Il gate richiede porta e data directory uniche per ogni worktree; la sola porta
 non separa SQLite, upload, log e report broker. I default storici restano
-invariati.
+invariati. Il gate e' stato consegnato nel commit
+`916f12bddf3eb9b8e834e4b9033eb52ce4bde25a` il 2026-09-10; B/C/D stanno
+preparando i checkpoint locali prima dell'incorporazione manuale della nuova base.
+
+**Integrazione C+D, 2026-09-10:** la piattaforma Tool C e il PAC D non entrano
+separatamente in `dev_release2`. C completa il layer generico e viene fusa dentro
+D; D aggiunge plugin/renderer PAC e consegna il pilot `pac-analyze` end-to-end.
+Solo la branch combinata D verra' proposta al target. Solver avanzato, copia
+portfolio, migrazione Broker e UI dedicata restano fuori da questo pilot.
 
 I worktree C/D sono allineati a `4a73f5f6`; i loro piani devono distinguere contratti
 approvati, scelte residue e codice non ancora autorizzato. Il pilota manuale non aspetta
 solver completo, copie portfolio o migrazione Broker fractional. Le implementazioni e
 i relativi piani di avanzamento restano nei worktree owner fino a integrazione esplicita:
 questa nota non importa codice nel checkout principale.
+
+**Integrazione Gruppo B, 2026-09-10:** Contracts/Runes e Round 1 sono stati
+riconciliati con E/runtime nel merge `d9e8f6d3`; la review UI reale ha richiesto
+un solo compattamento del feedback FX, consegnato in `00c469c3`. La branch B
+finale e' entrata in `dev_release2` con il merge `514582a4`. Registro,
+contratti, prove e validazione combinata vivono nel
+[piano esecutivo](../11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md)
+e nel [Round 1](../11_feedbackContractsRunes/plan-phase00FeedbackContractsRunesBugfixRound1.prompt.md).
+Gate automatici combinati verdi nella lane B isolata `6151` +
+`/tmp/librefolio-r2-b`; nessun terzo sync asset o vecchia ownership runtime B
+e' stato ripristinato. Sessione e worktree B archiviati localmente il
+2026-09-10; la cronologia resta nel repository.
 
 **Revisione 2026-09-07, confronto successivo:** YOC a 365 giorni e policy del trattino, documentazione/tooltip, estensione esplicita del CSV condiviso, catalogo Tool completo senza endpoint schema/prefill dedicati, mappa di parallelismo e gate UX prima/dopo realizzazione.
 
@@ -176,9 +198,9 @@ I 35 siti C901 BRIM attuali sono 34 nei broker e uno in `_brim_io`, non 35 parse
 
 ### P4-5 - Migrazione Runes mirata
 
-**Stato:** aperto, inventario aggiornato. **Taglia:** M.
+**Stato:** preso in carico da B/SP05; codice completato, review dev pendente nel [piano dedicato](../11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md). **Taglia:** M.
 
-| Target reale | Legacy corrente | Punti sensibili |
+| Target reale | Legacy alla baseline | Punti sensibili |
 |---|---:|---|
 | `F/lib/components/brokers/BrokerSharingPanel.svelte` | 24 `$:` | Props `43-50`, derivati `112-146`, reload `202`, save e `await tick()` `392-402`. |
 | `F/lib/components/settings/tabs/PreferencesTab.svelte` | 9 `$:` | Dirty/default `114-125`, save/undo/reset `155-271`. |
@@ -190,7 +212,7 @@ I 35 siti C901 BRIM attuali sono 34 nei broker e uno in `_brim_io`, non 35 parse
 
 ### P4-6 - Matrice dichiarativa `SignalResult`
 
-**Stato:** aperto. **Taglia:** M. `B/schemas/signals.py:1050-1115`, C901 32; stati a `194-199`.
+**Stato:** preso in carico da B/SP04 nel [piano dedicato](../11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md). **Taglia:** M. Baseline: `B/schemas/signals.py:1050-1115`, C901 32; stati a `194-199`.
 
 **Superfici:** validatore, `SignalAvailability`, costruzione risultati in `signal_service.py:791-1127`, test schema/servizio. Consumatori Asset, FX, risk e AI Export.
 
@@ -629,6 +651,8 @@ L'endpoint non avvia calcoli, probe, download prezzi, reset o riparazioni; non r
 
 ## 10. Piano a sprint - dal circoscritto al complesso
 
+**Avvio autorizzato dal dev:** SP04-SP05, Gruppo B r2. Il [piano esecutivo](../11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md) prende in carico P4-5, P4-6/S6 6.7, S6 6.2 e S6 6.11; non li dichiara gia completati. A/C/D restano Plan-only. Unica coda runtime e generazione assegnata all'integratore B; nessuna bonifica DB o migrazione nel suo scope.
+
 L'ordine ordina **rischio e ampiezza**, non inventa dipendenze. Il primo sprint e deliberatamente minimo: un solo flusso asset, nessuna API nuova, nessuna migrazione, nessuna libreria. Ogni sprint sotto ha un proprio risultato chiudibile; i sotto-step finanziari o di policy non autorizzano una soluzione implicita quando il gate resta aperto. **I 16 sprint non cambiano con questa revisione**: la sezione 11 li apre in task e corsie parallelizzabili. Per le UI indicate, il DoD comprende anche approvazione ASCII e review operativa della sezione 12.
 
 | Sprint | Obiettivo / task | Perche insieme e ordine interno | Definition of done |
@@ -638,19 +662,27 @@ L'ordine ordina **rischio e ampiezza**, non inventa dipendenze. Il primo sprint 
 | **SP03 - Dati e operazioni asset** | A1, A2, B3 | Stessa famiglia asset/classificazione/CRUD e componenti DataEditor/ConfirmModal. Catalogo settori -> CSV -> delete affidabile e link. | Settori lungo tutta la pipeline; CSV strict nel draft; batch delete con persistenza/count veri e link contestuali. Nessuna riscrittura del monolite. |
 | **SP04 - Contratti dichiarativi** | S6 6.11, S6 6.2, P4-6 | Layer di cataloghi/schema/API e validazione, con un handoff client controllato. Assert strutturali -> flag FX -> matrice segnali. | Invarianti anche con `-O`; API FX non richiede campi derivati in input; sequenza provider preservata; matrice segnali equivalente. Alias S6 deduplicati. |
 | **SP05 - Runes nei tre target** | P4-5 | Componenti gia coperti da harness dedicati; prepara i controlli settings prima del tour. Preferences -> GlobalSettings -> BrokerSharing. | Tutti e tre migrati senza alterare dirty/save/reset/permessi e senza loop di caricamento. |
-| **SP06 - Finestre e rendimenti** | G1a, G3, U3 | Dati di prezzo/reddito, finestre temporali e report/ExposureTable. P&L-only pronto -> rolling calendario -> fonte/disponibilita YOC -> colonna/help/teoria EN. | P&L cumulato corretto; N realmente calendario; YOC per-quota su 365 giorni, trattini motivati, tooltip header e pagina EN; non proxy cumulativo. |
-| **SP07 - Grafici portfolio estesi** | G1c, G1b | Stesso report storico, GrowthChart e risoluzione temporale. Serie incassi -> histogram -> contratto OHLC sintetico -> rendering/aggregazione. | Incassi riconciliati; candele etichettate, quantita storiche EOD, chiusura coerente, zero volume; daily/weekly/monthly, zoom e viewport senza regressioni. |
+| **SP06 - Redditi e rendimenti calendario** | U3, G3, G1c | Stesso dominio semantico: redditi per-quota/personali, finestre calendario, completezza e aggregazione temporale. Tre incrementi separati: YOC TTM -> rolling return a N giorni calendario nell'Asset -> serie/istogrammi DIVIDEND e INTEREST nel portfolio. Il backend puo avere sotto-lane distinte; il dettaglio Asset e `GrowthChart` non hanno lo stesso writer. | YOC per-quota su 365 giorni con stati motivati; N realmente calendario e non numero di osservazioni; incassi personali per tipo/data riconciliati ai KPI, inclusi non allocati; bucket a somma, nessun calcolo duplicato nel frontend. |
+| **SP07 - P&L assoluto e candele sintetiche** | G1a, G1b | Stessa serie `PortfolioHistory`, stesso `GrowthChart` e stesso owner portfolio/chart. Prima terza vista P&L cumulato gia disponibile; poi contratto OHLC sintetico backend; infine rendering e aggregazione. | P&L-only non ribasato sul periodo; candele esplicitamente ipotetiche, quantita storiche EOD, offset/FX/short/missing policy firmati, chiusura coerente col P&L, zero volume; composizione giornaliera prima di daily/weekly/monthly, zoom e viewport invariati. |
 | **SP08 - Pricing e confini del servizio** | P4-4, P4-1, S6 6.4 | Un'unica famiglia provider/manager; evita spostamenti concorrenti di asset_source. Yahoo locale -> mappa import/cache -> moduli -> fasi refresh nella destinazione scelta. | Parita provider e manager, ownership cache/thread/sessioni, sentinelle, chunk e risultati preservati. Nessun refactor FX/portfolio aggiuntivo. |
 | **SP09 - BRIM mirato** | B1 condizionale, P4-3 | Parsing broker e output di review. Risolvere gate eToro se disponibile -> caratterizzazione Credit Agricole -> estrazione locale -> eventuale secondo consumer. | Costi eToro riconciliati oppure blocco motivato mantenuto; output completo Credit Agricole equivalente. Nessuna falsa chiusura eToro per far risultare verde lo sprint. |
 | **SP10 - Cache con ownership** | P4-7 | Registry, serie e pool condividono confine di sessione e consumer chart. Misura -> decisione budget/policy -> implementazione -> rilascio/late responses. | Limiti motivati, oggetti e richieste realmente rilasciabili, cambio account sicuro, nessuna preferenza cancellata e nessun consumer interrotto arbitrariamente. |
-| **SP11 - Benvenuto e tour** | U8 | Auth, preferenze e overlay sono una sola catena UX. Stato/migrazione -> welcome -> tour breve -> guida import -> replay/skip. | Nuovo utente guidato senza scritture finanziarie automatiche; default admin rispettati; skip/replay/refresh/account e overlay compatibili, guide riallineate. |
+| **SP11 - Benvenuto e tour** | U8 | Auth, preferenze e overlay sono una sola catena UX. Analisi/stato/storyboard possono partire subito; implementazione di layout, replay e guida import segue il freeze delle superfici Tool/PAC e DataImport attive. Stato/migrazione -> welcome -> tour breve -> guida import -> replay/skip. | Nuovo utente guidato senza scritture finanziarie automatiche; default admin rispettati; skip/replay/refresh/account e overlay compatibili, guide riallineate. |
 | **SP12 - Piattaforma Tool** | T0, hub iniziale T2 | Contratto plugin/executor e catalogo con schemi completi. Registry -> API auth/bulk -> worker -> tipi/renderer -> hub. | Catalogo/compute/diagnostics protetti, riuso bulk corretto, errori/limiti onesti; nessun endpoint schema/prefill Tool e nessun PAC fittizio dichiarato funzionante. |
 | **SP13 - Modello e snapshot allocatore** | Gate T1, evaluator T1, copia T2 | Congela il significato dei parametri prima di cercare ottimi. Policy numerica -> normalizzazione/evaluator -> casse e FX -> copie da API di dominio -> preview. | Quantita/valori/target e casse per valuta riconciliati; semantica limiti/costi/FX firmata nel piano dedicato; input manuali e copie equivalenti. Nessun risultato chiamato ottimo senza solver. |
 | **SP14 - Allocatore e UI completa** | Solver T1, custom UI T2 | Un solo solver buy/sell/FX e le sue spiegazioni. Oracle piccolo -> ricerca/limiti -> risultato typed -> editor avanzato/grafici -> integrazione end-to-end. | PAC, rebalancing e PAC rebalancing realmente supportati; limiti vendite e conversioni opzionali, contributi per valuta, proof/status e tabelle completi; nessuna esecuzione ordini. |
-| **SP15 - Privacy globale completa** | U2 | Trasversale; chiude tutte le superfici, incluse quelle nuove di SP07/SP14, prima di esporre un lucchetto affidabile. Inventario -> primitive/store -> pagine/tooltip/modali -> grafici/Tool -> persistenza. | Solo classi sensibili mascherate, prezzi/FX pubblici invariati, nessun dato reale sotto patina nelle superfici protette, nessun flash; confine visuale/log/export esplicito. |
-| **SP16 - Batch transazioni** | P4-2 | Pipeline con il maggior impatto sulle scritture. Contratti/casi misti -> contesto -> estrazione stage -> dispatch ordinato dove utile. | Preview/commit/rollback, link/promote/split, WAC e saldi equivalenti. Nessun cambio di policy fiscale, nessun commit interno ai nuovi handler. |
+| **SP15 - Privacy globale completa** | U2 | Trasversale; il contratto/inventario e la primitive possono essere analizzati prima, ma l'integrazione attende le nuove superfici SP07/SP14/F. Tre gate: U2-core -> adapter per owner UI -> audit/release globale. | Solo classi sensibili mascherate, prezzi/FX pubblici invariati, nessun dato reale sotto patina nelle superfici protette, nessun flash; confine visuale/log/export esplicito. |
+| **SP16 - Scomposizione batch transazioni** | P4-2 | Refactor strutturale, non nuova UX: dividere le ~637 righe di `TransactionService.execute_batch` negli otto stage oggi sequenziali (parse leniente, accesso, delete, update, create, link, balance walk, esito commit/rollback) con contesto esplicito. Ownership esclusiva di `transaction_service.py`; nessun cambio di contratto/policy. | Preview/commit/rollback e raccolta completa errori equivalenti; ordine e atomicita multi-broker invariati; link/promote/split, WAC e saldi equivalenti; commit ancora al chiamante, nessun commit interno ai nuovi stage. |
 
 **Sequenza non significa blocco artificiale:** SP12-14 non dipendono da SP08/09/16. Possono essere anticipati se cambia la priorita di prodotto, senza fingere che il PAC richieda prima rifare FIFO o asset_source. Il presente ordine mantiene prima il lavoro circoscritto, poi catene L, infine il nuovo solver e le integrazioni XL.
+
+**Raffinamento 2026-09-10 — YOC:** la colonna e' S, ma il backend non e' una sola
+divisione. `PortfolioHolding` espone gia `wac_per_unit` e `ExposureTable` e' condivisa
+fra dashboard e broker; inoltre Yahoo/JustETF persistono `AssetEvent` DIVIDEND per quota.
+Restano da trattare finestra indipendente dal report, conversione FX, split intervenuti,
+quote-base bond, duplicati/manuali e uno stato di completezza che distingua `no_income`
+da `insufficient_history`. Stima raffinata: **M backend + S UI/docs**, non L/XL e non XS.
+E' il primo incremento raccomandato del nuovo SP06.
 
 **Gia consegnati, fuori dagli sprint di codice:** U6, G2, B2, S6 6.3, S6 6.12. La pubblicazione di questa analisi riconcilia le rispettive voci. TRY003 resta congelato; S6 6.14 non genera uno sprint autonomo.
 
@@ -724,13 +756,14 @@ flowchart LR
 | Contratti indipendenti | S6 6.2; P4-6; S6 6.11 | Tre owner possibili: FX, matrice segnali, assert AI Export. Nessuna sequenza obbligatoria fra loro; handoff API/i18n centralizzato. |
 | Pricing | P4-4; P4-1 + S6 6.4 | Yahoo puo procedere mentre si definisce lo split, a facciata/import congelati. Scissione e refresh sono un'unica corsia; integrare prima B3 nel monolite. |
 | BRIM | P4-3; B1 solo se gate risolto | Indipendente da Tool, Runes e metriche. Refactor e adozioni in `_brim_io` sotto un owner; eToro non blocca Credit Agricole se resta in attesa di evidenza. |
-| Metriche backend | U3, G1c, G1b; G3 in moduli segnali | Specifiche parallele; patch in portfolio_service/engine/schemas coordinate da un owner. G3 puo procedere nei propri moduli con contratto segnali stabile. |
-| Chart frontend | G1a, G1c UI, G1b UI; G3 UI | GrowthChart ha un owner e integrazione ordinata; vista Asset separabile dopo raccordo con B3 sul dettaglio. Layout/ASCII indipendenti dai calcoli backend. |
+| Redditi/rendimenti | U3; G3; G1c | Un solo contratto temporale/completeness, ma tre superfici separabili: YOC in holding snapshot, rolling calendario nel dettaglio Asset, incassi personali nel report storico. Coordinare FX/split/bucket; non forzare un unico file owner. |
+| P&L/candele backend | G1a; G1b | `PortfolioHistory`/engine/schema sotto un owner. G1a usa `total_pnl` gia presente; G1b aggiunge composizione OHLC giornaliera prima dell'aggregazione calendario. |
+| Chart frontend | G1a + G1b su `GrowthChart`; G1c su `GrowthChart`; G3 su dettaglio Asset | P&L/candele hanno un owner unico. L'istogramma redditi entra ordinatamente nello stesso chart ma appartiene a SP06. G3 resta separabile dopo il raccordo F/B3 sul dettaglio Asset. Ogni vista richiede ASCII prima del codice. |
 | Cache | P4-7 | Misura/policy in parallelo alle specifiche; implementazione su registry/pool con interfacce consumer stabili e confine sessione concordato. |
-| Onboarding | U8 | Stato backend e storyboard subito; welcome/tour su contratto concordato. Root layout/header/Preferences con owner rispettivi, non tre agenti sullo stesso file. |
+| Onboarding | U8 | Analisi backend e storyboard subito; implementazione dopo il freeze D/F. Welcome/tour su contratto concordato. Root layout/header/Preferences/ImportWizard con un solo integratore, non agenti concorrenti sugli stessi file. |
 | Piattaforma Tool | T0 backend; T2 hub | Dopo contratto catalogo/compute condiviso, backend e hub possono avanzare separati. Non attendere il solver. |
 | Allocatore | T1 modello/evaluator/solver; T2 copie/UI | Dopo G-PAC, nucleo matematico e adapter/UI su fixture possono avanzare in parallelo. Client copie separato dal renderer; integrazione finale su API/solver reali. |
-| Privacy | U2-core; adapter nelle corsie UI; U2-release | Contratto/store/primitive anticipabili; ogni owner integra la propria superficie. Il lucchetto globale diventa rilasciabile solo dopo copertura completa, incluse nuove viste e Tool. |
+| Privacy | U2-core; adapter nelle corsie UI; U2-release | Analisi e inventario anticipabili; evitare ora l'implementazione per non rincorrere Tool/PAC, DataImport e i nuovi chart. Primitive/store precedono gli adapter; il lucchetto diventa rilasciabile solo dopo copertura completa. |
 | Batch transazioni | P4-2 | Corsia autonoma ad ampio rischio, con ownership esclusiva di transaction_service; non blocca il calcolatore puro. Verifica d'integrazione nella coda condivisa. |
 
 La tabella descrive indipendenza logica, **non suggerisce di avviare un agente per ogni riga**. Un primo insieme compatibile puo essere U1/U5, U7, U4, P4-5, S6 6.11 e contratti T0/G-PAC, con G-UX-DESIGN rispettato dove applicabile. Ampliare solo in presenza di owner, contratti e capacita di integrare/revisionare i risultati.
@@ -811,6 +844,8 @@ Docs MkDocs in esecuzione tramite **docs-writer**: inglese, pipeline di traduzio
 ## 13. Tracciamento nel journal
 
 La pubblicazione di questo documento aggiorna README e aggiunge note datate per ogni voce nei file 00-05; non significa che i task aperti siano implementati.
+
+Primo piano preso in carico: [SP04-SP05 - Contratti e Runes](../11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md), approvato dal dev il 2026-09-07. I backlink dal piano 11 puntano a questo master e al backlog strutturale. Stato operativo e note per-step non vengono duplicati qui.
 
 All'avvio effettivo di uno sprint: scegliere il prossimo `<NN_area>` libero in `Phase_0/`, aprire il piano `.prompt.md`, cross-linkare il task originale e marcare la presa in carico secondo la regola del backlog. Non creare oggi sedici piani vuoti. Dopo ogni step eseguito, aggiornare immediatamente quel piano con stato, data, nota di implementazione ed eventuale fuori pista.
 
@@ -905,8 +940,9 @@ richiedere un commit documentale successivo, non uno SHA futuro scritto in antic
 **Per E:** `14_feedbackImportUrgent` e tutti i round, report urgente
 `07_feedback_import_critici.md`, U1/U4/U5/U7/U9 nel file `01`, SP01/SP02, README e
 task E1-E9 sono riconciliati nel checkout target. Privacy, YOC, onboarding e i temi
-multicurrency futuri restano aperti. Il pacchetto e' applicato ma non ancora committato:
-archivio e SHA seguono il commit manuale del dev.
+multicurrency futuri restano aperti. Il pacchetto e' committato in `ef722b55`;
+sessione/worktree E sono archiviati localmente. L'archivio documentale versionato
+resta un passo distinto.
 
 ### 14.5 Aggiornare gli altri worktree senza perdere il loro lavoro
 
