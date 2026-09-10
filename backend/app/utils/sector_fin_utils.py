@@ -29,6 +29,8 @@ class FinancialSector(StrEnum):
     CONSUMER_STAPLES = "Consumer Staples"
     TELECOMMUNICATION = "Telecommunication"
     UTILITIES = "Utilities"
+    CORPORATE_BONDS = "Corporate Bonds"
+    GOVERNMENT_BONDS = "Government Bonds"
     OTHER = "Other"
 
     @classmethod
@@ -72,6 +74,12 @@ class FinancialSector(StrEnum):
             "telecom": cls.TELECOMMUNICATION,  # Short alias
             "communication services": cls.TELECOMMUNICATION,  # Yahoo Finance alias
             "utilities": cls.UTILITIES,
+            "corporate": cls.CORPORATE_BONDS,
+            "corporate bond": cls.CORPORATE_BONDS,
+            "corporate bonds": cls.CORPORATE_BONDS,
+            "government": cls.GOVERNMENT_BONDS,
+            "government bond": cls.GOVERNMENT_BONDS,
+            "government bonds": cls.GOVERNMENT_BONDS,
             "other": cls.OTHER,
             # Yahoo Finance aliases
             "financial services": cls.FINANCIALS,
