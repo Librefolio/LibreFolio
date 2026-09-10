@@ -54,6 +54,8 @@ from backend.app.services.scheduler import get_shutdown_event, scheduler_loop
 from backend.app.services.settings_service import initialize_global_settings
 from backend.app.services.signal_runtime import validate_signal_runtime
 from backend.app.services.static_uploads import seed_default_avatars
+from backend.app.services.tools.executor import shutdown_tool_executor
+from backend.app.services.tools.registry import ToolPluginRegistry
 from backend.app.utils.cache_utils import close_all_caches
 from backend.app.utils.version import get_git_version
 
@@ -237,6 +239,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         plugin_count=len(SignalPluginRegistry.list_plugin_codes()),
     )
 
+    tool_catalog = await asyncio.to_thread(ToolPluginRegistry.get_snapshot)
+    logger.info("Tool catalog initialized", plugin_count=len(tool_catalog.definitions), quarantined_count=len(tool_catalog.failures))
+
     # Ensure all data directories exist (prod or test based on mode)
     ensure_data_dirs()
 
@@ -268,7 +273,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     shutdown_event = get_shutdown_event()
     scheduler_task = asyncio.create_task(scheduler_loop(shutdown_event))
 
-    yield
+    try:
+        yield
+    finally:
+        await shutdown_tool_executor()
     # Shutdown — stop scheduler first, then cleanup providers
     logger.info("Shutting down LibreFolio")
     shutdown_event.set()

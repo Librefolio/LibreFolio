@@ -7,6 +7,7 @@ Usage:
     python list_api_endpoints.py --list       # List all endpoints
     python list_api_endpoints.py --openapi    # Export OpenAPI schema to stdout
     python list_api_endpoints.py --openapi-file [path]  # Export to file
+    python list_api_endpoints.py --tool-contracts-file [path]  # Schema-only Tool export
 """
 import argparse
 import json
@@ -17,11 +18,11 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from backend.app.main import app
-
 
 def list_endpoints():
     """List all API endpoints with descriptions."""
+    from backend.app.main import app  # noqa: PLC0415 — schema-only Tool exports must not import the application
+
     print("=" * 80)
     print("API ENDPOINTS")
     print("=" * 80)
@@ -69,6 +70,8 @@ def list_endpoints():
 
 def export_openapi(output_path: str | None = None):
     """Export OpenAPI schema to file or stdout."""
+    from backend.app.main import app  # noqa: PLC0415 — schema-only Tool exports must not import the application
+
     openapi_schema = app.openapi()
 
     if output_path:
@@ -92,6 +95,7 @@ Examples:
   python list_api_endpoints.py                    # List all endpoints
   python list_api_endpoints.py --openapi          # Print OpenAPI to stdout
   python list_api_endpoints.py --openapi-file frontend/src/lib/api/openapi.json
+  python list_api_endpoints.py --tool-contracts-file frontend/src/lib/api/tool-contracts.openapi.json
         """,
         )
 
@@ -104,11 +108,15 @@ Examples:
     parser.add_argument(
         "--openapi-file", "-f", type=str, metavar="PATH", help="Export OpenAPI schema to file"
         )
+    parser.add_argument(
+        "--tool-contracts-file", type=str, metavar="PATH",
+        help="Export schema-only Tool contracts without importing the API application"
+        )
 
     args = parser.parse_args()
 
     # Default action is to list endpoints
-    if not any([args.list, args.openapi, args.openapi_file]):
+    if not any([args.list, args.openapi, args.openapi_file, args.tool_contracts_file]):
         args.list = True
 
     if args.list:
@@ -119,6 +127,12 @@ Examples:
 
     if args.openapi_file:
         export_openapi(args.openapi_file)
+
+    if args.tool_contracts_file:
+        from scripts.export_tool_contracts import export_tool_contracts  # noqa: PLC0415 — load Tool export support only for its explicit action
+
+        output = export_tool_contracts(args.tool_contracts_file)
+        print(f"Tool contracts exported to: {output}")
 
 
 if __name__ == "__main__":

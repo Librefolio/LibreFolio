@@ -709,6 +709,15 @@ def _services_setup() -> bool:
     return True
 
 
+def services_tools_registry(verbose: bool = False, test_names: list = None) -> bool:
+    """Test private Tool registry publication and read-only catalog projection."""
+    print_section("Services: Tool Registry")
+    print_info("Testing: private typed plugins, transactional discovery and catalog policies")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_tools_registry.py", test_names)
+    return run_command(cmd, "Tool registry tests", verbose=verbose)
+
+
 def services_all(verbose: bool = False) -> bool:
     """Run all backend service tests."""
     if _common.nothing_left_to_run("services"):
@@ -906,5 +915,13 @@ Note: No backend server required.
     add_test(cat, "borsa-italiana-search", services_borsa_italiana_search, name="Borsa Italiana Search", desc="Single-fetch search, IT+EN variants, ISIN direct hit (engine mocked)")
     add_test(cat, "borsa-italiana-funds", services_borsa_italiana_funds, name="Borsa Italiana Funds", desc="Mutual-fund NAV via codice_fondo detail page + resolve_url (scraper mocked)")
     add_test(cat, "web-link-finder", services_web_link_finder, name="Web Link Finder", desc="find_candidate_urls + search orchestration augmentation (ddgs mocked)")
+    add_test(
+        cat,
+        "tools-registry",
+        services_tools_registry,
+        name="Tool Registry",
+        desc="Typed plugins, transactional discovery, quarantine and read-only catalog",
+        isolation="pure",
+    )
     add_test(cat, "all", services_all, test_names=False, name="All Services Tests", desc="Run all service tests")
     registry["services"] = cat
