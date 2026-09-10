@@ -98,22 +98,7 @@ import {getSectorKeys} from '$lib/stores/reference/sectorStore';
  * Matches the backend FinancialSector enum — kept in sync manually
  * as a safety net for the brief window before the API call completes.
  */
-const SECTOR_KEYS_FALLBACK: readonly string[] = [
-    'Industrials',
-    'Technology',
-    'Financials',
-    'Consumer Discretionary',
-    'Health Care',
-    'Real Estate',
-    'Basic Materials',
-    'Energy',
-    'Consumer Staples',
-    'Telecommunication',
-    'Utilities',
-    'Corporate Bonds',
-    'Government Bonds',
-    'Other',
-];
+const SECTOR_KEYS_FALLBACK: readonly string[] = ['Industrials', 'Technology', 'Financials', 'Consumer Discretionary', 'Health Care', 'Real Estate', 'Basic Materials', 'Energy', 'Consumer Staples', 'Telecommunication', 'Utilities', 'Corporate Bonds', 'Government Bonds', 'Other'];
 
 /**
  * Get the standard financial sector keys.

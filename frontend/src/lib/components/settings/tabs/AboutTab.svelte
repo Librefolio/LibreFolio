@@ -9,6 +9,7 @@
     import SupportActions from '$lib/components/support/SupportActions.svelte';
     import SocialShareModal from '$lib/components/support/SocialShareModal.svelte';
     import type {SocialPlatform} from '$lib/components/support/supportLinks';
+    import ToolAboutPanel from '$lib/features/tools/ToolAboutPanel.svelte';
     import {mapBackendSignalDefinition} from '$lib/charts/signals/catalogMapper';
     import {getRegisteredSignalTypes} from '$lib/charts/signals/registry';
     import type {BackendSignalCatalogResponse, SignalDefinition} from '$lib/charts/signals';
@@ -18,6 +19,7 @@
     import ChangelogModal from '$lib/components/layout/ChangelogModal.svelte';
 
     let changelogOpen = false;
+    let toolPanelOpen = false;
 
     const githubUrl = 'https://github.com/Librefolio/LibreFolio';
     const websiteUrl = 'https://librefolio.github.io/LibreFolio/';
@@ -549,7 +551,7 @@ Generated: ${new Date().toISOString()}
             </details>
 
             <!-- Plugin Diagnostics -->
-            <details class="mb-3 group" data-testid="about-plugin-diagnostics">
+            <details bind:open={toolPanelOpen} class="mb-3 group" data-testid="about-plugin-diagnostics">
                 <summary class="flex items-center justify-between cursor-pointer select-none p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                     <span class="text-sm font-medium text-gray-700">{$_('settings.pluginDiagnostics')}</span>
                     <ChevronDown size={16} class="text-gray-400 transition-transform group-open:rotate-180" />
@@ -576,6 +578,7 @@ Generated: ${new Date().toISOString()}
                         </div>
                     {/each}
                 </div>
+                <ToolAboutPanel active={toolPanelOpen} />
             </details>
         </div>
     {/if}
