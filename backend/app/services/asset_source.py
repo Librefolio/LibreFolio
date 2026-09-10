@@ -4293,10 +4293,10 @@ class AssetCRUDService:
         prepared: list[tuple[FAAssetPatchItem, dict]] = []
         for patch in patches:
             patch_dict = patch.model_dump(mode="json", exclude={"asset_id"}, exclude_unset=True, exclude_none=True)
-            # Special handling for classification_params=None (clearing the field):
-            # only when the field was explicitly set on the patch object.
-            if "classification_params" not in patch_dict and patch.classification_params is None and "classification_params" in patch.model_fields_set:
-                patch_dict["classification_params"] = None
+            # Preserve explicit clears inside the atomic classification blocks too.
+            # exclude_none above would turn {"sector_area": None} into {}, clearing all.
+            if "classification_params" in patch.model_fields_set:
+                patch_dict["classification_params"] = patch.classification_params.model_dump(mode="json", exclude_unset=True) if patch.classification_params is not None else None
             prepared.append((patch, patch_dict))
 
         # Currency-change guard data (Policy D below), batched per asset.

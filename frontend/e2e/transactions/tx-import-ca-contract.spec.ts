@@ -32,7 +32,7 @@ import {uniqueSuffix} from '../fixtures/unique';
 test.setTimeout(120_000);
 
 const FIXTURE = resolve(process.cwd(), '../backend/app/services/brim_providers/sample_reports/credit_agricole-conti-contract.csv');
-const API = 'http://localhost:6041/api/v1';
+const API = `http://localhost:${process.env.TEST_PORT || '6041'}/api/v1`;
 
 // ---------------------------------------------------------------------------
 // Setup — broker and file created through the API, not through the UI

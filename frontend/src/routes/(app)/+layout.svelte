@@ -1,6 +1,7 @@
 <script lang="ts">
     import {onMount} from 'svelte';
     import {browser} from '$app/environment';
+    import {page} from '$app/stores';
     import {afterNavigate, goto, preloadCode} from '$app/navigation';
     import {i18nLoading, initI18n} from '$lib/i18n';
     import {trackNavigation} from '$lib/stores/app/navigationStore';
@@ -142,7 +143,7 @@
         <!-- Main Content Area -->
         <div class="min-h-screen flex flex-col transition-all duration-300 {sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'}">
             <!-- Header -->
-            <Header on:toggleSidebar={toggleSidebar} />
+            <Header onToggleSidebar={toggleSidebar} {sidebarOpen} routeKey={$page.url.pathname + $page.url.search} />
 
             <!-- Page Content -->
             <main class="flex-1 p-4 lg:p-6">
