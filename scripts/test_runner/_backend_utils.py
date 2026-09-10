@@ -169,6 +169,15 @@ def utils_runtime_isolation(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Runtime isolation tests", verbose=verbose)
 
 
+def utils_test_runner_cli(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the test-runner CLI's own command-building contract."""
+    print_section("Utils: Test Runner CLI")
+    print_info("Testing: scripts/test_runner/_backend_utils.py, _cli.py (registry dispatch)")
+    print_info("Tests: test_names → pytest -k semantics, registry forwarding, coverage_js_adapter link")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_test_runner_cli.py", test_names)
+    return run_command(cmd, "Test runner CLI contract tests", verbose=verbose)
+
+
 def utils_all(verbose: bool = False) -> bool:
     """Run all utility tests."""
     if _common.nothing_left_to_run("utils"):
@@ -194,6 +203,7 @@ Tests for utility modules and helper functions:
   • Geographic area normalization, Sector normalization
   • Currency utilities, Cache utilities
   • Provider core cache & thread isolation
+  • Test-runner CLI contract (coverage-js-adapter command building, registry dispatch)
 """,
         # These are functions over values. The three the static classifier could
         # not prove pure only touch a database because they import a helper that
@@ -256,6 +266,16 @@ Tests for utility modules and helper functions:
         desc="Per-lane port/data propagation, production guards, readiness identity and process ownership",
         # Only monkeypatches os.environ/sys.argv and builds argparse parsers;
         # no DB, no server, no filesystem writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "test-runner-cli",
+        utils_test_runner_cli,
+        name="Test Runner CLI Contract",
+        desc="test_names → pytest -k semantics on the real coverage-js-adapter action, registry dispatch forwarding, coverage_js.py compile check",
+        # Monkeypatches run_command/subprocess.run and reads source text only;
+        # no DB, no server, no network, no repo writes.
         isolation="pure",
     )
     add_test(cat, "all", utils_all, test_names=False, name="All Utils Tests", desc="Run all utility tests")
