@@ -24,11 +24,11 @@ PARTS_DIR = PROJECT_ROOT / ".coverage_data" / "parts"
 
 def _worker_env(index: int, coverage: bool) -> dict:
     """The exclusive resource lot handed to worker ``index``."""
-    from backend.test_scripts.test_db_config import TEST_DATABASE_URL
+    from backend.test_scripts.test_db_config import get_test_database_url
 
     env = os.environ.copy()
     env["LIBREFOLIO_TEST_MODE"] = "1"
-    env["DATABASE_URL"] = TEST_DATABASE_URL
+    env["DATABASE_URL"] = get_test_database_url()
     if coverage:
         # Per-worker data file: this is what replaces the copy-in/copy-out of a
         # single global .coverage, which is the reason two processes could not

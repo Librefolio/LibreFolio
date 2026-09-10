@@ -42,6 +42,7 @@ import {TEST_USER} from '../fixtures/test-users';
 import {uniqueSuffix, uniqueToken} from '../fixtures/unique';
 
 const API = '/api/v1';
+const TEST_PORT = process.env.TEST_PORT || '6041';
 const UI_TIMEOUT = 10_000;
 
 type Owned = {
@@ -118,8 +119,8 @@ async function cleanupOwned(page: Page, owned: Owned): Promise<void> {
 const test = base.extend<{owned: Owned}>({
     owned: async ({page}, use, testInfo) => {
         const baseURL = testInfo.project.use.baseURL;
-        if (!baseURL || new URL(baseURL).port !== '6041' || !['localhost', '127.0.0.1'].includes(new URL(baseURL).hostname)) {
-            throw new Error('E4 matching regressions may only use the shared local test backend on port 6041');
+        if (!baseURL || new URL(baseURL).port !== TEST_PORT || !['localhost', '127.0.0.1'].includes(new URL(baseURL).hostname)) {
+            throw new Error(`E4 matching regressions may only use the shared local test backend on port ${TEST_PORT}`);
         }
         const owned: Owned = {suffix: `m${testInfo.workerIndex}-${uniqueSuffix()}`, assetIds: [], brokerIds: [], fileIds: [], parseCalls: 0};
         page.on('request', (request) => {

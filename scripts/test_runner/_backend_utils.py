@@ -151,6 +151,15 @@ def utils_js_cache_fail_loud(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "JS cache fail-loud tests", verbose=verbose)
 
 
+def utils_runtime_isolation(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the runtime-isolation contract (test-mode data-dir override + CLI shapes)."""
+    print_section("Utils: Runtime Isolation")
+    print_info("Testing: runtime paths, CLI propagation, lane readiness and process ownership")
+    print_info("Tests: prod guards, dotenv/Pipenv boundaries, port collisions, symlink escapes, server/test parser shapes")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_runtime_isolation.py", test_names)
+    return run_command(cmd, "Runtime isolation tests", verbose=verbose)
+
+
 def utils_all(verbose: bool = False) -> bool:
     """Run all utility tests."""
     if _common.nothing_left_to_run("utils"):
@@ -220,6 +229,16 @@ Tests for utility modules and helper functions:
         name="JS Cache Fail-Loud (I1)",
         desc="update_js_cache: undownloadable+uncached resource or partial font subsets → hard failure → exit 1; cached copy → exit 0",
         # tmp_path + monkeypatched network only: no DB, no server, no repo writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "runtime-isolation",
+        utils_runtime_isolation,
+        name="Runtime Isolation",
+        desc="Per-lane port/data propagation, production guards, readiness identity and process ownership",
+        # Only monkeypatches os.environ/sys.argv and builds argparse parsers;
+        # no DB, no server, no filesystem writes.
         isolation="pure",
     )
     add_test(cat, "all", utils_all, test_names=False, name="All Utils Tests", desc="Run all utility tests")

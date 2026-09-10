@@ -34,6 +34,13 @@ Manifest e prove: [14_feedbackImportUrgent](../14_feedbackImportUrgent/manifest-
 Commit/SHA e archivio restano in attesa del commit manuale del dev. U2, U3, U8,
 gli sprint non inclusi e F-MC-1/2/3 restano aperti.
 
+**Infrastruttura di parallelismo, 2026-09-09:** prima di riallineare B/C/D e'
+stato aperto il piano
+[15_parallelRuntimeIsolation](../15_parallelRuntimeIsolation/plan-phase00ParallelRuntimeIsolation.prompt.md).
+Il gate richiede porta e data directory uniche per ogni worktree; la sola porta
+non separa SQLite, upload, log e report broker. I default storici restano
+invariati.
+
 I worktree C/D sono allineati a `4a73f5f6`; i loro piani devono distinguere contratti
 approvati, scelte residue e codice non ancora autorizzato. Il pilota manuale non aspetta
 solver completo, copie portfolio o migrazione Broker fractional. Le implementazioni e
