@@ -6,7 +6,6 @@ import asyncio
 import time
 from collections.abc import Awaitable, Callable
 
-from backend.app.services.tools.executor import get_tool_executor
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.routing import APIRoute
@@ -19,6 +18,7 @@ from backend.app.schemas.tools import ToolCatalogResponse, ToolComputeBatchReque
 from backend.app.services.tools.base import ToolExecutionError
 from backend.app.services.tools.catalog import effective_catalog_entries
 from backend.app.services.tools.catalog import get_tool_catalog as build_tool_catalog
+from backend.app.services.tools.executor import get_tool_executor
 from backend.app.services.tools.wire import parse_json, validate_json_value
 
 

@@ -26,12 +26,7 @@ TIMEOUT = 30.0
 
 PASSWORD = "ToolApiTestPass123!"
 
-SEMVER_RE = re.compile(
-    r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
-    r"(-((0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)"
-    r"(\.(0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*))?"
-    r"(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$"
-)
+SEMVER_RE = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)" r"(-((0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)" r"(\.(0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*))?" r"(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$")
 FINGERPRINT_RE = re.compile(r"^[a-f0-9]{64}$")
 TOKEN_RE = re.compile(r"^[!-~]{1,64}$")
 TOOL_CODE_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
@@ -106,6 +101,7 @@ POOL_KEYS = {
     "completed",
     "failed",
 }
+
 
 @pytest.fixture(scope="module")
 def test_server():
@@ -279,11 +275,7 @@ async def test_tools_catalog_is_strict_and_read_only(test_server):
     descriptors = [ToolDescriptor.model_validate(item) for item in payload["items"]]
     descriptor_codes = {descriptor.tool_code for descriptor in descriptors}
     assert len(descriptor_codes) == len(descriptors)
-    assert descriptor_codes.isdisjoint(
-        item["tool_code"]
-        for item in payload["unavailable"]
-        if item["tool_code"] is not None
-    )
+    assert descriptor_codes.isdisjoint(item["tool_code"] for item in payload["unavailable"] if item["tool_code"] is not None)
 
     before_payload = before.json()
     after_payload = after.json()
@@ -291,10 +283,7 @@ async def test_tools_catalog_is_strict_and_read_only(test_server):
         diagnostics = ToolDiagnosticsResponse.model_validate(diagnostics_payload)
         assert set(diagnostics_payload) == DIAGNOSTICS_KEYS
         assert {item.tool_code for item in diagnostics.loaded} == descriptor_codes
-        assert all(
-            set(failure) == {"tool_code", "filename", "reason"}
-            for failure in diagnostics_payload["failures"]
-        )
+        assert all(set(failure) == {"tool_code", "filename", "reason"} for failure in diagnostics_payload["failures"])
 
     assert before_payload["runtime_id"] == after_payload["runtime_id"]
     assert before_payload["policy"] == payload["policy"] == after_payload["policy"]
@@ -305,6 +294,7 @@ async def test_tools_catalog_is_strict_and_read_only(test_server):
     failed_delta = after_payload["pool"]["failed"] - before_payload["pool"]["failed"]
     assert completed_delta >= 0
     assert 0 <= failed_delta <= completed_delta
+
 
 @pytest.mark.asyncio
 async def test_tools_compute_unknown_tool_preserves_item_identity(test_server):
@@ -321,13 +311,7 @@ async def test_tools_compute_unknown_tool_preserves_item_identity(test_server):
     assert response.status_code == 200, response.text
     payload = response.json()
     assert set(payload) == COMPUTE_KEYS
-    validated = ToolComputeBatchResponse.model_validate(
-        {
-            key: value
-            for key, value in payload.items()
-            if key not in {"success_count", "failed_count"}
-        }
-    )
+    validated = ToolComputeBatchResponse.model_validate({key: value for key, value in payload.items() if key not in {"success_count", "failed_count"}})
     assert payload["request_id"] == envelope["request_id"]
     assert validated.request_id == envelope["request_id"]
     assert TOKEN_RE.fullmatch(str(payload["request_id"]))
@@ -357,11 +341,7 @@ async def test_tools_compute_unknown_tool_preserves_item_identity(test_server):
         assert set(result["error"]) == ERROR_KEYS
         assert set(result["metrics"]) == ITEM_METRICS_KEYS
         assert result["metrics"]["total_ms"] >= 0
-        assert all(
-            value is None
-            for key, value in result["metrics"].items()
-            if key != "total_ms"
-        )
+        assert all(value is None for key, value in result["metrics"].items() if key != "total_ms")
 
 
 @pytest.mark.asyncio
@@ -375,11 +355,7 @@ async def test_tools_compute_duplicate_correlations_is_sanitized(test_server):
     assert len(items) == 2
     assert len(correlation_ids) == 1
     assert len({item["tool_code"] for item in items}) == len(items)
-    assert all(
-        isinstance(item["parameters"], dict)
-        and item["parameters"].get("scenario") == scenario_marker
-        for item in items
-    )
+    assert all(isinstance(item["parameters"], dict) and item["parameters"].get("scenario") == scenario_marker for item in items)
 
     async with httpx.AsyncClient() as client:
         await _login_normal_user(client)
@@ -421,13 +397,8 @@ async def test_tools_diagnostics_is_strict_safe_for_normal_user(test_server):
     assert diagnostics.scope == "api_process"
     assert TOKEN_RE.fullmatch(payload["runtime_id"])
     assert set(payload["policy"]) == POLICY_KEYS
-    assert {item.tool_code for item in diagnostics.loaded} == {
-        item.tool_code for item in catalog.items
-    }
-    assert all(
-        set(failure) == {"tool_code", "filename", "reason"}
-        for failure in payload["failures"]
-    )
+    assert {item.tool_code for item in diagnostics.loaded} == {item.tool_code for item in catalog.items}
+    assert all(set(failure) == {"tool_code", "filename", "reason"} for failure in payload["failures"])
     _assert_pool_is_structural(payload["pool"], payload["policy"])
 
     serialized_strings = "\n".join(_recursive_strings(payload)).lower()
