@@ -16,11 +16,17 @@
 -->
 <script lang="ts">
     import {_} from '$lib/i18n';
+    import {onDestroy} from 'svelte';
+    import {get} from 'svelte/store';
     import {zodiosApi} from '$lib/api';
     import {trySave} from '$lib/utils/trySave';
-    import {ArrowDownUp, ArrowLeftRight, Lock, RotateCw, X} from 'lucide-svelte';
+    import {ArrowDownUp, ArrowLeftRight, Lock, X} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
-    import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
+    import {notify} from '$lib/stores/app/notify.svelte';
+    import {finishFxPairCreation, type FxPairCreatedDetail, type FxPairSyncCompleteDetail} from '$lib/services/fxCreationSync';
+    import {fxPairHtml} from '$lib/utils/providerHelpers';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {ConfirmModal} from '$lib/components/table';
     import {CurrencySearchSelect, FxProviderSelect} from '$lib/components/ui/select';
@@ -52,11 +58,14 @@
         initialQuote?: string;
         /** Lock the base currency field (e.g. when creating FX from asset detail) */
         readonlyBase?: boolean;
-        oncreated?: (detail: {base: string; quote: string; hasRealProvider: boolean; slug: string}) => void;
+        /** Configuration committed; does not wait for automatic rate sync. */
+        oncreated?: (detail: FxPairCreatedDetail) => void | Promise<void>;
+        /** Automatic sync settled, including partial, failed and skipped outcomes. */
+        onsynced?: (detail: FxPairSyncCompleteDetail) => void | Promise<void>;
         onclose?: () => void;
     }
 
-    let {open = $bindable(false), dateStart = '', dateEnd = '', editMode = false, editBase = '', editQuote = '', editRoutes = [], initialBase = '', initialQuote = '', readonlyBase = false, oncreated, onclose}: Props = $props();
+    let {open = $bindable(false), dateStart = '', dateEnd = '', editMode = false, editBase = '', editQuote = '', editRoutes = [], initialBase = '', initialQuote = '', readonlyBase = false, oncreated, onsynced, onclose}: Props = $props();
 
     // =========================================================================
     // State
@@ -66,7 +75,10 @@
     let quoteCurrency = $state('');
     let selectedRoutes = $state<ChainStep[][]>([]);
     let saving = $state(false);
-    let syncing = $state(false);
+    let saveAdmission = 0;
+    onDestroy(() => {
+        saveAdmission += 1;
+    });
     let error = $state<string | null>(null);
     let quoteSelectRef = $state<HTMLDivElement | null>(null);
     /** When true, intermediate pairs from chain routes are auto-created on save */
@@ -109,10 +121,10 @@
         loadingRoutes = true;
         try {
             const response = await zodiosApi.list_routes_api_v1_fx_providers_routes_get();
-            const items = (response as any)?.items || [];
-            const pairRoutes = items.filter((i: any) => ((i.base === editBase && i.quote === editQuote) || (i.base === editQuote && i.quote === editBase)) && !(i.chain_steps?.length === 1 && i.chain_steps[0].provider === 'MANUAL')).sort((a: any, b: any) => a.priority - b.priority);
+            const items = response?.items ?? [];
+            const pairRoutes = items.filter((i) => ((i.base === editBase && i.quote === editQuote) || (i.base === editQuote && i.quote === editBase)) && !(!i.is_chain && i.chain_steps[0]?.provider === 'MANUAL')).sort((a, b) => a.priority - b.priority);
             if (pairRoutes.length > 0) {
-                selectedRoutes = pairRoutes.map((r: any) => r.chain_steps ?? []);
+                selectedRoutes = pairRoutes.map((r) => r.chain_steps ?? []);
             } else if (editRoutes.length > 0) {
                 selectedRoutes = [...editRoutes];
             } else {
@@ -211,26 +223,51 @@
     }
 
     async function handleSave() {
-        if (!isValid) return;
+        if (!isValid || saving) return;
 
-        // Normalize alphabetical order for storage
         const base = baseCurrency.toUpperCase() < quoteCurrency.toUpperCase() ? baseCurrency.toUpperCase() : quoteCurrency.toUpperCase();
         const quote = baseCurrency.toUpperCase() < quoteCurrency.toUpperCase() ? quoteCurrency.toUpperCase() : baseCurrency.toUpperCase();
-        if (!editMode) {
-            await ensureFxRoutesLoaded();
-            if (getConfiguredPairSlugs().has(`${base}-${quote}`)) return;
-        }
+        const slug = `${base}-${quote}`;
+        const routes = selectedRoutes.map((route) => route.map(({from, to, provider}) => ({from, to, provider})));
+        const includeIntermediates = createIntermediatePairs;
+        const editing = editMode;
+        const start = dateStart;
+        const end = dateEnd;
+        const createdCallback = oncreated;
+        const syncedCallback = onsynced;
+        const closeCallback = onclose;
+        const configuredSlugsAtSave = new Set(configuredPairSlugs);
+        const sessionGeneration = getClientSessionGeneration();
+        const admission = ++saveAdmission;
+        const sameSession = () => isClientSessionCurrent(sessionGeneration);
+        const current = () => admission === saveAdmission && sameSession();
+        const reportConfigurationError = (message: string) => {
+            if (!sameSession()) return;
+            if (current()) {
+                error = message;
+            } else {
+                notify({
+                    name: 'fx.pair.configuration-failed',
+                    detail: {slug, editMode: editing, sessionGeneration},
+                    toast: {variant: 'error', message: `${fxPairHtml(slug, {outerFlags: true})}\n${escapeHtml(message)}`},
+                });
+            }
+        };
         saving = true;
         error = null;
 
         try {
+            if (!editing) {
+                await ensureFxRoutesLoaded();
+                if (!sameSession() || getConfiguredPairSlugs().has(slug)) return;
+            }
             // Build the main pair routes
             const mainItems =
-                selectedRoutes.length > 0
-                    ? selectedRoutes.map((chainSteps, idx) => ({
+                routes.length > 0
+                    ? routes.map((chainSteps, idx) => ({
                           base,
                           quote,
-                          chain_steps: chainSteps,
+                          chain_steps: chainSteps.map(({from, to, provider}) => ({from, to, provider})),
                           priority: idx + 1,
                       }))
                     : [
@@ -244,13 +281,13 @@
 
             // Collect intermediate pair routes if flag is on and there are chain routes
             const intermediateItems: typeof mainItems = [];
-            if (createIntermediatePairs && selectedRoutes.some((r) => r.length > 1)) {
-                const existingSlugs = new Set(configuredPairSlugs);
+            if (includeIntermediates && routes.some((r) => r.length > 1)) {
+                const existingSlugs = new Set([...configuredSlugsAtSave, ...getConfiguredPairSlugs()]);
                 // Also include the main pair being created
                 existingSlugs.add(`${base}-${quote}`);
                 const added = new Set<string>(); // track to avoid duplicates across chains
 
-                for (const chainSteps of selectedRoutes) {
+                for (const chainSteps of routes) {
                     for (const step of chainSteps) {
                         const iBase = step.from < step.to ? step.from : step.to;
                         const iQuote = step.from < step.to ? step.to : step.from;
@@ -269,29 +306,42 @@
                 }
             }
 
+            const hasRealProvider = routes.some((route) => route.some((step) => step.provider !== 'MANUAL'));
+            const context = {
+                detail: {base, quote, slug, hasRealProvider, autoSyncStarted: !editing && hasRealProvider && !!start && !!end},
+                pairs: [slug, ...intermediateItems.map((item) => `${item.base}-${item.quote}`)],
+                start,
+                end,
+                sessionGeneration,
+                editMode: editing,
+                oncreated: (createdDetail: FxPairCreatedDetail) => {
+                    if (current()) return createdCallback?.(createdDetail);
+                },
+                onsynced: syncedCallback,
+                onclose: () => {
+                    if (current()) resetAndClose(() => closeCallback?.());
+                },
+            };
+
             // In edit mode, delete all existing routes for this pair first
             // to ensure stale routes don't persist (e.g., when user removes all providers).
             // The backend auto-reinstates a MANUAL sentinel if no routes remain after delete.
-            if (editMode) {
-                const deleteResult = await trySave(() => zodiosApi.delete_routes_bulk_api_v1_fx_providers_routes_delete([{base, quote}]), {toast: false, fallback: $_('fx.addPair.createFailed')});
+            if (editing) {
+                const deleteResult = await trySave(() => zodiosApi.delete_routes_bulk_api_v1_fx_providers_routes_delete([{base, quote}]), {toast: false, fallback: get(_)('fx.addPair.createFailed')});
+                if (!sameSession()) return;
                 if (deleteResult.status === 'error') {
-                    error = deleteResult.message;
-                    saving = false;
+                    reportConfigurationError(deleteResult.message);
                     return;
                 }
                 // If user removed all providers, backend already reinstated MANUAL — skip POST
-                if (selectedRoutes.length === 0) {
-                    oncreated?.({base, quote, hasRealProvider: false, slug: base < quote ? `${base}-${quote}` : `${quote}-${base}`});
-                    resetAndClose();
+                if (routes.length === 0) {
+                    void finishFxPairCreation(context);
                     return;
                 }
             }
 
-            // I-bis #22 (Batch 4.d-part2) — wrap the create call through
-            // ``trySave``. Auto-sync below stays in its own non-blocking
-            // try/catch: a sync failure must NOT block creation success.
-            // ``toast: false`` because ``error`` is rendered inline.
-            const createResult = await trySave(() => zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post([...mainItems, ...intermediateItems]), {toast: false, fallback: $_('fx.addPair.createFailed')});
+            const createResult = await trySave(() => zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post([...mainItems, ...intermediateItems]), {toast: false, fallback: get(_)('fx.addPair.createFailed')});
+            if (!sameSession()) return;
             if (createResult.status === 'error') {
                 // A 409 is the concurrent-write conflict, and it is the one case
                 // where the backend's own sentence must not reach the screen:
@@ -300,55 +350,19 @@
                 // statement and its bound parameters in it. The conflict is also
                 // the only failure here the user can do something about, so it is
                 // the one that deserves a translated sentence telling them to.
-                error = createResult.status_code === 409 ? $_('fx.addPair.createConflict') : createResult.message;
-                saving = false;
+                reportConfigurationError(createResult.status_code === 409 ? get(_)('fx.addPair.createConflict') : createResult.message);
                 return;
             }
 
-            // Auto-sync only on creation (not in editMode — detail page manages sync explicitly)
-            const hasRealProvider = selectedRoutes.length > 0;
-            if (!editMode && hasRealProvider && dateStart && dateEnd) {
-                syncing = true;
-                try {
-                    const mainSlug = base < quote ? `${base}-${quote}` : `${quote}-${base}`;
-                    const pairsToSync = [mainSlug];
-                    // Also sync newly created intermediate pairs
-                    for (const item of intermediateItems) {
-                        const iSlug = `${item.base}-${item.quote}`;
-                        pairsToSync.push(iSlug);
-                    }
-                    const syncResult = await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({
-                        pairs: pairsToSync,
-                        start: dateStart,
-                        end: dateEnd,
-                    });
-                    // Show toast with sync result
-                    const r = (syncResult as any)?.results?.[0];
-                    if (r && r.status === 'ok') {
-                        const pairLabel = mainSlug.replace('-', '/');
-                        toasts.success(`${pairLabel} ${$_('fx.sync.synced')} — ${r.points_changed ?? r.points_fetched ?? 0} pts`);
-                    }
-                } catch (e) {
-                    console.warn('Auto-sync after pair creation failed:', e);
-                } finally {
-                    syncing = false;
-                }
-            }
-
-            oncreated?.({
-                base,
-                quote,
-                hasRealProvider,
-                slug: base < quote ? `${base}-${quote}` : `${quote}-${base}`,
-            });
-            resetAndClose();
+            void finishFxPairCreation(context);
         } finally {
-            saving = false;
+            if (current()) saving = false;
         }
     }
 
     /** Try to close — show confirm if dirty */
     function handleClose() {
+        if (saving) return;
         if (isDirty) {
             showDiscardConfirm = true;
         } else {
@@ -357,7 +371,9 @@
     }
 
     /** Actually reset and close */
-    function resetAndClose() {
+    function resetAndClose(closeCallback = onclose) {
+        saveAdmission += 1;
+        saving = false;
         baseCurrency = '';
         quoteCurrency = '';
         selectedRoutes = [];
@@ -368,7 +384,7 @@
         // Close the modal directly (open is $bindable). Callers that bind:open rely on this;
         // onclose remains for callers that need a side-effect hook.
         open = false;
-        onclose?.();
+        closeCallback?.();
     }
 </script>
 
@@ -400,13 +416,13 @@
             <!-- ========================================================= -->
             <div class="space-y-1.5">
                 <div class="flex flex-col sm:flex-row items-stretch gap-2">
-                    <div class="flex-1 min-w-0">
+                    <div class="flex-1 min-w-0" data-testid="fx-add-pair-base">
                         <div class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                             {$_('fx.addPair.baseCurrency')}
                         </div>
                         <CurrencySearchSelect
                             bind:value={baseCurrency}
-                            disabled={editMode || readonlyBase}
+                            disabled={saving || editMode || readonlyBase}
                             excludedCurrencies={editMode || readonlyBase ? new Set() : excludedForBase}
                             onchange={() => {
                                 if (!editMode) {
@@ -431,11 +447,11 @@
                     <div class="text-gray-400 dark:text-gray-500 flex-shrink-0 flex items-center justify-center sm:hidden">
                         <ArrowDownUp size={18} />
                     </div>
-                    <div bind:this={quoteSelectRef} class="flex-1 min-w-0">
+                    <div bind:this={quoteSelectRef} class="flex-1 min-w-0" data-testid="fx-add-pair-quote">
                         <div class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                             {$_('fx.addPair.quoteCurrency')}
                         </div>
-                        <CurrencySearchSelect bind:value={quoteCurrency} disabled={editMode} excludedCurrencies={editMode ? new Set() : excludedForQuote} placeholder={$_('fx.addPair.quoteCurrency')} />
+                        <CurrencySearchSelect bind:value={quoteCurrency} disabled={saving || editMode} excludedCurrencies={editMode ? new Set() : excludedForQuote} placeholder={$_('fx.addPair.quoteCurrency')} />
                     </div>
                 </div>
             </div>
@@ -468,12 +484,12 @@
                 {/if}
 
                 <!-- Route selection (unified: DFS pathfinding + search + flags) -->
-                <FxProviderSelect {baseCurrency} bind:selectedRoutes {configuredPairSlugs} disabled={!hasCurrencies} language={$currentLanguage} onSelectionChange={handleRoutesChange} {quoteCurrency} />
+                <FxProviderSelect {baseCurrency} bind:selectedRoutes {configuredPairSlugs} disabled={saving || !hasCurrencies} language={$currentLanguage} onSelectionChange={handleRoutesChange} {quoteCurrency} />
 
                 <!-- Create intermediate pairs checkbox (visible only when chain routes are selected) -->
                 {#if hasChainRoutes}
                     <label class="flex items-start gap-2 p-2.5 bg-blue-50 dark:bg-blue-900/10 rounded-lg border border-blue-200 dark:border-blue-800 cursor-pointer hover:bg-blue-100/50 dark:hover:bg-blue-900/20 transition-colors">
-                        <input type="checkbox" bind:checked={createIntermediatePairs} class="mt-0.5 rounded border-gray-300 dark:border-slate-600 text-libre-green focus:ring-libre-green" />
+                        <input type="checkbox" bind:checked={createIntermediatePairs} disabled={saving} data-testid="fx-add-pair-intermediates" class="mt-0.5 rounded border-gray-300 dark:border-slate-600 text-libre-green focus:ring-libre-green" />
                         <div class="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">
                             <span class="font-medium">{$_('fx.addPair.createIntermediatePairs')}</span>
                             <p class="text-blue-500 dark:text-blue-400 mt-0.5">{$_('fx.addPair.createIntermediatePairsHint')}</p>
@@ -498,20 +514,17 @@
         <!-- Footer -->
         <!-- ============================================================= -->
         <div class="flex justify-end gap-2 px-5 py-3 border-t border-gray-100 dark:border-slate-700 shrink-0">
-            <button class="px-3 py-1.5 text-sm bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors" disabled={saving || syncing} onclick={handleClose} type="button">
+            <button class="px-3 py-1.5 text-sm bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors" disabled={saving} onclick={handleClose} type="button">
                 {$_('common.cancel')}
             </button>
             <button
                 class="px-3 py-1.5 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
                 data-testid="fx-add-pair-save"
-                disabled={!isValid || pairAlreadyExists || saving || syncing}
+                disabled={!isValid || pairAlreadyExists || saving}
                 onclick={handleSave}
                 type="button"
             >
-                {#if syncing}
-                    <RotateCw size={14} class="animate-spin" />
-                    {$_('common.syncing')}
-                {:else if saving}
+                {#if saving}
                     {$_('common.saving')}
                 {:else}
                     {$_('common.saveConfiguration')}

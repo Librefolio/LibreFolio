@@ -35,6 +35,7 @@ AI_EXPORT_SERVICE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_ai_export_composer.py",
     "backend/test_scripts/test_services/test_ai_export_dataset_analysis_catalogs.py",
     "backend/test_scripts/test_services/test_ai_export_runtime_service.py",
+    "backend/test_scripts/test_services/test_ai_export_structural_invariants.py",
     "backend/test_scripts/test_services/test_ai_export_telemetry.py",
     "backend/test_scripts/test_services/test_ai_export_temporal.py",
 )

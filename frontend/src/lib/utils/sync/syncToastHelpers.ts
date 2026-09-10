@@ -10,7 +10,7 @@
  * @module utils/syncToastHelpers
  */
 
-import {fxPairHtml, fxProviderBadgeHtml, parseProviderChain} from '$lib/utils/providerHelpers';
+import {fxPairHtml, fxProviderBadgeHtml, parseProviderChain, type FxPairHtmlOptions} from '$lib/utils/providerHelpers';
 
 // Inline SVG icons (from Lucide) — small enough to embed in toast HTML strings
 const ICON_STYLE = 'display:inline-block;vertical-align:middle;margin-right:4px;width:14px;height:14px';
@@ -94,14 +94,15 @@ export function buildAssetSyncToast(result: any, label: string, tr: (key: string
  * @param tr - Translation function (from get(t))
  * @param _formatProvider - DEPRECATED (kept for API compat, ignored)
  * @param formatDetail - Optional function to format sync detail (for partial results)
+ * @param pairOptions - Opt-in linked pair presentation for creation feedback
  * @returns Toast variant and HTML message
  */
-export function buildFxSyncToast(result: any, slug: string, tr: (key: string, opts?: any) => string, _formatProvider?: (p: any) => string, formatDetail?: (r: any, tr: (key: string, opts?: any) => string) => string): SyncToastResult {
+export function buildFxSyncToast(result: any, slug: string, tr: (key: string, opts?: any) => string, _formatProvider?: (p: any) => string, formatDetail?: (r: any, tr: (key: string, opts?: any) => string) => string, pairOptions: FxPairHtmlOptions = {}): SyncToastResult {
     if (!result) {
         return {variant: 'error', message: `FX sync ${slug} — no response`};
     }
 
-    const pairLabel = fxPairHtml(slug);
+    const pairLabel = fxPairHtml(slug, pairOptions);
     const fetched = result.points_fetched ?? 0;
     const changed = result.points_changed ?? 0;
     const providerHtml = fxProviderChainHtml(result.provider_used);
@@ -110,7 +111,7 @@ export function buildFxSyncToast(result: any, slug: string, tr: (key: string, op
     if (result.status === 'ok') {
         return {
             variant: 'success',
-            message: `Synced:\n${pairLabel}\n${dataLine}${providerHtml ? ' ' + providerHtml : ''}`,
+            message: `${tr('fx.sync.synced')}:\n${pairLabel}\n${dataLine}${providerHtml ? ' ' + providerHtml : ''}`,
         };
     } else if (result.status === 'partial') {
         let msg = `${tr('prices.sync.partialSuffix')}:\n${pairLabel}\n${dataLine}${providerHtml ? ' ' + providerHtml : ''}`;
