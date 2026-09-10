@@ -26,6 +26,16 @@ than duplicated. Tool schemas live in the catalogue; data copying uses domain AP
 Section 11 maps parallel work; section 12 requires ASCII mockup approval before substantial
 UI changes and an operational developer walkthrough/feedback round afterward.
 
+## Workstream H planning - 2026-09-10
+
+U3 Yield on Cost is ✅ **PLAN/DESIGN APPROVED 2026-09-10, not implemented** in the
+[dedicated H plan and desktop/mobile storyboard](../19_yieldOnCost/plan-phase00YieldOnCost.prompt.md).
+The final contract uses gross asset-linked DIVIDEND/INTEREST transactions,
+broker-scoped D-1 eligibility and residual WAC. Implementation remains frozen
+until F's shared portfolio FX identity is integrated, H is aligned/refreshed
+onto that baseline by the developer, and a new explicit H execution
+authorization is issued.
+
 ## Selective resumption - 2026-09-08 11:30 CEST
 
 The developer resumed unblocked work after the workstation change. **E** continues the

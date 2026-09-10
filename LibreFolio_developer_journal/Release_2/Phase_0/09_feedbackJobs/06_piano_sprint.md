@@ -284,43 +284,74 @@ Patina decorativa sopra segnaposto di forma stabile. Non mantenere il numero rea
 
 ### U3 - Yield on Cost
 
-**Stato:** metrica mancante; fondazioni parziali. **Taglia:** L per dato TTM affidabile + S di colonna, non riuso diretto di una percentuale gia pronta.
+**Stato 2026-09-10:** ✅ **PLAN/DESIGN APPROVED, non implementato** nel
+[piano H dedicato](../19_yieldOnCost/plan-phase00YieldOnCost.prompt.md).
+L'approvazione non autorizza ancora l'esecuzione.
+**Taglia:** M backend + S UI/docs, con hard handoff cache FX dal workstream F.
 
-**Superfici:** `B/schemas/portfolio.py:257-291,506-543`; `portfolio_service.py:728-731,803-808,958-975`; eventi/transaction cash; `F/lib/components/dashboard/ExposureTable.svelte:28-76,124-157,326-392`; `PositionsPanel.svelte:122,175,203`.
+**Superfici:** `B/schemas/portfolio.py`; `portfolio_service.py`; nuovo servizio
+YOC; eligibility/replay FIFO; `F/lib/components/dashboard/ExposureTable.svelte`
+e relativo test. F resta owner di `portfolio_engine.py`.
 
-`asset_income` e `cash_yield` dei lotti sono cumulativi; l'annualized return corrente include P&L e costi. Nessuno e YOC. I pagamenti personali BRIM non garantiscono una serie completa di distribuzioni per quota dell'asset.
+`asset_income` e `cash_yield` dei lotti sono cumulativi; l'annualized return
+corrente include P&L e costi. Nessuno e' YOC. Gli income importati via BRIM
+contano quando sono Transaction asset-linked e seguono lo stesso replay D-1.
 
-**Contratto precisato il 2026-09-07:** finestra mobile di **365 giorni**, non dodici mesi di calendario. Con date giornaliere: dal giorno `T - 364` a `T`, inclusi; `T` e la data finale del report, indipendente dal suo `date_from`.
+**Contratto finale 2026-09-10:** fonte esclusiva sono le Transaction
+asset-linked DIVIDEND/INTEREST, i cui importi sono lordi. TAX/FEE, provider e
+AssetEvent income non entrano. Scope `(asset_id, broker_id)`, quantita' LONG
+eleggibile EOD D-1, paying-broker e transfer-aware. Finestra mobile di
+**365 giorni**, dal giorno `T - 364` a `T` inclusi, indipendente dal
+`date_from`.
 
 $$
-\mathrm{YOC}_{365}(T)=
-\frac{\sum_{T-365<t\le T} D_{\mathrm{unit}}(t)}
-{\mathrm{PMC}_{\mathrm{unit}}(T)}
+\operatorname{YOC}_{a,b}(T)=
+\frac{\sum_i
+\operatorname{FX}(A_i,d_i)/
+\left(Q^-_{a,b}(d_i)\prod_{d_i\le s\le T}r_s\right)}
+{\operatorname{WAC}_{a,b}(T)}
 $$
 
-Il numeratore contiene dividendi/interessi lordi **per quota**, normalizzati alla stessa unita corrente e valuta del PMC/WAC residuo. Non e la somma degli incassi complessivi sul conto divisa per un prezzo unitario. Il backend restituisce una frazione, formattata in percentuale dalla UI; niente annualizzazione di una cedola o degli incassi personali parziali.
+Ogni incasso e' normalizzato alla quantita' che lo ha generato; split e FX lo
+portano all'unita'/valuta del WAC residuo. Same-day BUY escluso, same-day SELL
+incluso. Nessun carry income automatico verso il broker destination.
 
-**Disponibilita e trattino, decisione utente:** stesso simbolo visuale `-`, ma stato/motivo distinti, senza confondere zero e dato mancante.
+**Disponibilita:** DTO nested typed `available | no_income | unavailable`, con
+provenance transaction-ledger, finestra e actual FX rate date.
 
 | Condizione | Contratto numerico | Cella / spiegazione |
 |---|---|---|
-| Storia completa, reddito per-quota presente, base valida | Frazione YOC calcolata | Percentuale. |
-| Storia completa, reddito per-quota zero, base valida | Zero noto; stato `no_income` proposto | `-`: nessuna distribuzione nella finestra. Non trasformare lo zero in errore. |
-| Strumento noto come non distributivo | Stato `not_applicable` proposto | `-`: metrica non applicabile. |
-| Strumento/storico troppo giovane o copertura incompleta | Valore non disponibile; motivo distinto | `-`: storia inferiore a 365 giorni o distribuzioni non coperte. |
-| Base nulla/non valida, FX mancante o altra indisponibilita | Valore non disponibile con motivo specifico | `-`, senza inventare zero. |
+| Income validi, eligibility/split/FX/WAC validi | Frazione YOC signed | Percentuale a 2 decimali, senza `+`. |
+| Nessun income e prima tx coppia `<= T-364` | Zero noto, `no_income` | `-`, nessuna icona problema. |
+| Nessun income e coppia piu' giovane | `unavailable/insufficient_history` | `-` + custom info Tooltip. |
+| Orphan/replay/split/FX/WAC non valido | `unavailable` con reason | `-` + custom info Tooltip; mai partial/fallback. |
 
-I codici sono proposte da fissare nel contratto, non campi gia implementati. "Giovane" riguarda lo strumento o la copertura delle distribuzioni, **non** automaticamente la tua data di acquisto: comprare ieri non impedisce YOC se lo storico per-quota e il PMC sono disponibili. Avere 365 giorni di prezzi non dimostra altrettanti giorni di distribuzioni complete.
+L'age usa la prima transaction storica della coppia e non si resetta dopo
+close/rebuy. Ogni holding e' applicabile, inclusi crypto/manual; nessun
+`not_applicable`.
 
-**Dipendenze hard:** fonte per-quota e disponibilita della storia; regole per split, quote base dei bond, FX e completezza TTM. Riutilizzare gli eventi autorevoli dove realmente disponibili, senza fabbricare distribuzioni dai soli incassi personali.
+**Dipendenza hard:** F integra
+`compute_portfolio_fx_cache_identity(db, scope_broker_ids, target_currency, date_to) -> str`
+nella L1. H invoca la stessa funzione e riusa la string identity nella L2 per
+tutti i report portfolio, aggiungendo solo dipendenze ledger/split YOC.
+Nessuna seconda helper o separazione rate/route.
 
-**Rischi / DoD:** prezzo di mercato cambiato da solo non cambia YOC; corretti acquisti recenti, vendite parziali, trasferimenti, costo nullo, posizioni chiuse/short e FX mancante. Esporre dato nullable con motivo, finestra e fonte; niente fallback monetario in valuta sbagliata. Colonna nascosta di default, abilitabile dall'occhio. **Un solo ExposureTable serve dashboard e dettaglio broker**: nessuna seconda tabella.
+**Rischi / DoD:** D-1 identico al FIFO, vendite parziali non gonfiano il
+rapporto, transfer/split/FX fail-closed, cache non stale. Colonna **visibile di
+default**, accanto ad Annualized; l'override DataTable user-scoped resta
+condiviso fra Dashboard e Broker.
 
-**Documentazione e help, inclusi nello sprint:** pagina **nuova proposta**, in inglese, `mkdocs_src/docs/financial-theory/technical-analysis/performance-metrics/portfolio-engine/yield-on-cost.en.md`, tramite docs-writer. Collegarla da indice/nav pertinenti e dalle guide posizioni; confrontarla con WAC, dividend yield a prezzo di mercato, cash yield cumulativo e CAGR. Contenuti minimi: formula/unita, confini dei 365 giorni, esempi, fonti, split/bond/FX e tutti i motivi del `-`. Non scriverla come feature gia consegnata prima del codice; nessuna traduzione documentale automatica.
+**Documentazione e help:** pagina EN proposta
+`mkdocs_src/docs/financial-theory/technical-analysis/performance-metrics/portfolio-engine/yield-on-cost.en.md`
+tramite docs-writer, indici/nav/guide posizioni, senza traduzione automatica.
 
-Tooltip nell'**header della colonna YOC** usando `ColumnDef.headerTooltip`, gia presente in `ExposureTable.svelte:211,252,266,333`: sintesi per-quota/365 giorni/PMC, significato del trattino e accesso alla teoria. Testo UI in quattro lingue; la pagina richiesta resta EN. Spiegazione del motivo specifico della cella accessibile senza dover interpretare il solo trattino.
+Tooltip header: formula transaction-ledger/D-1 e teoria. Solo genuine
+unavailable mostrano info icon di cella con custom Tooltip accessibile; il
+normale no-income non appare come errore.
 
-**Gate UX:** microvista ASCII di header, tooltip e righe percentuale/no-income/unavailable; feedback dev prima della UI. Review operativa dopo, su dashboard e broker, compresa attivazione della colonna dall'occhio.
+**Gate UX:** storyboard desktop/mobile v1 **APPROVED 2026-09-10**. La UI resta
+FROZEN fino al gate esecutivo; review operativa futura su Dashboard/Broker,
+inclusa persistence condivisa.
 
 ### U4 - Filtro utente Files
 
@@ -657,7 +688,7 @@ L'ordine ordina **rischio e ampiezza**, non inventa dipendenze. Il primo sprint 
 | **SP03 - Dati e operazioni asset** | A1, A2, B3 | Stessa famiglia asset/classificazione/CRUD e componenti DataEditor/ConfirmModal. Catalogo settori -> CSV -> delete affidabile e link. | Settori lungo tutta la pipeline; CSV strict nel draft; batch delete con persistenza/count veri e link contestuali. Nessuna riscrittura del monolite. |
 | **SP04 - Contratti dichiarativi** | S6 6.11, S6 6.2, P4-6 | Layer di cataloghi/schema/API e validazione, con un handoff client controllato. Assert strutturali -> flag FX -> matrice segnali. | Invarianti anche con `-O`; API FX non richiede campi derivati in input; sequenza provider preservata; matrice segnali equivalente. Alias S6 deduplicati. |
 | **SP05 - Runes nei tre target** | P4-5 | Componenti gia coperti da harness dedicati; prepara i controlli settings prima del tour. Preferences -> GlobalSettings -> BrokerSharing. | Tutti e tre migrati senza alterare dirty/save/reset/permessi e senza loop di caricamento. |
-| **SP06 - Redditi e rendimenti calendario** | U3, G3, G1c | Stesso dominio semantico: redditi per-quota/personali, finestre calendario, completezza e aggregazione temporale. Tre incrementi separati: YOC TTM -> rolling return a N giorni calendario nell'Asset -> serie/istogrammi DIVIDEND e INTEREST nel portfolio. Il backend puo avere sotto-lane distinte; il dettaglio Asset e `GrowthChart` non hanno lo stesso writer. | YOC per-quota su 365 giorni con stati motivati; N realmente calendario e non numero di osservazioni; incassi personali per tipo/data riconciliati ai KPI, inclusi non allocati; bucket a somma, nessun calcolo duplicato nel frontend. |
+| **SP06 - Redditi e rendimenti calendario** | U3, G3, G1c | Tre incrementi separati. U3 ha [PLAN/DESIGN APPROVED nel workstream H](../19_yieldOnCost/plan-phase00YieldOnCost.prompt.md), non implementato: gross income transaction-ledger/D-1 -> YOC. G3 e G1c restano separati. | U3: YOC asset+broker su 365 giorni, age pair, split/FX/WAC e stati typed; G3: N calendario; G1c: income series riconciliata. Nessun calcolo duplicato frontend. |
 | **SP07 - P&L assoluto e candele sintetiche** | G1a, G1b | Stessa serie `PortfolioHistory`, stesso `GrowthChart` e stesso owner portfolio/chart. Prima terza vista P&L cumulato gia disponibile; poi contratto OHLC sintetico backend; infine rendering e aggregazione. | P&L-only non ribasato sul periodo; candele esplicitamente ipotetiche, quantita storiche EOD, offset/FX/short/missing policy firmati, chiusura coerente col P&L, zero volume; composizione giornaliera prima di daily/weekly/monthly, zoom e viewport invariati. |
 | **SP08 - Pricing e confini del servizio** | P4-4, P4-1, S6 6.4 | Un'unica famiglia provider/manager; evita spostamenti concorrenti di asset_source. Yahoo locale -> mappa import/cache -> moduli -> fasi refresh nella destinazione scelta. | Parita provider e manager, ownership cache/thread/sessioni, sentinelle, chunk e risultati preservati. Nessun refactor FX/portfolio aggiuntivo. |
 | **SP09 - BRIM mirato** | B1 condizionale, P4-3 | Parsing broker e output di review. Risolvere gate eToro se disponibile -> caratterizzazione Credit Agricole -> estrazione locale -> eventuale secondo consumer. | Costi eToro riconciliati oppure blocco motivato mantenuto; output completo Credit Agricole equivalente. Nessuna falsa chiusura eToro per far risultare verde lo sprint. |
@@ -671,13 +702,14 @@ L'ordine ordina **rischio e ampiezza**, non inventa dipendenze. Il primo sprint 
 
 **Sequenza non significa blocco artificiale:** SP12-14 non dipendono da SP08/09/16. Possono essere anticipati se cambia la priorita di prodotto, senza fingere che il PAC richieda prima rifare FIFO o asset_source. Il presente ordine mantiene prima il lavoro circoscritto, poi catene L, infine il nuovo solver e le integrazioni XL.
 
-**Raffinamento 2026-09-10 — YOC:** la colonna e' S, ma il backend non e' una sola
-divisione. `PortfolioHolding` espone gia `wac_per_unit` e `ExposureTable` e' condivisa
-fra dashboard e broker; inoltre Yahoo/JustETF persistono `AssetEvent` DIVIDEND per quota.
-Restano da trattare finestra indipendente dal report, conversione FX, split intervenuti,
-quote-base bond, duplicati/manuali e uno stato di completezza che distingua `no_income`
-da `insufficient_history`. Stima raffinata: **M backend + S UI/docs**, non L/XL e non XS.
-E' il primo incremento raccomandato del nuovo SP06.
+**Raffinamento finale 2026-09-10 — YOC:** fonte transaction-ledger lorda,
+asset+broker e D-1; nessun provider/AssetEvent income o migration. L'age della
+coppia distingue `no_income=0` da `insufficient_history`; split/FX/WAC e replay
+restano fail-closed. `PortfolioHolding.wac_per_unit` e `ExposureTable` sono
+fondazioni esistenti. Stima confermata: **M backend + S UI/docs**. Stato
+✅ [PLAN/DESIGN APPROVED 2026-09-10](../19_yieldOnCost/plan-phase00YieldOnCost.prompt.md),
+non implementato; esecuzione attende helper/cache FX F integrata, baseline H
+riallineata e nuova autorizzazione.
 
 **Gia consegnati, fuori dagli sprint di codice:** U6, G2, B2, S6 6.3, S6 6.12. La pubblicazione di questa analisi riconcilia le rispettive voci. TRY003 resta congelato; S6 6.14 non genera uno sprint autonomo.
 
@@ -686,7 +718,7 @@ E' il primo incremento raccomandato del nuovo SP06.
 | Gate | Da chiudere prima di | Esito richiesto |
 |---|---|---|
 | G-ETORO | Modificare mapping/scarti B1 | Prova del movimento di cassa e valuta, soprattutto nonzero Withdraw Fee; decisione anti-doppio-conteggio. In assenza: task resta bloccato. |
-| G-YOC | Implementare il valore U3 | Fonte per-quota, copertura dei 365 giorni, split/bond/FX e stati distinti zero/no-income/unavailable. Definizione e policy del trattino gia scelte dall'utente. |
+| G-YOC | Implementare il valore U3 | Contratto e storyboard v1 [PLAN/DESIGN APPROVED 2026-09-10](../19_yieldOnCost/plan-phase00YieldOnCost.prompt.md). Gate residuo: shared FX identity F integrata, baseline H riallineata + autorizzazione esecutiva; poi replay D-1/split/FX e DTO fail-closed. |
 | G-ROLLING | Nuovo modo G3 | Calendario/reference lookup, lookback e limiti di staleness senza cambiare i segnali a osservazioni esistenti. |
 | G-CANDLES | Nuovo DTO/calcolo G1b | Ancora P&L/non-prezzo, conversione giornaliera, posizioni negative e politica OHLC mancante. Natura sintetica, EOD e aggregazione gia approvate. |
 | G-CACHE | Scegliere eviction/rilascio P4-7 | Misura reale, budget e ownership documentati; nessun LRU o numero massimo scelto per intuito. |
