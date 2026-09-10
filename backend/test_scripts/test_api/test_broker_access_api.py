@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.config import get_settings
 from backend.app.db.models import Broker, BrokerUserAccess, Transaction, User, UserRole
 from backend.app.db.session import get_async_engine
+from backend.app.services import user_service
 from backend.test_scripts.test_db_config import get_test_db_path, verify_test_database
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success
@@ -33,6 +34,7 @@ from backend.test_scripts.test_utils import print_section, print_success
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30
+SOLE_ADMIN_DELETE_DETAIL = "Cannot delete account: you are the only administrator"
 
 
 def unique_name(prefix: str) -> str:
@@ -692,6 +694,27 @@ async def self_leave(client: httpx.AsyncClient, broker_id: int) -> httpx.Respons
     return await client.delete(f"{API_BASE}/brokers/{broker_id}/access/me", timeout=TIMEOUT)
 
 
+async def cleanup_owned_user_account(client: httpx.AsyncClient, user_id: int, engine) -> Optional[str]:
+    """Delete a test-owned user through the API, with exact sole-admin fallback."""
+    try:
+        resp = await client.delete(f"{API_BASE}/auth/users/me", timeout=TIMEOUT)
+    except httpx.HTTPError as exc:
+        return f"User {user_id}: {exc}"
+
+    if resp.status_code == 400 and resp.json().get("detail") == SOLE_ADMIN_DELETE_DETAIL:
+        async with AsyncSession(engine) as session:
+            user = await session.get(User, user_id)
+            if user is None or not user.is_superuser:
+                return f"User {user_id}: unexpected sole-administrator response"
+            if not await user_service.delete_user(session, user_id):
+                return f"User {user_id}: service cleanup failed"
+        return None
+
+    if resp.status_code != 200:
+        return f"User {user_id}: {resp.status_code} {resp.text}"
+    return None
+
+
 class TestSelfServiceAccess:
     """F4 — self-service access: a user manages their OWN access row only.
 
@@ -1032,7 +1055,8 @@ class TestSelfServiceAccess:
 
             finally:
                 # Only IDs created here are eligible for cleanup. Use the API
-                # for writes; the physical verification sessions stay SELECT-only.
+                # for writes except for the sole-admin fallback below; the
+                # physical verification sessions above stay SELECT-only.
                 try:
                     async with AsyncSession(engine) as session:
                         brokers = await session.scalars(select(Broker.id).where(Broker.id.in_(owned_broker_ids)))
@@ -1049,13 +1073,10 @@ class TestSelfServiceAccess:
                         assert all(results[owned_id]["success"] for owned_id in surviving_broker_ids), resp.text
                 finally:
                     cleanup_errors = []
-                    for user_id, client in owned_users.items():
-                        try:
-                            resp = await client.delete(f"{API_BASE}/auth/users/me", timeout=TIMEOUT)
-                            if resp.status_code != 200:
-                                cleanup_errors.append(f"User {user_id}: {resp.status_code} {resp.text}")
-                        except httpx.HTTPError as exc:
-                            cleanup_errors.append(f"User {user_id}: {exc}")
+                    for user_id, client in reversed(owned_users.items()):
+                        cleanup_error = await cleanup_owned_user_account(client=client, user_id=user_id, engine=engine)
+                        if cleanup_error is not None:
+                            cleanup_errors.append(cleanup_error)
                     assert not cleanup_errors, f"Owned account cleanup failed: {cleanup_errors}"
 
             print_success("✓ Last owner left: broker, transaction and all three grants deleted; users and unrelated grants intact")

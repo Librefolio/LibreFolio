@@ -187,7 +187,10 @@
       "bondQuoteBaseHint": "Bonds are usually quoted per 100 nominal (e.g. BTP): check this value — it's typically 100.",
       "activeTooltip": "If active, the asset will be updated automatically by the scheduler and remain visible in selectors. Disable it to hide the asset when you no longer own it or do not want to keep downloading prices.",
       "quoteBaseMin": "Must be at least 1",
-      "quoteBaseInteger": "Whole numbers only"
+      "quoteBaseInteger": "Whole numbers only",
+      "currencyHelp": "Currency used to store this asset's prices.",
+      "currencyHelpLabel": "About the asset currency",
+      "nameRequired": "Enter an asset name to continue."
     },
     "provider": {
       "assignment": "Provider Assignment",
@@ -707,7 +710,12 @@
       "sectionArchive": "In the archive",
       "create": "Create a new asset",
       "createNamed": "Create “{name}”"
-    }
+    },
+    "manualAssets": {
+      "title": "Assets to create manually",
+      "body": "Link an existing asset or create it manually. Future imports will recognize its saved identifier when the match is unique."
+    },
+    "selectionChangedReview": "The final duplicate check changed the selection. Review it before importing."
   },
   "brokers": {
     "title": "Brokers",
@@ -1018,7 +1026,14 @@
     "deleteBlockedMessage": "Cannot delete: this broker has {count} transaction(s).",
     "forceCascadeDelete": "Delete broker and transactions",
     "goToTransactions": "Go to transactions",
-    "deleteFailed": "Could not delete broker"
+    "deleteFailed": "Could not delete broker",
+    "duplicateNameRecovery": "To resolve this, rename the existing broker or choose a different name for the broker you are adding.",
+    "duplicateNameOwn": "You already have a broker named \"{name}\".",
+    "duplicateNameOwned": "Broker \"{name}\" already exists (owned by \"{owner}\").",
+    "duplicateNameExists": "A broker named \"{name}\" already exists.",
+    "deleted": "Broker \"{name}\" deleted.",
+    "deletedWithTransactions": "Broker \"{name}\" and {count} transactions deleted.",
+    "created": "Broker \"{name}\" created."
   },
   "chart": {
     "tooltip": {
@@ -2056,7 +2071,12 @@
       "suggestLightbulb": "Show suggestion",
       "partnerInaccessible": "Partner on inaccessible broker",
       "eventTooltipAmount": "Amount",
-      "splitHint": "To delete only one side, first use Split to unlink the pair."
+      "splitHint": "To delete only one side, first use Split to unlink the pair.",
+      "workspaceRows": "Workspace rows: {rows}",
+      "dateSortHint": "Date is primary. Pairs stay together, ordered by earliest leg date, then latest leg date and stable row ID.",
+      "balanceGroupOutsideWorkspace": "No contributing rows from this workspace match this group. Check the broker's history.",
+      "workspaceRowHint": "Position in the current sort. a/b are paired sides, not transaction IDs.",
+      "issueRowsHidden": "The affected rows are hidden by the table filters."
     },
     "commit": {
       "serverError": "Save failed — server error"
@@ -2298,7 +2318,11 @@
     "size": "Size",
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out",
-    "previewAutofitHint": "Double-click a column header to fit its width"
+    "previewAutofitHint": "Double-click a column header to fit its width",
+    "uploader": "Uploaded by",
+    "uploaderHint": "User who uploaded the file.",
+    "noUploader": "Uploader not recorded",
+    "uploaderLookupFailed": "Uploader names could not be loaded. Files remain available with user IDs."
   },
   "donationPopup": {
     "title": "LibreFolio grows thanks to users like you!",
@@ -3090,13 +3114,19 @@
     "expandAll": "Expand all",
     "collapseAll": "Collapse all",
     "checkNow": "Check for updates",
-    "upToDate": "You are running the latest version.",
+    "upToDate": "You're up to date with the latest version!",
     "askAdmin": "A newer version exists. Ask an administrator to update:",
     "searchResults": "Matches:",
     "copyEmail": "Copy email",
     "copied": "Copied!",
     "askAdminTitle": "Update available — contact an administrator",
-    "emailCopied": "Email copied to clipboard"
+    "emailCopied": "Email copied to clipboard",
+    "detectedRemoteVersion": "Version detected online: {version}",
+    "checkFailed": "Unable to complete the update check. Try again.",
+    "noStableRelease": "No stable release was found on GitHub.",
+    "imagePending": "A newer stable release was detected, but its Docker image is not available yet.",
+    "imageCheckFailed": "A newer stable release was detected, but its Docker image could not be verified. Try again.",
+    "adminLookupFailed": "Update available, but the administrator list could not be loaded."
   },
   "providerErrors": {
     "NO_DATA": "No data available for this instrument on the provider.",
@@ -3109,5 +3139,42 @@
     "PARSE_ERROR": "The provider response could not be parsed.",
     "SCRAPE_ERROR": "The provider page could not be read.",
     "UNSUPPORTED_PAGE": "The provider found this instrument but its market page cannot be read yet. Please open an issue on GitHub (Librefolio/LibreFolio) reporting this ISIN so support can be added."
+  },
+  "support": {
+    "title": "Support LibreFolio",
+    "description": "Buy a coffee or help others discover the project.",
+    "shareDivider": "Or share",
+    "shareOn": "Share on",
+    "share": {
+      "titleLabel": "Suggested title",
+      "x": {
+        "message": "Hey! I'm using LibreFolio to track my investments and I'm loving it. Give it a try!\n#LibreFolio #OpenSource #SelfHosted #Investing #Privacy",
+        "hint": "The project link is added to the copy and the post. X opens in a new tab."
+      },
+      "reddit": {
+        "title": "Trying LibreFolio to track my portfolio on my own server",
+        "message": "I've been looking for a simpler way to follow my investments without handing all my portfolio data to an external service. Lately I've been trying LibreFolio, and I'm enjoying having everything in one place.\n\nIt's an open-source portfolio tracker you can install on your own server to organize your holdings and explore their performance while keeping your data under your control. If that sounds useful, take a look!",
+        "hint": "We open a text post with a separate title and body. If Reddit leaves the body empty, paste the text already copied."
+      },
+      "facebook": {
+        "message": "Lately I've been using LibreFolio to keep an eye on my investments, and I like having everything in one place without giving up control of my data.\n\nIf you're looking for an open-source portfolio tracker you can run on your own server, give it a look!",
+        "hint": "Facebook prepares only the link preview. After opening it, paste the copied text into the post's message field.",
+        "afterCopy": "Text and link copied. Paste the text into Facebook's post message."
+      },
+      "instagram": {
+        "message": "A little more order in my investments, without leaving my data elsewhere. I'm trying LibreFolio: an open-source portfolio tracker you can host on your own server.\n\n#LibreFolio #OpenSource #SelfHosted #Investing #Privacy",
+        "hint": "Instagram cannot prepare a post from this link. After opening it, choose Create (+), select a photo or video, then paste the copied caption.",
+        "afterCopy": "Caption and link copied. On Instagram: Create (+), choose your photo/video, then paste the caption."
+      },
+      "tiktok": {
+        "message": "My new sidekick for tracking my portfolio: LibreFolio. Open source, on my own server, with my data under my control. If you like tinkering, check it out!\n\n#LibreFolio #OpenSource #SelfHosted #PersonalFinance",
+        "hint": "We open TikTok's upload page; sign in if asked. Select your video, then paste the copied caption. No video or caption is uploaded automatically.",
+        "afterCopy": "Caption and link copied. On TikTok's upload page, select your video and paste the caption."
+      }
+    },
+    "shareMessageLabel": "Suggested message",
+    "clipboardUnavailable": "Could not copy to the clipboard. Allow clipboard access and try again.",
+    "copyAndGo": "Copy and go",
+    "navigationFailed": "Text and link copied, but the social site could not be opened. Allow pop-ups and try again."
   }
 }

@@ -23,7 +23,7 @@ import UpdateAvailableModal from './UpdateAvailableModal.svelte';
 import {updateAvailable} from '$lib/features/update-check/updateCheckStore.svelte';
 import {readCache} from '$lib/features/update-check/updateCheck';
 
-const RELEASE = {version: '9.9.9', url: 'https://example.com/release-9.9.9', name: 'Test release'};
+const RELEASE = {version: '1.2.4', tag: 'v1.2.4', url: 'https://example.com/release-1.2.4', name: 'Test release'};
 
 beforeAll(async () => {
     await setupI18n();
@@ -36,7 +36,7 @@ beforeEach(() => {
 
 describe('UpdateAvailableModal (F14)', () => {
     it('is absent with no release and renders when one is shown', async () => {
-        render(UpdateAvailableModal, {currentVersion: '1.0.0'});
+        render(UpdateAvailableModal, {currentVersion: '1.2.3'});
 
         expect(screen.queryByTestId('update-available-modal')).not.toBeInTheDocument();
 
@@ -44,6 +44,11 @@ describe('UpdateAvailableModal (F14)', () => {
 
         await waitFor(() => expect(screen.getByTestId('update-available-modal')).toBeInTheDocument());
         expect(screen.getByTestId('update-available-message')).toBeInTheDocument();
+        expect(screen.getByTestId('update-available-current')).toHaveAttribute('data-testid', 'update-available-current');
+        expect(screen.getByTestId('update-available-current')).toHaveTextContent('v1.2.3');
+        expect(screen.getByTestId('update-available-latest')).toHaveAttribute('data-version', RELEASE.version);
+        expect(screen.getByTestId('update-available-latest')).toHaveAttribute('data-tag', RELEASE.tag);
+        expect(screen.getByTestId('update-available-latest')).toHaveTextContent(RELEASE.tag);
         expect(screen.getByTestId('update-available-release')).toHaveAttribute('href', RELEASE.url);
         expect(screen.getByTestId('update-available-release')).toHaveAttribute('target', '_blank');
         // Locale-prefixed updating guide, deep-linked to the {#updating} anchor
@@ -52,7 +57,7 @@ describe('UpdateAvailableModal (F14)', () => {
     });
 
     it('"later" hides the modal without dismissing the version', async () => {
-        render(UpdateAvailableModal, {currentVersion: '1.0.0'});
+        render(UpdateAvailableModal, {currentVersion: '1.2.3'});
         updateAvailable.show(RELEASE);
         await waitFor(() => expect(screen.getByTestId('update-available-modal')).toBeInTheDocument());
 
@@ -63,13 +68,13 @@ describe('UpdateAvailableModal (F14)', () => {
     });
 
     it('"skip" persists the dismissal for the shown version', async () => {
-        render(UpdateAvailableModal, {currentVersion: '1.0.0'});
+        render(UpdateAvailableModal, {currentVersion: '1.2.3'});
         updateAvailable.show(RELEASE);
         await waitFor(() => expect(screen.getByTestId('update-available-modal')).toBeInTheDocument());
 
         await fireEvent.click(screen.getByTestId('update-available-skip'));
 
         await waitFor(() => expect(screen.queryByTestId('update-available-modal')).not.toBeInTheDocument());
-        expect(readCache()?.dismissedVersion).toBe('9.9.9');
+        expect(readCache()?.dismissedVersion).toBe('1.2.4');
     });
 });

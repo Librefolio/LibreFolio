@@ -34,7 +34,7 @@ const FIXTURES = [
     {path: `${SAMPLES}/fineco_btp_placement.csv`, label: 'placement'},
     {path: `${SAMPLES}/fineco_btp_market.csv`, label: 'market'},
 ];
-const API = 'http://localhost:6041/api/v1';
+const API = `http://localhost:${process.env.TEST_PORT || '6041'}/api/v1`;
 
 // ---------------------------------------------------------------------------
 // Setup

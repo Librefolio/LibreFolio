@@ -98,7 +98,10 @@ beforeEach(async () => {
     vi.mocked(zodiosApi.list_providers_api_v1_assets_provider_get).mockResolvedValue([]);
     vi.mocked(zodiosApi.list_currencies_api_v1_utilities_currencies_get).mockResolvedValue({items: [], language: 'en'});
     // A fake fetch for the embedded AssetSearchAutocomplete (never streamed here).
-    vi.stubGlobal('fetch', vi.fn<typeof fetch>(async () => new Response(null, {status: 503})));
+    vi.stubGlobal(
+        'fetch',
+        vi.fn<typeof fetch>(async () => new Response(null, {status: 503})),
+    );
 });
 
 afterEach(() => {
@@ -446,13 +449,9 @@ describe('AssetModal — opt-in creation success links', () => {
 
             await expectCreationClosed(oncreated, id);
             expect(zodiosApi.assign_providers_bulk_api_v1_assets_provider_post).toHaveBeenCalledTimes(1);
-            expect(zodiosApi.assign_providers_bulk_api_v1_assets_provider_post).toHaveBeenCalledWith([
-                {asset_id: id, provider_code: PROVIDER_CODE, identifier: PROVIDER_IDENTIFIER, identifier_type: 'TICKER', provider_params: null},
-            ]);
+            expect(zodiosApi.assign_providers_bulk_api_v1_assets_provider_post).toHaveBeenCalledWith([{asset_id: id, provider_code: PROVIDER_CODE, identifier: PROVIDER_IDENTIFIER, identifier_type: 'TICKER', provider_params: null}]);
             expect(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post).toHaveBeenCalledTimes(1);
-            expect(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post).toHaveBeenCalledWith([
-                {asset_id: id, date_range: {start: 'resume', end: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/)}},
-            ]);
+            expect(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post).toHaveBeenCalledWith([{asset_id: id, date_range: {start: 'resume', end: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/)}}]);
             expect(within(toastMarkup('success')).getByTestId('toast-asset-link')).toHaveAttribute('href', `/assets/${id}`);
             expectOnlySuccessToast();
             expect(goto).not.toHaveBeenCalled();

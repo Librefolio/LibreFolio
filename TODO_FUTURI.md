@@ -634,3 +634,88 @@ Aggiungere un calcolatore FIRE non solo da oggi al futuro, ma anche fissando una
   automatic or silent substitution is forbidden.
 - **Trigger to revisit**: repeated replay use demonstrates stable, auditable proxy
   mappings and the persistence UX has been designed.
+
+---
+
+## 💱 Settlement multicurrency ed esposizione — feedback 2026-09-08
+
+**Status**: FUTURO — progettazione separata, non autorizzata come hotfix del parser.
+**Origine**: nuovo feedback utente del 2026-09-08; correzioni urgenti import/asset/FX
+affidate alla corsia E in un worktree separato. Qui si tracciano soltanto i tre temi
+architetturali rinviati; le altre voci di questo file restano invariate.
+
+### F-MC-1 — Acquisti multicurrency con conversione del broker “on-the-fly”
+
+**Problema riportato:** alcuni broker convertono liquidità al momento dell'acquisto
+senza una riga FX separata nel ledger. Una rappresentazione incompleta o una valuta cash
+attribuita male può portare il consistency checker a rilevare cassa negativa.
+
+**Target:** rappresentare correttamente il settlement multicurrency e, se necessario,
+una policy esplicita per i broker interessati, senza perdere conservazione e audit dei saldi.
+
+**Prima del design:** distinguere valuta della quotazione dell'asset, valuta del cash
+effettivamente addebitato e valuta di regolamento. Verificare quanto il modello corrente
+già supporta e quanto invece manca nel report/parser; non assumere che ogni acquisto
+di un asset quotato in USD debba addebitare una cassa USD.
+
+**Gate e rischi:** scegliere fonti e struttura delle eventuali gambe di settlement,
+date, arrotondamenti e costi; mantenere quantità/importi originali e tracciabilità.
+Credito/margine o permesso di saldo negativo non sono sinonimi di conversione implicita.
+Niente disabilitazione del checker o deposito inventato per nascondere un deficit.
+
+**Superfici candidate:** schemi transazione, normalizzazione BRIM/core, paired-leg
+workflow, validazione saldi e wizard. Piano dedicato dopo esempi reali anonimizzati;
+nessuna nuova conversione dentro il parser in questa tornata.
+
+### F-MC-2 — Proposte FX automatiche opt-in per import Generic CSV
+
+**Idea:** offrire un toggle che proponga transazioni collegate di cambio valuta per
+deficit di liquidità spiegabili da conversioni non esplicitate nel file.
+
+**Confine:** generazione in uno strato di preparazione/core o nel workflow di review,
+DOPO la trascrizione del CSV. **BRIM resta un parser verbatim: niente FX o ricalcolo
+monetario nel plugin.** Le proposte entrano nel draft normale della bulk, non in un
+nuovo percorso di commit nascosto.
+
+**Dati:** riusare il motore FX e i tassi storici disponibili (BCE quando pertinente,
+con fonti/fallback già supportati), indicando data, provenance e staleness. Un tasso
+stimato non va presentato come quello realmente applicato dal broker.
+
+**Gate:** scelta esplicita di valuta/conto di finanziamento, fondi disponibili, date,
+fee e rounding; preview modificabile/rifiutabile prima del salvataggio. Mancanza dati
+o fondi resta un problema visibile. Reparse/riprova non deve duplicare gambe già presenti
+o approvate; conservare collegamento alla motivazione e alla riga originaria.
+
+**Dipendenza:** chiarire il modello F-MC-1 e la distinzione fra ricostruzione documentata
+e simulazione assistita. Nessuna generazione FX automatica autorizzata dai bug E1-E4.
+
+### F-MC-3 — Valuta base dell'asset ed esposizione valutaria economica
+
+**Richiesta:** conservare un'informazione di valuta nativa/originale distinta dalla
+valuta della quota del feed/provider e aggiungere una vista a torta della composizione
+valutaria del portafoglio.
+
+**Distinzioni da progettare:** valuta di quotazione, valuta base/denominazione dello
+strumento ed esposizione economica sottostante non sono la stessa cosa. Un ETF sul
+Giappone non implica automaticamente valuta base JPY né esposizione JPY pura; holdings,
+share class e coperture valutarie possono cambiare il risultato.
+
+**Target dati:** valutare una colonna per valuta base/originale SOLO con semantica e
+fonte chiare. Per l'esposizione effettiva può servire una distribuzione valutaria
+look-through, con data, copertura/hedging e quota Unknown, non un unico codice dedotto
+dalla geografia.
+
+**Target UI:** grafico Dashboard con metodo e denominatore dichiarati, cash e
+posizioni trattati coerentemente, dati incompleti visibili e nessun peso ricavato da
+una falsa precisione. Calcoli backend; prima ASCII e decisione del dev, poi review
+operativa su esempi sintetici multi-valuta e hedged.
+
+**Gate:** fonte e refresh dei metadati, aggregazione/normalizzazione, disponibilità,
+FX e criteri di esposizione. Eventuali colonne/tabelle nuove tramite migrazione Alembic
+incrementale generica. Nessuna modifica Asset o grafico di esposizione in questo hotfix.
+
+## Espandere i provider aggiungendo extraetf.com e mettendo anche la distribuzione valutaria, potrebbe sposarsi con l'idea della valuta originaria del fondo, trasformandola di fatto in una distribuzione anche lei.
+Possibilità di integrare queste informazioni nella UI e nei calcoli backend, mantenendo la tracciabilità delle fonti e la coerenza con le regole di esposizione valutaria già definite.
+
+## Come per la valuta di esposizione, studiare come fare per aggiungere anche la distribuzione delle aziende, ma capendo come garantire di non avere Apple e apple SRL che sembrano diverse, ma in realtà sono la stessa.
+Possibile approccio: normalizzazione dei nomi, utilizzo di identificatori univoci (es. ISIN per le aziende quotate), e gestione dei casi ambigui tramite regole di matching o intervento manuale.

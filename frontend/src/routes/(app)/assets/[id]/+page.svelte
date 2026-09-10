@@ -1218,7 +1218,7 @@
         try {
             const response = await zodiosApi.list_routes_api_v1_fx_providers_routes_get();
             if (!current()) return;
-            const items = response.items;
+            const items = response.items ?? [];
             const slugSet = new Set<string>();
             for (const i of items) {
                 const b = i.base < i.quote ? i.base : i.quote;

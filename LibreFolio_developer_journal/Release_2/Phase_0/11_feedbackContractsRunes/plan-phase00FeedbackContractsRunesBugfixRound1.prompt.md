@@ -1,9 +1,12 @@
 # Group B - Manual review corrections, Round 1
 
-**Date:** 2026-09-09. **Status:** checkpoint ready on `4a73f5f6`; runtime validation pending base integration.
+**Date:** 2026-09-09. **Status:** checkpoint `74bfd9cf`; semantic merge with
+`dev_release2`/`916f12bd` resolved and staged; combined automated acceptance
+complete, developer visual review pending.
 Previous: [B SP04-SP05 execution plan](plan-phase00FeedbackContractsRunes.prompt.md).
-Source: current B worktree (4a73f5f6 plus delivered B diff), not the main
-checkout or E's unmerged changes.
+Source: current B worktree with checkpoint `74bfd9cf` merged against
+`916f12bddf3eb9b8e834e4b9033eb52ce4bde25a`; the developer owns the pending
+merge commit.
 
 ## 1. Accepted work and fixed scope
 
@@ -212,20 +215,18 @@ does not authorize copying E's diff or granting a runtime lease.
 
 Integration policy from master06 section14: one complete package at a time
 returns to dev_release2, with Git history operations performed by the developer.
-E is the first candidate after its R4, not integrated yet. When that happens,
-B must first preserve a stable WIP checkpoint, then reconcile its small
-AssetModal/create/FX delta with E's loaders/payload semantics. Never replace
-whole files or apply global ours/theirs. Update baseline and evidence after
-integration; current results cannot certify that future combination.
+The developer checkpointed B at `74bfd9cf`, then started the merge from E/runtime
+integration commit `916f12bd`. The five textual overlaps were reconciled
+semantically without replacing whole files or applying global ours/theirs.
+Combined evidence is recorded below; old `4a73f5f6+B` results remain historical.
 
-## 5.1 Checkpoint before updating the base - 2026-09-10
+## 5.1 Historical checkpoint before updating the base - 2026-09-10
 
-The B package is frozen for the developer's manual checkpoint. Current HEAD is
-`4a73f5f63447e01b51993afb2e3c73e2c22a9a28`; the available local
-`dev_release2` integration commit is
-`916f12bddf3eb9b8e834e4b9033eb52ce4bde25a`.
-No merge, rebase, cherry-pick, commit, staging or history mutation was run by
-the agent.
+The developer created B checkpoint
+`74bfd9cf021af885abfb136c4e4f08b6a526f87a` from the package below, then
+started the merge from
+`916f12bddf3eb9b8e834e4b9033eb52ce4bde25a`. The inventory remains the
+pre-merge handoff record; the agent did not create either commit.
 
 Checkpoint inventory:
 
@@ -272,11 +273,67 @@ Additional semantic dependencies without textual overlap:
 - previous B00-B09 green results remain valid evidence for `4a73f5f6+B`, not
   for `916f12bd+B`.
 
-After the developer checkpoints and merges the new base, B uses only its
-isolated lane:
-`./dev.py test --test-port 6141 --data-dir /tmp/librefolio-r2-b ...`.
-No `--force`. Refresh baseline references, inspect the residual delta, then
-run only the newly combined relevant checks under a fresh runtime lease.
+Combined validation uses only the B lane:
+`PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test
+--test-port 6151 --data-dir /tmp/librefolio-r2-b ...`.
+No agent command uses `--force`; the runner may internally recreate its own
+isolated fixture database as designed.
+
+## 5.2 Semantic merge and combined validation - 2026-09-10
+
+The developer started `git merge dev_release2`; the agent resolved and staged
+the five reported conflicts without creating the merge commit:
+
+- `CHANGELOG.md`: retained one canonical undated `Unreleased` chapter and
+  integrated B entries into E's sections.
+- `06_piano_sprint.md` and `09_feedbackJobs/README.md`: retained E/runtime
+  history and section 14, then re-added only B checkpoint/plan status.
+- `AssetModal.svelte`: retained E's provider-probe, full payload,
+  classification and stacking work; re-added only B's default-off asset link.
+- `assets/+page.svelte`: retained E's async full edit loader/session/busy
+  guards; re-added only B's asset-global link presentation, with no third sync.
+- `_frontend_utility.py`: retained E/runtime registrations and filtering, and
+  contains all four B registrations.
+
+Static integration exposed three real seams and two stale test assumptions:
+the ignored generated client needed regeneration from the combined backend;
+the asset route list may omit `items`; and the generated FX conversion union is
+wider than the validated scalar wire shape. These are handled by local API
+regeneration, `items ?? []`, and an explicit scalar guard at the FX store
+boundary. Test fixtures now copy readonly request steps into mutable response
+steps. The bundled changelog test accepts exactly one undated `Unreleased`
+chapter while still requiring dates on released chapters. ACCESS-076 cleanup
+handles the exact test-owned bootstrap administrator on an otherwise empty
+lane without weakening the production sole-admin guard.
+
+Combined evidence so far:
+
+| Check | Result |
+|---|---|
+| Runtime isolation | 133 passed |
+| Test registration/reachability | 196 backend files, 77 E2E specs and 195 frontend unit files registered/reachable |
+| Backend Ruff | Passed |
+| Frontend Svelte check | 0 errors; 41 existing deprecation warnings in the two migrated Runes files |
+| Frontend core units | 1,916 passed |
+| Frontend component units | 1,722 passed |
+| FX route schemas | 34 passed |
+| Signal schemas | 471 passed |
+| AI Export schemas | 16 passed |
+| AI Export structural guards | 78 passed, including normal and optimized Python |
+| SignalService | 45 passed |
+| FX API unit / HTTP / sync / service | 29 / 21 / 10 / 5 passed |
+| Last-owner physical cascade | 1 passed; OWNER, EDITOR, VIEWER, transaction and control rows verified |
+| Settings Runes E2E | 2 passed |
+| Broker-sharing Runes E2E | 2 passed |
+| Explicit combined frontend build | Passed after API regeneration; 0 Svelte errors |
+| FX creation/early-detail E2E | 11 passed |
+
+The first combined FX creation E2E run passed all six new lifecycle,
+navigation and stale-response cases plus four legacy cases. Its last legacy
+route-section case exposed obsolete selector and seeded-route assumptions.
+The repaired test now owns its route discovery responses, targets the exact
+SearchSelect option test ID and waits for the options-close state. Its focused
+rerun passed 1/1 and the complete action then passed 11/11.
 
 Order: record acceptance -> agree scope/layout -> amber confirmation and
 mixed-role characterization -> shared link/format seam -> FX async lifecycle
@@ -324,8 +381,8 @@ these new R1 behaviors separately from the accepted B10 cases.
 | R1-02 Mixed-role cleanup proof | Regression complete; unrun after Round1 |
 | R1-03 FX nonblocking creation/sync | Source/tests complete, including early-detail stale-response guard; unrun after Round1 |
 | R1-04 Existing success links/flags | Source/tests/docs complete; unrun after Round1 |
-| R1-05 Targeted acceptance | Deferred until developer checkpoint + integration of `916f12bd`; old B results do not certify the combination |
-| R1-06 Developer review | Pending integrated validation and new combined build |
+| R1-05 Targeted acceptance | ✅ 2026-09-10 - combined static, unit, API and targeted E2E checks green on lane 6151 |
+| R1-06 Developer review | Pending real combined UI/viewport review; automation does not replace this gate |
 
 > **Note implementazione** (R1-01 authoring, 2026-09-09): GlobalSettingsTab now
 > opens the existing amber ConfirmModal instead of calling browser confirm.
@@ -382,3 +439,20 @@ these new R1 behaviors separately from the accepted B10 cases.
 > **Note implementazione** (review follow-up, 2026-09-09): the focused
 > read-only reviewer found no significant issue after those two fixes.
 > This is source-review evidence only, not a passing runtime result.
+
+> **⚠️ Fuori pista** (combined validation, 2026-09-10): the first isolated
+> ACCESS-076 run proved the full physical cascade but failed cleanup because a
+> fresh database promotes its first account to sole administrator. The test now
+> deletes ordinary owned accounts through the API and, only for the exact
+> sole-admin rejection, verifies and deletes that exact test-owned row through
+> `user_service`; the focused rerun is green and the production guard is intact.
+> The first FX E2E run similarly passed all new behavior but exposed a legacy
+> helper looking for nonexistent `role=option` elements and a fixed EUR/CAD pair
+> already present in seeded routes. The repaired case uses stable test IDs and
+> browser-local owned provider/route responses; focused and full reruns are green.
+
+> **Note implementazione** (R1-05, 2026-09-10): the combined frontend was
+> rebuilt explicitly after regenerating the ignored API client, so E2E evidence
+> does not rely on the pre-integration bundle. All automated gates listed above
+> are green. No merge commit was created by the agent; the developer still owns
+> the merge commit and final real-UI/viewport verdict.
