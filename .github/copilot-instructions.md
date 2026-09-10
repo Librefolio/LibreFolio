@@ -195,6 +195,10 @@ backend, alongside its neighbours.** So a test may never *assume* — it must *v
 no fixed positions, no global counts, no clock waits, no assertions on translated text.
 Separate worktrees may run concurrently only when each has a unique pair of
 `--test-port` and `--data-dir`; never share either resource between active lanes.
+App-managed worktrees reuse the main locked environment without installing a
+second one:
+`PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test ...`.
+Plain `pipenv run` from a worktree path may create an empty worktree-specific venv.
 
 **Agent**: for writing, rewriting or repairing any test (backend or frontend), invoke the
 `test-author` agent — the rules, the isolation classes, the runner registration and the

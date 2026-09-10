@@ -53,7 +53,7 @@ frontend/e2e/
 ./dev.py test all-frontend
 
 # Isolated worktree lane (global options stay before the category)
-./dev.py test --test-port 6142 --data-dir /tmp/librefolio-r2-c front-asset all
+./dev.py test --test-port 6152 --data-dir /tmp/librefolio-r2-c front-asset all
 
 # Options: --ui (Playwright UI), --headed (visible browser), --debug (debug mode)
 ./dev.py test front-transaction tx-broker-access --headed

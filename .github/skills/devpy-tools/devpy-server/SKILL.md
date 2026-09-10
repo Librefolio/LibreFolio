@@ -18,7 +18,7 @@ description: "Use this skill when the user needs to start/stop the development s
 ./dev.py server --host 0.0.0.0        # Override host
 ./dev.py server --port 9000           # Override port
 ./dev.py server --data-dir /tmp/lf-b  # Override this server's data root
-./dev.py server --test --port 6141 --data-dir /tmp/lf-test-b
+./dev.py server --test --port 6151 --data-dir /tmp/lf-test-b
 ```
 
 ### Independent worktree runtimes
@@ -26,8 +26,8 @@ description: "Use this skill when the user needs to start/stop the development s
 Use a unique **pair** for every concurrent worktree:
 
 ```bash
-./dev.py server --test --port 6141 --data-dir /tmp/librefolio-r2-b
-./dev.py test --test-port 6141 --data-dir /tmp/librefolio-r2-b api all
+./dev.py server --test --port 6151 --data-dir /tmp/librefolio-r2-b
+./dev.py test --test-port 6151 --data-dir /tmp/librefolio-r2-b api all
 ```
 
 The second command propagates the lane to pytest, the shared backend,

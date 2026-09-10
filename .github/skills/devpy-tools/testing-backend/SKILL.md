@@ -43,7 +43,7 @@ backend/test_scripts/
 ./dev.py test --verbose api all
 
 # Dedicated lane for a concurrent worktree
-./dev.py test --test-port 6141 --data-dir /tmp/librefolio-r2-b api all
+./dev.py test --test-port 6151 --data-dir /tmp/librefolio-r2-b api all
 
 # Filter external providers (useful when a service is down)
 ./dev.py test --exclude-providers yfinance external asset-providers 
@@ -71,6 +71,11 @@ both to every child process. Tests inside one lane still share that backend and
 database, so unique ids, cleanup and ownership rules remain unchanged. An
 occupied lane is rejected; the runner never reuses or force-kills an
 unidentified listener.
+
+In an app-managed worktree, select the shared locked environment with
+`PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py ...`.
+Plain `pipenv run` may create an empty venv because the worktree has a different
+filesystem path.
 
 ### Pattern for an API test
 
