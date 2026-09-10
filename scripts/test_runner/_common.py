@@ -18,7 +18,7 @@ from typing import Callable
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 
 # Setup test database configuration
-from backend.test_scripts.test_db_config import TEST_DATABASE_URL, TEST_DB_PATH, setup_test_database
+from backend.test_scripts.test_db_config import get_test_database_url
 
 # Import test utilities
 from backend.test_scripts.test_utils import Colors, print_error, print_header, print_info, print_section, print_success, print_warning
@@ -523,7 +523,7 @@ def _run_command_body(cmd: list[str], description: str, verbose: bool = False, t
             if any("backend.test_scripts" in c or c.endswith(".py") and "backend/test_scripts" in c for c in cmd):
                 env = os.environ.copy()
                 env["LIBREFOLIO_TEST_MODE"] = "1"
-                env["DATABASE_URL"] = TEST_DATABASE_URL
+                env["DATABASE_URL"] = get_test_database_url()
                 if use_coverage:
                     env["COVERAGE_RUN"] = "1"
                     # Let multiprocessing spawn children (spawn_worker.py) start

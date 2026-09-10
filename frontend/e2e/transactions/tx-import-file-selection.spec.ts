@@ -15,6 +15,7 @@ import {TEST_USER} from '../fixtures/test-users';
 import {uniqueSuffix} from '../fixtures/unique';
 
 const API = '/api/v1';
+const TEST_PORT = process.env.TEST_PORT || '6041';
 const UI_TIMEOUT = 10_000;
 type OwnedFile = {file_id: string; filename: string; target_broker_id: number};
 type Owned = {suffix: string; brokerIds: number[]; fileIds: Set<string>};
@@ -74,8 +75,8 @@ async function cleanupOwned(page: Page, owned: Owned): Promise<void> {
 const test = base.extend<{owned: Owned}>({
     owned: async ({page}, use, testInfo) => {
         const baseURL = testInfo.project.use.baseURL;
-        if (!baseURL || new URL(baseURL).port !== '6041' || !['localhost', '127.0.0.1'].includes(new URL(baseURL).hostname)) {
-            throw new Error('File-selection regressions require the shared local test backend on port 6041');
+        if (!baseURL || new URL(baseURL).port !== TEST_PORT || !['localhost', '127.0.0.1'].includes(new URL(baseURL).hostname)) {
+            throw new Error(`File-selection regressions require the shared local test backend on port ${TEST_PORT}`);
         }
         const origin = new URL(baseURL).origin;
         await page.route('**/*', async (route) => {

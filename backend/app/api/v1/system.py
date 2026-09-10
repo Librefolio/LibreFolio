@@ -5,17 +5,20 @@ Provides system information, version data, and runtime details.
 """
 
 import json
+import os
 import platform
 import re
+import secrets
 import sys
 from importlib.metadata import version as pkg_version
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import JSONResponse
 
 from backend.app.api.v1.auth import get_current_user
-from backend.app.config import PROJECT_ROOT
+from backend.app.config import PROJECT_ROOT, TEST_LANE_HEADER, is_test_mode
 from backend.app.db.models import User
 from backend.app.logging_config import get_logger
 from backend.app.schemas.system import ContainerImageStatusResponse, DependencyInfo, HealthCheckResponse, PluginDiagnosticsResponse, PluginDiscoveryFailureInfo, SystemInfoResponse
@@ -217,3 +220,25 @@ async def health_check():
         dict: Status message with "ok" status
     """
     return {"status": "ok"}
+
+
+@router.get(
+    "/test-lane-health",
+    response_model=HealthCheckResponse,
+    include_in_schema=False,
+)
+def test_lane_health(
+    token: Annotated[str, Query(min_length=16, max_length=128)],
+) -> JSONResponse:
+    """Confirm readiness only for the test process tree that owns this server."""
+    expected = os.environ.get("LIBREFOLIO_TEST_LANE_ID")
+    if (
+        not is_test_mode()
+        or not expected
+        or not secrets.compare_digest(token, expected)
+    ):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    return JSONResponse(
+        content={"status": "ok"},
+        headers={TEST_LANE_HEADER: expected},
+    )

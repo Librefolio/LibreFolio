@@ -11,6 +11,7 @@ Provides shared utilities for all CLI modules:
 """
 
 import os
+import secrets
 import socket
 import subprocess
 from pathlib import Path
@@ -78,12 +79,12 @@ def get_server_host() -> str:
 
 def get_server_port() -> int:
     """Get server port from environment variable (default: 6040)."""
-    return int(os.environ.get("PORT", "6040"))
+    return int(_configured_env_value("PORT") or "6040")
 
 
 def get_test_server_port() -> int:
     """Get test server port from environment variable (default: 6041)."""
-    return int(os.environ.get("TEST_PORT", "6041"))
+    return int(_configured_env_value("TEST_PORT") or "6041")
 
 
 # =============================================================================
@@ -93,6 +94,98 @@ def get_test_server_port() -> int:
 # Default data directories (relative to project root)
 DEFAULT_PROD_DATA_DIR = "backend/data/prod"
 DEFAULT_TEST_DATA_DIR = "backend/data/test"
+
+
+def _project_dotenv_values() -> dict[str, str]:
+    """Read repository .env values without making dotenv a bootstrap dependency."""
+    if os.environ.get("PIPENV_DONT_LOAD_ENV", "").lower() in {"1", "true", "yes", "on"}:
+        return {}
+    configured_path = os.environ.get("PIPENV_DOTENV_LOCATION")
+    env_file = Path(configured_path).expanduser() if configured_path else get_project_root() / ".env"
+    if not env_file.is_absolute():
+        env_file = get_project_root() / env_file
+    if not env_file.exists():
+        return {}
+    try:
+        from dotenv import dotenv_values  # noqa: PLC0415 — optional outside the managed environment
+
+        return {
+            key: str(value)
+            for key, value in dotenv_values(env_file).items()
+            if value is not None
+        }
+    except ImportError:
+        pass
+
+    values: dict[str, str] = {}
+    try:
+        lines = env_file.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return values
+
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        values[key.removeprefix("export ").strip()] = value.strip().strip('"').strip("'")
+    return values
+
+
+def _dotenv_value(name: str) -> str | None:
+    return _project_dotenv_values().get(name)
+
+
+def _configured_env_value(name: str) -> str | None:
+    """Return shell environment first, then the repository .env value."""
+    if name in os.environ:
+        return os.environ[name]
+    return _dotenv_value(name)
+
+
+def _load_project_dotenv() -> None:
+    """Hydrate the parent once so nested Pipenv commands need not reload .env."""
+    for name, value in _project_dotenv_values().items():
+        os.environ.setdefault(name, value)
+
+
+def resolve_data_dir(value: str | os.PathLike[str]) -> Path:
+    """Resolve a configured data directory relative to the project root."""
+    raw = os.fspath(value).strip()
+    if not raw:
+        raise ValueError("Data directory cannot be empty")
+    if "?" in raw or "#" in raw:
+        raise ValueError("Data directory cannot contain '?' or '#'")
+    path = Path(raw).expanduser()
+    if not path.is_absolute():
+        path = get_project_root() / path
+    path = path.resolve()
+    if "?" in str(path) or "#" in str(path):
+        raise ValueError("Resolved data directory cannot contain '?' or '#'")
+    return path
+
+
+def _validated_port(value: int | str, option: str) -> int:
+    if isinstance(value, bool):
+        raise ValueError(f"{option} must be an integer between 1 and 65535")
+    try:
+        port = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"{option} must be an integer between 1 and 65535"
+        ) from exc
+    if not 1 <= port <= 65535:
+        raise ValueError(f"{option} must be between 1 and 65535")
+    return port
+
+
+def ensure_test_lane_id() -> str:
+    """Return one opaque readiness identity shared by a test process tree."""
+    lane_id = os.environ.get("LIBREFOLIO_TEST_LANE_ID")
+    if not lane_id:
+        lane_id = secrets.token_hex(16)
+        os.environ["LIBREFOLIO_TEST_LANE_ID"] = lane_id
+    return lane_id
 
 
 def get_data_dir(test_mode: bool = False) -> Path:
@@ -106,17 +199,85 @@ def get_data_dir(test_mode: bool = False) -> Path:
         Path to data directory
     """
     if test_mode:
-        return get_project_root() / DEFAULT_TEST_DATA_DIR
+        configured = _configured_env_value("LIBREFOLIO_TEST_DATA_DIR")
+        candidate = resolve_data_dir(configured or DEFAULT_TEST_DATA_DIR)
+        from backend.app.config import validate_test_data_dir  # noqa: PLC0415 — keep bootstrap-only CLI commands stdlib-only
+
+        return validate_test_data_dir(
+            candidate,
+            production_data_dir=get_data_dir(test_mode=False),
+        )
 
     # Check for custom data dir in env (only for prod mode)
-    env_data_dir = os.environ.get("LIBREFOLIO_DATA_DIR")
+    env_data_dir = _configured_env_value("LIBREFOLIO_DATA_DIR")
     if env_data_dir:
-        path = Path(env_data_dir)
-        if not path.is_absolute():
-            path = get_project_root() / path
-        return path
+        return resolve_data_dir(env_data_dir)
 
-    return get_project_root() / DEFAULT_PROD_DATA_DIR
+    return resolve_data_dir(DEFAULT_PROD_DATA_DIR)
+
+
+def configure_test_runtime(
+    port: int | str | None = None,
+    data_dir: str | os.PathLike[str] | None = None,
+) -> tuple[int, Path]:
+    """Validate and apply one test lane's port and data directory.
+
+    Explicit values are exported for every child process. Omitted values keep
+    their effective value while normalizing it for every child process.
+    """
+    raw_port = port if port is not None else (_configured_env_value("TEST_PORT") or "6041")
+    resolved_port = _validated_port(raw_port, "--test-port")
+    production_port = _validated_port(
+        _configured_env_value("PORT") or "6040",
+        "PORT",
+    )
+    if resolved_port == production_port:
+        raise ValueError(
+            "Test port must not be the production server port"
+        )
+
+    raw_data_dir = data_dir
+    if raw_data_dir is None:
+        raw_data_dir = _configured_env_value("LIBREFOLIO_TEST_DATA_DIR") or DEFAULT_TEST_DATA_DIR
+    resolved_data_dir = resolve_data_dir(raw_data_dir)
+
+    from backend.app.config import validate_test_data_dir  # noqa: PLC0415 — keep bootstrap-only CLI commands stdlib-only
+
+    resolved_data_dir = validate_test_data_dir(
+        resolved_data_dir,
+        production_data_dir=get_data_dir(test_mode=False),
+    )
+
+    _load_project_dotenv()
+    os.environ["TEST_PORT"] = str(resolved_port)
+    os.environ["LIBREFOLIO_TEST_DATA_DIR"] = str(resolved_data_dir)
+    ensure_test_lane_id()
+    os.environ["LIBREFOLIO_TEST_MODE"] = "1"
+    os.environ["PIPENV_DONT_LOAD_ENV"] = "1"
+
+    return resolved_port, resolved_data_dir
+
+
+def configure_server_runtime(
+    port: int | str | None = None,
+    data_dir: str | os.PathLike[str] | None = None,
+) -> tuple[int, Path]:
+    """Normalize and export one production/debug server runtime."""
+    raw_port = port if port is not None else (_configured_env_value("PORT") or "6040")
+    resolved_port = _validated_port(raw_port, "--port")
+
+    configured_data_dir = data_dir
+    if configured_data_dir is None:
+        configured_data_dir = _configured_env_value("LIBREFOLIO_DATA_DIR") or DEFAULT_PROD_DATA_DIR
+    resolved_data_dir = resolve_data_dir(configured_data_dir)
+
+    _load_project_dotenv()
+    os.environ["PORT"] = str(resolved_port)
+    os.environ["LIBREFOLIO_DATA_DIR"] = str(resolved_data_dir)
+    os.environ.pop("LIBREFOLIO_TEST_LANE_ID", None)
+    os.environ["LIBREFOLIO_TEST_MODE"] = "0"
+    os.environ["PIPENV_DONT_LOAD_ENV"] = "1"
+    return resolved_port, resolved_data_dir
 
 
 def get_database_path(test_mode: bool = False) -> str:
@@ -427,4 +588,3 @@ def auto_build_frontend(debug: bool = False, build_func=None, force: bool = Fals
             capture_output=False
         )
         return result.returncode
-
