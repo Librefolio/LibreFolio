@@ -74,14 +74,27 @@
     }
 </script>
 
-<section class="mt-4 min-w-0 space-y-4" aria-label={$t('tools.diagnostics.title', {default: 'Tool diagnostics'})} data-testid="tool-diagnostics-panel" data-state={loading ? 'loading' : error ? 'error' : snapshot ? degraded ? 'degraded' : 'ready' : 'idle'} data-busy={loading ? 'true' : 'false'} aria-busy={loading}>
+<section
+    class="mt-4 min-w-0 space-y-4"
+    aria-label={$t('tools.diagnostics.title', {default: 'Tool diagnostics'})}
+    data-testid="tool-diagnostics-panel"
+    data-state={loading ? 'loading' : error ? 'error' : snapshot ? (degraded ? 'degraded' : 'ready') : 'idle'}
+    data-busy={loading ? 'true' : 'false'}
+    aria-busy={loading}
+>
     <header class="flex flex-wrap items-start justify-between gap-3">
         <p class="max-w-prose text-xs text-gray-500 dark:text-gray-400">
             {$t('tools.diagnostics.scopeDescription', {
                 default: 'This snapshot describes one responding API process, not the whole instance. Catalogue and diagnostics are separate reads. Reload to update the snapshot.',
             })}
         </p>
-        <button type="button" onclick={onRefresh} disabled={loading} class="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700 dark:focus-visible:outline-green-400" data-testid="tool-diagnostics-refresh">
+        <button
+            type="button"
+            onclick={onRefresh}
+            disabled={loading}
+            class="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700 dark:focus-visible:outline-green-400"
+            data-testid="tool-diagnostics-refresh"
+        >
             <RefreshCw size={15} aria-hidden="true" />
             {$t('common.refresh')}
         </button>

@@ -5,24 +5,9 @@
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
     import {notify} from '$lib/stores/app/notify.svelte';
     import {fetchToolCatalog, fetchToolDiagnostics} from './client';
-    import {
-        getToolAccountState,
-        observeToolAccount,
-        type ToolAccountState,
-        type ToolClientError,
-        type ToolDescriptor,
-        type ToolDiagnosticsResponse,
-        type VerifiedToolCatalog,
-    } from './contracts';
+    import {getToolAccountState, observeToolAccount, type ToolAccountState, type ToolClientError, type ToolDescriptor, type ToolDiagnosticsResponse, type VerifiedToolCatalog} from './contracts';
     import {resolveToolRenderer, type ToolRendererResolution} from './registry';
-    import {
-        toolDescription,
-        toolDocumentationPath,
-        toolErrorMessage,
-        toolName,
-        toolViewError,
-        unavailableMessage,
-    } from './presentation';
+    import {toolDescription, toolDocumentationPath, toolErrorMessage, toolName, toolViewError, unavailableMessage} from './presentation';
     import ToolDiagnosticsPanel from './ToolDiagnosticsPanel.svelte';
 
     let {active = false}: {active?: boolean} = $props();
@@ -52,12 +37,25 @@
     const busy = $derived(active && account.authenticated && (catalogPending || diagnosticsLoading));
     const incompatibleCount = $derived(entries.filter((entry) => entry.resolution.status === 'unavailable').length);
     const catalogErrorCopy = $derived(catalogError ? toolErrorMessage(catalogError) : null);
-    const diagnosticsDegraded = $derived(diagnosticsOpen && diagnostics !== null
-        && (diagnostics.failures.length > 0 || !diagnostics.pool.available || diagnostics.pool.degraded_lanes > 0));
-    const state = $derived(
-        !active ? 'inactive' : !account.authenticated ? 'anonymous' : busy ? 'loading' : catalogError ? 'error'
-            : (diagnosticsError && diagnosticsOpen) || diagnosticsDegraded ? 'degraded' : !catalog ? 'idle'
-                : catalog.unavailable.length || incompatibleCount ? 'degraded' : entries.length ? 'ready' : 'empty',
+    const diagnosticsDegraded = $derived(diagnosticsOpen && diagnostics !== null && (diagnostics.failures.length > 0 || !diagnostics.pool.available || diagnostics.pool.degraded_lanes > 0));
+    const viewState = $derived(
+        !active
+            ? 'inactive'
+            : !account.authenticated
+              ? 'anonymous'
+              : busy
+                ? 'loading'
+                : catalogError
+                  ? 'error'
+                  : (diagnosticsError && diagnosticsOpen) || diagnosticsDegraded
+                    ? 'degraded'
+                    : !catalog
+                      ? 'idle'
+                      : catalog.unavailable.length || incompatibleCount
+                        ? 'degraded'
+                        : entries.length
+                          ? 'ready'
+                          : 'empty',
     );
 
     function sessionCurrent(generation: number, request: AbortController): boolean {
@@ -109,10 +107,12 @@
         try {
             const loaded = await fetchToolCatalog({signal: request.signal});
             if (catalogSequence !== requestSequence || !sessionCurrent(generation, request)) return;
-            const nextEntries = loaded.items.map((descriptor): CatalogEntry => ({
-                descriptor,
-                resolution: resolveToolRenderer(loaded, descriptor.tool_code),
-            }));
+            const nextEntries = loaded.items.map(
+                (descriptor): CatalogEntry => ({
+                    descriptor,
+                    resolution: resolveToolRenderer(loaded, descriptor.tool_code),
+                }),
+            );
             catalog = loaded;
             entries = nextEntries;
             const incompatible = nextEntries.filter((entry) => entry.resolution.status === 'unavailable').length;
@@ -120,12 +120,14 @@
             notify({
                 name: degraded ? 'tool.about.catalog.degraded' : 'tool.about.catalog.loaded',
                 detail: {loaded: loaded.items.length, unavailable: loaded.unavailable.length, incompatible},
-                toast: degraded ? {
-                    variant: 'warning',
-                    message: $t('tools.catalog.degradedToast', {
-                        default: 'Tools loaded with unavailable entries or interfaces. See the catalogue for details.',
-                    }),
-                } : undefined,
+                toast: degraded
+                    ? {
+                          variant: 'warning',
+                          message: $t('tools.catalog.degradedToast', {
+                              default: 'Tools loaded with unavailable entries or interfaces. See the catalogue for details.',
+                          }),
+                      }
+                    : undefined,
             });
         } catch (caught) {
             if (catalogSequence !== requestSequence || !sessionCurrent(generation, request)) return;
@@ -170,12 +172,14 @@
                     degradedLanes: snapshot.pool.degraded_lanes,
                     poolAvailable: snapshot.pool.available,
                 },
-                toast: degraded ? {
-                    variant: 'warning',
-                    message: $t('tools.diagnostics.degraded', {
-                        default: 'Discovery failures or reduced execution capacity were reported. Other tools may remain available.',
-                    }),
-                } : undefined,
+                toast: degraded
+                    ? {
+                          variant: 'warning',
+                          message: $t('tools.diagnostics.degraded', {
+                              default: 'Discovery failures or reduced execution capacity were reported. Other tools may remain available.',
+                          }),
+                      }
+                    : undefined,
             });
         } catch (caught) {
             if (diagnosticsSequence !== requestSequence || !diagnosticsOpen || !sessionCurrent(generation, request)) return;
@@ -230,7 +234,7 @@
     });
 </script>
 
-<section class="mt-4 min-w-0 space-y-4 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800" data-testid="tool-about-panel" data-state={state} data-busy={busy ? 'true' : 'false'} aria-busy={busy}>
+<section class="mt-4 min-w-0 space-y-4 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800" data-testid="tool-about-panel" data-state={viewState} data-busy={busy ? 'true' : 'false'} aria-busy={busy}>
     <header class="flex flex-wrap items-start justify-between gap-3">
         <div class="min-w-0">
             <h4 class="flex items-center gap-2 font-semibold text-gray-900 dark:text-gray-100">
@@ -241,7 +245,13 @@
                 {$t('tools.about.readOnly', {default: 'Read-only catalogue and diagnostics. No calculations, probes or repairs are run.'})}
             </p>
         </div>
-        <button type="button" onclick={() => refreshCatalog()} disabled={!active || !account.authenticated || catalogPending} class="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700 dark:focus-visible:outline-green-400" data-testid="tool-about-refresh">
+        <button
+            type="button"
+            onclick={() => refreshCatalog()}
+            disabled={!active || !account.authenticated || catalogPending}
+            class="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700 dark:focus-visible:outline-green-400"
+            data-testid="tool-about-refresh"
+        >
             <RefreshCw size={15} aria-hidden="true" />
             {$t('common.refresh')}
         </button>
@@ -326,7 +336,10 @@
         {/if}
 
         <details open={diagnosticsOpen} ontoggle={toggleDiagnostics} class="border-t border-gray-200 pt-3 dark:border-gray-700" data-testid="tool-about-diagnostics">
-            <summary class="flex cursor-pointer list-none items-center justify-between gap-2 rounded text-sm font-medium text-gray-800 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-libre-green dark:text-gray-200 dark:focus-visible:outline-green-400" data-testid="tool-about-diagnostics-toggle">
+            <summary
+                class="flex cursor-pointer list-none items-center justify-between gap-2 rounded text-sm font-medium text-gray-800 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-libre-green dark:text-gray-200 dark:focus-visible:outline-green-400"
+                data-testid="tool-about-diagnostics-toggle"
+            >
                 {$t('tools.diagnostics.title', {default: 'Tool diagnostics'})}
                 <ChevronDown size={16} aria-hidden="true" class={`shrink-0 transition-transform ${diagnosticsOpen ? 'rotate-180' : ''}`} />
             </summary>

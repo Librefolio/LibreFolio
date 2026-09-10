@@ -50,9 +50,7 @@ export interface ToolRendererBinding {
 
 export type ToolRendererUnavailableCode = 'renderer_missing' | 'renderer_registration_invalid' | 'renderer_collision';
 
-export type ToolRendererResolution =
-    | {readonly status: 'ready'; readonly binding: ToolRendererBinding}
-    | {readonly status: 'unavailable'; readonly reason: ToolCompatibilityCode | ToolRendererUnavailableCode; readonly descriptor?: ToolDescriptor};
+export type ToolRendererResolution = {readonly status: 'ready'; readonly binding: ToolRendererBinding} | {readonly status: 'unavailable'; readonly reason: ToolCompatibilityCode | ToolRendererUnavailableCode; readonly descriptor?: ToolDescriptor};
 
 const registrationBrand: unique symbol = Symbol('compiled-tool-renderer');
 const bindRenderer: unique symbol = Symbol('bind-compiled-tool-renderer');
@@ -66,12 +64,7 @@ export interface CompiledToolRendererRegistration {
     readonly [bindRenderer]: (catalog: VerifiedToolCatalog) => ToolRendererBinding;
 }
 
-function mountToolComponent<C extends ToolCode, V extends ToolVersion<C>>(
-    component: Component<ToolHostPropsV1<C, V>>,
-    descriptor: CompatibleToolDescriptor<C, V>,
-    target: HTMLElement,
-    {context, cleanupFailureToast}: ToolRendererMountOptions = {},
-): ToolRendererMount {
+function mountToolComponent<C extends ToolCode, V extends ToolVersion<C>>(component: Component<ToolHostPropsV1<C, V>>, descriptor: CompatibleToolDescriptor<C, V>, target: HTMLElement, {context, cleanupFailureToast}: ToolRendererMountOptions = {}): ToolRendererMount {
     const accountGeneration = getToolDescriptorGeneration(descriptor);
     const root = target.ownerDocument.createElement('div');
     root.dataset.testid = 'tool-renderer-mount';
@@ -101,10 +94,12 @@ function mountToolComponent<C extends ToolCode, V extends ToolVersion<C>>(
     const destroy = (): Promise<void> => {
         if (cleanup) return cleanup;
         disposed = true;
-        cleanup = Promise.resolve().then(() => unmount(instance)).catch(() => {
-            reportCleanupFailure();
-            throw new ToolClientError('renderer', 'renderer_unmount_failed');
-        });
+        cleanup = Promise.resolve()
+            .then(() => unmount(instance))
+            .catch(() => {
+                reportCleanupFailure();
+                throw new ToolClientError('renderer', 'renderer_unmount_failed');
+            });
         unobserve();
         root.remove();
         return cleanup;
@@ -127,11 +122,7 @@ function mountToolComponent<C extends ToolCode, V extends ToolVersion<C>>(
 }
 
 /** Register source-owned literal imports only; catalogue metadata never becomes an import path. */
-export function defineToolRenderer<const C extends ToolCode, const V extends ToolVersion<C>>(
-    code: C,
-    version: V,
-    options: ToolRendererOptions<NoInfer<C>, NoInfer<V>>,
-): CompiledToolRendererRegistration {
+export function defineToolRenderer<const C extends ToolCode, const V extends ToolVersion<C>>(code: C, version: V, options: ToolRendererOptions<NoInfer<C>, NoInfer<V>>): CompiledToolRendererRegistration {
     const {componentKey, uiContractVersion, load} = options;
     const registration: CompiledToolRendererRegistration = {
         toolCode: code,
@@ -152,19 +143,22 @@ export function defineToolRenderer<const C extends ToolCode, const V extends Too
                 async load({signal}: {signal?: AbortSignal} = {}): Promise<LoadedToolRenderer> {
                     try {
                         getToolDescriptorGeneration(descriptor);
-                        return await runToolSessionTask(accountGeneration, async (requestSignal) => {
-                            const component = await load();
-                            getToolDescriptorGeneration(descriptor);
-                            if (requestSignal.aborted) throw new ToolClientError('aborted', 'waiting_stopped');
-                            if (typeof component.default !== 'function') {
-                                throw new ToolClientError('renderer', 'renderer_load_failed');
-                            }
-                            // The closure keeps the generated C/V props paired with their component.
-                            return {
-                                mount: (target: HTMLElement, options?: ToolRendererMountOptions) =>
-                                    mountToolComponent(component.default, descriptor, target, options),
-                            };
-                        }, signal);
+                        return await runToolSessionTask(
+                            accountGeneration,
+                            async (requestSignal) => {
+                                const component = await load();
+                                getToolDescriptorGeneration(descriptor);
+                                if (requestSignal.aborted) throw new ToolClientError('aborted', 'waiting_stopped');
+                                if (typeof component.default !== 'function') {
+                                    throw new ToolClientError('renderer', 'renderer_load_failed');
+                                }
+                                // The closure keeps the generated C/V props paired with their component.
+                                return {
+                                    mount: (target: HTMLElement, options?: ToolRendererMountOptions) => mountToolComponent(component.default, descriptor, target, options),
+                                };
+                            },
+                            signal,
+                        );
                     } catch (error) {
                         if (error instanceof ToolClientError) throw error;
                         throw new ToolClientError('renderer', 'renderer_load_failed');
@@ -191,10 +185,7 @@ export function createToolRendererRegistry(registrations: readonly CompiledToolR
         if (entries.has(key)) blocked.set(key, 'renderer_collision');
         else entries.set(key, registration);
         const contract = getCompiledToolContract(registration.toolCode, registration.contractVersion);
-        if (!contract
-            || registration[registrationBrand] !== true
-            || registration.componentKey !== contract.componentKey
-            || registration.uiContractVersion !== contract.uiContractVersion) {
+        if (!contract || registration[registrationBrand] !== true || registration.componentKey !== contract.componentKey || registration.uiContractVersion !== contract.uiContractVersion) {
             if (!blocked.has(key)) blocked.set(key, 'renderer_registration_invalid');
         }
         const claims = componentClaims.get(registration.componentKey) ?? [];

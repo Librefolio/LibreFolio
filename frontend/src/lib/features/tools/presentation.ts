@@ -43,9 +43,7 @@ export function toolDescription(descriptor: ToolDescriptor, translate: Translato
 
 export function toolDocumentationPath(descriptor: ToolDescriptor): string | null {
     const path = descriptor.documentation.path;
-    if (!/^[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*\/?$/.test(path)
-        || path.startsWith('mkdocs/')
-        || SUPPORTED_LOCALES.some((locale) => path.startsWith(`${locale}/`))) {
+    if (!/^[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*\/?$/.test(path) || path.startsWith('mkdocs/') || SUPPORTED_LOCALES.some((locale) => path.startsWith(`${locale}/`))) {
         return null;
     }
     return path;

@@ -1,7 +1,7 @@
 # Manifest checkpoint C — Piattaforma Tool
 
 **Data:** 2026-09-10
-**Stato:** merge `916f12bd` risolto · backend validato · commit merge manuale atteso
+**Stato:** base C completa · merge `bb0cdc33` · checkpoint finale staged · handoff D pronto
 **Piano:** [plan-phase00ToolPlatform.prompt.md](plan-phase00ToolPlatform.prompt.md)
 
 ## 1. Fotografia esatta del checkpoint `1656aff6` pre-merge
@@ -95,12 +95,12 @@ LibreFolio_developer_journal/Release_2/Phase_0/16_toolPlatform/manifest-integraz
 | Path / gruppo | Stato | Trattamento |
 |---------------|-------|-------------|
 | `.testLog/` | Presente e ignorato; contiene log DTO | Escludere dal commit |
-| `frontend/src/lib/api/tool-contracts.openapi.json` | Presente dopo export schema; ignorato dalla `.gitignore` locale | Non committare |
-| `frontend/src/lib/api/generated-tools.ts` | Assente; ignorato | Generare, non committare |
-| `frontend/src/lib/api/tool-contract-map.generated.ts` | Assente; ignorato | Generare, non committare |
+| `frontend/src/lib/api/tool-contracts.openapi.json` | Generato e ignorato · SHA256 `1e12276a590dbc92dfbf07ed541874b851e27379693d677a467babd9ef3e34c5` | Non committare |
+| `frontend/src/lib/api/generated-tools.ts` | Generato e ignorato · SHA256 `839aabc4a6a92b1dd510d09b4308b6e65a82ce3ae9b3121397b76b2d18e6882d` | Non committare |
+| `frontend/src/lib/api/tool-contract-map.generated.ts` | Generato e ignorato · SHA256 `49dc1bbf739581e3e5d1f865140e991d5f82cbb59790e16a65fbdd3d6106e60c` | Non committare |
 | `.tools-codegen.lock`, `*.pending`, `*.previous` | Assenti | Artefatti transitori, mai committare |
-| `tool-ui-i18n.json` | Artifact sessione esterno al repo | Input per writer i18n, non fonte runtime |
-| `tool-test-registration.patch` | Artifact sessione esterno al repo, ormai superato | Lifecycle registrato nel source; non committare |
+| `tool-ui-i18n.json` | Artifact sessione esterno al repo, applicato via CLI | Storico handoff, non fonte runtime |
+| `tool-test-registration.patch` | Artifact sessione esterno al repo, applicato | Storico handoff, non committare |
 | `/tmp/libreFolio_c_*` | Log/fingerprint fuori repo | Evidenza locale, non committare |
 | `__pycache__`, `.pyc`, cache tool | Ignorati | Escludere |
 
@@ -124,10 +124,12 @@ Le evidenze post-merge sostitutive sono nella sezione6.
 
 Overlap Git esatto: **3 file**.
 
-**Esito:** unico conflitto testuale in `_backend_utils.py`, risolto e staged.
+**Esito:** merge committato dal developer in
+`bb0cdc3348971d118cc12d7e5a4a5e7f6f7ccfe7`.
+Unico conflitto testuale in `_backend_utils.py`, risolto additivamente.
 `dev.py` e `cli_base.py` sono auto-merge verificati semanticamente.
-Indice merge finale:192 path staged, nessun `UU` e nessuna modifica unstaged.
-L'agente non ha creato il merge commit.
+Checkpoint post-merge finale:21 path staged, nessun `UU`, untracked o modifica
+unstaged. L'agente non crea il commit finale.
 
 ### `dev.py`
 
@@ -193,21 +195,32 @@ Gate mirati confermano `runtime-isolation`133/134, `container-registry`30 e
 | Tool wire |196 passed |
 | Tool registry |82 passed |
 | Tool lifecycle |63 passed |
+| Tool API |5 passed |
+| System API |24 passed |
 | Orphan/reachability | pass |
 | i18n |2668/2668 EN/IT/FR/ES |
 | MkDocs build / links | pass /12 |
 | OpenAPI listing |121 endpoint,3 Tool |
+| API sync completo / Tool-only | pass / pass;0 plugin base |
+| Svelte check |0 errori,0 warning |
+| Vitest client Tool |17 passed |
+| Frontend build | pass |
+| Prettier check | pass |
 
-### Gate bloccati
+### Ambiente ripristinato
 
-- `api sync --tools-only`: export Python riuscito; generatore Node fermo su
-  `ERR_MODULE_NOT_FOUND: openapi-zod-client` per `frontend/node_modules` assente.
-  Nessuna installazione o lettura del checkout principale.
-- `front check`, Vitest e build: stessa dipendenza ambiente.
-- `api system`: shared backend non ha raggiunto i test; il server esegue
-  l'auto-build frontend stale, bloccata dalle dipendenze Node assenti.
-  OpenAPI/import route sono stati verificati separatamente.
+- Un solo `npm --prefix frontend ci` dal lock:433 pacchetti, manifest/lock invariati.
+- Audit npm ha riportato20 advisory del lock corrente; nessun `npm audit fix`
+  o aggiornamento dipendenze eseguito.
+- Cache MathJax popolata localmente dallo stesso URL configurato tramite `curl`
+  con TLS di sistema verificato; file/manifest sono cache ignorata.
+
+### Limiti residui
+
 - Nessun plugin/renderer PAC reale integrato.
+- Output generati restano ignorati e non vanno committati.
+- Le pagine localizzate Tool esistono nel sito tramite fallback EN; traduzioni
+  MkDocs native IT/FR/ES richiedono una richiesta esplicita separata.
 
 > **⚠️ Detour ambiente**: un primo `pipenv run` senza custom venv ha creato il
 > virtualenv vuoto del worktree e si e' fermato prima dei test. L'ambiente e'
@@ -217,6 +230,7 @@ Due review read-only boundary completate. I residui trovati sono stati corretti
 su frame deadline, PGID, output aliases/shape, schema supportato, interi safe e
 snapshot client. Le regressioni backend sono verdi; client/AST resta da eseguire
 dopo la generazione dei codec.
+Il contratto D e' in [handoff-pac-D.md](handoff-pac-D.md).
 
 ## 7. Conflitti semantici ancora aperti
 
@@ -234,5 +248,16 @@ Run each item in an owned process tree and derive client codecs from
 Pydantic contracts so plugins remain reusable without ambient authority.
 ```
 
-Checkpoint C: `1656aff6937f08935a902726884fdda4102f46ec`.
-Il merge commit resta manuale; l'agente non lo crea.
+Checkpoint C iniziale: `1656aff6937f08935a902726884fdda4102f46ec`.
+Merge runtime: `bb0cdc3348971d118cc12d7e5a4a5e7f6f7ccfe7`.
+
+Checkpoint finale proposto:
+
+```text
+fix(tools): harden merged platform
+
+Validate process, schema, wire, and client boundaries after runtime
+isolation, then wire diagnostics, docs, translations, and API tests.
+```
+
+Il commit finale resta manuale; l'agente non lo crea.

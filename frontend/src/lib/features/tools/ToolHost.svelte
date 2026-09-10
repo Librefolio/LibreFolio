@@ -8,28 +8,9 @@
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import {notify} from '$lib/stores/app/notify.svelte';
     import {fetchToolCatalog} from './client';
-    import {
-        ToolClientError,
-        getToolAccountState,
-        observeToolAccount,
-        type ToolAccountState,
-        type ToolDescriptor,
-        type VerifiedToolCatalog,
-    } from './contracts';
-    import {
-        resolveToolRenderer,
-        type ToolRendererBinding,
-        type ToolRendererMount,
-    } from './registry';
-    import {
-        toolDescription,
-        toolDocumentationPath,
-        toolErrorMessage,
-        toolName,
-        toolViewError,
-        unavailableMessage,
-        type ToolUnavailableReason,
-    } from './presentation';
+    import {ToolClientError, getToolAccountState, observeToolAccount, type ToolAccountState, type ToolDescriptor, type VerifiedToolCatalog} from './contracts';
+    import {resolveToolRenderer, type ToolRendererBinding, type ToolRendererMount} from './registry';
+    import {toolDescription, toolDocumentationPath, toolErrorMessage, toolName, toolViewError, unavailableMessage, type ToolUnavailableReason} from './presentation';
 
     let {toolCode}: {toolCode: string} = $props();
 
@@ -63,8 +44,7 @@
 
     function current(requestSequence: number, code: string, generation: number, request: AbortController): boolean {
         const session = getToolAccountState();
-        return alive && requestSequence === sequence && code === toolCode && !request.signal.aborted
-            && session.authenticated && session.generation === generation;
+        return alive && requestSequence === sequence && code === toolCode && !request.signal.aborted && session.authenticated && session.generation === generation;
     }
 
     function reportFailure(failure: ToolClientError, name = 'tool.host.failed'): void {
@@ -175,12 +155,14 @@
             notify({
                 name: degraded ? 'tool.host.degraded' : 'tool.host.loaded',
                 detail: {unavailable: loadedCatalog.unavailable.length},
-                toast: degraded ? {
-                    variant: 'warning',
-                    message: $t('tools.catalog.degradedToast', {
-                        default: 'Tools loaded with unavailable entries or interfaces. See the catalogue for details.',
-                    }),
-                } : undefined,
+                toast: degraded
+                    ? {
+                          variant: 'warning',
+                          message: $t('tools.catalog.degradedToast', {
+                              default: 'Tools loaded with unavailable entries or interfaces. See the catalogue for details.',
+                          }),
+                      }
+                    : undefined,
             });
         } catch (caught) {
             if (!current(requestSequence, code, generation, request)) return;
@@ -212,7 +194,7 @@
 
     function retry(): void {
         if (busy) return;
-        void loadTool(toolCode, account.generation, errorStage === 'component' ? binding ?? undefined : undefined);
+        void loadTool(toolCode, account.generation, errorStage === 'component' ? (binding ?? undefined) : undefined);
     }
 
     onMount(() => {
@@ -246,11 +228,22 @@
 <section class="min-w-0 space-y-5" data-testid="tool-host" data-state={phase} data-busy={busy ? 'true' : 'false'} aria-busy={busy}>
     <header class="space-y-4">
         <div class="flex flex-wrap items-center justify-between gap-3">
-            <a href="/tools" aria-label={`${$t('common.back')} · ${$t('tools.title', {default: 'Tools'})}`} class="inline-flex items-center gap-2 rounded text-sm font-medium text-libre-green focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green dark:text-green-400 dark:focus-visible:outline-green-400" data-testid="tool-back">
+            <a
+                href="/tools"
+                aria-label={`${$t('common.back')} · ${$t('tools.title', {default: 'Tools'})}`}
+                class="inline-flex items-center gap-2 rounded text-sm font-medium text-libre-green focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green dark:text-green-400 dark:focus-visible:outline-green-400"
+                data-testid="tool-back"
+            >
                 <ArrowLeft size={18} aria-hidden="true" />
                 {$t('tools.title', {default: 'Tools'})}
             </a>
-            <button type="button" onclick={requestReload} disabled={busy || !account.authenticated} class="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 dark:focus-visible:outline-green-400" data-testid="tool-host-refresh">
+            <button
+                type="button"
+                onclick={requestReload}
+                disabled={busy || !account.authenticated}
+                class="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 dark:focus-visible:outline-green-400"
+                data-testid="tool-host-refresh"
+            >
                 <RefreshCw size={16} aria-hidden="true" />
                 {$t('common.refresh')}
             </button>
@@ -339,6 +332,8 @@
     cancelText={$t('common.continueEditing')}
     warning
     onConfirm={acceptReload}
-    onCancel={() => { confirmReload = false; }}
+    onCancel={() => {
+        confirmReload = false;
+    }}
     testId="tool-host-reload-confirm"
 />

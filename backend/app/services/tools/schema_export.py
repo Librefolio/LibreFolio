@@ -73,6 +73,28 @@ _TRANSPORT_ROOTS = (
 )
 
 
+def _expand_transport_json_value(document: dict[str, JsonValue]) -> None:
+    """Replace Pydantic's unconstrained `{}` marker with its actual JSON value domain."""
+    definitions = document.get("$defs")
+    if not isinstance(definitions, dict) or "JsonValue" not in definitions:
+        return
+    if definitions["JsonValue"] != {}:
+        raise ToolSchemaExportError("Unexpected Pydantic JsonValue schema")
+    definitions["JsonValue"] = {
+        "anyOf": [
+            {"type": "string"},
+            {"type": "number"},
+            {"type": "boolean"},
+            {"type": "null"},
+            {"type": "array", "items": {"$ref": "#/$defs/JsonValue"}},
+            {
+                "type": "object",
+                "additionalProperties": {"$ref": "#/$defs/JsonValue"},
+            },
+        ]
+    }
+
+
 def _component_reference(name: str) -> str:
     return f"#/components/schemas/{name}"
 
@@ -369,6 +391,7 @@ def build_tool_contracts_document(snapshot: ToolRegistrySnapshot) -> dict[str, J
     transport: dict[str, JsonValue] = {}
     for root in _TRANSPORT_ROOTS:
         document = generate_tool_schema(TypeAdapter(root.model), root.mode)
+        _expand_transport_json_value(document)
         reference = _add_schema_bundle(components, document, namespace=root.component_name, mode=root.mode)
         transport[root.role] = {
             "model": root.model.__name__,
