@@ -212,8 +212,13 @@ export function createToolRendererRegistry(registrations: readonly CompiledToolR
     });
 }
 
-// No financial UI has been delivered/approved yet. Add real literal imports here only after handoff.
-const compiledRendererRegistrations: readonly CompiledToolRendererRegistration[] = [];
+const compiledRendererRegistrations: readonly CompiledToolRendererRegistration[] = [
+    defineToolRenderer('pac_allocator', '1.0.0', {
+        componentKey: 'pac-allocator',
+        uiContractVersion: 1,
+        load: () => import('./pac-allocator/PacAllocatorTool.svelte'),
+    }),
+];
 const compiledRegistry = createToolRendererRegistry(compiledRendererRegistrations);
 
 export function resolveToolRenderer(catalog: VerifiedToolCatalog, toolCode: string): ToolRendererResolution {

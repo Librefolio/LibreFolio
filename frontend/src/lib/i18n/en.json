@@ -3301,6 +3301,91 @@
         "invalid_schema": "Schema cannot be published",
         "invalid_operation_policy": "Invalid operation policy"
       }
+    },
+    "pacAllocator": {
+      "name": "PAC allocator",
+      "description": "Analyze the exact initial allocation state.",
+      "pilotNotice": "Manual initial-state analysis only. No portfolio data is read, no orders are proposed, and nothing is saved.",
+      "scenario": "Scenario",
+      "reportCurrency": "Reporting currency",
+      "asOfDate": "As-of date (optional)",
+      "rows": {
+        "title": "Assets and custody contexts",
+        "description": "Each row is one asset in one context. Use the dedicated action to preserve instrument identity across contexts.",
+        "addAsset": "New local asset",
+        "empty": "Add at least one row. The backend will report missing rows until then.",
+        "rowNumber": "Row {number}",
+        "identity": "Local instrument identity",
+        "sameAsset": "Same asset, another context",
+        "initialQuantity": "Initial quantity",
+        "price": "Native price",
+        "quoteBasis": "Quote base quantity",
+        "target": "Target (%)",
+        "gridMode": "Purchase grid",
+        "whole": "Whole quantities",
+        "fractional": "Fractional quantities",
+        "quantityStep": "Purchase quantity step",
+        "quoteDate": "Quote date (optional)"
+      },
+      "cash": {
+        "existing": "Existing cash",
+        "notSupplied": "Not supplied",
+        "noneExisting": "Explicitly no existing cash",
+        "amount": "Amount",
+        "addCurrency": "Add currency",
+        "markNoneExisting": "No existing cash",
+        "markNotSupplied": "Mark as not supplied",
+        "contributions": "New contributions",
+        "noneContributions": "Explicitly no new contributions",
+        "markNoneContributions": "No new contributions"
+      },
+      "rates": {
+        "title": "Valuation exchange rates",
+        "description": "Reporting value of one native currency unit. These rates do not convert or move cash.",
+        "add": "Add rate",
+        "value": "Rate to reporting currency",
+        "date": "Rate date (optional)"
+      },
+      "revision": "Draft revision",
+      "noOrders": "Orders, feasibility, and optimization are not included in this pilot.",
+      "stopWaiting": "Stop waiting",
+      "analyzing": "Analyzing revision {revision}…",
+      "analyze": "Check initial state",
+      "stale": {
+        "pending": "Request revision {requestRevision} is still running, but the draft is now revision {draftRevision}. Its response will be ignored.",
+        "ignored": "Response for revision {revision} was ignored because the draft or account changed.",
+        "result": "This result belongs to an older draft revision."
+      },
+      "draftPreserved": "Your draft was preserved.",
+      "platformErrorTitle": "Analysis not completed",
+      "platformError": "The backend could not complete this analysis. Your draft was preserved.",
+      "state": {
+        "ready": "Ready · initial state is evaluable",
+        "needsInput": "Needs input",
+        "invalid": "Invalid scenario",
+        "unsupported": "Outside the P1 domain"
+      },
+      "resultMeaning": "This is an initial-state analysis. It does not certify trade feasibility, target attainment, or optimality.",
+      "exactView": "Exact",
+      "formattedView": "Formatted",
+      "totals": {
+        "invested": "Initial invested value",
+        "existingCash": "Existing cash",
+        "contributions": "New contributions",
+        "combinedCash": "Cash plus contributions",
+        "maxGap": "Maximum absolute gap (pp)",
+        "squaredGap": "Squared gap (pp²)"
+      },
+      "result": {
+        "row": "Row",
+        "value": "Reporting value",
+        "weight": "Current weight",
+        "target": "Target",
+        "gap": "Gap (pp)"
+      },
+      "cashPools": "Native cash pools",
+      "issues": "Backend findings",
+      "normalizedInput": "Normalized input and units"
     }
   }
 }
