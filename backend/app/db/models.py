@@ -25,6 +25,7 @@ from sqlalchemy import (
     Index,
     Integer,
     Numeric,
+    String,
     Text,
     UniqueConstraint,
     event,
@@ -295,6 +296,22 @@ class UserRole(StrEnum):
     VIEWER = "VIEWER"
 
 
+class OnboardingFlow(StrEnum):
+    """Independent onboarding flows tracked per user."""
+
+    WELCOME = "welcome"
+    INTRO_TOUR = "intro_tour"
+    IMPORT_GUIDE = "import_guide"
+
+
+class OnboardingStatus(StrEnum):
+    """Persisted lifecycle state for one onboarding flow."""
+
+    PENDING = "pending"
+    COMPLETED = "completed"
+    SKIPPED = "skipped"
+
+
 # ============================================================================
 # USER MODELS
 # ============================================================================
@@ -353,6 +370,43 @@ class UserSettings(SQLModel, table=True):
     def validate_base_currency(cls, v: Any) -> str:
         """Validate base_currency against ISO 4217."""
         return _validate_currency_field(v)
+
+
+class UserOnboardingProgress(SQLModel, table=True):
+    """Versioned onboarding state for one user and one independent flow."""
+
+    __tablename__ = "user_onboarding_progress"
+    __table_args__ = (
+        UniqueConstraint("user_id", "flow", name="uq_user_onboarding_progress_user_flow"),
+        CheckConstraint(
+            "status IN ('pending', 'completed', 'skipped')",
+            name="ck_user_onboarding_progress_status",
+        ),
+        CheckConstraint(
+            "version >= 1",
+            name="ck_user_onboarding_progress_version",
+        ),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(
+        sa_column=Column(
+            Integer,
+            ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+        )
+    )
+    flow: OnboardingFlow = Field(sa_column=Column(String(50), nullable=False))
+    status: OnboardingStatus = Field(
+        default=OnboardingStatus.PENDING,
+        sa_column=Column(String(20), nullable=False),
+    )
+    version: int = Field(default=1, ge=1, nullable=False)
+
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+    completed_at: Optional[datetime] = Field(default=None, nullable=True)
+    skipped_at: Optional[datetime] = Field(default=None, nullable=True)
 
 
 class GlobalSetting(SQLModel, table=True):

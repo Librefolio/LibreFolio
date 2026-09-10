@@ -21,6 +21,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "vitest",
             "run",
             "src/lib/stores/core/entityStore.test.ts",
+            "src/lib/stores/app/onboarding.test.ts",
             "src/lib/components/ui/select/optionFilter.test.ts",
             "src/lib/utils/__tests__/dateArrowStep.test.ts",
             "src/lib/utils/__tests__/dateOnly.test.ts",
@@ -91,6 +92,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/stores/reference/brokerStore.test.ts",
             "src/lib/features/changelog/changelog.test.ts",
             "src/lib/features/update-check/updateCheck.test.ts",
+            "src/lib/features/onboarding/guideAnchors.test.ts",
             "src/lib/components/support/supportLinks.test.ts",
             "src/lib/charts/signals/__tests__/registry.test.ts",
             "src/lib/charts/signals/__tests__/syntheticSignals.test.ts",
@@ -210,6 +212,42 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
         return True
 
     print_error(f"Svelte component unit tests - FAILED (exit code: {result.returncode})")
+    if not verbose:
+        print(result.stdout.decode() if result.stdout else "")
+        print(result.stderr.decode() if result.stderr else "")
+    return False
+
+
+def front_onboarding_component_unit(
+    verbose: bool = False,
+    ui: bool = False,
+    headed: bool = False,
+    debug: bool = False,
+    test_names: list = None,
+    coverage: bool = False,
+) -> bool:
+    """Run the isolated onboarding component tests without importing the full UI catalog."""
+    print(f"\n{Colors.BLUE}Running: Onboarding component unit tests{Colors.NC}")
+    if test_names:
+        print(f"{Colors.YELLOW}Filter: {' | '.join(test_names)}{Colors.NC}")
+    result = subprocess.run(
+        [
+            "npx",
+            "vitest",
+            "run",
+            "src/lib/components/onboarding/OnboardingCoachmark.test.ts",
+            "src/lib/components/onboarding/WelcomeForm.test.ts",
+            "src/lib/components/onboarding/WelcomePage.test.ts",
+            *(["-t", "|".join(test_names)] if test_names else []),
+        ],
+        cwd="frontend",
+        capture_output=not verbose,
+    )
+    if result.returncode == 0:
+        print_success("Onboarding component unit tests - PASSED")
+        return True
+
+    print_error(f"Onboarding component unit tests - FAILED (exit code: {result.returncode})")
     if not verbose:
         print(result.stdout.decode() if result.stdout else "")
         print(result.stderr.decode() if result.stderr else "")
@@ -347,6 +385,19 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "auth", front_auth, name="Auth Tests", desc="Login, register, logout, language change", prereq="Test users created", tests="auth.spec.ts")
     add_test(cat, "core-unit", front_utility_unit, test_names=True, name="Core Store Unit Tests", desc="entityStore, option filter, date/decimal parsing, request concurrency, HTML escaping for hand-built markup, safe accessors for widened API unions, import-wizard dedup/merge/compare pure logic, URL filter round trip for DataTable deep links, trySave error seam (FastAPI detail ladder, pydantic issue unpacking and formatting, toast/prefix/pre-handler), comparison-overlay loader (query shape, resolved series injected back into the signal, currency filter, refused conversions), sync toast variants for asset/FX results, chart helpers (echarts tooltip/animation/zoom-pan, geography map, price-chart & candlestick series/scale arithmetic, signal-problem formatting), chart-settings store (per-account hydration, scoped global vs per-item overrides, sanitising, debounced persistence, SSR silence), signal registry (palette assignment, config creation, round trip), local signal maths (linear/compound/sine benchmarks, measure ruler, asset & FX comparison overlays), signal catalog partition rules and backend renderer slice capping, transaction form-item resolution (paired orientation, hidden-broker sentinel, injected lookups) and image-crop presets/MIME/file-naming with the cropper contract faked, FX tooltip data assembly where a zero rate is the absence sentinel and not a quote, brokerStore.getOwnedBrokers roles×shares matrix (F2 dashboard scope), changelog chapter parsing incl. the canonical-Unreleased known gap, and the update-check probe (version compare, 24h throttle, dismissal memory, never-throw fetch)", tests="src/lib/stores/core/entityStore.test.ts")
     add_test(cat, "component-unit", front_component_unit, test_names=True, name="Svelte Component Unit Tests", desc="UI primitives mounted in jsdom: CalendarMonth grid/states, SingleDatePicker typed/calendar seam, TagInput keyboard model, SimpleSelect keyboard/unavailable states, FxProviderSelect route picker, DataTableColumnFilter filter modes, DataTable sorting/paging/selection/row actions, ScheduledInvestmentEditor schedule payload round trip, ImportWizardModal shell/open-gating/close, TransactionCompareModal outlier judgement and diff highlighting, TransactionFormModal draft seeding (create-mode empty quantity T1-b, duplicate-mode date preservation T3), CompactCashCell decimal typing through the parent prop loop (T1-a), SyncModalBase run/timeout/retry/session engine with SyncResultRow the one result line the three sync modals share, MeasurePanel measure add/preview/summary table, RegisterCard sign-up validation gate and server-error ladder, DonationPopupModal deliberate absence of every escape hatch, BrokerSharingPanel role ladder and last-owner guard, the five Setting* controls plus SettingsLayout bulk bar, PasswordChangeModal validation and post-success window, SchedulerConfigModal day/time/timezone payload, SchedulerLogModal run outcomes, PreferencesTab theme/language/currency save payloads and the un-rolled-back optimistic apply, ProfileTab edit lock with its discard dialog plus the per-field save/undo/revert ladder, AboutTab system facts, copy-for-issue payload and plugin discovery status, GlobalSettingsTab admin lock, value_type dispatch, 403 ladder and bulk save, FX card/table/editor rendering an absent rate as absent rather than as 0.0000, plus the beta-feedback batch: AssetTable txCount scope badge palette (F15), KpiSection absolute-vs-period ROI separation (F5), ExposureTable/ContributionTable analyzed-row tint (F9), DataTable header tooltips opening upward via a Tooltip probe (F10), the import wizard's report-issue banner (F11), ChangelogModal chapter rendering, clickable search hits and the header update-check delegation (F12/F14) and UpdateAvailableModal show/later/skip (F12/F14)", tests="src/lib/components/ui/date/CalendarMonth.test.ts")
+    add_test(
+        cat,
+        "onboarding-component-unit",
+        front_onboarding_component_unit,
+        test_names=True,
+        name="Onboarding Component Unit Tests",
+        desc="Isolated welcome form/page and semantic coachmark behavior",
+        tests=(
+            "src/lib/components/onboarding/OnboardingCoachmark.test.ts",
+            "src/lib/components/onboarding/WelcomeForm.test.ts",
+            "src/lib/components/onboarding/WelcomePage.test.ts",
+        ),
+    )
     add_test(cat, "settings", front_settings, name="Settings Tests", desc="User preferences, global settings (admin)", prereq="Login working", tests="settings.spec.ts")
     add_test(cat, "files", front_files, name="Files Tests", desc="Files page, tabs, URL filters", prereq="Login working", tests="files.spec.ts")
     add_test(cat, "files-uploader", front_files_uploader, name="Files Uploader Tests", desc="Uploader URL/list-grid/reload parity, unknown/null identities and avatar geometry with synthetic APIs", tests="files-uploader.spec.ts")

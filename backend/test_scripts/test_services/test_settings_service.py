@@ -335,6 +335,55 @@ class TestUpdateUserSettings:
                 "avatar_url": "https://example.com/update-avatar.png",
             }
 
+    @pytest.mark.asyncio
+    async def test_explicit_none_clears_avatar_but_omitted_field_preserves_it(self):
+        """`avatar_url=None` explicitly set clears it; an update that omits it leaves it untouched.
+
+        `UserSettingsUpdate.avatar_url` defaults to `None`, so a plain `is not None` check
+        cannot tell "clear the avatar" from "the caller didn't mention it". The fix reads
+        `model_fields_set` instead — this test locks that distinction in for both directions.
+        """
+        from sqlalchemy.ext.asyncio import AsyncSession  # noqa: PLC0415 — test setup — imports after db config
+
+        from backend.app.db.session import get_async_engine  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.schemas.settings import UserSettingsUpdate  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.services import user_service  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.services.settings_service import update_user_settings  # noqa: PLC0415 — test setup — imports after db config
+
+        unique_id = uuid.uuid4().hex[:8]
+        engine = get_async_engine()
+        async with AsyncSession(engine) as session:
+            user, error = await user_service.create_user(
+                session=session,
+                username=f"settingsavatar_{unique_id}",
+                email=f"settingsavatar_{unique_id}@example.com",
+                password="TestPass123!",
+            )
+            assert error is None
+            user_id = user.id
+
+            await update_user_settings(
+                user_id,
+                UserSettingsUpdate(avatar_url="https://example.com/original-avatar.png"),
+                session,
+            )
+
+            # An update that omits avatar_url entirely must preserve the existing value.
+            preserved = await update_user_settings(
+                user_id,
+                UserSettingsUpdate(theme="dark"),
+                session,
+            )
+            assert preserved.avatar_url == "https://example.com/original-avatar.png"
+
+            # An update that explicitly sets avatar_url=None must clear it.
+            cleared = await update_user_settings(
+                user_id,
+                UserSettingsUpdate(avatar_url=None),
+                session,
+            )
+            assert cleared.avatar_url is None
+
 
 class TestGetEffectiveBaseCurrency:
     """P0-1 (audit 08): get_effective_base_currency resolution chain.
@@ -537,3 +586,361 @@ class TestEngineBaseCurrencyBranch:
 
             assert result.target_currency == "CHF"
             assert result.daily_states == []
+
+
+# ============================================================================
+# ONBOARDING SERVICE (Workstream J foundation)
+# ============================================================================
+#
+# Tests for backend/app/services/onboarding_service.py: ensure/get/transition.
+# Appended here (rather than a new test file) because the backend test runner
+# registers test files individually by name — this file is already registered
+# as `services settings`, and its domain (per-user settings.py surface) is the
+# natural home for the sibling onboarding surface without a runner edit.
+
+
+class TestOnboardingServiceEnsure:
+    """Tests for ensure_onboarding_progress() (also exercised via get_onboarding_progress)."""
+
+    @staticmethod
+    async def _make_user(session, marker: str):
+        from backend.app.services import user_service  # noqa: PLC0415 — test setup — imports after db config
+
+        unique_id = uuid.uuid4().hex[:8]
+        user, error = await user_service.create_user(
+            session=session,
+            username=f"onb_{marker}_{unique_id}",
+            email=f"onb_{marker}_{unique_id}@example.com",
+            password="TestPassword123!",
+        )
+        assert error is None
+        return user.id  # capture now: the session expires ORM attrs on commit
+
+    @pytest.mark.asyncio
+    async def test_ensure_creates_all_missing_rows_pending_current_version(self):
+        """A brand-new user has no rows: ensure() must insert all three flows,
+        each pending at the server's current content version."""
+        from sqlalchemy.ext.asyncio import AsyncSession  # noqa: PLC0415
+
+        from backend.app.db.models import OnboardingStatus  # noqa: PLC0415
+        from backend.app.db.session import get_async_engine  # noqa: PLC0415
+        from backend.app.services.onboarding_service import (  # noqa: PLC0415
+            ONBOARDING_FLOW_VERSIONS,
+            ensure_onboarding_progress,
+        )
+
+        engine = get_async_engine()
+        async with AsyncSession(engine) as session:
+            user_id = await self._make_user(session, "ensure_all")
+
+            rows = await ensure_onboarding_progress(user_id, session)
+
+            assert set(rows) == set(ONBOARDING_FLOW_VERSIONS), "Every registered flow must get a row"
+            for flow, row in rows.items():
+                assert row.user_id == user_id
+                assert row.status == OnboardingStatus.PENDING
+                assert row.version == ONBOARDING_FLOW_VERSIONS[flow]
+                assert row.completed_at is None
+                assert row.skipped_at is None
+
+    @pytest.mark.asyncio
+    async def test_ensure_is_idempotent_on_second_call(self):
+        """Calling ensure() again must not insert duplicates or touch existing rows."""
+        from sqlalchemy.ext.asyncio import AsyncSession  # noqa: PLC0415
+
+        from backend.app.db.session import get_async_engine  # noqa: PLC0415
+        from backend.app.services.onboarding_service import (  # noqa: PLC0415
+            ONBOARDING_FLOW_VERSIONS,
+            ensure_onboarding_progress,
+        )
+
+        engine = get_async_engine()
+        async with AsyncSession(engine) as session:
+            user_id = await self._make_user(session, "ensure_idem")
+
+            first = await ensure_onboarding_progress(user_id, session)
+            first_snapshot = {flow: (row.id, row.status, row.version, row.updated_at) for flow, row in first.items()}
+
+            second = await ensure_onboarding_progress(user_id, session)
+            second_snapshot = {flow: (row.id, row.status, row.version, row.updated_at) for flow, row in second.items()}
+
+            assert second_snapshot == first_snapshot, "Second ensure() must be a true no-op: same ids, same values"
+            assert len(second) == len(ONBOARDING_FLOW_VERSIONS), "No duplicate rows must be created for this user"
+
+    @pytest.mark.asyncio
+    async def test_ensure_never_overwrites_completed_or_skipped_rows(self):
+        """A completed/skipped row must survive ensure(); only the still-pending
+        flow for this user may be touched."""
+        from sqlalchemy.ext.asyncio import AsyncSession  # noqa: PLC0415
+
+        from backend.app.db.models import OnboardingFlow, OnboardingStatus  # noqa: PLC0415
+        from backend.app.db.session import get_async_engine  # noqa: PLC0415
+        from backend.app.services.onboarding_service import (  # noqa: PLC0415
+            ONBOARDING_FLOW_VERSIONS,
+            ensure_onboarding_progress,
+            transition_onboarding_progress,
+        )
+        from backend.app.utils.datetime_utils import ensure_utc  # noqa: PLC0415
+
+        engine = get_async_engine()
+        async with AsyncSession(engine) as session:
+            user_id = await self._make_user(session, "ensure_terminal")
+            await ensure_onboarding_progress(user_id, session)
+
+            completed = await transition_onboarding_progress(
+                user_id=user_id,
+                flow=OnboardingFlow.WELCOME,
+                target_status=OnboardingStatus.COMPLETED,
+                expected_version=ONBOARDING_FLOW_VERSIONS[OnboardingFlow.WELCOME],
+                session=session,
+            )
+            skipped = await transition_onboarding_progress(
+                user_id=user_id,
+                flow=OnboardingFlow.INTRO_TOUR,
+                target_status=OnboardingStatus.SKIPPED,
+                expected_version=ONBOARDING_FLOW_VERSIONS[OnboardingFlow.INTRO_TOUR],
+                session=session,
+            )
+
+            rows = await ensure_onboarding_progress(user_id, session)
+
+            assert rows[OnboardingFlow.WELCOME].status == OnboardingStatus.COMPLETED
+            assert ensure_utc(rows[OnboardingFlow.WELCOME].completed_at) == ensure_utc(completed.completed_at)
+            assert rows[OnboardingFlow.INTRO_TOUR].status == OnboardingStatus.SKIPPED
+            assert ensure_utc(rows[OnboardingFlow.INTRO_TOUR].skipped_at) == ensure_utc(skipped.skipped_at)
+            assert rows[OnboardingFlow.IMPORT_GUIDE].status == OnboardingStatus.PENDING
+
+
+class TestOnboardingServiceTransition:
+    """Tests for transition_onboarding_progress() (complete/skip)."""
+
+    @staticmethod
+    async def _make_user(session, marker: str):
+        from backend.app.services import user_service  # noqa: PLC0415 — test setup — imports after db config
+
+        unique_id = uuid.uuid4().hex[:8]
+        user, error = await user_service.create_user(
+            session=session,
+            username=f"onb_{marker}_{unique_id}",
+            email=f"onb_{marker}_{unique_id}@example.com",
+            password="TestPassword123!",
+        )
+        assert error is None
+        return user.id  # capture now: the session expires ORM attrs on commit
+
+    @pytest.mark.asyncio
+    async def test_complete_sets_completed_at_and_clears_skipped_at(self):
+        from sqlalchemy.ext.asyncio import AsyncSession  # noqa: PLC0415
+
+        from backend.app.db.models import OnboardingFlow, OnboardingStatus  # noqa: PLC0415
+        from backend.app.db.session import get_async_engine  # noqa: PLC0415
+        from backend.app.services.onboarding_service import (  # noqa: PLC0415
+            ONBOARDING_FLOW_VERSIONS,
+            transition_onboarding_progress,
+        )
+
+        engine = get_async_engine()
+        async with AsyncSession(engine) as session:
+            user_id = await self._make_user(session, "complete")
+            flow = OnboardingFlow.WELCOME
+
+            item = await transition_onboarding_progress(
+                user_id=user_id,
+                flow=flow,
+                target_status=OnboardingStatus.COMPLETED,
+                expected_version=ONBOARDING_FLOW_VERSIONS[flow],
+                session=session,
+            )
+
+            assert item.status == OnboardingStatus.COMPLETED
+            assert item.completed_at is not None
+            assert item.skipped_at is None
+            assert item.update_available is False
+
+    @pytest.mark.asyncio
+    async def test_skip_sets_skipped_at_and_clears_completed_at(self):
+        from sqlalchemy.ext.asyncio import AsyncSession  # noqa: PLC0415
+
+        from backend.app.db.models import OnboardingFlow, OnboardingStatus  # noqa: PLC0415
+        from backend.app.db.session import get_async_engine  # noqa: PLC0415
+        from backend.app.services.onboarding_service import (  # noqa: PLC0415
+            ONBOARDING_FLOW_VERSIONS,
+            transition_onboarding_progress,
+        )
+
+        engine = get_async_engine()
+        async with AsyncSession(engine) as session:
+            user_id = await self._make_user(session, "skip")
+            flow = OnboardingFlow.IMPORT_GUIDE
+
+            item = await transition_onboarding_progress(
+                user_id=user_id,
+                flow=flow,
+                target_status=OnboardingStatus.SKIPPED,
+                expected_version=ONBOARDING_FLOW_VERSIONS[flow],
+                session=session,
+            )
+
+            assert item.status == OnboardingStatus.SKIPPED
+            assert item.skipped_at is not None
+            assert item.completed_at is None
+
+    @pytest.mark.asyncio
+    async def test_skipped_to_completed_explicit_transition_swaps_timestamps(self):
+        """Replay-like: an explicit complete() call after skip() is allowed and
+        must clear skipped_at while setting completed_at (never both set)."""
+        from sqlalchemy.ext.asyncio import AsyncSession  # noqa: PLC0415
+
+        from backend.app.db.models import OnboardingFlow, OnboardingStatus  # noqa: PLC0415
+        from backend.app.db.session import get_async_engine  # noqa: PLC0415
+        from backend.app.services.onboarding_service import (  # noqa: PLC0415
+            ONBOARDING_FLOW_VERSIONS,
+            transition_onboarding_progress,
+        )
+
+        engine = get_async_engine()
+        async with AsyncSession(engine) as session:
+            user_id = await self._make_user(session, "replay")
+            flow = OnboardingFlow.INTRO_TOUR
+            version = ONBOARDING_FLOW_VERSIONS[flow]
+
+            skipped = await transition_onboarding_progress(user_id=user_id, flow=flow, target_status=OnboardingStatus.SKIPPED, expected_version=version, session=session)
+            assert skipped.status == OnboardingStatus.SKIPPED
+            assert skipped.skipped_at is not None
+            assert skipped.completed_at is None
+
+            completed = await transition_onboarding_progress(user_id=user_id, flow=flow, target_status=OnboardingStatus.COMPLETED, expected_version=version, session=session)
+
+            assert completed.status == OnboardingStatus.COMPLETED
+            assert completed.completed_at is not None
+            assert completed.skipped_at is None, "Completing after a skip must clear skipped_at — never both set"
+
+    @pytest.mark.asyncio
+    async def test_repeat_same_transition_is_a_true_noop(self):
+        """Idempotent terminal operation: calling complete() again with the same
+        version must not change anything, including updated_at."""
+        from sqlalchemy.ext.asyncio import AsyncSession  # noqa: PLC0415
+
+        from backend.app.db.models import OnboardingFlow, OnboardingStatus  # noqa: PLC0415
+        from backend.app.db.session import get_async_engine  # noqa: PLC0415
+        from backend.app.services.onboarding_service import (  # noqa: PLC0415
+            ONBOARDING_FLOW_VERSIONS,
+            transition_onboarding_progress,
+        )
+
+        engine = get_async_engine()
+        async with AsyncSession(engine) as session:
+            user_id = await self._make_user(session, "repeat")
+            flow = OnboardingFlow.WELCOME
+            version = ONBOARDING_FLOW_VERSIONS[flow]
+
+            first = await transition_onboarding_progress(user_id=user_id, flow=flow, target_status=OnboardingStatus.COMPLETED, expected_version=version, session=session)
+            second = await transition_onboarding_progress(user_id=user_id, flow=flow, target_status=OnboardingStatus.COMPLETED, expected_version=version, session=session)
+
+            assert second.model_dump() == first.model_dump(), "Repeating the same terminal transition must be a byte-identical no-op"
+
+    @pytest.mark.asyncio
+    async def test_stale_expected_version_raises_mismatch_error(self):
+        from sqlalchemy.ext.asyncio import AsyncSession  # noqa: PLC0415
+
+        from backend.app.db.models import OnboardingFlow, OnboardingStatus  # noqa: PLC0415
+        from backend.app.db.session import get_async_engine  # noqa: PLC0415
+        from backend.app.services.onboarding_service import (  # noqa: PLC0415
+            ONBOARDING_FLOW_VERSIONS,
+            OnboardingVersionMismatchError,
+            transition_onboarding_progress,
+        )
+
+        engine = get_async_engine()
+        async with AsyncSession(engine) as session:
+            user_id = await self._make_user(session, "stale")
+            flow = OnboardingFlow.WELCOME
+            current_version = ONBOARDING_FLOW_VERSIONS[flow]
+            stale_version = current_version + 1
+
+            with pytest.raises(OnboardingVersionMismatchError) as exc_info:
+                await transition_onboarding_progress(
+                    user_id=user_id,
+                    flow=flow,
+                    target_status=OnboardingStatus.COMPLETED,
+                    expected_version=stale_version,
+                    session=session,
+                )
+
+            err = exc_info.value
+            assert err.flow == flow
+            assert err.expected_version == stale_version
+            assert err.current_version == current_version
+
+    @pytest.mark.asyncio
+    async def test_passive_update_available_does_not_reopen_terminal_status(self, monkeypatch):
+        """A bumped content version must surface as `update_available` only — it
+        must never reset a completed/skipped row back to pending on its own."""
+        from sqlalchemy.ext.asyncio import AsyncSession  # noqa: PLC0415
+
+        from backend.app.db.models import OnboardingFlow, OnboardingStatus  # noqa: PLC0415
+        from backend.app.db.session import get_async_engine  # noqa: PLC0415
+        from backend.app.services.onboarding_service import (  # noqa: PLC0415
+            ONBOARDING_FLOW_VERSIONS,
+            get_onboarding_progress,
+            transition_onboarding_progress,
+        )
+
+        engine = get_async_engine()
+        async with AsyncSession(engine) as session:
+            user_id = await self._make_user(session, "passive")
+            flow = OnboardingFlow.WELCOME
+            persisted_version = ONBOARDING_FLOW_VERSIONS[flow]
+
+            completed = await transition_onboarding_progress(
+                user_id=user_id,
+                flow=flow,
+                target_status=OnboardingStatus.COMPLETED,
+                expected_version=persisted_version,
+                session=session,
+            )
+            assert completed.update_available is False
+
+            monkeypatch.setitem(ONBOARDING_FLOW_VERSIONS, flow, persisted_version + 1)
+
+            response = await get_onboarding_progress(user_id, session)
+            item = next(i for i in response.flows if i.flow == flow)
+
+            assert item.status == OnboardingStatus.COMPLETED, "A version bump must never reopen a terminal flow"
+            assert item.version == persisted_version, "The persisted version must not be silently rewritten"
+            assert item.current_version == persisted_version + 1
+            assert item.update_available is True
+
+    @pytest.mark.asyncio
+    async def test_progress_is_isolated_per_user(self):
+        from sqlalchemy.ext.asyncio import AsyncSession  # noqa: PLC0415
+
+        from backend.app.db.models import OnboardingFlow, OnboardingStatus  # noqa: PLC0415
+        from backend.app.db.session import get_async_engine  # noqa: PLC0415
+        from backend.app.services.onboarding_service import (  # noqa: PLC0415
+            ONBOARDING_FLOW_VERSIONS,
+            get_onboarding_progress,
+            transition_onboarding_progress,
+        )
+
+        engine = get_async_engine()
+        async with AsyncSession(engine) as session:
+            user_a_id = await self._make_user(session, "iso_a")
+            user_b_id = await self._make_user(session, "iso_b")
+            flow = OnboardingFlow.WELCOME
+
+            await transition_onboarding_progress(
+                user_id=user_a_id,
+                flow=flow,
+                target_status=OnboardingStatus.COMPLETED,
+                expected_version=ONBOARDING_FLOW_VERSIONS[flow],
+                session=session,
+            )
+
+            response_b = await get_onboarding_progress(user_b_id, session)
+            item_b = next(i for i in response_b.flows if i.flow == flow)
+            assert item_b.status == OnboardingStatus.PENDING, "User B must be unaffected by user A's completion"
+
+            response_a = await get_onboarding_progress(user_a_id, session)
+            item_a = next(i for i in response_a.flows if i.flow == flow)
+            assert item_a.status == OnboardingStatus.COMPLETED

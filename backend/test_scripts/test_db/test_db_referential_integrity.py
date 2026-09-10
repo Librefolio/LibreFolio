@@ -18,6 +18,7 @@ Test Coverage:
 
 import sys
 import time
+import uuid
 from contextlib import suppress
 from datetime import date
 from decimal import Decimal
@@ -48,7 +49,7 @@ from backend.app.db import (
     Transaction,
     TransactionType,
 )
-from backend.app.db.models import FxRate
+from backend.app.db.models import FxRate, OnboardingFlow, OnboardingStatus, User, UserOnboardingProgress
 from backend.app.db.session import get_sync_engine
 
 # ============================================================================
@@ -342,6 +343,104 @@ def test_unique_constraint_price_history_asset_date():
         if asset_to_delete:
             session.delete(asset_to_delete)
         session.commit()
+
+
+# ============================================================================
+# ONBOARDING PROGRESS TESTS (Workstream J foundation)
+# ============================================================================
+
+
+def _make_onboarding_test_user(session, marker: str) -> int:
+    """Create a throwaway user owned entirely by one onboarding test. Returns its id."""
+    unique_name = f"onb_{marker}_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}"
+    user = User(
+        username=unique_name,
+        email=f"{unique_name}@test.example",
+        hashed_password="not-a-real-hash",
+    )
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user.id
+
+
+def test_user_deletion_cascades_onboarding_progress():
+    """Verify UserOnboardingProgress rows are CASCADE deleted when their User is deleted.
+
+    FK is declared `ondelete="CASCADE"` in UserOnboardingProgress.user_id — this is a
+    behavioural check (not just metadata inspection) that SQLite actually enforces it.
+    """
+    with Session(get_sync_engine()) as session:
+        user_id = _make_onboarding_test_user(session, "cascade")
+
+        session.add(
+            UserOnboardingProgress(
+                user_id=user_id,
+                flow=OnboardingFlow.WELCOME,
+                status=OnboardingStatus.PENDING,
+                version=1,
+            )
+        )
+        session.add(
+            UserOnboardingProgress(
+                user_id=user_id,
+                flow=OnboardingFlow.INTRO_TOUR,
+                status=OnboardingStatus.PENDING,
+                version=1,
+            )
+        )
+        session.commit()
+
+    with Session(get_sync_engine()) as session:
+        rows_before = session.exec(select(UserOnboardingProgress).where(UserOnboardingProgress.user_id == user_id)).all()
+        assert len(rows_before) == 2, "Setup: both onboarding rows for this fresh user must exist before delete"
+
+        user = session.get(User, user_id)
+        assert user is not None, "Setup: the throwaway user must still exist"
+        session.delete(user)
+        session.commit()
+
+    with Session(get_sync_engine()) as session:
+        rows_after = session.exec(select(UserOnboardingProgress).where(UserOnboardingProgress.user_id == user_id)).all()
+        assert rows_after == [], "UserOnboardingProgress rows must be CASCADE deleted with their user"
+
+        user_after = session.get(User, user_id)
+        assert user_after is None
+
+
+def test_unique_constraint_user_onboarding_progress_user_flow():
+    """Verify UNIQUE(user_id, flow) prevents a second row for the same user+flow."""
+    with Session(get_sync_engine()) as session:
+        user_id = _make_onboarding_test_user(session, "unique")
+
+        row1 = UserOnboardingProgress(
+            user_id=user_id,
+            flow=OnboardingFlow.IMPORT_GUIDE,
+            status=OnboardingStatus.PENDING,
+            version=1,
+        )
+        session.add(row1)
+        session.commit()
+
+        row2 = UserOnboardingProgress(
+            user_id=user_id,
+            flow=OnboardingFlow.IMPORT_GUIDE,
+            status=OnboardingStatus.PENDING,
+            version=1,
+        )
+        session.add(row2)
+
+        with pytest.raises(IntegrityError):
+            session.commit()
+
+        session.rollback()
+
+    # Cleanup: deleting the user CASCADE-deletes the surviving row too.
+    with Session(get_sync_engine()) as session:
+        user = session.get(User, user_id)
+        if user:
+            session.delete(user)
+            session.commit()
 
 
 # ============================================================================
