@@ -4,8 +4,8 @@
 **Execution baseline:** `4a73f5f63447e01b51993afb2e3c73e2c22a9a28`.
 **Integration baseline:** B checkpoint `74bfd9cf` plus `dev_release2`
 `916f12bddf3eb9b8e834e4b9033eb52ce4bde25a`.
-**Status:** B00-B09 delivered; B10 Round 1 integrated and combined automated
-acceptance complete; final developer visual review remains open.
+**Status:** ✅ B00-B10 complete; combined automated and developer UI acceptance
+completed 2026-09-10.
 
 Previous/master: [sprint plan, sections 4/10-12](../09_feedbackJobs/06_piano_sprint.md).
 Scope source: [structural backlog](../09_feedbackJobs/00_backlog_strutturale_P4.md).
@@ -57,7 +57,7 @@ Shared runtime/generated/runner ownership still requires coordinator slots.
 | B07 | GlobalSettingsTab Runes | ✅ 2026-09-08 - component and owned-data E2E parity |
 | B08 | BrokerSharingPanel Runes | ✅ 2026-09-08 - component, F3 and modal/Info E2E parity |
 | B09 | Shared registration, targeted runtime and FX documentation | ✅ 2026-09-08 - integrated automated acceptance and backend review |
-| B10 | Real UI walkthrough, developer feedback and corrections | Round 1 integrated and automated acceptance complete 2026-09-10; final visual review open |
+| B10 | Real UI walkthrough, developer feedback and corrections | ✅ 2026-09-10 - final UI/viewport review and requested compact-toast correction accepted |
 
 > **Note implementazione** (B00, 2026-09-07): approved contracts and evidence
 > consolidated here; source baseline and production-data prohibition retained.
@@ -518,6 +518,8 @@ record this feedback.
 | B-UI-008 | Creation feedback | Successful FX sync toast links the flagged pair to its detail; when no sync starts, show immediate creation success with the same link. Existing asset-global creation-success toasts should link the asset; contextual dropdown/import/transaction creation must not gain links or new notifications. |
 | B-UI-009 | FX toast formatting | Use existing formatting utilities; Japanese flag before JPY and Romanian flag after RON, as emoji, not ad-hoc unflagged text. |
 | B-UI-010 | B10-07 viewport/visual sweep | No explicit verdict supplied; do not infer acceptance. |
+| B-UI-011 | Combined review on merge `d9e8f6d3`, 2026-09-10 | B-UI-11 through 15 accepted; direct/chain FX creation judged excellent, with one request to keep the linked pair, download/change counters and provider badges on the same detail row; B-UI-18 through 20 accepted; viewport review positive; B-UI-21 needs a simpler operational walkthrough. |
+| B-UI-012 | Final correction retest, 2026-09-10 | Compact linked FX toast reported correct. Asset currency-change confirmation appears only after Save; Cancel restores the original currency. Developer verdict: success. |
 
 > **Note implementazione** (feedback intake, 2026-09-09): accepted preference
 > and sharing behavior recorded in CHANGELOG as compatibility, without claiming
@@ -525,6 +527,20 @@ record this feedback.
 > its conditional behavior was confirmed by the developer. The runtime is not
 > needed during analysis, so the coordinator was told it may reassign its
 > review server/queue. No coordinator-owned process was stopped by this agent.
+
+> **Note implementazione** (combined UI feedback, 2026-09-10): all reviewed
+> Contracts/Runes behavior is accepted except one presentation-only FX toast
+> refinement. The linked creation-sync variant removes the explicit newline
+> between the pair and its counters/provider badges; default sync and MANUAL
+> layouts remain unchanged. B-UI-21 is not marked accepted until the developer
+> performs the simplified preservation/overlay walkthrough.
+
+> **Note implementazione** (final UI acceptance, 2026-09-10): the developer
+> accepted the compact direct/chain FX completion row and confirmed the
+> AssetModal nested currency warning/save/cancel behavior. B10 is closed.
+> The review server was stopped; no automated gate was repeated beyond the
+> focused toast unit, Svelte check and combined frontend build required by the
+> requested correction.
 
 Follow-up:
 [Round 1 - manual review corrections](plan-phase00FeedbackContractsRunesBugfixRound1.prompt.md).

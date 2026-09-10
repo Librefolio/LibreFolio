@@ -107,14 +107,15 @@ export function buildFxSyncToast(result: any, slug: string, tr: (key: string, op
     const changed = result.points_changed ?? 0;
     const providerHtml = fxProviderChainHtml(result.provider_used);
     const dataLine = `${fetched}↓ ${changed}Δ`;
+    const pairAndData = `${pairLabel}${pairOptions.linkToDetail ? ' ' : '\n'}${dataLine}${providerHtml ? ' ' + providerHtml : ''}`;
 
     if (result.status === 'ok') {
         return {
             variant: 'success',
-            message: `${tr('fx.sync.synced')}:\n${pairLabel}\n${dataLine}${providerHtml ? ' ' + providerHtml : ''}`,
+            message: `${tr('fx.sync.synced')}:\n${pairAndData}`,
         };
     } else if (result.status === 'partial') {
-        let msg = `${tr('prices.sync.partialSuffix')}:\n${pairLabel}\n${dataLine}${providerHtml ? ' ' + providerHtml : ''}`;
+        let msg = `${tr('prices.sync.partialSuffix')}:\n${pairAndData}`;
         if (formatDetail) msg += formatDetail(result, tr);
         return {variant: 'warning', message: msg};
     } else if (result.status === 'skipped') {
