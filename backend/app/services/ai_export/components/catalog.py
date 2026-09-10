@@ -28,7 +28,7 @@ from backend.app.services.ai_export.components.portfolio_broker_registry import 
 from backend.app.services.ai_export.components.portfolio_broker_registry import (
     validate_replacements_against_placeholders as validate_portfolio_broker_replacements,
 )
-from backend.app.services.ai_export.components.registry import ComponentRegistry
+from backend.app.services.ai_export.components.registry import ComponentRegistry, ComponentRegistryError
 from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.types import Domain, PeriodBehavior, TemporalAggregatorSpec
 from backend.app.services.ai_export.dependencies import BuildContext
@@ -216,9 +216,12 @@ def _build_integrated_components() -> tuple[ComponentSpec, ...]:
 
 ALL_COMPONENTS: tuple[ComponentSpec, ...] = _build_integrated_components()
 
-assert len(ALL_FOUNDATION_COMPONENTS) == 67
-assert len(ALL_REAL_COMPONENTS) == 67
-assert len(ALL_COMPONENTS) == 67
+if len(ALL_FOUNDATION_COMPONENTS) != 67:
+    raise ComponentRegistryError(f"ALL_FOUNDATION_COMPONENTS must contain exactly 67 components, got {len(ALL_FOUNDATION_COMPONENTS)}")
+if len(ALL_REAL_COMPONENTS) != 67:
+    raise ComponentRegistryError(f"ALL_REAL_COMPONENTS must contain exactly 67 components, got {len(ALL_REAL_COMPONENTS)}")
+if len(ALL_COMPONENTS) != 67:
+    raise ComponentRegistryError(f"ALL_COMPONENTS must contain exactly 67 components, got {len(ALL_COMPONENTS)}")
 
 
 def build_component_registry() -> ComponentRegistry:

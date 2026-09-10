@@ -57,6 +57,17 @@ solver completo, copie portfolio o migrazione Broker fractional. Le implementazi
 i relativi piani di avanzamento restano nei worktree owner fino a integrazione esplicita:
 questa nota non importa codice nel checkout principale.
 
+**Checkpoint Gruppo B, 2026-09-10:** il pacchetto Contracts/Runes e il Round 1
+di correzione feedback sono versionati nel checkpoint `74bfd9cf`; i cinque
+conflitti con la baseline locale `916f12bd` sono risolti e staged. Registro,
+contratti, prove storiche e validazione combinata vivono nel
+[piano esecutivo](../11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md)
+e nel [Round 1](../11_feedbackContractsRunes/plan-phase00FeedbackContractsRunesBugfixRound1.prompt.md).
+La nuova combinazione ha completato i gate automatici mirati nella lane B
+isolata `6151` + `/tmp/librefolio-r2-b`; restano il commit manuale del merge e
+la review UI/viewport del developer. Nessuna vecchia ownership runtime B viene
+ripristinata da questo raccordo.
+
 **Revisione 2026-09-07, confronto successivo:** YOC a 365 giorni e policy del trattino, documentazione/tooltip, estensione esplicita del CSV condiviso, catalogo Tool completo senza endpoint schema/prefill dedicati, mappa di parallelismo e gate UX prima/dopo realizzazione.
 
 **Indice:** [README](README.md). Fonti operative: [00](00_backlog_strutturale_P4.md), [01](01_ux_dashboard.md), [02](02_grafici_avanzati.md), [03](03_asset_dati_classificazione.md), [04](04_brim_import.md), [05](05_pac_allocation_tool.md).
@@ -186,9 +197,9 @@ I 35 siti C901 BRIM attuali sono 34 nei broker e uno in `_brim_io`, non 35 parse
 
 ### P4-5 - Migrazione Runes mirata
 
-**Stato:** aperto, inventario aggiornato. **Taglia:** M.
+**Stato:** preso in carico da B/SP05; codice completato, review dev pendente nel [piano dedicato](../11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md). **Taglia:** M.
 
-| Target reale | Legacy corrente | Punti sensibili |
+| Target reale | Legacy alla baseline | Punti sensibili |
 |---|---:|---|
 | `F/lib/components/brokers/BrokerSharingPanel.svelte` | 24 `$:` | Props `43-50`, derivati `112-146`, reload `202`, save e `await tick()` `392-402`. |
 | `F/lib/components/settings/tabs/PreferencesTab.svelte` | 9 `$:` | Dirty/default `114-125`, save/undo/reset `155-271`. |
@@ -200,7 +211,7 @@ I 35 siti C901 BRIM attuali sono 34 nei broker e uno in `_brim_io`, non 35 parse
 
 ### P4-6 - Matrice dichiarativa `SignalResult`
 
-**Stato:** aperto. **Taglia:** M. `B/schemas/signals.py:1050-1115`, C901 32; stati a `194-199`.
+**Stato:** preso in carico da B/SP04 nel [piano dedicato](../11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md). **Taglia:** M. Baseline: `B/schemas/signals.py:1050-1115`, C901 32; stati a `194-199`.
 
 **Superfici:** validatore, `SignalAvailability`, costruzione risultati in `signal_service.py:791-1127`, test schema/servizio. Consumatori Asset, FX, risk e AI Export.
 
@@ -634,6 +645,8 @@ L'endpoint non avvia calcoli, probe, download prezzi, reset o riparazioni; non r
 
 ## 10. Piano a sprint - dal circoscritto al complesso
 
+**Avvio autorizzato dal dev:** SP04-SP05, Gruppo B r2. Il [piano esecutivo](../11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md) prende in carico P4-5, P4-6/S6 6.7, S6 6.2 e S6 6.11; non li dichiara gia completati. A/C/D restano Plan-only. Unica coda runtime e generazione assegnata all'integratore B; nessuna bonifica DB o migrazione nel suo scope.
+
 L'ordine ordina **rischio e ampiezza**, non inventa dipendenze. Il primo sprint e deliberatamente minimo: un solo flusso asset, nessuna API nuova, nessuna migrazione, nessuna libreria. Ogni sprint sotto ha un proprio risultato chiudibile; i sotto-step finanziari o di policy non autorizzano una soluzione implicita quando il gate resta aperto. **I 16 sprint non cambiano con questa revisione**: la sezione 11 li apre in task e corsie parallelizzabili. Per le UI indicate, il DoD comprende anche approvazione ASCII e review operativa della sezione 12.
 
 | Sprint | Obiettivo / task | Perche insieme e ordine interno | Definition of done |
@@ -816,6 +829,8 @@ Docs MkDocs in esecuzione tramite **docs-writer**: inglese, pipeline di traduzio
 ## 13. Tracciamento nel journal
 
 La pubblicazione di questo documento aggiorna README e aggiunge note datate per ogni voce nei file 00-05; non significa che i task aperti siano implementati.
+
+Primo piano preso in carico: [SP04-SP05 - Contratti e Runes](../11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md), approvato dal dev il 2026-09-07. I backlink dal piano 11 puntano a questo master e al backlog strutturale. Stato operativo e note per-step non vengono duplicati qui.
 
 All'avvio effettivo di uno sprint: scegliere il prossimo `<NN_area>` libero in `Phase_0/`, aprire il piano `.prompt.md`, cross-linkare il task originale e marcare la presa in carico secondo la regola del backlog. Non creare oggi sedici piani vuoti. Dopo ogni step eseguito, aggiornare immediatamente quel piano con stato, data, nota di implementazione ed eventuale fuori pista.
 

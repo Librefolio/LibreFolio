@@ -76,6 +76,18 @@ lives in [14_feedbackImportUrgent](../14_feedbackImportUrgent/manifest-integrazi
 Commit/SHA and archive remain pending the developer's manual commit. U2 privacy,
 U3 YOC, U8 onboarding and the deferred multicurrency proposals remain open.
 
+## Group B checkpoint - 2026-09-10
+
+[Contracts and Runes - SP04-SP05](../11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md)
+and its [manual-review correction round](../11_feedbackContractsRunes/plan-phase00FeedbackContractsRunesBugfixRound1.prompt.md)
+are versioned at checkpoint `74bfd9cf`; their five conflicts with local
+`dev_release2` baseline `916f12bd` are resolved and staged. Scope remains P4-5,
+P4-6/S6 6.7, S6 6.2 and S6 6.11 plus the approved review corrections. Combined
+static, unit, API and targeted E2E gates are green on isolated lane `6151` +
+`/tmp/librefolio-r2-b`; the developer still owns the merge commit and final
+UI/viewport review. Runtime ownership follows the current section 14
+integration policy, not the older execution lease.
+
 ## Regole della cartella
 
 - I task si pescano da qui all'inizio di un round; quando un task parte, il suo piano vive in

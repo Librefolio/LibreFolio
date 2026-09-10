@@ -21,7 +21,7 @@
 -->
 <script lang="ts">
     import {_} from '$lib/i18n';
-    import {tick} from 'svelte';
+    import {tick, untrack} from 'svelte';
     import {goto} from '$app/navigation';
     import {zodiosApi} from '$lib/api';
     import {auth} from '$lib/stores/app/auth';
@@ -40,14 +40,18 @@
     // =========================================================================
     // Props
     // =========================================================================
-    export let brokerId: number;
-    export let readOnly: boolean = false;
-    export let onChanged: (() => void) | undefined = undefined;
-    /** If provided, shows a Cancel/Close button next to Save and is also called
-     *  right after a successful save (modal auto-close use case). Omit for embedding. */
-    export let onCancel: (() => void) | undefined = undefined;
-    /** Bindable — lets a modal wrapper check for unsaved changes before closing. */
-    export let hasChanges: boolean = false;
+    interface Props {
+        brokerId: number;
+        readOnly?: boolean;
+        onChanged?: () => void;
+        /** If provided, shows a Cancel/Close button next to Save and is also called
+         *  right after a successful save (modal auto-close use case). Omit for embedding. */
+        onCancel?: () => void;
+        /** Bindable — lets a modal wrapper check for unsaved changes before closing. */
+        hasChanges?: boolean;
+    }
+
+    let {brokerId, readOnly = false, onChanged, onCancel, hasChanges = $bindable(false)}: Props = $props();
 
     // =========================================================================
     // Types
@@ -70,53 +74,53 @@
     // =========================================================================
     // State
     // =========================================================================
-    let accesses: AccessEntry[] = [];
-    let originalAccesses: AccessEntry[] = [];
-    let loading = true;
-    let saving = false;
-    let error: string | null = null;
-    let errorKey: string | null = null;
-    let accessLoadState: 'loading' | 'ready' | 'error' = 'loading';
+    let accesses: AccessEntry[] = $state([]);
+    let originalAccesses: AccessEntry[] = $state([]);
+    let loading = $state(true);
+    let saving = $state(false);
+    let error: string | null = $state(null);
+    let errorKey: string | null = $state(null);
+    let accessLoadState = $state<'loading' | 'ready' | 'error'>('loading');
 
     // Add user state
-    let showAddModal = false; // Add User as overlay modal
-    let availableUsers: SearchUser[] = [];
-    let loadingUsers = false;
-    let selectedUserId: number | null = null;
-    let newRole: 'OWNER' | 'EDITOR' | 'VIEWER' = 'VIEWER';
-    let newSharePercent: number = 0;
-    let showRoleDropdown = false;
+    let showAddModal = $state(false); // Add User as overlay modal
+    let availableUsers: SearchUser[] = $state([]);
+    let loadingUsers = $state(false);
+    let selectedUserId: number | null = $state(null);
+    let newRole = $state<AccessEntry['role']>('VIEWER');
+    let newSharePercent: number = $state(0);
+    let showRoleDropdown = $state(false);
 
     // Edit state
-    let showEditModal = false;
-    let editingUserId: number | null = null;
-    let editRole: 'OWNER' | 'EDITOR' | 'VIEWER' = 'VIEWER';
-    let editSharePercent: number = 0;
-    let showEditRoleDropdown = false;
-    let editError: string | null = null;
-    let editErrorKey: string | null = null;
+    let showEditModal = $state(false);
+    let editingUserId: number | null = $state(null);
+    let editRole = $state<AccessEntry['role']>('VIEWER');
+    let editSharePercent: number = $state(0);
+    let showEditRoleDropdown = $state(false);
+    let editError: string | null = $state(null);
+    let editErrorKey: string | null = $state(null);
 
     // Confirm dialogs
-    let confirmRemoveOpen = false;
-    let confirmRemoveUsername = '';
-    let confirmRemoveUserId: number | null = null;
+    let confirmRemoveOpen = $state(false);
+    let confirmRemoveUsername = $state('');
+    let confirmRemoveUserId: number | null = $state(null);
 
     // Self-service state (F4): leave broker / self-demote
-    let confirmLeaveOpen = false;
-    let confirmDemoteOpen = false;
-    let selfActionBusy = false;
+    let confirmLeaveOpen = $state(false);
+    let confirmDemoteOpen = $state(false);
+    let selfActionBusy = $state(false);
 
     // =========================================================================
     // Computed
     // =========================================================================
-    $: owners = accesses.filter((a) => a.role === 'OWNER');
-    $: editors = accesses.filter((a) => a.role === 'EDITOR');
-    $: viewers = accesses.filter((a) => a.role === 'VIEWER');
-    $: totalAllocated = owners.reduce((sum, o) => sum + o.share_percentage, 0);
-    $: totalAllocatedPercent = Math.round(totalAllocated * 10000) / 100;
-    $: availablePercent = Math.round((1 - totalAllocated) * 10000) / 100;
-    $: exceedsLimit = totalAllocated > 1.0001; // small epsilon for floating point
-    $: hasChanges =
+    let owners = $derived(accesses.filter((a) => a.role === 'OWNER'));
+    let editors = $derived(accesses.filter((a) => a.role === 'EDITOR'));
+    let viewers = $derived(accesses.filter((a) => a.role === 'VIEWER'));
+    let totalAllocated = $derived(owners.reduce((sum, o) => sum + o.share_percentage, 0));
+    let totalAllocatedPercent = $derived(Math.round(totalAllocated * 10000) / 100);
+    let availablePercent = $derived(Math.round((1 - totalAllocated) * 10000) / 100);
+    let exceedsLimit = $derived(totalAllocated > 1.0001); // small epsilon for floating point
+    let localHasChanges = $derived(
         JSON.stringify(
             accesses.map((a) => ({
                 user_id: a.user_id,
@@ -124,26 +128,32 @@
                 share_percentage: a.share_percentage,
             })),
         ) !==
-        JSON.stringify(
-            originalAccesses.map((a) => ({
-                user_id: a.user_id,
-                role: a.role,
-                share_percentage: a.share_percentage,
-            })),
-        );
-    $: existingUserIds = new Set(accesses.map((a) => a.user_id));
+            JSON.stringify(
+                originalAccesses.map((a) => ({
+                    user_id: a.user_id,
+                    role: a.role,
+                    share_percentage: a.share_percentage,
+                })),
+            ),
+    );
+
+    $effect(() => {
+        hasChanges = localHasChanges;
+    });
+
+    let existingUserIds = $derived(new Set(accesses.map((a) => a.user_id)));
     // Users still addable: exclude anyone already granted access locally.
-    $: selectableUsers = availableUsers.filter((u) => !existingUserIds.has(u.id));
-    $: selectedUser = selectableUsers.find((u) => u.id === selectedUserId) ?? null;
+    let selectableUsers = $derived(availableUsers.filter((u) => !existingUserIds.has(u.id)));
+    let selectedUser = $derived(selectableUsers.find((u) => u.id === selectedUserId) ?? null);
 
     // =========================================================================
     // Self-service (F4): the current user can always leave; an EDITOR can also
     // demote themselves to VIEWER. The last OWNER leaving cascade-deletes the
     // broker (confirmed semantics) — the UI presents that as a danger action.
     // =========================================================================
-    $: currentUserId = $auth.user?.id ?? null;
-    $: selfEntry = currentUserId != null ? (accesses.find((a) => a.user_id === currentUserId) ?? null) : null;
-    $: selfIsLastOwner = selfEntry?.role === 'OWNER' && owners.length <= 1;
+    let currentUserId = $derived($auth.user?.id ?? null);
+    let selfEntry = $derived(currentUserId != null ? (accesses.find((a) => a.user_id === currentUserId) ?? null) : null);
+    let selfIsLastOwner = $derived(selfEntry?.role === 'OWNER' && owners.length <= 1);
 
     async function handleSelfDemote() {
         if (selfActionBusy) return;
@@ -189,30 +199,34 @@
             selfActionBusy = false;
         }
     }
-    $: canEditAccess = !readOnly && accessLoadState === 'ready';
+    let canEditAccess = $derived(!readOnly && accessLoadState === 'ready');
 
     // For add form: max share available
-    $: maxNewShare = newRole === 'OWNER' ? Math.max(0, Math.round((1 - totalAllocated) * 10000) / 100) : 0;
+    let maxNewShare = $derived(newRole === 'OWNER' ? Math.max(0, Math.round((1 - totalAllocated) * 10000) / 100) : 0);
 
     // =========================================================================
     // Lifecycle — (re)load whenever brokerId is set/changes. Also covers the
     // modal use case: ModalBase destroys/recreates children on open/close, so
     // this naturally re-fires on every fresh mount (i.e. every time reopened).
     // =========================================================================
-    $: if (brokerId) {
-        loadAccesses();
-    }
+    $effect(() => {
+        if (brokerId) {
+            untrack(loadAccesses);
+        }
+    });
 
     // =========================================================================
     // Derived: chart data for SemiDonutChart
     // =========================================================================
-    $: chartSlices = owners
-        .filter((o) => Math.round(o.share_percentage * 10000) / 100 > 0)
-        .map((o) => ({
-            name: o.username,
-            percentage: Math.round(o.share_percentage * 10000) / 100,
-            avatarUrl: o.avatar_url ? `${o.avatar_url}?img_preview=64x64` : null,
-        }));
+    let chartSlices = $derived(
+        owners
+            .filter((o) => Math.round(o.share_percentage * 10000) / 100 > 0)
+            .map((o) => ({
+                name: o.username,
+                percentage: Math.round(o.share_percentage * 10000) / 100,
+                avatarUrl: o.avatar_url ? `${o.avatar_url}?img_preview=64x64` : null,
+            })),
+    );
 
     // =========================================================================
     // Data Loading
@@ -426,18 +440,11 @@
         return username ? username.charAt(0).toUpperCase() : '?';
     }
 
-    const roleOptions: Array<{value: 'OWNER' | 'EDITOR' | 'VIEWER'; label: string; shortLabel: string}> = [
-        {value: 'OWNER', label: '', shortLabel: ''},
-        {value: 'EDITOR', label: '', shortLabel: ''},
-        {value: 'VIEWER', label: '', shortLabel: ''},
-    ];
-    // Reactive labels
-    $: roleOptions[0].label = $_('brokers.sharing.roleOwner');
-    $: roleOptions[1].label = $_('brokers.sharing.roleEditor');
-    $: roleOptions[2].label = $_('brokers.sharing.roleViewer');
-    $: roleOptions[0].shortLabel = $_('brokers.sharing.roleOwnerShort');
-    $: roleOptions[1].shortLabel = $_('brokers.sharing.roleEditorShort');
-    $: roleOptions[2].shortLabel = $_('brokers.sharing.roleViewerShort');
+    let roleOptions: Array<{value: 'OWNER' | 'EDITOR' | 'VIEWER'; label: string; shortLabel: string}> = $derived([
+        {value: 'OWNER', label: $_('brokers.sharing.roleOwner'), shortLabel: $_('brokers.sharing.roleOwnerShort')},
+        {value: 'EDITOR', label: $_('brokers.sharing.roleEditor'), shortLabel: $_('brokers.sharing.roleEditorShort')},
+        {value: 'VIEWER', label: $_('brokers.sharing.roleViewer'), shortLabel: $_('brokers.sharing.roleViewerShort')},
+    ]);
 </script>
 
 <div class="space-y-4" data-testid="broker-sharing-panel" data-access-state={accessLoadState} data-error-key={errorKey ?? undefined} aria-busy={loading ? 'true' : 'false'} aria-invalid={accessLoadState === 'error' ? 'true' : undefined}>
@@ -451,6 +458,7 @@
                 }}
                 class="p-1.5 text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg transition-colors"
                 title="Reset"
+                data-testid="sharing-reset-btn"
             >
                 <RotateCcw size={18} />
             </button>
@@ -769,6 +777,7 @@
                                 class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-600"
                                 on:click={() => (showRoleDropdown = !showRoleDropdown)}
                                 type="button"
+                                data-testid="sharing-add-role-trigger"
                             >
                                 <span class={getRoleIconColor(newRole)}>
                                     <svelte:component this={getRoleIcon(newRole)} size={14} />
@@ -782,6 +791,7 @@
                                         <button
                                             type="button"
                                             class="w-full flex items-center gap-2 text-left px-3 py-2 text-xs hover:bg-gray-100 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-200 whitespace-nowrap"
+                                            data-testid="sharing-add-role-option-{opt.value}"
                                             on:click={() => {
                                                 newRole = opt.value;
                                                 showRoleDropdown = false;
@@ -891,6 +901,7 @@
                                 type="button"
                                 class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-600"
                                 on:click={() => (showEditRoleDropdown = !showEditRoleDropdown)}
+                                data-testid="sharing-edit-role-trigger"
                             >
                                 <span class={getRoleIconColor(editRole)}>
                                     <svelte:component this={getRoleIcon(editRole)} size={14} />
@@ -904,6 +915,7 @@
                                         <button
                                             type="button"
                                             class="w-full flex items-center gap-2 text-left px-3 py-2 text-xs hover:bg-gray-100 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-200 whitespace-nowrap"
+                                            data-testid="sharing-edit-role-option-{opt.value}"
                                             on:click={() => {
                                                 editError = null;
                                                 editErrorKey = null;
