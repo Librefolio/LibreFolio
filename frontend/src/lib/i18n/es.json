@@ -1718,7 +1718,9 @@
     "Utilities": "Servicios públicos",
     "Other": "Otro",
     "Unknown": "Sin clasificar",
-    "Liquidity": "Liquidez"
+    "Liquidity": "Liquidez",
+    "CorporateBonds": "Bonos corporativos",
+    "GovernmentBonds": "Bonos del Estado"
   },
   "settings": {
     "profile": "Perfil",

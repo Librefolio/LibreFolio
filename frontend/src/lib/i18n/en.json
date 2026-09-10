@@ -1718,7 +1718,9 @@
     "Utilities": "Utilities",
     "Other": "Other",
     "Unknown": "Unknown",
-    "Liquidity": "Liquidity"
+    "Liquidity": "Liquidity",
+    "CorporateBonds": "Corporate Bonds",
+    "GovernmentBonds": "Government Bonds"
   },
   "settings": {
     "profile": "Profile",
