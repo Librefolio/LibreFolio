@@ -208,11 +208,7 @@ class _DiscoveryFixture:
     registry_symbol: str
 
     def write_module(self, stem: str, body: str) -> str:
-        imports = (
-            f"from {__name__} import {self.registry_symbol} as Registry\n"
-            f"from {__name__} import _PrivatePlugin, _register_through_helper\n"
-            "from backend.app.services.provider_registry import register_plugin\n"
-        )
+        imports = f"from {__name__} import {self.registry_symbol} as Registry\n" f"from {__name__} import _PrivatePlugin, _register_through_helper\n" "from backend.app.services.provider_registry import register_plugin\n"
         (self.directory / f"{stem}.py").write_text(imports + dedent(body), encoding="utf-8")
         return f"{self.namespace}.{stem}"
 
@@ -301,10 +297,7 @@ def test_published_adapters_enforce_real_nested_models(direction, payload, error
     with pytest.raises(ValidationError) as caught:
         adapter.validate_python({**envelope, "payload": deepcopy(payload)})
 
-    assert any(
-        issue["type"] == error_type and issue["loc"][0] == "payload"
-        for issue in caught.value.errors(include_input=False)
-    )
+    assert any(issue["type"] == error_type and issue["loc"][0] == "payload" for issue in caught.value.errors(include_input=False))
 
 
 def test_subclasses_do_not_share_claims_or_published_definitions(discovery_factory, plugin_factory):
@@ -498,10 +491,7 @@ def test_published_integer_schema_injects_safe_bounds_without_widening_stricter_
     definition = build_tool_definition(plugin_factory("private_integer_bounds", input_type=_IntegerBoundsInput))
     properties = definition.descriptor.input_schema["properties"]
 
-    assert {
-        name: (properties[name]["minimum"], properties[name]["maximum"])
-        for name in ("unbounded", "minimum_only", "maximum_only", "narrower")
-    } == {
+    assert {name: (properties[name]["minimum"], properties[name]["maximum"]) for name in ("unbounded", "minimum_only", "maximum_only", "narrower")} == {
         "unbounded": (-MAX_SAFE_JSON_INTEGER, MAX_SAFE_JSON_INTEGER),
         "minimum_only": (-17, MAX_SAFE_JSON_INTEGER),
         "maximum_only": (-MAX_SAFE_JSON_INTEGER, 23),
@@ -682,13 +672,7 @@ def test_lookups_match_codes_exactly(lookup, discovery_factory, plugin_factory):
 def test_registration_is_rolled_back_when_its_import_caller_fails(through_helper, spoof_module, discovery_factory):
     discovery = discovery_factory()
     registration = "_register_through_helper(Registry, Broken)" if through_helper else "register_plugin(Registry)(Broken)"
-    body = (
-        "class Broken(_PrivatePlugin):\n"
-        '    tool_code = "private_broken"\n'
-        + ('    __module__ = "backend.app.services.tools.base"\n' if spoof_module else "")
-        + registration
-        + '\nraise RuntimeError("PRIVATE_IMPORT_INPUT_SENTINEL")\n'
-    )
+    body = "class Broken(_PrivatePlugin):\n" '    tool_code = "private_broken"\n' + ('    __module__ = "backend.app.services.tools.base"\n' if spoof_module else "") + registration + '\nraise RuntimeError("PRIVATE_IMPORT_INPUT_SENTINEL")\n'
     failed_module = discovery.write_module("a_broken", body)
     discovery.write_module(
         "z_healthy",
