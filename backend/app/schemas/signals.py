@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import math
 import re
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from enum import StrEnum
+from types import MappingProxyType
 from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 
 from pydantic import AfterValidator, ConfigDict, Field, FiniteFloat, JsonValue, field_validator, model_validator
@@ -1047,71 +1050,18 @@ class SignalResult(SignalModel):
         return ensure_json_safe(value, "normalized_params")
 
     @model_validator(mode="after")
-    def validate_status_matrix(self) -> SignalResult:  # noqa: C901 — flat status-matrix invariant raises
+    def validate_status_matrix(self) -> SignalResult:
         if self.series:
             _validate_series_alignment(self.series)
 
-        if self.status == SignalStatus.OK:
-            if self.availability is None or self.warmup is None:
-                raise ValueError("ok result requires availability and warm-up metadata")
-            if not self.series:
-                raise ValueError("ok result requires series")
-            if not self.availability.can_compute or not self.warmup.complete:
-                raise ValueError("ok result requires computable input and complete warm-up")
-            if self.availability.reason_code is not None or self.availability.partial_coverage_used:
-                raise ValueError("ok result cannot use partial availability")
-            if _series_have_missing_values(self.series):
-                raise ValueError("ok result cannot contain missing output values")
-            if self.error is not None:
-                raise ValueError("ok result cannot contain error")
-        elif self.status == SignalStatus.PARTIAL:
-            if self.availability is None or self.warmup is None:
-                raise ValueError("partial result requires availability and warm-up metadata")
-            if not self.series:
-                raise ValueError("partial result requires series")
-            if not self.availability.can_compute:
-                raise ValueError("partial result requires computable input")
-            if not self.warnings:
-                raise ValueError("partial result requires at least one warning")
-            if self.warmup.complete and not self.availability.partial_coverage_used and self.availability.reason_code != SignalAvailabilityReason.PARTIAL_UNDEFINED_METRIC:
-                raise ValueError("partial result requires incomplete warm-up or partial coverage")
-            if self.error is not None:
-                raise ValueError("partial result cannot contain error")
-        elif self.status == SignalStatus.UNAVAILABLE:
-            if self.availability is None or self.warmup is None:
-                raise ValueError("unavailable result requires availability and warm-up metadata")
-            if self.series or self.annotations:
-                raise ValueError("unavailable result cannot contain series or annotations")
-            if self.availability.can_compute:
-                raise ValueError("unavailable result requires can_compute=false")
-            if self.error is not None:
-                raise ValueError("unavailable result uses availability reason, not error")
-        elif self.status == SignalStatus.FAILED:
-            if self.series or self.annotations:
-                raise ValueError("failed result cannot contain series or annotations")
-            if self.error is None:
-                raise ValueError("failed result requires structured error")
-            precompute_errors = {
-                SignalErrorCode.UNKNOWN_SIGNAL,
-                SignalErrorCode.INVALID_PARAMS,
-                SignalErrorCode.PLANNING_ERROR,
-            }
-            if self.error.code in precompute_errors:
-                if self.availability is not None or self.warmup is not None:
-                    raise ValueError("pre-compute failure cannot contain availability or warm-up metadata")
-            else:
-                if self.availability is None or self.warmup is None:
-                    raise ValueError("compute failure requires availability and warm-up metadata")
-                if not self.availability.can_compute:
-                    raise ValueError("compute failure requires computable input")
+        _validate_result_rules(self, _RESULT_STATUS_RULES[self.status])
+        if self.status == SignalStatus.FAILED and self.error is not None:
+            failure_rules = _FAILED_PRECOMPUTE_RULES if self.error.code in _PRECOMPUTE_ERROR_CODES else _FAILED_RUNTIME_RULES
+            _validate_result_rules(self, failure_rules)
 
         if self.availability is not None and self.warmup is not None:
-            if self.availability.required_points != self.warmup.requirement.total_points:
-                raise ValueError("availability required_points must match warm-up total_points")
-            if self.availability.warmup_complete != self.warmup.complete:
-                raise ValueError("availability warmup_complete must match warm-up metadata")
-        if (self.risk_metadata is None) != (self.data_quality is None):
-            raise ValueError("risk_metadata and data_quality must be provided together")
+            _validate_result_rules(self, _RESULT_METADATA_RULES)
+        _validate_result_rules(self, _RESULT_RISK_CONTEXT_RULES)
         return self
 
 
@@ -1132,6 +1082,141 @@ def _series_have_missing_values(series: List[SignalSeries]) -> bool:
         elif any(point.value is None for point in item.points):
             return True
     return False
+
+
+_ResultField = Literal["availability", "warmup", "series", "annotations", "warnings", "error"]
+_PresenceRequirement = Literal["present", "absent", "nonempty", "empty"]
+
+
+@dataclass(frozen=True, slots=True)
+class _ResultPresenceRule:
+    fields: tuple[_ResultField, ...]
+    requirement: _PresenceRequirement
+    message: str
+
+    def matches(self, result: SignalResult) -> bool:
+        values: tuple[object, ...] = tuple(getattr(result, field) for field in self.fields)
+        if self.requirement == "present":
+            return all(value is not None for value in values)
+        if self.requirement == "absent":
+            return all(value is None for value in values)
+        if self.requirement == "nonempty":
+            return all(bool(value) for value in values)
+        if self.requirement == "empty":
+            return not any(values)
+        raise ValueError(f"unknown result presence requirement: {self.requirement}")
+
+
+@dataclass(frozen=True, slots=True)
+class _ResultPredicateRule:
+    predicate: Callable[[SignalResult], bool]
+    message: str
+
+    def matches(self, result: SignalResult) -> bool:
+        return self.predicate(result)
+
+
+_ResultRule = Union[_ResultPresenceRule, _ResultPredicateRule]
+
+
+def _has_computable_input(result: SignalResult) -> bool:
+    return result.availability is not None and result.availability.can_compute
+
+
+def _has_noncomputable_input(result: SignalResult) -> bool:
+    return result.availability is not None and not result.availability.can_compute
+
+
+def _has_computable_complete_input(result: SignalResult) -> bool:
+    return _has_computable_input(result) and result.warmup is not None and result.warmup.complete
+
+
+def _has_full_availability(result: SignalResult) -> bool:
+    availability = result.availability
+    return availability is not None and availability.reason_code is None and not availability.partial_coverage_used
+
+
+def _has_no_missing_output_values(result: SignalResult) -> bool:
+    return not _series_have_missing_values(result.series)
+
+
+def _has_justified_partial_state(result: SignalResult) -> bool:
+    availability = result.availability
+    warmup = result.warmup
+    return availability is not None and warmup is not None and (not warmup.complete or availability.partial_coverage_used or availability.reason_code == SignalAvailabilityReason.PARTIAL_UNDEFINED_METRIC)
+
+
+def _has_matching_required_points(result: SignalResult) -> bool:
+    availability = result.availability
+    warmup = result.warmup
+    return availability is not None and warmup is not None and availability.required_points == warmup.requirement.total_points
+
+
+def _has_matching_warmup_completion(result: SignalResult) -> bool:
+    availability = result.availability
+    warmup = result.warmup
+    return availability is not None and warmup is not None and availability.warmup_complete == warmup.complete
+
+
+def _has_paired_risk_context(result: SignalResult) -> bool:
+    return (result.risk_metadata is None) == (result.data_quality is None)
+
+
+# Rule order preserves which error is reported when several constraints fail.
+_RESULT_STATUS_RULES: Mapping[SignalStatus, tuple[_ResultRule, ...]] = MappingProxyType(
+    {
+        SignalStatus.OK: (
+            _ResultPresenceRule(("availability", "warmup"), "present", "ok result requires availability and warm-up metadata"),
+            _ResultPresenceRule(("series",), "nonempty", "ok result requires series"),
+            _ResultPredicateRule(_has_computable_complete_input, "ok result requires computable input and complete warm-up"),
+            _ResultPredicateRule(_has_full_availability, "ok result cannot use partial availability"),
+            _ResultPredicateRule(_has_no_missing_output_values, "ok result cannot contain missing output values"),
+            _ResultPresenceRule(("error",), "absent", "ok result cannot contain error"),
+        ),
+        SignalStatus.PARTIAL: (
+            _ResultPresenceRule(("availability", "warmup"), "present", "partial result requires availability and warm-up metadata"),
+            _ResultPresenceRule(("series",), "nonempty", "partial result requires series"),
+            _ResultPredicateRule(_has_computable_input, "partial result requires computable input"),
+            _ResultPresenceRule(("warnings",), "nonempty", "partial result requires at least one warning"),
+            _ResultPredicateRule(_has_justified_partial_state, "partial result requires incomplete warm-up or partial coverage"),
+            _ResultPresenceRule(("error",), "absent", "partial result cannot contain error"),
+        ),
+        SignalStatus.UNAVAILABLE: (
+            _ResultPresenceRule(("availability", "warmup"), "present", "unavailable result requires availability and warm-up metadata"),
+            _ResultPresenceRule(("series", "annotations"), "empty", "unavailable result cannot contain series or annotations"),
+            _ResultPredicateRule(_has_noncomputable_input, "unavailable result requires can_compute=false"),
+            _ResultPresenceRule(("error",), "absent", "unavailable result uses availability reason, not error"),
+        ),
+        SignalStatus.FAILED: (
+            _ResultPresenceRule(("series", "annotations"), "empty", "failed result cannot contain series or annotations"),
+            _ResultPresenceRule(("error",), "present", "failed result requires structured error"),
+        ),
+    }
+)
+
+_PRECOMPUTE_ERROR_CODES = frozenset(
+    {
+        SignalErrorCode.UNKNOWN_SIGNAL,
+        SignalErrorCode.INVALID_PARAMS,
+        SignalErrorCode.PLANNING_ERROR,
+    }
+)
+_FAILED_PRECOMPUTE_RULES: tuple[_ResultRule, ...] = (_ResultPresenceRule(("availability", "warmup"), "absent", "pre-compute failure cannot contain availability or warm-up metadata"),)
+_FAILED_RUNTIME_RULES: tuple[_ResultRule, ...] = (
+    _ResultPresenceRule(("availability", "warmup"), "present", "compute failure requires availability and warm-up metadata"),
+    _ResultPredicateRule(_has_computable_input, "compute failure requires computable input"),
+)
+_RESULT_METADATA_RULES: tuple[_ResultRule, ...] = (
+    _ResultPredicateRule(_has_matching_required_points, "availability required_points must match warm-up total_points"),
+    _ResultPredicateRule(_has_matching_warmup_completion, "availability warmup_complete must match warm-up metadata"),
+)
+_RESULT_RISK_CONTEXT_RULES: tuple[_ResultRule, ...] = (_ResultPredicateRule(_has_paired_risk_context, "risk_metadata and data_quality must be provided together"),)
+
+
+def _validate_result_rules(result: SignalResult, rules: tuple[_ResultRule, ...]) -> None:
+    for rule in rules:
+        if not rule.matches(result):
+            raise ValueError(rule.message)
 
 
 class SignalPreviewPoint(SignalModel):

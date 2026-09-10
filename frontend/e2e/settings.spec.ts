@@ -1,6 +1,177 @@
-import {expect, test} from './fixtures/playwright';
+import {expect, type Page, type Request, test} from './fixtures/playwright';
 import {login, navigateTo} from './fixtures/auth-helpers';
 import {TEST_ADMIN, TEST_USER} from './fixtures/test-users';
+import {eventSeq, waitForEvent} from './fixtures/app-events';
+import {optionsClosed} from './fixtures/probe';
+import {uniqueSuffix} from './fixtures/unique';
+
+test.describe('Runes parity', () => {
+    // The preference case owns its account; the admin case changes only a local
+    // draft. Neither case writes instance-wide settings or repairs shared data.
+    test.setTimeout(45_000);
+
+    async function openPreferences(page: Page) {
+        await navigateTo(page, '/settings');
+        await page.getByTestId('settings-tab-preferences').click();
+        await expect(page.getByTestId('preference-currency').getByRole('combobox')).toBeEnabled({timeout: 10_000});
+    }
+
+    test('preferences save a real value across reload; Reset and Undo only stage changes', async ({page, request}) => {
+        const suffix = uniqueSuffix();
+        const user = {username: `runes_prefs_${suffix}`, email: `runes_prefs_${suffix}@example.com`, password: `Runes9!_${suffix}`};
+        const registered = await request.post('/api/v1/auth/register', {data: user});
+        expect(registered.status(), 'Disposable-account registration must be enabled; do not change global settings to repair it').toBe(201);
+        const {user: created} = (await registered.json()) as {user: {id: number}};
+
+        const puts: unknown[] = [];
+        const recordPut = (req: Request) => {
+            if (req.method() === 'PUT' && new URL(req.url()).pathname === '/api/v1/settings/user') puts.push(req.postDataJSON());
+        };
+        try {
+            await login(page, user);
+            const me = await page.request.get('/api/v1/auth/me');
+            expect(me.ok()).toBe(true);
+            expect((await me.json()).user.id).toBe(created.id);
+
+            const globals = await page.request.get('/api/v1/settings/global');
+            expect(globals.ok()).toBe(true);
+            const {items} = (await globals.json()) as {items: {key: string; value: string}[]};
+            const defaultCurrency = items.find((item) => item.key === 'default_currency')?.value;
+            expect(defaultCurrency, 'The test must read the real default, not assume EUR').toMatch(/^[A-Z]{3}$/);
+            if (!defaultCurrency) throw new Error('default_currency was absent from settings/global');
+            const savedCurrency = defaultCurrency === 'USD' ? 'EUR' : 'USD';
+
+            // Only this disposable account is seeded, before observing UI writes.
+            const seeded = await page.request.put('/api/v1/settings/user', {data: {base_currency: defaultCurrency}});
+            expect(seeded.ok()).toBe(true);
+            await openPreferences(page);
+            const row = page.getByTestId('preference-currency');
+            const select = row.getByRole('combobox');
+            await expect(select).toContainText(defaultCurrency);
+            page.on('request', recordPut);
+
+            await select.click();
+            await page.getByTestId(`search-select-option-${savedCurrency}`).click();
+            await optionsClosed(page);
+            await expect(select).toContainText(savedCurrency);
+            const since = await eventSeq(page);
+            const response = page.waitForResponse((res) => res.request().method() === 'PUT' && new URL(res.url()).pathname === '/api/v1/settings/user');
+            await row.getByTestId('setting-save').click();
+            const saved = await response;
+            expect(saved.request().postDataJSON()).toEqual({base_currency: savedCurrency});
+            expect(saved.ok()).toBe(true);
+            expect((await waitForEvent(page, 'settings.preferences.saved', {since})).detail).toMatchObject({field: 'default_currency', value: savedCurrency});
+            await expect(row.getByTestId('setting-save')).toBeHidden();
+
+            // A new document/mount must display the persisted value, not just a tab.
+            await openPreferences(page);
+            await expect(select).toContainText(savedCurrency);
+            await row.getByTestId('setting-reset').click();
+            await expect(select).toContainText(defaultCurrency);
+            await expect(row.getByTestId('setting-save')).toBeVisible();
+            const afterReset = await page.request.get('/api/v1/settings/user');
+            expect(afterReset.ok()).toBe(true);
+            expect((await afterReset.json()).base_currency).toBe(savedCurrency);
+
+            await row.getByTestId('setting-undo').click();
+            await expect(select).toContainText(savedCurrency);
+            await expect(row.getByTestId('setting-save')).toBeHidden();
+            await openPreferences(page);
+            await expect(select).toContainText(savedCurrency);
+            expect(puts).toEqual([{base_currency: savedCurrency}]);
+        } finally {
+            page.off('request', recordPut);
+            // The isolated API context does not depend on the browser surviving
+            // the assertion. Verify identity before the self-delete endpoint.
+            const loggedIn = await request.post('/api/v1/auth/login', {data: {username: user.username, password: user.password}});
+            expect(loggedIn.ok()).toBe(true);
+            expect((await loggedIn.json()).user.id).toBe(created.id);
+            const removed = await request.delete('/api/v1/auth/users/me');
+            expect(removed.ok()).toBe(true);
+        }
+    });
+
+    test('global lock rejects then accepts discarding a local draft without persisting it', async ({page}) => {
+        await login(page, TEST_ADMIN);
+        await navigateTo(page, '/settings');
+        await page.getByTestId('settings-tab-admin').click();
+        const tab = page.getByTestId('global-settings-tab');
+        await expect(tab).toHaveAttribute('data-busy', 'false', {timeout: 10_000});
+        const field = tab.getByTestId('global-setting-session_ttl_hours').getByRole('spinbutton');
+        await expect(field).toBeDisabled();
+        const baseline = await field.inputValue();
+        expect(baseline).toMatch(/^\d+$/);
+        const draft = String(Number(baseline) + 1);
+        const writes: string[] = [];
+        const nativeDialogs: string[] = [];
+        // Negative sentinel only: none of the tested interactions uses a native
+        // dialog. Dismiss unexpected ones so a regression fails, rather than hangs.
+        page.on('dialog', async (dialog) => {
+            nativeDialogs.push(dialog.type());
+            await dialog.dismiss();
+        });
+        const recordWrite = (req: Request) => {
+            if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method()) && new URL(req.url()).pathname.startsWith('/api/v1/settings/global')) writes.push(req.url());
+        };
+        page.on('request', recordWrite);
+        try {
+            await tab.getByTestId('settings-lock-toggle').click();
+            await expect(field).toBeEnabled();
+            await field.fill(draft);
+            await expect(tab.getByTestId('settings-save-all')).toBeVisible();
+
+            const header = page.getByTestId('global-settings-discard-confirm');
+            const discard = page.getByRole('dialog').filter({has: header});
+            for (const action of ['cancel', 'escape', 'dismiss', 'backdrop'] as const) {
+                await test.step(`keep local draft on modal ${action}`, async () => {
+                    await tab.getByTestId('settings-lock-toggle').click();
+                    await expect(header).toBeVisible();
+                    const confirm = discard.getByTestId('confirm-modal-confirm');
+                    await expect(confirm).toBeEnabled();
+                    // Approved feature assertion, never a class-based selector.
+                    await expect(confirm).toHaveClass(/\bbtn-warning\b/);
+                    await expect(confirm).not.toHaveClass(/\bbtn-danger\b/);
+                    await expect(field).toHaveValue(draft);
+                    if (action === 'cancel') {
+                        await discard.getByTestId('confirm-modal-cancel').click();
+                    } else if (action === 'escape') {
+                        await discard.press('Escape');
+                    } else if (action === 'dismiss') {
+                        await header.getByRole('button').click();
+                    } else {
+                        // ModalBase's padded viewport corner is outside the content.
+                        await discard.click({position: {x: 1, y: 1}});
+                    }
+                    await expect(header).toBeHidden();
+                    await expect(field).toBeEnabled();
+                    await expect(field).toHaveValue(draft);
+                    await expect(tab.getByTestId('settings-save-all')).toBeVisible();
+                    expect(nativeDialogs).toEqual([]);
+                    expect(writes).toEqual([]);
+                });
+            }
+
+            await tab.getByTestId('settings-lock-toggle').click();
+            await expect(header).toBeVisible();
+            await discard.getByTestId('confirm-modal-confirm').click();
+            await expect(header).toBeHidden();
+            await expect(field).toBeDisabled();
+            await expect(field).toHaveValue(baseline);
+            await expect(tab.getByTestId('settings-save-all')).toBeHidden();
+            expect(nativeDialogs).toEqual([]);
+
+            await navigateTo(page, '/settings');
+            await page.getByTestId('settings-tab-admin').click();
+            await expect(tab).toHaveAttribute('data-busy', 'false', {timeout: 10_000});
+            await expect(field).toBeDisabled();
+            await expect(field).toHaveValue(baseline);
+            expect(nativeDialogs).toEqual([]);
+            expect(writes).toEqual([]);
+        } finally {
+            page.off('request', recordWrite);
+        }
+    });
+});
 
 test.describe('Settings', () => {
     test.describe('Settings Page Access', () => {

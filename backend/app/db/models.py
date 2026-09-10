@@ -907,7 +907,7 @@ class FxConversionRoute(SQLModel, table=True):
 
     @property
     def providers_used(self) -> set[str]:
-        """Set of provider codes used in this route's chain."""
+        """Configured provider membership, including MANUAL; not ordered fetch provenance."""
         return {step["provider"] for step in self.parsed_steps}
 
 

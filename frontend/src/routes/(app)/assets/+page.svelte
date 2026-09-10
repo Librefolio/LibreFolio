@@ -26,6 +26,8 @@
     import type {LivePriceDirection} from '$lib/services/livePriceService';
     import AssetSyncModal from '$lib/components/assets/AssetSyncModal.svelte';
     import AssetModal from '$lib/components/assets/AssetModal.svelte';
+    import {entityDetailLinkHtml} from '$lib/utils/core/entityLink';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {loadAssetEditData, type AssetEditData} from '$lib/components/assets/assetEditData';
     import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
     import {extractErrorMessage} from '$lib/utils/trySave';
@@ -782,7 +784,7 @@
         }
     }
 
-    async function handleSyncAsset(asset: any) {
+    async function handleSyncAsset(asset: any, linkCreatedAsset = false) {
         syncingAssetIds = new Set([...syncingAssetIds, asset.id]);
         try {
             const response = await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([
@@ -799,7 +801,7 @@
                 const changed = inserted + updated;
                 toasts.success(
                     $t('assets.sync.toastOk', {
-                        values: {name: asset.display_name, fetched, changed},
+                        values: {name: linkCreatedAsset ? entityDetailLinkHtml({kind: 'asset', id: asset.id}, asset.display_name) : escapeHtml(asset.display_name), fetched, changed},
                     }),
                 );
             } else {
@@ -1662,12 +1664,13 @@
     bind:open={assetModalOpen}
     editMode={assetModalEditMode}
     editData={assetModalEditData}
+    linkCreatedAsset
     oncreated={async (assetId) => {
         await loadAssets();
         // Auto-sync the newly created asset to fetch initial price data
         const newAsset = assets.find((a) => a.id === assetId);
         if (newAsset?.provider_code) {
-            await handleSyncAsset(newAsset);
+            await handleSyncAsset(newAsset, true);
         }
     }}
     onupdated={() => loadAssets()}
