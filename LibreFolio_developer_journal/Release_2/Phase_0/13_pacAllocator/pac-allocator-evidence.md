@@ -3,8 +3,12 @@
 ## 1. Provenienza
 
 - Baseline letta e implementata: `4a73f5f63447e01b51993afb2e3c73e2c22a9a28`.
-- Commit runtime disponibile ma non incorporato:
+- Checkpoint D creato dal dev:
+  `cf1dd37974b2191877093e641cf00f261a241d20`.
+- Commit runtime incorporato manualmente:
   `916f12bddf3eb9b8e834e4b9033eb52ce4bde25a`.
+- HEAD combinato:
+  `d018e8a677289b9bc38e65b437a86e1f2684caa7`.
 - Merge-base: `4a73f5f6`.
 - Commit intermedi runtime: `ef722b55`, `916f12bd`.
 - Worktree D isolato: `e-alfy-friendly-dollop`.
@@ -69,12 +73,41 @@ Nessun file C platform, API, DB, frontend, docs utente, i18n o CHANGELOG modific
 | Durata | 2.48 s |
 | DB worktree | assente prima/dopo |
 | Fingerprint schema | invariato |
-| Service/evaluator | non eseguito |
-| Legacy-heavy imports | non eseguito |
+| Service/evaluator sulla baseline | non eseguito |
+| Legacy-heavy imports sulla baseline | non eseguito |
 | C codegen/roundtrip | non eseguito |
-| Runtime combinato | non eseguito |
+| Runtime combinato finale, schema | 816 passed, 2.47 s |
+| Runtime combinato finale, service | 194 passed, 2.93 s |
+| Legacy-heavy initializer | 3 casi passati nel service selector |
+| Ruff mirato | verde sui 14 file Python P1 |
+| Black check mirato | verde sui 14 file Python P1 |
 
-Il selector schema e stato eseguito dal coordinatore prima del commit runtime.
+Tentativo combinato successivo:
+
+```text
+./dev.py test --test-port 6153 --data-dir /tmp/librefolio-r2-d schemas pac-analyze
+```
+
+Il comando e terminato prima di pytest durante l'import del runner con
+`ModuleNotFoundError: No module named 'pydantic'`. Non sono stati creati
+`/tmp/librefolio-r2-d` o il DB del worktree; nessuna installazione o seconda suite.
+
+Il retry richiesto con `pipenv run python dev.py ...` ha creato automaticamente il venv
+D vuoto `/Users/ea_enel/.local/share/virtualenvs/e-alfy-friendly-dollop-bwI0S8St`
+e si e fermato prima di pytest con `ModuleNotFoundError: No module named 'argcomplete'`.
+Nessun pacchetto progetto installato, nessun data-dir/DB e nessun test service. Il venv
+resta intatto finche il coordinatore non autorizza ambiente o cleanup.
+
+Risoluzione senza install: selezionato il venv locked esistente
+`/Users/ea_enel/.local/share/virtualenvs/LibreFolio-SAUMUTtc` tramite
+`PIPENV_CUSTOM_VENV_NAME`. Entrambi i selector sono poi passati serialmente nella lane
+6153. Il service runner ha creato il DB solo in
+`/tmp/librefolio-r2-d/sqlite/app.db`; il DB del worktree resta assente.
+
+Ruff ha trovato due import block non formattati e tre problemi test-only:
+`zip()` senza `strict`, closure su variabili di loop e encoding UTF-8 ridondante.
+Test-author ha corretto i test; ruff/Black hanno formattato i file P1. Il confronto AST
+contro HEAD mostra cambi semantici solo nei due test, non nei file production formattati.
 
 ## 5. Controlli checkpoint
 
@@ -88,36 +121,31 @@ Il selector schema e stato eseguito dal coordinatore prima del commit runtime.
 
 Questo prova applicabilita testuale probabile, non compatibilita semantica finale.
 
-## 6. Rischi da ricontrollare sulla revisione combinata
+## 6. Rischi residui
 
-1. Runner `916f12bd`: isolamento, data-dir e lifecycle cambiati.
-2. I selector P1 devono usare solo `/tmp/librefolio-r2-d`.
-3. Import lazy devono preservare tutti gli export dopo le modifiche E.
-4. TypeAdapter P1 deve attraversare il codegen C reale senza perdere:
+1. TypeAdapter P1 deve attraversare il codegen C reale senza perdere:
    - union discriminate;
    - max 80/384 issue;
    - `normalized` ready/non-ready;
    - code point Unicode;
    - stringhe Decimal esatte.
-5. Wrapper C deve chiamare `context.checkpoint()` e lasciare tempi/errori platform
+2. Wrapper C deve chiamare `context.checkpoint()` e lasciare tempi/errori platform
    fuori dal risultato PAC.
+3. Il venv vuoto D e un residuo ambientale noto da rimuovere solo con autorizzazione.
 
-## 7. Ripresa verificabile
-
-Dopo commit e integrazione manuali:
+## 7. Comandi verificati
 
 ```text
-./dev.py test --test-port 6143 --data-dir /tmp/librefolio-r2-d schemas pac-analyze
-./dev.py test --test-port 6143 --data-dir /tmp/librefolio-r2-d services pac-analyze
+PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6153 --data-dir /tmp/librefolio-r2-d schemas pac-analyze
+PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6153 --data-dir /tmp/librefolio-r2-d services pac-analyze
 ```
 
 Attesi:
 
 - nessun `--force`;
-- porta 6143 non condivisa;
+- porta 6153 non condivisa;
 - nessuna scrittura fuori dal data-dir dedicato;
 - nessun uso di 6041;
-- errore esplicito se dipendenze mancanti;
 - nessuna installazione automatica.
 
 ## 8. Esclusioni dal checkpoint

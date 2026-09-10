@@ -148,11 +148,7 @@ def _money(fact, amount, currency="EUR"):
 
 
 def _issue(result, code, path=None, kind=None):
-    matches = [
-        issue
-        for issue in result["issues"]
-        if issue["code"] == code and (path is None or issue["path"] == list(path))
-    ]
+    matches = [issue for issue in result["issues"] if issue["code"] == code and (path is None or issue["path"] == list(path))]
     assert len(matches) == 1, (code, path, result["issues"])
     (found,) = matches
     if kind is not None:
@@ -235,9 +231,7 @@ def test_custody_fractions_are_not_rounded_to_the_whole_buy_grid(quantity, price
 
 
 def test_repeated_instrument_is_scored_per_compound_row_not_aggregated():
-    result = _analyze(
-        _request([_row("Alfa/X", quantity="10", target="50"), _row("Alfa/Y", quantity="0", target="50")])
-    )
+    result = _analyze(_request([_row("Alfa/X", quantity="10", target="50"), _row("Alfa/Y", quantity="0", target="50")]))
     assert result["availability"] == "ready"
     rows = _rows(result)
     assert rows["Alfa/X"]["instrument_key"] == rows["Alfa/Y"]["instrument_key"] == "Alfa"
@@ -411,9 +405,7 @@ def test_duplicate_row_keys_retain_each_input_row_and_one_group_issue():
     raw = _request([_row("same", quantity=str(index), target=target) for index, target in enumerate(("20", "30", "50"))])
     result = _analyze(raw)
     assert result["availability"] == "invalid"
-    assert [(row["row_index"], row["row_key"], _value(row["quantity"])) for row in result["rows"]] == [
-        (0, "same", "0"), (1, "same", "1"), (2, "same", "2")
-    ]
+    assert [(row["row_index"], row["row_key"], _value(row["quantity"])) for row in result["rows"]] == [(0, "same", "0"), (1, "same", "1"), (2, "same", "2")]
     assert _issue(result, "duplicate_row_key", kind="invalid")["related_row_indices"] == [0, 1, 2]
 
 
@@ -681,11 +673,7 @@ def test_invalid_reference_date_blocks_only_its_dependent_valuations(source, ref
     raw["valuation_rates"] = [_rate()]
     raw["cash_balances"] = [{"currency": "USD", "amount": "1"}]
     raw["contributions"] = [{"currency": "EUR", "amount": "5"}]
-    path = (
-        ("rows", 1, "quote", "reference_date")
-        if source == "quote"
-        else ("valuation_rates", 0, "reference_date")
-    )
+    path = ("rows", 1, "quote", "reference_date") if source == "quote" else ("valuation_rates", 0, "reference_date")
     _put(raw, path, reference_date)
     result = _analyze(raw)
     assert result["availability"] == "invalid"
@@ -769,14 +757,10 @@ def test_availability_precedence_collects_all_primary_field_issues():
 def test_semantic_error_rows_keep_input_order_identity_and_revision_relative_indices():
     raw = _request([_row("Z/X", quantity="1", target="30"), _row("A/X", quantity="bad", target="40"), _row("M/X", quantity="-1", target="30")])
     result = _analyze(raw)
-    assert [(row["row_index"], row["row_key"], row["instrument_key"]) for row in result["rows"]] == [
-        (0, "Z/X", "Alfa"), (1, "A/X", "Alfa"), (2, "M/X", "Alfa")
-    ]
+    assert [(row["row_index"], row["row_key"], row["instrument_key"]) for row in result["rows"]] == [(0, "Z/X", "Alfa"), (1, "A/X", "Alfa"), (2, "M/X", "Alfa")]
     for index, code in ((1, "invalid_decimal_syntax"), (2, "short_inventory_unsupported")):
         assert _issue(result, code)["related_row_indices"] == [index]
-    assert [issue["path"] for issue in result["issues"]] == [
-        ["rows", 1, "initial_quantity"], ["rows", 2, "initial_quantity"]
-    ]
+    assert [issue["path"] for issue in result["issues"]] == [["rows", 1, "initial_quantity"], ["rows", 2, "initial_quantity"]]
     raw["rows"].reverse()
     reordered = _analyze(raw)
     assert [row["row_key"] for row in reordered["rows"]] == ["M/X", "A/X", "Z/X"]
@@ -918,7 +902,7 @@ def test_checkpoint_cancellation_propagates_unchanged_at_early_middle_and_last_c
         seen = 0
         error = ArithmeticError(f"cancel-at-{stop_at}")
 
-        def cancel():
+        def cancel(stop_at=stop_at, error=error):
             nonlocal seen
             seen += 1
             if seen == stop_at:
@@ -969,10 +953,10 @@ def test_actual_32_row_unicode_wire_witness_is_bounded_without_clipping_facts(in
     else:
         assert len(result["normalized"]["rows"]) == 32
     emitted = PAC_ANALYZE_OUTPUT_ADAPTER.dump_json(PAC_ANALYZE_OUTPUT_ADAPTER.validate_python(result))
-    compact_utf8 = json.dumps(result, ensure_ascii=False, allow_nan=False, separators=(",", ":")).encode("utf-8")
+    compact_utf8 = json.dumps(result, ensure_ascii=False, allow_nan=False, separators=(",", ":")).encode()
     assert len(emitted) <= 256 * 1024
     assert len(compact_utf8) <= 256 * 1024
-    assert "🧮".encode("utf-8") in emitted
+    assert "🧮".encode() in emitted
     assert b"\\u0001" in emitted
     assert json.loads(emitted) == json.loads(compact_utf8)
 
@@ -1009,8 +993,16 @@ def test_actual_32_row_unicode_wire_witness_is_bounded_without_clipping_facts(in
                 "is_fake_asset_id": "brim",
             },
             (
-                "brokers", "transactions", "assets", "prices", "provider",
-                "refresh", "fx", "signals", "system", "brim",
+                "brokers",
+                "transactions",
+                "assets",
+                "prices",
+                "provider",
+                "refresh",
+                "fx",
+                "signals",
+                "system",
+                "brim",
             ),
         ),
         (
@@ -1043,8 +1035,7 @@ def test_legacy_lazy_reexports_preserve_canonical_identity_in_a_fresh_process(pa
     Resolves real legacy Broker/BRIM/ROI/WAC imports, but invokes no service,
     database operation, provider, HTTP request or application lifecycle.
     """
-    script = dedent(
-        """
+    script = dedent("""
         import importlib
         import json
         import sys
@@ -1083,12 +1074,16 @@ def test_legacy_lazy_reexports_preserve_canonical_identity_in_a_fresh_process(pa
             "package": package_name, "checked": sorted(checked),
             "module_aliases": sorted(aliases),
         }))
-        """
-    )
+        """)
     completed = subprocess.run(
         [
-            sys.executable, "-B", "-c", script, package,
-            json.dumps(exports), json.dumps(module_aliases),
+            sys.executable,
+            "-B",
+            "-c",
+            script,
+            package,
+            json.dumps(exports),
+            json.dumps(module_aliases),
         ],
         cwd=Path(__file__).resolve().parents[3],
         capture_output=True,
@@ -1098,11 +1093,7 @@ def test_legacy_lazy_reexports_preserve_canonical_identity_in_a_fresh_process(pa
     )
     assert completed.returncode == 0, completed.stderr
     marker = "PAC_LEGACY_IMPORT_RESULT="
-    observations = [
-        json.loads(line.removeprefix(marker))
-        for line in completed.stdout.splitlines()
-        if line.startswith(marker)
-    ]
+    observations = [json.loads(line.removeprefix(marker)) for line in completed.stdout.splitlines() if line.startswith(marker)]
     assert len(observations) == 1, completed.stdout
     (observation,) = observations
     assert observation == {

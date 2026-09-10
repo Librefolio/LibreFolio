@@ -45,31 +45,67 @@ REASONS = {
 }
 ISSUE_CODES = {
     "missing": {
-        "rows_required", "field_required", "incomplete_decimal", "quote_required",
-        "grid_required", "cash_vector_required", "valuation_rate_required",
+        "rows_required",
+        "field_required",
+        "incomplete_decimal",
+        "quote_required",
+        "grid_required",
+        "cash_vector_required",
+        "valuation_rate_required",
     },
     "invalid": {
-        "invalid_decimal_syntax", "invalid_currency", "invalid_date",
-        "reference_after_asof", "nonpositive_price", "nonpositive_fx_rate",
-        "invalid_quote_basis", "target_percent_out_of_range", "target_total_not_100",
-        "nonpositive_quantity_step", "noninteger_whole_step", "negative_contribution",
-        "duplicate_row_key", "duplicate_currency", "identity_rate_mismatch",
+        "invalid_decimal_syntax",
+        "invalid_currency",
+        "invalid_date",
+        "reference_after_asof",
+        "nonpositive_price",
+        "nonpositive_fx_rate",
+        "invalid_quote_basis",
+        "target_percent_out_of_range",
+        "target_total_not_100",
+        "nonpositive_quantity_step",
+        "noninteger_whole_step",
+        "negative_contribution",
+        "duplicate_row_key",
+        "duplicate_currency",
+        "identity_rate_mismatch",
     },
     "unsupported": {
-        "numeric_domain_exceeded", "currency_domain_exceeded",
-        "quote_basis_unsupported", "short_inventory_unsupported",
+        "numeric_domain_exceeded",
+        "currency_domain_exceeded",
+        "quote_basis_unsupported",
+        "short_inventory_unsupported",
         "initial_debt_unsupported",
     },
     "info": {
-        "inventory_off_buy_grid", "reference_date_unspecified",
-        "unused_valuation_reference", "identity_rate_redundant",
+        "inventory_off_buy_grid",
+        "reference_date_unspecified",
+        "unused_valuation_reference",
+        "identity_rate_redundant",
     },
 }
 PATH_FIELDS = {
-    "report_currency", "as_of_date", "rows", "row_key", "instrument_key", "name",
-    "initial_quantity", "quote", "raw_price", "currency", "quote_base_quantity",
-    "reference_date", "target_percent", "buy_grid", "mode", "quantity_step",
-    "cash_balances", "contributions", "valuation_rates", "amount", "rate_to_report",
+    "report_currency",
+    "as_of_date",
+    "rows",
+    "row_key",
+    "instrument_key",
+    "name",
+    "initial_quantity",
+    "quote",
+    "raw_price",
+    "currency",
+    "quote_base_quantity",
+    "reference_date",
+    "target_percent",
+    "buy_grid",
+    "mode",
+    "quantity_step",
+    "cash_balances",
+    "contributions",
+    "valuation_rates",
+    "amount",
+    "rate_to_report",
 }
 PARAM_FIELDS = {"currency", "vector", "limit", "allowed_quote_bases", "unit"}
 DECIMAL_PATHS = (
@@ -108,26 +144,16 @@ NUMERIC_FIELDS = (
     (("rows", 0, "target_percent", "value"), 26),
     (("rows", 0, "initial_value_native", "value", "amount"), 52),
     (("rows", 0, "initial_value_reporting", "value", "amount"), 80),
-    *(
-        (("rows", 0, fact, "value", field), width)
-        for fact in ("current_weight_percent", "deviation_pp")
-        for field, width in (("numerator", 96), ("denominator", 80), ("approximation", 36))
-    ),
-    *(
-        (("cash_pools", "value", 0, field), width)
-        for field, width in (
-            ("existing_amount", 26), ("contribution_amount", 26), ("combined_amount", 28)
-        )
-    ),
-    *(
-        (("cash_pools", "value", 0, field, "value", "amount"), 80)
-        for field in ("existing_reporting", "contribution_reporting", "combined_reporting")
-    ),
+    *((("rows", 0, fact, "value", field), width) for fact in ("current_weight_percent", "deviation_pp") for field, width in (("numerator", 96), ("denominator", 80), ("approximation", 36))),
+    *((("cash_pools", "value", 0, field), width) for field, width in (("existing_amount", 26), ("contribution_amount", 26), ("combined_amount", 28))),
+    *((("cash_pools", "value", 0, field, "value", "amount"), 80) for field in ("existing_reporting", "contribution_reporting", "combined_reporting")),
     *(
         (("totals", field, "value", "amount"), 80)
         for field in (
-            "initial_invested_reporting", "existing_cash_reporting",
-            "contributions_reporting", "cash_plus_contributions_reporting",
+            "initial_invested_reporting",
+            "existing_cash_reporting",
+            "contributions_reporting",
+            "cash_plus_contributions_reporting",
         )
     ),
     (("totals", "target_total_percent", "value"), 26),
@@ -137,7 +163,7 @@ NUMERIC_FIELDS = (
             ("max_abs_gap_pp", (96, 80, 36)),
             ("squared_gap_pp2", (192, 160, 36)),
         )
-        for field, width in zip(("numerator", "denominator", "approximation"), widths)
+        for field, width in zip(("numerator", "denominator", "approximation"), widths, strict=True)
     ),
     (("normalized", "rows", 0, "initial_quantity"), 26),
     (("normalized", "rows", 0, "quote", "raw_price"), 26),
@@ -150,9 +176,7 @@ NUMERIC_FIELDS = (
 
 
 def _encode(value: Any, *, ensure_ascii: bool = False) -> bytes:
-    return json.dumps(
-        value, ensure_ascii=ensure_ascii, allow_nan=False, separators=(",", ":")
-    ).encode("utf-8")
+    return json.dumps(value, ensure_ascii=ensure_ascii, allow_nan=False, separators=(",", ":")).encode("utf-8")
 
 
 def _at(value: Any, path: Path) -> Any:
@@ -180,23 +204,31 @@ def _request() -> dict[str, Any]:
         "operation": "analyze",
         "report_currency": "EUR",
         "as_of_date": "2026-09-08",
-        "rows": [{
-            "row_key": "schema-owned::alpha",
-            "instrument_key": "schema-owned-alpha",
-            "name": "Codec witness",
-            "initial_quantity": "10.125",
-            "quote": {
-                "raw_price": "10", "currency": "EUR",
-                "quote_base_quantity": 1, "reference_date": None,
-            },
-            "target_percent": "100",
-            "buy_grid": {"mode": "whole", "quantity_step": "1"},
-        }],
+        "rows": [
+            {
+                "row_key": "schema-owned::alpha",
+                "instrument_key": "schema-owned-alpha",
+                "name": "Codec witness",
+                "initial_quantity": "10.125",
+                "quote": {
+                    "raw_price": "10",
+                    "currency": "EUR",
+                    "quote_base_quantity": 1,
+                    "reference_date": None,
+                },
+                "target_percent": "100",
+                "buy_grid": {"mode": "whole", "quantity_step": "1"},
+            }
+        ],
         "cash_balances": [{"currency": "EUR", "amount": "0.005"}],
         "contributions": [{"currency": "EUR", "amount": "5"}],
-        "valuation_rates": [{
-            "currency": "USD", "rate_to_report": "0.9", "reference_date": "2026-09-08",
-        }],
+        "valuation_rates": [
+            {
+                "currency": "USD",
+                "rate_to_report": "0.9",
+                "reference_date": "2026-09-08",
+            }
+        ],
     }
 
 
@@ -228,8 +260,10 @@ def _analyzed(payload: dict[str, Any], expected: str) -> dict[str, Any]:
 def output_witnesses() -> dict[str, dict[str, Any]]:
     witnesses = {}
     for state, quantity in (
-        ("ready", "10.125"), ("needs_input", None),
-        ("invalid", "12abc"), ("unsupported", "-1"),
+        ("ready", "10.125"),
+        ("needs_input", None),
+        ("invalid", "12abc"),
+        ("unsupported", "-1"),
     ):
         payload = _request()
         _set(payload, ("rows", 0, "initial_quantity"), quantity)
@@ -243,8 +277,11 @@ def _issue_document(witnesses, kind: str, code: str) -> dict[str, Any]:
     assert wire["issues"], "The invalid witness must supply a real issue"
     issue = deepcopy(next(iter(wire["issues"])))
     issue.update(
-        kind=kind, code=code, path=["rows", 0, "initial_quantity"],
-        related_row_indices=[0], params={},
+        kind=kind,
+        code=code,
+        path=["rows", 0, "initial_quantity"],
+        related_row_indices=[0],
+        params={},
     )
     wire["issues"] = [issue]
     return wire
@@ -297,9 +334,7 @@ def test_public_adapters_are_real_codecs():
     assert isinstance(request, PacAnalyzeInput)
     assert TypeAdapter(PacAnalyzeInput).validate_json(b'{"operation":"analyze"}') == request
     for mode in ("validation", "serialization"):
-        assert TypeAdapter(PacAnalyzeOutput).json_schema(mode=mode) == (
-            PAC_ANALYZE_OUTPUT_ADAPTER.json_schema(mode=mode)
-        )
+        assert TypeAdapter(PacAnalyzeOutput).json_schema(mode=mode) == (PAC_ANALYZE_OUTPUT_ADAPTER.json_schema(mode=mode))
 
 
 @pytest.mark.parametrize("root", [None, [], ["analyze"], "analyze", True, False, 0, 1.5])
@@ -307,10 +342,18 @@ def test_wrong_input_root_is_structural(root):
     _reject(PAC_ANALYZE_INPUT_ADAPTER, root)
 
 
-@pytest.mark.parametrize("payload", [
-    {}, {"operation": None}, {"operation": "solve"}, {"operation": "ANALYZE"},
-    {"operation": True}, {"operation": 1}, {"operation": {}},
-])
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        {"operation": None},
+        {"operation": "solve"},
+        {"operation": "ANALYZE"},
+        {"operation": True},
+        {"operation": 1},
+        {"operation": {}},
+    ],
+)
 def test_operation_is_required_and_analyze_only(payload):
     _reject(PAC_ANALYZE_INPUT_ADAPTER, payload)
 
@@ -318,30 +361,42 @@ def test_operation_is_required_and_analyze_only(payload):
 def test_all_draft_cells_default_to_null_and_only_collections_default_empty():
     model = _roundtrip(PAC_ANALYZE_INPUT_ADAPTER, {"operation": "analyze"})
     assert model.model_dump(mode="json") == {
-        "operation": "analyze", "report_currency": None, "as_of_date": None,
-        "rows": [], "cash_balances": None, "contributions": None, "valuation_rates": [],
+        "operation": "analyze",
+        "report_currency": None,
+        "as_of_date": None,
+        "rows": [],
+        "cash_balances": None,
+        "contributions": None,
+        "valuation_rates": [],
     }
     draft = {
         "operation": "analyze",
         "rows": [{"row_key": "owned", "instrument_key": "instrument"}],
-        "cash_balances": [{}], "contributions": [{}], "valuation_rates": [{}],
+        "cash_balances": [{}],
+        "contributions": [{}],
+        "valuation_rates": [{}],
     }
     expanded = _roundtrip(PAC_ANALYZE_INPUT_ADAPTER, draft).model_dump(mode="json")
-    assert expanded["rows"] == [{
-        "row_key": "owned", "instrument_key": "instrument", "name": None,
-        "initial_quantity": None, "quote": None, "target_percent": None, "buy_grid": None,
-    }]
-    assert expanded["cash_balances"] == expanded["contributions"] == [
-        {"currency": None, "amount": None}
+    assert expanded["rows"] == [
+        {
+            "row_key": "owned",
+            "instrument_key": "instrument",
+            "name": None,
+            "initial_quantity": None,
+            "quote": None,
+            "target_percent": None,
+            "buy_grid": None,
+        }
     ]
-    assert expanded["valuation_rates"] == [
-        {"currency": None, "rate_to_report": None, "reference_date": None}
-    ]
+    assert expanded["cash_balances"] == expanded["contributions"] == [{"currency": None, "amount": None}]
+    assert expanded["valuation_rates"] == [{"currency": None, "rate_to_report": None, "reference_date": None}]
     draft["rows"][0].update(quote={}, buy_grid={})
     expanded = _roundtrip(PAC_ANALYZE_INPUT_ADAPTER, draft).model_dump(mode="json")
     assert expanded["rows"][0]["quote"] == {
-        "raw_price": None, "currency": None,
-        "quote_base_quantity": None, "reference_date": None,
+        "raw_price": None,
+        "currency": None,
+        "quote_base_quantity": None,
+        "reference_date": None,
     }
     assert expanded["rows"][0]["buy_grid"] == {"mode": None, "quantity_step": None}
 
@@ -360,8 +415,13 @@ def test_unknown_fields_rejected_at_every_input_object():
     payload = _request()
     objects = list(_objects(payload))
     assert {path for path, _ in objects} == {
-        (), ("rows", 0), ("rows", 0, "quote"), ("rows", 0, "buy_grid"),
-        ("cash_balances", 0), ("contributions", 0), ("valuation_rates", 0),
+        (),
+        ("rows", 0),
+        ("rows", 0, "quote"),
+        ("rows", 0, "buy_grid"),
+        ("cash_balances", 0),
+        ("contributions", 0),
+        ("valuation_rates", 0),
     }
     for path, _ in objects:
         mutated = deepcopy(payload)
@@ -369,21 +429,41 @@ def test_unknown_fields_rejected_at_every_input_object():
         _reject(PAC_ANALYZE_INPUT_ADAPTER, mutated)
 
 
-@pytest.mark.parametrize("field", [
-    "candidate_trades", "fees", "reserves", "broker_id", "execution_fx",
-    "operational_threshold", "initial_value", "draft_revision", "account_id",
-])
+@pytest.mark.parametrize(
+    "field",
+    [
+        "candidate_trades",
+        "fees",
+        "reserves",
+        "broker_id",
+        "execution_fx",
+        "operational_threshold",
+        "initial_value",
+        "draft_revision",
+        "account_id",
+    ],
+)
 def test_full_allocator_and_platform_fields_are_not_analyze_parameters(field):
     payload = _request()
     payload[field] = None
     _reject(PAC_ANALYZE_INPUT_ADAPTER, payload)
 
 
-@pytest.mark.parametrize("path", [
-    ("rows",), ("cash_balances",), ("contributions",), ("valuation_rates",),
-    ("rows", 0), ("rows", 0, "quote"), ("rows", 0, "buy_grid"),
-    ("cash_balances", 0), ("contributions", 0), ("valuation_rates", 0),
-])
+@pytest.mark.parametrize(
+    "path",
+    [
+        ("rows",),
+        ("cash_balances",),
+        ("contributions",),
+        ("valuation_rates",),
+        ("rows", 0),
+        ("rows", 0, "quote"),
+        ("rows", 0, "buy_grid"),
+        ("cash_balances", 0),
+        ("contributions", 0),
+        ("valuation_rates", 0),
+    ],
+)
 @pytest.mark.parametrize("bad", [True, 1, "{}", "[]"])
 def test_nested_container_types_are_not_coerced(path, bad):
     payload = _request()
@@ -396,19 +476,32 @@ def test_default_empty_collections_do_not_accept_null(field):
     _reject(PAC_ANALYZE_INPUT_ADAPTER, {"operation": "analyze", field: None})
 
 
-@pytest.mark.parametrize("path", [
-    ("rows",), ("cash_balances",), ("contributions",), ("valuation_rates",),
-])
+@pytest.mark.parametrize(
+    "path",
+    [
+        ("rows",),
+        ("cash_balances",),
+        ("contributions",),
+        ("valuation_rates",),
+    ],
+)
 def test_input_arrays_do_not_accept_objects(path):
     payload = _request()
     _set(payload, path, {})
     _reject(PAC_ANALYZE_INPUT_ADAPTER, payload)
 
 
-@pytest.mark.parametrize("path", [
-    ("rows", 0), ("rows", 0, "quote"), ("rows", 0, "buy_grid"),
-    ("cash_balances", 0), ("contributions", 0), ("valuation_rates", 0),
-])
+@pytest.mark.parametrize(
+    "path",
+    [
+        ("rows", 0),
+        ("rows", 0, "quote"),
+        ("rows", 0, "buy_grid"),
+        ("cash_balances", 0),
+        ("contributions", 0),
+        ("valuation_rates", 0),
+    ],
+)
 def test_input_objects_do_not_accept_arrays(path):
     payload = _request()
     _set(payload, path, [])
@@ -440,9 +533,7 @@ def test_null_cash_vectors_remain_distinct_from_explicit_closed_empty_vectors(fi
     payload[field] = []
     closed = _roundtrip(PAC_ANALYZE_INPUT_ADAPTER, payload)
     assert getattr(closed, field) == []
-    assert PAC_ANALYZE_INPUT_ADAPTER.dump_json(absent) != (
-        PAC_ANALYZE_INPUT_ADAPTER.dump_json(closed)
-    )
+    assert PAC_ANALYZE_INPUT_ADAPTER.dump_json(absent) != (PAC_ANALYZE_INPUT_ADAPTER.dump_json(closed))
 
 
 @pytest.mark.parametrize("path", DECIMAL_PATHS)
@@ -454,10 +545,25 @@ def test_financial_cells_require_strings_not_json_numbers_or_booleans(path, bad)
 
 
 @pytest.mark.parametrize("path", DECIMAL_PATHS)
-@pytest.mark.parametrize("text", [
-    "", "-", ".", "1e3", "12abc", "NaN", "Infinity", "-Infinity", "1,234.5",
-    "1.2.3", "１２", "  +001.2300  ", "\x00", "\U0001f680",
-])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "",
+        "-",
+        ".",
+        "1e3",
+        "12abc",
+        "NaN",
+        "Infinity",
+        "-Infinity",
+        "1,234.5",
+        "1.2.3",
+        "１２",
+        "  +001.2300  ",
+        "\x00",
+        "\U0001f680",
+    ],
+)
 def test_malformed_decimal_text_is_structural_input_not_codec_failure(path, text):
     payload = _request()
     _set(payload, path, text)
@@ -494,9 +600,15 @@ def test_grid_mode_rejects_unknown_literals(mode):
     _reject(PAC_ANALYZE_INPUT_ADAPTER, payload)
 
 
-@pytest.mark.parametrize("field,limit", [
-    ("rows", 32), ("cash_balances", 4), ("contributions", 4), ("valuation_rates", 4),
-])
+@pytest.mark.parametrize(
+    "field,limit",
+    [
+        ("rows", 32),
+        ("cash_balances", 4),
+        ("contributions", 4),
+        ("valuation_rates", 4),
+    ],
+)
 def test_input_collection_boundaries(field, limit):
     payload = _request()
     template = deepcopy(next(iter(payload[field])))
@@ -533,9 +645,19 @@ def test_key_maximum_allows_quote_and_backslash_escaping(key, limit):
 
 
 @pytest.mark.parametrize("key", ["row_key", "instrument_key"])
-@pytest.mark.parametrize("bad", [
-    " ", "a b", "\x00", "\n", "\t", "\x7f", "é", "\U0001f680",
-])
+@pytest.mark.parametrize(
+    "bad",
+    [
+        " ",
+        "a b",
+        "\x00",
+        "\n",
+        "\t",
+        "\x7f",
+        "é",
+        "\U0001f680",
+    ],
+)
 def test_keys_are_nonempty_printable_ascii_without_whitespace(key, bad):
     payload = _request()
     payload["rows"][0][key] = bad
@@ -579,7 +701,13 @@ def test_surrogate_object_keys_are_not_accepted(adapter, output_witnesses):
 def test_actual_output_has_complete_root_literals_and_conditional_normalized(state, output_witnesses):
     wire = deepcopy(output_witnesses[state])
     assert set(wire) == {
-        *ROOT_LITERALS, "availability", "normalized", "rows", "cash_pools", "totals", "issues",
+        *ROOT_LITERALS,
+        "availability",
+        "normalized",
+        "rows",
+        "cash_pools",
+        "totals",
+        "issues",
     }
     assert {key: wire[key] for key in ROOT_LITERALS} == ROOT_LITERALS
     assert (wire["normalized"] is not None) == (state == "ready")
@@ -637,9 +765,7 @@ def test_issue_array_caps_and_ready_info_only(state, output_witnesses):
             _reject(PAC_ANALYZE_OUTPUT_ADAPTER, wire)
 
 
-@pytest.mark.parametrize("kind,code", [
-    (kind, code) for kind, codes in ISSUE_CODES.items() for code in sorted(codes)
-])
+@pytest.mark.parametrize("kind,code", [(kind, code) for kind, codes in ISSUE_CODES.items() for code in sorted(codes)])
 def test_issue_code_vocabulary_is_kind_specific(kind, code, output_witnesses):
     wire = _issue_document(output_witnesses, kind, code)
     _roundtrip(PAC_ANALYZE_OUTPUT_ADAPTER, wire)
@@ -662,10 +788,7 @@ def test_unknown_issue_kind_is_rejected(bad, output_witnesses):
 def test_fact_discriminated_shapes_and_closed_reason_vocabulary(output_witnesses):
     seen = set()
     for original in output_witnesses.values():
-        facts = [
-            (path, obj) for path, obj in _objects(original)
-            if obj.get("availability") in {"available", "unavailable"}
-        ]
+        facts = [(path, obj) for path, obj in _objects(original) if obj.get("availability") in {"available", "unavailable"}]
         for path, fact in facts:
             seen.add(fact["availability"])
             assert set(fact) == {"availability", "value", "reason_codes"}
@@ -676,10 +799,7 @@ def test_fact_discriminated_shapes_and_closed_reason_vocabulary(output_witnesses
             else:
                 assert len(fact["reason_codes"]) == 1
                 assert fact["reason_codes"][0] in REASONS
-            invalid_reasons = (
-                [["input_missing"], None, "input_missing"] if available
-                else [[], ["input_missing", "input_invalid"], ["invented"], None, "input_missing"]
-            )
+            invalid_reasons = [["input_missing"], None, "input_missing"] if available else [[], ["input_missing", "input_invalid"], ["invented"], None, "input_missing"]
             for reasons in invalid_reasons:
                 wire = deepcopy(original)
                 _at(wire, path)["reason_codes"] = reasons
@@ -706,10 +826,21 @@ def test_related_row_indices_codec_boundaries(indices, output_witnesses):
     _roundtrip(PAC_ANALYZE_OUTPUT_ADAPTER, wire)
 
 
-@pytest.mark.parametrize("indices", [
-    [True], [False], [0.0], ["0"], [-1], [32], [0, 0],
-    list(range(32)) + [0], ["schema-owned::alpha"], None,
-])
+@pytest.mark.parametrize(
+    "indices",
+    [
+        [True],
+        [False],
+        [0.0],
+        ["0"],
+        [-1],
+        [32],
+        [0, 0],
+        list(range(32)) + [0],
+        ["schema-owned::alpha"],
+        None,
+    ],
+)
 def test_related_row_indices_are_strict_unique_indices_not_echoed_keys(indices, output_witnesses):
     wire = _issue_document(output_witnesses, "invalid", "duplicate_row_key")
     wire["issues"][0]["related_row_indices"] = indices
@@ -719,20 +850,12 @@ def test_related_row_indices_are_strict_unique_indices_not_echoed_keys(indices, 
 def test_production_duplicate_projection_sorts_indices_in_original_row_order():
     payload = _request()
     template = payload["rows"][0]
-    payload["rows"] = [
-        {**deepcopy(template), "row_key": f"schema-owned::{index}", "target_percent": "3.125"}
-        for index in range(32)
-    ]
+    payload["rows"] = [{**deepcopy(template), "row_key": f"schema-owned::{index}", "target_percent": "3.125"} for index in range(32)]
     affected = [0, 15, 31]
     for index in affected:
         payload["rows"][index]["row_key"] = "schema-owned::duplicate"
     wire = _analyzed(payload, "invalid")
-    assert [
-        (row["row_index"], row["row_key"], row["instrument_key"]) for row in wire["rows"]
-    ] == [
-        (index, row["row_key"], row["instrument_key"])
-        for index, row in enumerate(payload["rows"])
-    ]
+    assert [(row["row_index"], row["row_key"], row["instrument_key"]) for row in wire["rows"]] == [(index, row["row_key"], row["instrument_key"]) for index, row in enumerate(payload["rows"])]
     duplicates = [issue for issue in wire["issues"] if issue["code"] == "duplicate_row_key"]
     assert len(duplicates) == 1  # Exactly one duplicate group was constructed here.
     (duplicate,) = duplicates
@@ -742,51 +865,96 @@ def test_production_duplicate_projection_sorts_indices_in_original_row_order():
         assert "related_row_keys" not in issue
 
 
-@pytest.mark.parametrize("path", [
-    [], ["rows", 31, "quote", "quote_base_quantity"], [0, 31],
-    *[[field] for field in sorted(PATH_FIELDS)],
-])
+@pytest.mark.parametrize(
+    "path",
+    [
+        [],
+        ["rows", 31, "quote", "quote_base_quantity"],
+        [0, 31],
+        *[[field] for field in sorted(PATH_FIELDS)],
+    ],
+)
 def test_issue_path_admits_only_bounded_input_tokens(path, output_witnesses):
     wire = _issue_document(output_witnesses, "invalid", "invalid_decimal_syntax")
     wire["issues"][0]["path"] = path
     _roundtrip(PAC_ANALYZE_OUTPUT_ADAPTER, wire)
 
 
-@pytest.mark.parametrize("path", [
-    ["rows"] * 5, [True], [False], [0.0], [-1], [32], ["0"], [None],
-    ["/api/v1"], ["schema-owned::alpha"], ["exception"], ["x" * 20], None, "rows",
-])
+@pytest.mark.parametrize(
+    "path",
+    [
+        ["rows"] * 5,
+        [True],
+        [False],
+        [0.0],
+        [-1],
+        [32],
+        ["0"],
+        [None],
+        ["/api/v1"],
+        ["schema-owned::alpha"],
+        ["exception"],
+        ["x" * 20],
+        None,
+        "rows",
+    ],
+)
 def test_issue_path_rejects_unbounded_tokens_and_non_strict_indices(path, output_witnesses):
     wire = _issue_document(output_witnesses, "invalid", "invalid_decimal_syntax")
     wire["issues"][0]["path"] = path
     _reject(PAC_ANALYZE_OUTPUT_ADAPTER, wire)
 
 
-@pytest.mark.parametrize("params", [
-    {}, dict.fromkeys(sorted(PARAM_FIELDS)),
-    {
-        "currency": "EUR", "vector": "valuation_rates", "limit": 512,
-        "allowed_quote_bases": [1, 100], "unit": "native_amount",
-    },
-    {"limit": 0}, {"allowed_quote_bases": []},
-    *[{"vector": vector} for vector in ("cash_balances", "contributions", "valuation_rates")],
-    *[{"unit": unit} for unit in ("quantity", "quote", "rate", "percent", "native_amount")],
-])
+@pytest.mark.parametrize(
+    "params",
+    [
+        {},
+        dict.fromkeys(sorted(PARAM_FIELDS)),
+        {
+            "currency": "EUR",
+            "vector": "valuation_rates",
+            "limit": 512,
+            "allowed_quote_bases": [1, 100],
+            "unit": "native_amount",
+        },
+        {"limit": 0},
+        {"allowed_quote_bases": []},
+        *[{"vector": vector} for vector in ("cash_balances", "contributions", "valuation_rates")],
+        *[{"unit": unit} for unit in ("quantity", "quote", "rate", "percent", "native_amount")],
+    ],
+)
 def test_issue_params_admitted_shapes(params, output_witnesses):
     wire = _issue_document(output_witnesses, "invalid", "invalid_decimal_syntax")
     wire["issues"][0]["params"] = params
     _roundtrip(PAC_ANALYZE_OUTPUT_ADAPTER, wire)
 
 
-@pytest.mark.parametrize("params", [
-    {"currency": "eur"}, {"currency": "ZZZ"}, {"currency": "EURO"}, {"currency": True},
-    {"vector": "rows"}, {"unit": "money"}, {"limit": -1}, {"limit": 513},
-    {"limit": True}, {"limit": 1.0}, {"limit": "32"},
-    {"allowed_quote_bases": [1, 100, 1]}, {"allowed_quote_bases": [2]},
-    {"allowed_quote_bases": [True]}, {"allowed_quote_bases": [1.0]},
-    {"allowed_quote_bases": ["100"]}, {"raw_input": "12abc"},
-    {"exception": "private traceback"}, {"row_key": "opaque"}, None, [],
-])
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"currency": "eur"},
+        {"currency": "ZZZ"},
+        {"currency": "EURO"},
+        {"currency": True},
+        {"vector": "rows"},
+        {"unit": "money"},
+        {"limit": -1},
+        {"limit": 513},
+        {"limit": True},
+        {"limit": 1.0},
+        {"limit": "32"},
+        {"allowed_quote_bases": [1, 100, 1]},
+        {"allowed_quote_bases": [2]},
+        {"allowed_quote_bases": [True]},
+        {"allowed_quote_bases": [1.0]},
+        {"allowed_quote_bases": ["100"]},
+        {"raw_input": "12abc"},
+        {"exception": "private traceback"},
+        {"row_key": "opaque"},
+        None,
+        [],
+    ],
+)
 def test_issue_params_are_closed_and_field_bounded(params, output_witnesses):
     wire = _issue_document(output_witnesses, "invalid", "invalid_decimal_syntax")
     wire["issues"][0]["params"] = params
@@ -808,18 +976,25 @@ def test_output_numeric_fields_have_exact_wire_widths(path, width, output_witnes
         _reject(PAC_ANALYZE_OUTPUT_ADAPTER, wire)
 
 
-@pytest.mark.parametrize("path,unit", [
-    (("rows", 0, "current_weight_percent", "value"), "percent"),
-    (("rows", 0, "deviation_pp", "value"), "percentage_points"),
-    (("totals", "max_abs_gap_pp", "value"), "percentage_points"),
-    (("totals", "squared_gap_pp2", "value"), "percentage_points_squared"),
-])
+@pytest.mark.parametrize(
+    "path,unit",
+    [
+        (("rows", 0, "current_weight_percent", "value"), "percent"),
+        (("rows", 0, "deviation_pp", "value"), "percentage_points"),
+        (("totals", "max_abs_gap_pp", "value"), "percentage_points"),
+        (("totals", "squared_gap_pp2", "value"), "percentage_points_squared"),
+    ],
+)
 def test_ratios_have_strict_metadata_positive_denominators_and_required_units(path, unit, output_witnesses):
     wire = deepcopy(output_witnesses["ready"])
     ratio = _at(wire, path)
     assert set(ratio) == {
-        "numerator", "denominator", "unit", "approximation",
-        "approximation_decimal_places", "approximation_exact",
+        "numerator",
+        "denominator",
+        "unit",
+        "approximation",
+        "approximation_decimal_places",
+        "approximation_exact",
     }
     assert ratio["unit"] == unit
     assert ratio["approximation_decimal_places"] == 28
@@ -844,9 +1019,13 @@ def test_ratios_have_strict_metadata_positive_denominators_and_required_units(pa
         _reject(PAC_ANALYZE_OUTPUT_ADAPTER, wire)
 
 
-@pytest.mark.parametrize("path", [
-    ("rows", 0, "name"), ("normalized", "rows", 0, "name"),
-])
+@pytest.mark.parametrize(
+    "path",
+    [
+        ("rows", 0, "name"),
+        ("normalized", "rows", 0, "name"),
+    ],
+)
 @pytest.mark.parametrize("character", ["\U0001f680", "\x00"])
 def test_output_names_preserve_128_unicode_scalars_and_reject_129(path, character, output_witnesses):
     wire = deepcopy(output_witnesses["ready"])
@@ -882,11 +1061,14 @@ def test_output_keys_retain_the_same_ascii_length_domain(prefix, key, limit, out
         assert re.fullmatch(field["pattern"], "\\" * limit)
 
 
-@pytest.mark.parametrize("path", [
-    ("normalized", "as_of_date"),
-    ("normalized", "rows", 0, "quote", "reference_date"),
-    ("normalized", "valuation_rates", 0, "reference_date"),
-])
+@pytest.mark.parametrize(
+    "path",
+    [
+        ("normalized", "as_of_date"),
+        ("normalized", "rows", 0, "quote", "reference_date"),
+        ("normalized", "valuation_rates", 0, "reference_date"),
+    ],
+)
 def test_normalized_dates_are_nullable_real_iso_dates_not_raw_drafts(path, output_witnesses):
     wire = deepcopy(output_witnesses["ready"])
     for valid in (None, "2024-02-29", "2026-09-08"):
@@ -919,14 +1101,17 @@ def test_output_row_index_is_strict_zero_through_31(bad, output_witnesses):
     _reject(PAC_ANALYZE_OUTPUT_ADAPTER, wire)
 
 
-@pytest.mark.parametrize("path,limit", [
-    (("rows",), 32),
-    (("cash_pools", "value"), 4),
-    (("normalized", "rows"), 32),
-    (("normalized", "cash_balances"), 4),
-    (("normalized", "contributions"), 4),
-    (("normalized", "valuation_rates"), 5),
-])
+@pytest.mark.parametrize(
+    "path,limit",
+    [
+        (("rows",), 32),
+        (("cash_pools", "value"), 4),
+        (("normalized", "rows"), 32),
+        (("normalized", "cash_balances"), 4),
+        (("normalized", "contributions"), 4),
+        (("normalized", "valuation_rates"), 5),
+    ],
+)
 def test_output_collection_caps_are_codec_constraints(path, limit, output_witnesses):
     wire = deepcopy(output_witnesses["ready"])
     template = deepcopy(next(iter(_at(wire, path))))
@@ -974,8 +1159,11 @@ def test_exported_input_defaults_and_field_specific_limits(mode):
         assert row["properties"][name]["default"] is None
         assert {"type": "null"} in row["properties"][name]["anyOf"]
     for path in (
-        ("rows", 0, "quote"), ("rows", 0, "buy_grid"),
-        ("cash_balances", 0), ("contributions", 0), ("valuation_rates", 0),
+        ("rows", 0, "quote"),
+        ("rows", 0, "buy_grid"),
+        ("cash_balances", 0),
+        ("contributions", 0),
+        ("valuation_rates", 0),
     ):
         obj = _schema_at(schema, path)
         assert not obj.get("required")
@@ -1039,11 +1227,7 @@ def test_exported_availability_branches_encode_conditional_bounds(mode):
 @pytest.mark.parametrize("mode", ["validation", "serialization"])
 def test_exported_fact_unions_encode_nullability_reasons_and_nested_values(mode):
     schema = PAC_ANALYZE_OUTPUT_ADAPTER.json_schema(mode=mode)
-    unions = [
-        obj for _, obj in _objects(schema)
-        if obj.get("discriminator", {}).get("propertyName") == "availability"
-        and set(obj["discriminator"]["mapping"]) == {"available", "unavailable"}
-    ]
+    unions = [obj for _, obj in _objects(schema) if obj.get("discriminator", {}).get("propertyName") == "availability" and set(obj["discriminator"]["mapping"]) == {"available", "unavailable"}]
     assert unions, "Facts must remain discriminated unions in the actual export"
     for union in unions:
         assert len(union["oneOf"]) == 2
@@ -1066,9 +1250,16 @@ def test_exported_fact_unions_encode_nullability_reasons_and_nested_values(mode)
         assert unavailable["properties"]["reason_codes"]["maxItems"] == 1
     row = _schema_at(schema, ("rows", 0))
     assert set(row["properties"]) == {
-        "row_index", "row_key", "instrument_key", "name", "quantity",
-        "initial_value_native", "initial_value_reporting", "current_weight_percent",
-        "target_percent", "deviation_pp",
+        "row_index",
+        "row_key",
+        "instrument_key",
+        "name",
+        "quantity",
+        "initial_value_native",
+        "initial_value_reporting",
+        "current_weight_percent",
+        "target_percent",
+        "deviation_pp",
     }
     index = row["properties"]["row_index"]
     assert index["type"] == "integer" and index["minimum"] == 0 and index["maximum"] == 31
@@ -1076,16 +1267,25 @@ def test_exported_fact_unions_encode_nullability_reasons_and_nested_values(mode)
         assert _schema_at(schema, path)["maxLength"] == 128
     totals = _schema_at(schema, ("totals",))
     assert set(totals["properties"]) == {
-        "initial_invested_reporting", "existing_cash_reporting", "contributions_reporting",
-        "cash_plus_contributions_reporting", "target_total_percent", "max_abs_gap_pp",
+        "initial_invested_reporting",
+        "existing_cash_reporting",
+        "contributions_reporting",
+        "cash_plus_contributions_reporting",
+        "target_total_percent",
+        "max_abs_gap_pp",
         "squared_gap_pp2",
     }
     pools = _schema_at(schema, ("cash_pools", "value"))
     assert pools["type"] == "array" and pools["maxItems"] == 4
     pool = _resolve(schema, pools["items"])
     assert set(pool["properties"]) == {
-        "currency", "existing_amount", "contribution_amount", "combined_amount",
-        "existing_reporting", "contribution_reporting", "combined_reporting",
+        "currency",
+        "existing_amount",
+        "contribution_amount",
+        "combined_amount",
+        "existing_reporting",
+        "contribution_reporting",
+        "combined_reporting",
     }
 
 
@@ -1148,32 +1348,38 @@ def _stress_request(name: str, *, invalid: bool) -> dict[str, Any]:
     currencies = ("EUR", "USD", "GBP", "JPY")
     payload["rows"] = []
     for index in range(32):
-        payload["rows"].append({
-            "row_key": _escaped_key(index, 256),
-            "instrument_key": _escaped_key(index, 128),
-            "name": name,
-            "initial_quantity": maximum,
-            "quote": {
-                "raw_price": maximum, "currency": currencies[index % 4],
-                "quote_base_quantity": 100, "reference_date": None,
-            },
-            "target_percent": "x" * 64 if invalid else "3.125",
-            "buy_grid": {"mode": "whole", "quantity_step": "1"},
-        })
+        payload["rows"].append(
+            {
+                "row_key": _escaped_key(index, 256),
+                "instrument_key": _escaped_key(index, 128),
+                "name": name,
+                "initial_quantity": maximum,
+                "quote": {
+                    "raw_price": maximum,
+                    "currency": currencies[index % 4],
+                    "quote_base_quantity": 100,
+                    "reference_date": None,
+                },
+                "target_percent": "x" * 64 if invalid else "3.125",
+                "buy_grid": {"mode": "whole", "quantity_step": "1"},
+            }
+        )
     for field in ("cash_balances", "contributions"):
         payload[field] = [{"currency": currency, "amount": maximum} for currency in currencies]
-    payload["valuation_rates"] = [
-        {"currency": currency, "rate_to_report": "1" if currency == "EUR" else maximum,
-         "reference_date": None}
-        for currency in currencies
-    ]
+    payload["valuation_rates"] = [{"currency": currency, "rate_to_report": "1" if currency == "EUR" else maximum, "reference_date": None} for currency in currencies]
     return payload
 
 
 @pytest.mark.parametrize("state,issue_limit", [("ready", 80), ("invalid", 384)])
-@pytest.mark.parametrize("name", [
-    "\U0001f680" * 128, "\x00" * 128, ("\U0001f680\x00\x01\x02" * 32),
-], ids=["128-non-bmp", "128-six-byte-controls", "mixed-scalars-and-controls"])
+@pytest.mark.parametrize(
+    "name",
+    [
+        "\U0001f680" * 128,
+        "\x00" * 128,
+        ("\U0001f680\x00\x01\x02" * 32),
+    ],
+    ids=["128-non-bmp", "128-six-byte-controls", "mixed-scalars-and-controls"],
+)
 def test_real_utf8_serialization_fits_256_kib_with_maximum_codec_issue_arrays(state, issue_limit, name):
     """Representability witness, not a runtime benchmark or a financial mutation oracle."""
     payload = _stress_request(name, invalid=state == "invalid")
@@ -1183,9 +1389,7 @@ def test_real_utf8_serialization_fits_256_kib_with_maximum_codec_issue_arrays(st
     assert len(name) == 128
     wire = _analyzed(payload, state)
     assert len(wire["rows"]) == 32
-    assert [(row["row_key"], row["instrument_key"], row["name"]) for row in wire["rows"]] == [
-        (row["row_key"], row["instrument_key"], name) for row in payload["rows"]
-    ]
+    assert [(row["row_key"], row["instrument_key"], row["name"]) for row in wire["rows"]] == [(row["row_key"], row["instrument_key"], name) for row in payload["rows"]]
     assert (wire["normalized"] is not None) == (state == "ready")
     assert len(wire["issues"]) <= issue_limit
     kind = "info" if state == "ready" else "invalid"
@@ -1195,8 +1399,11 @@ def test_real_utf8_serialization_fits_256_kib_with_maximum_codec_issue_arrays(st
         path=["rows", 31, "quote", "quote_base_quantity"],
         related_row_indices=list(range(32)),
         params={
-            "currency": "EUR", "vector": "valuation_rates", "limit": 512,
-            "allowed_quote_bases": [1, 100], "unit": "native_amount",
+            "currency": "EUR",
+            "vector": "valuation_rates",
+            "limit": 512,
+            "allowed_quote_bases": [1, 100],
+            "unit": "native_amount",
         },
     )
     # Saturate only the bounded issue codec, preserving actual financial facts.
@@ -1228,8 +1435,7 @@ def test_real_utf8_serialization_fits_256_kib_with_maximum_codec_issue_arrays(st
 )
 def test_p1_fresh_process_import_does_not_load_legacy_application_dependencies(target):
     """Observe a real interpreter; no fake packages or sys.modules manipulation."""
-    script = dedent(
-        """
+    script = dedent("""
         import importlib
         import json
         import sys
@@ -1244,8 +1450,7 @@ def test_p1_fresh_process_import_does_not_load_legacy_application_dependencies(t
         else:
             assert callable(module.analyze_initial_state)
         print(json.dumps({"before": before, "after": sorted(sys.modules)}))
-        """
-    )
+        """)
     completed = subprocess.run(
         [sys.executable, "-B", "-c", script, target],
         cwd=FilePath(__file__).resolve().parents[3],
@@ -1280,18 +1485,13 @@ def test_p1_fresh_process_import_does_not_load_legacy_application_dependencies(t
         "scipy",
     )
     for phase in ("before", "after"):
-        loaded = [
-            name
-            for name in observation[phase]
-            if any(name.startswith(prefix) for prefix in forbidden)
-        ]
+        loaded = [name for name in observation[phase] if any(name.startswith(prefix) for prefix in forbidden)]
         assert loaded == [], (phase, loaded)
 
 
 def test_lazy_parent_metadata_and_common_aliases_are_light_in_a_fresh_process():
     """dir/__all__/unknown attributes must not force heavy legacy lazy exports."""
-    script = dedent(
-        """
+    script = dedent("""
         import importlib
         import json
         import sys
@@ -1367,8 +1567,7 @@ def test_lazy_parent_metadata_and_common_aliases_are_light_in_a_fresh_process():
             "aliases": sorted(aliases),
             "directories": directories,
         }))
-        """
-    )
+        """)
     completed = subprocess.run(
         [sys.executable, "-B", "-c", script],
         cwd=FilePath(__file__).resolve().parents[3],
@@ -1380,8 +1579,13 @@ def test_lazy_parent_metadata_and_common_aliases_are_light_in_a_fresh_process():
     assert completed.returncode == 0, completed.stderr
     observation = json.loads(completed.stdout)
     assert set(observation["aliases"]) == {
-        "Currency", "BackwardFillInfo", "DateRangeModel", "OldNew",
-        "BaseBulkResponse", "BaseDeleteResult", "BaseBulkDeleteResponse",
+        "Currency",
+        "BackwardFillInfo",
+        "DateRangeModel",
+        "OldNew",
+        "BaseBulkResponse",
+        "BaseDeleteResult",
+        "BaseBulkDeleteResponse",
     }
     for name in observation["modules"]:
         assert not name.startswith(

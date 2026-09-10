@@ -115,14 +115,48 @@ class PacAnalyzeInput(PacStrictModel):
 
 
 PathField = Literal[
-    "report_currency", "as_of_date", "rows", "row_key", "instrument_key", "name", "initial_quantity", "quote", "raw_price", "currency", "quote_base_quantity", "reference_date", "target_percent", "buy_grid", "mode", "quantity_step", "cash_balances", "contributions", "valuation_rates", "amount", "rate_to_report"
+    "report_currency",
+    "as_of_date",
+    "rows",
+    "row_key",
+    "instrument_key",
+    "name",
+    "initial_quantity",
+    "quote",
+    "raw_price",
+    "currency",
+    "quote_base_quantity",
+    "reference_date",
+    "target_percent",
+    "buy_grid",
+    "mode",
+    "quantity_step",
+    "cash_balances",
+    "contributions",
+    "valuation_rates",
+    "amount",
+    "rate_to_report",
 ]
 IssuePath = Annotated[list[Union[PathField, RowIndex]], Field(max_length=4)]
 IssueUnit = Literal["quantity", "quote", "rate", "percent", "native_amount"]
 FactReason = Literal["input_missing", "input_invalid", "outside_p1_domain", "dependency_unavailable", "zero_initial_invested_value"]
 MissingCode = Literal["rows_required", "field_required", "incomplete_decimal", "quote_required", "grid_required", "cash_vector_required", "valuation_rate_required"]
 InvalidCode = Literal[
-    "invalid_decimal_syntax", "invalid_currency", "invalid_date", "reference_after_asof", "nonpositive_price", "nonpositive_fx_rate", "invalid_quote_basis", "target_percent_out_of_range", "target_total_not_100", "nonpositive_quantity_step", "noninteger_whole_step", "negative_contribution", "duplicate_row_key", "duplicate_currency", "identity_rate_mismatch"
+    "invalid_decimal_syntax",
+    "invalid_currency",
+    "invalid_date",
+    "reference_after_asof",
+    "nonpositive_price",
+    "nonpositive_fx_rate",
+    "invalid_quote_basis",
+    "target_percent_out_of_range",
+    "target_total_not_100",
+    "nonpositive_quantity_step",
+    "noninteger_whole_step",
+    "negative_contribution",
+    "duplicate_row_key",
+    "duplicate_currency",
+    "identity_rate_mismatch",
 ]
 UnsupportedCode = Literal["numeric_domain_exceeded", "currency_domain_exceeded", "quote_basis_unsupported", "short_inventory_unsupported", "initial_debt_unsupported"]
 InfoCode = Literal["inventory_off_buy_grid", "reference_date_unspecified", "unused_valuation_reference", "identity_rate_redundant"]

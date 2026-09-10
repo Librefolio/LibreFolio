@@ -31,9 +31,18 @@ if TYPE_CHECKING:
 
 _EXPORT_GROUPS = {
     "roi_utils": (
-        "CashFlowInput", "MWRRPoint", "NAVSnapshot", "ROIResult", "SimpleROIPoint", "TWRRPoint",
-        "calculate_mwrr", "calculate_mwrr_series", "calculate_simple_roi", "calculate_simple_roi_series",
-        "calculate_twrr", "calculate_twrr_series",
+        "CashFlowInput",
+        "MWRRPoint",
+        "NAVSnapshot",
+        "ROIResult",
+        "SimpleROIPoint",
+        "TWRRPoint",
+        "calculate_mwrr",
+        "calculate_mwrr_series",
+        "calculate_simple_roi",
+        "calculate_simple_roi_series",
+        "calculate_twrr",
+        "calculate_twrr_series",
     ),
     "wac_utils": ("WACCalcResult", "WACInputTX", "compute_wac_from_txlist", "determine_target_currency"),
 }
