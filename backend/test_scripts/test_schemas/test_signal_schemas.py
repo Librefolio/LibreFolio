@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
+from copy import deepcopy
 from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Literal
+from itertools import product
+from typing import Any, Literal
 
 import pytest
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError, model_validator
 
 from backend.app.schemas.common import Currency, DateRangeModel
 from backend.app.schemas.fx import FXConversionRequest
@@ -1260,3 +1263,812 @@ class TestResultStatusMatrix:
                 message="Bad output",
                 details={"value": object()},
             )
+
+
+# Pinned from 4a73f5f63447e01b51993afb2e3c73e2c22a9a28, BEFORE the ordered-rule
+# refactor. Do not replace this oracle with production predicates/tables. The
+# SAME validator name overrides (rather than adds to) the inherited validator.
+# Its two helpers are pinned locally too; nested field validators stay public.
+def _ensure_unique(values: list[Any], label: str) -> None:
+    if len(values) != len(set(values)):
+        raise ValueError(f"{label} must not contain duplicates")
+
+
+def _validate_series_alignment(series: list[SignalSeries]) -> None:
+    _ensure_unique([item.key for item in series], "series keys")
+    _ensure_unique([item.semantic_id for item in series], "series semantic_ids")
+    reference_dates = [point.date for point in series[0].points]
+    for item in series[1:]:
+        if [point.date for point in item.points] != reference_dates:
+            raise ValueError("all signal series must have identical dates and cardinality")
+
+
+def _series_have_missing_values(series: list[SignalSeries]) -> bool:
+    for item in series:
+        if isinstance(item, SignalBandSeries):
+            if any(point.lower is None or point.middle is None or point.upper is None for point in item.points):
+                return True
+        elif any(point.value is None for point in item.points):
+            return True
+    return False
+
+
+class _BaselineSignalResult(SignalResult):
+    @model_validator(mode="after")
+    def validate_status_matrix(self) -> SignalResult:  # noqa: C901 — pinned imperative baseline oracle
+        if self.series:
+            _validate_series_alignment(self.series)
+
+        if self.status == SignalStatus.OK:
+            if self.availability is None or self.warmup is None:
+                raise ValueError("ok result requires availability and warm-up metadata")
+            if not self.series:
+                raise ValueError("ok result requires series")
+            if not self.availability.can_compute or not self.warmup.complete:
+                raise ValueError("ok result requires computable input and complete warm-up")
+            if self.availability.reason_code is not None or self.availability.partial_coverage_used:
+                raise ValueError("ok result cannot use partial availability")
+            if _series_have_missing_values(self.series):
+                raise ValueError("ok result cannot contain missing output values")
+            if self.error is not None:
+                raise ValueError("ok result cannot contain error")
+        elif self.status == SignalStatus.PARTIAL:
+            if self.availability is None or self.warmup is None:
+                raise ValueError("partial result requires availability and warm-up metadata")
+            if not self.series:
+                raise ValueError("partial result requires series")
+            if not self.availability.can_compute:
+                raise ValueError("partial result requires computable input")
+            if not self.warnings:
+                raise ValueError("partial result requires at least one warning")
+            if self.warmup.complete and not self.availability.partial_coverage_used and self.availability.reason_code != SignalAvailabilityReason.PARTIAL_UNDEFINED_METRIC:
+                raise ValueError("partial result requires incomplete warm-up or partial coverage")
+            if self.error is not None:
+                raise ValueError("partial result cannot contain error")
+        elif self.status == SignalStatus.UNAVAILABLE:
+            if self.availability is None or self.warmup is None:
+                raise ValueError("unavailable result requires availability and warm-up metadata")
+            if self.series or self.annotations:
+                raise ValueError("unavailable result cannot contain series or annotations")
+            if self.availability.can_compute:
+                raise ValueError("unavailable result requires can_compute=false")
+            if self.error is not None:
+                raise ValueError("unavailable result uses availability reason, not error")
+        elif self.status == SignalStatus.FAILED:
+            if self.series or self.annotations:
+                raise ValueError("failed result cannot contain series or annotations")
+            if self.error is None:
+                raise ValueError("failed result requires structured error")
+            precompute_errors = {
+                SignalErrorCode.UNKNOWN_SIGNAL,
+                SignalErrorCode.INVALID_PARAMS,
+                SignalErrorCode.PLANNING_ERROR,
+            }
+            if self.error.code in precompute_errors:
+                if self.availability is not None or self.warmup is not None:
+                    raise ValueError("pre-compute failure cannot contain availability or warm-up metadata")
+            else:
+                if self.availability is None or self.warmup is None:
+                    raise ValueError("compute failure requires availability and warm-up metadata")
+                if not self.availability.can_compute:
+                    raise ValueError("compute failure requires computable input")
+
+        if self.availability is not None and self.warmup is not None:
+            if self.availability.required_points != self.warmup.requirement.total_points:
+                raise ValueError("availability required_points must match warm-up total_points")
+            if self.availability.warmup_complete != self.warmup.complete:
+                raise ValueError("availability warmup_complete must match warm-up metadata")
+        if (self.risk_metadata is None) != (self.data_quality is None):
+            raise ValueError("risk_metadata and data_quality must be provided together")
+        return self
+
+
+_RawPayload = dict[str, Any]
+_ValidationIssue = tuple[tuple[str | int, ...], str, str]
+_PRECOMPUTE_CODES = (
+    SignalErrorCode.UNKNOWN_SIGNAL,
+    SignalErrorCode.INVALID_PARAMS,
+    SignalErrorCode.PLANNING_ERROR,
+)
+_RUNTIME_CODES = (
+    SignalErrorCode.COMPUTE_ERROR,
+    SignalErrorCode.INVALID_OUTPUT,
+    SignalErrorCode.CONTRACT_VIOLATION,
+)
+_ERROR_CHOICES = (None, *_PRECOMPUTE_CODES, *_RUNTIME_CODES)
+_FIXED_TIMESTAMP = "2026-01-03T12:00:00Z"
+
+
+def _raw_series(kind: str = "line", *, missing: bool = False) -> _RawPayload:
+    """Raw public input, not a model dump or make_result's truthiness defaults."""
+    points = (
+        [
+            {"date": "2026-01-01", "lower": None if missing else 0.0, "middle": 0.0, "upper": 0.0},
+            {"date": "2026-01-02", "lower": 0.0, "middle": 1.0, "upper": 2.0},
+        ]
+        if kind == "band"
+        else [
+            {"date": "2026-01-01", "value": None if missing else 0.0},
+            {"date": "2026-01-02", "value": 1.0},
+        ]
+    )
+    return {
+        "kind": kind,
+        "key": "output",
+        "label_key": "signals.test.output",
+        "semantic_id": "test.output",
+        "semantic_description": "A neutral output value.",
+        "unit": "price",
+        "axis": {"key": "price", "role": "price"},
+        "points": points,
+    }
+
+
+def _raw_availability(
+    can_compute: bool = True,
+    warmup_complete: bool = True,
+    partial_coverage_used: bool = False,
+    reason: SignalAvailabilityReason | None = None,
+) -> _RawPayload:
+    return {
+        "domain_compatible": True,
+        "can_compute": can_compute,
+        "missing_price_fields": [] if can_compute else ["close"],
+        "input_coverage": {
+            "requested_points": 2,
+            "available_points": 2 if can_compute else 0,
+            "contiguous_points": 2 if can_compute else 0,
+            "observed_points": 2 if can_compute else 0,
+            "backfilled_points": 0,
+            "missing_points": 0 if can_compute else 2,
+            "internal_gap_count": 0,
+            "coverage_ratio": 1.0 if can_compute else 0.0,
+            "first_available_date": "2026-01-01" if can_compute else None,
+            "last_available_date": "2026-01-02" if can_compute else None,
+        },
+        "required_points": 3,
+        "warmup_complete": warmup_complete,
+        "partial_coverage_used": partial_coverage_used,
+        "reason_code": reason,
+    }
+
+
+def _raw_warmup(complete: bool = True) -> _RawPayload:
+    # complete=False need NOT imply used_points < total_points in the baseline.
+    return {
+        "requirement": {"minimum_points": 2, "stabilization_points": 1, "total_points": 3},
+        "loaded_points": 3,
+        "used_points": 3,
+        "complete": complete,
+    }
+
+
+def _raw_warning(code: SignalWarningCode = SignalWarningCode.OUTPUT_TRUNCATED) -> _RawPayload:
+    return {"code": code, "message": "Informational warning", "details": {"arbitrary": [None, 0, False]}}
+
+
+def _raw_error(code: SignalErrorCode = SignalErrorCode.COMPUTE_ERROR) -> _RawPayload:
+    return {"code": code, "message": "Characterization failure", "details": {"phase": "orchestration"}}
+
+
+def _raw_annotation() -> _RawPayload:
+    # Neither its key nor its date must coincide with an output series.
+    return {"key": "unrelated", "annotation_type": "event", "date": "2026-01-03", "values": {"level": 0.0}}
+
+
+def _raw_risk_metadata(*, populated: bool = False) -> _RawPayload:
+    return {
+        "analyzed_range": {"start": "2026-01-01", "end": "2026-01-02"},
+        "n_observations": 5 if populated else 0,
+        "calendar_days": 10 if populated else 0,
+        "annualization_factor": 182.5 if populated else None,
+        "coverage": 0.75 if populated else 0.0,
+        "currency": "eur",
+        "return_basis": "price_only",
+        "algorithm_version": "1.0.0",
+        "computed_at": _FIXED_TIMESTAMP,
+    }
+
+
+def _raw_result(
+    status: SignalStatus = SignalStatus.OK,
+    error_code: SignalErrorCode | None = None,
+) -> _RawPayload:
+    complete = status != SignalStatus.PARTIAL
+    computable = status != SignalStatus.UNAVAILABLE
+    reason = SignalAvailabilityReason.MISSING_INPUT_FIELDS if not computable else SignalAvailabilityReason.INCOMPLETE_WARMUP if not complete else None
+    precompute = status == SignalStatus.FAILED and error_code in _PRECOMPUTE_CODES
+    return {
+        "instance_id": "characterization",
+        "signal_code": "  ema  ",
+        "implementation_version": None,
+        "normalized_params": {"length": 2, "nested": [None, False, 0]},
+        "status": status,
+        "series": [_raw_series()] if status in (SignalStatus.OK, SignalStatus.PARTIAL) else [],
+        "availability": None if precompute else _raw_availability(computable, complete, reason=reason),
+        "warmup": None if precompute else _raw_warmup(complete),
+        "annotations": [],
+        "warnings": [_raw_warning()] if status == SignalStatus.PARTIAL else [],
+        "error": _raw_error(error_code) if error_code is not None else None,
+        "risk_metadata": None,
+        "data_quality": None,
+    }
+
+
+def _validation_outcome(model: type[BaseModel], payload: _RawPayload, *, json_input: bool = False) -> tuple[BaseModel | None, list[_ValidationIssue]]:
+    # No instance reuse: Pydantic is free to normalize/mutate its own input.
+    raw = deepcopy(payload)
+    try:
+        result = model.model_validate_json(json.dumps(raw)) if json_input else model.model_validate(raw)
+    except ValidationError as exc:
+        return None, [(tuple(error["loc"]), error["type"], error["msg"]) for error in exc.errors()]
+    return result, []
+
+
+def _assert_equivalent(payload: _RawPayload) -> tuple[BaseModel | None, list[_ValidationIssue]]:
+    python_outcome: tuple[BaseModel | None, list[_ValidationIssue]] = (None, [])
+    for json_input in (False, True):
+        reference, expected_errors = _validation_outcome(_BaselineSignalResult, payload, json_input=json_input)
+        actual, errors = _validation_outcome(SignalResult, payload, json_input=json_input)
+        context = f"json_input={json_input}, payload={payload!r}"
+        assert errors == expected_errors, context
+        assert (actual is None) == (reference is None), context
+        if reference is not None:
+            assert actual is not None
+            assert actual.model_dump(mode="python") == reference.model_dump(mode="python"), context
+            assert actual.model_dump(mode="json") == reference.model_dump(mode="json"), context
+            assert actual.model_dump_json() == reference.model_dump_json(), context
+        if not json_input:
+            python_outcome = actual, errors
+    return python_outcome
+
+
+def _assert_root_error(payload: _RawPayload, message: str) -> None:
+    result, errors = _assert_equivalent(payload)
+    assert result is None
+    assert errors == [((), "value_error", f"Value error, {message}")], payload
+
+
+class TestResultDifferentialGrids:
+    @pytest.mark.parametrize("status", tuple(SignalStatus))
+    @pytest.mark.parametrize("error_code", _ERROR_CHOICES)
+    def test_presence_grid(self, status: SignalStatus, error_code: SignalErrorCode | None) -> None:
+        """28 groups x 128 raw cells = 3584; baseline accepts 8+4+4+12+12."""
+        accepted = 0
+        visited = 0
+        for has_availability, has_warmup, has_series, has_annotations, has_warnings, has_risk, has_quality in product((False, True), repeat=7):
+            payload = _raw_result(status, error_code)
+            # Presence axes must use individually valid, status-appropriate
+            # nested objects even when this particular error forbids them.
+            canonical = _raw_result(status)
+            payload.update(
+                availability=canonical["availability"] if has_availability else None,
+                warmup=canonical["warmup"] if has_warmup else None,
+                series=[_raw_series()] if has_series else [],
+                annotations=[_raw_annotation()] if has_annotations else [],
+                warnings=[_raw_warning()] if has_warnings else [],
+                risk_metadata=_raw_risk_metadata() if has_risk else None,
+                data_quality={} if has_quality else None,
+            )
+            result, errors = _assert_equivalent(payload)
+            # Every rejected cell reaches the result validator, not a broken
+            # nested fixture (e.g. risk_metadata={} would invalidate the grid).
+            assert all(loc == () for loc, _, _ in errors), payload
+            accepted += result is not None
+            visited += 1
+        assert visited == 128
+        expected = 0
+        if status == SignalStatus.FAILED and error_code is not None:
+            expected = 4
+        elif error_code is None:
+            expected = {SignalStatus.OK: 8, SignalStatus.PARTIAL: 4, SignalStatus.UNAVAILABLE: 4}.get(status, 0)
+        assert accepted == expected
+
+    @pytest.mark.parametrize(
+        ("computable", "complete", "partial", "nested_count", "ok_count", "partial_count", "unavailable_count", "runtime_count"),
+        [
+            (False, False, False, 10, 0, 0, 10, 0),
+            (False, False, True, 0, 0, 0, 0, 0),
+            (False, True, False, 10, 0, 0, 10, 0),
+            (False, True, True, 0, 0, 0, 0, 0),
+            (True, False, False, 2, 0, 2, 0, 2),
+            (True, False, True, 3, 0, 3, 0, 3),
+            (True, True, False, 3, 1, 1, 0, 3),
+            (True, True, True, 3, 0, 3, 0, 3),
+        ],
+    )
+    def test_availability_grid(
+        self,
+        computable: bool,
+        complete: bool,
+        partial: bool,
+        nested_count: int,
+        ok_count: int,
+        partial_count: int,
+        unavailable_count: int,
+        runtime_count: int,
+    ) -> None:
+        """128 nested cells: 31 valid, 97 invalid; runtime accepts 11/code."""
+        accepted: Counter[str] = Counter()
+        modes = (
+            (SignalStatus.OK, None),
+            (SignalStatus.PARTIAL, None),
+            (SignalStatus.UNAVAILABLE, None),
+            *((SignalStatus.FAILED, code) for code in _RUNTIME_CODES),
+        )
+        reasons = (None, *SignalAvailabilityReason)
+        assert len(reasons) == 16
+        for reason in reasons:
+            availability = _raw_availability(computable, complete, partial, reason)
+            nested, _ = _validation_outcome(SignalAvailability, availability)
+            accepted["nested"] += nested is not None
+            for status, error_code in modes:
+                payload = _raw_result(status, error_code)
+                payload.update(availability=availability, warmup=_raw_warmup(complete))
+                result, errors = _assert_equivalent(payload)
+                if nested is None:
+                    assert errors and all(loc == ("availability",) for loc, _, _ in errors), payload
+                accepted[error_code.value if error_code else status.value] += result is not None
+        assert accepted == {
+            "nested": nested_count,
+            "ok": ok_count,
+            "partial": partial_count,
+            "unavailable": unavailable_count,
+            **{code.value: runtime_count for code in _RUNTIME_CODES},
+        }
+
+    def test_missing_source_capability_remains_unclassified(self) -> None:
+        availability = _raw_availability(reason=SignalAvailabilityReason.MISSING_SOURCE_CAPABILITY)
+        assert SignalAvailability.model_validate(deepcopy(availability)).can_compute
+        for code in _RUNTIME_CODES:
+            payload = _raw_result(SignalStatus.FAILED, code)
+            payload["availability"] = availability
+            assert _assert_equivalent(payload)[0] is not None
+        payload = _raw_result()
+        payload["availability"] = availability
+        _assert_root_error(payload, "ok result cannot use partial availability")
+        payload.update(status=SignalStatus.PARTIAL, warnings=[_raw_warning()])
+        _assert_root_error(payload, "partial result requires incomplete warm-up or partial coverage")
+
+
+_STATUS_CASES = (
+    (SignalStatus.OK, None),
+    (SignalStatus.PARTIAL, None),
+    (SignalStatus.UNAVAILABLE, None),
+    *((SignalStatus.FAILED, code) for code in (*_PRECOMPUTE_CODES, *_RUNTIME_CODES)),
+)
+
+
+def _merge_raw(payload: _RawPayload, changes: _RawPayload) -> None:
+    """Apply co-faults without replacing an unrelated nested mutation."""
+    for key, value in changes.items():
+        if isinstance(value, dict) and isinstance(payload.get(key), dict):
+            _merge_raw(payload[key], value)
+        else:
+            payload[key] = deepcopy(value)
+
+
+def _guard_chain(status: SignalStatus, code: SignalErrorCode | None) -> list[tuple[str, _RawPayload]]:
+    """Reachable witnesses in baseline order, not production rule introspection."""
+    required_points = (
+        "availability required_points must match warm-up total_points",
+        {"availability": {"required_points": 4}},
+    )
+    risk_pair = ("risk_metadata and data_quality must be provided together", {"data_quality": {}})
+    if status == SignalStatus.OK:
+        # An OK warmup-flag mismatch cannot reach the final equality guard:
+        # incomplete availability requires a reason, which OK rejects earlier.
+        return [
+            ("ok result requires availability and warm-up metadata", {"availability": None}),
+            ("ok result requires series", {"series": []}),
+            ("ok result requires computable input and complete warm-up", {"warmup": {"complete": False}}),
+            (
+                "ok result cannot use partial availability",
+                {"availability": {"reason_code": SignalAvailabilityReason.PARTIAL_UNDEFINED_METRIC}},
+            ),
+            ("ok result cannot contain missing output values", {"series": [_raw_series(missing=True)]}),
+            ("ok result cannot contain error", {"error": _raw_error()}),
+            required_points,
+            risk_pair,
+        ]
+    if status == SignalStatus.PARTIAL:
+        return [
+            ("partial result requires availability and warm-up metadata", {"availability": None}),
+            ("partial result requires series", {"series": []}),
+            (
+                "partial result requires computable input",
+                {"availability": _raw_availability(False, False, reason=SignalAvailabilityReason.MISSING_INPUT_FIELDS)},
+            ),
+            ("partial result requires at least one warning", {"warnings": []}),
+            (
+                "partial result requires incomplete warm-up or partial coverage",
+                {"availability": _raw_availability(), "warmup": _raw_warmup()},
+            ),
+            ("partial result cannot contain error", {"error": _raw_error()}),
+            required_points,
+            (
+                "availability warmup_complete must match warm-up metadata",
+                {"availability": {"warmup_complete": True, "reason_code": SignalAvailabilityReason.PARTIAL_UNDEFINED_METRIC}},
+            ),
+            risk_pair,
+        ]
+    if status == SignalStatus.UNAVAILABLE:
+        return [
+            ("unavailable result requires availability and warm-up metadata", {"availability": None}),
+            ("unavailable result cannot contain series or annotations", {"annotations": [_raw_annotation()]}),
+            ("unavailable result requires can_compute=false", {"availability": _raw_availability()}),
+            ("unavailable result uses availability reason, not error", {"error": _raw_error()}),
+            required_points,
+            ("availability warmup_complete must match warm-up metadata", {"availability": {"warmup_complete": False}}),
+            risk_pair,
+        ]
+    common = [
+        ("failed result cannot contain series or annotations", {"annotations": [_raw_annotation()]}),
+        ("failed result requires structured error", {"error": None}),
+    ]
+    if code in _PRECOMPUTE_CODES:
+        return [
+            *common,
+            ("pre-compute failure cannot contain availability or warm-up metadata", {"warmup": _raw_warmup()}),
+            risk_pair,
+        ]
+    return [
+        *common,
+        ("compute failure requires availability and warm-up metadata", {"warmup": None}),
+        (
+            "compute failure requires computable input",
+            {"availability": _raw_availability(False, reason=SignalAvailabilityReason.MISSING_INPUT_FIELDS)},
+        ),
+        required_points,
+        (
+            "availability warmup_complete must match warm-up metadata",
+            {"availability": {"warmup_complete": False, "reason_code": SignalAvailabilityReason.PARTIAL_UNDEFINED_METRIC}},
+        ),
+        risk_pair,
+    ]
+
+
+class TestResultValidationPrecedence:
+    @pytest.mark.parametrize(("status", "error_code"), _STATUS_CASES)
+    def test_adjacent_cofaults_keep_interleaved_guard_order(self, status: SignalStatus, error_code: SignalErrorCode | None) -> None:
+        guards = _guard_chain(status, error_code)
+        # Prove each fault alone actually reaches its claimed guard. A second
+        # "fault" which is nested-invalid or silently legal is not precedence.
+        for message, changes in guards:
+            payload = _raw_result(status, error_code)
+            _merge_raw(payload, changes)
+            _assert_root_error(payload, message)
+        for (first_message, first_changes), (_, second_changes) in zip(guards, guards[1:], strict=False):
+            payload = _raw_result(status, error_code)
+            _merge_raw(payload, first_changes)
+            _merge_raw(payload, second_changes)
+            _assert_root_error(payload, first_message)
+
+    @pytest.mark.parametrize(("status", "error_code"), _STATUS_CASES)
+    @pytest.mark.parametrize("misalignment", ("dates", "cardinality"))
+    def test_alignment_precedes_status_even_when_output_is_forbidden(self, status: SignalStatus, error_code: SignalErrorCode | None, misalignment: str) -> None:
+        payload = _raw_result(status, error_code)
+        first = _raw_series()
+        second = _raw_series("area")
+        if misalignment == "dates":
+            second["points"][1]["date"] = "2026-01-03"
+        else:
+            second["points"].pop()
+        payload["series"] = [first, second]
+        _assert_root_error(payload, "series keys must not contain duplicates")
+        second["key"] = "second"
+        _assert_root_error(payload, "series semantic_ids must not contain duplicates")
+        second["semantic_id"] = "test.second"
+        _assert_root_error(payload, "all signal series must have identical dates and cardinality")
+        second["points"] = deepcopy(first["points"])
+        if status in (SignalStatus.FAILED, SignalStatus.UNAVAILABLE):
+            _assert_root_error(payload, f"{status.value} result cannot contain series or annotations")
+        else:
+            assert _assert_equivalent(payload)[0] is not None
+
+    @pytest.mark.parametrize("required_points", (2, 4))
+    @pytest.mark.parametrize("warmup_complete", (False, True))
+    def test_metadata_equalities_both_directions_precede_risk_pairing(self, required_points: int, warmup_complete: bool) -> None:
+        payload = _raw_result(SignalStatus.FAILED, SignalErrorCode.COMPUTE_ERROR)
+        payload["availability"] = _raw_availability(
+            warmup_complete=not warmup_complete,
+            reason=SignalAvailabilityReason.PARTIAL_UNDEFINED_METRIC,
+        )
+        payload["warmup"] = _raw_warmup(warmup_complete)
+        payload["availability"]["required_points"] = required_points
+        payload["data_quality"] = {}
+        _assert_root_error(payload, "availability required_points must match warm-up total_points")
+        payload["availability"]["required_points"] = 3
+        _assert_root_error(payload, "availability warmup_complete must match warm-up metadata")
+        payload["availability"]["warmup_complete"] = warmup_complete
+        _assert_root_error(payload, "risk_metadata and data_quality must be provided together")
+        payload["risk_metadata"] = _raw_risk_metadata()
+        assert _assert_equivalent(payload)[0] is not None
+
+
+class TestResultRawBoundaries:
+    @pytest.mark.parametrize(("status", "error_code"), _STATUS_CASES)
+    @pytest.mark.parametrize("field", ("series", "annotations", "warnings"))
+    @pytest.mark.parametrize("presence", ("omitted", "none", "empty", "nonempty"))
+    def test_collection_omission_none_and_emptiness(self, status: SignalStatus, error_code: SignalErrorCode | None, field: str, presence: str) -> None:
+        payload = _raw_result(status, error_code)
+        if presence == "omitted":
+            del payload[field]
+        else:
+            example = {"series": _raw_series(), "annotations": _raw_annotation(), "warnings": _raw_warning()}[field]
+            payload[field] = None if presence == "none" else [example] if presence == "nonempty" else []
+        result, errors = _assert_equivalent(payload)
+        if presence == "none":
+            assert result is None
+            assert errors == [((field,), "list_type", "Input should be a valid list")]
+            return
+        has_values = presence == "nonempty"
+        expected = True
+        if field == "series":
+            expected = has_values == (status in (SignalStatus.OK, SignalStatus.PARTIAL))
+        elif field == "annotations":
+            expected = not has_values or status in (SignalStatus.OK, SignalStatus.PARTIAL)
+        elif status == SignalStatus.PARTIAL:
+            expected = has_values
+        assert (result is not None) == expected, payload
+        if result is not None:
+            assert bool(result.model_dump()[field]) == has_values
+
+    @pytest.mark.parametrize(("status", "error_code"), _STATUS_CASES)
+    @pytest.mark.parametrize("field", ("availability", "warmup"))
+    @pytest.mark.parametrize("presence", ("omitted", "none", "empty_object"))
+    def test_metadata_individual_absences_and_empty_objects(self, status: SignalStatus, error_code: SignalErrorCode | None, field: str, presence: str) -> None:
+        payload = _raw_result(status, error_code)
+        if presence == "omitted":
+            del payload[field]
+        else:
+            payload[field] = {} if presence == "empty_object" else None
+        result, errors = _assert_equivalent(payload)
+        if presence == "empty_object":
+            assert result is None
+            assert errors and all(loc[0] == field and kind == "missing" for loc, kind, _ in errors)
+        else:
+            assert (result is not None) == (error_code in _PRECOMPUTE_CODES), payload
+
+    @pytest.mark.parametrize("status", tuple(SignalStatus))
+    @pytest.mark.parametrize("kind", ("line", "area", "bar", "band"))
+    @pytest.mark.parametrize("points", ("zero", "some_none", "all_none", "empty"))
+    def test_series_kinds_none_zero_and_nested_failures(self, status: SignalStatus, kind: str, points: str) -> None:
+        payload = _raw_result(status, SignalErrorCode.COMPUTE_ERROR if status == SignalStatus.FAILED else None)
+        series = _raw_series(kind, missing=points == "some_none")
+        value_fields = ("lower", "middle", "upper") if kind == "band" else ("value",)
+        if points in ("zero", "all_none"):
+            for point in series["points"]:
+                point.update(dict.fromkeys(value_fields, None if points == "all_none" else 0.0))
+        elif points == "empty":
+            series["points"] = []
+        payload["series"] = [series]
+        result, errors = _assert_equivalent(payload)
+        if points == "all_none":
+            prefix = "band series" if kind == "band" else "series"
+            assert errors == [(("series", 0, kind), "value_error", f"Value error, {prefix} must contain at least one finite value")]
+        elif points == "empty":
+            assert errors and all(loc == ("series", 0, kind, "points") and error_type == "too_short" for loc, error_type, _ in errors)
+        else:
+            expected = status == SignalStatus.PARTIAL or (status == SignalStatus.OK and points == "zero")
+            assert (result is not None) == expected
+            assert all(loc == () for loc, _, _ in errors)
+
+    @pytest.mark.parametrize("component", ("lower", "middle", "upper"))
+    @pytest.mark.parametrize("status", (SignalStatus.OK, SignalStatus.PARTIAL))
+    def test_each_missing_band_component(self, component: str, status: SignalStatus) -> None:
+        payload = _raw_result(status)
+        series = _raw_series("band")
+        series["points"][0][component] = None
+        payload["series"] = [series]
+        if status == SignalStatus.OK:
+            _assert_root_error(payload, "ok result cannot contain missing output values")
+        else:
+            assert _assert_equivalent(payload)[0] is not None
+
+    @pytest.mark.parametrize("warning_code", tuple(SignalWarningCode))
+    def test_partial_undefined_metric_allows_complete_warmup_and_any_warning(self, warning_code: SignalWarningCode) -> None:
+        payload = _raw_result(SignalStatus.PARTIAL)
+        payload.update(
+            availability=_raw_availability(reason=SignalAvailabilityReason.PARTIAL_UNDEFINED_METRIC),
+            warmup=_raw_warmup(),
+            warnings=[_raw_warning(warning_code)],
+            annotations=[_raw_annotation()],
+        )
+        result, _ = _assert_equivalent(payload)
+        assert result is not None
+        dumped = result.model_dump(mode="json")
+        assert dumped["warmup"]["complete"] is True
+        assert dumped["availability"]["partial_coverage_used"] is False
+        assert dumped["warnings"][0]["code"] == warning_code.value
+        assert dumped["annotations"][0]["date"] == "2026-01-03"
+
+    @pytest.mark.parametrize("code", (*_PRECOMPUTE_CODES, *_RUNTIME_CODES))
+    @pytest.mark.parametrize("phase", (None, "compute", "preflight", "orchestration", 0, ["arbitrary", False]))
+    def test_failed_family_uses_error_code_not_details_phase(self, code: SignalErrorCode, phase: Any) -> None:
+        payload = _raw_result(SignalStatus.FAILED, code)
+        payload["error"]["details"]["phase"] = phase
+        assert _assert_equivalent(payload)[0] is not None
+        # Contradict the code family with metadata, keeping the phase unchanged.
+        if code in _PRECOMPUTE_CODES:
+            payload.update(availability=_raw_availability(), warmup=_raw_warmup())
+            _assert_root_error(payload, "pre-compute failure cannot contain availability or warm-up metadata")
+        else:
+            payload.update(availability=None, warmup=None)
+            _assert_root_error(payload, "compute failure requires availability and warm-up metadata")
+
+    @pytest.mark.parametrize(("status", "error_code"), _STATUS_CASES)
+    @pytest.mark.parametrize("populated", (False, True))
+    def test_paired_risk_context_is_optional_even_for_precompute_failure(self, status: SignalStatus, error_code: SignalErrorCode | None, populated: bool) -> None:
+        payload = _raw_result(status, error_code)
+        metadata = _raw_risk_metadata(populated=populated)
+        quality = {"carried_forward_price_points": 2, "warnings": ["Informational"]} if populated else {}
+        payload.update(risk_metadata=metadata, data_quality=quality)
+        result, _ = _assert_equivalent(payload)
+        assert result is not None
+        dumped = result.model_dump(mode="json")
+        assert dumped["risk_metadata"]["n_observations"] == (5 if populated else 0)
+        assert dumped["risk_metadata"]["computed_at"] == _FIXED_TIMESTAMP
+        assert dumped["data_quality"]["data_quality_status"] == ("carried_forward" if populated else "ok")
+        for absent_field in ("risk_metadata", "data_quality"):
+            unpaired = deepcopy(payload)
+            unpaired[absent_field] = None
+            _assert_root_error(unpaired, "risk_metadata and data_quality must be provided together")
+
+    def test_empty_risk_metadata_is_nested_invalid_but_empty_quality_is_present(self) -> None:
+        payload = _raw_result()
+        payload.update(risk_metadata={}, data_quality={})
+        result, errors = _assert_equivalent(payload)
+        assert result is None
+        assert errors and all(loc[0] == "risk_metadata" and kind == "missing" for loc, kind, _ in errors)
+        payload["risk_metadata"] = _raw_risk_metadata()
+        assert _assert_equivalent(payload)[0] is not None
+        payload["risk_metadata"] = None
+        _assert_root_error(payload, "risk_metadata and data_quality must be provided together")
+
+    def test_zero_required_points_are_values_not_absent_metadata(self) -> None:
+        payload = _raw_result()
+        payload["availability"]["required_points"] = 0
+        payload["warmup"].update(
+            requirement={"minimum_points": 0, "stabilization_points": 0, "total_points": 0},
+            loaded_points=0,
+            used_points=0,
+        )
+        assert _assert_equivalent(payload)[0] is not None
+        payload["availability"]["required_points"] = None
+        result, errors = _assert_equivalent(payload)
+        assert result is None
+        assert errors == [(("availability", "required_points"), "int_type", "Input should be a valid integer")]
+
+
+def _without_schema_titles(value: Any) -> Any:
+    """Titles are presentation, including the reference subclass's identity."""
+    if isinstance(value, dict):
+        return {key: _without_schema_titles(item) for key, item in value.items() if key != "title"}
+    if isinstance(value, list):
+        return [_without_schema_titles(item) for item in value]
+    return value
+
+
+def _pinned_result_properties() -> _RawPayload:
+    """Public root field shape at 4a73f5f6, independent of inherited fields.
+
+    Nested contracts are intentionally not reimplemented: the refactor owns
+    only SignalResult. Both modes also compare the complete public/reference
+    schema below, and explicitly protect the output-only quality property.
+    """
+    series_refs = {
+        "line": "#/$defs/SignalLineSeries",
+        "area": "#/$defs/SignalAreaSeries",
+        "bar": "#/$defs/SignalBarSeries",
+        "band": "#/$defs/SignalBandSeries",
+    }
+    return {
+        "instance_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "signal_code": {"type": "string", "minLength": 1, "maxLength": 64},
+        "implementation_version": {
+            "anyOf": [{"type": "string", "minLength": 1, "maxLength": 64}, {"type": "null"}],
+            "default": None,
+        },
+        "normalized_params": {"type": "object", "additionalProperties": {"$ref": "#/$defs/JsonValue"}},
+        "status": {"$ref": "#/$defs/SignalStatus"},
+        "series": {
+            "type": "array",
+            "items": {
+                "discriminator": {"propertyName": "kind", "mapping": series_refs},
+                "oneOf": [{"$ref": ref} for ref in series_refs.values()],
+            },
+        },
+        "annotations": {"type": "array", "items": {"$ref": "#/$defs/SignalAnnotation"}},
+        "warnings": {"type": "array", "items": {"$ref": "#/$defs/SignalWarning"}},
+        **{
+            field: {"anyOf": [{"$ref": f"#/$defs/{model}"}, {"type": "null"}], "default": None}
+            for field, model in (
+                ("availability", "SignalAvailability"),
+                ("warmup", "SignalWarmupMetadata"),
+                ("error", "SignalError"),
+                ("risk_metadata", "RiskResultMetadata"),
+                ("data_quality", "DataQualityReport"),
+            )
+        },
+    }
+
+
+class TestResultPublicShape:
+    @pytest.mark.parametrize("mode", ("validation", "serialization"))
+    def test_public_schema_validation_and_serialization_shape(self, mode: Literal["validation", "serialization"]) -> None:
+        schema = _without_schema_titles(SignalResult.model_json_schema(mode=mode))
+        reference = _without_schema_titles(_BaselineSignalResult.model_json_schema(mode=mode))
+        assert schema == reference
+        # Unlike comparing only an inheriting subclass, these pinned properties
+        # detect a new/removed field, constraint, default, union or discriminator.
+        assert schema["properties"] == _pinned_result_properties()
+        assert schema["type"] == "object"
+        assert schema["additionalProperties"] is False
+        assert schema["required"] == ["instance_id", "signal_code", "status"]
+        assert schema["$defs"]["SignalStatus"]["enum"] == ["ok", "partial", "unavailable", "failed"]
+        assert schema["$defs"]["SignalErrorCode"]["enum"] == ["unknown_signal", "invalid_params", "planning_error", "compute_error", "invalid_output", "contract_violation"]
+        quality = schema["$defs"]["DataQualityReport"]
+        if mode == "validation":
+            assert "data_quality_status" not in quality["properties"]
+            assert "data_quality_status" not in quality.get("required", [])
+        else:
+            assert quality["properties"]["data_quality_status"]["readOnly"] is True
+            assert "data_quality_status" in quality["required"]
+
+    @pytest.mark.parametrize(("status", "error_code"), _STATUS_CASES)
+    def test_python_and_json_dumps_keep_defaults_and_computed_output(self, status: SignalStatus, error_code: SignalErrorCode | None) -> None:
+        payload = _raw_result(status, error_code)
+        payload.update(risk_metadata=_raw_risk_metadata(), data_quality={})
+        untouched = deepcopy(payload)
+        result, _ = _assert_equivalent(payload)
+        assert payload == untouched
+        assert result is not None
+        python_dump = result.model_dump(mode="python")
+        json_dump = result.model_dump(mode="json")
+        assert set(python_dump) == set(json_dump) == set(_pinned_result_properties())
+        assert python_dump["risk_metadata"]["computed_at"] == datetime(2026, 1, 3, 12, tzinfo=UTC)
+        assert json_dump["risk_metadata"]["computed_at"] == _FIXED_TIMESTAMP
+        assert json_dump["risk_metadata"]["currency"] == "EUR"
+        assert json_dump["signal_code"] == "EMA"
+        assert json_dump["implementation_version"] is None
+        assert json_dump["normalized_params"] == {"length": 2, "nested": [None, False, 0]}
+        assert json_dump["data_quality"]["data_quality_status"] == "ok"
+        assert json_dump["data_quality"]["issues"] == []
+        assert json.loads(result.model_dump_json()) == json_dump
+        # Deliberately NOT model_validate(json_dump): output includes the
+        # read-only computed data_quality_status, forbidden on public input.
+
+    def test_defaulted_fields_can_be_omitted_without_serialization_shape_drift(self) -> None:
+        payload = {
+            "instance_id": "minimal-failure",
+            "signal_code": "ema",
+            "status": "failed",
+            "error": _raw_error(SignalErrorCode.UNKNOWN_SIGNAL),
+        }
+        result, _ = _assert_equivalent(payload)
+        assert result is not None
+        dumped = result.model_dump(mode="json")
+        assert set(dumped) == set(_pinned_result_properties())
+        assert dumped["normalized_params"] == {}
+        for field in ("series", "annotations", "warnings"):
+            assert dumped[field] == []
+        for field in ("availability", "warmup", "implementation_version", "risk_metadata", "data_quality"):
+            assert dumped[field] is None
+
+    def test_nested_errors_precede_result_guards_in_declared_field_order(self) -> None:
+        payload = _raw_result(SignalStatus.FAILED)
+        payload.update(
+            series=[{**_raw_series(), "points": []}],
+            availability={},
+            warmup={},
+            risk_metadata={},
+            unexpected=True,
+        )
+        result, errors = _assert_equivalent(payload)
+        assert result is None
+        # Adjacent repeated fields are grouped, without discarding ordered
+        # error details in the public/reference comparison.
+        field_order = list(dict.fromkeys(loc[0] for loc, _, _ in errors))
+        assert field_order == ["series", "availability", "warmup", "risk_metadata", "unexpected"]
+        assert errors[-1] == (("unexpected",), "extra_forbidden", "Extra inputs are not permitted")

@@ -37,6 +37,20 @@ In LibreFolio, you can create new assets in two different ways:
         D --> H[Commit all transactions]
     ```
 
+!!! info "Success notification"
+
+    Saving from the **+ New Asset** button on the asset list closes the modal at once and
+    shows a success toast whose asset name is a clickable link straight to the new asset's
+    detail page. If the asset has a pricing provider, that page's own post-creation flow then
+    triggers a price sync for it — when that sync succeeds, it shows its own **follow-up
+    success toast**, also with a clickable name.
+
+    Creating an asset **from inside another flow** — the broker import wizard, a
+    transaction's contextual "add asset" search, or the transaction form — behaves the
+    same way for saving, but the modal instead hands the new asset back to that
+    selector, and its confirmation stays plain text (no link), consistent with whatever
+    notifications, if any, that flow already shows.
+
 ## 🧪 Testing Provider Configuration
 
 After configuring a provider, click **Test Configuration** to verify that pricing data can be fetched. The test checks:
