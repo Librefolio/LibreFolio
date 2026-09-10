@@ -3301,6 +3301,91 @@
         "invalid_schema": "Lo schema non può essere pubblicato",
         "invalid_operation_policy": "Policy dell'operazione non valida"
       }
+    },
+    "pacAllocator": {
+      "name": "Allocatore PAC",
+      "description": "Analizza lo stato iniziale esatto dell'allocazione.",
+      "pilotNotice": "Solo analisi manuale dello stato iniziale. Nessun dato del portafoglio viene letto, nessun ordine viene proposto e nulla viene salvato.",
+      "scenario": "Scenario",
+      "reportCurrency": "Valuta di report",
+      "asOfDate": "Data di riferimento (facoltativa)",
+      "rows": {
+        "title": "Asset e contesti di custodia",
+        "description": "Ogni riga rappresenta un asset in un contesto. Usa l'azione dedicata per mantenere l'identità dello strumento tra contesti.",
+        "addAsset": "Nuovo asset locale",
+        "empty": "Aggiungi almeno una riga. Fino ad allora il backend segnalerà le righe mancanti.",
+        "rowNumber": "Riga {number}",
+        "identity": "Identità locale dello strumento",
+        "sameAsset": "Stesso asset, altro contesto",
+        "initialQuantity": "Quantità iniziale",
+        "price": "Prezzo nativo",
+        "quoteBasis": "Quantità base della quotazione",
+        "target": "Obiettivo (%)",
+        "gridMode": "Griglia di acquisto",
+        "whole": "Quantità intere",
+        "fractional": "Quantità frazionarie",
+        "quantityStep": "Passo quantità di acquisto",
+        "quoteDate": "Data della quotazione (facoltativa)"
+      },
+      "cash": {
+        "existing": "Cassa esistente",
+        "notSupplied": "Non fornito",
+        "noneExisting": "Nessuna cassa esistente, esplicitamente",
+        "amount": "Importo",
+        "addCurrency": "Aggiungi valuta",
+        "markNoneExisting": "Nessuna cassa esistente",
+        "markNotSupplied": "Segna come non fornito",
+        "contributions": "Nuovi contributi",
+        "noneContributions": "Nessun nuovo contributo, esplicitamente",
+        "markNoneContributions": "Nessun nuovo contributo"
+      },
+      "rates": {
+        "title": "Cambi di valorizzazione",
+        "description": "Valore di report di un'unità di valuta nativa. Questi cambi non convertono né spostano cassa.",
+        "add": "Aggiungi cambio",
+        "value": "Cambio verso la valuta di report",
+        "date": "Data del cambio (facoltativa)"
+      },
+      "revision": "Revisione bozza",
+      "noOrders": "Ordini, fattibilità e ottimizzazione non sono inclusi in questo pilot.",
+      "stopWaiting": "Interrompi attesa",
+      "analyzing": "Analisi revisione {revision}…",
+      "analyze": "Controlla situazione iniziale",
+      "stale": {
+        "pending": "La richiesta della revisione {requestRevision} è ancora in esecuzione, ma la bozza è ora alla revisione {draftRevision}. La risposta verrà ignorata.",
+        "ignored": "La risposta per la revisione {revision} è stata ignorata perché la bozza o l'account sono cambiati.",
+        "result": "Questo risultato appartiene a una revisione precedente della bozza."
+      },
+      "draftPreserved": "La bozza è stata conservata.",
+      "platformErrorTitle": "Analisi non completata",
+      "platformError": "Il backend non ha potuto completare l'analisi. La bozza è stata conservata.",
+      "state": {
+        "ready": "Pronto · lo stato iniziale è valutabile",
+        "needsInput": "Richiede dati",
+        "invalid": "Scenario non valido",
+        "unsupported": "Fuori dal dominio P1"
+      },
+      "resultMeaning": "Questa è un'analisi dello stato iniziale. Non certifica fattibilità degli ordini, raggiungimento dell'obiettivo o ottimalità.",
+      "exactView": "Esatta",
+      "formattedView": "Formattata",
+      "totals": {
+        "invested": "Valore investito iniziale",
+        "existingCash": "Cassa esistente",
+        "contributions": "Nuovi contributi",
+        "combinedCash": "Cassa più contributi",
+        "maxGap": "Scostamento assoluto massimo (pp)",
+        "squaredGap": "Scostamento quadratico (pp²)"
+      },
+      "result": {
+        "row": "Riga",
+        "value": "Valore di report",
+        "weight": "Peso corrente",
+        "target": "Obiettivo",
+        "gap": "Scostamento (pp)"
+      },
+      "cashPools": "Casse native",
+      "issues": "Segnalazioni backend",
+      "normalizedInput": "Input normalizzato e unità"
     }
   }
 }

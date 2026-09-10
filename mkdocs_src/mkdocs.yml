@@ -83,6 +83,8 @@ plugins:
             Installation (Docker): Installazione (Docker)
             Install as App (PWA): Installa come App (PWA)
             "🧠 AI Export": "🧠 Esportazione AI"
+            "🧰 Tools": "🧰 Strumenti"
+            PAC allocator: Allocatore PAC
             "🏦 Brokers": "🏦 Broker"
             Broker Sharing: Condivisione Broker
             Broker Transactions: Transazioni del broker
@@ -259,6 +261,8 @@ plugins:
             Installation (Docker): Installation (Docker)
             Install as App (PWA): Installer comme App (PWA)
             "🧠 AI Export": "🧠 Export IA"
+            "🧰 Tools": "🧰 Outils"
+            PAC allocator: Allocateur PAC
             "🏦 Brokers": "🏦 Courtiers"
             Broker Sharing: Partage de Courtier
             Broker Transactions: Transactions du broker
@@ -435,6 +439,8 @@ plugins:
             Installation (Docker): Instalación (Docker)
             Install as App (PWA): Instalar como App (PWA)
             "🧠 AI Export": "🧠 Exportación de IA"
+            "🧰 Tools": "🧰 Herramientas"
+            PAC allocator: Asignador PAC
             "🏦 Brokers": "🏦 Brokers"
             Broker Sharing: Compartir Broker
             Broker Transactions: Transacciones del bróker
@@ -674,7 +680,9 @@ nav:
                   - Finpension: user/transactions/import/finpension.md
                   - Parqet: user/transactions/import/parqet.md
                   - Generic CSV: user/transactions/import/generic-csv.md
-      - 🧰 Tools: user/tools/index.md
+      - 🧰 Tools:
+          - Overview: user/tools/index.md
+          - PAC allocator: user/tools/pac-allocator/index.md
       - 📈 Assets:
           - Overview: user/assets/index.md
           - Create & Edit: user/assets/create-edit.md

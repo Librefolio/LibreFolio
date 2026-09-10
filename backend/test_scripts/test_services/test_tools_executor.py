@@ -205,12 +205,7 @@ async def runtime(monkeypatch):
             finally:
                 if owned.tasks:
                     await asyncio.wait_for(asyncio.gather(*owned.tasks, return_exceptions=True), timeout=_WAIT)
-                io_tasks = {
-                    job.io_task
-                    for executor in owned.executors
-                    for job in executor._jobs.values()
-                    if job.io_task is not None
-                }
+                io_tasks = {job.io_task for executor in owned.executors for job in executor._jobs.values() if job.io_task is not None}
                 if io_tasks:
                     await asyncio.wait_for(asyncio.gather(*io_tasks, return_exceptions=True), timeout=_WAIT)
 
@@ -305,10 +300,7 @@ async def test_out_of_order_completion_preserves_request_order_and_correlation(r
         _batch(_item("owned-first", "hold", text="first"), _item("owned-second", "hold", text="second")),
     )
     handles = [await _begin_worker(runtime.harness) for _ in range(2)]
-    by_text = {
-        decode_json(executor._jobs[handle.execution_id].spec.parameters)["text"]: handle
-        for handle in handles
-    }
+    by_text = {decode_json(executor._jobs[handle.execution_id].spec.parameters)["text"]: handle for handle in handles}
     await asyncio.to_thread(by_text["second"].send, "release")
     await _until(lambda: executor.snapshot().completed == 1, "second physical item completed while first remains gated")
     await asyncio.to_thread(_assert_native_termination, by_text["second"])
@@ -1162,6 +1154,28 @@ def test_tree_tracks_recursive_children_and_group_members_after_leader_exit(monk
     assert unrelated.signals == []
 
 
+def test_running_members_keeps_owned_root_when_unrelated_group_lookup_is_denied(monkeypatch):
+    root = _NativeProcess(101, 1.25)
+    unrelated = _NativeProcess(201, 2.0)
+    processes = {root.pid: root, unrelated.pid: unrelated}
+    _native_view(monkeypatch, processes, {root.pid: root.pid})
+
+    def getpgid(pid):
+        if pid == unrelated.pid:
+            raise PermissionError(errno.EPERM, "permission denied")
+        return root.pid
+
+    monkeypatch.setattr(tree_module.os, "getpgid", getpgid)
+    tree = tree_module.OwnedProcessTree(_ProcessHandle(pid=root.pid))
+    tree.confirm_session(pid=root.pid, group_id=root.pid, created_at=root.born)
+
+    members = tree.running_members()
+
+    assert [member.pid for member in members] == [root.pid]
+    assert set(tree.known) == {root.pid}
+    assert root.children_calls == [True]
+
+
 def test_wait_empty_requires_kernel_confirmation_after_process_snapshot_is_empty(monkeypatch):
     handle = _ProcessHandle(exitcode=0)
     _native_view(monkeypatch, {})
@@ -1191,6 +1205,45 @@ def test_wait_empty_requires_kernel_confirmation_after_process_snapshot_is_empty
 
     assert tree._wait_empty(101.0) is True
     assert events == ["group-alive", "recheck", "group-gone"]
+
+
+def test_cleanup_tolerates_permission_error_when_group_leader_exits_before_signal(monkeypatch):
+    handle = _ProcessHandle(exitcode=None)
+    child = _NativeProcess(102, 1.5)
+    root = _NativeProcess(101, 1.25, descendants=(child,))
+    processes = {root.pid: root, child.pid: child}
+    _native_view(monkeypatch, processes, {root.pid: root.pid, child.pid: root.pid})
+    tree = tree_module.OwnedProcessTree(handle)
+    tree.root = tree_module.ProcessIdentity(root.pid, root.born)
+    tree.known[root.pid] = tree.root
+    tree.group_id = root.pid
+    observations = iter([False, True])
+    events = []
+
+    assert tree._group_is_owned() is True
+
+    def wait_empty(_deadline):
+        observation = next(observations)
+        events.append(("empty", observation))
+        assert handle.calls == []
+        return observation
+
+    def killpg(group_id, signal_number):
+        assert (group_id, signal_number) == (root.pid, signal.SIGTERM)
+        events.append(("killpg", signal_number))
+        processes.pop(root.pid)
+        handle.exitcode = 0
+        raise PermissionError(errno.EPERM, "Operation not permitted")
+
+    monkeypatch.setattr(tree, "_wait_empty", wait_empty)
+    monkeypatch.setattr(tree_module.os, "killpg", killpg)
+
+    assert tree.cleanup(time.monotonic() + 5) is True
+    assert events == [("empty", False), ("killpg", signal.SIGTERM), ("empty", True)]
+    assert root.signals == []
+    assert child.signals == [signal.SIGTERM]
+    assert handle.calls == [("join", 0), ("close",)]
+    assert tree.closed is True
 
 
 @pytest.mark.asyncio

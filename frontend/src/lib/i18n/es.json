@@ -3301,6 +3301,91 @@
         "invalid_schema": "El esquema no se puede publicar",
         "invalid_operation_policy": "Política de operación no válida"
       }
+    },
+    "pacAllocator": {
+      "name": "Asignador PAC",
+      "description": "Analiza el estado inicial exacto de la asignación.",
+      "pilotNotice": "Solo análisis manual del estado inicial. No se leen datos de la cartera, no se proponen órdenes y no se guarda nada.",
+      "scenario": "Escenario",
+      "reportCurrency": "Divisa del informe",
+      "asOfDate": "Fecha de referencia (opcional)",
+      "rows": {
+        "title": "Activos y contextos de custodia",
+        "description": "Cada fila representa un activo en un contexto. Usa la acción específica para conservar la identidad del instrumento entre contextos.",
+        "addAsset": "Nuevo activo local",
+        "empty": "Añade al menos una fila. Hasta entonces, el backend indicará que faltan filas.",
+        "rowNumber": "Fila {number}",
+        "identity": "Identidad local del instrumento",
+        "sameAsset": "Mismo activo, otro contexto",
+        "initialQuantity": "Cantidad inicial",
+        "price": "Precio nativo",
+        "quoteBasis": "Cantidad base de la cotización",
+        "target": "Objetivo (%)",
+        "gridMode": "Cuadrícula de compra",
+        "whole": "Cantidades enteras",
+        "fractional": "Cantidades fraccionarias",
+        "quantityStep": "Paso de cantidad de compra",
+        "quoteDate": "Fecha de la cotización (opcional)"
+      },
+      "cash": {
+        "existing": "Efectivo existente",
+        "notSupplied": "No proporcionado",
+        "noneExisting": "Sin efectivo existente, de forma explícita",
+        "amount": "Importe",
+        "addCurrency": "Añadir divisa",
+        "markNoneExisting": "Sin efectivo existente",
+        "markNotSupplied": "Marcar como no proporcionado",
+        "contributions": "Nuevas aportaciones",
+        "noneContributions": "Sin nuevas aportaciones, de forma explícita",
+        "markNoneContributions": "Sin nuevas aportaciones"
+      },
+      "rates": {
+        "title": "Tipos de cambio de valoración",
+        "description": "Valor de informe de una unidad de divisa nativa. Estos tipos no convierten ni mueven efectivo.",
+        "add": "Añadir tipo",
+        "value": "Tipo hacia la divisa del informe",
+        "date": "Fecha del tipo (opcional)"
+      },
+      "revision": "Revisión del borrador",
+      "noOrders": "Las órdenes, la viabilidad y la optimización no están incluidas en este piloto.",
+      "stopWaiting": "Dejar de esperar",
+      "analyzing": "Analizando la revisión {revision}…",
+      "analyze": "Comprobar el estado inicial",
+      "stale": {
+        "pending": "La solicitud de la revisión {requestRevision} sigue en curso, pero el borrador está ahora en la revisión {draftRevision}. Su respuesta se ignorará.",
+        "ignored": "La respuesta de la revisión {revision} se ignoró porque cambió el borrador o la cuenta.",
+        "result": "Este resultado pertenece a una revisión anterior del borrador."
+      },
+      "draftPreserved": "Tu borrador se ha conservado.",
+      "platformErrorTitle": "Análisis no completado",
+      "platformError": "El backend no pudo completar este análisis. Tu borrador se ha conservado.",
+      "state": {
+        "ready": "Listo · el estado inicial se puede evaluar",
+        "needsInput": "Requiere datos",
+        "invalid": "Escenario no válido",
+        "unsupported": "Fuera del dominio P1"
+      },
+      "resultMeaning": "Este es un análisis del estado inicial. No certifica la viabilidad de las órdenes, el cumplimiento del objetivo ni la optimalidad.",
+      "exactView": "Exacta",
+      "formattedView": "Formateada",
+      "totals": {
+        "invested": "Valor invertido inicial",
+        "existingCash": "Efectivo existente",
+        "contributions": "Nuevas aportaciones",
+        "combinedCash": "Efectivo más aportaciones",
+        "maxGap": "Desviación absoluta máxima (pp)",
+        "squaredGap": "Desviación cuadrática (pp²)"
+      },
+      "result": {
+        "row": "Fila",
+        "value": "Valor del informe",
+        "weight": "Peso actual",
+        "target": "Objetivo",
+        "gap": "Desviación (pp)"
+      },
+      "cashPools": "Reservas de efectivo nativas",
+      "issues": "Hallazgos del backend",
+      "normalizedInput": "Entrada normalizada y unidades"
     }
   }
 }

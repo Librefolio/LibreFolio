@@ -172,7 +172,7 @@ class PacIssueParams(PacStrictModel):
 
 class _IssueBase(PacStrictModel):
     path: IssuePath
-    related_row_indices: Annotated[list[RowIndex], Field(max_length=P1_MAX_ROWS, json_schema_extra={"uniqueItems": True}), AfterValidator(_unique_indices)]
+    related_row_indices: Annotated[list[RowIndex], Field(max_length=P1_MAX_ROWS), AfterValidator(_unique_indices)]
     params: PacIssueParams
 
 

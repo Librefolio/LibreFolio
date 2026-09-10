@@ -3301,6 +3301,91 @@
         "invalid_schema": "Le schéma ne peut pas être publié",
         "invalid_operation_policy": "Politique d'opération invalide"
       }
+    },
+    "pacAllocator": {
+      "name": "Allocateur PAC",
+      "description": "Analyse l'état initial exact de l'allocation.",
+      "pilotNotice": "Analyse manuelle de l'état initial uniquement. Aucune donnée du portefeuille n'est lue, aucun ordre n'est proposé et rien n'est enregistré.",
+      "scenario": "Scénario",
+      "reportCurrency": "Devise de reporting",
+      "asOfDate": "Date de référence (facultative)",
+      "rows": {
+        "title": "Actifs et contextes de garde",
+        "description": "Chaque ligne représente un actif dans un contexte. Utilisez l'action dédiée pour conserver l'identité de l'instrument entre les contextes.",
+        "addAsset": "Nouvel actif local",
+        "empty": "Ajoutez au moins une ligne. Jusque-là, le backend signalera les lignes manquantes.",
+        "rowNumber": "Ligne {number}",
+        "identity": "Identité locale de l'instrument",
+        "sameAsset": "Même actif, autre contexte",
+        "initialQuantity": "Quantité initiale",
+        "price": "Prix natif",
+        "quoteBasis": "Quantité de base de la cotation",
+        "target": "Cible (%)",
+        "gridMode": "Grille d'achat",
+        "whole": "Quantités entières",
+        "fractional": "Quantités fractionnaires",
+        "quantityStep": "Pas de quantité d'achat",
+        "quoteDate": "Date de la cotation (facultative)"
+      },
+      "cash": {
+        "existing": "Liquidités existantes",
+        "notSupplied": "Non renseigné",
+        "noneExisting": "Aucune liquidité existante, explicitement",
+        "amount": "Montant",
+        "addCurrency": "Ajouter une devise",
+        "markNoneExisting": "Aucune liquidité existante",
+        "markNotSupplied": "Marquer comme non renseigné",
+        "contributions": "Nouveaux versements",
+        "noneContributions": "Aucun nouveau versement, explicitement",
+        "markNoneContributions": "Aucun nouveau versement"
+      },
+      "rates": {
+        "title": "Taux de change de valorisation",
+        "description": "Valeur de reporting d'une unité de devise native. Ces taux ne convertissent ni ne déplacent les liquidités.",
+        "add": "Ajouter un taux",
+        "value": "Taux vers la devise de reporting",
+        "date": "Date du taux (facultative)"
+      },
+      "revision": "Révision du brouillon",
+      "noOrders": "Les ordres, la faisabilité et l'optimisation ne sont pas inclus dans ce pilote.",
+      "stopWaiting": "Arrêter l'attente",
+      "analyzing": "Analyse de la révision {revision}…",
+      "analyze": "Vérifier l'état initial",
+      "stale": {
+        "pending": "La requête de la révision {requestRevision} est toujours en cours, mais le brouillon est maintenant à la révision {draftRevision}. Sa réponse sera ignorée.",
+        "ignored": "La réponse de la révision {revision} a été ignorée car le brouillon ou le compte a changé.",
+        "result": "Ce résultat appartient à une ancienne révision du brouillon."
+      },
+      "draftPreserved": "Votre brouillon a été conservé.",
+      "platformErrorTitle": "Analyse non terminée",
+      "platformError": "Le backend n'a pas pu terminer cette analyse. Votre brouillon a été conservé.",
+      "state": {
+        "ready": "Prêt · l'état initial est évaluable",
+        "needsInput": "Données requises",
+        "invalid": "Scénario non valide",
+        "unsupported": "Hors du domaine P1"
+      },
+      "resultMeaning": "Il s'agit d'une analyse de l'état initial. Elle ne certifie ni la faisabilité des ordres, ni l'atteinte de la cible, ni l'optimalité.",
+      "exactView": "Exacte",
+      "formattedView": "Formatée",
+      "totals": {
+        "invested": "Valeur initialement investie",
+        "existingCash": "Liquidités existantes",
+        "contributions": "Nouveaux versements",
+        "combinedCash": "Liquidités plus versements",
+        "maxGap": "Écart absolu maximal (pp)",
+        "squaredGap": "Écart quadratique (pp²)"
+      },
+      "result": {
+        "row": "Ligne",
+        "value": "Valeur de reporting",
+        "weight": "Pondération actuelle",
+        "target": "Cible",
+        "gap": "Écart (pp)"
+      },
+      "cashPools": "Réserves de liquidités natives",
+      "issues": "Constats du backend",
+      "normalizedInput": "Entrée normalisée et unités"
     }
   }
 }

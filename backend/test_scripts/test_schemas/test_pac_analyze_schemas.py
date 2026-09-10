@@ -1317,7 +1317,8 @@ def test_exported_issue_paths_indices_and_params_are_bounded(mode):
     assert max(map(len, names["enum"])) <= 19
     assert indices["minimum"] == 0 and indices["maximum"] == 31
     related = props["related_row_indices"]
-    assert related["maxItems"] == 32 and related["uniqueItems"] is True
+    assert related["maxItems"] == 32
+    assert "uniqueItems" not in related
     assert related["items"]["type"] == "integer"
     assert related["items"]["minimum"] == 0 and related["items"]["maximum"] == 31
     params = _resolve(schema, props["params"])
