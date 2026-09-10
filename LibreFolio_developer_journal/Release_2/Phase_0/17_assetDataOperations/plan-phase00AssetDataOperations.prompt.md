@@ -254,6 +254,34 @@ cronologia.
   > **Note implementazione**: handoff post-integrazione inviato al coordinatore
   > con HEAD, manifest a tre file e gate; nessun delta API/i18n/docs.
 
+## 10. Feedback manual review — label bond e aiuto CSV
+
+> **⚠️ Fuori pista autorizzato (2026-09-10):** la review manuale ha confermato
+> A2/B3 ma rilevato le due chiavi `sectors.*Bonds` assenti dai cataloghi
+> integrati. Richiesto anche un collegamento diretto alla guida CSV e chiarimento
+> sull'ambiguita' separatore/decimale.
+
+- [x] Aggiungere le label bond EN/IT/FR/ES tramite `dev.py i18n`. ✅ 2026-09-10
+  > **Note implementazione**: aggiunte le due chiavi dinamiche protette con la
+  > matrice approvata; il matching localizzato IT puo' ora risolvere
+  > `Obbligazioni societarie` e `Titoli di Stato`.
+- [x] Aggiungere icona libro nel modal con link alla guida inglese. ✅ 2026-09-10
+  > **Note implementazione**: link stabile alla sezione
+  > `user/assets/create-edit/#importing-a-distribution-csv`.
+- [x] Completare chiarimento docs su separatore/decimale e test specialistici. ✅ 2026-09-10
+  > **Note implementazione**: la guida EN usa ora un anchor esplicito, documenta
+  > replace atomico, duplicati e l'ambiguita' comma: con virgola decimale usare
+  > `;` oppure quotare il valore in un CSV separato da virgole. Test component
+  > specialistici: 6 pass su label IT esatte e link docs.
+- [x] Validare, inviare checkpoint e tornare FROZEN. ✅ 2026-09-10
+  > **Note implementazione**: i18n audit 2568/2568 su quattro lingue; 6 test
+  > component verdi; Prettier/diff check verdi; svelte-check 0 errori
+  > (41 warning preesistenti). MkDocs strict e link check verdi. Ambiente manuale
+  > ricostruito e disponibile su 6154.
+  > **⚠️ Feedback UI successivo**: su richiesta developer l'icona libro e'
+  > stata spostata dal corpo all'header del modal tramite uno slot action
+  > opzionale e riusabile di `DataImportModal`.
+
 ## Definition of done
 
 - API, selettori, fallback ed emoji espongono entrambe le categorie bond; i
