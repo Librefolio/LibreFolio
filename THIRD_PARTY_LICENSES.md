@@ -22,6 +22,18 @@ repository linked in the tables.
 
 ---
 
+## 🎨 Brand icon assets
+
+The X, Reddit, Facebook, Instagram and TikTok SVG paths in `SocialIcon.svelte` come from
+[Simple Icons](https://github.com/simple-icons/simple-icons), dedicated to the
+public domain under [CC0 1.0 Universal](https://github.com/simple-icons/simple-icons/blob/develop/LICENSE.md).
+Sources: [X](https://github.com/simple-icons/simple-icons/blob/develop/icons/x.svg)
+[Reddit](https://github.com/simple-icons/simple-icons/blob/develop/icons/reddit.svg),
+[Facebook](https://github.com/simple-icons/simple-icons/blob/develop/icons/facebook.svg),
+[Instagram](https://github.com/simple-icons/simple-icons/blob/develop/icons/instagram.svg)
+and [TikTok](https://github.com/simple-icons/simple-icons/blob/develop/icons/tiktok.svg).
+Brand names and trademarks remain the property of their respective owners.
+
 ## 📉 Risk Analysis stack
 
 These are the libraries powering the Risk Analysis subsystem (simulation, optimisation,

@@ -45,9 +45,9 @@
     "semantic_hash": "c238966658aaaf0d8bb6090c0c59d610"
   },
   "wiki/domains/transactions.md": {
-    "mtime": 1779357383.0569663,
-    "ast_hash": "593870eec53198c83f7af26904ba3042",
-    "semantic_hash": "593870eec53198c83f7af26904ba3042"
+    "mtime": 1788970110.0977328,
+    "ast_hash": "013f2f23df159af07ad9e3562e121792",
+    "semantic_hash": "013f2f23df159af07ad9e3562e121792"
   },
   "wiki/domains/infrastructure.md": {
     "mtime": 1777316019.471213,
@@ -215,9 +215,9 @@
     "semantic_hash": "212204275583f8965eefe2b24b3e6927"
   },
   "wiki/features/F-083.md": {
-    "mtime": 1777316019.4804418,
-    "ast_hash": "f07807b68c7df5fcb32183b0dc479d10",
-    "semantic_hash": "f07807b68c7df5fcb32183b0dc479d10"
+    "mtime": 1788969353.817861,
+    "ast_hash": "7091970fa10a60c1d4aff7fbf7a642fb",
+    "semantic_hash": "7091970fa10a60c1d4aff7fbf7a642fb"
   },
   "wiki/features/F-001.md": {
     "mtime": 1777316019.4726276,
@@ -265,9 +265,9 @@
     "semantic_hash": "34b9fbb6cb6405252d340a7f7f0e8840"
   },
   "wiki/features/F-011.md": {
-    "mtime": 1777316019.4736054,
-    "ast_hash": "ea0e4fcc583dfa3acbfc44d628c6fa8e",
-    "semantic_hash": "ea0e4fcc583dfa3acbfc44d628c6fa8e"
+    "mtime": 1788970110.1018066,
+    "ast_hash": "7d1462cf14988be26942d4911f25c1cd",
+    "semantic_hash": "7d1462cf14988be26942d4911f25c1cd"
   },
   "wiki/features/F-063.md": {
     "mtime": 1777316019.4786117,
@@ -360,9 +360,9 @@
     "semantic_hash": "25ba11c61a96d95b7f46732415c0cc5b"
   },
   "wiki/features/F-012.md": {
-    "mtime": 1777316019.4737797,
-    "ast_hash": "afe27b96f4e0c973db96d674abd862a9",
-    "semantic_hash": "afe27b96f4e0c973db96d674abd862a9"
+    "mtime": 1788969577.756971,
+    "ast_hash": "018af18f4cde941e314511924979199b",
+    "semantic_hash": "018af18f4cde941e314511924979199b"
   },
   "wiki/features/F-043.md": {
     "mtime": 1777316019.4766448,
@@ -410,9 +410,9 @@
     "semantic_hash": "c7d2a7e0946fbff0306e4460d80ad716"
   },
   "wiki/features/F-013.md": {
-    "mtime": 1777316019.473871,
-    "ast_hash": "45a0ee92ff422c9ea50c7325941c82a2",
-    "semantic_hash": "45a0ee92ff422c9ea50c7325941c82a2"
+    "mtime": 1788970361.234672,
+    "ast_hash": "4aa030175ebdc0a180aac661f27183a5",
+    "semantic_hash": "4aa030175ebdc0a180aac661f27183a5"
   },
   "wiki/features/F-042.md": {
     "mtime": 1777316019.4765577,
@@ -505,9 +505,9 @@
     "semantic_hash": "0a8b305f07ada32d4e27a7e345c50547"
   },
   "wiki/features/F-049.md": {
-    "mtime": 1777316019.4773142,
-    "ast_hash": "6b15840bde10a14ca0e20b21785ad93b",
-    "semantic_hash": "6b15840bde10a14ca0e20b21785ad93b"
+    "mtime": 1788969353.8166182,
+    "ast_hash": "c3014d92008d529fe4a3a76e37302d47",
+    "semantic_hash": "c3014d92008d529fe4a3a76e37302d47"
   },
   "wiki/features/F-058.md": {
     "mtime": 1784420108.5086946,
@@ -520,9 +520,9 @@
     "semantic_hash": "974b2b929953cb91fac46ccfaef565be"
   },
   "wiki/features/registry.md": {
-    "mtime": 1784718263.7259398,
-    "ast_hash": "05fa66b35e8050f5ae1c4634bc00f05a",
-    "semantic_hash": "05fa66b35e8050f5ae1c4634bc00f05a"
+    "mtime": 1788970361.236402,
+    "ast_hash": "ec909add77247d7be68375a20efc2a96",
+    "semantic_hash": "ec909add77247d7be68375a20efc2a96"
   },
   "wiki/features/F-019.md": {
     "mtime": 1777316019.4744287,
@@ -560,9 +560,9 @@
     "semantic_hash": "ecd182fdccf25773f354bce8fc4c3b12"
   },
   "wiki/workflows/brim-import-flow.md": {
-    "mtime": 1777316019.4875414,
-    "ast_hash": "8f97bcd7b38592601e049dbb9da14b83",
-    "semantic_hash": "8f97bcd7b38592601e049dbb9da14b83"
+    "mtime": 1788969577.7557065,
+    "ast_hash": "819e598d8209c4daee8c2c5210f1b4ce",
+    "semantic_hash": "819e598d8209c4daee8c2c5210f1b4ce"
   },
   "wiki/problems/babel-currency-symbol-echo.md": {
     "mtime": 1777316019.4824069,
@@ -670,9 +670,9 @@
     "semantic_hash": "890ce4844ea74f3a1dd8d905a12bebe9"
   },
   "wiki/decisions/brim-broker-scoped.md": {
-    "mtime": 1777316019.4671748,
-    "ast_hash": "e6137baed66452b54bbc7ead12b054c7",
-    "semantic_hash": "e6137baed66452b54bbc7ead12b054c7"
+    "mtime": 1788968760.376839,
+    "ast_hash": "56e6ae599b17de493d6f209cd1b9a55b",
+    "semantic_hash": "56e6ae599b17de493d6f209cd1b9a55b"
   },
   "wiki/decisions/cost-basis-currency-object.md": {
     "mtime": 1782036533.6327984,
@@ -725,9 +725,9 @@
     "semantic_hash": "7edc863530ca105412b8347d389aa8f1"
   },
   "wiki/decisions/brim-fake-asset-id.md": {
-    "mtime": 1777316019.4672692,
-    "ast_hash": "362955e54d76228b8bd9a5b516749f03",
-    "semantic_hash": "362955e54d76228b8bd9a5b516749f03"
+    "mtime": 1788969353.8102896,
+    "ast_hash": "c1ebd56dbfa040ffd820a1eef076bd68",
+    "semantic_hash": "c1ebd56dbfa040ffd820a1eef076bd68"
   },
   "wiki/decisions/data-editor-unification.md": {
     "mtime": 1777316019.4674473,
@@ -865,9 +865,9 @@
     "semantic_hash": "58772e5ef1e65e51b227228594675410"
   },
   "wiki/decisions/brim-parser-only.md": {
-    "mtime": 1777316019.4673586,
-    "ast_hash": "5b81e483003cda79dc5158b4ec660aec",
-    "semantic_hash": "5b81e483003cda79dc5158b4ec660aec"
+    "mtime": 1788969577.7545648,
+    "ast_hash": "5628afe2e7685ff4f73ad24febddbf06",
+    "semantic_hash": "5628afe2e7685ff4f73ad24febddbf06"
   },
   "wiki/decisions/provider-registry-decision.md": {
     "mtime": 1777316019.468911,
@@ -1315,9 +1315,10 @@
     "semantic_hash": "b40116df845dd9b737f2d3272c841f2b"
   },
   "wiki/concepts/ci-release-pipeline.md": {
-    "mtime": 1783071490.7542367,
+    "mtime": 1788971895.7640893,
+    "seen": 1788972094.495605,
     "ast_hash": "4ca4043ed008cc2e71f331c6faf3ac4e",
-    "semantic_hash": "4ca4043ed008cc2e71f331c6faf3ac4e"
+    "semantic_hash": "4d114484f68890f9f6b14f410f73153b"
   },
   "wiki/concepts/fifo-lot-tracking.md": {
     "mtime": 1784718183.0360057,
@@ -1340,9 +1341,9 @@
     "semantic_hash": "509190687a6a5b3a1273c0a17af4241a"
   },
   "wiki/concepts/import-todo-signals.md": {
-    "mtime": 1783071490.754342,
-    "ast_hash": "1a7ce399af2b0539a440b8a823b101fc",
-    "semantic_hash": "1a7ce399af2b0539a440b8a823b101fc"
+    "mtime": 1788970110.1032748,
+    "ast_hash": "c33af73abf327fddcee467cb7738cfca",
+    "semantic_hash": "c33af73abf327fddcee467cb7738cfca"
   },
   "wiki/concepts/inline-wac-computation.md": {
     "mtime": 1784420108.5030053,
@@ -1410,9 +1411,9 @@
     "semantic_hash": "479252ca71b9c6d5961d881af8f8867f"
   },
   "wiki/decisions/import-wizard-v5-paradigm.md": {
-    "mtime": 1783071490.7555068,
-    "ast_hash": "7ec214ac5743b5bc67fa24a0198b2e47",
-    "semantic_hash": "7ec214ac5743b5bc67fa24a0198b2e47"
+    "mtime": 1788969839.5181172,
+    "ast_hash": "e736b08e4edb70c313acfd564f81d95d",
+    "semantic_hash": "e736b08e4edb70c313acfd564f81d95d"
   },
   "wiki/decisions/mwrr-boundary-fix.md": {
     "mtime": 1784420108.5054262,
@@ -1435,9 +1436,9 @@
     "semantic_hash": "b1255450f6f2d5ac9a9ae01715e9baa8"
   },
   "wiki/entities/import-wizard-modal.md": {
-    "mtime": 1783071490.7558208,
-    "ast_hash": "6243b3bc4fba7ac23a0f291adfe91c9b",
-    "semantic_hash": "6243b3bc4fba7ac23a0f291adfe91c9b"
+    "mtime": 1788968760.3790529,
+    "ast_hash": "d70e9d9cbaac92db0285307223cd1be3",
+    "semantic_hash": "d70e9d9cbaac92db0285307223cd1be3"
   },
   "wiki/entities/market-data-scheduler.md": {
     "mtime": 1783071490.755938,
@@ -2259,5 +2260,11 @@
     "mtime": 1785926105.7600598,
     "ast_hash": "404ac1243c6b6ef13fefc498e4fe2ca0",
     "semantic_hash": ""
+  },
+  "wiki/problems/ghcr-browser-cors-auth-flow.md": {
+    "mtime": 1788971895.761463,
+    "seen": 1788972094.4956071,
+    "ast_hash": "",
+    "semantic_hash": "309e243fd7abf5e382715bf6a8be97c8"
   }
 }

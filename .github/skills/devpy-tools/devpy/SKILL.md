@@ -43,6 +43,7 @@ dev.py [-h]
 |----------|---------|
 | Start for development | `./dev.py server` |
 | Test mode | `./dev.py server --test` |
+| Isolated worktree tests | `./dev.py test --test-port 6141 --data-dir /tmp/librefolio-r2-b api all` |
 | Kill zombie + start | `./dev.py server --force` |
 | Frontend with HMR | T1: `./dev.py server` — T2: `./dev.py front dev` |
 | After modifying models | `./dev.py db migrate "…"` (incremental migration; `db create-clean` only for fresh/test DBs) |
@@ -85,7 +86,11 @@ change IP before suspecting the code.
 
 | Port | Service |
 |------|---------|
-| 6040 | Backend production |
-| 6041 | Backend test mode |
+| 6040 | Backend production (default) |
+| 6041 | Backend test mode (default; use a unique `--test-port` per active worktree) |
 | 6042 | MkDocs serve |
 | 5173 | Frontend dev (Vite HMR) |
+
+Concurrent worktrees also need distinct `--data-dir` values. A unique port
+alone isolates sockets, not SQLite/uploads/logs. Global `test` options precede
+the category.

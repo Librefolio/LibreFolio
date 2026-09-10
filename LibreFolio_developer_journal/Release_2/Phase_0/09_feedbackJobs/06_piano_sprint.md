@@ -4,7 +4,48 @@
 
 **Baseline:** branch `dev_release2`, commit `a9138140`.
 
-**Stato:** proposta pubblicata; nessuno sprint di implementazione avviato.
+**Stato dell'analisi al 2026-09-07:** proposta pubblicata, senza avvio del codice.
+
+**Coordinamento aggiornato, 2026-09-08 11:30 CEST:** il dev autorizza la ripresa delle
+attivita sbloccate dopo il cambio postazione. E continua i fix urgenti import/asset/FX,
+diagnostica multiriga E7, cronologia E8 e UX U1/U5/U4/U7/U9 ereditata da A.
+Nella stessa data si aggiunge E9: nightly `1.0.1-114` segnalata come aggiornata
+rispetto a stable `1.1.0`, con richiesta di mostrare nel banner la versione online
+realmente rilevata. Causa da investigare, nessun deploy o accesso al server del dev.
+C e D riprendono contratti, minimo pilota PAC `analyze`, dettagli numerici e ASCII;
+nessuna approvazione implicita dei gate o avvio delle implementazioni ancora bloccate.
+A non riapre i task ceduti; B ha codice pronto nel proprio worktree e attende review
+operativa del dev. E conserva la coda esclusiva runtime/build/suite/API sync e i writer
+runner/i18n. About/supporto segue E -> C; nessun accesso a produzione `6040`.
+
+**Autorizzazioni successive, 2026-09-08 15:48/15:51:** il dev autorizza C completa sui
+file indipendenti, hub/About con link locale-aware, diagnostics sanitizzati per tutti
+gli autenticati, job atomico per item e metriche temporali. Niente nuova dipendenza
+`jsonschema`: fonte e validazione Pydantic/TypeAdapter. D può implementare schema/core
+iniziale P1 e test backend dopo approvazione N1/devC1/X1, non UI/solver/copiedati/Broker.
+Questi mandati superano la precedente pausa di codice C/D, non la riserva del server E.
+La review manuale E continua; verifiche realmente PURE e writer dei runner vengono
+assegnati separatamente, una suite alla volta e senza setup DB o server impliciti.
+
+**Integrazione E, 2026-09-09:** E1-E9 e U1/U4/U5/U7/U9 sono completati e il
+pacchetto verificato e' stato applicato al checkout locale `dev_release2`.
+La review indipendente ha aperto e chiuso il Round 5 sul challenge pubblico GHCR.
+Manifest e prove: [14_feedbackImportUrgent](../14_feedbackImportUrgent/manifest-integrazione-E.md).
+Commit/SHA e archivio restano in attesa del commit manuale del dev. U2, U3, U8,
+gli sprint non inclusi e F-MC-1/2/3 restano aperti.
+
+**Infrastruttura di parallelismo, 2026-09-09:** prima di riallineare B/C/D e'
+stato aperto il piano
+[15_parallelRuntimeIsolation](../15_parallelRuntimeIsolation/plan-phase00ParallelRuntimeIsolation.prompt.md).
+Il gate richiede porta e data directory uniche per ogni worktree; la sola porta
+non separa SQLite, upload, log e report broker. I default storici restano
+invariati.
+
+I worktree C/D sono allineati a `4a73f5f6`; i loro piani devono distinguere contratti
+approvati, scelte residue e codice non ancora autorizzato. Il pilota manuale non aspetta
+solver completo, copie portfolio o migrazione Broker fractional. Le implementazioni e
+i relativi piani di avanzamento restano nei worktree owner fino a integrazione esplicita:
+questa nota non importa codice nel checkout principale.
 
 **Revisione 2026-09-07, confronto successivo:** YOC a 365 giorni e policy del trattino, documentazione/tooltip, estensione esplicita del CSV condiviso, catalogo Tool completo senza endpoint schema/prefill dedicati, mappa di parallelismo e gate UX prima/dopo realizzazione.
 
@@ -12,7 +53,7 @@
 
 Questo documento distingue quanto esiste realmente, quanto resta da fare e quanto e stato ridefinito con l'utente durante l'analisi. I report archiviati sono fonti storiche, non certificazioni dello stato corrente. Le righe sotto appartengono alla baseline indicata; insieme alla riga viene riportato il simbolo per ritrovare il codice dopo eventuali spostamenti.
 
-`TODO_FUTURI.md` resta fuori dal lavoro. Non si riaprono regime fiscale, matching LIFO/HIFO, nuove strategie d'investimento o altri rinvii deliberati.
+Nell'analisi del 2026-09-07 `TODO_FUTURI.md` restava fuori dal lavoro. Il mandato successivo del 2026-09-08 autorizza solo l'aggiunta dei tre temi futuri F-MC-1/2/3, non la loro esecuzione. Non si riaprono regime fiscale, matching LIFO/HIFO, nuove strategie d'investimento o altri rinvii deliberati.
 
 ## 1. Come leggere dimensioni, stati e dipendenze
 
@@ -509,7 +550,7 @@ Non esiste un componente autonomo AssetDeleteModal: si usa ConfirmModal. La canc
 |---|---|
 | `GET /api/v1/tools/catalog` | Catalogo completo: identita/versioni, schemi input/output, default, vincoli, capacita/limiti e descriptor UI. |
 | `POST /api/v1/tools/compute` | Batch anche eterogeneo; un item per normale utilizzo UI. |
-| `GET /api/v1/tools/diagnostics` | Diagnostica tecnica read-only per amministratore autenticato, senza dati degli scenari. |
+| `GET /api/v1/tools/diagnostics` | Diagnostica tecnica read-only per tutti gli utenti autenticati, senza dati degli scenari o log grezzi; decisione 2026-09-08 che supera admin-only. |
 
 **Catalogo come contratto di popolamento UI/MCP:** ogni entry contiene `tool_code`, versioni, nome/descrizione e chiavi i18n, icona/categoria, capacita, `input_schema` e `output_schema` completi con riferimenti locali, parametri/default/enum/unita/vincoli necessari alla configurazione, limiti operativi e descriptor `custom`/`component_key`/versione UI. I default non sono snapshot personali o prezzi correnti. Il catalogo popola hub e selettori e configura la UI custom registrata; non promette di generare automaticamente il complesso editor PAC.
 
@@ -517,25 +558,25 @@ Non esiste un componente autonomo AssetDeleteModal: si usa ConfirmModal. La canc
 
 Ogni compute item porta correlation id, tool/version e parametri. Envelope invalido o ID duplicati rifiutati come richiesta; errore plugin/parametri/output di un item non annulla gli altri. Ordine/cardinalita stabili, errore e risultato mutuamente esclusivi. Un risultato finanziariamente infeasible non e un crash di esecuzione.
 
-**Batch e ottimizzazione:** lo stesso `tool_code` puo comparire piu volte, con parametri uguali o diversi e correlation ID distinti. Una sola richiesta evita round-trip e orchestrazione ripetuta, ma N scenari differenti restano N problemi di calcolo. L'executor puo condividere preparazioni immutabili e deduplicare item identici dopo validazione/normalizzazione, solo per plugin dichiarati puri/deterministici. Chiave completa: plugin/versione/modalita, input normalizzati, date/fonti/snapshot e opzioni di esecuzione rilevanti; scope del riuso al batch autorizzato. Nessuna cache cross-user implicita, nessun riuso approssimato tra scenari diversi. Restituire comunque un esito per ogni item originario, con il suo ID; timeout/errori/limiti non diventano successi per effetto del riuso. Eterogeneita non introduce automaticamente chaining di output tra item.
+**Batch e atomicita, decisione 2026-09-08:** lo stesso `tool_code` puo comparire piu volte, con parametri uguali o diversi e correlation ID distinti. Dati gia preconfezionati e un worker per item, con parallelismo reale entro i limiti dichiarati: in questa versione niente accorpamento fisico degli item identici, superando la proposta precedente di deduplica `analyze`. Figli/processi/thread del plugin devono terminare con il job. Un esito per ogni item originario, con ID/stato e tempi backend misurati e definiti, mostrati anche nel frontend; fasi non misurate non diventano zeri fittizi. Nessuna cache cross-user, fusione di scenari o futura orchestrazione stateful/service-layer introdotta ora.
 
 **Diagnostics in concreto, proposta:** stato plugin caricato/scartato/non disponibile; errori di import/discovery, codice duplicato o schema/descriptor non valido; versioni e capacita dichiarate; disponibilita/configurazione del pool, lavori attivi/in coda e limiti effettivi. Riutilizzare i dati di `AbstractPluginRegistry.get_discovery_errors` e l'infrastruttura di esecuzione, non creare un sistema di monitoraggio separato. L'esempio di errore e "plugin scartato per input schema non valido", non "mostra l'ultimo input finanziario dell'utente".
 
-L'endpoint non avvia calcoli, probe, download prezzi, reset o riparazioni; non restituisce parametri, risultati personali, credenziali o log grezzi dei job. Con piu processi backend, le statistiche sono esplicitamente riferite al worker interrogato, non presentate come totali di istanza. Compatibilita del `component_key` con il bundle frontend verificata dalla UI, non inventata dal backend. Nessun pannello amministrativo nuovo necessario per il primo incremento.
+L'endpoint non avvia calcoli, probe, download prezzi, reset o riparazioni; non restituisce parametri, risultati personali, credenziali o log grezzi dei job. Con piu processi backend, le statistiche sono esplicitamente riferite al worker interrogato, non presentate come totali di istanza. Compatibilita del `component_key` con il bundle frontend verificata dalla UI, non inventata dal backend. Pannello nella sezione Plugin diagnostics di About per gli utenti autenticati, con link documentali secondo la lingua frontend e destinazioni/fallback effettivi. Mount About dopo il passaggio E, non durante la sua review.
 
 **Confine puro:** plugin calcola da dati espliciti e modelli validati; niente DB session, FastAPI, utente dichiarato nei parametri, provider calls, ordini o scritture finanziarie. La UI orchestra le letture di dominio autorizzate e copia i risultati nel draft; le aggregazioni finanziarie restano backend. Il futuro MCP puo usare le stesse letture di dominio e lo stesso compute con principal autenticato, senza copiare il solver o nascondere prefill dentro il calcolo.
 
-**Tipi/versioni:** JSON Schema nel catalogo non genera da solo tipi TypeScript del PAC. Integrare i modelli bundled nella pipeline `api sync`/generazione, validare il payload prima di affidarlo al renderer. Output finanziari Decimal/string; convertire in number solo per coordinate/formattazione, non per calcolare allocazioni.
+**Tipi/versioni:** JSON Schema nel catalogo non genera da solo tipi TypeScript del PAC. Integrare i modelli bundled nella pipeline `api sync`/generazione, validare il payload prima di affidarlo al renderer. Fonte e validazione Pydantic/TypeAdapter, schemi sempre derivati: il dev non autorizza una nuova dipendenza `jsonschema` o schemi plugin manuali. Restano controlli su export supportato, riferimenti locali, strictness e descriptor. Output finanziari Decimal/string; convertire in number solo per coordinate/formattazione, non per calcolare allocazioni.
 
 **Discovery/risorse:** registry rigoroso, collisioni e plugin mancanti visibili; non ereditare il fallback del costruttore che riprova senza argomenti dopo qualunque TypeError (`provider_registry.py:78`). La diagnostica Tool non va aggiunta al route pubblico system senza auth. Worker CPU dedicato ai Tool, con meccanica riusabile del pool in `risk/quant/spawn_worker.py:309-453`, ma coda/budget/lifecycle distinti. Timeout su un thread non lo uccide: un solver pesante richiede isolamento terminabile.
 
-**Dipendenze:** contratto piattaforma prima dell'integrazione del primo plugin; il suo nucleo matematico puo procedere su I/O concordato senza attendere le route. Nessuna dipendenza da scissione asset, execute_batch o installazione MCP. **DoD:** auth su catalogo/compute/diagnostics, autorizzazione sulle API di dominio usate per la copia, isolamento bulk e del riuso, limiti dichiarati, crash/cancel/timeout/backpressure espliciti, output validato, cleanup worker, UI incompatibile dichiarata e tracker principale ancora usabile in caso di problema Tool.
+**Dipendenze:** contratto piattaforma prima dell'integrazione del primo plugin; il suo nucleo matematico puo procedere su I/O concordato senza attendere le route. Nessuna dipendenza da scissione asset, execute_batch o installazione MCP. **DoD:** auth su catalogo/compute/diagnostics, autorizzazione sulle API di dominio usate per la copia, isolamento per item, limiti dichiarati, crash/cancel/timeout/backpressure espliciti, output validato, cleanup worker/figli, tempi osservabili, UI incompatibile dichiarata e tracker principale ancora usabile in caso di problema Tool.
 
-**Gate UX:** la parte frontend T0/T2 parte da ASCII di hub, card, tool incompatibile/indisponibile ed errori di catalogo, approvati dal dev. Dopo, walkthrough dalla sidebar e prova operativa delle condizioni di errore.
+**Gate UX C, aggiornato 2026-09-08:** piattaforma completa e hub/About approvati dal dev con la correzione dei link secondo lingua frontend. Dopo implementazione resta il walkthrough operativo delle condizioni di errore. Questo non approva implicitamente la UI PAC D, BC01 o le viste del solver.
 
 ### T1 - Unico allocatore PAC / ribilanciamento / PAC ribilanciante
 
-**Stato:** non implementato. **Taglia:** XL nello scope ampliato. La vecchia M-L per un PAC euro buy-only non e piu una stima dell'intero requisito.
+**Stato, aggiornato 2026-09-08:** implementazione del solo schema/core iniziale P1 autorizzata a D; allocatore completo, solver, copie e UI estesa non ancora implementati. **Taglia:** XL nello scope ampliato. La vecchia M-L per un PAC euro buy-only non e piu una stima dell'intero requisito.
 
 **Studio letto:** [guida PAC multi-ETF](../../guida_allocazione_pac_multi_etf.md), 1.167 righe. La parte aggiunta modifica pesi d'esempio, budget e gerarchia obiettivi. Nessun ticker, peso o calendario personale dello studio diventa una costante di prodotto.
 
@@ -543,15 +584,19 @@ L'endpoint non avvia calcoli, probe, download prezzi, reset o riparazioni; non r
 
 **Input concordati:** posizioni iniziali anche zero; distribuzione target; prezzi/valute; quote intere o frazionarie con passo esplicito; input in quantita o valori chiaramente denominati; vendite opzionali e limiti per titolo; liquidita esistente aggregata per valuta; lista nuovi contributi per valuta; conversioni FX opzionali; costi e margini espliciti.
 
-**Stessa identita asset fra broker:** consolidare quantita/valori una sola volta usando identita canonica, non nomi. Non fondere asset diversi con stesso nome. L'input manuale deve restare possibile senza asset ID DB.
+**Raccordo decisioni D, 2026-09-08:** input e target separati per riga asset/broker, anche per lo stesso asset su piu broker. Chiave di riga opaca/stabile e identita strumento esplicita per l'esclusione globale buy/sell; non aggregare i target fra broker o dedurre identita dai nomi. Il core non interpreta broker/ruoli/DB. L'input manuale resta possibile senza asset ID DB.
 
 **Casse separate:** disponibilita EUR e USD non sono una cassa unica. Acquisti/vendite alimentano la valuta pertinente; contributi nuovi non entrano due volte nello snapshot. Con FX disabilitato, una valuta in eccesso non finanzia automaticamente un'altra. Con FX abilitato, mostrare conversione proposta, importi debitati/accreditati, tasso, costi/margini e cassa finale per valuta. Nessun vincolo di instradamento per broker richiesto.
 
 **Gate numerico prima del solver:** congelare unita dei min/max di acquisto/vendita, minimo obbligatorio vs minimo se si opera, commissioni, riserve, passi frazionari, valuta di valutazione dei target, bande, ordine degli obiettivi e precisione. Quantita, valore e percentuali non sono intercambiabili senza prezzo e totale iniziale. Posizioni frazionarie pregresse non vanno arrotondate al passo intero delle nuove operazioni.
 
+**Passo monetario operativo, chiarimento 2026-09-08:** parametro decimale positivo generico nella valuta della soglia interessata. `0.01`, `0.1`, `1`, `10`, `100`, `1000` e oltre sono esempi, non enum, sole potenze di dieci o tetto implicito. Riguarda soglie usate dal calcolo, non display o passo delle quote; non si deduce dai decimali ISO della valuta. D deve precisare campi e scope della configurazione senza arrotondare indistintamente prezzi, FX, cash, quantita o limiti. Eventuali limiti tecnici di rappresentazione/costo vanno dichiarati, non spacciati per policy valutaria.
+
 **Conservazione:** nessuna vendita oltre l'inventario, nessuno short/leva implicito, niente acquisto e vendita simultanei dello stesso titolo per gonfiare l'obiettivo. Costi e margini non contano come capitale investito. Conservazione di ogni cassa prima/dopo operazioni e FX, con riconciliazione separata nella valuta di reporting. Tassi manuali/cicli di conversione non devono permettere arbitraggio artificiale creato dal modello.
 
-**Obiettivo da formalizzare:** il criterio investment-first dello studio buy-only non puo diventare "massimizza acquisti" quando esistono vendite. Distinguere patrimonio terminale investito, scostamento target, turnover, numero ordini e costi. Una policy senza trade quando gia conforme e senza nuova liquidita deve essere verificabile. Eventuale tolleranza di equivalenza fra soluzioni, best-effort o rilassamento delle sole bande richiede scelta esplicita; nessun coefficiente magico nascosto.
+**Gerarchia approvata e riconfermata, 2026-09-08:** A minimizza il peggior scostamento delle righe target in punti percentuali, poi l'errore quadratico complessivo. B massimizza l'investito nel problema condizionale con A conservata come baseline immutabile, buy non decrescenti, sell congelate e vincoli hard originari. Alternative valutate separatamente dal medesimo stato iniziale, non ordini sequenziali con fee doppie; il soft score di A non diventa un vincolo hard nascosto di B. Il dev accetta per difetto o HALF_DOWN se rispettano questi obiettivi: il solver deve considerare valori operativamente ammissibili, non arrotondare a posteriori e dichiarare ottimalita. Restano da formalizzare spareggi, limiti, costi, FX e prove; nessun coefficiente o rilassamento implicito.
+
+**Minimo pilota separato:** `analyze` dello stato iniziale non emette ordini, soglie operative o settlement e non dichiara fattibilita/ottimalita del solver. Il suo contratto esatto e ASCII possono avanzare senza attendere questa griglia operativa completa, la migrazione Broker fractional o le copie dal portafoglio. Nessun formatter monetario globale modificato da questa decisione.
 
 **Stati onesti:** valido/no-trade, ottimo provato, fattibile non provato, infeasible provato, limite senza soluzione e guasto/unsupported distinti. La definizione esatta dell'enum e del supporto best-effort e parte del gate numerico, non lasciata alla libreria solver. Ogni candidato viene ricontrollato da un evaluator Decimal indipendente.
 
@@ -561,19 +606,19 @@ L'endpoint non avvia calcoli, probe, download prezzi, reset o riparazioni; non r
 
 **Superfici riusabili:** `schemas/portfolio.py:257-290,347-377`; `portfolio_service.py:1885-1893`; `broker_service.py:356-394,438,493`; quote DB `api/v1/assets.py:740-753`; `AssetSelect`, `CompactCashCell`, DataTable. Sidebar `:36-43` e il punto di inserimento del nuovo hub.
 
-**Flusso dati chiarito:** il bottone richiama tramite i client esistenti il report portfolio con le sole sezioni necessarie, il riepilogo broker se serve quella base, query metadata/prezzi Asset e conversioni FX. La UI presenta lo snapshot e copia i campi scelti; non fa somme economiche, normalizzazione dei target o conversioni finanziarie nuove. Se gli endpoint non offrono raggruppamento per asset/currency o scope esatto sufficienti, estendere i relativi servizi/DTO/endpoint di dominio con un contratto riusabile. Non creare `tools/prefill`, non far conoscere al plugin matematico la provenienza HTTP degli input.
+**Flusso dati chiarito:** il bottone richiama tramite i client esistenti il report portfolio con le sole sezioni necessarie, il riepilogo broker se serve quella base, query metadata/prezzi Asset e conversioni FX. La UI presenta lo snapshot e copia i campi scelti; non fa somme economiche, normalizzazione dei target o conversioni finanziarie nuove. Se gli endpoint non offrono righe asset/broker, casse per valuta o scope esatto sufficienti, estendere i relativi servizi/DTO/endpoint di dominio con un contratto riusabile. Non creare `tools/prefill`, non far conoscere al plugin matematico la provenienza HTTP degli input.
 
-**Attenzione alla fonte:** report puo scalare quantita/cash per quota di ownership; riepilogo broker fornisce un'altra vista di custodia. Il selettore di copia deve esplicitare la base scelta, non combinarle. Validare ogni broker richiesto, senza intersezione silenziosa che riduce lo scope. Prezzi report sono gia convertiti; `quote_base_quantity` dei bond e obbligatorio. Non usare come refresh automatico `/assets/prices/current`, che puo persistere OHLC odierno.
+**Fonte scelta nel raccordo D, 2026-09-08:** solo broker con ruolo OWNER, incluso OWNER0; quota di possesso mostrata, quantita/cash a custodia intera senza scala di ownership. Il report esistente puo usare una proiezione diversa: non copiarla come equivalente e non cambiare il comportamento dashboard. Validare ogni broker richiesto, senza intersezione silenziosa che riduce lo scope; cash una sola volta per broker/valuta. Prezzi report sono gia convertiti; `quote_base_quantity` dei bond e obbligatorio. Non usare come refresh automatico `/assets/prices/current`, che puo persistere OHLC odierno.
 
-**Target copiato:** e distribuzione osservata come punto di partenza, non raccomandazione strategica. Aggregare dai valori non arrotondati e indicare denominatore/esclusioni; la UI attuale arrotonda pesi a due decimali. Missing FX/prezzo non diventa zero e non causa esclusione silenziosa di titoli.
+**Target copiato:** e distribuzione osservata come punto di partenza, non raccomandazione strategica. Ricavare i pesi delle righe asset/broker dai valori non arrotondati e indicare denominatore/esclusioni; non fondere i target dello stesso asset su broker diversi. La UI attuale arrotonda pesi a due decimali. Missing FX/prezzo non diventa zero e non causa esclusione silenziosa di titoli.
 
 **UI proposta:** hub con card da catalogo; editor per stato iniziale, target, casse/contributi, vincoli, frizioni e policy; sezioni avanzate progressive. Pulsanti indipendenti di copia, preview dei campi sostituiti e protezione delle modifiche intervenute durante il fetch. Risultato precedente marcato stale dopo edit. Calcoli/anteprime economiche dal backend, non duplicati nel browser.
 
-**Output completo:** per titolo identita, input normalizzati, prezzo/fonte/data/valuta, target, quantita iniziale, acquisti, vendite, quantita finale, nozionali/costi, pesi prima/target/dopo, scostamenti, vincoli attivi. Per valuta cassa iniziale, contributo, ricavi, spesa, fee, conversioni, riserva/residuo. Metadati con policy/versione, assunzioni, disponibilita, limiti e prova di ottimalita.
+**Output completo:** per riga asset/broker identita, input normalizzati, prezzo/fonte/data/valuta, target, quantita iniziale, acquisti, vendite, quantita finale, nozionali/costi, pesi prima/target/dopo, scostamenti, vincoli attivi. Per valuta cassa iniziale, contributo, ricavi, spesa, fee, conversioni, riserva/residuo. Metadati con policy/versione, assunzioni, disponibilita, limiti e prova di ottimalita.
 
 **Grafici:** allocazione prima/target/dopo, bande/scostamenti, operazioni buy/sell e flussi di cassa/FX, tutti accompagnati da tabella leggibile. Privacy globale applicata a patrimonio, budget e operazioni personali; prezzi pubblici restano visibili. Nessun pulsante di esecuzione ordini.
 
-**Dipendenze hard:** contratti del catalogo/compute T0 e I/O numerico T1 per sviluppare il client; backend operativo e solver per l'integrazione finale. Copia e UI possono avanzare contro fixture di contratto mentre il solver viene realizzato. **DoD:** stessi input normalizzati danno stesso risultato nei tre preset; funzionamento manuale senza portafoglio; copia scope-safe e non distruttiva; oracolo esaustivo indipendente su casi piccoli, inclusi FX e limiti; budget sotto una quota, cash multi-valuta, asset aggregati, no-op, limiti incompatibili e input non finiti; output e UI non spacciano un incumbent per ottimo.
+**Dipendenze hard:** contratti del catalogo/compute T0 e I/O numerico T1 per sviluppare il client; backend operativo e solver per l'integrazione finale. Copia e UI possono avanzare contro fixture di contratto mentre il solver viene realizzato. **DoD:** stessi input normalizzati danno stesso risultato nei tre preset; funzionamento manuale senza portafoglio; copia scope-safe e non distruttiva; oracolo esaustivo indipendente su casi piccoli, inclusi FX e limiti; budget sotto una quota, cash multi-valuta, stesso asset su piu broker con target distinti, no-op, limiti incompatibili e input non finiti; output e UI non spacciano un incumbent per ottimo.
 
 **Gate UX:** storyboard ASCII di editor, input manuali/copiati, vincoli, contributi per valuta, risultati, grafici e stati invalid/infeasible/busy/stale, desktop/mobile; feedback misurato e approvazione del dev prima delle viste. Dopo implementazione, walkthrough da Tool fino a scenario manuale, copia, calcolo e lettura del risultato; raccolta feedback operativo e giro di correzione prima della chiusura.
 
@@ -766,7 +811,141 @@ All'avvio effettivo di uno sprint: scegliere il prossimo `<NN_area>` libero in `
 
 Per ogni corsia registrare anche owner, file prenotati, contratti concordati, dipendenze residue, versione dei mockup ASCII approvata e stato della review operativa. Non confondere la presa in carico nel backlog con il completamento di una UI ancora in attesa di feedback.
 
-Le chiusure gia dimostrate rimandano al codice/piano storico, non a nuove implementazioni immaginarie. Nessun commit/push automatico e nessuna modifica a `TODO_FUTURI.md`.
+Le chiusure gia dimostrate rimandano al codice/piano storico, non a nuove implementazioni immaginarie. Nessun commit/push automatico. `TODO_FUTURI.md` riceve soltanto le nuove voci F-MC-1/2/3 autorizzate il 2026-09-08; il futuro preesistente resta invariato.
+
+## 14. Integrazione dei worktree, chiusura e riallineamento
+
+**Policy operativa formalizzata il 2026-09-09 su richiesta del dev.** La destinazione
+del round e `refs/heads/dev_release2` nel checkout principale, non `main`.
+Promozione a `main`, tag, push e deploy sono operazioni successive e separate.
+Questa policy non avvia oggi un merge e non chiude task ancora in review.
+
+### 14.1 Stati distinti e responsabilita
+
+| Stato | Significato |
+|---|---|
+| In corso / correzioni richieste | Sorgenti, verifiche o feedback ancora aperti. |
+| Pronto nel worktree | Consegna tecnica identificata; non implica accettazione del dev. |
+| Accettato / pronto da integrare | Feedback pertinente chiuso, pacchetto congelato e completo. |
+| Integrato | Codice e documentazione riconciliati sul target, con revisione ed evidenze del risultato integrato. |
+| Archiviato | Catena documentale chiusa e indicizzata; nessun lavoro residuo nascosto. |
+
+Un vecchio `✅` di **presa in carico** non significa "implementato e integrato".
+Le note finali dichiarano lo stato per esteso. Per ogni consegna si registrano owner,
+commit di partenza, revisione sorgente, revisione target, task inclusi/esclusi,
+feedback ricevuto e motivi degli eventuali rinvii. Prima dei commit si usano manifest
+e fingerprint del diff; non si inventa lo SHA di una revisione ancora non creata.
+
+Il coordinatore prepara contenuti, risoluzioni, controlli e comandi; **commit, merge,
+rebase e push restano operazioni del dev**, secondo le regole del repository.
+Nessuno stash, reset o cambio di base automatico per liberare una working tree sporca.
+
+### 14.2 Pacchetto di consegna: niente copia indiscriminata
+
+1. Congelare il set di file della consegna al checkpoint dell'owner, inclusi nuovi
+   file non tracciati, test, piani e dipendenze. Fermare i writer su quel set; gli
+   altri lavori indipendenti possono continuare.
+2. Separare sorgenti e documentazione da build, cache, DB, uploads, CSV personali,
+   log e backup privati. Questi ultimi **non entrano nel merge del codice**.
+3. Raccogliere piano esecutivo, tutti i round di correzione, esiti pertinenti,
+   accettazioni e limiti residui. Portare nel journal gli artifact necessari alla
+   comprensione, senza link indispensabili a cartelle di sessione locali.
+4. Leggere anche le modifiche gia presenti nel checkout principale. Note del
+   coordinatore e modifiche dell'utente non sono una base da sovrascrivere con il
+   README o il master piu vecchio del worktree.
+5. Preparare un checkpoint versionato e revisionabile per il dev. Un normale merge
+   porta **commit**, non modifiche ancora locali: al controllo del 2026-09-09 tutti
+   i worktree erano ancora a `4a73f5f6`, con il lavoro nei rispettivi diff.
+
+Il target deve avere le modifiche locali salvaguardate e una situazione Git adatta
+all'integrazione prima dell'operazione. Niente `git add .` indiscriminato o ripristino
+di file per "fare pulizia". Un backup privato protegge dati e recupero, ma non sostituisce
+il checkpoint Git necessario a un merge riproducibile.
+
+### 14.3 Integrazione di un pacchetto alla volta
+
+Il percorso ordinario e un merge locale tracciabile del branch di consegna, eseguito
+dal dev dopo la preparazione; non copie integrali di directory o cherry-pick duplicati.
+Il coordinatore riconcilia i contenuti a tre vie senza scegliere globalmente
+`ours`/`theirs`: preservare entrambe le intenzioni, non soltanto eliminare i marker.
+
+**Un merge senza conflitti testuali non prova la compatibilita.** Rileggere i punti
+di contatto: callback/props, lifecycle e richieste tardive, payload/API, permessi,
+errori/toast, chiavi i18n, registrazioni, imports e link documentali. I file generati
+si rigenerano dai contratti integrati, non si fondono manualmente per farli compilare.
+
+La validazione copre il risultato sul target: casi del pacchetto e regressioni dei
+punti condivisi, con build/API sync quando necessari e una sola coda runtime.
+La review nel worktree non sostituisce quella del risultato combinato. Usare TEST,
+proteggendo lo stato manuale prima di setup distruttivi; nessun accesso a produzione.
+Un controllo rosso pertinente lascia l'integrazione aperta, senza falsa chiusura.
+
+Codice e chiusura documentale costituiscono **la stessa consegna**. Le annotazioni
+"integrato" e lo SHA effettivo si finalizzano dopo il passaggio riuscito; possono
+richiedere un commit documentale successivo, non uno SHA futuro scritto in anticipo.
+
+### 14.4 Chiusura documentale obbligatoria
+
+| Superficie | Aggiornamento richiesto nella consegna |
+|---|---|
+| Piano esecutivo e round | Stato per ogni step, data, `Note implementazione`, eventuale `Fuori pista`, feedback e revisione a cui si riferiscono le evidenze. Non cancellare la cronologia dei problemi risolti. |
+| Piani/ASCII sorgente dell'agente | Rimandi avanti/indietro al lavoro effettivo; rendere espliciti trasferimenti e proposte superate. A non risulta implementatore del lavoro poi consegnato da E. |
+| Backlog `09_feedbackJobs` | Aggiornare le sole voci consegnate, il relativo report, questo master e README: esito reale, data e link al piano/commit. Nessuna chiusura degli altri sprint per vicinanza di file. |
+| `TODO_Completati.md` | Aggiungere o aggiornare le voci effettivamente completate, con richiesta originale, risultato e riferimenti; evitare doppioni o sole promesse. |
+| `TODO_FUTURI.md` | Lasciare invariati i rinvii deliberati, inclusi F-MC-1/2/3. Spostamenti o nuovi rinvii richiedono una decisione esplicita e il relativo rimando. |
+| `CHANGELOG.md` | Riconciliare gli effetti visibili nel capitolo in preparazione senza doppioni. Preparare `1.1.1` non significa pubblicarla: data/tag di release separati. |
+| MkDocs e devWiki | Documentazione coerente col codice; decisioni e problemi non banali conservati tramite gli specialisti pertinenti. MkDocs EN, traduzioni solo se richieste; fonti wiki realmente esistenti, niente log/dati privati. |
+| Indici e link | Niente piani orfani, link rotti o riferimenti operativi al worktree che verra rimosso. Annotare la nuova baseline per gli owner rimanenti. |
+
+**Per E:** `14_feedbackImportUrgent` e tutti i round, report urgente
+`07_feedback_import_critici.md`, U1/U4/U5/U7/U9 nel file `01`, SP01/SP02, README e
+task E1-E9 sono riconciliati nel checkout target. Privacy, YOC, onboarding e i temi
+multicurrency futuri restano aperti. Il pacchetto e' applicato ma non ancora committato:
+archivio e SHA seguono il commit manuale del dev.
+
+### 14.5 Aggiornare gli altri worktree senza perdere il loro lavoro
+
+1. Dopo l'integrazione, comunicare agli owner lo **SHA locale effettivo di
+   `dev_release2`**, manifest e punti di contatto. Non usare implicitamente una
+   remote-tracking ref che puo essere indietro.
+2. Ogni owner raggiunge un checkpoint e conserva il proprio delta, inclusi file
+   nuovi. Il dev crea il checkpoint necessario prima del riallineamento. Non si
+   mergea sopra modifiche non protette, non si cancella il lavoro incompleto e non
+   si distribuiscono copie del checkout principale sopra i worktree.
+3. Il percorso ordinario e far confluire la nuova base locale nel branch di lavoro
+   con un merge eseguito dal dev. Niente rebase/reset/stash automatici. Risolvere
+   soltanto i conflitti reali, mantenendo le estensioni non ancora integrate.
+4. Raccordare anche i conflitti semantici e gli handoff gia applicati a mano:
+   non duplicare la patch dei tre initializer condivisa da D e C, le registrazioni
+   o le chiavi i18n. Il delta residuo deve descrivere soltanto il lavoro ancora proprio.
+5. Aggiornare nel piano del worktree baseline, contratti ricevuti, dipendenze chiuse
+   e controlli da ripetere. Conservare gli esiti precedenti con la loro revisione:
+   non presentarli come esiti della nuova combinazione.
+
+**Ordine attuale:** E e candidato al primo rientro dopo R4. Poi B va riconciliato
+con il nuovo AssetModal senza perdere loader/payload di E o le aggiunte create/FX
+di B; C integra About dopo il supporto definitivo E; D conserva nucleo P1 e propri
+limiti di scope, con future modifiche Broker raccordate al codice consolidato.
+B/C/D possono continuare sui file indipendenti: non devono attendere tutti il merge
+E per lavorare. L'ordine delle consegne successive dipende da prontezza e dipendenze,
+non implica autorizzazione automatica a UI/solver/migrazioni ancora esclusi.
+
+### 14.6 Archiviazione soltanto dopo il rientro
+
+Applicare la skill `plan-archive` dopo completamento/integrazione e chiusura dei link.
+Per Release 2 un workstream concluso conserva il proprio nome sotto
+`LibreFolio_developer_journal/Release_2/phases/`, non dentro `Phase_0/phases/`.
+Per E la destinazione prevista e `Release_2/phases/14_feedbackImportUrgent/`;
+aggiornare README del workstream e `phases/00-index.md`, risolvendo i link dopo
+gli spostamenti versionati. `Phase_0` nel suo complesso resta attiva finche vi sono
+altre corsie aperte.
+
+L'archiviazione della **sessione/worktree** e un passo distinto: solo dopo che ogni
+delta da conservare e persistito nel target, non restano writer/processi o handoff
+necessari e i dati manuali/ignorati sono preservati fuori dal worktree. Non eliminare
+branch o worktree per nascondere un residuo non integrato. La prova finale e la
+presenza nel target della revisione consegnata e l'assenza di modifiche da perdere,
+non la sola scomparsa dei conflitti.
 
 ## Appendice A - I 25 marker attuali, senza allargare il backlog
 

@@ -29,7 +29,7 @@ not declare capabilities.**
 |------|--------|
 | `BRIMCapabilities` | No real consumers — dead code from day one |
 | `BRIMParseOutput.asset_events` | Dividends as AssetEvents are the asset provider's job (yfinance/JustETF), not the broker file importer's |
-| `POST /brokers/import/commit` | After fake-ID resolution, the frontend uses the standard `/transactions/bulk` endpoint |
+| `POST /brokers/import/commit` | After fake-ID resolution, the frontend uses the standard `/api/v1/transactions/commit` endpoint |
 | `commit_import()` service | Follows commit endpoint removal |
 | `BRIMCommitRequest/Response/ResultItem` | No endpoint to serve them |
 | `AssetCRUDService.bulk_upsert_events_strict()` | Was only used by commit_import |
@@ -52,7 +52,7 @@ not declare capabilities.**
 ## Final Flow
 
 ```
-upload → parse (BRIM) → fake-ID resolution (Staging Modal) → commit (POST /transactions/bulk)
+upload → parse (BRIM) → fake-ID resolution (Import Wizard) → stage in Bulk Editor → commit (POST /api/v1/transactions/commit)
 ```
 
 The commit step uses the same atomic multi-broker endpoint as manual entry.
@@ -81,5 +81,5 @@ No BRIM-specific commit API exists.
 
 ## Related decisions
 
-- [[decisions/brim-fake-asset-id]] — the fake-ID mechanism is what makes parser-only viable: parsers emit negative integers as placeholder IDs, decoupling parse from the asset catalog. BRIM cannot be parser-only without fake IDs.
-- [[decisions/multi-broker-atomic-tx]] — the standard `/transactions/bulk` endpoint (the only commit path after Revision 2) is multi-broker atomic.
+- [[decisions/brim-fake-asset-id]] — the fake-ID mechanism is what makes parser-only viable: parsers emit reserved positive-high placeholder IDs, decoupling parse from the asset catalog. BRIM cannot be parser-only without fake IDs.
+- [[decisions/multi-broker-atomic-tx]] — the standard `/api/v1/transactions/commit` endpoint (the only commit path after Revision 2) is multi-broker atomic.

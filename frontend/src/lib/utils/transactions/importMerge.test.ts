@@ -1,7 +1,7 @@
 import {describe, it, expect} from 'vitest';
 import {FAKE_ASSET_ID_BASE} from '$lib/utils/brim/isFakeAssetId';
 import type {BrimParseResponse} from '$lib/types';
-import {buildMergedTransactions, mergeCandidates, uniqueExactCandidateId, type MergeSourceResult, type MergeBroker} from './importMerge';
+import {buildMergedTransactions, mergeCandidates, uniqueCandidateId, type MergeSourceResult, type MergeBroker} from './importMerge';
 import type {AssetResolution} from './importTypes';
 
 const FAKE = FAKE_ASSET_ID_BASE;
@@ -17,17 +17,31 @@ const src = (fileId: string, brokerId: number, response: Record<string, unknown>
     response: response as unknown as BrimParseResponse,
 });
 
-describe('uniqueExactCandidateId', () => {
-    it('returns the id when exactly one candidate is exact', () => {
-        expect(uniqueExactCandidateId([cand(1, 'high'), cand(2, 'exact')])).toBe(2);
+describe('uniqueCandidateId', () => {
+    // Policy (mirrors the backend's `search_asset_candidates`, see
+    // test_brim_bulk_candidates.py): one distinct asset id among the candidates — of ANY
+    // confidence — selects it. Two or more distinct ids is an ambiguity the wizard must not
+    // arbitrate on its own, regardless of how strong either match is individually. The prior
+    // `uniqueExactCandidateId` only ever looked at the EXACT tier, which both force-selected an
+    // EXACT match over a competing HIGH one (silently discarding the ambiguity) and refused a
+    // lone HIGH match that was never in doubt.
+    it('collapses a primary-column match and an alias match for the same asset to one candidate, and selects it', () => {
+        // mergeCandidates is what actually dedupes same-id entries (see below); this asserts
+        // uniqueCandidateId agrees once that dedup has happened — a single distinct id, EXACT
+        // via the primary column, HIGH via the alias, resolves same as any other lone match.
+        expect(uniqueCandidateId([cand(2, 'exact'), cand(2, 'high')])).toBe(2);
     });
-    it('is case-insensitive about the confidence label', () => {
-        expect(uniqueExactCandidateId([cand(9, 'EXACT')])).toBe(9);
+    it('rejects the ambiguity between an EXACT and a HIGH match for two different assets', () => {
+        expect(uniqueCandidateId([cand(1, 'exact'), cand(2, 'high')])).toBeNull();
     });
-    it('returns null with no exact match or with an ambiguous pair of them', () => {
-        expect(uniqueExactCandidateId([cand(1, 'high')])).toBeNull();
-        expect(uniqueExactCandidateId([cand(1, 'exact'), cand(2, 'exact')])).toBeNull();
-        expect(uniqueExactCandidateId([])).toBeNull();
+    it('rejects the ambiguity between two EXACT matches for two different assets', () => {
+        expect(uniqueCandidateId([cand(1, 'exact'), cand(2, 'exact')])).toBeNull();
+    });
+    it('selects a lone HIGH-confidence candidate — no EXACT match is required', () => {
+        expect(uniqueCandidateId([cand(5, 'high')])).toBe(5);
+    });
+    it('returns null for an empty candidate list', () => {
+        expect(uniqueCandidateId([])).toBeNull();
     });
 });
 
@@ -187,9 +201,9 @@ describe('mergeCandidates — unknown confidence tiers on both sides', () => {
     });
 });
 
-describe('uniqueExactCandidateId — nullish input', () => {
+describe('uniqueCandidateId — nullish input', () => {
     it('treats a null candidate list as empty', () => {
-        expect(uniqueExactCandidateId(null as unknown as Candidates)).toBeNull();
+        expect(uniqueCandidateId(null as unknown as Candidates)).toBeNull();
     });
 });
 

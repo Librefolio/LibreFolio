@@ -6,78 +6,127 @@
  * and compares it against the running app version. Self-hosted installs that
  * are offline simply fail the fetch and nothing is shown.
  *
- * Throttling: at most one fetch per 1h (the last result is cached in
- * localStorage). Dismissal: the admin can skip a specific version; a newer one
- * will prompt again.
+ * Automatic release metadata probes are cached in localStorage for 1h.
+ * Explicit checks bypass that cache. Dismissal suppresses automatic prompts
+ * for a specific version; a newer one will prompt again.
  *
  * Release availability: a release is only reported once its Docker image for the
  * tag actually exists on GHCR — the CI pipeline builds for ~1.5h after the
  * release is created, and without this check an admin would be prompted to
- * `docker pull` a tag that does not exist yet. Both probes are anonymous and
- * fail-safe (any error → nothing shown).
+ * `docker pull` a tag that does not exist yet. The same-origin backend performs
+ * GHCR's anonymous token handshake because the registry does not expose that
+ * flow to browsers through CORS. Both probes fail closed: automatic errors stay
+ * silent; manual checks report them.
  */
 
+import {zodiosApi} from '$lib/api';
 import {debug} from '$lib/debug';
 
 export interface NewerRelease {
     /** Tag without the leading "v", e.g. "0.11.0". */
     version: string;
+    /** Exact tag returned by GitHub; absent in older cached results. */
+    tag?: string;
     /** Release page URL on GitHub. */
     url: string;
     /** Release display name (may be empty). */
     name: string;
 }
 
+type ProbeStatus = 'success' | 'no-release' | 'error';
+type CheckFailure = 'invalid-current-version' | 'check-failed' | 'release-request-failed' | 'invalid-release' | 'image-auth-request-failed' | 'image-request-failed';
+
+export interface ImageProbeResult {
+    status: 'published' | 'pending' | 'error';
+    reason?: 'image-auth-request-failed' | 'image-request-failed' | null;
+}
+
+export type ImageProbe = (version: string) => Promise<ImageProbeResult>;
+
+export interface UpdateCheckResult {
+    status: 'up-to-date' | 'update-available' | 'dismissed' | 'image-pending' | 'no-release' | 'error';
+    latest: NewerRelease | null;
+    source: 'network' | 'cache' | 'none';
+    checkedAt: number | null;
+    reason?: CheckFailure;
+}
+
 interface UpdateCheckCache {
     checkedAt: number;
     latest: NewerRelease | null;
     dismissedVersion?: string;
+    probeStatus?: ProbeStatus;
+    reason?: CheckFailure;
 }
 
 const STORAGE_KEY = 'librefolio-update-check';
 export const CHECK_INTERVAL_MS = 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 5000;
 const LATEST_RELEASE_URL = 'https://api.github.com/repos/Librefolio/LibreFolio/releases/latest';
-const GHCR_MANIFEST_URL = (tag: string) => `https://ghcr.io/v2/librefolio/librefolio/manifests/${tag}`;
 
-/** Numeric triple comparison; ignores leading "v" and any pre-release suffix. */
+function parseVersion(value: string): number[] | null {
+    const match = value.trim().match(/^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:-[0-9a-z-]+(?:\.[0-9a-z-]+)*)?(?:\+[0-9a-z-]+(?:\.[0-9a-z-]+)*)?$/i);
+    if (!match) return null;
+    const parts = match.slice(1, 4).map((part) => Number(part ?? 0));
+    return parts.every(Number.isSafeInteger) ? parts : null;
+}
+
+/** Compare base versions, retaining the existing same-base nightly/prerelease policy. Invalid input returns NaN. */
 export function compareVersions(a: string, b: string): number {
-    const parse = (v: string) =>
-        v
-            .replace(/^v/i, '')
-            .split('-')[0]
-            .split('.')
-            .map((p) => parseInt(p, 10) || 0);
-    const pa = parse(a);
-    const pb = parse(b);
-    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-        const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
+    const pa = parseVersion(a);
+    const pb = parseVersion(b);
+    if (!pa || !pb) return Number.NaN;
+    for (let i = 0; i < 3; i++) {
+        const diff = pa[i] - pb[i];
         if (diff !== 0) return diff < 0 ? -1 : 1;
     }
     return 0;
 }
 
-export function readCache(storage: Pick<Storage, 'getItem'> = localStorage): UpdateCheckCache | null {
+function isStableVersion(value: string): boolean {
+    return /^v?\d+\.\d+\.\d+$/i.test(value) && parseVersion(value) !== null;
+}
+
+function isRelease(value: unknown): value is NewerRelease {
+    if (!value || typeof value !== 'object') return false;
+    const release = value as NewerRelease;
+    return (
+        typeof release.version === 'string' &&
+        isStableVersion(release.version) &&
+        typeof release.url === 'string' &&
+        release.url.trim().length > 0 &&
+        typeof release.name === 'string' &&
+        (release.tag === undefined || (typeof release.tag === 'string' && isStableVersion(release.tag) && compareVersions(release.tag, release.version) === 0))
+    );
+}
+
+export function readCache(storage?: Pick<Storage, 'getItem'>): UpdateCheckCache | null {
     try {
-        const raw = storage.getItem(STORAGE_KEY);
+        const raw = (storage ?? localStorage).getItem(STORAGE_KEY);
         if (!raw) return null;
         const parsed = JSON.parse(raw) as UpdateCheckCache;
-        return typeof parsed?.checkedAt === 'number' ? parsed : null;
+        if (!Number.isFinite(parsed?.checkedAt) || parsed.checkedAt < 0) return null;
+        if (parsed.latest !== null && !isRelease(parsed.latest)) return null;
+        if (parsed.dismissedVersion !== undefined && typeof parsed.dismissedVersion !== 'string') return null;
+        if (parsed.probeStatus !== undefined && !['success', 'no-release', 'error'].includes(parsed.probeStatus)) return null;
+        if (parsed.probeStatus === 'success' && !parsed.latest) return null;
+        if ((parsed.probeStatus === 'error' || parsed.probeStatus === 'no-release') && parsed.latest) return null;
+        return parsed;
     } catch {
         return null;
     }
 }
 
-export function writeCache(cache: UpdateCheckCache, storage: Pick<Storage, 'setItem'> = localStorage): void {
+export function writeCache(cache: UpdateCheckCache, storage?: Pick<Storage, 'setItem'>): void {
     try {
-        storage.setItem(STORAGE_KEY, JSON.stringify(cache));
+        (storage ?? localStorage).setItem(STORAGE_KEY, JSON.stringify(cache));
     } catch {
         // storage full/blocked — the check simply runs again next login
     }
 }
 
-export function dismissVersion(version: string, storage: Pick<Storage, 'getItem' | 'setItem'> = localStorage): void {
-    const cache = readCache(storage) ?? {checkedAt: Date.now(), latest: null};
+export function dismissVersion(version: string, storage?: Pick<Storage, 'getItem' | 'setItem'>): void {
+    const cache = readCache(storage) ?? {checkedAt: 0, latest: null};
     writeCache({...cache, dismissedVersion: version}, storage);
 }
 
@@ -85,84 +134,104 @@ export function dismissVersion(version: string, storage: Pick<Storage, 'getItem'
 export function shouldPrompt(cache: UpdateCheckCache | null, currentVersion: string): {prompt: boolean; release: NewerRelease | null} {
     const latest = cache?.latest ?? null;
     if (!latest) return {prompt: false, release: null};
-    if (compareVersions(latest.version, currentVersion) <= 0) return {prompt: false, release: null};
+    const comparison = compareVersions(latest.version, currentVersion);
+    if (!Number.isFinite(comparison) || comparison <= 0) return {prompt: false, release: null};
     if (cache?.dismissedVersion && compareVersions(cache.dismissedVersion, latest.version) >= 0) return {prompt: false, release: null};
     return {prompt: true, release: latest};
 }
 
-/** Whether a fresh network probe is due (never checked or older than 24h). */
+/** Whether a fresh network probe is due (never checked or at least one hour old). */
 export function isProbeDue(cache: UpdateCheckCache | null, now = Date.now()): boolean {
-    return !cache || now - cache.checkedAt >= CHECK_INTERVAL_MS;
+    return !cache || !Number.isFinite(cache.checkedAt) || cache.checkedAt <= 0 || cache.checkedAt > now || now - cache.checkedAt >= CHECK_INTERVAL_MS;
 }
 
-/**
- * Probe GitHub for the latest stable release. Returns null on any failure
- * (offline install, rate limit, malformed payload) — never throws.
- */
-export async function probeLatestRelease(fetchFn: typeof fetch = fetch): Promise<NewerRelease | null> {
+async function probeRelease(fetchFn: typeof fetch = fetch): Promise<Pick<UpdateCheckCache, 'latest' | 'probeStatus' | 'reason'>> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     try {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
         const res = await fetchFn(LATEST_RELEASE_URL, {
             headers: {Accept: 'application/vnd.github+json'},
             signal: controller.signal,
+            cache: 'no-store',
         });
-        clearTimeout(timer);
-        if (!res.ok) return null;
-        const data = (await res.json()) as {tag_name?: string; html_url?: string; name?: string};
-        if (!data.tag_name || !data.html_url) return null;
-        return {version: data.tag_name.replace(/^v/i, ''), url: data.html_url, name: data.name ?? ''};
+        if (res.status === 404) return {latest: null, probeStatus: 'no-release'};
+        if (!res.ok) return {latest: null, probeStatus: 'error', reason: 'release-request-failed'};
+        const data = (await res.json()) as {tag_name?: unknown; html_url?: unknown; name?: unknown; draft?: unknown; prerelease?: unknown} | null;
+        if (!data || typeof data.tag_name !== 'string' || (data.draft !== undefined && data.draft !== false) || (data.prerelease !== undefined && data.prerelease !== false)) {
+            return {latest: null, probeStatus: 'error', reason: 'invalid-release'};
+        }
+        const latest = {version: data.tag_name.replace(/^v/i, ''), tag: data.tag_name, url: data.html_url, name: data.name ?? ''};
+        if (!isRelease(latest)) return {latest: null, probeStatus: 'error', reason: 'invalid-release'};
+        return {latest, probeStatus: 'success'};
     } catch {
-        return null;
+        return {latest: null, probeStatus: 'error', reason: 'release-request-failed'};
+    } finally {
+        clearTimeout(timer);
     }
 }
 
+/** Compatibility seam for callers that only need a successfully detected release. */
+export async function probeLatestRelease(fetchFn: typeof fetch = fetch): Promise<NewerRelease | null> {
+    return (await probeRelease(fetchFn)).latest;
+}
+
 /**
- * Whether the Docker image for a tag exists on GHCR. The public manifest
- * endpoint answers anonymously; a release is only announced once its image is
- * actually pullable. Any failure (offline, 404 while CI is still building,
- * rate limit) → false: better silent than prompting for an unpullable tag.
+ * Keep the image gate fail-closed. The backend distinguishes public-token
+ * failures from manifest failures; either remains an error, never "up to date".
  */
-export async function isImagePublished(version: string, fetchFn: typeof fetch = fetch): Promise<boolean> {
+async function probeImageWithApi(version: string): Promise<ImageProbeResult> {
+    return zodiosApi.get_container_image_status_api_v1_system_container_image_status_get({
+        queries: {tag: version},
+    });
+}
+
+async function probeImage(version: string, imageProbe: ImageProbe = probeImageWithApi): Promise<'published' | 'pending' | 'image-auth-request-failed' | 'image-request-failed'> {
     try {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-        // The tag carries no "v" prefix (v1.1.0 release → image tag 1.1.0).
-        const res = await fetchFn(GHCR_MANIFEST_URL(version), {
-            method: 'HEAD',
-            headers: {Accept: 'application/vnd.oci.image.index.v1+json'},
-            signal: controller.signal,
-        });
-        clearTimeout(timer);
-        return res.ok;
+        const result = await imageProbe(version);
+        if (result.status === 'published' || result.status === 'pending') return result.status;
+        return result.reason === 'image-auth-request-failed' ? result.reason : 'image-request-failed';
     } catch {
-        return false;
+        return 'image-request-failed';
     }
 }
 
+export async function isImagePublished(version: string, imageProbe?: ImageProbe): Promise<boolean> {
+    return (await probeImage(version, imageProbe)) === 'published';
+}
+
 /**
- * Full flow: use the cached probe when fresh, otherwise probe now and cache.
- * Returns the release to prompt about, or null. A release is only returned once
- * its Docker image for that tag is actually published on GHCR (the CI pipeline
- * needs ~1.5h after the GitHub release appears — the image probe prevents
- * prompting for a tag that cannot be pulled yet).
+ * Shared automatic/manual flow. Manual checks force a fresh probe and may
+ * ignore prompt dismissal, without changing the stable channel or image gate.
  */
-export async function checkForNewerRelease(currentVersion: string, fetchFn?: typeof fetch): Promise<NewerRelease | null> {
+export async function checkForUpdates(currentVersion: string, options: {force?: boolean; ignoreDismissed?: boolean} = {}, fetchFn?: typeof fetch, imageProbe?: ImageProbe): Promise<UpdateCheckResult> {
+    if (!parseVersion(currentVersion)) {
+        return {status: 'error', latest: null, source: 'none', checkedAt: null, reason: 'invalid-current-version'};
+    }
     let cache = readCache();
-    if (isProbeDue(cache)) {
-        const latest = await probeLatestRelease(fetchFn);
-        debug.log('UpdateCheck', 'probe →', {current: currentVersion, latest: latest?.version ?? null, fresh: true});
-        cache = {checkedAt: Date.now(), latest, dismissedVersion: cache?.dismissedVersion};
+    let source: UpdateCheckResult['source'] = 'cache';
+    if (!cache || options.force || isProbeDue(cache)) {
+        const probe = await probeRelease(fetchFn);
+        cache = {checkedAt: Date.now(), ...probe, dismissedVersion: cache?.dismissedVersion};
         writeCache(cache);
-    } else {
-        debug.log('UpdateCheck', 'cache fresh →', {current: currentVersion, latest: cache?.latest?.version ?? null, ageMinutes: Math.round((Date.now() - (cache?.checkedAt ?? 0)) / 60000)});
+        source = 'network';
     }
-    const candidate = shouldPrompt(cache, currentVersion).release;
-    if (!candidate) return null;
-    // Second gate: only announce what can actually be pulled (image published).
-    if (!(await isImagePublished(candidate.version, fetchFn))) {
-        debug.log('UpdateCheck', 'release found but image not yet published →', candidate.version);
-        return null;
+    const details = {latest: cache.latest, source, checkedAt: cache.checkedAt};
+    debug.log('UpdateCheck', 'release check', {current: currentVersion, latest: cache.latest?.version ?? null, source, probeStatus: cache.probeStatus});
+    if (!cache.latest) {
+        if (cache.probeStatus === 'no-release') return {...details, status: 'no-release'};
+        // Older caches stored every failed/absent result as null.
+        return {...details, status: 'error', reason: cache.reason ?? 'release-request-failed'};
     }
-    return candidate;
+    if (compareVersions(cache.latest.version, currentVersion) <= 0) return {...details, status: 'up-to-date'};
+    if (!options.ignoreDismissed && !shouldPrompt(cache, currentVersion).prompt) return {...details, status: 'dismissed'};
+    const image = await probeImage(cache.latest.version, imageProbe);
+    if (image === 'pending') return {...details, status: 'image-pending'};
+    if (image !== 'published') return {...details, status: 'error', reason: image};
+    return {...details, status: 'update-available'};
+}
+
+/** Automatic login checks stay silent unless an undismissed, pullable update exists. */
+export async function checkForNewerRelease(currentVersion: string, fetchFn?: typeof fetch, imageProbe?: ImageProbe): Promise<NewerRelease | null> {
+    const result = await checkForUpdates(currentVersion, {}, fetchFn, imageProbe);
+    return result.status === 'update-available' ? result.latest : null;
 }

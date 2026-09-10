@@ -4,9 +4,14 @@ Task su interfaccia, dashboard e shell autenticata. Approvati dall'utente il 07/
 (revisione TODO_FUTURI), poi precisati nella stessa data durante l'analisi per sprint.
 Stato corrente e dettagli in [06_piano_sprint.md](06_piano_sprint.md). Il bug resta il primo intervento.
 
+> **Chiusura Gruppo E — 2026-09-09:** U1, U4, U5, U7 e U9 sono stati
+> implementati, verificati e applicati al checkout `dev_release2`; piano ed
+> evidenze in [14_feedbackImportUrgent](../14_feedbackImportUrgent/manifest-integrazione-E.md).
+> U2 privacy, U3 YOC e U8 onboarding restano aperti.
+
 ---
 
-## 🐛 BUG — "Testa configurazione" non si resetta cambiando asset
+## 🐛 BUG — "Testa configurazione" non si resetta cambiando asset ✅
 
 **Complessità**: S–M · **Tipo**: bug vero (priorità nel round)
 
@@ -29,6 +34,10 @@ Apri asset A → testa → vedi esito; cerca/seleziona asset B → l'esito di A 
 comparire (o deve essere chiaramente marcato come riferito ad A). Test componente (vitest) che
 fissa il comportamento, comprese risposte fuori ordine, A → B → A, parametri e riapertura.
 Il gate "Save without testing" deve usare soltanto lo stato corrente.
+
+**Completato 2026-09-09 (E/U1):** autorita' per generazione di draft/configurazione,
+risposte tardive scartate e salvataggio legato al probe corrente; verificati anche
+riapertura, metadata concorrenti e modifica manuale.
 
 ---
 
@@ -110,14 +119,14 @@ rendimento nel tempo, indipendente dalle fluttuazioni di mercato.
 
 ---
 
-## 📁 Filtro utente nella Files page
+## 📁 Filtro utente nella Files page ✅
 
 **Complessità**: S · **Origine**: TODO_FUTURI (più vecchio)
 
-### Richiesta
-Nella pagina Files (admin, più utenti): filtro dropdown per utente (accanto al search per
-nome) + colonna utente visibile se `users.length > 1`, badge colorati come nel BRIM (stessa
-funzione di calcolo colori).
+### Richiesta finale
+Nella pagina Files: colonna **Caricato da** ordinabile e filtro colonna
+multi-selezione con avatar/nome, secondo il pattern Asset. Lista, griglia e URL
+condividono lo stesso stato; assente, non risolto e ID noto restano distinti.
 
 ### Note implementative
 - **Verifica 2026-09-07**: `/admin/users` non esiste, ma non serve crearlo.
@@ -131,19 +140,23 @@ funzione di calcolo colori).
 **Confronto UI 2026-09-07:** microvista ASCII toolbar/colonna prima; dopo, istruzioni per
 provare uploader, URL, lista/griglia e casi sconosciuti con feedback del dev.
 
+**Completato 2026-09-09 (E/U4):** variante colonna approvata e verificata in
+desktop/mobile, senza ampliare i permessi sui file.
+
 ---
 
-## 💱 Tooltip esplicativo "Valuta" nel form asset
+## 💱 Tooltip esplicativo "Valuta" nel form asset ✅
 
 **Complessità**: S · **Origine**: feedback utente
 
 ### Richiesta
-Nel form di creazione asset, un tooltip sul campo **Valuta** che chiarisca: indica la
-*valuta di negoziazione / esposizione del provider*, non la denominazione né la valuta finale
-di portafoglio (quella è gestita dalle conversioni forex).
+Nel form di creazione asset, un tooltip sul campo **Valuta** che chiarisca in una
+frase che e' la valuta in cui vengono salvati i prezzi.
 
 ### Note
 - Una riga di i18n ×4 + il componente Tooltip già esistente. Definizione di fatto minima.
+
+**Completato 2026-09-09 (E/U5):** testo breve localizzato nelle quattro lingue.
 
 ---
 
@@ -176,7 +189,7 @@ svelte-check 0/0, prettier pulito, test del FormModal verdi.
 
 ---
 
-## ☕ Pagina/area "Supporta il progetto" — caffè + condivisione social
+## ☕ Pagina/area "Supporta il progetto" — caffè + condivisione social ✅
 
 **Complessità**: S · **Origine**: utente 07/09
 
@@ -184,13 +197,12 @@ svelte-check 0/0, prettier pulito, test del FormModal verdi.
 Nella pagina del supporto (l'area con il "offri un caffè"), oltre al caffè, proporre **in
 alternativa la condivisione del progetto sui social** per aiutarlo a crescere.
 
-### Dettagli
-- Social attuali del progetto:
-  - X: `https://x.com/librefolio`
-  - Reddit: `https://www.reddit.com/user/Far_Psychology_6271/`
-- Ogni social ha un **hook** che apre la piattaforma con un **messaggio pre-compilato nella
-  lingua corrente** dell'utente (es. intent di condivisione X `https://twitter.com/intent/tweet?text=…`
-  con testo localizzato; per Reddit un submit link con titolo localizzato).
+### Dettagli finali
+- Social: X, Reddit, Facebook, Instagram e TikTok.
+- Ogni icona apre una modale condivisa con testo nella lingua UI, URL pubblico
+  del progetto sempre copiato e flusso **Copia e vai**. X/Reddit usano le
+  capacita' di composizione disponibili; Facebook condivide il link, mentre
+  Instagram/TikTok spiegano onestamente i passaggi manuali e i requisiti media.
 - **Superfici concordate**:
   - `DonationPopupModal.svelte` — la **modale al login** che compare a cadenza (il backend
     segnala via `AuthLoginResponse.show_donation_popup`, `auth.py:111`; cadenza gestita da
@@ -206,15 +218,18 @@ alternativa la condivisione del progetto sui social** per aiutarlo a crescere.
   bozza social senza pubblicazione automatica o tracking. Cadenza backend invariata.
 
 ### Definizione di fatto
-- Sezione "oppure condividi" con i 2 social + hook pre-compilati (testo localizzato, link al
-  sito/repo), presente **solo** nella **modale di login** (DonationPopup) e nella pagina
-  supporto (About). Header e pagina di login pubblica restano solo-caffè. Nessuna nuova
-  chiamata backend per le azioni social; tutto statico + i18n. Dismiss delle nuove azioni
-  esplicito e compatibile con la chiusura volontaria del popup.
+- Sezione "oppure condividi" nei soli DonationPopup e About. Nessun social
+  nell'header globale o nella pagina login pubblica.
+- Clipboard negata e popup bloccato hanno errori distinti; l'origine resta aperta.
+  Nessuna pubblicazione automatica, tracking o hostname dell'istanza condiviso.
 
 **Gate UX 2026-09-07:** prima ASCII del popup e di About, approvati dal dev; dopo,
 istruzioni per raggiungere entrambe le superfici e provare lingua, link e dismiss,
 registrando il feedback. Non cambiare la cadenza reale per facilitare la review.
+
+**Completato 2026-09-09 (E/U7):** cinque social, modale e fallback verificati.
+L'indagine su Instagram non ha trovato un ingresso web affidabile a Crea; il limite
+e' documentato, non mascherato da una falsa funzionalita'.
 
 ---
 
@@ -255,13 +270,13 @@ giro di correzione prima della chiusura.
 
 ---
 
-## 📱 Header mobile: scompare in discesa, ricompare in salita
+## 📱 Header desktop/mobile: scompare in discesa, ricompare in salita ✅
 
 **Complessità**: S–M · **Origine**: nuova richiesta utente 2026-09-07
 
-### Richiesta
-Su mobile, scorrendo verso il basso l'header scompare; appena si torna a scorrere verso
-l'alto ricompare, senza dover raggiungere l'inizio della pagina. Desktop invariato.
+### Richiesta finale
+Su desktop e mobile, scorrendo verso il basso l'header scompare; appena si torna
+a scorrere verso l'alto ricompare, senza dover raggiungere l'inizio della pagina.
 
 ### Analisi 2026-09-07
 `Header.svelte:16-24` usa intenzionalmente flusso normale su mobile e `lg:sticky` su desktop.
@@ -276,6 +291,9 @@ Coordinare il futuro lucchetto privacy sullo stesso componente.
 dopo review su pagina lunga con gesti reali mobile, cambio route e resize, con istruzioni
 e feedback operativo. Un'immagine statica non chiude il comportamento di scroll.
 
+**Completato 2026-09-09 (E/U9):** comportamento approvato anche su desktop,
+con pin per interazioni, cleanup, reduced motion e assenza di salti di layout.
+
 ## Analisi per task — 2026-09-07
 
 Baseline `a9138140`; superfici, dipendenze, rischi e DoD completi in
@@ -283,15 +301,15 @@ Baseline `a9138140`; superfici, dipendenze, rischi e DoD completi in
 
 | ID | Esito | Sprint |
 |---|---|---|
-| U1 | Bug di stato e risposte tardive confermato; includere metadata concorrente. S–M. | SP01 |
+| U1 | ✅ Completato da E: stato/generazioni del probe e metadata concorrente. | SP01 |
 | U2 | Scope globale concordato, non solo dashboard; primitive condivise. XL. | SP15 |
 | U3 | YOC per-quota/WAC residuo su 365 giorni, `-` con motivi distinti, teoria EN e tooltip header; fonte completa non garantita. L + S colonna. | SP06 |
-| U4 | Filtro assente; API utenti e campo uploader già disponibili. S. | SP02 |
-| U5 | Tooltip assente sul campo a `AssetModal.svelte:1735`. XS–S. | SP01 |
+| U4 | ✅ Completato da E: colonna uploader ordinabile e filtro multi-selezione. | SP02 |
+| U5 | ✅ Completato da E: tooltip breve localizzato. | SP01 |
 | U6 | ✅ Rimozione duplicate-mode e fast-open bulk confermati; form vivo da preservare. | Nessun codice |
-| U7 | Caffè nel popup presente; About e social da aggiungere. S. | SP02 |
+| U7 | ✅ Completato da E: supporto condiviso in DonationPopup/About e cinque social. | SP02 |
 | U8 | Requisiti discussi; L per welcome, tour breve e guida import, con skip/replay. | SP11 |
-| U9 | Nuova richiesta header mobile auto-hide, con guardia anti-flicker. S–M. | SP02 |
+| U9 | ✅ Completato da E: header auto-hide desktop/mobile con guardie lifecycle. | SP02 |
 
 La [mappa nel piano](06_piano_sprint.md) separa corsie indipendenti da file condivisi:
 supporto/About, Files e migrazione Preferences possono avanzare separatamente. Header,
