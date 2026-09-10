@@ -6,7 +6,11 @@
 > **Analisi e decisioni 2026-09-07**: lo scope è stato ampliato durante la pianificazione.
 > La stima M–L del solo PAC euro buy-only non descrive più la richiesta completa.
 > Fonte operativa: [06_piano_sprint.md](06_piano_sprint.md), T0/T1/T2 e SP12–14.
-> Nessuna implementazione avviata.
+> La base C e' ora implementata e validata; il pilot PAC reale resta nel branch D.
+>
+> **Piano C attivo:** [Piattaforma Tool atomica](../16_toolPlatform/plan-phase00ToolPlatform.prompt.md)
+> — base generica completa; [handoff PAC D](../16_toolPlatform/handoff-pac-D.md)
+> pubblicato, pilot reale aperto.
 
 > **Raccordo decisioni 2026-09-08**: C/D hanno ripreso la progettazione, non il codice.
 > Le scelte successive confermano righe/target asset-broker separati, copia OWNER-only

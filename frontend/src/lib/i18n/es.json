@@ -3176,5 +3176,216 @@
     "clipboardUnavailable": "No se pudo copiar al portapapeles. Permite el acceso al portapapeles y vuelve a intentarlo.",
     "copyAndGo": "Copiar y abrir",
     "navigationFailed": "Texto y enlace copiados, pero no se pudo abrir la red social. Permite las ventanas emergentes y vuelve a intentarlo."
+  },
+  "tools": {
+    "title": "Herramientas",
+    "subtitle": "Cálculos independientes. No se guardan cambios en la cartera.",
+    "open": "Abrir herramienta",
+    "contractVersion": "Contrato",
+    "implementationVersion": "Implementación",
+    "status": {
+      "unavailable": "No disponible",
+      "available": "Disponible"
+    },
+    "authRequired": "Inicia sesión para usar las herramientas.",
+    "documentationUnavailable": "Enlace a la documentación no disponible",
+    "catalog": {
+      "emptyTitle": "No hay herramientas disponibles",
+      "emptyDescription": "El catálogo no devolvió herramientas operativas. Recarga después de instalar o reparar una herramienta.",
+      "degraded": "Entradas del backend no disponibles: {count}.",
+      "uiUnavailable": "Interfaces no disponibles en esta compilación: {count}.",
+      "degradedToast": "Herramientas cargadas con entradas o interfaces no disponibles. Consulta el catálogo para más detalles.",
+      "diagnosticsHint": "Los diagnósticos de solo lectura están disponibles en Configuración → Acerca de → Diagnósticos de plugins.",
+      "unavailableEntries": "Entradas del backend no disponibles",
+      "unknownTool": "Herramienta no identificada"
+    },
+    "availability": {
+      "notInstalled": "Esta herramienta no figura en el catálogo actual del backend.",
+      "backendUnavailable": "Esta herramienta no está disponible en el backend. No se ha iniciado ningún cálculo.",
+      "incompatible": "Esta herramienta requiere una compilación compatible del frontend. No se ha iniciado ningún cálculo.",
+      "rendererMissing": "La herramienta backend está instalada, pero su interfaz no está incluida en esta compilación del frontend. No se ha iniciado ningún cálculo.",
+      "rendererInvalid": "El registro de la interfaz compilada no es válido o está duplicado. No se ha iniciado ningún cálculo."
+    },
+    "host": {
+      "loadingInterface": "Cargando la interfaz de la herramienta…",
+      "reloadTitle": "¿Recargar la herramienta?",
+      "reloadWarning": "La recarga sustituye la interfaz de la herramienta y descarta su borrador actual. ¿Continuar?"
+    },
+    "errors": {
+      "network": "No se pudo contactar con el servicio de herramientas. Comprueba la conexión y vuelve a intentarlo explícitamente.",
+      "timeout": "La solicitud a la herramienta agotó el tiempo de espera. No se aceptó ningún resultado ni se reintentó automáticamente.",
+      "requestRejected": "El servidor rechazó la solicitud a la herramienta.",
+      "requestInvalid": "La solicitud a la herramienta no superó la validación estructural local.",
+      "protocol": "La respuesta del servidor no coincide con el contrato esperado de la herramienta.",
+      "mismatch": "Los metadatos de la herramienta ya no coinciden con este frontend. Recarga explícitamente para obtener metadatos actualizados.",
+      "internal": "Se produjo un error inesperado en la interfaz de la herramienta.",
+      "componentLoad": "No se pudo cargar la interfaz de la herramienta.",
+      "componentMount": "No se pudo abrir la interfaz de la herramienta.",
+      "cleanup": "La vista de la herramienta se eliminó, pero la liberación de sus recursos informó de un error.",
+      "sessionChanged": "La cuenta cambió. Los datos anteriores de la herramienta se borraron.",
+      "stopped": "Espera interrumpida. Esto no confirma la cancelación en el servidor."
+    },
+    "metrics": {
+      "title": "Tiempos del backend",
+      "description": "Medidos por el backend, sin incluir el tiempo de red. Las fases pueden solaparse; las duraciones de los elementos paralelos no se suman para obtener la duración de la solicitud.",
+      "milliseconds": "{value} ms",
+      "serverProcessing": "Solicitud · procesamiento del servidor",
+      "itemTotal": "Elemento · total",
+      "queueWait": "Espera en cola",
+      "startup": "Inicio del worker",
+      "inputValidation": "Validación de entradas",
+      "compute": "Cálculo",
+      "outputValidation": "Validación de la salida",
+      "serialization": "Serialización de la salida",
+      "execution": "Ejecución del worker",
+      "cleanup": "Liberación de recursos"
+    },
+    "about": {
+      "readOnly": "Catálogo y diagnósticos de solo lectura. No se ejecutan cálculos, pruebas activas ni reparaciones.",
+      "inactive": "Abre Diagnósticos de plugins para cargar los metadatos de las herramientas.",
+      "interfaceRegistered": "Interfaz compatible registrada en esta compilación."
+    },
+    "diagnostics": {
+      "title": "Diagnósticos de herramientas",
+      "scopeDescription": "Esta instantánea describe un solo proceso API que respondió, no toda la instancia. El catálogo y los diagnósticos son lecturas independientes. Recarga para actualizar la instantánea.",
+      "scope": "Ámbito de la instantánea",
+      "runtime": "Identificador del proceso API",
+      "degraded": "Se notificaron fallos de descubrimiento o una capacidad de ejecución reducida. Otras herramientas pueden seguir disponibles.",
+      "pool": {
+        "title": "Instantánea del grupo de ejecución",
+        "availability": "Disponibilidad del grupo de ejecución",
+        "active": "Trabajos activos",
+        "queued": "Trabajos en cola",
+        "pending": "Trabajos pendientes",
+        "degradedLanes": "Plazas degradadas",
+        "completed": "Trabajos completados",
+        "failed": "Trabajos fallidos"
+      },
+      "loaded": "Herramientas cargadas en este proceso API",
+      "noLoaded": "No hay herramientas cargadas en este proceso API.",
+      "failures": "Fallos de descubrimiento",
+      "noFailures": "No se notificaron fallos de descubrimiento en esta instantánea.",
+      "notLoaded": "No hay ninguna instantánea de diagnóstico cargada. Recarga para solicitar una.",
+      "policy": {
+        "title": "Límites efectivos de la plataforma",
+        "description": "Límites de configuración, no tiempos medidos ni garantías de rendimiento. Las operaciones de las herramientas pueden declarar límites más estrictos. Las duraciones no se suman.",
+        "workers": "Plazas de ejecución",
+        "maxBatchItems": "Máximo de elementos por lote",
+        "maxPendingItems": "Máximo de trabajos pendientes",
+        "maxPendingPerPrincipal": "Máximo de trabajos pendientes por cuenta",
+        "maxBatchesPerPrincipal": "Máximo de lotes simultáneos por cuenta",
+        "maxJsonDepth": "Profundidad máxima del JSON",
+        "maxRequestBytes": "Tamaño máximo de la solicitud",
+        "maxParameterBytes": "Tamaño máximo de parámetros por elemento",
+        "maxResultBytes": "Tamaño máximo del resultado por elemento",
+        "maxResponseBytes": "Tamaño máximo de la respuesta",
+        "envelopeReserveBytes": "Reserva de tamaño para el sobre",
+        "queueTimeout": "Tiempo límite en cola",
+        "jobTimeout": "Límite de tiempo estricto del trabajo",
+        "softTimeout": "Límite de tiempo cooperativo del trabajo",
+        "outputReserve": "Reserva de tiempo para la salida",
+        "cleanupTimeout": "Tiempo límite de liberación de recursos",
+        "ingressTimeout": "Tiempo límite de entrada de la solicitud",
+        "responseReserve": "Reserva de tiempo para la respuesta",
+        "requestTimeout": "Tiempo límite de la solicitud en el servidor",
+        "clientTimeout": "Tiempo límite del cliente de herramientas"
+      },
+      "reason": {
+        "import_failed": "Falló la importación del plugin",
+        "invalid_plugin": "Definición del plugin no válida",
+        "invalid_code": "Código de herramienta no válido",
+        "duplicate_code": "Código de herramienta duplicado; registros en cuarentena",
+        "invalid_descriptor": "Descriptor de herramienta no válido",
+        "invalid_input_model": "Modelo de entrada no válido",
+        "invalid_output_model": "Modelo de salida no válido",
+        "invalid_schema": "El esquema no se puede publicar",
+        "invalid_operation_policy": "Política de operación no válida"
+      }
+    },
+    "pacAllocator": {
+      "name": "Asignador PAC",
+      "description": "Analiza el estado inicial exacto de la asignación.",
+      "pilotNotice": "Solo análisis manual del estado inicial. No se leen datos de la cartera, no se proponen órdenes y no se guarda nada.",
+      "scenario": "Escenario",
+      "reportCurrency": "Divisa del informe",
+      "asOfDate": "Fecha de referencia (opcional)",
+      "rows": {
+        "title": "Activos y contextos de custodia",
+        "description": "Cada fila representa un activo en un contexto. Usa la acción específica para conservar la identidad del instrumento entre contextos.",
+        "addAsset": "Nuevo activo local",
+        "empty": "Añade al menos una fila. Hasta entonces, el backend indicará que faltan filas.",
+        "rowNumber": "Fila {number}",
+        "identity": "Identidad local del instrumento",
+        "sameAsset": "Mismo activo, otro contexto",
+        "initialQuantity": "Cantidad inicial",
+        "price": "Precio nativo",
+        "quoteBasis": "Cantidad base de la cotización",
+        "target": "Objetivo (%)",
+        "gridMode": "Cuadrícula de compra",
+        "whole": "Cantidades enteras",
+        "fractional": "Cantidades fraccionarias",
+        "quantityStep": "Paso de cantidad de compra",
+        "quoteDate": "Fecha de la cotización (opcional)"
+      },
+      "cash": {
+        "existing": "Efectivo existente",
+        "notSupplied": "No proporcionado",
+        "noneExisting": "Sin efectivo existente, de forma explícita",
+        "amount": "Importe",
+        "addCurrency": "Añadir divisa",
+        "markNoneExisting": "Sin efectivo existente",
+        "markNotSupplied": "Marcar como no proporcionado",
+        "contributions": "Nuevas aportaciones",
+        "noneContributions": "Sin nuevas aportaciones, de forma explícita",
+        "markNoneContributions": "Sin nuevas aportaciones"
+      },
+      "rates": {
+        "title": "Tipos de cambio de valoración",
+        "description": "Valor de informe de una unidad de divisa nativa. Estos tipos no convierten ni mueven efectivo.",
+        "add": "Añadir tipo",
+        "value": "Tipo hacia la divisa del informe",
+        "date": "Fecha del tipo (opcional)"
+      },
+      "revision": "Revisión del borrador",
+      "noOrders": "Las órdenes, la viabilidad y la optimización no están incluidas en este piloto.",
+      "stopWaiting": "Dejar de esperar",
+      "analyzing": "Analizando la revisión {revision}…",
+      "analyze": "Comprobar el estado inicial",
+      "stale": {
+        "pending": "La solicitud de la revisión {requestRevision} sigue en curso, pero el borrador está ahora en la revisión {draftRevision}. Su respuesta se ignorará.",
+        "ignored": "La respuesta de la revisión {revision} se ignoró porque cambió el borrador o la cuenta.",
+        "result": "Este resultado pertenece a una revisión anterior del borrador."
+      },
+      "draftPreserved": "Tu borrador se ha conservado.",
+      "platformErrorTitle": "Análisis no completado",
+      "platformError": "El backend no pudo completar este análisis. Tu borrador se ha conservado.",
+      "state": {
+        "ready": "Listo · el estado inicial se puede evaluar",
+        "needsInput": "Requiere datos",
+        "invalid": "Escenario no válido",
+        "unsupported": "Fuera del dominio P1"
+      },
+      "resultMeaning": "Este es un análisis del estado inicial. No certifica la viabilidad de las órdenes, el cumplimiento del objetivo ni la optimalidad.",
+      "exactView": "Exacta",
+      "formattedView": "Formateada",
+      "totals": {
+        "invested": "Valor invertido inicial",
+        "existingCash": "Efectivo existente",
+        "contributions": "Nuevas aportaciones",
+        "combinedCash": "Efectivo más aportaciones",
+        "maxGap": "Desviación absoluta máxima (pp)",
+        "squaredGap": "Desviación cuadrática (pp²)"
+      },
+      "result": {
+        "row": "Fila",
+        "value": "Valor del informe",
+        "weight": "Peso actual",
+        "target": "Objetivo",
+        "gap": "Desviación (pp)"
+      },
+      "cashPools": "Reservas de efectivo nativas",
+      "issues": "Hallazgos del backend",
+      "normalizedInput": "Entrada normalizada y unidades"
+    }
   }
 }

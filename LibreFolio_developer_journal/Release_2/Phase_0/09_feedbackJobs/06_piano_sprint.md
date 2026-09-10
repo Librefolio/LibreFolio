@@ -556,6 +556,11 @@ Non esiste un componente autonomo AssetDeleteModal: si usa ConfirmModal. La canc
 
 ### T0 - Piattaforma Tool backend, estensione approvata
 
+**Piano C attivo:** [Piattaforma Tool atomica](../16_toolPlatform/plan-phase00ToolPlatform.prompt.md).
+Il merge runtime, i gate backend, codec e frontend generici C sono completati.
+Il [contratto PAC per D](../16_toolPlatform/handoff-pac-D.md) definisce il primo
+plugin/renderer reale, che resta condizione di chiusura del pilot.
+
 **Stato:** nuova. **Taglia:** L per piattaforma custom-first; non richiede UI generica schema-driven.
 
 **Non confondere con cio che esiste:** PAC Planning in AI Export e una richiesta di analisi, non un solver; optimizer risk calcola pesi continui da rendimenti storici; Scheduled Investment e pricing di strumenti a rendimento programmato. Nessuno implementa questo tool.

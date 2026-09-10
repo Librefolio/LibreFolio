@@ -9,10 +9,27 @@ from typing import Dict, List, Type
 
 from backend.app.config import PROJECT_ROOT
 from backend.app.logging_config import get_logger
-from backend.app.services.risk.base import RiskAnalytic
-from backend.app.services.signal_plugins.base import SignalPlugin
 
 logger = get_logger(__name__)
+
+_LAZY_PLUGIN_BASES = {
+    "RiskAnalytic": "backend.app.services.risk.base",
+    "SignalPlugin": "backend.app.services.signal_plugins.base",
+}
+
+
+def __getattr__(name: str) -> object:
+    """Preserve existing base-class aliases without eager domain imports."""
+    module_name = _LAZY_PLUGIN_BASES.get(name)
+    if module_name is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    value = getattr(importlib.import_module(module_name), name)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | _LAZY_PLUGIN_BASES.keys())
 
 
 class PluginRegistryError(RuntimeError):
@@ -298,6 +315,8 @@ class SignalPluginRegistry(AbstractPluginRegistry):
     @classmethod
     def _validate_plugin_class(cls, plugin_class: Type) -> None:
         super()._validate_plugin_class(plugin_class)
+        from backend.app.services.signal_plugins.base import SignalPlugin  # noqa: PLC0415 - keep the generic registry independent of signal imports
+
         if not issubclass(plugin_class, SignalPlugin):
             raise TypeError("SignalPluginRegistry entries must extend SignalPlugin")
         plugin_class.validate_definition()
@@ -339,6 +358,8 @@ class RiskAnalyticRegistry(AbstractPluginRegistry):
     @classmethod
     def _validate_plugin_class(cls, plugin_class: Type) -> None:
         super()._validate_plugin_class(plugin_class)
+        from backend.app.services.risk.base import RiskAnalytic  # noqa: PLC0415 - keep the generic registry independent of risk imports
+
         if not issubclass(plugin_class, RiskAnalytic):
             raise TypeError("RiskAnalyticRegistry entries must extend RiskAnalytic")
         plugin_class.validate_definition()
