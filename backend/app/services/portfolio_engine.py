@@ -1897,15 +1897,25 @@ async def compute_portfolio_fx_cache_identity(
     """Fingerprint all FX data/config that can affect a portfolio scope.
 
     This is the shared identity contract for both portfolio cache layers.
-    Dependencies are limited to currencies present in scoped transactions,
-    held assets, and their price history, paired with the target currency.
+    Dependencies are limited to cash and cost-basis currencies present in
+    scoped transactions, held assets, and their price history, paired with the
+    target currency.
     """
     if not scope_broker_ids:
         return "no_fx"
 
-    tx_rows = (await db.execute(select(Transaction.currency, Transaction.asset_id, Transaction.quantity).where(Transaction.broker_id.in_(scope_broker_ids)))).all()
-    source_currencies = {currency for currency, _, _ in tx_rows if currency}
-    held_asset_ids = {asset_id for _, asset_id, quantity in tx_rows if asset_id is not None and quantity and quantity != 0}
+    tx_rows = (
+        await db.execute(
+            select(
+                Transaction.currency,
+                Transaction.cost_basis_currency,
+                Transaction.asset_id,
+                Transaction.quantity,
+            ).where(Transaction.broker_id.in_(scope_broker_ids))
+        )
+    ).all()
+    source_currencies = {currency for cash_currency, cost_basis_currency, _, _ in tx_rows for currency in (cash_currency, cost_basis_currency) if currency}
+    held_asset_ids = {asset_id for _, _, asset_id, quantity in tx_rows if asset_id is not None and quantity and quantity != 0}
 
     if held_asset_ids:
         asset_currency_rows = (await db.execute(select(Asset.currency).where(Asset.id.in_(held_asset_ids)).distinct())).scalars()
