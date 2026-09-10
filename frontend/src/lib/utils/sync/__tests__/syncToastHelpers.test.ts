@@ -154,6 +154,13 @@ describe('buildFxSyncToast', () => {
         expect(buildFxSyncToast({status: 'ok'}, 'EUR-USD', tr).message).toContain('0↓ 0Δ');
     });
 
+    it('keeps the default unlinked layout as heading, pair row, then counts/providers row', () => {
+        mockPairCurrencies();
+        const toast = buildFxSyncToast({status: 'ok', points_fetched: 9, points_changed: 4, provider_used: 'CHAIN:ECB+FED'}, 'JPY-RON', tr);
+
+        expect(toast.message.split('\n').map(markupText)).toEqual([`${tr('fx.sync.synced')}:`, `${pairFlags.JPY} JPY ${pairFlags.RON} RON`, '9↓ 4Δ ECB → FED']);
+    });
+
     describe('the provider chain', () => {
         it('renders a single provider', () => {
             const toast = buildFxSyncToast({status: 'ok', provider_used: 'MOCKFX'}, 'EUR-USD', tr);
@@ -242,11 +249,11 @@ describe('buildFxSyncToast', () => {
 
         it('uses the translated success prefix and one linked JPY / RON label between its flags', () => {
             const translate = vi.fn(tr);
-            const toast = buildFxSyncToast({status: 'ok', points_fetched: 9, points_changed: 4}, 'JPY-RON', translate, undefined, undefined, {outerFlags: true, linkToDetail: true});
+            const toast = buildFxSyncToast({status: 'ok', points_fetched: 9, points_changed: 4, provider_used: 'CHAIN:MOCKFX+MOCKFX_FAIL+MOCKFX'}, 'JPY-RON', translate, undefined, undefined, {outerFlags: true, linkToDetail: true});
 
             expect(translate).toHaveBeenCalledWith('fx.sync.synced');
             expect(toast.variant).toBe('success');
-            expect(markupText(toast.message)).toBe(`${tr('fx.sync.synced')}: ${pairFlags.JPY} JPY / RON ${pairFlags.RON} 9↓ 4Δ`);
+            expect(toast.message.split('\n').map(markupText)).toEqual([`${tr('fx.sync.synced')}:`, `${pairFlags.JPY} JPY / RON ${pairFlags.RON} 9↓ 4Δ MOCKFX → MOCKFX_FAIL → MOCKFX`]);
             expect(toast.message).toContain('href="/fx/JPY-RON"');
             expect(toast.message).toContain('data-testid="toast-fx-link"');
             expect(toast.message.match(/<a\b/g)).toHaveLength(1);
@@ -269,7 +276,12 @@ describe('buildFxSyncToast', () => {
 
             expect(plain.variant).toBe(variant);
             expect(linked.variant).toBe(variant);
-            expect(linked.message).toBe(plain.message.replace(fxPairHtml('JPY-RON'), fxPairHtml('JPY-RON', options)));
+
+            const plainPair = fxPairHtml('JPY-RON');
+            const linkedPair = fxPairHtml('JPY-RON', options);
+            const isSharedFormatterStatus = status === 'ok' || status === 'partial';
+            const expectedMessage = isSharedFormatterStatus ? plain.message.replace(`${plainPair}\n`, `${linkedPair} `) : plain.message.replace(plainPair, linkedPair);
+            expect(linked.message).toBe(expectedMessage);
             expect(linked.message).toContain(detail);
             expect(linked.message).toContain('href="/fx/JPY-RON"');
             expect(linked.message.match(/<a\b/g)).toHaveLength(1);
@@ -279,6 +291,12 @@ describe('buildFxSyncToast', () => {
                 expect(formatDetail).toHaveBeenCalledWith(result, tr);
             } else {
                 expect(formatDetail).not.toHaveBeenCalled();
+            }
+
+            if (isSharedFormatterStatus) {
+                expect(linked.message.split('\n').map(markupText)).toEqual([`${status === 'ok' ? tr('fx.sync.synced') : tr('prices.sync.partialSuffix')}:`, `${pairFlags.JPY} JPY / RON ${pairFlags.RON} 8↓ 3Δ MOCKFX → MOCKFX`, ...(status === 'partial' ? ['[[leg-detail:unavailable]]'] : [])]);
+            } else if (status === 'skipped') {
+                expect(linked.message.split('\n').map(markupText)).toEqual([`${tr('prices.sync.skippedSuffix')}:`, `${pairFlags.JPY} JPY / RON ${pairFlags.RON}`, tr('prices.sync.manualOnly')]);
             }
         });
 

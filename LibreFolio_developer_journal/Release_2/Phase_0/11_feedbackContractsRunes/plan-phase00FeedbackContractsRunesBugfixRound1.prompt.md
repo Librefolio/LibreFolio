@@ -1,12 +1,12 @@
 # Group B - Manual review corrections, Round 1
 
-**Date:** 2026-09-09. **Status:** checkpoint `74bfd9cf`; semantic merge with
-`dev_release2`/`916f12bd` resolved and staged; combined automated acceptance
-complete, developer visual review pending.
+**Date:** 2026-09-09. **Status:** ✅ complete. Merged as `d9e8f6d3`; combined
+automated acceptance and final developer UI review completed 2026-09-10.
 Previous: [B SP04-SP05 execution plan](plan-phase00FeedbackContractsRunes.prompt.md).
-Source: current B worktree with checkpoint `74bfd9cf` merged against
-`916f12bddf3eb9b8e834e4b9033eb52ce4bde25a`; the developer owns the pending
-merge commit.
+Source: merge `d9e8f6d3bcb59080ea10f8849015ee3336b55818`, with parents
+`74bfd9cf021af885abfb136c4e4f08b6a526f87a` and
+`916f12bddf3eb9b8e834e4b9033eb52ce4bde25a`; the post-review compact-toast
+delta remains for the developer's next manual commit.
 
 ## 1. Accepted work and fixed scope
 
@@ -377,12 +377,12 @@ these new R1 behaviors separately from the accepted B10 cases.
 | Step | Status |
 |---|---|
 | R1-00 Feedback/changelog | Recorded 2026-09-09 |
-| R1-01 Amber confirmation | Source/tests complete; unrun after Round1 |
-| R1-02 Mixed-role cleanup proof | Regression complete; unrun after Round1 |
-| R1-03 FX nonblocking creation/sync | Source/tests complete, including early-detail stale-response guard; unrun after Round1 |
-| R1-04 Existing success links/flags | Source/tests/docs complete; unrun after Round1 |
+| R1-01 Amber confirmation | ✅ Combined automated and developer UI acceptance |
+| R1-02 Mixed-role cleanup proof | ✅ Physical OWNER/EDITOR/VIEWER cascade verified |
+| R1-03 FX nonblocking creation/sync | ✅ Direct, chain, MANUAL and early-detail flows accepted |
+| R1-04 Existing success links/flags | ✅ Asset/FX links, flags and compact completion row accepted |
 | R1-05 Targeted acceptance | ✅ 2026-09-10 - combined static, unit, API and targeted E2E checks green on lane 6151 |
-| R1-06 Developer review | Pending real combined UI/viewport review; automation does not replace this gate |
+| R1-06 Developer review | ✅ 2026-09-10 - final UI/viewport verdict: success |
 
 > **Note implementazione** (R1-01 authoring, 2026-09-09): GlobalSettingsTab now
 > opens the existing amber ConfirmModal instead of calling browser confirm.
@@ -456,3 +456,24 @@ these new R1 behaviors separately from the accepted B10 cases.
 > does not rely on the pre-integration bundle. All automated gates listed above
 > are green. No merge commit was created by the agent; the developer still owns
 > the merge commit and final real-UI/viewport verdict.
+
+> **Note implementazione** (developer UI review, 2026-09-10): Preferences,
+> Global Settings, sharing/permissions, direct and chain FX creation, MANUAL,
+> early-detail behavior, asset-global links and viewport behavior were reported
+> correct. The only requested code change is presentational: in linked FX
+> creation-sync feedback, the pair, fetched/changed counters and provider badges
+> share one detail row instead of three stacked rows. The legacy unlinked sync
+> layout and the accepted MANUAL creation toast are unchanged.
+
+> **Note implementazione** (B-UI-16/17 polish, 2026-09-10): the linked success
+> and partial formatter now keeps the flagged pair, `fetched/changed` counters
+> and ordered provider badges on one detail row beneath the status heading.
+> Focused Vitest passed 24 cases, Svelte check reports zero errors, and the
+> combined production frontend build completed. Default unlinked sync and
+> MANUAL/skipped three-row contracts are pinned unchanged.
+
+> **Note implementazione** (R1-06 closure, 2026-09-10): the developer retested
+> the compact linked FX row and reported it correct. The clarified AssetModal
+> walkthrough confirmed that currency-change deletion warning appears only on
+> Save and Cancel restores the original currency. All Round 1 acceptance gates
+> are closed; the B review server was stopped and port 6151 released.
