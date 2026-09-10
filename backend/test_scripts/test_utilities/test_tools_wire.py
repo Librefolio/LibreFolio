@@ -188,7 +188,7 @@ def test_escaped_surrogate_pairs_become_scalars_in_keys_and_values(escaped: str,
 
     assert wire.parse_json(payload) == expected
     assert wire.decode_json(payload) == expected
-    assert wire.encode_json(expected) == f'{{"{scalar}":["{scalar}"]}}'.encode("utf-8")
+    assert wire.encode_json(expected) == f'{{"{scalar}":["{scalar}"]}}'.encode()
 
 
 @pytest.mark.parametrize("literal", (b"NaN", b"Infinity", b"-Infinity", b"1e309", b"-1e309", b"9.99E999999"))
@@ -216,6 +216,39 @@ def test_finite_exponents_and_nonfinite_looking_strings_remain_valid() -> None:
     assert wire.parse_json(payload) == expected
     assert wire.decode_json(payload) == expected
     assert wire.decode_json(wire.encode_json(expected)) == expected
+
+
+@pytest.mark.parametrize("value", (-wire.MAX_SAFE_JSON_INTEGER, wire.MAX_SAFE_JSON_INTEGER))
+def test_safe_integer_boundaries_survive_at_root_and_nested_positions(value: int) -> None:
+    for candidate in (value, {"nested": [{"value": value}]}):
+        payload = wire.encode_json(candidate)
+
+        assert wire.decode_json(payload) == candidate
+
+
+@pytest.mark.parametrize(
+    "value",
+    (-(wire.MAX_SAFE_JSON_INTEGER + 1), wire.MAX_SAFE_JSON_INTEGER + 1),
+)
+def test_unsafe_integers_are_rejected_at_root_and_nested_positions(value: int) -> None:
+    for candidate in (value, {"nested": [{"value": value}]}):
+        with pytest.raises(ValueError, match="exactly representable in JavaScript"):
+            wire.validate_json_value(candidate)
+        with pytest.raises(ValueError, match="exactly representable in JavaScript"):
+            wire.encode_json(candidate)
+        with pytest.raises(ValueError, match="exactly representable in JavaScript"):
+            wire.decode_json(_ascii_json(candidate))
+
+
+@pytest.mark.parametrize(
+    "key",
+    (str(-(wire.MAX_SAFE_JSON_INTEGER + 1)), str(wire.MAX_SAFE_JSON_INTEGER + 1)),
+)
+def test_safe_integer_limit_does_not_reinterpret_json_object_keys(key: str) -> None:
+    value = {key: {"nested": wire.MAX_SAFE_JSON_INTEGER}}
+    payload = wire.encode_json(value)
+
+    assert wire.decode_json(payload) == value
 
 
 @pytest.mark.parametrize(

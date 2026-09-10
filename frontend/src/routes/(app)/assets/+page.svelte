@@ -13,7 +13,7 @@
      *
      * Svelte 5 runes throughout.
      */
-    import {onMount, tick} from 'svelte';
+    import {onDestroy, onMount, tick} from 'svelte';
     import {goto} from '$app/navigation';
     import {page} from '$app/stores';
     import {_ as t} from '$lib/i18n';
@@ -26,6 +26,9 @@
     import type {LivePriceDirection} from '$lib/services/livePriceService';
     import AssetSyncModal from '$lib/components/assets/AssetSyncModal.svelte';
     import AssetModal from '$lib/components/assets/AssetModal.svelte';
+    import {loadAssetEditData, type AssetEditData} from '$lib/components/assets/assetEditData';
+    import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
+    import {extractErrorMessage} from '$lib/utils/trySave';
     import AssetMergeModal from '$lib/components/assets/AssetMergeModal.svelte';
     import {invalidateAfterMutation} from '$lib/stores/reference/assetStore';
     import ViewModeToggle from '$lib/components/ui/ViewModeToggle.svelte';
@@ -131,7 +134,10 @@
     // Asset modal (create/edit)
     let assetModalOpen = $state(false);
     let assetModalEditMode = $state(false);
-    let assetModalEditData = $state<any>(null);
+    let assetModalEditData = $state<AssetEditData | null>(null);
+    let assetEditLoading = $state(false);
+    let assetEditRequest = 0;
+    onDestroy(() => (assetEditRequest += 1));
 
     // Filters
     let searchText = $state('');
@@ -752,24 +758,28 @@
     // =========================================================================
 
     function handleAddAsset() {
+        assetEditRequest += 1;
+        assetEditLoading = false;
         assetModalEditMode = false;
         assetModalEditData = null;
         assetModalOpen = true;
     }
 
-    function handleEditAsset(asset: any) {
-        assetModalEditMode = true;
-        assetModalEditData = {
-            id: asset.id,
-            display_name: asset.display_name,
-            currency: asset.currency,
-            asset_type: asset.asset_type ?? 'STOCK',
-            icon_url: asset.icon_url,
-            quote_base_quantity: asset.quote_base_quantity ?? 1,
-            active: asset.active,
-            provider_code: asset.provider_code,
-        };
-        assetModalOpen = true;
+    async function handleEditAsset(asset: {id: number}) {
+        const request = ++assetEditRequest;
+        const session = getClientSessionGeneration();
+        assetEditLoading = true;
+        try {
+            const data = await loadAssetEditData(asset.id);
+            if (request !== assetEditRequest || !isClientSessionCurrent(session)) return;
+            assetModalEditMode = true;
+            assetModalEditData = data;
+            assetModalOpen = true;
+        } catch (error: unknown) {
+            if (request === assetEditRequest && isClientSessionCurrent(session)) toasts.error(extractErrorMessage(error, $t('common.errorOccurred')));
+        } finally {
+            if (request === assetEditRequest) assetEditLoading = false;
+        }
     }
 
     async function handleSyncAsset(asset: any) {
@@ -1118,7 +1128,7 @@
      * is readable by assistive tech (`aria-busy`) and by anything else that needs to know
      * whether what it is looking at is final.
      */
-    let busy = $derived(loading || assets.some((a) => a.loadingPrices));
+    let busy = $derived(loading || assetEditLoading || assets.some((a) => a.loadingPrices));
 </script>
 
 <div class="space-y-6" aria-busy={busy} data-busy={busy ? 'true' : 'false'} data-testid="assets-page">

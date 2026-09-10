@@ -36,7 +36,8 @@ from backend.app.schemas.tools import ToolDocumentation, ToolOperationPolicy, To
 from backend.app.services.provider_registry import register_plugin
 from backend.app.services.tools.base import ToolExecutionContext, ToolPlugin
 from backend.app.services.tools.registry import ToolPluginRegistry
-from backend.app.services.tools.worker import ToolWorkerJob
+from backend.app.services.tools.wire import decode_json, encode_json
+from backend.app.services.tools.worker import PipeCancellation, ToolWorkerJob
 
 _SETUP_TIMEOUT = 30.0
 _CLEANUP_TIMEOUT = 5.0
@@ -97,39 +98,43 @@ def _identity_from_frame(value: object) -> OwnedIdentity:
     return OwnedIdentity(pid, created_at, cast(Role, role))
 
 
-def _cleanup_owned(identities: Iterable[OwnedIdentity], processes: Iterable[BaseProcess] = ()) -> None:
-    """Last-resort cleanup, using only captured PID/birth pairs and native waits."""
-    owned = tuple(dict.fromkeys(identities))
-    problems: list[str] = []
-    for force, timeout in ((False, 0.2), (True, _CLEANUP_TIMEOUT)):
-        waiting: list[psutil.Process] = []
-        for identity in reversed(owned):
-            try:
-                if identity.pid == os.getpid():
-                    raise AssertionError("Fixture cleanup must never signal its own process")
-                process = identity.current()
-                if process is None:
-                    continue
-                # psutil also checks PID reuse inside its native signal methods.
-                process.kill() if force else process.terminate()
-                waiting.append(process)
-            except psutil.NoSuchProcess:
+def _signal_owned(owned: tuple[OwnedIdentity, ...], *, force: bool, timeout: float, problems: list[str]) -> None:
+    waiting: list[psutil.Process] = []
+    for identity in reversed(owned):
+        try:
+            if identity.pid == os.getpid():
+                raise AssertionError("Fixture cleanup must never signal its own process")
+            process = identity.current()
+            if process is None:
                 continue
-            except (psutil.Error, OSError, AssertionError) as exc:
-                problems.append(f"{identity.role} {identity.pid}: {exc}")
-        if waiting:
-            try:
-                psutil.wait_procs(waiting, timeout=timeout)
-            except psutil.Error as exc:
-                problems.append(f"Native process wait: {exc}")
+            # psutil also checks PID reuse inside its native signal methods.
+            process.kill() if force else process.terminate()
+            waiting.append(process)
+        except psutil.NoSuchProcess:
+            continue
+        except (psutil.Error, OSError, AssertionError) as exc:
+            problems.append(f"{identity.role} {identity.pid}: {exc}")
+    if waiting:
+        try:
+            psutil.wait_procs(waiting, timeout=timeout)
+        except psutil.Error as exc:
+            problems.append(f"Native process wait: {exc}")
 
+
+def _close_process_handles(processes: Iterable[BaseProcess], problems: list[str]) -> None:
     for process in processes:
         if process is None:
             continue
         try:
             pid = process.pid
             if pid is not None:
-                process.join(timeout=1.0)
+                process.join(timeout=0.1)
+                if process.is_alive():
+                    process.terminate()
+                    process.join(timeout=0.2)
+                if process.is_alive():
+                    process.kill()
+                    process.join(timeout=_CLEANUP_TIMEOUT)
                 if process.is_alive():
                     problems.append(f"Owned multiprocessing handle {pid} is still alive")
                     continue
@@ -139,12 +144,24 @@ def _cleanup_owned(identities: Iterable[OwnedIdentity], processes: Iterable[Base
         except (OSError, AssertionError) as exc:
             problems.append(f"Joining an owned multiprocessing handle: {exc}")
 
+
+def _check_owned_survivors(owned: tuple[OwnedIdentity, ...], problems: list[str]) -> None:
     for identity in owned:
         try:
             if identity.current() is not None:
                 problems.append(f"Surviving owned {identity.role}: pid={identity.pid}, created_at={identity.created_at}")
         except psutil.Error as exc:
             problems.append(f"Checking owned {identity.role} {identity.pid}: {exc}")
+
+
+def _cleanup_owned(identities: Iterable[OwnedIdentity], processes: Iterable[BaseProcess] = ()) -> None:
+    """Last-resort cleanup, using only captured PID/birth pairs and native waits."""
+    owned = tuple(dict.fromkeys(identities))
+    problems: list[str] = []
+    _signal_owned(owned, force=False, timeout=0.2, problems=problems)
+    _signal_owned(owned, force=True, timeout=_CLEANUP_TIMEOUT, problems=problems)
+    _close_process_handles(processes, problems)
+    _check_owned_survivors(owned, problems)
     if problems:
         raise AssertionError("Fixture emergency cleanup failed: " + "; ".join(problems))
 
@@ -181,7 +198,17 @@ class FixtureInput(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid")
 
     operation: Literal["exercise"]
-    scenario: Literal["echo", "hold", "crash", "oversize", "unicode", "invalid_output", "not_model", "descendants"]
+    scenario: Literal[
+        "echo",
+        "hold",
+        "crash",
+        "oversize",
+        "unicode",
+        "invalid_output",
+        "not_model",
+        "descendants",
+        "partial_frame",
+    ]
     text: str = "private"
     size: int = Field(default=2_048, strict=True, le=1_000_000)
     ignore_term: bool = False
@@ -308,6 +335,29 @@ def _worker_job(args: tuple[object, ...]) -> ToolWorkerJob:
     return job
 
 
+def _stall_after_partial_frame(job: ToolWorkerJob, response: Connection, cancellation: PipeCancellation) -> None:
+    """Adopt a real session, then leave half a multiprocessing frame header."""
+    os.setsid()
+    response.send_bytes(
+        encode_json(
+            {
+                "kind": "ready",
+                "execution_id": job.execution_id,
+                "pid": os.getpid(),
+                "pgid": os.getpgrp(),
+                "created_at": psutil.Process().create_time(),
+            }
+        )
+    )
+    if not cancellation.await_start(job.hard_deadline):
+        return
+    if os.write(response.fileno(), b"\x00\x00") != 2:
+        raise AssertionError("Fixture could not publish its partial frame header")
+    _report("partial-frame", job.execution_id)
+    # No clock guess: production cleanup must terminate this owned process.
+    threading.Event().wait()
+
+
 def controlled_worker_entry(target: Callable[..., object], args: tuple[object, ...], control_connection: Connection) -> None:
     """Gate a real worker entrypoint without bypassing its production handshake."""
     global _CHILD_CONTROL, _CHILD_EXECUTION_ID
@@ -317,7 +367,14 @@ def controlled_worker_entry(target: Callable[..., object], args: tuple[object, .
         _CHILD_EXECUTION_ID = job.execution_id
         _report("boot", job.execution_id)
         _expect_command(control_connection, "start", time.monotonic() + _SETUP_TIMEOUT, f"worker {job.execution_id} start gate")
-        target(*args)
+        parameters = decode_json(job.parameters)
+        if isinstance(parameters, dict) and parameters.get("scenario") == "partial_frame":
+            response, cancellation = args[1:3]
+            if not isinstance(response, Connection) or not isinstance(cancellation, PipeCancellation):
+                raise AssertionError("Partial-frame fixture received unexpected worker arguments")
+            _stall_after_partial_frame(job, response, cancellation)
+        else:
+            target(*args)
     finally:
         _CHILD_CONTROL = None
         _CHILD_EXECUTION_ID = None
@@ -338,6 +395,49 @@ def _park_descendant(connection: Connection, identity: OwnedIdentity) -> None:
         keeper.close()
 
 
+def _create_grandchild(connection: Connection, ignore_term: bool, session_id: int, deadline: float) -> tuple[BaseProcess, Connection, Connection, OwnedIdentity]:
+    context = multiprocessing.get_context("spawn")
+    grand_connection, grand_endpoint = context.Pipe(duplex=True)
+    grandchild = context.Process(target=_descendant_entry, args=("grandchild", grand_endpoint, ignore_term, session_id, deadline), daemon=False)
+    birth: OwnedIdentity | None = None
+    try:
+        try:
+            grandchild.start()
+        finally:
+            grand_endpoint.close()
+        birth = _started_identity(grandchild, "grandchild")
+        if birth is None:
+            raise AssertionError("Fixture grandchild exited before its birth could be recorded")
+        connection.send({"kind": "member", "member": birth.as_frame()})
+        born = _setup_frame(grand_connection, "born", deadline)
+        if _identity_from_frame(born.get("member")) != birth:
+            raise AssertionError("Fixture grandchild changed identity during setup")
+        return grandchild, grand_connection, grand_endpoint, birth
+    except BaseException:
+        _cleanup_owned((birth,) if birth is not None else (), (grandchild,))
+        grand_connection.close()
+        grand_endpoint.close()
+        raise
+
+
+def _prepare_descendant_tree(connection: Connection, ignore_term: bool, session_id: int, deadline: float) -> tuple[BaseProcess, Connection, Connection, OwnedIdentity]:
+    _expect_command(connection, "spawn", deadline, "permission to create the grandchild")
+    grandchild, grand_connection, grand_endpoint, birth = _create_grandchild(connection, ignore_term, session_id, deadline)
+    try:
+        connection.send({"kind": "ready"})
+        _expect_command(connection, "park", deadline, "permission to park the descendant tree")
+        grand_connection.send("park")
+        parked = _setup_frame(grand_connection, "parked", deadline)
+        if _identity_from_frame(parked.get("member")) != birth:
+            raise AssertionError("Unexpected grandchild parked acknowledgement")
+        return grandchild, grand_connection, grand_endpoint, birth
+    except BaseException:
+        _cleanup_owned((birth,), (grandchild,))
+        grand_connection.close()
+        grand_endpoint.close()
+        raise
+
+
 def _descendant_entry(role: Literal["child", "grandchild"], connection: Connection, ignore_term: bool, session_id: int, deadline: float) -> None:
     """Spawn only owned descendants; park only after the root records their births."""
     grandchild: BaseProcess | None = None
@@ -352,29 +452,8 @@ def _descendant_entry(role: Literal["child", "grandchild"], connection: Connecti
         identity = _current_identity(role)
         connection.send({"kind": "born", "member": identity.as_frame()})
         if role == "child":
-            _expect_command(connection, "spawn", deadline, "permission to create the grandchild")
-            context = multiprocessing.get_context("spawn")
-            grand_connection, grand_endpoint = context.Pipe(duplex=True)
-            grandchild = context.Process(target=_descendant_entry, args=("grandchild", grand_endpoint, ignore_term, session_id, deadline), daemon=False)
-            try:
-                grandchild.start()
-            finally:
-                grand_endpoint.close()
-                birth = _started_identity(grandchild, "grandchild")
-                if birth is not None:
-                    owned.append(birth)
-            if birth is None:
-                raise AssertionError("Fixture grandchild exited before its birth could be recorded")
-            connection.send({"kind": "member", "member": birth.as_frame()})
-            born = _setup_frame(grand_connection, "born", deadline)
-            if _identity_from_frame(born.get("member")) != birth:
-                raise AssertionError("Fixture grandchild changed identity during setup")
-            connection.send({"kind": "ready"})
-            _expect_command(connection, "park", deadline, "permission to park the descendant tree")
-            grand_connection.send("park")
-            parked = _setup_frame(grand_connection, "parked", deadline)
-            if _identity_from_frame(parked.get("member")) != birth:
-                raise AssertionError("Unexpected grandchild parked acknowledgement")
+            grandchild, grand_connection, grand_endpoint, birth = _prepare_descendant_tree(connection, ignore_term, session_id, deadline)
+            owned.append(birth)
         else:
             _expect_command(connection, "park", deadline, "permission to park the grandchild")
         _park_descendant(connection, identity)

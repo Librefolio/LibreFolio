@@ -14,17 +14,19 @@ from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from textwrap import dedent
-from typing import Annotated, Literal, Self
+from typing import Annotated, Literal, Self, TypedDict
 from uuid import uuid4
 
 import pytest
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, computed_field
+from pydantic.dataclasses import dataclass as pydantic_dataclass
 
 from backend.app.schemas.tools import ToolDocumentation, ToolOperationPolicy, ToolPlatformPolicy, ToolUIDescriptor
 from backend.app.services.provider_registry import AbstractPluginRegistry, register_plugin
 from backend.app.services.tools.base import ToolDefinitionError, ToolPlugin
 from backend.app.services.tools.catalog import effective_catalog_entries, effective_operation, get_tool_catalog
 from backend.app.services.tools.registry import ToolPluginRegistry, build_tool_definition
+from backend.app.services.tools.wire import MAX_SAFE_JSON_INTEGER, encode_json
 
 
 class _StrictModel(BaseModel):
@@ -77,6 +79,68 @@ class _NestedLooseInput(_StrictModel):
 class _NestedLooseOutput(_StrictModel):
     status: Literal["ready"]
     payload: _LooseText
+
+
+class _TypedPayload(TypedDict):
+    text: str
+
+
+class _NestedTypedDictInput(_StrictModel):
+    operation: Literal["inspect"]
+    payload: _TypedPayload
+
+
+@pydantic_dataclass(config=ConfigDict(strict=True, extra="forbid"))
+class _DataclassPayload:
+    text: str
+
+
+class _NestedDataclassOutput(_StrictModel):
+    status: Literal["ready"]
+    payload: _DataclassPayload
+
+
+class _ComputedOutput(_StrictModel):
+    status: Literal["ready"]
+    payload: _Text
+
+    @computed_field
+    @property
+    def summary(self) -> str:
+        return f"{self.status}:{self.payload.text}"
+
+
+class _SerializationAliasOutput(_StrictModel):
+    status: Literal["ready"]
+    payload: _Text = Field(serialization_alias="wire_payload")
+
+
+class _ValidationAliasOutput(_StrictModel):
+    status: Literal["ready"]
+    payload: _Text = Field(validation_alias="wire_payload")
+
+
+class _RoundTripAliasOutput(_StrictModel):
+    status: Literal["ready"]
+    payload: _Text = Field(validation_alias="wire_payload", serialization_alias="wire_payload")
+
+
+class _TupleInput(_StrictModel):
+    operation: Literal["inspect"]
+    values: tuple[int, str]
+
+
+class _SetOutput(_StrictModel):
+    status: Literal["ready"]
+    values: set[str]
+
+
+class _IntegerBoundsInput(_StrictModel):
+    operation: Literal["inspect"]
+    unbounded: int
+    minimum_only: Annotated[int, Field(ge=-17)]
+    maximum_only: Annotated[int, Field(le=23)]
+    narrower: Annotated[int, Field(ge=-17, le=23)]
 
 
 class _NoOperationInput(_StrictModel):
@@ -363,6 +427,88 @@ def test_invalid_or_open_models_quarantine_only_their_tool(attribute, bad_type, 
     assert {failure.reason for failure in failures} == {reason}
 
 
+@pytest.mark.parametrize(
+    ("attribute", "bad_type", "reason"),
+    [
+        pytest.param("input_type", _NestedTypedDictInput, "invalid_input_model", id="nested-typed-dict"),
+        pytest.param("output_type", _NestedDataclassOutput, "invalid_output_model", id="nested-pydantic-dataclass"),
+    ],
+)
+def test_nested_non_model_shapes_quarantine_only_their_claim(attribute, bad_type, reason, discovery_factory, plugin_factory):
+    broken = plugin_factory("private_nested_shape", **{attribute: bad_type})
+    healthy = plugin_factory("private_healthy")
+
+    snapshot = _publish(discovery_factory(), broken, healthy)
+
+    assert set(snapshot.definitions) == {healthy.tool_code}
+    assert [(failure.tool_code, failure.reason) for failure in snapshot.failures] == [(broken.tool_code, reason)]
+
+
+@pytest.mark.parametrize(
+    ("output_type", "code"),
+    [
+        pytest.param(_ComputedOutput, "private_computed_output", id="computed-field"),
+        pytest.param(_SerializationAliasOutput, "private_serialization_alias", id="serialization-only-alias"),
+        pytest.param(_ValidationAliasOutput, "private_validation_alias", id="validation-only-alias"),
+    ],
+)
+def test_non_roundtrippable_outputs_are_quarantined_without_hiding_healthy_tools(output_type, code, discovery_factory, plugin_factory):
+    broken = plugin_factory(code, output_type=output_type)
+    healthy = plugin_factory("private_healthy")
+
+    snapshot = _publish(discovery_factory(), broken, healthy)
+
+    assert set(snapshot.definitions) == {healthy.tool_code}
+    assert [(failure.tool_code, failure.reason) for failure in snapshot.failures] == [(broken.tool_code, "invalid_output_model")]
+
+
+def test_matching_validation_and_serialization_alias_is_published_only_when_wire_roundtrip_succeeds(plugin_factory):
+    definition = build_tool_definition(plugin_factory("private_roundtrip_alias", output_type=_RoundTripAliasOutput))
+    value = _RoundTripAliasOutput.model_validate({"status": "ready", "wire_payload": {"text": "private"}})
+
+    wire_value = definition.output_adapter.dump_python(value, mode="json", by_alias=True, warnings="error")
+    payload = encode_json(wire_value)
+    validated = definition.output_adapter.validate_json(payload, strict=True)
+
+    assert wire_value == {
+        "status": "ready",
+        "wire_payload": {"text": "private"},
+    }
+    assert validated == value
+    assert "wire_payload" in definition.descriptor.output_schema["properties"]
+    assert "payload" not in definition.descriptor.output_schema["properties"]
+
+
+def test_frontend_unsupported_tuple_and_set_schemas_are_quarantined_individually(discovery_factory, plugin_factory):
+    tuple_claim = plugin_factory("private_tuple_schema", input_type=_TupleInput)
+    set_claim = plugin_factory("private_set_schema", output_type=_SetOutput)
+    healthy = plugin_factory("private_healthy")
+
+    snapshot = _publish(discovery_factory(), tuple_claim, set_claim, healthy)
+
+    assert set(snapshot.definitions) == {healthy.tool_code}
+    assert len(snapshot.failures) == 2
+    assert {(failure.tool_code, failure.reason) for failure in snapshot.failures} == {
+        (tuple_claim.tool_code, "invalid_schema"),
+        (set_claim.tool_code, "invalid_schema"),
+    }
+
+
+def test_published_integer_schema_injects_safe_bounds_without_widening_stricter_fields(plugin_factory):
+    definition = build_tool_definition(plugin_factory("private_integer_bounds", input_type=_IntegerBoundsInput))
+    properties = definition.descriptor.input_schema["properties"]
+
+    assert {
+        name: (properties[name]["minimum"], properties[name]["maximum"])
+        for name in ("unbounded", "minimum_only", "maximum_only", "narrower")
+    } == {
+        "unbounded": (-MAX_SAFE_JSON_INTEGER, MAX_SAFE_JSON_INTEGER),
+        "minimum_only": (-17, MAX_SAFE_JSON_INTEGER),
+        "maximum_only": (-MAX_SAFE_JSON_INTEGER, 23),
+        "narrower": (-17, 23),
+    }
+
+
 @pytest.mark.parametrize("input_type", [_NoOperationInput, _DefaultOperationInput, _StringOperationInput, _NumericOperationInput])
 def test_input_operations_are_required_literal_strings_without_defaults(input_type, plugin_factory):
     plugin = plugin_factory(input_type=input_type)
@@ -468,7 +614,7 @@ def test_unresolved_or_remote_schema_references_quarantine_real_models(schema_ex
 def test_unresolved_python_annotations_cannot_publish_a_tool(discovery_factory, plugin_factory):
     class UnresolvedInput(_StrictModel):
         operation: Literal["inspect"]
-        payload: "NeverDefinedPrivateModel"
+        payload: "NeverDefinedPrivateModel"  # noqa: F821, UP037 - unresolved on purpose
 
     broken = plugin_factory("private_unresolved", input_type=UnresolvedInput)
     healthy = plugin_factory("private_healthy")

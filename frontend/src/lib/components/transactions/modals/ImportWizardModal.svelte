@@ -8,7 +8,7 @@
   Step 4: Review & Import — asset resolution + TX selection + handoff to BulkModal
 -->
 <script lang="ts">
-    import {untrack} from 'svelte';
+    import {onDestroy, untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import {Upload, Trash2, Eye, Search, ChevronDown, ChevronRight, Check, AlertTriangle, Info, Plus, CheckCircle, FileText, RefreshCw, CheckSquare, Square, ListChecks, X, Wand2, Pencil, Loader2} from 'lucide-svelte';
     import {axiosInstance, zodiosApi} from '$lib/api';
@@ -18,11 +18,15 @@
     import {formatCurrencyAmountHtml} from '$lib/utils/currency/currencyFormat';
     import {ensureBrokersLoaded, getEditableBrokers, refreshAllBrokers, getBrokerInfo, type BrokerInfo} from '$lib/stores/reference/brokerStore';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {notify} from '$lib/stores/app/notify.svelte';
     import {getAssetInfo, refreshAllAssets, type AssetInfo} from '$lib/stores/reference/assetStore';
+    import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
+    import {safeString} from '$lib/types/common';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {isFakeAssetId} from '$lib/utils/brim/isFakeAssetId';
     import {getIndexColor, getStringColor} from '$lib/utils/colors';
     import AssetModal from '$lib/components/assets/AssetModal.svelte';
+    import {loadAssetEditData, type AssetEditData} from '$lib/components/assets/assetEditData';
     import IdentifierPrimaryChooser from '$lib/components/assets/IdentifierPrimaryChooser.svelte';
     import {pendingIdentifier, needsPrimaryChoice, mergeOther, demotedValues} from '$lib/utils/assetIdentifiers';
     import {electPrimary, groupExtractedAssets, groupSignature, orderedIdentifiers, representativeMap, representativeOf, type AssetGroup, type ExtractedAsset, type GroupOverride, type IdentifierKind, type PrimaryMap, type SimilarityLink} from '$lib/utils/assetGrouping';
@@ -66,7 +70,7 @@
     import {isFixStepTodo, rowStaysInFixStep, todosAfterSettle, todosAfterReopen} from '$lib/utils/transactions/fixRowLifecycle';
     import {CONF_ORDER, type DuplicateStatus, type DuplicateTier, type DedupKey, type DuplicateGroup, type MergedTx, type AssetResolution} from '$lib/utils/transactions/importTypes';
     import {buildDedupKey, buildDuplicateGroups, dedupKeysMatch, duplicateStatusAllowsAutoSelect, duplicateStatusIsSelectedWarning, isResolvedAwayDuplicate, pendingDuplicateStatusFor} from '$lib/utils/transactions/importDedup';
-    import {buildMergedTransactions, mergeCandidates, uniqueExactCandidateId} from '$lib/utils/transactions/importMerge';
+    import {buildMergedTransactions, mergeCandidates, uniqueCandidateId} from '$lib/utils/transactions/importMerge';
     import {cmpSourceFromTx, cmpSourceFromExisting, compareTypeCellHtml, type CmpSource} from '$lib/utils/transactions/importCompare';
     import {createNamesFor, createOtherFor, duplicateCandidates, resolutionLabel as resolutionLabelPure} from '$lib/utils/transactions/importResolutionHelpers';
     import {brokerIdForTx, beforeOpeningInfo, isBeforeOpening as isBeforeOpeningPure, isRowAssetResolved as isRowAssetResolvedPure, shouldAutoSelectOnRecheck} from '$lib/utils/transactions/importRowState';
@@ -409,6 +413,26 @@
 
     let mergedTransactions = $state<MergedTx[]>([]);
     let assetResolutions = $state<AssetResolution[]>([]);
+    let candidatesRefreshing = $state(false);
+    let candidatesError = $state<string | null>(null);
+    let candidateRequestEpoch = 0;
+    let wizardDataEpoch = 0;
+    let navigationEpoch = 0;
+    let duplicateRequestEpoch = 0;
+    let importPreparing = $state(false);
+    const manualAssetSelections = new Map<string, number | null>();
+
+    function invalidateCandidateRequests() {
+        wizardDataEpoch += 1;
+        candidateRequestEpoch += 1;
+        navigationEpoch += 1;
+        duplicateRequestEpoch += 1;
+        candidatesRefreshing = false;
+        candidatesError = null;
+        duplicateRecheckRunning = false;
+    }
+
+    onDestroy(invalidateCandidateRequests);
 
     /*
      * Unification state.
@@ -603,8 +627,9 @@
     let step4SelectedCount = $derived(mergedTransactions.filter((t) => t.selected && !beforeOpeningIndices.has(t.index)).length);
     let step4TotalCount = $derived(step4Rows.filter((t) => !beforeOpeningIndices.has(t.index)).length);
     let step4UnresolvedCount = $derived(assetResolutions.filter((r) => r.resolvedAssetId === null).length);
+    let step4MissingAssetCount = $derived(assetResolutions.filter((r) => r.resolvedAssetId === null && r.candidates.length === 0).length);
     let step4HasUnresolvedSelected = $derived(mergedTransactions.some((t) => t.selected && !beforeOpeningIndices.has(t.index) && !isRowAssetResolved(t)));
-    let step4CanImport = $derived(step4SelectedCount > 0 && !step4HasUnresolvedSelected);
+    let step4CanImport = $derived(step4SelectedCount > 0 && !step4HasUnresolvedSelected && !candidatesRefreshing && !candidatesError && !duplicateRecheckRunning && !importPreparing);
     let step4SelectedDuplicateCount = $derived(mergedTransactions.filter((t) => t.selected && !beforeOpeningIndices.has(t.index) && duplicateStatusIsSelectedWarning(t.duplicateStatus)).length);
     let step4BeforeOpeningCount = $derived(beforeOpeningIndices.size);
     // Reasons a visible step-4 row is pre-deselected (for the explanatory banner)
@@ -645,18 +670,21 @@
         }));
     });
 
-    /**
-     * Return the asset_id of a lone EXACT-confidence candidate, else null.
-     * Used to auto-bind an extracted asset whose ISIN uniquely matches one existing
-     * asset even when the backend left selected_asset_id null.
-     */
     function mergeAllTransactions() {
+        invalidateCandidateRequests();
         const {txArr, assetMap, fileIdOfFake} = buildMergedTransactions(parseResults, brokers, pendingDeleteTxIds);
 
         // Unification runs *before* anything else looks at assets: the duplicate report, the
         // correction step and the review all read the resulting list, so a partition applied
         // later would mean asking the user to pick an asset twice.
         applyAssetGrouping(txArr, assetMap, fileIdOfFake);
+        for (const resolution of assetMap.values()) {
+            const signature = groupSignature({members: resolution.groupMembers});
+            if (manualAssetSelections.has(signature)) {
+                resolution.resolvedAssetId = manualAssetSelections.get(signature) ?? null;
+                resolution.selectionOrigin = 'manual';
+            }
+        }
 
         syncDuplicateFilePriority();
         rebuildDuplicateGroups(txArr, assetMap);
@@ -722,10 +750,10 @@
                 // A member may have been the only one the backend could match: keep its
                 // candidates and its binding rather than losing them with the entry.
                 leadRes.candidates = mergeCandidates(leadRes.candidates, folded.candidates);
-                leadRes.resolvedAssetId = leadRes.resolvedAssetId ?? folded.resolvedAssetId;
                 leadRes.notices = [...leadRes.notices, ...folded.notices];
                 assetMap.delete(member.fakeAssetId);
             }
+            if (group.members.length > 1) leadRes.resolvedAssetId = uniqueCandidateId(leadRes.candidates);
         }
 
         // Rewriting the bindings through the map rather than per group is what keeps the two
@@ -761,7 +789,12 @@
      * this file already exist?". After the user fixes a row that the plugin misread, that is
      * no longer the question being asked, so the answer is re-requested rather than reused.
      */
-    async function refreshDuplicateReport(): Promise<void> {
+    async function refreshDuplicateReport(preserveSelection = false): Promise<void> {
+        const request = ++duplicateRequestEpoch;
+        const context = wizardDataEpoch;
+        const session = getClientSessionGeneration();
+        const mappingKey = JSON.stringify(assetResolutions.map((resolution) => [resolution.fakeAssetId, resolution.resolvedAssetId]));
+        const current = () => open && request === duplicateRequestEpoch && context === wizardDataEpoch && isClientSessionCurrent(session) && mappingKey === JSON.stringify(assetResolutions.map((resolution) => [resolution.fakeAssetId, resolution.resolvedAssetId]));
         duplicateRecheckError = null;
         if (mergedTransactions.length === 0) {
             duplicateGroups = [];
@@ -796,6 +829,7 @@
                     broker_id: brokerId,
                     transactions: asked.map(({clone}) => clone) as never,
                 });
+                if (!current()) return;
                 const pendingDeleteSet = new Set(pendingDeleteTxIds);
                 const record = (entries: unknown[], status: DuplicateStatus) => {
                     for (const raw of entries as Array<{tx_row_index: number; tx_existing_matches?: BrimDuplicateMatch[]}>) {
@@ -811,13 +845,16 @@
                 record(report.tx_possible_duplicates ?? [], 'possible');
             }
         } catch (e) {
+            if (!current()) return;
             // A failed re-check must not silently fall back to the stale verdict: say so and
             // keep what we have, so the user can still arbitrate manually.
             duplicateRecheckError = extractErrorMessage(e);
             duplicateRecheckRunning = false;
             return;
+        } finally {
+            if (request === duplicateRequestEpoch) duplicateRecheckRunning = false;
         }
-        duplicateRecheckRunning = false;
+        if (!current()) return;
 
         const assetMap = new Map<number, AssetResolution>(assetResolutions.map((r) => [r.fakeAssetId, r]));
         const txArr = mergedTransactions.map((m) => {
@@ -838,7 +875,7 @@
                 dupKeeperFileName: undefined,
                 isDupKeeper: undefined,
                 dupPendingMatch: undefined,
-                selected: !beforeOpening && duplicateStatusAllowsAutoSelect(status),
+                selected: (!preserveSelection || m.selected) && !beforeOpening && duplicateStatusAllowsAutoSelect(status),
             } as MergedTx;
         });
 
@@ -851,14 +888,24 @@
     }
 
     function resolveAsset(fakeAssetId: number, realAssetId: number) {
-        assetResolutions = assetResolutions.map((r) => (r.fakeAssetId === fakeAssetId ? {...r, resolvedAssetId: realAssetId} : r));
+        assetResolutions = assetResolutions.map((r): AssetResolution => {
+            if (r.fakeAssetId !== fakeAssetId) return r;
+            manualAssetSelections.set(groupSignature({members: r.groupMembers}), realAssetId);
+            return {...r, resolvedAssetId: realAssetId, selectionOrigin: 'manual'};
+        });
+        duplicateRecheckDone = false;
         // W7: rows gated on before-opening while this asset was unresolved never
         // got re-selected — re-run the importable pass now that they resolve.
         reselectImportableRows();
     }
 
     function clearResolution(fakeAssetId: number) {
-        assetResolutions = assetResolutions.map((r) => (r.fakeAssetId === fakeAssetId ? {...r, resolvedAssetId: null} : r));
+        assetResolutions = assetResolutions.map((r): AssetResolution => {
+            if (r.fakeAssetId !== fakeAssetId) return r;
+            manualAssetSelections.set(groupSignature({members: r.groupMembers}), null);
+            return {...r, resolvedAssetId: null, selectionOrigin: 'manual'};
+        });
+        duplicateRecheckDone = false;
         reselectImportableRows();
     }
 
@@ -947,48 +994,61 @@
         await refreshCandidates(fakeId);
     }
 
-    /**
-     * Replace candidates for a specific fakeAssetId with fresh results from the backend.
-     * Called after an asset's identifier is updated so confidence reflects current DB state.
-     */
-    async function refreshCandidates(fakeAssetId: number) {
-        const res = assetResolutions.find((r) => r.fakeAssetId === fakeAssetId);
-        if (!res) return;
+    /** Refresh catalog-dependent matches, never the cached parser facts or manual choices. */
+    async function refreshCandidates(fakeAssetId?: number): Promise<boolean> {
+        const targets = assetResolutions.filter((resolution) => fakeAssetId === undefined || resolution.fakeAssetId === fakeAssetId);
+        if (targets.length === 0) return true;
+        const request = ++candidateRequestEpoch;
+        const context = wizardDataEpoch;
+        const session = getClientSessionGeneration();
+        const current = () => open && request === candidateRequestEpoch && context === wizardDataEpoch && isClientSessionCurrent(session);
+        candidatesRefreshing = true;
+        candidatesError = null;
         try {
-            // Search on every code the group carries, not just the representative's. A unified
-            // bond holds its issue code and its quoted one; querying one of them would quietly
-            // narrow the very union the unification step just built.
-            const isins = res.groupIsins.length > 0 ? res.groupIsins : [res.extractedIsin ?? ''];
-            const symbols = res.groupSymbols.length > 0 ? res.groupSymbols : [res.extractedSymbol ?? ''];
-            const queries = Math.max(isins.length, symbols.length);
-            let fresh: Awaited<ReturnType<typeof zodiosApi.get_asset_candidates_api_v1_brokers_import_asset_candidates_post>> = [];
-            for (let i = 0; i < queries; i++) {
-                const batch = await zodiosApi.get_asset_candidates_api_v1_brokers_import_asset_candidates_post({
-                    extracted_symbol: symbols[i] || undefined,
-                    extracted_isin: isins[i] || undefined,
-                    extracted_name: res.extractedName ?? undefined,
-                });
-                fresh = [...fresh, ...batch];
-            }
-            // Sort by confidence and replace candidates in state
-            const seenAssetIds = new Set<number>();
-            const sorted: AssetResolution['candidates'] = [...fresh]
-                .sort((a, b) => (CONF_ORDER[a.match_confidence] ?? 9) - (CONF_ORDER[b.match_confidence] ?? 9))
-                .filter((c) => {
-                    // Sorted first, so the entry kept is the strongest confidence for that asset.
-                    if (seenAssetIds.has(c.asset_id)) return false;
-                    seenAssetIds.add(c.asset_id);
-                    return true;
-                })
-                .map((c) => ({asset_id: c.asset_id, symbol: (Array.isArray(c.symbol) ? (c.symbol[0] ?? null) : c.symbol) as string | null, isin: (Array.isArray(c.isin) ? (c.isin[0] ?? null) : c.isin) as string | null, name: c.name, match_confidence: c.match_confidence as string}));
+            await refreshAllAssets();
+            if (!current()) return false;
+            const updates = new Map<number, AssetResolution['candidates']>();
+            await mapWithConcurrency(
+                targets,
+                async (resolution) => {
+                    const isins = resolution.groupIsins.length ? resolution.groupIsins : [resolution.extractedIsin ?? ''];
+                    const symbols = resolution.groupSymbols.length ? resolution.groupSymbols : [resolution.extractedSymbol ?? ''];
+                    const names = resolution.groupNames.length ? resolution.groupNames : [resolution.extractedName ?? ''];
+                    const stages = [isins.filter(Boolean).map((value) => ({extracted_isin: value})), symbols.filter(Boolean).map((value) => ({extracted_symbol: value})), names.filter(Boolean).map((value) => ({extracted_name: value}))];
+                    let candidates: AssetResolution['candidates'] = [];
+                    // Match the backend's precedence across the whole group: fuzzy names must
+                    // not compete with a primary/alternate ISIN found through another member.
+                    for (const queries of stages) {
+                        for (const query of queries) {
+                            if (!current()) return;
+                            const result = await zodiosApi.get_asset_candidates_api_v1_brokers_import_asset_candidates_post(query);
+                            candidates = mergeCandidates(
+                                candidates,
+                                result.map((candidate) => ({asset_id: candidate.asset_id, symbol: safeString(candidate.symbol), isin: safeString(candidate.isin), name: candidate.name, match_confidence: candidate.match_confidence})),
+                            );
+                        }
+                        if (candidates.length > 0) break;
+                    }
+                    updates.set(resolution.fakeAssetId, candidates);
+                },
+                {shouldStop: () => !current()},
+            );
+            if (!current()) return false;
             assetResolutions = assetResolutions.map((r) => {
-                if (r.fakeAssetId !== fakeAssetId) return r;
-                // If still unresolved and a fresh identifier edit produced a lone exact match, auto-bind it.
-                const autoBind = r.resolvedAssetId == null ? uniqueExactCandidateId(sorted) : null;
-                return {...r, candidates: sorted, resolvedAssetId: r.resolvedAssetId ?? autoBind};
+                const candidates = updates.get(r.fakeAssetId);
+                if (!candidates) return r;
+                const resolvedAssetId = r.selectionOrigin === 'manual' ? r.resolvedAssetId : uniqueCandidateId(candidates);
+                if (resolvedAssetId !== r.resolvedAssetId) duplicateRecheckDone = false;
+                return {...r, candidates, resolvedAssetId};
             });
-        } catch {
-            // Silently ignore — old candidates remain visible
+            return true;
+        } catch (error: unknown) {
+            if (!current()) return false;
+            candidatesError = extractErrorMessage(error, $t('common.errorOccurred'));
+            toasts.error(candidatesError);
+            return false;
+        } finally {
+            if (current()) candidatesRefreshing = false;
         }
     }
 
@@ -1029,7 +1089,7 @@
         if (!pending) {
             // Nothing to decide — but the search keys still have to land somewhere.
             await mergeSearchKeys(realAssetId, currentOther, extraOther);
-            await refreshCandidates(fakeAssetId);
+            await refreshCandidates();
             return;
         }
 
@@ -1144,9 +1204,37 @@
             });
     }
 
-    function handleImport() {
-        const creates = buildFinalTxList();
-        onImportBatch(creates);
+    async function handleImport() {
+        if (importPreparing) return;
+        const session = getClientSessionGeneration();
+        importPreparing = true;
+        try {
+            if (!(await refreshCandidates()) || !open || !isClientSessionCurrent(session)) return;
+            if (step4HasUnresolvedSelected || step4SelectedCount === 0) return;
+            if (!duplicateRecheckDone) {
+                const context = wizardDataEpoch;
+                const previousSelection = new Set(mergedTransactions.filter((row) => row.selected && !beforeOpeningIndices.has(row.index)).map((row) => row.index));
+                await refreshDuplicateReport(true);
+                if (!open || context !== wizardDataEpoch || !isClientSessionCurrent(session) || duplicateRecheckError || !duplicateRecheckDone) return;
+                if (stepIsActive('duplicates')) {
+                    currentStepId = 'duplicates';
+                    return;
+                }
+                const currentSelection = mergedTransactions.filter((row) => row.selected && !beforeOpeningIndices.has(row.index)).map((row) => row.index);
+                if (currentSelection.length !== previousSelection.size || currentSelection.some((index) => !previousSelection.has(index))) {
+                    notify({
+                        name: 'tx.import.selection.changed',
+                        detail: {previousIndices: [...previousSelection], currentIndices: currentSelection},
+                        toast: {variant: 'warning', message: $t('importWizard.selectionChangedReview')},
+                    });
+                    return;
+                }
+            }
+            if (step4HasUnresolvedSelected || step4SelectedCount === 0) return;
+            onImportBatch(buildFinalTxList());
+        } finally {
+            importPreparing = false;
+        }
     }
 
     /**
@@ -2123,6 +2211,12 @@ ${arrow}<span>${label}</span></span>`,
     });
 
     function resetState() {
+        invalidateCandidateRequests();
+        manualAssetSelections.clear();
+        importPreparing = false;
+        inspectRequestEpoch += 1;
+        inspectAssetData = null;
+        inspectAssetLoading = false;
         currentStepId = 'upload';
         pendingFiles = [];
         globalBrokerId = null;
@@ -2473,32 +2567,48 @@ ${arrow}<span>${label}</span></span>`,
      * from a list of names is guesswork when two of them read alike — the currency, the
      * identifiers and the provider decide it, and they are only visible in the asset form.
      */
-    let inspectAssetData = $state<Record<string, unknown> | null>(null);
+    let inspectAssetData = $state<AssetEditData | null>(null);
     let inspectAssetLoading = $state(false);
+    let inspectRequestEpoch = 0;
+    onDestroy(() => (inspectRequestEpoch += 1));
 
     async function openAssetInspector(assetId: number) {
         if (inspectAssetLoading) return;
+        const request = ++inspectRequestEpoch;
+        const session = getClientSessionGeneration();
+        const current = () => open && request === inspectRequestEpoch && isClientSessionCurrent(session);
         inspectAssetLoading = true;
         try {
-            // `/assets/all` hides inactive instruments, and an expired security created from
-            // this very wizard is usually filed as inactive on purpose — asking for it there
-            // returns nothing and the inspector silently refuses to open.
-            const assets = (await zodiosApi.list_assets_api_v1_assets_query_get({queries: {}})) as Array<Record<string, unknown>>;
-            const asset = assets.find((a) => a.id === assetId);
-            if (!asset) return;
-            const assignments = (await zodiosApi.get_provider_assignments_api_v1_assets_provider_assignments_get({queries: {asset_ids: [assetId]}})) as Array<Record<string, unknown>>;
-            const assignment = assignments[0] ?? null;
-            inspectAssetData = {
-                ...asset,
-                provider_code: assignment?.provider_code ?? null,
-                provider_identifier: assignment?.identifier ?? '',
-                provider_identifier_type: assignment?.identifier_type ?? '',
-                provider_params: assignment?.provider_params ?? null,
-                provider_user_url: asset.user_url ?? '',
-                provider_url: assignment?.provider_url ?? null,
-            };
+            const data = await loadAssetEditData(assetId);
+            if (current()) inspectAssetData = data;
+        } catch (error: unknown) {
+            if (current()) toasts.error(extractErrorMessage(error, $t('common.errorOccurred')));
         } finally {
-            inspectAssetLoading = false;
+            if (request === inspectRequestEpoch) inspectAssetLoading = false;
+        }
+    }
+
+    async function refreshAssetCatalog(): Promise<void> {
+        const context = wizardDataEpoch;
+        const session = getClientSessionGeneration();
+        const current = () => open && context === wizardDataEpoch && isClientSessionCurrent(session);
+        try {
+            await refreshAllAssets();
+            if (!current() || !(await refreshCandidates())) return;
+            if (currentStepId === 'review' && !duplicateRecheckDone) await refreshDuplicateReport(true);
+        } catch (error: unknown) {
+            if (current()) toasts.error(extractErrorMessage(error, $t('common.errorOccurred')));
+        }
+    }
+
+    async function handleInspectedAssetUpdated() {
+        const request = ++inspectRequestEpoch;
+        inspectAssetData = null;
+        inspectAssetLoading = true;
+        try {
+            await refreshAssetCatalog();
+        } finally {
+            if (request === inspectRequestEpoch) inspectAssetLoading = false;
         }
     }
 
@@ -2607,6 +2717,7 @@ ${arrow}<span>${label}</span></span>`,
     }
 
     function resetDownstreamState() {
+        invalidateCandidateRequests();
         mergedTransactions = [];
         assetResolutions = [];
         assetGroups = [];
@@ -2627,6 +2738,7 @@ ${arrow}<span>${label}</span></span>`,
 
     function goToStep(target: StepId) {
         if (!isStepBeforeCurrent(target)) return;
+        invalidateCandidateRequests();
         if (target === 'upload') selectedFiles = [];
         if (target === 'upload' || target === 'select') resetDownstreamState();
         currentStepId = target;
@@ -2639,9 +2751,19 @@ ${arrow}<span>${label}</span></span>`,
      * on a stale "nothing to arbitrate" or shown with the plugin's original verdict.
      */
     async function enterNextActiveStep(from: StepId) {
+        const navigation = ++navigationEpoch;
+        const current = () => open && navigation === navigationEpoch && currentStepId === from;
+        if (!(await refreshCandidates())) return;
+        if (!current()) return;
+        if (from === 'duplicates' && !duplicateRecheckDone) {
+            await refreshDuplicateReport();
+            if (!current()) return;
+            if (stepIsActive('duplicates')) return;
+        }
         for (let i = STEP_ORDER.indexOf(from) + 1; i < STEP_ORDER.length; i++) {
             const id = STEP_ORDER[i];
             if (id === 'duplicates') await refreshDuplicateReport();
+            if (!current()) return;
             if (stepIsActive(id)) {
                 currentStepId = id;
                 return;
@@ -2651,6 +2773,7 @@ ${arrow}<span>${label}</span></span>`,
     }
 
     function goNext() {
+        if (candidatesRefreshing || duplicateRecheckRunning) return;
         if (currentStepId === 'upload') {
             uploadAllPendingFiles().then(() => {
                 currentStepId = 'select';
@@ -2675,11 +2798,12 @@ ${arrow}<span>${label}</span></span>`,
         } else if (currentStepId === 'fix') {
             enterNextActiveStep('fix');
         } else if (currentStepId === 'duplicates') {
-            currentStepId = 'review';
+            void enterNextActiveStep('duplicates');
         }
     }
 
     function goBack() {
+        invalidateCandidateRequests();
         if (currentStepId === 'analyze' && parseParsing) {
             abortParsing = true;
         }
@@ -2907,11 +3031,15 @@ ${arrow}<span>${label}</span></span>`,
             }
             brokerFilesMap = map;
 
-            // Auto-expand brokers with files
-            expandedBrokers = new Set(allBrokerIds.filter((id) => (map.get(id)?.length ?? 0) > 0));
+            const step1FileIds = new Set(pendingFiles.filter((f) => f.status === 'uploaded' && f.serverFileId).map((f) => f.serverFileId!));
+            expandedBrokers = new Set(
+                allBrokerIds.filter((id) => {
+                    const files = map.get(id) ?? [];
+                    return step1FileIds.size > 0 ? files.some((file) => step1FileIds.has(file.file_id)) : files.length > 0;
+                }),
+            );
 
             // T7: Pre-select files uploaded in Step 1 + auto-pick plugin
-            const step1FileIds = new Set(pendingFiles.filter((f) => f.status === 'uploaded' && f.serverFileId).map((f) => f.serverFileId!));
             for (const [brokerId, brokerFiles] of brokerFilesMap) {
                 for (const bf of brokerFiles) {
                     if (step1FileIds.has(bf.file_id) && !selectedFiles.some((s) => s.fileId === bf.file_id)) {
@@ -3557,7 +3685,13 @@ ${arrow}<span>${label}</span></span>`,
     <!-- ================================================================== -->
     <!-- Content -->
     <!-- ================================================================== -->
-    <div class="p-5 space-y-4 max-h-[65vh] overflow-y-auto">
+    <div class="p-5 space-y-4 max-h-[65vh] overflow-y-auto" data-testid="import-wizard-content" aria-busy={candidatesRefreshing || duplicateRecheckRunning || importPreparing} data-busy={candidatesRefreshing || duplicateRecheckRunning || importPreparing}>
+        {#if candidatesError}
+            <div role="alert" class="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300" data-testid="import-wizard-candidates-error">
+                <p>{candidatesError}</p>
+                <button type="button" class="mt-2 underline disabled:opacity-50" disabled={candidatesRefreshing} onclick={() => void refreshCandidates()} data-testid="import-wizard-candidates-retry">{$t('common.retry')}</button>
+            </div>
+        {/if}
         <!-- ============================================================ -->
         <!-- Step 1: Upload & Assign Broker -->
         <!-- ============================================================ -->
@@ -3676,7 +3810,7 @@ ${arrow}<span>${label}</span></span>`,
                             {$t('importWizard.selectedCount', {values: {n: selectedFiles.length, b: selectedBrokerCount}})}
                         </span>
                         <div class="flex items-center gap-2">
-                            <ColumnVisibilityToggle tableRef={tableRefs[0]} additionalTableRefs={tableRefs.slice(1)} />
+                            <ColumnVisibilityToggle tableRef={tableRefs.find((table) => table != null)} additionalTableRefs={tableRefs.filter((table) => table != null).slice(1)} />
                         </div>
                     </div>
 
@@ -3689,9 +3823,15 @@ ${arrow}<span>${label}</span></span>`,
                     {#each brokers as broker, brokerIdx}
                         {@const brokerFiles = brokerFilesMap.get(broker.id) ?? []}
                         {#if brokerFiles.length > 0}
-                            <div class="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                            <div class="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden" data-testid={`import-wizard-broker-files-${broker.id}`}>
                                 <!-- Broker header (collapsible) -->
-                                <button type="button" class="w-full flex items-center gap-2 px-3 py-2.5 bg-gray-50 dark:bg-slate-800 hover:bg-gray-100 dark:hover:bg-slate-750 text-left" onclick={() => toggleBrokerExpand(broker.id)}>
+                                <button
+                                    type="button"
+                                    class="w-full flex items-center gap-2 px-3 py-2.5 bg-gray-50 dark:bg-slate-800 hover:bg-gray-100 dark:hover:bg-slate-750 text-left"
+                                    onclick={() => toggleBrokerExpand(broker.id)}
+                                    aria-expanded={expandedBrokers.has(broker.id)}
+                                    data-testid={`import-wizard-broker-toggle-${broker.id}`}
+                                >
                                     {#if expandedBrokers.has(broker.id)}
                                         <ChevronDown size={14} class="text-gray-400" />
                                     {:else}
@@ -3728,9 +3868,11 @@ ${arrow}<span>${label}</span></span>`,
                                             enableSorting={true}
                                             enableColumnFilters={true}
                                             enableColumnResize={true}
-                                            enablePagination={false}
+                                            enablePagination={brokerFiles.length > 5}
+                                            alwaysShowPagination={brokerFiles.length > 5}
                                             enableColumnVisibility={false}
-                                            defaultPageSize={100}
+                                            defaultPageSize={5}
+                                            pageSizeOptions={[5, 10, 25, 50, 100, 0]}
                                             tableLayout="auto"
                                             stickyActions={false}
                                             enableContextMenu={true}
@@ -3757,7 +3899,7 @@ ${arrow}<span>${label}</span></span>`,
             <!-- Step 3: Parse Engine -->
             <!-- ============================================================ -->
         {:else if currentStepId === 'analyze'}
-            <div class="flex flex-col gap-4 p-4" data-testid="import-wizard-step3" data-parse-state={parseState}>
+            <div class="flex flex-col gap-4 p-4" data-testid="import-wizard-step3" data-parse-state={parseState} data-busy={candidatesRefreshing || duplicateRecheckRunning} aria-busy={candidatesRefreshing || duplicateRecheckRunning}>
                 <!-- Progress bar -->
                 <div class="space-y-1">
                     <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
@@ -4100,7 +4242,19 @@ ${arrow}<span>${label}</span></span>`,
             <!-- Step 4: Review & Import -->
             <!-- ============================================================ -->
         {:else if currentStepId === 'review'}
-            <div class="flex flex-col gap-4 h-full overflow-y-auto" data-testid="import-wizard-step4" data-busy={autoFixingBrokerId !== null || recheckingOpenings} data-selected-count={step4SelectedCount} data-total-count={step4TotalCount}>
+            <div
+                class="flex flex-col gap-4 h-full overflow-y-auto"
+                data-testid="import-wizard-step4"
+                data-busy={autoFixingBrokerId !== null || recheckingOpenings || candidatesRefreshing || duplicateRecheckRunning || importPreparing || inspectAssetLoading}
+                aria-busy={autoFixingBrokerId !== null || recheckingOpenings || candidatesRefreshing || duplicateRecheckRunning || importPreparing || inspectAssetLoading}
+                data-selected-count={step4SelectedCount}
+                data-total-count={step4TotalCount}
+            >
+                {#if duplicateRecheckError}
+                    <div data-testid="import-wizard-duplicate-recheck-error">
+                        <InfoBanner variant="error" message={$t('importWizard.duplicateRecheckFailed', {values: {error: duplicateRecheckError}})} />
+                    </div>
+                {/if}
                 <!-- ── Resolve Assets section ─────────────────────────── -->
                 {#if assetResolutions.length > 0}
                     <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden" data-testid="import-wizard-resolve-section">
@@ -4126,6 +4280,15 @@ ${arrow}<span>${label}</span></span>`,
                                 {/if}
                             </div>
                         </button>
+
+                        {#if step4MissingAssetCount > 0}
+                            <div class="px-3 pt-3" data-testid="import-wizard-manual-asset-help">
+                                <InfoBanner variant="info">
+                                    <p class="font-semibold mb-1">{$t('importWizard.manualAssets.title')}</p>
+                                    <p>{$t('importWizard.manualAssets.body')}</p>
+                                </InfoBanner>
+                            </div>
+                        {/if}
 
                         {#if step4ShowResolveSection}
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-3 p-3">
@@ -4421,7 +4584,13 @@ ${arrow}<span>${label}</span></span>`,
                     </span>
                 {/if}
             </div>
-            <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed" onclick={goNext} disabled={!step3CanContinue} data-testid="import-wizard-continue">
+            <button
+                type="button"
+                class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                onclick={goNext}
+                disabled={!step3CanContinue || candidatesRefreshing || duplicateRecheckRunning}
+                data-testid="import-wizard-continue"
+            >
                 {$t('common.continue')} ▶
             </button>
             <!--
@@ -4446,7 +4615,7 @@ ${arrow}<span>${label}</span></span>`,
                     </span>
                 {/if}
             </div>
-            <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90" onclick={goNext} data-testid="import-wizard-assets-continue">
+            <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50" onclick={goNext} disabled={candidatesRefreshing || duplicateRecheckRunning} data-testid="import-wizard-assets-continue">
                 {$t('common.continue')} ▶
             </button>
         {:else if currentStepId === 'fix'}
@@ -4466,7 +4635,13 @@ ${arrow}<span>${label}</span></span>`,
                     </span>
                 {/if}
             </div>
-            <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed" onclick={goNext} disabled={fixStepPendingCount > 0 || duplicateRecheckRunning} data-testid="import-wizard-fix-continue">
+            <button
+                type="button"
+                class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                onclick={goNext}
+                disabled={fixStepPendingCount > 0 || duplicateRecheckRunning || candidatesRefreshing}
+                data-testid="import-wizard-fix-continue"
+            >
                 {#if duplicateRecheckRunning}
                     <LoadingSpinner size="sm" />
                 {:else}
@@ -4490,7 +4665,7 @@ ${arrow}<span>${label}</span></span>`,
                     </span>
                 {/if}
             </div>
-            <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90" onclick={goNext} data-testid="import-wizard-duplicates-continue">
+            <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50" onclick={goNext} disabled={candidatesRefreshing || duplicateRecheckRunning} data-testid="import-wizard-duplicates-continue">
                 {$t('common.continue')} ▶
             </button>
         {:else}
@@ -4719,17 +4894,7 @@ ${arrow}<span>${label}</span></span>`,
 
 <!-- Asset inspection from the resolution step — the picked instrument, in full -->
 {#if inspectAssetData !== null}
-    <AssetModal
-        open={true}
-        editMode={true}
-        editData={inspectAssetData as never}
-        zIndex={90}
-        onupdated={() => {
-            inspectAssetData = null;
-            void refreshAllAssets();
-        }}
-        onclose={() => (inspectAssetData = null)}
-    />
+    <AssetModal open={true} editMode={true} editData={inspectAssetData} zIndex={90} onupdated={handleInspectedAssetUpdated} onclose={() => (inspectAssetData = null)} />
 {/if}
 
 <!-- Asset creation from the correction step — seeded with the row's own description -->
@@ -4758,7 +4923,7 @@ ${arrow}<span>${label}</span></span>`,
         oncreated={(assetId) => {
             fixCreatedAssets = {...fixCreatedAssets, [fixCreateAssetIndex!]: assetId};
             fixCreateAssetIndex = null;
-            void refreshAllAssets();
+            void refreshAssetCatalog();
         }}
         onclose={() => (fixCreateAssetIndex = null)}
     />

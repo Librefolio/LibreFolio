@@ -674,6 +674,7 @@ nav:
                   - Finpension: user/transactions/import/finpension.md
                   - Parqet: user/transactions/import/parqet.md
                   - Generic CSV: user/transactions/import/generic-csv.md
+      - 🧰 Tools: user/tools/index.md
       - 📈 Assets:
           - Overview: user/assets/index.md
           - Create & Edit: user/assets/create-edit.md
@@ -852,6 +853,7 @@ nav:
                   - Asset Plugin Guide: developer/architecture/patterns/asset_plugin_guide.md
                   - FX Plugin Guide: developer/architecture/patterns/fx_plugin_guide.md
                   - Signal Plugin Guide: developer/architecture/patterns/signal_plugin_guide.md
+                  - Tool Plugin Guide: developer/architecture/patterns/tool_plugins.md
               - 🧠 AI Export:
                   - Overview: developer/architecture/patterns/ai_export_snapshot.md
                   - Composition & Prompt: developer/architecture/patterns/ai_export_composition.md

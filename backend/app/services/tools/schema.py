@@ -9,12 +9,48 @@ from typing import Literal
 from pydantic import BaseModel, JsonValue, TypeAdapter
 
 from backend.app.services.tools.base import ToolDefinitionError
-from backend.app.services.tools.wire import encode_json
+from backend.app.services.tools.wire import MAX_SAFE_JSON_INTEGER, encode_json
 
 _SCHEMA_DOCUMENT = TypeAdapter(dict[str, JsonValue])
 _SCHEMA_MAPS = ("$defs", "definitions", "properties", "patternProperties", "dependentSchemas")
 _SCHEMA_ARRAYS = ("allOf", "anyOf", "oneOf", "prefixItems")
 _SCHEMA_SINGLE = ("items", "additionalProperties", "unevaluatedProperties", "contains", "propertyNames", "not", "if", "then", "else")
+_CODEGEN_SCHEMA_KEYS = frozenset(
+    {
+        "$defs",
+        "$ref",
+        "$schema",
+        "additionalProperties",
+        "allOf",
+        "anyOf",
+        "const",
+        "default",
+        "deprecated",
+        "description",
+        "discriminator",
+        "enum",
+        "examples",
+        "exclusiveMaximum",
+        "exclusiveMinimum",
+        "format",
+        "items",
+        "maxItems",
+        "maximum",
+        "maxLength",
+        "minItems",
+        "minimum",
+        "minLength",
+        "multipleOf",
+        "oneOf",
+        "pattern",
+        "properties",
+        "readOnly",
+        "required",
+        "title",
+        "type",
+        "writeOnly",
+    }
+)
 
 
 def walk_schema(schema: dict[str, JsonValue]) -> Iterator[dict[str, JsonValue]]:
@@ -89,6 +125,8 @@ def _require_strict_models(adapter: TypeAdapter, mode: Literal["validation", "se
                 continue
             visited.add(id(node))
         if isinstance(node, dict):
+            if node.get("type") in {"typed-dict", "dataclass", "dataclass-args"}:
+                raise ToolDefinitionError("invalid_input_model" if mode == "validation" else "invalid_output_model")
             if node.get("type") == "model":
                 model_class = node.get("cls")
                 config = node.get("config", {})
@@ -102,12 +140,48 @@ def _require_strict_models(adapter: TypeAdapter, mode: Literal["validation", "se
         raise ToolDefinitionError("invalid_input_model" if mode == "validation" else "invalid_output_model")
 
 
+def require_roundtrip_output(adapter: TypeAdapter) -> None:
+    """Reject output shapes that Pydantic cannot validate from their own wire form."""
+    pending: list[object] = [adapter.core_schema]
+    visited: set[int] = set()
+    while pending:
+        node = pending.pop()
+        if isinstance(node, (dict, list)):
+            if id(node) in visited:
+                continue
+            visited.add(id(node))
+        if isinstance(node, dict):
+            if node.get("computed_fields"):
+                raise ToolDefinitionError("invalid_output_model")
+            serialization_alias = node.get("serialization_alias")
+            validation_alias = node.get("validation_alias")
+            if serialization_alias != validation_alias:
+                raise ToolDefinitionError("invalid_output_model")
+            pending.extend(node.values())
+        elif isinstance(node, list):
+            pending.extend(node)
+
+
+def _constrain_integer(node: dict[str, JsonValue]) -> None:
+    if node.get("type") != "integer":
+        return
+    minimum = node.get("minimum")
+    maximum = node.get("maximum")
+    node["minimum"] = max(minimum, -MAX_SAFE_JSON_INTEGER) if isinstance(minimum, (int, float)) else -MAX_SAFE_JSON_INTEGER
+    node["maximum"] = min(maximum, MAX_SAFE_JSON_INTEGER) if isinstance(maximum, (int, float)) else MAX_SAFE_JSON_INTEGER
+    if node["minimum"] > node["maximum"]:
+        raise ToolDefinitionError("invalid_schema")
+
+
 def generate_tool_schema(adapter: TypeAdapter, mode: Literal["validation", "serialization"]) -> dict[str, JsonValue]:
     _require_strict_models(adapter, mode)
     schema = _SCHEMA_DOCUMENT.validate_python(adapter.json_schema(mode=mode), strict=True)
     schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
     encode_json(schema, max_depth=64)
     for node in walk_schema(schema):
+        if any(key not in _CODEGEN_SCHEMA_KEYS and not key.startswith("x-") for key in node):
+            raise ToolDefinitionError("invalid_schema")
+        _constrain_integer(node)
         if "$dynamicRef" in node or "$recursiveRef" in node or "$id" in node:
             raise ToolDefinitionError("invalid_schema")
         reference = node.get("$ref")

@@ -187,7 +187,10 @@
       "bondQuoteBaseHint": "Les obligations sont généralement cotées pour 100 de nominal (ex. BTP) : vérifiez cette valeur — elle est généralement de 100.",
       "activeTooltip": "Si l'actif est actif, il sera mis à jour automatiquement par le planificateur et restera visible dans les sélecteurs. Désactivez-le pour le masquer lorsque vous ne le détenez plus et que vous ne souhaitez plus télécharger ses prix.",
       "quoteBaseMin": "Doit être au moins 1",
-      "quoteBaseInteger": "Nombres entiers uniquement"
+      "quoteBaseInteger": "Nombres entiers uniquement",
+      "currencyHelp": "Devise utilisée pour enregistrer les prix de cet actif.",
+      "currencyHelpLabel": "À propos de la devise de l’actif",
+      "nameRequired": "Saisissez le nom de l'actif pour continuer."
     },
     "provider": {
       "assignment": "Attribution du Fournisseur",
@@ -707,7 +710,12 @@
       "sectionArchive": "Dans l’archive",
       "create": "Créer un nouvel actif",
       "createNamed": "Créer « {name} »"
-    }
+    },
+    "manualAssets": {
+      "title": "Actifs à créer manuellement",
+      "body": "Associez un actif existant ou créez-le manuellement. Les prochains imports reconnaîtront son identifiant enregistré si la correspondance est unique."
+    },
+    "selectionChangedReview": "Le dernier contrôle des doublons a modifié la sélection. Vérifiez-la avant l'import."
   },
   "brokers": {
     "title": "Courtiers",
@@ -1018,7 +1026,14 @@
     "deleteBlockedMessage": "Impossible de supprimer : ce courtier a {count} transaction(s).",
     "forceCascadeDelete": "Supprimer le courtier et les transactions",
     "goToTransactions": "Aller aux transactions",
-    "deleteFailed": "Impossible de supprimer le courtier"
+    "deleteFailed": "Impossible de supprimer le courtier",
+    "duplicateNameRecovery": "Pour résoudre ce problème, renommez le courtier existant ou choisissez un autre nom pour celui que vous essayez d’ajouter.",
+    "duplicateNameOwn": "Vous avez déjà un courtier nommé « {name} ».",
+    "duplicateNameOwned": "Le courtier « {name} » existe déjà (propriétaire : « {owner} »).",
+    "duplicateNameExists": "Un courtier nommé « {name} » existe déjà.",
+    "deleted": "Courtier « {name} » supprimé.",
+    "deletedWithTransactions": "Courtier « {name} » et {count} transactions supprimés.",
+    "created": "Courtier « {name} » créé."
   },
   "chart": {
     "tooltip": {
@@ -2056,7 +2071,12 @@
       "suggestLightbulb": "Afficher suggestion",
       "partnerInaccessible": "Partenaire sur courtier inaccessible",
       "eventTooltipAmount": "Montant",
-      "splitHint": "Pour supprimer un seul côté, utilisez d'abord Scinder pour dissocier la paire."
+      "splitHint": "Pour supprimer un seul côté, utilisez d'abord Scinder pour dissocier la paire.",
+      "workspaceRows": "Lignes de l’espace de travail : {rows}",
+      "dateSortHint": "La date est le critère principal. Les paires restent groupées : date de l’opération la plus ancienne, puis la plus récente et identifiant stable de la ligne.",
+      "balanceGroupOutsideWorkspace": "Aucune ligne de cet espace de travail ne contribue à ce groupe. Consultez l’historique du courtier.",
+      "workspaceRowHint": "Position dans le tri actuel. a/b désignent les deux côtés d'une paire, pas des identifiants de transaction.",
+      "issueRowsHidden": "Les lignes concernées sont masquées par les filtres du tableau."
     },
     "commit": {
       "serverError": "Sauvegarde impossible — erreur serveur"
@@ -2298,7 +2318,11 @@
     "size": "Taille",
     "zoomIn": "Zoom avant",
     "zoomOut": "Zoom arrière",
-    "previewAutofitHint": "Double-cliquez sur l’en-tête d’une colonne pour ajuster sa largeur"
+    "previewAutofitHint": "Double-cliquez sur l’en-tête d’une colonne pour ajuster sa largeur",
+    "uploader": "Téléversé par",
+    "uploaderHint": "Utilisateur ayant téléversé le fichier.",
+    "noUploader": "Utilisateur non indiqué",
+    "uploaderLookupFailed": "Impossible de charger les noms des utilisateurs. Les fichiers restent accessibles avec leurs identifiants."
   },
   "donationPopup": {
     "title": "LibreFolio grandit grâce à des utilisateurs comme vous !",
@@ -3090,13 +3114,19 @@
     "expandAll": "Tout déplier",
     "collapseAll": "Tout replier",
     "checkNow": "Vérifier les mises à jour",
-    "upToDate": "Vous utilisez la dernière version.",
+    "upToDate": "Vous utilisez la dernière version !",
     "askAdmin": "Une version plus récente existe. Demandez à un administrateur de mettre à jour :",
     "searchResults": "Résultats :",
     "copyEmail": "Copier l'email",
     "copied": "Copié !",
     "askAdminTitle": "Mise à jour disponible — contactez un administrateur",
-    "emailCopied": "Email copiée dans le presse-papiers"
+    "emailCopied": "Email copiée dans le presse-papiers",
+    "detectedRemoteVersion": "Version détectée en ligne : {version}",
+    "checkFailed": "Impossible de terminer la recherche de mises à jour. Réessayez.",
+    "noStableRelease": "Aucune version stable n’a été trouvée sur GitHub.",
+    "imagePending": "Une version stable plus récente a été détectée, mais son image Docker n’est pas encore disponible.",
+    "imageCheckFailed": "Une version stable plus récente a été détectée, mais son image Docker n’a pas pu être vérifiée. Réessayez.",
+    "adminLookupFailed": "Une mise à jour est disponible, mais la liste des administrateurs n’a pas pu être chargée."
   },
   "providerErrors": {
     "NO_DATA": "Aucune donnée disponible pour cet instrument chez le fournisseur.",
@@ -3109,5 +3139,168 @@
     "PARSE_ERROR": "La réponse du fournisseur n'a pas pu être analysée.",
     "SCRAPE_ERROR": "La page du fournisseur n'a pas pu être lue.",
     "UNSUPPORTED_PAGE": "Le fournisseur a trouvé cet instrument mais sa page de marché n'est pas encore lisible. Ouvrez une issue sur GitHub (Librefolio/LibreFolio) en indiquant cet ISIN pour que le support soit ajouté."
+  },
+  "support": {
+    "title": "Soutenir LibreFolio",
+    "description": "Offrez un café ou faites découvrir le projet.",
+    "shareDivider": "Ou partagez",
+    "shareOn": "Partager sur",
+    "share": {
+      "titleLabel": "Titre suggéré",
+      "x": {
+        "message": "Salut ! Je suis mes investissements avec LibreFolio et j'adore. Essaie-la aussi !\n#LibreFolio #OpenSource #AutoHebergement #Investissement #ViePrivee",
+        "hint": "Le lien du projet est ajouté à la copie et au post. X s'ouvre dans un nouvel onglet."
+      },
+      "reddit": {
+        "title": "Je teste LibreFolio pour suivre mon portefeuille sur mon serveur",
+        "message": "Je cherchais une façon plus simple de suivre mes investissements sans confier toutes les données de mon portefeuille à un service externe. Ces derniers jours, je teste LibreFolio et j'apprécie de tout retrouver au même endroit.\n\nC'est un logiciel open source à installer sur son propre serveur pour organiser son portefeuille et en explorer les performances, tout en gardant le contrôle de ses données. Si cela peut vous être utile, jetez-y un œil !",
+        "hint": "Nous ouvrons un post texte avec un titre et un corps séparés. Si Reddit laisse le corps vide, collez le texte déjà copié."
+      },
+      "facebook": {
+        "message": "Ces derniers temps, j'utilise LibreFolio pour garder un œil sur mes investissements. J'aime retrouver toutes les informations au même endroit sans renoncer au contrôle de mes données.\n\nSi vous cherchez un outil de suivi de portefeuille open source à héberger sur votre serveur, découvrez-le !",
+        "hint": "Facebook prépare uniquement l'aperçu du lien. Après l'ouverture, collez le texte copié dans le message de la publication.",
+        "afterCopy": "Texte et lien copiés. Collez le texte dans le message de votre publication Facebook."
+      },
+      "instagram": {
+        "message": "Un peu plus d'ordre dans mes investissements, sans laisser mes données ailleurs. Je teste LibreFolio : un outil open source de suivi de portefeuille à héberger sur son propre serveur.\n\n#LibreFolio #OpenSource #AutoHebergement #Investissement #ViePrivee",
+        "hint": "Instagram ne peut pas préparer une publication à partir de ce lien. Après l'ouverture, choisissez Créer (+), sélectionnez une photo ou une vidéo, puis collez la légende copiée.",
+        "afterCopy": "Légende et lien copiés. Sur Instagram : Créer (+), choisir la photo/vidéo, puis coller la légende."
+      },
+      "tiktok": {
+        "message": "Mon nouvel allié pour suivre mon portefeuille : LibreFolio. Open source, sur mon serveur, avec mes données sous mon contrôle. Si vous aimez bidouiller, découvrez-le !\n\n#LibreFolio #OpenSource #AutoHebergement #FinancesPersonnelles",
+        "hint": "Nous ouvrons la page d'importation de TikTok ; connectez-vous si nécessaire. Sélectionnez votre vidéo, puis collez la légende copiée. Aucune vidéo ni aucun texte n'est envoyé automatiquement.",
+        "afterCopy": "Légende et lien copiés. Sur la page d'importation TikTok, sélectionnez la vidéo et collez la légende."
+      }
+    },
+    "shareMessageLabel": "Message suggéré",
+    "clipboardUnavailable": "Impossible de copier dans le presse-papiers. Autorise son accès et réessaie.",
+    "copyAndGo": "Copier et ouvrir",
+    "navigationFailed": "Texte et lien copiés, mais le réseau social n'a pas pu être ouvert. Autorise les fenêtres pop-up et réessaie."
+  },
+  "tools": {
+    "title": "Outils",
+    "subtitle": "Calculs indépendants. Aucune modification du portefeuille n'est enregistrée.",
+    "open": "Ouvrir l'outil",
+    "contractVersion": "Contrat",
+    "implementationVersion": "Implémentation",
+    "status": {
+      "unavailable": "Indisponible",
+      "available": "Disponible"
+    },
+    "authRequired": "Connectez-vous pour utiliser les outils.",
+    "documentationUnavailable": "Lien vers la documentation indisponible",
+    "catalog": {
+      "emptyTitle": "Aucun outil disponible",
+      "emptyDescription": "Le catalogue n'a renvoyé aucun outil opérationnel. Rechargez après l'installation ou la réparation d'un outil.",
+      "degraded": "Entrées du backend indisponibles : {count}.",
+      "uiUnavailable": "Interfaces indisponibles dans cette build : {count}.",
+      "degradedToast": "Outils chargés avec des entrées ou interfaces indisponibles. Consultez le catalogue pour les détails.",
+      "diagnosticsHint": "Les diagnostics en lecture seule sont disponibles dans Paramètres → À propos → Diagnostics des plugins.",
+      "unavailableEntries": "Entrées du backend indisponibles",
+      "unknownTool": "Outil non identifié"
+    },
+    "availability": {
+      "notInstalled": "Cet outil ne figure pas dans le catalogue actuel du backend.",
+      "backendUnavailable": "Cet outil est indisponible sur le backend. Aucun calcul n'a été lancé.",
+      "incompatible": "Cet outil nécessite une build frontend compatible. Aucun calcul n'a été lancé.",
+      "rendererMissing": "L'outil backend est installé, mais son interface n'est pas incluse dans cette build frontend. Aucun calcul n'a été lancé.",
+      "rendererInvalid": "L'enregistrement de l'interface compilée est invalide ou dupliqué. Aucun calcul n'a été lancé."
+    },
+    "host": {
+      "loadingInterface": "Chargement de l'interface de l'outil…",
+      "reloadTitle": "Recharger l'outil ?",
+      "reloadWarning": "Le rechargement remplace l'interface de l'outil et supprime son brouillon actuel. Continuer ?"
+    },
+    "errors": {
+      "network": "Le service des outils est injoignable. Vérifiez votre connexion et relancez la demande.",
+      "timeout": "Le délai de la demande à l'outil a expiré. Aucun résultat n'a été accepté et aucune nouvelle tentative automatique n'a été effectuée.",
+      "requestRejected": "Le serveur a refusé la demande à l'outil.",
+      "requestInvalid": "La demande à l'outil a échoué à la validation structurelle locale.",
+      "protocol": "La réponse du serveur ne correspond pas au contrat attendu pour l'outil.",
+      "mismatch": "Les métadonnées de l'outil ne correspondent plus à ce frontend. Rechargez explicitement pour obtenir des métadonnées à jour.",
+      "internal": "Une erreur inattendue s'est produite dans l'interface de l'outil.",
+      "componentLoad": "Impossible de charger l'interface de l'outil.",
+      "componentMount": "Impossible d'ouvrir l'interface de l'outil.",
+      "cleanup": "La vue de l'outil a été supprimée, mais la libération de ses ressources a signalé une erreur.",
+      "sessionChanged": "Le compte a changé. Les données précédentes de l'outil ont été effacées.",
+      "stopped": "Attente interrompue. Cela ne confirme pas l'annulation sur le serveur."
+    },
+    "metrics": {
+      "title": "Durées du backend",
+      "description": "Mesurées par le backend, hors temps réseau. Les phases peuvent se chevaucher ; les durées des éléments parallèles ne sont pas additionnées pour obtenir la durée de la demande.",
+      "milliseconds": "{value} ms",
+      "serverProcessing": "Demande · traitement serveur",
+      "itemTotal": "Élément · total",
+      "queueWait": "Attente en file",
+      "startup": "Démarrage du worker",
+      "inputValidation": "Validation des entrées",
+      "compute": "Calcul",
+      "outputValidation": "Validation de la sortie",
+      "serialization": "Sérialisation de la sortie",
+      "execution": "Exécution du worker",
+      "cleanup": "Libération des ressources"
+    },
+    "about": {
+      "readOnly": "Catalogue et diagnostics en lecture seule. Aucun calcul, test actif ni réparation n'est lancé.",
+      "inactive": "Ouvrez Diagnostics des plugins pour charger les métadonnées des outils.",
+      "interfaceRegistered": "Interface compatible enregistrée dans cette build."
+    },
+    "diagnostics": {
+      "title": "Diagnostics des outils",
+      "scopeDescription": "Cet instantané décrit un seul processus API ayant répondu, pas l'instance entière. Le catalogue et les diagnostics proviennent de lectures distinctes. Rechargez pour actualiser l'instantané.",
+      "scope": "Portée de l'instantané",
+      "runtime": "Identifiant du processus API",
+      "degraded": "Des échecs de découverte ou une capacité d'exécution réduite ont été signalés. D'autres outils peuvent rester disponibles.",
+      "pool": {
+        "title": "Instantané du pool d'exécution",
+        "availability": "Disponibilité du pool d'exécution",
+        "active": "Tâches actives",
+        "queued": "Tâches en file",
+        "pending": "Tâches en attente",
+        "degradedLanes": "Emplacements dégradés",
+        "completed": "Tâches terminées",
+        "failed": "Tâches en échec"
+      },
+      "loaded": "Outils chargés dans ce processus API",
+      "noLoaded": "Aucun outil n'est chargé dans ce processus API.",
+      "failures": "Échecs de découverte",
+      "noFailures": "Aucun échec de découverte n'a été signalé dans cet instantané.",
+      "notLoaded": "Aucun instantané de diagnostic n'est chargé. Rechargez pour en demander un.",
+      "policy": {
+        "title": "Limites effectives de la plateforme",
+        "description": "Limites de configuration, pas des durées mesurées ni des garanties de performance. Les opérations des outils peuvent déclarer des limites plus strictes. Les durées ne sont pas additionnées.",
+        "workers": "Emplacements worker",
+        "maxBatchItems": "Nombre maximal d'éléments par lot",
+        "maxPendingItems": "Nombre maximal de tâches en attente",
+        "maxPendingPerPrincipal": "Nombre maximal de tâches en attente par compte",
+        "maxBatchesPerPrincipal": "Nombre maximal de lots simultanés par compte",
+        "maxJsonDepth": "Profondeur JSON maximale",
+        "maxRequestBytes": "Taille maximale de la demande",
+        "maxParameterBytes": "Taille maximale des paramètres par élément",
+        "maxResultBytes": "Taille maximale du résultat par élément",
+        "maxResponseBytes": "Taille maximale de la réponse",
+        "envelopeReserveBytes": "Réserve de taille pour l'enveloppe",
+        "queueTimeout": "Délai maximal en file",
+        "jobTimeout": "Délai maximal strict de la tâche",
+        "softTimeout": "Délai coopératif de la tâche",
+        "outputReserve": "Réserve de temps pour la sortie",
+        "cleanupTimeout": "Délai maximal de libération des ressources",
+        "ingressTimeout": "Délai maximal d'entrée de la demande",
+        "responseReserve": "Réserve de temps pour la réponse",
+        "requestTimeout": "Délai maximal de la demande côté serveur",
+        "clientTimeout": "Délai maximal du client des outils"
+      },
+      "reason": {
+        "import_failed": "Échec de l'import du plugin",
+        "invalid_plugin": "Définition du plugin invalide",
+        "invalid_code": "Code d'outil invalide",
+        "duplicate_code": "Code d'outil dupliqué ; enregistrements mis en quarantaine",
+        "invalid_descriptor": "Descripteur d'outil invalide",
+        "invalid_input_model": "Modèle d'entrée invalide",
+        "invalid_output_model": "Modèle de sortie invalide",
+        "invalid_schema": "Le schéma ne peut pas être publié",
+        "invalid_operation_policy": "Politique d'opération invalide"
+      }
+    }
   }
 }

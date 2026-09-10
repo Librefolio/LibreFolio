@@ -66,7 +66,26 @@ class OwnedProcessTree:
             leader = psutil.Process(self.group_id)
             return leader.create_time() == self.root.created_at
         except psutil.NoSuchProcess:
-            # A group can outlive its leader while descendants still hold its PGID.
+            for identity in self.known.values():
+                process = identity.current()
+                if process is None:
+                    continue
+                try:
+                    if os.getpgid(process.pid) == self.group_id:
+                        return True
+                except ProcessLookupError:
+                    continue
+            return False
+
+    def _group_exists(self) -> bool:
+        if self.group_id is None:
+            return False
+        try:
+            os.killpg(self.group_id, 0)
+            return True
+        except ProcessLookupError:
+            return False
+        except PermissionError:
             return True
 
     def _capture_group(self) -> None:
@@ -124,7 +143,7 @@ class OwnedProcessTree:
         while True:
             members = self.running_members()
             root_alive = self.process.exitcode is None
-            if not members and not root_alive:
+            if not members and not root_alive and not self._group_exists():
                 return True
             remaining = deadline - time.monotonic()
             if remaining <= 0:

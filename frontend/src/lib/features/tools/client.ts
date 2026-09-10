@@ -114,10 +114,69 @@ function newRequestId(): string {
     }
 }
 
-function encodeRequest(request: unknown): string {
+function validUnicode(value: string): boolean {
+    for (let index = 0; index < value.length; index += 1) {
+        const unit = value.charCodeAt(index);
+        if (unit >= 0xd800 && unit <= 0xdbff) {
+            const next = value.charCodeAt(index + 1);
+            if (next < 0xdc00 || next > 0xdfff) return false;
+            index += 1;
+        } else if (unit >= 0xdc00 && unit <= 0xdfff) {
+            return false;
+        }
+    }
+    return true;
+}
+
+function clonePlainJson(value: unknown, seen = new Set<object>()): unknown {
+    if (value === null || typeof value === 'boolean') return value;
+    if (typeof value === 'string') {
+        if (!validUnicode(value)) throw new ToolClientError('validation', 'invalid_request');
+        return value;
+    }
+    if (typeof value === 'number') {
+        if (!Number.isFinite(value) || (Number.isInteger(value) && !Number.isSafeInteger(value))) {
+            throw new ToolClientError('validation', 'invalid_request');
+        }
+        return value;
+    }
+    if (typeof value !== 'object' || seen.has(value)) {
+        throw new ToolClientError('validation', 'invalid_request');
+    }
+    seen.add(value);
     try {
-        const encoded = JSON.stringify(request);
-        if (typeof encoded === 'string') return encoded;
+        if (Array.isArray(value)) {
+            if (Object.getPrototypeOf(value) !== Array.prototype) throw new ToolClientError('validation', 'invalid_request');
+            const clone: unknown[] = [];
+            for (let index = 0; index < value.length; index += 1) {
+                const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+                if (!descriptor || !('value' in descriptor) || !descriptor.enumerable) {
+                    throw new ToolClientError('validation', 'invalid_request');
+                }
+                clone.push(clonePlainJson(descriptor.value, seen));
+            }
+            return clone;
+        }
+        const prototype = Object.getPrototypeOf(value);
+        if (prototype !== Object.prototype && prototype !== null) throw new ToolClientError('validation', 'invalid_request');
+        if (Object.getOwnPropertySymbols(value).length) throw new ToolClientError('validation', 'invalid_request');
+        const clone: Record<string, unknown> = Object.create(null);
+        for (const [key, descriptor] of Object.entries(Object.getOwnPropertyDescriptors(value))) {
+            if (!validUnicode(key) || !('value' in descriptor) || !descriptor.enumerable) {
+                throw new ToolClientError('validation', 'invalid_request');
+            }
+            clone[key] = clonePlainJson(descriptor.value, seen);
+        }
+        return clone;
+    } finally {
+        seen.delete(value);
+    }
+}
+
+function snapshotRequest(request: unknown): {body: string; value: unknown} {
+    try {
+        const encoded = JSON.stringify(clonePlainJson(request));
+        if (typeof encoded === 'string') return {body: encoded, value: JSON.parse(encoded)};
     } catch {
         throw new ToolClientError('validation', 'invalid_request');
     }
@@ -168,7 +227,7 @@ export async function runTool<const C extends ToolCode, const V extends ToolVers
 ): Promise<ToolItemResult<C, V>> {
     const {descriptor, correlationId, parameters, signal} = options;
     if (signal?.aborted) throw new ToolClientError('aborted', 'waiting_stopped');
-    const context = prepareToolRun(code, version, descriptor, parameters);
+    const context = prepareToolRun(code, version, descriptor);
     const request = {
         request_id: newRequestId(),
         items: [{
@@ -180,20 +239,31 @@ export async function runTool<const C extends ToolCode, const V extends ToolVers
             parameters,
         }],
     };
-    // Validate structure, but serialize the original parameters without parser-added defaults.
-    parseToolCodec(toolTransportSchemas.computeRequest, request, 'validation', 'invalid_request');
-    const body = encodeRequest(request);
+    // Snapshot plain JSON once, validate that exact wire value, then reuse its bytes.
+    const snapshot = snapshotRequest(request);
+    const validatedRequest = parseToolCodec(toolTransportSchemas.computeRequest, snapshot.value, 'validation', 'invalid_request');
+    context.validateInput(validatedRequest.items[0]?.parameters);
+    const expected: ExpectedBatch = {
+        request_id: validatedRequest.request_id,
+        items: validatedRequest.items.map((item) => ({
+            correlation_id: item.correlation_id,
+            tool_code: item.tool_code,
+            contract_version: item.contract_version,
+            implementation_version: item.implementation_version,
+            schema_fingerprint: item.schema_fingerprint,
+        })),
+    };
     try {
         return await runToolSessionTask(context.accountGeneration, async (requestSignal) => {
-            const response = await axiosInstance.post<unknown>('/api/v1/tools/compute', request, {
+            const response = await axiosInstance.post<unknown>('/api/v1/tools/compute', snapshot.value, {
                 signal: requestSignal,
                 timeout: context.clientTimeoutMs,
                 headers: {'Content-Type': 'application/json'},
                 // Keep the raw-wire snapshot stable across asynchronous request interceptors.
-                transformRequest: [() => body],
+                transformRequest: [() => snapshot.body],
             });
             assertResponseCurrent(context.accountGeneration, requestSignal);
-            const {results, ...batch} = validateBatchResponse(response.data, request);
+            const {results, ...batch} = validateBatchResponse(response.data, expected);
             const item = results[0];
             if (!item) throw new ToolClientError('protocol', 'response_count_mismatch');
             const identity = {

@@ -23,6 +23,7 @@ def list_endpoints():
     """List all API endpoints with descriptions."""
     from backend.app.main import app  # noqa: PLC0415 — schema-only Tool exports must not import the application
 
+    schema = app.openapi()
     print("=" * 80)
     print("API ENDPOINTS")
     print("=" * 80)
@@ -30,24 +31,17 @@ def list_endpoints():
 
     # Group routes by tag
     routes_by_tag = {}
-    for route in app.routes:
-        if hasattr(route, "methods") and hasattr(route, "path"):
-            # Get first line of docstring as description
-            description = ""
-            if route.endpoint and route.endpoint.__doc__:
-                description = route.endpoint.__doc__.strip().split("\n")[0]
-
-            # Get methods (exclude HEAD, OPTIONS)
-            methods = [m for m in route.methods if m not in ["HEAD", "OPTIONS"]]
-
-            # Get tags (or use 'default' if none)
-            tags = getattr(route, "tags", ["default"])
-            for t in tags:
-                if t not in routes_by_tag:
-                    routes_by_tag[t] = []
-                routes_by_tag[t].append(
-                    {"methods": methods, "path": route.path, "description": description}
-                    )
+    endpoint_count = 0
+    for path, path_item in schema.get("paths", {}).items():
+        for method, operation in path_item.items():
+            if method.upper() not in {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"} or not isinstance(operation, dict):
+                continue
+            endpoint_count += 1
+            description = operation.get("summary") or str(operation.get("description", "")).strip().split("\n")[0]
+            for tag in operation.get("tags") or ["default"]:
+                routes_by_tag.setdefault(tag, []).append(
+                    {"methods": [method.upper()], "path": path, "description": description}
+                )
 
     # Print routes grouped by tag
     for tag in sorted(routes_by_tag.keys()):
@@ -64,7 +58,7 @@ def list_endpoints():
         print()
 
     print("=" * 80)
-    print(f"Total endpoints: {len(app.routes)}")
+    print(f"Total endpoints: {endpoint_count}")
     print("=" * 80)
 
 

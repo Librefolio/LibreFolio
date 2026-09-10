@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import multiprocessing
 import os
+import select
+import struct
 import threading
 import time
 import uuid
@@ -85,9 +87,39 @@ class _ItemTicket:
     job: _OwnedJob | None = None
 
 
+def _read_exact(connection: Connection, size: int, job: _OwnedJob) -> bytes:
+    chunks = bytearray()
+    descriptor = connection.fileno()
+    while len(chunks) < size:
+        if job.cancel.is_set():
+            raise ToolExecutionError("execution_limit", retryable=True)
+        remaining = job.spec.hard_deadline - time.monotonic()
+        if remaining <= 0:
+            raise ToolExecutionError("execution_timeout", retryable=True)
+        readable, _, _ = select.select([descriptor], [], [], min(0.05, remaining))
+        if not readable:
+            if job.tree is not None and job.tree.process.exitcode is not None:
+                raise ToolExecutionError("worker_crashed")
+            continue
+        chunk = os.read(descriptor, size - len(chunks))
+        if not chunk:
+            raise ToolExecutionError("worker_crashed")
+        chunks.extend(chunk)
+    return bytes(chunks)
+
+
 def _read_frame(connection: Connection, job: _OwnedJob) -> dict[str, object]:
-    payload = connection.recv_bytes(job.spec.max_result_bytes + 65_536)
+    length = struct.unpack("!i", _read_exact(connection, 4, job))[0]
+    if length == -1:
+        length = struct.unpack("!Q", _read_exact(connection, 8, job))[0]
+    if length < 0:
+        raise ToolExecutionError("worker_crashed")
+    if length > job.spec.max_result_bytes + 65_536:
+        raise ToolExecutionError("output_limit_exceeded")
+    payload = _read_exact(connection, length, job)
     frame = plain_json_object(decode_json(payload, max_depth=job.spec.max_json_depth + 4))
+    if time.monotonic() >= job.spec.hard_deadline:
+        raise ToolExecutionError("execution_timeout", retryable=True)
     if frame.get("execution_id") != job.spec.execution_id:
         raise ToolExecutionError("worker_crashed")
     return dict(frame)
@@ -124,17 +156,16 @@ def _wait_result(response: Connection, cancellation: Connection, job: _OwnedJob)
         remaining = job.spec.hard_deadline - time.monotonic()
         if remaining <= 0:
             raise ToolExecutionError("execution_timeout", retryable=True)
-        if not response.poll(min(0.05, remaining)):
-            if job.tree is not None and job.tree.process.exitcode is not None:
-                raise ToolExecutionError("worker_crashed")
-            continue
         frame = _read_frame(response, job)
         if frame.get("kind") == "ready" and not ready:
             _accept_ready(frame, job)
             ready = True
             cancellation.send_bytes(b"\x00")
         elif frame.get("kind") == "result" and ready:
-            return _accept_result(frame, job)
+            result = _accept_result(frame, job)
+            if time.monotonic() >= job.spec.hard_deadline:
+                raise ToolExecutionError("execution_timeout", retryable=True)
+            return result
         else:
             raise ToolExecutionError("worker_crashed")
 
