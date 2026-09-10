@@ -18,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixed
 
+#### 🤖 AI Export and signal contracts
+
+- AI Export structural validation now raises typed errors for invalid component, dataset, analysis, policy and detail-level definitions even when Python runs with optimization enabled. Public IDs, versions and catalog ordering remain unchanged.
+- Technical-signal results consistently enforce the declared status matrix for precompute/runtime failures, partial undefined metrics, aligned output and paired metadata, preventing impossible API result combinations.
+
 #### 📥 Imports and transaction editing
 
 - Editing an asset from the import wizard now loads its complete saved metadata. Saving unrelated fields preserves descriptions and sector/geographic distributions; explicit clears remain possible.
@@ -47,7 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Files show who uploaded them in a sortable column, with an avatar/name multi-select filter. Uploader filters survive switching between list and grid.
 - The header hides while scrolling down and returns while scrolling up on desktop and mobile. Focus, open menus and dialogs keep it visible.
 - Preferences and broker-sharing forms retain staged Save/Undo/Reset, persisted values and role-based access after their Svelte 5 migration. Successful sharing saves close the list-page modal without another discard prompt; saving from the broker's Info tab keeps the inline editor open.
-- New FX-pair configuration closes immediately while automatic synchronization continues in the background. Creation and sync results use flagged, clickable pair links; asset-library creation success links point to the new asset without changing contextual import or transaction flows.
+- New FX-pair configuration closes immediately while automatic synchronization continues in the background. Creation and sync results use flagged, clickable pair links; linked completion feedback keeps the pair, fetched/changed counters and provider badges on one compact detail row. Asset-library creation success links point to the new asset without changing contextual import or transaction flows.
 
 ---
 
