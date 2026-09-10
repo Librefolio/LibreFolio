@@ -95,6 +95,7 @@
         differences: DiffItem[];
         /** Asset name, used by the inline identifier chooser. */
         assetName?: string;
+        zIndex?: number;
         /**
          * Applied fields, plus the resolved identifier decisions.
          * `resolutions` is keyed by field name and only carries `identifier_*` rows.
@@ -103,7 +104,7 @@
         oncancel?: () => void;
     }
 
-    let {open = $bindable(false), differences = [], assetName = '', onapply, oncancel}: Props = $props();
+    let {open = $bindable(false), differences = [], assetName = '', zIndex = 70, onapply, oncancel}: Props = $props();
 
     // =========================================================================
     // State — local copy for checkbox management
@@ -245,7 +246,7 @@
     }
 </script>
 
-<ModalBase {open} maxWidth="2xl" onRequestClose={handleCancel} zIndex={70} testId="comparison-modal">
+<ModalBase {open} maxWidth="2xl" onRequestClose={handleCancel} {zIndex} testId="comparison-modal">
     <!-- Header -->
     <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-slate-700">
         <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">

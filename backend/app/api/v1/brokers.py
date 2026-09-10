@@ -72,7 +72,7 @@ from backend.app.schemas.uploads import FilePreviewResponse
 from backend.app.services import brim_provider
 from backend.app.services.brim_parse_pool import parse_file_offloaded
 from backend.app.services.brim_provider import BRIMParseError, detect_tx_duplicates, search_asset_candidates, search_asset_candidates_bulk
-from backend.app.services.broker_service import BrokerService
+from backend.app.services.broker_service import BROKER_NAME_RECOVERY, BrokerService
 from backend.app.services.file_preview import (
     FilePreviewLinks,
     UnsupportedPreviewError,
@@ -180,7 +180,7 @@ async def create_brokers(
             logger.warning("Broker creation lost a uniqueness race", user_id=user_id)
             raise HTTPException(
                 status_code=409,
-                detail="A broker with that name already exists. Choose a different name.",
+                detail=f"A broker with that name already exists. {BROKER_NAME_RECOVERY}",
             ) from None
         logger.info(f"Created {response.success_count} brokers successfully", user_id=user_id)
     else:

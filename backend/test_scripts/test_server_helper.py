@@ -25,17 +25,16 @@ This is achieved by:
 """
 
 import os
-import signal
-import subprocess
 import threading
 import time
-from contextlib import suppress
+import urllib.parse
 
 import httpx
 import uvicorn
 
 # Import settings to get TEST_PORT
-from backend.app.config import PROJECT_ROOT, Settings
+from backend.app.config import PROJECT_ROOT, TEST_LANE_HEADER, Settings
+from scripts.cli_base import ensure_test_lane_id
 
 # Get settings
 _settings = Settings()
@@ -78,49 +77,78 @@ def check_port_available(port: int = TEST_SERVER_PORT) -> tuple[bool, str | None
     """
     import subprocess  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
+    process_info = None
     try:
-        # Use lsof to check port (works on macOS/Linux)
-        result = subprocess.run(["lsof", "-i", f":{port}"], capture_output=True, text=True)
-
+        result = subprocess.run(
+            ["lsof", "-nP", f"-iTCP:{port}", "-sTCP:LISTEN"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
         if result.returncode == 0 and result.stdout.strip():
-            # Port is occupied
-            return False, result.stdout.strip()
-        else:
-            # Port is available
+            process_info = result.stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+    if process_info:
+        return False, process_info
+
+    # lsof may be unavailable or unable to identify another user's process.
+    # Binding is the authoritative fallback: an unverifiable occupied port must
+    # still fail closed rather than be treated as free.
+    import socket  # noqa: PLC0415 — test setup — imports after sys.path/db config
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+        try:
+            # Ignore sockets left only in TIME_WAIT; a live listener still
+            # makes bind fail, preserving the occupied-port guard.
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.bind((TEST_SERVER_HOST, port))
             return True, None
-
-    except FileNotFoundError:
-        # lsof not available, try alternative method
-        import socket  # noqa: PLC0415 — test setup — imports after sys.path/db config
-
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            try:
-                s.bind(("localhost", port))
-                return True, None
-            except OSError:
-                return False, f"Port {port} is in use (unable to get process details)"
+        except OSError:
+            return False, f"Port {port} is in use (unable to get process details)"
 
 
-def print_port_occupied_help(port: int, process_info: str):
+def port_holder_pids(port: int = TEST_SERVER_PORT) -> set[int] | None:
+    """Return listening PIDs, or ``None`` when ownership cannot be verified."""
+    import subprocess  # noqa: PLC0415 — test setup — imports after sys.path/db config
+
+    try:
+        result = subprocess.run(
+            ["lsof", "-nP", f"-iTCP:{port}", "-sTCP:LISTEN", "-t"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+    if result.returncode not in (0, 1):
+        return None
+
+    holders: set[int] = set()
+    try:
+        for raw_pid in result.stdout.split():
+            holders.add(int(raw_pid))
+    except ValueError:
+        return None
+    return holders
+
+
+def print_port_occupied_help(port: int, process_info: str | None):
     """Print helpful instructions when port is occupied."""
     print(f"\n{'=' * 60}")
     print(f"⚠️  ERROR: Port {port} is already in use")
     print(f"{'=' * 60}")
-    print("\n📋 Process using the port:")
-    print(process_info)
-    print("\n💡 How to fix this:")
-    print("\n1. Check what's using the port:")
+    if process_info:
+        print("\n📋 Process using the port:")
+        print(process_info)
+    print("\nRefusing to reuse or terminate the listener because it may belong")
+    print("to another worktree's test lane.")
+    print("\nUse a unique lane for each concurrent command:")
+    print("   ./dev.py test --test-port <free-port> --data-dir <unique-dir> ...")
+    print("\nTo inspect the current listener:")
     print(f"   lsof -i :{port}")
-    print("\n2. Find the PID (Process ID) from the output above")
-    print("\n3. Kill the process:")
-    print("   kill <PID>")
-    print("   # Or forcefully:")
-    print("   kill -9 <PID>")
-    print("\n4. If it's a zombie uvicorn server:")
-    print(f"   pkill -f 'uvicorn.*{port}'")
-    print("\n5. Or kill all Python processes (⚠️  use with caution):")
-    print("   pkill -f python")
-    print("\n6. Then run the test again")
     print(f"{'=' * 60}\n")
 
 
@@ -138,52 +166,18 @@ class _TestingServerManager:
         self.server_thread = None
         self.server_started = threading.Event()
         self.project_root = PROJECT_ROOT
-        self.health_url = f"{TEST_API_BASE_URL}/system/health"
+        self.lane_id = ensure_test_lane_id()
+        query = urllib.parse.urlencode({"token": self.lane_id})
+        self.health_url = f"{TEST_API_BASE_URL}/system/test-lane-health?{query}"
         self.attached_to_shared = False
 
     def is_server_running(self) -> bool:
         """Check if test server is responding on TEST_SERVER_PORT."""
         try:
             response = httpx.get(self.health_url, timeout=2.0)
-            return response.status_code == 200
+            return response.status_code == 200 and response.headers.get(TEST_LANE_HEADER) == self.lane_id
         except Exception:
             return False
-
-    @staticmethod
-    def _force_kill_port(port: int) -> bool:
-        """
-        Kill any *foreign* processes occupying the given port (zombie cleanup).
-
-        Never kills the calling process. The test server runs as a thread inside
-        this very process, so as soon as two API modules share a pytest process
-        ``lsof`` reports our own PID — killing it would make the process SIGKILL
-        itself and take the whole run (and its coverage) down with it.
-
-        Returns:
-            bool: True if the port is held by this process, in which case there
-                  is nothing to clean up and the caller must not treat the port
-                  as occupied by a zombie.
-        """
-        self_pid = os.getpid()
-        held_by_self = False
-        with suppress(Exception):  # zombie reaping is best-effort
-            result = subprocess.run(
-                ["lsof", "-i", f":{port}", "-t"],
-                capture_output=True,
-                text=True,
-            )
-            if result.stdout.strip():
-                pids = [int(p) for p in result.stdout.strip().split("\n") if p]
-                for pid in pids:
-                    if pid == self_pid:
-                        held_by_self = True
-                        continue
-                    try:
-                        os.kill(pid, signal.SIGKILL)
-                        print(f"  ✗ Killed zombie PID {pid}")
-                    except (ProcessLookupError, PermissionError):
-                        pass
-        return held_by_self
 
     def _run_server(self):
         """Run uvicorn server in background thread (called by start_server)."""
@@ -207,11 +201,106 @@ class _TestingServerManager:
             access_log=False,
         )
 
+    @staticmethod
+    def _reject_unowned_listener(
+        holders: set[int] | None,
+        process_info: str | None,
+        *,
+        healthy: bool,
+    ) -> bool:
+        """Report a foreign/unverifiable listener and fail without touching it."""
+        foreign_pids = sorted(pid for pid in holders or set() if pid != os.getpid())
+        if foreign_pids:
+            if healthy:
+                print(f"\n❌ Healthy listener on port {TEST_SERVER_PORT} is " f"held by foreign PID(s) " f"{', '.join(str(pid) for pid in foreign_pids)}.")
+            else:
+                print(f"\n❌ Port {TEST_SERVER_PORT} is held by foreign PID(s) " f"{', '.join(str(pid) for pid in foreign_pids)}.")
+        elif healthy:
+            print(f"\n❌ Could not verify ownership of healthy listener " f"on port {TEST_SERVER_PORT}.")
+        else:
+            print(f"\n❌ Could not verify ownership of occupied port {TEST_SERVER_PORT}.")
+        print_port_occupied_help(TEST_SERVER_PORT, process_info)
+        return False
+
+    def _reuse_occupied_port(self, process_info: str | None) -> bool:
+        """Reuse only a healthy listener owned solely by this process.
+
+        ``port_holder_pids`` has three distinct outcomes here, and each is
+        handled on its own terms:
+
+        - ``None`` — lsof is unavailable/unusable, so ownership cannot be
+          verified by PID at all. The only thing that can stand in for it is
+          the lane-authenticated health check: only *our own* in-process
+          server can answer its private lane token, so a success there is
+          accepted as proof of ownership. Absent that proof, fail closed.
+        - a concrete set equal to ``{os.getpid()}`` — verified as ours.
+        - any other concrete set, including the *empty* set — lsof actually
+          ran and positively identified the holder(s) as not us (an empty set
+          still means "confirmed, and definitely not this process"). A
+          concrete answer must fail closed regardless of health, because a
+          foreign process could be relaying/proxying the health check.
+        """
+        holders = port_holder_pids(TEST_SERVER_PORT)
+
+        if holders is None:
+            if self.is_server_running():
+                print(f"✅ Reusing test server already listening on port {TEST_SERVER_PORT} " "(lsof unavailable; ownership verified via authenticated health)")
+                return True
+            return self._reject_unowned_listener(None, process_info, healthy=False)
+
+        if holders != {os.getpid()}:
+            return self._reject_unowned_listener(
+                holders,
+                process_info,
+                healthy=False,
+            )
+
+        # The port belongs to a server thread inside *this* process, so it runs
+        # the very code under test: reusing it is correct, and killing it would
+        # mean SIGKILLing ourselves.
+        if self.is_server_running():
+            print(f"✅ Reusing test server already listening on port {TEST_SERVER_PORT}")
+            return True
+        print(f"\n❌ Port {TEST_SERVER_PORT} is held by this very process " f"(PID {os.getpid()}) but no server is answering.\n" "   A previous test server thread is still bound to the port; " "it cannot be freed without killing the test run itself.")
+        return False
+
+    def _verify_new_listener(self, server_thread: threading.Thread) -> bool:
+        """Accept post-launch health only when this live process owns the port.
+
+        The caller only reaches this method after its own authenticated
+        health probe has already succeeded (see ``start_server``). That still
+        is not proof of ownership by itself — the free-port preflight and
+        uvicorn's bind are not atomic, so a foreign process could have won
+        that race and be answering in our stead. ``port_holder_pids`` settles
+        it when it can: a concrete ``{os.getpid()}`` confirms us, any other
+        concrete set (including empty) fails closed regardless of health. When
+        it returns ``None`` (lsof unavailable/unusable), ownership cannot be
+        verified by PID at all, so the launch thread being alive *and* the
+        already-succeeded authenticated health check are accepted together as
+        proof — only our own in-process server can answer that lane-specific
+        token.
+        """
+        if not server_thread.is_alive():
+            print(f"\n❌ Test server thread exited while another listener " f"answered on port {TEST_SERVER_PORT}.")
+            return False
+
+        holders = port_holder_pids(TEST_SERVER_PORT)
+        if holders is None:
+            return True
+        if holders == {os.getpid()}:
+            return True
+        return self._reject_unowned_listener(holders, None, healthy=True)
+
     def start_server(self) -> bool:
         """
         Start backend server for testing on TEST_PORT as a background thread.
 
-        Automatically kills zombie processes on the test port (--force behavior).
+        An occupied port is reused only when this pytest process demonstrably
+        owns it: either ``port_holder_pids`` names only this process, or — when
+        lsof cannot verify ownership by PID at all — the lane-authenticated
+        health check succeeds, which only our own in-process server could
+        answer. A concrete foreign or unowned PID set is never signalled and
+        must use a different test lane, even if a health probe answers.
 
         Returns:
             bool: True if server started successfully
@@ -219,33 +308,9 @@ class _TestingServerManager:
         if shared_server_mode():
             return self._attach_to_shared_server()
 
-        # Force-kill any zombie processes on the test port
         is_available, process_info = check_port_available(TEST_SERVER_PORT)
         if not is_available:
-            print(f"\n⚠️  Port {TEST_SERVER_PORT} is occupied — killing zombie process(es)...")
-            # Kills every *foreign* holder (--force behaviour): a leftover server
-            # from a previous run must die even if it still answers, otherwise we
-            # would test the stale code it has in memory. Only our own PID is
-            # spared — see below.
-            held_by_self = self._force_kill_port(TEST_SERVER_PORT)
-
-            if held_by_self:
-                # The port belongs to a server thread inside *this* process, so it
-                # runs the very code under test: reusing it is correct, and killing
-                # it would mean SIGKILLing ourselves.
-                if self.is_server_running():
-                    print(f"✅ Reusing test server already listening on port {TEST_SERVER_PORT}")
-                    return True
-                print(f"\n❌ Port {TEST_SERVER_PORT} is held by this very process (PID {os.getpid()}) but no server is answering.\n   A previous test server thread is still bound to the port; it cannot be freed without killing the test run itself.")
-                return False
-
-            time.sleep(1)
-            # Re-check
-            is_available, process_info = check_port_available(TEST_SERVER_PORT)
-            if not is_available:
-                print_port_occupied_help(TEST_SERVER_PORT, process_info)
-                return False
-            print(f"✅ Port {TEST_SERVER_PORT} is now free")
+            return self._reuse_occupied_port(process_info)
 
         # Start server in background thread
         self.server_thread = threading.Thread(
@@ -261,8 +326,17 @@ class _TestingServerManager:
         # Wait for server to be ready
         start_time = time.time()
         while time.time() - start_time < SERVER_START_TIMEOUT:
+            server_thread = self.server_thread
+            if server_thread is None or not server_thread.is_alive():
+                print(f"\n❌ Test server thread exited before it owned a healthy " f"listener on port {TEST_SERVER_PORT}.")
+                return False
+
             if self.is_server_running():
-                return True
+                # The free-port preflight and uvicorn's bind are not atomic. A
+                # foreign process can win that race and answer our health probe
+                # while this thread is still starting (or has already died).
+                # Health is therefore necessary but not proof of ownership.
+                return self._verify_new_listener(server_thread)
             time.sleep(0.5)
 
         # Server didn't start in time

@@ -11,6 +11,7 @@ from pathlib import Path
 
 import argcomplete
 
+from scripts.cli_base import configure_test_runtime
 from scripts.coverage_analysis import register_subparser as register_cov_parser
 from scripts.coverage_analysis import run_analysis as run_coverage_analysis
 
@@ -442,6 +443,7 @@ def create_parser() -> argparse.ArgumentParser:
     parser.add_argument("--log-dir", dest="log_dir", metavar="PATH", help="Write one log file per test unit into this directory (previous logs are archived). Defaults to .testLog; pass an empty string to disable", default=DEFAULT_LOG_DIR)
     parser.add_argument("--no-shared-server", dest="no_shared_server", action="store_true", help="Let each test module start its own backend (slower; escape hatch)", default=False)
     parser.add_argument("--assume-scoped", dest="assume_scoped", action="store_true", help="Experiment: run every server-backed unit in parallel, whatever the catalogue says. The reds are the work list, not a regression", default=False)
+    _add_runtime_args(parser)
 
     subparsers = parser.add_subparsers(dest="category", help="Test category to run", required=False)
 
@@ -486,6 +488,7 @@ def register_subparser(parent_subparsers):
     test_parser.add_argument("--log-dir", dest="log_dir", metavar="PATH", help="Write one log file per test unit into this directory (previous logs are archived). Defaults to .testLog; pass an empty string to disable", default=DEFAULT_LOG_DIR)
     test_parser.add_argument("--no-shared-server", dest="no_shared_server", action="store_true", help="Let each test module start its own backend (slower; escape hatch)", default=False)
     test_parser.add_argument("--assume-scoped", dest="assume_scoped", action="store_true", help="Experiment: run every server-backed unit in parallel, whatever the catalogue says. The reds are the work list, not a regression", default=False)
+    _add_runtime_args(test_parser)
 
     test_subparsers = test_parser.add_subparsers(dest="category", title="Test categories", metavar="")
 
@@ -512,9 +515,61 @@ def register_subparser(parent_subparsers):
     return test_parser
 
 
-#: Categories whose units talk HTTP to a running backend. They used to start one
-#: uvicorn each; now the runner starts a single server around the whole category.
-_SERVER_BACKED_CATEGORIES = {"api", "e2e", "all", "all-backend"}
+def _add_runtime_args(parser: argparse.ArgumentParser) -> None:
+    """Add per-invocation test lane overrides to either CLI entry point."""
+    parser.add_argument(
+        "--test-port",
+        "--port",
+        dest="test_port",
+        type=int,
+        metavar="PORT",
+        default=None,
+        help="Backend port for this test lane (default: TEST_PORT env or 6041)",
+    )
+    parser.add_argument(
+        "--data-dir",
+        metavar="PATH",
+        default=None,
+        help="Data root for this test lane (default: LIBREFOLIO_TEST_DATA_DIR or backend/data/test)",
+    )
+
+
+def _configure_runtime(args) -> bool:
+    """Apply the lane before setup, server creation, or child processes."""
+    try:
+        port, data_dir = configure_test_runtime(
+            port=getattr(args, "test_port", None),
+            data_dir=getattr(args, "data_dir", None),
+        )
+    except ValueError as exc:
+        print_error(str(exc))
+        return False
+
+    if getattr(args, "test_port", None) is not None or getattr(args, "data_dir", None) is not None:
+        print_info(f"Test runtime lane: port {port}, data {data_dir}")
+    return True
+
+
+#: Aggregate/backend categories whose units talk HTTP to a running backend.
+_SERVER_BACKED_CATEGORIES = {"api", "e2e", "all", "all-backend", "all-frontend"}
+
+
+def _requires_shared_backend(args) -> bool:
+    """Whether this invocation contains browser/API units that need a server."""
+    if getattr(args, "list_tests", False):
+        return False
+    category = getattr(args, "category", None)
+    if category in _SERVER_BACKED_CATEGORIES:
+        return True
+    if category not in _FRONTEND_CATEGORIES:
+        return False
+
+    action = getattr(args, "action", None)
+    if not action or action == "all":
+        return True
+    tests = TEST_REGISTRY.get(category, {}).get(action, {}).get("tests", ())
+    paths = [tests] if isinstance(tests, str) else list(tests or ())
+    return any(str(path).endswith(".spec.ts") for path in paths)
 
 
 @contextlib.contextmanager
@@ -529,7 +584,7 @@ def shared_backend_for(category: str, args):
     47 servers inside one pytest process, silently undoing the whole point of
     sharing one.
     """
-    if category not in _SERVER_BACKED_CATEGORIES or getattr(args, "no_shared_server", False):
+    if not _requires_shared_backend(args) or getattr(args, "no_shared_server", False):
         yield
         return
 
@@ -1085,6 +1140,9 @@ def _apply_parallel(args, verbose: bool) -> tuple:
 
 
 def _dispatch_test_command_body(args):  # noqa: C901 — flat sequential step driver, no nested logic
+    if not _configure_runtime(args):
+        return 1
+
     if not args.category:
         # Handle --run-status without category
         if getattr(args, "run_status", False):
@@ -1203,6 +1261,9 @@ def _activate_log_dir(args) -> None:
 
 def _main_body(parser, args):  # noqa: C901 — flat sequential step driver, no nested logic
     """Actual main logic (wrapped by main() for optional log teeing)."""
+    if not _configure_runtime(args):
+        return 1
+
     # Handle --run-status without category
     if getattr(args, "run_status", False):
         print(_cache_show_status())

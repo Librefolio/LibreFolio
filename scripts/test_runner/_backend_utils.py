@@ -59,6 +59,17 @@ def utils_version(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Version utility tests", verbose=verbose)
 
 
+def utils_container_registry(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the GHCR manifest/token flow without DB, server, or network."""
+    print_section("Utils: Container Registry")
+    print_info("Testing: trusted GHCR challenge parsing, token flow, status mapping, endpoint guards")
+    cmd = _build_pytest_cmd(
+        "backend/test_scripts/test_services/test_container_registry.py",
+        test_names,
+    )
+    return run_command(cmd, "Container registry tests", verbose=verbose)
+
+
 def utils_coverage_js_adapter(verbose: bool = False, test_names: list = None) -> bool:
     """Test the JS/Svelte coverage adapter that feeds coverage_analysis."""
     print_section("Utils: JS Coverage Adapter")
@@ -140,6 +151,15 @@ def utils_js_cache_fail_loud(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "JS cache fail-loud tests", verbose=verbose)
 
 
+def utils_runtime_isolation(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the runtime-isolation contract (test-mode data-dir override + CLI shapes)."""
+    print_section("Utils: Runtime Isolation")
+    print_info("Testing: runtime paths, CLI propagation, lane readiness and process ownership")
+    print_info("Tests: prod guards, dotenv/Pipenv boundaries, port collisions, symlink escapes, server/test parser shapes")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_runtime_isolation.py", test_names)
+    return run_command(cmd, "Runtime isolation tests", verbose=verbose)
+
+
 def utils_all(verbose: bool = False) -> bool:
     """Run all utility tests."""
     if _common.nothing_left_to_run("utils"):
@@ -190,6 +210,14 @@ Tests for utility modules and helper functions:
     add_test(cat, "sector-normalization", utils_sector_normalization, name="Sector Normalization", desc="FinancialSector enum, aliases")
     add_test(cat, "currency-utils", utils_currency_utils, name="Currency Utils", desc="Currency listing, flag mapping")
     add_test(cat, "cache-utils", utils_cache_utils, name="Cache Utils", desc="NamedCache, TTL, registry, stats")
+    add_test(
+        cat,
+        "container-registry",
+        utils_container_registry,
+        name="Container Registry",
+        desc="Trusted GHCR challenge/token flow, result mapping, endpoint guards, secret redaction",
+        isolation="pure",
+    )
     add_test(cat, "provider-core-cache", utils_provider_core_cache, name="Provider Core Cache", desc="Thread isolation, timeout, caches")
     add_test(cat, "roi-utils", utils_roi_utils, name="ROI Utils", desc="annualized_to_cumulative, calculate_mwrr/_series")
     add_test(cat, "translation-utils", utils_translation_utils, name="Translation Utils", desc="get_babel_locale + English fallback")
@@ -201,6 +229,16 @@ Tests for utility modules and helper functions:
         name="JS Cache Fail-Loud (I1)",
         desc="update_js_cache: undownloadable+uncached resource or partial font subsets → hard failure → exit 1; cached copy → exit 0",
         # tmp_path + monkeypatched network only: no DB, no server, no repo writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "runtime-isolation",
+        utils_runtime_isolation,
+        name="Runtime Isolation",
+        desc="Per-lane port/data propagation, production guards, readiness identity and process ownership",
+        # Only monkeypatches os.environ/sys.argv and builds argparse parsers;
+        # no DB, no server, no filesystem writes.
         isolation="pure",
     )
     add_test(cat, "all", utils_all, test_names=False, name="All Utils Tests", desc="Run all utility tests")
