@@ -91,6 +91,7 @@
     import {signalCatalogStore} from '$lib/stores/signalCatalogStore.svelte';
     import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
     import type {FxPairCreatedDetail, FxPairSyncCompleteDetail} from '$lib/services/fxCreationSync';
+    import {buildTransactionsFiltersUrl} from '../../transactions/filterState';
 
     const DISABLED_AI_EXPORT_COMPATIBILITY = emptyAiExportCompatibility();
 
@@ -1820,6 +1821,11 @@
 
                     <span class="text-lg emoji-flag">{currencyFlag}</span>
                     <span class="text-sm font-mono text-gray-500 dark:text-gray-400">{assetInfo.currency}</span>
+                    {#if (assetInfo.tx_count ?? 0) > 0}
+                        <a href={buildTransactionsFiltersUrl({asset_id: assetInfo.id})} data-testid="asset-detail-transactions-link" class="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400">
+                            {$t('transactions.title')} ({assetInfo.tx_count})
+                        </a>
+                    {/if}
 
                     {#if assetInfo.provider_code}
                         <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">
