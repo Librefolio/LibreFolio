@@ -89,6 +89,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/stores/reference/brokerStore.test.ts",
             "src/lib/features/changelog/changelog.test.ts",
             "src/lib/features/update-check/updateCheck.test.ts",
+            "src/lib/features/tools/client.test.ts",
             "src/lib/components/support/supportLinks.test.ts",
             "src/lib/charts/signals/__tests__/registry.test.ts",
             "src/lib/charts/signals/__tests__/syntheticSignals.test.ts",

@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### ✨ Added
 
 - Shared support actions in the donation popup and About page: coffee links and X, Reddit, Facebook, Instagram and TikTok icons, with platform-specific messages in the active interface language. **Copy and go** includes the public project link and opens a new tab, leaving the original screen open. Reddit separates title and body; platforms without text-prefill support explain how to paste the copied caption. TikTok opens its upload page rather than the feed. Clipboard and pop-up failures are reported explicitly; nothing is published automatically.
+- A new authenticated **Tools** foundation provides a versioned catalogue, isolated per-item computation, read-only diagnostics and compiled custom interfaces. The hub reports missing or incompatible tools explicitly; no financial calculation or portfolio write is implied when no compatible plugin is installed.
 
 ### 🐛 Fixed
 
