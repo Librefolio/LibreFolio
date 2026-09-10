@@ -91,6 +91,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/stores/reference/brokerStore.test.ts",
             "src/lib/features/changelog/changelog.test.ts",
             "src/lib/features/update-check/updateCheck.test.ts",
+            "src/lib/features/tools/client.test.ts",
             "src/lib/components/support/supportLinks.test.ts",
             "src/lib/charts/signals/__tests__/registry.test.ts",
             "src/lib/charts/signals/__tests__/syntheticSignals.test.ts",
@@ -200,6 +201,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/settings/tabs/ProfileTab.test.ts",
             "src/lib/components/settings/tabs/AboutTab.test.ts",
             "src/lib/components/settings/tabs/GlobalSettingsTab.test.ts",
+            "src/lib/features/tools/pac-allocator/PacAllocatorTool.test.ts",
             *(["-t", "|".join(test_names)] if test_names else []),
         ],
         cwd="frontend",
@@ -302,6 +304,16 @@ def front_utilities(verbose: bool = False, ui: bool = False, headed: bool = Fals
     return _run_playwright("utilities.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_pac_tool(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the PAC allocator P1 pilot on desktop and mobile."""
+    print_section("Frontend PAC Allocator Tool Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("tools/pac-allocator.spec.ts", ui=ui, headed=headed, debug=debug, project="", test_names=test_names, coverage=coverage)
+
+
 def front_tooltip(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run shared Tooltip component E2E tests (pinned hover/click model)."""
     print_section("Frontend Tooltip Component Tests")
@@ -356,6 +368,7 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "select", front_select, name="Select Components Tests", desc="SimpleSelect, SearchSelect, keyboard nav", prereq="Login working", tests="select-components.spec.ts")
     add_test(cat, "image-crop", front_image_crop, name="Image Crop & Media Tests", desc="ImageEditModal, AssetPicker, FileGrid, avatar", prereq="Login working", tests="image-crop.spec.ts")
     add_test(cat, "utilities", front_utilities, name="Utilities API E2E", desc="Currencies, countries, sectors API", prereq="Login working", tests="utilities.spec.ts")
+    add_test(cat, "pac-tool", front_pac_tool, name="PAC Allocator Tool E2E", desc="Manual P1 ready flow, stale-response guard and platform error on desktop/mobile", prereq="Test users created", tests="tools/pac-allocator.spec.ts")
     add_test(cat, "tooltip", front_tooltip, name="Tooltip Component Tests", desc="Pinned hover/click model: hover-only, click-to-pin, grace dismiss, click-outside", prereq="Login working", tests="tooltip-component.spec.ts")
     add_test(cat, "scheduler", front_scheduler, name="Scheduler Settings E2E", desc="ConfigModal, LogModal, status row, fetch_interval regression", prereq="Admin user + populated DB", tests="settings/scheduler.spec.ts")
     add_test(cat, "all", front_utility_all, test_names=False, name="All Frontend Utility Tests", desc="Run all utility/component E2E tests")

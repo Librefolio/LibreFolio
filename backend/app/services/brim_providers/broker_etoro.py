@@ -17,7 +17,7 @@ This plugin parses CSV exports from eToro (social trading platform).
 - Interest Payment → INTEREST
 - Withdraw Request → WITHDRAWAL
 - Deposit → DEPOSIT
-- Withdraw Fee / Conversion Fee → FEE
+- Non-zero Withdraw Fee / Withdrawal Conversion Fee → FEE
 
 **Columns:**
 - Date: Transaction date
@@ -68,12 +68,12 @@ TYPE_MAPPINGS: Dict[str, TransactionType] = {
     "deposit": TransactionType.DEPOSIT,
 }
 
+FEE_TYPES = ("withdraw fee", "withdrawal conversion fee", "conversion fee")
+
 # Types to skip
 SKIP_TYPES = [
     "overnight fee",
     "overnight refund",
-    "withdraw fee",
-    "conversion fee",
     "sdrt",  # UK stamp duty
 ]
 
@@ -230,16 +230,21 @@ class EtoroBrokerProvider(BRIMProvider):
                     if not tx_type_raw:
                         continue
 
-                    # Skip certain types
+                    # Skip non-transactional rows before normal type mapping.
                     if any(skip in tx_type_raw for skip in SKIP_TYPES):
                         continue
 
-                    # Map transaction type
-                    tx_type = None
-                    for pattern, mapped_type in TYPE_MAPPINGS.items():
-                        if pattern in tx_type_raw:
-                            tx_type = mapped_type
-                            break
+                    amount = _parse_etoro_number(row.get(COL_AMOUNT, ""))
+                    if any(fee_type in tx_type_raw for fee_type in FEE_TYPES):
+                        if amount is None or amount == 0:
+                            continue
+                        tx_type = TransactionType.FEE
+                    else:
+                        tx_type = None
+                        for pattern, mapped_type in TYPE_MAPPINGS.items():
+                            if pattern in tx_type_raw:
+                                tx_type = mapped_type
+                                break
 
                     if tx_type is None:
                         warnings.append(f"Row {row_num}: unknown type '{tx_type_raw}', skipping")
@@ -282,11 +287,8 @@ class EtoroBrokerProvider(BRIMProvider):
 
                             next_fake_id -= 1
 
-                    # Parse amount
-                    amount = _parse_etoro_number(row.get(COL_AMOUNT, ""))
-
                     # Parse quantity
-                    quantity = _parse_etoro_number(row.get(COL_UNITS, ""))
+                    quantity = Decimal("0") if tx_type == TransactionType.FEE else _parse_etoro_number(row.get(COL_UNITS, ""))
                     if quantity is None:
                         quantity = Decimal("0")
 
@@ -294,6 +296,8 @@ class EtoroBrokerProvider(BRIMProvider):
                     if tx_type == TransactionType.SELL and quantity > 0:
                         quantity = -quantity
                     if tx_type == TransactionType.BUY and amount and amount > 0:
+                        amount = -amount
+                    if tx_type == TransactionType.FEE and amount and amount > 0:
                         amount = -amount
 
                     # Create transaction
@@ -347,6 +351,10 @@ class EtoroBrokerProvider(BRIMProvider):
     @property
     def docs_url(self) -> Optional[str]:
         return "/mkdocs/user/transactions/import/etoro/"
+
+    @property
+    def plugin_version(self) -> str:
+        return "1.1.0"
 
     @property
     def test_file_pattern(self) -> Optional[str]:
