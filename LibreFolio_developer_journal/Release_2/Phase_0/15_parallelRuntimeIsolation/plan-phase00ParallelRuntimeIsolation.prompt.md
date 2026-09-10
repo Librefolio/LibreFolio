@@ -3,6 +3,8 @@
 **Avvio:** 2026-09-09. **Owner:** coordinatore Release 2.
 **Baseline:** `ef722b552433028c051ccb1207c84f1072e51bb7`
 (`dev_release2`).
+**Commit consegnato:** `916f12bddf3eb9b8e834e4b9033eb52ce4bde25a`
+(`feat(dev): isolate test runtime lanes`, 2026-09-10).
 **Mandato:** rendere porta e data directory esplicitamente configurabili per
 `./dev.py server` e `./dev.py test`, mantenendo invariati i default. Aggiornare
 istruzioni/skill, validare due lane realmente indipendenti e poi sbloccare B/C/D.
@@ -79,18 +81,18 @@ push, rebase o reset.
 > DB/backend" e' ora esplicitamente per-lane: non cambia l'isolamento interno
 > delle suite, ma consente worktree concorrenti se entrambi i valori sono
 > distinti. Lane assegnate per il prossimo riallineamento: coordinatore
-> `6140` + `/tmp/librefolio-r2-main`; B `6141` +
-> `/tmp/librefolio-r2-b`; C `6142` + `/tmp/librefolio-r2-c`; D `6143` +
+> `6150` + `/tmp/librefolio-r2-main`; B `6151` +
+> `/tmp/librefolio-r2-b`; C `6152` + `/tmp/librefolio-r2-c`; D `6153` +
 > `/tmp/librefolio-r2-d`. Nessun agente usa `--force` su una porta altrui.
 
-## 3. Verifica e handoff - ⏳ commit manuale
+## 3. Verifica e handoff - ✅ completato 2026-09-10
 
 - [x] Eseguire il selettore puro `utils runtime-isolation`.
 - [x] Provare due backend contemporanei su porte e data directory distinte,
   verificando health e path DB senza dati produzione.
 - [x] Eseguire i controlli mirati gia' esistenti su runner/config/Playwright.
 - [x] Preparare il messaggio di commit dedicato, senza committare.
-- [ ] Comunicare a B, C e D il contratto e le rispettive lane dopo il commit
+- [x] Comunicare a B, C e D il contratto e le rispettive lane dopo il commit
   manuale del dev.
 
 > **Note verifica (2026-09-09):** `utils runtime-isolation` 133/133;
@@ -105,6 +107,20 @@ push, rebase o reset.
 > **Handoff:** messaggio pronto in
 > `/tmp/libreFolio_commit_runtime_isolation.txt`. B/C/D ricevono i comandi
 > definitivi solo dopo che il dev crea il commit e comunica lo SHA.
+>
+> **Note handoff (2026-09-10):** commit verificato su `dev_release2`, checkout
+> pulito. B/C/D sono ancora sulla baseline `4a73f5f6` con delta locali non
+> committati: hanno ricevuto l'ordine di congelare un checkpoint, proporre il
+> messaggio di commit e censire i conflitti. Nessun agente esegue operazioni
+> Git mutanti. Dopo i checkpoint manuali del dev incorporeranno `916f12bd` e
+> attiveranno rispettivamente le lane 6151/B, 6152/C e 6153/D.
+>
+> **⚠️ Fuori pista (2026-09-10):** il primo avvio D ha mostrato che Pipenv
+> identifica il progetto dal path del worktree e crea un venv nuovo vuoto.
+> Nessuna dipendenza viene duplicata: B/C/D usano il venv locked principale con
+> `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc`, senza leggere il checkout
+> principale. Verificati interprete e import `argcomplete`/`pydantic`; il venv
+> vuoto D non viene modificato o rimosso durante i gate.
 
 ## Definition of done
 

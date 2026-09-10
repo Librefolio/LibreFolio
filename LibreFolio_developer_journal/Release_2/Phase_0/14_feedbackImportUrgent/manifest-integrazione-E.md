@@ -1,11 +1,13 @@
 # Manifest di integrazione - Gruppo E
 
 **Baseline:** `4a73f5f63447e01b51993afb2e3c73e2c22a9a28`, `refs/heads/dev_release2`.
-**Aggiornato:** 2026-09-09.
+**Aggiornato:** 2026-09-10.
 **Stato pacchetto:** R1-R5 verificati tecnicamente e applicati al checkout target
 `dev_release2` il 2026-09-09. Badge e sottotesti R4 accettati dal dev il
 2026-09-09 alle 15:51.
-**Commit/SHA di integrazione:** in attesa del commit manuale del dev. **Archiviato:** no.
+**Commit/SHA di integrazione:** `ef722b552433028c051ccb1207c84f1072e51bb7`
+(`feat: ship urgent import and UX fixes`). **Sessione/worktree:** archiviati
+localmente il 2026-09-10; piano versionato ancora in `Phase_0`.
 **Ultima build pronta:** R5,
 `c53959a6c873604e64c28defaf1e23900cf73d0e8179607b7596e53dd1b3ead0`.
 **Ultimo punto:** ingresso diretto Crea Instagram valutato e non adottato;
@@ -13,7 +15,7 @@ il limite resta esplicito, non dichiarato accettato. Nessuna integrazione
 autorizzata qui.
 
 Questo documento e' il riferimento portabile del pacchetto E. Il contenuto e'
-presente nel checkout target ma resta non committato: l'utente esegue il commit.
+presente e committato nel checkout target allo SHA indicato sopra.
 Le scritture del coordinatore presenti nello stesso worktree sono escluse dal
 pacchetto automatico. Nessun dato, backup, log o CSV privato appartiene al manifest.
 

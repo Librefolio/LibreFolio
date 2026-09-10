@@ -31,15 +31,25 @@ assegnati separatamente, una suite alla volta e senza setup DB o server implicit
 pacchetto verificato e' stato applicato al checkout locale `dev_release2`.
 La review indipendente ha aperto e chiuso il Round 5 sul challenge pubblico GHCR.
 Manifest e prove: [14_feedbackImportUrgent](../14_feedbackImportUrgent/manifest-integrazione-E.md).
-Commit/SHA e archivio restano in attesa del commit manuale del dev. U2, U3, U8,
-gli sprint non inclusi e F-MC-1/2/3 restano aperti.
+Integrazione committata in `ef722b552433028c051ccb1207c84f1072e51bb7`;
+sessione/worktree E archiviati localmente il 2026-09-10. L'eventuale spostamento
+versionato del piano resta separato. U2, U3, U8, gli sprint non inclusi e
+F-MC-1/2/3 restano aperti.
 
 **Infrastruttura di parallelismo, 2026-09-09:** prima di riallineare B/C/D e'
 stato aperto il piano
 [15_parallelRuntimeIsolation](../15_parallelRuntimeIsolation/plan-phase00ParallelRuntimeIsolation.prompt.md).
 Il gate richiede porta e data directory uniche per ogni worktree; la sola porta
 non separa SQLite, upload, log e report broker. I default storici restano
-invariati.
+invariati. Il gate e' stato consegnato nel commit
+`916f12bddf3eb9b8e834e4b9033eb52ce4bde25a` il 2026-09-10; B/C/D stanno
+preparando i checkpoint locali prima dell'incorporazione manuale della nuova base.
+
+**Integrazione C+D, 2026-09-10:** la piattaforma Tool C e il PAC D non entrano
+separatamente in `dev_release2`. C completa il layer generico e viene fusa dentro
+D; D aggiunge plugin/renderer PAC e consegna il pilot `pac-analyze` end-to-end.
+Solo la branch combinata D verra' proposta al target. Solver avanzato, copia
+portfolio, migrazione Broker e UI dedicata restano fuori da questo pilot.
 
 I worktree C/D sono allineati a `4a73f5f6`; i loro piani devono distinguere contratti
 approvati, scelte residue e codice non ancora autorizzato. Il pilota manuale non aspetta
@@ -900,8 +910,9 @@ richiedere un commit documentale successivo, non uno SHA futuro scritto in antic
 **Per E:** `14_feedbackImportUrgent` e tutti i round, report urgente
 `07_feedback_import_critici.md`, U1/U4/U5/U7/U9 nel file `01`, SP01/SP02, README e
 task E1-E9 sono riconciliati nel checkout target. Privacy, YOC, onboarding e i temi
-multicurrency futuri restano aperti. Il pacchetto e' applicato ma non ancora committato:
-archivio e SHA seguono il commit manuale del dev.
+multicurrency futuri restano aperti. Il pacchetto e' committato in `ef722b55`;
+sessione/worktree E sono archiviati localmente. L'archivio documentale versionato
+resta un passo distinto.
 
 ### 14.5 Aggiornare gli altri worktree senza perdere il loro lavoro
 
