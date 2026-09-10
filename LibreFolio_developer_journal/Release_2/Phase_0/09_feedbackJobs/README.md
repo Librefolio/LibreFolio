@@ -8,7 +8,7 @@ di TODO_FUTURI.md (classificazione con l'utente) + gli 8 P4 ereditati dall'audit
 |------|------|-----------|
 | [00_backlog_strutturale_P4.md](00_backlog_strutturale_P4.md) | Debito strutturale | Gli 8 task P4 dell'audit (scissione asset_source, execute_batch, BRIM helpers, Yahoo, Runes, status matrix, cache store, coda S6) |
 | [01_ux_dashboard.md](01_ux_dashboard.md) | UX & dashboard | Provider probe, global privacy, YOC, uploader filter, currency help, support, onboarding, mobile header |
-| [02_grafici_avanzati.md](02_grafici_avanzati.md) | Grafici | F8 (P&L-only, synthetic candles, income histograms), delivered lot analysis, calendar-day asset return |
+| [02_grafici_avanzati.md](02_grafici_avanzati.md) | Grafici | PLANNED: [piano performance charts](../20_performanceCharts/plan-phase00PerformanceCharts.prompt.md) per F8 P&L/candles/income + calendar return; lot analysis gia consegnata |
 | [03_asset_dati_classificazione.md](03_asset_dati_classificazione.md) | Asset & dati | Settori bond Corporate/Governativi, import CSV distribuzioni geo/settore |
 | [04_brim_import.md](04_brim_import.md) | BRIM & import | eToro fee reconciliation, delivered FIFO v4 cost allocation, asset deletion links |
 | [05_pac_allocation_tool.md](05_pac_allocation_tool.md) | Tool platform | Backend plugins, custom-first UI, PAC/rebalancing, per-currency cash and optional buy/sell/FX |
@@ -87,6 +87,16 @@ static, unit, API and targeted E2E gates are green on isolated lane `6151` +
 `/tmp/librefolio-r2-b`; the developer still owns the merge commit and final
 UI/viewport review. Runtime ownership follows the current section 14
 integration policy, not the older execution lease.
+
+## Performance charts plan-only checkpoint - 2026-09-10
+
+[SP06 G3/G1c and SP07 G1a/G1b](../20_performanceCharts/plan-phase00PerformanceCharts.prompt.md)
+have a durable final product contract, ASCII v2 storyboards, file ownership and
+dependency-safe XL phase split. The developer authorized **planning only**.
+Implementation remains frozen behind hard Gate 0: integrate workstream F, refresh
+the resolver/portfolio-engine/Asset-detail analysis on the new target SHA, reserve
+writers, then obtain explicit implementation authorization. No task is marked
+implemented or integrated by this checkpoint.
 
 ## Regole della cartella
 

@@ -842,6 +842,13 @@ La pubblicazione di questo documento aggiorna README e aggiunge note datate per 
 
 Primo piano preso in carico: [SP04-SP05 - Contratti e Runes](../11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md), approvato dal dev il 2026-09-07. I backlink dal piano 11 puntano a questo master e al backlog strutturale. Stato operativo e note per-step non vengono duplicati qui.
 
+**Pianificazione SP06/SP07 autorizzata, 2026-09-10:** il
+[piano performance charts](../20_performanceCharts/plan-phase00PerformanceCharts.prompt.md)
+registra il contratto chiuso per G3/G1a/G1b/G1c, gli storyboard ASCII v2 e lo
+split per owner. Stato **PLANNED / implementation frozen**: Gate 0 richiede prima
+l'integrazione F, una nuova lettura dei resolver/engine/Asset detail e una
+successiva autorizzazione esplicita del dev. Il link non marca i task implementati.
+
 All'avvio effettivo di uno sprint: scegliere il prossimo `<NN_area>` libero in `Phase_0/`, aprire il piano `.prompt.md`, cross-linkare il task originale e marcare la presa in carico secondo la regola del backlog. Non creare oggi sedici piani vuoti. Dopo ogni step eseguito, aggiornare immediatamente quel piano con stato, data, nota di implementazione ed eventuale fuori pista.
 
 Per ogni corsia registrare anche owner, file prenotati, contratti concordati, dipendenze residue, versione dei mockup ASCII approvata e stato della review operativa. Non confondere la presa in carico nel backlog con il completamento di una UI ancora in attesa di feedback.
