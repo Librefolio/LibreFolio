@@ -57,16 +57,17 @@ solver completo, copie portfolio o migrazione Broker fractional. Le implementazi
 i relativi piani di avanzamento restano nei worktree owner fino a integrazione esplicita:
 questa nota non importa codice nel checkout principale.
 
-**Checkpoint Gruppo B, 2026-09-10:** il pacchetto Contracts/Runes e il Round 1
-di correzione feedback sono versionati nel checkpoint `74bfd9cf`; i cinque
-conflitti con la baseline locale `916f12bd` sono risolti e staged. Registro,
-contratti, prove storiche e validazione combinata vivono nel
+**Integrazione Gruppo B, 2026-09-10:** Contracts/Runes e Round 1 sono stati
+riconciliati con E/runtime nel merge `d9e8f6d3`; la review UI reale ha richiesto
+un solo compattamento del feedback FX, consegnato in `00c469c3`. La branch B
+finale e' entrata in `dev_release2` con il merge `514582a4`. Registro,
+contratti, prove e validazione combinata vivono nel
 [piano esecutivo](../11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md)
 e nel [Round 1](../11_feedbackContractsRunes/plan-phase00FeedbackContractsRunesBugfixRound1.prompt.md).
-La nuova combinazione ha completato i gate automatici mirati nella lane B
-isolata `6151` + `/tmp/librefolio-r2-b`; restano il commit manuale del merge e
-la review UI/viewport del developer. Nessuna vecchia ownership runtime B viene
-ripristinata da questo raccordo.
+Gate automatici combinati verdi nella lane B isolata `6151` +
+`/tmp/librefolio-r2-b`; nessun terzo sync asset o vecchia ownership runtime B
+e' stato ripristinato. Sessione e worktree B archiviati localmente il
+2026-09-10; la cronologia resta nel repository.
 
 **Revisione 2026-09-07, confronto successivo:** YOC a 365 giorni e policy del trattino, documentazione/tooltip, estensione esplicita del CSV condiviso, catalogo Tool completo senza endpoint schema/prefill dedicati, mappa di parallelismo e gate UX prima/dopo realizzazione.
 
