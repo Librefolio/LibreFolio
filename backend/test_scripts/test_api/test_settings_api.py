@@ -317,6 +317,51 @@ class TestUserSettings:
             print_success("✓ Existing user settings updated and partial fields preserved")
 
     @pytest.mark.asyncio
+    async def test_update_user_settings_avatar_url_null_clears_it(self, test_server):
+        """SET-003d: PUT /settings/user with avatar_url: null clears a previously set avatar."""
+        print_section("SET-003d: PUT /settings/user - Clear avatar_url with null")
+
+        async with httpx.AsyncClient() as client:
+            from uuid import uuid4  # noqa: PLC0415 — test-only local import
+
+            username, email, session, _ = await get_or_create_test_user(client, f"settings_avatar_clear_{uuid4().hex[:8]}")
+            assert session is not None, "Failed to create test user"
+
+            # First set a non-null avatar URL, alongside other settings we can verify are untouched later.
+            set_payload = {
+                "language": "fr",
+                "base_currency": "USD",
+                "theme": "dark",
+                "avatar_url": "https://example.com/settings-avatar-to-clear.png",
+            }
+            set_resp = await client.put(f"{API_BASE}/settings/user", json=set_payload, timeout=TIMEOUT)
+            assert set_resp.status_code == 200, f"Expected 200, got {set_resp.status_code}: {set_resp.text}"
+            assert set_resp.json() == set_payload
+
+            # Now clear only avatar_url via explicit null.
+            clear_resp = await client.put(
+                f"{API_BASE}/settings/user",
+                json={"avatar_url": None},
+                timeout=TIMEOUT,
+            )
+
+            assert clear_resp.status_code == 200, f"Expected 200, got {clear_resp.status_code}: {clear_resp.text}"
+            expected = {
+                "language": "fr",
+                "base_currency": "USD",
+                "theme": "dark",
+                "avatar_url": None,
+            }
+            assert clear_resp.json() == expected, f"Expected {expected}, got {clear_resp.json()}"
+
+            # A subsequent GET must reflect the same cleared state.
+            get_resp = await client.get(f"{API_BASE}/settings/user", timeout=TIMEOUT)
+            assert get_resp.status_code == 200, f"Expected 200, got {get_resp.status_code}"
+            assert get_resp.json() == expected, f"Expected {expected}, got {get_resp.json()}"
+
+            print_success("✓ avatar_url cleared to null while other settings were preserved")
+
+    @pytest.mark.asyncio
     async def test_update_user_settings_invalid(self, test_server):
         """SET-004: Update user settings with invalid values → validation error."""
         print_section("SET-004: PUT /settings/user - Invalid Values")
@@ -339,6 +384,240 @@ class TestUserSettings:
                 422,
             ], f"Expected 400/422 for invalid data, got {resp.status_code}"
             print_success("✓ Correctly rejected invalid settings")
+
+
+# ============================================================================
+# Onboarding Progress Tests (Workstream J foundation)
+# ============================================================================
+
+ONBOARDING_FLOWS = ("welcome", "intro_tour", "import_guide")
+
+
+async def _get_onboarding_flows(client: httpx.AsyncClient) -> dict:
+    """GET /settings/onboarding and index the response by flow name."""
+    resp = await client.get(f"{API_BASE}/settings/onboarding", timeout=TIMEOUT)
+    assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+    data = resp.json()
+    return {item["flow"]: item for item in data["flows"]}
+
+
+async def _new_onboarding_user(client: httpx.AsyncClient, marker: str) -> str:
+    """Register+login a fresh unique user and set the session cookie on client."""
+    from uuid import uuid4  # noqa: PLC0415 — test-only local import
+
+    username, _email, session, _is_admin = await get_or_create_test_user(client, f"onb_{marker}_{uuid4().hex[:8]}")
+    assert session is not None, "Failed to create test user"
+    client.cookies.set("session", session)
+    return username
+
+
+class TestOnboardingProgressApi:
+    """Tests for GET/complete/skip /settings/onboarding endpoints."""
+
+    @pytest.mark.asyncio
+    async def test_get_onboarding_progress_requires_auth(self, test_server):
+        """Unauthenticated GET /settings/onboarding -> 401, auth surface unchanged."""
+        print_section("ONB-001: GET /settings/onboarding - Unauthenticated")
+
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(f"{API_BASE}/settings/onboarding", timeout=TIMEOUT)
+            assert resp.status_code == 401, f"Expected 401, got {resp.status_code}"
+
+        print_success("✓ Correctly rejected unauthenticated request")
+
+    @pytest.mark.asyncio
+    async def test_get_onboarding_progress_new_user_all_pending(self, test_server):
+        """ONB-002: a fresh user gets exactly the three registered flows, all pending."""
+        print_section("ONB-002: GET /settings/onboarding - New user")
+
+        async with httpx.AsyncClient() as client:
+            await _new_onboarding_user(client, "get_new")
+
+            flows = await _get_onboarding_flows(client)
+
+            assert set(flows) == set(ONBOARDING_FLOWS), f"Expected exactly {ONBOARDING_FLOWS}, got {sorted(flows)}"
+            for name, item in flows.items():
+                assert item["status"] == "pending", f"{name}: expected pending, got {item['status']}"
+                assert item["version"] == item["current_version"], f"{name}: fresh user must be at the current version"
+                assert item["update_available"] is False
+                assert item["completed_at"] is None
+                assert item["skipped_at"] is None
+
+        print_success("✓ New user has all flows pending at the current version")
+
+    @pytest.mark.asyncio
+    async def test_complete_onboarding_flow(self, test_server):
+        """ONB-003: POST /settings/onboarding/welcome/complete marks it completed."""
+        print_section("ONB-003: POST /settings/onboarding/{flow}/complete")
+
+        async with httpx.AsyncClient() as client:
+            await _new_onboarding_user(client, "complete")
+            flows = await _get_onboarding_flows(client)
+            version = flows["welcome"]["current_version"]
+
+            resp = await client.post(
+                f"{API_BASE}/settings/onboarding/welcome/complete",
+                json={"expected_version": version},
+                timeout=TIMEOUT,
+            )
+
+            assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+            item = resp.json()
+            assert item["flow"] == "welcome"
+            assert item["status"] == "completed"
+            assert item["completed_at"] is not None
+            assert item["skipped_at"] is None
+            assert item["update_available"] is False
+
+            # Persisted: a fresh GET reflects the same terminal state.
+            flows_after = await _get_onboarding_flows(client)
+            assert flows_after["welcome"]["status"] == "completed"
+            assert flows_after["intro_tour"]["status"] == "pending", "Other flows for this user must be untouched"
+
+        print_success("✓ Onboarding flow completed and persisted")
+
+    @pytest.mark.asyncio
+    async def test_skip_onboarding_flow(self, test_server):
+        """ONB-004: POST /settings/onboarding/{flow}/skip marks it skipped."""
+        print_section("ONB-004: POST /settings/onboarding/{flow}/skip")
+
+        async with httpx.AsyncClient() as client:
+            await _new_onboarding_user(client, "skip")
+            flows = await _get_onboarding_flows(client)
+            version = flows["import_guide"]["current_version"]
+
+            resp = await client.post(
+                f"{API_BASE}/settings/onboarding/import_guide/skip",
+                json={"expected_version": version},
+                timeout=TIMEOUT,
+            )
+
+            assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+            item = resp.json()
+            assert item["flow"] == "import_guide"
+            assert item["status"] == "skipped"
+            assert item["skipped_at"] is not None
+            assert item["completed_at"] is None
+
+        print_success("✓ Onboarding flow skipped and persisted")
+
+    @pytest.mark.asyncio
+    async def test_complete_onboarding_flow_is_idempotent(self, test_server):
+        """ONB-005: completing the same flow twice at the same version is a no-op repeat, not an error."""
+        print_section("ONB-005: complete/complete - Idempotent repeat")
+
+        async with httpx.AsyncClient() as client:
+            await _new_onboarding_user(client, "complete_idem")
+            flows = await _get_onboarding_flows(client)
+            version = flows["intro_tour"]["current_version"]
+            payload = {"expected_version": version}
+
+            first = await client.post(f"{API_BASE}/settings/onboarding/intro_tour/complete", json=payload, timeout=TIMEOUT)
+            second = await client.post(f"{API_BASE}/settings/onboarding/intro_tour/complete", json=payload, timeout=TIMEOUT)
+
+            assert first.status_code == 200
+            assert second.status_code == 200
+            assert second.json() == first.json(), "Repeating the same completion must return the identical resource"
+
+        print_success("✓ Repeat completion is idempotent")
+
+    @pytest.mark.asyncio
+    async def test_skip_then_explicit_complete_transition_allowed(self, test_server):
+        """ONB-006: replay-like skipped→completed explicit transition is allowed and
+        clears skipped_at (never both timestamps set)."""
+        print_section("ONB-006: skip then explicit complete - Replay-like transition")
+
+        async with httpx.AsyncClient() as client:
+            await _new_onboarding_user(client, "replay")
+            flows = await _get_onboarding_flows(client)
+            version = flows["welcome"]["current_version"]
+            payload = {"expected_version": version}
+
+            skip_resp = await client.post(f"{API_BASE}/settings/onboarding/welcome/skip", json=payload, timeout=TIMEOUT)
+            assert skip_resp.status_code == 200
+            assert skip_resp.json()["status"] == "skipped"
+
+            complete_resp = await client.post(f"{API_BASE}/settings/onboarding/welcome/complete", json=payload, timeout=TIMEOUT)
+            assert complete_resp.status_code == 200
+            item = complete_resp.json()
+            assert item["status"] == "completed"
+            assert item["completed_at"] is not None
+            assert item["skipped_at"] is None
+
+        print_success("✓ Explicit skip→complete transition applied")
+
+    @pytest.mark.asyncio
+    async def test_unknown_flow_returns_validation_error(self, test_server):
+        """ONB-007: an unregistered flow name is rejected by path validation, not the service."""
+        print_section("ONB-007: POST /settings/onboarding/{unknown}/complete - Validation")
+
+        async with httpx.AsyncClient() as client:
+            await _new_onboarding_user(client, "unknown_flow")
+
+            resp = await client.post(
+                f"{API_BASE}/settings/onboarding/not_a_real_flow/complete",
+                json={"expected_version": 1},
+                timeout=TIMEOUT,
+            )
+
+            assert resp.status_code == 422, f"Expected 422, got {resp.status_code}: {resp.text}"
+
+        print_success("✓ Unknown flow rejected by validation")
+
+    @pytest.mark.asyncio
+    async def test_stale_expected_version_returns_409_with_detail(self, test_server):
+        """ONB-008: a client completing an older/newer version than the server gets an
+        explicit 409 with a structured, machine-readable detail (never a translated string)."""
+        print_section("ONB-008: Stale expected_version - 409 Conflict")
+
+        async with httpx.AsyncClient() as client:
+            await _new_onboarding_user(client, "stale")
+            flows = await _get_onboarding_flows(client)
+            current_version = flows["welcome"]["current_version"]
+            stale_version = current_version + 1
+
+            resp = await client.post(
+                f"{API_BASE}/settings/onboarding/welcome/complete",
+                json={"expected_version": stale_version},
+                timeout=TIMEOUT,
+            )
+
+            assert resp.status_code == 409, f"Expected 409, got {resp.status_code}: {resp.text}"
+            assert resp.json()["detail"] == {
+                "code": "onboarding_version_mismatch",
+                "flow": "welcome",
+                "expected_version": stale_version,
+                "current_version": current_version,
+            }
+
+        print_success("✓ Stale version rejected with structured 409 detail")
+
+    @pytest.mark.asyncio
+    async def test_onboarding_progress_isolated_per_user(self, test_server):
+        """ONB-009: completing a flow for one user must not affect another user's progress."""
+        print_section("ONB-009: Onboarding progress isolation across users")
+
+        async with httpx.AsyncClient() as client_a, httpx.AsyncClient() as client_b:
+            await _new_onboarding_user(client_a, "iso_a")
+            await _new_onboarding_user(client_b, "iso_b")
+
+            flows_a = await _get_onboarding_flows(client_a)
+            version = flows_a["welcome"]["current_version"]
+
+            resp = await client_a.post(
+                f"{API_BASE}/settings/onboarding/welcome/complete",
+                json={"expected_version": version},
+                timeout=TIMEOUT,
+            )
+            assert resp.status_code == 200
+
+            flows_b_after = await _get_onboarding_flows(client_b)
+            assert flows_b_after["welcome"]["status"] == "pending", "User B's flow must be unaffected by user A"
+
+            flows_a_after = await _get_onboarding_flows(client_a)
+            assert flows_a_after["welcome"]["status"] == "completed"
+
+        print_success("✓ Onboarding progress is isolated per user")
 
 
 # ============================================================================
