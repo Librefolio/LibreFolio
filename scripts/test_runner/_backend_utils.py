@@ -140,6 +140,15 @@ def utils_js_cache_fail_loud(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "JS cache fail-loud tests", verbose=verbose)
 
 
+def utils_tools_wire(verbose: bool = False, test_names: list = None) -> bool:
+    """Test bounded Tool JSON encoding and sanitized validation errors."""
+    print_section("Utils: Tool Wire")
+    print_info("Testing: Unicode scalars, JSON limits, raw values and error redaction")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_tools_wire.py", test_names)
+    return run_command(cmd, "Tool wire tests", verbose=verbose)
+
+
 def utils_all(verbose: bool = False) -> bool:
     """Run all utility tests."""
     if _common.nothing_left_to_run("utils"):
@@ -201,6 +210,14 @@ Tests for utility modules and helper functions:
         name="JS Cache Fail-Loud (I1)",
         desc="update_js_cache: undownloadable+uncached resource or partial font subsets → hard failure → exit 1; cached copy → exit 0",
         # tmp_path + monkeypatched network only: no DB, no server, no repo writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "tools-wire",
+        utils_tools_wire,
+        name="Tool Wire",
+        desc="Strict UTF-8 JSON, byte/depth boundaries and sanitized validation issues",
         isolation="pure",
     )
     add_test(cat, "all", utils_all, test_names=False, name="All Utils Tests", desc="Run all utility tests")
