@@ -26,7 +26,11 @@ and standardize data exchange between components.
 - Plan 05b: Removed 16 wrapper classes (now use List[ItemType] directly)
 """
 
-from backend.app.schemas.assets import (
+from importlib import import_module as _import_module
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from backend.app.schemas.assets import (
     # Distribution models
     BaseDistribution,
     FAAinfoFiltersRequest,
@@ -52,7 +56,7 @@ from backend.app.schemas.assets import (
     FAMetadataRefreshResult,
     FASectorArea,
 )
-from backend.app.schemas.brim import (
+    from backend.app.schemas.brim import (
     # Constants and helpers
     FAKE_ASSET_ID_BASE,
     # Asset mapping
@@ -78,7 +82,7 @@ from backend.app.schemas.brim import (
     BRIMValidationIssue,
     is_fake_asset_id,
 )
-from backend.app.schemas.brokers import (
+    from backend.app.schemas.brokers import (
     BRAccessBulkItem,
     BRAccessBulkResponse,
     BRAccessItem,
@@ -96,7 +100,7 @@ from backend.app.schemas.brokers import (
     BRUpdateItem,
     BRUpdateResult,
 )
-from backend.app.schemas.common import (
+    from backend.app.schemas.common import (
     BackwardFillInfo,
     BaseBulkDeleteResponse,
     BaseBulkResponse,
@@ -105,7 +109,7 @@ from backend.app.schemas.common import (
     DateRangeModel,
     OldNew,
 )
-from backend.app.schemas.fx import (
+    from backend.app.schemas.fx import (
     FXBulkDeleteResponse,
     FXBulkUpsertResponse,
     FXConversionRequest,
@@ -126,7 +130,7 @@ from backend.app.schemas.fx import (
     FXUpsertItem,
     validate_chain_steps,
 )
-from backend.app.schemas.prices import (
+    from backend.app.schemas.prices import (
     FAAssetDelete,
     FABulkDeleteResponse,
     FABulkUpsertResponse,
@@ -135,7 +139,7 @@ from backend.app.schemas.prices import (
     FAUpsert,
     FAUpsertResult,
 )
-from backend.app.schemas.provider import (
+    from backend.app.schemas.provider import (
     FABulkAssignResponse,
     FABulkRemoveResponse,
     FAProviderAssignmentItem,
@@ -146,7 +150,7 @@ from backend.app.schemas.provider import (
     FAProviderRemovalResult,
     FAVolumeKind,
 )
-from backend.app.schemas.refresh import (
+    from backend.app.schemas.refresh import (
     CHANGED_POINTS_PAYLOAD_CAP,
     FABulkRefreshResponse,
     FARefreshItem,
@@ -157,7 +161,7 @@ from backend.app.schemas.refresh import (
     FXSyncStatus,
     SyncStatus,
 )
-from backend.app.schemas.signals import (
+    from backend.app.schemas.signals import (
     SignalAggregationProfile,
     SignalAiDescription,
     SignalAiEventDescription,
@@ -220,13 +224,13 @@ from backend.app.schemas.signals import (
     SignalWarning,
     SignalWarningCode,
 )
-from backend.app.schemas.system import (
+    from backend.app.schemas.system import (
     DependencyInfo,
     PluginDiagnosticsResponse,
     PluginDiscoveryFailureInfo,
     SystemInfoResponse,
 )
-from backend.app.schemas.transactions import (
+    from backend.app.schemas.transactions import (
     TX_TYPE_METADATA,
     FieldMode,
     PairFieldConstraint,
@@ -461,3 +465,98 @@ __all__ = [  # noqa: RUF022 — grouped by domain with section comments; sorting
     "BRIMValidationIssue",
     "BRIMFieldTodo",
 ]
+
+_EXPORT_GROUPS = {
+    "assets": (
+        "BaseDistribution", "FAAinfoFiltersRequest", "FAAssetCreateItem", "FAAssetCreateResult",
+        "FAAssetDeleteResult", "FAAssetEventPoint", "FAAssetMetadataResponse", "FAAssetPatchItem",
+        "FAAssetPatchResult", "FAAssetProviderAssignment", "FABulkAssetCreateResponse",
+        "FABulkAssetDeleteResponse", "FABulkAssetPatchResponse", "FABulkMetadataRefreshResponse",
+        "FAClassificationParams", "FACurrentValue", "FAGeographicArea", "FAHistoricalData",
+        "FAinfoResponse", "FAMetadataRefreshResult", "FASectorArea",
+    ),
+    "brim": (
+        "FAKE_ASSET_ID_BASE", "BRIMAssetCandidate", "BRIMAssetMapping", "BRIMDuplicateLevel",
+        "BRIMDuplicateMatch", "BRIMDuplicateReport", "BRIMFieldTodo", "BRIMFileInfo",
+        "BRIMFileStatus", "BRIMMatchConfidence", "BRIMParseRequest", "BRIMParseResponse",
+        "BRIMPluginInfo", "BRIMTXDuplicateCandidate", "BRIMValidationIssue", "is_fake_asset_id",
+    ),
+    "brokers": (
+        "BRAccessBulkItem", "BRAccessBulkResponse", "BRAccessItem", "BRAccessListResponse",
+        "BRAssetHolding", "BRBulkCreateResponse", "BRBulkDeleteResponse", "BRBulkUpdateResponse",
+        "BRCreateItem", "BRCreateResult", "BRDeleteItem", "BRDeleteResult", "BRReadItem",
+        "BRSummary", "BRUpdateItem", "BRUpdateResult",
+    ),
+    "common": (
+        "BackwardFillInfo", "BaseBulkDeleteResponse", "BaseBulkResponse", "BaseDeleteResult",
+        "Currency", "DateRangeModel", "OldNew",
+    ),
+    "fx": (
+        "FXBulkDeleteResponse", "FXBulkUpsertResponse", "FXConversionRequest",
+        "FXConversionResult", "FXConversionRouteItem", "FXConversionRouteResult",
+        "FXConversionRoutesResponse", "FXConvertResponse", "FXCreateRoutesResponse",
+        "FXDeleteItem", "FXDeleteResult", "FXDeleteRouteItem", "FXDeleteRouteResult",
+        "FXDeleteRoutesResponse", "FXProviderInfo", "FXRouteStep", "FXSignalQueryResult",
+        "FXUpsertItem", "validate_chain_steps",
+    ),
+    "prices": (
+        "FAAssetDelete", "FABulkDeleteResponse", "FABulkUpsertResponse",
+        "FAPriceDeleteResult", "FAPricePoint", "FAUpsert", "FAUpsertResult",
+    ),
+    "provider": (
+        "FABulkAssignResponse", "FABulkRemoveResponse", "FAProviderAssignmentItem",
+        "FAProviderAssignmentReadItem", "FAProviderAssignmentResult", "FAProviderInfo",
+        "FAProviderRefreshFieldsDetail", "FAProviderRemovalResult", "FAVolumeKind",
+    ),
+    "refresh": (
+        "CHANGED_POINTS_PAYLOAD_CAP", "FABulkRefreshResponse", "FARefreshItem",
+        "FARefreshResult", "FXSyncBulkResponse", "FXSyncPairRequest", "FXSyncPairResult",
+        "FXSyncStatus", "SyncStatus",
+    ),
+    "signals": (
+        "SignalAggregationProfile", "SignalAiDescription", "SignalAiEventDescription",
+        "SignalAiOutputDescription", "SignalAnnotation", "SignalAnnotationDirection",
+        "SignalAnnotationRequest", "SignalAnnotationRequestBase", "SignalAnnotationSampling",
+        "SignalAreaSeries", "SignalAvailability", "SignalAvailabilityReason", "SignalAxisRole",
+        "SignalAxisSpec", "SignalBandComponent", "SignalBandPoint", "SignalBandSeries",
+        "SignalBandValueSource", "SignalBarSeries", "SignalCadence", "SignalCatalogDefinition",
+        "SignalCatalogResponse", "SignalCategory", "SignalComputation", "SignalDataPolicy",
+        "SignalDecimal", "SignalDomain", "SignalError", "SignalErrorCode", "SignalEventPoint",
+        "SignalExecutionContext", "SignalInputCoverage", "SignalInputData",
+        "SignalInputRequirements", "SignalLineCrossoverRequest", "SignalLineSeries",
+        "SignalModel", "SignalOutputSpec", "SignalOutputValueSource", "SignalPriceField",
+        "SignalPricePoint", "SignalPriceValueSource", "SignalReferenceLevel", "SignalRequest",
+        "SignalResult", "SignalSeries", "SignalSeriesKind", "SignalSourceCapability",
+        "SignalStatus", "SignalThresholdCrossingRequest", "SignalThresholdDirection",
+        "SignalUnit", "SignalValuePoint", "SignalValueRegion", "SignalValueSource",
+        "SignalViewTransform", "SignalVolumeKind", "SignalWarmupMetadata",
+        "SignalWarmupRequirement", "SignalWarning", "SignalWarningCode",
+    ),
+    "system": (
+        "DependencyInfo", "PluginDiagnosticsResponse", "PluginDiscoveryFailureInfo",
+        "SystemInfoResponse",
+    ),
+    "transactions": (
+        "TX_TYPE_METADATA", "FieldMode", "PairFieldConstraint", "PairFieldRelation",
+        "PairFormLayout", "PromoteRule", "SignType", "SplitMeta", "TXBatchResponse",
+        "TXBatchResultItem", "TXCreateItem", "TXDeleteItem", "TXDeleteResult",
+        "TXMixedBatch", "TXQueryParams", "TXReadItem", "TXTypeMetadata", "TXUpdateItem",
+        "TXValidationIssue", "tags_to_csv", "validate_tags_list",
+    ),
+}
+_EXPORTS = {name: f"{__name__}.{module}" for module, names in _EXPORT_GROUPS.items() for name in names}
+
+
+def __getattr__(name: str) -> object:
+    if name in _EXPORTS:
+        value = getattr(_import_module(_EXPORTS[name]), name)
+    elif name in _EXPORT_GROUPS:
+        value = _import_module(f"{__name__}.{name}")
+    else:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(_EXPORTS) | set(_EXPORT_GROUPS))
