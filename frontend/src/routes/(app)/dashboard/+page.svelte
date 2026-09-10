@@ -13,7 +13,7 @@
   Pattern: Svelte 5 Runes, Tailwind CSS 4, dark mode, data-testid everywhere.
 -->
 <script lang="ts">
-    import {onMount, tick, untrack} from 'svelte';
+    import {onDestroy, onMount, tick, untrack} from 'svelte';
     import {page} from '$app/stores';
     import {_} from '$lib/i18n';
     import {RefreshCw, Briefcase, TrendingUp, ArrowRightLeft, Wallet, Shield} from 'lucide-svelte';
@@ -45,6 +45,8 @@
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
     import {invalidateFxRoutes} from '$lib/stores/reference/fxRoutesStore';
+    import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
+    import type {FxPairSyncCompleteDetail} from '$lib/services/fxCreationSync';
     import {TransactionFormModal, TransactionsTable, resolveFormItemsForView, loadPartnerRows, loadEventTooltipMap, type FormModalItems} from '$lib/components/transactions';
     import type {TXReadItem, AssetEvent} from '$lib/components/transactions/types';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
@@ -227,6 +229,10 @@
 
     /** FxPairAddModal state for CTA-driven pair creation */
     let showFxPairAddModal = $state(false);
+    let pageAlive = true;
+    onDestroy(() => {
+        pageAlive = false;
+    });
     let fxPairCreateSlug = $state('');
 
     /** Transaction view modal state (opened from the Transazioni tab's row double-click). */
@@ -362,11 +368,16 @@
         dateRangeCtl.markMaxResolved(history.length > 0 ? history[0].date : null);
     }
 
-    async function loadAll(force = false) {
+    async function loadAll(force = false, propagateError = false) {
+        const sessionGeneration = getClientSessionGeneration();
+        const current = () => pageAlive && isClientSessionCurrent(sessionGeneration);
+        if (!current()) return;
         reportLoading = true;
         const requested = targetCurrency;
         try {
             const report = await fetchReport(activeBrokerIds, dateRangeCtl.start || undefined, dateRangeCtl.end || undefined, requested, force);
+            if (!current()) return;
+            if (!report && propagateError) throw new Error($_('common.error'));
             // Cast from the Zodios union types to the concrete types the dashboard expects
             summary = (report?.summary as PortfolioSummary | null | undefined) ?? null;
             history = (report?.history as PortfolioHistoryPoint[] | null | undefined) ?? [];
@@ -376,8 +387,21 @@
             resolveMaxStartFromHistory();
             appliedCurrency = requested;
         } finally {
-            reportLoading = false;
+            if (current()) reportLoading = false;
         }
+    }
+
+    async function handleFxPairCreated() {
+        if (!pageAlive) return;
+        invalidateFxRoutes();
+        invalidate();
+        await loadAll(true);
+    }
+
+    async function handleFxPairCreationSynced(detail: FxPairSyncCompleteDetail) {
+        if (!pageAlive || !isClientSessionCurrent(detail.sessionGeneration)) return;
+        // The sync interceptor invalidates portfolio/risk caches at commit time.
+        await loadAll(true, true);
     }
 
     /** Lazy-load contribution data (called when user switches to Contribution view). */
@@ -767,18 +791,7 @@
 <!-- FxPairAddModal — opened from DataQualityBanner CTA -->
 {#if showFxPairAddModal}
     {@const fxParts = fxPairCreateSlug.includes('-') ? fxPairCreateSlug.split('-') : fxPairCreateSlug.split('/')}
-    <FxPairAddModal
-        bind:open={showFxPairAddModal}
-        initialBase={fxParts[0] ?? ''}
-        initialQuote={fxParts[1] ?? ''}
-        dateStart={dateRangeCtl.start}
-        dateEnd={dateRangeCtl.end}
-        oncreated={() => {
-            invalidateFxRoutes();
-            invalidate();
-            loadAll();
-        }}
-    />
+    <FxPairAddModal bind:open={showFxPairAddModal} initialBase={fxParts[0] ?? ''} initialQuote={fxParts[1] ?? ''} dateStart={dateRangeCtl.start} dateEnd={dateRangeCtl.end} oncreated={handleFxPairCreated} onsynced={handleFxPairCreationSynced} />
 {/if}
 
 <!-- Transaction view modal — opened from the Transazioni tab's row double-click -->

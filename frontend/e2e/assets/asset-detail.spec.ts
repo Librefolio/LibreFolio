@@ -9,10 +9,49 @@
  */
 
 import {expect, test} from '../fixtures/playwright';
+import type {Page} from '../fixtures/playwright';
 import {login} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {waitForSettled} from '../fixtures/app-events';
-import {goToAssetsPage} from './assets-helpers';
+import {goToAssetDetailPage, goToAssetsPage} from './assets-helpers';
+import {t} from '../fixtures/i18n-data';
+
+async function mockDetailAssetWithGlobalTransactions(page: Page, assetId: number, txCount: number) {
+    const asset = {
+        id: assetId,
+        display_name: `Synthetic detail asset ${assetId}`,
+        currency: 'EUR',
+        asset_type: 'STOCK',
+        active: true,
+        has_metadata: false,
+        provider_code: null,
+        tx_count: txCount,
+        // Deliberately zero: the displayed total is global and is not a promise
+        // that this user can see any of the transactions behind it.
+        tx_count_own: 0,
+    };
+    await page.route('**/api/v1/assets/query*', async (route) => {
+        await route.fulfill({json: [asset]});
+    });
+    await page.route('**/api/v1/assets/prices/query', async (route) => {
+        await route.fulfill({
+            json: {
+                items: [
+                    {
+                        asset_id: assetId,
+                        prices: [],
+                        events: [],
+                        errors: [],
+                        signals: [],
+                    },
+                ],
+            },
+        });
+    });
+    await page.route('**/api/v1/assets/prices/current', async (route) => {
+        await route.fulfill({json: {results: [], success_count: 0, errors: []}});
+    });
+}
 
 /**
  * Navigate to a *seeded* asset's detail page.
@@ -80,6 +119,28 @@ test.describe('Asset Detail Page', () => {
         await goToSeededAssetDetail(page);
         await expect(page.getByTestId('asset-detail-header')).toBeVisible();
         await expectAssetDetailChartCanvas(page);
+    });
+
+    test('global transaction count renders a clean filtered link without claiming row visibility', async ({page}) => {
+        const assetId = 920_051;
+        const globalCount = 29;
+        await mockDetailAssetWithGlobalTransactions(page, assetId, globalCount);
+
+        await goToAssetDetailPage(page, String(assetId));
+
+        const link = page.getByTestId('asset-detail-transactions-link');
+        await expect(link).toBeVisible();
+        await expect(link).toHaveAttribute('href', `/transactions?asset_id=${assetId}`);
+        await expect(link).toContainText(`(${globalCount})`);
+        // The label itself must come from the real transactions.title catalogue
+        // entry, not a hardcoded English guess and not a missing key like the old
+        // `nav.transactions` (svelte-i18n renders a missing key as the literal key
+        // string, so this also catches a regression back to that key by construction).
+        await expect(link).toContainText(t('en', 'transactions.title'));
+        await expect(link).not.toContainText('nav.transactions');
+        await expect(link).not.toContainText('transactions.title');
+        // Do not follow the link or assert transaction rows: tx_count is global,
+        // while the transactions endpoint keeps enforcing the user's broker access.
     });
 
     // ========================================================================

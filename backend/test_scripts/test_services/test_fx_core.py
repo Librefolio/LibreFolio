@@ -25,6 +25,7 @@ setup_test_database()
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import delete
 
+import backend.app.services.portfolio_engine as portfolio_engine_module
 from backend.app.db.models import FxRate
 from backend.app.db.session import get_async_engine
 from backend.app.services.fx import (
@@ -33,6 +34,7 @@ from backend.app.services.fx import (
     normalize_rate_for_storage,
     upsert_rates_bulk,
 )
+from backend.app.services.portfolio_service import _portfolio_l2_cache
 from backend.app.utils.decimal_utils import truncate_fx_rate
 from backend.test_scripts.test_utils import print_section, print_success
 
@@ -414,3 +416,80 @@ class TestUpsertRatesBulkEdgeCases:
             assert len(results) == 3
             assert all(r[0] for r in results), "All should succeed"
             print_success(f"Inserted {len(results)} different pairs")
+
+
+# ============================================================================
+# delete_rates_bulk — portfolio cache invalidation (R2-Fx)
+# ============================================================================
+#
+# delete_rates_bulk() feeds compute_portfolio_fx_cache_identity()'s dependency
+# set (backend/app/services/portfolio_engine.py): deleting a rate that a
+# portfolio depended on must not leave a stale L1 blob / L2 report entry
+# alive for the rest of its TTL. A no-op delete (nothing matched) must, by the
+# same logic, leave both caches untouched — clearing them on every call,
+# including pure misses, would erase every other user's warm cache for no
+# reason each time an already-absent rate is "deleted".
+#
+# The cache sentinel key intentionally does NOT collide with any real
+# portfolio blob/report key shape (those are tuples keyed on user_id etc.) —
+# it exists only to observe whether clear_cache("portfolio_blob" /
+# "portfolio_layer2") ran, not to imitate a real cache entry.
+_CACHE_SENTINEL_KEY = ("test_fx_core_cache_invalidation_sentinel",)
+
+
+@pytest.mark.asyncio
+class TestDeleteRatesBulkCacheInvalidation:
+    """delete_rates_bulk() must clear the portfolio_layer2 + portfolio_blob TTL
+    caches when it actually deletes rows, and must not touch them on a no-op
+    delete (existing/deleted count of 0)."""
+
+    def _seed_portfolio_caches(self) -> None:
+        portfolio_engine_module._portfolio_blob_cache.set(_CACHE_SENTINEL_KEY, object())
+        _portfolio_l2_cache.set(_CACHE_SENTINEL_KEY, object())
+
+    def _portfolio_caches_populated(self) -> bool:
+        _, blob_hit = portfolio_engine_module._portfolio_blob_cache.get(_CACHE_SENTINEL_KEY)
+        _, l2_hit = _portfolio_l2_cache.get(_CACHE_SENTINEL_KEY)
+        return blob_hit and l2_hit
+
+    async def test_successful_deletion_clears_portfolio_caches(self):
+        """A delete that actually removes rows (deleted_count_total > 0) must
+        clear both portfolio_layer2 and portfolio_blob."""
+        print_section("delete_rates_bulk: successful deletion clears portfolio caches")
+        engine = get_async_engine()
+        today = date.today()
+        async with AsyncSession(engine) as session:
+            session.add(FxRate(date=today, base=FX_CORE_BASE, quote=FX_CORE_QUOTE, rate=Decimal("1.0"), source="TEST"))
+            await session.commit()
+
+        self._seed_portfolio_caches()
+        assert self._portfolio_caches_populated(), "test setup: sentinel did not land in both portfolio caches"
+
+        async with AsyncSession(engine) as session:
+            results = await delete_rates_bulk(session, [(FX_CORE_BASE, FX_CORE_QUOTE, today, None)])
+        success, existing, deleted, _msg = results[0]
+        assert success is True
+        assert deleted >= 1, "seeded rate was not actually deleted — cache-clear precondition not met"
+
+        assert not self._portfolio_caches_populated(), "a successful rate deletion did not clear the portfolio_layer2/portfolio_blob caches"
+        print_success("Successful deletion cleared both portfolio cache layers")
+
+    async def test_noop_deletion_does_not_clear_portfolio_caches(self):
+        """A delete request that matches nothing (deleted_count_total == 0) must
+        leave both portfolio caches untouched."""
+        print_section("delete_rates_bulk: no-op deletion must not clear portfolio caches")
+        engine = get_async_engine()
+
+        self._seed_portfolio_caches()
+        assert self._portfolio_caches_populated(), "test setup: sentinel did not land in both portfolio caches"
+
+        async with AsyncSession(engine) as session:
+            # AAA/ZZZ: not this file's pair, and nothing was seeded for it — a
+            # genuine miss, not merely "this file's own rows happen to be absent".
+            results = await delete_rates_bulk(session, [("AAA", "ZZZ", date.today(), None)])
+        success, existing, deleted, _msg = results[0]
+        assert success is True
+        assert deleted == 0, "test setup: expected nothing to match so the delete is a genuine no-op"
+
+        assert self._portfolio_caches_populated(), "a no-op deletion (nothing existed to delete) falsely cleared the portfolio caches"
+        print_success("No-op deletion left both portfolio cache layers untouched")

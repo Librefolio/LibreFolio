@@ -46,7 +46,7 @@ Different worktrees may run test commands concurrently only with a unique port
 **and** data root for each lane:
 
 ```bash
-./dev.py test --test-port 6141 --data-dir /tmp/librefolio-r2-b api all
+./dev.py test --test-port 6151 --data-dir /tmp/librefolio-r2-b api all
 ```
 
 The runner propagates both values to pytest, the shared backend, Playwright and

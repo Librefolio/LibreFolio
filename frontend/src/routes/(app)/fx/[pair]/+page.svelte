@@ -74,6 +74,8 @@
     import {aiExportCatalogLoader, emptyAiExportCompatibility, type AiExportCatalogCompatibilityResult} from '$lib/features/ai-export/catalog/compatibility';
     import {buildAiExportMenuLabels, getAiExportErrorMessage, getAiExportSuccessMessages} from '$lib/features/ai-export/ui';
     import {signalCatalogStore} from '$lib/stores/signalCatalogStore.svelte';
+    import {clientSessionUserId, getClientSessionGeneration, getClientSessionUserId, isClientSessionCurrent} from '$lib/stores/app/clientSession';
+    import {subscribeFxCreationSyncCompleted} from '$lib/services/fxCreationSync';
 
     const DISABLED_AI_EXPORT_COMPATIBILITY = emptyAiExportCompatibility();
 
@@ -93,12 +95,20 @@
     }
 
     let {data}: Props = $props();
+    let pageMounted = false;
+    let signalDefinitionsReady = false;
+    let initialSignalDefinitions: Promise<void> | null = null;
+    let chartLoadVersion = 0;
+    let completionWhileInitializing = false;
+    let completionSubscriptionKey = '';
+    let unsubscribeCreationCompletion = () => {};
 
     // =========================================================================
     // State
     // =========================================================================
 
     let chartData: FxDataPoint[] = $state([]);
+    let discardedChartLoads = $state(0);
     let loading = $state(true);
     /** Stores either a raw message or an i18n key prefixed with `_i18n:` for reactive translation */
     let error: string | null = $state(null);
@@ -509,17 +519,81 @@
         await loadChartData();
     }
 
-    onMount(async () => {
-        // Persist the inversion state from the URL so FxCard reflects it on back-navigation
-        setCardInverted(data.canonicalSlug, data.inverted);
-        void loadFxAiExportCompatibility();
+    function connectCreationCompletion() {
+        const slug = data.canonicalSlug;
+        const sessionGeneration = getClientSessionGeneration();
+        const key = `${sessionGeneration}:${slug}`;
+        if (completionSubscriptionKey === key) return;
+        unsubscribeCreationCompletion();
+        completionSubscriptionKey = key;
+        chartLoadVersion += 1;
+        if (getClientSessionUserId() === null) {
+            unsubscribeCreationCompletion = () => {};
+            return;
+        }
+        unsubscribeCreationCompletion = subscribeFxCreationSyncCompleted(async (completion) => {
+            if (!pageMounted || completion.sessionGeneration !== sessionGeneration || !isClientSessionCurrent(sessionGeneration) || data.canonicalSlug !== slug || !completion.pairs.includes(slug)) return;
+            chartLoadVersion += 1;
+            rearmMaxPendingBeforeReload();
+            if (!signalDefinitionsReady) {
+                completionWhileInitializing = true;
+                await (initialSignalDefinitions ??= loadFxSignalDefinitions());
+                if (!pageMounted || !isClientSessionCurrent(sessionGeneration) || data.canonicalSlug !== slug) return;
+                signalDefinitionsReady = true;
+            }
+            await loadChartData(signals, true);
+        });
+    }
 
-        await loadFxSignalDefinitions();
-        await Promise.all([ensureCurrenciesLoaded(get(currentLanguage)), loadChartData(), loadProviders(), loadAssetList()]);
-        // Force flag reactivity after currencies load
-        flagVersion++;
-        // Load comparison asset data after initial data is ready
-        await maybeLoadComparison();
+    async function initializePage() {
+        const sessionGeneration = getClientSessionGeneration();
+        const current = () => pageMounted && isClientSessionCurrent(sessionGeneration);
+        let initialLoadVersion = chartLoadVersion;
+        try {
+            // Persist URL inversion so FxCard reflects it on back-navigation.
+            setCardInverted(data.canonicalSlug, data.inverted);
+            void loadFxAiExportCompatibility();
+
+            await (initialSignalDefinitions ??= loadFxSignalDefinitions());
+            if (!current()) return;
+            signalDefinitionsReady = true;
+            if (completionWhileInitializing) {
+                rearmMaxPendingBeforeReload();
+                completionWhileInitializing = false;
+            }
+            const initialChartLoad = loadChartData();
+            initialLoadVersion = chartLoadVersion;
+            await Promise.all([ensureCurrenciesLoaded(get(currentLanguage)), initialChartLoad, loadProviders(), loadAssetList()]);
+            if (!current()) return;
+            flagVersion++;
+            await maybeLoadComparison();
+        } catch (initializationError) {
+            if (!current() || initialLoadVersion !== chartLoadVersion) return;
+            console.error('Failed to initialize FX detail:', initializationError);
+            error = initializationError instanceof Error ? initializationError.message : get(t)('common.error');
+            loading = false;
+            signalsLoading = false;
+        }
+    }
+
+    onMount(() => {
+        pageMounted = true;
+        let initialSession = true;
+        const unsubscribeSession = clientSessionUserId.subscribe(() => {
+            connectCreationCompletion();
+            if (!initialSession && getClientSessionUserId() !== null) {
+                if (signalDefinitionsReady) void loadChartData();
+                else void initializePage();
+            }
+            initialSession = false;
+        });
+        if (getClientSessionUserId() !== null) void initializePage();
+        return () => {
+            pageMounted = false;
+            chartLoadVersion += 1;
+            unsubscribeCreationCompletion();
+            unsubscribeSession();
+        };
     });
 
     let previousDisplayOrientation = $state('');
@@ -531,7 +605,10 @@
         }
         if (orientation !== previousDisplayOrientation) {
             previousDisplayOrientation = orientation;
-            void loadChartData();
+            if (pageMounted) {
+                connectCreationCompletion();
+                if (signalDefinitionsReady) void loadChartData();
+            }
         }
     });
 
@@ -571,93 +648,112 @@
         displayDateStart = 'min';
     }
 
-    async function loadChartData(requestedSignalConfigs: SignalConfig[] = signals) {
+    async function loadChartData(requestedSignalConfigs: SignalConfig[] = signals, propagateError = false) {
+        if (!pageMounted) return;
+        const slug = data.canonicalSlug;
+        const base = data.urlBase;
+        const quote = data.urlQuote;
+        const inverted = data.inverted;
+        const canonicalBase = data.canonicalBase;
+        const canonicalQuote = data.canonicalQuote;
+        const start = dateStart;
+        const end = dateEnd;
+        const sessionGeneration = getClientSessionGeneration();
+        const loadVersion = ++chartLoadVersion;
+        const current = () => pageMounted && loadVersion === chartLoadVersion && isClientSessionCurrent(sessionGeneration) && data.canonicalSlug === slug && data.urlBase === base && data.urlQuote === quote;
+        const discardObsoleteResponse = () => {
+            if (current()) return false;
+            if (pageMounted && isClientSessionCurrent(sessionGeneration)) discardedChartLoads += 1;
+            return true;
+        };
         error = null;
-        const store = getFxStore(data.canonicalSlug);
-        const hasCachedRange = store.getMissingIntervals(dateStart, dateEnd).length === 0;
+        const store = getFxStore(slug);
+        const gaps = store.getMissingIntervals(start, end);
+        const hasCachedRange = gaps.length === 0;
         const requestPlan = buildBackendSignalRequestPlan(requestedSignalConfigs, signalDefinitions);
         const requestVersion = signalResultState.beginRequest();
+        const withSignals = requestPlan.requests.length > 0;
 
         if (hasCachedRange) {
-            chartData = store.getRange(dateStart, dateEnd).data;
+            chartData = store.getRange(start, end).data;
             if (chartData.length === 0) error = '_i18n:fxDetail.noData';
             resolveMaxStartFromChartData();
         }
 
-        if (requestPlan.requests.length === 0) {
-            if (!hasCachedRange) {
-                loading = true;
-                try {
-                    chartData = await ensureFxRangeLoaded(data.canonicalSlug, dateStart, dateEnd);
-                    if (chartData.length === 0 && !error) {
-                        error = '_i18n:fxDetail.noData';
-                    }
-                    resolveMaxStartFromChartData();
-                } finally {
-                    loading = false;
-                }
-            }
+        if (!withSignals && hasCachedRange) {
             applyBackendSignalResults(requestedSignalConfigs, requestVersion, []);
             signalRequestFailed = false;
+            loading = false;
+            signalsLoading = false;
             return;
         }
 
         loading = !hasCachedRange;
         signalRequestFailed = false;
-        signalsLoading = true;
+        signalsLoading = withSignals;
+        // Keep gap requests canonical; only signal requests follow the displayed orientation.
+        const ranges = withSignals ? [{start, end}] : gaps;
         try {
-            const response = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post([
-                {
-                    from_amount: {
-                        code: data.urlBase,
-                        amount: '1',
-                    },
-                    to: data.urlQuote,
-                    date_range: {
-                        start: dateStart,
-                        end: dateEnd,
-                    },
-                    signals: requestPlan.requests,
-                },
-            ]);
-            const dailyResults = (response as any)?.results ?? [];
-            const canonicalPoints = apiResultsToCanonicalFxDataPoints(dailyResults, data.inverted);
+            const response = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post(
+                ranges.map((range) => ({
+                    from_amount: {code: withSignals ? base : canonicalBase, amount: '1'},
+                    to: withSignals ? quote : canonicalQuote,
+                    date_range: {start: range.start, end: range.end},
+                    ...(withSignals ? {signals: requestPlan.requests} : {}),
+                })),
+            );
+            if (discardObsoleteResponse()) return;
+            const canonicalPoints = apiResultsToCanonicalFxDataPoints(response.results, withSignals && inverted);
             if (canonicalPoints.length > 0) {
                 store.merge(canonicalPoints);
             }
-            store.markFetched(dateStart, dateEnd);
-            chartData = store.getRange(dateStart, dateEnd).data;
+            for (const range of ranges) store.markFetched(range.start, range.end);
+            chartData = store.getRange(start, end).data;
 
-            const signalGroup = ((response as any)?.signal_results ?? []).find((group: any) => group.request_index === 0);
+            const signalGroup = withSignals ? response.signal_results?.find((group) => group.request_index === 0) : undefined;
             applyBackendSignalResults(requestedSignalConfigs, requestVersion, parseBackendSignalResults(signalGroup?.signals));
             if (chartData.length === 0 && !error) {
                 error = '_i18n:fxDetail.noData';
             }
             resolveMaxStartFromChartData();
         } catch (e: any) {
-            signalRequestFailed = true;
-            const existingData = store.getRange(dateStart, dateEnd).data;
-            if (existingData.length > 0) {
+            if (discardObsoleteResponse()) return;
+            signalRequestFailed = withSignals;
+            const existingData = store.getRange(start, end).data;
+            if (!withSignals) {
+                if (e?.response?.status === 404) {
+                    for (const gap of gaps) store.markFetched(gap.start, gap.end);
+                } else {
+                    console.error('Failed to load FX chart range:', e);
+                }
+                chartData = existingData;
+                if (chartData.length === 0) error = '_i18n:fxDetail.noData';
+                applyBackendSignalResults(requestedSignalConfigs, requestVersion, []);
+                resolveMaxStartFromChartData();
+            } else if (existingData.length > 0) {
                 chartData = existingData;
             } else if (e?.response?.status === 404) {
                 chartData = [];
-                store.invalidateRange(dateStart, dateEnd);
+                store.invalidateRange(start, end);
                 error = '_i18n:fxDetail.noData';
             } else {
                 console.error('Failed to load chart data:', e);
                 chartData = [];
                 error = e?.message || 'Failed to load rates';
             }
+            if (propagateError && e?.response?.status !== 404) throw e;
         } finally {
-            loading = false;
-            signalsLoading = false;
+            if (current()) {
+                loading = false;
+                signalsLoading = false;
+            }
         }
     }
 
     async function loadProviders() {
         try {
             const response = await zodiosApi.list_routes_api_v1_fx_providers_routes_get();
-            const items = (response as any)?.items || [];
+            const items = response?.items ?? [];
 
             // Extract ALL unique configured pair slugs (for FxPair signal dropdown)
             const slugSet = new Set<string>();
@@ -670,12 +766,12 @@
 
             // Filter routes for current pair only
             providers = items
-                .filter((i: any) => ((i.base === data.canonicalBase && i.quote === data.canonicalQuote) || (i.base === data.canonicalQuote && i.quote === data.canonicalBase)) && !(i.chain_steps?.length === 1 && i.chain_steps[0].provider === 'MANUAL'))
-                .sort((a: any, b: any) => a.priority - b.priority)
-                .map((i: any) => {
+                .filter((i) => ((i.base === data.canonicalBase && i.quote === data.canonicalQuote) || (i.base === data.canonicalQuote && i.quote === data.canonicalBase)) && !(!i.is_chain && i.chain_steps[0]?.provider === 'MANUAL'))
+                .sort((a, b) => a.priority - b.priority)
+                .map((i) => {
                     const steps = i.chain_steps ?? [];
                     return {
-                        providerCode: steps.length === 1 ? steps[0].provider : 'CHAIN:' + steps.map((s: any) => s.provider).join('+'),
+                        providerCode: i.is_chain ? 'CHAIN:' + steps.map((s) => s.provider).join('+') : steps[0].provider,
                         priority: i.priority,
                         chainSteps: steps,
                     };
@@ -910,7 +1006,7 @@
     }
 </script>
 
-<div class="space-y-4" data-testid="fx-detail-page" data-busy={loading}>
+<div class="space-y-4" data-testid="fx-detail-page" data-busy={loading} data-chart-pair={data.canonicalSlug} data-chart-last-rate={chartData.at(-1)?.rate ?? ''} data-discarded-chart-loads={discardedChartLoads}>
     <!-- ======================================================================= -->
     <!-- Header: pair info + back button -->
     <!-- ======================================================================= -->

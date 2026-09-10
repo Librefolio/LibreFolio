@@ -40,6 +40,10 @@ class BucketDetailLevel(StrEnum):
     FULL = "full"
 
 
+class IndicatorPolicyError(ValueError):
+    """Raised when the declared indicator policy matrix has incomplete coverage."""
+
+
 #: K (max_bucket_days) per detail level, per the normative Phase 0 policy table.
 _MAX_BUCKET_DAYS_BY_DETAIL_LEVEL: dict[BucketDetailLevel, int] = {
     BucketDetailLevel.COMPACT: 30,
@@ -77,8 +81,10 @@ _INDICATOR_POLICY_PARAMETERS: dict[
     },
 }
 
-assert set(_INDICATOR_POLICY_PARAMETERS) == set(BucketDetailLevel)
-assert all(set(parameters) == set(SignalTemporalClass) for parameters in _INDICATOR_POLICY_PARAMETERS.values())
+if set(_INDICATOR_POLICY_PARAMETERS) != set(BucketDetailLevel):
+    raise IndicatorPolicyError("indicator policy must cover every BucketDetailLevel member")
+if not all(set(parameters) == set(SignalTemporalClass) for parameters in _INDICATOR_POLICY_PARAMETERS.values()):
+    raise IndicatorPolicyError("each indicator policy row must cover every SignalTemporalClass member")
 
 
 _INDICATOR_HISTORY_ROW_LIMITS: dict[BucketDetailLevel, int | None] = {
