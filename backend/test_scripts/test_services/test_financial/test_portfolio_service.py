@@ -11,6 +11,7 @@ import json
 import sys
 from datetime import date, timedelta
 from decimal import Decimal
+from uuid import uuid4
 
 import pytest
 import pytest_asyncio
@@ -666,6 +667,7 @@ class TestPortfolioFxCacheIdentity:
     FX_SCOPE_CCY = "ZAR"  # currency actually present in the test's scope
     FX_IRRELEVANT_CCY = "THB"  # a pair the scope never touches
     FX_OUT_OF_SCOPE_CCY = "NOK"  # lives only on a broker outside scope_broker_ids
+    FX_COST_BASIS_CCY = "KWD"  # enters the scope only through cost_basis_currency
     IDENTITY_DATE = date(2032, 6, 15)
 
     async def _scoped_broker(self, session, test_user, currency) -> Broker:
@@ -682,6 +684,49 @@ class TestPortfolioFxCacheIdentity:
                 amount=Decimal("100"),
                 currency=currency,
             )
+        )
+        await session.flush()
+        return broker
+
+    async def _cost_basis_only_broker(self, session, test_user) -> Broker:
+        """Scope whose only non-target currency is an opening cost basis."""
+        marker = uuid4().hex
+        broker = Broker(name=f"PfFxIdentity_CostBasis_{marker}")
+        asset = Asset(
+            display_name=f"PfFxIdentityAsset_{marker}",
+            ticker=f"PFCB{marker[:8]}",
+            currency=self.FX_TARGET,
+            type=AssetType.STOCK,
+        )
+        session.add_all([broker, asset])
+        await session.flush()
+        session.add_all(
+            [
+                BrokerUserAccess(
+                    broker_id=broker.id,
+                    user_id=test_user.id,
+                    role=UserRole.OWNER,
+                    share_percentage=Decimal("1"),
+                ),
+                Transaction(
+                    broker_id=broker.id,
+                    asset_id=asset.id,
+                    type=TransactionType.ADJUSTMENT,
+                    date=self.IDENTITY_DATE - timedelta(days=30),
+                    quantity=Decimal("2"),
+                    amount=Decimal("0"),
+                    currency=None,
+                    cost_basis_override=Decimal("25"),
+                    cost_basis_currency=self.FX_COST_BASIS_CCY,
+                ),
+                PriceHistory(
+                    asset_id=asset.id,
+                    date=self.IDENTITY_DATE,
+                    close=Decimal("100"),
+                    currency=self.FX_TARGET,
+                    source_plugin_key="manual_test",
+                ),
+            ]
         )
         await session.flush()
         return broker
@@ -802,6 +847,41 @@ class TestPortfolioFxCacheIdentity:
         assert after_provider != after_priority, "editing the route's provider chain did not move the identity"
 
     @pytest.mark.asyncio
+    async def test_cost_basis_currency_fx_cache_identity_tracks_rate_and_route(self, session, test_user):
+        """A third currency used only by cost_basis_currency is an FX dependency."""
+        broker = await self._cost_basis_only_broker(session, test_user)
+        baseline = await portfolio_engine_module.compute_portfolio_fx_cache_identity(session, {broker.id}, self.FX_TARGET, self.IDENTITY_DATE)
+        assert baseline != "no_fx", "cost_basis_currency was ignored when cash, asset, and price currencies all matched the target"
+
+        rate = FxRate(
+            date=self.IDENTITY_DATE,
+            base=self.FX_TARGET,
+            quote=self.FX_COST_BASIS_CCY,
+            rate=Decimal("0.25"),
+            source="TEST",
+        )
+        session.add(rate)
+        await session.flush()
+        after_rate = await portfolio_engine_module.compute_portfolio_fx_cache_identity(session, {broker.id}, self.FX_TARGET, self.IDENTITY_DATE)
+        assert after_rate != baseline, "a rate used only by cost_basis_currency did not move the FX identity"
+
+        route = FxConversionRoute(
+            base=self.FX_TARGET,
+            quote=self.FX_COST_BASIS_CCY,
+            priority=1,
+            chain_steps=json.dumps([{"from": self.FX_COST_BASIS_CCY, "to": self.FX_TARGET, "provider": "ECB"}]),
+        )
+        session.add(route)
+        await session.flush()
+        after_route = await portfolio_engine_module.compute_portfolio_fx_cache_identity(session, {broker.id}, self.FX_TARGET, self.IDENTITY_DATE)
+        assert after_route != after_rate, "a route used only by cost_basis_currency did not move the FX identity"
+
+        route.chain_steps = json.dumps([{"from": self.FX_COST_BASIS_CCY, "to": self.FX_TARGET, "provider": "MOCKFX"}])
+        await session.flush()
+        after_provider = await portfolio_engine_module.compute_portfolio_fx_cache_identity(session, {broker.id}, self.FX_TARGET, self.IDENTITY_DATE)
+        assert after_provider != after_route, "changing the cost-basis route provider did not move the FX identity"
+
+    @pytest.mark.asyncio
     async def test_future_dated_rate_beyond_date_to_excluded(self, session, test_user):
         """date_to bounds the FX dependency window: a rate dated after date_to is
         not yet usable for this valuation and must not appear in the identity —
@@ -880,6 +960,69 @@ class TestPortfolioBlobCacheFxSensitivity:
         await session.flush()
         await engine.calculate(test_user.id, broker_ids=[broker.id], date_to=date_to, target_currency="EUR")
         assert build_calls["n"] == 2, "a relevant EUR/ZAR rate insert did not bust the L1 blob cache"
+
+    @pytest.mark.asyncio
+    async def test_cost_basis_currency_fx_cache_change_busts_l1_blob(self, session, test_user, monkeypatch, request):
+        identity_fixture = TestPortfolioFxCacheIdentity()
+        broker = await identity_fixture._cost_basis_only_broker(session, test_user)
+        portfolio_engine_module._portfolio_blob_cache.clear()
+        request.addfinalizer(portfolio_engine_module._portfolio_blob_cache.clear)
+
+        build_calls = {"n": 0}
+        original_build = portfolio_engine_module.DailyStateBuilder.build
+
+        def counting_build(builder_self):
+            build_calls["n"] += 1
+            return original_build(builder_self)
+
+        monkeypatch.setattr(portfolio_engine_module.DailyStateBuilder, "build", counting_build)
+
+        engine = portfolio_engine_module.PortfolioCalculationEngine(session)
+
+        async def calculate():
+            return await engine.calculate(
+                test_user.id,
+                broker_ids=[broker.id],
+                date_to=identity_fixture.IDENTITY_DATE,
+                target_currency=identity_fixture.FX_TARGET,
+            )
+
+        await calculate()
+        await calculate()
+        assert build_calls["n"] == 1, "unchanged cost-basis FX dependencies missed the L1 blob cache"
+
+        session.add(
+            FxRate(
+                date=identity_fixture.IDENTITY_DATE,
+                base=identity_fixture.FX_TARGET,
+                quote=identity_fixture.FX_COST_BASIS_CCY,
+                rate=Decimal("0.25"),
+                source="TEST",
+            )
+        )
+        await session.flush()
+        await calculate()
+        assert build_calls["n"] == 2, "a rate used only by cost_basis_currency did not bust the L1 blob cache"
+
+        session.add(
+            FxConversionRoute(
+                base=identity_fixture.FX_TARGET,
+                quote=identity_fixture.FX_COST_BASIS_CCY,
+                priority=1,
+                chain_steps=json.dumps(
+                    [
+                        {
+                            "from": identity_fixture.FX_COST_BASIS_CCY,
+                            "to": identity_fixture.FX_TARGET,
+                            "provider": "MOCKFX",
+                        }
+                    ]
+                ),
+            )
+        )
+        await session.flush()
+        await calculate()
+        assert build_calls["n"] == 3, "a route used only by cost_basis_currency did not bust the L1 blob cache"
 
 
 # =============================================================================

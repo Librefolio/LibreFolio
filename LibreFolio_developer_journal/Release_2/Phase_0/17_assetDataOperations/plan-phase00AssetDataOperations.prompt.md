@@ -231,6 +231,29 @@ cronologia.
 - [ ] Aggiungere/regolare il test minimo e rieseguire gate component/format.
 - [ ] Inviare delta/evidenza al coordinatore e tornare FROZEN.
 
+## 9. Detour post-integrazione — cost basis FX
+
+> **⚠️ Fuori pista autorizzato (2026-09-10):** dopo l'integrazione il developer
+> ha confermato un gap bounded nella chiave FX: una
+> `Transaction.cost_basis_currency` diversa dalla valuta cash/asset/target
+> poteva cambiare WAC e P&L senza muovere il fingerprint.
+
+- [x] Includere le cost-basis currency non-null dello scope nel dependency set. ✅ 2026-09-10
+  > **Note implementazione**: la stessa query bounded delle transazioni seleziona
+  > anche `cost_basis_currency`; cash e cost basis vengono normalizzate dal
+  > percorso esistente, senza valute globali o modifiche al contratto L1.
+- [x] Delegare regression identity/L1 al test-author. ✅ 2026-09-10
+  > **Note implementazione**: aggiunti scenari in cui KWD compare soltanto come
+  > cost-basis currency, con cash null e asset/price/target EUR; rate e
+  > route/provider EUR-KWD muovono l'identita', mentre L1 passa da hit a
+  > recompute. Gate specialista: 10 test FX identity/L1 verdi.
+- [x] Eseguire selettori minimi, Ruff, Black e diff check. ✅ 2026-09-10
+  > **Note implementazione**: selector FX identity/L1 10 pass; Ruff verde;
+  > Black applicato al layout della query e check finale verde; diff check pulito.
+- [x] Inviare manifest/evidenza e tornare FROZEN. ✅ 2026-09-10
+  > **Note implementazione**: handoff post-integrazione inviato al coordinatore
+  > con HEAD, manifest a tre file e gate; nessun delta API/i18n/docs.
+
 ## Definition of done
 
 - API, selettori, fallback ed emoji espongono entrambe le categorie bond; i
