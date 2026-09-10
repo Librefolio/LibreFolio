@@ -1,12 +1,17 @@
 # Piano Phase 0 - Allocatore PAC e analisi iniziale P1
 
-**Stato:** checkpoint D pronto; integrazione runtime manuale non ancora eseguita
+**Stato:** core P1 verificato sulla revisione combinata; codec C/D reale ancora pendente
 
 **Data checkpoint:** 2026-09-10
 
-**Baseline D:** `4a73f5f63447e01b51993afb2e3c73e2c22a9a28`
+**Baseline originale D:** `4a73f5f63447e01b51993afb2e3c73e2c22a9a28`
 
-**Runtime da incorporare manualmente:** `916f12bddf3eb9b8e834e4b9033eb52ce4bde25a`
+**Checkpoint D:** `cf1dd37974b2191877093e641cf00f261a241d20`
+
+**HEAD combinato:** `d018e8a677289b9bc38e65b437a86e1f2684caa7`
+
+**Genitori merge:** `cf1dd37974b2191877093e641cf00f261a241d20` e
+`916f12bddf3eb9b8e834e4b9033eb52ce4bde25a`
 
 ## 1. Confine approvato
 
@@ -104,11 +109,11 @@ importabili. Attributi sconosciuti sollevano `AttributeError`. Nessuna manipolaz
 | File | Stato |
 |---|---|
 | `backend/test_scripts/test_schemas/test_pac_analyze_schemas.py` | Scritto; eseguito nel selector schema |
-| `backend/test_scripts/test_services/test_pac_analyze.py` | Scritto; non ancora eseguito |
+| `backend/test_scripts/test_services/test_pac_analyze.py` | Scritto; 194 test eseguiti |
 | `scripts/test_runner/_backend_schemas.py` | Registra `schemas pac-analyze`, isolamento `pure` |
 | `scripts/test_runner/_backend_services.py` | Registra `services pac-analyze`, isolamento `pure` |
 
-## 4. Verifica prima del checkpoint
+## 4. Verifica del checkpoint
 
 | Prova | Risultato |
 |---|---|
@@ -117,13 +122,21 @@ importabili. Attributi sconosciuti sollevano `AttributeError`. Nessuna manipolaz
 | Fingerprint schema | Invariato |
 | `git diff --check` sui file tracked | Nessun errore |
 | Residui generati nelle directory P1 | Nessuno |
-| `services pac-analyze` | Non eseguito |
-| Import compatibility legacy-heavy | Non eseguito |
+| `services pac-analyze` sulla baseline pre-merge | Non eseguito |
+| Import compatibility legacy-heavy | 3 casi passati nel selector service |
 | Codec reale C/D e codegen | Non eseguito |
-| Revisione combinata con `916f12bd` | Non testata |
+| Riconciliazione statica initializer con E/runtime | Nessun conflitto rilevato |
+| Schema sulla revisione combinata, porta 6153 | Bloccato prima di pytest: `pydantic` assente |
+| Retry con `pipenv run python` | Pipenv ha creato un venv vuoto; bloccato prima di pytest: `argcomplete` assente |
+| Schema finale sulla revisione combinata | 816 passed, 2.47 s |
+| Service/evaluator finale sulla revisione combinata | 194 passed, 2.93 s |
+| Ruff mirato, 14 file Python | Verde |
+| Black check mirato, 14 file Python | Verde |
+| DB worktree | Assente |
+| DB lane service | Solo `/tmp/librefolio-r2-d/sqlite/app.db` |
 
-Il verde schema non certifica evaluator, compatibilita import completa, runner nuovo o
-integrazione Tool.
+I selector certificano schema, evaluator P1 e re-export legacy coperti. Non certificano
+ancora integrazione Tool, codegen/client o codec C/D end-to-end.
 
 ## 5. Checkpoint Git e raccordo runtime
 
@@ -143,6 +156,15 @@ Non sono attesi conflitti testuali. Sono possibili raccordi semantici:
 2. la piattaforma C deve usare i veri TypeAdapter P1 e i metadata finali;
 3. il wrapper Tool deve usare `context.checkpoint()` e non importare DB/provider;
 4. il client generato deve preservare conteggio Unicode per code point e bounds condizionali.
+
+Raccordo statico eseguito dopo il merge:
+
+- `schemas/assets.py` cambia solo la semantica documentata di patch classification;
+- `schemas/system.py` aggiunge `ContainerImageStatusResponse`, che non era re-exported
+  dal package initializer precedente;
+- `broker_service.py` aggiunge testo di recovery, senza cambiare `BrokerService`;
+- `asset_source.py` cambia la patch classification, senza cambiare gli export lazy usati;
+- i tre initializer D non hanno conflitti testuali nel merge.
 
 ## 6. File da includere ed escludere
 
@@ -171,28 +193,28 @@ detached from DB and BRIM startup.
 
 L'agente non esegue il commit.
 
-## 8. Ripresa dopo integrazione manuale
+## 8. Verifica eseguita dopo integrazione manuale
 
-Prerequisito: il dev comunica la revisione combinata effettiva.
-
-Usare solo lane D:
+Il venv locked esistente e stato selezionato senza installazioni tramite
+`PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc`. Comandi effettivi:
 
 ```text
-./dev.py test --test-port 6143 --data-dir /tmp/librefolio-r2-d schemas pac-analyze
-./dev.py test --test-port 6143 --data-dir /tmp/librefolio-r2-d services pac-analyze
+PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6153 --data-dir /tmp/librefolio-r2-d schemas pac-analyze
+PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6153 --data-dir /tmp/librefolio-r2-d services pac-analyze
 ```
 
 Regole:
 
 - un comando/suite alla volta;
 - mai `--force`;
-- porta 6143 occupata deve fallire chiusa;
+- porta 6153 occupata deve fallire chiusa;
 - nessun uso di 6041;
 - verificare assenza di scritture fuori `/tmp/librefolio-r2-d`;
-- fermarsi se manca una dipendenza, senza installarla;
+- nessuna installazione o cleanup ambientale implicita;
 - non espandere a solver/UI/Broker.
 
-Poi eseguire compatibilita import e codec C/D solo con lease esplicito.
+Il venv D vuoto creato dal retry infrastrutturale resta intatto per istruzione del
+coordinatore. Codec C/D e plugin restano un gate separato.
 
 ## 9. Gate
 
@@ -200,7 +222,7 @@ Poi eseguire compatibilita import e codec C/D solo con lease esplicito.
 |---|---|---|
 | P1-N1 | Approvato; schema verificato | Core numerico iniziale |
 | P1-C1 | ABI approvata; codec integrato ancora pendente | Wrapper C/D futuro |
-| P1-X1 | Approvato; codice/test scritti | Verifica backend isolata |
+| P1-X1 | Approvato; schema/service/statiche verdi sulla revisione combinata | Core P1 verificato |
 | P1-U1 | Aperto | Solo UI manuale P1 |
 | P1-R1 | Aperto | Configurazione runtime/deployment |
 | Full contract | Aperto e non bloccante | Solver/copie/UI estesa |
@@ -214,11 +236,19 @@ Poi eseguire compatibilita import e codec C/D solo con lease esplicito.
 3. [x] 2026-09-09 - Implementati schema, normalizer, evaluator e report.
    > **Nota implementazione**: nucleo puro, Decimal, nessun DB/provider/solver.
 4. [x] 2026-09-09 - Implementati test e import boundary lazy.
-   > **Nota implementazione**: schema verificato; service/legacy-heavy ancora pendenti.
+   > **Nota implementazione**: schema, service/evaluator e legacy re-export verificati.
 5. [x] 2026-09-10 - Preparato checkpoint prima del runtime.
    > **Nota implementazione**: overlap path zero; nessun residuo generato; piano reso portabile.
-6. [ ] Integrazione manuale del dev con `916f12bd`.
-7. [ ] Riesecuzione schema/service nella lane D.
+6. [x] 2026-09-10 - Integrazione manuale del dev con `916f12bd`.
+   > **Nota implementazione**: merge `d018e8a6`, genitori checkpoint D e runtime.
+7. [x] 2026-09-10 - Rieseguiti schema/service nella lane D.
+   > **Nota implementazione**: 816 schema + 194 service verdi su porta 6153;
+   > ruff e Black verdi sui 14 file Python P1; DB solo nel data-dir dedicato.
+   > **Fuori pista**: primo comando su 6153 fermato prima di pytest per
+   > `ModuleNotFoundError: No module named 'pydantic'`. Retry corretto dal coordinatore
+   > con `pipenv run python`: creato automaticamente venv D vuoto
+   > `e-alfy-friendly-dollop-bwI0S8St`, poi `argcomplete` assente. Nessun package
+   > progetto installato; il venv vuoto resta intatto.
 8. [ ] Checkpoint C/D su wrapper e codec reali.
 
 ## 11. Artifact collegati

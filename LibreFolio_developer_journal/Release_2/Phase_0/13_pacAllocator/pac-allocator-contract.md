@@ -1,7 +1,10 @@
 # Contratto PAC P1-r3 - analisi della situazione iniziale
 
-**Stato:** N1/C1/X1 approvati; implementazione D presente su baseline `4a73f5f6`;
-codec C/D integrato e test service ancora pendenti.
+**Stato:** N1/C1/X1 approvati; implementazione D integrata con runtime a
+`d018e8a677289b9bc38e65b437a86e1f2684caa7`. Verifica combinata: 816 test schema,
+194 test service/evaluator e statiche mirate verdi. Codec/codegen C/D end-to-end
+restano pendenti. Due tentativi infrastrutturali pre-pytest sono registrati nelle
+evidenze; nessuna dipendenza installata.
 
 ## 1. Scopo
 

@@ -10,6 +10,8 @@ from typing import Callable
 from backend.app.schemas.pac_allocator import FactReason, GridMode, PacAnalyzeIssue
 
 Checkpoint = Callable[[], None]
+
+
 @dataclass(frozen=True, slots=True)
 class ParsedValue[T]:
     value: T | None
