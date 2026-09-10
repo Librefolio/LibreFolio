@@ -49,6 +49,8 @@
     import {ensureAssetProvidersCached, getAssetProviderName, isParametricProvider} from '$lib/utils/providerHelpers';
     import {mergeAssets, invalidateAfterMutation} from '$lib/stores/reference/assetStore';
     import {isRealProbeError} from './providerProbe';
+    import {entityDetailLinkHtml} from '$lib/utils/core/entityLink';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
 
     import {numericArrows} from '$lib/actions/numericArrows';
     // =========================================================================
@@ -147,6 +149,8 @@
          * purely informational — never changes behaviour (the user decides via the active toggle).
          */
         importNotices?: Array<{kind: string; reason: string}>;
+        /** Asset-global only; contextual creation keeps its existing plain success toast. */
+        linkCreatedAsset?: boolean;
         oncreated?: (assetId: number) => void;
         onupdated?: () => void;
         onclose?: () => void;
@@ -165,6 +169,7 @@
         onReuseExisting,
         reuseAllowKeyMerge = true,
         importNotices = [],
+        linkCreatedAsset = false,
         oncreated,
         onupdated,
         onclose,
@@ -1305,7 +1310,8 @@
         // Success UX first — close the modal and notify immediately. The historical price
         // sync below is fired in the BACKGROUND so the ~2s network round-trip no longer
         // blocks the modal close (the user reported the save felt too slow on localhost).
-        toasts.success($t('assets.modal.createSuccess', {values: {name: displayName}}));
+        const createdLabel = linkCreatedAsset ? entityDetailLinkHtml({kind: 'asset', id: assetId}, displayName) : escapeHtml(displayName);
+        toasts.success($t('assets.modal.createSuccess', {values: {name: createdLabel}}));
         open = false;
         oncreated?.(assetId);
 

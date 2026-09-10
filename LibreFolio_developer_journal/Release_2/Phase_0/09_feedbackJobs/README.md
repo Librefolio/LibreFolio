@@ -17,13 +17,28 @@ di TODO_FUTURI.md (classificazione con l'utente) + gli 8 P4 ereditati dall'audit
 **Planning update (2026-09-07):** see [06](06_piano_sprint.md) for the current-code
 assessment and decisions made during review. Global privacy, mobile auto-hide header,
 synthetic P&L candles and the backend Tool plugin platform supersede the original narrower
-scope. The plan is a proposal; implementation has not started.
+scope. The initial publication was planning-only; the execution update below records
+the subsequently authorized work.
 
 **Review follow-up (2026-09-07):** YOC now specifies a 365-day window, explained dash states,
 an English theory page and a column-header tooltip. The shared CsvEditor is extended rather
 than duplicated. Tool schemas live in the catalogue; data copying uses domain APIs.
 Section 11 maps parallel work; section 12 requires ASCII mockup approval before substantial
 UI changes and an operational developer walkthrough/feedback round afterward.
+
+## Execution update - 2026-09-07
+
+**Group B only** is authorized to implement approved revision 2:
+[Contracts and Runes - SP04-SP05](../11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md).
+Scope: P4-5, P4-6/S6 6.7, S6 6.2 and S6 6.11. Progress and acceptance live in that plan;
+backlog pickup does not mean implementation is complete. A/C/D remain planning-only.
+Group B owns the sequential shared runtime/API-generation queue. No production-data
+repair, schema migration, staging, commit or push is part of this authorization.
+
+**Handoff update (2026-09-08):** Group B's code work is complete. Final operational
+developer review is deferred and remains open (`awaiting_dev_review`); use the runbook
+in the linked execution plan. The B test server is stopped and the runtime queue has
+been returned. This does not authorize implementation or runtime use by A/C/D.
 
 ## Regole della cartella
 
