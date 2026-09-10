@@ -10,6 +10,8 @@ Covers:
 """
 
 import pytest
+from fastapi import HTTPException
+from fastapi.responses import JSONResponse
 
 import backend.app.api.v1.system as system_module
 from backend.app.api.v1.system import (
@@ -22,6 +24,7 @@ from backend.app.api.v1.system import (
     get_system_info,
     parse_pipfile,
 )
+from backend.app.config import TEST_LANE_HEADER
 
 
 class _FakePath:
@@ -141,6 +144,67 @@ class TestGetDeploymentMode:
     def test_docker_when_dockerenv_present(self, monkeypatch):
         monkeypatch.setattr(system_module, "Path", _FakePath(True))
         assert get_deployment_mode() == "docker"
+
+
+class TestTestLaneHealth:
+    @staticmethod
+    def assert_generic_not_found(error: HTTPException, *hidden_values: str):
+        assert error.status_code == 404
+        assert error.detail == "Not Found"
+        rendered_error = f"{error.detail} {error.headers}"
+        assert "test-lane-health" not in rendered_error
+        for hidden_value in hidden_values:
+            assert hidden_value not in rendered_error
+
+    def test_exact_token_is_accepted_in_test_mode(self, monkeypatch):
+        lane_id = "0123456789abcdef0123456789abcdef"
+        monkeypatch.setenv("LIBREFOLIO_TEST_LANE_ID", lane_id)
+        monkeypatch.setattr(system_module, "is_test_mode", lambda: True)
+
+        response = system_module.test_lane_health(lane_id)
+
+        assert isinstance(response, JSONResponse)
+        assert response.status_code == 200
+        assert response.body == b'{"status":"ok"}'
+        assert response.headers[TEST_LANE_HEADER] == lane_id
+
+    def test_wrong_token_is_generic_not_found(self, monkeypatch):
+        lane_id = "0123456789abcdef0123456789abcdef"
+        wrong_token = "fedcba9876543210fedcba9876543210"
+        monkeypatch.setenv("LIBREFOLIO_TEST_LANE_ID", lane_id)
+        monkeypatch.setattr(system_module, "is_test_mode", lambda: True)
+
+        with pytest.raises(HTTPException) as exc_info:
+            system_module.test_lane_health(wrong_token)
+
+        self.assert_generic_not_found(
+            exc_info.value,
+            lane_id,
+            wrong_token,
+        )
+
+    def test_missing_lane_context_is_generic_not_found(self, monkeypatch):
+        supplied_token = "0123456789abcdef0123456789abcdef"
+        monkeypatch.delenv("LIBREFOLIO_TEST_LANE_ID", raising=False)
+        monkeypatch.setattr(system_module, "is_test_mode", lambda: True)
+
+        with pytest.raises(HTTPException) as exc_info:
+            system_module.test_lane_health(supplied_token)
+
+        self.assert_generic_not_found(exc_info.value, supplied_token)
+
+    def test_production_mode_is_generic_not_found_for_exact_token(
+        self,
+        monkeypatch,
+    ):
+        lane_id = "0123456789abcdef0123456789abcdef"
+        monkeypatch.setenv("LIBREFOLIO_TEST_LANE_ID", lane_id)
+        monkeypatch.setattr(system_module, "is_test_mode", lambda: False)
+
+        with pytest.raises(HTTPException) as exc_info:
+            system_module.test_lane_health(lane_id)
+
+        self.assert_generic_not_found(exc_info.value, lane_id)
 
 
 class TestGetSystemInfoEndpoint:

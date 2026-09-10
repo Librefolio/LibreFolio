@@ -1,4 +1,5 @@
 import {defineConfig, devices} from '@playwright/test';
+import {randomUUID} from 'crypto';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 import {fileURLToPath} from 'url';
@@ -6,13 +7,37 @@ import {fileURLToPath} from 'url';
 // ES module compatibility for __dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const PROJECT_ROOT = path.resolve(__dirname, '..');
 
-// Load .env from project root
-dotenv.config({path: path.resolve(__dirname, '../.env')});
+// Load dotenv once, then prevent nested Pipenv commands in global setup from
+// replacing this lane's explicit port/data values.
+const DONT_LOAD_ENV = /^(1|true|yes|on)$/i.test(process.env.PIPENV_DONT_LOAD_ENV || '');
+if (!DONT_LOAD_ENV) {
+    const configuredDotenv = process.env.PIPENV_DOTENV_LOCATION;
+    dotenv.config({
+        path: configuredDotenv ? path.resolve(process.cwd(), configuredDotenv) : path.resolve(PROJECT_ROOT, '.env'),
+    });
+}
 
 // Use TEST_PORT for E2E tests (server runs in test mode)
 const TEST_PORT = process.env.TEST_PORT || '6041';
+const TEST_DATA_DIR = path.resolve(PROJECT_ROOT, process.env.LIBREFOLIO_TEST_DATA_DIR || 'backend/data/test');
+process.env.TEST_PORT = TEST_PORT;
+process.env.LIBREFOLIO_TEST_DATA_DIR = TEST_DATA_DIR;
+process.env.PIPENV_DONT_LOAD_ENV = '1';
 const BASE_URL = `http://localhost:${TEST_PORT}`;
+const TEST_LANE_ID = process.env.LIBREFOLIO_TEST_LANE_ID || randomUUID();
+process.env.LIBREFOLIO_TEST_LANE_ID = TEST_LANE_ID;
+const WEB_SERVER_ENV: Record<string, string> = {
+    TEST_PORT,
+    LIBREFOLIO_TEST_DATA_DIR: TEST_DATA_DIR,
+    LIBREFOLIO_TEST_LANE_ID: TEST_LANE_ID,
+    PIPENV_DONT_LOAD_ENV: '1',
+};
+if (process.env.COVERAGE_JS === '1') {
+    WEB_SERVER_ENV.COVERAGE_INSTRUMENT = '1';
+    WEB_SERVER_ENV.NODE_OPTIONS = '--max-old-space-size=8192';
+}
 
 // How many Playwright workers hit the backend at once. Still 1 by default:
 // fullyParallel is off and the suite shares state, so raising it is a decision
@@ -104,7 +129,8 @@ export default defineConfig({
         },
     ],
 
-    // Server avviato automaticamente in test mode (--force kills stale servers)
+    // Server avviato automaticamente in test mode. An occupied lane fails
+    // instead of reusing or killing a backend owned by another worktree.
     // Worker count: LIBREFOLIO_SERVER_WORKERS / GALLERY_SERVER_WORKERS, else derived
     // from E2E_WORKERS (see SERVER_WORKERS above).
     // COVERAGE_BACKEND=1 enables backend code coverage tracking during E2E tests
@@ -135,7 +161,7 @@ export default defineConfig({
         // drags the network into the suite. Measured on the shared path when it
         // was still missing: ±700-1300 lines of backend coverage between two
         // identical runs, and one run where the Bank of England answered HTML.
-        command: `cd .. && exec ./dev.py server --test --force --no-reload --no-scheduler --workers ${SERVER_WORKERS}${process.env.COVERAGE_BACKEND ? ' --coverage' : ''}`,
+        command: `cd .. && exec ./dev.py server --test --no-reload --no-scheduler --workers ${SERVER_WORKERS}${process.env.COVERAGE_BACKEND ? ' --coverage' : ''}`,
         // The server auto-rebuilds the frontend when it thinks the sources moved,
         // and that rebuild does not know what kind of build the runner just made.
         // Without this it produced a *plain* bundle on top of the instrumented
@@ -143,13 +169,11 @@ export default defineConfig({
         // and the run then reported "no JS coverage collected" while every test
         // passed. Passing the flags down means a rebuild, if one still happens,
         // reproduces the same kind and has the heap to finish it.
-        env: process.env.COVERAGE_JS === '1' ? {COVERAGE_INSTRUMENT: '1', NODE_OPTIONS: '--max-old-space-size=8192'} : {},
-        url: `${BASE_URL}/api/v1/system/health`,
-        // In coverage mode, always start a fresh server (don't reuse a
-        // non-coverage server that may already be running on the port) —
-        // unless the runner started the shared one, which already has coverage
-        // enabled because both follow the same flag.
-        reuseExistingServer: SHARED_SERVER ? true : process.env.COVERAGE_BACKEND ? false : !process.env.CI,
+        env: WEB_SERVER_ENV,
+        url: `${BASE_URL}/api/v1/system/test-lane-health?token=${encodeURIComponent(TEST_LANE_ID)}`,
+        // Only the runner-owned shared backend may be reused. Any other process
+        // on the lane's port is a collision and Playwright must fail closed.
+        reuseExistingServer: SHARED_SERVER,
         // CI runners also build the MkDocs site from the test server on a cold
         // cache; 120s proved too tight there (gallery webServer timeout on
         // 2026-09-04 after the docs growth). Locally a warm reuse makes the

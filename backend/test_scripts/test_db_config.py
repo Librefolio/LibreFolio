@@ -7,26 +7,25 @@ Tests should use a separate database to avoid corrupting production/development 
 Data Structure:
     backend/data/
     ├── prod/sqlite/app.db    # Production database
-    └── test/sqlite/app.db    # Test database (isolated)
+    └── test/sqlite/app.db    # Default test database (isolated)
 
 The test database is automatically used when LIBREFOLIO_TEST_MODE=1.
+LIBREFOLIO_TEST_DATA_DIR can assign a separate root to one runtime lane.
 """
 
 import os
 from pathlib import Path
 
-from backend.app.config import DEFAULT_TEST_DATA_DIR, get_settings
+from backend.app.config import get_settings
+from scripts.cli_base import configure_test_runtime
 
 # NOTE: Do NOT import main.py at module level - it has side effects!
 # Import ensure_database_exists lazily when needed.
 
-# Test data directory and database path
-TEST_DATA_DIR = DEFAULT_TEST_DATA_DIR
-TEST_DB_PATH = TEST_DATA_DIR / "sqlite" / "app.db"
-TEST_DATABASE_URL = f"sqlite:///{TEST_DB_PATH}"
 
-# Database directory
-DB_DIR = TEST_DB_PATH.parent
+def get_test_database_url() -> str:
+    """Return the active test lane's SQLite URL."""
+    return f"sqlite:///{get_test_db_path()}"
 
 
 def setup_test_database():
@@ -38,19 +37,26 @@ def setup_test_database():
         Path: Path to test database
     """
     # Ensure database directory exists
-    DB_DIR.mkdir(parents=True, exist_ok=True)
+    test_db_path = get_test_db_path()
+    test_db_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Enable explicit test mode for the application BEFORE any app modules are imported.
     # This mirrors the --test flag behavior and ensures get_settings() will return
     # DATABASE_URL pointing at the test database.
     os.environ["LIBREFOLIO_TEST_MODE"] = "1"
 
-    return TEST_DB_PATH
+    return test_db_path
 
 
 def get_test_db_path() -> Path:
     """Get the path to test database."""
-    return TEST_DB_PATH
+    return get_test_data_dir() / "sqlite" / "app.db"
+
+
+def get_test_data_dir() -> Path:
+    """Return a validated test root, including direct-script entry points."""
+    _, data_dir = configure_test_runtime()
+    return data_dir
 
 
 def is_test_database_configured() -> bool:
@@ -69,8 +75,8 @@ def verify_test_database() -> tuple[bool, str]:
     settings = get_settings()
     db_url = settings.DATABASE_URL
 
-    # Check if path contains "test" data directory
-    is_test = "/data/test/" in db_url or is_test_database_configured()
+    expected_url = get_test_database_url()
+    is_test = is_test_database_configured() and db_url == expected_url
     return is_test, db_url
 
 
