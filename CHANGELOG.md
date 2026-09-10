@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### ✨ Added
+
+- **FX route metadata in the API** — route responses expose `is_chain` and a sorted, unique `providers_used` list of configured providers. Ordered `chain_steps` still preserves direction and repeated providers; request payloads remain unchanged, with no database migration required.
+
+### 🔄 Changed
+
+- **Preferences and broker-sharing compatibility** — the updated forms retain staged Save/Undo/Reset, persisted preferences and role-based access. Successful sharing saves close the list-page modal without another discard prompt; saving from the broker's Info tab keeps the inline editor open.
+
 ## [1.1.0] - 2026-09-07
 
 The first feature release after 1.0. It introduces the **Risk Analysis** subsystem (beta), rebuilds technical analysis as a backend plugin platform, ships the first public **AI Export V1** catalog, adds 19 new broker importers, and replaces the legacy valuation cascade with a single unified price resolver. Two beta-testing waves (early August with real Crédit Agricole reports, late August on a fresh production install) reshaped the import wizard around asset identity and added an ownership-aware dashboard, broker self-service sharing, a Docker light variant and an in-app changelog on top.

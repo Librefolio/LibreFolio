@@ -34,6 +34,7 @@
  *     part PreferencesTab owns.
  */
 import {beforeEach, describe, expect, it, vi} from 'vitest';
+import {tick} from 'svelte';
 import {readable, writable} from 'svelte/store';
 import {fireEvent, render, screen, waitFor, within} from '$test/component';
 
@@ -100,7 +101,13 @@ const setLanguage = vi.fn();
 vi.mock('$lib/stores/app/language', () => {
     const store = writable('en');
     return {
-        currentLanguage: {subscribe: store.subscribe, set: (v: string) => setLanguage(v)},
+        currentLanguage: {
+            subscribe: store.subscribe,
+            set: (v: string) => {
+                store.set(v);
+                setLanguage(v);
+            },
+        },
         // The real module re-exports LANGUAGE_OPTIONS as availableLanguages.
         availableLanguages: [
             {code: 'en', name: 'English', flag: 'EN'},
@@ -134,6 +141,8 @@ vi.mock('$lib/stores/reference/fxRoutesStore', () => ({
 
 import PreferencesTab from './PreferencesTab.svelte';
 import {zodiosApi} from '$lib/api';
+import {locale} from '$lib/i18n';
+import {currentLanguage} from '$lib/stores/app/language';
 
 // --- Helpers ------------------------------------------------------------
 
@@ -212,6 +221,8 @@ function banner(): HTMLElement | null {
 }
 
 beforeEach(() => {
+    currentLanguage.set('en');
+    locale.set('en');
     vi.clearAllMocks();
     globalGet().mockResolvedValue(globalItems() as never);
     userGet().mockResolvedValue({language: 'en', base_currency: 'EUR', theme: 'auto'} as never);
@@ -772,5 +783,120 @@ describe('PreferencesTab — the category filter', () => {
         // editedValues is not rebuilt by the filter: the pending change survives.
         await waitFor(() => expect(screen.queryByTestId('preference-theme')).not.toBeNull());
         expect(rowButton(themeRow(), 'save')).not.toBeNull();
+    });
+});
+
+// =========================================================================
+describe('PreferencesTab — Runes read boundaries', () => {
+    // The layout root contains only the desktop navigation. The mobile trigger
+    // lives outside it, so even the selected category has one matching button.
+    const category = (key: string) => within(within(screen.getByTestId('settings-layout')).getByRole('navigation')).getByRole('button', {name: key});
+
+    const expectInitialReadsOnly = () => {
+        expect(globalGet().mock.calls).toEqual([[]]);
+        expect(userGet().mock.calls).toEqual([[]]);
+    };
+
+    it('keeps exactly the two initial GETs across draft, category and live locale changes', async () => {
+        await mount();
+        await tick();
+        expectInitialReadsOnly();
+
+        await chooseLanguage('Italiano');
+        await chooseCurrency('USD');
+        await chooseTheme('dark');
+        expect(screen.getByTestId('settings-save-all')).toBeEnabled();
+        expectInitialReadsOnly();
+
+        await fireEvent.click(category('settings.categoryDisplay'));
+        expect(languageRow()).toBeInTheDocument();
+        expect(screen.queryByTestId('preference-theme')).not.toBeInTheDocument();
+        expectInitialReadsOnly();
+
+        currentLanguage.set('it');
+        locale.set('it');
+        await tick();
+        expect(within(languageRow()).getByRole('combobox')).toHaveTextContent('Italiano');
+        expect(within(languageRow()).getByTestId('setting-save')).toBeEnabled();
+        expectInitialReadsOnly();
+
+        await fireEvent.click(category('settings.categoryAppearance'));
+        expect(within(themeRow()).getByTestId('setting-save')).toBeEnabled();
+        await fireEvent.click(category('settings.all'));
+        expect(within(currencyRow()).getByRole('combobox')).toHaveTextContent('USD');
+        expect(within(themeRow()).getByTestId('setting-save')).toBeEnabled();
+        expectInitialReadsOnly();
+        expect(userPut()).not.toHaveBeenCalled();
+        expect(applyTheme).not.toHaveBeenCalled();
+        expect(setDirect).not.toHaveBeenCalled();
+    });
+
+    it('does not let late global defaults overwrite a draft made after the user GET', async () => {
+        const globals = deferred<ReturnType<typeof globalItems>>();
+        const user = deferred<{language: string; base_currency: string; theme: string}>();
+        globalGet().mockReturnValue(globals.promise);
+        userGet().mockReturnValue(user.promise);
+        render(PreferencesTab);
+
+        await waitFor(expectInitialReadsOnly);
+        user.resolve({language: 'en', base_currency: 'EUR', theme: 'auto'});
+        await waitFor(() => expect(languageRow()).toBeInTheDocument());
+        // The user GET, not Promise.all, owns the loading gate.
+        expect(screen.getByTestId('settings-layout')).toHaveAttribute('data-busy', 'false');
+        await chooseLanguage('Italiano');
+        await chooseCurrency('USD');
+        await chooseTheme('dark');
+        expect(within(languageRow()).queryByTestId('setting-reset')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('settings-reset-all')).not.toBeInTheDocument();
+
+        globals.resolve(globalItems({default_language: 'it', default_currency: 'USD', default_theme: 'light'}));
+        // Bulk Reset depends on the persisted values versus the global defaults
+        // and remains available while dirty. Its appearance proves the late
+        // response was consumed; per-field Reset is intentionally hidden until
+        // that field is no longer modified.
+        await waitFor(() => expect(screen.getByTestId('settings-reset-all')).toBeEnabled());
+        expect(within(languageRow()).getByRole('combobox')).toHaveTextContent('Italiano');
+        expect(within(currencyRow()).getByRole('combobox')).toHaveTextContent('USD');
+        for (const row of [languageRow(), currencyRow(), themeRow()]) {
+            expect(within(row).getByTestId('setting-save')).toBeEnabled();
+        }
+        expect(userPut()).not.toHaveBeenCalled();
+        expectInitialReadsOnly();
+
+        // Theme has no semantic selected-value attribute. Observe the retained
+        // draft at its existing write boundary, not through styling or a new seam.
+        await fireEvent.click(screen.getByTestId('settings-save-all'));
+        await waitFor(() =>
+            expect(notify).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    name: 'settings.preferences.saved',
+                    detail: expect.objectContaining({fields: 3, saved: ['language', 'default_currency', 'theme'], failed: [], language: 'it', currency: 'USD', theme: 'dark'}),
+                    toast: expect.objectContaining({variant: 'success'}),
+                }),
+            ),
+        );
+        expect(userPut().mock.calls).toEqual([[{language: 'it'}], [{base_currency: 'USD'}], [{theme: 'dark'}]]);
+        expect(setLanguage).toHaveBeenCalledWith('it');
+        expect(applyTheme).toHaveBeenCalledWith('dark');
+        expect(setDirect).toHaveBeenCalledWith({language: 'it', base_currency: 'USD', theme: 'dark'});
+        expectInitialReadsOnly();
+    });
+
+    it('starts exactly the same two reads on remount and discards only the old local draft', async () => {
+        const first = await mount();
+        await chooseLanguage('Italiano');
+        expect(within(languageRow()).getByTestId('setting-save')).toBeEnabled();
+        expectInitialReadsOnly();
+
+        first.unmount();
+        expect(screen.queryByTestId('preference-language')).not.toBeInTheDocument();
+        await mount();
+        await tick();
+
+        expect(within(languageRow()).getByRole('combobox')).toHaveTextContent('English');
+        expect(within(languageRow()).queryByTestId('setting-save')).not.toBeInTheDocument();
+        expect(globalGet().mock.calls).toEqual([[], []]);
+        expect(userGet().mock.calls).toEqual([[], []]);
+        expect(userPut()).not.toHaveBeenCalled();
     });
 });

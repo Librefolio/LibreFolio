@@ -60,11 +60,7 @@ export async function ensureFxRoutesLoaded(): Promise<void> {
         loading = true;
         try {
             const response = await zodiosApi.list_routes_api_v1_fx_providers_routes_get();
-            const items = ((response as any)?.items ?? []) as Array<{
-                base: string;
-                quote: string;
-                chain_steps?: Array<{from: string; to: string; provider: string}> | null;
-            }>;
+            const items = response?.items ?? [];
 
             const currencies = new Set<string>();
             const slugs = new Set<string>();

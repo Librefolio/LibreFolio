@@ -12,7 +12,7 @@
      *
      * Uses Svelte 5 runes. Reference: fx/[pair]/+page.svelte
      */
-    import {onMount, tick, untrack} from 'svelte';
+    import {onDestroy, onMount, tick, untrack} from 'svelte';
     import {page} from '$app/stores';
     import {goto} from '$app/navigation';
     import {debug, isDebugEnabled} from '$lib/debug';
@@ -89,6 +89,8 @@
     import {aiExportCatalogLoader, emptyAiExportCompatibility, type AiExportCatalogCompatibilityResult} from '$lib/features/ai-export/catalog/compatibility';
     import {buildAiExportMenuLabels, getAiExportErrorMessage, getAiExportSuccessMessages} from '$lib/features/ai-export/ui';
     import {signalCatalogStore} from '$lib/stores/signalCatalogStore.svelte';
+    import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
+    import type {FxPairCreatedDetail, FxPairSyncCompleteDetail} from '$lib/services/fxCreationSync';
 
     const DISABLED_AI_EXPORT_COMPATIBILITY = emptyAiExportCompatibility();
 
@@ -101,6 +103,10 @@
     }
 
     let {data}: Props = $props();
+    let pageAlive = true;
+    onDestroy(() => {
+        pageAlive = false;
+    });
 
     const ASSET_DETAIL_TAB_IDS = ['overview', 'risk'] as const;
     type AssetDetailTabId = (typeof ASSET_DETAIL_TAB_IDS)[number];
@@ -1107,7 +1113,11 @@
         displayDateStart = 'min';
     }
 
-    async function loadChartData(force = false, requestedSignalConfigs: SignalConfig[] = signals) {
+    async function loadChartData(force = false, requestedSignalConfigs: SignalConfig[] = signals, propagateError = false) {
+        const requestedAssetId = data.assetId;
+        const sessionGeneration = getClientSessionGeneration();
+        const current = () => pageAlive && data.assetId === requestedAssetId && isClientSessionCurrent(sessionGeneration);
+        if (!current()) return;
         const effectiveCurrency = displayCurrency && assetInfo?.currency && displayCurrency !== assetInfo.currency ? displayCurrency : (assetInfo?.currency ?? '');
         const targetCurrency = displayCurrency && assetInfo?.currency && displayCurrency !== assetInfo.currency ? displayCurrency : undefined;
         const requestPlan = buildBackendSignalRequestPlan(requestedSignalConfigs, signalDefinitions);
@@ -1162,6 +1172,7 @@
                     signals: requestPlan.requests,
                 },
             ]);
+            if (!current()) return;
             const result = (response as any)?.items?.[0];
             if (result) {
                 if (!pricesFromCache) {
@@ -1186,19 +1197,28 @@
             }
             resolveMaxStartFromChartData();
         } catch (e: any) {
+            if (!current()) return;
             console.error('Failed to load chart data:', e);
             signalRequestFailed = requestPlan.requests.length > 0;
             if (chartData.length === 0) error = e?.message || 'Failed to load prices';
+            if (propagateError) throw e;
         } finally {
-            loading = false;
-            signalsLoading = false;
+            if (current()) {
+                loading = false;
+                signalsLoading = false;
+            }
         }
     }
 
-    async function loadFxPairSlugs() {
+    async function loadFxPairSlugs(propagateError = false) {
+        const requestedAssetId = data.assetId;
+        const sessionGeneration = getClientSessionGeneration();
+        const current = () => pageAlive && data.assetId === requestedAssetId && isClientSessionCurrent(sessionGeneration);
+        if (!current()) return;
         try {
             const response = await zodiosApi.list_routes_api_v1_fx_providers_routes_get();
-            const items = (response as any)?.items || [];
+            if (!current()) return;
+            const items = response.items;
             const slugSet = new Set<string>();
             for (const i of items) {
                 const b = i.base < i.quote ? i.base : i.quote;
@@ -1207,7 +1227,9 @@
             }
             allConfiguredFxSlugs = [...slugSet].sort();
         } catch (e) {
+            if (!current()) return;
             console.error('Failed to load FX pair slugs:', e);
+            if (propagateError) throw e;
         }
     }
 
@@ -1257,14 +1279,22 @@
      * Load comparison asset data if any comparison signals are configured.
      * Called explicitly from onMount, handleRefresh, handleDateRangeChange, handleSignalsChange.
      */
-    async function maybeLoadComparison() {
+    async function maybeLoadComparison(propagateError = false) {
+        const requestedAssetId = data.assetId;
+        const sessionGeneration = getClientSessionGeneration();
+        const current = () => pageAlive && data.assetId === requestedAssetId && isClientSessionCurrent(sessionGeneration);
+        if (!current()) return;
         const compSignals = signals.filter((s) => s.signalType === 'asset-comparison');
         if (compSignals.length === 0 || lineData.length === 0) return;
         try {
-            comparisonEvents = await loadComparisonAssetsData(compSignals, {start: dateStart, end: dateEnd}, allAssets, comparisonEvents, data.assetId, displayCurrency || undefined);
+            const loadedEvents = await loadComparisonAssetsData(compSignals, {start: dateStart, end: dateEnd}, allAssets, comparisonEvents, requestedAssetId, displayCurrency || undefined);
+            if (!current()) return;
+            comparisonEvents = loadedEvents;
             overlayDataVersion++;
         } catch (e) {
+            if (!current()) return;
             console.error('Failed to load comparison asset data:', e);
+            if (propagateError) throw e;
         }
     }
 
@@ -1417,19 +1447,25 @@
         toasts.info(messages.privacyNotice);
     }
 
-    async function handleRefresh() {
-        invalidateAssetPriceStore(data.assetId);
+    async function handleRefresh(propagateError = false) {
+        const requestedAssetId = data.assetId;
+        const sessionGeneration = getClientSessionGeneration();
+        const current = () => pageAlive && data.assetId === requestedAssetId && isClientSessionCurrent(sessionGeneration);
+        if (!current()) return;
+        invalidateAssetPriceStore(requestedAssetId);
         rearmMaxPendingBeforeReload();
-        await loadChartData(true);
+        await loadChartData(true, signals, propagateError);
+        if (!current()) return;
         // Invalidate FX overlay stores so they refetch updated rates
         for (const pair of requiredFxPairs) {
             if (pair.status === 'missing') continue;
             getFxStore(pair.slug).invalidateAll();
             await ensureFxRangeLoaded(pair.slug, dateStart, dateEnd);
+            if (!current()) return;
         }
         overlayDataVersion++;
-        await maybeLoadComparison();
-        riskRefreshVersion += 1;
+        await maybeLoadComparison(propagateError);
+        if (current()) riskRefreshVersion += 1;
     }
 
     async function reloadMetadata() {
@@ -1490,26 +1526,41 @@
         overlayDataVersion++;
     }
 
-    async function handleFxPairCreated({base, quote, hasRealProvider}: {base: string; quote: string; hasRealProvider: boolean}) {
-        const wasForComparison = !!fxPairCreateSlug;
+    async function handleFxPairCreated({base, quote}: FxPairCreatedDetail, assetIdAtCreation: number, wasForComparison: boolean, assetCurrency: string) {
+        const sessionGeneration = getClientSessionGeneration();
+        const current = () => pageAlive && data.assetId === assetIdAtCreation && isClientSessionCurrent(sessionGeneration);
+        if (!current()) return;
         showFxPairAddModal = false;
         fxPairCreateSlug = '';
         invalidateFxRoutes();
-        await loadFxPairSlugs();
         // Only update display currency when creating the main asset's FX pair
         if (!wasForComparison) {
-            const assetCur = assetInfo?.currency ?? '';
-            const newQuote = assetCur === base ? quote : base;
-            if (newQuote !== assetCur) {
+            const newQuote = assetCurrency === base ? quote : base;
+            if (newQuote !== assetCurrency) {
                 displayCurrency = newQuote;
             }
         }
-        if (hasRealProvider) {
-            toasts.success($t('assetDetail.fxPairCreatedSynced'));
-        }
-        await handleRefresh();
-        await maybeLoadComparison();
-        overlayDataVersion++;
+        await loadFxPairSlugs(true);
+        if (current()) await handleRefresh();
+    }
+
+    async function handleFxPairCreationSynced(detail: FxPairSyncCompleteDetail, assetIdAtCreation: number) {
+        const current = () => pageAlive && data.assetId === assetIdAtCreation && isClientSessionCurrent(detail.sessionGeneration);
+        if (!current()) return;
+        await loadFxPairSlugs(true);
+        if (current()) await handleRefresh(true);
+    }
+
+    function createFxPairCallbacks(assetIdAtCreation: number, wasForComparison: boolean, assetCurrency: string) {
+        return {
+            oncreated: (detail: FxPairCreatedDetail) => handleFxPairCreated(detail, assetIdAtCreation, wasForComparison, assetCurrency),
+            onsynced: (detail: FxPairSyncCompleteDetail) => handleFxPairCreationSynced(detail, assetIdAtCreation),
+            onclose: () => {
+                if (!pageAlive || data.assetId !== assetIdAtCreation) return;
+                showFxPairAddModal = false;
+                fxPairCreateSlug = '';
+            },
+        };
     }
 
     async function handleDateRangeChange(newStart: string, newEnd: string) {
@@ -1906,7 +1957,7 @@
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                 data-testid="asset-detail-refresh-btn"
                 disabled={loading}
-                onclick={handleRefresh}
+                onclick={() => handleRefresh()}
             >
                 <RefreshCw class={loading ? 'animate-spin' : ''} size={14} />
                 {#if showActionLabels}<span>{$t('common.refresh')}</span>{/if}
@@ -2454,19 +2505,8 @@
         {@const createParts = fxPairCreateSlug ? fxPairCreateSlug.split('-') : []}
         {@const createBase = createParts.length === 2 ? createParts[0] : assetInfo.currency}
         {@const createQuote = createParts.length === 2 ? createParts[1] : displayCurrency !== assetInfo.currency ? displayCurrency : ''}
-        <FxPairAddModal
-            bind:open={showFxPairAddModal}
-            readonlyBase={!fxPairCreateSlug}
-            initialBase={createBase}
-            initialQuote={createQuote}
-            {dateStart}
-            {dateEnd}
-            oncreated={handleFxPairCreated}
-            onclose={() => {
-                showFxPairAddModal = false;
-                fxPairCreateSlug = '';
-            }}
-        />
+        {@const fxCreationCallbacks = createFxPairCallbacks(data.assetId, !!fxPairCreateSlug, assetInfo.currency)}
+        <FxPairAddModal bind:open={showFxPairAddModal} readonlyBase={!fxPairCreateSlug} initialBase={createBase} initialQuote={createQuote} {dateStart} {dateEnd} oncreated={fxCreationCallbacks.oncreated} onsynced={fxCreationCallbacks.onsynced} onclose={fxCreationCallbacks.onclose} />
     {/if}
 
     <!-- Page Sync Modal (sync all assets + FX pairs) -->

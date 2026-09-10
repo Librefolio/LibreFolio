@@ -66,7 +66,7 @@ export interface FxPairConfig {
     slug: string;
     /** Route configurations ordered by priority */
     providers: Array<{
-        /** Primary provider code (first step's provider, for display) */
+        /** Direct provider code or ordered CHAIN: provider label, including repeated steps */
         providerCode: string;
         priority: number;
         /** Full chain steps — 1 step = direct, 2+ = chain */

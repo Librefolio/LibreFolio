@@ -240,18 +240,55 @@ class TestFxConversionRouteProperties:
 
     def test_is_chain_multi_step(self):
         """2-step route IS a chain."""
-        r = FxConversionRoute(base="EUR", quote="USD", chain_steps='[{"from":"RON","to":"EUR","provider":"ECB"},{"from":"EUR","to":"USD","provider":"ECB"}]')
+        r = FxConversionRoute(base="RON", quote="USD", chain_steps='[{"from":"RON","to":"EUR","provider":"ECB"},{"from":"EUR","to":"USD","provider":"ECB"}]')
         assert r.is_chain is True
 
     def test_providers_used_single(self):
         """providers_used returns set of provider codes."""
         r = FxConversionRoute(base="EUR", quote="USD", chain_steps='[{"from":"EUR","to":"USD","provider":"ECB"}]')
+        assert type(r.providers_used) is set
         assert r.providers_used == {"ECB"}
 
     def test_providers_used_multi(self):
         """providers_used with multiple providers."""
         r = FxConversionRoute(base="CHF", quote="USD", chain_steps='[{"from":"CHF","to":"EUR","provider":"SNB"},{"from":"EUR","to":"USD","provider":"ECB"}]')
+        assert type(r.providers_used) is set
         assert r.providers_used == {"SNB", "ECB"}
+        assert r.parsed_steps == [
+            {"from": "CHF", "to": "EUR", "provider": "SNB"},
+            {"from": "EUR", "to": "USD", "provider": "ECB"},
+        ]
+
+    def test_inverse_single_step_is_not_a_chain(self):
+        r = FxConversionRoute(base="EUR", quote="USD", chain_steps='[{"from":"USD","to":"EUR","provider":"MOCKFX"}]')
+        assert r.is_chain is False
+        assert type(r.providers_used) is set
+        assert r.providers_used == {"MOCKFX"}
+        assert r.parsed_steps == [{"from": "USD", "to": "EUR", "provider": "MOCKFX"}]
+
+    def test_repeated_provider_is_a_chain_with_one_member(self):
+        r = FxConversionRoute(base="RON", quote="USD", chain_steps='[{"from":"RON","to":"EUR","provider":"MOCKFX"},{"from":"EUR","to":"USD","provider":"MOCKFX"}]')
+        assert r.is_chain is True
+        assert type(r.providers_used) is set
+        assert r.providers_used == {"MOCKFX"}
+        assert r.parsed_steps == [
+            {"from": "RON", "to": "EUR", "provider": "MOCKFX"},
+            {"from": "EUR", "to": "USD", "provider": "MOCKFX"},
+        ]
+
+    def test_manual_direct_route_keeps_manual_membership(self):
+        r = FxConversionRoute(base="EUR", quote="USD", chain_steps='[{"from":"EUR","to":"USD","provider":"MANUAL"}]')
+        assert r.is_chain is False
+        assert type(r.providers_used) is set
+        assert r.providers_used == {"MANUAL"}
+
+    def test_raw_mixed_manual_membership_is_only_an_in_memory_property(self):
+        """Not valid API input: raw table construction intentionally skips validation."""
+        r = FxConversionRoute(base="RON", quote="USD", chain_steps='[{"from":"RON","to":"EUR","provider":"MANUAL"},{"from":"EUR","to":"USD","provider":"MOCKFX"}]')
+        # Never persist or POST this object: the schema rejects MANUAL chains.
+        assert r.is_chain is True
+        assert type(r.providers_used) is set
+        assert r.providers_used == {"MANUAL", "MOCKFX"}
 
 
 # ============================================================================
