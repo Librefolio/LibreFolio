@@ -223,10 +223,7 @@ def test_transport_forbids_extras_at_each_envelope_level(model, factory, path):
     with pytest.raises(ValidationError) as caught:
         model.model_validate(payload)
 
-    assert any(
-        issue["type"] == "extra_forbidden" and issue["loc"][-1] == "unexpected_test_field"
-        for issue in caught.value.errors(include_input=False)
-    )
+    assert any(issue["type"] == "extra_forbidden" and issue["loc"][-1] == "unexpected_test_field" for issue in caught.value.errors(include_input=False))
 
 
 @pytest.mark.parametrize(
@@ -293,10 +290,7 @@ def test_required_contract_fields_are_not_supplied_by_defaults(model, factory, f
         del payload[field]
         with pytest.raises(ValidationError) as caught:
             model.model_validate(payload)
-        assert any(
-            issue["type"] == "missing" and issue["loc"] == (field,)
-            for issue in caught.value.errors(include_input=False)
-        ), field
+        assert any(issue["type"] == "missing" and issue["loc"] == (field,) for issue in caught.value.errors(include_input=False)), field
 
 
 @pytest.mark.parametrize(
@@ -317,10 +311,7 @@ def test_literal_metadata_rejects_other_variants(model, factory, field, value):
     payload[field] = value
     with pytest.raises(ValidationError) as caught:
         model.model_validate(payload)
-    assert any(
-        issue["type"] == "literal_error" and issue["loc"] == (field,)
-        for issue in caught.value.errors(include_input=False)
-    )
+    assert any(issue["type"] == "literal_error" and issue["loc"] == (field,) for issue in caught.value.errors(include_input=False))
 
 
 @pytest.mark.parametrize("mode", ["validation", "serialization"])
@@ -546,10 +537,7 @@ def test_response_counts_cannot_be_supplied_or_overridden(count_field):
     payload[count_field] = 99
     with pytest.raises(ValidationError) as caught:
         ToolComputeBatchResponse.model_validate(payload)
-    assert any(
-        issue["type"] == "extra_forbidden" and issue["loc"] == (count_field,)
-        for issue in caught.value.errors(include_input=False)
-    )
+    assert any(issue["type"] == "extra_forbidden" and issue["loc"] == (count_field,) for issue in caught.value.errors(include_input=False))
 
 
 _METRIC_PHASES = (
@@ -590,13 +578,7 @@ def test_platform_policy_accepts_exact_envelope_and_deadline_boundaries():
     assert policy.max_batch_items * policy.max_parameter_bytes + policy.envelope_reserve_bytes == policy.max_request_bytes
     assert policy.max_batch_items * policy.max_result_bytes + policy.envelope_reserve_bytes == policy.max_response_bytes
     assert policy.soft_timeout_ms + policy.output_reserve_ms == policy.job_timeout_ms
-    assert (
-        policy.ingress_timeout_ms
-        + policy.queue_timeout_ms
-        + policy.job_timeout_ms
-        + policy.cleanup_timeout_ms
-        + policy.response_reserve_ms
-    ) == policy.request_timeout_ms
+    assert (policy.ingress_timeout_ms + policy.queue_timeout_ms + policy.job_timeout_ms + policy.cleanup_timeout_ms + policy.response_reserve_ms) == policy.request_timeout_ms
     assert policy.client_timeout_ms > policy.request_timeout_ms
 
 
