@@ -34,6 +34,7 @@ Aggregate, WAC-based accounting for the whole portfolio (or any broker/asset sco
 | **[Timing Effect](portfolio-engine/timing-effect.md)** | Difference between Cumulative MWRR and Cumulative TWRR — quantifies the impact of cash flow timing on returns. |
 | **[Simple ROI](portfolio-engine/roi.md)** | Percentage return relative to net invested capital. Simple but subject to cash flow dilution. |
 | **[Net Annualized Return](portfolio-engine/net-annualized-return.md)** | Net CAGR definitions for holdings, period contribution, and FIFO lots, with 30-day minimum window. |
+| **[Yield on Cost](portfolio-engine/yield-on-cost.md)** | Trailing-365-day non-negative gross dividend/interest per eligible historical unit, divided by average purchase price (WAC) for each asset/broker pair. |
 | **[TWRR](portfolio-engine/twrr.md)** | Time-Weighted Rate of Return. Pure asset/strategy performance, neutralizing deposit/withdrawal timing. |
 | **[MWRR (XIRR)](portfolio-engine/mwrr.md)** | Money-Weighted Rate of Return. Personal investor performance accounting for cash flow timing. Annualized and Cumulative forms. |
 
@@ -97,6 +98,11 @@ To help you choose the right metric for your analysis, use this comparison guide
 * **Core Question:** "What is the equivalent money-weighted cumulative return over this selected time window?"
 * **Formula Concept:** Compounds the annualized MWRR for the actual number of days elapsed.
 * **Best Use Case:** Serial charts and dashboard widgets to compare visual performance trends side-by-side with TWRR and ROI.
+
+### 💸 9. [Yield on Cost](portfolio-engine/yield-on-cost.md)
+* **Core Question:** "How much gross dividend and interest income did each current unit produce over the last 365 calendar dates relative to its average purchase price?"
+* **Formula Concept:** Sums non-negative, transaction-date-FX income per eligible prior-day long unit, adjusts for linked splits, then divides by average purchase price (WAC) at the report end date.
+* **Best Use Case:** Comparing the recorded income productivity of open asset/broker positions without confusing it with market dividend yield, CAGR, or bond YTM.
 
 ---
 
@@ -164,4 +170,4 @@ To aid navigation, the three KPI cards on the LibreFolio dashboard — **Period 
 1. The help icon opens the matching section of the user guide's [KPI Cards](../../../user/dashboard/kpi-cards.md) page ([Card 1](../../../user/dashboard/kpi-cards.md#card-1-period-pl), [Card 2](../../../user/dashboard/kpi-cards.md#card-2-returns), [Card 3](../../../user/dashboard/kpi-cards.md#card-3-net-worth)).
 2. From there, each metric links to its financial theory chapter: [Period P&L](portfolio-engine/period-pnl.md), [Book Value](portfolio-engine/book-value.md), [ROI](portfolio-engine/roi.md), [TWRR](portfolio-engine/twrr.md), [MWRR](portfolio-engine/mwrr.md), [Timing Effect](portfolio-engine/timing-effect.md), [NAV / Net Worth](portfolio-engine/nav.md), [Deposited Capital & Total P&L](portfolio-engine/deposited-capital.md).
 
-Elsewhere in the app, the WAC preview in the transaction form links directly to the [Weighted Average Cost](weighted-average-cost.md) chapter, and each chart signal/indicator links to its own theory page.
+Elsewhere in the app, the WAC preview in the transaction form links directly to the [Weighted Average Cost](weighted-average-cost.md) chapter, the Holdings table links its YOC column to [Yield on Cost](portfolio-engine/yield-on-cost.md), and each chart signal/indicator links to its own theory page.

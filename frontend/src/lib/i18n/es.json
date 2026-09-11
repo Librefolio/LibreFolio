@@ -1431,7 +1431,30 @@
     "annualizedReturn": "Anualizado",
     "annualizedReturnTooltip": "Rendimiento neto anualizado (CAGR) de todos los lotes aún abiertos de la posición, desde la primera transacción hasta hoy — incluyendo ingresos menos gastos; valorado al coste cuando no hay precio. Para comparar posiciones mantenidas durante distintas duraciones.",
     "annualizedReturnPeriodTooltip": "Rendimiento neto anualizado (CAGR) sobre la ventana de tenencia de la posición en el periodo seleccionado, para comparar periodos de distinta duración.",
-    "netWorthTooltip": "Valores a precio de mercado + efectivo (+ valor en tránsito). Incluye la liquidez — no comparable con el solo contravalor de valores de un extracto bancario."
+    "netWorthTooltip": "Valores a precio de mercado + efectivo (+ valor en tránsito). Incluye la liquidez — no comparable con el solo contravalor de valores de un extracto bancario.",
+    "yieldOnCost": "YOC",
+    "yieldOnCostDisplayName": "Rendimiento sobre coste (YOC)",
+    "yieldOnCostTooltip": "Relaciona los dividendos e intereses brutos registrados durante el último año con el precio medio de compra (PMC).",
+    "yieldOnCostUnavailable": "Rendimiento sobre coste no disponible",
+    "yieldOnCostGrossPerUnit": "Ingreso bruto por unidad",
+    "yieldOnCostFxPair": "Conversión",
+    "yieldOnCostIssueDate": "Fecha del pago",
+    "yieldOnCostFirstTransaction": "Primer movimiento",
+    "yieldOnCostNoIncome": "No se registraron dividendos ni intereses durante el último año.",
+    "yieldOnCostReasons": {
+      "insufficientHistory": "El historial con este bróker abarca menos de un año.",
+      "incomeWithoutEligibleQuantity": "No consta ninguna cantidad mantenida el día anterior para un pago registrado.",
+      "replayInconsistent": "El historial de compras, ventas o transferencias no puede reconstruirse correctamente.",
+      "invalidSplit": "Un desdoblamiento vinculado no es coherente con las cantidades registradas.",
+      "missingFx": "No está disponible el tipo de cambio necesario para un pago.",
+      "missingWac": "El precio medio de compra (PMC) no está disponible.",
+      "nonPositiveWac": "El precio medio de compra (PMC) es nulo o negativo.",
+      "missingFxDetails": "Falta el tipo de cambio {pair} necesario para el cálculo en la fecha {date}."
+    },
+    "yieldOnCostValue": "Rendimiento sobre coste",
+    "yieldOnCostPeriod": "Periodo",
+    "yieldOnCostFxRateDate": "tipo del",
+    "yieldOnCostNoIncomeTitle": "Sin ingresos registrados"
   },
   "dataQuality": {
     "headerInfoOnly": "Nota de calidad de datos",
