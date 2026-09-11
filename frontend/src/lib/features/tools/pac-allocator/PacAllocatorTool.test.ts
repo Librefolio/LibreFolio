@@ -34,8 +34,10 @@
 import {beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import {getClientSessionGeneration, transitionClientSession} from '$lib/stores/app/clientSession';
-import {getCompiledToolContract, validateToolCatalog, verifyToolDescriptor, type CompatibleToolDescriptor, type ToolBatchMetrics, type ToolInput, type ToolItemMetrics, type ToolOutput} from '$lib/features/tools/contracts';
+import {userSettings} from '$lib/stores/app/settings';
+import {ToolClientError, getCompiledToolContract, validateToolCatalog, verifyToolDescriptor, type CompatibleToolDescriptor, type ToolBatchMetrics, type ToolInput, type ToolItemMetrics, type ToolOutput} from '$lib/features/tools/contracts';
 import type {ToolItemResult, ToolRunOptions} from '$lib/features/tools/client';
+import type {PacAllocationSource, PacAllocationSourceAsset} from './allocationSource';
 import PacAllocatorTool from './PacAllocatorTool.svelte';
 
 // =========================================================================
@@ -44,11 +46,22 @@ import PacAllocatorTool from './PacAllocatorTool.svelte';
 // `vi.mock` factories are hoisted above ordinary `const` declarations, so the
 // mock itself must be created through `vi.hoisted` (see client.test.ts /
 // ProviderAssignmentSection.test.ts for the same idiom).
-const {runToolMock} = vi.hoisted(() => ({
+const {runToolMock, fetchSourceMock, ensureCurrenciesLoadedMock} = vi.hoisted(() => ({
     runToolMock: vi.fn<(code: 'pac_allocator', version: '1.0.0', options: ToolRunOptions<'pac_allocator', '1.0.0'>) => Promise<ToolItemResult<'pac_allocator', '1.0.0'>>>(),
+    fetchSourceMock: vi.fn(),
+    ensureCurrenciesLoadedMock: vi.fn(),
 }));
 
 vi.mock('$lib/features/tools/client', () => ({runTool: runToolMock}));
+vi.mock('./allocationSource', () => ({fetchPacAllocationSource: fetchSourceMock}));
+vi.mock('$lib/stores/reference/currencyStore', () => ({
+    ensureCurrenciesLoaded: ensureCurrenciesLoadedMock,
+    getAllCurrencies: () => [
+        {code: 'EUR', name: 'Euro fixture', symbol: '€', flag_emoji: '🇪🇺', country_codes: ['EU'], country_names: ['Fixture Europe']},
+        {code: 'USD', name: 'Dollar fixture', symbol: '$', flag_emoji: '🇺🇸', country_codes: ['US'], country_names: ['Fixture United States']},
+        {code: 'CHF', name: 'Franc fixture', symbol: 'CHF', flag_emoji: '🇨🇭', country_codes: ['CH'], country_names: ['Fixture Switzerland']},
+    ],
+}));
 
 // =========================================================================
 // Generated-type projections. No financial interface is redeclared here: every
@@ -305,23 +318,18 @@ function deferred<T>(): {promise: Promise<T>; resolve: (value: T) => void} {
 }
 
 // =========================================================================
-// Descriptor / catalog setup. Built once through the real, unmocked
+// Descriptor / catalog setup. Rebuilt for each test through the real, unmocked
 // `contracts.ts` functions so the descriptor the component receives is
 // genuinely branded/compatible — the same path the production renderer takes
 // (see `registry.ts`) — rather than a hand-typed stand-in.
 // =========================================================================
 let descriptor: PacDescriptor;
 let accountGeneration: number;
+let accountSequence = 0;
 
-beforeAll(async () => {
-    await setupI18n();
-
-    transitionClientSession('pac-allocator-component-test');
-    accountGeneration = getClientSessionGeneration();
-
+function makeDescriptor(): PacDescriptor {
     const contract = getCompiledToolContract('pac_allocator', '1.0.0');
     if (!contract) throw new Error('pac_allocator/1.0.0 tool contract is not compiled — run the API client generation step first.');
-
     const rawCatalog = {
         catalog_version: '1',
         items: [
@@ -377,13 +385,79 @@ beforeAll(async () => {
         },
         unavailable: [],
     };
-
     const catalog = validateToolCatalog(rawCatalog, accountGeneration);
-    descriptor = verifyToolDescriptor(catalog, 'pac_allocator', '1.0.0');
+    return verifyToolDescriptor(catalog, 'pac_allocator', '1.0.0');
+}
+
+function localIsoOffset(days: number): string {
+    const date = new Date();
+    date.setDate(date.getDate() + days);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function ownedAsset(overrides: Partial<PacAllocationSourceAsset> = {}): PacAllocationSourceAsset {
+    const base: PacAllocationSourceAsset = {
+        assetId: 17,
+        instrumentKey: 'asset:17',
+        name: 'Fixture global ETF',
+        ticker: 'FIX',
+        assetType: 'ETF',
+        iconUrl: null,
+        quote: {
+            rawPrice: '123.450000000001',
+            currency: 'USD',
+            quoteBaseQuantity: 100,
+            referenceDate: '2026-09-09',
+            source: 'fixture-close',
+            daysBeforeRequested: 1,
+        },
+        contexts: [
+            {
+                contextKey: 'asset:17:broker:3',
+                brokerId: 3,
+                brokerName: 'Fixture broker A',
+                ownershipSharePercent: '25',
+                custodyQuantity: '12.345678901234',
+            },
+            {
+                contextKey: 'asset:17:broker:4',
+                brokerId: 4,
+                brokerName: 'Fixture broker B',
+                ownershipSharePercent: '75',
+                custodyQuantity: '7.000000000001',
+            },
+        ],
+    };
+    return {
+        ...base,
+        ...overrides,
+        quote: {...base.quote, ...overrides.quote},
+        contexts: overrides.contexts ?? base.contexts,
+    };
+}
+
+function allocationSource(asOfDate: string, assets: readonly PacAllocationSourceAsset[] = []): PacAllocationSource {
+    return {
+        generatedAt: `${asOfDate}T12:00:00Z`,
+        asOfDate,
+        assets,
+    };
+}
+
+beforeAll(async () => {
+    await setupI18n();
 });
 
 beforeEach(() => {
+    transitionClientSession(`pac-allocator-component-test-${++accountSequence}`);
+    accountGeneration = getClientSessionGeneration();
+    descriptor = makeDescriptor();
+    userSettings.setDirect({language: 'en', base_currency: 'EUR', theme: 'auto', avatar_url: null});
     runToolMock.mockReset();
+    fetchSourceMock.mockReset();
+    fetchSourceMock.mockImplementation(async (asOfDate: string) => allocationSource(asOfDate));
+    ensureCurrenciesLoadedMock.mockReset();
+    ensureCurrenciesLoadedMock.mockResolvedValue(undefined);
 });
 
 // =========================================================================
@@ -400,93 +474,726 @@ function rowByIndex(index: number): HTMLElement {
     return row;
 }
 
+function field(testid: string): HTMLInputElement {
+    return screen.getByTestId(testid) as HTMLInputElement;
+}
+
+async function addManualRow(): Promise<HTMLElement> {
+    await fireEvent.click(screen.getByTestId('pac-add-manual-asset'));
+    return rowByIndex(screen.getAllByTestId('pac-row').length - 1);
+}
+
+async function selectCurrency(testId: string, value: string): Promise<void> {
+    const trigger = screen.getByTestId(`${testId}-trigger`);
+    await fireEvent.click(trigger);
+    const listbox = await screen.findByRole('listbox');
+    await fireEvent.click(within(listbox).getByTestId(`search-select-option-${value}`));
+    await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
+}
+
+/** Selects a SimpleSelect option by keyboard distance from its current value. */
+async function stepSimpleSelect(testId: string, arrowMoves: number): Promise<void> {
+    const trigger = screen.getByTestId(`${testId}-button`);
+    await fireEvent.click(trigger);
+    for (let index = 0; index < arrowMoves; index += 1) {
+        await fireEvent.keyDown(trigger, {key: 'ArrowDown'});
+    }
+    await fireEvent.keyDown(trigger, {key: 'Enter'});
+    await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'false'));
+}
+
+/**
+ * The three money modes, in the order `PacMoneySection` declares them. Naming the
+ * index here rather than counting arrow presses from wherever the select happens
+ * to be means a mode can be selected *absolutely* (Home, then N steps down), in
+ * either direction, without ever matching on a translated option label.
+ */
+const MONEY_MODE_INDEX = {not_supplied: 0, none: 1, custom: 2} as const;
+
+async function selectMoneyMode(kind: 'cash' | 'contributions', mode: keyof typeof MONEY_MODE_INDEX): Promise<void> {
+    const trigger = screen.getByTestId(`pac-${kind}-mode-button`);
+    await fireEvent.click(trigger);
+    await fireEvent.keyDown(trigger, {key: 'Home'});
+    for (let index = 0; index < MONEY_MODE_INDEX[mode]; index += 1) {
+        await fireEvent.keyDown(trigger, {key: 'ArrowDown'});
+    }
+    await fireEvent.keyDown(trigger, {key: 'Enter'});
+    await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'false'));
+    // The section publishes which mode it landed in, so the helper ends on the
+    // post-condition it promises instead of on "a key was pressed".
+    if (mode === 'custom') await waitFor(() => expect(screen.getAllByTestId(`pac-${kind}-row`).length).toBeGreaterThan(0));
+    else await waitFor(() => expect(screen.getByTestId(`pac-${kind}-${mode === 'none' ? 'none' : 'not-supplied'}`)).toBeInTheDocument());
+}
+
+/**
+ * `ConfirmModal` shows its item list outright when there is exactly one item and
+ * collapses it behind a toggle as soon as there are more
+ * (`shouldShowItems = items.length === 1 || showItems`). A multi-context
+ * description therefore has to be opened before it can be read.
+ *
+ * The toggle carries no test id and its label is translated, so it is identified
+ * structurally instead: within this confirmation it is the only button that is
+ * neither the header's close cross (a hardcoded `aria-label="Close"`, not a
+ * translated string) nor one of the two footer actions, both of which do carry
+ * test ids. The filter is asserted to resolve to exactly one button, so a future
+ * button added to the modal body fails here rather than silently clicking the
+ * wrong thing.
+ */
+async function expandConfirmationItems(testId: string): Promise<void> {
+    const modal = screen.getByTestId(testId).closest('[role="dialog"]');
+    if (!modal) throw new Error(`confirmation ${testId} is not inside a dialog`);
+    const toggles = within(modal as HTMLElement)
+        .getAllByRole('button')
+        .filter((button) => !button.dataset.testid && button.getAttribute('aria-label') !== 'Close');
+    expect(toggles).toHaveLength(1);
+    await fireEvent.click(toggles[0]!);
+}
+
+function queueSuccess(output: PacOutput = readyOutput()): void {
+    runToolMock.mockImplementationOnce(async (_code, _version, options) => successResult(options.correlationId, output, accountGeneration));
+}
+
+async function analyzeAndReadInput(output: PacOutput = readyOutput()): Promise<ToolInput<'pac_allocator', '1.0.0'>> {
+    const callIndex = runToolMock.mock.calls.length;
+    queueSuccess(output);
+    await fireEvent.click(screen.getByTestId('pac-analyze'));
+    await waitFor(() => expect(runToolMock).toHaveBeenCalledTimes(callIndex + 1));
+    await waitFor(() => expect(screen.getByTestId('pac-allocator-tool')).toHaveAttribute('data-busy', 'false'));
+    const call = runToolMock.mock.calls[callIndex];
+    if (!call) throw new Error(`runTool call ${callIndex} not found`);
+    return call[2].parameters;
+}
+
 describe('PacAllocatorTool (pac-allocator)', () => {
-    it('caps existing cash and contributions independently at four rows', async () => {
+    it('starts with no rows, the local date, and the configured report currency', async () => {
+        userSettings.setDirect({language: 'en', base_currency: 'CHF', theme: 'auto', avatar_url: null});
         renderTool();
 
-        const addCash = screen.getByTestId('pac-add-cash');
-        for (let index = 0; index < 4; index++) await fireEvent.click(addCash);
-        expect(screen.getAllByTestId('pac-existing-cash-row')).toHaveLength(4);
-        expect(addCash).toBeDisabled();
-        await fireEvent.click(addCash);
-        expect(screen.getAllByTestId('pac-existing-cash-row')).toHaveLength(4);
-
-        const addContribution = screen.getByTestId('pac-add-contribution');
-        for (let index = 0; index < 4; index++) await fireEvent.click(addContribution);
-        expect(screen.getAllByTestId('pac-contribution-row')).toHaveLength(4);
-        expect(addContribution).toBeDisabled();
-        await fireEvent.click(addContribution);
-        expect(screen.getAllByTestId('pac-contribution-row')).toHaveLength(4);
+        expect(screen.getByTestId('pac-no-rows')).toBeInTheDocument();
+        expect(screen.queryAllByTestId('pac-row')).toHaveLength(0);
+        expect(screen.getByTestId('pac-as-of-date')).toHaveValue(localIsoOffset(0));
+        await waitFor(() => expect(screen.getByTestId('pac-report-currency-trigger')).toHaveTextContent('CHF'));
     });
 
-    it('sends a manually-filled draft as a correctly separated typed request, with no browser-computed economic result', async () => {
+    it('falls back to EUR when user settings have not supplied a base currency', async () => {
+        userSettings.reset();
+        renderTool();
+
+        await waitFor(() => expect(screen.getByTestId('pac-report-currency-trigger')).toHaveTextContent('EUR'));
+    });
+
+    it('keeps manual entry available while the allocation source is loading', async () => {
+        const pending = deferred<PacAllocationSource>();
+        fetchSourceMock.mockReturnValueOnce(pending.promise);
+        renderTool();
+
+        expect(await screen.findByTestId('pac-owned-assets-loading')).toBeInTheDocument();
+        const addManual = screen.getByTestId('pac-add-manual-asset');
+        expect(addManual).toBeEnabled();
+        await fireEvent.click(addManual);
+        expect(rowByIndex(0)).toBeInTheDocument();
+
+        pending.resolve(allocationSource(localIsoOffset(0)));
+    });
+
+    it('keeps manual entry available when the allocation source fails', async () => {
+        fetchSourceMock.mockRejectedValueOnce(new ToolClientError('network', 'network_failed'));
+        renderTool();
+
+        expect(await screen.findByTestId('pac-owned-assets-error')).toBeInTheDocument();
+        await fireEvent.click(screen.getByTestId('pac-add-manual-asset'));
+        expect(rowByIndex(0)).toBeInTheDocument();
+    });
+
+    it('keeps manual entry available for an empty allocation source', async () => {
+        renderTool();
+
+        expect(await screen.findByTestId('pac-owned-assets-empty')).toBeInTheDocument();
+        await fireEvent.click(screen.getByTestId('pac-add-manual-asset'));
+        expect(rowByIndex(0)).toBeInTheDocument();
+    });
+
+    it('renders custom currency/date/grid/quote selectors and exact decimal fields', async () => {
+        renderTool();
+        await addManualRow();
+
+        expect(screen.getByTestId('pac-report-currency')).toContainElement(screen.getByTestId('pac-report-currency-trigger'));
+        expect(screen.getByTestId('pac-as-of-date')).toHaveAttribute('type', 'text');
+        expect(screen.getByTestId('pac-asset-currency-0')).toContainElement(screen.getByTestId('pac-asset-currency-0-trigger'));
+        expect(screen.getByTestId('pac-price-basis-0')).toContainElement(screen.getByTestId('pac-price-basis-0-button'));
+        expect(screen.getByTestId('pac-price-date-0')).toHaveAttribute('type', 'text');
+        expect(screen.getByTestId('pac-grid-mode-0')).toContainElement(screen.getByTestId('pac-grid-mode-0-button'));
+
+        for (const testid of ['pac-initial-quantity-0', 'pac-raw-price-0', 'pac-target-weight-0', 'pac-step-quantity-0']) {
+            expect(screen.getByTestId(testid)).toHaveAttribute('type', 'text');
+            expect(screen.getByTestId(testid)).toHaveAttribute('inputmode', 'decimal');
+        }
+    });
+
+    it('caps custom cash and contributions independently at four rows', async () => {
+        renderTool();
+
+        await stepSimpleSelect('pac-cash-mode', 2);
+        const addCash = screen.getByTestId('pac-add-cash');
+        for (let index = 1; index < 4; index += 1) await fireEvent.click(addCash);
+        expect(screen.getAllByTestId('pac-cash-row')).toHaveLength(4);
+        expect(addCash).toBeDisabled();
+
+        await stepSimpleSelect('pac-contributions-mode', 2);
+        const addContribution = screen.getByTestId('pac-add-contributions');
+        for (let index = 1; index < 4; index += 1) await fireEvent.click(addContribution);
+        expect(screen.getAllByTestId('pac-contributions-row')).toHaveLength(4);
+        expect(addContribution).toBeDisabled();
+    });
+
+    it('sends a manually filled draft without computing an economic result in the browser', async () => {
         const {promise, resolve} = deferred<PacSuccess>();
         runToolMock.mockImplementationOnce(() => promise);
         renderTool();
+        await addManualRow();
 
-        await fireEvent.input(screen.getByTestId('pac-report-currency'), {target: {value: 'EUR'}});
-
-        const row0 = rowByIndex(0);
-        await fireEvent.input(within(row0).getByTestId('pac-row-name'), {target: {value: 'Local ETF'}});
-        await fireEvent.input(within(row0).getByTestId('pac-initial-quantity'), {target: {value: '10'}});
-        await fireEvent.input(within(row0).getByTestId('pac-price'), {target: {value: '100'}});
-        await fireEvent.input(within(row0).getByTestId('pac-price-currency'), {target: {value: 'EUR'}});
-        await fireEvent.input(within(row0).getByTestId('pac-target-percent'), {target: {value: '100'}});
-
-        await fireEvent.click(screen.getByTestId('pac-add-cash'));
-        await fireEvent.input(screen.getByTestId('pac-cash-currency'), {target: {value: 'EUR'}});
-        await fireEvent.input(screen.getByTestId('pac-cash-amount'), {target: {value: '500'}});
-
-        await fireEvent.click(screen.getByTestId('pac-add-contribution'));
-        await fireEvent.input(screen.getByTestId('pac-contribution-currency'), {target: {value: 'USD'}});
-        await fireEvent.input(screen.getByTestId('pac-contribution-amount'), {target: {value: '200'}});
+        await fireEvent.input(field('pac-display-name-0'), {target: {value: 'Local ETF'}});
+        await fireEvent.input(field('pac-initial-quantity-0'), {target: {value: '10.000000000001'}});
+        await fireEvent.input(field('pac-raw-price-0'), {target: {value: '100.000000000001'}});
+        await selectCurrency('pac-asset-currency-0', 'EUR');
+        await fireEvent.input(field('pac-target-weight-0'), {target: {value: '100'}});
 
         await fireEvent.click(screen.getByTestId('pac-analyze'));
         await waitFor(() => expect(runToolMock).toHaveBeenCalledTimes(1));
 
-        const [call] = runToolMock.mock.calls;
+        const call = runToolMock.mock.calls[0];
         if (!call) throw new Error('runTool was not called');
         const [code, version, options] = call;
         expect(code).toBe('pac_allocator');
         expect(version).toBe('1.0.0');
-
-        const parameters: ToolInput<'pac_allocator', '1.0.0'> = options.parameters;
-
-        // Exactly the seven `PacInput` fields — nothing computed (no aggregate
-        // total, no merged cash figure) was added on top of the typed draft.
+        const parameters = options.parameters;
         expect(Object.keys(parameters).sort()).toEqual(['as_of_date', 'cash_balances', 'contributions', 'operation', 'report_currency', 'rows', 'valuation_rates']);
+        expect(parameters).toMatchObject({
+            operation: 'analyze',
+            report_currency: 'EUR',
+            cash_balances: null,
+            contributions: null,
+            valuation_rates: [],
+        });
+        expect(parameters.rows).toHaveLength(1);
+        expect(parameters.rows?.[0]).toMatchObject({
+            name: 'Local ETF',
+            initial_quantity: '10.000000000001',
+            target_percent: '100',
+            quote: {raw_price: '100.000000000001', currency: 'EUR'},
+        });
 
-        expect(parameters.operation).toBe('analyze');
-        expect(parameters.report_currency).toBe('EUR');
-
-        // `cash_balances` and `contributions` are separate vectors, never merged.
-        expect(parameters.cash_balances).toEqual([{currency: 'EUR', amount: '500'}]);
-        expect(parameters.contributions).toEqual([{currency: 'USD', amount: '200'}]);
-        expect(parameters.valuation_rates).toEqual([]);
-
-        const requestRows = parameters.rows ?? [];
-        expect(requestRows).toHaveLength(1);
-        const [requestRow] = requestRows;
-        expect(requestRow.name).toBe('Local ETF');
-        expect(requestRow.initial_quantity).toBe('10');
-        // The wire schema allows `quote` to be absent; this draft never leaves it
-        // unset, so check that precondition instead of assuming it.
-        if (!requestRow.quote) throw new Error('expected the row to carry a quote');
-        expect(requestRow.quote.raw_price).toBe('100');
-        expect(requestRow.quote.currency).toBe('EUR');
-        expect(requestRow.target_percent).toBe('100');
-
-        // Until the backend boundary resolves there is no economic result for
-        // the browser to invent from the draft.
         expect(screen.queryByTestId('pac-result')).toBeNull();
-        resolve(successResult('c-draft', readyOutput(), accountGeneration));
+        resolve(successResult(options.correlationId, readyOutput(), accountGeneration));
         await waitFor(() => expect(screen.getByTestId('pac-allocator-tool')).toHaveAttribute('data-busy', 'false'));
     });
 
-    it('renders a ready result as backend facts, with execution metrics as an independent section', async () => {
-        runToolMock.mockResolvedValueOnce(successResult('c-ready', readyOutput(), accountGeneration));
+    it('imports every custody context of one canonical asset atomically and keeps missing-price assets', async () => {
+        const requestedDate = localIsoOffset(0);
+        const missingPrice = ownedAsset({
+            assetId: 18,
+            instrumentKey: 'asset:18',
+            name: 'Fixture no-price asset',
+            ticker: null,
+            quote: {
+                rawPrice: null,
+                currency: 'EUR',
+                quoteBaseQuantity: 1,
+                referenceDate: null,
+                source: null,
+                daysBeforeRequested: null,
+            },
+            contexts: [
+                {
+                    contextKey: 'asset:18:broker:9',
+                    brokerId: 9,
+                    brokerName: 'Fixture broker C',
+                    ownershipSharePercent: '100',
+                    custodyQuantity: '3',
+                },
+            ],
+        });
+        fetchSourceMock.mockImplementation(async (asOfDate: string) => allocationSource(asOfDate, [ownedAsset(), missingPrice]));
         renderTool();
 
+        const groupedCard = await screen.findByTestId('pac-owned-asset-17');
+        expect(screen.queryAllByTestId('pac-owned-asset-17')).toHaveLength(1);
+        await fireEvent.click(groupedCard);
+        await fireEvent.click(screen.getByTestId('pac-owned-asset-18'));
+
+        expect(screen.getAllByTestId('pac-row')).toHaveLength(3);
+        expect(field('pac-initial-quantity-0')).toHaveValue('12.345678901234');
+        expect(field('pac-initial-quantity-1')).toHaveValue('7.000000000001');
+        expect(field('pac-raw-price-2')).toHaveValue('');
+        expect(field('pac-target-weight-0')).toHaveValue('');
+        expect(field('pac-step-quantity-0')).toHaveValue('');
+
+        const parameters = await analyzeAndReadInput();
+        expect(parameters.as_of_date).toBe(requestedDate);
+        expect(parameters.rows).toHaveLength(3);
+        expect(parameters.rows?.map((row) => row.initial_quantity)).toEqual(['12.345678901234', '7.000000000001', '3']);
+        expect(parameters.rows?.[0]?.quote).toEqual({
+            raw_price: '123.450000000001',
+            currency: 'USD',
+            quote_base_quantity: 100,
+            reference_date: '2026-09-09',
+        });
+        expect(parameters.rows?.[2]?.quote?.raw_price).toBeNull();
+        expect(parameters.rows?.[0]?.target_percent).toBe('');
+        expect(parameters.rows?.[0]?.buy_grid).toEqual({mode: null, quantity_step: ''});
+
+        for (const row of parameters.rows ?? []) {
+            expect(Object.keys(row).sort()).toEqual(['buy_grid', 'initial_quantity', 'instrument_key', 'name', 'quote', 'row_key', 'target_percent']);
+            expect(row).not.toHaveProperty('origin');
+            expect(row).not.toHaveProperty('source');
+            expect(row).not.toHaveProperty('importedValue');
+            expect(row).not.toHaveProperty('stale');
+        }
+    });
+
+    it('enforces the 32-row cap all-or-nothing for a multi-context asset', async () => {
+        fetchSourceMock.mockImplementation(async (asOfDate: string) => allocationSource(asOfDate, [ownedAsset()]));
+        renderTool();
+        const card = await screen.findByTestId('pac-owned-asset-17');
+
+        for (let index = 0; index < 31; index += 1) {
+            await fireEvent.click(screen.getByTestId('pac-add-manual-asset'));
+        }
+        expect(screen.getAllByTestId('pac-row')).toHaveLength(31);
+
+        await fireEvent.click(card);
+
+        expect(screen.getAllByTestId('pac-row')).toHaveLength(31);
+        expect(card).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('duplicates every payload field except for a fresh row key and keeps mobile actions accessible', async () => {
+        const oneContext = ownedAsset({contexts: [ownedAsset().contexts[0]!]});
+        fetchSourceMock.mockImplementation(async (asOfDate: string) => allocationSource(asOfDate, [oneContext]));
+        renderTool();
+        await fireEvent.click(await screen.findByTestId('pac-owned-asset-17'));
+
+        await fireEvent.input(field('pac-target-weight-0'), {target: {value: '42.5'}});
+        await stepSimpleSelect('pac-grid-mode-0', 1);
+        await fireEvent.input(field('pac-step-quantity-0'), {target: {value: '2.500000000001'}});
+
+        const duplicate = screen.getByTestId('pac-duplicate-asset-0');
+        const remove = screen.getByTestId('pac-remove-asset-0');
+        expect(duplicate).toHaveAccessibleName();
+        expect(remove).toHaveAccessibleName();
+        await fireEvent.click(duplicate);
+        expect(screen.getAllByTestId('pac-row')).toHaveLength(2);
+
+        const parameters = await analyzeAndReadInput();
+        const rows = parameters.rows ?? [];
+        expect(rows).toHaveLength(2);
+        const [original, copy] = rows;
+        if (!original || !copy) throw new Error('expected original and duplicate rows');
+        const {row_key: originalKey, ...originalPayload} = original;
+        const {row_key: copyKey, ...copyPayload} = copy;
+        expect(copyKey).not.toBe(originalKey);
+        expect(copyPayload).toEqual(originalPayload);
+    });
+
+    it('confirms deselection when an edited duplicate is linked to the selected asset', async () => {
+        const oneContext = ownedAsset({contexts: [ownedAsset().contexts[0]!]});
+        fetchSourceMock.mockImplementation(async (asOfDate: string) => allocationSource(asOfDate, [oneContext]));
+        renderTool();
+        const card = await screen.findByTestId('pac-owned-asset-17');
+        await fireEvent.click(card);
+        await fireEvent.click(screen.getByTestId('pac-duplicate-asset-0'));
+        await fireEvent.input(field('pac-display-name-1'), {target: {value: 'Edited duplicate fixture'}});
+
+        await fireEvent.click(card);
+
+        const confirmation = screen.getByTestId('pac-confirm-deselect');
+        expect(confirmation).toBeInTheDocument();
+        expect(screen.getByRole('listitem')).toHaveTextContent('Edited duplicate fixture');
+        expect(screen.getAllByTestId('pac-row')).toHaveLength(2);
+
+        await fireEvent.click(screen.getByTestId('confirm-modal-confirm'));
+        expect(screen.queryAllByTestId('pac-row')).toHaveLength(0);
+        expect(card).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('confirms one context only when a modified copied row is removed directly', async () => {
+        // Removing a row and deselecting the asset are two different intentions
+        // that both end in a destructive confirmation, so the confirmation has
+        // to say which one is about to happen. Here only the row under the
+        // button may be described and removed — the sibling context stays, and
+        // the asset stays selected because a copy of it is still in the draft.
+        fetchSourceMock.mockImplementation(async (asOfDate: string) => allocationSource(asOfDate, [ownedAsset()]));
+        renderTool();
+        const card = await screen.findByTestId('pac-owned-asset-17');
+        await fireEvent.click(card);
+
+        expect(screen.getAllByTestId('pac-row')).toHaveLength(2);
+        await fireEvent.input(field('pac-display-name-0'), {target: {value: 'Edited broker A row'}});
+        await fireEvent.input(field('pac-display-name-1'), {target: {value: 'Edited broker B row'}});
+
+        await fireEvent.click(screen.getByTestId('pac-remove-asset-0'));
+
+        const listed = screen.getAllByRole('listitem');
+        expect(listed).toHaveLength(1);
+        expect(listed[0]).toHaveTextContent('Edited broker A row');
+        expect(listed[0]).toHaveTextContent('Fixture broker A');
+        expect(listed[0]).not.toHaveTextContent('Fixture broker B');
+        // Nothing is removed until the answer comes back.
+        expect(screen.getAllByTestId('pac-row')).toHaveLength(2);
+
+        await fireEvent.click(screen.getByTestId('confirm-modal-confirm'));
+
+        expect(screen.getAllByTestId('pac-row')).toHaveLength(1);
+        expect(field('pac-display-name-0')).toHaveValue('Edited broker B row');
+        expect(card).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('cancels a single-row removal without touching the draft', async () => {
+        fetchSourceMock.mockImplementation(async (asOfDate: string) => allocationSource(asOfDate, [ownedAsset()]));
+        renderTool();
+        await fireEvent.click(await screen.findByTestId('pac-owned-asset-17'));
+        await fireEvent.input(field('pac-display-name-0'), {target: {value: 'Edited broker A row'}});
+
+        await fireEvent.click(screen.getByTestId('pac-remove-asset-0'));
+        await fireEvent.click(screen.getByTestId('confirm-modal-cancel'));
+
+        expect(screen.queryAllByRole('listitem')).toHaveLength(0);
+        expect(screen.getAllByTestId('pac-row')).toHaveLength(2);
+        expect(field('pac-display-name-0')).toHaveValue('Edited broker A row');
+    });
+
+    it('removes an unmodified copied row with no confirmation at all', async () => {
+        // The confirmation exists to protect edits. A pristine copy has none to
+        // lose, so asking would be a dialog for nothing.
+        fetchSourceMock.mockImplementation(async (asOfDate: string) => allocationSource(asOfDate, [ownedAsset()]));
+        renderTool();
+        await fireEvent.click(await screen.findByTestId('pac-owned-asset-17'));
+
+        await fireEvent.click(screen.getByTestId('pac-remove-asset-0'));
+
+        expect(screen.queryAllByRole('listitem')).toHaveLength(0);
+        expect(screen.getAllByTestId('pac-row')).toHaveLength(1);
+    });
+
+    it('describes and removes every linked context when the gallery card is deselected', async () => {
+        // The contrast with the row button above: one click on the card is an
+        // intention about the whole asset, so every modified context it owns is
+        // named, and confirming takes all of them out.
+        fetchSourceMock.mockImplementation(async (asOfDate: string) => allocationSource(asOfDate, [ownedAsset()]));
+        renderTool();
+        const card = await screen.findByTestId('pac-owned-asset-17');
+        await fireEvent.click(card);
+        await fireEvent.input(field('pac-display-name-0'), {target: {value: 'Edited broker A row'}});
+        await fireEvent.input(field('pac-display-name-1'), {target: {value: 'Edited broker B row'}});
+
+        await fireEvent.click(card);
+
+        // Two modified contexts, so the list starts collapsed: open it and read
+        // what the user is about to lose.
+        await expandConfirmationItems('pac-confirm-deselect');
+        const listed = screen.getAllByRole('listitem').map((item) => item.textContent ?? '');
+        expect(listed).toHaveLength(2);
+        expect(listed.some((text) => text.includes('Edited broker A row') && text.includes('Fixture broker A'))).toBe(true);
+        expect(listed.some((text) => text.includes('Edited broker B row') && text.includes('Fixture broker B'))).toBe(true);
+        expect(screen.getAllByTestId('pac-row')).toHaveLength(2);
+
+        await fireEvent.click(screen.getByTestId('confirm-modal-confirm'));
+
+        expect(screen.queryAllByTestId('pac-row')).toHaveLength(0);
+        expect(card).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('marks imported rows stale, ignores a late source response, and confirms refresh conflicts without replacing target/grid', async () => {
+        const today = localIsoOffset(0);
+        const supersededDate = localIsoOffset(-1);
+        const currentDate = localIsoOffset(-2);
+        const superseded = deferred<PacAllocationSource>();
+        const current = deferred<PacAllocationSource>();
+        fetchSourceMock.mockImplementation((asOfDate: string) => {
+            if (asOfDate === today) return Promise.resolve(allocationSource(asOfDate, [ownedAsset({contexts: [ownedAsset().contexts[0]!]})]));
+            if (asOfDate === supersededDate) return superseded.promise;
+            if (asOfDate === currentDate) return current.promise;
+            throw new Error(`unexpected source date ${asOfDate}`);
+        });
+        renderTool();
+        await fireEvent.click(await screen.findByTestId('pac-owned-asset-17'));
+
+        await fireEvent.input(field('pac-display-name-0'), {target: {value: 'Edited local name'}});
+        await fireEvent.input(field('pac-target-weight-0'), {target: {value: '42.5'}});
+        await stepSimpleSelect('pac-grid-mode-0', 1);
+        await fireEvent.input(field('pac-step-quantity-0'), {target: {value: '2.5'}});
+
+        const date = field('pac-as-of-date');
+        await fireEvent.input(date, {target: {value: supersededDate}});
+        await fireEvent.blur(date);
+        await waitFor(() => expect(fetchSourceMock).toHaveBeenCalledTimes(2));
+        await fireEvent.focus(date);
+        await fireEvent.input(date, {target: {value: currentDate}});
+        await fireEvent.blur(date);
+        await waitFor(() => expect(fetchSourceMock).toHaveBeenCalledTimes(3));
+        expect(screen.getByTestId('pac-stale-source')).toBeInTheDocument();
+
+        superseded.resolve(
+            allocationSource(supersededDate, [
+                ownedAsset({
+                    name: 'Late response name',
+                    contexts: [{...ownedAsset().contexts[0]!, custodyQuantity: '88'}],
+                }),
+            ]),
+        );
+        await Promise.resolve();
+        expect(field('pac-display-name-0')).toHaveValue('Edited local name');
+        expect(field('pac-initial-quantity-0')).toHaveValue('12.345678901234');
+
+        current.resolve(
+            allocationSource(currentDate, [
+                ownedAsset({
+                    name: 'Fresh server name',
+                    quote: {...ownedAsset().quote, rawPrice: '200.000000000001', referenceDate: currentDate},
+                    contexts: [{...ownedAsset().contexts[0]!, custodyQuantity: '99.000000000001'}],
+                }),
+            ]),
+        );
+        await waitFor(() => expect(screen.getByTestId('pac-owned-assets-refresh')).toBeEnabled());
+
+        // Merely receiving the fresh source never overwrites the editable copy.
+        expect(field('pac-display-name-0')).toHaveValue('Edited local name');
+        expect(field('pac-initial-quantity-0')).toHaveValue('12.345678901234');
+        await fireEvent.click(screen.getByTestId('pac-refresh-copied-facts'));
+
+        const confirmation = screen.getByTestId('pac-confirm-refresh');
+        expect(confirmation).toBeInTheDocument();
+        expect(screen.getByRole('listitem')).toHaveTextContent('Edited local name');
+        await fireEvent.click(screen.getByTestId('confirm-modal-confirm'));
+
+        expect(field('pac-display-name-0')).toHaveValue('Fresh server name');
+        expect(field('pac-initial-quantity-0')).toHaveValue('99.000000000001');
+        expect(field('pac-raw-price-0')).toHaveValue('200.000000000001');
+        expect(field('pac-target-weight-0')).toHaveValue('42.5');
+        expect(field('pac-step-quantity-0')).toHaveValue('2.5');
+
+        const parameters = await analyzeAndReadInput();
+        expect(parameters.as_of_date).toBe(currentDate);
+        expect(parameters.rows?.[0]).toMatchObject({
+            name: 'Fresh server name',
+            initial_quantity: '99.000000000001',
+            target_percent: '42.5',
+            buy_grid: {mode: 'whole', quantity_step: '2.5'},
+            quote: {raw_price: '200.000000000001', reference_date: currentDate},
+        });
+    });
+
+    it('marks copied rows stale when the same date answers differently, and never overwrites the draft on its own', async () => {
+        // The date-change path is covered above. This is the other half: the
+        // request date does not move at all, so nothing in the draft says the
+        // copy might be out of date — the *response* is the only evidence. The
+        // two shapes that evidence takes, a context that changed and a context
+        // that disappeared, are exercised one at a time and with the banner
+        // cleared in between, so each is genuinely the cause of the red it
+        // would produce. Neither may edit the user's draft by itself.
+        const today = localIsoOffset(0);
+        const changed = deferred<PacAllocationSource>();
+        const removed = deferred<PacAllocationSource>();
+        let sourceCalls = 0;
+        fetchSourceMock.mockImplementation((asOfDate: string) => {
+            if (asOfDate !== today) throw new Error(`unexpected source date ${asOfDate}`);
+            sourceCalls += 1;
+            if (sourceCalls === 1) return Promise.resolve(allocationSource(today, [ownedAsset()]));
+            if (sourceCalls === 2) return changed.promise;
+            return removed.promise;
+        });
+        renderTool();
+        await fireEvent.click(await screen.findByTestId('pac-owned-asset-17'));
+
+        expect(screen.getAllByTestId('pac-row')).toHaveLength(2);
+        await fireEvent.input(field('pac-target-weight-0'), {target: {value: '42.5'}});
+        await fireEvent.input(field('pac-target-weight-1'), {target: {value: '57.5'}});
+        expect(screen.queryByTestId('pac-stale-source')).toBeNull();
+
+        // ── 1. Same date, one context answers with a different custody quantity.
+        await fireEvent.click(screen.getByTestId('pac-owned-assets-refresh'));
+        await waitFor(() => expect(fetchSourceMock).toHaveBeenCalledTimes(2));
+        changed.resolve(
+            allocationSource(today, [
+                ownedAsset({
+                    name: 'Fresh server name',
+                    contexts: [{...ownedAsset().contexts[0]!, custodyQuantity: '55.000000000001'}, ownedAsset().contexts[1]!],
+                }),
+            ]),
+        );
+
+        await waitFor(() => expect(screen.getByTestId('pac-stale-source')).toBeInTheDocument());
+        // Arrival alone changed nothing the user can see in their own copy.
+        expect(field('pac-display-name-0')).toHaveValue('Fixture global ETF');
+        expect(field('pac-initial-quantity-0')).toHaveValue('12.345678901234');
+        expect(field('pac-initial-quantity-1')).toHaveValue('7.000000000001');
+        expect(field('pac-target-weight-0')).toHaveValue('42.5');
+        expect(field('pac-target-weight-1')).toHaveValue('57.5');
+
+        // Reconciling takes the server's facts and leaves the draft-only fields
+        // alone; with both contexts accounted for, the warning goes away again.
+        await waitFor(() => expect(screen.getByTestId('pac-refresh-copied-facts')).toBeEnabled());
+        await fireEvent.click(screen.getByTestId('pac-refresh-copied-facts'));
+        await waitFor(() => expect(field('pac-initial-quantity-0')).toHaveValue('55.000000000001'));
+        expect(field('pac-display-name-0')).toHaveValue('Fresh server name');
+        expect(field('pac-target-weight-0')).toHaveValue('42.5');
+        expect(field('pac-initial-quantity-1')).toHaveValue('7.000000000001');
+        expect(screen.queryByTestId('pac-stale-source')).toBeNull();
+
+        // ── 2. Same date again, and this time broker B's context is simply gone.
+        await fireEvent.click(screen.getByTestId('pac-owned-assets-refresh'));
+        await waitFor(() => expect(fetchSourceMock).toHaveBeenCalledTimes(3));
+        removed.resolve(
+            allocationSource(today, [
+                ownedAsset({
+                    name: 'Fresh server name',
+                    contexts: [{...ownedAsset().contexts[0]!, custodyQuantity: '55.000000000001'}],
+                }),
+            ]),
+        );
+
+        await waitFor(() => expect(screen.getByTestId('pac-stale-source')).toBeInTheDocument());
+        expect(field('pac-initial-quantity-1')).toHaveValue('7.000000000001');
+        expect(field('pac-target-weight-1')).toHaveValue('57.5');
+
+        // A row whose context vanished has nothing to reconcile against, so it
+        // keeps the copy it has and keeps saying it is out of date.
+        await waitFor(() => expect(screen.getByTestId('pac-refresh-copied-facts')).toBeEnabled());
+        await fireEvent.click(screen.getByTestId('pac-refresh-copied-facts'));
+        expect(field('pac-initial-quantity-1')).toHaveValue('7.000000000001');
+        expect(field('pac-target-weight-1')).toHaveValue('57.5');
+        expect(screen.getByTestId('pac-stale-source')).toBeInTheDocument();
+
+        const parameters = await analyzeAndReadInput();
+        expect(parameters.rows?.map((row) => row.initial_quantity)).toEqual(['55.000000000001', '7.000000000001']);
+        expect(parameters.rows?.map((row) => row.target_percent)).toEqual(['42.5', '57.5']);
+    });
+
+    it('serializes cash and contributions as null, empty arrays, or entered values according to their tri-state modes', async () => {
+        renderTool();
+
+        const omitted = await analyzeAndReadInput();
+        expect(omitted.cash_balances).toBeNull();
+        expect(omitted.contributions).toBeNull();
+
+        await stepSimpleSelect('pac-cash-mode', 1);
+        await stepSimpleSelect('pac-contributions-mode', 1);
+        const explicitNone = await analyzeAndReadInput();
+        expect(explicitNone.cash_balances).toEqual([]);
+        expect(explicitNone.contributions).toEqual([]);
+
+        await stepSimpleSelect('pac-cash-mode', 1);
+        await stepSimpleSelect('pac-contributions-mode', 1);
+        await selectCurrency('pac-cash-currency-0', 'EUR');
+        await fireEvent.input(field('pac-cash-amount-0'), {target: {value: '500.000000000001'}});
+        await selectCurrency('pac-contributions-currency-0', 'USD');
+        await fireEvent.input(field('pac-contributions-amount-0'), {target: {value: '200.000000000001'}});
+
+        const entered = await analyzeAndReadInput();
+        expect(entered.cash_balances).toEqual([{currency: 'EUR', amount: '500.000000000001'}]);
+        expect(entered.contributions).toEqual([{currency: 'USD', amount: '200.000000000001'}]);
+    });
+
+    it('ignores cash and contribution rows retained behind an inactive mode when hinting at FX', async () => {
+        // Switching a money section back to `not_supplied` / `none` keeps the
+        // rows the user typed, so nothing is lost if they change their mind.
+        // They are not part of the request in those modes, though, so a foreign
+        // currency sitting in one of them must not ask for a rate that would
+        // never be used — and must not disappear from the draft either.
+        renderTool();
+        expect(screen.queryByTestId('pac-fx-needed')).toBeNull();
+
+        await selectMoneyMode('cash', 'custom');
+        // A new row is created in the report currency, which is not foreign.
+        expect(screen.queryByTestId('pac-fx-needed')).toBeNull();
+        await selectCurrency('pac-cash-currency-0', 'CHF');
+        await fireEvent.input(field('pac-cash-amount-0'), {target: {value: '500'}});
+        expect(screen.getByTestId('pac-fx-needed')).toBeInTheDocument();
+
+        await selectMoneyMode('contributions', 'custom');
+        await selectCurrency('pac-contributions-currency-0', 'USD');
+        await fireEvent.input(field('pac-contributions-amount-0'), {target: {value: '200'}});
+        expect(screen.getByTestId('pac-fx-needed')).toBeInTheDocument();
+
+        // Cash goes quiet; the contribution in USD is still live, so the hint is
+        // still right to be there — which is what makes the next step a real
+        // assertion rather than a hint that happened to vanish.
+        await selectMoneyMode('cash', 'none');
+        expect(screen.getByTestId('pac-fx-needed')).toBeInTheDocument();
+
+        await selectMoneyMode('contributions', 'not_supplied');
+        expect(screen.queryByTestId('pac-fx-needed')).toBeNull();
+
+        // The hint is only half the contract. `addValuationRate()` suggests the
+        // first foreign currency that is not configured yet, off the same
+        // `foreignCurrencies` list, so a retained CHF/USD row must not seed a
+        // rate the request would never carry either. Asserted on the serialized
+        // payload — an empty `currency` is the machine-readable proof that
+        // nothing was auto-selected, with no translated label involved.
+        const rates = screen.getByTestId('pac-valuation-rates');
+        await fireEvent.click(within(rates).getByRole('button', {expanded: false}));
+        await fireEvent.click(screen.getByTestId('pac-enable-rates'));
+        await fireEvent.click(screen.getByTestId('pac-add-rate'));
+        expect(screen.queryAllByTestId('pac-rate-row')).toHaveLength(1);
+        expect(screen.getByTestId('pac-rate-currency-0-trigger')).not.toHaveTextContent(/CHF|USD/);
+        expect((await analyzeAndReadInput()).valuation_rates).toEqual([{currency: '', rate_to_report: '', reference_date: ''}]);
+
+        // Hand the section back exactly as it was found: the empty rate goes, and
+        // manual rates go off again, because `pac-fx-needed` is suppressed while
+        // `allowFx` is on and the assertions below are about the hint.
+        await fireEvent.click(screen.getByTestId('pac-remove-rate-0'));
+        expect(screen.queryAllByTestId('pac-rate-row')).toHaveLength(0);
+        await fireEvent.click(screen.getByTestId('pac-enable-rates'));
+        await waitFor(() => expect(screen.queryByTestId('pac-add-rate')).toBeNull());
+        expect(screen.queryByTestId('pac-fx-needed')).toBeNull();
+
+        // Neither row was thrown away: both come back exactly as typed, and so
+        // does the hint they justify.
+        await selectMoneyMode('cash', 'custom');
+        await selectMoneyMode('contributions', 'custom');
+        expect(screen.getByTestId('pac-cash-currency-0-trigger')).toHaveTextContent('CHF');
+        expect(field('pac-cash-amount-0')).toHaveValue('500');
+        expect(screen.getByTestId('pac-contributions-currency-0-trigger')).toHaveTextContent('USD');
+        expect(field('pac-contributions-amount-0')).toHaveValue('200');
+        expect(screen.getByTestId('pac-fx-needed')).toBeInTheDocument();
+
+        // And the same suggestion, on the same two rows, now that both modes are
+        // live again: CHF is offered. Without this the empty suggestion above
+        // would also be satisfied by a component that never suggests anything.
+        await fireEvent.click(within(screen.getByTestId('pac-valuation-rates')).getByRole('button', {expanded: false}));
+        await fireEvent.click(screen.getByTestId('pac-enable-rates'));
+        await fireEvent.click(screen.getByTestId('pac-add-rate'));
+        expect(screen.queryAllByTestId('pac-rate-row')).toHaveLength(1);
+        expect((await analyzeAndReadInput()).valuation_rates).toEqual([{currency: 'CHF', rate_to_report: '', reference_date: ''}]);
+    });
+
+    it('keeps valuation rates manual even when imported rows use a foreign currency', async () => {
+        const oneContext = ownedAsset({contexts: [ownedAsset().contexts[0]!]});
+        fetchSourceMock.mockImplementation(async (asOfDate: string) => allocationSource(asOfDate, [oneContext]));
+        renderTool();
+        await fireEvent.click(await screen.findByTestId('pac-owned-asset-17'));
+
+        expect(screen.getByTestId('pac-fx-needed')).toBeInTheDocument();
+        expect(screen.queryAllByTestId('pac-rate-row')).toHaveLength(0);
+        expect((await analyzeAndReadInput()).valuation_rates).toEqual([]);
+
+        const rates = screen.getByTestId('pac-valuation-rates');
+        await fireEvent.click(within(rates).getByRole('button', {expanded: false}));
+        await fireEvent.click(screen.getByTestId('pac-enable-rates'));
+        expect(screen.queryAllByTestId('pac-rate-row')).toHaveLength(0);
+        await fireEvent.click(screen.getByTestId('pac-add-rate'));
+        await selectCurrency('pac-rate-currency-0', 'USD');
+        await fireEvent.input(field('pac-rate-value-0'), {target: {value: '0.900000000001'}});
+        const rateDate = field('pac-rate-date-0');
+        await fireEvent.input(rateDate, {target: {value: localIsoOffset(-1)}});
+        await fireEvent.blur(rateDate);
+
+        expect((await analyzeAndReadInput()).valuation_rates).toEqual([{currency: 'USD', rate_to_report: '0.900000000001', reference_date: localIsoOffset(-1)}]);
+    });
+
+    it('renders a ready result as backend facts, with execution metrics as an independent section', async () => {
+        renderTool();
+        queueSuccess(readyOutput());
         await fireEvent.click(screen.getByTestId('pac-analyze'));
 
         const result = await screen.findByTestId('pac-result');
@@ -517,17 +1224,33 @@ describe('PacAllocatorTool (pac-allocator)', () => {
         const {promise, resolve} = deferred<PacSuccess>();
         runToolMock.mockImplementationOnce(() => promise);
         renderTool();
+        await addManualRow();
+        await fireEvent.input(field('pac-display-name-0'), {target: {value: 'Before in-flight edit'}});
 
         await fireEvent.click(screen.getByTestId('pac-analyze'));
         await waitFor(() => expect(screen.getByTestId('pac-allocator-tool')).toHaveAttribute('data-busy', 'true'));
 
         // Edit the draft while the request above is still in flight.
-        const row0 = rowByIndex(0);
-        await fireEvent.input(within(row0).getByTestId('pac-row-name'), {target: {value: 'Changed mid-flight'}});
+        await fireEvent.input(field('pac-display-name-0'), {target: {value: 'Changed mid-flight'}});
 
         await waitFor(() => expect(screen.getByTestId('pac-request-stale')).toBeInTheDocument());
 
         resolve(successResult('c-stale', readyOutput(), accountGeneration));
+
+        await waitFor(() => expect(screen.getByTestId('pac-response-ignored')).toBeInTheDocument());
+        expect(screen.queryByTestId('pac-result')).toBeNull();
+        expect(screen.getByTestId('pac-allocator-tool')).toHaveAttribute('data-busy', 'false');
+    });
+
+    it('ignores a compute response after the account generation changes', async () => {
+        const {promise, resolve} = deferred<PacSuccess>();
+        runToolMock.mockImplementationOnce(() => promise);
+        renderTool();
+
+        await fireEvent.click(screen.getByTestId('pac-analyze'));
+        await waitFor(() => expect(screen.getByTestId('pac-allocator-tool')).toHaveAttribute('data-busy', 'true'));
+        transitionClientSession(`pac-compute-other-account-${++accountSequence}`);
+        resolve(successResult('c-account-stale', readyOutput(), accountGeneration));
 
         await waitFor(() => expect(screen.getByTestId('pac-response-ignored')).toBeInTheDocument());
         expect(screen.queryByTestId('pac-result')).toBeNull();
@@ -567,10 +1290,8 @@ describe('PacAllocatorTool (pac-allocator)', () => {
 
     it('renders a platform failure and preserves the draft', async () => {
         renderTool();
-
-        await fireEvent.input(screen.getByTestId('pac-report-currency'), {target: {value: 'EUR'}});
-        const row0 = rowByIndex(0);
-        await fireEvent.input(within(row0).getByTestId('pac-row-name'), {target: {value: 'Kept ETF'}});
+        await addManualRow();
+        await fireEvent.input(field('pac-display-name-0'), {target: {value: 'Kept ETF'}});
 
         runToolMock.mockResolvedValueOnce(errorResult('c-error', 'execution_failed', true, accountGeneration));
         await fireEvent.click(screen.getByTestId('pac-analyze'));
@@ -579,7 +1300,7 @@ describe('PacAllocatorTool (pac-allocator)', () => {
         expect(platformError).toHaveAttribute('data-error-code', 'execution_failed');
         expect(screen.queryByTestId('pac-result')).toBeNull();
 
-        expect(screen.getByTestId('pac-report-currency')).toHaveValue('EUR');
-        expect(within(rowByIndex(0)).getByTestId('pac-row-name')).toHaveValue('Kept ETF');
+        expect(screen.getByTestId('pac-report-currency-trigger')).toHaveTextContent('EUR');
+        expect(field('pac-display-name-0')).toHaveValue('Kept ETF');
     });
 });

@@ -7,7 +7,17 @@ description: Standalone calculations, compatibility, diagnostics, and timing in 
 
 A **Tool** is a standalone calculation: you supply the data for one operation, and it returns a result or a structured error. It is not an instruction to modify your portfolio.
 
-The Tool platform is **experimental**. Its implemented [PAC allocator](pac-allocator/index.md) pilot provides a manual interface for analyzing an exact initial allocation state. It is intentionally narrower than a solver: it does not propose trades, optimize an allocation, or assess trade feasibility. Any future solver would be a separate capability with its own contract and interface.
+The Tool platform is **experimental**. Its implemented [PAC allocator](pac-allocator/index.md) pilot analyzes an exact initial allocation state. It can start a scenario from your own owned assets or from fully manual rows, but it is intentionally narrower than a solver: it does not propose trades, optimize an allocation, or assess trade feasibility. Any future solver would be a separate capability with its own contract and interface.
+
+## 🖱️ Opening a tool
+
+Open **Tools** from the sidebar to see the catalogue as a grid of cards. For a ready tool, the **entire card** is clickable, not just its title or an icon; an arrow indicator marks it as open-able.
+
+Both the catalogue and an open tool show:
+
+- a **Documentation** action linking to that tool's page, with a label that appears next to the icon on wider screens and collapses to an icon-only control on narrow screens;
+- a **Refresh** action that reloads the catalogue (from the hub) or the current tool's interface (from an open tool), with the same responsive icon-only behavior; refreshing an open tool always asks for confirmation because it replaces the interface and discards its current draft;
+- a single **Version** label showing the tool's contract version — there is no separate build or implementation number shown alongside it.
 
 ## 🧭 Availability and compatibility
 
@@ -34,7 +44,7 @@ The calculation's contract does not give it your signed-in user, database access
 In particular:
 
 - Manual values are inputs to that calculation, not saved portfolio transactions.
-- Do not assume that missing prices, exchange rates, or holdings will be fetched automatically.
+- Do not assume that missing prices, exchange rates, or holdings will be fetched automatically. A tool-specific interface can offer an explicit action to copy your own current holdings into the draft, but that is a separate, user-triggered read of your data — not something the calculation itself does.
 - The tool-specific interface is responsible for helping you enter and review the inputs; it must not silently substitute a different scenario.
 - Scenario values belong in the compute request, not in documentation URLs, diagnostic metadata, or logs.
 
