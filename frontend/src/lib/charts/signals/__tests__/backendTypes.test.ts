@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest';
 
-import {backendSignalSchemas, type BackendSignalBandSeries, type BackendSignalBarSeries, type BackendSignalLineSeries, type BackendSignalResult} from '../backendTypes';
+import {backendSignalSchemas, normalizeBackendSignalSeries, type BackendSignalAreaSeries, type BackendSignalBandSeries, type BackendSignalBarSeries, type BackendSignalLineSeries, type BackendSignalResult} from '../backendTypes';
 
 const priceAxis = {
     key: 'price',
@@ -111,5 +111,74 @@ describe('backend signal runtime contracts', () => {
         });
 
         expect(result.series?.map((series) => series.kind)).toEqual(['line', 'line', 'bar']);
+    });
+});
+
+describe('backend signal series normalization', () => {
+    it('preserves canonical line, area, and bar discriminants and flat point order', () => {
+        const points: BackendSignalLineSeries['points'] = [
+            {date: '2026-07-23', value: 101.5},
+            {date: '2026-07-24', value: 102.5},
+        ];
+        const line: BackendSignalLineSeries = {
+            key: 'line',
+            label_key: 'signals.test.line',
+            semantic_id: 'test.line',
+            semantic_description: 'Canonical flat line fixture.',
+            unit: 'price',
+            axis: priceAxis,
+            kind: 'line',
+            points,
+        };
+        const area: BackendSignalAreaSeries = {...line, key: 'area', kind: 'area'};
+        const bar: BackendSignalBarSeries = {...line, key: 'bar', kind: 'bar'};
+
+        const normalized = [line, area, bar].map((series) => normalizeBackendSignalSeries(series));
+
+        expect(normalized.map((series) => series.kind)).toEqual(['line', 'area', 'bar']);
+        expect(normalized.map((series) => series.points)).toEqual([points, points, points]);
+    });
+
+    it('flattens generated point elements by exactly one level while preserving order', () => {
+        const first = {date: '2026-07-23', value: 1};
+        const second = {date: '2026-07-24', value: 2};
+        const third = {date: '2026-07-25', value: 3};
+        const generatedLine = {
+            key: 'generated-line',
+            label_key: 'signals.test.generated_line',
+            semantic_id: 'test.generated-line',
+            semantic_description: 'Generated nested line fixture.',
+            unit: 'price',
+            axis: priceAxis,
+            kind: 'line',
+            points: [[first, second], third],
+        } satisfies Parameters<typeof normalizeBackendSignalSeries>[0];
+
+        const normalized = normalizeBackendSignalSeries(generatedLine);
+
+        expect(normalized.kind).toBe('line');
+        expect(normalized.points).toEqual([first, second, third]);
+    });
+
+    it('leaves band series unchanged without flattening band points', () => {
+        const band: BackendSignalBandSeries = {
+            key: 'band',
+            label_key: 'signals.test.band',
+            semantic_id: 'test.band',
+            semantic_description: 'Canonical band fixture.',
+            unit: 'price',
+            axis: priceAxis,
+            kind: 'band',
+            points: [
+                {date: '2026-07-23', lower: 95, middle: 100, upper: 105},
+                {date: '2026-07-24', lower: 96, middle: 101, upper: 106},
+            ],
+        };
+
+        const normalized = normalizeBackendSignalSeries(band);
+
+        expect(normalized.kind).toBe('band');
+        expect(normalized).toEqual(band);
+        expect(normalized.points).toEqual(band.points);
     });
 });
