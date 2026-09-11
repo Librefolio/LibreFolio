@@ -14,6 +14,7 @@ from backend.app.schemas.pac_allocator import (
     InitialStateTotals,
     NativeMoney,
     NormalizedBuyGrid,
+    NormalizedContribution,
     NormalizedInitialRow,
     NormalizedMoney,
     NormalizedQuote,
@@ -97,7 +98,10 @@ def _normalized(state: InitialState) -> PacNormalizedInitialState:
             for row in state.rows
         ],
         cash_balances=[NormalizedMoney(currency=currency, amount=decimal_text(amount)) for currency, amount in state.cash_balances],
-        contributions=[NormalizedMoney(currency=currency, amount=decimal_text(amount)) for currency, amount in state.contributions],
+        contributions=[
+            NormalizedContribution(currency=currency, amount=decimal_text(amount), monetary_step=decimal_text(monetary_step))
+            for currency, amount, monetary_step in state.contributions
+        ],
         valuation_rates=[NormalizedValuationRate(currency=rate.currency, rate_to_report=decimal_text(rate.rate.require()), reference_date=rate.reference_date.isoformat() if rate.reference_date is not None else None) for rate in state.valuation_rates],
     )
 

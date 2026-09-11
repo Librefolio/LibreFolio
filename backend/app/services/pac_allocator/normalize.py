@@ -6,7 +6,6 @@ import re
 from collections import defaultdict
 from datetime import date
 from decimal import Decimal, localcontext
-from typing import Literal
 
 from backend.app.schemas.common import Currency
 from backend.app.schemas.pac_allocator import (
@@ -18,6 +17,7 @@ from backend.app.schemas.pac_allocator import (
     PacAnalyzeInput,
     PacAnalyzeIssue,
     PacAnalyzeRowInput,
+    PacContributionInput,
     PacInfoIssue,
     PacInvalidIssue,
     PacIssueParams,
@@ -29,7 +29,7 @@ from backend.app.schemas.pac_allocator import (
     PathField,
     UnsupportedCode,
 )
-from backend.app.services.pac_allocator.models import Checkpoint, InitialRow, InitialState, NormalizationResult, ParsedGrid, ParsedMoneyVector, ParsedQuote, ParsedRate, ParsedRow, ParsedValue, check_budget, unavailable_reason
+from backend.app.services.pac_allocator.models import Checkpoint, InitialRow, InitialState, NormalizationResult, ParsedContributionVector, ParsedGrid, ParsedMoneyVector, ParsedQuote, ParsedRate, ParsedRow, ParsedValue, check_budget, unavailable_reason
 from backend.app.services.pac_allocator.numeric import HUNDRED, ONE, ZERO, decimal_context
 
 _FIXED_DECIMAL = re.compile(r"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)")
@@ -142,9 +142,6 @@ class _Normalizer:
         elif raw_basis <= 0:
             self.invalid("invalid_quote_basis", (*path, "quote_base_quantity"))
             basis = ParsedValue(None, "input_invalid")
-        elif raw_basis not in (1, 100):
-            self.unsupported("quote_basis_unsupported", (*path, "quote_base_quantity"), PacIssueParams(allowed_quote_bases=[1, 100]))
-            basis = ParsedValue(None, "outside_p1_domain")
         else:
             basis = ParsedValue(raw_basis)
         reference, valid_date = self.reference_date(quote.reference_date, (*path, "reference_date"), as_of)
@@ -184,7 +181,8 @@ class _Normalizer:
                 self.info("inventory_off_buy_grid", (*path, "initial_quantity"))
         return ParsedRow(row.row_key, row.instrument_key, name, quantity, quote, target, grid)
 
-    def money_vector(self, entries: list[PacMoneyInput] | None, vector: Literal["cash_balances", "contributions"]) -> ParsedMoneyVector:
+    def cash_vector(self, entries: list[PacMoneyInput] | None) -> ParsedMoneyVector:
+        vector = "cash_balances"
         if entries is None:
             self.missing("cash_vector_required", (vector,), PacIssueParams(vector=vector))
             return ParsedMoneyVector((), "input_missing")
@@ -195,12 +193,8 @@ class _Normalizer:
             currency = self.currency(item.currency, (vector, index, "currency"))
             amount = self.number(item.amount, (vector, index, "amount"), "native_amount")
             if amount.available and amount.require() < ZERO:
-                if vector == "contributions":
-                    self.invalid("negative_contribution", (vector, index, "amount"))
-                    amount = ParsedValue(None, "input_invalid")
-                else:
-                    self.unsupported("initial_debt_unsupported", (vector, index, "amount"))
-                    amount = ParsedValue(None, "outside_p1_domain")
+                self.unsupported("initial_debt_unsupported", (vector, index, "amount"))
+                amount = ParsedValue(None, "outside_p1_domain")
             if currency.available:
                 indices_by_currency[currency.require()].append(index)
             parsed.append((currency, amount))
@@ -212,6 +206,43 @@ class _Normalizer:
             reason = "input_invalid"
         amounts = tuple((currency.require(), amount.require()) for currency, amount in parsed if currency.available and amount.available and currency.require() not in duplicates)
         return ParsedMoneyVector(amounts, reason)
+
+    def contribution_vector(self, entries: list[PacContributionInput] | None) -> ParsedContributionVector:
+        vector = "contributions"
+        if entries is None:
+            self.missing("cash_vector_required", (vector,), PacIssueParams(vector=vector))
+            return ParsedContributionVector((), "input_missing")
+        parsed: list[tuple[ParsedValue[str], ParsedValue[Decimal], ParsedValue[Decimal]]] = []
+        indices_by_currency: dict[str, list[int]] = defaultdict(list)
+        for index, item in enumerate(entries):
+            check_budget(self.checkpoint)
+            currency = self.currency(item.currency, (vector, index, "currency"))
+            amount = self.number(item.amount, (vector, index, "amount"), "native_amount")
+            if amount.available and amount.require() < ZERO:
+                self.invalid("negative_contribution", (vector, index, "amount"))
+                amount = ParsedValue(None, "input_invalid")
+            monetary_step = self.number(item.monetary_step, (vector, index, "monetary_step"), "native_amount")
+            if monetary_step.available and monetary_step.require() <= ZERO:
+                self.invalid("nonpositive_monetary_step", (vector, index, "monetary_step"))
+                monetary_step = ParsedValue(None, "input_invalid")
+            if amount.available and monetary_step.available and amount.require() % monetary_step.require() != ZERO:
+                self.invalid("contribution_not_multiple_of_monetary_step", (vector, index, "amount"), PacIssueParams(unit="native_amount"))
+                amount = ParsedValue(None, "input_invalid")
+            if currency.available:
+                indices_by_currency[currency.require()].append(index)
+            parsed.append((currency, amount, monetary_step))
+        duplicates = {code for code, indices in indices_by_currency.items() if len(indices) > 1}
+        for code in sorted(duplicates):
+            self.invalid("duplicate_currency", (vector, indices_by_currency[code][0], "currency"), PacIssueParams(currency=code, vector=vector), cross=True)
+        reason = unavailable_reason(tuple(field for entry in parsed for field in entry))
+        if duplicates:
+            reason = "input_invalid"
+        contributions = tuple(
+            (currency.require(), amount.require(), monetary_step.require())
+            for currency, amount, monetary_step in parsed
+            if currency.available and amount.available and monetary_step.available and currency.require() not in duplicates
+        )
+        return ParsedContributionVector(contributions, reason)
 
     def _rate(self, index: int, item: PacValuationRateInput, report_currency: ParsedValue[str], as_of: date | None) -> ParsedRate | None:
         path: _Path = ("valuation_rates", index)
@@ -286,14 +317,21 @@ class _Normalizer:
             self.invalid("target_total_not_100", ("rows",), indices=list(range(len(rows))), cross=True)
         return target_total, targets_valid
 
-    def _normalized_state(self, rows: list[ParsedRow], cash: ParsedMoneyVector, contributions: ParsedMoneyVector, rates: tuple[ParsedRate, ...], report_currency: ParsedValue[str], as_of: date | None) -> InitialState:
+    def _normalized_state(self, rows: list[ParsedRow], cash: ParsedMoneyVector, contributions: ParsedContributionVector, rates: tuple[ParsedRate, ...], report_currency: ParsedValue[str], as_of: date | None) -> InitialState:
         normalized_rows: list[InitialRow] = []
         for row in rows:
             if row.name is None or row.grid.mode is None:
                 raise RuntimeError("Ready PAC row is incomplete")
             normalized_rows.append(InitialRow(row.row_key, row.instrument_key, row.name, row.quantity.require(), row.quote.price.require(), row.quote.currency.require(), row.quote.basis.require(), row.quote.reference_date, row.target.require(), row.grid.mode, row.grid.step.require()))
-        cash_map, contribution_map = cash.amounts(), contributions.amounts()
-        return InitialState(report_currency.require(), as_of, tuple(normalized_rows), tuple((code, cash_map.get(code, ZERO)) for code in sorted(self.currencies)), tuple((code, contribution_map.get(code, ZERO)) for code in sorted(self.currencies)), rates)
+        cash_map = cash.amounts()
+        return InitialState(
+            report_currency.require(),
+            as_of,
+            tuple(normalized_rows),
+            tuple((code, cash_map.get(code, ZERO)) for code in sorted(self.currencies)),
+            tuple(sorted(contributions.entries)),
+            rates,
+        )
 
     def run(self) -> NormalizationResult:
         check_budget(self.checkpoint)
@@ -307,8 +345,8 @@ class _Normalizer:
             check_budget(self.checkpoint)
             rows.append(self.row(index, item, as_of))
             row_groups[item.row_key].append(index)
-        cash = self.money_vector(self.request.cash_balances, "cash_balances")
-        contributions = self.money_vector(self.request.contributions, "contributions")
+        cash = self.cash_vector(self.request.cash_balances)
+        contributions = self.contribution_vector(self.request.contributions)
         rates = self.rates(report_currency, as_of)
         identity_valid = self._row_identity(row_groups)
         currency_domain_valid = self._reference_coverage(report_currency, rows, rates)

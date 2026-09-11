@@ -73,6 +73,14 @@ def _rate(currency="USD", value="0.9", reference_date="2026-09-08"):
     }
 
 
+def _contribution(currency="EUR", amount="5", monetary_step="0.01"):
+    return {
+        "currency": currency,
+        "amount": amount,
+        "monetary_step": monetary_step,
+    }
+
+
 def _put(raw, path, value):
     """Address a field of this test's own, explicitly constructed input."""
     parent = raw
@@ -192,7 +200,7 @@ def _cash_witness():
         {"currency": "EUR", "amount": "0.005"},
         {"currency": "USD", "amount": "10"},
     ]
-    raw["contributions"] = [{"currency": "EUR", "amount": "5"}]
+    raw["contributions"] = [_contribution()]
     raw["valuation_rates"] = [_rate()]
     return raw
 
@@ -211,23 +219,65 @@ def test_empty_draft_is_unknown_not_an_empty_zero_portfolio():
 
 
 @pytest.mark.parametrize(
-    ("quantity", "price", "basis", "expected"),
-    [("10.125", "10", 1, "101.25"), ("3.25", "98.5", 100, "3.20125")],
+    ("mode", "step", "off_grid"),
+    [
+        pytest.param("whole", "1", True, id="whole-off-grid"),
+        pytest.param("fractional", "0.125", False, id="fractional-on-grid"),
+        pytest.param("fractional", "0.2", True, id="fractional-off-grid"),
+    ],
 )
-def test_custody_fractions_are_not_rounded_to_the_whole_buy_grid(quantity, price, basis, expected):
+def test_opening_inventory_is_never_rounded_to_the_purchase_grid(mode, step, off_grid):
+    result = _analyze(_request([_row(quantity="10.125", price="10", mode=mode, step=step)]))
+    assert result["availability"] == "ready"
+    row = _rows(result)["Alfa/X"]
+    assert _value(row["quantity"]) == "10.125"
+    _money(row["initial_value_native"], "101.25")
+    _money(row["initial_value_reporting"], "101.25")
+    _money(result["totals"]["initial_invested_reporting"], "101.25")
+    normalized = {item["row_key"]: item for item in result["normalized"]["rows"]}["Alfa/X"]
+    assert normalized["initial_quantity"] == "10.125"
+    assert normalized["buy_grid"] == {"mode": mode, "quantity_step": step}
+    issues = [issue for issue in result["issues"] if issue["code"] == "inventory_off_buy_grid"]
+    assert len(issues) == int(off_grid)
+    if off_grid:
+        (issue,) = issues
+        assert issue["kind"] == "info"
+        assert issue["path"] == ["rows", 0, "initial_quantity"]
+        assert issue["related_row_indices"] == [0]
+
+
+@pytest.mark.parametrize(
+    ("basis", "quantity", "price", "expected"),
+    [
+        pytest.param(3, "9", "10", "30", id="basis-three"),
+        pytest.param(100, "3.25", "98.5", "3.20125", id="basis-hundred"),
+        pytest.param(1000, "2500", "4", "10", id="basis-thousand"),
+    ],
+)
+def test_any_positive_quote_base_quantity_scales_holding_value_exactly(basis, quantity, price, expected):
     result = _analyze(_request([_row(quantity=quantity, price=price, basis=basis)]))
     assert result["availability"] == "ready"
     row = _rows(result)["Alfa/X"]
-    assert _value(row["quantity"]) == quantity
     _money(row["initial_value_native"], expected)
     _money(row["initial_value_reporting"], expected)
     _money(result["totals"]["initial_invested_reporting"], expected)
     assert Fraction(expected) == Fraction(quantity) * Fraction(price) / basis
     normalized = {item["row_key"]: item for item in result["normalized"]["rows"]}["Alfa/X"]
-    assert normalized["initial_quantity"] == quantity
-    assert normalized["buy_grid"] == {"mode": "whole", "quantity_step": "1"}
-    issue = _issue(result, "inventory_off_buy_grid", ("rows", 0, "initial_quantity"), "info")
-    assert issue["related_row_indices"] == [0]
+    assert normalized["quote"]["quote_base_quantity"] == basis
+
+
+@pytest.mark.parametrize(
+    ("basis", "availability", "code", "kind"),
+    [
+        pytest.param(0, "invalid", "invalid_quote_basis", "invalid", id="zero"),
+        pytest.param(-1, "invalid", "invalid_quote_basis", "invalid", id="negative"),
+        pytest.param(None, "needs_input", "field_required", "missing", id="missing"),
+    ],
+)
+def test_quote_base_quantity_must_be_a_positive_integer(basis, availability, code, kind):
+    result = _analyze(_request([_row(basis=basis)]))
+    assert result["availability"] == availability
+    _issue(result, code, ("rows", 0, "quote", "quote_base_quantity"), kind)
 
 
 def test_repeated_instrument_is_scored_per_compound_row_not_aggregated():
@@ -265,6 +315,72 @@ def test_cash_is_pooled_once_and_valued_without_changing_native_currency():
     assert all("broker" not in pool for pool in pools.values())
     balances = {item["currency"]: item["amount"] for item in result["normalized"]["cash_balances"]}
     assert balances == {"EUR": "0.005", "USD": "10"}
+    assert result["normalized"]["contributions"] == [{"currency": "EUR", "amount": "5", "monetary_step": "0.01"}]
+
+
+def test_observed_cash_has_no_monetary_step_or_alignment_constraint():
+    raw = _request()
+    raw["cash_balances"] = [{"currency": "EUR", "amount": "0.005"}]
+    result = _analyze(raw)
+    assert result["availability"] == "ready"
+    assert result["normalized"]["cash_balances"] == [{"currency": "EUR", "amount": "0.005"}]
+    assert all("monetary_step" not in item for item in result["normalized"]["cash_balances"])
+    assert not any(issue["code"] == "contribution_not_multiple_of_monetary_step" for issue in result["issues"])
+    _money(result["totals"]["existing_cash_reporting"], "0.005")
+
+
+@pytest.mark.parametrize(
+    ("amount", "monetary_step", "availability"),
+    [
+        pytest.param("0.3", "0.1", "ready", id="decimal-tenths"),
+        pytest.param("555.55", "0.01", "ready", id="cent-aligned"),
+        pytest.param("555.55", "1", "invalid", id="whole-unit-misaligned"),
+        pytest.param("0.300000000001", "0.1", "invalid", id="one-picounit-off-grid"),
+    ],
+)
+def test_contribution_amount_must_be_an_exact_decimal_multiple(amount, monetary_step, availability):
+    raw = _request()
+    raw["contributions"] = [_contribution(amount=amount, monetary_step=monetary_step)]
+    result = _analyze(raw)
+    assert result["availability"] == availability
+    if availability == "ready":
+        assert result["normalized"]["contributions"] == [{"currency": "EUR", "amount": amount, "monetary_step": monetary_step}]
+        assert not any(issue["code"] == "contribution_not_multiple_of_monetary_step" for issue in result["issues"])
+    else:
+        issue = _issue(result, "contribution_not_multiple_of_monetary_step", ("contributions", 0, "amount"), "invalid")
+        assert issue["params"]["unit"] == "native_amount"
+
+
+def test_zero_contribution_is_valid_and_preserves_its_positive_monetary_step():
+    raw = _request()
+    raw["contributions"] = [_contribution(amount="0", monetary_step="0.03")]
+    result = _analyze(raw)
+    assert result["availability"] == "ready"
+    assert result["normalized"]["contributions"] == [{"currency": "EUR", "amount": "0", "monetary_step": "0.03"}]
+    _money(result["totals"]["contributions_reporting"], "0")
+    _money(result["totals"]["cash_plus_contributions_reporting"], "0")
+    assert not any(issue["code"] == "contribution_not_multiple_of_monetary_step" for issue in result["issues"])
+
+
+@pytest.mark.parametrize(
+    ("monetary_step", "availability", "code", "kind"),
+    [
+        pytest.param(None, "needs_input", "field_required", "missing", id="missing"),
+        pytest.param("not-a-decimal", "invalid", "invalid_decimal_syntax", "invalid", id="malformed"),
+        pytest.param("0", "invalid", "nonpositive_monetary_step", "invalid", id="zero"),
+        pytest.param("-0.01", "invalid", "nonpositive_monetary_step", "invalid", id="negative"),
+    ],
+)
+def test_unavailable_monetary_step_does_not_cascade_to_amount_alignment(monetary_step, availability, code, kind):
+    raw = _request()
+    contribution = _contribution(amount="0.03", monetary_step=monetary_step)
+    if monetary_step is None:
+        del contribution["monetary_step"]
+    raw["contributions"] = [contribution]
+    result = _analyze(raw)
+    assert result["availability"] == availability
+    _issue(result, code, ("contributions", 0, "monetary_step"), kind)
+    assert [issue["code"] for issue in result["issues"]] == [code]
 
 
 def test_missing_cash_fx_keeps_native_pools_but_not_a_subset_total():
@@ -318,7 +434,7 @@ def test_explicit_zero_conversion_is_known_without_inventing_a_missing_fx_rate()
 
 def test_zero_initial_investment_can_be_ready_but_has_no_weights_or_score():
     raw = _request([_row(quantity="0")])
-    raw["contributions"] = [{"currency": "EUR", "amount": "100"}]
+    raw["contributions"] = [_contribution(amount="100", monetary_step="1")]
     result = _analyze(raw)
     assert result["availability"] == "ready"
     _money(result["totals"]["initial_invested_reporting"], "0")
@@ -382,6 +498,12 @@ def test_duplicate_normalized_currency_is_invalid_and_not_summed(vector):
     raw["valuation_rates"] = [_rate()]
     if vector == "valuation_rates":
         raw[vector] = [_rate("USD", "0.9"), _rate(" usd ", "0.1"), _rate("usd", "1")]
+    elif vector == "contributions":
+        raw[vector] = [
+            _contribution("USD", "1"),
+            _contribution(" usd ", "2"),
+            _contribution("usd", "3"),
+        ]
     else:
         raw[vector] = [
             {"currency": "USD", "amount": "1"},
@@ -438,6 +560,7 @@ def test_numeric_admission_normalizes_zero_padding_without_value_loss(raw_quanti
         ("rows", 0, "buy_grid", "quantity_step"),
         ("cash_balances", 0, "amount"),
         ("contributions", 0, "amount"),
+        ("contributions", 0, "monetary_step"),
         ("valuation_rates", 0, "rate_to_report"),
     ],
 )
@@ -445,7 +568,7 @@ def test_numeric_admission_normalizes_zero_padding_without_value_loss(raw_quanti
 def test_nonzero_thirteenth_digit_is_unsupported_not_rounded(path, text):
     raw = _request()
     raw["cash_balances"] = [{"currency": "EUR", "amount": "0"}]
-    raw["contributions"] = [{"currency": "EUR", "amount": "0"}]
+    raw["contributions"] = [_contribution(amount="0", monetary_step="0.000000000001")]
     raw["valuation_rates"] = [_rate()]
     _put(raw, path, text)
     result = _analyze(raw)
@@ -465,6 +588,7 @@ def test_nonzero_thirteenth_digit_is_unsupported_not_rounded(path, text):
         ("rows", 0, "buy_grid", "quantity_step"),
         ("cash_balances", 0, "amount"),
         ("contributions", 0, "amount"),
+        ("contributions", 0, "monetary_step"),
         ("valuation_rates", 0, "rate_to_report"),
     ],
 )
@@ -472,7 +596,7 @@ def test_nonzero_thirteenth_digit_is_unsupported_not_rounded(path, text):
 def test_malformed_decimal_cells_are_domain_issues_not_cleaned_or_coerced(path, text):
     raw = _request()
     raw["cash_balances"] = [{"currency": "EUR", "amount": "0"}]
-    raw["contributions"] = [{"currency": "EUR", "amount": "0"}]
+    raw["contributions"] = [_contribution(amount="0", monetary_step="0.01")]
     raw["valuation_rates"] = [_rate()]
     _put(raw, path, text)
     result = _analyze(raw)
@@ -500,11 +624,6 @@ def test_unfinished_numeric_cell_is_missing_not_zero(text, code):
         (("rows", 0, "quote", "raw_price"), "-1", "invalid", "nonpositive_price"),
         (("valuation_rates", 0, "rate_to_report"), "0", "invalid", "nonpositive_fx_rate"),
         (("valuation_rates", 0, "rate_to_report"), "-1", "invalid", "nonpositive_fx_rate"),
-        (("rows", 0, "quote", "quote_base_quantity"), 2, "unsupported", "quote_basis_unsupported"),
-        (("rows", 0, "quote", "quote_base_quantity"), 1000, "unsupported", "quote_basis_unsupported"),
-        (("rows", 0, "quote", "quote_base_quantity"), 0, "invalid", "invalid_quote_basis"),
-        (("rows", 0, "quote", "quote_base_quantity"), -1, "invalid", "invalid_quote_basis"),
-        (("rows", 0, "quote", "quote_base_quantity"), None, "needs_input", "field_required"),
         (("rows", 0, "target_percent"), "-1", "invalid", "target_percent_out_of_range"),
         (("rows", 0, "target_percent"), "100.000000000001", "invalid", "target_percent_out_of_range"),
         (("rows", 0, "buy_grid", "quantity_step"), "0", "invalid", "nonpositive_quantity_step"),
@@ -512,10 +631,10 @@ def test_unfinished_numeric_cell_is_missing_not_zero(text, code):
         (("rows", 0, "buy_grid", "quantity_step"), "0.5", "invalid", "noninteger_whole_step"),
     ],
 )
-def test_domain_classification_for_sign_basis_target_and_buy_step(path, value, availability, code):
+def test_domain_classification_for_sign_target_and_buy_step(path, value, availability, code):
     raw = _request()
     raw["cash_balances"] = [{"currency": "EUR", "amount": "0"}]
-    raw["contributions"] = [{"currency": "EUR", "amount": "0"}]
+    raw["contributions"] = [_contribution(amount="0", monetary_step="0.01")]
     raw["valuation_rates"] = [_rate()]
     _put(raw, path, value)
     result = _analyze(raw)
@@ -529,6 +648,25 @@ def test_effective_buy_grid_accepts_any_admitted_positive_step_for_its_mode(mode
     assert result["availability"] == "ready"
     assert _value(_rows(result)["Alfa/X"]["quantity"]) == "1.125"
     _money(result["totals"]["initial_invested_reporting"], "11.25")
+    normalized = {item["row_key"]: item for item in result["normalized"]["rows"]}["Alfa/X"]
+    assert normalized["buy_grid"] == {"mode": mode, "quantity_step": step}
+
+
+@pytest.mark.parametrize(
+    ("mode", "availability", "code"),
+    [
+        pytest.param("whole", "invalid", "noninteger_whole_step", id="whole-rejects-fractional-step"),
+        pytest.param("fractional", "ready", None, id="fractional-accepts-fractional-step"),
+    ],
+)
+def test_fractional_quantity_step_is_allowed_only_in_fractional_mode(mode, availability, code):
+    result = _analyze(_request([_row(quantity="1", mode=mode, step="0.5")]))
+    assert result["availability"] == availability
+    if code is None:
+        normalized = {item["row_key"]: item for item in result["normalized"]["rows"]}["Alfa/X"]
+        assert normalized["buy_grid"] == {"mode": "fractional", "quantity_step": "0.5"}
+    else:
+        _issue(result, code, ("rows", 0, "buy_grid", "quantity_step"), "invalid")
 
 
 @pytest.mark.parametrize(("targets", "total"), [(("0.5", "0.5"), "1"), (("50", "49.99"), "99.99"), (("50", "49.999999999999"), "99.999999999999")])
@@ -672,7 +810,7 @@ def test_invalid_reference_date_blocks_only_its_dependent_valuations(source, ref
     )
     raw["valuation_rates"] = [_rate()]
     raw["cash_balances"] = [{"currency": "USD", "amount": "1"}]
-    raw["contributions"] = [{"currency": "EUR", "amount": "5"}]
+    raw["contributions"] = [_contribution(amount="5", monetary_step="1")]
     path = ("rows", 1, "quote", "reference_date") if source == "quote" else ("valuation_rates", 0, "reference_date")
     _put(raw, path, reference_date)
     result = _analyze(raw)
@@ -771,7 +909,7 @@ def test_issue_order_is_header_rows_vectors_rates_then_cross_field_groups():
     raw = _request([_row("same", quantity="bad", target="50"), _row("same", price="bad", target="50")])
     raw["as_of_date"] = "bad"
     raw["cash_balances"] = [{"currency": "EUR", "amount": "bad"}]
-    raw["contributions"] = [{"currency": "EUR", "amount": "-1"}]
+    raw["contributions"] = [_contribution(amount="-1", monetary_step="1")]
     raw["valuation_rates"] = [_rate("USD", "bad")]
     result = _analyze(raw)
     assert [issue["path"] for issue in result["issues"]] == [
@@ -831,7 +969,7 @@ def test_boundary_arithmetic_is_independent_of_hostile_ambient_decimal_context(p
     )
     raw["valuation_rates"] = [_rate("USD", "999999999999.999999999999")]
     raw["cash_balances"] = [{"currency": "USD", "amount": "999999999999.999999999999"}]
-    raw["contributions"] = [{"currency": "USD", "amount": "0.000000000001"}]
+    raw["contributions"] = [_contribution("USD", "0.000000000001", "0.000000000001")]
     ordinary = _analyze(raw)
     with localcontext() as ambient:
         ambient.prec = precision
@@ -941,7 +1079,7 @@ def test_actual_32_row_unicode_wire_witness_is_bounded_without_clipping_facts(in
     raw = _request(rows)
     raw["as_of_date"] = None
     raw["cash_balances"] = [{"currency": currency, "amount": "999999999999.999999999999"} for currency in currencies]
-    raw["contributions"] = deepcopy(raw["cash_balances"])
+    raw["contributions"] = [_contribution(currency, "999999999999.999999999999", "999999999999.999999999999") for currency in currencies]
     raw["valuation_rates"] = [_rate(currency, "999999999999.999999999999", None) for currency in currencies if currency != "EUR"]
     result = _analyze(raw)
     assert result["availability"] == ("invalid" if invalid else "ready")
