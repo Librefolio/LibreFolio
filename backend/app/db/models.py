@@ -301,6 +301,9 @@ class OnboardingFlow(StrEnum):
 
     WELCOME = "welcome"
     INTRO_TOUR = "intro_tour"
+    BROKER_GUIDE = "broker_guide"
+    FX_GUIDE = "fx_guide"
+    ASSET_GUIDE = "asset_guide"
     IMPORT_GUIDE = "import_guide"
 
 

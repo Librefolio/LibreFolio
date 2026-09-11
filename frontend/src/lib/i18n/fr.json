@@ -3387,5 +3387,260 @@
       "issues": "Constats du backend",
       "normalizedInput": "Entrée normalisée et unités"
     }
+  },
+  "onboarding": {
+    "welcome": {
+      "title": "Bienvenue dans LibreFolio",
+      "description": "Configurez l'essentiel avant de commencer à suivre votre portefeuille.",
+      "defaultsHint": "La langue et la devise utilisent d'abord les valeurs par défaut de l'administrateur. Vous pouvez les modifier maintenant ou plus tard.",
+      "avatarLabel": "Photo de profil",
+      "avatarHint": "Facultatif. Vos initiales sont utilisées si aucune image n'est sélectionnée.",
+      "chooseAvatar": "Choisir une image",
+      "removeAvatar": "Supprimer l'image",
+      "avatarAlt": "Aperçu de la photo de profil",
+      "themeHint": "Votre préférence de thème actuelle reste inchangée.",
+      "skip": "Ignorer définitivement la configuration",
+      "skipHint": "Cela ne sera plus affiché automatiquement. Vous pouvez le relancer depuis les Paramètres.",
+      "completed": "Configuration enregistrée. Vous pouvez continuer dans LibreFolio.",
+      "skipped": "Configuration ignorée. Vous pourrez la relancer plus tard depuis les Paramètres."
+    },
+    "errors": {
+      "loadTitle": "Impossible de charger la prise en main",
+      "loadDescription": "Réessayez la configuration ou déconnectez-vous en toute sécurité.",
+      "degraded": "Impossible d'actualiser l'état de la prise en main. Votre configuration terminée reste active.",
+      "replayStart": "Impossible de démarrer le guide. Réessayez.",
+      "progressUnavailable": "La progression de la prise en main est indisponible. Rechargez et réessayez.",
+      "complete": "Impossible de terminer le guide. Réessayez.",
+      "skip": "Impossible d'ignorer le guide. Réessayez."
+    },
+    "actions": {
+      "finish": "Terminer le guide",
+      "skipPermanently": "Ignorer définitivement",
+      "pause": "Mettre en pause",
+      "close": "Fermer le guide",
+      "back": "Retour",
+      "next": "Suivant",
+      "exitTour": "Quitter le parcours",
+      "skipCurrentTour": "Ignorer ce parcours"
+    },
+    "guide": {
+      "waiting": "En attente de la disponibilité de cette zone…",
+      "useWizardAction": "Continuez avec le bouton indiqué.",
+      "exploreThenContinue": "Explorez le contrôle indiqué, puis continuez."
+    },
+    "tour": {
+      "progress": "Étape {current} sur {total}",
+      "steps": {
+        "transactionsImport": {
+          "title": "Commencez par une importation",
+          "description": "Ouvrez l'importateur de transactions pour transformer les rapports de courtier en brouillons. Rien n'est enregistré automatiquement."
+        },
+        "brokers": {
+          "title": "Courtiers et accès",
+          "description": "Les courtiers représentent les comptes et contrôlent la propriété, la modification et le partage."
+        },
+        "assets": {
+          "title": "Votre catalogue d'actifs",
+          "description": "Les actifs regroupent les identifiants, devises, fournisseurs, prix et événements."
+        },
+        "dashboard": {
+          "title": "Votre portefeuille en un coup d’œil",
+          "description": "Le Tableau de bord est votre point de départ pour la valeur, la performance, l’allocation et la qualité des données du portefeuille."
+        },
+        "tools": {
+          "title": "Outils d'analyse",
+          "description": "Les outils proposent des analyses guidées, comme la planification PAC, sans exécuter d'ordres."
+        },
+        "settings": {
+          "title": "Relancez à tout moment",
+          "description": "Les Paramètres permettent de relancer cette visite, la configuration d'accueil ou le guide d'importation."
+        },
+        "navigation": {
+          "title": "Repérez-vous dans l’application",
+          "description": "Utilisez ce contrôle pour réduire ou développer la barre latérale sur ordinateur, ou ouvrir le menu de navigation sur les petits écrans."
+        },
+        "transactionsNav": {
+          "title": "Commencez par vos transactions",
+          "description": "Transactions contient les saisies manuelles et l’historique du portefeuille. Importer dispose de son propre guide contextuel."
+        },
+        "brokersAdd": {
+          "title": "Ajouter un courtier",
+          "description": "Les courtiers représentent les comptes qui contiennent vos transactions et définissent la propriété et le partage."
+        },
+        "brokersCurrency": {
+          "title": "Définir la devise du courtier",
+          "description": "Choisissez la devise de chaque solde initial. Cet aperçu n’enregistre jamais de courtier."
+        },
+        "fxAdd": {
+          "title": "Ajouter une paire de change",
+          "description": "Les paires de change permettent à LibreFolio de convertir les valeurs du portefeuille entre devises."
+        },
+        "fxPair": {
+          "title": "Choisir les devises de base et de cotation",
+          "description": "Définissez la paire de devises nécessaire. Cet aperçu n’enregistre jamais de paire de change."
+        },
+        "assetsAdd": {
+          "title": "Ajouter un actif",
+          "description": "Les actifs relient les transactions aux instruments, devises, prix et données de marché."
+        },
+        "assetsConfig": {
+          "title": "Configurer l’actif",
+          "description": "Choisissez sa devise de cotation et son fournisseur de données. Cet aperçu n’enregistre jamais d’actif."
+        },
+        "brokersNav": {
+          "title": "Courtiers",
+          "description": "Ouvrez Courtiers pour configurer vos comptes. Un court guide démarre lorsque vous choisissez Ajouter un courtier."
+        },
+        "fxNav": {
+          "title": "Taux de change",
+          "description": "Ouvrez Taux de change pour configurer les paires de devises et leurs fournisseurs de données."
+        },
+        "assetsNav": {
+          "title": "Actifs",
+          "description": "Ouvrez Actifs pour définir les instruments, les devises et les données de marché utilisés par votre portefeuille."
+        },
+        "toolsNav": {
+          "title": "Outils",
+          "description": "Outils propose des analyses ciblées, comme la planification PAC, sans exécuter d’ordres."
+        },
+        "settingsNav": {
+          "title": "Paramètres",
+          "description": "Les Paramètres contiennent les préférences et permettent de relancer n’importe quel guide si nécessaire."
+        }
+      }
+    },
+    "flows": {
+      "welcome": "Configuration d'accueil",
+      "intro_tour": "Visite rapide",
+      "import_guide": "Guide d'importation",
+      "broker_guide": "Guide des courtiers",
+      "fx_guide": "Guide des taux de change",
+      "asset_guide": "Guide des actifs"
+    },
+    "status": {
+      "pending": "En attente",
+      "completed": "Terminé",
+      "skipped": "Ignoré"
+    },
+    "settings": {
+      "category": "Prise en main",
+      "title": "Prise en main et guides",
+      "description": "Relancez la configuration et les guides contextuels sans modifier vos données enregistrées.",
+      "replayAll": "Tout relancer",
+      "updateAvailable": "Nouvelle version à consulter",
+      "nextImport": "Prêt pour la prochaine importation",
+      "replayReady": "Relance prête",
+      "version": "Vue v{seen} · actuelle v{current}",
+      "replayOnNextImport": "Relancer à la prochaine importation",
+      "replay": "Relancer",
+      "groups": {
+        "setup": "Configuration",
+        "core": "Parcours principal",
+        "contextual": "Guides contextuels"
+      },
+      "armedToast": "{flow} est prêt. Ouvrez la fonctionnalité pour commencer.",
+      "cancelArmed": "Annuler l’activation",
+      "armed": {
+        "welcome": "Relance de l’accueil prête",
+        "intro_tour": "Relance du parcours principal prête",
+        "broker_guide": "Prêt : choisissez Ajouter un courtier",
+        "fx_guide": "Prêt : choisissez Ajouter une paire de devises",
+        "asset_guide": "Prêt : choisissez Ajouter un actif",
+        "import_guide": "Prêt : ouvrez Importer"
+      },
+      "replayAtNextTrigger": {
+        "broker_guide": "Relancer au prochain ajout de courtier",
+        "fx_guide": "Relancer au prochain ajout de paire de devises",
+        "asset_guide": "Relancer au prochain ajout d’actif"
+      }
+    },
+    "importGuide": {
+      "steps": {
+        "upload": {
+          "title": "Importer des rapports",
+          "description": "Ajoutez un ou plusieurs rapports et attribuez chaque rapport à un courtier."
+        },
+        "select": {
+          "title": "Choisissez les fichiers et analyseurs",
+          "description": "Sélectionnez les rapports stockés et choisissez l’analyseur adapté à chaque fichier."
+        },
+        "analyze": {
+          "title": "Analysez les données extraites",
+          "description": "Exécutez les analyseurs et vérifiez les enregistrements extraits, les notifications et les résultats de validation."
+        },
+        "assets": {
+          "title": "Unifiez les identités d'actifs",
+          "description": "Rapprochez les enregistrements extraits qui peuvent désigner le même actif."
+        },
+        "fix": {
+          "title": "Résolvez les lignes signalées",
+          "description": "Corrigez ou conservez explicitement les lignes que l’analyseur n’a pas pu résoudre."
+        },
+        "duplicates": {
+          "title": "Choisissez entre les doublons",
+          "description": "Décidez quelles lignes importées en doublon conserver."
+        },
+        "review": {
+          "title": "Vérifiez l'importation",
+          "description": "Sélectionnez les lignes admissibles et résolvez les actifs requis avant d’ouvrir l’éditeur groupé."
+        },
+        "bulk": {
+          "title": "Tout enregistrer écrit les transactions",
+          "description": "Vérifiez et modifiez les brouillons de transactions, puis choisissez Tout enregistrer lorsqu’ils sont prêts."
+        }
+      }
+    },
+    "intro": {
+      "title": "Bienvenue dans LibreFolio",
+      "line1": "Bienvenue.",
+      "line2": "Nous sommes ravis de vous accueillir.",
+      "line3": "Voici une visite rapide pour vous aider à démarrer.",
+      "start": "Commencer la visite",
+      "autoStartHint": "La visite commence automatiquement dans 10 secondes."
+    },
+    "brokerGuide": {
+      "steps": {
+        "overview": {
+          "title": "Créez un courtier",
+          "description": "Ce formulaire définit le compte qui contiendra les transactions et les importations."
+        },
+        "plugin": {
+          "title": "Choisissez le plugin d’importation par défaut",
+          "description": "Le plugin par défaut est présélectionné lorsque vous importez des rapports de ce courtier."
+        },
+        "icon": {
+          "title": "Ajoutez une icône personnalisée",
+          "description": "Choisissez une image pour ce courtier ou conservez l’icône automatique issue de son plugin ou de son site web."
+        }
+      }
+    },
+    "fxGuide": {
+      "steps": {
+        "currencies": {
+          "title": "Choisissez la paire de devises",
+          "description": "Sélectionnez les devises de base et de cotation entre lesquelles LibreFolio doit effectuer la conversion."
+        },
+        "providers": {
+          "title": "Configurez les fournisseurs de taux",
+          "description": "Choisissez un chemin de fournisseurs direct ou chaîné, ou conservez la paire en mode manuel lorsqu’aucune source automatique ne convient."
+        }
+      }
+    },
+    "assetGuide": {
+      "steps": {
+        "search": {
+          "title": "Recherchez avant de saisir les données",
+          "description": "Recherchez en ligne pour préremplir les identifiants et métadonnées connus, ou saisissez l’actif manuellement."
+        },
+        "identity": {
+          "title": "Définissez l’actif",
+          "description": "Vérifiez son nom, son type, sa quantité de base de cotation et sa devise."
+        },
+        "provider": {
+          "title": "Configurez le fournisseur de données",
+          "description": "Sélectionnez le fournisseur, l’identifiant et les paramètres, ou conservez explicitement l’actif sans fournisseur."
+        }
+      }
+    }
   }
 }

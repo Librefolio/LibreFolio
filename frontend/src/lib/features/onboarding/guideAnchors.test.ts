@@ -1,4 +1,4 @@
-import {describe, expect, it} from 'vitest';
+import {describe, expect, it, vi} from 'vitest';
 
 import {createGuideAnchorAction, createGuideAnchorRegistry} from './guideAnchors.svelte';
 
@@ -166,21 +166,54 @@ describe('createGuideAnchorAction — the Svelte action wrapper', () => {
         expect(registry.get('step-2')).toBeNull();
     });
 
-    it('two actions on two nodes are independent — destroying one leaves the other registered', () => {
+    it('desktop and mobile toggle anchors coexist — destroying one leaves the responsive alternative registered', () => {
         const registry = createGuideAnchorRegistry();
         const guideAnchor = createGuideAnchorAction(registry);
-        const nodeA = fakeNode();
-        const nodeB = fakeNode();
+        const desktopToggle = fakeNode();
+        const mobileToggle = fakeNode();
 
-        const a = guideAnchor(nodeA, 'a');
-        const b = guideAnchor(nodeB, 'b');
+        const desktop = guideAnchor(desktopToggle, 'nav.toggle.desktop');
+        const mobile = guideAnchor(mobileToggle, 'nav.toggle.mobile');
 
-        a?.destroy?.();
+        desktop?.destroy?.();
 
-        expect(registry.get('a')).toBeNull();
-        expect(registry.get('b')).toBe(nodeB);
+        expect(registry.get('nav.toggle.desktop')).toBeNull();
+        expect(registry.get('nav.toggle.mobile')).toBe(mobileToggle);
 
-        b?.destroy?.();
-        expect(registry.get('b')).toBeNull();
+        mobile?.destroy?.();
+        expect(registry.get('nav.toggle.mobile')).toBeNull();
+    });
+});
+
+/**
+ * `TransactionBulkModal`'s commit button (`tx-bulk-commit`) wires exactly two
+ * things to its element: `onclick={requestCommit}` (a real user click handler)
+ * and `use:guideAnchor={'import.bulk.save-all'}` (this action, purely so the
+ * coachmark can find it to point at). The production risk this locks down is
+ * the anchor action ever growing a side channel that could trigger a commit on
+ * its own — e.g. a "click the anchor to advance" convenience someone adds to
+ * the guide later. `register()` above already proves the action never touches
+ * `anchors`/`revision` beyond a Map entry; this proves the *node* side: mount,
+ * every `update`, and `destroy` never call `.click()` or attach any listener to
+ * the element it was given. Anything that finds and "clicks" `tx-bulk-commit`
+ * therefore has to be a real user event, never this wiring.
+ */
+describe('createGuideAnchorAction — never touches the node beyond registering it', () => {
+    it('mount, update and destroy never click the node or attach a listener to it', () => {
+        const registry = createGuideAnchorRegistry();
+        const guideAnchor = createGuideAnchorAction(registry);
+        const click = vi.fn();
+        const addEventListener = vi.fn();
+        const removeEventListener = vi.fn();
+        const node = {isConnected: true, click, addEventListener, removeEventListener} as unknown as HTMLElement;
+
+        const lifecycle = guideAnchor(node, 'import.bulk.save-all');
+        lifecycle?.update?.('import.bulk.save-all'); // same id, the common case on every re-render
+        lifecycle?.update?.('import.bulk.other-step'); // a genuine id change too
+        lifecycle?.destroy?.();
+
+        expect(click).not.toHaveBeenCalled();
+        expect(addEventListener).not.toHaveBeenCalled();
+        expect(removeEventListener).not.toHaveBeenCalled();
     });
 });

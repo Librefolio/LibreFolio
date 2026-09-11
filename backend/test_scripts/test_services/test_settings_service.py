@@ -944,3 +944,247 @@ class TestOnboardingServiceTransition:
             response_a = await get_onboarding_progress(user_a_id, session)
             item_a = next(i for i in response_a.flows if i.flow == flow)
             assert item_a.status == OnboardingStatus.COMPLETED
+
+
+class TestOnboardingServiceCompleteWelcome:
+    """Tests for complete_welcome_onboarding() — the atomic preferences+progress commit."""
+
+    @staticmethod
+    async def _make_user(session, marker: str):
+        from backend.app.services import user_service  # noqa: PLC0415 — test setup — imports after db config
+
+        unique_id = uuid.uuid4().hex[:8]
+        user, error = await user_service.create_user(
+            session=session,
+            username=f"onbw_{marker}_{unique_id}",
+            email=f"onbw_{marker}_{unique_id}@example.com",
+            password="TestPass123!",
+        )
+        assert error is None
+        return user.id  # capture now: the session expires ORM attrs on commit
+
+    @pytest.mark.asyncio
+    async def test_atomic_welcome_updates_language_currency_avatar_and_completes_progress(self):
+        """A first-time welcome completion must create the settings row with the
+        submitted preferences AND mark the welcome flow completed, in one call."""
+        from sqlalchemy import select  # noqa: PLC0415
+        from sqlalchemy.ext.asyncio import AsyncSession  # noqa: PLC0415
+
+        from backend.app.db.models import OnboardingFlow, OnboardingStatus, UserSettings  # noqa: PLC0415
+        from backend.app.db.session import get_async_engine  # noqa: PLC0415
+        from backend.app.schemas.settings import OnboardingWelcomeSettings  # noqa: PLC0415
+        from backend.app.services.onboarding_service import (  # noqa: PLC0415
+            ONBOARDING_FLOW_VERSIONS,
+            complete_welcome_onboarding,
+        )
+
+        engine = get_async_engine()
+        async with AsyncSession(engine) as session:
+            user_id = await self._make_user(session, "create")
+            version = ONBOARDING_FLOW_VERSIONS[OnboardingFlow.WELCOME]
+
+            item = await complete_welcome_onboarding(
+                user_id=user_id,
+                expected_version=version,
+                welcome_settings=OnboardingWelcomeSettings(language="fr", base_currency="CHF", avatar_url="https://example.com/atomic-avatar.png"),
+                session=session,
+            )
+
+            assert item.flow == OnboardingFlow.WELCOME
+            assert item.status == OnboardingStatus.COMPLETED
+            assert item.completed_at is not None
+            assert item.skipped_at is None
+            assert item.update_available is False
+
+        # Verify from a fresh session: the settings row must reflect the submitted values.
+        async with AsyncSession(engine) as verify_session:
+            result = await verify_session.execute(select(UserSettings).where(UserSettings.user_id == user_id))
+            settings = result.scalar_one()
+            assert settings.language == "fr"
+            assert settings.base_currency == "CHF"
+            assert settings.avatar_url == "https://example.com/atomic-avatar.png"
+
+    @pytest.mark.asyncio
+    async def test_atomic_welcome_updates_existing_settings_without_touching_theme(self):
+        """When a settings row already exists (e.g. via PUT /settings/user before welcome
+        finishes), the atomic path must update language/currency/avatar and must not
+        clobber a field it does not own (theme)."""
+        from sqlalchemy import select  # noqa: PLC0415
+        from sqlalchemy.ext.asyncio import AsyncSession  # noqa: PLC0415
+
+        from backend.app.db.models import OnboardingFlow, UserSettings  # noqa: PLC0415
+        from backend.app.db.session import get_async_engine  # noqa: PLC0415
+        from backend.app.schemas.settings import OnboardingWelcomeSettings, UserSettingsUpdate  # noqa: PLC0415
+        from backend.app.services.onboarding_service import (  # noqa: PLC0415
+            ONBOARDING_FLOW_VERSIONS,
+            complete_welcome_onboarding,
+        )
+        from backend.app.services.settings_service import update_user_settings  # noqa: PLC0415
+
+        engine = get_async_engine()
+        async with AsyncSession(engine) as session:
+            user_id = await self._make_user(session, "existing")
+            await update_user_settings(
+                user_id,
+                UserSettingsUpdate(language="en", base_currency="EUR", theme="dark", avatar_url=None),
+                session,
+            )
+            version = ONBOARDING_FLOW_VERSIONS[OnboardingFlow.WELCOME]
+
+            await complete_welcome_onboarding(
+                user_id=user_id,
+                expected_version=version,
+                welcome_settings=OnboardingWelcomeSettings(language="it", base_currency="USD", avatar_url="https://example.com/existing-avatar.png"),
+                session=session,
+            )
+
+        async with AsyncSession(engine) as verify_session:
+            result = await verify_session.execute(select(UserSettings).where(UserSettings.user_id == user_id))
+            settings = result.scalar_one()
+            assert settings.language == "it"
+            assert settings.base_currency == "USD"
+            assert settings.avatar_url == "https://example.com/existing-avatar.png"
+            assert settings.theme == "dark", "theme is not part of welcome_settings and must survive untouched"
+
+    @pytest.mark.asyncio
+    async def test_terminal_replay_remains_explicit_settings_reapplied_progress_untouched(self):
+        """Calling complete_welcome_onboarding again at the same version is allowed
+        (unlike a silently-ignored no-op): the settings write is re-applied explicitly
+        with whatever the caller sends this time, while the already-terminal progress
+        row is left exactly as it was (no wasted rewrite of an unchanged status)."""
+        from sqlalchemy import select  # noqa: PLC0415
+        from sqlalchemy.ext.asyncio import AsyncSession  # noqa: PLC0415
+
+        from backend.app.db.models import OnboardingFlow, OnboardingStatus, UserSettings  # noqa: PLC0415
+        from backend.app.db.session import get_async_engine  # noqa: PLC0415
+        from backend.app.schemas.settings import OnboardingWelcomeSettings  # noqa: PLC0415
+        from backend.app.services.onboarding_service import (  # noqa: PLC0415
+            ONBOARDING_FLOW_VERSIONS,
+            complete_welcome_onboarding,
+        )
+
+        engine = get_async_engine()
+        async with AsyncSession(engine) as session:
+            user_id = await self._make_user(session, "replay")
+            version = ONBOARDING_FLOW_VERSIONS[OnboardingFlow.WELCOME]
+
+            first = await complete_welcome_onboarding(
+                user_id=user_id,
+                expected_version=version,
+                welcome_settings=OnboardingWelcomeSettings(language="en", base_currency="EUR", avatar_url=None),
+                session=session,
+            )
+            assert first.status == OnboardingStatus.COMPLETED
+
+            second = await complete_welcome_onboarding(
+                user_id=user_id,
+                expected_version=version,
+                welcome_settings=OnboardingWelcomeSettings(language="es", base_currency="GBP", avatar_url="https://example.com/replay-avatar.png"),
+                session=session,
+            )
+
+            assert second.status == OnboardingStatus.COMPLETED
+            assert second.updated_at == first.updated_at, "an already-terminal row at the current version must not be rewritten"
+            assert second.completed_at == first.completed_at
+
+        async with AsyncSession(engine) as verify_session:
+            result = await verify_session.execute(select(UserSettings).where(UserSettings.user_id == user_id))
+            settings = result.scalar_one()
+            assert settings.language == "es", "the replay's settings must be applied explicitly, not silently skipped"
+            assert settings.base_currency == "GBP"
+            assert settings.avatar_url == "https://example.com/replay-avatar.png"
+
+    @pytest.mark.asyncio
+    async def test_commit_failure_rolls_back_both_preferences_and_progress(self, monkeypatch):
+        """A failure at the final commit must not leave a half-applied welcome: neither
+        the settings row nor the progress row may reach disk. Verified from a fresh,
+        unpatched session, per the asset-delete-bulk commit-failure pattern."""
+        from sqlalchemy import select  # noqa: PLC0415
+        from sqlalchemy.ext.asyncio import AsyncSession  # noqa: PLC0415
+
+        from backend.app.db.models import OnboardingFlow, UserOnboardingProgress, UserSettings  # noqa: PLC0415
+        from backend.app.db.session import get_async_engine  # noqa: PLC0415
+        from backend.app.schemas.settings import OnboardingWelcomeSettings  # noqa: PLC0415
+        from backend.app.services.onboarding_service import (  # noqa: PLC0415
+            ONBOARDING_FLOW_VERSIONS,
+            complete_welcome_onboarding,
+        )
+
+        engine = get_async_engine()
+        async with AsyncSession(engine, expire_on_commit=False) as setup_session:
+            user_id = await self._make_user(setup_session, "commitfail")
+        version = ONBOARDING_FLOW_VERSIONS[OnboardingFlow.WELCOME]
+
+        async def failing_commit():
+            raise RuntimeError("simulated commit failure")
+
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            monkeypatch.setattr(session, "commit", failing_commit)
+
+            with pytest.raises(RuntimeError, match="simulated commit failure"):
+                await complete_welcome_onboarding(
+                    user_id=user_id,
+                    expected_version=version,
+                    welcome_settings=OnboardingWelcomeSettings(language="it", base_currency="CHF", avatar_url="https://example.com/rollback-avatar.png"),
+                    session=session,
+                )
+
+        async with AsyncSession(engine, expire_on_commit=False) as verify_session:
+            settings_result = await verify_session.execute(select(UserSettings).where(UserSettings.user_id == user_id))
+            assert settings_result.scalar_one_or_none() is None, "a commit failure must roll back the tentative settings write"
+
+            progress_result = await verify_session.execute(select(UserOnboardingProgress).where(UserOnboardingProgress.user_id == user_id))
+            assert progress_result.scalars().all() == [], "a commit failure must roll back the tentative progress insert too — not even a pending row survives"
+
+    @pytest.mark.asyncio
+    async def test_stale_expected_version_changes_neither_settings_nor_progress(self):
+        """A version mismatch must raise before touching either table: pre-existing
+        settings and progress must both be provably unchanged afterwards."""
+        from sqlalchemy import select  # noqa: PLC0415
+        from sqlalchemy.ext.asyncio import AsyncSession  # noqa: PLC0415
+
+        from backend.app.db.models import OnboardingFlow, OnboardingStatus, UserOnboardingProgress, UserSettings  # noqa: PLC0415
+        from backend.app.db.session import get_async_engine  # noqa: PLC0415
+        from backend.app.schemas.settings import OnboardingWelcomeSettings, UserSettingsUpdate  # noqa: PLC0415
+        from backend.app.services.onboarding_service import (  # noqa: PLC0415
+            ONBOARDING_FLOW_VERSIONS,
+            OnboardingVersionMismatchError,
+            complete_welcome_onboarding,
+            ensure_onboarding_progress,
+        )
+        from backend.app.services.settings_service import update_user_settings  # noqa: PLC0415
+
+        engine = get_async_engine()
+        async with AsyncSession(engine) as session:
+            user_id = await self._make_user(session, "stale")
+            await update_user_settings(
+                user_id,
+                UserSettingsUpdate(language="it", base_currency="GBP", theme="light", avatar_url=None),
+                session,
+            )
+            rows = await ensure_onboarding_progress(user_id, session)
+            assert rows[OnboardingFlow.WELCOME].status == OnboardingStatus.PENDING
+            current_version = ONBOARDING_FLOW_VERSIONS[OnboardingFlow.WELCOME]
+            stale_version = current_version + 1
+
+            with pytest.raises(OnboardingVersionMismatchError) as exc_info:
+                await complete_welcome_onboarding(
+                    user_id=user_id,
+                    expected_version=stale_version,
+                    welcome_settings=OnboardingWelcomeSettings(language="es", base_currency="USD", avatar_url="https://example.com/stale-avatar.png"),
+                    session=session,
+                )
+            err = exc_info.value
+            assert err.flow == OnboardingFlow.WELCOME
+            assert err.expected_version == stale_version
+            assert err.current_version == current_version
+
+        async with AsyncSession(engine) as verify_session:
+            settings_result = await verify_session.execute(select(UserSettings).where(UserSettings.user_id == user_id))
+            settings = settings_result.scalar_one()
+            assert settings.language == "it", "pre-existing settings must survive a rejected stale-version request"
+            assert settings.base_currency == "GBP"
+
+            progress_result = await verify_session.execute(select(UserOnboardingProgress).where(UserOnboardingProgress.user_id == user_id))
+            progress_row = next(r for r in progress_result.scalars().all() if r.flow == OnboardingFlow.WELCOME.value)
+            assert progress_row.status == OnboardingStatus.PENDING.value, "the welcome flow must remain pending after a rejected stale version"

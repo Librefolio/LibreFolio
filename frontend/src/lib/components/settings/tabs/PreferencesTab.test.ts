@@ -139,6 +139,15 @@ vi.mock('$lib/stores/reference/fxRoutesStore', () => ({
     invalidateFxRoutes: vi.fn(),
 }));
 
+// OnboardingReplaySection has its own full behavioural coverage in
+// OnboardingReplaySection.test.ts (replay/busy/error/armed-badge). Here it
+// would otherwise drag in the onboarding controller, guide and appBootstrap
+// singletons just to prove *placement*, so it is replaced with a one-testid
+// probe — see the harness file's own doc comment.
+vi.mock('$lib/components/onboarding/OnboardingReplaySection.svelte', async () => ({
+    default: (await import('$test/harness/OnboardingReplaySectionProbe.svelte')).default,
+}));
+
 import PreferencesTab from './PreferencesTab.svelte';
 import {zodiosApi} from '$lib/api';
 import {locale} from '$lib/i18n';
@@ -783,6 +792,38 @@ describe('PreferencesTab — the category filter', () => {
         // editedValues is not rebuilt by the filter: the pending change survives.
         await waitFor(() => expect(screen.queryByTestId('preference-theme')).not.toBeNull());
         expect(rowButton(themeRow(), 'save')).not.toBeNull();
+    });
+});
+
+// =========================================================================
+describe('PreferencesTab — onboarding replay section placement', () => {
+    /** The desktop category nav renders one button per category, labelled by key. */
+    const navButton = (key: string) => screen.getAllByRole('button', {name: key})[0];
+    const onboardingProbe = () => screen.queryByTestId('onboarding-replay-section-probe');
+
+    it('appears under the default (no category selected, i.e. "All")', async () => {
+        await mount();
+
+        expect(onboardingProbe()).not.toBeNull();
+    });
+
+    it.each(['settings.categoryDisplay', 'settings.categoryCurrency', 'settings.categoryAppearance'])('disappears under %s', async (categoryKey) => {
+        await mount();
+
+        await fireEvent.click(navButton(categoryKey));
+
+        await waitFor(() => expect(onboardingProbe()).toBeNull());
+    });
+
+    it('appears alone (no preference row) under the onboarding category', async () => {
+        await mount();
+
+        await fireEvent.click(navButton('onboarding.settings.category'));
+
+        await waitFor(() => expect(onboardingProbe()).not.toBeNull());
+        expect(screen.queryByTestId('preference-language')).toBeNull();
+        expect(screen.queryByTestId('preference-currency')).toBeNull();
+        expect(screen.queryByTestId('preference-theme')).toBeNull();
     });
 });
 

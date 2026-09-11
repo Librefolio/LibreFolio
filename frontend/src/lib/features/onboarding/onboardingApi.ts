@@ -1,11 +1,11 @@
 import {z} from 'zod';
 
 import {axiosInstance} from '$lib/api';
-import type {OnboardingApi, OnboardingFlow, OnboardingProgressItem, OnboardingProgressResponse, OnboardingTransitionRequest} from '$lib/types/onboarding';
+import type {OnboardingApi, OnboardingFlow, OnboardingProgressItem, OnboardingProgressResponse, OnboardingTransitionRequest, OnboardingWelcomeCompleteRequest} from '$lib/types/onboarding';
 
 const progressItemSchema = z
     .object({
-        flow: z.enum(['welcome', 'intro_tour', 'import_guide']),
+        flow: z.enum(['welcome', 'intro_tour', 'broker_guide', 'fx_guide', 'asset_guide', 'import_guide']),
         status: z.enum(['pending', 'completed', 'skipped']),
         version: z.number().int().positive(),
         current_version: z.number().int().positive(),
@@ -31,6 +31,11 @@ export const onboardingApi: OnboardingApi = {
 
     async completeFlow(flow: OnboardingFlow, request: OnboardingTransitionRequest): Promise<OnboardingProgressItem> {
         const response = await axiosInstance.post(`/api/v1/settings/onboarding/${flow}/complete`, request);
+        return parseItem(response.data);
+    },
+
+    async completeWelcome(request: OnboardingWelcomeCompleteRequest): Promise<OnboardingProgressItem> {
+        const response = await axiosInstance.post('/api/v1/settings/onboarding/welcome/complete', request);
         return parseItem(response.data);
     },
 

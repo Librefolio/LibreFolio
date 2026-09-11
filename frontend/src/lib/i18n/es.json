@@ -3387,5 +3387,260 @@
       "issues": "Hallazgos del backend",
       "normalizedInput": "Entrada normalizada y unidades"
     }
+  },
+  "onboarding": {
+    "welcome": {
+      "title": "Te damos la bienvenida a LibreFolio",
+      "description": "Configura lo esencial antes de empezar a seguir tu cartera.",
+      "defaultsHint": "El idioma y la divisa parten de los valores predeterminados del administrador. Puedes cambiarlos ahora o más adelante.",
+      "avatarLabel": "Foto de perfil",
+      "avatarHint": "Opcional. Se usan tus iniciales cuando no seleccionas ninguna imagen.",
+      "chooseAvatar": "Elegir imagen",
+      "removeAvatar": "Quitar imagen",
+      "avatarAlt": "Vista previa de la foto de perfil",
+      "themeHint": "Tu preferencia de tema actual se mantiene sin cambios.",
+      "skip": "Omitir la configuración permanentemente",
+      "skipHint": "No se volverá a mostrar automáticamente. Puedes repetirla desde Ajustes.",
+      "completed": "Configuración guardada. Puedes continuar a LibreFolio.",
+      "skipped": "Configuración omitida. Puedes repetirla más tarde desde Ajustes."
+    },
+    "errors": {
+      "loadTitle": "No se pudo cargar la introducción",
+      "loadDescription": "Reintenta la configuración o cierra sesión de forma segura.",
+      "degraded": "No se pudo actualizar el estado de la introducción. Tu configuración completada sigue activa.",
+      "replayStart": "No se pudo iniciar la guía. Inténtalo de nuevo.",
+      "progressUnavailable": "El progreso de la introducción no está disponible. Recarga e inténtalo de nuevo.",
+      "complete": "No se pudo finalizar la guía. Inténtalo de nuevo.",
+      "skip": "No se pudo omitir la guía. Inténtalo de nuevo."
+    },
+    "actions": {
+      "finish": "Finalizar guía",
+      "skipPermanently": "Omitir permanentemente",
+      "pause": "Pausar",
+      "close": "Cerrar guía",
+      "back": "Atrás",
+      "next": "Siguiente",
+      "exitTour": "Salir del recorrido",
+      "skipCurrentTour": "Omitir este recorrido"
+    },
+    "guide": {
+      "waiting": "Esperando a que esta zona esté disponible…",
+      "useWizardAction": "Continúa con el botón indicado.",
+      "exploreThenContinue": "Explora el control indicado y luego continúa."
+    },
+    "tour": {
+      "progress": "Paso {current} de {total}",
+      "steps": {
+        "transactionsImport": {
+          "title": "Empieza con una importación",
+          "description": "Abre el importador de transacciones para convertir los informes de bróker en borradores. Nada se guarda automáticamente."
+        },
+        "brokers": {
+          "title": "Brókeres y acceso",
+          "description": "Los brókeres representan cuentas y controlan la propiedad, la edición y el uso compartido."
+        },
+        "assets": {
+          "title": "Tu catálogo de activos",
+          "description": "Los activos contienen identificadores, divisas, proveedores, precios y eventos."
+        },
+        "dashboard": {
+          "title": "Tu cartera de un vistazo",
+          "description": "El Panel es el punto de partida para el valor, el rendimiento, la asignación y la calidad de los datos de tu cartera."
+        },
+        "tools": {
+          "title": "Herramientas de análisis",
+          "description": "Las herramientas ofrecen análisis guiados, como la planificación PAC, sin ejecutar órdenes."
+        },
+        "settings": {
+          "title": "Repite cuando lo necesites",
+          "description": "Ajustes te permite repetir este recorrido, la configuración de bienvenida o la guía de importación."
+        },
+        "navigation": {
+          "title": "Oriéntate en la aplicación",
+          "description": "Usa este control para contraer o ampliar la barra lateral en el escritorio, o abrir el menú de navegación en pantallas pequeñas."
+        },
+        "transactionsNav": {
+          "title": "Empieza por tus transacciones",
+          "description": "Transacciones contiene las entradas manuales y el historial de la cartera. Importar tiene su propia guía contextual."
+        },
+        "brokersAdd": {
+          "title": "Añade un bróker",
+          "description": "Los brókeres representan las cuentas que contienen tus transacciones y definen propiedad y uso compartido."
+        },
+        "brokersCurrency": {
+          "title": "Configura la divisa del bróker",
+          "description": "Elige la divisa de cada saldo inicial. Esta vista previa nunca guarda un bróker."
+        },
+        "fxAdd": {
+          "title": "Añade un par de divisas",
+          "description": "Los pares de divisas permiten que LibreFolio convierta los valores de la cartera entre monedas."
+        },
+        "fxPair": {
+          "title": "Elige las divisas base y cotizada",
+          "description": "Define el par de divisas que necesitas. Esta vista previa nunca guarda un par de divisas."
+        },
+        "assetsAdd": {
+          "title": "Añade un activo",
+          "description": "Los activos conectan las transacciones con instrumentos, divisas, precios y datos de mercado."
+        },
+        "assetsConfig": {
+          "title": "Configura el activo",
+          "description": "Elige su divisa de cotización y proveedor de datos. Esta vista previa nunca guarda un activo."
+        },
+        "brokersNav": {
+          "title": "Brókeres",
+          "description": "Abre Brókeres para configurar tus cuentas. Una breve guía comienza cuando eliges Añadir bróker."
+        },
+        "fxNav": {
+          "title": "Tipos de cambio",
+          "description": "Abre Tipos de cambio para configurar los pares de divisas y sus proveedores de datos."
+        },
+        "assetsNav": {
+          "title": "Activos",
+          "description": "Abre Activos para definir los instrumentos, las divisas y los datos de mercado usados por tu cartera."
+        },
+        "toolsNav": {
+          "title": "Herramientas",
+          "description": "Herramientas contiene análisis específicos, como la planificación PAC, sin ejecutar órdenes."
+        },
+        "settingsNav": {
+          "title": "Ajustes",
+          "description": "Ajustes contiene las preferencias y permite repetir cualquier guía cuando sea necesario."
+        }
+      }
+    },
+    "flows": {
+      "welcome": "Configuración de bienvenida",
+      "intro_tour": "Recorrido rápido",
+      "import_guide": "Guía de importación",
+      "broker_guide": "Guía de brókeres",
+      "fx_guide": "Guía de tipos de cambio",
+      "asset_guide": "Guía de activos"
+    },
+    "status": {
+      "pending": "Pendiente",
+      "completed": "Completado",
+      "skipped": "Omitido"
+    },
+    "settings": {
+      "category": "Introducción",
+      "title": "Introducción y guías",
+      "description": "Repite la configuración y las guías contextuales sin cambiar tus datos guardados.",
+      "replayAll": "Repetir todo",
+      "updateAvailable": "Nueva versión por ver",
+      "nextImport": "Lista para la próxima importación",
+      "replayReady": "Repetición lista",
+      "version": "Vista v{seen} · actual v{current}",
+      "replayOnNextImport": "Repetir en la próxima importación",
+      "replay": "Repetir",
+      "groups": {
+        "setup": "Configuración",
+        "core": "Recorrido principal",
+        "contextual": "Guías contextuales"
+      },
+      "armedToast": "{flow} está listo. Abre la función para empezar.",
+      "cancelArmed": "Cancelar activación",
+      "armed": {
+        "welcome": "Repetición de bienvenida lista",
+        "intro_tour": "Repetición del recorrido principal lista",
+        "broker_guide": "Listo: elige Añadir bróker",
+        "fx_guide": "Listo: elige Añadir par de divisas",
+        "asset_guide": "Listo: elige Añadir activo",
+        "import_guide": "Listo: abre Importar"
+      },
+      "replayAtNextTrigger": {
+        "broker_guide": "Repetir la próxima vez que elijas Añadir bróker",
+        "fx_guide": "Repetir la próxima vez que elijas Añadir par de divisas",
+        "asset_guide": "Repetir la próxima vez que elijas Añadir activo"
+      }
+    },
+    "importGuide": {
+      "steps": {
+        "upload": {
+          "title": "Subir informes",
+          "description": "Añade uno o varios informes y asigna cada informe a un bróker."
+        },
+        "select": {
+          "title": "Elige archivos y analizadores",
+          "description": "Selecciona los informes guardados y elige el analizador que corresponda a cada archivo."
+        },
+        "analyze": {
+          "title": "Analiza los datos extraídos",
+          "description": "Ejecuta los analizadores y revisa los registros extraídos, los avisos y los resultados de validación."
+        },
+        "assets": {
+          "title": "Unifica las identidades de activos",
+          "description": "Relaciona los registros extraídos que puedan referirse al mismo activo."
+        },
+        "fix": {
+          "title": "Resuelve las filas señaladas",
+          "description": "Corrige o conserva explícitamente las filas que el analizador no pudo resolver."
+        },
+        "duplicates": {
+          "title": "Elige entre duplicados",
+          "description": "Decide qué filas importadas solapadas conservar."
+        },
+        "review": {
+          "title": "Revisa la importación",
+          "description": "Selecciona las filas aptas y resuelve los activos necesarios antes de abrir el editor masivo."
+        },
+        "bulk": {
+          "title": "Guardar todo escribe las transacciones",
+          "description": "Revisa y modifica los borradores de transacciones y elige Guardar todo cuando estén listos."
+        }
+      }
+    },
+    "intro": {
+      "title": "Te damos la bienvenida a LibreFolio",
+      "line1": "Te damos la bienvenida.",
+      "line2": "Nos alegra tenerte con nosotros.",
+      "line3": "Aquí tienes un recorrido rápido para empezar.",
+      "start": "Iniciar recorrido",
+      "autoStartHint": "El recorrido comienza automáticamente en 10 segundos."
+    },
+    "brokerGuide": {
+      "steps": {
+        "overview": {
+          "title": "Crea un bróker",
+          "description": "Este formulario define la cuenta que contendrá transacciones e importaciones."
+        },
+        "plugin": {
+          "title": "Elige el plugin de importación predeterminado",
+          "description": "El plugin predeterminado se preselecciona al importar informes de este bróker."
+        },
+        "icon": {
+          "title": "Añade un icono personalizado",
+          "description": "Elige una imagen para este bróker o conserva el icono automático derivado de su plugin o sitio web."
+        }
+      }
+    },
+    "fxGuide": {
+      "steps": {
+        "currencies": {
+          "title": "Elige el par de divisas",
+          "description": "Selecciona las divisas base y cotizada entre las que LibreFolio debe realizar la conversión."
+        },
+        "providers": {
+          "title": "Configura los proveedores de tipos",
+          "description": "Elige una ruta de proveedores directa o encadenada, o mantén el par en modo manual cuando no sea adecuada ninguna fuente automática."
+        }
+      }
+    },
+    "assetGuide": {
+      "steps": {
+        "search": {
+          "title": "Busca antes de introducir datos",
+          "description": "Busca en línea para prerrellenar identificadores y metadatos conocidos, o introduce el activo manualmente."
+        },
+        "identity": {
+          "title": "Define el activo",
+          "description": "Revisa su nombre, tipo, cantidad base de cotización y divisa."
+        },
+        "provider": {
+          "title": "Configura el proveedor de datos",
+          "description": "Selecciona el proveedor, el identificador y los parámetros, o mantén explícitamente el activo sin proveedor."
+        }
+      }
+    }
   }
 }
