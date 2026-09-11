@@ -1,28 +1,27 @@
 # ⚖️ WAC & Cost Basis
 
-**WAC (Weighted Average Cost)** — also called *PMC* (Prezzo Medio di Carico) — is LibreFolio's primary blended cost-basis methodology. The shipped implementation lives in `backend/app/services/portfolio_service.py` and `backend/app/utils/financial/wac_utils.py`.
+**WAC (Weighted Average Cost)** — also called *PMC* (*Prezzo Medio di
+Carico*) — is LibreFolio's blended, per-unit cost-basis method. The asynchronous
+preparation layer lives in `backend/app/services/portfolio_service.py`; the pure
+math layer lives in `backend/app/utils/financial/wac_utils.py`.
 
 ---
 
-## 🏗️ Architecture: Two Layers
-
-The computation is split into two layers:
+## 🏗️ Two-layer Architecture
 
 ```text
-compute_wac_iterative()          ← async DB/FX/cache layer
-    └─ compute_wac_from_txlist() ← pure math layer (no DB, no I/O)
+compute_wac_iterative()          ← database, split-event, FX, and cache layer
+    └─ compute_wac_from_txlist() ← pure iterative math layer
 ```
 
-| Layer | File | Responsibility |
-|-------|------|----------------|
-| `compute_wac_iterative` | `portfolio_service.py` | Queries DB, detects split-linked rows, resolves FX, caches by transaction fingerprint, builds input list |
-| `compute_wac_from_txlist` | `utils/financial/wac_utils.py` | Pure iterative WAC math, no side effects |
-
-This separation makes the pure math layer fully unit-testable without a database.
+| Layer | Responsibility |
+|-------|----------------|
+| `compute_wac_iterative()` | Query relevant rows, detect split-linked adjustments, choose the target currency, resolve FX, cache by transaction fingerprint, and build the response schema |
+| `compute_wac_from_txlist()` | Sort and process already-normalized inputs without database or network I/O |
 
 ---
 
-## ⚙️ `compute_wac_iterative()` — Async Preparation Layer
+## ⚙️ Async Preparation
 
 ```python
 async def compute_wac_iterative(
@@ -36,115 +35,178 @@ async def compute_wac_iterative(
 ) -> WACPreviewResultItem:
 ```
 
-Steps performed:
+The function:
 
-1. **Query** all transactions for `(broker_id, asset_id)` with `date ≤ as_of_date` and `quantity ≠ 0`
-2. **Exclude** any IDs in `excluded_tx_ids` (used by preview/auto-cost flows that must ignore the row currently being resolved)
-3. **Detect split-linked ADJUSTMENT rows** through `AssetEvent.type == SPLIT`; these rescale quantity/cost and skip normal add/reduce math.
-4. **Determine target currency**: `target_currency_override` if present, otherwise `determine_target_currency()` chooses the latest acquisition currency and falls back to `asset_currency`.
-5. **FX conversion**: for acquisitions in a different currency, fetch FX rates and convert to the target currency via `convert_bulk()`.
-6. **Delegate** to `compute_wac_from_txlist()` for the iterative calculation.
-7. **Return schema**: `WACPreviewResultItem` with current WAC, qualifying rows, FX staleness, and missing FX pairs.
+1. queries non-zero-quantity transactions for the broker and asset through
+   `as_of_date`;
+2. excludes any IDs supplied by the caller;
+3. identifies `ADJUSTMENT` rows linked to a `SPLIT` `AssetEvent`;
+4. fingerprints the selected rows and split linkage for the WAC cache;
+5. chooses `target_currency_override`, or the most recent acquisition currency
+   with `asset_currency` as fallback;
+6. converts acquisition costs into the target currency;
+7. returns `wac=None` plus `wac_missing_pairs` if required FX data is unavailable;
+8. delegates the normalized rows to `compute_wac_from_txlist()`; and
+9. returns a `WACPreviewResultItem`.
 
 ---
 
-## 🧮 WAC Algorithm
+## 🧮 Pure WAC Algorithm
 
-The WAC algorithm maintains a running **inventory** of (quantity, average cost):
+The pure function maintains a quantity pool and a per-unit average:
 
 ```text
-For each transaction in chronological order:
-  BUY:       new_wac = (old_qty × old_wac + new_qty × unit_cost) / (old_qty + new_qty)
-             inventory += new_qty
-  SELL:      inventory -= sold_qty   (WAC does not change on a sell)
-  TRANSFER+: treated like BUY using cost_basis_override as unit cost
-  TRANSFER-: treated like SELL
-  ADJUSTMENT+: treated like BUY
+For each date:
+  process positive quantities before negative quantities
+
+For an acquisition:
+  new_wac = (old_qty × old_wac + added_qty × unit_cost) / new_qty
+
+For a reduction:
+  reduce quantity at the current WAC; WAC itself does not change
+
+When quantity reaches zero:
+  reset WAC to zero
 ```
 
-`compute_wac_from_txlist()` sorts by `(date, tx_id)`, then processes same-day additions before reductions to avoid transient negative quantity. The algorithm handles **zero-crossing** (position going to zero): when inventory reaches exactly zero, the WAC is reset to zero. A subsequent acquisition starts a fresh average.
+The input is sorted by `(date, tx_id)`, then same-day additions are processed
+before reductions. A negative quantity caused by rounding is clamped to a
+zero-quantity, zero-WAC pool.
 
-Split-linked rows (`is_split_linked=True`) bypass normal acquisition/reduction logic:
+Split-linked adjustments bypass normal add/reduce math:
 
 ```text
-new_qty = qty_pool + tx.quantity
-wac = (wac * qty_pool) / new_qty
+new_qty = old_qty + split_delta
+new_wac = (old_wac × old_qty) / new_qty
 ```
 
-This preserves total cost while redistributing it over post-split quantity.
+This preserves total economic cost while rescaling the number of units.
 
 ---
 
-## 🧾 Cost Basis Override (Manual WAC)
+## 🧾 Persisted Cost Basis
 
-Each transaction has two optional fields for manual cost basis override:
+`transactions.cost_basis_override` is a **per-unit** amount, not a total
+acquisition cost. Its currency is stored in `cost_basis_currency`; the two values
+are written and cleared together by the transaction flows.
 
-| Field | Description |
-|-------|-------------|
-| `cost_basis_override` | Amount in `cost_basis_currency` representing the total acquisition cost |
-| `cost_basis_currency` | Currency of the override (may differ from the transaction currency) |
+| Field | Meaning |
+|-------|---------|
+| `cost_basis_override` | Frozen WAC for one unit |
+| `cost_basis_currency` | ISO currency code for that per-unit amount |
 
-When `cost_basis_override` is set, the WAC engine uses it instead of computing from the transaction amount. This is essential for:
-
-- **TRANSFER incoming leg** — the receiving broker does not know the original purchase price; the user sets it manually
-- **ADJUSTMENT+** — arbitrary quantity adjustments require an explicit cost basis
-
-If `cost_basis_override` is `None` on a BUY, the engine uses `amount` (gross transaction value).
+For a positive incoming `TRANSFER` or `ADJUSTMENT`, the portfolio calculation
+uses the override as the acquisition unit cost. A normal `BUY` derives its unit
+cost from the absolute cash amount divided by quantity. If an acquisition has
+neither a usable override nor a purchase amount, the pure engine treats it as a
+zero-cost addition.
 
 ---
 
-## 🔍 WAC Preview and Analytics
+## 🔄 Inline Batch Auto Modes
 
-Committed WAC analytics are exposed through the portfolio router:
+`cost_basis_mode` is a request-only instruction on `TXCreateItem` and
+`TXUpdateItem`; it is not a database column.
+
+| Mode | Batch behavior |
+|------|----------------|
+| `auto` | Compute and persist the per-unit WAC; return a compact WAC result |
+| `auto-detail` | Compute the same value and also return qualifying transactions and price detail |
+| `manual` | Use the submitted `cost_basis_override`; do not add the row to the auto-WAC worklist |
+
+The ordered batch flow is:
+
+```text
+create → promote → link resolution → compute_wac_and_fx_issues()
+       → validate required cost basis → balance replay
+```
+
+`compute_wac_and_fx_issues()` calls
+`TransactionService._compute_wac_for_auto_items()` only when no non-balance issue
+already exists. That helper scans only `parsed_creates` and `parsed_updates` for
+`auto` or `auto-detail`.
+
+For each selected row:
+
+- a create carrying `link_uuid` uses the linked partner's broker as the WAC
+  source;
+- an unlinked item uses its own broker and excludes its own row from the WAC
+  history;
+- a supplied `cost_basis_override.code` acts as the target-currency hint; and
+- a calculated `wac` is written to `cost_basis_override` and
+  `cost_basis_currency` on the staged ORM row.
+
+The create stage has already flushed new rows for generated IDs, and all of this
+work remains in the caller's session. Neither the WAC helper nor the surrounding
+batch stages commit.
+
+### 🧬 Split-linked adjustment skip
+
+If the selected row references an `AssetEvent` of type `SPLIT`, auto mode clears
+both stored cost-basis fields and emits a batch WAC result with `wac=None` and no
+missing pairs. The portfolio math will rescale the live pool when it later sees
+the split-linked adjustment; storing the pre-split WAC would double-count the
+economic cost.
+
+### 💱 Missing FX behavior
+
+If `compute_wac_iterative()` returns no WAC and reports missing FX pairs, the
+batch stage appends a `TXValidationIssue` with:
+
+- code `wacFxUnavailable`;
+- the originating create/update operation and index;
+- field `cost_basis_override`; and
+- pair names plus required dates in `params`.
+
+The response may still include `wac_results`, but the issue makes
+`committed=False`; the route that owns the session then rolls back.
+
+### 🔗 Promote boundary
+
+`TXPromoteBatchItem` has no `cost_basis_mode`, and `apply_promotes()` no longer
+performs an automatic WAC calculation. A promote-specific resolved value arrives
+as `resolved_fields.cost_basis_override` from the frontend merge flow (or another
+API client). The promote stage applies it to the positive-quantity transfer leg
+and clears it from the sender.
+
+Rows that are also present in `creates[]` or `updates[]` enter auto-WAC only
+because that create/update item requested an auto mode, never because of the
+promote item itself.
+
+---
+
+## 🔍 Preview and Response Data
+
+Committed WAC analytics are exposed through:
 
 ```text
 POST /portfolio/wac
 ```
 
-The endpoint calls `compute_wac_iterative()` for each `(broker, asset)` query and builds a point-per-qualifying-transaction series from `wac_qualifying_txs`.
-
-Transaction batch auto-cost-basis uses the same function from `TransactionService._compute_wac_for_auto_items()`. For `cost_basis_mode in ("auto", "auto-detail")`, the service flushes the transaction, computes WAC for the source broker/asset/date, then writes `transaction.cost_basis_override` and `cost_basis_currency`. Split-linked ADJUSTMENT rows are skipped because `wac_utils.compute_wac_from_txlist()` handles split rescaling live.
-
----
-
-## 💾 Usage in `execute_batch()`
-
-After creating/updating transactions in a batch, `TransactionService._compute_wac_for_auto_items()` runs WAC for each affected `(broker_id, asset_id)` pair where the transaction has `cost_basis_mode = "auto"` or `"auto-detail"`:
+Inline batch results use the same `WACPreviewResultItem` schema and additionally
+populate `operation`, `index`, and `source_broker_id`. The main fields are:
 
 ```python
-await self._compute_wac_for_auto_items(batch_results, session)
-```
-
-The result is written back to `transaction.cost_basis_override` so the DB always stores the resolved cost basis (no re-computation on read).
-
----
-
-## 📦 Data Structures
-
-```python
-@dataclass
-class WACInputTX:
-    tx_id: int | None
-    type: str               # "BUY", "SELL", "TRANSFER", "ADJUSTMENT"
-    date: date
-    quantity: Decimal
-    unit_cost_converted: Decimal | None   # in target currency (post FX-conversion)
-    original_currency: str
-    is_pending: bool        # True for in-memory/non-DB rows when caller supplies them
-    cost_basis_mode: str | None
-    is_split_linked: bool
-
-@dataclass
 class WACPreviewResultItem:
-    wac: Currency           # Current WAC after all transactions
-    wac_qualifying_txs: list[WACQualifyingTX]   # Which transactions affected WAC
-    wac_missing_pairs: list[WACMissingPairInfo]  # Missing FX pairs and dates
+    wac: Currency | None
+    wac_qualifying_txs: list[WACQualifyingTX]
+    wac_missing_pairs: list[WACMissingPairInfo]
+    asset_price: Currency | None
+    asset_price_stale: BackwardFillInfo | None
+    asset_price_missing: bool
+    operation: Literal["create", "update"] | None
+    index: int | None
+    source_broker_id: int | None
 ```
+
+The pure layer receives `WACInputTX` dataclasses containing the signed quantity,
+converted per-unit cost, original currency, request mode, and split-link flag.
 
 ---
 
 ## 🔗 Related
 
-- 🏗️ **[Transaction Service](service.md)** — How WAC is invoked in the batch pipeline
+- 🏗️ **[Transaction Service](service.md)** — Ordered batch stages and caller-owned transaction boundary
+- ✂️ **[Split & Promote](split_promote.md)** — Promote's resolved cost-basis contract
 - 📖 **[Weighted Average Cost Theory](../../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md)** — Financial methodology
-- 🧠 **[FIFO Lot Engine](fifo_lot_engine.md)** — Per-lot alternative that tracks individual acquisition batches instead of a blended average
+- 🧠 **[FIFO Lot Engine](fifo_lot_engine.md)** — Per-lot alternative to a blended average

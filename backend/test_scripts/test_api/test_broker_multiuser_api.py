@@ -33,7 +33,7 @@ def unique_name(prefix: str) -> str:
 def unique_username() -> str:
     """Generate a unique username."""
     timestamp = int(datetime.now().timestamp() * 1000)
-    return f"multi_test_{timestamp}"
+    return f"multi_test_{timestamp}_{uuid.uuid4().hex[:8]}"
 
 
 # ============================================================================
@@ -384,6 +384,91 @@ class TestMultiUserRoles:
             assert tx_id in ids_left, f"tx unexpectedly deleted: {ids_left}"
 
             print_success("✓ Viewer correctly blocked from deleting transactions")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "restricted_role",
+        ["VIEWER", None],
+        ids=["viewer-on-second-broker", "no-access-on-second-broker"],
+    )
+    async def test_cross_broker_access_failure_is_atomic(
+        self,
+        test_server,
+        restricted_role,
+    ):
+        """EDITOR access on one broker cannot partially apply a two-broker batch."""
+        print_section("MULTI-008d: Cross-broker access failure is atomic")
+
+        async with (
+            httpx.AsyncClient() as owner_client,
+            httpx.AsyncClient() as editor_client,
+        ):
+            await create_user_and_login(owner_client)
+            editable_broker_id = await create_broker(owner_client)
+            restricted_broker_id = await create_broker(owner_client)
+
+            editor_id, _ = await create_user_and_login(editor_client)
+            await add_access(
+                owner_client,
+                editable_broker_id,
+                editor_id,
+                "EDITOR",
+            )
+            if restricted_role is not None:
+                await add_access(
+                    owner_client,
+                    restricted_broker_id,
+                    editor_id,
+                    restricted_role,
+                )
+
+            editable_marker = unique_name("editable-create")
+            restricted_marker = unique_name("restricted-create")
+            response = await editor_client.post(
+                f"{API_BASE}/transactions/commit",
+                json={
+                    "creates": [
+                        {
+                            "broker_id": editable_broker_id,
+                            "type": "DEPOSIT",
+                            "date": date.today().isoformat(),
+                            "cash": {"code": "EUR", "amount": "100"},
+                            "description": editable_marker,
+                        },
+                        {
+                            "broker_id": restricted_broker_id,
+                            "type": "DEPOSIT",
+                            "date": date.today().isoformat(),
+                            "cash": {"code": "EUR", "amount": "200"},
+                            "description": restricted_marker,
+                        },
+                    ]
+                },
+                timeout=TIMEOUT,
+            )
+
+            assert response.status_code == 200, response.text
+            body = response.json()
+            assert body["committed"] is False
+            assert body["results"] == []
+            assert body["success_count"] == 0
+            access_issues = [issue for issue in body["issues"] if issue["code"] == "accessDenied"]
+            assert len(access_issues) == 1
+            assert access_issues[0]["params"] == {"brokerId": restricted_broker_id}
+
+            for broker_id, marker in (
+                (editable_broker_id, editable_marker),
+                (restricted_broker_id, restricted_marker),
+            ):
+                check = await owner_client.get(
+                    f"{API_BASE}/transactions",
+                    params={"broker_id": broker_id},
+                    timeout=TIMEOUT,
+                )
+                assert check.status_code == 200, check.text
+                assert not any(tx.get("description") == marker for tx in check.json())
+
+            print_success("✓ Access denial returned no results or partial writes")
 
 
 class TestEditorRestrictions:
