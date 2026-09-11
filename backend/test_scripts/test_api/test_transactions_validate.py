@@ -210,33 +210,88 @@ async def test_validate_never_persists(test_server):
 
 @pytest.mark.asyncio
 async def test_validate_collects_all_issues(test_server):
-    """Multiple bad ops in one batch → each surfaces as its own issue."""
-    print_section("G.3.3 — collects all issues (no early stop)")
+    """Raw rows parse leniently and preserve their original per-operation indices."""
+    print_section("G.3.3 — lenient raw parsing preserves indices")
     async with httpx.AsyncClient() as client:
         await create_test_user(client)
+        broker_id = await _create_broker(client, allow_cash_overdraft=True)
+        marker = f"lenient-valid-{uuid.uuid4().hex}"
 
-        # NOTE: we can't mix a malformed `create` here because Pydantic
-        # rejects structurally-invalid payloads at schema-validation time
-        # (BEFORE ``validate_batch`` runs), returning a 422 instead of the
-        # service-level TXValidationIssue we want to exercise. Ghost
-        # updates+deletes are enough to show that both op categories
-        # contribute issues independently — the "never stops at first"
-        # invariant is covered by observing ≥2 issues from ≥2 ops.
-        body = await _validate(
-            client,
-            updates=[
-                {"id": 999999997, "description": "ghost u1"},
-                {"id": 999999998, "description": "ghost u2"},
-            ],
-            deletes=[999999999],
+        response = await client.post(
+            f"{API_BASE}/transactions/validate",
+            json={
+                "creates": [
+                    {
+                        "broker_id": broker_id,
+                        "type": "DEPOSIT",
+                        "date": date.today().isoformat(),
+                        "cash": {"code": "EUR", "amount": "100"},
+                        "description": marker,
+                    },
+                    {
+                        "type": "DEPOSIT",
+                        "date": date.today().isoformat(),
+                        "cash": {"code": "EUR", "amount": "200"},
+                    },
+                ],
+                "updates": [{"description": "missing update id"}],
+            },
+            timeout=TIMEOUT,
         )
+        assert response.status_code == 200, response.text
+        body = response.json()
+
         assert body["committed"] is False
-        issues = body["issues"]
-        ops = sorted({i["operation"] for i in issues})
-        assert "delete" in ops, body
-        assert "update" in ops, body
-        assert len(issues) >= 3, f"expected ≥3 issues, got {len(issues)}"
-        print_success(f"Collected {len(issues)} issues across ops: {ops}")
+        assert body["success_count"] == 1
+        assert [(result["operation"], result["index"], result["status"]) for result in body["results"]] == [("create", 0, "success")]
+        assert [(issue["operation"], issue["index"], issue["field"], issue["code"]) for issue in body["issues"]] == [
+            ("create", 1, "broker_id", "missing"),
+            ("update", 0, "id", "missing"),
+        ]
+        print_success("Malformed rows reported while the valid create still produced a result")
+
+
+@pytest.mark.asyncio
+async def test_commit_mixed_issue_rolls_back_applied_create(test_server):
+    """A failed commit reports simulated work but the router rolls it all back."""
+    print_section("G.3.3b — failed mixed commit has no partial writes")
+    async with httpx.AsyncClient() as client:
+        await create_test_user(client)
+        broker_id = await _create_broker(client, allow_cash_overdraft=True)
+        marker = f"failed-mixed-{uuid.uuid4().hex}"
+        before_ids = {tx["id"] for tx in await _list_txs(client, broker_id)}
+
+        response = await client.post(
+            f"{API_BASE}/transactions/commit",
+            json={
+                "creates": [
+                    {
+                        "broker_id": broker_id,
+                        "type": "DEPOSIT",
+                        "date": date.today().isoformat(),
+                        "cash": {"code": "EUR", "amount": "321"},
+                        "description": marker,
+                    }
+                ],
+                "updates": [{"description": "missing update id"}],
+            },
+            timeout=TIMEOUT,
+        )
+        assert response.status_code == 200, response.text
+        body = response.json()
+
+        assert body["committed"] is False
+        assert body["success_count"] == 1
+        assert [(result["operation"], result["index"], result["status"]) for result in body["results"]] == [("create", 0, "simulated")]
+        assert len(body["results"][0]["ids"]) == 1
+        assert [(issue["operation"], issue["index"], issue["field"], issue["code"]) for issue in body["issues"]] == [("update", 0, "id", "missing")]
+
+        simulated_id = body["results"][0]["ids"][0]
+        after = await _list_txs(client, broker_id)
+        assert {tx["id"] for tx in after} == before_ids
+        assert simulated_id not in {tx["id"] for tx in after}
+        assert not any(tx.get("description") == marker for tx in after)
+        print_success("Applied create was diagnostic only and caller rollback removed it")
 
 
 @pytest.mark.asyncio

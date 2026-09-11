@@ -1,95 +1,116 @@
-# Split & Promote
+# ✂️ Split & Promote
 
-**Split** and **Promote** are two inverse operations on composite transactions (`TRANSFER`, `FX_CONVERSION`, `CASH_TRANSFER`). Both are implemented in `TransactionService` as atomic operations within `execute_batch()`.
+Split and batch promote both change the shape of composite transactions, but they
+are not implemented as delete-and-recreate inverses:
+
+| Operation | Direction | Batch behavior |
+|-----------|-----------|----------------|
+| **Split** | Composite pair → two standalone rows | Mutates both persisted rows in place and removes their reciprocal links |
+| **Promote** | Two standalone rows → composite pair | Mutates the resolved rows in place and creates reciprocal links |
+
+The durable pair is always stored with reciprocal `related_transaction_id` values.
+`link_uuid` is only a request-scoped correlation value for creates; it is not a
+column on `Transaction`.
 
 ---
 
-## Concepts
+## 🔢 Pipeline Position
 
-| Operation | Direction | Description |
-|-----------|-----------|-------------|
-| **Split** | Composite → Two independent | Break a linked pair into two standalone transactions |
-| **Promote** | Two independent → Composite | Merge two standalone transactions into a linked pair |
+The relevant `execute_batch()` stages run in this order:
+
+```text
+delete → split → update → updated-pair validation → create → promote → create-link resolution
+```
+
+Split deliberately precedes update. A batch can therefore split a pair and then
+apply updates whose type swaps are legal only for the resulting standalone types.
+Promote follows create so its references can resolve either persisted rows or rows
+that were flushed earlier in the same batch.
 
 ---
 
-## Split
+## ✂️ Split
 
-### What It Does
+### ⚙️ In-place behavior
 
-A split takes a **linked pair** (two transactions sharing a `link_uuid`) and:
+For each `TXSplitBatchItem`, `apply_splits()`:
 
-1. Detaches both legs (removes `link_uuid` from both)
-2. Re-types each leg according to the deterministic **Split Type Map**:
+1. resolves both required database IDs;
+2. verifies that each row's `related_transaction_id` points to the other;
+3. determines source/destination by negative/positive quantity for `TRANSFER`, or
+   by negative/positive amount for cash pairs;
+4. changes both row types using `SPLIT_TYPE_MAP`;
+5. clears both `related_transaction_id` values;
+6. clears `asset_id` for the cash split outcomes; and
+7. records both brokers' affected dates and a two-ID `split` result.
 
-| Source composite type | From-leg becomes | To-leg becomes |
-|-----------------------|-----------------|---------------|
+The rows keep their IDs. No create or delete is involved.
+
+| Source composite type | Negative/source leg | Positive/destination leg |
+|-----------------------|---------------------|--------------------------|
 | `CASH_TRANSFER` | `WITHDRAWAL` | `DEPOSIT` |
 | `TRANSFER` | `ADJUSTMENT` | `ADJUSTMENT` |
 | `FX_CONVERSION` | `WITHDRAWAL` | `DEPOSIT` |
 
-3. Writes the two modified transactions back — in the same atomic batch
+### 📦 Request shape
 
-### When to Use
-
-- A broker CSV imported a cross-currency transfer as a single row; BRIM created it as `CASH_TRANSFER` but the two legs actually belong to different purposes
-- A `TRANSFER` was created incorrectly and needs to be corrected independently
-
-### API
-
-The split is submitted as part of the standard batch endpoint:
+Split is a first-class item in the unified batch:
 
 ```json
 POST /transactions/commit
 {
   "splits": [
-    { "id_a": 101, "id_b": 102 }
+    {"id_a": 101, "id_b": 102}
   ]
 }
 ```
 
-Both `id_a` and `id_b` must be the two legs of the same linked pair (same `link_uuid`). Passing unlinked transactions raises a validation error.
+`id_a` and `id_b` must be different positive IDs and must identify the two
+reciprocally linked rows. Their input order does not determine source and
+destination; the signed quantity or amount does.
 
 ---
 
-## Promote
+## 🔗 Batch Promote
 
-### What It Does
+### ⚙️ In-place behavior
 
-Promote merges two **independent** transactions (no `link_uuid`) into a new linked composite. The operation is atomic:
+`apply_promotes()` accepts:
 
-1. Validates that the two transactions are compatible (types, currencies, brokers)
-2. **Deletes** the two originals
-3. **Creates** two new linked transactions (same data, new `link_uuid`, updated types)
+- two saved rows (`id_a` + `id_b`);
+- two creates from this batch (`link_uuid_a` + `link_uuid_b`); or
+- one saved and one same-batch row.
 
-This delete-and-recreate approach (rather than update-in-place) ensures balance validation runs cleanly from scratch on the new pair.
+Each side must provide exactly one reference form: `id_*` or `link_uuid_*`, never
+both. After resolving the references, the stage:
 
-### Promotion Rules
+1. rejects a row that already has `related_transaction_id`;
+2. calls `_find_promote_rule_match()` to infer the target type from
+   `TX_TYPE_METADATA.promote_from` and its field constraints;
+3. assigns the inferred type to both existing ORM rows;
+4. writes reciprocal `related_transaction_id` values;
+5. applies recognized `resolved_fields`;
+6. marks same-batch correlation keys as consumed so the later create-link stage
+   does not process them again; and
+7. emits a `promote` result containing the same two row IDs.
 
-The allowed promotion pairs are defined in `TX_TYPE_METADATA.promote_from` rules:
+No original row is deleted and no replacement row is created.
 
-| From types | Target composite | Constraints |
-|-----------|-----------------|-------------|
-| `DEPOSIT` + `WITHDRAWAL` | `CASH_TRANSFER` | Distinct brokers, same currency |
-| `DEPOSIT` + `WITHDRAWAL` | `FX_CONVERSION` | Same or distinct brokers, different currencies |
-| `DEPOSIT` + `WITHDRAWAL` + asset fields | `TRANSFER` | Distinct brokers, requires `asset_id` + `quantity` |
+### 🧭 Inferred target rules
 
-Rule matching is handled by `_find_promote_rule_match()` and additional constraint checks in `_check_promote_constraints()`.
+The batch payload does not contain `new_type`. The current metadata permits:
 
-### Promote Suggest
+| Standalone input types | Inferred target | Required constraints |
+|------------------------|-----------------|----------------------|
+| `ADJUSTMENT` + `ADJUSTMENT` | `TRANSFER` | Same `asset_id`, different brokers, opposite quantities |
+| `WITHDRAWAL` + `DEPOSIT` | `FX_CONVERSION` | Same broker, different cash currencies |
+| `WITHDRAWAL` + `DEPOSIT` | `CASH_TRANSFER` | Different brokers, same cash currency, opposite cash amounts |
 
-Before promoting manually, clients can call the **suggest endpoint** to get candidate pairs:
+The match is symmetric: either row may be supplied as side A.
 
-```
-POST /transactions/promote-suggest
-{
-  "items": [{ "tx_id": 101 }]
-}
-```
+### 📦 Request shape
 
-`promote_suggest_bulk()` scans accessible transactions and returns ranked candidates compatible with the input transaction, including which composite type would result.
-
-### API
+A saved-row promote can include values already resolved by the merge UI:
 
 ```json
 POST /transactions/commit
@@ -98,37 +119,101 @@ POST /transactions/commit
     {
       "id_a": 201,
       "id_b": 202,
-      "new_type": "CASH_TRANSFER"
+      "resolved_fields": {
+        "description": "Broker transfer",
+        "tags": ["internal"],
+        "date": "2026-09-11",
+        "cost_basis_override": {"code": "EUR", "amount": "42.50"}
+      }
     }
   ]
 }
 ```
 
-For `TRANSFER` promotion, additionally supply `asset_id`, `quantity`, and optionally `cost_basis_override`.
+The recognized `resolved_fields` keys are `description`, `tags`, `date`, and
+`cost_basis_override`. Description, tags, and date are applied to both rows. For
+an asset transfer, the cost basis is applied to the positive-quantity receiver
+and cleared from the sender.
+
+A mixed saved/new request uses a create correlation value:
+
+```json
+POST /transactions/commit
+{
+  "creates": [
+    {
+      "broker_id": 8,
+      "type": "DEPOSIT",
+      "date": "2026-09-11",
+      "cash": {"code": "EUR", "amount": "300"},
+      "link_uuid": "draft-deposit-8"
+    }
+  ],
+  "promotes": [
+    {"id_a": 201, "link_uuid_b": "draft-deposit-8"}
+  ]
+}
+```
+
+Here `link_uuid_b` resolves the just-flushed create. Once consumed by promote,
+that correlation group is skipped by `resolve_create_links()`. The persisted
+rows contain only reciprocal `related_transaction_id` values.
+
+### 🧮 Cost basis boundary
+
+A promote item has no `cost_basis_mode`, and `apply_promotes()` does not calculate
+WAC. The later `_compute_wac_for_auto_items()` worklist is built only from parsed
+create and update items. Promote-specific cost-basis resolution therefore comes
+from `resolved_fields.cost_basis_override`, supplied by the frontend merge flow
+or another API client.
 
 ---
 
-## Error Handling
+## 🛣️ Legacy Live Promote Endpoint
 
-Both operations participate in the standard **collect-all-errors** pipeline:
+`POST /transactions/transfers/promote` remains a separate live endpoint with a
+different contract:
 
-- Errors are reported as `TXValidationIssue` items in the response
-- A single error in any split or promote item **rolls back the entire batch**
-- The frontend receives the full set of issues to highlight every problem at once
+- request: `from_tx_id`, `to_tx_id`, `new_type`, and the optional
+  `asset_id`, `quantity`, and `cost_basis_override` fields needed for
+  `TRANSFER`;
+- implementation: snapshot the two `DEPOSIT`/`WITHDRAWAL` rows, delete them,
+  build two replacement create payloads with a shared `link_uuid`, and call
+  `execute_batch()` with those deletes and creates; and
+- response: `TXTransferPromoteResponse`, whose fields include the legacy
+  `rolled_back`, `new_from_tx_id`, `new_to_tx_id`, and `errors`.
 
-Common errors:
+This delete-and-create behavior applies only to the legacy endpoint. It must not
+be used to describe `promotes[]` in `/transactions/validate` or
+`/transactions/commit`.
+
+---
+
+## 🧯 Errors and Rollback
+
+Split/promote row failures are accumulated as `TXValidationIssue` entries while
+their stage loops continue. Common stable codes are:
 
 | Code | Cause |
 |------|-------|
-| `pairTypeMismatch` | Split IDs do not belong to the same linked pair |
-| `pairSameBroker` | TRANSFER/CASH_TRANSFER promote attempted with same broker on both sides |
-| `promoteIncompatible` | The two transaction types cannot form any composite |
-| `missingField` | TRANSFER promote missing `asset_id` or `quantity` |
+| `txNotFound` | A split ID does not resolve |
+| `splitIdsMismatch` | Split IDs are not reciprocal partners |
+| `typeCannotSplit` | The current pair type has no split mapping |
+| `promoteRefNotFound` | A saved or same-batch promote reference cannot be resolved |
+| `alreadyPaired` | A promote candidate already has a persistent partner |
+| `noPromoteRule` | No metadata rule and constraint set matches the two rows |
+
+The service does not roll the session back itself. `/transactions/validate`
+always rolls back; `/transactions/commit` commits only when
+`TXBatchResponse.committed` is true and rolls back otherwise. Access denial may
+return before either mutation stage, and balance replay stops after its first
+balance exception, so the overall pipeline is not an unconditional
+collect-every-error pass.
 
 ---
 
-## Related
+## 🔗 Related
 
-- 🏗️ **[Transaction Service](service.md)** — Batch pipeline and execution model
-- ⚖️ **[WAC & Cost Basis](wac.md)** — Cost basis impact of TRANSFER promotes
-- 🔒 **[Balance Validation](balance_validation.md)** — Runs after every split/promote
+- 🏗️ **[Transaction Service](service.md)** — Batch order, context, and transaction ownership
+- ⚖️ **[WAC & Cost Basis](wac.md)** — Create/update auto-WAC and promote's payload boundary
+- 🔒 **[Balance Validation](balance_validation.md)** — Final post-flush balance replay
