@@ -10,16 +10,23 @@ from backend.app.db.models import (
     OnboardingFlow,
     OnboardingStatus,
     UserOnboardingProgress,
+    UserSettings,
 )
 from backend.app.schemas.settings import (
+    SETTINGS_REGISTRY,
     OnboardingProgressItem,
     OnboardingProgressResponse,
+    OnboardingWelcomeSettings,
 )
+from backend.app.services.global_settings_service import get_setting_value
 from backend.app.utils.datetime_utils import utcnow
 
 ONBOARDING_FLOW_VERSIONS: Mapping[OnboardingFlow, int] = {
     OnboardingFlow.WELCOME: 1,
     OnboardingFlow.INTRO_TOUR: 1,
+    OnboardingFlow.BROKER_GUIDE: 1,
+    OnboardingFlow.FX_GUIDE: 1,
+    OnboardingFlow.ASSET_GUIDE: 1,
     OnboardingFlow.IMPORT_GUIDE: 1,
 }
 
@@ -57,11 +64,11 @@ async def _get_progress_rows(
     return {OnboardingFlow(row.flow): row for row in result.scalars().all()}
 
 
-async def ensure_onboarding_progress(
+async def _ensure_onboarding_progress_uncommitted(
     user_id: int,
     session: AsyncSession,
 ) -> dict[OnboardingFlow, UserOnboardingProgress]:
-    """Insert only missing flow rows; never rewrite persisted progress."""
+    """Insert only missing flow rows without committing the caller's transaction."""
     now = utcnow()
     statement = (
         sqlite_insert(UserOnboardingProgress)
@@ -81,7 +88,6 @@ async def ensure_onboarding_progress(
         .on_conflict_do_nothing(index_elements=["user_id", "flow"])
     )
     await session.execute(statement)
-    await session.commit()
 
     rows = await _get_progress_rows(user_id, session)
     missing = set(ONBOARDING_FLOW_VERSIONS) - set(rows)
@@ -89,6 +95,16 @@ async def ensure_onboarding_progress(
         missing_values = ", ".join(sorted(flow.value for flow in missing))
         raise RuntimeError(f"onboarding progress missing after upsert for user_id={user_id}: " f"{missing_values}")
     return rows
+
+
+async def ensure_onboarding_progress(
+    user_id: int,
+    session: AsyncSession,
+) -> dict[OnboardingFlow, UserOnboardingProgress]:
+    """Insert only missing flow rows; never rewrite persisted progress."""
+    await _ensure_onboarding_progress_uncommitted(user_id, session)
+    await session.commit()
+    return await _get_progress_rows(user_id, session)
 
 
 async def get_onboarding_progress(
@@ -122,7 +138,7 @@ async def transition_onboarding_progress(
             current_version=current_version,
         )
 
-    rows = await ensure_onboarding_progress(user_id, session)
+    rows = await _ensure_onboarding_progress_uncommitted(user_id, session)
     row = rows[flow]
     if row.status == target_status and row.version == current_version:
         return _to_progress_item(row)
@@ -142,3 +158,62 @@ async def transition_onboarding_progress(
     await session.commit()
     await session.refresh(row)
     return _to_progress_item(row)
+
+
+async def complete_welcome_onboarding(
+    user_id: int,
+    expected_version: int,
+    welcome_settings: OnboardingWelcomeSettings,
+    session: AsyncSession,
+) -> OnboardingProgressItem:
+    """Commit welcome preferences and terminal progress in one transaction."""
+    current_version = ONBOARDING_FLOW_VERSIONS[OnboardingFlow.WELCOME]
+    if expected_version != current_version:
+        raise OnboardingVersionMismatchError(
+            flow=OnboardingFlow.WELCOME,
+            expected_version=expected_version,
+            current_version=current_version,
+        )
+
+    try:
+        rows = await _ensure_onboarding_progress_uncommitted(user_id, session)
+        row = rows[OnboardingFlow.WELCOME]
+
+        result = await session.execute(select(UserSettings).where(UserSettings.user_id == user_id))
+        settings = result.scalar_one_or_none()
+        now = utcnow()
+        if settings is None:
+            settings = UserSettings(
+                user_id=user_id,
+                language=welcome_settings.language,
+                base_currency=welcome_settings.base_currency,
+                theme=await get_setting_value(
+                    session,
+                    SETTINGS_REGISTRY.global_.DEFAULT_THEME.key,
+                    "auto",
+                ),
+                avatar_url=welcome_settings.avatar_url,
+                created_at=now,
+                updated_at=now,
+            )
+        else:
+            settings.language = welcome_settings.language
+            settings.base_currency = welcome_settings.base_currency
+            settings.avatar_url = welcome_settings.avatar_url
+            settings.updated_at = now
+        session.add(settings)
+
+        if row.status != OnboardingStatus.COMPLETED or row.version != current_version:
+            row.status = OnboardingStatus.COMPLETED
+            row.version = current_version
+            row.updated_at = now
+            row.completed_at = now
+            row.skipped_at = None
+            session.add(row)
+
+        await session.commit()
+        await session.refresh(row)
+        return _to_progress_item(row)
+    except Exception:
+        await session.rollback()
+        raise

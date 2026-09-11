@@ -43,6 +43,8 @@
     import type {ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
+    import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
+    import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
     import AssetSetRiskPanel from '$lib/components/risk/AssetSetRiskPanel.svelte';
@@ -137,6 +139,7 @@
 
     // Asset modal (create/edit)
     let assetModalOpen = $state(false);
+    let assetTourPreview = $state(false);
     let assetModalEditMode = $state(false);
     let assetModalEditData = $state<AssetEditData | null>(null);
     let assetEditLoading = $state(false);
@@ -761,12 +764,18 @@
     // Actions
     // =========================================================================
 
-    function handleAddAsset() {
+    function openAssetCreate() {
         assetEditRequest += 1;
         assetEditLoading = false;
         assetModalEditMode = false;
         assetModalEditData = null;
         assetModalOpen = true;
+    }
+
+    function handleAddAsset() {
+        assetTourPreview = false;
+        openAssetCreate();
+        onboardingGuide.maybeStartContextual('asset_guide');
     }
 
     async function handleEditAsset(asset: {id: number}) {
@@ -1215,7 +1224,7 @@
                 </div>
             {/if}
             <ViewModeToggle bind:mode={viewMode} storageKey="assetsViewMode" />
-            <button class="flex items-center gap-1.5 px-3 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors whitespace-nowrap" data-testid="assets-add-button" onclick={handleAddAsset}>
+            <button class="flex items-center gap-1.5 px-3 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors whitespace-nowrap" data-testid="assets-add-button" use:guideAnchor={'assets.add'} onclick={handleAddAsset}>
                 <Plus size={16} />
                 {$t('assets.modal.title')}
             </button>
@@ -1525,7 +1534,7 @@
             {#if assets.length === 0}
                 <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2">{$t('assets.empty.noAssets')}</h3>
                 <p class="text-gray-500 dark:text-gray-400 mb-4">{$t('assets.empty.noAssetsDesc')}</p>
-                <button class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" onclick={handleAddAsset}>
+                <button class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" use:guideAnchor={'assets.add'} onclick={handleAddAsset}>
                     <Plus size={16} class="inline mr-1" />
                     {$t('assets.modal.title')}
                 </button>
@@ -1694,6 +1703,7 @@
 <!-- Asset Create/Edit Modal -->
 <AssetModal
     bind:open={assetModalOpen}
+    tourPreview={assetTourPreview}
     editMode={assetModalEditMode}
     editData={assetModalEditData}
     linkCreatedAsset
@@ -1708,6 +1718,10 @@
     onupdated={() => loadAssets()}
     onclose={() => {
         assetModalOpen = false;
+        assetTourPreview = false;
+        if (onboardingGuide.active?.flow === 'asset_guide') {
+            onboardingGuide.dismissHost({restartAtFirst: true});
+        }
     }}
 />
 

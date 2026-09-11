@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Shared support actions in the donation popup and About page: coffee links and X, Reddit, Facebook, Instagram and TikTok icons, with platform-specific messages in the active interface language. **Copy and go** includes the public project link and opens a new tab, leaving the original screen open. Reddit separates title and body; platforms without text-prefill support explain how to paste the copied caption. TikTok opens its upload page rather than the feed. Clipboard and pop-up failures are reported explicitly; nothing is published automatically.
 - A new authenticated **Tools** foundation provides a versioned catalogue, isolated per-item computation, read-only diagnostics and compiled custom interfaces. The hub reports missing or incompatible tools explicitly; no financial calculation or portfolio write is implied when no compatible plugin is installed.
+- New users now get an optional Welcome setup, a short guided tour, and a contextual import guide. Each guide can be skipped permanently or replayed from Settings; the import guide never writes transactions or presses Save All.
 - **FX route metadata in the API** — route responses expose `is_chain` and a sorted, unique `providers_used` list of configured providers. Ordered `chain_steps` still preserves direction and repeated providers; request payloads remain unchanged, with no database migration required.
 
 ### 🐛 Fixed
@@ -47,6 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔄 Changed
 
+- Language and display currency for new users start from administrator defaults; existing users are not forced through onboarding.
 - Import file tables paginate from five rows. After uploading, only the brokers that received those files start expanded.
 - First-time asset creation is explained briefly; known ISINs or tickers can prefill a missing asset name. The currency tooltip now describes the currency used to store asset prices.
 - The Generic CSV guide clarifies one file per broker—not one file per currency—and keeps its column reference in a single table.

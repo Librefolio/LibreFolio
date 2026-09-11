@@ -75,6 +75,8 @@
     import {createNamesFor, createOtherFor, duplicateCandidates, resolutionLabel as resolutionLabelPure} from '$lib/utils/transactions/importResolutionHelpers';
     import {brokerIdForTx, beforeOpeningInfo, isBeforeOpening as isBeforeOpeningPure, isRowAssetResolved as isRowAssetResolvedPure, shouldAutoSelectOnRecheck} from '$lib/utils/transactions/importRowState';
     import {groupPartitions as groupPartitionsPure, defaultKeeperIndices as defaultKeeperIndicesPure, resolverSelectionFor as resolverSelectionForPure, outlierIndexSet} from '$lib/utils/transactions/importDuplicateResolver';
+    import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
+    import {onboardingGuide, type ImportGuideStepId} from '$lib/features/onboarding/onboardingGuide.svelte';
 
     import type {TransactionCreateItem, BrimFile, BrimParseResponse, FilePreviewResponse} from '$lib/types';
 
@@ -140,6 +142,37 @@
     // =========================================================================
 
     let currentStepId = $state<StepId>('upload');
+    let guideObservedOpen = false;
+    let guideHandedOff = false;
+
+    function importGuideStep(id: StepId): ImportGuideStepId {
+        return `import.${id}` as ImportGuideStepId;
+    }
+
+    $effect(() => {
+        const isOpen = open;
+        const step = currentStepId;
+        const stepIndex = visibleSteps.findIndex((candidate) => candidate.id === step);
+        const progress = {
+            current: Math.max(stepIndex + 1, 1),
+            total: visibleSteps.length,
+        };
+        if (isOpen) {
+            if (!guideObservedOpen) {
+                guideObservedOpen = true;
+                guideHandedOff = false;
+                onboardingGuide.startImportAt(importGuideStep(step), progress);
+            } else if (onboardingGuide.active?.flow === 'import_guide' && !guideHandedOff) {
+                onboardingGuide.setStep(importGuideStep(step), progress);
+            }
+            return;
+        }
+        if (guideObservedOpen && !guideHandedOff && onboardingGuide.active?.flow === 'import_guide') {
+            onboardingGuide.dismissHost({restartAtFirst: true});
+        }
+        guideObservedOpen = false;
+        guideHandedOff = false;
+    });
 
     // =========================================================================
     // Step 1 State — Upload & Assign Broker
@@ -1232,6 +1265,13 @@
             }
             if (step4HasUnresolvedSelected || step4SelectedCount === 0) return;
             onImportBatch(buildFinalTxList());
+            if (onboardingGuide.active?.flow === 'import_guide') {
+                guideHandedOff = true;
+                onboardingGuide.setStep('import.bulk', {
+                    current: visibleSteps.length + 1,
+                    total: visibleSteps.length + 1,
+                });
+            }
         } finally {
             importPreparing = false;
         }
@@ -4522,7 +4562,14 @@ ${arrow}<span>${label}</span></span>`,
                         {$t('common.clear') || 'Clear'}
                     </button>
                 {/if}
-                <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed" onclick={goNext} disabled={!step1CanProceed || uploading} data-testid="import-wizard-next">
+                <button
+                    type="button"
+                    class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                    onclick={goNext}
+                    disabled={!step1CanProceed || uploading}
+                    data-testid="import-wizard-next"
+                    use:guideAnchor={'import.action.upload'}
+                >
                     {#if uploading}
                         <LoadingSpinner size="sm" />
                     {:else if step1ValidCount > 0}
@@ -4549,7 +4596,7 @@ ${arrow}<span>${label}</span></span>`,
                     </span>
                 {/if}
             </div>
-            <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed" onclick={goNext} disabled={!step2CanParse} data-testid="import-wizard-parse">
+            <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed" onclick={goNext} disabled={!step2CanParse} data-testid="import-wizard-parse" use:guideAnchor={'import.action.select'}>
                 {$t('importWizard.parse', {values: {n: selectedFiles.length}})} ▶
             </button>
         {:else if currentStepId === 'analyze'}
@@ -4590,6 +4637,7 @@ ${arrow}<span>${label}</span></span>`,
                 onclick={goNext}
                 disabled={!step3CanContinue || candidatesRefreshing || duplicateRecheckRunning}
                 data-testid="import-wizard-continue"
+                use:guideAnchor={'import.action.analyze'}
             >
                 {$t('common.continue')} ▶
             </button>
@@ -4615,7 +4663,14 @@ ${arrow}<span>${label}</span></span>`,
                     </span>
                 {/if}
             </div>
-            <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50" onclick={goNext} disabled={candidatesRefreshing || duplicateRecheckRunning} data-testid="import-wizard-assets-continue">
+            <button
+                type="button"
+                class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50"
+                onclick={goNext}
+                disabled={candidatesRefreshing || duplicateRecheckRunning}
+                data-testid="import-wizard-assets-continue"
+                use:guideAnchor={'import.action.assets'}
+            >
                 {$t('common.continue')} ▶
             </button>
         {:else if currentStepId === 'fix'}
@@ -4641,6 +4696,7 @@ ${arrow}<span>${label}</span></span>`,
                 onclick={goNext}
                 disabled={fixStepPendingCount > 0 || duplicateRecheckRunning || candidatesRefreshing}
                 data-testid="import-wizard-fix-continue"
+                use:guideAnchor={'import.action.fix'}
             >
                 {#if duplicateRecheckRunning}
                     <LoadingSpinner size="sm" />
@@ -4665,7 +4721,14 @@ ${arrow}<span>${label}</span></span>`,
                     </span>
                 {/if}
             </div>
-            <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50" onclick={goNext} disabled={candidatesRefreshing || duplicateRecheckRunning} data-testid="import-wizard-duplicates-continue">
+            <button
+                type="button"
+                class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50"
+                onclick={goNext}
+                disabled={candidatesRefreshing || duplicateRecheckRunning}
+                data-testid="import-wizard-duplicates-continue"
+                use:guideAnchor={'import.action.duplicates'}
+            >
                 {$t('common.continue')} ▶
             </button>
         {:else}
@@ -4689,7 +4752,7 @@ ${arrow}<span>${label}</span></span>`,
                     </span>
                 {/if}
             </div>
-            <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed" onclick={handleImport} disabled={!step4CanImport} data-testid="import-wizard-import">
+            <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed" onclick={handleImport} disabled={!step4CanImport} data-testid="import-wizard-import" use:guideAnchor={'import.action.review'}>
                 {$t('importWizard.importToEditor', {values: {n: step4SelectedCount}})} ▶
             </button>
         {/if}

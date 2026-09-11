@@ -4,8 +4,10 @@ Revision ID: 003_user_onboarding_progress
 Revises: 5b1333fa6b07
 Create Date: 2026-09-10
 
-Existing users are grandfathered into every current flow as completed. Users created
-after this migration receive pending rows lazily through the onboarding service.
+Existing users keep their established settings, so Welcome is grandfathered as
+completed. Every guide starts pending and appears only at its own trigger.
+Users created after this migration receive pending rows lazily through the
+onboarding service.
 """
 
 from typing import Sequence, Union
@@ -22,7 +24,7 @@ _CURRENT_VERSION = 1
 
 
 def upgrade() -> None:
-    """Create onboarding progress and grandfather every existing user."""
+    """Create onboarding progress and seed existing users by flow policy."""
     op.create_table(
         "user_onboarding_progress",
         sa.Column("id", sa.Integer(), primary_key=True),
@@ -45,13 +47,17 @@ def upgrade() -> None:
         sa.text("""
             INSERT OR IGNORE INTO user_onboarding_progress
                 (user_id, flow, status, version, created_at, updated_at, completed_at)
-            SELECT users.id, flows.flow, 'completed', :version,
-                   CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+            SELECT users.id, flows.flow, flows.status, :version,
+                   CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
+                   CASE WHEN flows.status = 'completed' THEN CURRENT_TIMESTAMP ELSE NULL END
             FROM users
             CROSS JOIN (
-                SELECT 'welcome' AS flow
-                UNION ALL SELECT 'intro_tour'
-                UNION ALL SELECT 'import_guide'
+                SELECT 'welcome' AS flow, 'completed' AS status
+                UNION ALL SELECT 'intro_tour', 'pending'
+                UNION ALL SELECT 'broker_guide', 'pending'
+                UNION ALL SELECT 'fx_guide', 'pending'
+                UNION ALL SELECT 'asset_guide', 'pending'
+                UNION ALL SELECT 'import_guide', 'pending'
             ) AS flows
             """),
         {"version": _CURRENT_VERSION},

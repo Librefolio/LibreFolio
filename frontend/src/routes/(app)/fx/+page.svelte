@@ -38,6 +38,8 @@
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
     import {gotoDateRange} from '$lib/utils/url/dateRangeUrl';
     import {signalCatalogStore} from '$lib/stores/signalCatalogStore.svelte';
+    import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
+    import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
     import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
     import type {FxPairSyncCompleteDetail} from '$lib/services/fxCreationSync';
 
@@ -114,6 +116,7 @@
 
     // Modals
     let addModalOpen = $state(false);
+    let fxTourPreview = $state(false);
     let syncModalOpen = $state(false);
     let settingsModalOpen = $state(false);
     /** Slug of the pair currently being configured via per-card ⚙️ (null = global) */
@@ -776,7 +779,17 @@
     }
 
     function handleAddPair() {
+        fxTourPreview = false;
         addModalOpen = true;
+        onboardingGuide.maybeStartContextual('fx_guide');
+    }
+
+    function closeAddPair() {
+        addModalOpen = false;
+        fxTourPreview = false;
+        if (onboardingGuide.active?.flow === 'fx_guide') {
+            onboardingGuide.dismissHost({restartAtFirst: true});
+        }
     }
 
     function handleSyncAll() {
@@ -963,7 +976,7 @@
                 />
             {/if}
             <ViewModeToggle bind:mode={viewMode} storageKey="fxViewMode" />
-            <button class="flex items-center gap-1.5 px-3 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors whitespace-nowrap" data-testid="fx-add-pair-button" onclick={handleAddPair}>
+            <button class="flex items-center gap-1.5 px-3 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors whitespace-nowrap" data-testid="fx-add-pair-button" use:guideAnchor={'fx.add'} onclick={handleAddPair}>
                 <Plus size={16} />
                 {$_('fx.actions.addPair')}
             </button>
@@ -1110,7 +1123,7 @@
             {#if pairs.length === 0}
                 <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2">{$_('fx.empty.noPairsTitle')}</h3>
                 <p class="text-gray-500 dark:text-gray-400 mb-4">{$_('fx.empty.noPairsDesc')}</p>
-                <button class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" onclick={handleAddPair}>
+                <button class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" use:guideAnchor={'fx.add'} onclick={handleAddPair}>
                     <Plus size={16} class="inline mr-1" />
                     {$_('fx.empty.addFirstPair')}
                 </button>
@@ -1194,7 +1207,7 @@
 />
 
 <!-- Add Pair Modal -->
-<FxPairAddModal bind:open={addModalOpen} {dateEnd} {dateStart} onclose={() => (addModalOpen = false)} oncreated={handlePairCreated} onsynced={handlePairCreationSynced} />
+<FxPairAddModal bind:open={addModalOpen} {dateEnd} {dateStart} tourPreview={fxTourPreview} onclose={closeAddPair} oncreated={handlePairCreated} onsynced={handlePairCreationSynced} />
 
 <!-- Sync Modal -->
 <FxSyncModal bind:open={syncModalOpen} {dateEnd} dateStart={syncDateStart} onclose={() => (syncModalOpen = false)} onsynced={handleSynced} pairs={syncModalPairs} />

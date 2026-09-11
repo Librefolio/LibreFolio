@@ -34,6 +34,8 @@ vi.mock('$lib/components/ui/media/ImagePickerWrapper.svelte', async () => ({
 
 import {fireEvent, render, screen, setupI18n, waitFor} from '$test/component';
 import type {WelcomeCopy} from '$lib/features/onboarding/welcome';
+import OnboardingBootstrapBanner from './OnboardingBootstrapBanner.svelte';
+import OnboardingBootstrapBlock from './OnboardingBootstrapBlock.svelte';
 import WelcomePage from './WelcomePage.svelte';
 
 const COPY: WelcomeCopy = {
@@ -150,17 +152,23 @@ describe('WelcomePage — complete', () => {
 });
 
 describe('WelcomePage — skip', () => {
-    it('calls onskip through the same busy wrapper and clears it on success', async () => {
+    it('owns the permanent Skip above the form, runs it through busy, and clears busy on success', async () => {
         const {onskip} = mount();
         const {promise, resolve} = deferred<void>();
         onskip.mockReturnValue(promise);
+        const form = screen.getByTestId('welcome-form');
+        const skip = screen.getByTestId('welcome-skip');
 
-        await fireEvent.click(screen.getByTestId('welcome-skip'));
+        expect(form).not.toContainElement(skip);
+
+        await fireEvent.click(skip);
         expect(onskip).toHaveBeenCalledTimes(1);
         await waitFor(() => expect(screen.getByTestId('welcome-form')).toHaveAttribute('data-busy', 'true'));
+        expect(skip).toBeDisabled();
 
         resolve();
         await waitFor(() => expect(screen.getByTestId('welcome-form')).toHaveAttribute('data-busy', 'false'));
+        expect(skip).toBeEnabled();
         expect(screen.queryByTestId('welcome-error')).toBeNull();
     });
 
@@ -182,6 +190,7 @@ describe('WelcomePage — outcome banner replaces the form', () => {
         expect(screen.getByTestId('welcome-page')).toHaveAttribute('data-outcome', 'completed');
         expect(screen.getByTestId('welcome-outcome')).toHaveTextContent('COMPLETED_TOKEN');
         expect(screen.queryByTestId('welcome-form')).toBeNull();
+        expect(screen.queryByTestId('welcome-skip')).toBeNull();
     });
 
     it('renders the skipped banner for a skipped outcome', () => {
@@ -208,5 +217,78 @@ describe('WelcomePage — avatar orchestration', () => {
 
         await waitFor(() => expect(screen.queryByRole('img')).toBeNull());
         expect(screen.queryByTestId('welcome-avatar-clear')).toBeNull();
+    });
+});
+
+/**
+ * OnboardingBootstrapBlock / OnboardingBootstrapBanner — the two bootstrap error
+ * handles `appBootstrap` renders around the rest of the app (blocked full-screen vs.
+ * degraded inline banner). Both are pure, prop-driven components: `error`, `onretry`
+ * and (block-only) `onlogout` are the whole contract, so they are covered here
+ * directly rather than through `appBootstrap` itself (see the singleton-injection
+ * seam noted in onboarding.test.ts). Assertions target `data-testid`/ARIA roles and
+ * the caller-supplied `error` string — never the i18n copy the component falls back
+ * to when `error` is null.
+ */
+describe('OnboardingBootstrapBlock — blocked bootstrap handle', () => {
+    it('renders as an alert and exposes retry/logout controls', () => {
+        render(OnboardingBootstrapBlock, {error: null, onretry: vi.fn(), onlogout: vi.fn()});
+
+        const region = screen.getByTestId('onboarding-bootstrap-blocked');
+        expect(region).toBeInTheDocument();
+        expect(screen.getByRole('alert')).toBeInTheDocument();
+        expect(screen.getByTestId('onboarding-bootstrap-retry')).toBeInTheDocument();
+        expect(screen.getByTestId('onboarding-bootstrap-logout')).toBeInTheDocument();
+    });
+
+    it('surfaces the caller-supplied error text verbatim (never a translated fallback) when one is provided', () => {
+        render(OnboardingBootstrapBlock, {error: 'BOOTSTRAP_ERROR_TOKEN', onretry: vi.fn(), onlogout: vi.fn()});
+
+        expect(screen.getByTestId('onboarding-bootstrap-blocked')).toHaveTextContent('BOOTSTRAP_ERROR_TOKEN');
+    });
+
+    it('calls onretry when the retry control is activated', async () => {
+        const onretry = vi.fn();
+        render(OnboardingBootstrapBlock, {error: null, onretry, onlogout: vi.fn()});
+
+        await fireEvent.click(screen.getByTestId('onboarding-bootstrap-retry'));
+
+        expect(onretry).toHaveBeenCalledTimes(1);
+    });
+
+    it('calls onlogout when the logout control is activated, independently of retry', async () => {
+        const onretry = vi.fn();
+        const onlogout = vi.fn();
+        render(OnboardingBootstrapBlock, {error: null, onretry, onlogout});
+
+        await fireEvent.click(screen.getByTestId('onboarding-bootstrap-logout'));
+
+        expect(onlogout).toHaveBeenCalledTimes(1);
+        expect(onretry).not.toHaveBeenCalled();
+    });
+});
+
+describe('OnboardingBootstrapBanner — degraded bootstrap handle', () => {
+    it('renders as a status region with a retry control', () => {
+        render(OnboardingBootstrapBanner, {error: null, onretry: vi.fn()});
+
+        expect(screen.getByTestId('onboarding-bootstrap-degraded')).toBeInTheDocument();
+        expect(screen.getByRole('status')).toBeInTheDocument();
+        expect(screen.getByTestId('onboarding-bootstrap-banner-retry')).toBeInTheDocument();
+    });
+
+    it('surfaces the caller-supplied error text verbatim when one is provided', () => {
+        render(OnboardingBootstrapBanner, {error: 'DEGRADED_ERROR_TOKEN', onretry: vi.fn()});
+
+        expect(screen.getByTestId('onboarding-bootstrap-degraded')).toHaveTextContent('DEGRADED_ERROR_TOKEN');
+    });
+
+    it('calls onretry when its retry control is activated', async () => {
+        const onretry = vi.fn();
+        render(OnboardingBootstrapBanner, {error: null, onretry});
+
+        await fireEvent.click(screen.getByTestId('onboarding-bootstrap-banner-retry'));
+
+        expect(onretry).toHaveBeenCalledTimes(1);
     });
 });
