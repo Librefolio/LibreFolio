@@ -161,9 +161,11 @@ per seguire una vecchia mappa.
 
 ### P4-2 - `TransactionService.execute_batch`
 
-**Stato:** 🟡 in implementazione su L/SP16. **Taglia:** XL, non un semplice
-dispatch per verbo. `B/services/transaction_service.py:937-1573`: 637 righe,
-C901 115 alla misura storica.
+**Stato:** ✅ integrato con L/SP16 (`846aefb24`, combined `ed0f4ff30`).
+`execute_batch` è ora un orchestratore esplicito di 50 linee AST con contesto typed
+e stage ordinati; contratto, indici, link, WAC, saldi e ownership transazionale
+restano invariati. [Piano](../23_transactionBatchRefactor/plan-phase00TransactionBatchRefactor.prompt.md).
+**Taglia storica:** XL; alla baseline il metodo occupava 637 righe con C901 115.
 
 **Superfici:** servizio, helper di WAC `1579-1739`, `B/api/v1/transactions.py:83-183`, `B/schemas/transactions.py:704-718`, chiamanti interni di promozione e depositi iniziali del broker.
 
@@ -255,7 +257,7 @@ review nel [piano dedicato](../11_feedbackContractsRunes/plan-phase00FeedbackCon
 | S6 6.3 quattro `aggregate_*` | Gia chiuso, XS documentale | Rimossi per decisione P1. `DerivedViewsBuilder.build_data_quality_report`, `portfolio_engine.py:1656`; caller arricchiti `portfolio_service.py:1209,2047`. Non reintrodurre helper che perderebbero politiche di qualita/metadati. |
 | S6 6.4 `bulk_refresh_prices` | Aperto, L | `asset_source.py:2788-3364`: prepare, fetch, confronto cambiamenti, persist esistono come closure, non come fasi estratte. C901 62; `_fetch_single` 22. Coordinare con P4-1. Preservare sessione distinta per persist, resume/min, cache, timeout, filtro valuta, risultati parziali e commit a chunk; non promettere atomicita che oggi non c'e. |
 | S6 6.7 | Alias P4-6 | Nessun secondo task o seconda stima. |
-| S6 6.8 | Alias P4-2 | Nessun secondo task o seconda stima. |
+| S6 6.8 | ✅ Chiuso come alias P4-2 | Nessun secondo task o seconda stima. |
 | S6 6.11 assert AI Export | Aperto, S | 17 assert strutturali, su 51 totali; 34 contestuali fuori scope. Elenco sotto. Nessun cambio cataloghi/versioni/dataset. |
 | S6 6.12 settings services | Gia risolto, XS documentale | Decisione P2-9: non fondere. `schemas/settings.py:286-360` registry; `settings_service.py:1-16` responsabilita; `global_settings_service.py:1-19` accessor. Conservare typed user settings vs chiavi globali. |
 | S6 6.14 BRIM generale | Non attivare come campagna | Consolidato nei limiti di P4-3: un provider alla volta, nessuna astrazione universale dedotta dai soli C901. |
@@ -739,7 +741,7 @@ L'ordine ordina **rischio e ampiezza**, non inventa dipendenze. Il primo sprint 
 | SP12 | ✅ Tool platform integrata. |
 | SP13–SP14 | 🟡 D Round 2 completo in implementazione; solver ancora aperto. |
 | SP15 | ⛔ Bloccato da SP07 + SP11 + SP14. |
-| SP16 | 🟡 L autorizzato e in implementazione. |
+| SP16 | ✅ Integrato: context/stage pipeline, full backend, docs e review verdi. |
 
 **Sequenza non significa blocco artificiale:** SP12-14 non dipendono da SP08/09/16. Possono essere anticipati se cambia la priorita di prodotto, senza fingere che il PAC richieda prima rifare FIFO o asset_source. Il presente ordine mantiene prima il lavoro circoscritto, poi catene L, infine il nuovo solver e le integrazioni XL.
 

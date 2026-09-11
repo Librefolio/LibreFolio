@@ -33,7 +33,7 @@ checkpoint intermedi.
 | SP12 | ✅ Piattaforma Tool integrata (`570beb386`). |
 | SP13–SP14 | 🟡 PAC P1 integrato; Round 2 completo attivo su D; solver SP14 ancora aperto. |
 | SP15 | ⛔ Attende SP07 + SP11 + SP14. |
-| SP16 | 🟡 L autorizzato e in implementazione sul refactor `execute_batch`. |
+| SP16 | ✅ Refactor `execute_batch` integrato con L (`846aefb24`, combined `ed0f4ff30`); full backend e docs verdi. |
 
 **Planning update (2026-09-07):** see [06](06_piano_sprint.md) for the current-code
 assessment and decisions made during review. Global privacy, mobile auto-hide header,
