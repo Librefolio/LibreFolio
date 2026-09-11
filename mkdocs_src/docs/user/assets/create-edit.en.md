@@ -105,9 +105,11 @@ For each distribution you can:
   something is missing, red when you overshoot.
 - **Remove** a row with its delete button.
 
-### 📥 Importing a Distribution CSV
+### 📥 Importing a Distribution CSV {: #importing-a-distribution-csv }
 
-The import button accepts the same two-column format for geographic and sector data:
+The import button accepts the same two-column format for geographic and sector data — a
+header row of `name,weight` (or `name;weight`, see separators below) followed by one row per
+country/area or sector:
 
 ```csv
 name,weight
@@ -115,24 +117,56 @@ USA,60
 Italy,40
 ```
 
-`weight` is a percentage from `0` through `100`. Names are matched exactly after trimming
-surrounding whitespace and normalizing letter case:
+`weight` is a percentage from `0` through `100`. Names are matched **exactly** after trimming
+surrounding whitespace and normalizing letter case — there is no fuzzy matching:
 
 - geographic names may be an ISO 2-letter code, an ISO 3-letter code, or the country's
   currently localized name;
 - sector names may be a canonical sector key (such as `Government Bonds`) or the sector's
   currently localized label.
 
-There is no fuzzy matching. The import is all-or-nothing: an invalid or duplicate name, an
-out-of-range weight, or a total outside the green tolerance blocks the whole import. Imported
-weights are not auto-balanced. On acceptance, each percentage is converted once to its stored
-fraction (`60` becomes `0.6`).
+The import is **atomic and all-or-nothing**: it validates every row before touching anything,
+and on success it **replaces the whole distribution** — rows already present in the editor that
+are not repeated in the file are dropped, not merged. An invalid or unmatched name, a **name
+repeated on two rows**, an out-of-range weight, or a total outside the green tolerance blocks
+the whole import and nothing is changed. Imported weights are not auto-balanced. On acceptance,
+each percentage is converted once to its stored fraction (`60` becomes `0.6`).
 
 !!! tip "The 100% rule"
 
     Aim for a clean 100%. The editor and CSV importer accept totals only when the difference
     from 100% is strictly less than 0.005 percentage points. If the instrument is 100% one
     country or sector, a single row at 100 is both valid and the clearest choice.
+
+!!! warning "Separator and decimal comma: avoid the silent-truncation trap"
+
+    The importer auto-detects the column separator from the header row — `;` (semicolon) or
+    `,` (comma) both work, whichever the first line uses. This is convenient for round-tripping
+    exports, but it creates one real trap: if you use `,` as both the **column separator** and
+    the **decimal separator** (e.g. `Italy,12,5` meaning 12.5%), the row is read as **three**
+    fields instead of two, and the weight column silently becomes `12` — the `,5` is discarded
+    without an error.
+
+    To write a decimal-comma weight safely, pick one of:
+
+    - use `;` as the column separator instead (unambiguous, decimal comma passes through as-is):
+
+      ```csv
+      name;weight
+      Italy;12,5
+      USA;87,5
+      ```
+
+    - or keep `,` as the column separator and **quote** any value that itself contains a comma:
+
+      ```csv
+      name,weight
+      Italy,"12,5"
+      USA,"87,5"
+      ```
+
+    A plain `.` decimal point (`Italy,12.5`) is never ambiguous with a comma-separated file and
+    needs no quoting.
 
 *(Screenshots of the two distribution editors — `assets/detail-classification` already exists and shows the area; dedicated close-ups of the editors are planned for the next gallery run.)*
 

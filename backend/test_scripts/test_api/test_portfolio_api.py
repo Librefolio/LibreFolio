@@ -5,14 +5,18 @@ from decimal import Decimal
 
 import httpx
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.config import get_settings
+from backend.app.db.session import get_async_engine
+from backend.app.services import user_service
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success
 
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30
+SOLE_ADMIN_DELETE_DETAIL = "Cannot delete account: you are the only administrator"
 
 
 # ---------------------------------------------------------------------------
@@ -38,6 +42,16 @@ async def create_test_user(client: httpx.AsyncClient) -> str:
     return username
 
 
+async def delete_current_test_user(client: httpx.AsyncClient, user_id: int) -> None:
+    """Delete only this test's authenticated account, with exact sole-admin fallback."""
+    response = await client.delete(f"{API_BASE}/auth/users/me", timeout=TIMEOUT)
+    if response.status_code == 400 and response.json().get("detail") == SOLE_ADMIN_DELETE_DETAIL:
+        async with AsyncSession(get_async_engine()) as session:
+            assert await user_service.delete_user(session, user_id)
+        return
+    assert response.status_code == 200, response.text
+
+
 async def create_broker(client: httpx.AsyncClient, name: str | None = None) -> int:
     resp = await client.post(
         f"{API_BASE}/brokers",
@@ -48,14 +62,19 @@ async def create_broker(client: httpx.AsyncClient, name: str | None = None) -> i
     return resp.json()["results"][0]["broker_id"]
 
 
-async def create_asset(client: httpx.AsyncClient, currency: str = "EUR", quote_base_quantity: int | None = None) -> int:
+async def create_asset(
+    client: httpx.AsyncClient,
+    currency: str = "EUR",
+    quote_base_quantity: int | None = None,
+    asset_type: str = "STOCK",
+) -> int:
     resp = await client.post(
         f"{API_BASE}/assets",
         json=[
             {
                 "display_name": f"As_{uuid.uuid4().hex[:6]}",
                 "currency": currency,
-                "asset_type": "STOCK",
+                "asset_type": asset_type,
                 **({"quote_base_quantity": quote_base_quantity} if quote_base_quantity is not None else {}),
             }
         ],
@@ -515,6 +534,165 @@ class TestPortfolioHistoryEndpoint:
 
 @pytest.mark.asyncio
 class TestPortfolioReportEndpoint:
+    async def test_report_serializes_typed_yield_on_cost_statuses_and_ignores_date_from(
+        self,
+        test_server,
+    ):
+        """Holding DTO exposes available/no-income/unavailable YOC without trimming its own window."""
+        print_section("Portfolio Report: Yield on Cost serialization")
+        broker_id = None
+        asset_ids: list[int] = []
+        user_id = None
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            me_response = await client.get(f"{API_BASE}/auth/me", timeout=TIMEOUT)
+            assert me_response.status_code == 200, me_response.text
+            user_id = me_response.json()["user"]["id"]
+            try:
+                broker_id = await create_broker(client)
+                available_asset_id = await create_asset(client, asset_type="BOND")
+                asset_ids.append(available_asset_id)
+                zero_available_asset_id = await create_asset(client, asset_type="STOCK")
+                asset_ids.append(zero_available_asset_id)
+                no_income_asset_id = await create_asset(client, asset_type="CRYPTO")
+                asset_ids.append(no_income_asset_id)
+                recent_asset_id = await create_asset(client, asset_type="HOLD")
+                asset_ids.append(recent_asset_id)
+
+                await commit_batch(
+                    client,
+                    creates=[
+                        {
+                            "broker_id": broker_id,
+                            "asset_id": available_asset_id,
+                            "type": "BUY",
+                            "date": "2024-01-01",
+                            "quantity": "10",
+                            "cash": {"code": "EUR", "amount": "-100"},
+                        },
+                        {
+                            "broker_id": broker_id,
+                            "asset_id": available_asset_id,
+                            "type": "DIVIDEND",
+                            "date": "2025-01-01",
+                            "quantity": "0",
+                            "cash": {"code": "EUR", "amount": "20"},
+                        },
+                        {
+                            "broker_id": broker_id,
+                            "asset_id": zero_available_asset_id,
+                            "type": "BUY",
+                            "date": "2024-01-01",
+                            "quantity": "5",
+                            "cash": {"code": "EUR", "amount": "-50"},
+                        },
+                        {
+                            "broker_id": broker_id,
+                            "asset_id": zero_available_asset_id,
+                            "type": "DIVIDEND",
+                            "date": "2025-01-01",
+                            "quantity": "0",
+                            "cash": {"code": "EUR", "amount": "0"},
+                        },
+                        {
+                            "broker_id": broker_id,
+                            "asset_id": no_income_asset_id,
+                            "type": "BUY",
+                            "date": "2024-01-01",
+                            "quantity": "2",
+                            "cash": {"code": "EUR", "amount": "-20"},
+                        },
+                        {
+                            "broker_id": broker_id,
+                            "asset_id": recent_asset_id,
+                            "type": "BUY",
+                            "date": "2025-12-01",
+                            "quantity": "4",
+                            "cash": {"code": "EUR", "amount": "-40"},
+                        },
+                    ],
+                )
+
+                response = await post_portfolio_report(
+                    client,
+                    {
+                        "broker_ids": [broker_id],
+                        "date_range": {
+                            "start": "2025-07-01",
+                            "end": "2025-12-31",
+                        },
+                        "include_history": False,
+                        "include_allocation_history": False,
+                        "include_positions_contribution": False,
+                    },
+                )
+                assert response.status_code == 200, response.text
+                report = response.json()
+                serialized_holdings = report["summary"]["holdings"]
+                assert serialized_holdings
+                for holding in serialized_holdings:
+                    assert "yield_on_cost" in holding
+                    assert holding["yield_on_cost"] is not None
+                    assert "net_zero" in holding["yield_on_cost"]["provenance"]
+
+                holdings = {(holding["asset_id"], holding["broker_id"]): holding for holding in serialized_holdings}
+
+                available = holdings[(available_asset_id, broker_id)]["yield_on_cost"]
+                assert available["status"] == "available"
+                assert Decimal(available["value"]) == Decimal("0.2")
+                assert available["reason"] is None
+                assert available["provenance"]["source"] == "transactions"
+                assert available["provenance"]["window_start"] == "2025-01-01"
+                assert available["provenance"]["window_end"] == "2025-12-31"
+                assert available["provenance"]["first_pair_transaction_date"] == "2024-01-01"
+                assert available["provenance"]["gross_income_transaction_count"] == 1
+                assert available["provenance"]["gross_income_per_unit"]["code"] == "EUR"
+                assert Decimal(available["provenance"]["gross_income_per_unit"]["amount"]) == Decimal("2")
+                assert available["provenance"]["net_zero"] is False
+
+                zero_available = holdings[(zero_available_asset_id, broker_id)]["yield_on_cost"]
+                assert zero_available["status"] == "available"
+                assert Decimal(zero_available["value"]) == Decimal("0")
+                assert zero_available["reason"] is None
+                assert zero_available["provenance"]["gross_income_transaction_count"] == 1
+                assert zero_available["provenance"]["gross_income_per_unit"]["code"] == "EUR"
+                assert Decimal(zero_available["provenance"]["gross_income_per_unit"]["amount"]) == Decimal("0")
+                assert zero_available["provenance"]["net_zero"] is True
+
+                no_income = holdings[(no_income_asset_id, broker_id)]["yield_on_cost"]
+                assert no_income["status"] == "no_income"
+                assert Decimal(no_income["value"]) == Decimal("0")
+                assert no_income["reason"] is None
+                assert no_income["provenance"]["gross_income_transaction_count"] == 0
+                assert Decimal(no_income["provenance"]["gross_income_per_unit"]["amount"]) == Decimal("0")
+                assert no_income["provenance"]["net_zero"] is False
+
+                unavailable = holdings[(recent_asset_id, broker_id)]["yield_on_cost"]
+                assert unavailable["status"] == "unavailable"
+                assert unavailable["value"] is None
+                assert unavailable["reason"] == "insufficient_history"
+                assert unavailable["provenance"]["first_pair_transaction_date"] == "2025-12-01"
+                assert unavailable["provenance"]["net_zero"] is False
+            finally:
+                if broker_id is not None:
+                    cleanup_broker = await client.delete(
+                        f"{API_BASE}/brokers",
+                        params={"ids": [broker_id], "force": True},
+                        timeout=TIMEOUT,
+                    )
+                    assert cleanup_broker.status_code == 200, cleanup_broker.text
+                if asset_ids:
+                    cleanup_assets = await client.delete(
+                        f"{API_BASE}/assets",
+                        params={"asset_ids": asset_ids},
+                        timeout=TIMEOUT,
+                    )
+                    assert cleanup_assets.status_code == 200, cleanup_assets.text
+                if user_id is not None:
+                    await delete_current_test_user(client, user_id)
+
+        print_success("Yield on Cost statuses serialize with independent trailing window")
+
     async def test_report_positions_contribution_is_date_aware(self, test_server):
         """Report uses date_to snapshot for holdings and serializes performance rows + other effects."""
         print_section("Portfolio Report: date-aware holdings and contribution")

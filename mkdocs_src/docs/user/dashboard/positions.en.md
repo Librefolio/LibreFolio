@@ -1,6 +1,6 @@
 # 🔍 Positions & Analysis
 
-The **Positions** tab of the dashboard allows you to inspect open holdings, analyze performance, and drill down into matching tax lots.
+The **Positions** tab of the dashboard allows you to inspect open holdings, analyze performance, and drill down into matching tax lots. Broker detail pages reuse the same Positions panel and saved table preferences, with the report scoped to the selected broker.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-positions-views" data-carousel-interval="6000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
   <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="positions-holdings-table" data-title="📋 Holdings (Table)" alt="Holdings Table View">
@@ -19,7 +19,7 @@ Use the view toggle to switch between them, and the table/map toggle to change t
 
 #### 📋 Holdings View
 
-The **Holdings** view shows the current open-position snapshot. The table has 13 columns:
+The **Holdings** view shows the current open-position snapshot. Each row represents one asset/broker position at the selected end date. The table has 14 columns:
 
 | Column | Description |
 |:---|:---|
@@ -28,16 +28,38 @@ The **Holdings** view shows the current open-position snapshot. The table has 13
 | **Δ1%** | The same daily change as a percentage of yesterday's position market value. |
 | **Unrealized P&L** | Open gain/loss: current value minus residual cost basis. |
 | **P&L %** | Unrealized P&L as a percentage of the residual cost basis. |
-| **Annualized** | Net annualized return (CAGR) of the still-open lots, from the first transaction to today — for comparison across positions held for different durations. |
+| **Annualized** | Net annualized return (CAGR) of the still-open lots, from the first transaction to the selected end date — for comparison across positions held for different durations. |
+| **YOC** | Gross recorded dividends and interest over the last year, compared with the average purchase price (WAC). Visible by default beside **Annualized**. |
 | **Value** | Total value at current market prices (\(\text{Price} \times \text{Quantity}\)). |
 | **Weight** | Proportional share of this position relative to the total portfolio value. |
 | **Qty** | Current shares, units, or coins held. |
-| **Brokers** | Broker account(s) holding the position. |
+| **Brokers** | Broker account for this asset/broker row. |
 | **Price** *(hidden by default)* | Current asset price from the connected data provider. |
 | **Avg. Cost** *(hidden by default)* | Average cost per unit of the currently open position (Weighted Average Cost). |
 | **Oldest open lot** *(hidden by default)* | Opening date of the oldest FIFO lot still open for this position. |
 
 Use the **eye icon** in the table toolbar to show or hide columns — your choices are remembered across sessions.
+
+#### 💸 Yield on Cost (YOC) {: #yield-on-cost-yoc }
+
+YOC answers: **"How much gross dividend and interest income did each current unit produce over the last 365 calendar dates relative to its average purchase price (WAC)?"**
+
+- It is calculated separately for each **asset/broker** row, even when the same asset is held at several brokers.
+- The window ends on the selected report end date and does not move with the report start date.
+- Only asset-linked `DIVIDEND` and `INTEREST` transactions with non-negative cash amounts count, including an exact-zero amount. Negative income amounts are not supported. Separate taxes and fees, provider income events, and income without an asset do not.
+- `ADJUSTMENT` transactions can affect quantity, average purchase price, or linked splits, but never count as income.
+- Income uses the paying broker's long quantity at end of day before payment. Same-day buys are excluded; same-day sells are included.
+- Transfers respect custody, but historical income does not automatically follow units to another broker. Linked same-day and later splits normalize prior income to current units. If connected cross-broker history contains a split but this broker lacks its own matching linked split row, YOC becomes unavailable rather than inferring a global restatement.
+- Each income uses transaction-date FX; the average purchase price uses end-date FX. If an earlier available rate is used, the tooltip shows the actual rate date.
+- The rule applies to every holding type, including crypto and manual assets.
+
+Available values may be positive or exactly zero and use two decimal places. Positive values have no leading plus sign. An available zero means that at least one qualifying income row was recorded at amount zero and no qualifying amount was positive; it appears as `0.00%`, with `net_zero=true` in its provenance. By contrast, `no_income` means that no qualifying income row was recorded: for a ledger at least 365 days old, the cell shows a plain `-` with no warning icon. The age gate applies only when there is no trailing-365-day income: a younger pair with valid recorded income can show an available YOC. A younger no-income pair, or a replay, quantity, split, FX, or WAC problem, has no numeric value and shows `-` with an info icon explaining why YOC is unavailable. LibreFolio does not show a partial value when any required input fails.
+
+The YOC column is visible by default beside **Annualized**. Dashboard and broker Holdings tables share the same persisted show/hide preference.
+
+!!! warning "YOC is gross, not tax-net"
+
+    LibreFolio includes only non-negative recorded `DIVIDEND` and `INTEREST` cash amounts and does not subtract separate `TAX` or `FEE` transactions from YOC. See the rigorous [Yield on Cost definition](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/yield-on-cost.md) and its comparison with dividend yield, cumulative cash yield, CAGR, current yield, and YTM.
 
 #### 📈 Performance View
 

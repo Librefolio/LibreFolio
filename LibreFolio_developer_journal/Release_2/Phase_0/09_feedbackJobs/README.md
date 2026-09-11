@@ -8,7 +8,7 @@ di TODO_FUTURI.md (classificazione con l'utente) + gli 8 P4 ereditati dall'audit
 |------|------|-----------|
 | [00_backlog_strutturale_P4.md](00_backlog_strutturale_P4.md) | Debito strutturale | Gli 8 task P4 dell'audit (scissione asset_source, execute_batch, BRIM helpers, Yahoo, Runes, status matrix, cache store, coda S6) |
 | [01_ux_dashboard.md](01_ux_dashboard.md) | UX & dashboard | Provider probe, global privacy, YOC, uploader filter, currency help, support, onboarding, mobile header |
-| [02_grafici_avanzati.md](02_grafici_avanzati.md) | Grafici | F8 (P&L-only, synthetic candles, income histograms), delivered lot analysis, calendar-day asset return |
+| [02_grafici_avanzati.md](02_grafici_avanzati.md) | Grafici | PLANNED: [piano performance charts](../20_performanceCharts/plan-phase00PerformanceCharts.prompt.md) per F8 P&L/candles/income + calendar return; lot analysis gia consegnata |
 | [03_asset_dati_classificazione.md](03_asset_dati_classificazione.md) | Asset & dati | Settori bond Corporate/Governativi, import CSV distribuzioni geo/settore |
 | [04_brim_import.md](04_brim_import.md) | BRIM & import | eToro fee reconciliation, delivered FIFO v4 cost allocation, asset deletion links |
 | [05_pac_allocation_tool.md](05_pac_allocation_tool.md) | Tool platform | Backend plugins, custom-first UI, PAC/rebalancing, per-currency cash and optional buy/sell/FX |
@@ -25,6 +25,18 @@ an English theory page and a column-header tooltip. The shared CsvEditor is exte
 than duplicated. Tool schemas live in the catalogue; data copying uses domain APIs.
 Section 11 maps parallel work; section 12 requires ASCII mockup approval before substantial
 UI changes and an operational developer walkthrough/feedback round afterward.
+
+## Workstream H completion - 2026-09-11
+
+U3 Yield on Cost is ✅ **IMPLEMENTED, VERIFIED AND DEVELOPER-ACCEPTED** in
+checkpoint `74afcebce`; the current merge integrates the
+[dedicated H implementation](../19_yieldOnCost/plan-phase00YieldOnCost.prompt.md).
+The final contract uses non-negative gross asset-linked DIVIDEND/INTEREST
+transactions, broker-scoped D-1 eligibility, split/FX provenance and residual
+WAC. Recorded-zero income remains distinct from true `no_income`; negative
+signed income is unsupported. Dashboard/Broker UI, four-language tooltips,
+English docs and shared cache identities are included. I20+ must re-read the
+post-H target before touching shared portfolio files.
 
 ## Selective resumption - 2026-09-08 11:30 CEST
 
@@ -88,19 +100,30 @@ static, unit, API and targeted E2E gates are green on isolated lane `6151` +
 UI/viewport review. Runtime ownership follows the current section 14
 integration policy, not the older execution lease.
 
-## Onboarding automated completion - 2026-09-11
+## Performance charts plan-only checkpoint - 2026-09-10
 
-[SP11 / U8](../21_onboarding/plan-phase00Onboarding.prompt.md) is implemented with
-automated backend, database, component and end-to-end gates green. New users receive
-an optional Welcome setup, intro tour and contextual import guide; existing users are
-not forced through the flow, and every guide supports permanent skip and Settings
-replay. The import guide never writes transactions or presses Save All.
+[SP06 G3/G1c and SP07 G1a/G1b](../20_performanceCharts/plan-phase00PerformanceCharts.prompt.md)
+have a durable final product contract, ASCII v2 storyboards, file ownership and
+dependency-safe XL phase split. The developer authorized **planning only**.
+The post-F technical refresh is recorded at `0af66da5`; I10 signal-only
+calendar-return backend and H/YOC checkpoint `74afcebce` are integrated. I20 must
+re-read the resulting portfolio service/schema/tests before implementation. UI G3
+and every portfolio phase remain unimplemented.
 
-Status remains **awaiting developer manual review**: the optional
-assets/fix/duplicates import path, real donation/update cadence and full mobile
-walkthrough must be exercised before closure or archival. Substantial English
-documentation updates under Getting Started, transaction import and Settings retain
-IT/FR/ES translation debt; translation runs only on explicit developer request.
+## Onboarding reviewed checkpoint and Round 3 plan - 2026-09-11
+
+[SP11 / U8](../21_onboarding/plan-phase00Onboarding.prompt.md) Foundation and Round 1
+are implemented with backend, database, component and E2E evidence preserved.
+[Round 2](../21_onboarding/plan-phase00OnboardingRound2-ModularGuides.prompt.md)
+separates the Core, Broker, FX, Asset and Import guidance and completed developer
+manual review. Its final test/docs campaign is intentionally deferred because the
+review superseded the Round 2 UX contract.
+
+[Round 3](../21_onboarding/plan-phase00OnboardingRound3-TriggeredTours.prompt.md) is
+**planned only**: it assigns versioned page/Add/detail guides to Transactions,
+Broker, FX and Asset, improves pointer geometry and keeps the single unreleased
+onboarding migration `003`. No Round 3 product implementation is authorized in the
+reviewed checkpoint.
 
 ## Regole della cartella
 

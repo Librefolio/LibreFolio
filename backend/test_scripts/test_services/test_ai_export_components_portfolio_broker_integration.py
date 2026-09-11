@@ -51,6 +51,9 @@ from backend.app.schemas.portfolio import (
     PortfolioReportResponse,
     PortfolioSummary,
     PositionsContribution,
+    YieldOnCostProvenance,
+    YieldOnCostResult,
+    YieldOnCostStatus,
 )
 from backend.app.schemas.prices import FAPricePoint, FAPriceQueryResult
 from backend.app.schemas.signals import SignalCadence, SignalDomain, SignalPricePoint
@@ -181,6 +184,21 @@ def _history_point(
     )
 
 
+def _required_yoc() -> YieldOnCostResult:
+    return YieldOnCostResult(
+        status=YieldOnCostStatus.NO_INCOME,
+        value=Decimal("0"),
+        provenance=YieldOnCostProvenance(
+            window_start=date(2025, 1, 1),
+            window_end=date(2025, 12, 31),
+            first_pair_transaction_date=date(2025, 1, 1),
+            gross_income_transaction_count=0,
+            gross_income_per_unit=_money(0),
+            net_zero=False,
+        ),
+    )
+
+
 def _holding(asset_id: int, broker_id: int, *, quantity: object = 10, current_value: object = 1000) -> PortfolioHolding:
     return PortfolioHolding(
         asset_id=asset_id,
@@ -191,6 +209,7 @@ def _holding(asset_id: int, broker_id: int, *, quantity: object = 10, current_va
         quantity=Decimal(str(quantity)),
         current_value=Decimal(str(current_value)),
         nav_weight_percent=Decimal("10"),
+        yield_on_cost=_required_yoc(),
     )
 
 
