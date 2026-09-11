@@ -768,7 +768,7 @@ test.describe('Asset Detail Page', () => {
         await expect(pricePrimary).toHaveAttribute('aria-pressed', 'false');
         await expectAssetDetailChartCanvas(page);
 
-        await expect(chart.getByTestId(/^asset-calendar-window-/)).toHaveCount(calendarWindows.length);
+        await expect(chart.getByTestId(/^asset-calendar-window-(?:7|30|90|365)$/)).toHaveCount(calendarWindows.length);
         for (const windowDays of calendarWindows) {
             const button = chart.getByTestId(`asset-calendar-window-${windowDays}`);
             await expect(button).toBeVisible();
