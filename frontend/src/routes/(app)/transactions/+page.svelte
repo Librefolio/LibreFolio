@@ -13,6 +13,7 @@
     import {ensurePluginIconsLoaded} from '$lib/utils/broker/brokerHelpers';
     import {ensureCurrenciesLoaded} from '$lib/stores/reference/currencyStore';
     import {currentLanguage} from '$lib/stores/app/language';
+    import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import {findPromoteMatch, ensureTypesLoaded, typesVersion} from '$lib/stores/transactions/transactionTypeStore';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import type {FilterValue} from '$lib/components/table/types';
@@ -734,7 +735,12 @@
             >
                 <RefreshCw size={15} class={loading ? 'animate-spin' : ''} />
             </button>
-            <button class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all" data-testid="tx-import-button" onclick={onImportFromBroker}>
+            <button
+                class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all"
+                data-testid="tx-import-button"
+                use:guideAnchor={'transactions.import'}
+                onclick={onImportFromBroker}
+            >
                 <Upload size={15} />
                 <span class="hidden sm:inline">{$_('common.import')}</span>
             </button>

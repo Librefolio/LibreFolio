@@ -2,6 +2,7 @@
     import {availableLanguages} from '$lib/stores/app/language';
     import SettingCurrency from '$lib/components/settings/SettingCurrency.svelte';
     import SettingSelect from '$lib/components/settings/SettingSelect.svelte';
+    import {LogOut} from 'lucide-svelte';
     import type {SelectOption} from '$lib/components/ui/select';
     import type {WelcomeCopy, WelcomeDraft} from '$lib/features/onboarding/welcome';
 
@@ -15,11 +16,12 @@
         error?: string | null;
         onavatarrequest?: () => void;
         onavatarclear?: () => void;
-        onsubmit?: (draft: WelcomeDraft) => void;
+        onlanguagechange?: (language: string) => void;
         onskip?: () => void;
+        onsubmit?: (draft: WelcomeDraft) => void;
     }
 
-    let {copy, initials, language = $bindable('en'), baseCurrency = $bindable('EUR'), avatarUrl = $bindable(null), busy = false, error = null, onavatarrequest, onavatarclear, onsubmit, onskip}: Props = $props();
+    let {copy, initials, language = $bindable('en'), baseCurrency = $bindable('EUR'), avatarUrl = $bindable(null), busy = false, error = null, onavatarrequest, onavatarclear, onlanguagechange, onskip, onsubmit}: Props = $props();
 
     const languageOptions: SelectOption[] = availableLanguages.map((item) => ({
         value: item.code,
@@ -85,7 +87,7 @@
 
     <section class="space-y-1 rounded-2xl border border-gray-200 p-4 dark:border-slate-700" data-testid="welcome-preferences">
         <div data-testid="welcome-language">
-            <SettingSelect bind:value={language} options={languageOptions} label={copy.languageLabel} hint={copy.languageHint} isLocked={busy} embedded={true} />
+            <SettingSelect bind:value={language} options={languageOptions} label={copy.languageLabel} hint={copy.languageHint} isLocked={busy} embedded={true} onchange={onlanguagechange} />
         </div>
         <SettingCurrency bind:value={baseCurrency} label={copy.currencyLabel} hint={copy.currencyHint} isLocked={busy} testId="welcome-currency" embedded={true} />
         <p class="pt-3 text-xs text-gray-500 dark:text-gray-400" data-testid="welcome-theme-hint">
@@ -93,24 +95,20 @@
         </p>
     </section>
 
-    <div class="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-            <button
-                type="button"
-                class="w-full rounded-lg px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green disabled:opacity-50 dark:text-gray-300 dark:hover:bg-slate-700 sm:w-auto"
-                disabled={busy}
-                onclick={onskip}
-                data-testid="welcome-skip"
-            >
-                {copy.skip}
-            </button>
-            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                {copy.skipHint}
-            </p>
-        </div>
+    <div class="flex items-center justify-between gap-3">
+        <button
+            type="button"
+            class="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green disabled:opacity-50 dark:text-gray-300 dark:hover:bg-slate-800"
+            disabled={busy}
+            onclick={onskip}
+            data-testid="welcome-skip"
+        >
+            <LogOut size={16} />
+            {copy.skip}
+        </button>
         <button
             type="submit"
-            class="w-full rounded-lg bg-libre-green px-5 py-2.5 text-sm font-medium text-white hover:bg-libre-green/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+            class="rounded-lg bg-libre-green px-5 py-2.5 text-sm font-medium text-white hover:bg-libre-green/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green disabled:cursor-not-allowed disabled:opacity-50"
             disabled={busy}
             data-testid="welcome-continue"
         >

@@ -3387,5 +3387,260 @@
       "issues": "Backend findings",
       "normalizedInput": "Normalized input and units"
     }
+  },
+  "onboarding": {
+    "welcome": {
+      "title": "Welcome to LibreFolio",
+      "description": "Set up the essentials before you start tracking your portfolio.",
+      "defaultsHint": "Language and currency start from your administrator's defaults. You can change them now or later.",
+      "avatarLabel": "Profile picture",
+      "avatarHint": "Optional. Your initials are used when no image is selected.",
+      "chooseAvatar": "Choose picture",
+      "removeAvatar": "Remove picture",
+      "avatarAlt": "Profile picture preview",
+      "themeHint": "Your current theme preference is kept unchanged.",
+      "skip": "Skip setup permanently",
+      "skipHint": "This will not be shown again automatically. You can replay it from Settings.",
+      "completed": "Setup saved. You can continue to LibreFolio.",
+      "skipped": "Setup skipped. You can replay it later from Settings."
+    },
+    "errors": {
+      "loadTitle": "We couldn't load onboarding",
+      "loadDescription": "Retry the setup or log out safely.",
+      "degraded": "Onboarding status could not be refreshed. Your completed setup remains active.",
+      "replayStart": "Could not start the guide. Try again.",
+      "progressUnavailable": "Onboarding progress is unavailable. Reload and try again.",
+      "complete": "Could not finish the guide. Try again.",
+      "skip": "Could not skip the guide. Try again."
+    },
+    "actions": {
+      "finish": "Finish guide",
+      "skipPermanently": "Skip permanently",
+      "pause": "Pause",
+      "close": "Close guide",
+      "back": "Back",
+      "next": "Next",
+      "exitTour": "Exit tour",
+      "skipCurrentTour": "Skip this tour"
+    },
+    "guide": {
+      "waiting": "Waiting for this area to become available…",
+      "useWizardAction": "Continue with the indicated button.",
+      "exploreThenContinue": "Explore the indicated control, then continue."
+    },
+    "tour": {
+      "progress": "Step {current} of {total}",
+      "steps": {
+        "transactionsImport": {
+          "title": "Start with an import",
+          "description": "Open the transaction importer to turn broker reports into drafts. Nothing is saved automatically."
+        },
+        "brokers": {
+          "title": "Brokers and access",
+          "description": "Brokers represent accounts and control ownership, editing, and sharing."
+        },
+        "assets": {
+          "title": "Your asset catalogue",
+          "description": "Assets hold identifiers, currencies, providers, prices, and events."
+        },
+        "dashboard": {
+          "title": "Your portfolio at a glance",
+          "description": "The Dashboard is your starting point for portfolio value, performance, allocation, and data quality."
+        },
+        "tools": {
+          "title": "Analysis tools",
+          "description": "Tools provide guided analyses such as PAC planning without executing orders."
+        },
+        "settings": {
+          "title": "Replay whenever needed",
+          "description": "Settings lets you replay this tour, the welcome setup, or the import guide."
+        },
+        "navigation": {
+          "title": "Find your way around",
+          "description": "Use this control to collapse or expand the sidebar on desktop, or open the navigation menu on smaller screens."
+        },
+        "transactionsNav": {
+          "title": "Start with your transactions",
+          "description": "Transactions contains manual entries and portfolio history. Import has its own contextual guide."
+        },
+        "brokersAdd": {
+          "title": "Add a broker",
+          "description": "Brokers represent the accounts that hold your transactions and define ownership and sharing."
+        },
+        "brokersCurrency": {
+          "title": "Set the broker currency",
+          "description": "Choose the currency of each initial balance. This preview never saves a broker."
+        },
+        "fxAdd": {
+          "title": "Add an FX pair",
+          "description": "FX pairs let LibreFolio convert portfolio values between currencies."
+        },
+        "fxPair": {
+          "title": "Choose base and quote currencies",
+          "description": "Define the currency pair you need. This preview never saves an FX pair."
+        },
+        "assetsAdd": {
+          "title": "Add an asset",
+          "description": "Assets connect transactions to instruments, currencies, prices, and market data."
+        },
+        "assetsConfig": {
+          "title": "Configure the asset",
+          "description": "Choose its quote currency and data provider. This preview never saves an asset."
+        },
+        "brokersNav": {
+          "title": "Brokers",
+          "description": "Open Brokers to configure your accounts. A short guide starts when you choose Add Broker."
+        },
+        "fxNav": {
+          "title": "FX rates",
+          "description": "Open FX rates to configure currency conversion pairs and their data providers."
+        },
+        "assetsNav": {
+          "title": "Assets",
+          "description": "Open Assets to define the instruments, currencies, and market data used by your portfolio."
+        },
+        "toolsNav": {
+          "title": "Tools",
+          "description": "Tools contains focused analyses such as PAC planning without executing orders."
+        },
+        "settingsNav": {
+          "title": "Settings",
+          "description": "Settings contains preferences and lets you replay any guide when needed."
+        }
+      }
+    },
+    "flows": {
+      "welcome": "Welcome setup",
+      "intro_tour": "Quick tour",
+      "import_guide": "Import guide",
+      "broker_guide": "Broker guide",
+      "fx_guide": "FX guide",
+      "asset_guide": "Asset guide"
+    },
+    "status": {
+      "pending": "Pending",
+      "completed": "Completed",
+      "skipped": "Skipped"
+    },
+    "settings": {
+      "category": "Onboarding",
+      "title": "Onboarding and guides",
+      "description": "Replay setup and contextual guides without changing your saved data.",
+      "replayAll": "Replay all",
+      "updateAvailable": "New version to view",
+      "nextImport": "Ready for next import",
+      "replayReady": "Replay ready",
+      "version": "Seen v{seen} · current v{current}",
+      "replayOnNextImport": "Replay on next import",
+      "replay": "Replay",
+      "groups": {
+        "setup": "Setup",
+        "core": "Core tour",
+        "contextual": "Contextual guides"
+      },
+      "armedToast": "{flow} is ready. Open its feature to start.",
+      "cancelArmed": "Cancel activation",
+      "armed": {
+        "welcome": "Welcome replay is ready",
+        "intro_tour": "Core tour replay is ready",
+        "broker_guide": "Ready: choose Add Broker",
+        "fx_guide": "Ready: choose Add FX pair",
+        "asset_guide": "Ready: choose Add Asset",
+        "import_guide": "Ready: open Import"
+      },
+      "replayAtNextTrigger": {
+        "broker_guide": "Replay on next Add Broker",
+        "fx_guide": "Replay on next Add FX pair",
+        "asset_guide": "Replay on next Add Asset"
+      }
+    },
+    "importGuide": {
+      "steps": {
+        "upload": {
+          "title": "Upload reports",
+          "description": "Add one or more broker reports and assign each report to a broker."
+        },
+        "select": {
+          "title": "Choose files and parsers",
+          "description": "Select stored reports and choose the parser that matches each file."
+        },
+        "analyze": {
+          "title": "Analyze extracted data",
+          "description": "Run the parsers and review extracted records, notices, and validation results."
+        },
+        "assets": {
+          "title": "Unify asset identities",
+          "description": "Match extracted records that may refer to the same asset."
+        },
+        "fix": {
+          "title": "Resolve flagged rows",
+          "description": "Correct or explicitly keep rows that the parser could not resolve."
+        },
+        "duplicates": {
+          "title": "Choose between duplicates",
+          "description": "Decide which overlapping imported rows to retain."
+        },
+        "review": {
+          "title": "Review the import",
+          "description": "Select eligible rows and resolve required assets before opening the bulk editor."
+        },
+        "bulk": {
+          "title": "Save All writes the transactions",
+          "description": "Review and edit prepared transaction drafts, then choose Save All when they are ready."
+        }
+      }
+    },
+    "intro": {
+      "title": "Welcome to LibreFolio",
+      "line1": "Welcome.",
+      "line2": "It's great to have you on board.",
+      "line3": "Here is a quick tour to help you get started.",
+      "start": "Start tour",
+      "autoStartHint": "The tour starts automatically in 10 seconds."
+    },
+    "brokerGuide": {
+      "steps": {
+        "overview": {
+          "title": "Create a broker",
+          "description": "This form defines the account that will own transactions and imports."
+        },
+        "plugin": {
+          "title": "Choose the default import plugin",
+          "description": "The default plugin is preselected when you import reports from this broker."
+        },
+        "icon": {
+          "title": "Add a custom icon",
+          "description": "Choose an image for this broker, or keep the automatic icon derived from its plugin or website."
+        }
+      }
+    },
+    "fxGuide": {
+      "steps": {
+        "currencies": {
+          "title": "Choose the currency pair",
+          "description": "Select the base and quote currencies that LibreFolio must convert between."
+        },
+        "providers": {
+          "title": "Configure rate providers",
+          "description": "Choose a direct or chained provider route, or keep the pair manual when no automatic source is suitable."
+        }
+      }
+    },
+    "assetGuide": {
+      "steps": {
+        "search": {
+          "title": "Search before entering data",
+          "description": "Search online to prefill known identifiers and metadata, or enter the asset manually."
+        },
+        "identity": {
+          "title": "Define the asset",
+          "description": "Review its name, type, quote-base quantity, and currency."
+        },
+        "provider": {
+          "title": "Configure the data provider",
+          "description": "Select the provider, identifier, and parameters, or explicitly keep the asset without a provider."
+        }
+      }
+    }
   }
 }

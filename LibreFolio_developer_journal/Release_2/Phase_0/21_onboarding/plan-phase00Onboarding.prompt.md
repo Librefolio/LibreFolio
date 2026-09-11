@@ -14,6 +14,51 @@ Questo piano prende in carico soltanto la fondazione indipendente di SP11/U8. Le
 integrazioni shell, Tool/PAC e DataImport restano congelate fino ai checkpoint D/F e a
 una nuova autorizzazione esplicita.
 
+### Mandato successivo - integrazione condivisa
+
+**Nuova baseline integrata verificata:** merge `4a9ae876e4599b5fdec5ade512b65b9c31a584a5`,
+parent fondazione `8d9761db1` + target integrato `570beb386`.
+
+**Autorizzazione coordinator su mandato developer, 2026-09-10:**
+procedere con l'integrazione condivisa onboarding sulle superfici prima bloccate,
+preservando D Tool/PAC e F DataImport/AssetModal. La review manuale developer resta
+obbligatoria prima di archivio/chiusura.
+
+Il mandato include:
+
+- bootstrap auth/settings/onboarding condiviso e conditional welcome shell via route-id;
+- gate redirect della root pubblica;
+- pin guida Header e anchor semantici Sidebar/Tools;
+- stato/replay per-flow in Settings;
+- arbitraggio guide, DonationPopup e UpdateAvailable;
+- guida ImportWizard sui veri step condizionali, sospensione nested modal e handoff
+  Bulk/Save All senza click o scritture automatiche;
+- test via `test-author`, documentazione inglese via `docs-writer`;
+- richiesta al coordinator, non modifica J, per API sync, cataloghi i18n, MkDocs nav e
+  changelog/master records.
+
+### Follow-up UX Round 1
+
+Il feedback operativo del primo tour apre
+[plan-phase00OnboardingRound1-UXRefinement.prompt.md](plan-phase00OnboardingRound1-UXRefinement.prompt.md).
+Il follow-up conserva questa fondazione e rifinisce insieme Welcome, tour introduttivo
+e guida Import; la review manuale complessiva viene rinviata al prossimo sprint.
+
+### Follow-up UX Round 2
+
+La seconda review manuale apre
+[plan-phase00OnboardingRound2-ModularGuides.prompt.md](plan-phase00OnboardingRound2-ModularGuides.prompt.md):
+il tour monolitico viene separato in Core, Broker, FX, Asset e Import, con consegna
+manual-first prima della nuova campagna test/docs.
+
+### Follow-up UX Round 3
+
+La review manuale del prototipo modulare apre
+[plan-phase00OnboardingRound3-TriggeredTours.prompt.md](plan-phase00OnboardingRound3-TriggeredTours.prompt.md):
+ogni pagina, Add/modal e dettaglio riceve un flow versionato per trigger; Round 3
+inizierà in una nuova iterazione e riutilizzerà ancora la migrazione non pubblicata
+`003`, senza crearne una nuova.
+
 ## Obiettivo
 
 Consegnare:
@@ -359,7 +404,9 @@ aggiornare ogni step/evidenza, poi consegnare checkpoint:
 
 ## Scope futuro, non autorizzato
 
-Raccordo successivo:
+Il blocco storico seguente e stato superato dal mandato di integrazione condivisa
+registrato sopra. I punti diventano gli step 7-13; non cancellare questo elenco, per
+conservare il confine del checkpoint foundation:
 
 - fetch parallelo settings/onboarding nel layout con generation guard;
 - conditional shell via route-id strict;
@@ -369,3 +416,317 @@ Raccordo successivo:
 - Settings replay controls;
 - ImportWizard/Bulk semantic anchors;
 - API sync, i18n, docs e review operativa integrata.
+
+## Integrazione condivisa - passi autorizzati
+
+### Step 7 - Riconciliazione post-merge D/F
+
+**Stato:** completato il 2026-09-10.
+
+Verificare il merge target, risolvere semanticamente il runner condiviso, rileggere
+interamente le superfici shell/settings/import aggiornate e congelare il contratto di
+integrazione senza perdere Tool/PAC, DataImport o AssetModal.
+
+> **Note implementazione**: unico conflitto merge in
+> `scripts/test_runner/_frontend_utility.py` risolto come union: registrazioni/path
+> Tool/PAC D e cinque test onboarding J tutti preservati, component onboarding esclusi
+> dal catalogo monolitico. Coordinator ha staged, developer ha creato merge
+> `4a9ae876`; worktree pulito, `MERGE_HEAD` assente. Audit read-only post-merge ha
+> verificato Sidebar `/tools`, PAC component/E2E, DataImport/AssetModal, step machine
+> ImportWizard e profondita ModalBase. Nessuna modifica developer manual-review
+> concorrente e stata segnalata sulle superfici condivise.
+
+### Step 8 - Welcome atomico e bootstrap condiviso
+
+**Stato:** completato il 2026-09-10.
+
+Implementare completamento welcome atomico preferenze+progress, bootstrap
+auth/settings/onboarding generation-guarded, root redirect gate e conditional shell
+strict route-id. Welcome non istanzia Sidebar/Header/Footer/Donation/Update. Errore
+bootstrap sconosciuto/pending blocca con Retry/Logout; stato terminale cached dello
+stesso account puo fail-open con banner retry.
+
+> **Note implementazione**: `welcome_settings` opzionale sul comando complete attiva
+> una singola transazione backend per preferenze + progress; stale version e commit
+> failure lasciano entrambe le tabelle invariate. Nuovo `appBootstrap` iniettabile
+> carica settings/onboarding/global in parallelo, applica generation guard,
+> blocked/degraded policy e redirect safe. Root login/check usa lo stesso gate.
+> `(app)/+layout` usa route-id strict, blocca ogni flash mentre redirige e sul welcome
+> non istanzia shell, toast o popup. Gate: `services settings` 24/24, `api settings`
+> 37/37, `front-utility core-unit` 82 file / 2.016 test,
+> `onboarding-component-unit` 3 file / 50 test. Test shell/E2E integrati restano nello
+> Step 12 insieme alle guide.
+
+> **⚠️ Fuori pista 2026-09-10**: primo gate ufficiale Step 8
+> `... dev.py test --test-port 6158 --data-dir
+> /tmp/librefolio-r2-j-onboarding services settings` -> 18 pass / 6 fail. I nuovi test
+> atomici erano verdi; i sei rossi esistenti esponevano `MissingGreenlet` dopo il
+> refactor di `ensure_onboarding_progress`: le righe ORM erano state lette prima del
+> commit e restituite expired. DB lane ricreato, nessun server usato. Fix prodotto:
+> commit dell'insert idempotente, poi refetch async delle righe prima di restituirle.
+>
+> **⚠️ Fuori pista 2026-09-10**: primo `front-utility core-unit` Step 8 ->
+> 2.012 pass / 1 fail. Il nuovo test generation/account ha mostrato che una
+> `completeWelcome` stale ignorava correttamente il payload ma lasciava
+> `transitioningFlow='welcome'` se il resetter account non era ancora intervenuto.
+> Fix prodotto: il `finally` azzera busy soltanto quando il ticket resta l'ultima
+> sequenza, indipendentemente dall'identita; una richiesta piu nuova conserva il proprio
+> stato, una risposta stale non puo applicare dati.
+
+### Step 9 - Tour introduttivo, shell e popup priority
+
+**Stato:** completato il 2026-09-11.
+
+Creare controller/host del tour, anchor route/nav reali, navigazione controllata senza
+scritture, pin Header e apertura drawer mobile. Priorita:
+auth/session critical > nested/user modal > guida > DonationPopup > UpdateAvailable.
+Integrare route Tool realmente consegnata, senza alterarne contratti.
+
+> **Note implementazione**: controller guida iniettabile con step intro namespaced,
+> resume/pause/finish/skip, returnTo safe e precedenza intro su import. OverlayHost
+> naviga sui route reali, apre il drawer per anchor nav, osserva profondita ModalBase e
+> sospende sulle modali utente. Header espone pin `guideActive`; Sidebar registra anchor
+> semantici mantenendo `/tools`/`nav-tools`; il bottone import Transazioni e ancorato.
+> `DeferredAppPopups` arbitra guida > modali gia aperte > donation > update senza
+> feedback loop sul lock del popup stesso. Gate combinato Step 9-11:
+> `onboarding-component-unit` 7 file / 161 test verdi; core tour incluso nel gate
+> `core-unit` 82 file / 2.039 test.
+
+> **⚠️ Fuori pista 2026-09-10**: primo
+> `... front-utility onboarding-component-unit` Step 9 -> 31 pass, suite coachmark non
+> raccolta: Vitest non ha alias `$app/stores`, importato dal nuovo OverlayHost. Nessun
+> prodotto/test eseguito oltre il mount. Fix architetturale: OverlayHost non legge
+> routing globale; riceve `currentPath` dal layout owner, rendendo dipendenza e test
+> espliciti. Repair test delegato a `test-author`.
+
+### Step 10 - Replay per-flow in Settings
+
+**Stato:** completato il 2026-09-11.
+
+Mostrare status/version/update-available e azioni Replay per welcome, intro tour e
+import guide, piu Replay all. Replay resta session-scoped, account-scoped e non
+distruttivo: nessuna mutazione backend finche l'utente non completa o salta
+esplicitamente.
+
+> **Note implementazione**: nuova sezione Preferences con categoria Onboarding,
+> status/version/current-version/update disponibile, replay per flow e Replay all.
+> Welcome apre la route dedicata; intro avvia il controller; import arma la prossima
+> apertura wizard. Replay all salva tre token e rollbacka quelli gia creati su errore.
+> Nessuna chiamata complete/skip avviene all'avvio del replay. Spec dedicata e placement
+> Preferences inclusi nell'action stretta coordinator-owned.
+
+### Step 11 - Guida ImportWizard e handoff Bulk
+
+**Stato:** completato il 2026-09-11.
+
+Seguire gli step semantici reali
+`upload|select|analyze|assets?|fix?|duplicates?|review`, sospendere sulle nested modal,
+seguire il ritorno a duplicates e riallinearsi a upload/current step dopo close/refresh.
+Alla consegna draft, evidenziare Save All senza clic; completare la guida solo con
+Finish esplicito. Nessun ripristino draft, file demo o write finanziario automatico.
+
+> **Note implementazione**: ImportWizard sincronizza la guida su
+> `import.<currentStepId>`, quindi segue automaticamente step opzionali e ritorno a
+> duplicates. Chiusura/discard pausa e riallinea a `import.upload`; handoff riuscito
+> passa a `import.bulk` senza pausa. Bulk espone solo l'anchor sul bottone Save All e,
+> se chiuso prima di Finish, pausa/resetta la guida. Overlay consente profondita 2 nel
+> wizard, 1 nella Bulk e sospende le nested modal successive. Solo il bottone Finish
+> del coachmark marca il flow completato; non invoca import, validate o commit.
+> Unit/component verdi; handoff reale upload->parse->Bulk e prova rete no-auto-commit
+> restano nello Step 12 E2E.
+>
+> **Note review 2026-09-11**: review indipendente del delta condiviso ha trovato due
+> difetti, entrambi corretti prima dei gate finali: l'effect close-guide Bulk era
+> annidato nell'effect promote-suggest e veniva distrutto proprio su `open=false`;
+> e il redirect del layout poteva competere con il post-complete della welcome.
+> L'effect Bulk e ora top-level; il layout non decide mai l'uscita dalla route welcome,
+> che resta proprietaria dell'handoff intro/returnTo.
+
+### Step 12 - Test, docs e handoff coordinator-owned
+
+**Stato:** completato il 2026-09-11.
+
+Usare `test-author` per ogni test nuovo/riparato e `docs-writer` per guide EN. Inviare
+al coordinator delta esatti per:
+
+- API sync/client generato;
+- cataloghi i18n EN/IT/FR/ES;
+- registrazioni runner eventualmente nuove;
+- MkDocs nav;
+- CHANGELOG e record Release 2.
+
+> **Note implementazione**: test-author ha esteso spec registrate, senza nuova action
+> E2E: auth nuovo/existing/atomic complete/skip/account switch; Settings status/replay;
+> import reale upload->select->analyze->review->Bulk, nested modal suspension, anchor
+> Save All e zero request commit prima/dopo Finish. Fixture canoniche E2E sono marcate
+> completed/v1 dal seeder; utenti unici restano senza righe fino a ensure pending.
+> Gate: auth 21/21, settings 45/45, tx-import-flow 9/9, header-scroll desktop+mobile
+> 4/4, DB referential 15/15. Coordinator ha completato API sync canonico e 69 chiavi
+> EN/IT/FR/ES; audit 2.806/2.806 per locale. Runner action stretta 7 spec / 161 test e
+> check-orphans verdi.
+>
+> docs-writer ha aggiornato 7 pagine EN: Getting Started, Import how-to, Preferences,
+> Profile, developer Import Wizard, Settings e Auth. MkDocs strict build e check-links
+> verdi; nessun cambio nav necessario. Translation-validate registra debito reale sulle
+> quattro pagine user, non stampato e non tradotto da J.
+>
+> Seam dichiarati: il CSV E2E race-free non produce `assets|fix|duplicates`, coperti da
+> unit/component e inclusi nel runbook manuale; popup priority non e attivabile via
+> debug nel build E2E production, coperta dal componente reale `DeferredAppPopups` e
+> inclusa nel runbook.
+
+> **⚠️ Fuori pista 2026-09-11**: primo `db referential-integrity` dopo il seed
+> onboarding -> 14 pass / 1 fail, con `populate_mock_data` fermo prima del populate:
+> `OnboardingFlow`/`OnboardingStatus`/`UserOnboardingProgress` erano esportati da
+> `db.base` ma non dal barrel `backend.app.db` usato dal seeder. Nessun dato canonico
+> e stato popolato; il test non ha raggiunto la nuova assertion. Fix additivo agli
+> export del package, senza cambiare il modello.
+>
+> **⚠️ Fuori pista 2026-09-11**: core-unit finale Step 12 -> 2.036 pass / 4 fail.
+> Tutti i rossi erano expectation test rimaste sui precedenti fallback inglesi dopo la
+> conversione intenzionale del controller a chiavi i18n (`complete`, `skip`,
+> `progressUnavailable`). Nessun errore di stato/API; test-author ha riallineato solo
+> le quattro stringhe attese, preservando le assertion su active guide, replay e
+> assenza di risultato success-shaped.
+>
+> **⚠️ Fuori pista 2026-09-11**: primo `front-utility header-scroll` integrato ->
+> 0/4, tutti fermi prima della pagina Settings. La fixture synthetic strict rispondeva
+> 501 al nuovo `GET /settings/onboarding`; `appBootstrap` ha correttamente mostrato lo
+> stato blocked. Nessun difetto Header/layout. Test-author ha aggiunto risposta
+> onboarding terminale sintetica per i tre flow, mantenendo il controllo
+> `unexpectedRequests`.
+>
+> **⚠️ Fuori pista 2026-09-11**: autoreview controller ha trovato che Pause intro
+> lasciava correttamente il token ma il reactive layout richiamava subito
+> `maybeStartIntro`, che riprendeva quel token nello stesso runtime. La guard
+> `introAttempted` ora precede il resume: Pause dura per la sessione; refresh o cambio
+> account ricreano/resettono il controller e possono riprendere il token.
+
+### Step 13 - Gate integrati e review manuale
+
+**Stato:** gate automatici completati il 2026-09-11; review developer pendente.
+
+Eseguire una suite alla volta nella lane J, static checks e review indipendente.
+Preparare runbook desktop/mobile per:
+
+- account nuovo vs existing/grandfathered;
+- welcome complete/skip/error/refresh;
+- tour complete/skip/pause/replay;
+- popup priority;
+- drawer/header/focus/reduced-motion;
+- import con e senza step condizionali, nested modal e duplicate bounce;
+- handoff Bulk e prova di nessun auto-commit;
+- cambio account e deep-link.
+
+Consegnare checkpoint FROZEN ma tenere sessione aperta: la chiusura richiede review
+operativa developer e relativo giro di correzione.
+
+> **Note implementazione**: matrice automatica finale sulla baseline integrata:
+>
+> - backend services settings 24/24;
+> - API settings/onboarding 37/37;
+> - DB referential/seeding 15/15;
+> - frontend core-unit 82 file / 2.042 test;
+> - onboarding-component-unit 7 file / 161 test;
+> - auth onboarding desktop 22/22;
+> - Settings replay desktop 45/45;
+> - Import Wizard reale desktop 10/10, incluso nested modal, handoff Bulk, close-reset
+>   e zero `/transactions/commit`;
+> - Header scroll desktop/mobile 4/4;
+> - frontend format check verde, svelte-check 0 errori / 41 warning legacy in due file;
+> - i18n audit 2.806/2.806 per locale, 0 missing/backend keys;
+> - check-orphans: 205 backend, 78 E2E, 203 unit frontend registrati e raggiungibili;
+> - MkDocs strict build e check-links verdi via docs-writer;
+> - review finale indipendente: nessun rilievo dopo due fix (effect Bulk top-level,
+>   ownership redirect welcome).
+>
+> **⚠️ Fuori pista 2026-09-11**: primo import E2E integrato -> 8 pass / 1 timeout.
+> Il G1 copiava due pressioni Escape dal corridoio senza guida; Escape e il gesto
+> approvato Pause, quindi la guida spariva correttamente prima di analyze. Test-author
+> ha rimosso solo gli Escape dal G1; rerun 9/9, poi regressione G2 aggiunta e suite
+> finale 10/10.
+
+### Runbook review operativa desktop/mobile
+
+Avvio, senza `--force`:
+
+```bash
+PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc \
+  pipenv run python dev.py server --test \
+  --port 6158 \
+  --data-dir /tmp/librefolio-r2-j-onboarding
+```
+
+#### A. Welcome nuovo account
+
+1. Da desktop, registrare un utente univoco e fare login.
+2. Atteso: route `/welcome`; presenti `welcome-shell` e `welcome-page`; assenti Header,
+   Sidebar, Donation e Update.
+3. Verificare lingua/valuta iniziali contro i default admin reali. Il tema corrente non
+   cambia.
+4. Selezionare avatar oppure lasciarlo vuoto. Completare.
+5. Atteso: una singola chiamata atomic welcome; nessun salvataggio finanziario; arrivo
+   in Transazioni con tour introduttivo attivo.
+6. Ripetere con un secondo account usando Skip permanente. Refresh e nuovo login non
+   devono riproporre welcome.
+
+#### B. Tour introduttivo
+
+1. Verificare sequenza:
+   Transazioni/Import -> Broker -> Asset -> Dashboard -> Tool -> Settings.
+2. Desktop: Header resta visibile durante scroll down; Back/Next cambiano step e route.
+3. Mobile: il drawer si apre per gli anchor nav, non copre il coachmark, safe-area
+   rispettata.
+4. Escape/Pause: il tour sparisce e non riparte nello stesso runtime.
+5. Refresh: il token sessione riprende lo step semantico valido.
+6. Skip permanente: logout/login non riapre il tour.
+7. Finish: termina esplicitamente e applica il returnTo interno, se presente.
+
+#### C. Replay Settings
+
+1. Aprire Settings -> Preferences -> categoria Onboarding.
+2. Verificare tre righe con status, versione vista/corrente e update badge quando
+   applicabile.
+3. Replay Welcome: apre welcome senza mutare prima lo stato backend.
+4. Replay Tour: parte dalla prima tappa.
+5. Replay Import: mostra "pronto per il prossimo import" e non naviga.
+6. Replay all: apre welcome, poi tour; import resta armato per il prossimo wizard.
+7. Abbandonare un replay: lo stato terminale precedente resta invariato.
+
+#### D. Guida import
+
+1. Aprire Transazioni -> Import -> wizard con un report reale.
+2. Verificare `upload`, `select`, `analyze`, poi solo gli step condizionali realmente
+   richiesti (`assets`, `fix`, `duplicates`) e infine `review`.
+3. Aprire Parse Detail o AssetModal: coachmark sospeso; chiudere: riprende sullo stesso
+   step.
+4. Provocare una recheck duplicate che ritorna a `duplicates`: la guida deve seguirla,
+   non avanzare per indice.
+5. Premere Import to Editor: Bulk resta aperta, coachmark punta Save All.
+6. Non premere Save All. Premere Finish guide: coachmark sparisce, draft Bulk restano,
+   nessuna request `/transactions/commit`.
+7. Ripetere chiudendo Bulk prima di Finish: guida pausa; riaprendo Import riparte da
+   `upload`; nessun draft viene ricostruito dal tour.
+
+#### E. Popup, errori e account boundary
+
+1. Con guida attiva, armare Donation e Update tramite hook debug solo se disponibili
+   nella build; altrimenti usare la cadenza reale senza modificarla.
+2. Atteso: nessun popup sopra la guida; dopo fine/skip, Donation precede Update.
+3. Con una modale utente/nested aperta, popup differiti e guida sospesa.
+4. Bloccare temporaneamente `GET /settings/onboarding`: utente senza stato terminale
+   cached vede Retry/Logout; utente terminale stesso account vede shell + banner retry.
+5. Durante una request, fare logout/login con account differente. Nessun coachmark,
+   replay, avatar, lingua o risultato async del primo account passa al secondo.
+
+#### F. Chiusura lane
+
+1. Registrare feedback desktop e mobile, incluse tastiera, focus e reduced motion.
+2. Fermare il server avviato.
+3. Verificare:
+
+```bash
+lsof -nP -iTCP:6158 -sTCP:LISTEN
+```
+
+Output atteso: nessun listener.

@@ -1,5 +1,5 @@
 import {getClientSessionGeneration, getClientSessionUserId, isClientSessionCurrent, registerClientSessionReset} from '$lib/stores/app/clientSession';
-import type {OnboardingApi, OnboardingFlow, OnboardingLoadState, OnboardingProgressItem, OnboardingProgressResponse, OnboardingReplayState} from '$lib/types/onboarding';
+import type {OnboardingApi, OnboardingFlow, OnboardingLoadState, OnboardingProgressItem, OnboardingProgressResponse, OnboardingReplayState, OnboardingWelcomeCompleteRequest} from '$lib/types/onboarding';
 
 interface RequestTicket {
     userId: string;
@@ -26,7 +26,15 @@ function errorMessage(error: unknown): string {
 function isReplayState(value: unknown): value is OnboardingReplayState {
     if (!value || typeof value !== 'object') return false;
     const candidate = value as Partial<OnboardingReplayState>;
-    return typeof candidate.flow === 'string' && typeof candidate.version === 'number' && Number.isInteger(candidate.version) && candidate.version >= 1 && typeof candidate.stepId === 'string' && typeof candidate.startedAt === 'number';
+    return (
+        typeof candidate.flow === 'string' &&
+        typeof candidate.version === 'number' &&
+        Number.isInteger(candidate.version) &&
+        candidate.version >= 1 &&
+        typeof candidate.stepId === 'string' &&
+        typeof candidate.startedAt === 'number' &&
+        (candidate.returnTo === undefined || typeof candidate.returnTo === 'string')
+    );
 }
 
 export function createOnboardingController(dependencies: OnboardingControllerDependencies = {}) {
@@ -141,12 +149,36 @@ export function createOnboardingController(dependencies: OnboardingControllerDep
             error = errorMessage(requestError);
             throw requestError;
         } finally {
-            if (requestIsCurrent(ticket)) transitioningFlow = null;
+            if (ticket.sequence === sequence) transitioningFlow = null;
         }
     }
 
-    function startReplay(flow: OnboardingFlow, version: number, stepId: string): boolean {
-        return writeReplay({flow, version, stepId, startedAt: now()});
+    async function completeWelcome(api: OnboardingApi, request: OnboardingWelcomeCompleteRequest): Promise<OnboardingProgressItem | null> {
+        const ticket = captureRequest();
+        transitioningFlow = 'welcome';
+        error = null;
+        try {
+            const updated = await api.completeWelcome(request);
+            if (!requestIsCurrent(ticket)) return null;
+            replaceFlow(updated);
+            return updated;
+        } catch (requestError) {
+            if (!requestIsCurrent(ticket)) return null;
+            error = errorMessage(requestError);
+            throw requestError;
+        } finally {
+            if (ticket.sequence === sequence) transitioningFlow = null;
+        }
+    }
+
+    function startReplay(flow: OnboardingFlow, version: number, stepId: string, returnTo?: string): boolean {
+        return writeReplay({
+            flow,
+            version,
+            stepId,
+            startedAt: now(),
+            ...(returnTo ? {returnTo} : {}),
+        });
     }
 
     function resumeReplay(flow: OnboardingFlow, version: number, validStepIds: readonly string[], fallbackStepId: string): OnboardingReplayState | null {
@@ -191,6 +223,26 @@ export function createOnboardingController(dependencies: OnboardingControllerDep
             replay = null;
             replayStorageError = errorMessage(storageError);
             return null;
+        }
+    }
+
+    function hasReplay(flow: OnboardingFlow, version: number): boolean {
+        const userId = getUserId();
+        const storage = getSessionStorage();
+        if (!userId || !storage) return false;
+        try {
+            removeReplayVersions(storage, userId, flow, version);
+            const raw = storage.getItem(replayKey(userId, flow, version));
+            if (!raw) return false;
+            const parsed: unknown = JSON.parse(raw);
+            if (!isReplayState(parsed) || parsed.flow !== flow || parsed.version !== version) {
+                storage.removeItem(replayKey(userId, flow, version));
+                return false;
+            }
+            return true;
+        } catch (storageError) {
+            replayStorageError = errorMessage(storageError);
+            return false;
         }
     }
 
@@ -248,9 +300,11 @@ export function createOnboardingController(dependencies: OnboardingControllerDep
         requiresAutomaticFlow: (flow: OnboardingFlow) => findFlow(flow)?.status === 'pending',
         load,
         complete: (api: OnboardingApi, flow: OnboardingFlow, expectedVersion: number) => transition(api, flow, expectedVersion, 'complete'),
+        completeWelcome,
         skip: (api: OnboardingApi, flow: OnboardingFlow, expectedVersion: number) => transition(api, flow, expectedVersion, 'skip'),
         startReplay,
         resumeReplay,
+        hasReplay,
         updateReplayStep,
         clearReplay,
         reset,

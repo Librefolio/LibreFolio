@@ -80,6 +80,8 @@
     import {txStoreGet, txStoreCount} from '$lib/stores/transactions/txStore.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {notify} from '$lib/stores/app/notify.svelte';
+    import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
+    import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
     import {resolveFormItemsFromOps, type FormModalItems} from '../shared/resolveFormItems';
     import type {TXReadItem, ValidationIssue} from '../types';
     import type {TransactionCreateItem} from '$lib/types';
@@ -2172,6 +2174,7 @@
     // ImportWizardModal (Phase 07 Part 5 v5 M1→M4): BRIM Import Wizard → BulkModal bridge.
     // -------------------------------------------------------------------------
     let importWizardOpen = $state(false);
+    let guideBulkObservedOpen = false;
     let pendingCreateTransactions = $derived.by<TransactionCreateItem[]>(() =>
         ops.flatMap((op) => {
             if (op.op !== 'create') return [];
@@ -2687,6 +2690,18 @@
                 }
             }, 500);
         });
+    });
+
+    $effect(() => {
+        const isOpen = open;
+        if (isOpen && onboardingGuide.active?.flow === 'import_guide' && onboardingGuide.active.stepId === 'import.bulk') {
+            guideBulkObservedOpen = true;
+            return;
+        }
+        if (!isOpen && guideBulkObservedOpen && onboardingGuide.active?.flow === 'import_guide' && onboardingGuide.active.stepId === 'import.bulk') {
+            onboardingGuide.dismissHost({restartAtFirst: true});
+        }
+        if (!isOpen) guideBulkObservedOpen = false;
     });
 
     /** Local promote suggestions: match new standalone ops against each other. */
@@ -3317,6 +3332,7 @@
                     class="px-4 py-2 text-sm rounded-lg text-white bg-libre-green hover:bg-libre-green/90 disabled:opacity-50 inline-flex items-center gap-1.5"
                     disabled={commitDisabled}
                     onclick={requestCommit}
+                    use:guideAnchor={'import.bulk.save-all'}
                     data-testid="tx-bulk-commit"
                     title={hasTodoBlockers ? $t('importWizard.todoBlockerCommitHint') : commitLabel}
                 >

@@ -324,3 +324,41 @@ Two more badges come from comparisons *inside this import* rather than against t
 Click **Import N transactions** to hand the selected rows to the **bulk editor** as new rows:
 nothing is written to the ledger yet. Give them one last look — or keep editing — and then
 **Save All** to commit them to your portfolio.
+
+---
+
+## 🧭 Guided First Import {: #guided-first-import }
+
+The first time you open the Import Wizard, a contextual guide bubble follows you through the
+flow above, step by step.
+
+- **It tracks the wizard you're actually seeing.** The guide follows whichever steps your files
+  trigger — including the optional **Unify Assets**, **Corrections**, and **Duplicates** steps —
+  and skips the ones that don't apply, exactly like the wizard itself.
+- **It yields to deeper dialog stacks.** The coachmark remains available through the wizard and
+  one dialog opened above it. If that dialog opens another dialog, the coachmark temporarily
+  hides and returns when the upper dialog closes.
+- **It follows a duplicate recheck bounce.** If **Import N transactions** triggers one last
+  duplicate check and that check reopens the **Duplicates** step, the guide follows you back
+  there instead of getting stuck on the review step.
+- **It observes; it does not operate the wizard.** You still use the wizard's own controls. The
+  guide never restores a previous wizard draft, clicks a control, or uploads a file for you.
+- **It ends by highlighting Save All — it never presses it.** Once your transactions reach the
+  bulk editor, the guide's last stop highlights the **Save All** button and waits. It does not
+  write any data for you.
+- **Only the automatic pending guide can be marked complete or skipped.** Its own **Finish
+  guide** button marks it complete; merely reaching the highlighted button or closing the wizard
+  does not. **Skip permanently** dismisses that pending guide for good. During a replay,
+  **Finish guide** and **Exit replay** only end the browser-session replay: neither action
+  completes or skips the guide on the server.
+
+In automatic pending mode, the top row offers **Skip permanently** and **X**; in replay mode,
+**Skip permanently** is replaced by **Exit replay**. **X** suspends rather than ends the guide
+and, for an import, resets the next guide entry to **Upload** while leaving the replay armed.
+Closing the wizard before the bulk-editor handoff does the same. This resets only the guide
+position — it does not reconstruct the wizard's in-memory draft. Ending a replay is strictly
+non-destructive: it neither writes transactions nor changes saved onboarding status.
+
+You can also re-arm the guide on demand from
+**[Settings → Preferences → Onboarding and guides](../../settings/preferences.md#onboarding-and-guides)**,
+which queues it for your **next** import instead of starting it immediately.

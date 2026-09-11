@@ -15,6 +15,8 @@
     import {refreshAllBrokers, getAllBrokers, getAccessibleBrokers, invalidateBroker} from '$lib/stores/reference/brokerStore';
     import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
     import {notify} from '$lib/stores/app/notify.svelte';
+    import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
+    import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import type {Broker} from '$lib/types';
 
@@ -57,6 +59,7 @@
     let targetCurrencyInitialized = false;
 
     let modalOpen = false;
+    let brokerTourPreview = false;
     let modalMode: 'create' | 'edit' = 'create';
     let editingBrokerId: number | null = null;
     let editingBrokerData: {
@@ -188,10 +191,12 @@
     }
 
     function openCreateModal() {
+        brokerTourPreview = false;
         modalMode = 'create';
         editingBrokerId = null;
         editingBrokerData = {};
         modalOpen = true;
+        onboardingGuide.maybeStartContextual('broker_guide');
     }
 
     function handleEdit(event: CustomEvent<{id: number}>) {
@@ -315,6 +320,10 @@
 
     function handleModalClose() {
         modalOpen = false;
+        brokerTourPreview = false;
+        if (onboardingGuide.active?.flow === 'broker_guide') {
+            onboardingGuide.dismissHost({restartAtFirst: true});
+        }
     }
 
     async function handleCreated() {
@@ -357,7 +366,7 @@
             <button class="p-2 text-gray-500 hover:text-libre-green hover:bg-libre-green/10 rounded-lg transition-colors disabled:opacity-50" data-testid="brokers-refresh" disabled={loading} on:click={loadBrokers} title="Refresh">
                 <RefreshCw class={loading ? 'animate-spin' : ''} size={18} />
             </button>
-            <button class="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-all" data-testid="add-broker-button" on:click={openCreateModal}>
+            <button class="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-all" data-testid="add-broker-button" use:guideAnchor={'brokers.add'} on:click={openCreateModal}>
                 <Plus size={18} />
                 <span class="hidden sm:inline">{$_('brokers.addBroker')}</span>
             </button>
@@ -390,7 +399,7 @@
                 </div>
                 <h3 class="text-lg font-semibold text-gray-700 mb-2">{$_('brokers.noBrokers')}</h3>
                 <p class="text-gray-500 mb-4">{$_('brokers.noBrokersMessage')}</p>
-                <button on:click={openCreateModal} class="inline-flex items-center space-x-2 px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-all">
+                <button on:click={openCreateModal} use:guideAnchor={'brokers.add'} class="inline-flex items-center space-x-2 px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-all">
                     <Plus size={18} />
                     <span>{$_('brokers.addBroker')}</span>
                 </button>
@@ -419,7 +428,7 @@
     {/if}
 </div>
 
-<BrokerModal brokerId={editingBrokerId} initialData={editingBrokerData} isOpen={modalOpen} mode={modalMode} onclose={handleModalClose} oncreated={handleCreated} onupdated={handleUpdated} />
+<BrokerModal brokerId={editingBrokerId} initialData={editingBrokerData} isOpen={modalOpen} mode={modalMode} tourPreview={brokerTourPreview} onclose={handleModalClose} oncreated={handleCreated} onupdated={handleUpdated} />
 
 <DeleteBrokerDialog
     brokerName={deletingBroker?.name ?? ''}

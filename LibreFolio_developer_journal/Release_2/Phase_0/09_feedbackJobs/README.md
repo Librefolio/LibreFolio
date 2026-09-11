@@ -88,6 +88,20 @@ static, unit, API and targeted E2E gates are green on isolated lane `6151` +
 UI/viewport review. Runtime ownership follows the current section 14
 integration policy, not the older execution lease.
 
+## Onboarding automated completion - 2026-09-11
+
+[SP11 / U8](../21_onboarding/plan-phase00Onboarding.prompt.md) is implemented with
+automated backend, database, component and end-to-end gates green. New users receive
+an optional Welcome setup, intro tour and contextual import guide; existing users are
+not forced through the flow, and every guide supports permanent skip and Settings
+replay. The import guide never writes transactions or presses Save All.
+
+Status remains **awaiting developer manual review**: the optional
+assets/fix/duplicates import path, real donation/update cadence and full mobile
+walkthrough must be exercised before closure or archival. Substantial English
+documentation updates under Getting Started, transaction import and Settings retain
+IT/FR/ES translation debt; translation runs only on explicit developer request.
+
 ## Regole della cartella
 
 - I task si pescano da qui all'inizio di un round; quando un task parte, il suo piano vive in

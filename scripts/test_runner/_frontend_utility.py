@@ -93,6 +93,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/changelog/changelog.test.ts",
             "src/lib/features/update-check/updateCheck.test.ts",
             "src/lib/features/onboarding/guideAnchors.test.ts",
+            "src/lib/features/onboarding/onboardingTourSurfaces.test.ts",
             "src/lib/features/tools/client.test.ts",
             "src/lib/components/support/supportLinks.test.ts",
             "src/lib/charts/signals/__tests__/registry.test.ts",
@@ -238,8 +239,16 @@ def front_onboarding_component_unit(
             "vitest",
             "run",
             "src/lib/components/onboarding/OnboardingCoachmark.test.ts",
+            "src/lib/components/onboarding/OnboardingIntroScene.test.ts",
+            "src/lib/components/onboarding/OnboardingReplaySection.test.ts",
             "src/lib/components/onboarding/WelcomeForm.test.ts",
             "src/lib/components/onboarding/WelcomePage.test.ts",
+            "src/lib/components/assets/AssetModal.test.ts",
+            "src/lib/components/brokers/BrokerModal.test.ts",
+            "src/lib/components/fx/FxPairAddModal.test.ts",
+            "src/lib/components/layout/Header.test.ts",
+            "src/lib/components/settings/tabs/PreferencesTab.test.ts",
+            "src/lib/components/transactions/modals/ImportWizardModal.test.ts",
             *(["-t", "|".join(test_names)] if test_names else []),
         ],
         cwd="frontend",
@@ -352,6 +361,16 @@ def front_pac_tool(verbose: bool = False, ui: bool = False, headed: bool = False
     return _run_playwright("tools/pac-allocator.spec.ts", ui=ui, headed=headed, debug=debug, project="", test_names=test_names, coverage=coverage)
 
 
+def front_onboarding_tour(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the onboarding tour on desktop and mobile."""
+    print_section("Frontend Onboarding Tour Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("onboarding-tour.spec.ts", ui=ui, headed=headed, debug=debug, project="", test_names=test_names, coverage=coverage)
+
+
 def front_tooltip(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run shared Tooltip component E2E tests (pinned hover/click model)."""
     print_section("Frontend Tooltip Component Tests")
@@ -395,7 +414,7 @@ def populate_registry(registry: dict) -> None:
         help_text="Frontend utility & component E2E tests (auth, settings, files, select, image-crop)",
         description="""Frontend Utility & Component Tests\n\nOptions: --ui, --headed, --debug""")
     add_test(cat, "auth", front_auth, name="Auth Tests", desc="Login, register, logout, language change", prereq="Test users created", tests="auth.spec.ts")
-    add_test(cat, "core-unit", front_utility_unit, test_names=True, name="Core Store Unit Tests", desc="entityStore, option filter, date/decimal parsing, request concurrency, HTML escaping for hand-built markup, safe accessors for widened API unions, import-wizard dedup/merge/compare pure logic, URL filter round trip for DataTable deep links, trySave error seam (FastAPI detail ladder, pydantic issue unpacking and formatting, toast/prefix/pre-handler), comparison-overlay loader (query shape, resolved series injected back into the signal, currency filter, refused conversions), sync toast variants for asset/FX results, chart helpers (echarts tooltip/animation/zoom-pan, geography map, price-chart & candlestick series/scale arithmetic, signal-problem formatting), chart-settings store (per-account hydration, scoped global vs per-item overrides, sanitising, debounced persistence, SSR silence), signal registry (palette assignment, config creation, round trip), local signal maths (linear/compound/sine benchmarks, measure ruler, asset & FX comparison overlays), signal catalog partition rules and backend renderer slice capping, transaction form-item resolution (paired orientation, hidden-broker sentinel, injected lookups) and image-crop presets/MIME/file-naming with the cropper contract faked, FX tooltip data assembly where a zero rate is the absence sentinel and not a quote, brokerStore.getOwnedBrokers roles×shares matrix (F2 dashboard scope), changelog chapter parsing incl. the canonical-Unreleased known gap, and the update-check probe (version compare, 24h throttle, dismissal memory, never-throw fetch)", tests="src/lib/stores/core/entityStore.test.ts")
+    add_test(cat, "core-unit", front_utility_unit, test_names=True, name="Core Store Unit Tests", desc="entityStore, option filter, date/decimal parsing, request concurrency, HTML escaping for hand-built markup, safe accessors for widened API unions, import-wizard dedup/merge/compare pure logic, URL filter round trip for DataTable deep links, trySave error seam (FastAPI detail ladder, pydantic issue unpacking and formatting, toast/prefix/pre-handler), comparison-overlay loader (query shape, resolved series injected back into the signal, currency filter, refused conversions), sync toast variants for asset/FX results, chart helpers (echarts tooltip/animation/zoom-pan, geography map, price-chart & candlestick series/scale arithmetic, signal-problem formatting), chart-settings store (per-account hydration, scoped global vs per-item overrides, sanitising, debounced persistence, SSR silence), signal registry (palette assignment, config creation, round trip), local signal maths (linear/compound/sine benchmarks, measure ruler, asset & FX comparison overlays), signal catalog partition rules and backend renderer slice capping, onboarding tour surface contracts, transaction form-item resolution (paired orientation, hidden-broker sentinel, injected lookups) and image-crop presets/MIME/file-naming with the cropper contract faked, FX tooltip data assembly where a zero rate is the absence sentinel and not a quote, brokerStore.getOwnedBrokers roles×shares matrix (F2 dashboard scope), changelog chapter parsing incl. the canonical-Unreleased known gap, and the update-check probe (version compare, 24h throttle, dismissal memory, never-throw fetch)", tests=("src/lib/stores/core/entityStore.test.ts", "src/lib/features/onboarding/onboardingTourSurfaces.test.ts"))
     add_test(cat, "component-unit", front_component_unit, test_names=True, name="Svelte Component Unit Tests", desc="UI primitives mounted in jsdom: CalendarMonth grid/states, SingleDatePicker typed/calendar seam, TagInput keyboard model, SimpleSelect keyboard/unavailable states, FxProviderSelect route picker, DataTableColumnFilter filter modes, DataTable sorting/paging/selection/row actions, ScheduledInvestmentEditor schedule payload round trip, ImportWizardModal shell/open-gating/close, TransactionCompareModal outlier judgement and diff highlighting, TransactionFormModal draft seeding (create-mode empty quantity T1-b, duplicate-mode date preservation T3), CompactCashCell decimal typing through the parent prop loop (T1-a), SyncModalBase run/timeout/retry/session engine with SyncResultRow the one result line the three sync modals share, MeasurePanel measure add/preview/summary table, RegisterCard sign-up validation gate and server-error ladder, DonationPopupModal deliberate absence of every escape hatch, BrokerSharingPanel role ladder and last-owner guard, the five Setting* controls plus SettingsLayout bulk bar, PasswordChangeModal validation and post-success window, SchedulerConfigModal day/time/timezone payload, SchedulerLogModal run outcomes, PreferencesTab theme/language/currency save payloads and the un-rolled-back optimistic apply, ProfileTab edit lock with its discard dialog plus the per-field save/undo/revert ladder, AboutTab system facts, copy-for-issue payload and plugin discovery status, GlobalSettingsTab admin lock, value_type dispatch, 403 ladder and bulk save, FX card/table/editor rendering an absent rate as absent rather than as 0.0000, plus the beta-feedback batch: AssetTable txCount scope badge palette (F15), KpiSection absolute-vs-period ROI separation (F5), ExposureTable/ContributionTable analyzed-row tint (F9), DataTable header tooltips opening upward via a Tooltip probe (F10), the import wizard's report-issue banner (F11), ChangelogModal chapter rendering, clickable search hits and the header update-check delegation (F12/F14) and UpdateAvailableModal show/later/skip (F12/F14)", tests="src/lib/components/ui/date/CalendarMonth.test.ts")
     add_test(
         cat,
@@ -403,11 +422,19 @@ def populate_registry(registry: dict) -> None:
         front_onboarding_component_unit,
         test_names=True,
         name="Onboarding Component Unit Tests",
-        desc="Isolated welcome form/page and semantic coachmark behavior",
+        desc="Isolated welcome, replay, coachmark, header and import-guide behavior",
         tests=(
             "src/lib/components/onboarding/OnboardingCoachmark.test.ts",
+            "src/lib/components/onboarding/OnboardingIntroScene.test.ts",
+            "src/lib/components/onboarding/OnboardingReplaySection.test.ts",
             "src/lib/components/onboarding/WelcomeForm.test.ts",
             "src/lib/components/onboarding/WelcomePage.test.ts",
+            "src/lib/components/assets/AssetModal.test.ts",
+            "src/lib/components/brokers/BrokerModal.test.ts",
+            "src/lib/components/fx/FxPairAddModal.test.ts",
+            "src/lib/components/layout/Header.test.ts",
+            "src/lib/components/settings/tabs/PreferencesTab.test.ts",
+            "src/lib/components/transactions/modals/ImportWizardModal.test.ts",
         ),
     )
     add_test(cat, "settings", front_settings, name="Settings Tests", desc="User preferences, global settings (admin)", prereq="Login working", tests="settings.spec.ts")
@@ -419,6 +446,7 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "select", front_select, name="Select Components Tests", desc="SimpleSelect, SearchSelect, keyboard nav", prereq="Login working", tests="select-components.spec.ts")
     add_test(cat, "image-crop", front_image_crop, name="Image Crop & Media Tests", desc="ImageEditModal, AssetPicker, FileGrid, avatar", prereq="Login working", tests="image-crop.spec.ts")
     add_test(cat, "utilities", front_utilities, name="Utilities API E2E", desc="Currencies, countries, sectors API", prereq="Login working", tests="utilities.spec.ts")
+    add_test(cat, "onboarding-tour", front_onboarding_tour, name="Onboarding Tour Tests", desc="Welcome handoff, semantic intro tour and contextual import guide on desktop/mobile", prereq="Test users created", tests="onboarding-tour.spec.ts")
     add_test(cat, "pac-tool", front_pac_tool, name="PAC Allocator Tool E2E", desc="Manual P1 ready flow, stale-response guard and platform error on desktop/mobile", prereq="Test users created", tests="tools/pac-allocator.spec.ts")
     add_test(cat, "tooltip", front_tooltip, name="Tooltip Component Tests", desc="Pinned hover/click model: hover-only, click-to-pin, grace dismiss, click-outside", prereq="Login working", tests="tooltip-component.spec.ts")
     add_test(cat, "scheduler", front_scheduler, name="Scheduler Settings E2E", desc="ConfigModal, LogModal, status row, fetch_interval regression", prereq="Admin user + populated DB", tests="settings/scheduler.spec.ts")

@@ -13,6 +13,7 @@
     import {Info, Plus, Trash2, Upload} from 'lucide-svelte';
 
     import {numericArrows} from '$lib/actions/numericArrows';
+    import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     type _DispatchEvents = {
         submit: {
             name: string;
@@ -44,6 +45,7 @@
         opened_at?: string | null;
     } = {};
     export let loading = false;
+    export let tourPreview = false;
 
     // Debug flag - set to false in production
     const DEBUG = false;
@@ -108,6 +110,7 @@
 
     // Initial balances (only for create mode)
     let initialBalances: Array<{code: string; amount: number}> = [];
+    let previousTourPreview = false;
 
     // Load user settings on mount
     onMount(async () => {
@@ -126,6 +129,11 @@
 
     // Get user's default currency
     $: defaultCurrency = $userSettings?.base_currency ?? 'EUR';
+
+    $: if (tourPreview !== previousTourPreview) {
+        previousTourPreview = tourPreview;
+        initialBalances = tourPreview && mode === 'create' ? [{code: defaultCurrency, amount: 0}] : [];
+    }
 
     // Image picker state (uses ImagePickerWrapper)
     let showImagePicker = false;
@@ -194,7 +202,7 @@
     }
 </script>
 
-<form class="space-y-5" on:submit|preventDefault={handleSubmit}>
+<form class="space-y-5" class:pointer-events-none={tourPreview} inert={tourPreview} on:submit|preventDefault={handleSubmit}>
     <!-- Name -->
     <div>
         <label class="block text-sm font-medium text-gray-700 mb-1" for="broker-name">
@@ -223,7 +231,7 @@
     </div>
 
     <!-- Default Import Plugin (moved up) -->
-    <div>
+    <div data-testid="broker-default-plugin" use:guideAnchor={'broker.plugin'}>
         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="broker-plugin">
             {$_('brokers.defaultImportPlugin')}
         </label>
@@ -248,7 +256,7 @@
             <!-- Clickable Icon Preview - opens AssetPickerModal -->
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <div class="icon-picker-trigger group relative cursor-pointer" data-testid="broker-icon-trigger" on:click={() => (showImagePicker = true)} title={$_('uploads.selectIcon') || 'Select Icon'}>
+            <div class="icon-picker-trigger group relative cursor-pointer" data-testid="broker-icon-trigger" use:guideAnchor={'broker.icon'} on:click={() => (showImagePicker = true)} title={$_('uploads.selectIcon') || 'Select Icon'}>
                 <BrokerIcon altText="Icon" {iconUrl} pluginCode={defaultImportPlugin} {portalUrl} size="lg" />
                 <div class="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                     <Upload class="text-white" size={16} />
@@ -353,7 +361,7 @@
             {#if initialBalances.length > 0}
                 <div class="space-y-3">
                     {#each initialBalances as balance, i (i)}
-                        <div class="flex items-center gap-2">
+                        <div class="flex items-center gap-2" use:guideAnchor={'brokers.currency'} data-testid="broker-tour-currency">
                             <!-- Amount first (60% width) -->
                             <div class="flex-[6]">
                                 <input type="number" use:numericArrows step="0.01" min="0" bind:value={balance.amount} placeholder={$_('brokers.amount')} class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green h-[42px]" />
@@ -388,14 +396,16 @@
     <button class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors" disabled={loading} on:click={handleCancel} type="button">
         {$_('common.cancel')}
     </button>
-    <button class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" data-testid="broker-form-submit" disabled={!isValid || loading || hasDuplicateCurrencies} on:click={handleSubmit} type="button">
-        {#if loading}
-            <span class="inline-flex items-center space-x-2">
-                <span class="animate-spin">⏳</span>
-                <span>{$_('common.loading')}</span>
-            </span>
-        {:else}
-            {mode === 'create' ? $_('common.create') : $_('common.save')}
-        {/if}
-    </button>
+    {#if !tourPreview}
+        <button class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" data-testid="broker-form-submit" disabled={!isValid || loading || hasDuplicateCurrencies} on:click={handleSubmit} type="button">
+            {#if loading}
+                <span class="inline-flex items-center space-x-2">
+                    <span class="animate-spin">⏳</span>
+                    <span>{$_('common.loading')}</span>
+                </span>
+            {:else}
+                {mode === 'create' ? $_('common.create') : $_('common.save')}
+            {/if}
+        </button>
+    {/if}
 </div>

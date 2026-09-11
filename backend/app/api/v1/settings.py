@@ -34,6 +34,7 @@ from backend.app.schemas.settings import (
 from backend.app.services.global_settings_service import get_setting_value
 from backend.app.services.onboarding_service import (
     OnboardingVersionMismatchError,
+    complete_welcome_onboarding,
     get_onboarding_progress,
     transition_onboarding_progress,
 )
@@ -120,6 +121,18 @@ async def _transition_onboarding_endpoint(
     session: AsyncSession,
 ) -> OnboardingProgressItem:
     try:
+        if request.welcome_settings is not None:
+            if flow != OnboardingFlow.WELCOME or target_status != OnboardingStatus.COMPLETED:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="welcome_settings is valid only when completing the welcome flow",
+                )
+            return await complete_welcome_onboarding(
+                user_id=current_user.id,
+                expected_version=request.expected_version,
+                welcome_settings=request.welcome_settings,
+                session=session,
+            )
         return await transition_onboarding_progress(
             user_id=current_user.id,
             flow=flow,

@@ -243,7 +243,11 @@ e' documentato, non mascherato da una falsa funzionalita'.
 
 > **Analisi 2026-09-07**: la stima iniziale M è stata sospesa prima del confronto.
 > Formato, skip e replay sono ora concordati; stato/migrazione e dettagli delle tappe
-> saranno fissati nel piano esecutivo. Nessuna implementazione avviata.
+> sono fissati nel [piano esecutivo](../21_onboarding/plan-phase00Onboarding.prompt.md).
+
+> **Stato 2026-09-11:** ✅ implementazione e gate automatici completati nel
+> workstream J. Restano obbligatori il walkthrough manuale developer su desktop/mobile
+> e l'eventuale giro di correzione prima della chiusura/archiviazione.
 
 ### Obiettivo
 Quando un utente appena registrato fa il **primo login**, guidarlo a scegliere subito le
@@ -312,7 +316,7 @@ Baseline `a9138140`; superfici, dipendenze, rischi e DoD completi in
 | U5 | ✅ Completato da E: tooltip breve localizzato. | SP01 |
 | U6 | ✅ Rimozione duplicate-mode e fast-open bulk confermati; form vivo da preservare. | Nessun codice |
 | U7 | ✅ Completato da E: supporto condiviso in DonationPopup/About e cinque social. | SP02 |
-| U8 | Requisiti discussi; L per welcome, tour breve e guida import, con skip/replay. | SP11 |
+| U8 | ✅ [Implementato da J](../21_onboarding/plan-phase00Onboarding.prompt.md): welcome, tour, guida import e replay; gate automatici verdi, review manuale developer pendente. | SP11 |
 | U9 | ✅ Completato da E: header auto-hide desktop/mobile con guardie lifecycle. | SP02 |
 
 La [mappa nel piano](06_piano_sprint.md) separa corsie indipendenti da file condivisi:

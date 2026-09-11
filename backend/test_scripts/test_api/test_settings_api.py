@@ -620,6 +620,210 @@ class TestOnboardingProgressApi:
         print_success("✓ Onboarding progress is isolated per user")
 
 
+class TestOnboardingWelcomeAtomicApi:
+    """Tests for the atomic path: POST /settings/onboarding/welcome/complete with welcome_settings."""
+
+    @pytest.mark.asyncio
+    async def test_complete_welcome_with_settings_persists_atomically(self, test_server):
+        """Completing welcome with welcome_settings must both complete the flow and
+        persist the submitted preferences, visible from a follow-up GET /settings/user."""
+        print_section("ONB-010: Atomic welcome completion persists preferences")
+
+        async with httpx.AsyncClient() as client:
+            await _new_onboarding_user(client, "atomic")
+            flows = await _get_onboarding_flows(client)
+            version = flows["welcome"]["current_version"]
+
+            resp = await client.post(
+                f"{API_BASE}/settings/onboarding/welcome/complete",
+                json={
+                    "expected_version": version,
+                    "welcome_settings": {
+                        "language": "fr",
+                        "base_currency": "CHF",
+                        "avatar_url": "https://example.com/onb-atomic-avatar.png",
+                    },
+                },
+                timeout=TIMEOUT,
+            )
+
+            assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+            item = resp.json()
+            assert item["flow"] == "welcome"
+            assert item["status"] == "completed"
+            assert item["completed_at"] is not None
+            assert item["skipped_at"] is None
+
+            settings_resp = await client.get(f"{API_BASE}/settings/user", timeout=TIMEOUT)
+            assert settings_resp.status_code == 200
+            settings = settings_resp.json()
+            assert settings["language"] == "fr"
+            assert settings["base_currency"] == "CHF"
+            assert settings["avatar_url"] == "https://example.com/onb-atomic-avatar.png"
+
+            flows_after = await _get_onboarding_flows(client)
+            assert flows_after["welcome"]["status"] == "completed"
+            assert flows_after["intro_tour"]["status"] == "pending", "Other flows for this user must be untouched"
+
+        print_success("✓ Atomic welcome completion persisted both progress and preferences")
+
+    @pytest.mark.asyncio
+    async def test_stale_version_with_welcome_settings_returns_409_and_leaves_settings_unchanged(self, test_server):
+        """A stale expected_version must reject the whole atomic request — including the
+        preferences half — and leave whatever settings the user already had untouched."""
+        print_section("ONB-011: Atomic welcome completion - stale version leaves settings unchanged")
+
+        async with httpx.AsyncClient() as client:
+            await _new_onboarding_user(client, "atomic_stale")
+
+            baseline_resp = await client.put(
+                f"{API_BASE}/settings/user",
+                json={"language": "it", "base_currency": "GBP", "theme": "dark", "avatar_url": None},
+                timeout=TIMEOUT,
+            )
+            assert baseline_resp.status_code == 200, f"Expected 200, got {baseline_resp.status_code}: {baseline_resp.text}"
+
+            flows = await _get_onboarding_flows(client)
+            current_version = flows["welcome"]["current_version"]
+            stale_version = current_version + 1
+
+            resp = await client.post(
+                f"{API_BASE}/settings/onboarding/welcome/complete",
+                json={
+                    "expected_version": stale_version,
+                    "welcome_settings": {
+                        "language": "es",
+                        "base_currency": "USD",
+                        "avatar_url": "https://example.com/onb-stale-avatar.png",
+                    },
+                },
+                timeout=TIMEOUT,
+            )
+
+            assert resp.status_code == 409, f"Expected 409, got {resp.status_code}: {resp.text}"
+            assert resp.json()["detail"] == {
+                "code": "onboarding_version_mismatch",
+                "flow": "welcome",
+                "expected_version": stale_version,
+                "current_version": current_version,
+            }
+
+            settings_resp = await client.get(f"{API_BASE}/settings/user", timeout=TIMEOUT)
+            assert settings_resp.status_code == 200
+            assert settings_resp.json() == {
+                "language": "it",
+                "base_currency": "GBP",
+                "theme": "dark",
+                "avatar_url": None,
+            }, "a rejected stale-version request must not touch settings at all"
+
+            flows_after = await _get_onboarding_flows(client)
+            assert flows_after["welcome"]["status"] == "pending", "welcome progress must also remain untouched"
+
+        print_success("✓ Stale version rejected the atomic request; settings untouched")
+
+    @pytest.mark.asyncio
+    async def test_welcome_settings_on_skip_returns_422(self, test_server):
+        """welcome_settings is only valid on a welcome *complete*; sending it on skip
+        must be rejected with 422, not silently ignored or applied."""
+        print_section("ONB-012: welcome_settings on skip - 422")
+
+        async with httpx.AsyncClient() as client:
+            await _new_onboarding_user(client, "atomic_skip")
+            flows = await _get_onboarding_flows(client)
+            version = flows["welcome"]["current_version"]
+
+            resp = await client.post(
+                f"{API_BASE}/settings/onboarding/welcome/skip",
+                json={
+                    "expected_version": version,
+                    "welcome_settings": {
+                        "language": "en",
+                        "base_currency": "EUR",
+                        "avatar_url": None,
+                    },
+                },
+                timeout=TIMEOUT,
+            )
+
+            assert resp.status_code == 422, f"Expected 422, got {resp.status_code}: {resp.text}"
+
+            flows_after = await _get_onboarding_flows(client)
+            assert flows_after["welcome"]["status"] == "pending", "a rejected skip must not have applied any transition"
+
+        print_success("✓ welcome_settings on skip rejected with 422")
+
+    @pytest.mark.asyncio
+    async def test_welcome_settings_on_non_welcome_flow_returns_422(self, test_server):
+        """welcome_settings is only valid for the welcome flow; sending it while
+        completing a different flow must be rejected with 422."""
+        print_section("ONB-013: welcome_settings on non-welcome flow - 422")
+
+        async with httpx.AsyncClient() as client:
+            await _new_onboarding_user(client, "atomic_wrong_flow")
+            flows = await _get_onboarding_flows(client)
+            version = flows["intro_tour"]["current_version"]
+
+            resp = await client.post(
+                f"{API_BASE}/settings/onboarding/intro_tour/complete",
+                json={
+                    "expected_version": version,
+                    "welcome_settings": {
+                        "language": "en",
+                        "base_currency": "EUR",
+                        "avatar_url": None,
+                    },
+                },
+                timeout=TIMEOUT,
+            )
+
+            assert resp.status_code == 422, f"Expected 422, got {resp.status_code}: {resp.text}"
+
+            flows_after = await _get_onboarding_flows(client)
+            assert flows_after["intro_tour"]["status"] == "pending", "a rejected completion must not have applied"
+
+        print_success("✓ welcome_settings on a non-welcome flow rejected with 422")
+
+    @pytest.mark.asyncio
+    async def test_complete_welcome_atomic_isolated_per_user(self, test_server):
+        """Completing welcome atomically for one user must not affect another user's
+        onboarding progress or settings."""
+        print_section("ONB-014: Atomic welcome completion isolation across users")
+
+        async with httpx.AsyncClient() as client_a, httpx.AsyncClient() as client_b:
+            await _new_onboarding_user(client_a, "atomic_iso_a")
+            await _new_onboarding_user(client_b, "atomic_iso_b")
+
+            settings_b_before = await client_b.get(f"{API_BASE}/settings/user", timeout=TIMEOUT)
+            assert settings_b_before.status_code == 200
+
+            flows_a = await _get_onboarding_flows(client_a)
+            version = flows_a["welcome"]["current_version"]
+
+            resp = await client_a.post(
+                f"{API_BASE}/settings/onboarding/welcome/complete",
+                json={
+                    "expected_version": version,
+                    "welcome_settings": {
+                        "language": "fr",
+                        "base_currency": "CHF",
+                        "avatar_url": "https://example.com/onb-iso-avatar.png",
+                    },
+                },
+                timeout=TIMEOUT,
+            )
+            assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+
+            flows_b_after = await _get_onboarding_flows(client_b)
+            assert flows_b_after["welcome"]["status"] == "pending", "User B's progress must be unaffected by user A's atomic completion"
+
+            settings_b_after = await client_b.get(f"{API_BASE}/settings/user", timeout=TIMEOUT)
+            assert settings_b_after.status_code == 200
+            assert settings_b_after.json() == settings_b_before.json(), "User B's settings must be unaffected by user A's welcome_settings"
+
+        print_success("✓ Atomic welcome completion is isolated per user")
+
+
 # ============================================================================
 # Global Settings Tests - List
 # ============================================================================

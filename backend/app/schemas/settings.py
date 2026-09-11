@@ -66,10 +66,21 @@ class OnboardingProgressResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class OnboardingWelcomeSettings(BaseModel):
+    """Preferences committed atomically when the welcome flow finishes."""
+
+    language: Literal["en", "it", "fr", "es"]
+    base_currency: str = Field(..., min_length=3, max_length=3)
+    avatar_url: Optional[str] = Field(None, max_length=500)
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class OnboardingTransitionRequest(BaseModel):
     """Complete or skip a flow rendered from a specific content version."""
 
     expected_version: int = Field(..., ge=1)
+    welcome_settings: Optional[OnboardingWelcomeSettings] = None
 
     model_config = ConfigDict(extra="forbid")
 

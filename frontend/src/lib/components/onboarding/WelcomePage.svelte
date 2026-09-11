@@ -12,10 +12,11 @@
         outcome?: 'completed' | 'skipped' | null;
         oncomplete: (draft: WelcomeDraft) => Promise<void>;
         onskip: () => Promise<void>;
+        onlanguagechange?: (language: string) => void;
         onlogout: () => Promise<void> | void;
     }
 
-    let {copy, username, language = $bindable('en'), baseCurrency = $bindable('EUR'), avatarUrl = $bindable(null), outcome = null, oncomplete, onskip, onlogout}: Props = $props();
+    let {copy, username, language = $bindable('en'), baseCurrency = $bindable('EUR'), avatarUrl = $bindable(null), outcome = null, oncomplete, onskip, onlanguagechange, onlogout}: Props = $props();
 
     let busy = $state(false);
     let error = $state<string | null>(null);
@@ -46,7 +47,10 @@
 <div class="min-h-full bg-libre-beige px-4 py-6 dark:bg-slate-950 sm:px-6 sm:py-10" data-testid="welcome-page" data-outcome={outcome ?? 'pending'}>
     <div class="mx-auto max-w-3xl">
         <header class="mb-6 flex items-center justify-between gap-4">
-            <span class="text-lg font-bold text-libre-green dark:text-emerald-300">
+            <span class="flex items-center gap-2 text-lg font-bold text-libre-green dark:text-emerald-300">
+                <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-white p-1 shadow-sm ring-1 ring-gray-200 dark:ring-slate-700">
+                    <img src="/logo.png" alt="" class="h-full w-full object-contain" />
+                </span>
                 {copy.productName}
             </span>
             <button type="button" class="rounded-lg px-3 py-2 text-sm text-gray-600 hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green dark:text-gray-300 dark:hover:bg-slate-800" onclick={onlogout} data-testid="welcome-logout">
@@ -69,7 +73,20 @@
                 </div>
             {:else}
                 <div class="mt-8">
-                    <WelcomeForm {copy} {initials} bind:language bind:baseCurrency bind:avatarUrl {busy} {error} onavatarrequest={() => (avatarPickerOpen = true)} onavatarclear={() => (avatarUrl = null)} onsubmit={(draft) => run(() => oncomplete(draft))} onskip={() => run(onskip)} />
+                    <WelcomeForm
+                        {copy}
+                        {initials}
+                        bind:language
+                        bind:baseCurrency
+                        bind:avatarUrl
+                        {busy}
+                        {error}
+                        onavatarrequest={() => (avatarPickerOpen = true)}
+                        onavatarclear={() => (avatarUrl = null)}
+                        {onlanguagechange}
+                        onskip={() => run(onskip)}
+                        onsubmit={(draft) => run(() => oncomplete(draft))}
+                    />
                 </div>
             {/if}
         </section>
