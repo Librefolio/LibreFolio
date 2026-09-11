@@ -819,6 +819,7 @@ nav:
                   - TWRR: financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md
                   - MWRR: financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md
                   - Net Annualized Return: financial-theory/technical-analysis/performance-metrics/portfolio-engine/net-annualized-return.md
+                  - Yield on Cost: financial-theory/technical-analysis/performance-metrics/portfolio-engine/yield-on-cost.md
               - 🔬 FIFO Engine:
                   - Overview: financial-theory/technical-analysis/performance-metrics/fifo-engine/index.md
                   - FIFO Lot Analysis: financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md

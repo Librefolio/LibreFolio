@@ -53,7 +53,7 @@ The **Overview** tab acts as a local dashboard for the selected broker. It conta
 
 ## 🔍 Positions Tab
 
-The **Positions** tab lists all active assets currently held under this broker. It is identical in functionality to the main **[Dashboard Positions](../dashboard/positions.md)** view, but scoped only to this broker:
+The **Positions** tab lists all active assets currently held under this broker. It reuses the same **[Dashboard Positions](../dashboard/positions.md)** panel and persisted Holdings-table column preferences, but scopes every row and metric — including per-asset/broker **Yield on Cost (YOC)** — to this broker:
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-broker-positions" data-carousel-interval="6000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
   <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="positions-holdings-table" data-title="📋 Holdings (Table)" alt="Broker Holdings Table View">

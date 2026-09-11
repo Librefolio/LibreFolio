@@ -52,6 +52,9 @@ from backend.app.schemas.portfolio import (
     PortfolioReportResponse,
     PortfolioSummary,
     PositionsContribution,
+    YieldOnCostProvenance,
+    YieldOnCostResult,
+    YieldOnCostStatus,
 )
 from backend.app.schemas.prices import FAPricePoint, FAPriceQueryResult
 from backend.app.services.ai_export.components import asset_core
@@ -154,6 +157,21 @@ def _price_results(*, observed_close: object | None = None, observed_currency: s
     return PriceResultsResource.from_results([FAPriceQueryResult(asset_id=ASSET_ID, prices=[point])])
 
 
+def _required_yoc() -> YieldOnCostResult:
+    return YieldOnCostResult(
+        status=YieldOnCostStatus.NO_INCOME,
+        value=Decimal("0"),
+        provenance=YieldOnCostProvenance(
+            window_start=date(2025, 1, 1),
+            window_end=date(2025, 12, 31),
+            first_pair_transaction_date=date(2025, 1, 1),
+            gross_income_transaction_count=0,
+            gross_income_per_unit=Currency(code=CURRENCY, amount=Decimal("0")),
+            net_zero=False,
+        ),
+    )
+
+
 def _holding(
     broker_id: int, *, asset_id: int = ASSET_ID, quantity: object = 10, wac_per_unit: object | None = 40, current_price: object | None = 50, current_value: object | None = 500, gain_loss: object | None = 100, gain_loss_percent: object | None = 25, valuation_source: str | None = "MARKET_PRICE"
 ) -> PortfolioHolding:
@@ -170,6 +188,7 @@ def _holding(
         gain_loss=Decimal(str(gain_loss)) if gain_loss is not None else None,
         gain_loss_percent=Decimal(str(gain_loss_percent)) if gain_loss_percent is not None else None,
         valuation_source=valuation_source,
+        yield_on_cost=_required_yoc(),
     )
 
 

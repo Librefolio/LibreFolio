@@ -11,7 +11,7 @@
   - Dark mode support
 -->
 <script generics="T" lang="ts">
-    import {onMount, untrack} from 'svelte';
+    import {onDestroy, onMount, untrack} from 'svelte';
     import {t} from '$lib/i18n';
     import {formatBytes} from '$lib/utils/files/upload';
     import {getUserStorageKey} from '$lib/utils/storage';
@@ -26,6 +26,7 @@
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
     import type {BulkAction, ColumnDef, ColumnWidthsState, FilterValue, FooterCellContent, FooterCells, PaginationState, RowAction, RowActions, SelectionState, SortState, VisibilityState} from './types';
     import {compareRowsByColumn, formatCellDate, getColumnMinMax, getCurrencyMinMaxByCode, getCurrencyOptions, getEnumOptionsWithCounts, getMultiEnumOptions, getMultiEnumOptionsWithCounts, matchesColumnFilter} from './dataTableLogic';
+    import {clearTimer} from '$lib/utils/core/clearTimer';
 
     interface Props {
         data: T[];
@@ -429,6 +430,47 @@
         return typeof col.headerTooltipUrl === 'function' ? col.headerTooltipUrl() : col.headerTooltipUrl;
     }
 
+    let headerTooltipLongPressTimer: ReturnType<typeof setTimeout> | null = null;
+    let suppressHeaderTooltipClick = false;
+
+    function openHeaderTooltipDoc(url: string) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+    }
+
+    function handleHeaderTooltipDblClick(event: MouseEvent, url: string) {
+        event.preventDefault();
+        event.stopPropagation();
+        openHeaderTooltipDoc(url);
+    }
+
+    function handleHeaderTooltipKeydown(event: KeyboardEvent, url: string) {
+        if (event.key !== 'Enter' || !event.shiftKey) return;
+        event.preventDefault();
+        event.stopPropagation();
+        openHeaderTooltipDoc(url);
+    }
+
+    function handleHeaderTooltipTouchStart(url: string) {
+        suppressHeaderTooltipClick = false;
+        headerTooltipLongPressTimer = clearTimer(headerTooltipLongPressTimer);
+        headerTooltipLongPressTimer = setTimeout(() => {
+            headerTooltipLongPressTimer = null;
+            suppressHeaderTooltipClick = true;
+            openHeaderTooltipDoc(url);
+        }, 500);
+    }
+
+    function cancelHeaderTooltipLongPress() {
+        headerTooltipLongPressTimer = clearTimer(headerTooltipLongPressTimer);
+    }
+
+    function handleHeaderTooltipGestureClick(event: MouseEvent) {
+        if (!suppressHeaderTooltipClick) return;
+        event.preventDefault();
+        event.stopPropagation();
+        suppressHeaderTooltipClick = false;
+    }
+
     /** Handle image load error — hide image and show fallback */
     function handleImageError(e: Event) {
         const img = e.currentTarget as HTMLImageElement;
@@ -723,6 +765,8 @@
         }
     });
 
+    onDestroy(cancelHeaderTooltipLongPress);
+
     // Notify parent when filters change (for URL sync)
     $effect(() => {
         // Only call if handler provided and we have some filter activity
@@ -999,12 +1043,33 @@
                                 <!-- Header tooltip info icon (only when no emoji/text tooltip) -->
                                 {#if getColumnTooltip(column) && getColumnTooltipUrl(column)}
                                     {@const tooltipText = getColumnTooltip(column) ?? ''}
-                                    {@const tooltipUrl = getColumnTooltipUrl(column)}
-                                    <Tooltip text={tooltipText} position="top" math={tooltipText.includes('$')}>
-                                        <a href={tooltipUrl} target="_blank" rel="noopener noreferrer" class="header-tooltip-icon header-tooltip-link" onclick={(e) => e.stopPropagation()}>
-                                            <Info size={12} />
-                                        </a>
-                                    </Tooltip>
+                                    {@const tooltipUrl = getColumnTooltipUrl(column) ?? ''}
+                                    {#if column.headerTooltipLinkMode === 'gesture'}
+                                        <Tooltip text={tooltipText} position="top" math={tooltipText.includes('$')} interactiveChild={true}>
+                                            <button
+                                                type="button"
+                                                class="header-tooltip-icon header-tooltip-gesture"
+                                                aria-label={tooltipText}
+                                                aria-keyshortcuts="Shift+Enter"
+                                                data-testid={`dt-header-tooltip-${column.id}`}
+                                                onclick={handleHeaderTooltipGestureClick}
+                                                ondblclick={(event) => handleHeaderTooltipDblClick(event, tooltipUrl)}
+                                                onkeydown={(event) => handleHeaderTooltipKeydown(event, tooltipUrl)}
+                                                ontouchstart={() => handleHeaderTooltipTouchStart(tooltipUrl)}
+                                                ontouchend={cancelHeaderTooltipLongPress}
+                                                ontouchmove={cancelHeaderTooltipLongPress}
+                                                ontouchcancel={cancelHeaderTooltipLongPress}
+                                            >
+                                                <Info size={12} />
+                                            </button>
+                                        </Tooltip>
+                                    {:else}
+                                        <Tooltip text={tooltipText} position="top" math={tooltipText.includes('$')}>
+                                            <a href={tooltipUrl} target="_blank" rel="noopener noreferrer" class="header-tooltip-icon header-tooltip-link" data-testid={`dt-header-tooltip-${column.id}`} onclick={(e) => e.stopPropagation()}>
+                                                <Info size={12} />
+                                            </a>
+                                        </Tooltip>
+                                    {/if}
                                 {/if}
 
                                 <!-- Filter button -->
@@ -1630,11 +1695,20 @@
         transition: color 0.15s;
     }
 
-    .header-tooltip-link:hover {
+    .header-tooltip-gesture {
+        padding: 0;
+        border: 0;
+        background: transparent;
+        transition: color 0.15s;
+    }
+
+    .header-tooltip-link:hover,
+    .header-tooltip-gesture:hover {
         color: #1a4031;
     }
 
-    :global(.dark) .header-tooltip-link:hover {
+    :global(.dark) .header-tooltip-link:hover,
+    :global(.dark) .header-tooltip-gesture:hover {
         color: #4ade80;
     }
 

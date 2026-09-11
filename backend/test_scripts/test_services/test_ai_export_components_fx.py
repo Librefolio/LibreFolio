@@ -44,7 +44,15 @@ import backend.app.services.portfolio_service as portfolio_service_module
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, FxRate, PriceHistory, Transaction, TransactionType, User
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency
-from backend.app.schemas.portfolio import PortfolioHolding, PortfolioReportMetadata, PortfolioReportResponse, PortfolioSummary
+from backend.app.schemas.portfolio import (
+    PortfolioHolding,
+    PortfolioReportMetadata,
+    PortfolioReportResponse,
+    PortfolioSummary,
+    YieldOnCostProvenance,
+    YieldOnCostResult,
+    YieldOnCostStatus,
+)
 from backend.app.services.ai_export.components.fx_core import FX_CORE_COMPONENTS
 from backend.app.services.ai_export.components.fx_payloads import (
     FxExposureBaseQuotePayload,
@@ -141,6 +149,21 @@ def _scope(
 def _context(session, scope: BuildScope) -> BuildContext:
     bucket_plan = build_bucket_plan_for_scope(scope)
     return BuildContext(_registry(), request_id=scope.request_id, scope=scope, bucket_plan=bucket_plan, session=session)
+
+
+def _required_yoc(currency: str) -> YieldOnCostResult:
+    return YieldOnCostResult(
+        status=YieldOnCostStatus.NO_INCOME,
+        value=Decimal("0"),
+        provenance=YieldOnCostProvenance(
+            window_start=date(2024, 1, 3),
+            window_end=date(2025, 1, 1),
+            first_pair_transaction_date=date(2024, 1, 3),
+            gross_income_transaction_count=0,
+            gross_income_per_unit=Currency(code=currency, amount=Decimal("0")),
+            net_zero=False,
+        ),
+    )
 
 
 async def _seed_rate(session, *, base: str, quote: str, rate: str, day: date, source: str = "ECB") -> None:
@@ -765,6 +788,7 @@ class TestExposureSourceFailure:
                             quantity=Decimal("1"),
                             current_value=None,
                             valuation_effective_currency=None,
+                            yield_on_cost=_required_yoc("EUR"),
                         )
                     ],
                     by_broker=[],

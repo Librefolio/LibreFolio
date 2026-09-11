@@ -31,10 +31,11 @@ UI changes and an operational developer walkthrough/feedback round afterward.
 U3 Yield on Cost is ✅ **PLAN/DESIGN APPROVED 2026-09-10, not implemented** in the
 [dedicated H plan and desktop/mobile storyboard](../19_yieldOnCost/plan-phase00YieldOnCost.prompt.md).
 The final contract uses gross asset-linked DIVIDEND/INTEREST transactions,
-broker-scoped D-1 eligibility and residual WAC. Implementation remains frozen
-until F's shared portfolio FX identity is integrated, H is aligned/refreshed
-onto that baseline by the developer, and a new explicit H execution
-authorization is issued.
+broker-scoped D-1 eligibility and residual WAC. Gate 0 is technically COMPLETE
+on baseline `b22998f`, including the shared FX identity's
+`cost_basis_currency` dependency and L1 witnesses. Implementation remains
+frozen pending a new explicit H execution authorization. Shared portfolio
+files are sequenced H first, I20+ afterward.
 
 ## Selective resumption - 2026-09-08 11:30 CEST
 

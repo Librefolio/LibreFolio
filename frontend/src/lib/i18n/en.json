@@ -1431,7 +1431,30 @@
     "annualizedReturn": "Annualized",
     "annualizedReturnTooltip": "Net annualized return (CAGR) of all still-open lots of this position, from the first transaction to today — including income minus fees; valued at cost when no market price. For comparison across positions held for different durations.",
     "annualizedReturnPeriodTooltip": "Net annualized return (CAGR) over the position's holding window within the selected period, for comparison across periods of different durations.",
-    "netWorthTooltip": "Securities at market value + cash (+ value in transit). Includes liquidity — not comparable to the securities-only figure in a bank statement."
+    "netWorthTooltip": "Securities at market value + cash (+ value in transit). Includes liquidity — not comparable to the securities-only figure in a bank statement.",
+    "yieldOnCost": "YOC",
+    "yieldOnCostDisplayName": "Yield on Cost (YOC)",
+    "yieldOnCostTooltip": "Compares gross dividends and interest recorded over the last year with the average purchase price (WAC).",
+    "yieldOnCostUnavailable": "Yield on Cost unavailable",
+    "yieldOnCostGrossPerUnit": "Gross income per unit",
+    "yieldOnCostFxPair": "Conversion",
+    "yieldOnCostIssueDate": "Payment date",
+    "yieldOnCostFirstTransaction": "First transaction",
+    "yieldOnCostNoIncome": "No dividends or interest in the last year.",
+    "yieldOnCostReasons": {
+      "insufficientHistory": "History at this broker is shorter than one year.",
+      "incomeWithoutEligibleQuantity": "A recorded payment has no quantity held on the previous day.",
+      "replayInconsistent": "Purchase, sale, or transfer history cannot be reconstructed correctly.",
+      "invalidSplit": "A linked split is inconsistent with the recorded quantities.",
+      "missingFx": "The exchange rate required for a payment is unavailable.",
+      "missingWac": "The average purchase price (WAC) is unavailable.",
+      "nonPositiveWac": "The average purchase price (WAC) is zero or negative.",
+      "missingFxDetails": "The {pair} exchange rate required for the calculation is missing on {date}."
+    },
+    "yieldOnCostValue": "Yield on Cost",
+    "yieldOnCostPeriod": "Period",
+    "yieldOnCostFxRateDate": "rate from",
+    "yieldOnCostNoIncomeTitle": "No income recorded"
   },
   "dataQuality": {
     "headerInfoOnly": "Data quality note",

@@ -286,7 +286,8 @@ Patina decorativa sopra segnaposto di forma stabile. Non mantenere il numero rea
 
 **Stato 2026-09-10:** ✅ **PLAN/DESIGN APPROVED, non implementato** nel
 [piano H dedicato](../19_yieldOnCost/plan-phase00YieldOnCost.prompt.md).
-L'approvazione non autorizza ancora l'esecuzione.
+Gate 0 tecnico **COMPLETE** sulla baseline `b22998f`; resta soltanto
+l'autorizzazione esecutiva.
 **Taglia:** M backend + S UI/docs, con hard handoff cache FX dal workstream F.
 
 **Superfici:** `B/schemas/portfolio.py`; `portfolio_service.py`; nuovo servizio
@@ -330,11 +331,13 @@ L'age usa la prima transaction storica della coppia e non si resetta dopo
 close/rebuy. Ogni holding e' applicabile, inclusi crypto/manual; nessun
 `not_applicable`.
 
-**Dipendenza hard:** F integra
+**Dipendenza verificata:** F ha integrato
 `compute_portfolio_fx_cache_identity(db, scope_broker_ids, target_currency, date_to) -> str`
 nella L1. H invoca la stessa funzione e riusa la string identity nella L2 per
 tutti i report portfolio, aggiungendo solo dipendenze ledger/split YOC.
-Nessuna seconda helper o separazione rate/route.
+Nessuna seconda helper o separazione rate/route. Il follow-up integrato in
+`b5ed1a623` aggiunge `Transaction.cost_basis_currency` alla dependency identity
+e copre identity/L1 con una terza valuta presente solo nel CBO.
 
 **Rischi / DoD:** D-1 identico al FIFO, vendite parziali non gonfiano il
 rapporto, transfer/split/FX fail-closed, cache non stale. Colonna **visibile di
@@ -708,8 +711,9 @@ coppia distingue `no_income=0` da `insufficient_history`; split/FX/WAC e replay
 restano fail-closed. `PortfolioHolding.wac_per_unit` e `ExposureTable` sono
 fondazioni esistenti. Stima confermata: **M backend + S UI/docs**. Stato
 ✅ [PLAN/DESIGN APPROVED 2026-09-10](../19_yieldOnCost/plan-phase00YieldOnCost.prompt.md),
-non implementato; esecuzione attende helper/cache FX F integrata, baseline H
-riallineata e nuova autorizzazione.
+non implementato; baseline `b22998f`, Gate 0 tecnico COMPLETE incluso
+`cost_basis_currency`. Resta la nuova autorizzazione esecutiva. Sequenza sui
+file portfolio condivisi: H prima, I20+ dopo.
 
 **Gia consegnati, fuori dagli sprint di codice:** U6, G2, B2, S6 6.3, S6 6.12. La pubblicazione di questa analisi riconcilia le rispettive voci. TRY003 resta congelato; S6 6.14 non genera uno sprint autonomo.
 
@@ -718,7 +722,7 @@ riallineata e nuova autorizzazione.
 | Gate | Da chiudere prima di | Esito richiesto |
 |---|---|---|
 | G-ETORO | Modificare mapping/scarti B1 | Prova del movimento di cassa e valuta, soprattutto nonzero Withdraw Fee; decisione anti-doppio-conteggio. In assenza: task resta bloccato. |
-| G-YOC | Implementare il valore U3 | Contratto e storyboard v1 [PLAN/DESIGN APPROVED 2026-09-10](../19_yieldOnCost/plan-phase00YieldOnCost.prompt.md). Gate residuo: shared FX identity F integrata, baseline H riallineata + autorizzazione esecutiva; poi replay D-1/split/FX e DTO fail-closed. |
+| G-YOC | Implementare il valore U3 | Contratto/storyboard approved; Gate 0 post-F [COMPLETE nel piano H](../19_yieldOnCost/plan-phase00YieldOnCost.prompt.md), incluso `cost_basis_currency` e reservation H-first. Resta solo l'autorizzazione esecutiva; poi replay D-1/split/FX e DTO fail-closed. |
 | G-ROLLING | Nuovo modo G3 | Calendario/reference lookup, lookback e limiti di staleness senza cambiare i segnali a osservazioni esistenti. |
 | G-CANDLES | Nuovo DTO/calcolo G1b | Ancora P&L/non-prezzo, conversione giornaliera, posizioni negative e politica OHLC mancante. Natura sintetica, EOD e aggregazione gia approvate. |
 | G-CACHE | Scegliere eviction/rilascio P4-7 | Misura reale, budget e ownership documentati; nessun LRU o numero massimo scelto per intuito. |

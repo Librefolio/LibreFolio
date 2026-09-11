@@ -101,8 +101,10 @@ rendimento nel tempo, indipendente dalle fluttuazioni di mercato.
   via BRIM contano soltanto quando diventano Transaction asset-linked; non si
   divide il loro totale per il cost basis corrente. Ogni riga usa la propria
   quantita' D-1; split e FX riallineano unita' e valuta.
-- La cache L2 deve riusare la stessa identita' FX generale consegnata da F per
-  la L1, senza una seconda implementazione. H attende quel checkpoint integrato.
+- La baseline H `b22998f` contiene la shared FX identity F, L1 e fix
+  `cost_basis_currency` con witness identity/L1. H deve riusare la funzione
+  identica nella L2, senza seconda implementazione. Gate 0 tecnico e' complete;
+  resta soltanto l'autorizzazione esecutiva.
 
 ### Dato mancante, zero e coppia giovane — decisione 2026-09-10
 - Nessun income TTM = YOC numerico 0 soltanto se la prima transaction storica
@@ -320,7 +322,7 @@ Baseline `a9138140`; superfici, dipendenze, rischi e DoD completi in
 |---|---|---|
 | U1 | ✅ Completato da E: stato/generazioni del probe e metadata concorrente. | SP01 |
 | U2 | Scope globale concordato, non solo dashboard; primitive condivise. XL. | SP15 |
-| U3 | ✅ [PLAN/DESIGN APPROVED](../19_yieldOnCost/plan-phase00YieldOnCost.prompt.md), non implementato: gross income transaction-ledger per quantita' D-1 / WAC residuo; M backend + S UI/docs, attende shared FX identity F + autorizzazione esecutiva. | SP06 |
+| U3 | ✅ [PLAN/DESIGN + GATE 0 APPROVED/COMPLETE](../19_yieldOnCost/plan-phase00YieldOnCost.prompt.md), non implementato: baseline `b22998f`; M backend + S UI/docs, attende solo autorizzazione esecutiva. | SP06 |
 | U4 | ✅ Completato da E: colonna uploader ordinabile e filtro multi-selezione. | SP02 |
 | U5 | ✅ Completato da E: tooltip breve localizzato. | SP01 |
 | U6 | ✅ Rimozione duplicate-mode e fast-open bulk confermati; form vivo da preservare. | Nessun codice |

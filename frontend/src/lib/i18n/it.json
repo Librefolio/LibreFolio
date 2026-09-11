@@ -1431,7 +1431,30 @@
     "annualizedReturn": "Annualizzato",
     "annualizedReturnTooltip": "Rendimento netto annualizzato (CAGR) di tutti i lotti ancora aperti della posizione, dalla prima transazione a oggi — inclusi proventi meno spese; valorizzato al costo se manca il prezzo. Per confrontare posizioni tenute per periodi diversi.",
     "annualizedReturnPeriodTooltip": "Rendimento netto annualizzato (CAGR) sulla finestra di detenzione della posizione nel periodo selezionato, per confrontare periodi di durata diversa.",
-    "netWorthTooltip": "Titoli al valore di mercato + liquidità (+ valore in transito). Include la liquidità — non confrontabile con il solo controvalore titoli di un estratto conto."
+    "netWorthTooltip": "Titoli al valore di mercato + liquidità (+ valore in transito). Include la liquidità — non confrontabile con il solo controvalore titoli di un estratto conto.",
+    "yieldOnCost": "YOC",
+    "yieldOnCostDisplayName": "Rendimento sul costo (YOC)",
+    "yieldOnCostTooltip": "Rapporta i dividendi e gli interessi lordi registrati nell'ultimo anno al prezzo medio di carico (PMC).",
+    "yieldOnCostUnavailable": "Rendimento sul costo non disponibile",
+    "yieldOnCostGrossPerUnit": "Reddito lordo unitario",
+    "yieldOnCostFxPair": "Cambio",
+    "yieldOnCostIssueDate": "Data del pagamento",
+    "yieldOnCostFirstTransaction": "Primo movimento",
+    "yieldOnCostNoIncome": "Nessun dividendo o interesse nell'ultimo anno.",
+    "yieldOnCostReasons": {
+      "insufficientHistory": "Lo storico presso questo broker è inferiore a un anno.",
+      "incomeWithoutEligibleQuantity": "Per un pagamento registrato non risulta alcuna quantità detenuta il giorno precedente.",
+      "replayInconsistent": "Lo storico di acquisti, vendite o trasferimenti non può essere ricostruito correttamente.",
+      "invalidSplit": "Un frazionamento collegato non è coerente con le quantità registrate.",
+      "missingFx": "Manca il cambio necessario per un pagamento.",
+      "missingWac": "Il prezzo medio di carico (PMC) non è disponibile.",
+      "nonPositiveWac": "Il prezzo medio di carico (PMC) è nullo o negativo.",
+      "missingFxDetails": "Manca il cambio {pair} necessario per il calcolo alla data {date}."
+    },
+    "yieldOnCostValue": "Rendimento sul costo",
+    "yieldOnCostPeriod": "Periodo",
+    "yieldOnCostFxRateDate": "tasso del",
+    "yieldOnCostNoIncomeTitle": "Nessun reddito registrato"
   },
   "dataQuality": {
     "headerInfoOnly": "Note sulla qualità dei dati",
