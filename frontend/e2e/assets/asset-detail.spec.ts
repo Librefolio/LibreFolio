@@ -449,6 +449,479 @@ test.describe('Asset Detail Page', () => {
         await expect(chart).toHaveAttribute('data-view-mode', 'percentage');
     });
 
+    test('calendar-return primary mode queries exact windows and restores price controls', async ({page}) => {
+        const assetId = 920_060;
+        const calendarInstanceId = 'asset-calendar-return';
+        const calendarSignalCode = 'ASSET_CALENDAR_ROLLING_RETURN';
+        const calendarWindows = [7, 30, 90, 365] as const;
+        type CalendarWindow = (typeof calendarWindows)[number];
+        type CalendarSignalRequest = {
+            instance_id?: string;
+            signal_code?: string;
+            params?: {window_days?: unknown};
+        };
+        type PriceQueryRequest = {
+            asset_id?: number;
+            include_price?: boolean;
+            signals?: CalendarSignalRequest[];
+        };
+        type CalendarPointFixture = {
+            date: string;
+            value: number;
+            provenance: {
+                status: 'available';
+                reference_target_date: string;
+                current_price_date: string;
+                current_price_days_back: number;
+                reference_price_date: string;
+                reference_price_days_back: number;
+                current_fx_date: null;
+                current_fx_days_back: null;
+                reference_fx_date: null;
+                reference_fx_days_back: null;
+            };
+        };
+        type CalendarSignalResultFixture = {
+            instance_id: string;
+            signal_code: string;
+            normalized_params: {window_days: CalendarWindow};
+            status: 'ok' | 'partial';
+            series: Array<{
+                key: 'calendar_return';
+                points: CalendarPointFixture[];
+                [key: string]: unknown;
+            }>;
+            [key: string]: unknown;
+        };
+        type DeferredCalendarOutcome = 'ready' | 'partial';
+        type DeferredCalendarResponse = {
+            outcome: DeferredCalendarOutcome;
+            wait: Promise<void>;
+            release: () => void;
+        };
+
+        const asset = {
+            id: assetId,
+            display_name: `Synthetic calendar-return asset ${assetId}`,
+            currency: 'EUR',
+            asset_type: 'STOCK',
+            active: true,
+            has_metadata: false,
+            provider_code: null,
+            tx_count: 0,
+            tx_count_own: 0,
+        };
+        const pricePoints = [
+            {date: '2026-08-01', open: '100.00', high: '103.00', low: '99.00', close: '102.00', volume: '1000', currency: 'EUR'},
+            {date: '2026-08-02', open: '102.00', high: '105.00', low: '101.00', close: '104.00', volume: '1100', currency: 'EUR'},
+            {date: '2026-08-03', open: '104.00', high: '106.00', low: '102.00', close: '103.00', volume: '900', currency: 'EUR'},
+        ];
+        const deferredCalendarResponses = new Map<CalendarWindow, DeferredCalendarResponse>();
+
+        const parseQueries = (raw: unknown): PriceQueryRequest[] => (Array.isArray(raw) ? (raw as PriceQueryRequest[]) : []);
+        const findCalendarSignal = (raw: unknown): CalendarSignalRequest | undefined =>
+            parseQueries(raw)
+                .flatMap((query) => query.signals ?? [])
+                .find((signal) => signal.instance_id === calendarInstanceId && signal.signal_code === calendarSignalCode);
+        const isCalendarWindow = (value: unknown): value is CalendarWindow => calendarWindows.some((windowDays) => windowDays === value);
+        const deferCalendarResponse = (windowDays: CalendarWindow, outcome: DeferredCalendarOutcome): DeferredCalendarResponse => {
+            let release!: () => void;
+            const wait = new Promise<void>((resolve) => {
+                release = () => resolve();
+            });
+            const deferred = {outcome, wait, release};
+            deferredCalendarResponses.set(windowDays, deferred);
+            return deferred;
+        };
+        const subtractDays = (date: string, days: number): string => {
+            const value = new Date(`${date}T00:00:00Z`);
+            value.setUTCDate(value.getUTCDate() - days);
+            return value.toISOString().slice(0, 10);
+        };
+        const buildCalendarResult = (windowDays: CalendarWindow, status: CalendarSignalResultFixture['status'] = 'ok'): CalendarSignalResultFixture => {
+            const points: CalendarPointFixture[] = [
+                {date: '2026-08-01', value: windowDays / 10},
+                {date: '2026-08-02', value: -windowDays / 20},
+            ].map(({date, value}) => {
+                const referenceDate = subtractDays(date, windowDays);
+                return {
+                    date,
+                    value,
+                    provenance: {
+                        status: 'available',
+                        reference_target_date: referenceDate,
+                        current_price_date: date,
+                        current_price_days_back: 0,
+                        reference_price_date: referenceDate,
+                        reference_price_days_back: 0,
+                        current_fx_date: null,
+                        current_fx_days_back: null,
+                        reference_fx_date: null,
+                        reference_fx_days_back: null,
+                    },
+                };
+            });
+
+            return {
+                instance_id: calendarInstanceId,
+                signal_code: calendarSignalCode,
+                implementation_version: '1.0.0',
+                normalized_params: {window_days: windowDays},
+                status,
+                series: [
+                    {
+                        key: 'calendar_return',
+                        label_key: 'signals.riskRollingReturn.output',
+                        description_key: 'signals.riskRollingReturn.outputDescription',
+                        semantic_id: 'calendar_rolling_return.value',
+                        semantic_description: 'Price-only return over an exact calendar-day window.',
+                        unit: 'percentage',
+                        axis: {key: 'calendar_return', role: 'independent', minimum: null, maximum: null},
+                        view_transform: 'none',
+                        style: {color_role: 'primary', line_pattern: null, width_delta: 0, opacity: 1, fill_opacity: 0.2},
+                        reference_levels: [{key: 'zero', label_key: 'signals.reference.zero', semantic: 'No price-only gain or loss.', value: 0}],
+                        value_regions: [],
+                        kind: 'line',
+                        points,
+                    },
+                ],
+                availability: {
+                    domain_compatible: true,
+                    can_compute: true,
+                    missing_price_fields: [],
+                    missing_event_types: [],
+                    input_coverage: {
+                        requested_points: points.length,
+                        available_points: points.length,
+                        contiguous_points: points.length,
+                        observed_points: points.length,
+                        backfilled_points: 0,
+                        missing_points: 0,
+                        max_consecutive_missing_points: 0,
+                        internal_gap_count: 0,
+                        coverage_ratio: 1,
+                        field_coverage: {close: 1},
+                        event_type_counts: {},
+                        first_available_date: '2026-08-01',
+                        last_available_date: '2026-08-02',
+                    },
+                    required_points: 2,
+                    warmup_complete: true,
+                    partial_coverage_used: status === 'partial',
+                    reason_code: null,
+                },
+                warmup: {
+                    requirement: {
+                        minimum_points: 2,
+                        stabilization_points: windowDays - 2,
+                        total_points: windowDays,
+                        normalized_tolerance: 0.000001,
+                        full_history: false,
+                    },
+                    loaded_points: windowDays + points.length,
+                    used_points: windowDays,
+                    complete: true,
+                },
+                annotations: [],
+                warnings: [],
+                error: null,
+                risk_metadata: null,
+                data_quality: null,
+            };
+        };
+        const waitForCalendarResponse = (windowDays: CalendarWindow) =>
+            page.waitForResponse(
+                (response) => {
+                    const request = response.request();
+                    if (request.method() !== 'POST' || new URL(request.url()).pathname !== '/api/v1/assets/prices/query') return false;
+                    return findCalendarSignal(request.postDataJSON())?.params?.window_days === windowDays;
+                },
+                {timeout: 10_000},
+            );
+        const waitForCalendarRequest = (windowDays: CalendarWindow) =>
+            page.waitForRequest(
+                (request) => {
+                    if (request.method() !== 'POST' || new URL(request.url()).pathname !== '/api/v1/assets/prices/query') return false;
+                    return findCalendarSignal(request.postDataJSON())?.params?.window_days === windowDays;
+                },
+                {timeout: 10_000},
+            );
+        const assertCalendarRequest = (raw: unknown, windowDays: CalendarWindow, expectedIncludePrice?: boolean) => {
+            const query = parseQueries(raw).find((candidate) => candidate.asset_id === assetId);
+            expect(query, `calendar request must target synthetic asset ${assetId}`).toBeDefined();
+            if (expectedIncludePrice !== undefined) {
+                expect(query?.include_price).toBe(expectedIncludePrice);
+            }
+            const signal = query?.signals?.find((candidate) => candidate.instance_id === calendarInstanceId && candidate.signal_code === calendarSignalCode);
+            expect(signal).toMatchObject({
+                instance_id: calendarInstanceId,
+                signal_code: calendarSignalCode,
+                params: {window_days: windowDays},
+            });
+        };
+
+        await page.route('**/api/v1/assets/query*', async (route) => {
+            await route.fulfill({json: [asset]});
+        });
+        await page.route('**/api/v1/assets/prices/query', async (route) => {
+            const requests = parseQueries(route.request().postDataJSON());
+            const requestedDeferredWindow = findCalendarSignal(requests)?.params?.window_days;
+            const deferredWindow = isCalendarWindow(requestedDeferredWindow) && deferredCalendarResponses.has(requestedDeferredWindow) ? requestedDeferredWindow : undefined;
+            const deferred = deferredWindow === undefined ? undefined : deferredCalendarResponses.get(deferredWindow);
+            if (deferred && deferredWindow !== undefined) {
+                deferredCalendarResponses.delete(deferredWindow);
+                await deferred.wait;
+            }
+            const items = requests.map((request) => {
+                const calendarSignal = request.signals?.find((signal) => signal.instance_id === calendarInstanceId && signal.signal_code === calendarSignalCode);
+                const requestedWindow = calendarSignal?.params?.window_days;
+                if (calendarSignal && !isCalendarWindow(requestedWindow)) {
+                    throw new Error(`Unexpected calendar window: ${String(requestedWindow)}`);
+                }
+                const isStaleForcedRefresh = deferredWindow === 90 && requestedWindow === 90;
+                return {
+                    asset_id: request.asset_id ?? assetId,
+                    // The stale forced refresh deliberately carries no prices:
+                    // old code applied this payload and unmounted the active chart
+                    // while the newer 365-day request was still pending.
+                    prices: request.include_price === false || isStaleForcedRefresh ? [] : pricePoints,
+                    events: [],
+                    errors: [],
+                    signals: calendarSignal && isCalendarWindow(requestedWindow) ? [buildCalendarResult(requestedWindow, requestedWindow === deferredWindow && deferred?.outcome === 'partial' ? 'partial' : 'ok')] : [],
+                };
+            });
+            await route.fulfill({json: {items}});
+        });
+        await page.route('**/api/v1/assets/prices/current', async (route) => {
+            await route.fulfill({json: {results: [], success_count: 0, errors: []}});
+        });
+
+        await goToAssetDetailPage(page, String(assetId));
+        const pageRoot = page.getByTestId('asset-detail-page');
+        const controls = page.getByTestId('asset-detail-controls');
+        const chart = page.getByTestId('asset-detail-chart');
+        const pricePrimary = chart.getByTestId('asset-chart-primary-price');
+        const calendarPrimary = chart.getByTestId('asset-chart-primary-calendar-return');
+        const editorButton = page.getByTestId('asset-detail-editdata-btn');
+        const editorPanel = page.getByTestId('asset-detail-editor-panel');
+        const editorSaveButton = page.getByTestId('asset-editor-save-btn');
+        const measuresSection = page.getByTestId('asset-detail-measures-section');
+        const measuresToggle = page.getByTestId('asset-detail-measures-toggle');
+        const measuresPanel = page.getByTestId('asset-detail-measures-panel');
+
+        await expect(chart).toHaveAttribute('data-primary-mode', 'price');
+        await expect(chart).toHaveAttribute('data-series-state', 'ready');
+        await expect(pricePrimary).toHaveAttribute('aria-pressed', 'true');
+        await expect(calendarPrimary).toHaveAttribute('aria-pressed', 'false');
+        await expectAssetDetailChartCanvas(page);
+
+        await editorButton.click();
+        await expect(editorPanel).toBeVisible();
+        await expect(editorSaveButton).toBeVisible();
+
+        const editorCalendarResponse = waitForCalendarResponse(30);
+        await calendarPrimary.click();
+        await editorCalendarResponse;
+        await expect(editorPanel).toHaveAttribute('aria-hidden', 'true');
+        await expect(editorPanel).toHaveAttribute('inert', '');
+        await expect(editorPanel).toBeHidden();
+        await expect(editorSaveButton).toHaveAttribute('data-testid', 'asset-editor-save-btn');
+        await expect(editorSaveButton).toBeHidden();
+
+        await pricePrimary.click();
+        await expect(editorPanel).toBeVisible();
+        await expect(editorSaveButton).toBeVisible();
+        await editorButton.click();
+        await expect(editorPanel).toHaveCount(0);
+
+        await measuresToggle.click();
+        await expect(measuresSection).toBeVisible();
+        await expect(measuresPanel).toBeVisible();
+
+        const measuresCalendarResponse = waitForCalendarResponse(30);
+        await calendarPrimary.click();
+        await measuresCalendarResponse;
+        await expect(measuresSection).toHaveAttribute('aria-hidden', 'true');
+        await expect(measuresSection).toHaveAttribute('inert', '');
+        await expect(measuresSection).toBeHidden();
+        await expect(measuresPanel).toHaveAttribute('data-testid', 'asset-detail-measures-panel');
+        await expect(measuresPanel).toBeHidden();
+
+        await pricePrimary.click();
+        await expect(measuresSection).toBeVisible();
+        await expect(measuresPanel).toBeVisible();
+
+        await chart.getByTestId('chart-view-absolute').click();
+        await expect(chart).toHaveAttribute('data-view-mode', 'absolute');
+        await chart.getByTestId('chart-type-candlestick').click();
+        await expect(chart.getByTestId('candlestick-chart')).toBeVisible();
+
+        const defaultResponsePromise = waitForCalendarResponse(30);
+        await calendarPrimary.click();
+        const defaultRequest = (await defaultResponsePromise).request();
+        assertCalendarRequest(defaultRequest.postDataJSON(), 30);
+
+        await expect(chart).toHaveAttribute('data-primary-mode', 'calendar-return');
+        await expect(chart).toHaveAttribute('data-window-days', '30');
+        await expect(chart).toHaveAttribute('data-series-state', 'ready');
+        await expect(calendarPrimary).toHaveAttribute('aria-pressed', 'true');
+        await expect(pricePrimary).toHaveAttribute('aria-pressed', 'false');
+        await expectAssetDetailChartCanvas(page);
+
+        await expect(chart.getByTestId(/^asset-calendar-window-/)).toHaveCount(calendarWindows.length);
+        for (const windowDays of calendarWindows) {
+            const button = chart.getByTestId(`asset-calendar-window-${windowDays}`);
+            await expect(button).toBeVisible();
+            await expect(button).toHaveAttribute('aria-pressed', windowDays === 30 ? 'true' : 'false');
+        }
+        await expect(chart.getByTestId('chart-view-mode-toggle')).toBeHidden();
+        await expect(chart.getByTestId('chart-type-line')).toBeHidden();
+        await expect(chart.getByTestId('chart-type-candlestick')).toBeHidden();
+        await expect(chart.getByTestId('candlestick-chart')).toBeHidden();
+        await expect(page.getByTestId('asset-detail-editdata-btn')).toBeHidden();
+
+        const refreshButton = page.getByTestId('asset-detail-refresh-btn');
+        const loadingNotice = page.getByTestId('asset-calendar-return-loading');
+
+        // Switching presentation modes must not invalidate the shared price/events
+        // request when no successor request exists. This deferred 30-day response
+        // is distinct from the empty-price stale 90-day response exercised below.
+        const modeSwitchRefreshGate = deferCalendarResponse(30, 'ready');
+        const modeSwitchRefreshRequestPromise = waitForCalendarRequest(30);
+        await refreshButton.click();
+        const modeSwitchRefreshRequest = await modeSwitchRefreshRequestPromise;
+        assertCalendarRequest(modeSwitchRefreshRequest.postDataJSON(), 30, true);
+
+        const modeSwitchRefreshResponsePromise = waitForCalendarResponse(30);
+        await pricePrimary.click();
+        await expect(chart).toHaveAttribute('data-primary-mode', 'price');
+        await expect(pricePrimary).toHaveAttribute('aria-pressed', 'true');
+        await expect(calendarPrimary).toHaveAttribute('aria-pressed', 'false');
+        await expect(chart).toHaveAttribute('data-series-state', 'loading');
+        await expect(pageRoot).toHaveAttribute('data-busy', 'true');
+        await expect(refreshButton).toBeDisabled();
+        await expectAssetDetailChartCanvas(page);
+
+        modeSwitchRefreshGate.release();
+        const modeSwitchRefreshResponse = await modeSwitchRefreshResponsePromise;
+        expect(modeSwitchRefreshResponse.ok()).toBe(true);
+        expect(await modeSwitchRefreshResponse.finished()).toBeNull();
+
+        await expect(chart).toHaveAttribute('data-primary-mode', 'price');
+        await expect(pricePrimary).toHaveAttribute('aria-pressed', 'true');
+        await expect(calendarPrimary).toHaveAttribute('aria-pressed', 'false');
+        await expect(chart).toHaveAttribute('data-series-state', 'ready');
+        await expect(pageRoot).toHaveAttribute('data-busy', 'false');
+        await expect(refreshButton).toBeEnabled();
+        await expectAssetDetailChartCanvas(page);
+
+        const restoredCalendarResponsePromise = waitForCalendarResponse(30);
+        await calendarPrimary.click();
+        const restoredCalendarRequest = (await restoredCalendarResponsePromise).request();
+        assertCalendarRequest(restoredCalendarRequest.postDataJSON(), 30);
+        await expect(chart).toHaveAttribute('data-primary-mode', 'calendar-return');
+        await expect(chart).toHaveAttribute('data-window-days', '30');
+        await expect(chart).toHaveAttribute('data-series-state', 'ready');
+
+        const ninetyDayResponsePromise = waitForCalendarResponse(90);
+        await chart.getByTestId('asset-calendar-window-90').click();
+        const ninetyDayRequest = (await ninetyDayResponsePromise).request();
+        assertCalendarRequest(ninetyDayRequest.postDataJSON(), 90);
+        await expect(chart).toHaveAttribute('data-window-days', '90');
+        await expect(chart).toHaveAttribute('data-series-state', 'ready');
+        await expect(chart.getByTestId('asset-calendar-window-90')).toHaveAttribute('aria-pressed', 'true');
+        await expect(chart.getByTestId('asset-calendar-window-30')).toHaveAttribute('aria-pressed', 'false');
+
+        const staleRefreshGate = deferCalendarResponse(90, 'ready');
+        const staleRefreshRequestPromise = waitForCalendarRequest(90);
+        await refreshButton.click();
+        const staleRefreshRequest = await staleRefreshRequestPromise;
+        assertCalendarRequest(staleRefreshRequest.postDataJSON(), 90, true);
+        await expect(chart).toHaveAttribute('data-window-days', '90');
+        await expect(chart).toHaveAttribute('data-series-state', 'loading');
+        await expect(pageRoot).toHaveAttribute('data-busy', 'true');
+        await expect(loadingNotice).toBeVisible();
+        await expect(refreshButton).toBeDisabled();
+
+        const latestPartialGate = deferCalendarResponse(365, 'partial');
+        const latestPartialRequestPromise = waitForCalendarRequest(365);
+        await chart.getByTestId('asset-calendar-window-365').click();
+        const latestPartialRequest = await latestPartialRequestPromise;
+        assertCalendarRequest(latestPartialRequest.postDataJSON(), 365, true);
+        await expect(chart).toHaveAttribute('data-window-days', '365');
+        await expect(chart).toHaveAttribute('data-series-state', 'loading');
+        await expect(pageRoot).toHaveAttribute('data-busy', 'true');
+        await expect(loadingNotice).toBeVisible();
+
+        const staleRefreshResponsePromise = waitForCalendarResponse(90);
+        staleRefreshGate.release();
+        const staleRefreshResponse = await staleRefreshResponsePromise;
+        expect(staleRefreshResponse.ok()).toBe(true);
+        expect(await staleRefreshResponse.finished()).toBeNull();
+
+        // The newer response is still gated. These retrying UI assertions expose
+        // both stale chart-data replacement and stale loading finalization.
+        await expect(chart).toHaveAttribute('data-window-days', '365');
+        await expect(chart).toHaveAttribute('data-series-state', 'loading');
+        await expect(chart.getByTestId('asset-calendar-window-controls')).toBeVisible();
+        await expect(chart.getByTestId('asset-calendar-window-365')).toHaveAttribute('aria-pressed', 'true');
+        await expect(chart.getByTestId('asset-calendar-window-90')).toHaveAttribute('aria-pressed', 'false');
+        await expect(pageRoot).toHaveAttribute('data-busy', 'true');
+        await expect(loadingNotice).toBeVisible();
+        await expect(refreshButton).toBeDisabled();
+
+        const latestPartialResponsePromise = waitForCalendarResponse(365);
+        latestPartialGate.release();
+        const latestPartialResponse = await latestPartialResponsePromise;
+        expect(latestPartialResponse.ok()).toBe(true);
+        expect(await latestPartialResponse.finished()).toBeNull();
+
+        const partialNotice = page.getByTestId('asset-calendar-return-partial');
+        await expect(chart).toHaveAttribute('data-window-days', '365');
+        await expect(chart).toHaveAttribute('data-series-state', 'partial');
+        await expect(chart.getByTestId('asset-calendar-window-365')).toHaveAttribute('aria-pressed', 'true');
+        await expect(partialNotice).toBeVisible();
+        await expectAssetDetailChartCanvas(page);
+        await expect(page.getByTestId('asset-calendar-return-error')).toBeHidden();
+        await expect(pageRoot).toHaveAttribute('data-busy', 'false');
+        await expect(loadingNotice).toBeHidden();
+        await expect(refreshButton).toBeEnabled();
+
+        const riskTab = controls.getByTestId('asset-detail-tab-risk');
+        const overviewTab = controls.getByTestId('asset-detail-tab-overview');
+        await expect(riskTab).toBeVisible();
+        await expect(chart).toHaveAttribute('data-primary-mode', 'calendar-return');
+        await riskTab.click();
+        await expect(riskTab).toHaveAttribute('aria-selected', 'true');
+
+        await expect(page.getByTestId('asset-detail-risk-panel')).toBeVisible();
+        const configureSignals = page.getByTestId('asset-risk-configure-signals');
+        await expect(configureSignals).toBeVisible();
+        await configureSignals.click();
+
+        await expect(overviewTab).toHaveAttribute('aria-selected', 'true');
+        await expect(chart).toHaveAttribute('data-primary-mode', 'price');
+        await expect(pricePrimary).toHaveAttribute('aria-pressed', 'true');
+        const signalsToggle = page.getByTestId('asset-detail-signals-toggle');
+        await expect(signalsToggle).toBeVisible();
+        await expect(signalsToggle).toHaveAttribute('aria-expanded', 'true');
+        await expect(page.getByTestId('asset-detail-signals-panel')).toBeVisible();
+        await expect(signalsToggle).toBeInViewport();
+
+        await pricePrimary.click();
+        await expect(chart).toHaveAttribute('data-primary-mode', 'price');
+        await expect(pricePrimary).toHaveAttribute('aria-pressed', 'true');
+        await expect(calendarPrimary).toHaveAttribute('aria-pressed', 'false');
+        await expect(chart).toHaveAttribute('data-view-mode', 'absolute');
+        await expect(chart.getByTestId('chart-view-mode-toggle')).toBeVisible();
+        await expect(chart.getByTestId('chart-view-absolute')).toHaveAttribute('aria-pressed', 'true');
+        await expect(chart.getByTestId('chart-type-line')).toBeVisible();
+        await expect(chart.getByTestId('chart-type-candlestick')).toBeVisible();
+        await expect(chart.getByTestId('candlestick-chart')).toBeVisible();
+        await expect(page.getByTestId('asset-detail-editdata-btn')).toBeVisible();
+        await expectAssetDetailChartCanvas(page);
+    });
+
     // ========================================================================
     // Test 18: Chart type toggle — Line → Candlestick → Line
     // ========================================================================

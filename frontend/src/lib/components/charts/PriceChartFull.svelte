@@ -44,6 +44,7 @@
         toAbsoluteValue,
         toDisplaySeries,
         type BucketInfo,
+        type CalendarReturnPointContext,
         type LogicalVisibleRange,
     } from './priceChartHelpers';
 
@@ -144,6 +145,14 @@
         mainCurrencyFlag?: string;
         /** Disable the candlestick toggle (e.g. for FX charts without OHLCV data) */
         disableCandlestick?: boolean;
+        /** Unit of already-normalized primary data. Percentage data is never rebased. */
+        valueUnit?: 'price' | 'percentage';
+        /** Hide the Abs/% control while the parent owns a non-price primary mode. */
+        hideViewModeToggle?: boolean;
+        /** Show the main-series delta from the first visible point in the tooltip. */
+        showMainDelta?: boolean;
+        /** Optional resolved provenance for the primary point shown in the tooltip. */
+        mainPointContext?: ReadonlyMap<string, CalendarReturnPointContext>;
         /** Callback when chart type changes (for external state sync) */
         onChartTypeChange?: (type: ChartType) => void;
         /** Callback when view mode changes (for parent-owned signal/measure state) */
@@ -186,6 +195,10 @@
         mainCurrency: mainCurrencyProp,
         mainCurrencyFlag: mainCurrencyFlagProp,
         disableCandlestick = false,
+        valueUnit = 'price',
+        hideViewModeToggle = false,
+        showMainDelta = true,
+        mainPointContext,
         onChartTypeChange: onChartTypeChangeProp,
         onViewModeChange: onViewModeChangeProp,
     }: Props = $props();
@@ -221,7 +234,7 @@
     // Derived data
     // =========================================================================
 
-    let displayData = $derived(toDisplaySeries(data, viewMode));
+    let displayData = $derived(valueUnit === 'percentage' ? data : toDisplaySeries(data, viewMode));
 
     // =========================================================================
     // Lifecycle
@@ -642,7 +655,7 @@
         }
 
         const isDark = document.documentElement.classList.contains('dark');
-        const isPercentage = viewMode === 'percentage';
+        const isPercentage = valueUnit === 'percentage' || viewMode === 'percentage';
         const baseColor = isDark ? COLORS.lineDark : COLORS.lineLight;
         const greenColor = isDark ? COLORS.greenDark : COLORS.greenLight;
         const redColor = isDark ? COLORS.redDark : COLORS.redLight;
@@ -665,11 +678,11 @@
         const staleDaysArr = resolvedLineData.map((point) => point.staleDays ?? 0);
         const mainSeriesName = mainSeriesLabel || currency || 'Value';
         const series: any[] = [];
-        const values = resolvedLineData.map((point) => point.value);
+        const values = resolvedLineData.map((point) => (point.missing ? null : point.value));
         const mainSeriesList = buildMainSeries(values, staleDaysArr, baseColor, greenColor, redColor, isDark, areaFill, 2, mainSeriesName, useBaselineColoring, baselineValue, showGradient);
         series.push(...mainSeriesList);
 
-        const ghostSeriesData = computeGhostSeries(data, isPercentage, activeResolution, mainSeriesLabel);
+        const ghostSeriesData = valueUnit === 'price' ? computeGhostSeries(data, isPercentage, activeResolution, mainSeriesLabel) : null;
         const hasOriginalValues = ghostSeriesData !== null;
         const ghostLabel = ghostSeriesData?.label ?? '';
         if (ghostSeriesData) {
@@ -883,7 +896,7 @@
                         }
                     }
                     const shownNames = new Set<string>();
-                    const firstValue = resolvedLineData.length > 0 ? resolvedLineData[0].value : null;
+                    const firstValue = resolvedLineData.find((point) => !point.missing)?.value ?? null;
                     const conversionActive = hasOriginalValues && displayCurrencyProp && displayCurrencyFlag;
                     for (const p of items) {
                         if (p.seriesName === 'Pending' || p.seriesName === '__baseline__' || p.seriesName === '__overview__' || p.seriesType === 'scatter' || String(p.seriesName).startsWith('Events: ')) continue;
@@ -943,6 +956,19 @@
                             }
                         }
                         let rowHtml = `${labelHtml}: ${Number(value).toFixed(4)}${valueSuffix}${axisNote}`;
+                        if (p.seriesName === mainSeriesName) {
+                            const context = mainPointContext?.get(date);
+                            if (context) {
+                                const referenceObservation = context.referencePriceDate && context.referencePriceDate !== context.referenceTargetDate ? ` · ${$t('chart.tooltip.valueAt', {values: {date: context.referencePriceDate}})}` : '';
+                                rowHtml += `<br/><span style="font-size:10px;color:#94a3b8">↩ ${context.referenceTargetDate}${referenceObservation}</span>`;
+                                if (context.currentPriceDate !== date) {
+                                    rowHtml += `<br/><span style="font-size:10px;color:#94a3b8">📅 ${$t('chart.tooltip.valueAt', {values: {date: context.currentPriceDate}})}</span>`;
+                                }
+                                if (context.currentFxDate || context.referenceFxDate) {
+                                    rowHtml += `<br/><span style="font-size:10px;color:#94a3b8">💱 ${context.currentFxDate ?? '—'} / ${context.referenceFxDate ?? '—'}</span>`;
+                                }
+                            }
+                        }
                         const representativePoint = overlayPointMeta.get(`${p.seriesName}|${date}`);
                         if (representativePoint?.representativeDate && representativePoint.representativeDate !== date) {
                             rowHtml += ` <span style="font-size:10px;color:#94a3b8">(${$t('chart.tooltip.valueAt', {values: {date: representativePoint.representativeDate}})})</span>`;
@@ -952,7 +978,7 @@
                         }
                         html += `<br/>${rowHtml}`;
                         // Show delta from first visible point for the main axis (yAxisIndex 0)
-                        if (axisIdx === 0 && firstValue !== null && !isGhost) {
+                        if (showMainDelta && axisIdx === 0 && firstValue !== null && !isGhost) {
                             html += buildDeltaHtml(Number(value), firstValue, isPercentage);
                         }
                     }
@@ -1013,7 +1039,7 @@
                     >
                 </div>
             {/if}
-            {#if hideToolbar}
+            {#if hideToolbar && !hideViewModeToggle}
                 <div class="flex rounded-lg border border-gray-200/70 dark:border-slate-600/70 overflow-hidden shadow-sm opacity-75 hover:opacity-100 transition-opacity" data-testid="chart-view-mode-toggle">
                     <button
                         class="px-2.5 py-1 text-xs font-medium transition-colors {viewMode === 'absolute' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"

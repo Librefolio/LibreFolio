@@ -1,15 +1,17 @@
 # Performance charts - SP06 G3/G1c and SP07 G1a/G1b
 
-**Status:** I10 calendar-return backend COMPLETE / integration pending.
-**Implementation:** I10 was explicitly authorized and completed on 2026-09-10.
-All portfolio and frontend phases remain FROZEN.
-**Revision:** 4 - I10 signal-only implementation and evidence, 2026-09-10.
+**Status:** I10 calendar-return backend integrated; I60 Asset frontend in progress.
+**Implementation:** I10 completed on 2026-09-10. I60 was explicitly authorized
+on 2026-09-11. All portfolio/GrowthChart phases remain FROZEN.
+**Revision:** 7 - I60 review correction round 2, 2026-09-11.
 **Analysis baseline:** `f90d9801bd7a2d74aac6a27efe305314c6c004cc`
 (`refs/heads/dev_release2`).
 **Gate-0 execution baseline:** `0af66da5f366a9559549154631a4ee15ca620915`,
 containing `dev_release2@973968ed2` and workstream F commit `e50d66408`.
 **I10 implementation baseline:** `0af66da5f366a9559549154631a4ee15ca620915`;
 developer authorization is limited to the signal-only I10 slice.
+**I60 implementation baseline:** `0d57874303b1311c0f5ea3b8653d24a33d4245a6`,
+including I10 and H.
 **Portfolio implementation baseline:** not yet authorized. It will be the later
 post-H target SHA supplied after the H-before-I integration gate.
 **Coordinator:** Release 2 coordinator, session
@@ -623,7 +625,7 @@ A separate owner integrates G3 after F and the backend calendar signal:
 | I30 | L | Portfolio backend integrator | I20 + same-resolver OHLC envelope | Daily total candles + flat fallback + strict close identity | BLOCKED |
 | I40 | M | Portfolio backend integrator + coordinator | I20 + I30 + post-H report contract | DTO/report/cache wiring, then coordinator API sync | BLOCKED |
 | I50 | L | GrowthChart owner | I40 | Value/Return/P&L core modes; Line/Candles/Income P&L submodes; broker lines and sum aggregation | BLOCKED |
-| I60 | M | G3 Asset UI owner | I10 + coordinator release after shared integration | Historical N-day primary mode in final Asset detail | BLOCKED |
+| I60 | M | G3 Asset UI owner | I10 + coordinator release after shared integration | Historical N-day primary mode in final Asset detail | IN PROGRESS 2026-09-11 |
 | I70 | L | Test author + owners | Relevant implementation phases; H test ownership released | Targeted backend/frontend regressions and integration gates | BLOCKED |
 | I80 | S | Docs writer + coordinator | Stable integrated UI | English docs, coordinator i18n/runner/changelog records | BLOCKED |
 | I90 | M | Developer + coordinator | I50 + I60 + I70 + I80 | Desktop/mobile operational review, corrections, integration handoff | BLOCKED |
@@ -794,6 +796,135 @@ No product decision remains open. Readiness still requires:
 > file changed. Port 6157 is free. The hidden plugin is ready for integration;
 > UI consumption and coordinator-owned API client generation remain deferred
 > to authorized I60/shared integration.
+
+### 6.5 I60 execution progress
+
+| Step | Scope | Status |
+|---|---|---|
+| I60.0 | Verify clean post-H/I10 baseline and re-read final Asset/PriceChart contracts | COMPLETE 2026-09-11 |
+| I60.1 | Test-author helper and Asset-detail regressions in registered files | COMPLETE 2026-09-11 |
+| I60.2 | Typed calendar-result extraction and chart-point/provenance mapping | COMPLETE 2026-09-11 |
+| I60.3 | Asset primary mode/window controls and request lifecycle | COMPLETE 2026-09-11; E2E EXECUTION DEFERRED |
+| I60.4 | PriceChartFull percentage-unit, missing-point and provenance presentation seams | COMPLETE 2026-09-11 |
+| I60.5 | Focused frontend gates, static checks and review corrections | AUTHORIZED GATES COMPLETE 2026-09-11 |
+| I60.6 | Evidence, manifest and frozen integration handoff | COMPLETE 2026-09-11; FROZEN |
+
+> **Note implementazione (I60.0, 2026-09-11):** verified exact clean HEAD
+> `0d57874303b1311c0f5ea3b8653d24a33d4245a6`. I60 can avoid the three
+> actively H-owned files (`backendRenderer.ts`, `backendTypes.ts`,
+> `backendTypes.test.ts`) and every D portfolio surface. The locked production
+> set is `assets/[id]/+page.svelte`, `PriceChartFull.svelte` and
+> `priceChartHelpers.ts`; registered test owners are
+> `priceChartHelpers.test.ts` and `e2e/assets/asset-detail.spec.ts`.
+> Calendar results are requested explicitly by instance/code and parsed through
+> a signal-owned structural helper, so the primary mode does not depend on the
+> public overlay catalog or H's renderer normalization.
+
+> **Note implementazione (I60.1, 2026-09-11):** `test-author` added focused
+> extraction/state/provenance cases to registered
+> `priceChartHelpers.test.ts` and a synthetic, no-DB-mutation Asset-detail
+> workflow to registered `asset-detail.spec.ts`. No runner change is required.
+
+> **Fuori pista (I60 formatter bootstrap, 2026-09-11):** the first exact-file
+> Prettier invocation failed before formatting because this worktree has no
+> `prettier-plugin-svelte` dependency available. No file, DB or server was
+> touched by the failed command. Per coordinated-lane policy, no `npm ci` or
+> other install was attempted without coordinator approval.
+
+> **Note implementazione (I60 bootstrap resolved, 2026-09-11):** coordinator
+> authorized `npm --prefix frontend ci` from the committed lock. It installed
+> the worktree-local dependencies; SHA-256 of `package.json` and
+> `package-lock.json` stayed unchanged. No audit fix/update or shared
+> environment mutation was performed.
+
+> **Fuori pista (I60 component runner, 2026-09-11):** the attempted focused
+> `front-utility component-unit extractCalendarReturnView` action expanded to
+> the full component catalogue and failed before executing tests because the
+> coordinator-owned ignored files `api/generated.ts`, `generated-tools.ts` and
+> tool contract map are absent in this worktree. Result: 41 files failed import,
+> 25 skipped, 0 tests executed. No DB/server or generated file was touched.
+> The exact already-registered `priceChartHelpers.test.ts` will be run directly
+> through Vitest, avoiding any API sync or shared generated artifact.
+
+> **Fuori pista (I60 review round 1, 2026-09-11):** coordinator review rejected
+> the first I60 checkpoint for four regressions: calendar mode unmounted the
+> stateful data editor and measure panel; the calendar generation guard covered
+> only `calendarReturnView` instead of every asynchronous request write; FX
+> carry age did not contribute to overall line opacity; and Risk-tab
+> `Configure Signals` returned to Overview without first restoring Price mode.
+> I60 reopened within the original three production files and two test files.
+> H renderer/type files, D portfolio files, generated API artifacts and shared
+> runner/i18n/docs remain excluded.
+
+> **Note implementazione (I60 review correction 1, 2026-09-11):** the Asset
+> editor and measure trees now stay mounted while calendar mode hides and makes
+> them inert; Price mode restores their existing local and mirrored state.
+> One chart-request generation now rejects stale success, empty-result, error
+> and finalization paths before any asynchronous page-state write. FX carry age
+> participates in overall `staleDays` while its dedicated `fxStaleDays` detail
+> remains available. Risk-tab `Configure Signals` restores Price mode before
+> returning to Overview and scrolling to the panel. Focused test-author
+> regressions and exact-file formatting remain the completion gates.
+
+> **Note implementazione (I60 review tests, 2026-09-11):** `test-author`
+> extended the owned helper/E2E files with four regression witnesses. The
+> Asset workflow verifies mounted-but-hidden/inert editor and measure trees,
+> uses a forced cache miss plus deferred responses so stale `chartData`,
+> no-data/error and loading-finalizer writes fail the pre-fix implementation,
+> and verifies Risk `Configure Signals` restores Price mode before exposing the
+> Signals panel. The pure helper asserts overall staleness is the maximum across
+> current/reference price and FX carry while preserving the FX-only maximum.
+> No production observability seam beyond the owned measures-section test id was
+> required.
+
+> **Note implementazione (I60 review gates, 2026-09-11):** exact command
+> `cd frontend && npx vitest run
+> src/lib/components/charts/priceChartHelpers.test.ts -t
+> extractCalendarReturnView` passed 10 tests with 82 skipped in the same file.
+> Exact Prettier check passed for the Asset page, `PriceChartFull`, helper,
+> helper test and Asset-detail E2E spec. Per coordinator instruction no
+> Playwright, server, API generation or full frontend check ran; those combined
+> gates remain reserved for the post-merge target baseline.
+
+> **Note implementazione (I60 review handoff, 2026-09-11):** replacement
+> checkpoint contains exactly the durable plan, Asset-detail E2E, chart
+> component, helper test, helper and Asset page (six tracked modified files;
+> none staged or untracked). Diff is 1,210 insertions / 171 deletions before
+> this final note. `git diff --check` is green, port 6157 is free, and ignored
+> build/API/tool generated artifacts remain absent. Proposed commit:
+> `feat(frontend): add calendar return chart`. State is FROZEN pending
+> coordinator review, developer commit and merge of the current target before
+> authorized combined frontend gates.
+
+> **Fuori pista (I60 review round 2, 2026-09-11):** a second coordinator
+> review accepted the four round-1 fixes but found that Calendar-to-Price mode
+> switching invalidated the shared chart request without starting a successor.
+> When filters changed during that pending request, Price could retain old data
+> under the new filters indefinitely. The correction must preserve the pending
+> shared price/events request and its loading state on a mode-only switch, while
+> a later request-producing action remains responsible for superseding it.
+
+> **Note implementazione (I60 review correction 2, 2026-09-11):**
+> Calendar-to-Price now changes only presentation state and clears the
+> calendar-specific view; it does not advance the shared request generation or
+> clear `loading`/`signalsLoading`. The pending request can therefore publish
+> price/events for the active filters and finalize normally. Price-to-Calendar
+> still starts a real successor through `loadChartData()`, whose request
+> generation supersedes any older request synchronously.
+
+> **Note implementazione (I60 review test 2, 2026-09-11):** `test-author`
+> added a regression distinct from the stale-vs-successor race. A forced
+> 30-day calendar refresh is held with `include_price:true`, the UI switches to
+> Price without issuing another request, and Price must remain loading/busy
+> with Refresh disabled until that sole shared response resolves. Round-1 code
+> fails the witness because it invalidates the request and immediately reports
+> ready. The existing 90-to-365 successor race remains unchanged.
+
+> **Note implementazione (I60 review gates 2, 2026-09-11):** focused helper
+> command passed 10 tests with 82 skipped; exact Prettier check for the five
+> owned frontend files and `git diff --check` are green. Per authorization no
+> Playwright, server, generated API step or full frontend check ran. The
+> replacement checkpoint is FROZEN for coordinator review.
 
 ## 7. ASCII storyboards v2
 
