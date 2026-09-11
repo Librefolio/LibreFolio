@@ -1,6 +1,15 @@
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
 
-import type {BackendSignalAreaSeries, BackendSignalBandSeries, BackendSignalBarSeries, BackendSignalLineSeries, BackendSignalOutputStyle, BackendSignalResult, BackendSignalValueRegion} from './backendTypes';
+import {
+    normalizeBackendSignalSeries,
+    type BackendSignalOutputStyle,
+    type BackendSignalResult,
+    type BackendSignalValueRegion,
+    type NormalizedBackendSignalAreaSeries,
+    type NormalizedBackendSignalBandSeries,
+    type NormalizedBackendSignalBarSeries,
+    type NormalizedBackendSignalLineSeries,
+} from './backendTypes';
 import type {RenderedSignal, SignalConfig, SignalDefinition, SignalStyle, SignalVisualComponent, SignalVisualStyle} from './ChartSignal';
 import {defaultSignalVisualStyle, resolveVisualSignalStyle} from './signalVisualStyle';
 
@@ -30,10 +39,10 @@ function transformValue(value: number, baseValue: number | null, shouldTransform
 }
 
 type FlexibleDescription<T> = Omit<T, 'description_key'> & {description_key?: unknown};
-type RenderLineSeries = FlexibleDescription<BackendSignalLineSeries>;
-type RenderAreaSeries = FlexibleDescription<BackendSignalAreaSeries>;
-type RenderBarSeries = FlexibleDescription<BackendSignalBarSeries>;
-type RenderBandSeries = FlexibleDescription<BackendSignalBandSeries>;
+type RenderLineSeries = FlexibleDescription<NormalizedBackendSignalLineSeries>;
+type RenderAreaSeries = FlexibleDescription<NormalizedBackendSignalAreaSeries>;
+type RenderBarSeries = FlexibleDescription<NormalizedBackendSignalBarSeries>;
+type RenderBandSeries = FlexibleDescription<NormalizedBackendSignalBandSeries>;
 type RenderSeries = RenderLineSeries | RenderAreaSeries | RenderBarSeries | RenderBandSeries;
 
 function axisLabel(series: RenderSeries): string {
@@ -299,7 +308,8 @@ function renderBandSeries(series: RenderBandSeries, component: SignalVisualCompo
 export function renderBackendSignalResult(result: BackendSignalResult, config: SignalConfig, options: BackendSignalRendererOptions): BackendSignalRenderOutcome {
     const baseValue = options.baseData[0]?.value ?? null;
     const signals = (result.series ?? [])
-        .flatMap((series, seriesIndex) => {
+        .flatMap((generatedSeries, seriesIndex) => {
+            const series = normalizeBackendSignalSeries(generatedSeries);
             const shouldTransform = options.viewMode === 'percentage' && series.view_transform === 'base_percentage';
             const component = visualComponent(options.definition, series.key);
             return series.kind === 'band' ? [renderBandSeries(series, component, config, baseValue, shouldTransform, options.translate)] : renderScalarSeries(series, component, config, seriesIndex, baseValue, shouldTransform, options.translate);
