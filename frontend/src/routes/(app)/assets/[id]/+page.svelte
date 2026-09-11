@@ -81,6 +81,7 @@
     import type {LivePriceDirection} from '$lib/services/livePriceService';
     import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';
     import {COLORS} from '$lib/components/charts/lineChartHelpers';
+    import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, extractCalendarReturnView, isCalendarReturnSignalResult, type CalendarReturnView, type CalendarReturnViewState, type CalendarReturnWindowDays} from '$lib/components/charts/priceChartHelpers';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
     import AiExportMenu from '$lib/features/ai-export/AiExportMenu.svelte';
@@ -173,6 +174,12 @@
     let viewMode: ViewMode = $state('percentage');
     let chartType: ChartType = $state('line');
     let displayCurrency = $state('');
+    type AssetChartPrimaryMode = 'price' | 'calendar-return';
+    const CALENDAR_RETURN_WINDOWS: CalendarReturnWindowDays[] = [7, 30, 90, 365];
+    let primaryMode: AssetChartPrimaryMode = $state('price');
+    let calendarWindowDays: CalendarReturnWindowDays = $state(30);
+    let calendarReturnView: CalendarReturnView = $state(emptyCalendarReturnView());
+    let chartRequestGeneration = 0;
 
     // Foldable panels
     let showAesthetics = $state(false);
@@ -293,6 +300,37 @@
             volume: p.volume != null ? Number(p.volume) : null,
         })),
     );
+    let activeChartData = $derived(primaryMode === 'price' ? lineData : calendarReturnView.points);
+    let calendarPointContext = $derived(primaryMode === 'calendar-return' ? calendarReturnView.contextByDate : undefined);
+    let chartSeriesState = $derived.by(() => {
+        if (primaryMode === 'calendar-return') return calendarReturnView.state;
+        if (loading) return 'loading';
+        return lineData.length > 0 ? 'ready' : error ? 'error' : 'unavailable';
+    });
+
+    function emptyCalendarReturnView(state: CalendarReturnViewState = 'idle'): CalendarReturnView {
+        return {state, points: [], contextByDate: new Map()};
+    }
+
+    function setPrimaryMode(mode: AssetChartPrimaryMode) {
+        if (mode === primaryMode) return;
+        primaryMode = mode;
+        if (mode === 'calendar-return') {
+            calendarReturnView = emptyCalendarReturnView('loading');
+            void loadChartData(false);
+        } else {
+            calendarReturnView = emptyCalendarReturnView();
+        }
+    }
+
+    function setCalendarWindow(windowDays: CalendarReturnWindowDays) {
+        if (windowDays === calendarWindowDays) return;
+        calendarWindowDays = windowDays;
+        if (primaryMode === 'calendar-return') {
+            calendarReturnView = emptyCalendarReturnView('loading');
+            void loadChartData(false);
+        }
+    }
 
     // #R3-4 — derive "parametric" status from provider kind (instead of hardcoded code),
     // so the detail page picks the "Regenerate" label for any parametric_generation provider.
@@ -895,6 +933,10 @@
         events = [];
         signalInstanceResults = [];
         signalRequestFailed = false;
+        primaryMode = 'price';
+        calendarWindowDays = 30;
+        chartRequestGeneration += 1;
+        calendarReturnView = emptyCalendarReturnView();
         comparisonEvents = new Map();
         currentLivePrice = null;
         livePriceConversionFailed = false;
@@ -1123,6 +1165,19 @@
         const targetCurrency = displayCurrency && assetInfo?.currency && displayCurrency !== assetInfo.currency ? displayCurrency : undefined;
         const requestPlan = buildBackendSignalRequestPlan(requestedSignalConfigs, signalDefinitions);
         const requestVersion = signalResultState.beginRequest();
+        const chartRequestVersion = ++chartRequestGeneration;
+        const requestIsCurrent = () => current() && chartRequestVersion === chartRequestGeneration;
+        const requestedCalendarWindow = calendarWindowDays;
+        const wantsCalendarReturn = primaryMode === 'calendar-return';
+        const calendarRequests = wantsCalendarReturn
+            ? [
+                  {
+                      instance_id: CALENDAR_RETURN_INSTANCE_ID,
+                      signal_code: CALENDAR_RETURN_SIGNAL_CODE,
+                      params: {window_days: requestedCalendarWindow},
+                  },
+              ]
+            : [];
         let pricesFromCache = false;
 
         // Cache-first: check if the price store already covers this range
@@ -1162,6 +1217,7 @@
         error = null;
         signalRequestFailed = false;
         signalsLoading = requestPlan.requests.length > 0;
+        if (wantsCalendarReturn) calendarReturnView = emptyCalendarReturnView('loading');
         try {
             const response = await zodiosApi.query_prices_bulk_api_v1_assets_prices_query_post([
                 {
@@ -1170,17 +1226,21 @@
                     include_price: !pricesFromCache,
                     include_events: true,
                     target_currency: targetCurrency,
-                    signals: requestPlan.requests,
+                    signals: [...requestPlan.requests, ...calendarRequests],
                 },
             ]);
-            if (!current()) return;
+            if (!requestIsCurrent()) return;
             const result = (response as any)?.items?.[0];
             if (result) {
                 if (!pricesFromCache) {
                     chartData = result.prices ?? [];
                 }
                 events = result.events ?? [];
-                applyBackendSignalResults(requestedSignalConfigs, requestVersion, parseBackendSignalResults(result.signals));
+                const rawSignalResults = Array.isArray(result.signals) ? result.signals : [];
+                if (wantsCalendarReturn && requestedCalendarWindow === calendarWindowDays && primaryMode === 'calendar-return') {
+                    calendarReturnView = extractCalendarReturnView(rawSignalResults, CALENDAR_RETURN_INSTANCE_ID);
+                }
+                applyBackendSignalResults(requestedSignalConfigs, requestVersion, parseBackendSignalResults(rawSignalResults.filter((item) => !isCalendarReturnSignalResult(item, CALENDAR_RETURN_INSTANCE_ID))));
                 // Populate the price cache (derive currency from response if not known yet)
                 const cacheCurrency = effectiveCurrency || chartData[0]?.currency || '';
                 if (!pricesFromCache && cacheCurrency && chartData.length > 0) {
@@ -1192,19 +1252,25 @@
                 if (!pricesFromCache) chartData = [];
                 events = [];
                 applyBackendSignalResults(requestedSignalConfigs, requestVersion, []);
+                if (wantsCalendarReturn) {
+                    calendarReturnView = emptyCalendarReturnView('error');
+                }
             }
             if (chartData.length === 0 && !error) {
                 error = '_i18n:assetDetail.noData';
             }
             resolveMaxStartFromChartData();
         } catch (e: any) {
-            if (!current()) return;
+            if (!requestIsCurrent()) return;
             console.error('Failed to load chart data:', e);
             signalRequestFailed = requestPlan.requests.length > 0;
+            if (wantsCalendarReturn) {
+                calendarReturnView = emptyCalendarReturnView('error');
+            }
             if (chartData.length === 0) error = e?.message || 'Failed to load prices';
             if (propagateError) throw e;
         } finally {
-            if (current()) {
+            if (requestIsCurrent()) {
                 loading = false;
                 signalsLoading = false;
             }
@@ -1342,7 +1408,7 @@
         // tick (route navigation races).
         if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
         if (!providerAssignment?.provider_code) return;
-        if (loading) return;
+        if (loading || (primaryMode === 'calendar-return' && calendarReturnView.state === 'loading')) return;
         const assetIdAtTick = data.assetId;
 
         try {
@@ -1367,7 +1433,7 @@
             // native currency and would flash wrong numbers mid-series. A
             // single silent full reload is the pragmatic fallback here.
             const isConvertedChart = !!(displayCurrency && assetInfo?.currency && displayCurrency !== assetInfo.currency);
-            if (isConvertedChart) {
+            if (isConvertedChart || primaryMode === 'calendar-return') {
                 invalidateAssetPriceStore(data.assetId);
                 await loadChartData(true);
                 return;
@@ -1787,6 +1853,7 @@
     }
 
     async function openSignalConfiguration(): Promise<void> {
+        setPrimaryMode('price');
         handleAssetDetailTabChange('overview');
         showSignals = true;
         await tick();
@@ -1794,7 +1861,7 @@
     }
 </script>
 
-<div class="space-y-4" data-testid="asset-detail-page" aria-busy={loading} data-busy={loading ? 'true' : 'false'}>
+<div class="space-y-4" data-testid="asset-detail-page" aria-busy={loading || (primaryMode === 'calendar-return' && calendarReturnView.state === 'loading')} data-busy={loading || (primaryMode === 'calendar-return' && calendarReturnView.state === 'loading') ? 'true' : 'false'}>
     <!-- ======================================================================= -->
     <!-- Header: asset info + back button -->
     <!-- ======================================================================= -->
@@ -1980,54 +2047,63 @@
         <!-- ======================================================================= -->
         <!-- Foldable Panel: Signals (ABOVE chart, replaces old Aesthetics position) -->
         <!-- ======================================================================= -->
-        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
-            <div class="relative">
-                <button type="button" class="absolute inset-0 z-0 w-full rounded-xl hover:bg-gray-50 dark:hover:bg-slate-700/50" data-testid="asset-detail-signals-toggle" aria-expanded={showSignals} aria-label={$t('common.signals')} onclick={() => (showSignals = !showSignals)}></button>
-                <div class="relative z-10 pointer-events-none w-full flex items-center gap-1 px-2 py-1.5" data-testid="asset-detail-signals-header">
-                    <span class="flex items-center gap-2 px-2 py-1 text-sm font-medium text-gray-700 dark:text-gray-200">
-                        <TrendingUp class="text-blue-500" size={15} />
-                        {$t('common.signals')}
-                    </span>
-                    <div class="flex-1"></div>
-                    <span class="flex items-center px-1 py-1 text-gray-700 dark:text-gray-200" data-testid="asset-detail-signals-chevron">
-                        <ChevronDown class="transition-transform {showSignals ? 'rotate-180' : ''}" size={15} />
-                    </span>
+        {#if primaryMode === 'price'}
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
+                <div class="relative">
+                    <button type="button" class="absolute inset-0 z-0 w-full rounded-xl hover:bg-gray-50 dark:hover:bg-slate-700/50" data-testid="asset-detail-signals-toggle" aria-expanded={showSignals} aria-label={$t('common.signals')} onclick={() => (showSignals = !showSignals)}></button>
+                    <div class="relative z-10 pointer-events-none w-full flex items-center gap-1 px-2 py-1.5" data-testid="asset-detail-signals-header">
+                        <span class="flex items-center gap-2 px-2 py-1 text-sm font-medium text-gray-700 dark:text-gray-200">
+                            <TrendingUp class="text-blue-500" size={15} />
+                            {$t('common.signals')}
+                        </span>
+                        <div class="flex-1"></div>
+                        <span class="flex items-center px-1 py-1 text-gray-700 dark:text-gray-200" data-testid="asset-detail-signals-chevron">
+                            <ChevronDown class="transition-transform {showSignals ? 'rotate-180' : ''}" size={15} />
+                        </span>
+                    </div>
                 </div>
+                {#if showSignals}
+                    <div data-testid="asset-detail-signals-panel" class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3">
+                        <ChartSignalsSection
+                            signals={[...signals]}
+                            definitions={signalDefinitions}
+                            backendError={signalBackendError}
+                            {signalsLoading}
+                            onretrybackend={retryBackendSignals}
+                            availablePairs={allConfiguredFxSlugs}
+                            availableAssets={allAssets.filter((a) => a.id !== data.assetId)}
+                            mainPairSlug={`asset-${data.assetId}`}
+                            onchange={handleSignalsChange}
+                            onsyncpair={handleSyncPair}
+                            ondetailpair={handleDetailPair}
+                            onsyncasset={handleSyncAsset}
+                            ondetailasset={handleDetailAsset}
+                            {signalSummaries}
+                            {dateStart}
+                            {displayCurrency}
+                            configuredFxSlugs={allConfiguredFxSlugs}
+                            oncreatefxpair={(slug) => {
+                                fxPairCreateSlug = slug;
+                                showFxPairAddModal = true;
+                            }}
+                            onsyncfxpair={handleSyncPair}
+                        />
+                    </div>
+                {/if}
             </div>
-            {#if showSignals}
-                <div data-testid="asset-detail-signals-panel" class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3">
-                    <ChartSignalsSection
-                        signals={[...signals]}
-                        definitions={signalDefinitions}
-                        backendError={signalBackendError}
-                        {signalsLoading}
-                        onretrybackend={retryBackendSignals}
-                        availablePairs={allConfiguredFxSlugs}
-                        availableAssets={allAssets.filter((a) => a.id !== data.assetId)}
-                        mainPairSlug={`asset-${data.assetId}`}
-                        onchange={handleSignalsChange}
-                        onsyncpair={handleSyncPair}
-                        ondetailpair={handleDetailPair}
-                        onsyncasset={handleSyncAsset}
-                        ondetailasset={handleDetailAsset}
-                        {signalSummaries}
-                        {dateStart}
-                        {displayCurrency}
-                        configuredFxSlugs={allConfiguredFxSlugs}
-                        oncreatefxpair={(slug) => {
-                            fxPairCreateSlug = slug;
-                            showFxPairAddModal = true;
-                        }}
-                        onsyncfxpair={handleSyncPair}
-                    />
-                </div>
-            {/if}
-        </div>
+        {/if}
 
         <!-- ======================================================================= -->
         <!-- Chart with left toolbar -->
         <!-- ======================================================================= -->
-        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-4" data-testid="asset-detail-chart" data-view-mode={viewMode}>
+        <div
+            class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-4"
+            data-testid="asset-detail-chart"
+            data-view-mode={viewMode}
+            data-primary-mode={primaryMode}
+            data-window-days={primaryMode === 'calendar-return' ? calendarWindowDays : undefined}
+            data-series-state={chartSeriesState}
+        >
             {#if loading && lineData.length === 0}
                 <div class="h-96 flex items-center justify-center">
                     <div class="text-center">
@@ -2036,8 +2112,47 @@
                     </div>
                 </div>
             {:else if lineData.length > 0}
+                <div class="mb-3 flex flex-wrap items-center justify-between gap-2" data-testid="asset-chart-primary-controls">
+                    <div class="flex rounded-lg overflow-hidden border border-gray-200 dark:border-slate-600 text-xs font-medium">
+                        <button
+                            class="px-3 py-1 transition-colors {primaryMode === 'price' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                            data-testid="asset-chart-primary-price"
+                            aria-pressed={primaryMode === 'price'}
+                            onclick={() => setPrimaryMode('price')}
+                        >
+                            {$t('assetDetail.pricesTab')}
+                        </button>
+                        <button
+                            class="px-3 py-1 border-l border-gray-200 dark:border-slate-600 transition-colors {primaryMode === 'calendar-return' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                            data-testid="asset-chart-primary-calendar-return"
+                            aria-pressed={primaryMode === 'calendar-return'}
+                            onclick={() => setPrimaryMode('calendar-return')}
+                        >
+                            {$t('signals.riskRollingReturn.name')}
+                        </button>
+                    </div>
+                    {#if primaryMode === 'calendar-return'}
+                        <div class="flex flex-wrap items-center gap-1.5" data-testid="asset-calendar-window-controls">
+                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('chartSettings.params.window')}</span>
+                            {#each CALENDAR_RETURN_WINDOWS as windowDays}
+                                <button
+                                    class="min-w-10 px-2 py-1 rounded-md border text-xs font-medium transition-colors {calendarWindowDays === windowDays
+                                        ? 'border-libre-green bg-libre-green text-white'
+                                        : 'border-gray-200 dark:border-slate-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                                    data-testid={`asset-calendar-window-${windowDays}`}
+                                    aria-pressed={calendarWindowDays === windowDays}
+                                    title={`${$t('chartSettings.params.window')}: ${windowDays} ${$t('chartSettings.units.days')}`}
+                                    onclick={() => setCalendarWindow(windowDays)}
+                                >
+                                    {windowDays}
+                                </button>
+                            {/each}
+                        </div>
+                    {/if}
+                </div>
+
                 <!-- Aesthetics panel (ABOVE chart, shown only when gear is active) -->
-                {#if showAesthetics}
+                {#if primaryMode === 'price' && showAesthetics}
                     <div data-testid="asset-detail-aesthetics-panel" class="mb-3 pb-3 border-b border-gray-100 dark:border-slate-700 relative">
                         <button class="absolute top-0 right-0 p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors" onclick={() => (showAesthetics = false)} title={$t('common.close')}>
                             <X size={16} />
@@ -2056,114 +2171,140 @@
                     </div>
                 {/if}
 
-                <div class="relative">
-                    <!-- Right toolbar -->
-                    <div class="absolute top-0 right-0 z-10 flex items-center gap-1.5">
-                        <button
-                            data-testid="asset-detail-measure-btn"
-                            class="p-1.5 rounded-lg transition-colors {measureMode
-                                ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 ring-1 ring-violet-300 dark:ring-violet-700'
-                                : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
-                            onclick={async () => {
-                                if (measureMode) {
-                                    measurePanel?.stopMeasureMode();
-                                } else {
-                                    showMeasures = true;
-                                    await tick();
-                                    measurePanel?.startMeasureMode();
-                                }
-                            }}
-                            title={measureMode ? $t('common.exitMeasure') : $t('common.addMeasure')}
-                        >
-                            <Ruler size={16} />
-                        </button>
-                        <button
-                            data-testid="asset-detail-editdata-btn"
-                            class="p-1.5 rounded-lg transition-colors {showDataEditor
-                                ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 ring-1 ring-amber-300 dark:ring-amber-700'
-                                : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
-                            onclick={() => {
-                                if (showDataEditor) {
-                                    showDataEditor = false;
-                                    pendingPreviewSignal = null;
-                                    if (savedPanelStates) {
-                                        showAesthetics = savedPanelStates.aesthetics;
-                                        showMeasures = savedPanelStates.measures;
-                                        showSignals = savedPanelStates.signals;
-                                        savedPanelStates = null;
-                                    }
-                                } else {
-                                    savedPanelStates = {aesthetics: showAesthetics, measures: showMeasures, signals: showSignals};
-                                    showAesthetics = false;
-                                    showMeasures = false;
-                                    showSignals = false;
-                                    showDataEditor = true;
-                                }
-                            }}
-                            title={showDataEditor ? $t('common.closeEditor') : $t('assetDetail.editData')}
-                        >
-                            <Pencil size={16} />
-                        </button>
-                        <button
-                            data-testid="asset-detail-aesthetics-toggle"
-                            class="p-1.5 rounded-lg transition-colors {showAesthetics
-                                ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-300 dark:ring-emerald-700'
-                                : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
-                            onclick={() => (showAesthetics = !showAesthetics)}
-                            title={$t('common.aesthetics')}
-                        >
-                            <Settings size={16} />
-                        </button>
+                {#if primaryMode === 'calendar-return' && calendarReturnView.state === 'loading'}
+                    <div class="h-96 flex items-center justify-center" data-testid="asset-calendar-return-loading">
+                        <RefreshCw size={24} class="animate-spin text-libre-green" />
                     </div>
+                {:else if primaryMode === 'calendar-return' && calendarReturnView.state === 'unavailable'}
+                    <div class="h-96 flex items-center justify-center text-sm text-gray-500 dark:text-gray-400" data-testid="asset-calendar-return-unavailable">
+                        {$t('chartSettings.signalProblems.unavailable')}
+                    </div>
+                {:else if primaryMode === 'calendar-return' && calendarReturnView.state === 'error'}
+                    <div class="h-96 flex items-center justify-center text-sm text-red-600 dark:text-red-400" data-testid="asset-calendar-return-error">
+                        {$t('chartSettings.signalResultsUnavailable')}
+                    </div>
+                {:else}
+                    <div class="relative">
+                        <!-- Right toolbar -->
+                        {#if primaryMode === 'price'}
+                            <div class="absolute top-0 right-0 z-10 flex items-center gap-1.5">
+                                <button
+                                    data-testid="asset-detail-measure-btn"
+                                    class="p-1.5 rounded-lg transition-colors {measureMode
+                                        ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 ring-1 ring-violet-300 dark:ring-violet-700'
+                                        : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
+                                    onclick={async () => {
+                                        if (measureMode) {
+                                            measurePanel?.stopMeasureMode();
+                                        } else {
+                                            showMeasures = true;
+                                            await tick();
+                                            measurePanel?.startMeasureMode();
+                                        }
+                                    }}
+                                    title={measureMode ? $t('common.exitMeasure') : $t('common.addMeasure')}
+                                >
+                                    <Ruler size={16} />
+                                </button>
+                                <button
+                                    data-testid="asset-detail-editdata-btn"
+                                    class="p-1.5 rounded-lg transition-colors {showDataEditor
+                                        ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 ring-1 ring-amber-300 dark:ring-amber-700'
+                                        : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
+                                    onclick={() => {
+                                        if (showDataEditor) {
+                                            showDataEditor = false;
+                                            pendingPreviewSignal = null;
+                                            if (savedPanelStates) {
+                                                showAesthetics = savedPanelStates.aesthetics;
+                                                showMeasures = savedPanelStates.measures;
+                                                showSignals = savedPanelStates.signals;
+                                                savedPanelStates = null;
+                                            }
+                                        } else {
+                                            savedPanelStates = {aesthetics: showAesthetics, measures: showMeasures, signals: showSignals};
+                                            showAesthetics = false;
+                                            showMeasures = false;
+                                            showSignals = false;
+                                            showDataEditor = true;
+                                        }
+                                    }}
+                                    title={showDataEditor ? $t('common.closeEditor') : $t('assetDetail.editData')}
+                                >
+                                    <Pencil size={16} />
+                                </button>
+                                <button
+                                    data-testid="asset-detail-aesthetics-toggle"
+                                    class="p-1.5 rounded-lg transition-colors {showAesthetics
+                                        ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-300 dark:ring-emerald-700'
+                                        : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
+                                    onclick={() => (showAesthetics = !showAesthetics)}
+                                    title={$t('common.aesthetics')}
+                                >
+                                    <Settings size={16} />
+                                </button>
+                            </div>
+                        {/if}
 
-                    <PriceChartFull
-                        data={lineData}
-                        currency={displayCurrency}
-                        mainSeriesLabel={assetInfo?.display_name ?? ''}
-                        chartHeight="400px"
-                        overlaySignals={allOverlaySignals}
-                        eventMarkers={chartEventMarkers}
-                        {overlaySignalInfoMap}
-                        mainIconUrl={assetInfo?.icon_url}
-                        mainAssetType={assetInfo?.asset_type}
-                        colorByBaseline={settings.colorByBaseline}
-                        areaFill={settings.areaFill}
-                        showGridLines={settings.gridLines}
-                        showGradient={settings.staleGradient}
-                        yAxisMode={settings.yAxisMode}
-                        yAxisMin={settings.yAxisMin}
-                        yAxisMax={settings.yAxisMax}
-                        {measureMode}
-                        onMeasureClick={handleMeasureClick}
-                        onMeasureHover={(date, value) => measurePanel?.updatePendingEnd(date, value)}
-                        hideToolbar={true}
-                        externalChartType={chartType}
-                        onChartTypeChange={(t) => {
-                            chartType = t;
-                        }}
-                        externalViewMode={viewMode}
-                        onViewModeChange={(mode) => {
-                            viewMode = mode;
-                        }}
-                        editMode={showDataEditor}
-                        staleLabel={$t('chart.tooltip.stale')}
-                        fxStaleLabel={$t('chart.tooltip.fxStale')}
-                        displayCurrency={displayCurrency !== assetInfo?.currency ? displayCurrency : undefined}
-                        displayCurrencyFlag={displayCurrency !== assetInfo?.currency ? getCurrencyInfo(displayCurrency).flag_emoji : undefined}
-                        mainCurrency={assetInfo?.currency ?? undefined}
-                        mainCurrencyFlag={assetInfo?.currency ? getCurrencyInfo(assetInfo.currency).flag_emoji : undefined}
-                        onDblClick={(date) => {
-                            if (showDataEditor && assetDataEditorRef) {
-                                assetDataEditorRef.scrollToDate(date, 'prices');
-                            }
-                        }}
-                        onEventDblClick={(date) => {
-                            if (showDataEditor && assetDataEditorRef) {
-                                assetDataEditorRef.scrollToDate(date, 'events');
-                            }
-                        }}
-                    />
-                </div>
+                        <PriceChartFull
+                            data={activeChartData}
+                            currency={primaryMode === 'price' ? displayCurrency : ''}
+                            mainSeriesLabel={primaryMode === 'price' ? (assetInfo?.display_name ?? '') : $t('signals.riskRollingReturn.name')}
+                            chartHeight="400px"
+                            overlaySignals={primaryMode === 'price' ? allOverlaySignals : []}
+                            eventMarkers={primaryMode === 'price' ? chartEventMarkers : []}
+                            overlaySignalInfoMap={primaryMode === 'price' ? overlaySignalInfoMap : undefined}
+                            mainIconUrl={assetInfo?.icon_url}
+                            mainAssetType={assetInfo?.asset_type}
+                            colorByBaseline={primaryMode === 'calendar-return' ? true : settings.colorByBaseline}
+                            areaFill={primaryMode === 'price' ? settings.areaFill : false}
+                            showGridLines={settings.gridLines}
+                            showGradient={settings.staleGradient}
+                            yAxisMode={primaryMode === 'calendar-return' ? 'include0' : settings.yAxisMode}
+                            yAxisMin={primaryMode === 'price' ? settings.yAxisMin : undefined}
+                            yAxisMax={primaryMode === 'price' ? settings.yAxisMax : undefined}
+                            measureMode={primaryMode === 'price' && measureMode}
+                            onMeasureClick={handleMeasureClick}
+                            onMeasureHover={(date, value) => measurePanel?.updatePendingEnd(date, value)}
+                            hideToolbar={true}
+                            externalChartType={primaryMode === 'price' ? chartType : 'line'}
+                            onChartTypeChange={(t) => {
+                                chartType = t;
+                            }}
+                            externalViewMode={primaryMode === 'price' ? viewMode : 'absolute'}
+                            onViewModeChange={(mode) => {
+                                viewMode = mode;
+                            }}
+                            editMode={primaryMode === 'price' && showDataEditor}
+                            disableCandlestick={primaryMode === 'calendar-return'}
+                            valueUnit={primaryMode === 'calendar-return' ? 'percentage' : 'price'}
+                            hideViewModeToggle={primaryMode === 'calendar-return'}
+                            showMainDelta={primaryMode === 'price'}
+                            mainPointContext={calendarPointContext}
+                            staleLabel={$t('chart.tooltip.stale')}
+                            fxStaleLabel={$t('chart.tooltip.fxStale')}
+                            displayCurrency={primaryMode === 'price' && displayCurrency !== assetInfo?.currency ? displayCurrency : undefined}
+                            displayCurrencyFlag={primaryMode === 'price' && displayCurrency !== assetInfo?.currency ? getCurrencyInfo(displayCurrency).flag_emoji : undefined}
+                            mainCurrency={primaryMode === 'price' ? (assetInfo?.currency ?? undefined) : undefined}
+                            mainCurrencyFlag={primaryMode === 'price' && assetInfo?.currency ? getCurrencyInfo(assetInfo.currency).flag_emoji : undefined}
+                            onDblClick={(date) => {
+                                if (primaryMode === 'price' && showDataEditor && assetDataEditorRef) {
+                                    assetDataEditorRef.scrollToDate(date, 'prices');
+                                }
+                            }}
+                            onEventDblClick={(date) => {
+                                if (primaryMode === 'price' && showDataEditor && assetDataEditorRef) {
+                                    assetDataEditorRef.scrollToDate(date, 'events');
+                                }
+                            }}
+                        />
+                    </div>
+                    {#if primaryMode === 'calendar-return' && calendarReturnView.state === 'partial'}
+                        <p class="mt-2 text-center text-xs text-amber-600 dark:text-amber-400" data-testid="asset-calendar-return-partial">
+                            {$t('chartSettings.signalProblems.partialResult')}
+                        </p>
+                    {/if}
+                {/if}
             {:else}
                 <div class="h-96 flex items-center justify-center">
                     <div class="text-center">
@@ -2234,7 +2375,7 @@
         <!-- Data Editor Placeholder -->
         <!-- ======================================================================= -->
         {#if showDataEditor}
-            <div data-testid="asset-detail-editor-panel" class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-amber-200 dark:border-amber-800">
+            <div data-testid="asset-detail-editor-panel" class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-amber-200 dark:border-amber-800 {primaryMode === 'price' ? '' : 'hidden'}" aria-hidden={primaryMode !== 'price'} inert={primaryMode !== 'price'}>
                 <div class="flex items-center justify-between px-4 py-3 border-b border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-yellow-900/30 rounded-t-xl">
                     <span class="flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-400">
                         <Pencil size={15} />
@@ -2302,7 +2443,7 @@
         <!-- ======================================================================= -->
         <!-- Foldable Panel: Measures -->
         <!-- ======================================================================= -->
-        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 {primaryMode === 'price' ? '' : 'hidden'}" data-testid="asset-detail-measures-section" aria-hidden={primaryMode !== 'price'} inert={primaryMode !== 'price'}>
             <div
                 class="flex items-center justify-between px-4 py-2.5 cursor-pointer select-none hover:bg-gray-50 dark:hover:bg-slate-750 transition-colors rounded-t-xl"
                 role="button"
@@ -2327,9 +2468,9 @@
                     <button
                         type="button"
                         class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md
-                               bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400
-                               hover:bg-violet-100 dark:hover:bg-violet-900/50
-                               transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                   bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400
+                                   hover:bg-violet-100 dark:hover:bg-violet-900/50
+                                   transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         disabled={lineData.length < 2}
                         data-testid="asset-detail-add-measure-btn"
                         onclick={(e) => {

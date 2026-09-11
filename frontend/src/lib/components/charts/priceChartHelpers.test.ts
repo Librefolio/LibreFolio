@@ -21,6 +21,7 @@ import {
     computeGhostSeries,
     computeZoomWindow,
     countBuckets,
+    extractCalendarReturnView,
     formatMonthLabel,
     formatTruncatedGhostLabel,
     getBucketInfo,
@@ -43,6 +44,193 @@ function pt(date: string, value: number, overrides: Partial<LineDataPoint> = {})
 function dailyRun(dates: string[]): LineDataPoint[] {
     return dates.map((date, index) => pt(date, index + 1));
 }
+
+const CALENDAR_INSTANCE_ID = 'asset-calendar-return';
+const CALENDAR_SIGNAL_CODE = 'ASSET_CALENDAR_ROLLING_RETURN';
+
+function calendarProvenance(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+        status: 'available',
+        reference_target_date: '2026-01-02',
+        current_price_date: '2026-02-01',
+        current_price_days_back: 0,
+        reference_price_date: '2026-01-02',
+        reference_price_days_back: 0,
+        current_fx_date: null,
+        current_fx_days_back: null,
+        reference_fx_date: null,
+        reference_fx_days_back: null,
+        ...overrides,
+    };
+}
+
+function calendarPoint(date: string, value: number | null, provenance: Record<string, unknown> = {}): Record<string, unknown> {
+    return {date, value, provenance: calendarProvenance(provenance)};
+}
+
+function nestedCalendarResult(points: unknown[], overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+        instance_id: CALENDAR_INSTANCE_ID,
+        signal_code: CALENDAR_SIGNAL_CODE,
+        status: 'ok',
+        series: [{key: 'calendar_return', points}],
+        ...overrides,
+    };
+}
+
+describe('extractCalendarReturnView', () => {
+    it('maps a runtime-flat ready result without rebasing its percentage values', () => {
+        const view = extractCalendarReturnView(
+            [
+                {
+                    instance_id: CALENDAR_INSTANCE_ID,
+                    signal_code: CALENDAR_SIGNAL_CODE,
+                    status: 'ok',
+                    key: 'calendar_return',
+                    points: [calendarPoint('2026-02-01', 12.5)],
+                },
+            ],
+            CALENDAR_INSTANCE_ID,
+        );
+
+        expect(view.state).toBe('ready');
+        expect(view.points.find((point) => point.date === '2026-02-01')).toMatchObject({
+            date: '2026-02-01',
+            value: 12.5,
+        });
+        expect(view.contextByDate.has('2026-02-01')).toBe(true);
+    });
+
+    it('accepts generated one-level series/points nesting and selects the requested instance, code, and series key', () => {
+        const requested = nestedCalendarResult([calendarPoint('2026-02-02', -3.75)], {
+            series: [
+                {key: 'other_series', points: [calendarPoint('2026-02-02', 999)]},
+                {key: 'calendar_return', points: [calendarPoint('2026-02-02', -3.75)]},
+                {key: 'another_series', points: [calendarPoint('2026-02-02', -999)]},
+            ],
+        });
+        const view = extractCalendarReturnView([{...requested, instance_id: 'another-instance'}, requested, {...requested, signal_code: 'RISK_ROLLING_RETURN'}], CALENDAR_INSTANCE_ID);
+
+        expect(view.state).toBe('ready');
+        expect(view.points.find((point) => point.date === '2026-02-02')).toMatchObject({
+            date: '2026-02-02',
+            value: -3.75,
+        });
+        expect(view.points.some((point) => point.value === 999)).toBe(false);
+        expect(view.points.some((point) => point.value === -999)).toBe(false);
+    });
+
+    it('preserves every date and turns null values into explicit missing chart gaps', () => {
+        const view = extractCalendarReturnView(
+            [
+                nestedCalendarResult([
+                    calendarPoint('2026-02-01', null, {
+                        status: 'missing_reference',
+                        reference_target_date: '2026-01-02',
+                        reference_price_date: null,
+                        reference_price_days_back: null,
+                    }),
+                    calendarPoint('2026-02-02', 1.25, {
+                        reference_target_date: '2026-01-03',
+                        current_price_date: '2026-02-02',
+                        reference_price_date: '2026-01-03',
+                    }),
+                ]),
+            ],
+            CALENDAR_INSTANCE_ID,
+        );
+
+        expect(view.points.map((point) => point.date)).toEqual(['2026-02-01', '2026-02-02']);
+        expect(view.points.find((point) => point.date === '2026-02-01')).toMatchObject({
+            value: 0,
+            missing: true,
+        });
+        expect(view.points.find((point) => point.date === '2026-02-02')).toMatchObject({
+            value: 1.25,
+        });
+        expect(view.points.find((point) => point.date === '2026-02-02')?.missing).not.toBe(true);
+    });
+
+    it('uses maximum price/FX staleness overall and keeps the FX-only maximum separate', () => {
+        const view = extractCalendarReturnView(
+            [
+                nestedCalendarResult([
+                    calendarPoint('2026-02-10', 4.5, {
+                        reference_target_date: '2026-01-11',
+                        current_price_date: '2026-02-08',
+                        current_price_days_back: 2,
+                        reference_price_date: '2026-01-05',
+                        reference_price_days_back: 6,
+                        current_fx_date: '2026-02-06',
+                        current_fx_days_back: 4,
+                        reference_fx_date: '2026-01-02',
+                        reference_fx_days_back: 9,
+                    }),
+                ]),
+            ],
+            CALENDAR_INSTANCE_ID,
+        );
+
+        expect(view.points.find((point) => point.date === '2026-02-10')).toMatchObject({
+            staleDays: 9,
+            fxStaleDays: 9,
+        });
+        expect(view.contextByDate.get('2026-02-10')).toMatchObject({
+            referenceTargetDate: '2026-01-11',
+            currentPriceDate: '2026-02-08',
+            referencePriceDate: '2026-01-05',
+            currentFxDate: '2026-02-06',
+            referenceFxDate: '2026-01-02',
+        });
+    });
+
+    it('keeps usable points and reports a partial backend result as partial', () => {
+        const view = extractCalendarReturnView([nestedCalendarResult([calendarPoint('2026-02-01', 2.5)], {status: 'partial'})], CALENDAR_INSTANCE_ID);
+
+        expect(view.state).toBe('partial');
+        expect(view.points.find((point) => point.date === '2026-02-01')).toMatchObject({
+            value: 2.5,
+        });
+    });
+
+    it('reports backend unavailable without fabricating points or context', () => {
+        const view = extractCalendarReturnView([nestedCalendarResult([], {status: 'unavailable', series: []})], CALENDAR_INSTANCE_ID);
+
+        expect(view).toEqual({
+            state: 'unavailable',
+            points: [],
+            contextByDate: new Map(),
+        });
+    });
+
+    it('maps a failed backend result to error', () => {
+        const view = extractCalendarReturnView([nestedCalendarResult([], {status: 'failed', series: []})], CALENDAR_INSTANCE_ID);
+
+        expect(view).toEqual({
+            state: 'error',
+            points: [],
+            contextByDate: new Map(),
+        });
+    });
+
+    it.each([
+        {label: 'null results', rawResults: null},
+        {
+            label: 'missing calendar series',
+            rawResults: [nestedCalendarResult([], {series: [{key: 'another_series', points: [calendarPoint('2026-02-01', 1)]}]})],
+        },
+        {
+            label: 'non-array points',
+            rawResults: [nestedCalendarResult([], {series: [{key: 'calendar_return', points: {date: '2026-02-01', value: 1}}]})],
+        },
+    ])('returns error for malformed $label payloads', ({rawResults}) => {
+        expect(extractCalendarReturnView(rawResults, CALENDAR_INSTANCE_ID)).toEqual({
+            state: 'error',
+            points: [],
+            contextByDate: new Map(),
+        });
+    });
+});
 
 describe('formatMonthLabel', () => {
     it('formats a mid-month date as "Month YYYY" in the given locale', () => {
