@@ -9,6 +9,7 @@ Supports both current values and historical OHLC (Open, High, Low, Close) data.
 from __future__ import annotations
 
 import time as _time_mod
+from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import Dict
@@ -111,6 +112,214 @@ def _yf_with_retry(fn, *, label: str = "yfinance"):
             logger.warning(f"{label} transient error (attempt {attempt}/{_YF_MAX_RETRIES}): {e}, " f"retrying in {delay:.1f}s")
             _time_mod.sleep(delay)
     raise last_exc  # pragma: no cover – safety net
+
+
+@dataclass(frozen=True)
+class _YahooHistoryAcquisition:
+    history: object
+    currency: str
+    dividends: object | None
+    splits: object | None
+
+
+def _normalize_yahoo_date(index_value) -> date:
+    """Convert a Yahoo index value to the canonical UTC calendar date."""
+    if hasattr(index_value, "tz_convert"):
+        return index_value.tz_convert("UTC").date()
+    return index_value.date()
+
+
+def _acquire_history_data(
+    ticker,
+    identifier: str,
+    start_date: AssetHistoryStartDate,
+    end_date: date,
+) -> _YahooHistoryAcquisition:
+    """Fetch Yahoo history plus best-effort metadata/event series."""
+    if start_date == "min":
+        history = _yf_with_retry(
+            lambda: ticker.history(period="max"),
+            label=f"history-max({identifier})",
+        )
+    else:
+        remote_end = (end_date + timedelta(days=1)).isoformat()
+        history = _yf_with_retry(
+            lambda: ticker.history(
+                start=start_date.isoformat(),
+                end=remote_end,
+            ),
+            label=f"history({identifier})",
+        )
+
+    if history is None or not hasattr(history, "empty"):
+        raise AssetSourceError(
+            f"yfinance returned invalid data for {identifier} (got {type(history).__name__})",
+            "FETCH_ERROR",
+            {"identifier": identifier},
+        )
+
+    currency = "USD"
+    try:
+        info = ticker.info
+        if info:
+            currency = info.get("currency", "USD") or "USD"
+    except Exception:
+        logger.exception(
+            "Failed to fetch yfinance currency metadata; falling back to USD",
+            identifier=identifier,
+        )
+
+    try:
+        dividends = ticker.dividends
+    except Exception as exc:
+        logger.debug(f"Could not fetch dividends for {identifier}: {exc}")
+        dividends = None
+
+    try:
+        splits = ticker.splits
+    except Exception as exc:
+        logger.debug(f"Could not fetch splits for {identifier}: {exc}")
+        splits = None
+
+    return _YahooHistoryAcquisition(
+        history=history,
+        currency=currency,
+        dividends=dividends,
+        splits=splits,
+    )
+
+
+def _map_history_prices(
+    history,
+    identifier: str,
+    currency: str,
+    start_date: AssetHistoryStartDate,
+    end_date: date,
+) -> list[FAPricePoint]:
+    """Map Yahoo OHLCV rows to canonical price points."""
+    if history.empty:
+        raise AssetSourceError(
+            f"No historical data for ticker: {identifier}",
+            "NO_DATA",
+            {
+                "identifier": identifier,
+                "start": str(start_date),
+                "end": str(end_date),
+            },
+        )
+
+    required_columns = {"Open", "High", "Low", "Close", "Volume"}
+    if not required_columns.issubset(set(history.columns)):
+        raise AssetSourceError(
+            f"Unexpected DataFrame columns for {identifier}: {list(history.columns)}",
+            "FETCH_ERROR",
+            {
+                "identifier": identifier,
+                "columns": list(history.columns),
+            },
+        )
+
+    prices: list[FAPricePoint] = []
+    for index_value, row in history.iterrows():
+        point_date = _normalize_yahoo_date(index_value)
+        if start_date != "min" and point_date < start_date:
+            continue
+        if point_date > end_date:
+            continue
+        if not pd.notna(row["Close"]):
+            logger.debug(f"Skipping {point_date} for {identifier}: Close is NaN")
+            continue
+
+        prices.append(
+            FAPricePoint(
+                date=point_date,
+                open=(Decimal(str(row["Open"])) if pd.notna(row["Open"]) else None),
+                high=(Decimal(str(row["High"])) if pd.notna(row["High"]) else None),
+                low=(Decimal(str(row["Low"])) if pd.notna(row["Low"]) else None),
+                close=Decimal(str(row["Close"])),
+                volume=(int(row["Volume"]) if pd.notna(row["Volume"]) else None),
+                currency=currency,
+            )
+        )
+
+    if not prices:
+        raise AssetSourceError(
+            f"No usable price points for ticker: {identifier} (all Close values are NaN)",
+            "NO_DATA",
+            {
+                "identifier": identifier,
+                "start": str(start_date),
+                "end": str(end_date),
+            },
+        )
+    return prices
+
+
+def _parse_dividend_events(
+    dividends,
+    identifier: str,
+    currency: str,
+    start_date: AssetHistoryStartDate,
+    end_date: date,
+) -> list[FAAssetEventPoint]:
+    """Map positive, in-range Yahoo dividends to canonical events."""
+    if dividends is None or dividends.empty:
+        return []
+
+    events: list[FAAssetEventPoint] = []
+    for index_value, amount in dividends.items():
+        if not pd.notna(amount) or amount <= 0:
+            continue
+        event_date = _normalize_yahoo_date(index_value)
+        if start_date != "min" and event_date < start_date:
+            continue
+        if event_date > end_date:
+            continue
+        events.append(
+            FAAssetEventPoint(
+                date=event_date,
+                type="DIVIDEND",
+                value=CurrencyAmount(
+                    code=currency,
+                    amount=Decimal(str(amount)),
+                ),
+                notes=f"Yahoo Finance dividend for {identifier}",
+            )
+        )
+    return events
+
+
+def _parse_split_events(
+    splits,
+    currency: str,
+    start_date: AssetHistoryStartDate,
+    end_date: date,
+) -> list[FAAssetEventPoint]:
+    """Map non-trivial, in-range Yahoo split ratios to canonical events."""
+    if splits is None or splits.empty:
+        return []
+
+    events: list[FAAssetEventPoint] = []
+    for index_value, ratio in splits.items():
+        if not pd.notna(ratio) or ratio == 0 or ratio == 1:
+            continue
+        event_date = _normalize_yahoo_date(index_value)
+        if start_date != "min" and event_date < start_date:
+            continue
+        if event_date > end_date:
+            continue
+        events.append(
+            FAAssetEventPoint(
+                date=event_date,
+                type="SPLIT",
+                value=CurrencyAmount(
+                    code=currency,
+                    amount=Decimal(str(ratio)),
+                ),
+                notes=f"Stock split {ratio}:1",
+            )
+        )
+    return events
 
 
 @register_provider(AssetProviderRegistry)
@@ -281,7 +490,7 @@ class YahooFinanceProvider(AssetSourceProvider):
                 {"identifier": identifier, "error": str(e)},
             ) from e
 
-    async def get_history_value(  # noqa: C901 — flat fetch→validate→map pipeline, guarded event parsing
+    async def get_history_value(
         self,
         identifier: str,
         identifier_type: IdentifierType,
@@ -323,154 +532,54 @@ class YahooFinanceProvider(AssetSourceProvider):
         try:
             # The core executes this method in a dedicated thread,
             # so sync yfinance calls are safe — no asyncio.to_thread needed.
-            _end = (end_date + timedelta(days=1)).isoformat()
+            acquisition = _acquire_history_data(
+                yf.Ticker(identifier),
+                identifier,
+                start_date,
+                end_date,
+            )
+            prices = _map_history_prices(
+                acquisition.history,
+                identifier,
+                acquisition.currency,
+                start_date,
+                end_date,
+            )
 
-            t = yf.Ticker(identifier)
-
-            # Wrap history fetch in retry for transient network errors
-            # (e.g., curl 56, NoneType from empty responses).
-            if start_date == "min":
-                hist = _yf_with_retry(
-                    lambda: t.history(period="max"),
-                    label=f"history-max({identifier})",
-                )
-            else:
-                hist = _yf_with_retry(
-                    lambda: t.history(start=start_date.isoformat(), end=_end),
-                    label=f"history({identifier})",
-                )
-
-            # Defensive: handle None or non-DataFrame return (yfinance edge-case)
-            if hist is None or not hasattr(hist, "empty"):
-                raise AssetSourceError(
-                    f"yfinance returned invalid data for {identifier} (got {type(hist).__name__})",
-                    "FETCH_ERROR",
-                    {"identifier": identifier},
-                )
-
-            # Currency (separate API call)
-            currency = "USD"
-            try:
-                info = t.info
-                if info:
-                    currency = info.get("currency", "USD") or "USD"
-            except Exception:
-                logger.exception("Failed to fetch yfinance currency metadata; falling back to USD", identifier=identifier)
-            # Dividends & splits (may trigger additional requests)
-            try:
-                dividends = t.dividends
-            except Exception:
-                dividends = None
-            try:
-                splits = t.splits
-            except Exception:
-                splits = None
-
-            if hist.empty:
-                raise AssetSourceError(
-                    f"No historical data for ticker: {identifier}",
-                    "NO_DATA",
-                    {"identifier": identifier, "start": str(start_date), "end": str(end_date)},
-                )
-
-            # Convert DataFrame to FAPricePoint list (pure CPU, no I/O)
-            prices = []
-            required_cols = {"Open", "High", "Low", "Close", "Volume"}
-            actual_cols = set(hist.columns)
-            if not required_cols.issubset(actual_cols):
-                raise AssetSourceError(
-                    f"Unexpected DataFrame columns for {identifier}: {list(hist.columns)}",
-                    "FETCH_ERROR",
-                    {"identifier": identifier, "columns": list(hist.columns)},
-                )
-
-            for idx, row in hist.iterrows():
-                # yfinance returns DatetimeIndex with market timezone.
-                # Convert to UTC for consistent backend date handling.
-                # Frontend will handle local display.
-                if hasattr(idx, "tz_convert"):
-                    date_utc = idx.tz_convert("UTC").date()
-                else:
-                    date_utc = idx.date()
-
-                if start_date != "min" and date_utc < start_date:
-                    continue
-                if date_utc > end_date:
-                    continue
-
-                # Skip rows where Close is NaN — this happens on the current trading day
-                # when markets are still open, or on data quality gaps returned by yfinance.
-                # Close is required (non-optional in FAPricePoint), so NaN rows are unusable.
-                if not pd.notna(row["Close"]):
-                    logger.debug(f"Skipping {date_utc} for {identifier}: Close is NaN")
-                    continue
-
-                prices.append(
-                    FAPricePoint(
-                        date=date_utc,
-                        open=Decimal(str(row["Open"])) if pd.notna(row["Open"]) else None,
-                        high=Decimal(str(row["High"])) if pd.notna(row["High"]) else None,
-                        low=Decimal(str(row["Low"])) if pd.notna(row["Low"]) else None,
-                        close=Decimal(str(row["Close"])),
-                        volume=int(row["Volume"]) if pd.notna(row["Volume"]) else None,
-                        currency=currency,
-                    )
-                )
-
-            if not prices:
-                raise AssetSourceError(
-                    f"No usable price points for ticker: {identifier} (all Close values are NaN)",
-                    "NO_DATA",
-                    {"identifier": identifier, "start": str(start_date), "end": str(end_date)},
-                )
-
-            # --- Parse asset events (dividends + splits) ---
             events: list[FAAssetEventPoint] = []
-
             try:
-                # Dividends: pre-fetched in _sync_fetch_history (Series or None)
-                if dividends is not None and not dividends.empty:
-                    # Filter to requested date range
-                    for idx, amount in dividends.items():
-                        if pd.notna(amount) and amount > 0:
-                            div_date = idx.tz_convert("UTC").date() if hasattr(idx, "tz_convert") else idx.date()
-                            if (start_date == "min" or start_date <= div_date) and div_date <= end_date:
-                                events.append(
-                                    FAAssetEventPoint(
-                                        date=div_date,
-                                        type="DIVIDEND",
-                                        value=CurrencyAmount(code=currency, amount=Decimal(str(amount))),
-                                        notes=f"Yahoo Finance dividend for {identifier}",
-                                    )
-                                )
-                    if events:
-                        logger.debug(f"Parsed {len(events)} DIVIDEND events for {identifier}")
+                dividend_events = _parse_dividend_events(
+                    acquisition.dividends,
+                    identifier,
+                    acquisition.currency,
+                    start_date,
+                    end_date,
+                )
+                events.extend(dividend_events)
+                if dividend_events:
+                    logger.debug(f"Parsed {len(dividend_events)} DIVIDEND events for {identifier}")
             except Exception as e:
                 logger.debug(f"Could not parse dividends for {identifier}: {e}")
 
             try:
-                # Splits: pre-fetched in _sync_fetch_history (Series or None)
-                if splits is not None and not splits.empty:
-                    split_count = 0
-                    for idx, ratio in splits.items():
-                        if pd.notna(ratio) and ratio != 0 and ratio != 1:
-                            split_date = idx.tz_convert("UTC").date() if hasattr(idx, "tz_convert") else idx.date()
-                            if (start_date == "min" or start_date <= split_date) and split_date <= end_date:
-                                events.append(
-                                    FAAssetEventPoint(
-                                        date=split_date,
-                                        type="SPLIT",
-                                        value=CurrencyAmount(code=currency, amount=Decimal(str(ratio))),
-                                        notes=f"Stock split {ratio}:1",
-                                    )
-                                )
-                                split_count += 1
-                    if split_count:
-                        logger.debug(f"Parsed {split_count} SPLIT events for {identifier}")
+                split_events = _parse_split_events(
+                    acquisition.splits,
+                    acquisition.currency,
+                    start_date,
+                    end_date,
+                )
+                events.extend(split_events)
+                if split_events:
+                    logger.debug(f"Parsed {len(split_events)} SPLIT events for {identifier}")
             except Exception as e:
                 logger.debug(f"Could not parse splits for {identifier}: {e}")
 
-            return FAHistoricalData(prices=prices, events=events, currency=currency, source=self.provider_name)
+            return FAHistoricalData(
+                prices=prices,
+                events=events,
+                currency=acquisition.currency,
+                source=self.provider_name,
+            )
 
         except AssetSourceError:
             raise
