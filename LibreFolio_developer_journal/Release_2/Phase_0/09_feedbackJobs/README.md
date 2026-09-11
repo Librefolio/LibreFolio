@@ -8,12 +8,32 @@ di TODO_FUTURI.md (classificazione con l'utente) + gli 8 P4 ereditati dall'audit
 |------|------|-----------|
 | [00_backlog_strutturale_P4.md](00_backlog_strutturale_P4.md) | Debito strutturale | Gli 8 task P4 dell'audit (scissione asset_source, execute_batch, BRIM helpers, Yahoo, Runes, status matrix, cache store, coda S6) |
 | [01_ux_dashboard.md](01_ux_dashboard.md) | UX & dashboard | Provider probe, global privacy, YOC, uploader filter, currency help, support, onboarding, mobile header |
-| [02_grafici_avanzati.md](02_grafici_avanzati.md) | Grafici | PLANNED: [piano performance charts](../20_performanceCharts/plan-phase00PerformanceCharts.prompt.md) per F8 P&L/candles/income + calendar return; lot analysis gia consegnata |
-| [03_asset_dati_classificazione.md](03_asset_dati_classificazione.md) | Asset & dati | Settori bond Corporate/Governativi, import CSV distribuzioni geo/settore |
-| [04_brim_import.md](04_brim_import.md) | BRIM & import | eToro fee reconciliation, delivered FIFO v4 cost allocation, asset deletion links |
-| [05_pac_allocation_tool.md](05_pac_allocation_tool.md) | Tool platform | Backend plugins, custom-first UI, PAC/rebalancing, per-currency cash and optional buy/sell/FX |
+| [02_grafici_avanzati.md](02_grafici_avanzati.md) | Grafici | I10 calendar-return backend integrato; I60 Asset UI/follow-up attivi su I; P&L/candele/income ancora aperti |
+| [03_asset_dati_classificazione.md](03_asset_dati_classificazione.md) | Asset & dati | ✅ Settori bond e import CSV distribuzioni integrati e revisionati |
+| [04_brim_import.md](04_brim_import.md) | BRIM & import | ✅ eToro fee, refactor CA/helper maturity e delete-asset links integrati e revisionati |
+| [05_pac_allocation_tool.md](05_pac_allocation_tool.md) | Tool platform | Tool platform e PAC P1 integrati; Round 2 PAC completo in corso su D; solver ancora aperto |
 | [06_piano_sprint.md](06_piano_sprint.md) | Analysis and sprint plan | Current-code evidence, 16 sprints, parallel-work dependency map, shared-resource ownership and developer UI review gates |
-| [07_feedback_import_critici.md](07_feedback_import_critici.md) | Urgent import/UX/update feedback | ✅ E1-E9 plus U1/U4/U5/U7/U9 completed; package applied to `dev_release2`, commit pending |
+| [07_feedback_import_critici.md](07_feedback_import_critici.md) | Urgent import/UX/update feedback | ✅ E1-E9 plus U1/U4/U5/U7/U9 integrati in `dev_release2` (`ef722b552`) |
+
+## Stato esecutivo riconciliato — 2026-09-11
+
+Questa tabella prevale sulle note cronologiche più sotto, che restano come storico dei
+checkpoint intermedi.
+
+| Sprint | Stato persistito |
+|---|---|
+| SP01–SP03 | ✅ Integrati e revisionati: E (`ef722b552`) + F (`e50d66408`, `cc57b6a38`). |
+| SP04–SP05 | ✅ Contratti, matrice segnali e Runes integrati tramite B (`514582a47`). |
+| SP06 | 🟡 YOC/U3 e I10 integrati; I60 implementato e validato sul branch I, follow-up UX attivo; G1c aperto. |
+| SP07 | ⏸️ I20–I50 non iniziati; attendono rilascio delle superfici Portfolio/PAC condivise. |
+| SP08 | 🟡 K autorizzato e in implementazione: P4-1, P4-4 e S6 6.4. |
+| SP09 | ✅ G integrato, developer-accepted e archiviato (`ebba209c5`, docs `4949b2f4c`). |
+| SP10 | ⏸️ Differito fino alla stabilizzazione chart/store. |
+| SP11 | 🟡 J Round 2 revisionato; Round 3 in implementazione sul branch J, non integrato. |
+| SP12 | ✅ Piattaforma Tool integrata (`570beb386`). |
+| SP13–SP14 | 🟡 PAC P1 integrato; Round 2 completo attivo su D; solver SP14 ancora aperto. |
+| SP15 | ⛔ Attende SP07 + SP11 + SP14. |
+| SP16 | 🟡 L autorizzato e in implementazione sul refactor `execute_batch`. |
 
 **Planning update (2026-09-07):** see [06](06_piano_sprint.md) for the current-code
 assessment and decisions made during review. Global privacy, mobile auto-hide header,
@@ -28,8 +48,8 @@ UI changes and an operational developer walkthrough/feedback round afterward.
 
 ## Workstream H completion - 2026-09-11
 
-U3 Yield on Cost is ✅ **IMPLEMENTED, VERIFIED AND DEVELOPER-ACCEPTED** in
-checkpoint `74afcebce`; the current merge integrates the
+U3 Yield on Cost is ✅ **IMPLEMENTED, VERIFIED, DEVELOPER-ACCEPTED AND INTEGRATED** in
+checkpoint `74afcebce`, with the final renderer follow-up integrated at `f092a194b`; see the
 [dedicated H implementation](../19_yieldOnCost/plan-phase00YieldOnCost.prompt.md).
 The final contract uses non-negative gross asset-linked DIVIDEND/INTEREST
 transactions, broker-scoped D-1 eligibility, split/FX provenance and residual
@@ -82,34 +102,30 @@ integration are separate states.
 ## Group E completion - 2026-09-09
 
 The final reviewed 109-file E package, including the Round 5 GHCR fix found by
-independent review, was applied to the local `dev_release2` working tree. Canonical
+independent review, was committed and integrated into `dev_release2` as `ef722b552`. Canonical
 status lives in [07](07_feedback_import_critici.md); portable execution evidence
 lives in [14_feedbackImportUrgent](../14_feedbackImportUrgent/manifest-integrazione-E.md).
-Commit/SHA and archive remain pending the developer's manual commit. U2 privacy,
+U2 privacy,
 U3 YOC, U8 onboarding and the deferred multicurrency proposals remain open.
 
 ## Group B checkpoint - 2026-09-10
 
 [Contracts and Runes - SP04-SP05](../11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md)
 and its [manual-review correction round](../11_feedbackContractsRunes/plan-phase00FeedbackContractsRunesBugfixRound1.prompt.md)
-are versioned at checkpoint `74bfd9cf`; their five conflicts with local
-`dev_release2` baseline `916f12bd` are resolved and staged. Scope remains P4-5,
+were integrated into `dev_release2` through `514582a47`. Scope remains P4-5,
 P4-6/S6 6.7, S6 6.2 and S6 6.11 plus the approved review corrections. Combined
-static, unit, API and targeted E2E gates are green on isolated lane `6151` +
-`/tmp/librefolio-r2-b`; the developer still owns the merge commit and final
-UI/viewport review. Runtime ownership follows the current section 14
+static, unit, API and targeted E2E gates were green on isolated lane `6151` +
+`/tmp/librefolio-r2-b`; manual corrections are included. Runtime ownership follows the current section 14
 integration policy, not the older execution lease.
 
 ## Performance charts plan-only checkpoint - 2026-09-10
 
 [SP06 G3/G1c and SP07 G1a/G1b](../20_performanceCharts/plan-phase00PerformanceCharts.prompt.md)
 have a durable final product contract, ASCII v2 storyboards, file ownership and
-dependency-safe XL phase split. The developer authorized **planning only**.
-The post-F technical refresh is recorded at `0af66da5`; I10 signal-only
-calendar-return backend is complete and awaiting integration. H/YOC checkpoint
-`74afcebce` is developer-accepted and enters the target before I20, which must
-re-read the resulting portfolio service/schema/tests. UI G3 and every portfolio
-phase remain unimplemented.
+dependency-safe XL phase split. I10 signal-only calendar-return backend is integrated
+(`d4b3deb2f`/`d54d74189`). H/YOC is integrated before I. I60 Asset UI is implemented
+and automatically validated on branch I; its developer-approved UX follow-up is active.
+I20–I50 and G1c remain unimplemented.
 
 ## Regole della cartella
 

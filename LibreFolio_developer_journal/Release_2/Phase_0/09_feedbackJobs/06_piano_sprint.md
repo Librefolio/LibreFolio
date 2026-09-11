@@ -146,7 +146,10 @@ La wiki ha fornito contesto utile su FIFO v4, batch e DataEditor; il grafo dichi
 
 ### P4-1 - Scissione di `asset_source.py`
 
-**Stato:** aperto; monolite ancora presente. **Taglia:** L. Il file attuale ha 5.106 righe, non 5.162. `AssetMetadataService` e `compute_metadata_diff` non esistono piu: non ricrearli per seguire una vecchia mappa.
+**Stato:** 🟡 in implementazione su K/SP08; monolite ancora presente alla
+baseline di avvio. **Taglia:** L. Il file attuale ha 5.106 righe, non 5.162.
+`AssetMetadataService` e `compute_metadata_diff` non esistono piu: non ricrearli
+per seguire una vecchia mappa.
 
 **Superfici:** `B/services/asset_source.py`: infrastruttura/cache/thread `144-263`; contratto provider e guardia OHLC `271-962`; assegnazioni/metadata `990-1423`; scritture prezzi/eventi `1430-1973`; probe `1980-2129`; query/segnali `2236-2781`; refresh `2788-3364`; quote correnti `3371-3608`; eventi `3615-3906`; CRUD/merge `3914-4680`; ricerca `4688-5106`. Caller: API assets, scheduler, risk, AI Export e provider concreti.
 
@@ -158,7 +161,9 @@ La wiki ha fornito contesto utile su FIFO v4, batch e DataEditor; il grafo dichi
 
 ### P4-2 - `TransactionService.execute_batch`
 
-**Stato:** aperto. **Taglia:** XL, non un semplice dispatch per verbo. `B/services/transaction_service.py:937-1573`: 637 righe, C901 115.
+**Stato:** 🟡 in implementazione su L/SP16. **Taglia:** XL, non un semplice
+dispatch per verbo. `B/services/transaction_service.py:937-1573`: 637 righe,
+C901 115 alla misura storica.
 
 **Superfici:** servizio, helper di WAC `1579-1739`, `B/api/v1/transactions.py:83-183`, `B/schemas/transactions.py:704-718`, chiamanti interni di promozione e depositi iniziali del broker.
 
@@ -172,7 +177,9 @@ La wiki ha fornito contesto utile su FIFO v4, batch e DataEditor; il grafo dichi
 
 ### P4-3 - Helper BRIM / Credit Agricole
 
-**Stato:** fondazioni parziali, parser annidato ancora intatto. **Taglia:** L per primo provider; M per adozioni successive realmente equivalenti.
+**Stato:** ✅ integrato e developer-accepted con G/SP09. La descrizione seguente
+resta la baseline storica usata per caratterizzazione ed estrazione. **Taglia:**
+L per il primo provider; M per adozioni successive realmente equivalenti.
 
 **Superfici:** `B/services/brim_providers/broker_credit_agricole.py:929-1620`, `_parse_account_movements`: 692 righe e nove funzioni locali. `_classify_account_row` e gia estratto a `871`. `_brim_io.py` e gia usato da Credit Agricole, Directa, Fineco e Intesa; base `brim_provider.py:387,461`.
 
@@ -186,7 +193,9 @@ I 35 siti C901 BRIM attuali sono 34 nei broker e uno in `_brim_io`, non 35 parse
 
 ### P4-4 - Yahoo `get_history_value`
 
-**Stato:** aperto. **Taglia:** M. `B/services/asset_source_providers/yahoo_finance.py:284-482`, C901 31. `_sync_fetch_history` e citato in commenti, non e un helper implementato.
+**Stato:** 🟡 in implementazione su K/SP08. **Taglia:** M.
+`B/services/asset_source_providers/yahoo_finance.py:284-482`, C901 31 alla
+baseline. `_sync_fetch_history` e citato in commenti, non e un helper implementato.
 
 **Superfici:** fetch/retry `79-113,329-368`; mapping DataFrame `370-425`; dividendi/split `428-472`; costruzione risultato/errori `474-482`.
 
@@ -198,7 +207,9 @@ I 35 siti C901 BRIM attuali sono 34 nei broker e uno in `_brim_io`, non 35 parse
 
 ### P4-5 - Migrazione Runes mirata
 
-**Stato:** preso in carico da B/SP05; codice completato, review dev pendente nel [piano dedicato](../11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md). **Taglia:** M.
+**Stato:** ✅ integrato tramite B/SP05 (`514582a47`), incluse le correzioni di
+review nel [piano dedicato](../11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md).
+**Taglia:** M.
 
 | Target reale | Legacy alla baseline | Punti sensibili |
 |---|---:|---|
@@ -212,7 +223,9 @@ I 35 siti C901 BRIM attuali sono 34 nei broker e uno in `_brim_io`, non 35 parse
 
 ### P4-6 - Matrice dichiarativa `SignalResult`
 
-**Stato:** preso in carico da B/SP04 nel [piano dedicato](../11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md). **Taglia:** M. Baseline: `B/schemas/signals.py:1050-1115`, C901 32; stati a `194-199`.
+**Stato:** ✅ integrato tramite B/SP04 (`514582a47`) nel
+[piano dedicato](../11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md).
+**Taglia:** M. Baseline: `B/schemas/signals.py:1050-1115`, C901 32; stati a `194-199`.
 
 **Superfici:** validatore, `SignalAvailability`, costruzione risultati in `signal_service.py:791-1127`, test schema/servizio. Consumatori Asset, FX, risk e AI Export.
 
@@ -685,7 +698,10 @@ L'endpoint non avvia calcoli, probe, download prezzi, reset o riparazioni; non r
 
 ## 10. Piano a sprint - dal circoscritto al complesso
 
-**Avvio autorizzato dal dev:** SP04-SP05, Gruppo B r2. Il [piano esecutivo](../11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md) prende in carico P4-5, P4-6/S6 6.7, S6 6.2 e S6 6.11; non li dichiara gia completati. A/C/D restano Plan-only. Unica coda runtime e generazione assegnata all'integratore B; nessuna bonifica DB o migrazione nel suo scope.
+**Nota storica:** l'avvio iniziale autorizzava solo SP04-SP05. Lo stato corrente
+prevale nella tabella seguente: B, E, F, G, H, Tool platform e I10 sono integrati;
+D/I/J/K/L mantengono workstream attivi e non vanno dichiarati consegnati prima
+dei rispettivi checkpoint, review e merge.
 
 L'ordine ordina **rischio e ampiezza**, non inventa dipendenze. Il primo sprint e deliberatamente minimo: un solo flusso asset, nessuna API nuova, nessuna migrazione, nessuna libreria. Ogni sprint sotto ha un proprio risultato chiudibile; i sotto-step finanziari o di policy non autorizzano una soluzione implicita quando il gate resta aperto. **I 16 sprint non cambiano con questa revisione**: la sezione 11 li apre in task e corsie parallelizzabili. Per le UI indicate, il DoD comprende anche approvazione ASCII e review operativa della sezione 12.
 
@@ -707,6 +723,23 @@ L'ordine ordina **rischio e ampiezza**, non inventa dipendenze. Il primo sprint 
 | **SP14 - Allocatore e UI completa** | Solver T1, custom UI T2 | Un solo solver buy/sell/FX e le sue spiegazioni. Oracle piccolo -> ricerca/limiti -> risultato typed -> editor avanzato/grafici -> integrazione end-to-end. | PAC, rebalancing e PAC rebalancing realmente supportati; limiti vendite e conversioni opzionali, contributi per valuta, proof/status e tabelle completi; nessuna esecuzione ordini. |
 | **SP15 - Privacy globale completa** | U2 | Trasversale; il contratto/inventario e la primitive possono essere analizzati prima, ma l'integrazione attende le nuove superfici SP07/SP14/F. Tre gate: U2-core -> adapter per owner UI -> audit/release globale. | Solo classi sensibili mascherate, prezzi/FX pubblici invariati, nessun dato reale sotto patina nelle superfici protette, nessun flash; confine visuale/log/export esplicito. |
 | **SP16 - Scomposizione batch transazioni** | P4-2 | Refactor strutturale, non nuova UX: dividere le ~637 righe di `TransactionService.execute_batch` negli otto stage oggi sequenziali (parse leniente, accesso, delete, update, create, link, balance walk, esito commit/rollback) con contesto esplicito. Ownership esclusiva di `transaction_service.py`; nessun cambio di contratto/policy. | Preview/commit/rollback e raccolta completa errori equivalenti; ordine e atomicita multi-broker invariati; link/promote/split, WAC e saldi equivalenti; commit ancora al chiamante, nessun commit interno ai nuovi stage. |
+
+### Stato esecutivo dei 16 sprint — 2026-09-11
+
+| Sprint | Stato corrente |
+|---|---|
+| SP01–SP03 | ✅ Integrati e revisionati (E/F). |
+| SP04–SP05 | ✅ Integrati tramite B. |
+| SP06 | 🟡 U3/YOC + I10 integrati; I60/follow-up attivi su I; G1c aperto. |
+| SP07 | ⏸️ I20–I50 non iniziati. |
+| SP08 | 🟡 K autorizzato e in implementazione. |
+| SP09 | ✅ G integrato, developer-accepted e archiviato. |
+| SP10 | ⏸️ Differito. |
+| SP11 | 🟡 J Round 3 in implementazione; nessuna integrazione target finché manca review finale. |
+| SP12 | ✅ Tool platform integrata. |
+| SP13–SP14 | 🟡 D Round 2 completo in implementazione; solver ancora aperto. |
+| SP15 | ⛔ Bloccato da SP07 + SP11 + SP14. |
+| SP16 | 🟡 L autorizzato e in implementazione. |
 
 **Sequenza non significa blocco artificiale:** SP12-14 non dipendono da SP08/09/16. Possono essere anticipati se cambia la priorita di prodotto, senza fingere che il PAC richieda prima rifare FIFO o asset_source. Il presente ordine mantiene prima il lavoro circoscritto, poi catene L, infine il nuovo solver e le integrazioni XL.
 
