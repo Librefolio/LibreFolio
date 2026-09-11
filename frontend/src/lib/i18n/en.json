@@ -1540,7 +1540,8 @@
     "today": "Today",
     "resolvingStart": "Finding…",
     "openCalendar": "Open the calendar",
-    "formatHint": "Type the date or pick it from the calendar. Accepted: 2026-08-07, 2026/8/7, 7-8-2026, 7.8.2026 — the year must be written in full."
+    "formatHint": "Type the date or pick it from the calendar. Accepted: 2026-08-07, 2026/8/7, 7-8-2026, 7.8.2026 — the year must be written in full.",
+    "invalidDate": "Enter a valid available date."
   },
   "error": {
     "pageNotFound": "Page Not Found",
@@ -3180,9 +3181,6 @@
   "tools": {
     "title": "Tools",
     "subtitle": "Independent calculations. No portfolio changes are written.",
-    "open": "Open tool",
-    "contractVersion": "Contract",
-    "implementationVersion": "Implementation",
     "status": {
       "unavailable": "Unavailable",
       "available": "Available"
@@ -3305,18 +3303,11 @@
     "pacAllocator": {
       "name": "PAC allocator",
       "description": "Analyze the exact initial allocation state.",
-      "pilotNotice": "Manual initial-state analysis only. No portfolio data is read, no orders are proposed, and nothing is saved.",
       "scenario": "Scenario",
       "reportCurrency": "Reporting currency",
       "asOfDate": "As-of date (optional)",
       "rows": {
-        "title": "Assets and custody contexts",
-        "description": "Each row is one asset in one context. Use the dedicated action to preserve instrument identity across contexts.",
-        "addAsset": "New local asset",
         "empty": "Add at least one row. The backend will report missing rows until then.",
-        "rowNumber": "Row {number}",
-        "identity": "Local instrument identity",
-        "sameAsset": "Same asset, another context",
         "initialQuantity": "Initial quantity",
         "price": "Native price",
         "quoteBasis": "Quote base quantity",
@@ -3333,18 +3324,22 @@
         "noneExisting": "Explicitly no existing cash",
         "amount": "Amount",
         "addCurrency": "Add currency",
-        "markNoneExisting": "No existing cash",
-        "markNotSupplied": "Mark as not supplied",
         "contributions": "New contributions",
         "noneContributions": "Explicitly no new contributions",
-        "markNoneContributions": "No new contributions"
+        "existingHint": "Native cash already held, grouped by currency.",
+        "contributionsHint": "New money for this scenario, separate from existing cash.",
+        "enterAmounts": "Enter amounts",
+        "notSuppliedHint": "Unknown is different from zero: the backend will report this input as missing."
       },
       "rates": {
         "title": "Valuation exchange rates",
         "description": "Reporting value of one native currency unit. These rates do not convert or move cash.",
         "add": "Add rate",
         "value": "Rate to reporting currency",
-        "date": "Rate date (optional)"
+        "date": "Rate date (optional)",
+        "foreignCurrencies": "Manual valuation rates are needed for: {currencies}.",
+        "useManualRates": "Provide manual valuation rates",
+        "noCashConversion": "Valuation only: this does not convert or move cash."
       },
       "revision": "Draft revision",
       "noOrders": "Orders, feasibility, and optimization are not included in this pilot.",
@@ -3385,7 +3380,54 @@
       },
       "cashPools": "Native cash pools",
       "issues": "Backend findings",
-      "normalizedInput": "Normalized input and units"
-    }
+      "normalizedInput": "Normalized input and units",
+      "scenarioHint": "Choose the reporting currency and the date used for portfolio facts.",
+      "ownedAssets": "Your assets",
+      "ownedAssetsHint": "Select an asset to copy every custody context into this editable draft.",
+      "addManualAsset": "New manual asset",
+      "loadingOwnedAssets": "Loading your assets…",
+      "noOwnedAssets": "No owned assets found",
+      "noOwnedAssetsHint": "You can still build the scenario with a manual asset.",
+      "searchOwnedAssets": "Search assets or brokers",
+      "custodyContext": "custody context",
+      "custodyContexts": "custody contexts",
+      "missingPrice": "Price missing",
+      "modified": "Modified",
+      "staleLabel": "Outdated",
+      "noAssetMatches": "No assets match this search.",
+      "selectGrid": "Select a purchase grid",
+      "perUnits": "Price per",
+      "fullCustody": "Full custody quantity",
+      "personalShare": "personal share",
+      "manual": "Manual",
+      "snapshotAt": "Portfolio snapshot",
+      "priceAt": "price dated",
+      "editableCopy": "editable copy",
+      "duplicate": "Duplicate",
+      "identityAndCustody": "Identity and custody",
+      "instrumentId": "Instrument ID",
+      "marketFacts": "Market facts",
+      "selectPriceBasis": "Select price basis",
+      "targetAndGrid": "Target and purchase grid",
+      "rowLimit": "This P1 analysis supports up to 32 rows.",
+      "atomicRowLimit": "All custody contexts must fit within the 32-row limit; nothing was copied.",
+      "staleSourceHint": "{count} copied rows refer to another snapshot date. Review the refreshed source before replacing facts.",
+      "refreshCopiedFacts": "Refresh copied facts",
+      "selectedContexts": "Selected custody contexts",
+      "selectedContextsHint": "Copied values are a snapshot and remain fully editable. Set targets and purchase grids explicitly.",
+      "emptyRowsHint": "Choose one of your assets above or add a manual asset.",
+      "confirmDeselectTitle": "Remove copied asset?",
+      "confirmDeselectMessage": "Some linked rows were edited. Deselecting the asset removes every copied custody context and duplicate listed below.",
+      "confirmRefreshTitle": "Replace edited source facts?",
+      "confirmRefreshMessage": "The fields listed below differ from the copied snapshot.",
+      "confirmRefreshDescription": "Continuing replaces only copied identity, custody and quote facts. Targets and purchase grids are preserved.",
+      "modifiedFields": "Edited rows and fields",
+      "removeCopiedRows": "Remove copied rows",
+      "overwriteCopiedFacts": "Replace copied facts",
+      "confirmRemoveRowTitle": "Remove copied context?",
+      "confirmRemoveRowMessage": "This copied context has edits. Removing it discards only this row; other custody contexts remain selected.",
+      "removeCopiedRow": "Remove context"
+    },
+    "version": "Version"
   }
 }

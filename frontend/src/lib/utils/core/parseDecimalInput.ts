@@ -97,6 +97,44 @@ export function stepDecimalValue(value: string, delta: number, step = 1): string
     return places === 0 ? String(next) : next.toFixed(places);
 }
 
+function exactScaledInteger(value: string, places: number): bigint | null {
+    const normalized = normalizeDecimalInput(value);
+    if (!/^-?(?:\d+(?:\.\d*)?|\.\d+)$/.test(normalized)) return null;
+    const negative = normalized.startsWith('-');
+    const unsigned = negative ? normalized.slice(1) : normalized;
+    const [integerRaw = '', fraction = ''] = unsigned.split('.');
+    const digits = `${integerRaw || '0'}${fraction.padEnd(places, '0')}`.replace(/^0+(?=\d)/, '');
+    const scaled = BigInt(digits || '0');
+    return negative ? -scaled : scaled;
+}
+
+function formatScaledInteger(value: bigint, places: number): string {
+    const negative = value < 0n;
+    const digits = (negative ? -value : value).toString().padStart(places + 1, '0');
+    const integer = places === 0 ? digits : digits.slice(0, -places);
+    const fraction = places === 0 ? '' : digits.slice(-places);
+    const rendered = places === 0 ? integer : `${integer}.${fraction}`;
+    return negative && value !== 0n ? `-${rendered}` : rendered;
+}
+
+/** Exact fixed-step arithmetic for high-precision decimal text fields. */
+export function stepExactDecimalValue(value: string, delta: -1 | 1, step = '1'): string {
+    const normalizedValue = normalizeDecimalInput(value);
+    const normalizedStep = normalizeDecimalInput(step);
+    const places = Math.max(decimalPlaces(normalizedValue), decimalPlaces(normalizedStep));
+    const current = exactScaledInteger(normalizedValue, places) ?? 0n;
+    const magnitude = exactScaledInteger(normalizedStep, places);
+    if (magnitude === null || magnitude <= 0n) return value;
+    return formatScaledInteger(current + BigInt(delta) * magnitude, places);
+}
+
+export function exactDecimalArrowStep(event: KeyboardEvent, value: string, step = '1'): string | null {
+    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return null;
+    if (event.ctrlKey || event.metaKey || event.altKey) return null;
+    event.preventDefault();
+    return stepExactDecimalValue(value, event.key === 'ArrowUp' ? 1 : -1, step);
+}
+
 /**
  * Hold-to-accelerate state. Only one input can hold a key at a time, so a single
  * module-level tracker is enough and every call site keeps its plain signature.

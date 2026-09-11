@@ -93,7 +93,7 @@
         });
     }
 
-    async function refreshCatalog(): Promise<void> {
+    async function refreshCatalog(reload = false): Promise<void> {
         const session = getToolAccountState();
         if (!alive || !active || !session.authenticated || catalogController) return;
         const generation = session.generation;
@@ -105,7 +105,7 @@
         catalog = null;
         entries = [];
         try {
-            const loaded = await fetchToolCatalog({signal: request.signal});
+            const loaded = await fetchToolCatalog({signal: request.signal, reload});
             if (catalogSequence !== requestSequence || !sessionCurrent(generation, request)) return;
             const nextEntries = loaded.items.map(
                 (descriptor): CatalogEntry => ({
@@ -235,26 +235,27 @@
 </script>
 
 <section class="mt-4 min-w-0 space-y-4 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800" data-testid="tool-about-panel" data-state={viewState} data-busy={busy ? 'true' : 'false'} aria-busy={busy}>
-    <header class="flex flex-wrap items-start justify-between gap-3">
-        <div class="min-w-0">
+    <header class="space-y-1">
+        <div class="flex min-w-0 items-center justify-between gap-3">
             <h4 class="flex items-center gap-2 font-semibold text-gray-900 dark:text-gray-100">
                 <Wrench size={18} aria-hidden="true" class="shrink-0 text-libre-green dark:text-green-400" />
                 {$t('tools.title', {default: 'Tools'})}
             </h4>
-            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                {$t('tools.about.readOnly', {default: 'Read-only catalogue and diagnostics. No calculations, probes or repairs are run.'})}
-            </p>
+            <button
+                type="button"
+                onclick={() => refreshCatalog(true)}
+                disabled={!active || !account.authenticated || catalogPending}
+                class="inline-flex shrink-0 items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700 dark:focus-visible:outline-green-400"
+                aria-label={$t('common.refresh')}
+                data-testid="tool-about-refresh"
+            >
+                <RefreshCw size={15} aria-hidden="true" />
+                <span class="hidden sm:inline">{$t('common.refresh')}</span>
+            </button>
         </div>
-        <button
-            type="button"
-            onclick={() => refreshCatalog()}
-            disabled={!active || !account.authenticated || catalogPending}
-            class="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700 dark:focus-visible:outline-green-400"
-            data-testid="tool-about-refresh"
-        >
-            <RefreshCw size={15} aria-hidden="true" />
-            {$t('common.refresh')}
-        </button>
+        <p class="text-xs text-gray-500 dark:text-gray-400">
+            {$t('tools.about.readOnly', {default: 'Read-only catalogue and diagnostics. No calculations, probes or repairs are run.'})}
+        </p>
     </header>
 
     {#if !active}
@@ -272,7 +273,7 @@
         {:else if catalogError && catalogErrorCopy}
             <div class="space-y-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200" role="alert" data-testid="tool-about-catalog-error" data-error-code={catalogError.code}>
                 <p>{$t(catalogErrorCopy.key, {default: catalogErrorCopy.fallback})}</p>
-                <button type="button" onclick={() => refreshCatalog()} class="rounded border border-current px-3 py-1.5 focus-visible:outline-2 focus-visible:outline-offset-2" data-testid="tool-about-catalog-retry">{$t('common.retry')}</button>
+                <button type="button" onclick={() => refreshCatalog(true)} class="rounded border border-current px-3 py-1.5 focus-visible:outline-2 focus-visible:outline-offset-2" data-testid="tool-about-catalog-retry">{$t('common.retry')}</button>
             </div>
         {:else if catalog}
             {#if catalog.unavailable.length > 0 || incompatibleCount > 0}
@@ -306,8 +307,7 @@
                                 {/if}
                             </div>
                             <p class="mt-2 break-words text-xs text-gray-500 dark:text-gray-400">
-                                <code>{item.tool_code}</code> · {$t('tools.contractVersion', {default: 'Contract'})}: {item.contract_version}
-                                · {$t('tools.implementationVersion', {default: 'Implementation'})}: {item.implementation_version}
+                                <code>{item.tool_code}</code> · {$t('tools.version', {default: 'Version'})}: {item.contract_version}
                             </p>
                             {#if entry.resolution.status === 'ready'}
                                 <p class="mt-2 text-xs text-green-800 dark:text-green-300" data-testid="tool-about-ui-compatible">

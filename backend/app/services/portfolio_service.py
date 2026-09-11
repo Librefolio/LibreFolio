@@ -51,6 +51,7 @@ from backend.app.schemas.portfolio import (
     IssueSeverity,
     MissingPriceAsset,
     OtherPeriodEffect,
+    PortfolioAllocationSource,
     PortfolioHistoryPoint,
     PortfolioHolding,
     PortfolioReportMetadata,
@@ -62,6 +63,7 @@ from backend.app.schemas.portfolio import (
 )
 from backend.app.schemas.wac import WACMissingPairInfo, WACPreviewResultItem, WACQualifyingTX
 from backend.app.services.fx import convert_bulk
+from backend.app.services.portfolio_allocation_source import build_portfolio_allocation_source
 from backend.app.services.settings_service import get_effective_base_currency
 from backend.app.utils.cache_utils import get_ttl_cache
 from backend.app.utils.financial.roi_utils import (
@@ -1877,13 +1879,18 @@ class PortfolioService:
         base_currency = query.target_currency or await self._get_base_currency(user_id)
         date_from = query.date_range.resolved_start() if query.date_range else None
         date_to = query.date_range.resolved_end() if query.date_range else None
+        allocation_source_date = query.allocation_source.as_of_date if query.allocation_source else None
+        price_fingerprint_date = max(date_to or today, allocation_source_date or today)
 
         # ── 0. Layer 2 cache check ──
         # Build a fingerprint from transactions + prices to detect data changes
         l2_key = None
         broker_ids_for_scope = query.broker_ids
         scope_stmt = select(BrokerUserAccess).where(BrokerUserAccess.user_id == user_id)
-        if broker_ids_for_scope:
+        # The allocation editor intentionally sees every OWNER context, independent of
+        # the optional report filter. Its cache fingerprint must therefore cover the
+        # full accessible broker set whenever that projection is requested.
+        if broker_ids_for_scope and allocation_source_date is None:
             scope_stmt = scope_stmt.where(BrokerUserAccess.broker_id.in_(broker_ids_for_scope))
         scope_result = await self.db.execute(scope_stmt)
         scope_accesses = list(scope_result.scalars().all())
@@ -1901,14 +1908,52 @@ class PortfolioService:
 
             held_ids = {tx.asset_id for tx in all_txs_for_fp if tx.asset_id and tx.quantity and tx.quantity != 0}
             price_fp = "no_assets"
+            allocation_metadata_fp = None
             if held_ids:
-                pf_stmt = select(func.count(PriceHistory.id), func.max(PriceHistory.fetched_at)).where(PriceHistory.asset_id.in_(held_ids)).where(PriceHistory.date <= (date_to or today))
+                pf_stmt = select(func.count(PriceHistory.id), func.max(PriceHistory.fetched_at)).where(PriceHistory.asset_id.in_(held_ids)).where(PriceHistory.date <= price_fingerprint_date)
                 pf_row = (await self.db.execute(pf_stmt)).one()
                 price_fp = f"{pf_row[0] or 0}:{pf_row[1].isoformat() if pf_row[1] else 'none'}"
+            if allocation_source_date is not None:
+                broker_metadata_rows = (await self.db.execute(select(Broker.id, Broker.name).where(Broker.id.in_(scope_broker_ids)))).all()
+                asset_metadata_rows = (
+                    (
+                        await self.db.execute(
+                            select(
+                                Asset.id,
+                                Asset.display_name,
+                                Asset.identifier_ticker,
+                                Asset.asset_type,
+                                Asset.icon_url,
+                                Asset.currency,
+                                Asset.quote_base_quantity,
+                            ).where(Asset.id.in_(held_ids))
+                        )
+                    ).all()
+                    if held_ids
+                    else []
+                )
+                allocation_metadata_fp = (
+                    tuple(sorted((broker_id, name) for broker_id, name in broker_metadata_rows)),
+                    tuple(
+                        sorted(
+                            (
+                                asset_id,
+                                display_name,
+                                identifier_ticker,
+                                getattr(asset_type, "value", asset_type),
+                                icon_url,
+                                currency,
+                                quote_base_quantity,
+                            )
+                            for asset_id, display_name, identifier_ticker, asset_type, icon_url, currency, quote_base_quantity in asset_metadata_rows
+                        )
+                    ),
+                )
 
             l2_key = (
                 user_id,
                 tuple(scope_broker_ids),
+                tuple(sorted(broker_ids_for_scope)) if broker_ids_for_scope else None,
                 access_fp,
                 base_currency,
                 str(date_from),
@@ -1918,14 +1963,43 @@ class PortfolioService:
                 query.include_allocation_history,
                 query.include_breakdown,
                 query.include_positions_contribution,
+                str(allocation_source_date),
                 tx_fp,
                 price_fp,
+                allocation_metadata_fp,
             )
 
             cached, hit = _portfolio_l2_cache.get(l2_key)
             if hit:
                 _logger.debug("Portfolio L2 cache hit", user_id=user_id)
                 return cached
+
+        allocation_source: PortfolioAllocationSource | None = None
+        if allocation_source_date is not None:
+            allocation_source = await build_portfolio_allocation_source(
+                self.db,
+                user_id=user_id,
+                as_of_date=allocation_source_date,
+            )
+
+        needs_engine = query.include_summary or query.include_history or query.include_allocation_history or query.include_positions_contribution
+        if allocation_source is not None and not needs_engine:
+            report = PortfolioReportResponse(
+                metadata=PortfolioReportMetadata(
+                    broker_ids=query.broker_ids,
+                    target_currency=base_currency,
+                    requested_date_from=date_from,
+                    requested_date_to=date_to,
+                    computed_date_from=None,
+                    computed_date_to=None,
+                    generated_at=today,
+                    included_features=["allocation_source"],
+                ),
+                allocation_source=allocation_source,
+            )
+            if l2_key is not None:
+                _portfolio_l2_cache.set(l2_key, report)
+            return report
 
         # ── 1. Single engine run ──
         engine = PortfolioCalculationEngine(self.db)
@@ -1940,6 +2014,8 @@ class PortfolioService:
         views = DerivedViewsBuilder(engine_result.daily_states, base_currency)
 
         included: list[str] = []
+        if allocation_source is not None:
+            included.append("allocation_source")
 
         # ── 2. Summary (reuses get_summary logic inline to share engine result) ──
         summary: PortfolioSummary | None = None
@@ -2085,6 +2161,7 @@ class PortfolioService:
             allocation_history=alloc_history,
             data_quality=data_quality,
             positions_contribution=positions_contribution,
+            allocation_source=allocation_source,
         )
 
         # Store in Layer 2 cache

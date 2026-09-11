@@ -11,6 +11,7 @@ Schemas for the /api/v1/portfolio/ endpoints:
 """
 
 from datetime import date as date_type
+from datetime import datetime
 from enum import StrEnum
 from typing import Any, Dict, List, Literal, Optional
 
@@ -835,6 +836,54 @@ class PortfolioReportMetadata(StrictModel):
     included_features: List[str] = Field(default_factory=list)
 
 
+class PortfolioAllocationSourceRequest(StrictModel):
+    """Opt-in full-custody source for allocation editors."""
+
+    as_of_date: date_type = Field(..., description="Inclusive custody and saved-price snapshot date.")
+
+
+class PortfolioAllocationSourceQuote(StrictModel):
+    """Latest saved native quote at or before the requested date."""
+
+    raw_price: Optional[SafeDecimal] = None
+    currency: str = Field(..., description="Native asset/quote currency.")
+    quote_base_quantity: int = Field(..., ge=1, description="Asset units represented by raw_price.")
+    reference_date: Optional[date_type] = None
+    source: Optional[str] = Field(None, description="Saved price source plugin key.")
+    days_before_requested: Optional[int] = Field(None, ge=0)
+
+
+class PortfolioAllocationSourceContext(StrictModel):
+    """One OWNER custody position for a canonical asset."""
+
+    context_key: str
+    broker_id: int
+    broker_name: str
+    ownership_share_percent: SafeDecimal = Field(..., description="Display metadata only; custody_quantity is not share-scaled.")
+    custody_quantity: SafeDecimal
+
+
+class PortfolioAllocationSourceAsset(StrictModel):
+    """Canonical asset with every owned broker context."""
+
+    asset_id: int
+    instrument_key: str
+    name: str
+    ticker: Optional[str] = None
+    asset_type: str
+    icon_url: Optional[str] = None
+    quote: PortfolioAllocationSourceQuote
+    contexts: List[PortfolioAllocationSourceContext] = Field(default_factory=list)
+
+
+class PortfolioAllocationSource(StrictModel):
+    """Read-only facts copied by allocation editors; never targets or advice."""
+
+    generated_at: datetime
+    as_of_date: date_type
+    assets: List[PortfolioAllocationSourceAsset] = Field(default_factory=list)
+
+
 class PortfolioReportQuery(StrictModel):
     """Request body for POST /portfolio/report.
 
@@ -849,6 +898,7 @@ class PortfolioReportQuery(StrictModel):
     include_allocation_history: bool = Field(True, description="Include allocation history by all dimensions.")
     include_breakdown: bool = Field(False, description="Include per-broker breakdown in summary.")
     include_positions_contribution: bool = Field(False, description="Include per-asset period P&L contribution.")
+    allocation_source: Optional[PortfolioAllocationSourceRequest] = Field(None, description="Opt-in OWNER/full-custody allocation-editor source.")
 
 
 class PortfolioReportResponse(StrictModel):
@@ -864,3 +914,4 @@ class PortfolioReportResponse(StrictModel):
     allocation_history: Optional[AllocationHistoryDimensions] = None
     data_quality: Optional[DataQualityReport] = None
     positions_contribution: Optional[PositionsContribution] = Field(None, description="Per-asset period P&L contribution. Only when include_positions_contribution=True.")
+    allocation_source: Optional[PortfolioAllocationSource] = Field(None, description="OWNER/full-custody source facts when requested.")

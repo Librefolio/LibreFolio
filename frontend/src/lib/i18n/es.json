@@ -1540,7 +1540,8 @@
     "today": "Hoy",
     "resolvingStart": "Buscando…",
     "openCalendar": "Abrir el calendario",
-    "formatHint": "Escribe la fecha o elígela en el calendario. Formatos aceptados: 2026-08-07, 2026/8/7, 7-8-2026, 7.8.2026 — el año debe escribirse completo."
+    "formatHint": "Escribe la fecha o elígela en el calendario. Formatos aceptados: 2026-08-07, 2026/8/7, 7-8-2026, 7.8.2026 — el año debe escribirse completo.",
+    "invalidDate": "Introduce una fecha válida y disponible."
   },
   "error": {
     "pageNotFound": "Página No Encontrada",
@@ -3180,9 +3181,6 @@
   "tools": {
     "title": "Herramientas",
     "subtitle": "Cálculos independientes. No se guardan cambios en la cartera.",
-    "open": "Abrir herramienta",
-    "contractVersion": "Contrato",
-    "implementationVersion": "Implementación",
     "status": {
       "unavailable": "No disponible",
       "available": "Disponible"
@@ -3305,18 +3303,11 @@
     "pacAllocator": {
       "name": "Asignador PAC",
       "description": "Analiza el estado inicial exacto de la asignación.",
-      "pilotNotice": "Solo análisis manual del estado inicial. No se leen datos de la cartera, no se proponen órdenes y no se guarda nada.",
       "scenario": "Escenario",
       "reportCurrency": "Divisa del informe",
       "asOfDate": "Fecha de referencia (opcional)",
       "rows": {
-        "title": "Activos y contextos de custodia",
-        "description": "Cada fila representa un activo en un contexto. Usa la acción específica para conservar la identidad del instrumento entre contextos.",
-        "addAsset": "Nuevo activo local",
         "empty": "Añade al menos una fila. Hasta entonces, el backend indicará que faltan filas.",
-        "rowNumber": "Fila {number}",
-        "identity": "Identidad local del instrumento",
-        "sameAsset": "Mismo activo, otro contexto",
         "initialQuantity": "Cantidad inicial",
         "price": "Precio nativo",
         "quoteBasis": "Cantidad base de la cotización",
@@ -3333,18 +3324,22 @@
         "noneExisting": "Sin efectivo existente, de forma explícita",
         "amount": "Importe",
         "addCurrency": "Añadir divisa",
-        "markNoneExisting": "Sin efectivo existente",
-        "markNotSupplied": "Marcar como no proporcionado",
         "contributions": "Nuevas aportaciones",
         "noneContributions": "Sin nuevas aportaciones, de forma explícita",
-        "markNoneContributions": "Sin nuevas aportaciones"
+        "existingHint": "Efectivo nativo ya disponible, agrupado por divisa.",
+        "contributionsHint": "Dinero nuevo para este escenario, separado del efectivo existente.",
+        "enterAmounts": "Introducir importes",
+        "notSuppliedHint": "Un valor desconocido es distinto de cero: el backend indicará que falta este dato."
       },
       "rates": {
         "title": "Tipos de cambio de valoración",
         "description": "Valor de informe de una unidad de divisa nativa. Estos tipos no convierten ni mueven efectivo.",
         "add": "Añadir tipo",
         "value": "Tipo hacia la divisa del informe",
-        "date": "Fecha del tipo (opcional)"
+        "date": "Fecha del tipo (opcional)",
+        "foreignCurrencies": "Se necesitan tipos de valoración manuales para: {currencies}.",
+        "useManualRates": "Proporcionar tipos de valoración manuales",
+        "noCashConversion": "Solo valoración: esto no convierte ni mueve efectivo."
       },
       "revision": "Revisión del borrador",
       "noOrders": "Las órdenes, la viabilidad y la optimización no están incluidas en este piloto.",
@@ -3385,7 +3380,54 @@
       },
       "cashPools": "Reservas de efectivo nativas",
       "issues": "Hallazgos del backend",
-      "normalizedInput": "Entrada normalizada y unidades"
-    }
+      "normalizedInput": "Entrada normalizada y unidades",
+      "scenarioHint": "Elige la divisa de informe y la fecha utilizada para los datos de la cartera.",
+      "ownedAssets": "Tus activos",
+      "ownedAssetsHint": "Selecciona un activo para copiar todos sus contextos de custodia en este borrador editable.",
+      "addManualAsset": "Nuevo activo manual",
+      "loadingOwnedAssets": "Cargando tus activos…",
+      "noOwnedAssets": "No se encontraron activos propios",
+      "noOwnedAssetsHint": "Aun así puedes crear el escenario con un activo manual.",
+      "searchOwnedAssets": "Buscar activos o brókeres",
+      "custodyContext": "contexto de custodia",
+      "custodyContexts": "contextos de custodia",
+      "missingPrice": "Falta el precio",
+      "modified": "Modificado",
+      "staleLabel": "Desactualizado",
+      "noAssetMatches": "Ningún activo coincide con esta búsqueda.",
+      "selectGrid": "Selecciona una cuadrícula de compra",
+      "perUnits": "Precio por",
+      "fullCustody": "Cantidad total en custodia",
+      "personalShare": "participación personal",
+      "manual": "Manual",
+      "snapshotAt": "Instantánea de la cartera",
+      "priceAt": "precio con fecha",
+      "editableCopy": "copia editable",
+      "duplicate": "Duplicar",
+      "identityAndCustody": "Identidad y custodia",
+      "instrumentId": "ID del instrumento",
+      "marketFacts": "Datos de mercado",
+      "selectPriceBasis": "Selecciona la base del precio",
+      "targetAndGrid": "Objetivo y cuadrícula de compra",
+      "rowLimit": "Este análisis P1 admite hasta 32 filas.",
+      "atomicRowLimit": "Todos los contextos de custodia deben caber en el límite de 32 filas; no se copió nada.",
+      "staleSourceHint": "{count} filas copiadas corresponden a otra fecha de instantánea. Revisa la fuente actualizada antes de reemplazar los datos.",
+      "refreshCopiedFacts": "Actualizar datos copiados",
+      "selectedContexts": "Contextos de custodia seleccionados",
+      "selectedContextsHint": "Los valores copiados son una instantánea y siguen siendo editables. Define explícitamente los objetivos y cuadrículas de compra.",
+      "emptyRowsHint": "Elige uno de tus activos arriba o añade un activo manual.",
+      "confirmDeselectTitle": "¿Eliminar el activo copiado?",
+      "confirmDeselectMessage": "Se editaron algunas filas vinculadas. Al deseleccionar el activo se eliminan todos los contextos de custodia copiados y los duplicados indicados abajo.",
+      "confirmRefreshTitle": "¿Reemplazar los datos de origen modificados?",
+      "confirmRefreshMessage": "Los campos indicados abajo difieren de la instantánea copiada.",
+      "confirmRefreshDescription": "Continuar reemplaza solo la identidad, custodia y cotizaciones copiadas. Se conservan los objetivos y cuadrículas de compra.",
+      "modifiedFields": "Filas y campos modificados",
+      "removeCopiedRows": "Eliminar filas copiadas",
+      "overwriteCopiedFacts": "Reemplazar los datos copiados",
+      "confirmRemoveRowTitle": "¿Eliminar el contexto copiado?",
+      "confirmRemoveRowMessage": "Este contexto copiado contiene cambios. Al eliminarlo solo se descarta esta fila; los demás contextos de custodia permanecen seleccionados.",
+      "removeCopiedRow": "Eliminar contexto"
+    },
+    "version": "Versión"
   }
 }

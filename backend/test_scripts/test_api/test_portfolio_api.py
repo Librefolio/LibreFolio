@@ -5,14 +5,19 @@ from decimal import Decimal
 
 import httpx
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.config import get_settings
+from backend.app.db.session import get_async_engine
+from backend.app.services import user_service
+from backend.test_scripts.test_db_config import verify_test_database
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success
 
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30
+SOLE_ADMIN_DELETE_DETAIL = "Cannot delete account: you are the only administrator"
 
 
 # ---------------------------------------------------------------------------
@@ -515,6 +520,224 @@ class TestPortfolioHistoryEndpoint:
 
 @pytest.mark.asyncio
 class TestPortfolioReportEndpoint:
+    async def test_report_allocation_source_authenticated_contract(self, test_server):
+        """Opt-in source is serialized through /report without running other views."""
+        print_section("Portfolio Report: allocation source contract")
+        broker_id: int | None = None
+        asset_id: int | None = None
+        user_id: int | None = None
+
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            try:
+                broker_name = f"Allocation Broker {uuid.uuid4().hex}"
+                broker_id = await create_broker(client, broker_name)
+                asset_name = f"Allocation Asset {uuid.uuid4().hex}"
+                ticker = f"AL{uuid.uuid4().hex[:8]}".upper()
+                icon_url = "https://example.test/allocation-source.svg"
+                create_resp = await client.post(
+                    f"{API_BASE}/assets",
+                    json=[
+                        {
+                            "display_name": asset_name,
+                            "currency": "JPY",
+                            "asset_type": "STOCK",
+                            "quote_base_quantity": 100,
+                            "identifier_ticker": ticker,
+                            "icon_url": icon_url,
+                        }
+                    ],
+                    timeout=TIMEOUT,
+                )
+                assert create_resp.status_code in (200, 201), create_resp.text
+                asset_result = next(result for result in create_resp.json()["results"] if result["display_name"] == asset_name)
+                assert asset_result["success"] is True
+                asset_id = asset_result["asset_id"]
+
+                me_resp = await client.get(f"{API_BASE}/auth/me", timeout=TIMEOUT)
+                assert me_resp.status_code == 200, me_resp.text
+                user_id = me_resp.json()["user"]["id"]
+                access_resp = await client.put(
+                    f"{API_BASE}/brokers/{broker_id}/access",
+                    json=[
+                        {
+                            "user_id": user_id,
+                            "role": "OWNER",
+                            "share_percentage": 0,
+                        }
+                    ],
+                    timeout=TIMEOUT,
+                )
+                assert access_resp.status_code == 200, access_resp.text
+
+                await commit_batch(
+                    client,
+                    creates=[
+                        {
+                            "broker_id": broker_id,
+                            "asset_id": asset_id,
+                            "type": "BUY",
+                            "date": "2026-08-10",
+                            "quantity": "12",
+                            "cash": {"code": "JPY", "amount": "-1200"},
+                        },
+                        {
+                            "broker_id": broker_id,
+                            "asset_id": asset_id,
+                            "type": "SELL",
+                            "date": "2026-08-20",
+                            "quantity": "-2",
+                            "cash": {"code": "JPY", "amount": "200"},
+                        },
+                        {
+                            "broker_id": broker_id,
+                            "asset_id": asset_id,
+                            "type": "BUY",
+                            "date": "2026-08-21",
+                            "quantity": "100",
+                            "cash": {"code": "JPY", "amount": "-10000"},
+                        },
+                    ],
+                )
+                price_resp = await client.post(
+                    f"{API_BASE}/assets/prices",
+                    json=[
+                        {
+                            "asset_id": asset_id,
+                            "prices": [
+                                {
+                                    "date": "2026-08-18",
+                                    "close": "123.45",
+                                    "currency": "JPY",
+                                },
+                                {
+                                    "date": "2026-08-21",
+                                    "close": "999",
+                                    "currency": "JPY",
+                                },
+                            ],
+                        }
+                    ],
+                    timeout=TIMEOUT,
+                )
+                assert price_resp.status_code == 200, price_resp.text
+
+                resp = await post_portfolio_report(
+                    client,
+                    {
+                        "broker_ids": [broker_id],
+                        "include_summary": False,
+                        "include_history": False,
+                        "include_allocation_history": False,
+                        "include_positions_contribution": False,
+                        "allocation_source": {"as_of_date": "2026-08-20"},
+                    },
+                )
+                assert resp.status_code == 200, resp.text
+                report = resp.json()
+
+                assert set(report) == {
+                    "metadata",
+                    "summary",
+                    "history",
+                    "allocation_history",
+                    "data_quality",
+                    "positions_contribution",
+                    "allocation_source",
+                }
+                assert report["summary"] is None
+                assert report["history"] is None
+                assert report["allocation_history"] is None
+                assert report["data_quality"] is None
+                assert report["positions_contribution"] is None
+                assert report["metadata"]["broker_ids"] == [broker_id]
+                assert report["metadata"]["included_features"] == ["allocation_source"]
+
+                source = report["allocation_source"]
+                assert set(source) == {"generated_at", "as_of_date", "assets"}
+                assert source["as_of_date"] == "2026-08-20"
+                assets_by_id = {asset["asset_id"]: asset for asset in source["assets"]}
+                assert set(assets_by_id) == {asset_id}
+                asset = assets_by_id[asset_id]
+                assert set(asset) == {
+                    "asset_id",
+                    "instrument_key",
+                    "name",
+                    "ticker",
+                    "asset_type",
+                    "icon_url",
+                    "quote",
+                    "contexts",
+                }
+                assert asset["instrument_key"] == f"asset:{asset_id}"
+                assert asset["name"] == asset_name
+                assert asset["ticker"] == ticker
+                assert asset["asset_type"] == "STOCK"
+                assert asset["icon_url"] == icon_url
+
+                assert set(asset["quote"]) == {
+                    "raw_price",
+                    "currency",
+                    "quote_base_quantity",
+                    "reference_date",
+                    "source",
+                    "days_before_requested",
+                }
+                assert Decimal(asset["quote"]["raw_price"]) == Decimal("123.45")
+                assert asset["quote"]["currency"] == "JPY"
+                assert asset["quote"]["quote_base_quantity"] == 100
+                assert asset["quote"]["reference_date"] == "2026-08-18"
+                assert asset["quote"]["source"] == "MANUAL"
+                assert asset["quote"]["days_before_requested"] == 2
+
+                contexts_by_key = {context["context_key"]: context for context in asset["contexts"]}
+                context_key = f"asset:{asset_id}:broker:{broker_id}"
+                assert set(contexts_by_key) == {context_key}
+                context = contexts_by_key[context_key]
+                assert set(context) == {
+                    "context_key",
+                    "broker_id",
+                    "broker_name",
+                    "ownership_share_percent",
+                    "custody_quantity",
+                }
+                assert context["broker_id"] == broker_id
+                assert context["broker_name"] == broker_name
+                assert Decimal(context["ownership_share_percent"]) == 0
+                assert Decimal(context["custody_quantity"]) == 10
+                print_success("Allocation source API contract OK")
+            finally:
+                if broker_id is not None:
+                    cleanup_broker = await client.delete(
+                        f"{API_BASE}/brokers",
+                        params={"ids": [broker_id], "force": True},
+                        timeout=TIMEOUT,
+                    )
+                    assert cleanup_broker.status_code == 200, cleanup_broker.text
+                    broker_results = {item["id"]: item for item in cleanup_broker.json()["results"]}
+                    assert broker_results[broker_id]["success"] is True, cleanup_broker.text
+                if asset_id is not None:
+                    cleanup_asset = await client.delete(
+                        f"{API_BASE}/assets",
+                        params={"asset_ids": [asset_id]},
+                        timeout=TIMEOUT,
+                    )
+                    assert cleanup_asset.status_code == 200, cleanup_asset.text
+                    asset_results = {item["asset_id"]: item for item in cleanup_asset.json()["results"]}
+                    assert asset_results[asset_id]["success"] is True, cleanup_asset.text
+                cleanup_user = await client.delete(
+                    f"{API_BASE}/auth/users/me",
+                    timeout=TIMEOUT,
+                )
+                if cleanup_user.status_code == 400 and cleanup_user.json().get("detail") == SOLE_ADMIN_DELETE_DETAIL:
+                    is_test_db, _ = verify_test_database()
+                    assert is_test_db, "Refusing sole-admin cleanup outside the test database"
+                    assert user_id is not None
+                    async with AsyncSession(get_async_engine()) as session:
+                        assert await user_service.delete_user(session, user_id)
+                else:
+                    assert cleanup_user.status_code == 200, cleanup_user.text
+
     async def test_report_positions_contribution_is_date_aware(self, test_server):
         """Report uses date_to snapshot for holdings and serializes performance rows + other effects."""
         print_section("Portfolio Report: date-aware holdings and contribution")

@@ -45,6 +45,7 @@ export interface LoadedToolRenderer {
 export interface ToolRendererBinding {
     readonly descriptor: VerifiedToolDescriptor;
     readonly accountGeneration: number;
+    peek: () => LoadedToolRenderer | null;
     load: (options?: {signal?: AbortSignal}) => Promise<LoadedToolRenderer>;
 }
 
@@ -124,6 +125,32 @@ function mountToolComponent<C extends ToolCode, V extends ToolVersion<C>>(compon
 /** Register source-owned literal imports only; catalogue metadata never becomes an import path. */
 export function defineToolRenderer<const C extends ToolCode, const V extends ToolVersion<C>>(code: C, version: V, options: ToolRendererOptions<NoInfer<C>, NoInfer<V>>): CompiledToolRendererRegistration {
     const {componentKey, uiContractVersion, load} = options;
+    let loadedComponent: Component<ToolHostPropsV1<C, V>> | null = null;
+    let componentPromise: Promise<Component<ToolHostPropsV1<C, V>>> | null = null;
+
+    const resolvedRenderer = (component: Component<ToolHostPropsV1<C, V>>, descriptor: CompatibleToolDescriptor<C, V>): LoadedToolRenderer => ({
+        mount: (target: HTMLElement, mountOptions?: ToolRendererMountOptions) => mountToolComponent(component, descriptor, target, mountOptions),
+    });
+
+    const loadComponent = (): Promise<Component<ToolHostPropsV1<C, V>>> => {
+        if (loadedComponent) return Promise.resolve(loadedComponent);
+        if (componentPromise) return componentPromise;
+        componentPromise = load()
+            .then((module) => {
+                if (typeof module.default !== 'function') {
+                    throw new ToolClientError('renderer', 'renderer_load_failed');
+                }
+                loadedComponent = module.default;
+                return loadedComponent;
+            })
+            .catch((error: unknown) => {
+                componentPromise = null;
+                if (error instanceof ToolClientError) throw error;
+                throw new ToolClientError('renderer', 'renderer_load_failed');
+            });
+        return componentPromise;
+    };
+
     const registration: CompiledToolRendererRegistration = {
         toolCode: code,
         contractVersion: version,
@@ -140,22 +167,20 @@ export function defineToolRenderer<const C extends ToolCode, const V extends Too
             return Object.freeze({
                 descriptor,
                 accountGeneration,
+                peek(): LoadedToolRenderer | null {
+                    getToolDescriptorGeneration(descriptor);
+                    return loadedComponent ? resolvedRenderer(loadedComponent, descriptor) : null;
+                },
                 async load({signal}: {signal?: AbortSignal} = {}): Promise<LoadedToolRenderer> {
                     try {
                         getToolDescriptorGeneration(descriptor);
                         return await runToolSessionTask(
                             accountGeneration,
                             async (requestSignal) => {
-                                const component = await load();
+                                const component = await loadComponent();
                                 getToolDescriptorGeneration(descriptor);
                                 if (requestSignal.aborted) throw new ToolClientError('aborted', 'waiting_stopped');
-                                if (typeof component.default !== 'function') {
-                                    throw new ToolClientError('renderer', 'renderer_load_failed');
-                                }
-                                // The closure keeps the generated C/V props paired with their component.
-                                return {
-                                    mount: (target: HTMLElement, options?: ToolRendererMountOptions) => mountToolComponent(component.default, descriptor, target, options),
-                                };
+                                return resolvedRenderer(component, descriptor);
                             },
                             signal,
                         );
