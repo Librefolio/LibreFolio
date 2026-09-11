@@ -284,10 +284,10 @@ Patina decorativa sopra segnaposto di forma stabile. Non mantenere il numero rea
 
 ### U3 - Yield on Cost
 
-**Stato 2026-09-10:** ✅ **PLAN/DESIGN APPROVED, non implementato** nel
+**Stato 2026-09-11:** ✅ **IMPLEMENTATO, VERIFICATO E DEVELOPER-ACCEPTED**
+nel checkpoint H `74afcebce`; il merge target e' in corso. Contratto,
+storyboard, correzioni review ed evidenze nel
 [piano H dedicato](../19_yieldOnCost/plan-phase00YieldOnCost.prompt.md).
-Gate 0 tecnico **COMPLETE** sulla baseline `b22998f`; resta soltanto
-l'autorizzazione esecutiva.
 **Taglia:** M backend + S UI/docs, con hard handoff cache FX dal workstream F.
 
 **Superfici:** `B/schemas/portfolio.py`; `portfolio_service.py`; nuovo servizio
@@ -322,7 +322,7 @@ provenance transaction-ledger, finestra e actual FX rate date.
 
 | Condizione | Contratto numerico | Cella / spiegazione |
 |---|---|---|
-| Income validi, eligibility/split/FX/WAC validi | Frazione YOC signed | Percentuale a 2 decimali, senza `+`. |
+| Income validi, eligibility/split/FX/WAC validi | Frazione YOC non negativa | Percentuale a 2 decimali, senza `+`; income registrato a zero espone `0.00%` + `net_zero`. |
 | Nessun income e prima tx coppia `<= T-364` | Zero noto, `no_income` | `-`, nessuna icona problema. |
 | Nessun income e coppia piu' giovane | `unavailable/insufficient_history` | `-` + custom info Tooltip. |
 | Orphan/replay/split/FX/WAC non valido | `unavailable` con reason | `-` + custom info Tooltip; mai partial/fallback. |
@@ -344,7 +344,7 @@ rapporto, transfer/split/FX fail-closed, cache non stale. Colonna **visibile di
 default**, accanto ad Annualized; l'override DataTable user-scoped resta
 condiviso fra Dashboard e Broker.
 
-**Documentazione e help:** pagina EN proposta
+**Documentazione e help:** pagina EN implementata
 `mkdocs_src/docs/financial-theory/technical-analysis/performance-metrics/portfolio-engine/yield-on-cost.en.md`
 tramite docs-writer, indici/nav/guide posizioni, senza traduzione automatica.
 
@@ -352,9 +352,9 @@ Tooltip header: formula transaction-ledger/D-1 e teoria. Solo genuine
 unavailable mostrano info icon di cella con custom Tooltip accessibile; il
 normale no-income non appare come errore.
 
-**Gate UX:** storyboard desktop/mobile v1 **APPROVED 2026-09-10**. La UI resta
-FROZEN fino al gate esecutivo; review operativa futura su Dashboard/Broker,
-inclusa persistence condivisa.
+**Gate UX:** storyboard desktop/mobile v1 **APPROVED 2026-09-10**; review
+operativa Dashboard/Broker, persistence, mobile/dark, tooltip e gesture guida
+completata e accettata dal developer il 2026-09-11.
 
 ### U4 - Filtro utente Files
 
@@ -590,6 +590,11 @@ Non esiste un componente autonomo AssetDeleteModal: si usa ConfirmModal. La canc
 
 ### T0 - Piattaforma Tool backend, estensione approvata
 
+**Piano C attivo:** [Piattaforma Tool atomica](../16_toolPlatform/plan-phase00ToolPlatform.prompt.md).
+Il merge runtime, i gate backend, codec e frontend generici C sono completati.
+Il [contratto PAC per D](../16_toolPlatform/handoff-pac-D.md) definisce il primo
+plugin/renderer reale, che resta condizione di chiusura del pilot.
+
 **Stato:** nuova. **Taglia:** L per piattaforma custom-first; non richiede UI generica schema-driven.
 
 **Non confondere con cio che esiste:** PAC Planning in AI Export e una richiesta di analisi, non un solver; optimizer risk calcola pesi continui da rendimenti storici; Scheduled Investment e pricing di strumenti a rendimento programmato. Nessuno implementa questo tool.
@@ -691,7 +696,7 @@ L'ordine ordina **rischio e ampiezza**, non inventa dipendenze. Il primo sprint 
 | **SP03 - Dati e operazioni asset** | A1, A2, B3 | Stessa famiglia asset/classificazione/CRUD e componenti DataEditor/ConfirmModal. Catalogo settori -> CSV -> delete affidabile e link. | Settori lungo tutta la pipeline; CSV strict nel draft; batch delete con persistenza/count veri e link contestuali. Nessuna riscrittura del monolite. |
 | **SP04 - Contratti dichiarativi** | S6 6.11, S6 6.2, P4-6 | Layer di cataloghi/schema/API e validazione, con un handoff client controllato. Assert strutturali -> flag FX -> matrice segnali. | Invarianti anche con `-O`; API FX non richiede campi derivati in input; sequenza provider preservata; matrice segnali equivalente. Alias S6 deduplicati. |
 | **SP05 - Runes nei tre target** | P4-5 | Componenti gia coperti da harness dedicati; prepara i controlli settings prima del tour. Preferences -> GlobalSettings -> BrokerSharing. | Tutti e tre migrati senza alterare dirty/save/reset/permessi e senza loop di caricamento. |
-| **SP06 - Redditi e rendimenti calendario** | U3, G3, G1c | Tre incrementi separati. U3 ha [PLAN/DESIGN APPROVED nel workstream H](../19_yieldOnCost/plan-phase00YieldOnCost.prompt.md), non implementato: gross income transaction-ledger/D-1 -> YOC. G3 e G1c restano separati. | U3: YOC asset+broker su 365 giorni, age pair, split/FX/WAC e stati typed; G3: N calendario; G1c: income series riconciliata. Nessun calcolo duplicato frontend. |
+| **SP06 - Redditi e rendimenti calendario** | U3, G3, G1c | Tre incrementi separati. U3 e' implementato e developer-accepted nel [checkpoint H](../19_yieldOnCost/plan-phase00YieldOnCost.prompt.md): gross income transaction-ledger/D-1 -> YOC. G3 e G1c restano separati. | U3 consegnato: YOC asset+broker su 365 giorni, age pair, split/FX/WAC e stati typed; G3: N calendario; G1c: income series riconciliata. Nessun calcolo duplicato frontend. |
 | **SP07 - P&L assoluto e candele sintetiche** | G1a, G1b | Stessa serie `PortfolioHistory`, stesso `GrowthChart` e stesso owner portfolio/chart. Prima terza vista P&L cumulato gia disponibile; poi contratto OHLC sintetico backend; infine rendering e aggregazione. | P&L-only non ribasato sul periodo; candele esplicitamente ipotetiche, quantita storiche EOD, offset/FX/short/missing policy firmati, chiusura coerente col P&L, zero volume; composizione giornaliera prima di daily/weekly/monthly, zoom e viewport invariati. |
 | **SP08 - Pricing e confini del servizio** | P4-4, P4-1, S6 6.4 | Un'unica famiglia provider/manager; evita spostamenti concorrenti di asset_source. Yahoo locale -> mappa import/cache -> moduli -> fasi refresh nella destinazione scelta. | Parita provider e manager, ownership cache/thread/sessioni, sentinelle, chunk e risultati preservati. Nessun refactor FX/portfolio aggiuntivo. |
 | **SP09 - BRIM mirato** | B1 condizionale, P4-3 | Parsing broker e output di review. Risolvere gate eToro se disponibile -> caratterizzazione Credit Agricole -> estrazione locale -> eventuale secondo consumer. | Costi eToro riconciliati oppure blocco motivato mantenuto; output completo Credit Agricole equivalente. Nessuna falsa chiusura eToro per far risultare verde lo sprint. |
@@ -710,10 +715,11 @@ asset+broker e D-1; nessun provider/AssetEvent income o migration. L'age della
 coppia distingue `no_income=0` da `insufficient_history`; split/FX/WAC e replay
 restano fail-closed. `PortfolioHolding.wac_per_unit` e `ExposureTable` sono
 fondazioni esistenti. Stima confermata: **M backend + S UI/docs**. Stato
-✅ [PLAN/DESIGN APPROVED 2026-09-10](../19_yieldOnCost/plan-phase00YieldOnCost.prompt.md),
-non implementato; baseline `b22998f`, Gate 0 tecnico COMPLETE incluso
-`cost_basis_currency`. Resta la nuova autorizzazione esecutiva. Sequenza sui
-file portfolio condivisi: H prima, I20+ dopo.
+✅ [IMPLEMENTATO, VERIFICATO E DEVELOPER-ACCEPTED](../19_yieldOnCost/plan-phase00YieldOnCost.prompt.md)
+nel checkpoint H `74afcebce`; baseline `b22998f`, Gate 0 incluso
+`cost_basis_currency`, contratto non-negativo con recorded-zero `net_zero`,
+UI/docs/gate completati. Sequenza sui file portfolio condivisi: H prima, I20+
+dopo.
 
 **Gia consegnati, fuori dagli sprint di codice:** U6, G2, B2, S6 6.3, S6 6.12. La pubblicazione di questa analisi riconcilia le rispettive voci. TRY003 resta congelato; S6 6.14 non genera uno sprint autonomo.
 
@@ -722,7 +728,7 @@ file portfolio condivisi: H prima, I20+ dopo.
 | Gate | Da chiudere prima di | Esito richiesto |
 |---|---|---|
 | G-ETORO | Modificare mapping/scarti B1 | Prova del movimento di cassa e valuta, soprattutto nonzero Withdraw Fee; decisione anti-doppio-conteggio. In assenza: task resta bloccato. |
-| G-YOC | Implementare il valore U3 | Contratto/storyboard approved; Gate 0 post-F [COMPLETE nel piano H](../19_yieldOnCost/plan-phase00YieldOnCost.prompt.md), incluso `cost_basis_currency` e reservation H-first. Resta solo l'autorizzazione esecutiva; poi replay D-1/split/FX e DTO fail-closed. |
+| G-YOC | Implementare il valore U3 | ✅ COMPLETE nel checkpoint H `74afcebce`: contratto/storyboard, Gate 0 post-F, replay D-1/split/FX, DTO fail-closed, UI/docs e review developer. |
 | G-ROLLING | Nuovo modo G3 | Calendario/reference lookup, lookback e limiti di staleness senza cambiare i segnali a osservazioni esistenti. |
 | G-CANDLES | Nuovo DTO/calcolo G1b | Ancora P&L/non-prezzo, conversione giornaliera, posizioni negative e politica OHLC mancante. Natura sintetica, EOD e aggregazione gia approvate. |
 | G-CACHE | Scegliere eviction/rilascio P4-7 | Misura reale, budget e ownership documentati; nessun LRU o numero massimo scelto per intuito. |
@@ -877,6 +883,15 @@ Docs MkDocs in esecuzione tramite **docs-writer**: inglese, pipeline di traduzio
 La pubblicazione di questo documento aggiorna README e aggiunge note datate per ogni voce nei file 00-05; non significa che i task aperti siano implementati.
 
 Primo piano preso in carico: [SP04-SP05 - Contratti e Runes](../11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md), approvato dal dev il 2026-09-07. I backlink dal piano 11 puntano a questo master e al backlog strutturale. Stato operativo e note per-step non vengono duplicati qui.
+
+**Pianificazione SP06/SP07 autorizzata, 2026-09-10:** il
+[piano performance charts](../20_performanceCharts/plan-phase00PerformanceCharts.prompt.md)
+registra il contratto chiuso per G3/G1a/G1b/G1c, gli storyboard ASCII v2 e lo
+split per owner. Stato **PLANNED / implementation frozen**: il refresh tecnico
+post-F e' registrato su `0af66da5`; il dev ha autorizzato e I ha completato la
+sola slice I10 backend signal, ora in attesa di integrazione. H/YOC precede I
+su service/schema/test portfolio; UI G3 e I20+ restano congelati e I dovra'
+rileggere il target post-H. Il link non marca gli altri task implementati.
 
 All'avvio effettivo di uno sprint: scegliere il prossimo `<NN_area>` libero in `Phase_0/`, aprire il piano `.prompt.md`, cross-linkare il task originale e marcare la presa in carico secondo la regola del backlog. Non creare oggi sedici piani vuoti. Dopo ogni step eseguito, aggiornare immediatamente quel piano con stato, data, nota di implementazione ed eventuale fuori pista.
 

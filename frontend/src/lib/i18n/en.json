@@ -1741,7 +1741,9 @@
     "Utilities": "Utilities",
     "Other": "Other",
     "Unknown": "Unknown",
-    "Liquidity": "Liquidity"
+    "Liquidity": "Liquidity",
+    "CorporateBonds": "Corporate Bonds",
+    "GovernmentBonds": "Government Bonds"
   },
   "settings": {
     "profile": "Profile",
@@ -3199,5 +3201,216 @@
     "clipboardUnavailable": "Could not copy to the clipboard. Allow clipboard access and try again.",
     "copyAndGo": "Copy and go",
     "navigationFailed": "Text and link copied, but the social site could not be opened. Allow pop-ups and try again."
+  },
+  "tools": {
+    "title": "Tools",
+    "subtitle": "Independent calculations. No portfolio changes are written.",
+    "open": "Open tool",
+    "contractVersion": "Contract",
+    "implementationVersion": "Implementation",
+    "status": {
+      "unavailable": "Unavailable",
+      "available": "Available"
+    },
+    "authRequired": "Sign in to use tools.",
+    "documentationUnavailable": "Documentation link unavailable",
+    "catalog": {
+      "emptyTitle": "No tools available",
+      "emptyDescription": "No healthy tools were returned by this catalogue. Reload after a tool is installed or repaired.",
+      "degraded": "Unavailable backend entries: {count}.",
+      "uiUnavailable": "Interfaces unavailable in this build: {count}.",
+      "degradedToast": "Tools loaded with unavailable entries or interfaces. See the catalogue for details.",
+      "diagnosticsHint": "Read-only diagnostics are available in Settings → About → Plugin diagnostics.",
+      "unavailableEntries": "Unavailable backend entries",
+      "unknownTool": "Unidentified tool"
+    },
+    "availability": {
+      "notInstalled": "This tool is not listed in the current backend catalogue.",
+      "backendUnavailable": "This tool is unavailable on the backend. No calculation has been started.",
+      "incompatible": "This tool requires a compatible frontend build. No calculation has been started.",
+      "rendererMissing": "The backend tool is installed, but its interface is not included in this frontend build. No calculation has been started.",
+      "rendererInvalid": "The compiled interface registration is invalid or duplicated. No calculation has been started."
+    },
+    "host": {
+      "loadingInterface": "Loading tool interface…",
+      "reloadTitle": "Reload tool?",
+      "reloadWarning": "Reloading replaces this tool interface and discards its current draft. Continue?"
+    },
+    "errors": {
+      "network": "The tool service could not be reached. Check your connection and retry explicitly.",
+      "timeout": "The tool request timed out. No result has been accepted and nothing was retried automatically.",
+      "requestRejected": "The server rejected the tool request.",
+      "requestInvalid": "The tool request failed local structural validation.",
+      "protocol": "The server response did not match the expected tool contract.",
+      "mismatch": "Tool metadata no longer matches this frontend. Reload explicitly to obtain updated metadata.",
+      "internal": "An unexpected tool interface error occurred.",
+      "componentLoad": "The tool interface could not be loaded.",
+      "componentMount": "The tool interface could not be opened.",
+      "cleanup": "The tool view was removed, but its cleanup reported an error.",
+      "sessionChanged": "The account changed. Previous tool data was cleared.",
+      "stopped": "Waiting stopped. This does not confirm cancellation on the server."
+    },
+    "metrics": {
+      "title": "Backend timings",
+      "description": "Measured by the backend, excluding network time. Phases can overlap; parallel items are not added to obtain the request duration.",
+      "milliseconds": "{value} ms",
+      "serverProcessing": "Request · server processing",
+      "itemTotal": "Item · total",
+      "queueWait": "Queue wait",
+      "startup": "Worker startup",
+      "inputValidation": "Input validation",
+      "compute": "Compute",
+      "outputValidation": "Output validation",
+      "serialization": "Output serialization",
+      "execution": "Worker execution",
+      "cleanup": "Cleanup"
+    },
+    "about": {
+      "readOnly": "Read-only catalogue and diagnostics. No calculations, probes or repairs are run.",
+      "inactive": "Open Plugin diagnostics to load tool metadata.",
+      "interfaceRegistered": "Compatible interface registered in this build."
+    },
+    "diagnostics": {
+      "title": "Tool diagnostics",
+      "scopeDescription": "This snapshot describes one responding API process, not the whole instance. Catalogue and diagnostics are separate reads. Reload to update the snapshot.",
+      "scope": "Snapshot scope",
+      "runtime": "API process identifier",
+      "degraded": "Discovery failures or reduced execution capacity were reported. Other tools may remain available.",
+      "pool": {
+        "title": "Execution pool snapshot",
+        "availability": "Execution pool availability",
+        "active": "Active jobs",
+        "queued": "Queued jobs",
+        "pending": "Pending jobs",
+        "degradedLanes": "Degraded lanes",
+        "completed": "Completed jobs",
+        "failed": "Failed jobs"
+      },
+      "loaded": "Tools loaded in this API process",
+      "noLoaded": "No tools are loaded in this API process.",
+      "failures": "Discovery failures",
+      "noFailures": "No discovery failures were reported in this snapshot.",
+      "notLoaded": "No diagnostic snapshot is loaded. Reload to request one.",
+      "policy": {
+        "title": "Effective platform limits",
+        "description": "Configuration limits, not measured timings or performance guarantees. Tool operations may declare stricter limits. Durations are not added together.",
+        "workers": "Worker lanes",
+        "maxBatchItems": "Maximum items per batch",
+        "maxPendingItems": "Maximum pending jobs",
+        "maxPendingPerPrincipal": "Maximum pending jobs per account",
+        "maxBatchesPerPrincipal": "Maximum concurrent batches per account",
+        "maxJsonDepth": "Maximum JSON depth",
+        "maxRequestBytes": "Maximum request size",
+        "maxParameterBytes": "Maximum parameter size per item",
+        "maxResultBytes": "Maximum result size per item",
+        "maxResponseBytes": "Maximum response size",
+        "envelopeReserveBytes": "Envelope size reserve",
+        "queueTimeout": "Queue timeout",
+        "jobTimeout": "Job hard timeout",
+        "softTimeout": "Job soft timeout",
+        "outputReserve": "Output time reserve",
+        "cleanupTimeout": "Cleanup timeout",
+        "ingressTimeout": "Ingress timeout",
+        "responseReserve": "Response time reserve",
+        "requestTimeout": "Server request timeout",
+        "clientTimeout": "Tool client timeout"
+      },
+      "reason": {
+        "import_failed": "Plugin import failed",
+        "invalid_plugin": "Invalid plugin definition",
+        "invalid_code": "Invalid tool code",
+        "duplicate_code": "Duplicate tool code; claimants quarantined",
+        "invalid_descriptor": "Invalid tool descriptor",
+        "invalid_input_model": "Invalid input model",
+        "invalid_output_model": "Invalid output model",
+        "invalid_schema": "Schema cannot be published",
+        "invalid_operation_policy": "Invalid operation policy"
+      }
+    },
+    "pacAllocator": {
+      "name": "PAC allocator",
+      "description": "Analyze the exact initial allocation state.",
+      "pilotNotice": "Manual initial-state analysis only. No portfolio data is read, no orders are proposed, and nothing is saved.",
+      "scenario": "Scenario",
+      "reportCurrency": "Reporting currency",
+      "asOfDate": "As-of date (optional)",
+      "rows": {
+        "title": "Assets and custody contexts",
+        "description": "Each row is one asset in one context. Use the dedicated action to preserve instrument identity across contexts.",
+        "addAsset": "New local asset",
+        "empty": "Add at least one row. The backend will report missing rows until then.",
+        "rowNumber": "Row {number}",
+        "identity": "Local instrument identity",
+        "sameAsset": "Same asset, another context",
+        "initialQuantity": "Initial quantity",
+        "price": "Native price",
+        "quoteBasis": "Quote base quantity",
+        "target": "Target (%)",
+        "gridMode": "Purchase grid",
+        "whole": "Whole quantities",
+        "fractional": "Fractional quantities",
+        "quantityStep": "Purchase quantity step",
+        "quoteDate": "Quote date (optional)"
+      },
+      "cash": {
+        "existing": "Existing cash",
+        "notSupplied": "Not supplied",
+        "noneExisting": "Explicitly no existing cash",
+        "amount": "Amount",
+        "addCurrency": "Add currency",
+        "markNoneExisting": "No existing cash",
+        "markNotSupplied": "Mark as not supplied",
+        "contributions": "New contributions",
+        "noneContributions": "Explicitly no new contributions",
+        "markNoneContributions": "No new contributions"
+      },
+      "rates": {
+        "title": "Valuation exchange rates",
+        "description": "Reporting value of one native currency unit. These rates do not convert or move cash.",
+        "add": "Add rate",
+        "value": "Rate to reporting currency",
+        "date": "Rate date (optional)"
+      },
+      "revision": "Draft revision",
+      "noOrders": "Orders, feasibility, and optimization are not included in this pilot.",
+      "stopWaiting": "Stop waiting",
+      "analyzing": "Analyzing revision {revision}…",
+      "analyze": "Check initial state",
+      "stale": {
+        "pending": "Request revision {requestRevision} is still running, but the draft is now revision {draftRevision}. Its response will be ignored.",
+        "ignored": "Response for revision {revision} was ignored because the draft or account changed.",
+        "result": "This result belongs to an older draft revision."
+      },
+      "draftPreserved": "Your draft was preserved.",
+      "platformErrorTitle": "Analysis not completed",
+      "platformError": "The backend could not complete this analysis. Your draft was preserved.",
+      "state": {
+        "ready": "Ready · initial state is evaluable",
+        "needsInput": "Needs input",
+        "invalid": "Invalid scenario",
+        "unsupported": "Outside the P1 domain"
+      },
+      "resultMeaning": "This is an initial-state analysis. It does not certify trade feasibility, target attainment, or optimality.",
+      "exactView": "Exact",
+      "formattedView": "Formatted",
+      "totals": {
+        "invested": "Initial invested value",
+        "existingCash": "Existing cash",
+        "contributions": "New contributions",
+        "combinedCash": "Cash plus contributions",
+        "maxGap": "Maximum absolute gap (pp)",
+        "squaredGap": "Squared gap (pp²)"
+      },
+      "result": {
+        "row": "Row",
+        "value": "Reporting value",
+        "weight": "Current weight",
+        "target": "Target",
+        "gap": "Gap (pp)"
+      },
+      "cashPools": "Native cash pools",
+      "issues": "Backend findings",
+      "normalizedInput": "Normalized input and units"
+    }
   }
 }
