@@ -27,6 +27,7 @@ setup_test_database()
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import backend.app.services.portfolio_engine as portfolio_engine_module
+import backend.app.services.portfolio_service as portfolio_service_module
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetProviderAssignment, AssetType, Broker, BrokerUserAccess, FxConversionRoute, FxRate, PriceHistory, ProviderInputType, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.brokers import BRAccessBulkItem
@@ -509,6 +510,58 @@ class TestRoleAwareShareScaling:
         row = await contribution_row()
         assert row.period_income == Decimal("30"), f"30%-owner income must be 30, got {row.period_income}"
         assert row.end_value == Decimal("330"), f"30%-owner end value must be 330 (3 × 110), got {row.end_value}"
+
+
+class TestPortfolioYieldOnCost:
+    @pytest.mark.asyncio
+    async def test_summary_wires_yoc_to_holding_independently_of_date_from(self, session, test_user, broker_with_access, test_asset):
+        """YOC owns its trailing window: report date_from must not trim qualifying income."""
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(
+                    broker_id=broker.id,
+                    asset_id=test_asset.id,
+                    type=TransactionType.BUY,
+                    date=date(2024, 1, 1),
+                    quantity=Decimal("10"),
+                    amount=Decimal("-100"),
+                    currency="EUR",
+                ),
+                Transaction(
+                    broker_id=broker.id,
+                    asset_id=test_asset.id,
+                    type=TransactionType.DIVIDEND,
+                    date=date(2025, 1, 15),
+                    amount=Decimal("20"),
+                    currency="EUR",
+                ),
+            ]
+        )
+        await session.flush()
+
+        summary = await PortfolioService(session).get_summary(
+            user_id=test_user.id,
+            date_from=date(2025, 7, 1),
+            date_to=date(2025, 12, 31),
+        )
+
+        holding = next(
+            (item for item in summary.holdings if item.asset_id == test_asset.id and item.broker_id == broker.id),
+            None,
+        )
+        assert holding is not None
+        assert holding.yield_on_cost is not None
+        assert "yield_on_cost" in holding.model_dump()
+        assert holding.yield_on_cost.provenance.net_zero is False
+        assert holding.yield_on_cost.status == "available"
+        assert holding.yield_on_cost.value == Decimal("0.2")
+        assert holding.yield_on_cost.reason is None
+        assert holding.yield_on_cost.provenance.window_start == date(2025, 1, 1)
+        assert holding.yield_on_cost.provenance.window_end == date(2025, 12, 31)
+        assert holding.yield_on_cost.provenance.gross_income_transaction_count == 1
+        assert holding.yield_on_cost.provenance.gross_income_per_unit is not None
+        assert holding.yield_on_cost.provenance.gross_income_per_unit.amount == Decimal("2")
 
 
 class TestAccessFingerprintCacheBust:
@@ -2048,6 +2101,326 @@ class TestPortfolioServiceGetReport:
         second = await service.get_report(user_id=test_user.id, query=query)
 
         assert second.model_dump() == first.model_dump()
+
+    @pytest.mark.asyncio
+    async def test_implicit_date_rollover_and_explicit_same_day_use_distinct_l2_keys(
+        self,
+        session,
+        test_user,
+        broker_with_access,
+        monkeypatch,
+        request,
+    ):
+        """Cache identity preserves raw date_to intent plus its effective date."""
+        broker, _ = broker_with_access
+        first_day = date(2037, 5, 10)
+        second_day = first_day + timedelta(days=1)
+        session.add(
+            Transaction(
+                broker_id=broker.id,
+                type=TransactionType.DEPOSIT,
+                date=first_day - timedelta(days=2),
+                amount=Decimal("750"),
+                currency="EUR",
+            )
+        )
+        await session.flush()
+        _portfolio_l2_cache.clear()
+        portfolio_engine_module._portfolio_blob_cache.clear()
+        request.addfinalizer(_portfolio_l2_cache.clear)
+        request.addfinalizer(portfolio_engine_module._portfolio_blob_cache.clear)
+
+        class MutableToday(date):
+            current = first_day
+
+            @classmethod
+            def today(cls):
+                return cls.current
+
+        monkeypatch.setattr(
+            portfolio_service_module,
+            "date_type",
+            MutableToday,
+        )
+        monkeypatch.setattr(
+            portfolio_engine_module,
+            "date_type",
+            MutableToday,
+        )
+
+        observed_keys = []
+        original_get = _portfolio_l2_cache.get
+
+        def capture_get(key):
+            observed_keys.append(key)
+            return original_get(key)
+
+        monkeypatch.setattr(_portfolio_l2_cache, "get", capture_get)
+
+        engine_calls = {"count": 0}
+        original_calculate = portfolio_engine_module.PortfolioCalculationEngine.calculate
+
+        async def counting_calculate(engine_self, *args, **kwargs):
+            engine_calls["count"] += 1
+            return await original_calculate(engine_self, *args, **kwargs)
+
+        monkeypatch.setattr(
+            portfolio_engine_module.PortfolioCalculationEngine,
+            "calculate",
+            counting_calculate,
+        )
+
+        service = PortfolioService(session)
+        implicit_query = PortfolioReportQuery(
+            broker_ids=[broker.id],
+            target_currency="EUR",
+            include_summary=False,
+            include_history=False,
+            include_allocation_history=False,
+            include_breakdown=False,
+            include_positions_contribution=False,
+        )
+        explicit_query = PortfolioReportQuery(
+            broker_ids=[broker.id],
+            target_currency="EUR",
+            date_range={"end": str(first_day)},
+            include_summary=False,
+            include_history=False,
+            include_allocation_history=False,
+            include_breakdown=False,
+            include_positions_contribution=False,
+        )
+
+        implicit_first = await service.get_report(
+            user_id=test_user.id,
+            query=implicit_query,
+        )
+        assert implicit_first.metadata.requested_date_to is None
+        assert implicit_first.metadata.computed_date_to == first_day
+
+        explicit_same_day = await service.get_report(
+            user_id=test_user.id,
+            query=explicit_query,
+        )
+        assert explicit_same_day.metadata.requested_date_to == first_day
+        assert explicit_same_day.metadata.computed_date_to == first_day
+        assert engine_calls["count"] == 2
+        assert len(observed_keys) == 2
+        assert observed_keys[0] != observed_keys[1]
+
+        MutableToday.current = second_day
+        implicit_second = await service.get_report(
+            user_id=test_user.id,
+            query=implicit_query,
+        )
+
+        assert implicit_second.metadata.requested_date_to is None
+        assert implicit_second.metadata.computed_date_to == second_day
+        assert engine_calls["count"] == 3
+        assert len(observed_keys) == 3
+        assert len(set(observed_keys)) == 3
+
+    @pytest.mark.asyncio
+    async def test_layer2_uses_exact_shared_fx_identity_for_summaryless_reports_and_never_falls_back_stale(
+        self,
+        session,
+        test_user,
+        broker_with_access,
+        monkeypatch,
+        request,
+    ):
+        """Every report shape uses the shared FX identity verbatim in its L2 key.
+
+        Stable identity -> hit. Changed identity -> fresh engine call; a fresh
+        failure propagates instead of returning the stale prior report.
+        """
+        broker, _ = broker_with_access
+        report_date = date(2035, 4, 30)
+        session.add(
+            Transaction(
+                broker_id=broker.id,
+                type=TransactionType.DEPOSIT,
+                date=report_date - timedelta(days=1),
+                amount=Decimal("750"),
+                currency="EUR",
+            )
+        )
+        await session.flush()
+        _portfolio_l2_cache.clear()
+        portfolio_engine_module._portfolio_blob_cache.clear()
+        request.addfinalizer(_portfolio_l2_cache.clear)
+        request.addfinalizer(portfolio_engine_module._portfolio_blob_cache.clear)
+
+        identity = {"value": "shared-fx-identity-a"}
+        identity_calls: list[tuple[object, set[int], str, date]] = []
+
+        async def shared_identity(db, scope_broker_ids, target_currency, date_to):
+            identity_calls.append((db, set(scope_broker_ids), target_currency, date_to))
+            return identity["value"]
+
+        monkeypatch.setattr(
+            portfolio_engine_module,
+            "compute_portfolio_fx_cache_identity",
+            shared_identity,
+        )
+
+        observed_keys = []
+        original_get = _portfolio_l2_cache.get
+
+        def capture_get(key):
+            observed_keys.append(key)
+            return original_get(key)
+
+        monkeypatch.setattr(_portfolio_l2_cache, "get", capture_get)
+
+        engine_calls = {"count": 0, "fail": False}
+        original_calculate = portfolio_engine_module.PortfolioCalculationEngine.calculate
+
+        async def controlled_calculate(engine_self, *args, **kwargs):
+            engine_calls["count"] += 1
+            if engine_calls["fail"]:
+                raise RuntimeError("fresh FX identity calculation failed")
+            return await original_calculate(engine_self, *args, **kwargs)
+
+        monkeypatch.setattr(
+            portfolio_engine_module.PortfolioCalculationEngine,
+            "calculate",
+            controlled_calculate,
+        )
+
+        service = PortfolioService(session)
+        query = PortfolioReportQuery(
+            broker_ids=[broker.id],
+            target_currency="EUR",
+            date_range={"start": "2035-04-01", "end": str(report_date)},
+            include_summary=False,
+            include_history=False,
+            include_allocation_history=False,
+            include_breakdown=False,
+            include_positions_contribution=False,
+        )
+
+        first = await service.get_report(user_id=test_user.id, query=query)
+        second = await service.get_report(user_id=test_user.id, query=query)
+
+        assert second.model_dump() == first.model_dump()
+        assert engine_calls["count"] == 1
+        assert len(observed_keys) == 2
+        assert observed_keys[0] == observed_keys[1]
+        assert observed_keys[0][-2] == "shared-fx-identity-a"
+        assert observed_keys[0][-1] == "no_yoc"
+        assert len(identity_calls) == 3
+        assert all(call[0] is session for call in identity_calls)
+        assert all(call[1:] == ({broker.id}, "EUR", report_date) for call in identity_calls)
+
+        identity["value"] = "shared-fx-identity-b"
+        engine_calls["fail"] = True
+        with pytest.raises(RuntimeError, match="fresh FX identity calculation failed"):
+            await service.get_report(user_id=test_user.id, query=query)
+
+        assert engine_calls["count"] == 2
+        assert observed_keys[-1][-2] == "shared-fx-identity-b"
+        assert observed_keys[-1][-1] == "no_yoc"
+        assert observed_keys[-1] != observed_keys[0]
+
+    @pytest.mark.asyncio
+    async def test_layer2_identity_changes_when_linked_split_material_changes(
+        self,
+        session,
+        test_user,
+        broker_with_access,
+        test_asset,
+        monkeypatch,
+        request,
+    ):
+        """AssetEvent split ratio is a material L2 dependency even without summary."""
+        broker, _ = broker_with_access
+        report_date = date(2036, 12, 31)
+        split_event = AssetEvent(
+            asset_id=test_asset.id,
+            date=date(2036, 6, 1),
+            type=AssetEventType.SPLIT,
+            value=Decimal("2"),
+            currency="EUR",
+        )
+        session.add(split_event)
+        await session.flush()
+        assert split_event.id is not None
+        session.add_all(
+            [
+                Transaction(
+                    broker_id=broker.id,
+                    asset_id=test_asset.id,
+                    type=TransactionType.BUY,
+                    date=date(2035, 1, 1),
+                    quantity=Decimal("10"),
+                    amount=Decimal("-100"),
+                    currency="EUR",
+                ),
+                Transaction(
+                    broker_id=broker.id,
+                    asset_id=test_asset.id,
+                    asset_event_id=split_event.id,
+                    type=TransactionType.ADJUSTMENT,
+                    date=split_event.date,
+                    quantity=Decimal("10"),
+                    amount=Decimal("0"),
+                    currency="EUR",
+                ),
+            ]
+        )
+        await session.flush()
+        _portfolio_l2_cache.clear()
+        portfolio_engine_module._portfolio_blob_cache.clear()
+        request.addfinalizer(_portfolio_l2_cache.clear)
+        request.addfinalizer(portfolio_engine_module._portfolio_blob_cache.clear)
+
+        observed_keys = []
+        original_get = _portfolio_l2_cache.get
+
+        def capture_get(key):
+            observed_keys.append(key)
+            return original_get(key)
+
+        monkeypatch.setattr(_portfolio_l2_cache, "get", capture_get)
+
+        engine_calls = {"count": 0}
+        original_calculate = portfolio_engine_module.PortfolioCalculationEngine.calculate
+
+        async def counting_calculate(engine_self, *args, **kwargs):
+            engine_calls["count"] += 1
+            return await original_calculate(engine_self, *args, **kwargs)
+
+        monkeypatch.setattr(
+            portfolio_engine_module.PortfolioCalculationEngine,
+            "calculate",
+            counting_calculate,
+        )
+
+        service = PortfolioService(session)
+        query = PortfolioReportQuery(
+            broker_ids=[broker.id],
+            target_currency="EUR",
+            date_range={"start": "2036-01-01", "end": str(report_date)},
+            include_summary=False,
+            include_history=False,
+            include_allocation_history=False,
+            include_breakdown=False,
+            include_positions_contribution=False,
+        )
+
+        await service.get_report(user_id=test_user.id, query=query)
+        await service.get_report(user_id=test_user.id, query=query)
+        assert engine_calls["count"] == 1
+        assert observed_keys[0] == observed_keys[1]
+
+        split_event.value = Decimal("3")
+        await session.flush()
+
+        await service.get_report(user_id=test_user.id, query=query)
+        assert engine_calls["count"] == 2
+        assert observed_keys[-1] != observed_keys[0]
+        assert observed_keys[-1][-1] != observed_keys[0][-1]
 
     @pytest.mark.asyncio
     async def test_get_report_narrower_date_to_not_corrupted_by_wider_blob_cache(self, session, test_user, broker_with_access, test_asset):

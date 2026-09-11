@@ -514,9 +514,68 @@ class SignalOutputSpec(SignalOutputBase):
         return self
 
 
+class SignalCalendarReturnPointStatus(StrEnum):
+    """Why one calendar-return point has a value or is unavailable."""
+
+    AVAILABLE = "available"
+    MISSING_REFERENCE = "missing_reference"
+    INVALID_CURRENT_PRICE = "invalid_current_price"
+    INVALID_REFERENCE_PRICE = "invalid_reference_price"
+
+
+class SignalCalendarReturnProvenance(SignalModel):
+    """Resolved observation identity for one calendar-return comparison."""
+
+    status: SignalCalendarReturnPointStatus
+    reference_target_date: date
+    current_price_date: date
+    current_price_days_back: NonNegativeInt
+    reference_price_date: Optional[date] = None
+    reference_price_days_back: Optional[NonNegativeInt] = None
+    current_fx_date: Optional[date] = None
+    current_fx_days_back: Optional[NonNegativeInt] = None
+    reference_fx_date: Optional[date] = None
+    reference_fx_days_back: Optional[NonNegativeInt] = None
+
+    @model_validator(mode="after")
+    def validate_provenance(self) -> SignalCalendarReturnProvenance:
+        for date_field, days_field in (
+            ("reference_price_date", "reference_price_days_back"),
+            ("current_fx_date", "current_fx_days_back"),
+            ("reference_fx_date", "reference_fx_days_back"),
+        ):
+            if (getattr(self, date_field) is None) != (getattr(self, days_field) is None):
+                raise ValueError(f"{date_field} and {days_field} must be set together")
+        reference_present = self.reference_price_date is not None
+        if self.status == SignalCalendarReturnPointStatus.MISSING_REFERENCE and reference_present:
+            raise ValueError("missing_reference cannot carry a resolved reference price")
+        if (
+            self.status
+            in (
+                SignalCalendarReturnPointStatus.AVAILABLE,
+                SignalCalendarReturnPointStatus.INVALID_REFERENCE_PRICE,
+            )
+            and not reference_present
+        ):
+            raise ValueError(f"{self.status.value} requires a resolved reference price")
+        return self
+
+
 class SignalValuePoint(SignalModel):
     date: date
     value: Optional[FiniteFloat] = None
+
+
+class SignalCalendarReturnValuePoint(SignalValuePoint):
+    """Calendar-return value with signal-owned, non-empty provenance."""
+
+    provenance: SignalCalendarReturnProvenance
+
+
+SignalScalarValuePoint = Union[
+    SignalCalendarReturnValuePoint,
+    SignalValuePoint,
+]
 
 
 class SignalBandPoint(SignalModel):
@@ -545,7 +604,7 @@ class SignalSeriesBase(SignalOutputBase):
 
 
 class SignalScalarSeriesBase(SignalSeriesBase):
-    points: List[SignalValuePoint] = Field(..., min_length=1)
+    points: List[SignalScalarValuePoint] = Field(..., min_length=1)
 
     @model_validator(mode="after")
     def validate_points(self) -> SignalScalarSeriesBase:

@@ -2,7 +2,8 @@
   ExposureTable — Holdings snapshot table for open positions at the selected end date.
 
   Shows open holdings only (snapshot at date_to).
-  Columns: Asset, Δ P&L 1D, Δ P&L % 1D, P&L, P&L %, Value, Weight, Quantity, Price (hidden), PMC (hidden), Broker.
+  Columns: Asset, Δ P&L 1D, Δ P&L % 1D, P&L, P&L %, Annualized, YOC, Value,
+  Weight, Quantity, Price (hidden), PMC (hidden), Oldest open lot (hidden), Broker.
   Sorted by value descending.
 
   Pattern: Svelte 5 Runes, DataTable, data-testid, dark mode.
@@ -15,6 +16,7 @@
     import type {ColumnDef, RowAction} from '$lib/components/table/types';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
+    import YieldOnCostCell from './YieldOnCostCell.svelte';
     import {ensureAssetsLoaded, getAssetInfo} from '$lib/stores/reference/assetStore';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import {makePositionKey} from '$lib/utils/core/positionKey';
@@ -23,7 +25,7 @@
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {attachOverflowMarqueeToDescendants} from '$lib/actions/scrollOnOverflow';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
-    import {safeDecimal, safeNumber, safeString} from '$lib/types';
+    import {safeDecimal, safeNumber, safeScalar, safeString} from '$lib/types';
 
     interface Holding {
         asset_id: number;
@@ -40,9 +42,34 @@
         gain_loss?: string | (string | null)[] | null;
         gain_loss_percent?: string | (string | null)[] | null;
         annualized_return?: string | (string | null)[] | null;
+        yield_on_cost: YieldOnCostLike | (YieldOnCostLike | null)[];
         gain_loss_change_1d?: string | (string | null)[] | null;
         gain_loss_change_1d_percent?: string | (string | null)[] | null;
         oldest_open_lot_date?: string | (string | null)[] | null;
+    }
+
+    interface YieldOnCostLike {
+        status: 'available' | 'no_income' | 'unavailable';
+        value?: string | (string | null)[] | null;
+        reason?: string | (string | null)[] | null;
+        provenance: {
+            window_start: string;
+            window_end: string;
+            first_pair_transaction_date?: string | (string | null)[] | null;
+            gross_income_transaction_count?: number;
+            gross_income_per_unit?: {code: string; amount: string} | ({code: string; amount: string} | null)[] | null;
+            net_zero?: boolean;
+            fx?: Array<{
+                purpose: 'income' | 'wac';
+                requested_date: string;
+                rate_date: string;
+                from_currency: string;
+                to_currency: string;
+                days_back: number;
+            }>;
+            issue_date?: string | (string | null)[] | null;
+            issue_pair?: string | (string | null)[] | null;
+        };
     }
 
     interface Props {
@@ -68,6 +95,9 @@
         unrealizedPnl: number | null;
         unrealizedPnlPercent: number | null;
         annualizedReturn: number | null;
+        yieldOnCost: YieldOnCostLike;
+        yieldOnCostStatus: 'available' | 'no_income' | 'unavailable';
+        yieldOnCostValue: number | null;
         gainLossChange1d: number | null;
         gainLossChange1dPercent: number | null;
         quantity: number | null;
@@ -121,6 +151,11 @@
         return value == null ? '—' : value.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 6});
     }
 
+    function label(key: string, fallback: string): string {
+        const translated = $_(key);
+        return translated === key ? fallback : translated;
+    }
+
     let rows = $derived.by<DisplayRow[]>(() => {
         const brokerMap = new Map(brokers.map((broker) => [broker.id, broker]));
 
@@ -129,6 +164,7 @@
                 const brokerId = safeNumber(holding.broker_id);
                 const broker = brokerId == null ? null : (brokerMap.get(brokerId) ?? null);
                 const currentValue = safeDecimal(holding.current_value);
+                const yieldOnCost = safeScalar(holding.yield_on_cost) as YieldOnCostLike;
                 return {
                     key: makePositionKey(holding.asset_id, brokerId),
                     assetId: holding.asset_id,
@@ -142,6 +178,9 @@
                     unrealizedPnl: safeDecimal(holding.gain_loss),
                     unrealizedPnlPercent: safeDecimal(holding.gain_loss_percent),
                     annualizedReturn: safeDecimal(holding.annualized_return),
+                    yieldOnCost,
+                    yieldOnCostStatus: yieldOnCost.status,
+                    yieldOnCostValue: safeDecimal(yieldOnCost.value),
                     gainLossChange1d: safeDecimal(holding.gain_loss_change_1d),
                     gainLossChange1dPercent: safeDecimal(holding.gain_loss_change_1d_percent),
                     quantity: safeDecimal(holding.quantity),
@@ -273,6 +312,27 @@
                 sortable: true,
                 getValue: (row) => row.annualizedReturn ?? 0,
                 cell: (row) => percentChangeCell(row.annualizedReturn),
+            },
+            {
+                id: 'yield-on-cost',
+                header: () => label('dashboard.yieldOnCost', 'YOC'),
+                displayName: () => label('dashboard.yieldOnCostDisplayName', 'Yield on Cost (YOC)'),
+                headerTooltip: () => label('dashboard.yieldOnCostTooltip', 'Compares gross dividends and interest recorded over the last year with the average purchase price (WAC).'),
+                headerTooltipUrl: '/mkdocs/financial-theory/technical-analysis/performance-metrics/portfolio-engine/yield-on-cost/',
+                headerTooltipLinkMode: 'gesture',
+                type: 'number',
+                align: 'right',
+                width: 120,
+                minWidth: 105,
+                maxWidth: 180,
+                resizable: true,
+                sortable: true,
+                getValue: (row) => (row.yieldOnCostStatus === 'no_income' ? 0 : row.yieldOnCostStatus === 'available' ? row.yieldOnCostValue : null),
+                cell: (row) => ({
+                    type: 'custom',
+                    component: YieldOnCostCell,
+                    props: {result: row.yieldOnCost},
+                }),
             },
             {
                 id: 'value',
