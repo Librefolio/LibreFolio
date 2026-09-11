@@ -259,3 +259,5 @@ coordinatore. Codec C/D e plugin restano un gate separato.
 
 Questi file descrivono P1. Le sezioni full solver degli appunti precedenti restano
 proposte separate e non sono recepite come comportamento implementato.
+
+→ Follow-up UI: [Round 2 - PAC allocator UI refinement](plan-phase00Step2Round2-PacAllocatorUiRefinement.prompt.md)
