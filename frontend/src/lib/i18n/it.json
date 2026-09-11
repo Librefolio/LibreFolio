@@ -1540,7 +1540,8 @@
     "today": "Oggi",
     "resolvingStart": "Ricerca…",
     "openCalendar": "Apri il calendario",
-    "formatHint": "Scrivi la data oppure scegliela dal calendario. Formati accettati: 2026-08-07, 2026/8/7, 7-8-2026, 7.8.2026 — l’anno va scritto per esteso."
+    "formatHint": "Scrivi la data oppure scegliela dal calendario. Formati accettati: 2026-08-07, 2026/8/7, 7-8-2026, 7.8.2026 — l’anno va scritto per esteso.",
+    "invalidDate": "Inserisci una data valida e disponibile."
   },
   "error": {
     "pageNotFound": "Pagina Non Trovata",
@@ -3180,9 +3181,6 @@
   "tools": {
     "title": "Strumenti",
     "subtitle": "Calcoli indipendenti. Nessuna modifica viene salvata nel portafoglio.",
-    "open": "Apri strumento",
-    "contractVersion": "Contratto",
-    "implementationVersion": "Implementazione",
     "status": {
       "unavailable": "Non disponibile",
       "available": "Disponibile"
@@ -3305,18 +3303,11 @@
     "pacAllocator": {
       "name": "Allocatore PAC",
       "description": "Analizza lo stato iniziale esatto dell'allocazione.",
-      "pilotNotice": "Solo analisi manuale dello stato iniziale. Nessun dato del portafoglio viene letto, nessun ordine viene proposto e nulla viene salvato.",
       "scenario": "Scenario",
       "reportCurrency": "Valuta di report",
       "asOfDate": "Data di riferimento (facoltativa)",
       "rows": {
-        "title": "Asset e contesti di custodia",
-        "description": "Ogni riga rappresenta un asset in un contesto. Usa l'azione dedicata per mantenere l'identità dello strumento tra contesti.",
-        "addAsset": "Nuovo asset locale",
         "empty": "Aggiungi almeno una riga. Fino ad allora il backend segnalerà le righe mancanti.",
-        "rowNumber": "Riga {number}",
-        "identity": "Identità locale dello strumento",
-        "sameAsset": "Stesso asset, altro contesto",
         "initialQuantity": "Quantità iniziale",
         "price": "Prezzo nativo",
         "quoteBasis": "Quantità base della quotazione",
@@ -3333,18 +3324,22 @@
         "noneExisting": "Nessuna cassa esistente, esplicitamente",
         "amount": "Importo",
         "addCurrency": "Aggiungi valuta",
-        "markNoneExisting": "Nessuna cassa esistente",
-        "markNotSupplied": "Segna come non fornito",
         "contributions": "Nuovi contributi",
         "noneContributions": "Nessun nuovo contributo, esplicitamente",
-        "markNoneContributions": "Nessun nuovo contributo"
+        "existingHint": "Liquidità nativa già disponibile, raggruppata per valuta.",
+        "contributionsHint": "Nuovi fondi per questo scenario, separati dalla liquidità esistente.",
+        "enterAmounts": "Inserisci importi",
+        "notSuppliedHint": "Sconosciuto è diverso da zero: il backend segnalerà questo input come mancante."
       },
       "rates": {
         "title": "Cambi di valorizzazione",
         "description": "Valore di report di un'unità di valuta nativa. Questi cambi non convertono né spostano cassa.",
         "add": "Aggiungi cambio",
         "value": "Cambio verso la valuta di report",
-        "date": "Data del cambio (facoltativa)"
+        "date": "Data del cambio (facoltativa)",
+        "foreignCurrencies": "Servono tassi di valorizzazione manuali per: {currencies}.",
+        "useManualRates": "Fornisci tassi di valorizzazione manuali",
+        "noCashConversion": "Solo valorizzazione: non converte né sposta liquidità."
       },
       "revision": "Revisione bozza",
       "noOrders": "Ordini, fattibilità e ottimizzazione non sono inclusi in questo pilot.",
@@ -3385,7 +3380,54 @@
       },
       "cashPools": "Casse native",
       "issues": "Segnalazioni backend",
-      "normalizedInput": "Input normalizzato e unità"
-    }
+      "normalizedInput": "Input normalizzato e unità",
+      "scenarioHint": "Scegli la valuta di rendicontazione e la data usata per i dati del portafoglio.",
+      "ownedAssets": "I tuoi asset",
+      "ownedAssetsHint": "Seleziona un asset per copiare nel draft modificabile tutti i contesti di custodia.",
+      "addManualAsset": "Nuovo asset manuale",
+      "loadingOwnedAssets": "Caricamento dei tuoi asset…",
+      "noOwnedAssets": "Nessun asset posseduto trovato",
+      "noOwnedAssetsHint": "Puoi comunque creare lo scenario con un asset manuale.",
+      "searchOwnedAssets": "Cerca asset o broker",
+      "custodyContext": "contesto di custodia",
+      "custodyContexts": "contesti di custodia",
+      "missingPrice": "Prezzo mancante",
+      "modified": "Modificato",
+      "staleLabel": "Non aggiornato",
+      "noAssetMatches": "Nessun asset corrisponde alla ricerca.",
+      "selectGrid": "Seleziona una griglia di acquisto",
+      "perUnits": "Prezzo per",
+      "fullCustody": "Quantità totale in custodia",
+      "personalShare": "quota personale",
+      "manual": "Manuale",
+      "snapshotAt": "Snapshot portafoglio",
+      "priceAt": "prezzo del",
+      "editableCopy": "copia modificabile",
+      "duplicate": "Duplica",
+      "identityAndCustody": "Identità e custodia",
+      "instrumentId": "ID strumento",
+      "marketFacts": "Dati di mercato",
+      "selectPriceBasis": "Seleziona la base prezzo",
+      "targetAndGrid": "Obiettivo e griglia di acquisto",
+      "rowLimit": "Questa analisi P1 supporta fino a 32 righe.",
+      "atomicRowLimit": "Tutti i contesti di custodia devono rientrare nel limite di 32 righe; non è stato copiato nulla.",
+      "staleSourceHint": "{count} righe copiate si riferiscono a un'altra data snapshot. Controlla la fonte aggiornata prima di sostituire i dati.",
+      "refreshCopiedFacts": "Aggiorna dati copiati",
+      "selectedContexts": "Contesti di custodia selezionati",
+      "selectedContextsHint": "I valori copiati sono uno snapshot e restano modificabili. Imposta esplicitamente obiettivi e griglie di acquisto.",
+      "emptyRowsHint": "Scegli uno dei tuoi asset qui sopra o aggiungi un asset manuale.",
+      "confirmDeselectTitle": "Rimuovere l'asset copiato?",
+      "confirmDeselectMessage": "Alcune righe collegate sono state modificate. Deselezionando l'asset rimuoverai tutti i contesti di custodia copiati e i duplicati elencati sotto.",
+      "confirmRefreshTitle": "Sostituire i dati sorgente modificati?",
+      "confirmRefreshMessage": "I campi elencati sotto differiscono dallo snapshot copiato.",
+      "confirmRefreshDescription": "Continuando sostituirai solo identità, custodia e quotazioni copiate. Obiettivi e griglie di acquisto saranno conservati.",
+      "modifiedFields": "Righe e campi modificati",
+      "removeCopiedRows": "Rimuovi righe copiate",
+      "overwriteCopiedFacts": "Sostituisci dati copiati",
+      "confirmRemoveRowTitle": "Rimuovere il contesto copiato?",
+      "confirmRemoveRowMessage": "Questo contesto copiato contiene modifiche. La rimozione elimina solo questa riga; gli altri contesti di custodia restano selezionati.",
+      "removeCopiedRow": "Rimuovi contesto"
+    },
+    "version": "Versione"
   }
 }

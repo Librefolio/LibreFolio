@@ -1540,7 +1540,8 @@
     "today": "Aujourd'hui",
     "resolvingStart": "Recherche…",
     "openCalendar": "Ouvrir le calendrier",
-    "formatHint": "Saisissez la date ou choisissez-la dans le calendrier. Formats acceptés : 2026-08-07, 2026/8/7, 7-8-2026, 7.8.2026 — l’année doit être écrite en entier."
+    "formatHint": "Saisissez la date ou choisissez-la dans le calendrier. Formats acceptés : 2026-08-07, 2026/8/7, 7-8-2026, 7.8.2026 — l’année doit être écrite en entier.",
+    "invalidDate": "Saisissez une date valide et disponible."
   },
   "error": {
     "pageNotFound": "Page Non Trouvée",
@@ -3180,9 +3181,6 @@
   "tools": {
     "title": "Outils",
     "subtitle": "Calculs indépendants. Aucune modification du portefeuille n'est enregistrée.",
-    "open": "Ouvrir l'outil",
-    "contractVersion": "Contrat",
-    "implementationVersion": "Implémentation",
     "status": {
       "unavailable": "Indisponible",
       "available": "Disponible"
@@ -3305,18 +3303,11 @@
     "pacAllocator": {
       "name": "Allocateur PAC",
       "description": "Analyse l'état initial exact de l'allocation.",
-      "pilotNotice": "Analyse manuelle de l'état initial uniquement. Aucune donnée du portefeuille n'est lue, aucun ordre n'est proposé et rien n'est enregistré.",
       "scenario": "Scénario",
       "reportCurrency": "Devise de reporting",
       "asOfDate": "Date de référence (facultative)",
       "rows": {
-        "title": "Actifs et contextes de garde",
-        "description": "Chaque ligne représente un actif dans un contexte. Utilisez l'action dédiée pour conserver l'identité de l'instrument entre les contextes.",
-        "addAsset": "Nouvel actif local",
         "empty": "Ajoutez au moins une ligne. Jusque-là, le backend signalera les lignes manquantes.",
-        "rowNumber": "Ligne {number}",
-        "identity": "Identité locale de l'instrument",
-        "sameAsset": "Même actif, autre contexte",
         "initialQuantity": "Quantité initiale",
         "price": "Prix natif",
         "quoteBasis": "Quantité de base de la cotation",
@@ -3333,18 +3324,22 @@
         "noneExisting": "Aucune liquidité existante, explicitement",
         "amount": "Montant",
         "addCurrency": "Ajouter une devise",
-        "markNoneExisting": "Aucune liquidité existante",
-        "markNotSupplied": "Marquer comme non renseigné",
         "contributions": "Nouveaux versements",
         "noneContributions": "Aucun nouveau versement, explicitement",
-        "markNoneContributions": "Aucun nouveau versement"
+        "existingHint": "Liquidités natives déjà détenues, regroupées par devise.",
+        "contributionsHint": "Nouveaux fonds pour ce scénario, séparés des liquidités existantes.",
+        "enterAmounts": "Saisir les montants",
+        "notSuppliedHint": "Une valeur inconnue est différente de zéro : le backend signalera cette donnée comme manquante."
       },
       "rates": {
         "title": "Taux de change de valorisation",
         "description": "Valeur de reporting d'une unité de devise native. Ces taux ne convertissent ni ne déplacent les liquidités.",
         "add": "Ajouter un taux",
         "value": "Taux vers la devise de reporting",
-        "date": "Date du taux (facultative)"
+        "date": "Date du taux (facultative)",
+        "foreignCurrencies": "Des taux de valorisation manuels sont nécessaires pour : {currencies}.",
+        "useManualRates": "Fournir des taux de valorisation manuels",
+        "noCashConversion": "Valorisation uniquement : ceci ne convertit ni ne déplace les liquidités."
       },
       "revision": "Révision du brouillon",
       "noOrders": "Les ordres, la faisabilité et l'optimisation ne sont pas inclus dans ce pilote.",
@@ -3385,7 +3380,54 @@
       },
       "cashPools": "Réserves de liquidités natives",
       "issues": "Constats du backend",
-      "normalizedInput": "Entrée normalisée et unités"
-    }
+      "normalizedInput": "Entrée normalisée et unités",
+      "scenarioHint": "Choisissez la devise de reporting et la date utilisée pour les données du portefeuille.",
+      "ownedAssets": "Vos actifs",
+      "ownedAssetsHint": "Sélectionnez un actif pour copier tous ses contextes de conservation dans ce brouillon modifiable.",
+      "addManualAsset": "Nouvel actif manuel",
+      "loadingOwnedAssets": "Chargement de vos actifs…",
+      "noOwnedAssets": "Aucun actif détenu trouvé",
+      "noOwnedAssetsHint": "Vous pouvez tout de même créer le scénario avec un actif manuel.",
+      "searchOwnedAssets": "Rechercher des actifs ou courtiers",
+      "custodyContext": "contexte de conservation",
+      "custodyContexts": "contextes de conservation",
+      "missingPrice": "Prix manquant",
+      "modified": "Modifié",
+      "staleLabel": "Obsolète",
+      "noAssetMatches": "Aucun actif ne correspond à cette recherche.",
+      "selectGrid": "Sélectionner une grille d'achat",
+      "perUnits": "Prix pour",
+      "fullCustody": "Quantité totale en conservation",
+      "personalShare": "quote-part personnelle",
+      "manual": "Manuel",
+      "snapshotAt": "Instantané du portefeuille",
+      "priceAt": "prix daté du",
+      "editableCopy": "copie modifiable",
+      "duplicate": "Dupliquer",
+      "identityAndCustody": "Identité et conservation",
+      "instrumentId": "ID de l'instrument",
+      "marketFacts": "Données de marché",
+      "selectPriceBasis": "Sélectionner la base de prix",
+      "targetAndGrid": "Cible et grille d'achat",
+      "rowLimit": "Cette analyse P1 prend en charge jusqu'à 32 lignes.",
+      "atomicRowLimit": "Tous les contextes de conservation doivent respecter la limite de 32 lignes ; rien n'a été copié.",
+      "staleSourceHint": "{count} lignes copiées se réfèrent à une autre date d'instantané. Vérifiez la source actualisée avant de remplacer les données.",
+      "refreshCopiedFacts": "Actualiser les données copiées",
+      "selectedContexts": "Contextes de conservation sélectionnés",
+      "selectedContextsHint": "Les valeurs copiées forment un instantané et restent modifiables. Définissez explicitement les cibles et grilles d'achat.",
+      "emptyRowsHint": "Choisissez l'un de vos actifs ci-dessus ou ajoutez un actif manuel.",
+      "confirmDeselectTitle": "Supprimer l'actif copié ?",
+      "confirmDeselectMessage": "Certaines lignes liées ont été modifiées. Désélectionner l'actif supprime tous les contextes de conservation copiés et les doublons listés ci-dessous.",
+      "confirmRefreshTitle": "Remplacer les données source modifiées ?",
+      "confirmRefreshMessage": "Les champs listés ci-dessous diffèrent de l'instantané copié.",
+      "confirmRefreshDescription": "Continuer remplace uniquement l'identité, la conservation et les cotations copiées. Les cibles et grilles d'achat sont conservées.",
+      "modifiedFields": "Lignes et champs modifiés",
+      "removeCopiedRows": "Supprimer les lignes copiées",
+      "overwriteCopiedFacts": "Remplacer les données copiées",
+      "confirmRemoveRowTitle": "Supprimer le contexte copié ?",
+      "confirmRemoveRowMessage": "Ce contexte copié contient des modifications. Sa suppression élimine uniquement cette ligne ; les autres contextes de conservation restent sélectionnés.",
+      "removeCopiedRow": "Supprimer le contexte"
+    },
+    "version": "Version"
   }
 }
