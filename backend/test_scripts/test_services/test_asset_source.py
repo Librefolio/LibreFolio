@@ -56,23 +56,32 @@ from backend.app.schemas import FAGeographicArea, FASectorArea, SignalVolumeKind
 from backend.app.schemas.assets import FAAssetCreateItem, FAAssetPatchItem, FAClassificationParams
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.prices import AssetBackwardFillInfo, FAAssetDelete, FAPricePoint, FAPriceQueryItem, FAUpsert
-from backend.app.schemas.provider import FAProviderAssignmentItem, FAProviderConfigBase, FAVolumeKind, ProbeOperation
-from backend.app.schemas.refresh import FARefreshItem, FXSyncPairRequest
-from backend.app.services import asset_source as asset_source_module
+from backend.app.schemas.provider import (
+    FAProviderAssignmentItem,
+    FAProviderConfigBase,
+    FAProviderKind,
+    FAVolumeKind,
+    ProbeOperation,
+)
+from backend.app.schemas.refresh import FARefreshItem, FXSyncPairRequest, SyncStatus
 from backend.app.services.asset_source import (
     AssetCRUDService,
     AssetSearchService,
     AssetSourceManager,
     AssetSourceProvider,
-    _provider_params_hash,
 )
 from backend.app.services.asset_source_providers import borsa_italiana as borsa_provider_module
 from backend.app.services.asset_source_providers import yahoo_finance as yahoo_provider_module
 from backend.app.services.asset_source_providers.scheduled_investment import (
     calculate_day_count_fraction,
 )
+from backend.app.services.asset_sources import core as asset_source_core
+from backend.app.services.asset_sources import price_query as price_query_module
+from backend.app.services.asset_sources import price_store as price_store_module
+from backend.app.services.asset_sources import refresh as refresh_module
+from backend.app.services.asset_sources import search as search_module
+from backend.app.services.asset_sources.provider_management import AssetProviderRegistry
 from backend.app.services.fx_providers.mockfx import MOCKFX_FIXED_RATE, MockFXProvider
-from backend.app.services.provider_registry import AssetProviderRegistry
 from backend.test_scripts.test_utils import (
     print_info,
     print_section,
@@ -763,7 +772,7 @@ async def test_bulk_upsert_prices_spans_chunk_boundaries():
     pins that: every row lands, and the F.4 "preserve" sentinel still sees the value
     written by a previous call on dates that fall in different slices.
     """
-    chunk = asset_source_module.PRICE_UPSERT_CHUNK_SIZE
+    chunk = price_store_module.PRICE_UPSERT_CHUNK_SIZE
     total = chunk * 2 + 137  # three slices, last one deliberately partial
     timestamp = int(time.time() * 1000)
 
@@ -1505,8 +1514,8 @@ def test_provider_param_helpers_and_identifier_mapping():
     params_a = {"b": 2, "a": 1}
     params_b = {"a": 1, "b": 2}
 
-    assert _provider_params_hash(None) == "none"
-    assert _provider_params_hash(params_a) == _provider_params_hash(params_b)
+    assert asset_source_core._provider_params_hash(None) == "none"
+    assert asset_source_core._provider_params_hash(params_a) == asset_source_core._provider_params_hash(params_b)
     assert AssetSourceManager._parse_provider_params(None) == {}
     assert AssetSourceManager._parse_provider_params(params_a) == params_a
     assert AssetSourceManager._parse_provider_params('{"x": 1, "y": "z"}') == {"x": 1, "y": "z"}
@@ -1568,7 +1577,7 @@ async def test_refresh_assets_from_provider_mixed_results():
     print_section("Test 22: refresh_assets_from_provider mixed batch")
 
     AssetProviderRegistry.auto_discover()
-    asset_source_module._asset_metadata_cache.clear()
+    asset_source_core._asset_metadata_cache.clear()
     timestamp = int(time.time() * 1000)
 
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
@@ -1631,7 +1640,7 @@ async def test_refresh_assets_from_provider_uses_metadata_cache(monkeypatch):
     print_section("Test 23: refresh_assets_from_provider metadata cache")
 
     AssetProviderRegistry.auto_discover()
-    asset_source_module._asset_metadata_cache.clear()
+    asset_source_core._asset_metadata_cache.clear()
     timestamp = int(time.time() * 1000)
 
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
@@ -1659,7 +1668,7 @@ async def test_refresh_assets_from_provider_uses_metadata_cache(monkeypatch):
         async def _unexpected_provider_call(*args, **kwargs):
             raise AssertionError("provider fetch should not run on cache hit")
 
-        monkeypatch.setattr(asset_source_module, "_run_provider_in_thread", _unexpected_provider_call)
+        monkeypatch.setattr(asset_source_core, "_run_provider_in_thread", _unexpected_provider_call)
 
         second = await AssetSourceManager.refresh_assets_from_provider([asset.id], session)
         assert second.results[0].success is True
@@ -1898,7 +1907,7 @@ async def test_bulk_refresh_prices_current_only_marks_partial(monkeypatch):
 
     class PartialProvider:
         supports_history = True
-        provider_kind = asset_source_module.FAProviderKind.ONLINE_SCRAPER
+        provider_kind = FAProviderKind.ONLINE_SCRAPER
 
         async def get_history_value(self, identifier, identifier_type, provider_params, start_date, end_date):
             return SimpleNamespace(prices=[], events=[])
@@ -1909,14 +1918,18 @@ async def test_bulk_refresh_prices_current_only_marks_partial(monkeypatch):
         def validate_params(self, params):
             return None
 
-    original_get_provider_instance = AssetProviderRegistry.get_provider_instance
+    original_get_provider_instance = refresh_module.AssetProviderRegistry.get_provider_instance
 
     def _patched_get_provider_instance(cls, code: str, **kwargs):
         if code == "partialprov":
             return PartialProvider()
         return original_get_provider_instance.__func__(cls, code, **kwargs)
 
-    monkeypatch.setattr(AssetProviderRegistry, "get_provider_instance", classmethod(_patched_get_provider_instance))
+    monkeypatch.setattr(
+        refresh_module.AssetProviderRegistry,
+        "get_provider_instance",
+        classmethod(_patched_get_provider_instance),
+    )
 
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
         asset = Asset(display_name=f"Partial Refresh {timestamp}", currency="USD", asset_type=AssetType.STOCK, active=True)
@@ -1946,7 +1959,7 @@ async def test_bulk_refresh_prices_current_only_marks_partial(monkeypatch):
         )
 
         result = response.results[0]
-        assert result.status == asset_source_module.SyncStatus.PARTIAL
+        assert result.status == SyncStatus.PARTIAL
         assert result.points_fetched == 1
         assert result.inserted_count == 1
         assert result.message == "Current value only, history unavailable"
@@ -1961,7 +1974,7 @@ async def test_asset_search_service_search_handles_cache_and_errors(monkeypatch)
     """Search aggregates successes, skips unsupported providers, and reuses cache on repeat query."""
     print_section("Test 28: AssetSearchService.search")
 
-    asset_source_module._search_query_cache.clear()
+    asset_source_core._search_query_cache.clear()
 
     class OkSearchProvider:
         supports_search = True
@@ -1999,12 +2012,12 @@ async def test_asset_search_service_search_handles_cache_and_errors(monkeypatch)
     providers = {"okprov": ok_provider, "errprov": err_provider, "nosrch": no_provider}
 
     monkeypatch.setattr(
-        AssetProviderRegistry,
+        search_module.AssetProviderRegistry,
         "list_providers",
         classmethod(lambda cls: [{"code": "okprov"}, {"code": "errprov"}, {"code": "nosrch"}]),
     )
     monkeypatch.setattr(
-        AssetProviderRegistry,
+        search_module.AssetProviderRegistry,
         "get_provider_instance",
         classmethod(lambda cls, code, **kwargs: providers.get(code)),
     )
@@ -2056,7 +2069,7 @@ class TestDeriveSignalSourceCapability:
     def test_all_backward_filled_series_is_unsupported(self, monkeypatch):
         """Backward-filled points must never count as observed evidence."""
         monkeypatch.setattr(
-            AssetProviderRegistry,
+            price_query_module.AssetProviderRegistry,
             "get_provider_instance",
             classmethod(lambda cls, code, **kwargs: SimpleNamespace(supports_meaningful_volume=True, volume_kind=FAVolumeKind.TRADED_SHARES)),
         )
@@ -2066,7 +2079,7 @@ class TestDeriveSignalSourceCapability:
 
     def test_single_registered_capable_source_is_supported(self, monkeypatch):
         monkeypatch.setattr(
-            AssetProviderRegistry,
+            price_query_module.AssetProviderRegistry,
             "get_provider_instance",
             classmethod(lambda cls, code, **kwargs: SimpleNamespace(supports_meaningful_volume=True, volume_kind=FAVolumeKind.TRADED_SHARES)),
         )
@@ -2076,7 +2089,11 @@ class TestDeriveSignalSourceCapability:
         assert capability.volume_kind == SignalVolumeKind.TRADED_SHARES
 
     def test_unregistered_source_fails_closed(self, monkeypatch):
-        monkeypatch.setattr(AssetProviderRegistry, "get_provider_instance", classmethod(lambda cls, code, **kwargs: None))
+        monkeypatch.setattr(
+            price_query_module.AssetProviderRegistry,
+            "get_provider_instance",
+            classmethod(lambda cls, code, **kwargs: None),
+        )
         points = [_capable_point(1, "MANUAL")]
         capability = AssetSourceManager.derive_signal_source_capability(points)
         assert capability.supports_meaningful_volume is False
@@ -2093,7 +2110,7 @@ class TestDeriveSignalSourceCapability:
         key is ever registered, so this must fail closed without needing to
         simulate an unresolvable provider.
         """
-        assert AssetProviderRegistry.get_provider_instance(sentinel_key) is None
+        assert price_query_module.AssetProviderRegistry.get_provider_instance(sentinel_key) is None
         points = [_capable_point(1, sentinel_key)]
         capability = AssetSourceManager.derive_signal_source_capability(points)
         assert capability.supports_meaningful_volume is False
@@ -2104,7 +2121,11 @@ class TestDeriveSignalSourceCapability:
             "yfinance": SimpleNamespace(supports_meaningful_volume=True, volume_kind=FAVolumeKind.TRADED_SHARES),
             "justetf": SimpleNamespace(supports_meaningful_volume=False, volume_kind=FAVolumeKind.UNKNOWN),
         }
-        monkeypatch.setattr(AssetProviderRegistry, "get_provider_instance", classmethod(lambda cls, code, **kwargs: providers.get(code)))
+        monkeypatch.setattr(
+            price_query_module.AssetProviderRegistry,
+            "get_provider_instance",
+            classmethod(lambda cls, code, **kwargs: providers.get(code)),
+        )
         points = [_capable_point(1, "yfinance"), _capable_point(2, "justetf")]
         capability = AssetSourceManager.derive_signal_source_capability(points)
         assert capability.supports_meaningful_volume is False
@@ -2124,7 +2145,11 @@ class TestDeriveSignalSourceCapability:
             "yfinance": SimpleNamespace(supports_meaningful_volume=True, volume_kind=FAVolumeKind.TRADED_SHARES),
             "borsa_italiana": SimpleNamespace(supports_meaningful_volume=True, volume_kind=FAVolumeKind.TRADED_SHARES),
         }
-        monkeypatch.setattr(AssetProviderRegistry, "get_provider_instance", classmethod(lambda cls, code, **kwargs: providers.get(code)))
+        monkeypatch.setattr(
+            price_query_module.AssetProviderRegistry,
+            "get_provider_instance",
+            classmethod(lambda cls, code, **kwargs: providers.get(code)),
+        )
         points = [_capable_point(1, "yfinance"), _capable_point(2, "borsa_italiana")]
         capability = AssetSourceManager.derive_signal_source_capability(points)
         assert capability.supports_meaningful_volume is True
@@ -2134,7 +2159,11 @@ class TestDeriveSignalSourceCapability:
         """Even a single unresolvable source_plugin_key among otherwise-capable
         sources must fail closed (no partial trust)."""
         providers = {"yfinance": SimpleNamespace(supports_meaningful_volume=True, volume_kind=FAVolumeKind.TRADED_SHARES)}
-        monkeypatch.setattr(AssetProviderRegistry, "get_provider_instance", classmethod(lambda cls, code, **kwargs: providers.get(code)))
+        monkeypatch.setattr(
+            price_query_module.AssetProviderRegistry,
+            "get_provider_instance",
+            classmethod(lambda cls, code, **kwargs: providers.get(code)),
+        )
         points = [_capable_point(1, "yfinance"), _capable_point(2, "MANUAL")]
         capability = AssetSourceManager.derive_signal_source_capability(points)
         assert capability.supports_meaningful_volume is False

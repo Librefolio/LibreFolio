@@ -43,7 +43,6 @@ setup_test_database()
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-import backend.app.services.asset_source as module
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetProviderAssignment, AssetType, PriceHistory
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.assets import FAAinfoFiltersRequest
@@ -52,6 +51,9 @@ from backend.app.schemas.prices import FAHistoricalData, FAPricePoint, FAPriceQu
 from backend.app.schemas.provider import ProviderInputType
 from backend.app.schemas.refresh import FARefreshItem, SyncDateRangeModel, SyncStatus
 from backend.app.services.asset_source import AssetCRUDService, AssetSourceManager
+from backend.app.services.asset_sources import core as asset_source_core
+from backend.app.services.asset_sources import price_query as price_query_module
+from backend.app.services.asset_sources import refresh as refresh_module
 from backend.test_scripts.test_utils import unique_id
 
 # A date window far from the mock dataset's, so a stray row of this unit can
@@ -411,7 +413,7 @@ async def test_events_are_restated_in_the_target_currency(asset_with_events, mon
             out.append((Currency(amount=currency.amount * Decimal("2"), code=target), when, False))
         return out, []
 
-    monkeypatch.setattr(module, "convert_bulk", _fake_convert_bulk)
+    monkeypatch.setattr(price_query_module, "convert_bulk", _fake_convert_bulk)
     result = await _query(_events_request(asset_with_events, "EUR"))
 
     converted = {ev.date: ev for ev in result.events}
@@ -435,7 +437,7 @@ async def test_event_already_in_target_currency_is_passed_through_untouched(asse
         seen.append(len(conversions))
         return [(Currency(amount=c[0].amount, code=c[1]), c[2], False) for c in conversions], []
 
-    monkeypatch.setattr(module, "convert_bulk", _fake_convert_bulk)
+    monkeypatch.setattr(price_query_module, "convert_bulk", _fake_convert_bulk)
     result = await _query(_events_request(asset_with_events, "EUR"))
 
     native = next(ev for ev in result.events if ev.date == BASE_DATE + timedelta(days=3))
@@ -454,7 +456,7 @@ async def test_missing_rate_leaves_the_event_native_and_warns(asset_with_events,
         first = (Currency(amount=conversions[0][0].amount, code=conversions[0][1]), conversions[0][2], False)
         return [first, None], ["rate provider unavailable"]
 
-    monkeypatch.setattr(module, "convert_bulk", _fake_convert_bulk)
+    monkeypatch.setattr(price_query_module, "convert_bulk", _fake_convert_bulk)
     result = await _query(_events_request(asset_with_events, "EUR"))
 
     stranded = next(ev for ev in result.events if ev.date == BASE_DATE + timedelta(days=2))
@@ -472,7 +474,7 @@ async def test_conversion_pass_is_skipped_without_a_target_currency(asset_with_e
     async def _explode(*_args, **_kwargs):
         raise AssertionError("convert_bulk must not run without a target currency")
 
-    monkeypatch.setattr(module, "convert_bulk", _explode)
+    monkeypatch.setattr(price_query_module, "convert_bulk", _explode)
     result = await _query(_events_request(asset_with_events, None))
 
     assert {ev.value.code for ev in result.events} == {"USD", "EUR"}
@@ -486,7 +488,7 @@ async def test_conversion_pass_is_skipped_when_every_event_is_already_in_target(
     async def _fake_convert_bulk(_session, conversions, raise_on_error=False):
         return [(Currency(amount=c[0].amount, code=c[1]), c[2], False) for c in conversions], []
 
-    monkeypatch.setattr(module, "convert_bulk", _fake_convert_bulk)
+    monkeypatch.setattr(price_query_module, "convert_bulk", _fake_convert_bulk)
     # Only the EUR event is in range: everything the query returns is already USD-free.
     request = FAPriceQueryItem(
         asset_id=asset_with_events,
@@ -557,12 +559,16 @@ async def assigned_asset(owned_asset: int):
 
 
 def _patch_provider(monkeypatch, prices: list[FAPricePoint]) -> None:
-    monkeypatch.setattr(module.AssetProviderRegistry, "get_provider_instance", staticmethod(lambda _code: _FakeProvider()))
+    monkeypatch.setattr(
+        refresh_module.AssetProviderRegistry,
+        "get_provider_instance",
+        staticmethod(lambda _code: _FakeProvider()),
+    )
 
     async def _fake_thread(_fn, timeout=None):
         return FAHistoricalData(prices=prices, source="fake_provider_for_tests")
 
-    monkeypatch.setattr(module, "_run_provider_in_thread", _fake_thread)
+    monkeypatch.setattr(asset_source_core, "_run_provider_in_thread", _fake_thread)
 
 
 def _refresh_item(asset_id: int) -> FARefreshItem:
