@@ -21,7 +21,7 @@ I marker `TODO(P2-refactor)` erano 26 al 03/09 e sono **25** alla baseline `a913
 | P4-5 | **Migrazione Svelte 5 Runes** di `BrokerSharingPanel.svelte` (24 `$:`), `PreferencesTab.svelte` (9), `GlobalSettingsTab.svelte` (10) | 43 statement legacy; preservare binding, salvataggi, reset, permessi e caricamenti | M | [11 #6](../../phases/08_newCleanAndDocumentation_audit/11_crosscutting.md) · [10 §G3](../../phases/08_newCleanAndDocumentation_audit/10_frontend_charts.md) |
 | P4-6 | **Matrice dichiarativa per `validate_status_matrix`** (`schemas/signals.py:1050`, C901 32) | Tabella di presenza/assenza più predicati semantici; conservare sottomatrice FAILED e invarianti trasversali | M | [05 §T4](../../phases/08_newCleanAndDocumentation_audit/05_signals_risk.md) |
 | P4-7 | **Ciclo di vita dei cache store frontend** (`removeAssetPriceStore` mai chiamato, registry non completamente collegati al reset sessione) | Confine account già presente; pool limitato a 8 worker. Misurare entry, punti, intervalli e riferimenti prima di scegliere budget/rilascio | L | [08 §T2](../../phases/08_newCleanAndDocumentation_audit/08_frontend_state_api.md) · [14 #9](../../phases/08_newCleanAndDocumentation_audit/14_backlog_ed_esecuzione.md) |
-| P4-8 | **Coda S6 riconciliata**: aperte 6.2/6.4/6.11; 6.7/6.8 alias di P4-6/P4-2; 6.3/6.12 già risolte; 6.14 solo entro P4-3; **TRY003 congelata** | Il report 14 non incorpora tutte le chiusure P2: fa fede la verifica corrente sotto | varie | [14 #23/#26](../../phases/08_newCleanAndDocumentation_audit/14_backlog_ed_esecuzione.md) |
+| P4-8 | **Coda S6 riconciliata**: 6.2/6.3/6.4/6.7/6.8/6.11/6.12 chiuse; 6.14 limitata al refactor G già consegnato; **TRY003 congelata** | Il report 14 non incorpora tutte le chiusure successive: fa fede la verifica corrente sotto | varie | [14 #23/#26](../../phases/08_newCleanAndDocumentation_audit/14_backlog_ed_esecuzione.md) |
 
 ## Come leggerlo
 
@@ -43,10 +43,10 @@ Le spunte di presa in carico sotto non attestano il completamento dell'implement
 
 | Task | Nota di analisi | Sprint |
 |---|---|---|
-| P4-1 | 🟡 In implementazione su K/SP08: facciata compatibile + moduli per responsabilità; non ricreare AssetMetadataService. | SP08 |
+| P4-1 | ✅ Integrato con K/SP08: `asset_source.py` è una facciata compatibile; implementazione canonica separata per responsabilità. [Piano](../22_assetPricingRefactor/plan-phase00AssetPricingRefactor.prompt.md). | SP08 |
 | P4-2 | ✅ Integrato con L/SP16: `execute_batch` ridotto a orchestratore esplicito, contesto typed + stage ordinati, contratto/atomicità invariati. [Piano](../23_transactionBatchRefactor/plan-phase00TransactionBatchRefactor.prompt.md). | SP16 |
 | P4-3 | ✅ Integrato e developer-accepted con G; caratterizzazione CA, helper maturity CA/Intesa ed eToro FEE. [Piano](../18_brimTargeted/plan-phase00BrimTargeted.prompt.md). | SP09 |
-| P4-4 | 🟡 In implementazione su K/SP08: refactor locale Yahoo prima della scissione manager. | SP08 |
+| P4-4 | ✅ Integrato con K/SP08: acquisizione, mapping prezzi ed eventi Yahoo separati con contratto invariato. [Piano](../22_assetPricingRefactor/plan-phase00AssetPricingRefactor.prompt.md). | SP08 |
 | P4-5 | ✅ Integrato con B/SP05 (`514582a47`). [Piano](../11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md). | SP05 |
 | P4-6 | ✅ Integrato con B/SP04 (`514582a47`), incluso alias S6 6.7. [Piano](../11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md). | SP04 |
 | P4-7 | Parziale, L: misura/ownership prima di eviction e rilascio. | SP10 |
@@ -56,7 +56,7 @@ Le spunte di presa in carico sotto non attestano il completamento dell'implement
 |---|---|
 | 6.2 | ✅ Integrato in B/SP04. `is_chain` e `providers_used` restano output-only; membership configurata distinta dal percorso e dalla provenance. |
 | 6.3 | ✅ Chiuso per rimozione dei quattro aggregate; [audit 02](../../phases/08_newCleanAndDocumentation_audit/02_services_core.md), nessun helper da ripristinare. |
-| 6.4 | 🟡 In implementazione su K/SP08: estrazione PREPARE/FETCH/PERSIST dopo il move meccanico. |
+| 6.4 | ✅ Integrato con K/SP08: refresh esplicito PREPARE/FETCH/PERSIST, sessioni e risultati parziali invariati. |
 | 6.7 | ✅ Integrato come alias P4-6 nello stesso piano B; nessuna seconda implementazione. |
 | 6.8 | ✅ Chiuso come alias P4-2 nello stesso refactor L/SP16; nessuna seconda implementazione. |
 | 6.11 | ✅ Integrato in B/SP04: 17 guardie Python in memoria, nessuna bonifica DB. |
