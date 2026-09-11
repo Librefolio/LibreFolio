@@ -176,7 +176,7 @@
     let displayCurrency = $state('');
     type AssetChartPrimaryMode = 'price' | 'calendar-return';
     const CALENDAR_RETURN_WINDOWS: CalendarReturnWindowDays[] = [7, 30, 90, 365];
-    let primaryMode: AssetChartPrimaryMode = $state('price');
+    let primaryMode = $state<AssetChartPrimaryMode>('price');
     let calendarWindowDays: CalendarReturnWindowDays = $state(30);
     let calendarReturnView: CalendarReturnView = $state(emptyCalendarReturnView());
     let chartRequestGeneration = 0;
@@ -1236,7 +1236,7 @@
                     chartData = result.prices ?? [];
                 }
                 events = result.events ?? [];
-                const rawSignalResults = Array.isArray(result.signals) ? result.signals : [];
+                const rawSignalResults: unknown[] = Array.isArray(result.signals) ? result.signals : [];
                 if (wantsCalendarReturn && requestedCalendarWindow === calendarWindowDays && primaryMode === 'calendar-return') {
                     calendarReturnView = extractCalendarReturnView(rawSignalResults, CALENDAR_RETURN_INSTANCE_ID);
                 }
@@ -2187,7 +2187,7 @@
                     <div class="relative">
                         <!-- Right toolbar -->
                         {#if primaryMode === 'price'}
-                            <div class="absolute top-0 right-0 z-10 flex items-center gap-1.5">
+                            <div class="absolute top-0 right-0 z-20 flex items-center gap-1.5">
                                 <button
                                     data-testid="asset-detail-measure-btn"
                                     class="p-1.5 rounded-lg transition-colors {measureMode
