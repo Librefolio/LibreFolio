@@ -58,6 +58,7 @@
     import type {ProcessedAssetResult} from '$lib/workers/priceProcessing.worker';
     import {signalCatalogStore} from '$lib/stores/signalCatalogStore.svelte';
     import {globalSettings} from '$lib/stores/app/globalSettings';
+    import {matchesAssetLifecycle, orderAssetsByLifecycle} from '$lib/components/assets/assetLifecycle';
     import {buildTabUrl, getResolvedTabParam} from '$lib/utils/url/tabUrl';
     import {buildTransactionsFiltersUrl} from '../transactions/filterState';
 
@@ -285,23 +286,18 @@
     let configuredCurrencies = $derived([...new Set(assets.map((a) => a.currency))].sort());
 
     let filteredAssets = $derived(
-        assets.filter((a) => {
-            // Tri-state active filter: if both toggles match (both on or both off),
-            // no filter is applied. Otherwise keep only the state matching the
-            // single selected toggle.
-            const bothSameState = filterShowActive === filterShowInactive;
-            if (!bothSameState) {
-                if (filterShowActive && !a.active) return false;
-                if (filterShowInactive && a.active) return false;
-            }
-            if (filterTypes.size > 0 && !filterTypes.has(a.asset_type ?? '')) return false;
-            if (filterCurrencies.size > 0 && !filterCurrencies.has(a.currency)) return false;
-            if (searchText) {
-                const q = searchText.toLowerCase();
-                if (!a.display_name.toLowerCase().includes(q)) return false;
-            }
-            return true;
-        }),
+        orderAssetsByLifecycle(
+            assets.filter((a) => {
+                if (!matchesAssetLifecycle(a.active, filterShowActive, filterShowInactive)) return false;
+                if (filterTypes.size > 0 && !filterTypes.has(a.asset_type ?? '')) return false;
+                if (filterCurrencies.size > 0 && !filterCurrencies.has(a.currency)) return false;
+                if (searchText) {
+                    const q = searchText.toLowerCase();
+                    if (!a.display_name.toLowerCase().includes(q)) return false;
+                }
+                return true;
+            }),
+        ),
     );
 
     // Which delta periods are visible for the selected date range
