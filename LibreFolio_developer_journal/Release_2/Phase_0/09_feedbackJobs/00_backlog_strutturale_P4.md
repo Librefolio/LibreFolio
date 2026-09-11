@@ -44,7 +44,7 @@ Le spunte di presa in carico sotto non attestano il completamento dell'implement
 | Task | Nota di analisi | Sprint |
 |---|---|---|
 | P4-1 | 🟡 In implementazione su K/SP08: facciata compatibile + moduli per responsabilità; non ricreare AssetMetadataService. | SP08 |
-| P4-2 | 🟡 In implementazione su L/SP16: contesto typed + stage ordinati, contratto invariato. | SP16 |
+| P4-2 | ✅ Integrato con L/SP16: `execute_batch` ridotto a orchestratore esplicito, contesto typed + stage ordinati, contratto/atomicità invariati. [Piano](../23_transactionBatchRefactor/plan-phase00TransactionBatchRefactor.prompt.md). | SP16 |
 | P4-3 | ✅ Integrato e developer-accepted con G; caratterizzazione CA, helper maturity CA/Intesa ed eToro FEE. [Piano](../18_brimTargeted/plan-phase00BrimTargeted.prompt.md). | SP09 |
 | P4-4 | 🟡 In implementazione su K/SP08: refactor locale Yahoo prima della scissione manager. | SP08 |
 | P4-5 | ✅ Integrato con B/SP05 (`514582a47`). [Piano](../11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md). | SP05 |
@@ -58,7 +58,7 @@ Le spunte di presa in carico sotto non attestano il completamento dell'implement
 | 6.3 | ✅ Chiuso per rimozione dei quattro aggregate; [audit 02](../../phases/08_newCleanAndDocumentation_audit/02_services_core.md), nessun helper da ripristinare. |
 | 6.4 | 🟡 In implementazione su K/SP08: estrazione PREPARE/FETCH/PERSIST dopo il move meccanico. |
 | 6.7 | ✅ Integrato come alias P4-6 nello stesso piano B; nessuna seconda implementazione. |
-| 6.8 | 🟡 Alias P4-2 attivo su L/SP16; nessuna seconda implementazione. |
+| 6.8 | ✅ Chiuso come alias P4-2 nello stesso refactor L/SP16; nessuna seconda implementazione. |
 | 6.11 | ✅ Integrato in B/SP04: 17 guardie Python in memoria, nessuna bonifica DB. |
 | 6.12 | ✅ Risolto P2-9: registry unico, servizi separati per scelta; [piano P2](../../phases/08_newCleanAndDocumentation_audit/plan-phase00P2ProductDecisions.prompt.md). |
 | 6.14 | Nessuna campagna autonoma; limiti incorporati in P4-3. |
