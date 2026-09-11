@@ -29,13 +29,18 @@ type SyntheticAsset = {
     tx_count_own: number;
 };
 
-function syntheticAsset(id: number, txCount = 0, txCountOwn = 0): SyntheticAsset {
+type SyntheticAssetOptions = {
+    displayName?: string;
+    active?: boolean;
+};
+
+function syntheticAsset(id: number, txCount = 0, txCountOwn = 0, options: SyntheticAssetOptions = {}): SyntheticAsset {
     return {
         id,
-        display_name: `Synthetic asset ${id}`,
+        display_name: options.displayName ?? `Synthetic asset ${id}`,
         currency: 'EUR',
         asset_type: 'STOCK',
-        active: true,
+        active: options.active ?? true,
         has_metadata: false,
         provider_code: null,
         tx_count: txCount,
@@ -312,23 +317,126 @@ test.describe('Asset List Page', () => {
     });
 
     // ========================================================================
-    // Test 13: Active/All toggle changes badge count
+    // Test 13: Active and inactive toggles implement all four lifecycle states.
     // ========================================================================
-    test('active/all toggle changes displayed count', async ({page}) => {
-        await goToAssetsPage(page);
-        const badge = page.getByTestId('assets-count-badge');
-        const activeBadge = await badge.textContent();
+    test('lifecycle toggles cover active, inactive, union, and unfiltered states', async ({page}) => {
+        const active = syntheticAsset(910_021, 0, 0, {displayName: 'Lifecycle active'});
+        const inactive = syntheticAsset(910_022, 0, 0, {
+            displayName: 'Lifecycle inactive',
+            active: false,
+        });
+        await goToMockedAssets(page, [active, inactive]);
+        await page.getByTestId('view-mode-grid').click();
 
-        // Toggle to show all (including inactive)
-        const toggle = page.getByTestId('assets-active-toggle');
-        await toggle.click();
-        // aria-pressed is the toggle telling us it flipped. Comparing the badges
-        // before that is comparing a number with itself.
-        await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+        const activeToggle = page.getByTestId('assets-active-toggle');
+        const inactiveToggle = page.getByTestId('assets-inactive-toggle');
+        const activeCard = page.getByTestId(`asset-card-${active.id}`);
+        const inactiveCard = page.getByTestId(`asset-card-${inactive.id}`);
 
-        const allBadge = await badge.textContent();
-        // Count should be same or greater (all >= active)
-        expect(parseInt(allBadge || '0')).toBeGreaterThanOrEqual(parseInt(activeBadge || '0'));
+        // Default: active only.
+        await expect(activeToggle).toHaveAttribute('aria-pressed', 'true');
+        await expect(inactiveToggle).toHaveAttribute('aria-pressed', 'false');
+        await expect(activeCard).toBeVisible();
+        await expect(inactiveCard).toHaveCount(0);
+
+        // Both selected: the two sets form a union.
+        await inactiveToggle.click();
+        await expect(inactiveToggle).toHaveAttribute('aria-pressed', 'true');
+        await expect(activeCard).toBeVisible();
+        await expect(inactiveCard).toBeVisible();
+
+        // Inactive only.
+        await activeToggle.click();
+        await expect(activeToggle).toHaveAttribute('aria-pressed', 'false');
+        await expect(inactiveCard).toBeVisible();
+        await expect(activeCard).toHaveCount(0);
+
+        // Neither selected: no lifecycle filter, so both return.
+        await inactiveToggle.click();
+        await expect(inactiveToggle).toHaveAttribute('aria-pressed', 'false');
+        await expect(activeCard).toBeVisible();
+        await expect(inactiveCard).toBeVisible();
+    });
+
+    test('lifecycle ordering and visual markers apply in every usage panel', async ({page}) => {
+        const panels = [
+            {
+                id: 'own',
+                active: syntheticAsset(910_101, 4, 2, {displayName: 'Own active'}),
+                inactive: syntheticAsset(910_102, 5, 3, {
+                    displayName: 'Own inactive',
+                    active: false,
+                }),
+            },
+            {
+                id: 'others',
+                active: syntheticAsset(910_103, 4, 0, {displayName: 'Others active'}),
+                inactive: syntheticAsset(910_104, 5, 0, {
+                    displayName: 'Others inactive',
+                    active: false,
+                }),
+            },
+            {
+                id: 'analysis',
+                active: syntheticAsset(910_105, 0, 0, {displayName: 'Analysis active'}),
+                inactive: syntheticAsset(910_106, 0, 0, {
+                    displayName: 'Analysis inactive',
+                    active: false,
+                }),
+            },
+        ] as const;
+
+        // Each inactive asset precedes its active peer in the intercepted payload.
+        // The UI must reorder by lifecycle without relying on database ordering.
+        await goToMockedAssets(
+            page,
+            panels.flatMap((panel) => [panel.inactive, panel.active]),
+        );
+        await page.getByTestId('assets-inactive-toggle').click();
+        await expect(page.getByTestId('assets-inactive-toggle')).toHaveAttribute('aria-pressed', 'true');
+        await page.getByTestId('view-mode-grid').click();
+
+        for (const panel of panels) {
+            const section = page.getByTestId(`assets-panel-${panel.id}`);
+            const cards = section.locator('[data-testid^="asset-card-"][data-lifecycle]');
+            await expect(section).toBeVisible();
+            await expect(cards).toHaveCount(2);
+            await expect
+                .poll(() => cards.evaluateAll((items) => items.map((item) => item.getAttribute('data-testid'))), {
+                    timeout: 5_000,
+                })
+                .toEqual([`asset-card-${panel.active.id}`, `asset-card-${panel.inactive.id}`]);
+
+            const activeCard = page.getByTestId(`asset-card-${panel.active.id}`);
+            const inactiveCard = page.getByTestId(`asset-card-${panel.inactive.id}`);
+            await expect(activeCard).toHaveAttribute('data-lifecycle', 'active');
+            await expect(activeCard).toHaveClass(/(^|\s)bg-white(\s|$)/);
+            await expect(activeCard).toHaveClass(/(^|\s)dark:bg-slate-800(\s|$)/);
+            await expect(activeCard).not.toHaveClass(/(^|\s)bg-amber-50(\s|$)/);
+            await expect(inactiveCard).toHaveAttribute('data-lifecycle', 'inactive');
+            await expect(inactiveCard).toHaveClass(/(^|\s)bg-amber-50(\s|$)/);
+            await expect(inactiveCard).toHaveClass(/(^|\s)dark:bg-amber-950\/30(\s|$)/);
+        }
+
+        await page.getByTestId('view-mode-list').click();
+        await waitForSettled(page.getByTestId('assets-page'), 20_000);
+
+        for (const panel of panels) {
+            const section = page.getByTestId(`assets-table-panel-${panel.id}`);
+            const rows = section.locator('tbody tr[data-row-id]');
+            await expect(section).toBeVisible();
+            await expect(rows).toHaveCount(2);
+            await expect
+                .poll(() => rows.evaluateAll((items) => items.map((item) => item.getAttribute('data-row-id'))), {
+                    timeout: 5_000,
+                })
+                .toEqual([String(panel.active.id), String(panel.inactive.id)]);
+
+            const activeRow = section.locator(`tbody tr[data-row-id="${panel.active.id}"]`);
+            const inactiveRow = section.locator(`tbody tr[data-row-id="${panel.inactive.id}"]`);
+            await expect(activeRow).not.toHaveClass(/asset-row-inactive/);
+            await expect(inactiveRow).toHaveClass(/asset-row-inactive/);
+        }
     });
 
     test('loads all asset cards through exactly one bulk price request', async ({page}) => {
