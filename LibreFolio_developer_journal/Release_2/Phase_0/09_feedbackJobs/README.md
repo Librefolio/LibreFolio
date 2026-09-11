@@ -26,7 +26,7 @@ checkpoint intermedi.
 | SP04–SP05 | ✅ Contratti, matrice segnali e Runes integrati tramite B (`514582a47`). |
 | SP06 | 🟡 YOC/U3 e I10 integrati; I60 implementato e validato sul branch I, follow-up UX attivo; G1c aperto. |
 | SP07 | ⏸️ I20–I50 non iniziati; attendono rilascio delle superfici Portfolio/PAC condivise. |
-| SP08 | 🟡 K autorizzato e in implementazione: P4-1, P4-4 e S6 6.4. |
+| SP08 | ✅ Asset pricing refactor integrato con K (`3c85866dd`, combined `b72475f0e`): P4-1, P4-4 e S6 6.4 chiusi. |
 | SP09 | ✅ G integrato, developer-accepted e archiviato (`ebba209c5`, docs `4949b2f4c`). |
 | SP10 | ⏸️ Differito fino alla stabilizzazione chart/store. |
 | SP11 | 🟡 J Round 2 revisionato; Round 3 in implementazione sul branch J, non integrato. |

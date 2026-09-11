@@ -146,10 +146,11 @@ La wiki ha fornito contesto utile su FIFO v4, batch e DataEditor; il grafo dichi
 
 ### P4-1 - Scissione di `asset_source.py`
 
-**Stato:** 🟡 in implementazione su K/SP08; monolite ancora presente alla
-baseline di avvio. **Taglia:** L. Il file attuale ha 5.106 righe, non 5.162.
-`AssetMetadataService` e `compute_metadata_diff` non esistono piu: non ricrearli
-per seguire una vecchia mappa.
+**Stato:** ✅ integrato con K/SP08 (`3c85866dd`, combined `b72475f0e`).
+`asset_source.py` è una facciata compatibile di 21 righe; l'implementazione
+canonica vive in `asset_sources/` per responsabilità, con identità unica per
+classi, cache, thread runner ed errori. [Piano](../22_assetPricingRefactor/plan-phase00AssetPricingRefactor.prompt.md).
+**Taglia storica:** L; alla baseline il monolite superava 5.100 righe.
 
 **Superfici:** `B/services/asset_source.py`: infrastruttura/cache/thread `144-263`; contratto provider e guardia OHLC `271-962`; assegnazioni/metadata `990-1423`; scritture prezzi/eventi `1430-1973`; probe `1980-2129`; query/segnali `2236-2781`; refresh `2788-3364`; quote correnti `3371-3608`; eventi `3615-3906`; CRUD/merge `3914-4680`; ricerca `4688-5106`. Caller: API assets, scheduler, risk, AI Export e provider concreti.
 
@@ -195,9 +196,10 @@ I 35 siti C901 BRIM attuali sono 34 nei broker e uno in `_brim_io`, non 35 parse
 
 ### P4-4 - Yahoo `get_history_value`
 
-**Stato:** 🟡 in implementazione su K/SP08. **Taglia:** M.
-`B/services/asset_source_providers/yahoo_finance.py:284-482`, C901 31 alla
-baseline. `_sync_fetch_history` e citato in commenti, non e un helper implementato.
+**Stato:** ✅ integrato con K/SP08 (`3c85866dd`). Acquisizione, mapping DataFrame,
+dividendi e split sono separati; retry, `period="max"`, date inclusive, NaN,
+valuta fallback ed eventi best-effort restano equivalenti.
+**Taglia storica:** M; `get_history_value` aveva C901 31 alla baseline.
 
 **Superfici:** fetch/retry `79-113,329-368`; mapping DataFrame `370-425`; dividendi/split `428-472`; costruzione risultato/errori `474-482`.
 
@@ -255,7 +257,7 @@ review nel [piano dedicato](../11_feedbackContractsRunes/plan-phase00FeedbackCon
 |---|---|---|
 | S6 6.2 `is_chain` / `providers_used` | Parziale, M | Proprieta DB `models.py:899-911`; DTO `schemas/fx.py:400-439`; API `fx.py:719-849`; frontend FX `+page.svelte:310-316`, `[pair]/+page.svelte:676-682`. Esporre dato derivato senza renderlo input obbligatorio; `providers_used` set non sostituisce la sequenza ordinata con ripetizioni `CHAIN:MOCKFX+MOCKFX`. Distinguere membership, percorso e MANUAL. Hard handoff schema -> API sync -> consumer. Nessuna migrazione DB. |
 | S6 6.3 quattro `aggregate_*` | Gia chiuso, XS documentale | Rimossi per decisione P1. `DerivedViewsBuilder.build_data_quality_report`, `portfolio_engine.py:1656`; caller arricchiti `portfolio_service.py:1209,2047`. Non reintrodurre helper che perderebbero politiche di qualita/metadati. |
-| S6 6.4 `bulk_refresh_prices` | Aperto, L | `asset_source.py:2788-3364`: prepare, fetch, confronto cambiamenti, persist esistono come closure, non come fasi estratte. C901 62; `_fetch_single` 22. Coordinare con P4-1. Preservare sessione distinta per persist, resume/min, cache, timeout, filtro valuta, risultati parziali e commit a chunk; non promettere atomicita che oggi non c'e. |
+| S6 6.4 `bulk_refresh_prices` | ✅ Chiuso con K/SP08 | Fasi PREPARE/FETCH/PERSIST estratte con record typed; sessione distinta per persist, resume/min, cache, timeout, filtro valuta, risultati parziali e commit a chunk preservati. |
 | S6 6.7 | Alias P4-6 | Nessun secondo task o seconda stima. |
 | S6 6.8 | ✅ Chiuso come alias P4-2 | Nessun secondo task o seconda stima. |
 | S6 6.11 assert AI Export | Aperto, S | 17 assert strutturali, su 51 totali; 34 contestuali fuori scope. Elenco sotto. Nessun cambio cataloghi/versioni/dataset. |
@@ -734,7 +736,7 @@ L'ordine ordina **rischio e ampiezza**, non inventa dipendenze. Il primo sprint 
 | SP04–SP05 | ✅ Integrati tramite B. |
 | SP06 | 🟡 U3/YOC + I10 integrati; I60/follow-up attivi su I; G1c aperto. |
 | SP07 | ⏸️ I20–I50 non iniziati. |
-| SP08 | 🟡 K autorizzato e in implementazione. |
+| SP08 | ✅ Integrato: Yahoo refactor, scissione asset-source e refresh phases; full services/API e docs verdi. |
 | SP09 | ✅ G integrato, developer-accepted e archiviato. |
 | SP10 | ⏸️ Differito. |
 | SP11 | 🟡 J Round 3 in implementazione; nessuna integrazione target finché manca review finale. |
