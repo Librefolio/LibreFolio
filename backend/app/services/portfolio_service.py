@@ -65,6 +65,11 @@ from backend.app.schemas.wac import WACMissingPairInfo, WACPreviewResultItem, WA
 from backend.app.services.fx import convert_bulk
 from backend.app.services.portfolio_allocation_source import build_portfolio_allocation_source
 from backend.app.services.settings_service import get_effective_base_currency
+from backend.app.services.yield_on_cost import (
+    YieldOnCostPositionInput,
+    calculate_yield_on_cost_for_positions,
+    compute_yield_on_cost_dependency_identity,
+)
 from backend.app.utils.cache_utils import get_ttl_cache
 from backend.app.utils.financial.roi_utils import (
     CashFlowInput,
@@ -83,7 +88,7 @@ from backend.app.utils.financial.wac_utils import WACInputTX, compute_wac_from_t
 
 _logger = structlog.get_logger(__name__)
 
-# Layer 2 cache: full report results keyed by (user, scope, date_range, tx_fingerprint, price_fingerprint)
+# Layer 2 cache: full report results keyed by scope/query plus tx, price, FX and split identities.
 _portfolio_l2_cache = get_ttl_cache("portfolio_layer2", maxsize=20, ttl=1800)  # 30 min
 
 # WAC computation cache: avoid re-querying DB for unchanged (broker, asset) pairs
@@ -875,6 +880,21 @@ class PortfolioService:
         first_lot_txn_dates: dict[tuple[int, int], date_type] = {key: min(t.date for t in txns) for key, txns in lot_txns_by_key.items() if txns}
 
         end_positions = [ps for ps in engine_result.position_states_end if ps.quantity > _QUANTITY_DUST_THRESHOLD]
+        yield_on_cost_by_position = await calculate_yield_on_cost_for_positions(
+            self.db,
+            user_id=user_id,
+            positions=[
+                YieldOnCostPositionInput(
+                    asset_id=position.asset_id,
+                    broker_id=position.broker_id,
+                    wac_per_unit=position.wac,
+                    wac_currency=position.wac_currency,
+                )
+                for position in end_positions
+            ],
+            target_currency=base_currency,
+            as_of_date=valuation_date,
+        )
         assets_map = await self._get_assets_map({ps.asset_id for ps in end_positions})
         brokers_map = await self._get_brokers_map({ps.broker_id for ps in end_positions})
 
@@ -899,12 +919,9 @@ class PortfolioService:
                     )
                     all_missing_pairs.extend(mp)
 
-            wac_per_unit: Decimal | None = None
-            if ps.wac_currency == base_currency:
-                wac_per_unit = ps.wac
-            else:
-                wac_per_unit, mp = await self._convert_to_base(ps.wac, ps.wac_currency, base_currency, ps.date)
-                all_missing_pairs.extend(mp)
+            yield_on_cost_calculation = yield_on_cost_by_position[(ps.asset_id, ps.broker_id)]
+            wac_per_unit = yield_on_cost_calculation.wac_per_unit
+            all_missing_pairs.extend(yield_on_cost_calculation.missing_fx_pairs)
 
             current_value = ps.market_value
             if current_value is not None:
@@ -999,6 +1016,7 @@ class PortfolioService:
                     gain_loss_change_1d=gain_loss_change_1d,
                     gain_loss_change_1d_percent=gain_loss_change_1d_percent,
                     oldest_open_lot_date=oldest_open_lot_dates.get((ps.broker_id, ps.asset_id)),
+                    yield_on_cost=yield_on_cost_calculation.result if yield_on_cost_calculation is not None else None,
                     allocation_percent=None,
                 )
             )
@@ -1873,6 +1891,7 @@ class PortfolioService:
             DerivedViewsBuilder,
             PortfolioCalculationEngine,
             _compute_tx_fingerprint,
+            compute_portfolio_fx_cache_identity,
         )
 
         today = date_type.today()
@@ -1880,7 +1899,8 @@ class PortfolioService:
         date_from = query.date_range.resolved_start() if query.date_range else None
         date_to = query.date_range.resolved_end() if query.date_range else None
         allocation_source_date = query.allocation_source.as_of_date if query.allocation_source else None
-        price_fingerprint_date = max(date_to or today, allocation_source_date or today)
+        effective_date_to = date_to or today
+        price_fingerprint_date = max(effective_date_to, allocation_source_date or effective_date_to)
 
         # ── 0. Layer 2 cache check ──
         # Build a fingerprint from transactions + prices to detect data changes
@@ -1950,6 +1970,19 @@ class PortfolioService:
                     ),
                 )
 
+            fx_fp = await compute_portfolio_fx_cache_identity(
+                self.db,
+                set(scope_broker_ids),
+                base_currency,
+                effective_date_to,
+            )
+            yield_on_cost_fp = await compute_yield_on_cost_dependency_identity(
+                self.db,
+                user_id=user_id,
+                scope_transactions=all_txs_for_fp,
+                as_of_date=effective_date_to,
+            )
+
             l2_key = (
                 user_id,
                 tuple(scope_broker_ids),
@@ -1958,6 +1991,7 @@ class PortfolioService:
                 base_currency,
                 str(date_from),
                 str(date_to),
+                str(effective_date_to),
                 query.include_summary,
                 query.include_history,
                 query.include_allocation_history,
@@ -1967,6 +2001,8 @@ class PortfolioService:
                 tx_fp,
                 price_fp,
                 allocation_metadata_fp,
+                fx_fp,
+                yield_on_cost_fp,
             )
 
             cached, hit = _portfolio_l2_cache.get(l2_key)
@@ -2007,7 +2043,7 @@ class PortfolioService:
             user_id=user_id,
             broker_ids=query.broker_ids,
             date_from=None,  # always from t=0 for correct cumulative values
-            date_to=date_to,
+            date_to=effective_date_to,
             target_currency=base_currency,
         )
 
@@ -2027,7 +2063,7 @@ class PortfolioService:
                 target_currency_override=base_currency,
                 include_breakdown=query.include_breakdown,
                 date_from=date_from,
-                date_to=date_to,
+                date_to=effective_date_to,
                 _precomputed_engine_result=engine_result,
             )
 
@@ -2039,7 +2075,7 @@ class PortfolioService:
                 user_id=user_id,
                 broker_ids=query.broker_ids,
                 date_from=date_from,
-                date_to=date_to,
+                date_to=effective_date_to,
                 target_currency_override=base_currency,
                 _precomputed_engine_result=engine_result,
             )
@@ -2060,7 +2096,7 @@ class PortfolioService:
                         user_id=user_id,
                         broker_ids=query.broker_ids,
                         date_from=date_from,
-                        date_to=date_to,
+                        date_to=effective_date_to,
                         target_currency_override=base_currency,
                         _precomputed_engine_result=engine_result,
                         _mwrr_use_warm_start=False,
@@ -2110,7 +2146,7 @@ class PortfolioService:
                 user_id=user_id,
                 broker_ids=query.broker_ids,
                 date_from=date_from,
-                date_to=date_to,
+                date_to=effective_date_to,
                 target_currency_override=base_currency,
                 _precomputed_engine_result=engine_result,
             )
@@ -2125,7 +2161,7 @@ class PortfolioService:
                 configured_fx_pairs=configured_fx_pairs,
                 real_provider_fx_pairs=real_provider_fx_pairs,
                 period_from=date_from,
-                period_to=date_to,
+                period_to=effective_date_to,
             )
 
         # Append MWRR series unreliable issue if needed
