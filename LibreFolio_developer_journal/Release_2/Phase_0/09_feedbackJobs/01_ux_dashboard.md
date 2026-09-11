@@ -75,38 +75,53 @@ Regola comune G-UX-DESIGN/G-UX-REVIEW nel [piano](06_piano_sprint.md).
 
 **Complessità raffinata 2026-09-10**: M per metrica/fonti + S per colonna/docs · **Origine**: feedback @ExpectChaos (utente esterno)
 
+**Stato 2026-09-11:** ✅ **IMPLEMENTATO, VERIFICATO E ACCETTATO DAL DEVELOPER**
+nel checkpoint H `74afcebce`. Contratto finale, storyboard desktop/mobile,
+correzioni review ed evidenze nel
+[piano H dedicato](../19_yieldOnCost/plan-phase00YieldOnCost.prompt.md).
+
 ### Richiesta
 Una colonna che mostri il **rendimento corrente dell'asset rispetto al costo di acquisto**
 (Yield on Cost): utile per chi investe in strumenti a distribuzione e vuole monitorare il
 rendimento nel tempo, indipendente dalle fluttuazioni di mercato.
 
 ### Note implementative
-- **Precisazione 2026-09-07**: YOC = somma delle distribuzioni lorde **per quota** nei
-  **365 giorni** fino alla data finale del report ÷ PMC/WAC **unitario** residuo.
-  Non dividere gli incassi complessivi del conto per un prezzo unitario. Finestra da
-  `T - 364` a `T` inclusi, indipendente dal `date_from`; non dodici mesi di calendario.
+- **Decisione finale 2026-09-10**: fonte esclusiva sono le `Transaction`
+  asset-linked DIVIDEND/INTEREST, i cui importi LibreFolio sono lordi. TAX/FEE,
+  provider e AssetEvent income non entrano. Ogni incasso viene normalizzato per
+  quantita' LONG eleggibile a fine D-1, broker-scoped e transfer-aware; la somma
+  per-unit da `T - 364` a `T` inclusi viene divisa per PMC/WAC unitario residuo.
+  Nessun carry automatico dell'income fra broker dopo un transfer.
 - Dove: tabella Holdings in dashboard (`ExposureTable.svelte`) e tabella posizioni nel broker
-  detail. Colonna nascosta di default, attivabile dall'icona occhio (convenzione colonne).
+  detail. Colonna **visibile di default**, accanto ad Annualized Return. L'utente
+  puo' nasconderla con l'occhio; il normale override user-scoped e' condiviso
+  fra entrambe le superfici.
 - Dashboard e broker usano già lo stesso `PositionsPanel`/`ExposureTable`: una sola colonna.
-- `asset_income`/`cash_yield` sono cumulativi, non YOC. Gli incassi personali BRIM non
-  garantiscono una storia per-quota completa: mancanza di dati → non disponibile con motivo,
-  non zero o annualizzazione di pochi incassi.
-- Fonte, split, quote-base bond, FX e completezza TTM sono il gate prima del calcolo backend.
-- La verifica corrente riduce la stima: `PortfolioHolding.wac_per_unit` e la tabella
-  condivisa esistono; Yahoo/JustETF persistono eventi DIVIDEND per quota. Non e' pero
-  una semplice divisione finche non sono espliciti split intervenuti, conversione FX,
-  duplicati/manuali e lo stato di completezza. Primo incremento raccomandato di SP06.
+- `asset_income`/`cash_yield` sono cumulativi, non YOC. Gli incassi importati
+  via BRIM contano soltanto quando diventano Transaction asset-linked; non si
+  divide il loro totale per il cost basis corrente. Ogni riga usa la propria
+  quantita' D-1; split e FX riallineano unita' e valuta.
+- La baseline H `b22998f` contiene la shared FX identity F, L1 e fix
+  `cost_basis_currency` con witness identity/L1. H deve riusare la funzione
+  identica nella L2, senza seconda implementazione. Gate 0, implementazione e
+  review sono complete.
 
-### Dato mancante, zero e titolo giovane — decisione 2026-09-07
-- UI **`-`** sia per nessun reddito sia per storia insufficiente, con spiegazione distinta.
-- Storia completa e base valida ma dividendi/interessi zero: zero noto nel contratto,
-  stato `no_income` proposto; visualizzazione `-`, non confusione con dato mancante.
-- Strumento non distributivo: non applicabile. Storia troppo giovane/incompleta,
-  base nulla o FX mancante: valore non disponibile e motivo specifico.
-- La sola assenza di incassi personali o la presenza di 365 giorni di prezzi non provano
-  copertura completa delle distribuzioni. Un acquisto recente non impone `-` se lo
-  strumento ha già storia sufficiente e il PMC è disponibile.
-- Sono requisiti del piano: la colonna YOC non è ancora implementata.
+### Dato mancante, zero e coppia giovane — decisione 2026-09-10
+- Nessun income TTM = YOC numerico 0 soltanto se la prima transaction storica
+  della coppia `(asset, broker)` e' almeno `T - 364`; close/rebuy non resetta
+  l'age. Coppia piu' giovane = `unavailable/insufficient_history`.
+- Uno o piu' income registrati esplicitamente a importo zero producono
+  `available=0` con provenance `net_zero`; sono distinti dal vero `no_income`.
+- Ogni holding e' applicabile, inclusi crypto e asset manuali; nessun
+  `not_applicable` o whitelist per tipo.
+- Income senza quantita' D-1, replay/split incoerente, FX o WAC mancanti:
+  unavailable con reason tipizzata; mai calcolo parziale/fallback.
+- UI `-` per no-income e unavailable; solo i problemi unavailable mostrano
+  l'icona info con custom Tooltip. Il normale zero/no-income non appare come
+  errore. Percentuali disponibili: due decimali, senza `+`.
+- La policy FX e' quella portfolio corrente, senza cap YOC; provenance e
+  tooltip espongono la data effettiva del tasso.
+- La colonna YOC e' implementata e condivisa da Dashboard/Broker.
 
 ### Documentazione, tooltip e confronto UI
 - Aggiungere **in inglese**, tramite docs-writer, una pagina nella teoria finanziaria:
@@ -116,10 +131,12 @@ rendimento nel tempo, indipendente dalle fluttuazioni di mercato.
 - Spiegare formula/unita, finestra, fonti, casi del trattino, split/bond/FX e differenze
   rispetto a dividend yield di mercato, cash yield cumulativo e CAGR.
 - Tooltip nell'**header YOC** della tabella, riusando `ColumnDef.headerTooltip`:
-  sintesi formula/365 giorni/trattino e accesso alla teoria. Testo UI EN/IT/FR/ES.
-- Microvista ASCII di header/tooltip e righe con percentuale o `-`, approvata prima della UI.
-  Dopo: walkthrough su dashboard e broker, attivazione dall'occhio, motivi dei trattini,
-  pagina teoria e raccolta feedback operativo.
+  sintesi ultimo anno/PMC e accesso alla teoria. Click/tap apre il Tooltip;
+  doppio click, long press o `Shift+Enter` aprono la guida. Testo UI EN/IT/FR/ES.
+- Microvista ASCII di header/tooltip e righe con percentuale o `-`,
+  **APPROVED 2026-09-10**; walkthrough Dashboard/Broker desktop/mobile,
+  visibilita' condivisa, tooltip, dark mode e gesture completato e accettato dal
+  developer il 2026-09-11.
 
 ---
 
@@ -307,7 +324,7 @@ Baseline `a9138140`; superfici, dipendenze, rischi e DoD completi in
 |---|---|---|
 | U1 | ✅ Completato da E: stato/generazioni del probe e metadata concorrente. | SP01 |
 | U2 | Scope globale concordato, non solo dashboard; primitive condivise. XL. | SP15 |
-| U3 | YOC per-quota/WAC residuo su 365 giorni, `-` con motivi distinti, teoria EN e tooltip header; fonte completa non garantita. L + S colonna. | SP06 |
+| U3 | ✅ [IMPLEMENTATO, VERIFICATO E DEVELOPER-ACCEPTED](../19_yieldOnCost/plan-phase00YieldOnCost.prompt.md), checkpoint H `74afcebce`; merge target in corso. | SP06 |
 | U4 | ✅ Completato da E: colonna uploader ordinabile e filtro multi-selezione. | SP02 |
 | U5 | ✅ Completato da E: tooltip breve localizzato. | SP01 |
 | U6 | ✅ Rimozione duplicate-mode e fast-open bulk confermati; form vivo da preservare. | Nessun codice |

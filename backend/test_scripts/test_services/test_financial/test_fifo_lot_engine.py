@@ -1,6 +1,6 @@
 """Unit tests for backend/app/services/fifo_lot_engine.py."""
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
@@ -8,7 +8,9 @@ import pytest
 from backend.app.services.fifo_lot_engine import (
     EconomicEvent,
     FifoInputTransaction,
+    FragmentInterval,
     ReferencePriceResolution,
+    eligible_income_quantity,
     run_fifo_lot_engine,
 )
 
@@ -83,6 +85,7 @@ def _run(
     *,
     broker_shorting: dict[int, bool] | None = None,
     split_ratios_by_tx_id: dict[int, Decimal] | None = None,
+    split_event_ids_by_tx_id: dict[int, int] | None = None,
     reference_prices: dict[tuple[int, str], ReferencePriceResolution] | None = None,
     economic_events: list[EconomicEvent] | None = None,
     target_currency: str = "",
@@ -96,6 +99,7 @@ def _run(
         txs,
         broker_shorting or {},
         split_ratios_by_tx_id=split_ratios_by_tx_id,
+        split_event_ids_by_tx_id=split_event_ids_by_tx_id,
         reference_price_lookup=lookup,
         economic_events=economic_events or (),
         target_currency=target_currency,
@@ -453,6 +457,88 @@ class TestTransfers:
         assert result.active_fragments(broker_id=2) == []
 
 
+class TestEligibleIncomeQuantity:
+    """Public D-1 eligibility seam shared by FIFO allocation and Yield on Cost."""
+
+    def test_cutoff_excludes_same_day_buy_and_includes_same_day_sell(self):
+        income_date = date(2025, 1, 10)
+        fragments = [
+            FragmentInterval(
+                fragment_id="sold-on-income-day",
+                lot_id=1,
+                direction="LONG",
+                custody_type="BROKER",
+                quantity=_d("10"),
+                unit_price=_d("100"),
+                start_date=date(2025, 1, 1),
+                end_date=income_date,
+                broker_id=1,
+            ),
+            FragmentInterval(
+                fragment_id="bought-on-income-day",
+                lot_id=2,
+                direction="LONG",
+                custody_type="BROKER",
+                quantity=_d("7"),
+                unit_price=_d("100"),
+                start_date=income_date,
+                broker_id=1,
+            ),
+            FragmentInterval(
+                fragment_id="short-is-never-eligible",
+                lot_id=3,
+                direction="SHORT",
+                custody_type="BROKER",
+                quantity=_d("99"),
+                unit_price=_d("100"),
+                start_date=date(2025, 1, 1),
+                broker_id=1,
+            ),
+        ]
+
+        assert eligible_income_quantity(
+            fragments,
+            broker_id=1,
+            cutoff=income_date - timedelta(days=1),
+        ) == _d("10")
+
+    def test_in_transit_quantity_belongs_to_source_until_arrival(self):
+        fragments = [
+            FragmentInterval(
+                fragment_id="in-transit",
+                lot_id=1,
+                direction="LONG",
+                custody_type="IN_TRANSIT",
+                quantity=_d("4"),
+                unit_price=_d("100"),
+                start_date=date(2025, 1, 5),
+                end_date=date(2025, 1, 10),
+                source_broker_id=1,
+                destination_broker_id=2,
+            ),
+            FragmentInterval(
+                fragment_id="arrived",
+                lot_id=1,
+                direction="LONG",
+                custody_type="BROKER",
+                quantity=_d("4"),
+                unit_price=_d("100"),
+                start_date=date(2025, 1, 10),
+                broker_id=2,
+                source_broker_id=1,
+                destination_broker_id=2,
+            ),
+        ]
+
+        transit_cutoff = date(2025, 1, 7)
+        assert eligible_income_quantity(fragments, broker_id=1, cutoff=transit_cutoff) == _d("4")
+        assert eligible_income_quantity(fragments, broker_id=2, cutoff=transit_cutoff) == _d("0")
+
+        arrival_cutoff = date(2025, 1, 10)
+        assert eligible_income_quantity(fragments, broker_id=1, cutoff=arrival_cutoff) == _d("0")
+        assert eligible_income_quantity(fragments, broker_id=2, cutoff=arrival_cutoff) == _d("4")
+
+
 class TestSplits:
     def test_forward_split_preserves_cost(self):
         result = _run(
@@ -495,6 +581,105 @@ class TestSplits:
         assert active.fragment_id == "lot:1/transfer:2/to:2"
         assert active.quantity == _d("20")
         assert active.unit_price == _d("50")
+
+    def test_global_split_linked_on_both_transfer_brokers_applies_once_per_in_transit_fragment(self):
+        """Two broker adjustments represent one global event, not two 2:1 splits."""
+        t_out, t_in = _transfer_pair(
+            2,
+            3,
+            "10",
+            out_broker_id=1,
+            in_broker_id=2,
+            out_date="2025-01-05",
+            in_date="2025-01-10",
+        )
+        source_split_tx = _adjustment(
+            4,
+            "10",
+            dt="2025-01-07",
+            broker_id=1,
+        )
+        destination_split_tx = _adjustment(
+            5,
+            "10",
+            dt="2025-01-07",
+            broker_id=2,
+        )
+        global_split_event_id = 7001
+
+        result = _run(
+            [
+                _buy(1, "10", "100", dt="2025-01-01", broker_id=1),
+                t_out,
+                t_in,
+                source_split_tx,
+                destination_split_tx,
+            ],
+            split_ratios_by_tx_id={4: _d("2"), 5: _d("2")},
+            split_event_ids_by_tx_id={
+                4: global_split_event_id,
+                5: global_split_event_id,
+            },
+        )
+
+        split_events = [event for event in result.classified_events if event.kind == "SPLIT"]
+        assert {event.transaction_id for event in split_events} == {4, 5}
+        assert {event.asset_event_id for event in split_events} == {global_split_event_id}
+
+        transit_history = [fragment for fragment in result.fragment_intervals if fragment.fragment_id == "lot:1/transfer:2/transit"]
+        assert [fragment.quantity for fragment in transit_history] == [
+            _d("10"),
+            _d("20"),
+        ]
+
+        active = result.active_fragments(lot_id=1)
+        assert len(active) == 1
+        assert active[0].fragment_id == "lot:1/transfer:2/to:2"
+        assert active[0].quantity == _d("20")
+        assert active[0].unit_price == _d("50")
+        assert result.get_lot(1).original_cost == _d("1000")
+
+    def test_split_snapshot_keeps_large_scope_and_small_custody_candidates_separate(self):
+        """Passive metadata stays pre-event; generic FIFO does not judge row coherence."""
+        in_transit_quantity = _d("900000000000")
+        total_quantity = in_transit_quantity + _d("1")
+        t_out, t_in = _transfer_pair(
+            2,
+            3,
+            str(in_transit_quantity),
+            out_broker_id=1,
+            in_broker_id=2,
+            out_date="2025-01-05",
+            in_date="2025-01-10",
+        )
+        split_tx = _adjustment(
+            4,
+            "2",
+            dt="2025-01-07",
+            broker_id=1,
+        )
+
+        result = _run(
+            [
+                _buy(
+                    1,
+                    str(total_quantity),
+                    "1",
+                    dt="2025-01-01",
+                    broker_id=1,
+                ),
+                t_out,
+                t_in,
+                split_tx,
+            ],
+            split_ratios_by_tx_id={4: _d("2")},
+            split_event_ids_by_tx_id={4: 7002},
+        )
+
+        snapshot = result.split_quantities_by_transaction_id[4]
+        assert snapshot.scoped_quantity == total_quantity
+        assert snapshot.broker_custody_quantity == _d("1")
+        assert result.analysis_status == "COMPLETE"
 
     def test_split_only_transforms_broker_with_linked_transaction(self):
         move_out, move_in = _transfer_pair(3, 4, "5", out_broker_id=1, in_broker_id=2, out_date="2025-01-05", in_date="2025-01-06")

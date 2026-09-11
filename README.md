@@ -33,6 +33,30 @@ Your data stays on your server. No third-party cloud. No tracking.
 
 ---
 
+## 📈 Project Growth
+
+<p align="center">
+  <a href="https://github.com/Librefolio/LibreFolio/pkgs/container/librefolio">
+    <img src="https://ghcr-badge.elias.eu.org/shield/Librefolio/LibreFolio/librefolio" alt="GHCR downloads">
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://www.star-history.com/?repos=librefolio%2Flibrefolio&type=date&legend=top-left">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=librefolio/librefolio&type=date&theme=dark&legend=top-left">
+      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=librefolio/librefolio&type=date&legend=top-left">
+      <img src="https://api.star-history.com/chart?repos=librefolio/librefolio&type=date&legend=top-left" alt="LibreFolio GitHub star history" width="100%">
+    </picture>
+  </a>
+</p>
+
+<p align="center">
+  <sub>The GHCR badge shows total downloads. Click it for GitHub's native 30-day download chart.</sub>
+</p>
+
+---
+
 ## 🖼️ Gallery
 
 <p align="center">

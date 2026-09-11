@@ -39,6 +39,8 @@
         validateRows?: (rows: ParsedRow[]) => string | null;
         /** Optional snippet rendered between drop zone and CsvEditor */
         headerSlot?: Snippet;
+        /** Optional action rendered beside the modal title/help control */
+        headerActions?: Snippet;
         /** Optional snippet for help section content */
         helpContent?: Snippet;
         /** Called when import is confirmed with valid rows */
@@ -49,7 +51,7 @@
         oncsvtextchange?: (text: string) => void;
     }
 
-    let {open = $bindable(false), title = 'Import CSV Data', columns, identity, strict = false, validateRows, headerSlot, helpContent, onimport, onclose, oncsvtextchange}: Props = $props();
+    let {open = $bindable(false), title = 'Import CSV Data', columns, identity, strict = false, validateRows, headerSlot, headerActions, helpContent, onimport, onclose, oncsvtextchange}: Props = $props();
 
     // =========================================================================
     // State
@@ -202,7 +204,7 @@
 
 <ModalBase maxWidth="3xl" onRequestClose={requestClose} {open} testId="data-import-modal">
     <!-- Header -->
-    <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-600">
+    <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-600" data-testid="data-import-modal-header">
         <div class="flex items-center gap-2">
             <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">{title}</h2>
             {#if helpContent}
@@ -211,7 +213,12 @@
                 </button>
             {/if}
         </div>
-        <button aria-label="Close" class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded" onclick={requestClose}>✕ </button>
+        <div class="flex items-center gap-1">
+            {#if headerActions}
+                {@render headerActions()}
+            {/if}
+            <button aria-label="Close" class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded" onclick={requestClose}>✕ </button>
+        </div>
     </div>
 
     <!-- Content -->

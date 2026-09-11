@@ -1,5 +1,7 @@
 <script lang="ts">
     import DataImportModal from '$lib/components/ui/data-editor/DataImportModal.svelte';
+    import {BookOpen} from 'lucide-svelte';
+    import {_ as t} from '$lib/i18n';
     import type {CsvColumnDef, CsvIdentityDef, ParsedRow} from '$lib/components/ui/data-editor/CsvEditor.svelte';
 
     interface Props {
@@ -41,6 +43,23 @@
         }
         onimport?.(distribution);
     }
+
+    function openDocs() {
+        window.open('/mkdocs/user/assets/create-edit/#importing-a-distribution-csv', '_blank', 'noopener');
+    }
 </script>
 
-<DataImportModal bind:open {columns} {identity} {title} strict={true} {validateRows} onimport={handleImport} {onclose} />
+<DataImportModal bind:open {columns} {identity} {title} strict={true} {validateRows} onimport={handleImport} {onclose}>
+    {#snippet headerActions()}
+        <button
+            class="rounded p-1 text-gray-400 transition-colors hover:text-libre-green focus:outline-none focus-visible:ring-2 focus-visible:ring-libre-green/70"
+            onclick={openDocs}
+            type="button"
+            title={$t('common.documentation')}
+            aria-label={$t('common.documentation')}
+            data-testid="distribution-import-docs"
+        >
+            <BookOpen size={18} aria-hidden="true" />
+        </button>
+    {/snippet}
+</DataImportModal>

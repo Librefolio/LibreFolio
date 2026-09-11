@@ -30,7 +30,7 @@ const referenceData = vi.hoisted(() => ({
     // entry in en.json (nor any other locale) and never will: it exists only to
     // exercise the missing-translation fallback deterministically, decoupled from
     // whatever real sector keys do or don't have a translation on a given day.
-    sectorKeys: ['Technology', 'Financials', 'SyntheticUntranslatedSector'],
+    sectorKeys: ['Technology', 'Financials', 'Corporate Bonds', 'Government Bonds', 'SyntheticUntranslatedSector'],
 }));
 
 vi.mock('$lib/stores/reference/countryStore', () => ({
@@ -321,6 +321,21 @@ async function expectImportValidation(confirm: HTMLElement, expected: {validRows
 }
 
 describe('DistributionDataImportModal — atomic percentage contract', () => {
+    it('opens the distribution CSV documentation in an isolated tab', async () => {
+        const open = vi.spyOn(window, 'open').mockReturnValue(null);
+        try {
+            distributionModal();
+
+            const header = screen.getByTestId('data-import-modal-header');
+            const docsButton = within(header).getByTestId('distribution-import-docs');
+            await fireEvent.click(docsButton);
+
+            expect(open).toHaveBeenCalledWith('/mkdocs/user/assets/create-edit/#importing-a-distribution-csv', '_blank', 'noopener');
+        } finally {
+            open.mockRestore();
+        }
+    });
+
     it('the pristine header-only state never reports the domain total error', async () => {
         // Regression guard: before the fix, `validateRows` ran unconditionally over
         // whatever rows existed — including the empty array present right after
@@ -435,13 +450,19 @@ describe('DistributionEditor — exact reference-name resolution', () => {
         expect(onchange).not.toHaveBeenCalled();
     });
 
-    it.each([' technology ', ' TECNOLOGIA '])('accepts an exact sector key or current localized label after case and trim normalization: %s', async (identity) => {
+    it.each([
+        [' technology ', 'Technology'],
+        [' TECNOLOGIA ', 'Technology'],
+        ['Obbligazioni societarie', 'Corporate Bonds'],
+        ['Titoli di Stato', 'Government Bonds'],
+        ['Finanziari', 'Financials'],
+    ])('accepts an exact sector key or current Italian label after case and trim normalization: %s', async (identity, canonical) => {
         await setupI18n('it');
         try {
             const {confirm, onchange} = await importThroughDistributionEditor('sector', identity);
             await waitFor(() => expect(confirm).toBeEnabled());
             await fireEvent.click(confirm);
-            expect(onchange).toHaveBeenCalledWith({Technology: 1});
+            expect(onchange).toHaveBeenCalledWith({[canonical]: 1});
         } finally {
             await setupI18n('en');
         }

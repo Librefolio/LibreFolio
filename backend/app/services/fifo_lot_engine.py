@@ -133,12 +133,21 @@ class FifoEvent:
     quantity: Decimal | None = None
     unit_price: Decimal | None = None
     ratio: Decimal | None = None
+    asset_event_id: int | None = None
     pair_id: int | None = None
     source_broker_id: int | None = None
     destination_broker_id: int | None = None
     transit_start: date | None = None
     transit_end: date | None = None
     raw_transaction_ids: tuple[int, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class SplitQuantitySnapshot:
+    """Signed quantities visible to one split row before its global event."""
+
+    scoped_quantity: Decimal
+    broker_custody_quantity: Decimal
 
 
 @dataclass(slots=True)
@@ -290,6 +299,7 @@ class FifoEngineResult:
     fragment_intervals: list[FragmentInterval]
     closures: list[LotClosure]
     issues: list[FifoDataQualityIssue]
+    split_quantities_by_transaction_id: dict[int, SplitQuantitySnapshot] = field(default_factory=dict)
     economic_allocation_groups: list[EconomicAllocationGroup] = field(default_factory=list)
     economic_accumulators_by_lot: dict[int, LotEconomicAccumulators] = field(default_factory=dict)
     asset_orphan_income: Decimal = Decimal("0")
@@ -381,6 +391,7 @@ class FifoLotEngine:
         broker_shorting: dict[int, bool],
         *,
         split_ratios_by_tx_id: dict[int, Decimal] | None = None,
+        split_event_ids_by_tx_id: dict[int, int] | None = None,
         reference_price_lookup: ReferencePriceLookup | None = None,
         economic_events: Sequence[EconomicEvent] = (),
         target_currency: str = "",
@@ -395,6 +406,7 @@ class FifoLotEngine:
         self.transactions = normalized
         self.broker_shorting = broker_shorting
         self.split_ratios_by_tx_id = split_ratios_by_tx_id or {}
+        self.split_event_ids_by_tx_id = split_event_ids_by_tx_id or {}
         self.reference_price_lookup = reference_price_lookup
         self.economic_events = tuple(economic_events)
         self.target_currency = target_currency
@@ -406,6 +418,8 @@ class FifoLotEngine:
         self._closures: list[LotClosure] = []
         self._pending_transfers: dict[int, list[_PendingTransferPiece]] = {}
         self._transfer_arrival_dates: dict[int, date] = {}
+        self._applied_split_fragments: dict[tuple[int, str], Decimal] = {}
+        self._split_quantities_by_transaction_id: dict[int, SplitQuantitySnapshot] = {}
         self._classified_events_cache: list[FifoEvent] | None = None
 
     def run(self) -> FifoEngineResult:
@@ -433,6 +447,7 @@ class FifoLotEngine:
             fragment_intervals=sorted(self._intervals, key=lambda fragment: (fragment.start_date, fragment.fragment_id, fragment.quantity)),
             closures=sorted(self._closures, key=lambda closure: (closure.close_date, closure.transaction_id, closure.lot_id)),
             issues=self._issues,
+            split_quantities_by_transaction_id=dict(self._split_quantities_by_transaction_id),
             economic_allocation_groups=economic.groups,
             economic_accumulators_by_lot=economic.accumulators,
             asset_orphan_income=economic.orphan_income,
@@ -447,7 +462,18 @@ class FifoLotEngine:
         processed_transfer_pairs: set[int] = set()
         for tx in self.transactions:
             if tx.id in self.split_ratios_by_tx_id:
-                events.append(FifoEvent(kind="SPLIT", date=tx.date, transaction_id=tx.id, broker_id=tx.broker_id, ratio=self.split_ratios_by_tx_id[tx.id], raw_transaction_ids=(tx.id,)))
+                events.append(
+                    FifoEvent(
+                        kind="SPLIT",
+                        date=tx.date,
+                        transaction_id=tx.id,
+                        broker_id=tx.broker_id,
+                        quantity=tx.quantity,
+                        ratio=self.split_ratios_by_tx_id[tx.id],
+                        asset_event_id=self.split_event_ids_by_tx_id.get(tx.id),
+                        raw_transaction_ids=(tx.id,),
+                    )
+                )
                 continue
             if tx.type == "TRANSFER":
                 pair_id = tx.id if tx.related_transaction_id is None else min(tx.id, tx.related_transaction_id)
@@ -744,13 +770,17 @@ class FifoLotEngine:
     def _apply_split(self, event: FifoEvent) -> None:
         ratio = _require_decimal(event.ratio)
         broker_id = _require_id(event.broker_id)
-        impacted = [fragment for fragment in self._active_fragments.values() if self._fragment_matches_split_scope(fragment, broker_id)]
+        impacted = self._snapshot_split_scope(event, broker_id)
+        if event.asset_event_id is not None:
+            impacted = [fragment for fragment in impacted if (event.asset_event_id, fragment.fragment_id) not in self._applied_split_fragments]
         lot_open_qty_before = {fragment.lot_id: sum(current.quantity for current in self._active_fragments.values() if current.lot_id == fragment.lot_id) for fragment in impacted}
         for fragment in sorted(impacted, key=lambda item: (self._lots[item.lot_id].opening_date, item.fragment_id)):
             new_quantity = fragment.quantity * ratio
             new_unit_price = fragment.unit_price / ratio
             old_cost = fragment.quantity * fragment.unit_price
             self._transition_fragment(fragment, event.date, new_quantity=new_quantity, new_unit_price=new_unit_price)
+            if event.asset_event_id is not None:
+                self._applied_split_fragments[(event.asset_event_id, fragment.fragment_id)] = fragment.quantity
             if abs(new_quantity * new_unit_price - old_cost) > _COST_INVARIANT_TOLERANCE:
                 raise AssertionError("Split cost invariant violated")
         impacted_lot_ids = {fragment.lot_id for fragment in impacted}
@@ -766,6 +796,24 @@ class FifoLotEngine:
                 lot.reference_unit_price *= lot_open_qty_before[lot_id] / lot.open_quantity
             if abs(lot.original_quantity * lot.opening_unit_price - lot.original_cost) > _COST_INVARIANT_TOLERANCE:
                 raise AssertionError("Lot cost invariant violated")
+
+    def _snapshot_split_scope(self, event: FifoEvent, broker_id: int) -> list[FragmentInterval]:
+        scoped = [fragment for fragment in self._active_fragments.values() if self._fragment_matches_split_scope(fragment, broker_id)]
+
+        def signed_pre_split_quantity(fragment: FragmentInterval) -> Decimal:
+            quantity = fragment.quantity
+            if event.asset_event_id is not None:
+                quantity = self._applied_split_fragments.get((event.asset_event_id, fragment.fragment_id), quantity)
+            return quantity if fragment.direction == "LONG" else -quantity
+
+        self._split_quantities_by_transaction_id[event.transaction_id] = SplitQuantitySnapshot(
+            scoped_quantity=sum((signed_pre_split_quantity(fragment) for fragment in scoped), Decimal("0")),
+            broker_custody_quantity=sum(
+                (signed_pre_split_quantity(fragment) for fragment in scoped if fragment.custody_type == "BROKER"),
+                Decimal("0"),
+            ),
+        )
+        return scoped
 
     def _fragment_matches_split_scope(self, fragment: FragmentInterval, broker_id: int) -> bool:
         if fragment.custody_type == "BROKER":
@@ -1083,7 +1131,7 @@ class FifoLotEngine:
             for lot_id, lot in self._lots.items():
                 if lot.direction != "LONG":
                     continue
-                quantity = self._eligible_income_quantity(fragments_by_lot.get(lot_id, ()), broker_id, cutoff)
+                quantity = eligible_income_quantity(fragments_by_lot.get(lot_id, ()), broker_id, cutoff)
                 if quantity > Decimal("0"):
                     eligible.append((lot_id, quantity))
             eligible.sort(key=lambda item: item[0])
@@ -1169,24 +1217,6 @@ class FifoLotEngine:
                 )
             )
         return orphan_total
-
-    @staticmethod
-    def _eligible_income_quantity(fragments: Sequence[FragmentInterval], broker_id: int, cutoff: date) -> Decimal:
-        """Open quantity attributable to ``broker_id`` as of ``cutoff`` (transfer-aware).
-
-        Broker-custodied fragments count for their broker; in-transit fragments count for their
-        SOURCE broker (the payer of record during transit), never the destination — which only
-        becomes eligible once the arrival fragment exists on/after the arrival date.
-        """
-        total = Decimal("0")
-        for fragment in fragments:
-            if not (fragment.start_date <= cutoff and (fragment.end_date is None or cutoff < fragment.end_date)):
-                continue
-            if fragment.custody_type == "BROKER" and fragment.broker_id == broker_id:
-                total += fragment.quantity
-            elif fragment.custody_type == "IN_TRANSIT" and fragment.source_broker_id == broker_id:
-                total += fragment.quantity
-        return total
 
     # ------------------------------------------------------------------
     # FEE/TAX allocation (asset-linked costs). Deterministic matching order
@@ -1435,7 +1465,7 @@ class FifoLotEngine:
         for lot_id, lot in self._lots.items():
             if lot.direction != "LONG":
                 continue
-            quantity = self._eligible_income_quantity(fragments_by_lot.get(lot_id, ()), broker_id, cutoff)
+            quantity = eligible_income_quantity(fragments_by_lot.get(lot_id, ()), broker_id, cutoff)
             if quantity > Decimal("0"):
                 eligible.append((lot_id, quantity))
         if not eligible:
@@ -1493,6 +1523,7 @@ def run_fifo_lot_engine(
     broker_shorting: dict[int, bool],
     *,
     split_ratios_by_tx_id: dict[int, Decimal] | None = None,
+    split_event_ids_by_tx_id: dict[int, int] | None = None,
     reference_price_lookup: ReferencePriceLookup | None = None,
     economic_events: Sequence[EconomicEvent] = (),
     target_currency: str = "",
@@ -1501,10 +1532,36 @@ def run_fifo_lot_engine(
         transactions=transactions,
         broker_shorting=broker_shorting,
         split_ratios_by_tx_id=split_ratios_by_tx_id,
+        split_event_ids_by_tx_id=split_event_ids_by_tx_id,
         reference_price_lookup=reference_price_lookup,
         economic_events=economic_events,
         target_currency=target_currency,
     ).run()
+
+
+def eligible_income_quantity(
+    fragments: Sequence[FragmentInterval],
+    broker_id: int,
+    cutoff: date,
+) -> Decimal:
+    """Return LONG quantity attributable to a paying broker at end of ``cutoff``.
+
+    Broker-custodied fragments count for their broker. In-transit fragments
+    count for their source broker, never the destination before arrival.
+    This is the canonical D-1 eligibility seam shared by FIFO allocation and
+    transaction-ledger Yield on Cost.
+    """
+    total = Decimal("0")
+    for fragment in fragments:
+        if fragment.direction != "LONG":
+            continue
+        if not (fragment.start_date <= cutoff and (fragment.end_date is None or cutoff < fragment.end_date)):
+            continue
+        if fragment.custody_type == "BROKER" and fragment.broker_id == broker_id:
+            total += fragment.quantity
+        elif fragment.custody_type == "IN_TRANSIT" and fragment.source_broker_id == broker_id:
+            total += fragment.quantity
+    return total
 
 
 # ----------------------------------------------------------------------------
