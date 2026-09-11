@@ -42,6 +42,13 @@ from backend.app.services.provider_registry import (
 )
 from backend.app.services.signal_plugins.base import SignalPlugin
 
+# I10 — executable but catalog-hidden. The registry still resolves and runs it
+# (asset_source/SignalService go through get_plugin), while every public
+# catalog surface is built from list_definitions() and must not see it.
+CALENDAR_SIGNAL_CODE = "ASSET_CALENDAR_ROLLING_RETURN"
+CALENDAR_ALLOWED_WINDOWS = (7, 30, 90, 365)
+BASELINE_PUBLIC_SIGNAL_COUNT = 22
+
 
 class DemoParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -641,3 +648,146 @@ def test_signal_base_and_registry_do_not_import_indicator_functions():
         assert forbidden not in base_source
         assert forbidden not in registry_source
     assert SignalPluginRegistry._ignored_module_stems() == frozenset({"base"})
+
+
+# =============================================================================
+# I10 — catalog visibility: executable plugin, hidden catalog entry
+# =============================================================================
+
+
+def test_hidden_plugin_is_registered_and_executable_but_absent_from_public_catalog():
+    """`get_plugin` is the execution path, `list_definitions` the catalog one.
+
+    The whole point of the flag is that these two disagree for exactly this
+    plugin: SignalService can plan and run it, while /assets/prices/signals and
+    /currencies/signals never advertise it.
+    """
+    plugin_class = SignalPluginRegistry.get_plugin(CALENDAR_SIGNAL_CODE)
+
+    assert plugin_class is not None
+    assert plugin_class.__module__ == "backend.app.services.signal_plugins.calendar_rolling_return"
+    assert plugin_class.__name__ == "CalendarRollingReturnPlugin"
+    assert plugin_class.catalog_visible is False
+    assert CALENDAR_SIGNAL_CODE in SignalPluginRegistry.list_plugin_codes()
+    assert isinstance(
+        SignalPluginRegistry.get_plugin_instance(CALENDAR_SIGNAL_CODE),
+        plugin_class,
+    )
+    # Lookup normalization still applies to a hidden code.
+    assert SignalPluginRegistry.get_plugin(" asset_calendar_rolling_return ") is plugin_class
+
+    definitions = SignalPluginRegistry.list_definitions()
+    assert CALENDAR_SIGNAL_CODE not in {definition.signal_code for definition in definitions}
+    for domain in (SignalDomain.ASSET, SignalDomain.FX):
+        # Exactly what the two catalog endpoints build from list_definitions().
+        public_codes = {definition.signal_code for definition in definitions if domain in definition.compatible_domains}
+        assert CALENDAR_SIGNAL_CODE not in public_codes
+
+
+def test_catalog_visibility_partitions_the_registry_without_touching_visible_plugins():
+    """Registry-wide invariant, not a magic total: the public catalog is
+    exactly the visible half of the registered plugins, and the hidden half is
+    exactly the I10 plugin. The baseline cardinality is deliberately pinned:
+    I10 must add an executable without changing the public overlay count."""
+    registered_codes = set(SignalPluginRegistry.list_plugin_codes())
+    catalog_codes = {definition.signal_code for definition in SignalPluginRegistry.list_definitions()}
+    visible_codes = {code for code in registered_codes if SignalPluginRegistry.get_plugin(code).catalog_visible}
+
+    assert catalog_codes == visible_codes
+    assert registered_codes - catalog_codes == {CALENDAR_SIGNAL_CODE}
+    # Registry cardinality is the subject here: the hidden executable adds one
+    # registered plugin without changing the 22-entry public overlay catalog.
+    assert len(catalog_codes) == BASELINE_PUBLIC_SIGNAL_COUNT
+    assert len(registered_codes) == BASELINE_PUBLIC_SIGNAL_COUNT + 1
+    assert {"EMA", "SMA", "RISK_ROLLING_RETURN", "RISK_DRAWDOWN"} <= catalog_codes
+    # Default is opt-in visibility: a plugin that declares nothing is public.
+    assert SignalPlugin.catalog_visible is True
+    assert DemoSignalPlugin.catalog_visible is True
+
+
+def test_catalog_visible_flag_is_honored_by_an_isolated_registry():
+    """The mechanism itself, independent of the real plugin's existence."""
+
+    @register_plugin(InlineSignalRegistry)
+    class VisibleSignal(DemoSignalPlugin):
+        signal_code = "VISIBLE_SIGNAL"
+        semantic_id = "visible_signal"
+
+    @register_plugin(InlineSignalRegistry)
+    class HiddenSignal(DemoSignalPlugin):
+        signal_code = "HIDDEN_SIGNAL"
+        semantic_id = "hidden_signal"
+        catalog_visible = False
+
+    assert set(InlineSignalRegistry.list_plugin_codes()) == {"VISIBLE_SIGNAL", "HIDDEN_SIGNAL"}
+    assert [definition.signal_code for definition in InlineSignalRegistry.list_definitions()] == ["VISIBLE_SIGNAL"]
+    assert InlineSignalRegistry.get_plugin("HIDDEN_SIGNAL") is HiddenSignal
+    assert isinstance(InlineSignalRegistry.get_plugin_instance("HIDDEN_SIGNAL"), HiddenSignal)
+    # Hiding is a catalog decision, not a validation escape hatch.
+    HiddenSignal.validate_definition()
+    assert HiddenSignal.catalog_definition().signal_code == "HIDDEN_SIGNAL"
+    assert VisibleSignal.catalog_visible is True
+
+
+def test_calendar_window_days_defaults_to_thirty():
+    plugin_class = SignalPluginRegistry.get_plugin(CALENDAR_SIGNAL_CODE)
+
+    assert plugin_class is not None
+    assert plugin_class.default_params() == {"window_days": 30}
+    assert plugin_class.validate_params({}).window_days == 30
+    assert plugin_class.params_model.__name__ == "CalendarRollingReturnParams"
+    assert plugin_class.params_model().window_days == 30
+    window_schema = plugin_class.params_model.model_json_schema()["properties"]["window_days"]
+    assert window_schema["default"] == 30
+    assert window_schema["enum"] == list(CALENDAR_ALLOWED_WINDOWS)
+
+
+@pytest.mark.parametrize("window_days", CALENDAR_ALLOWED_WINDOWS)
+def test_calendar_window_days_accepts_every_allowed_value(window_days):
+    plugin_class = SignalPluginRegistry.get_plugin(CALENDAR_SIGNAL_CODE)
+
+    assert plugin_class is not None
+    assert plugin_class.validate_params({"window_days": window_days}).window_days == window_days
+
+
+@pytest.mark.parametrize(
+    "window_days",
+    [0, -30, 1, 6, 8, 29, 31, 45, 180, 364, 366, 730],
+)
+def test_calendar_window_days_rejects_values_outside_allowed_enum(window_days):
+    plugin_class = SignalPluginRegistry.get_plugin(CALENDAR_SIGNAL_CODE)
+
+    assert plugin_class is not None
+    with pytest.raises(ValueError):
+        plugin_class.validate_params({"window_days": window_days})
+
+
+def test_calendar_params_reject_unknown_and_legacy_window_key():
+    plugin_class = SignalPluginRegistry.get_plugin(CALENDAR_SIGNAL_CODE)
+
+    assert plugin_class is not None
+    with pytest.raises(ValueError):
+        plugin_class.validate_params({"window_days": 30, "unknown": True})
+    # `window` belongs to RISK_ROLLING_RETURN; the calendar plugin must not
+    # silently accept it and fall back to its own default.
+    with pytest.raises(ValueError):
+        plugin_class.validate_params({"window": 30})
+
+
+def test_calendar_plugin_declares_percentage_line_on_an_independent_axis():
+    plugin_class = SignalPluginRegistry.get_plugin(CALENDAR_SIGNAL_CODE)
+
+    assert plugin_class is not None
+    definition = plugin_class.catalog_definition()
+    output_spec = next(spec for spec in definition.output_specs if spec.key == "calendar_return")
+
+    assert definition.signal_code == CALENDAR_SIGNAL_CODE
+    assert definition.compatible_domains == [SignalDomain.ASSET]
+    assert len(definition.output_specs) == 1
+    assert output_spec.kind == SignalSeriesKind.LINE
+    assert output_spec.unit == SignalUnit.PERCENTAGE
+    assert output_spec.aggregation_profile == SignalAggregationProfile.LAST_WITH_RANGE
+    assert output_spec.axis.role == SignalAxisRole.INDEPENDENT
+    assert output_spec.supports_reference_levels is True
+    zero_level = next(level for level in output_spec.default_reference_levels if level.key == "zero")
+    assert zero_level.value == 0.0
