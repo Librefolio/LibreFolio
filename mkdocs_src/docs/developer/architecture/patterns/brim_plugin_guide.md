@@ -593,31 +593,41 @@ falls back to the generic label, so a new category degrades instead of breaking.
 
 The one category shipped today. It is the **only warning** telling the user that a security is
 delisted and that no price provider will ever quote it — without it, the asset is created
-silently and then fails to price with no explanation:
+silently and then fails to price with no explanation.
+
+The responsibilities are deliberately split:
+
+- `_brim_io.py` provides schema-neutral detection/input support.
+  `detect_maturity_hits` identifies affected asset IDs and their transaction indexes without
+  importing BRIM schema types.
+- `_brim_output.py` provides schema-aware output construction and owns the canonical
+  `attach_maturity_notices` helper.
+
+When building a plugin, use that output helper rather than constructing the notice directly:
 
 ```python
-from backend.app.services.brim_providers import _brim_io as io
+from backend.app.services.brim_providers._brim_output import attach_maturity_notices
 
-for asset_id, idxs in io.detect_maturity_hits(transactions).items():
-    info = extracted_assets.get(asset_id)
-    if info is not None:
-        info.notices.append(BRIMAssetNotice(kind=io.MATURITY_NOTICE_KIND, reason="…", transaction_indexes=idxs))
+attach_maturity_notices(transactions, extracted_assets, reason="provider-specific reason")
 ```
 
 `detect_maturity_hits` scans `description` with `looks_like_maturity` (substrings `scadut`,
 `scaden`, `rimbors`, `estinzion`, `redemption`, `matured`, `maturity`) and **skips rows with
 no asset**, which is what keeps a cash refund (`SCT:RIMBORSO` on a bank transfer, a tax
-rebate) from ever labelling an instrument as expired.
+rebate) from ever labelling an instrument as expired. The human-readable `reason` stays
+provider-local because each export needs wording grounded in its own terminology.
 
 !!! danger "Call it from **every** layout your plugin parses"
 
     Real bug, found in beta: Crédit Agricole wired the scan into its securities-export branch
     only. A bond redeemed in the *account statement* got its `SELL` but no notice — and the
     account file is the one that spans years, so that is where redemptions normally appear.
-    A plugin with two `_parse_*` branches needs the call in both; factor it into one helper
-    (`_attach_maturity_notices`) so adding a third branch cannot forget it.
+    Invoke `attach_maturity_notices` from every `_parse_*` layout branch; adding another
+    supported layout means adding the call there too.
 
-Reference: `broker_credit_agricole.py`, `broker_intesa.py`.
+Crédit Agricole and Intesa are the concrete references: see `broker_credit_agricole.py` and
+`broker_intesa.py`. Add or generalize a shared output helper only when a real second consumer
+needs the same semantics; otherwise keep the logic provider-local.
 
 ## 🚪 Opening-date gate
 
