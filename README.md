@@ -17,7 +17,6 @@
   <a href="https://github.com/Librefolio/LibreFolio/actions/workflows/release.yml"><img src="https://github.com/Librefolio/LibreFolio/actions/workflows/release.yml/badge.svg" alt="Build Status"></a>
   <a href="https://www.gnu.org/licenses/agpl-3.0"><img src="https://img.shields.io/badge/License-AGPL_v3-blue.svg" alt="License: AGPL v3"></a>
   <a href="CHANGELOG.md"><img src="https://img.shields.io/github/v/release/Librefolio/LibreFolio?label=changelog&color=blue" alt="Changelog"></a>
-  <a href="https://github.com/orgs/Librefolio/packages/container/package/librefolio"><img src="https://img.shields.io/badge/container-ghcr.io-blue?logo=github" alt="Docker Registry"></a>
   <a href="https://github.com/Librefolio/LibreFolio/stargazers"><img src="https://img.shields.io/github/stars/Librefolio/LibreFolio.svg" alt="GitHub stars"></a>
   <a href="https://github.com/Librefolio/LibreFolio/pkgs/container/librefolio"><img src="https://ghcr-badge.elias.eu.org/shield/Librefolio/LibreFolio/librefolio" alt="GHCR downloads"></a>
 </p>
