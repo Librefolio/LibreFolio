@@ -1431,7 +1431,30 @@
     "annualizedReturn": "Annualisé",
     "annualizedReturnTooltip": "Rendement net annualisé (TCAC) de tous les lots encore ouverts de la position, de la première transaction à aujourd'hui — revenus moins frais inclus ; valorisé au coût en l'absence de prix. Pour comparer des positions détenues sur des durées différentes.",
     "annualizedReturnPeriodTooltip": "Rendement net annualisé (TCAC) sur la fenêtre de détention de la position dans la période sélectionnée, pour comparer des périodes de durées différentes.",
-    "netWorthTooltip": "Titres à valeur de marché + liquidités (+ valeur en transit). Inclut les liquidités — non comparable au seul contre-valeur titres d'un relevé bancaire."
+    "netWorthTooltip": "Titres à valeur de marché + liquidités (+ valeur en transit). Inclut les liquidités — non comparable au seul contre-valeur titres d'un relevé bancaire.",
+    "yieldOnCost": "YOC",
+    "yieldOnCostDisplayName": "Rendement sur coût (YOC)",
+    "yieldOnCostTooltip": "Rapporte les dividendes et intérêts bruts enregistrés au cours de la dernière année au prix de revient unitaire (PRU).",
+    "yieldOnCostUnavailable": "Rendement sur coût indisponible",
+    "yieldOnCostGrossPerUnit": "Revenu brut unitaire",
+    "yieldOnCostFxPair": "Conversion",
+    "yieldOnCostIssueDate": "Date du paiement",
+    "yieldOnCostFirstTransaction": "Premier mouvement",
+    "yieldOnCostNoIncome": "Aucun dividende ni intérêt au cours de la dernière année.",
+    "yieldOnCostReasons": {
+      "insufficientHistory": "L'historique auprès de ce courtier couvre moins d'un an.",
+      "incomeWithoutEligibleQuantity": "Aucune quantité détenue la veille ne correspond à un paiement enregistré.",
+      "replayInconsistent": "L'historique des achats, ventes ou transferts ne peut pas être reconstitué correctement.",
+      "invalidSplit": "Un fractionnement lié est incohérent avec les quantités enregistrées.",
+      "missingFx": "Le taux de change nécessaire à un paiement est indisponible.",
+      "missingWac": "Le prix de revient unitaire (PRU) n'est pas disponible.",
+      "nonPositiveWac": "Le prix de revient unitaire (PRU) est nul ou négatif.",
+      "missingFxDetails": "Le taux de change {pair} requis pour le calcul manque à la date du {date}."
+    },
+    "yieldOnCostValue": "Rendement sur coût",
+    "yieldOnCostPeriod": "Période",
+    "yieldOnCostFxRateDate": "taux du",
+    "yieldOnCostNoIncomeTitle": "Aucun revenu enregistré"
   },
   "dataQuality": {
     "headerInfoOnly": "Note de qualité des données",
