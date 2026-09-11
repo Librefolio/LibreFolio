@@ -20,70 +20,54 @@ from collections import defaultdict
 from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 from uuid import uuid4
 
 from fastapi import HTTPException
-from pydantic import ValidationError
 from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetType, Broker, BrokerUserAccess, Transaction, TransactionType, UserRole
-from backend.app.schemas.common import Currency
+from backend.app.db.models import Asset, AssetEvent, AssetEventType, Broker, BrokerUserAccess, Transaction, TransactionType, UserRole
 from backend.app.schemas.transactions import (
     EVENT_COMPATIBLE_TYPES,
     TX_TYPE_METADATA,
     PairFieldConstraint,
     TXBatchResponse,
-    TXBatchResultItem,
     TXCreateItem,
     TXEventSuggestCandidate,
     TXEventSuggestRequestItem,
     TXEventSuggestResultItem,
-    TXPromoteBatchItem,
     TXPromoteSuggestCandidate,
     TXPromoteSuggestResponse,
     TXQueryParams,
     TXReadItem,
-    TXSplitBatchItem,
     TXTransferPromoteRequest,
     TXTransferPromoteResponse,
     TXUpdateItem,
     TXValidationCode,
-    TXValidationIssue,
-    get_swap_group,
-    tags_to_csv,
-    validate_transaction_business_rules,
 )
 from backend.app.schemas.wac import WACPreviewResultItem
 from backend.app.services.portfolio_service import compute_wac_iterative
-from backend.app.utils.datetime_utils import parse_ISO_date, utcnow
-
-
-class BalanceValidationError(Exception):
-    """Raised when a balance validation fails."""
-
-    def __init__(
-        self,
-        broker_id: int,
-        date: date_type,
-        currency_or_asset: str,
-        balance: Decimal,
-        message: str,
-        code: str = "",
-        params: dict | None = None,
-        batch_index: int = -1,
-        batch_operation: str = "create",
-    ):
-        self.broker_id = broker_id
-        self.date = date
-        self.currency_or_asset = currency_or_asset
-        self.balance = balance
-        self.code = code
-        self.params = params or {}
-        self.batch_index = batch_index
-        self.batch_operation = batch_operation
-        super().__init__(message)
+from backend.app.services.transaction_batch_context import (
+    BalanceValidationError as BalanceValidationError,
+)
+from backend.app.services.transaction_batch_context import TransactionBatchContext
+from backend.app.services.transaction_batch_stages import _parse_lenient as _parse_lenient
+from backend.app.services.transaction_batch_stages import (
+    apply_creates,
+    apply_deletes,
+    apply_promotes,
+    apply_splits,
+    apply_updates,
+    compute_wac_and_fx_issues,
+    finalize_response,
+    parse_inputs,
+    preload_and_authorize,
+    resolve_create_links,
+    validate_balances,
+    validate_cost_basis,
+    validate_updated_pairs,
+)
 
 
 class LinkedTransactionError(Exception):
@@ -103,66 +87,6 @@ class _PromoteCandidate:
     currency: Optional[str]
     amount: Optional[Decimal]
     quantity: Optional[Decimal]
-
-
-def _loc_to_field(loc: tuple | list) -> Optional[str]:
-    """Convert Pydantic loc tuple to a dotted field path string."""
-    parts = [str(p) for p in loc if not isinstance(p, int)]
-    return ".".join(parts) if parts else None
-
-
-def _parse_lenient(
-    raw_list: List[dict],
-    model_class: type,
-    operation: str,
-) -> Tuple[List[Tuple[int, Any]], List[TXValidationIssue]]:
-    """Per-row model_validate with error collection.
-
-    Returns (parsed_items, issues) where parsed_items is a list of (index, model)
-    tuples for successfully-parsed rows, and issues contains all schema/business
-    errors from rows that failed validation.
-    """
-    parsed: List[Tuple[int, Any]] = []
-    issues: List[TXValidationIssue] = []
-    for idx, raw in enumerate(raw_list):
-        try:
-            parsed.append((idx, model_class.model_validate(raw)))
-        except ValidationError as e:
-            for err in e.errors():
-                # Handle packed multi-error from model_validator
-                if err.get("type") == "multipleBusinessRuleErrors":
-                    ctx = err.get("ctx", {})
-                    sub_errors = ctx.get("errors", [])
-                    for sub in sub_errors:
-                        # sub.ctx is always our own PydanticCustomError context
-                        # (e.g. {"type": "BUY"}) — safe to pass as-is.
-                        issues.append(
-                            TXValidationIssue(
-                                operation=operation,
-                                index=idx,
-                                error=sub.get("msg", ""),
-                                code=sub.get("code"),
-                                params=sub.get("ctx") or None,
-                                field=None,
-                            )
-                        )
-                    continue
-                # Standard Pydantic errors: ctx can contain non-serializable
-                # objects (e.g. {'error': ValueError('...')}), so we don't
-                # forward it as params.  The error message already carries the
-                # human-readable description; `code` = Pydantic error type
-                # (e.g. "value_error", "missing"); `field` pinpoints the loc.
-                issues.append(
-                    TXValidationIssue(
-                        operation=operation,
-                        index=idx,
-                        error=err.get("msg", str(err)),
-                        code=err.get("type"),
-                        params=None,
-                        field=_loc_to_field(err.get("loc", ())),
-                    )
-                )
-    return parsed, issues
 
 
 class TransactionService:
@@ -934,7 +858,7 @@ class TransactionService:
     # UNIFIED BATCH PIPELINE (replaces separate create/update/delete bulk)
     # =========================================================================
 
-    async def execute_batch(  # noqa: C901 — TODO(P2-refactor): 8-stage batch pipeline, split per-operation stages
+    async def execute_batch(
         self,
         creates_raw: List[dict],
         updates_raw: List[dict],
@@ -946,631 +870,44 @@ class TransactionService:
     ) -> TXBatchResponse:
         """Unified pipeline for both /validate (commit=False) and /commit (commit=True).
 
-        Order: lenient parse → access check → deletes → updates → creates →
-        link resolution → balance walk → commit/rollback.
+        Order: parse → access → delete → split → update → create → promote →
+        link → WAC → cost basis → balance replay → response.
 
-        Always collects the full set of issues instead of failing fast.
+        ``commit`` selects response semantics only. The caller still owns the
+        session commit or rollback.
         """
-        issues: List[TXValidationIssue] = []
-        results: List[TXBatchResultItem] = []
+        context = TransactionBatchContext.from_inputs(
+            creates_raw=creates_raw,
+            updates_raw=updates_raw,
+            deletes=deletes,
+            splits_raw=splits_raw,
+            promotes_raw=promotes_raw,
+            user_id=user_id,
+            commit_requested=commit,
+        )
 
-        # 1. Lenient per-row parse
-        parsed_creates, create_issues = _parse_lenient(creates_raw, TXCreateItem, "create")
-        parsed_updates, update_issues = _parse_lenient(updates_raw, TXUpdateItem, "update")
-        parsed_splits, split_issues = _parse_lenient(splits_raw or [], TXSplitBatchItem, "split")
-        parsed_promotes, promote_issues = _parse_lenient(promotes_raw or [], TXPromoteBatchItem, "promote")
-        issues.extend(create_issues)
-        issues.extend(update_issues)
-        issues.extend(split_issues)
-        issues.extend(promote_issues)
+        parse_inputs(context)
+        if await preload_and_authorize(self, context):
+            return TXBatchResponse(
+                committed=False,
+                issues=context.issues,
+                results=[],
+                success_count=0,
+            )
 
-        # 2. Determine touched brokers for access check
-        touched_brokers: Set[int] = set()
-        for _, item in parsed_creates:
-            touched_brokers.add(item.broker_id)
+        await apply_deletes(self, context)
+        await apply_splits(self, context)
+        await apply_updates(self, context)
+        await validate_updated_pairs(self, context)
 
-        # Lookup existing TXs for updates, deletes, splits, and promotes
-        ids_to_lookup: Set[int] = set(deletes)
-        for _, item in parsed_updates:
-            ids_to_lookup.add(item.id)
-        for _, item in parsed_splits:
-            ids_to_lookup.add(item.id_a)
-            ids_to_lookup.add(item.id_b)
-        for _, item in parsed_promotes:
-            if item.id_a is not None:
-                ids_to_lookup.add(item.id_a)
-            if item.id_b is not None:
-                ids_to_lookup.add(item.id_b)
-        existing_by_id: Dict[int, Transaction] = {}
-        if ids_to_lookup:
-            existing_txs = await self.get_by_ids(list(ids_to_lookup))
-            existing_by_id = {tx.id: tx for tx in existing_txs}
-            touched_brokers |= {tx.broker_id for tx in existing_txs}
+        await apply_creates(self, context)
+        await apply_promotes(self, context)
+        resolve_create_links(self, context)
 
-        # Fetch split partners (both IDs now provided explicitly in id_a/id_b)
-        for _, item in parsed_splits:
-            for sid in (item.id_a, item.id_b):
-                if sid not in existing_by_id:
-                    ids_to_lookup.add(sid)
-        # Re-fetch any missing IDs for splits
-        missing_split_ids = {sid for _, item in parsed_splits for sid in (item.id_a, item.id_b) if sid not in existing_by_id}
-        if missing_split_ids:
-            partners = await self.get_by_ids(list(missing_split_ids))
-            for tx in partners:
-                existing_by_id[tx.id] = tx
-            touched_brokers |= {tx.broker_id for tx in partners}
-
-        # Access check (EDITOR) — report as issues, not HTTPException
-        if user_id is not None:
-            for broker_id in touched_brokers:
-                role = await self._check_broker_access(broker_id, user_id, min_role=UserRole.EDITOR)
-                if role is None:
-                    issues.append(
-                        TXValidationIssue(
-                            operation="create",
-                            index=0,
-                            ref_id=None,
-                            error=f"Access denied: EDITOR required for broker {broker_id}",
-                            code=TXValidationCode.ACCESS_DENIED.value,
-                            params={"brokerId": broker_id},
-                        )
-                    )
-
-        # If access denied, stop early
-        if any(i.code == "accessDenied" for i in issues):
-            return TXBatchResponse(committed=False, issues=issues, results=[], success_count=0)
-
-        earliest_date_by_broker: Dict[int, date_type] = {}
-
-        # 3. Apply deletes
-        id_set_deletes = set(deletes)
-        for idx, tx_id in enumerate(deletes):
-            tx = existing_by_id.get(tx_id)
-            if tx is None:
-                issues.append(TXValidationIssue(operation="delete", index=idx, ref_id=tx_id, error=f"Transaction {tx_id} not found", code=TXValidationCode.TX_NOT_FOUND.value, params={"id": tx_id}))
-                continue
-            # Linked-pair integrity check
-            if tx.related_transaction_id and tx.related_transaction_id not in id_set_deletes:
-                issues.append(
-                    TXValidationIssue(
-                        operation="delete",
-                        index=idx,
-                        ref_id=tx_id,
-                        error=f"Cannot delete linked transaction {tx_id} without its pair {tx.related_transaction_id}",
-                        code="pairDeleteIncomplete",
-                        params={"id": tx_id, "partnerId": tx.related_transaction_id},
-                    )
-                )
-                continue
-            try:
-                prev = earliest_date_by_broker.get(tx.broker_id)
-                earliest_date_by_broker[tx.broker_id] = tx.date if prev is None else min(prev, tx.date)
-                await self.session.delete(tx)
-                results.append(TXBatchResultItem(operation="delete", index=idx, ids=[tx_id], status="success"))
-            except Exception as e:  # noqa: BLE001
-                issues.append(TXValidationIssue(operation="delete", index=idx, ref_id=tx_id, error=str(e)))
-
-        # 3b. Apply splits (must run before updates so post-split edits apply correctly)
-        for orig_idx, item in parsed_splits:
-            tx_a = existing_by_id.get(item.id_a)
-            tx_b = existing_by_id.get(item.id_b)
-            if tx_a is None or tx_b is None:
-                missing_id = item.id_a if tx_a is None else item.id_b
-                issues.append(
-                    TXValidationIssue(
-                        operation="split",
-                        index=orig_idx,
-                        ref_id=missing_id,
-                        error=f"Transaction {missing_id} not found",
-                        code=TXValidationCode.TX_NOT_FOUND.value,
-                    )
-                )
-                continue
-            # Validate they are actually a linked pair
-            if tx_a.related_transaction_id != item.id_b or tx_b.related_transaction_id != item.id_a:
-                issues.append(
-                    TXValidationIssue(
-                        operation="split",
-                        index=orig_idx,
-                        ref_id=item.id_a,
-                        error=f"Transactions {item.id_a} and {item.id_b} are not a linked pair",
-                        code=TXValidationCode.SPLIT_IDS_MISMATCH.value,
-                    )
-                )
-                continue
-            # Use tx_a as the reference for type
-            tx = tx_a
-            partner = tx_b
-            split_types = self.SPLIT_TYPE_MAP.get(tx.type)
-            if split_types is None:
-                issues.append(
-                    TXValidationIssue(
-                        operation="split",
-                        index=orig_idx,
-                        ref_id=item.id_a,
-                        error=f"Type {tx.type.value} cannot be split",
-                        code=TXValidationCode.TYPE_CANNOT_SPLIT.value,
-                    )
-                )
-                continue
-
-            from_type, to_type = split_types
-
-            # Determine from/to by value signs
-            if tx.type == TransactionType.TRANSFER:
-                if tx.quantity < Decimal("0"):
-                    tx_from, tx_to = tx, partner
-                else:
-                    tx_from, tx_to = partner, tx
-            else:
-                if tx.amount < Decimal("0"):
-                    tx_from, tx_to = tx, partner
-                else:
-                    tx_from, tx_to = partner, tx
-
-            # Mutate types
-            tx_from.type = from_type
-            tx_to.type = to_type
-
-            # Remove link
-            tx_from.related_transaction_id = None
-            tx_to.related_transaction_id = None
-
-            # TRANSFER→ADJUSTMENT: keep asset+qty. CASH→WITHDRAWAL/DEPOSIT: clear asset
-            if split_types != (TransactionType.ADJUSTMENT, TransactionType.ADJUSTMENT):
-                tx_from.asset_id = None
-                tx_to.asset_id = None
-
-            tx_from.updated_at = utcnow()
-            tx_to.updated_at = utcnow()
-
-            for t in (tx_from, tx_to):
-                prev = earliest_date_by_broker.get(t.broker_id)
-                earliest_date_by_broker[t.broker_id] = t.date if prev is None else min(prev, t.date)
-
-            results.append(TXBatchResultItem(operation="split", index=orig_idx, ids=[tx_from.id, tx_to.id], status="success"))
-
-        # 4. Apply updates (only successfully-parsed rows)
-        for orig_idx, item in parsed_updates:
-            tx = existing_by_id.get(item.id)
-            if tx is None:
-                issues.append(TXValidationIssue(operation="update", index=orig_idx, ref_id=item.id, error=f"Transaction {item.id} not found", code=TXValidationCode.TX_NOT_FOUND.value, params={"id": item.id}))
-                continue
-            try:
-                check_date = tx.date
-                # Step 15 (C5): type swap within swap group
-                if item.type is not None and item.type != tx.type:
-                    allowed = get_swap_group(tx.type)
-                    if item.type not in allowed:
-                        raise ValueError(f"Cannot change type from {tx.type.value} to {item.type.value} (allowed swaps: {', '.join(t.value for t in allowed)})")
-                    tx.type = item.type
-                if item.date is not None:
-                    check_date = min(check_date, item.date)
-                    tx.date = item.date
-                if item.quantity is not None:
-                    tx.quantity = item.quantity
-                if item.cash is not None:
-                    tx.amount = item.cash.amount
-                    tx.currency = item.cash.code
-                if item.tags is not None:
-                    tx.tags = tags_to_csv(item.tags)
-                if item.description is not None:
-                    tx.description = item.description
-                if item.cost_basis_override is not None:
-                    tx.cost_basis_override = item.cost_basis_override.amount
-                    tx.cost_basis_currency = item.cost_basis_override.code
-                if item.asset_event_id is not None:
-                    if item.asset_event_id == 0:
-                        tx.asset_event_id = None
-                    else:
-                        if tx.asset_id is None:
-                            raise ValueError("Cannot link asset_event_id: transaction has no asset_id")
-                        await self._validate_asset_event_link(item.asset_event_id, tx.asset_id)
-                        tx.asset_event_id = item.asset_event_id
-                # Fase 0.1 — final-state business-rule validation.
-                # UPDATE only validates id>0 at the DTO level (TXUpdateItem), so a
-                # bulk PATCH could otherwise persist an invalid final state (e.g. a
-                # FEE/TAX whose amount was flipped to >= 0, or a type swap that did
-                # not flip the cash sign). Re-run the shared per-type rules on the
-                # merged ORM state; any violation is reported as an issue, which
-                # prevents the whole batch from committing.
-                final_cash = Currency(code=tx.currency, amount=tx.amount) if tx.currency else None
-                rule_errors = validate_transaction_business_rules(
-                    tx_type=tx.type,
-                    asset_id=tx.asset_id,
-                    quantity=tx.quantity,
-                    cash=final_cash,
-                    asset_event_id=tx.asset_event_id,
-                    cost_basis_mode=item.cost_basis_mode,
-                )
-                if rule_errors:
-                    for rerr in rule_errors:
-                        issues.append(
-                            TXValidationIssue(
-                                operation="update",
-                                index=orig_idx,
-                                ref_id=item.id,
-                                error=rerr.message(),
-                                code=rerr.type,
-                                params=dict(rerr.context) if rerr.context else None,
-                            )
-                        )
-                    continue
-                tx.updated_at = utcnow()
-                prev = earliest_date_by_broker.get(tx.broker_id)
-                earliest_date_by_broker[tx.broker_id] = check_date if prev is None else min(prev, check_date)
-                results.append(TXBatchResultItem(operation="update", index=orig_idx, ids=[item.id], status="success"))
-            except Exception as e:  # noqa: BLE001
-                issues.append(TXValidationIssue(operation="update", index=orig_idx, ref_id=item.id, error=str(e)))
-
-        # 4b. Validate pair desc/tags consistency for updated linked TXs
-        for orig_idx, item in parsed_updates:
-            if item.tags is None and item.description is None:
-                continue
-            tx = existing_by_id.get(item.id)
-            if not tx or not tx.related_transaction_id:
-                continue
-            partner = existing_by_id.get(tx.related_transaction_id)
-            if partner is None:
-                partner = await self.session.get(Transaction, tx.related_transaction_id)
-            if partner is not None:
-                desc_result = self._validate_pair_description_tags(tx, partner)
-                if desc_result is not None:
-                    err_msg, err_code, err_params = desc_result
-                    issues.append(
-                        TXValidationIssue(
-                            operation="update",
-                            index=orig_idx,
-                            ref_id=item.id,
-                            error=err_msg,
-                            code=err_code,
-                            params=err_params,
-                        )
-                    )
-
-        # 5. Apply creates (only successfully-parsed rows)
-        link_uuid_map: Dict[str, List[Tuple[int, Transaction]]] = defaultdict(list)
-        for orig_idx, item in parsed_creates:
-            try:
-                if item.asset_id is not None:
-                    asset_result = await self.session.execute(select(Asset.asset_type).where(Asset.id == item.asset_id))
-                    if asset_result.scalar_one_or_none() == AssetType.INDEX:
-                        raise ValueError("Cannot create transactions for INDEX assets")
-                if item.asset_event_id is not None:
-                    assert item.asset_id is not None
-                    await self._validate_asset_event_link(item.asset_event_id, item.asset_id)
-                tx = Transaction(
-                    broker_id=item.broker_id,
-                    asset_id=item.asset_id,
-                    type=item.type,
-                    date=item.date,
-                    quantity=item.quantity,
-                    amount=item.get_amount(),
-                    currency=item.get_currency(),
-                    tags=item.get_tags_csv(),
-                    description=item.description,
-                    cost_basis_override=item.cost_basis_override.amount if item.cost_basis_override else None,
-                    cost_basis_currency=item.cost_basis_override.code if item.cost_basis_override else None,
-                    asset_event_id=item.asset_event_id,
-                    created_at=utcnow(),
-                    updated_at=utcnow(),
-                )
-                self.session.add(tx)
-                await self.session.flush()
-                prev = earliest_date_by_broker.get(tx.broker_id)
-                earliest_date_by_broker[tx.broker_id] = tx.date if prev is None else min(prev, tx.date)
-                if item.link_uuid:
-                    link_uuid_map[item.link_uuid].append((orig_idx, tx))
-                results.append(TXBatchResultItem(operation="create", index=orig_idx, ids=[tx.id], link_uuid=item.link_uuid, status="success"))
-            except Exception as e:  # noqa: BLE001
-                issues.append(TXValidationIssue(operation="create", index=orig_idx, ref_id=None, error=str(e)))
-
-        # 5c. Apply promotes
-        consumed_link_uuids: Set[str] = set()
-
-        for orig_idx, item in parsed_promotes:
-            tx_a = self._resolve_promote_ref(item.id_a, item.link_uuid_a, existing_by_id, link_uuid_map)
-            tx_b = self._resolve_promote_ref(item.id_b, item.link_uuid_b, existing_by_id, link_uuid_map)
-
-            if tx_a is None:
-                issues.append(
-                    TXValidationIssue(
-                        operation="promote",
-                        index=orig_idx,
-                        error="Cannot resolve TX A reference",
-                        code=TXValidationCode.PROMOTE_REF_NOT_FOUND.value,
-                    )
-                )
-                continue
-            if tx_b is None:
-                issues.append(
-                    TXValidationIssue(
-                        operation="promote",
-                        index=orig_idx,
-                        error="Cannot resolve TX B reference",
-                        code=TXValidationCode.PROMOTE_REF_NOT_FOUND.value,
-                    )
-                )
-                continue
-            if tx_a.related_transaction_id is not None:
-                issues.append(
-                    TXValidationIssue(
-                        operation="promote",
-                        index=orig_idx,
-                        ref_id=getattr(tx_a, "id", None),
-                        error=f"TX A ({tx_a.id}) already paired",
-                        code=TXValidationCode.ALREADY_PAIRED.value,
-                    )
-                )
-                continue
-            if tx_b.related_transaction_id is not None:
-                issues.append(
-                    TXValidationIssue(
-                        operation="promote",
-                        index=orig_idx,
-                        ref_id=getattr(tx_b, "id", None),
-                        error=f"TX B ({tx_b.id}) already paired",
-                        code=TXValidationCode.ALREADY_PAIRED.value,
-                    )
-                )
-                continue
-
-            target_type = self._find_promote_rule_match(tx_a, tx_b)
-            if target_type is None:
-                issues.append(
-                    TXValidationIssue(
-                        operation="promote",
-                        index=orig_idx,
-                        error=f"No promote rule for {tx_a.type.value}+{tx_b.type.value}",
-                        code=TXValidationCode.NO_PROMOTE_RULE.value,
-                    )
-                )
-                continue
-
-            # Mutate types + set bidirectional link
-            tx_a.type = target_type
-            tx_b.type = target_type
-            tx_a.related_transaction_id = tx_b.id
-            tx_b.related_transaction_id = tx_a.id
-
-            # Apply resolved_fields
-            if item.resolved_fields:
-                for field_name in ("description",):
-                    if field_name in item.resolved_fields:
-                        val = item.resolved_fields[field_name]
-                        setattr(tx_a, field_name, val)
-                        setattr(tx_b, field_name, val)
-                if "cost_basis_override" in item.resolved_fields:
-                    cbo_raw = item.resolved_fields["cost_basis_override"]
-                    if cbo_raw is not None:
-                        # Parse as Currency dict {code, amount}
-                        cbo_currency = Currency.model_validate(cbo_raw)
-                        cbo_amount = cbo_currency.amount
-                        cbo_code = cbo_currency.code
-                    else:
-                        cbo_amount = None
-                        cbo_code = None
-                    # Only apply to receiver (qty > 0); force null on sender
-                    if tx_a.quantity and tx_a.quantity > 0:
-                        tx_a.cost_basis_override = cbo_amount
-                        tx_a.cost_basis_currency = cbo_code
-                        tx_b.cost_basis_override = None
-                        tx_b.cost_basis_currency = None
-                    elif tx_b.quantity and tx_b.quantity > 0:
-                        tx_b.cost_basis_override = cbo_amount
-                        tx_b.cost_basis_currency = cbo_code
-                        tx_a.cost_basis_override = None
-                        tx_a.cost_basis_currency = None
-                    else:
-                        # Fallback: apply to both (non-TRANSFER promote)
-                        tx_a.cost_basis_override = cbo_amount
-                        tx_a.cost_basis_currency = cbo_code
-                        tx_b.cost_basis_override = cbo_amount
-                        tx_b.cost_basis_currency = cbo_code
-                if "tags" in item.resolved_fields:
-                    csv_tags = tags_to_csv(item.resolved_fields["tags"])
-                    tx_a.tags = csv_tags
-                    tx_b.tags = csv_tags
-                if "date" in item.resolved_fields:
-                    resolved_date = parse_ISO_date(item.resolved_fields["date"])
-                    tx_a.date = resolved_date
-                    tx_b.date = resolved_date
-
-            tx_a.updated_at = utcnow()
-            tx_b.updated_at = utcnow()
-
-            # Note: WAC auto-calc removed (WAC Preview Architecture v5).
-            # The frontend now computes WAC preview and sets cost_basis explicitly in the payload.
-
-            for t in (tx_a, tx_b):
-                prev = earliest_date_by_broker.get(t.broker_id)
-                earliest_date_by_broker[t.broker_id] = t.date if prev is None else min(prev, t.date)
-
-            # Track consumed link_uuids so Step 6 doesn't re-process them
-            if item.link_uuid_a:
-                consumed_link_uuids.add(item.link_uuid_a)
-            if item.link_uuid_b:
-                consumed_link_uuids.add(item.link_uuid_b)
-
-            results.append(TXBatchResultItem(operation="promote", index=orig_idx, ids=[tx_a.id, tx_b.id], status="success"))
-
-        # 6. Link resolution
-        for link_uuid, pairs in link_uuid_map.items():
-            if link_uuid in consumed_link_uuids:
-                continue  # Already consumed by a promote in Step 5c
-            if len(pairs) == 2:
-                pair_result = self._validate_linked_pair(pairs[0][1], pairs[1][1])
-                if pair_result is not None:
-                    pair_error, pair_code, pair_params = pair_result
-                    issues.append(TXValidationIssue(operation="create", index=pairs[0][0], ref_id=None, error=pair_error, code=pair_code, params=pair_params))
-                    continue
-                # Validate description/tags consistency
-                desc_result = self._validate_pair_description_tags(pairs[0][1], pairs[1][1])
-                if desc_result is not None:
-                    desc_error, desc_code, desc_params = desc_result
-                    issues.append(TXValidationIssue(operation="create", index=pairs[0][0], ref_id=None, error=desc_error, code=desc_code, params=desc_params))
-                    continue
-                pairs[0][1].related_transaction_id = pairs[1][1].id
-                pairs[1][1].related_transaction_id = pairs[0][1].id
-            else:
-                issues.append(
-                    TXValidationIssue(
-                        operation="create",
-                        index=pairs[0][0] if pairs else 0,
-                        ref_id=None,
-                        error=f"link_uuid '{link_uuid}' has {len(pairs)} creates (expected 2)",
-                        code=TXValidationCode.LINK_UUID_PAIR_COUNT.value,
-                        params={"linkUuid": link_uuid, "count": len(pairs)},
-                    )
-                )
-
-        # 6b. WAC auto-computation for items with cost_basis_mode in ("auto", "auto-detail").
-        # Post-flush: all rows are visible in session. No adapter needed.
-        wac_results: list[WACPreviewResultItem] | None = None
-        has_pydantic_errors = any(i.code not in (TXValidationCode.BALANCE_ASSET_NEGATIVE.value, TXValidationCode.BALANCE_CASH_NEGATIVE.value) for i in issues)
-        if not has_pydantic_errors:
-            wac_results = await self._compute_wac_for_auto_items(parsed_creates, parsed_updates, link_uuid_map)
-
-        # 6c. Emit wac_fx_unavailable issues for items where WAC auto failed due to missing FX
-        if wac_results:
-            for wr in wac_results:
-                if wr.wac is None and wr.wac_missing_pairs:
-                    pair_strs = [mp.pair for mp in wr.wac_missing_pairs]
-                    issues.append(
-                        TXValidationIssue(
-                            operation=wr.operation or "create",
-                            index=wr.index if wr.index is not None else 0,
-                            ref_id=None,
-                            error=f"WAC calculation failed: missing FX pairs {', '.join(pair_strs)}",
-                            code=TXValidationCode.WAC_FX_UNAVAILABLE.value,
-                            params={
-                                "pairs": pair_strs,
-                                "pair_details": [{"pair": mp.pair, "dates": [d.isoformat() for d in mp.dates]} for mp in wr.wac_missing_pairs],
-                            },
-                            field="cost_basis_override",
-                        )
-                    )
-
-        # 6d. Verify cost_basis_override is populated for types that require it.
-        # Skip items with cost_basis_mode='auto'|'auto-detail' — those went through WAC
-        # (step 6b) and any failure is already reported via step 6c.
-        # This check catches items that have NO mode AND no manual override.
-        await self.session.flush()
-
-        # Build set of create indices that used auto WAC (already handled by 6b/6c)
-        auto_create_indices: Set[int] = set()
-        for orig_idx, item in parsed_creates:
-            if getattr(item, "cost_basis_mode", None) in ("auto", "auto-detail"):
-                auto_create_indices.add(orig_idx)
-        auto_update_indices: Set[int] = set()
-        for orig_idx, item in parsed_updates:
-            if getattr(item, "cost_basis_mode", None) in ("auto", "auto-detail"):
-                auto_update_indices.add(orig_idx)
-
-        # Build set of create indices consumed by promote (step 5c handles cost_basis)
-        promoted_create_indices: Set[int] = set()
-        for _uuid in consumed_link_uuids:
-            for orig_idx, _tx in link_uuid_map.get(_uuid, []):
-                promoted_create_indices.add(orig_idx)
-
-        # Check creates via link_uuid_map (holds (orig_idx, Transaction) tuples)
-        checked_create_indices: Set[int] = set()
-        for _uuid, pairs in link_uuid_map.items():
-            if _uuid in consumed_link_uuids:
-                continue  # Already processed by promote (step 5c)
-            for orig_idx, tx in pairs:
-                if orig_idx in auto_create_indices:
-                    continue
-                if self._requires_cost_basis(tx) and tx.cost_basis_override is None:
-                    checked_create_indices.add(orig_idx)
-                    issues.append(
-                        TXValidationIssue(
-                            operation="create",
-                            index=orig_idx,
-                            ref_id=None,
-                            error=f"{tx.type.value} with qty>0 requires cost_basis_override",
-                            code=TXValidationCode.COST_BASIS_REQUIRED.value,
-                            params={"type": tx.type.value},
-                            field="cost_basis_override",
-                        )
-                    )
-        # Standalone creates (no link_uuid) — check from results
-        for r in results:
-            if r.operation == "create" and r.status == "success" and r.index not in checked_create_indices:
-                if r.index in auto_create_indices or r.index in promoted_create_indices:
-                    continue
-                for tid in r.ids or []:
-                    tx = await self.session.get(Transaction, tid)
-                    if tx and self._requires_cost_basis(tx) and tx.cost_basis_override is None:
-                        issues.append(
-                            TXValidationIssue(
-                                operation="create",
-                                index=r.index,
-                                ref_id=None,
-                                error=f"{tx.type.value} with qty>0 requires cost_basis_override",
-                                code=TXValidationCode.COST_BASIS_REQUIRED.value,
-                                params={"type": tx.type.value},
-                                field="cost_basis_override",
-                            )
-                        )
-        # Check updates
-        for orig_idx, item in parsed_updates:
-            if orig_idx in auto_update_indices:
-                continue
-            tx = await self.session.get(Transaction, item.id)
-            if tx and self._requires_cost_basis(tx) and tx.cost_basis_override is None:
-                issues.append(
-                    TXValidationIssue(
-                        operation="update",
-                        index=orig_idx,
-                        ref_id=item.id,
-                        error=f"{tx.type.value} with qty>0 requires cost_basis_override",
-                        code=TXValidationCode.COST_BASIS_REQUIRED.value,
-                        params={"type": tx.type.value},
-                        field="cost_basis_override",
-                    )
-                )
-
-        # 7. Balance walk per affected broker
-        try:
-            await self.session.flush()
-            # Build mapping: tx.id → (operation, batch_index) for batch transactions
-            batch_tx_ids: Dict[int, tuple] = {}
-            for r in results:
-                if r.status == "success" and r.ids:
-                    for tx_id in r.ids:
-                        batch_tx_ids[tx_id] = (r.operation, r.index)
-            for broker_id, from_date in earliest_date_by_broker.items():
-                await self._validate_broker_balances(broker_id, from_date, batch_tx_ids=batch_tx_ids)
-        except BalanceValidationError as e:
-            issues.append(TXValidationIssue(operation=e.batch_operation, index=e.batch_index, ref_id=None, error=str(e), code=e.code, params=e.params))
-        except Exception as e:  # noqa: BLE001
-            issues.append(TXValidationIssue(operation="create", index=-1, ref_id=None, error=f"Balance validation error: {e}"))
-
-        # 8. Decision
-        success_count = sum(1 for r in results if r.status == "success")
-        if commit and issues:
-            # A commit was asked for and the batch is about to be rolled back.
-            # Leaving per-item status at "success" tells the caller the opposite
-            # of what happened — and a client that trusts it (reading `ids` as
-            # if the rows existed) acts on phantom rows.
-            #
-            # Deliberately NOT applied to dry-runs (`commit=False`): there the
-            # caller never asked to persist anything, so "success" means "this
-            # item would apply cleanly", which is the whole answer `/validate`
-            # exists to give. The bulk editor relies on it to mark the batch's
-            # own rows as pending (TransactionBulkModal.svelte:1146).
-            for r in results:
-                if r.status == "success":
-                    r.status = "simulated"
-        if issues:
-            return TXBatchResponse(committed=False, issues=issues, results=results, success_count=success_count, wac_results=wac_results)
-        elif not commit:
-            # Dry-run: clean batch but caller requested validate-only
-            return TXBatchResponse(committed=False, issues=[], results=results, success_count=success_count, wac_results=wac_results)
-        else:
-            # Commit: caller (router) will session.commit()
-            return TXBatchResponse(committed=True, issues=[], results=results, success_count=success_count, wac_results=wac_results)
+        await compute_wac_and_fx_issues(self, context)
+        await validate_cost_basis(self, context)
+        await validate_balances(self, context)
+        return finalize_response(context)
 
     # =========================================================================
     # WAC AUTO-COMPUTATION (inline in validate/commit)
