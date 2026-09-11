@@ -1,9 +1,11 @@
 # Performance charts - SP06 G3/G1c and SP07 G1a/G1b
 
-**Status:** I10 calendar-return backend integrated; I60 Asset frontend in progress.
-**Implementation:** I10 completed on 2026-09-10. I60 was explicitly authorized
-on 2026-09-11. All portfolio/GrowthChart phases remain FROZEN.
-**Revision:** 7 - I60 review correction round 2, 2026-09-11.
+**Status:** I10 and I60 calendar-return backend/Asset frontend integrated and
+automatically validated; I60 manual review remains pending.
+**Implementation:** I10 completed on 2026-09-10. I60 implementation and
+post-merge combined validation completed on 2026-09-11. All
+portfolio/GrowthChart phases remain FROZEN.
+**Revision:** 8 - I60 post-merge combined validation, 2026-09-11.
 **Analysis baseline:** `f90d9801bd7a2d74aac6a27efe305314c6c004cc`
 (`refs/heads/dev_release2`).
 **Gate-0 execution baseline:** `0af66da5f366a9559549154631a4ee15ca620915`,
@@ -12,6 +14,8 @@ containing `dev_release2@973968ed2` and workstream F commit `e50d66408`.
 developer authorization is limited to the signal-only I10 slice.
 **I60 implementation baseline:** `0d57874303b1311c0f5ea3b8653d24a33d4245a6`,
 including I10 and H.
+**I60 combined-validation baseline:** `5524a0eda664834bcc1fe4e0effe007d18564030`,
+including the committed I60 implementation and merged H renderer normalization.
 **Portfolio implementation baseline:** not yet authorized. It will be the later
 post-H target SHA supplied after the H-before-I integration gate.
 **Coordinator:** Release 2 coordinator, session
@@ -619,13 +623,13 @@ A separate owner integrates G3 after F and the backend calendar signal:
 |---|---:|---|---|---|---|
 | I00 | XS | Workstream I planner | Plan-only developer authorization | Durable product contract, split, storyboards and backlog links | COMPLETE 2026-09-10 |
 | G0 | M analysis | Coordinator + assigned integrators | F integrated on `dev_release2` | Post-F technical refresh + phase-specific implementation authorization | I10 RELEASED ONLY 2026-09-10; PORTFOLIO BLOCKED |
-| H0 | external | H + coordinator | H/YOC accepted and integrated | Release portfolio service/schema/tests, provide exact target SHA, I re-read | BLOCKED |
-| I10 | M | G3 backend owner | G0 developer authorization; no H/F files | Calendar-return backend series + provenance, no resolver duplication | COMPLETE 2026-09-10 / INTEGRATION PENDING |
+| H0 | external | H + coordinator | H/YOC accepted and integrated | Release portfolio service/schema/tests, provide exact target SHA, I re-read | COMPLETE 2026-09-11 |
+| I10 | M | G3 backend owner | G0 developer authorization; no H/F files | Calendar-return backend series + provenance, no resolver duplication | COMPLETE AND INTEGRATED 2026-09-10 |
 | I20 | L | Portfolio backend integrator | G0 + H0 + F engine released | Additive daily broker P&L + signed canonical income | BLOCKED |
 | I30 | L | Portfolio backend integrator | I20 + same-resolver OHLC envelope | Daily total candles + flat fallback + strict close identity | BLOCKED |
 | I40 | M | Portfolio backend integrator + coordinator | I20 + I30 + post-H report contract | DTO/report/cache wiring, then coordinator API sync | BLOCKED |
 | I50 | L | GrowthChart owner | I40 | Value/Return/P&L core modes; Line/Candles/Income P&L submodes; broker lines and sum aggregation | BLOCKED |
-| I60 | M | G3 Asset UI owner | I10 + coordinator release after shared integration | Historical N-day primary mode in final Asset detail | IN PROGRESS 2026-09-11 |
+| I60 | M | G3 Asset UI owner | I10 + coordinator release after shared integration | Historical N-day primary mode in final Asset detail | AUTOMATED VALIDATION COMPLETE 2026-09-11; MANUAL REVIEW PENDING |
 | I70 | L | Test author + owners | Relevant implementation phases; H test ownership released | Targeted backend/frontend regressions and integration gates | BLOCKED |
 | I80 | S | Docs writer + coordinator | Stable integrated UI | English docs, coordinator i18n/runner/changelog records | BLOCKED |
 | I90 | M | Developer + coordinator | I50 + I60 + I70 + I80 | Desktop/mobile operational review, corrections, integration handoff | BLOCKED |
@@ -804,10 +808,10 @@ No product decision remains open. Readiness still requires:
 | I60.0 | Verify clean post-H/I10 baseline and re-read final Asset/PriceChart contracts | COMPLETE 2026-09-11 |
 | I60.1 | Test-author helper and Asset-detail regressions in registered files | COMPLETE 2026-09-11 |
 | I60.2 | Typed calendar-result extraction and chart-point/provenance mapping | COMPLETE 2026-09-11 |
-| I60.3 | Asset primary mode/window controls and request lifecycle | COMPLETE 2026-09-11; E2E EXECUTION DEFERRED |
+| I60.3 | Asset primary mode/window controls and request lifecycle | COMPLETE 2026-09-11; DESKTOP/MOBILE E2E GREEN |
 | I60.4 | PriceChartFull percentage-unit, missing-point and provenance presentation seams | COMPLETE 2026-09-11 |
 | I60.5 | Focused frontend gates, static checks and review corrections | AUTHORIZED GATES COMPLETE 2026-09-11 |
-| I60.6 | Evidence, manifest and frozen integration handoff | COMPLETE 2026-09-11; FROZEN |
+| I60.6 | Evidence, manifest and frozen integration handoff | COMBINED VALIDATION COMPLETE 2026-09-11; MANUAL REVIEW PENDING |
 
 > **Note implementazione (I60.0, 2026-09-11):** verified exact clean HEAD
 > `0d57874303b1311c0f5ea3b8653d24a33d4245a6`. I60 can avoid the three
@@ -925,6 +929,96 @@ No product decision remains open. Readiness still requires:
 > owned frontend files and `git diff --check` are green. Per authorization no
 > Playwright, server, generated API step or full frontend check ran. The
 > replacement checkpoint is FROZEN for coordinator review.
+
+> **Fuori pista (I60 post-merge type gate, 2026-09-11):** first combined
+> `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py front
+> check` reached the generated H/I contracts and failed with two I60-local
+> TypeScript diagnostics in the Asset page: Svelte narrowed the annotation-form
+> `$state('price')` initializer to the `price` literal, and an `any[]` response
+> left the calendar-result filter callback implicit-any. No server, DB or
+> generated source was modified by the check. Switched to
+> `$state<AssetChartPrimaryMode>('price')` and typed the raw transport array as
+> `unknown[]`; behavior and ownership remain unchanged.
+
+> **Note implementazione (I60 post-merge type gate, 2026-09-11):** rerunning
+> the exact full frontend check after the two local type corrections returned
+> exit 0: `svelte-check found 0 errors and 41 warnings in 2 files`. The warnings
+> are the merged baseline's existing Svelte deprecation/a11y warnings; no I60
+> error remains, and generated nested signal unions type-check through both H's
+> public renderer normalizer and I60's hidden-result extraction seam.
+
+> **Note implementazione (I60 post-merge production build, 2026-09-11):**
+> canonical command `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run
+> python dev.py front build` returned exit 0. It completed the built-in OpenAPI,
+> Zodios discriminator and Tool generation checks, then production client and
+> server builds (`17.50s` and `28.46s`), ending with `Frontend build complete`.
+> Generated/build/cache artifacts remain ignored; post-build Git status contains
+> only this plan and the two I60-local type corrections.
+
+> **Note implementazione (I60 post-merge focused units, 2026-09-11):**
+> lane command `... dev.py test --test-port 6157 --data-dir
+> /tmp/librefolio-r2-i-charts front-utility core-unit
+> extractCalendarReturnView` passed the 10 calendar helper tests (79 files /
+> 1,944 tests skipped by the name filter). The analogous `component-unit
+> MeasurePanel` selector passed 17 component tests (65 files / 1,758 tests
+> skipped), preserving the stateful component contract I60 keeps mounted.
+> Exact Vitest for H's `backendTypes.test.ts` plus
+> `backendRenderer.test.ts` passed 20/20 in 2 files, including one-level
+> generated point normalization and every public renderer series kind.
+
+> **Fuori pista (I60 post-merge E2E selector, 2026-09-11):** registered lane
+> command `... dev.py test --test-port 6157 --data-dir
+> /tmp/librefolio-r2-i-charts front-asset asset-detail` populated only the
+> assigned TEST DB, started the shared backend and ran desktop first. Result:
+> 25 pass / 1 fail. The calendar workflow stopped before product interaction
+> assertions because regex `^asset-calendar-window-` matched the controls
+> container plus the four buttons (5 nodes vs expected 4). The runner then
+> stopped before mobile and force-terminated its own backend process group after
+> the graceful five-second timeout. This is a deterministic test-selector bug,
+> not product evidence; repair is delegated to `test-author` before rerunning
+> the full registered desktop+mobile action.
+
+> **Note implementazione (I60 post-merge desktop E2E, 2026-09-11):**
+> after `test-author` narrowed the count selector to numeric window ids, the
+> registered `front-asset asset-detail` action passed desktop 26/26 in 54.0s.
+> The runner action hardcodes Playwright project `desktop`; mobile was not part
+> of that green result. Its owned backend again required runner process-group
+> termination after the five-second graceful timeout, and port 6157 was
+> confirmed free. The same registered spec must therefore run once more with
+> Playwright project `mobile` under the assigned port/data environment.
+
+> **Fuori pista (I60 post-merge mobile toolbar collision, 2026-09-11):**
+> direct mobile project run of the registered Asset-detail spec reached 25 pass
+> / 1 fail. The I60 calendar workflow itself passed. The existing
+> `measure button reveals the measures panel` test timed out because
+> PriceChartFull's later-rendered inner toolbar (`top-2 left-12 z-10 pr-24`)
+> intercepted the Asset page's measure button (`top-0 right-0 z-10`) through
+> its transparent reserved padding. Read-only parent-commit comparison confirms
+> both stacking classes predate I60, so the triage verdict is a latent product
+> defect, not a flaky test or I60 regression. Within the already-owned Asset
+> page, raised the outer interactive toolbar to `z-20`; the reserved layout
+> remains unchanged while its visible buttons correctly own pointer priority.
+
+> **Note implementazione (I60 post-merge mobile E2E, 2026-09-11):**
+> the exact failed mobile measure-button selector passed 1/1 after the stacking
+> correction. The complete Asset-detail mobile project then passed 26/26 in
+> 1.5 minutes, including calendar window selection, editor/measure preservation,
+> no-successor and stale-successor request ownership, FX-staleness rendering
+> inputs, Risk `Configure Signals`, Price state restoration and chart-type
+> controls. Together with the registered desktop result, Asset detail is green
+> 52/52 across both Playwright projects.
+
+> **Note implementazione (I60 final combined gates, 2026-09-11):** after the
+> mobile stacking correction, the full frontend check again returned 0 errors
+> / 41 baseline warnings. The canonical production build repeated OpenAPI,
+> Zodios/discriminator and Tool generation and completed both bundles in
+> 18.28s / 28.85s. Focused stale-rendering unit selection passed 6/6: calendar
+> provenance first maps maximum price/FX age to `staleDays`, then
+> `buildMainSeries` converts that age into the configured opacity gradient while
+> retaining `fxStaleDays` for tooltip detail. Automated evidence now covers
+> Price/calendar state preservation, both request-race classes, FX fade,
+> Configure Signals navigation and the merged generated nested-series union.
+> Manual desktop/mobile visual review remains the only I60 gate not executed.
 
 ## 7. ASCII storyboards v2
 
