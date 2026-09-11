@@ -66,6 +66,8 @@ ISSUE_CODES = {
         "nonpositive_quantity_step",
         "noninteger_whole_step",
         "negative_contribution",
+        "nonpositive_monetary_step",
+        "contribution_not_multiple_of_monetary_step",
         "duplicate_row_key",
         "duplicate_currency",
         "identity_rate_mismatch",
@@ -73,7 +75,6 @@ ISSUE_CODES = {
     "unsupported": {
         "numeric_domain_exceeded",
         "currency_domain_exceeded",
-        "quote_basis_unsupported",
         "short_inventory_unsupported",
         "initial_debt_unsupported",
     },
@@ -105,9 +106,10 @@ PATH_FIELDS = {
     "contributions",
     "valuation_rates",
     "amount",
+    "monetary_step",
     "rate_to_report",
 }
-PARAM_FIELDS = {"currency", "vector", "limit", "allowed_quote_bases", "unit"}
+PARAM_FIELDS = {"currency", "vector", "limit", "unit"}
 DECIMAL_PATHS = (
     ("rows", 0, "initial_quantity"),
     ("rows", 0, "target_percent"),
@@ -115,6 +117,7 @@ DECIMAL_PATHS = (
     ("rows", 0, "buy_grid", "quantity_step"),
     ("cash_balances", 0, "amount"),
     ("contributions", 0, "amount"),
+    ("contributions", 0, "monetary_step"),
     ("valuation_rates", 0, "rate_to_report"),
 )
 CURRENCY_PATHS = (
@@ -171,6 +174,7 @@ NUMERIC_FIELDS = (
     (("normalized", "rows", 0, "buy_grid", "quantity_step"), 26),
     (("normalized", "cash_balances", 0, "amount"), 26),
     (("normalized", "contributions", 0, "amount"), 26),
+    (("normalized", "contributions", 0, "monetary_step"), 26),
     (("normalized", "valuation_rates", 0, "rate_to_report"), 26),
 )
 
@@ -221,7 +225,7 @@ def _request() -> dict[str, Any]:
             }
         ],
         "cash_balances": [{"currency": "EUR", "amount": "0.005"}],
-        "contributions": [{"currency": "EUR", "amount": "5"}],
+        "contributions": [{"currency": "EUR", "amount": "5", "monetary_step": "0.01"}],
         "valuation_rates": [
             {
                 "currency": "USD",
@@ -388,7 +392,8 @@ def test_all_draft_cells_default_to_null_and_only_collections_default_empty():
             "buy_grid": None,
         }
     ]
-    assert expanded["cash_balances"] == expanded["contributions"] == [{"currency": None, "amount": None}]
+    assert expanded["cash_balances"] == [{"currency": None, "amount": None}]
+    assert expanded["contributions"] == [{"currency": None, "amount": None, "monetary_step": None}]
     assert expanded["valuation_rates"] == [{"currency": None, "rate_to_report": None, "reference_date": None}]
     draft["rows"][0].update(quote={}, buy_grid={})
     expanded = _roundtrip(PAC_ANALYZE_INPUT_ADAPTER, draft).model_dump(mode="json")
@@ -399,6 +404,16 @@ def test_all_draft_cells_default_to_null_and_only_collections_default_empty():
         "reference_date": None,
     }
     assert expanded["rows"][0]["buy_grid"] == {"mode": None, "quantity_step": None}
+
+
+def test_monetary_step_belongs_to_contributions_not_observed_cash():
+    payload = _request()
+    parsed = _roundtrip(PAC_ANALYZE_INPUT_ADAPTER, payload).model_dump(mode="json")
+    assert parsed["cash_balances"] == [{"currency": "EUR", "amount": "0.005"}]
+    assert parsed["contributions"] == [{"currency": "EUR", "amount": "5", "monetary_step": "0.01"}]
+
+    payload["cash_balances"][0]["monetary_step"] = "0.001"
+    _reject(PAC_ANALYZE_INPUT_ADAPTER, payload)
 
 
 @pytest.mark.parametrize("key", ["row_key", "instrument_key"])
@@ -572,14 +587,14 @@ def test_malformed_decimal_text_is_structural_input_not_codec_failure(path, text
 
 
 @pytest.mark.parametrize("bad", [True, False, 1.0, 100.0, "1", "100", [], {}])
-def test_quote_basis_is_a_strict_json_integer(bad):
+def test_quote_base_quantity_is_a_strict_json_integer(bad):
     payload = _request()
     _set(payload, ("rows", 0, "quote", "quote_base_quantity"), bad)
     _reject(PAC_ANALYZE_INPUT_ADAPTER, payload)
 
 
-@pytest.mark.parametrize("basis", [None, -1, 0, 1, 2, 100, 1000])
-def test_quote_basis_domain_is_not_prematurely_enforced_on_drafts(basis):
+@pytest.mark.parametrize("basis", [None, -1, 0, 1, 2, 3, 100, 1000])
+def test_quote_base_quantity_domain_is_not_prematurely_enforced_on_drafts(basis):
     payload = _request()
     _set(payload, ("rows", 0, "quote", "quote_base_quantity"), basis)
     result = _roundtrip(PAC_ANALYZE_INPUT_ADAPTER, payload)
@@ -914,11 +929,9 @@ def test_issue_path_rejects_unbounded_tokens_and_non_strict_indices(path, output
             "currency": "EUR",
             "vector": "valuation_rates",
             "limit": 512,
-            "allowed_quote_bases": [1, 100],
             "unit": "native_amount",
         },
         {"limit": 0},
-        {"allowed_quote_bases": []},
         *[{"vector": vector} for vector in ("cash_balances", "contributions", "valuation_rates")],
         *[{"unit": unit} for unit in ("quantity", "quote", "rate", "percent", "native_amount")],
     ],
@@ -943,11 +956,6 @@ def test_issue_params_admitted_shapes(params, output_witnesses):
         {"limit": True},
         {"limit": 1.0},
         {"limit": "32"},
-        {"allowed_quote_bases": [1, 100, 1]},
-        {"allowed_quote_bases": [2]},
-        {"allowed_quote_bases": [True]},
-        {"allowed_quote_bases": [1.0]},
-        {"allowed_quote_bases": ["100"]},
         {"raw_input": "12abc"},
         {"exception": "private traceback"},
         {"row_key": "opaque"},
@@ -1079,19 +1087,21 @@ def test_normalized_dates_are_nullable_real_iso_dates_not_raw_drafts(path, outpu
         _reject(PAC_ANALYZE_OUTPUT_ADAPTER, wire)
 
 
-def test_normalized_quote_basis_is_narrower_than_the_raw_integer_domain(output_witnesses):
+def test_normalized_quote_base_quantity_accepts_any_positive_strict_integer(output_witnesses):
     wire = deepcopy(output_witnesses["ready"])
     path = ("normalized", "rows", 0, "quote", "quote_base_quantity")
-    for valid in (1, 100):
+    for valid in (1, 3, 100, 1000):
         _set(wire, path, valid)
         _roundtrip(PAC_ANALYZE_OUTPUT_ADAPTER, wire)
-    for bad in (None, 0, -1, 2, 1000, True, 1.0, "100"):
+    for bad in (None, 0, -1, True, 1.0, "3"):
         _set(wire, path, bad)
         _reject(PAC_ANALYZE_OUTPUT_ADAPTER, wire)
     for mode in ("validation", "serialization"):
         schema = PAC_ANALYZE_OUTPUT_ADAPTER.json_schema(mode=mode)
         field = _schema_at(schema, path)
-        assert field["type"] == "integer" and set(field["enum"]) == {1, 100}
+        assert field["type"] == "integer"
+        assert field["exclusiveMinimum"] == 0
+        assert "enum" not in field
 
 
 @pytest.mark.parametrize("bad", [True, False, -1, 32, 0.0, "0", None])
@@ -1170,6 +1180,8 @@ def test_exported_input_defaults_and_field_specific_limits(mode):
         for prop in obj["properties"].values():
             assert prop["default"] is None
             assert {"type": "null"} in prop["anyOf"]
+    assert set(_schema_at(schema, ("cash_balances", 0))["properties"]) == {"currency", "amount"}
+    assert set(_schema_at(schema, ("contributions", 0))["properties"]) == {"currency", "amount", "monetary_step"}
     for path, limit in TEXT_LIMITS:
         prop = _schema_at(schema, path)
         assert prop["type"] == "string"
@@ -1326,9 +1338,6 @@ def test_exported_issue_paths_indices_and_params_are_bounded(mode):
     assert params["additionalProperties"] is False
     limit = _schema_at(schema, ("issues", 0, "params", "limit"), state="invalid")
     assert limit["type"] == "integer" and limit["minimum"] == 0 and limit["maximum"] == 512
-    bases = _schema_at(schema, ("issues", 0, "params", "allowed_quote_bases"), state="invalid")
-    assert bases["maxItems"] == 2
-    assert bases["items"]["type"] == "integer" and set(bases["items"]["enum"]) == {1, 100}
     currency = _schema_at(schema, ("issues", 0, "params", "currency"), state="invalid")
     assert currency["minLength"] == currency["maxLength"] == 3
     vector = _schema_at(schema, ("issues", 0, "params", "vector"), state="invalid")
@@ -1365,8 +1374,8 @@ def _stress_request(name: str, *, invalid: bool) -> dict[str, Any]:
                 "buy_grid": {"mode": "whole", "quantity_step": "1"},
             }
         )
-    for field in ("cash_balances", "contributions"):
-        payload[field] = [{"currency": currency, "amount": maximum} for currency in currencies]
+    payload["cash_balances"] = [{"currency": currency, "amount": maximum} for currency in currencies]
+    payload["contributions"] = [{"currency": currency, "amount": maximum, "monetary_step": maximum} for currency in currencies]
     payload["valuation_rates"] = [{"currency": currency, "rate_to_report": "1" if currency == "EUR" else maximum, "reference_date": None} for currency in currencies]
     return payload
 
@@ -1403,7 +1412,6 @@ def test_real_utf8_serialization_fits_256_kib_with_maximum_codec_issue_arrays(st
             "currency": "EUR",
             "vector": "valuation_rates",
             "limit": 512,
-            "allowed_quote_bases": [1, 100],
             "unit": "native_amount",
         },
     )

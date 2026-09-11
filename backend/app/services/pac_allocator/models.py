@@ -58,8 +58,23 @@ class ParsedMoneyVector:
     entries: tuple[tuple[str, Decimal], ...]
     reason: FactReason | None
 
+    def amount_entries(self) -> tuple[tuple[str, Decimal], ...]:
+        return self.entries
+
     def amounts(self) -> dict[str, Decimal]:
         return dict(self.entries)
+
+
+@dataclass(frozen=True, slots=True)
+class ParsedContributionVector:
+    entries: tuple[tuple[str, Decimal, Decimal], ...]
+    reason: FactReason | None
+
+    def amount_entries(self) -> tuple[tuple[str, Decimal], ...]:
+        return tuple((currency, amount) for currency, amount, _monetary_step in self.entries)
+
+    def amounts(self) -> dict[str, Decimal]:
+        return dict(self.amount_entries())
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,7 +105,7 @@ class InitialState:
     as_of_date: date | None
     rows: tuple[InitialRow, ...]
     cash_balances: tuple[tuple[str, Decimal], ...]
-    contributions: tuple[tuple[str, Decimal], ...]
+    contributions: tuple[tuple[str, Decimal, Decimal], ...]
     valuation_rates: tuple[ParsedRate, ...]
 
 
@@ -100,7 +115,7 @@ class NormalizationResult:
     as_of_date: date | None
     rows: tuple[ParsedRow, ...]
     cash: ParsedMoneyVector
-    contributions: ParsedMoneyVector
+    contributions: ParsedContributionVector
     rates: tuple[ParsedRate, ...]
     currencies: tuple[str, ...]
     currency_domain_valid: bool

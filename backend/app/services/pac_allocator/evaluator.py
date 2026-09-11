@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from decimal import Decimal, localcontext
 
-from backend.app.services.pac_allocator.models import Checkpoint, InitialEvaluation, InitialRowEvaluation, NormalizationResult, ParsedMoneyVector, ParsedValue, check_budget, unavailable_reason
+from backend.app.services.pac_allocator.models import Checkpoint, InitialEvaluation, InitialRowEvaluation, NormalizationResult, ParsedContributionVector, ParsedMoneyVector, ParsedValue, check_budget, unavailable_reason
 from backend.app.services.pac_allocator.numeric import HUNDRED, ZERO, decimal_context
 from backend.app.utils.financial.valuation_utils import compute_holding_value
 
@@ -32,13 +32,13 @@ def _sum_values(values: tuple[ParsedValue[Decimal], ...]) -> ParsedValue[Decimal
     return ParsedValue(None, reason) if reason is not None else ParsedValue(sum((value.require() for value in values), ZERO))
 
 
-def _money_total(vector: ParsedMoneyVector, state: NormalizationResult, checkpoint: Checkpoint | None) -> ParsedValue[Decimal]:
+def _money_total(vector: ParsedMoneyVector | ParsedContributionVector, state: NormalizationResult, checkpoint: Checkpoint | None) -> ParsedValue[Decimal]:
     if vector.reason is not None:
         return ParsedValue(None, vector.reason)
     if not state.report_currency.available:
         return ParsedValue(None, state.report_currency.reason or "input_missing")
     converted = []
-    for currency, amount in vector.entries:
+    for currency, amount in vector.amount_entries():
         check_budget(checkpoint)
         converted.append(reporting_value(ParsedValue(amount), currency, state))
     return _sum_values(tuple(converted))

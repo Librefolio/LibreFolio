@@ -28,12 +28,6 @@ def _unicode_scalar_text(value: str) -> str:
     return value
 
 
-def _quote_basis(value: int) -> int:
-    if value not in (1, 100):
-        raise ValueError("P1 quote basis must be 1 or 100")
-    return value
-
-
 def _calendar_date(value: str) -> str:
     date.fromisoformat(value)
     return value
@@ -66,7 +60,7 @@ RowDenominator = Annotated[str, StringConstraints(strict=True, min_length=1, max
 SquaredNumerator = Annotated[str, StringConstraints(strict=True, min_length=1, max_length=192, pattern=_NONNEGATIVE)]
 SquaredDenominator = Annotated[str, StringConstraints(strict=True, min_length=1, max_length=160, pattern=_POSITIVE)]
 RatioApproximation = Annotated[str, StringConstraints(strict=True, min_length=1, max_length=36, pattern=_DECIMAL)]
-QuoteBasis = Annotated[int, Field(strict=True, json_schema_extra={"enum": [1, 100]}), AfterValidator(_quote_basis)]
+QuoteBaseQuantity = Annotated[int, Field(strict=True, gt=0)]
 RowIndex = Annotated[int, Field(strict=True, ge=0, le=P1_MAX_ROWS - 1)]
 GridMode = Literal["whole", "fractional"]
 
@@ -74,7 +68,7 @@ GridMode = Literal["whole", "fractional"]
 class PacQuoteInput(PacStrictModel):
     raw_price: DraftDecimal | None = Field(None, description="Native-currency price per quote_base_quantity units. A raw draft string, not a parsed float.")
     currency: DraftCurrency | None = Field(None, description="Native ISO 4217 quote currency; this is not the reporting currency.")
-    quote_base_quantity: Annotated[int, Field(strict=True)] | None = Field(None, description="Units represented by the raw quote. P1 supports 1 or 100; another positive basis is explicitly unsupported.")
+    quote_base_quantity: Annotated[int, Field(strict=True)] | None = Field(None, description="Positive integer units represented by the raw quote.")
     reference_date: DraftDate | None = Field(None, description="Optional observation date. Missing dates are reported, never replaced by today.")
 
 
@@ -98,6 +92,12 @@ class PacMoneyInput(PacStrictModel):
     amount: DraftDecimal | None = Field(None, description="Exact native amount. Zero is known zero; null/blank is missing, not zero.")
 
 
+class PacContributionInput(PacStrictModel):
+    currency: DraftCurrency | None = None
+    amount: DraftDecimal | None = Field(None, description="Exact native contribution. Zero is known zero; null/blank is missing, not zero.")
+    monetary_step: DraftDecimal | None = Field(None, description="Exact positive increment for this contribution. The contribution amount must be an exact multiple.")
+
+
 class PacValuationRateInput(PacStrictModel):
     currency: DraftCurrency | None = None
     rate_to_report: DraftDecimal | None = Field(None, description="Reporting-currency value of one native currency unit. Valuation only: no cash conversion or funding is proposed.")
@@ -110,7 +110,7 @@ class PacAnalyzeInput(PacStrictModel):
     as_of_date: DraftDate | None = Field(None, description="Optional scenario reference date; provided observations may not be later. Not inferred from the clock.")
     rows: Annotated[list[PacAnalyzeRowInput], Field(max_length=P1_MAX_ROWS)] = Field(default_factory=list)
     cash_balances: Annotated[list[PacMoneyInput], Field(max_length=P1_MAX_CURRENCIES)] | None = Field(None, description="Closed native existing-cash vector, one entry per currency. Empty means no cash; null means not supplied.")
-    contributions: Annotated[list[PacMoneyInput], Field(max_length=P1_MAX_CURRENCIES)] | None = Field(None, description="Closed vector of new contributions, separate from existing cash. Empty means none; null means not supplied.")
+    contributions: Annotated[list[PacContributionInput], Field(max_length=P1_MAX_CURRENCIES)] | None = Field(None, description="Closed vector of new contributions and their exact monetary increments, separate from existing cash. Empty means none; null means not supplied.")
     valuation_rates: Annotated[list[PacValuationRateInput], Field(max_length=P1_MAX_CURRENCIES)] = Field(default_factory=list, description="Explicit valuation references. Reporting identity rate is 1; missing foreign rates never default to 1.")
 
 
@@ -135,6 +135,7 @@ PathField = Literal[
     "contributions",
     "valuation_rates",
     "amount",
+    "monetary_step",
     "rate_to_report",
 ]
 IssuePath = Annotated[list[Union[PathField, RowIndex]], Field(max_length=4)]
@@ -154,11 +155,13 @@ InvalidCode = Literal[
     "nonpositive_quantity_step",
     "noninteger_whole_step",
     "negative_contribution",
+    "nonpositive_monetary_step",
+    "contribution_not_multiple_of_monetary_step",
     "duplicate_row_key",
     "duplicate_currency",
     "identity_rate_mismatch",
 ]
-UnsupportedCode = Literal["numeric_domain_exceeded", "currency_domain_exceeded", "quote_basis_unsupported", "short_inventory_unsupported", "initial_debt_unsupported"]
+UnsupportedCode = Literal["numeric_domain_exceeded", "currency_domain_exceeded", "short_inventory_unsupported", "initial_debt_unsupported"]
 InfoCode = Literal["inventory_off_buy_grid", "reference_date_unspecified", "unused_valuation_reference", "identity_rate_redundant"]
 
 
@@ -166,7 +169,6 @@ class PacIssueParams(PacStrictModel):
     currency: CurrencyCode | None = None
     vector: Literal["cash_balances", "contributions", "valuation_rates"] | None = None
     limit: Annotated[int, Field(strict=True, ge=0, le=512)] | None = None
-    allowed_quote_bases: Annotated[list[QuoteBasis], Field(max_length=2)] | None = None
     unit: IssueUnit | None = None
 
 
@@ -287,7 +289,7 @@ class InitialStateTotals(PacStrictModel):
 class NormalizedQuote(PacStrictModel):
     raw_price: CanonicalScalar
     currency: CurrencyCode
-    quote_base_quantity: QuoteBasis
+    quote_base_quantity: QuoteBaseQuantity
     reference_date: ReferenceDate | None
 
 
@@ -311,6 +313,12 @@ class NormalizedMoney(PacStrictModel):
     amount: CanonicalScalar
 
 
+class NormalizedContribution(PacStrictModel):
+    currency: CurrencyCode
+    amount: CanonicalScalar
+    monetary_step: CanonicalScalar
+
+
 class NormalizedValuationRate(PacStrictModel):
     currency: CurrencyCode
     rate_to_report: CanonicalScalar
@@ -322,7 +330,7 @@ class PacNormalizedInitialState(PacStrictModel):
     as_of_date: ReferenceDate | None
     rows: Annotated[list[NormalizedInitialRow], Field(min_length=1, max_length=P1_MAX_ROWS)]
     cash_balances: Annotated[list[NormalizedMoney], Field(max_length=P1_MAX_CURRENCIES)]
-    contributions: Annotated[list[NormalizedMoney], Field(max_length=P1_MAX_CURRENCIES)]
+    contributions: Annotated[list[NormalizedContribution], Field(max_length=P1_MAX_CURRENCIES)]
     valuation_rates: Annotated[list[NormalizedValuationRate], Field(max_length=5)]
 
 
