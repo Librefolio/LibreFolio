@@ -14,7 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### ✨ Added
 
 - Shared support actions in the donation popup and About page: coffee links and X, Reddit, Facebook, Instagram and TikTok icons, with platform-specific messages in the active interface language. **Copy and go** includes the public project link and opens a new tab, leaving the original screen open. Reddit separates title and body; platforms without text-prefill support explain how to paste the copied caption. TikTok opens its upload page rather than the feed. Clipboard and pop-up failures are reported explicitly; nothing is published automatically.
-- Holdings tables on the Dashboard and Broker pages now show transaction-ledger **Yield on Cost** by asset and broker. The metric uses gross recorded dividend and interest income, D-1 eligible quantity, linked splits, portfolio FX rates and residual average unit cost; unavailable values explain the exact missing or inconsistent input.
+- A new authenticated **Tools** foundation provides a versioned catalogue, isolated per-item computation, read-only diagnostics and compiled custom interfaces. The hub reports missing or incompatible tools explicitly; no financial calculation or portfolio write is implied when no compatible plugin is installed.
+- Holdings tables on the Dashboard and Broker pages now show transaction-ledger **Yield on Cost** by asset and broker. The metric compares gross recorded dividend and interest income over the last year with the average purchase price, using prior-day held quantity, linked splits and portfolio FX rates; unavailable values explain the exact missing or inconsistent input.
 - **FX route metadata in the API** — route responses expose `is_chain` and a sorted, unique `providers_used` list of configured providers. Ordered `chain_steps` still preserves direction and repeated providers; request payloads remain unchanged, with no database migration required.
 
 ### 🐛 Fixed

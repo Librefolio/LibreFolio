@@ -75,10 +75,10 @@ Regola comune G-UX-DESIGN/G-UX-REVIEW nel [piano](06_piano_sprint.md).
 
 **Complessità raffinata 2026-09-10**: M per metrica/fonti + S per colonna/docs · **Origine**: feedback @ExpectChaos (utente esterno)
 
-**Stato 2026-09-10:** ✅ **PLAN/DESIGN APPROVED, non implementato**.
-Contratto finale, storyboard desktop/mobile, dipendenza cache FX e passi nel
+**Stato 2026-09-11:** ✅ **IMPLEMENTATO, VERIFICATO E ACCETTATO DAL DEVELOPER**
+nel checkpoint H `74afcebce`. Contratto finale, storyboard desktop/mobile,
+correzioni review ed evidenze nel
 [piano H dedicato](../19_yieldOnCost/plan-phase00YieldOnCost.prompt.md).
-L'approvazione non autorizza ancora l'esecuzione.
 
 ### Richiesta
 Una colonna che mostri il **rendimento corrente dell'asset rispetto al costo di acquisto**
@@ -103,13 +103,15 @@ rendimento nel tempo, indipendente dalle fluttuazioni di mercato.
   quantita' D-1; split e FX riallineano unita' e valuta.
 - La baseline H `b22998f` contiene la shared FX identity F, L1 e fix
   `cost_basis_currency` con witness identity/L1. H deve riusare la funzione
-  identica nella L2, senza seconda implementazione. Gate 0 tecnico e' complete;
-  resta soltanto l'autorizzazione esecutiva.
+  identica nella L2, senza seconda implementazione. Gate 0, implementazione e
+  review sono complete.
 
 ### Dato mancante, zero e coppia giovane — decisione 2026-09-10
 - Nessun income TTM = YOC numerico 0 soltanto se la prima transaction storica
   della coppia `(asset, broker)` e' almeno `T - 364`; close/rebuy non resetta
   l'age. Coppia piu' giovane = `unavailable/insufficient_history`.
+- Uno o piu' income registrati esplicitamente a importo zero producono
+  `available=0` con provenance `net_zero`; sono distinti dal vero `no_income`.
 - Ogni holding e' applicabile, inclusi crypto e asset manuali; nessun
   `not_applicable` o whitelist per tipo.
 - Income senza quantita' D-1, replay/split incoerente, FX o WAC mancanti:
@@ -119,7 +121,7 @@ rendimento nel tempo, indipendente dalle fluttuazioni di mercato.
   errore. Percentuali disponibili: due decimali, senza `+`.
 - La policy FX e' quella portfolio corrente, senza cap YOC; provenance e
   tooltip espongono la data effettiva del tasso.
-- La colonna YOC non e' ancora implementata.
+- La colonna YOC e' implementata e condivisa da Dashboard/Broker.
 
 ### Documentazione, tooltip e confronto UI
 - Aggiungere **in inglese**, tramite docs-writer, una pagina nella teoria finanziaria:
@@ -129,12 +131,12 @@ rendimento nel tempo, indipendente dalle fluttuazioni di mercato.
 - Spiegare formula/unita, finestra, fonti, casi del trattino, split/bond/FX e differenze
   rispetto a dividend yield di mercato, cash yield cumulativo e CAGR.
 - Tooltip nell'**header YOC** della tabella, riusando `ColumnDef.headerTooltip`:
-  sintesi formula transaction-ledger/D-1/365 giorni e accesso alla teoria.
-  Testo UI EN/IT/FR/ES.
+  sintesi ultimo anno/PMC e accesso alla teoria. Click/tap apre il Tooltip;
+  doppio click, long press o `Shift+Enter` aprono la guida. Testo UI EN/IT/FR/ES.
 - Microvista ASCII di header/tooltip e righe con percentuale o `-`,
-  **APPROVED 2026-09-10**; l'implementazione UI resta congelata.
-  Dopo: walkthrough su dashboard e broker, visibilita' default/override condiviso, motivi dei trattini,
-  pagina teoria e raccolta feedback operativo.
+  **APPROVED 2026-09-10**; walkthrough Dashboard/Broker desktop/mobile,
+  visibilita' condivisa, tooltip, dark mode e gesture completato e accettato dal
+  developer il 2026-09-11.
 
 ---
 
@@ -322,7 +324,7 @@ Baseline `a9138140`; superfici, dipendenze, rischi e DoD completi in
 |---|---|---|
 | U1 | ✅ Completato da E: stato/generazioni del probe e metadata concorrente. | SP01 |
 | U2 | Scope globale concordato, non solo dashboard; primitive condivise. XL. | SP15 |
-| U3 | ✅ [PLAN/DESIGN + GATE 0 APPROVED/COMPLETE](../19_yieldOnCost/plan-phase00YieldOnCost.prompt.md), non implementato: baseline `b22998f`; M backend + S UI/docs, attende solo autorizzazione esecutiva. | SP06 |
+| U3 | ✅ [IMPLEMENTATO, VERIFICATO E DEVELOPER-ACCEPTED](../19_yieldOnCost/plan-phase00YieldOnCost.prompt.md), checkpoint H `74afcebce`; merge target in corso. | SP06 |
 | U4 | ✅ Completato da E: colonna uploader ordinabile e filtro multi-selezione. | SP02 |
 | U5 | ✅ Completato da E: tooltip breve localizzato. | SP01 |
 | U6 | ✅ Rimozione duplicate-mode e fast-open bulk confermati; form vivo da preservare. | Nessun codice |

@@ -8,7 +8,7 @@ di TODO_FUTURI.md (classificazione con l'utente) + gli 8 P4 ereditati dall'audit
 |------|------|-----------|
 | [00_backlog_strutturale_P4.md](00_backlog_strutturale_P4.md) | Debito strutturale | Gli 8 task P4 dell'audit (scissione asset_source, execute_batch, BRIM helpers, Yahoo, Runes, status matrix, cache store, coda S6) |
 | [01_ux_dashboard.md](01_ux_dashboard.md) | UX & dashboard | Provider probe, global privacy, YOC, uploader filter, currency help, support, onboarding, mobile header |
-| [02_grafici_avanzati.md](02_grafici_avanzati.md) | Grafici | F8 (P&L-only, synthetic candles, income histograms), delivered lot analysis, calendar-day asset return |
+| [02_grafici_avanzati.md](02_grafici_avanzati.md) | Grafici | PLANNED: [piano performance charts](../20_performanceCharts/plan-phase00PerformanceCharts.prompt.md) per F8 P&L/candles/income + calendar return; lot analysis gia consegnata |
 | [03_asset_dati_classificazione.md](03_asset_dati_classificazione.md) | Asset & dati | Settori bond Corporate/Governativi, import CSV distribuzioni geo/settore |
 | [04_brim_import.md](04_brim_import.md) | BRIM & import | eToro fee reconciliation, delivered FIFO v4 cost allocation, asset deletion links |
 | [05_pac_allocation_tool.md](05_pac_allocation_tool.md) | Tool platform | Backend plugins, custom-first UI, PAC/rebalancing, per-currency cash and optional buy/sell/FX |
@@ -26,16 +26,17 @@ than duplicated. Tool schemas live in the catalogue; data copying uses domain AP
 Section 11 maps parallel work; section 12 requires ASCII mockup approval before substantial
 UI changes and an operational developer walkthrough/feedback round afterward.
 
-## Workstream H planning - 2026-09-10
+## Workstream H completion - 2026-09-11
 
-U3 Yield on Cost is ✅ **PLAN/DESIGN APPROVED 2026-09-10, not implemented** in the
-[dedicated H plan and desktop/mobile storyboard](../19_yieldOnCost/plan-phase00YieldOnCost.prompt.md).
-The final contract uses gross asset-linked DIVIDEND/INTEREST transactions,
-broker-scoped D-1 eligibility and residual WAC. Gate 0 is technically COMPLETE
-on baseline `b22998f`, including the shared FX identity's
-`cost_basis_currency` dependency and L1 witnesses. Implementation remains
-frozen pending a new explicit H execution authorization. Shared portfolio
-files are sequenced H first, I20+ afterward.
+U3 Yield on Cost is ✅ **IMPLEMENTED, VERIFIED AND DEVELOPER-ACCEPTED** in
+checkpoint `74afcebce`; the current merge integrates the
+[dedicated H implementation](../19_yieldOnCost/plan-phase00YieldOnCost.prompt.md).
+The final contract uses non-negative gross asset-linked DIVIDEND/INTEREST
+transactions, broker-scoped D-1 eligibility, split/FX provenance and residual
+WAC. Recorded-zero income remains distinct from true `no_income`; negative
+signed income is unsupported. Dashboard/Broker UI, four-language tooltips,
+English docs and shared cache identities are included. I20+ must re-read the
+post-H target before touching shared portfolio files.
 
 ## Selective resumption - 2026-09-08 11:30 CEST
 
@@ -98,6 +99,17 @@ static, unit, API and targeted E2E gates are green on isolated lane `6151` +
 `/tmp/librefolio-r2-b`; the developer still owns the merge commit and final
 UI/viewport review. Runtime ownership follows the current section 14
 integration policy, not the older execution lease.
+
+## Performance charts plan-only checkpoint - 2026-09-10
+
+[SP06 G3/G1c and SP07 G1a/G1b](../20_performanceCharts/plan-phase00PerformanceCharts.prompt.md)
+have a durable final product contract, ASCII v2 storyboards, file ownership and
+dependency-safe XL phase split. The developer authorized **planning only**.
+The post-F technical refresh is recorded at `0af66da5`; I10 signal-only
+calendar-return backend is complete and awaiting integration. H/YOC checkpoint
+`74afcebce` is developer-accepted and enters the target before I20, which must
+re-read the resulting portfolio service/schema/tests. UI G3 and every portfolio
+phase remain unimplemented.
 
 ## Regole della cartella
 

@@ -1741,7 +1741,9 @@
     "Utilities": "Services publics",
     "Other": "Autre",
     "Unknown": "Non classifié",
-    "Liquidity": "Liquidités"
+    "Liquidity": "Liquidités",
+    "CorporateBonds": "Obligations d’entreprise",
+    "GovernmentBonds": "Obligations d’État"
   },
   "settings": {
     "profile": "Profil",
@@ -3199,5 +3201,216 @@
     "clipboardUnavailable": "Impossible de copier dans le presse-papiers. Autorise son accès et réessaie.",
     "copyAndGo": "Copier et ouvrir",
     "navigationFailed": "Texte et lien copiés, mais le réseau social n'a pas pu être ouvert. Autorise les fenêtres pop-up et réessaie."
+  },
+  "tools": {
+    "title": "Outils",
+    "subtitle": "Calculs indépendants. Aucune modification du portefeuille n'est enregistrée.",
+    "open": "Ouvrir l'outil",
+    "contractVersion": "Contrat",
+    "implementationVersion": "Implémentation",
+    "status": {
+      "unavailable": "Indisponible",
+      "available": "Disponible"
+    },
+    "authRequired": "Connectez-vous pour utiliser les outils.",
+    "documentationUnavailable": "Lien vers la documentation indisponible",
+    "catalog": {
+      "emptyTitle": "Aucun outil disponible",
+      "emptyDescription": "Le catalogue n'a renvoyé aucun outil opérationnel. Rechargez après l'installation ou la réparation d'un outil.",
+      "degraded": "Entrées du backend indisponibles : {count}.",
+      "uiUnavailable": "Interfaces indisponibles dans cette build : {count}.",
+      "degradedToast": "Outils chargés avec des entrées ou interfaces indisponibles. Consultez le catalogue pour les détails.",
+      "diagnosticsHint": "Les diagnostics en lecture seule sont disponibles dans Paramètres → À propos → Diagnostics des plugins.",
+      "unavailableEntries": "Entrées du backend indisponibles",
+      "unknownTool": "Outil non identifié"
+    },
+    "availability": {
+      "notInstalled": "Cet outil ne figure pas dans le catalogue actuel du backend.",
+      "backendUnavailable": "Cet outil est indisponible sur le backend. Aucun calcul n'a été lancé.",
+      "incompatible": "Cet outil nécessite une build frontend compatible. Aucun calcul n'a été lancé.",
+      "rendererMissing": "L'outil backend est installé, mais son interface n'est pas incluse dans cette build frontend. Aucun calcul n'a été lancé.",
+      "rendererInvalid": "L'enregistrement de l'interface compilée est invalide ou dupliqué. Aucun calcul n'a été lancé."
+    },
+    "host": {
+      "loadingInterface": "Chargement de l'interface de l'outil…",
+      "reloadTitle": "Recharger l'outil ?",
+      "reloadWarning": "Le rechargement remplace l'interface de l'outil et supprime son brouillon actuel. Continuer ?"
+    },
+    "errors": {
+      "network": "Le service des outils est injoignable. Vérifiez votre connexion et relancez la demande.",
+      "timeout": "Le délai de la demande à l'outil a expiré. Aucun résultat n'a été accepté et aucune nouvelle tentative automatique n'a été effectuée.",
+      "requestRejected": "Le serveur a refusé la demande à l'outil.",
+      "requestInvalid": "La demande à l'outil a échoué à la validation structurelle locale.",
+      "protocol": "La réponse du serveur ne correspond pas au contrat attendu pour l'outil.",
+      "mismatch": "Les métadonnées de l'outil ne correspondent plus à ce frontend. Rechargez explicitement pour obtenir des métadonnées à jour.",
+      "internal": "Une erreur inattendue s'est produite dans l'interface de l'outil.",
+      "componentLoad": "Impossible de charger l'interface de l'outil.",
+      "componentMount": "Impossible d'ouvrir l'interface de l'outil.",
+      "cleanup": "La vue de l'outil a été supprimée, mais la libération de ses ressources a signalé une erreur.",
+      "sessionChanged": "Le compte a changé. Les données précédentes de l'outil ont été effacées.",
+      "stopped": "Attente interrompue. Cela ne confirme pas l'annulation sur le serveur."
+    },
+    "metrics": {
+      "title": "Durées du backend",
+      "description": "Mesurées par le backend, hors temps réseau. Les phases peuvent se chevaucher ; les durées des éléments parallèles ne sont pas additionnées pour obtenir la durée de la demande.",
+      "milliseconds": "{value} ms",
+      "serverProcessing": "Demande · traitement serveur",
+      "itemTotal": "Élément · total",
+      "queueWait": "Attente en file",
+      "startup": "Démarrage du worker",
+      "inputValidation": "Validation des entrées",
+      "compute": "Calcul",
+      "outputValidation": "Validation de la sortie",
+      "serialization": "Sérialisation de la sortie",
+      "execution": "Exécution du worker",
+      "cleanup": "Libération des ressources"
+    },
+    "about": {
+      "readOnly": "Catalogue et diagnostics en lecture seule. Aucun calcul, test actif ni réparation n'est lancé.",
+      "inactive": "Ouvrez Diagnostics des plugins pour charger les métadonnées des outils.",
+      "interfaceRegistered": "Interface compatible enregistrée dans cette build."
+    },
+    "diagnostics": {
+      "title": "Diagnostics des outils",
+      "scopeDescription": "Cet instantané décrit un seul processus API ayant répondu, pas l'instance entière. Le catalogue et les diagnostics proviennent de lectures distinctes. Rechargez pour actualiser l'instantané.",
+      "scope": "Portée de l'instantané",
+      "runtime": "Identifiant du processus API",
+      "degraded": "Des échecs de découverte ou une capacité d'exécution réduite ont été signalés. D'autres outils peuvent rester disponibles.",
+      "pool": {
+        "title": "Instantané du pool d'exécution",
+        "availability": "Disponibilité du pool d'exécution",
+        "active": "Tâches actives",
+        "queued": "Tâches en file",
+        "pending": "Tâches en attente",
+        "degradedLanes": "Emplacements dégradés",
+        "completed": "Tâches terminées",
+        "failed": "Tâches en échec"
+      },
+      "loaded": "Outils chargés dans ce processus API",
+      "noLoaded": "Aucun outil n'est chargé dans ce processus API.",
+      "failures": "Échecs de découverte",
+      "noFailures": "Aucun échec de découverte n'a été signalé dans cet instantané.",
+      "notLoaded": "Aucun instantané de diagnostic n'est chargé. Rechargez pour en demander un.",
+      "policy": {
+        "title": "Limites effectives de la plateforme",
+        "description": "Limites de configuration, pas des durées mesurées ni des garanties de performance. Les opérations des outils peuvent déclarer des limites plus strictes. Les durées ne sont pas additionnées.",
+        "workers": "Emplacements worker",
+        "maxBatchItems": "Nombre maximal d'éléments par lot",
+        "maxPendingItems": "Nombre maximal de tâches en attente",
+        "maxPendingPerPrincipal": "Nombre maximal de tâches en attente par compte",
+        "maxBatchesPerPrincipal": "Nombre maximal de lots simultanés par compte",
+        "maxJsonDepth": "Profondeur JSON maximale",
+        "maxRequestBytes": "Taille maximale de la demande",
+        "maxParameterBytes": "Taille maximale des paramètres par élément",
+        "maxResultBytes": "Taille maximale du résultat par élément",
+        "maxResponseBytes": "Taille maximale de la réponse",
+        "envelopeReserveBytes": "Réserve de taille pour l'enveloppe",
+        "queueTimeout": "Délai maximal en file",
+        "jobTimeout": "Délai maximal strict de la tâche",
+        "softTimeout": "Délai coopératif de la tâche",
+        "outputReserve": "Réserve de temps pour la sortie",
+        "cleanupTimeout": "Délai maximal de libération des ressources",
+        "ingressTimeout": "Délai maximal d'entrée de la demande",
+        "responseReserve": "Réserve de temps pour la réponse",
+        "requestTimeout": "Délai maximal de la demande côté serveur",
+        "clientTimeout": "Délai maximal du client des outils"
+      },
+      "reason": {
+        "import_failed": "Échec de l'import du plugin",
+        "invalid_plugin": "Définition du plugin invalide",
+        "invalid_code": "Code d'outil invalide",
+        "duplicate_code": "Code d'outil dupliqué ; enregistrements mis en quarantaine",
+        "invalid_descriptor": "Descripteur d'outil invalide",
+        "invalid_input_model": "Modèle d'entrée invalide",
+        "invalid_output_model": "Modèle de sortie invalide",
+        "invalid_schema": "Le schéma ne peut pas être publié",
+        "invalid_operation_policy": "Politique d'opération invalide"
+      }
+    },
+    "pacAllocator": {
+      "name": "Allocateur PAC",
+      "description": "Analyse l'état initial exact de l'allocation.",
+      "pilotNotice": "Analyse manuelle de l'état initial uniquement. Aucune donnée du portefeuille n'est lue, aucun ordre n'est proposé et rien n'est enregistré.",
+      "scenario": "Scénario",
+      "reportCurrency": "Devise de reporting",
+      "asOfDate": "Date de référence (facultative)",
+      "rows": {
+        "title": "Actifs et contextes de garde",
+        "description": "Chaque ligne représente un actif dans un contexte. Utilisez l'action dédiée pour conserver l'identité de l'instrument entre les contextes.",
+        "addAsset": "Nouvel actif local",
+        "empty": "Ajoutez au moins une ligne. Jusque-là, le backend signalera les lignes manquantes.",
+        "rowNumber": "Ligne {number}",
+        "identity": "Identité locale de l'instrument",
+        "sameAsset": "Même actif, autre contexte",
+        "initialQuantity": "Quantité initiale",
+        "price": "Prix natif",
+        "quoteBasis": "Quantité de base de la cotation",
+        "target": "Cible (%)",
+        "gridMode": "Grille d'achat",
+        "whole": "Quantités entières",
+        "fractional": "Quantités fractionnaires",
+        "quantityStep": "Pas de quantité d'achat",
+        "quoteDate": "Date de la cotation (facultative)"
+      },
+      "cash": {
+        "existing": "Liquidités existantes",
+        "notSupplied": "Non renseigné",
+        "noneExisting": "Aucune liquidité existante, explicitement",
+        "amount": "Montant",
+        "addCurrency": "Ajouter une devise",
+        "markNoneExisting": "Aucune liquidité existante",
+        "markNotSupplied": "Marquer comme non renseigné",
+        "contributions": "Nouveaux versements",
+        "noneContributions": "Aucun nouveau versement, explicitement",
+        "markNoneContributions": "Aucun nouveau versement"
+      },
+      "rates": {
+        "title": "Taux de change de valorisation",
+        "description": "Valeur de reporting d'une unité de devise native. Ces taux ne convertissent ni ne déplacent les liquidités.",
+        "add": "Ajouter un taux",
+        "value": "Taux vers la devise de reporting",
+        "date": "Date du taux (facultative)"
+      },
+      "revision": "Révision du brouillon",
+      "noOrders": "Les ordres, la faisabilité et l'optimisation ne sont pas inclus dans ce pilote.",
+      "stopWaiting": "Arrêter l'attente",
+      "analyzing": "Analyse de la révision {revision}…",
+      "analyze": "Vérifier l'état initial",
+      "stale": {
+        "pending": "La requête de la révision {requestRevision} est toujours en cours, mais le brouillon est maintenant à la révision {draftRevision}. Sa réponse sera ignorée.",
+        "ignored": "La réponse de la révision {revision} a été ignorée car le brouillon ou le compte a changé.",
+        "result": "Ce résultat appartient à une ancienne révision du brouillon."
+      },
+      "draftPreserved": "Votre brouillon a été conservé.",
+      "platformErrorTitle": "Analyse non terminée",
+      "platformError": "Le backend n'a pas pu terminer cette analyse. Votre brouillon a été conservé.",
+      "state": {
+        "ready": "Prêt · l'état initial est évaluable",
+        "needsInput": "Données requises",
+        "invalid": "Scénario non valide",
+        "unsupported": "Hors du domaine P1"
+      },
+      "resultMeaning": "Il s'agit d'une analyse de l'état initial. Elle ne certifie ni la faisabilité des ordres, ni l'atteinte de la cible, ni l'optimalité.",
+      "exactView": "Exacte",
+      "formattedView": "Formatée",
+      "totals": {
+        "invested": "Valeur initialement investie",
+        "existingCash": "Liquidités existantes",
+        "contributions": "Nouveaux versements",
+        "combinedCash": "Liquidités plus versements",
+        "maxGap": "Écart absolu maximal (pp)",
+        "squaredGap": "Écart quadratique (pp²)"
+      },
+      "result": {
+        "row": "Ligne",
+        "value": "Valeur de reporting",
+        "weight": "Pondération actuelle",
+        "target": "Cible",
+        "gap": "Écart (pp)"
+      },
+      "cashPools": "Réserves de liquidités natives",
+      "issues": "Constats du backend",
+      "normalizedInput": "Entrée normalisée et unités"
+    }
   }
 }
