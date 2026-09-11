@@ -19,6 +19,7 @@
   <a href="CHANGELOG.md"><img src="https://img.shields.io/github/v/release/Librefolio/LibreFolio?label=changelog&color=blue" alt="Changelog"></a>
   <a href="https://github.com/orgs/Librefolio/packages/container/package/librefolio"><img src="https://img.shields.io/badge/container-ghcr.io-blue?logo=github" alt="Docker Registry"></a>
   <a href="https://github.com/Librefolio/LibreFolio/stargazers"><img src="https://img.shields.io/github/stars/Librefolio/LibreFolio.svg" alt="GitHub stars"></a>
+  <a href="https://github.com/Librefolio/LibreFolio/pkgs/container/librefolio"><img src="https://ghcr-badge.elias.eu.org/shield/Librefolio/LibreFolio/librefolio" alt="GHCR downloads"></a>
 </p>
 
 ---
@@ -33,26 +34,16 @@ Your data stays on your server. No third-party cloud. No tracking.
 
 ---
 
-## 📈 Project Growth
-
-<p align="center">
-  <a href="https://github.com/Librefolio/LibreFolio/pkgs/container/librefolio">
-    <img src="https://ghcr-badge.elias.eu.org/shield/Librefolio/LibreFolio/librefolio" alt="GHCR downloads">
-  </a>
-</p>
+## Star History
 
 <p align="center">
   <a href="https://www.star-history.com/?repos=librefolio%2Flibrefolio&type=date&legend=top-left">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=librefolio/librefolio&type=date&theme=dark&legend=top-left">
-      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=librefolio/librefolio&type=date&legend=top-left">
-      <img src="https://api.star-history.com/chart?repos=librefolio/librefolio&type=date&legend=top-left" alt="LibreFolio GitHub star history" width="100%">
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=librefolio/librefolio&type=date&theme=dark&legend=top-left" />
+      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=librefolio/librefolio&type=date&legend=top-left" />
+      <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=librefolio/librefolio&type=date&legend=top-left" />
     </picture>
   </a>
-</p>
-
-<p align="center">
-  <sub>The GHCR badge shows total downloads. Click it for GitHub's native 30-day download chart.</sub>
 </p>
 
 ---
