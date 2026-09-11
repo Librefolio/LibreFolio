@@ -6,7 +6,8 @@
 > **Analisi e decisioni 2026-09-07**: lo scope è stato ampliato durante la pianificazione.
 > La stima M–L del solo PAC euro buy-only non descrive più la richiesta completa.
 > Fonte operativa: [06_piano_sprint.md](06_piano_sprint.md), T0/T1/T2 e SP12–14.
-> La base C e' ora implementata e validata; il pilot PAC reale resta nel branch D.
+> La piattaforma C e il pilot PAC P1 sono integrati. Il redesign Round 2 completo
+> resta attivo sul branch D; il solo `monetary_step` non ne costituisce la chiusura.
 >
 > **Piano C attivo:** [Piattaforma Tool atomica](../16_toolPlatform/plan-phase00ToolPlatform.prompt.md)
 > — base generica completa; [handoff PAC D](../16_toolPlatform/handoff-pac-D.md)
@@ -194,11 +195,17 @@ dal modello numerico e dagli adapter di copia autorizzati.
 
 | ID | Esito e taglia | Sprint |
 |---|---|---|
-| T0 | Piattaforma nuova, L; custom-first e schemi completi approvati. | SP12 |
-| T1 — specifica/evaluator | Modello ampliato da formalizzare, casse per valuta e FX opzionale. | SP13 |
-| T2 — snapshot | Copie esplicite, aggregazione/ownership/prezzi da rendere coerenti. | SP13 |
-| T1 — solver | Nuovo, XL con buy/sell/FX e stati di ottimalità verificabili. | SP14 |
-| T2 — editor/report | UI custom e grafici nuovi, L; dipendono dal contratto completo. | SP14 |
+| T0 | ✅ Piattaforma Tool custom-first integrata (`570beb386`). | SP12 |
+| T1 — specifica/evaluator | 🟡 P1 integrato; Phase A numerica e contratto Round 2 preservati su D, integrazione/finalizzazione pendenti. | SP13 |
+| T2 — snapshot | 🟡 Allocation source OWNER iniziale presente su D; catalogo completo, cash broker, privacy e fatti locked ancora in implementazione. | SP13 |
+| T1 — solver | Aperto: solver buy/sell/FX e prova di ottimalità non iniziati. | SP14 |
+| T2 — editor/report | 🟡 P1 integrato; redesign Round 2 completo riaperto dopo review respinta. Grafici/solver output restano aperti. | SP14 |
+
+> **Aggiornamento 2026-09-11:** il primo server di review Round 2 mostrava solo
+> il controllo contributi `monetary_step`; la review è stata respinta perché non
+> rappresentava il redesign approvato. D sta eseguendo l'intera matrice gap
+> (cash broker, funding-first, catalogo Owned/Other/Observed, fatti importati
+> locked, editor current/target, quote base e polish) prima di una nuova review.
 
 DoD, esempi numerici, superfici file:riga, rischi e oracoli indipendenti sono nel
 [piano sprint](06_piano_sprint.md). Nessun server MCP o cambiamento dei motori FIFO/WAC
