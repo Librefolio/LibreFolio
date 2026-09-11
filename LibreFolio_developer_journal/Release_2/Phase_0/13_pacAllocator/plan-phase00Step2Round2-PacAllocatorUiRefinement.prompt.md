@@ -1,7 +1,8 @@
 # PAC allocator UI refinement - Round 2
 
-**Stato:** approvato dal developer; Phase A numerica in corso, resto congelato
-in attesa dell'integrazione H.
+**Stato:** approvato dal developer; Phase A numerica committata a `a6960ef04`;
+slice indipendente Asset global completata, resto congelato in attesa
+dell'integrazione H.
 
 ← Piano precedente: [PAC allocator P1](plan-phase00PacAllocator.prompt.md)
 
@@ -460,8 +461,33 @@ Pannello:
 5. [ ] Implementare controlli/layout PAC.
 6. [ ] Implementare funding-first e gallery catalogo.
 7. [ ] Separare card importate/manuali e azioni responsive.
-8. [ ] Correggere Asset global lifecycle/ordine/sfondo.
+8. [x] 2026-09-11 - Correggere Asset global lifecycle/ordine/sfondo.
+   > **Nota implementazione 2026-09-11**: estratta una regola lifecycle unica:
+   > Attivi+Inattivi e nessuno selezionato mantengono l'unione, mentre le
+   > selezioni singole filtrano il rispettivo stato. Ogni pannello
+   > Posseduti/Altri utenti/Osservati conserva l'ordine ricevuto dentro il
+   > gruppo ma sposta stabilmente gli inattivi in fondo. Card e righe inattive
+   > espongono stato semantico e superficie ambra light/dark; dot, focus e
+   > selezione restano distinguibili.
+   > **Evidenza**:
+   > `npx prettier --check` sui sei file della slice -> verde;
+   > `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py
+   > test --test-port 6153 --data-dir /tmp/librefolio-r2-d front-utility
+   > component-unit 'asset lifecycle'` -> 7 passed;
+   > `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py
+   > front check` -> verde;
+   > stesso prefisso lane con `front-asset asset-list` e i due selettori
+   > lifecycle mirati -> 2 passed desktop; `git diff --check` verde e porta
+   > 6153 libera dopo il teardown del runner.
+   > **Fuori pista**: il primo check Prettier ha segnalato soltanto
+   > `AssetCard.svelte`; applicato Prettier al file e ripetuto il check con
+   > esito verde. Il graph cache wiki era assente nel worktree, quindi sono
+   > state lette le pagine committate `F-032` e `dual-view-pattern`.
 9. [ ] Aggiungere test tramite `test-author`.
+   > **Nota implementazione parziale 2026-09-11**: `test-author` ha aggiunto
+   > regressioni component/unit ed E2E deterministiche per truth table,
+   > ordinamento per ogni pannello e marker visuali card/riga. Il passo resta
+   > aperto per i test delle slice Portfolio/PAC ancora congelate.
 10. [ ] Aggiornare i18n, docs EN tramite `docs-writer`, CHANGELOG.
 11. [ ] Gate combinati e nuova review manuale desktop/mobile su lane 6153.
 
