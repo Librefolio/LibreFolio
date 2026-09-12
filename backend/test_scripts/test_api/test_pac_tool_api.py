@@ -30,7 +30,7 @@ API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30.0
 PASSWORD = "PacToolApiTestPass123!"
 
-PAC_SCHEMA_FINGERPRINT = "9741509a39b3fecf736091d1687b0663d325687d23b39a1f0a36a77593c291b4"
+PAC_SCHEMA_FINGERPRINT = "884ce254bdbed56f947ed3776625054ddf9504468e699bb776292dc6e644c89f"
 ITEM_METRIC_FIELDS = {
     "queue_wait_ms",
     "startup_ms",
@@ -135,7 +135,7 @@ def _parameters(*, first_price: str = "25") -> dict[str, object]:
             },
         ],
         "cash_balances": [{"currency": "EUR", "amount": "10"}],
-        "contributions": [{"currency": "EUR", "amount": "5"}],
+        "contributions": [{"currency": "EUR", "amount": "5", "monetary_step": "0.01"}],
         "valuation_rates": [],
     }
 
@@ -372,7 +372,7 @@ async def test_pac_tool_catalog_and_cross_process_compute(test_server):
     assert normalized_rows["pilot-equity"]["initial_quantity"] == "2"
     assert normalized_rows["pilot-equity"]["quote"]["raw_price"] == "25"
     assert normalized["cash_balances"] == [{"currency": "EUR", "amount": "10"}]
-    assert normalized["contributions"] == [{"currency": "EUR", "amount": "5"}]
+    assert normalized["contributions"] == [{"currency": "EUR", "amount": "5", "monetary_step": "0.01"}]
 
     invalid_model = PAC_ANALYZE_OUTPUT_ADAPTER.validate_python(invalid_result.result)
     assert isinstance(invalid_model, PacAnalyzeInvalid)

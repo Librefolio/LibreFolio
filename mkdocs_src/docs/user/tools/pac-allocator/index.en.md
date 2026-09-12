@@ -1,14 +1,14 @@
 ---
 title: PAC allocator
-description: Build a periodic-investment scenario from your own assets, manual rows, or both, and inspect its exact initial allocation state.
+description: Build a periodic-investment scenario from catalog Assets, OWNER custody and cash facts, or manual inputs, then inspect its exact initial allocation state.
 ---
 
 # 🧮 PAC allocator
 
 The **PAC allocator** is the implemented P1 pilot for a periodic investment
-plan. Build one scenario — from your own owned assets, from manual rows, or a
-mix of both — and LibreFolio evaluates its initial holdings, cash, target
-weights, and allocation gaps.
+plan. Build one scenario from LibreFolio's Asset catalog, your OWNER custody
+and broker-cash facts, manual inputs, or a mix. LibreFolio then evaluates its
+initial holdings, cash, target weights, and allocation gaps.
 
 !!! warning "Initial-state analysis only"
 
@@ -27,44 +27,61 @@ A freshly opened draft starts with:
 - **Reporting currency** set to your account's base currency;
 - **As-of date** set to today's date, in your device's local time zone —
   never inferred later or silently advanced;
-- **zero rows** — nothing is pre-selected from your portfolio until you
-  choose it.
+- **Existing cash** and **New contributions** both set to **Not supplied**;
+- **zero Asset rows** — nothing is selected until you choose a catalog card
+  or add a manual Asset.
 
-## 🗂️ Your assets
+## 🗂️ Asset catalog and source scopes
 
-The **Your assets** gallery lists each non-zero position held through a broker
-where your access role is **OWNER**, read from your authenticated Portfolio
-for the selected as-of date. It never writes anything back and never calls a
-price, FX, or other data provider itself.
+The Asset gallery is a read-only source assembled from the backend-owned
+global catalog for your authenticated account and selected as-of date. It is
+**not limited to your current holdings**: it contains every active Asset, plus
+an inactive Asset when you still have non-zero custody through an OWNER
+Broker.
 
-- Assets are grouped **canonically**: one card per underlying instrument,
-  even if you hold it through several brokers.
-- Selecting a card copies **every non-zero OWNER custody context** for that
-  asset into the draft at once — one row per broker context — subject to the
-  32-row cap below. Selecting it again deselects it and removes all of those
-  rows instead of adding duplicates.
-- A non-zero custody context with a **0% OWNER share** still appears and is
-  still copyable. The copied quantity is always the **full custody quantity**
-  held under that broker — it is never scaled down to your personal share.
-  The ownership share is shown only as descriptive metadata next to the row.
-- The card's price is the **latest saved native quote at or before the
-  as-of date**. If no saved price exists on or before that date, the price
-  is retained as missing (a "Price missing" badge) — it is never assumed to
-  be zero or fetched live.
-- Each copied row keeps its source metadata: the broker name, the portfolio
-  snapshot date, and the quote's reference date and source plugin, when
-  known. **Modified** and **Outdated** badges distinguish local edits from
-  source facts that have changed.
-- Use the search box to filter cards by asset name, ticker, asset type, or
-  broker name. **Refresh** reloads the gallery for the current as-of date;
-  **New manual asset** adds a blank manual row without using the gallery.
+The three filters classify recorded use:
+
+| Scope | Meaning |
+|---|---|
+| **Owned** | The Asset has recorded transaction use in at least one of your positive-share OWNER Brokers. This filter is on by default. |
+| **Other users** | The Asset has recorded transaction use, but none in one of your positive-share OWNER Brokers. Only this scope classification is exposed — not another user's identity, Broker, transactions, quantity, or cash. |
+| **Observed** | The Asset exists in the catalog but has no recorded transaction use. |
+
+These are usage scopes, not promises about today's quantity. Toggle any
+combination of scopes to broaden or narrow the gallery. Active cards appear
+before inactive cards; an inactive card is included only while a current
+OWNER custody context requires it. The counts beside the filters count Asset
+cards, not transactions or users.
+
+- Assets are grouped **canonically**: one card per Asset, even when you hold
+  it through several Brokers.
+- When a card has current custody, selecting it copies **every non-zero OWNER
+  custody context** at once — one row per Broker context — subject to the
+  32-row cap. A 0% OWNER economic share does not hide that context: the
+  imported quantity is always the **full custody quantity**, while the share
+  remains informational metadata.
+- When a card has no current custody contexts, selecting it creates one
+  zero-position catalog row with no invented Broker. Selecting **Other users**
+  never copies another user's holdings.
+- The quote is the **latest saved native quote at or before the as-of date**.
+  A missing saved quote stays missing and is never treated as zero or fetched
+  live.
+- Imported rows show their available Broker, snapshot, quote-date, and source
+  metadata. **Modified** marks changed target/grid inputs; **Outdated** marks
+  a source snapshot that no longer matches the current source.
+- Search matches the Asset name. **Refresh** reloads source facts for the
+  current as-of date; **New manual asset** bypasses the source entirely.
 
 ## ✍️ Add and edit rows
 
-Besides picking assets from the gallery, use **New manual asset** to add a
-blank row and fill it in yourself. Every row — copied or manual — uses the
-same editable fields and LibreFolio's native searchable currency selector,
-calendar date picker, and standard dropdown controls.
+Use **New manual asset** to add a blank, source-free row. Its visible scenario
+facts are editable. A row imported from the catalog is deliberately split:
+its source identity, name, opening custody, and saved quote facts are locked,
+while its **Target** and **Purchase grid** remain editable.
+
+Canonical Asset, instrument, context, and row identifiers stay hidden in the
+interface. They keep Broker contexts distinct behind the scenes; equal display
+names do not merge rows or establish identity.
 
 Numeric controls preserve values as **exact decimal strings**, rather than
 converting them through browser floating-point numbers. You can type either
@@ -75,14 +92,18 @@ blank is missing input, while `0` is a known exact zero.
 
 | Field | Unit and meaning |
 |---|---|
-| **Instrument ID** / **Name** | Identity and display label. Copied rows prefill both; equal labels never join rows or establish identity by themselves. |
-| **Custody context** | The row's opaque identity key. Two contexts for the same instrument remain two rows with separate targets and results. |
-| **Initial quantity** | Exact custody quantity. For a copied row, this is the full custody quantity, not your personal share. Short inventory is outside P1. |
-| **Currency** / **Native price** | The row's native quote currency and positive price for the selected quote base quantity. |
-| **Quote base quantity** | Either `1` or `100`. Holding value is `initial quantity × native price ÷ quote base quantity`. |
-| **Quote date** | Optional observation date for the native price. A cleared or omitted date is reported rather than silently replaced with today. |
+| **Name** | Editable display label on a manual row; locked to the catalog name on an imported row. Names are not identity keys. |
+| **Initial quantity** | Exact opening quantity. An imported custody row uses the full Broker custody quantity, not your economic share; a zero-position catalog row starts at `0`. Short inventory is outside P1. |
+| **Currency** / **Native price** | The native quote currency and positive saved or manual price. Imported values are locked; manual values are editable. |
+| **Quote base quantity** | Any positive integer number of units represented by the native price. Holding value is `initial quantity × native price ÷ quote base quantity`. |
+| **Quote date** | Optional observation date for the native price. A missing date is reported rather than silently replaced with today. |
 | **Target (%)** | Percentage from `0` to `100` for that row. All row targets must total exactly `100`. |
-| **Purchase grid** | Choose **Whole quantities** or **Fractional quantities**, then a positive quantity step (an integer for whole quantities). This governs only possible new purchases, never opening inventory. |
+| **Purchase grid** | Choose **Whole quantities** or **Fractional quantities**, then a positive quantity step. Whole mode requires an integer step. This governs only possible new purchases, never opening inventory. |
+
+If an imported row has a missing quote, or you need to replace another locked
+source fact for the scenario, choose **Duplicate** to create an independent
+manual copy, edit that copy, and remove the source-linked row if it is no
+longer wanted.
 
 ### ➕ Add, duplicate, remove, and clear
 
@@ -90,17 +111,17 @@ blank is missing input, while `0` is a known exact zero.
   Gallery selection is deduplicated by canonical asset: while any linked row
   remains, selecting its card again means **deselect**, not "add another
   copy." Use **Duplicate** when you intentionally need another row.
-- **Duplicate** clones every editable payload field — instrument identity,
-  name, custody quantity, native quote, target, and purchase grid — but gives
-  the copy a fresh row key. A duplicate of a copied row keeps that row's
-  source link, so it still participates in staleness tracking and
-  copied-facts refresh.
+- **Duplicate** copies the scenario values into a row with a fresh row key,
+  retains the hidden instrument key, removes the portfolio/catalog source
+  link, and makes the visible source facts editable. This independent manual
+  copy does not participate in copied-facts refresh or keep its source card
+  selected.
 - **Remove** deletes a single row immediately, unless that row was copied
-  from your assets **and** you have edited any of its fields — in that case,
+  from the catalog **and** you have edited any of its fields — in that case,
   a confirmation dialog identifies the affected row before removing it.
-- Deselecting an asset card removes **every** row copied from it, including
-  any duplicates of those rows. If any of them were edited, a confirmation
-  dialog lists the edited rows first.
+- Deselecting an Asset card removes every row still linked to that card.
+  Independent manual duplicates remain. If a linked row was edited, a
+  confirmation dialog lists it first.
 - Clearing an optional quote/rate date or an exact decimal field leaves it
   missing; it does not turn it into today or zero. There is no separate
   "clear draft" action. To start over, use **Refresh** in the open tool's
@@ -110,25 +131,36 @@ blank is missing input, while `0` is a known exact zero.
   gallery is **all-or-nothing**: if its custody contexts would not all fit
   under the 32-row cap, nothing is copied and a warning explains why.
 
-## 💶 Cash and contributions
+## 💶 Funding first: cash and contributions
 
-Enter existing cash as one amount per currency. Enter new contributions in
-the separate contribution list, also one amount per currency. The analyzer
-reports both vectors separately and combines them only in the dedicated
-cash total.
+Available funds appear before Asset selection. Existing cash and new
+contributions are separate vectors: the analyzer reports them separately and
+combines them only in the dedicated **Cash + contributions** total.
 
-Each section has three distinct modes:
+Existing cash has four modes:
 
-| Choice | Request meaning |
+| Cash mode | Request meaning |
 |---|---|
-| **Not supplied** | Sends `null`: the vector is unknown, not zero, and is reported as missing (`needs_input` when it is the only blocking condition). |
-| **Explicitly no existing cash / new contributions** | Sends an empty vector (`[]`): the known amount is zero. |
-| **Enter amounts** | Sends the entered currency/amount rows. |
+| **Not supplied** | Sends `null`: existing cash is unknown, not zero, and can produce `needs_input`. |
+| **No existing cash** | Sends an empty vector (`[]`): existing cash is known to be zero. |
+| **From brokers** | Select OWNER Brokers. The backend calculates their full-custody native balances at the as-of date and returns the selected total per currency; no selection produces a known empty vector. |
+| **Manual** | Sends the entered currency/amount rows. |
 
-Switching away from **Enter amounts** keeps those draft rows available if you
-switch back, but inactive rows are not sent. Duplicate currencies are invalid.
-Contributions must be non-negative; an opening cash debt is outside the P1
-domain.
+In **From brokers**, ownership share is informational: balances are not
+share-scaled. The selected aggregate is calculated by the backend and copied
+unchanged into the PAC request. The frontend performs no Broker-balance sum
+and no currency conversion. If no OWNER Broker is available, or the source
+read fails, switch to **Manual** and enter the scenario cash directly.
+
+Contributions use their own three modes: **Not supplied** (`null`), **No new
+contributions** (`[]`), and **Enter amounts**. Every entered contribution has
+a currency, a non-negative amount, and a separate positive **Monetary step**;
+the amount must be an exact multiple of that step. Existing cash has no
+`monetary_step` field.
+
+Switching modes keeps draft rows available if you switch back, but inactive
+rows are not sent. Duplicate currencies are invalid, and opening cash debt is
+outside P1.
 
 ## 💱 Valuation rates
 
@@ -140,56 +172,90 @@ cash balance, or contribution:
 For example, `USD` with a rate of `0.9` in an `EUR` report means
 `1 USD = 0.9 EUR`. The report currency has an identity rate of `1`.
 
+For row \(i\), let \(q_i\) be its opening quantity, \(p_i\) its native price,
+\(b_i\) its positive-integer quote base, \(c_i\) its native currency, \(R\)
+the report currency, and \(r_{c_i\to R}\) the explicit valuation rate:
+
+$$
+V_{i,R} =
+\begin{cases}
+\dfrac{q_i p_i}{b_i}, & c_i = R \\
+\dfrac{q_i p_i}{b_i}\,r_{c_i\to R}, & c_i \ne R
+\end{cases}
+$$
+
+Cash and contribution amounts use the same conditional rule: keep the native
+amount when its currency is \(R\); otherwise multiply it by the supplied
+`rate_to_report`.
+
 Each rate can have an optional observation date. Foreign currencies produce a
 hint, but rates are never fetched or filled automatically: enable manual rates
-and add each one explicitly. These rates value native amounts for the report;
-they do not exchange, transfer, merge, or otherwise move cash between currency
-pools — there is no automatic FX funding.
+and add each one explicitly. These rates value native amounts for the report.
+Native cash pools stay separate by currency: the tool does not exchange,
+transfer, merge, spend, or execute them, and it provides no automatic FX
+funding.
 
 ## 🔄 Keeping copied facts current
 
-Changing the **as-of date** re-fetches the gallery for that date and marks any
-copied row whose source no longer matches as referring to another snapshot.
-Refreshing the gallery can also discover changed facts for the same date.
-Neither action overwrites the draft: source facts are copied only when you
-select an asset, reselect it after removal, or choose **Refresh copied facts**.
+Changing the **as-of date** re-fetches source facts for that date and marks
+linked rows and Broker-copied cash stale. Refreshing can also discover changed
+facts for the same date. Neither action silently overwrites selected Asset
+rows: source facts are copied when you select an Asset, reselect it after
+removal, or choose **Refresh copied facts**.
 
 When copied rows are outdated, a **Refresh copied facts** action appears.
-It replaces only the copied identity, custody, and quote fields with the
-fresh snapshot; your **target percentage and purchase grid are always
-preserved**. If you had edited one of those copied fields yourself, refresh
-asks you to confirm overwriting your edits first, listing every affected
-row and field. If a custody context no longer exists in the refreshed source,
-its editable row is retained and stays marked **Outdated**. Selecting or
-reselecting an asset from the gallery always uses the current snapshot.
+It replaces only the locked identity, custody, and quote facts with the fresh
+snapshot; your **target percentage and purchase grid are always preserved**.
+If a custody context no longer exists, its row is retained and stays marked
+**Outdated**. Selecting or reselecting an Asset always uses the accepted
+current snapshot.
+
+Broker-copied cash has a stricter guard: while its source is loading, failed,
+or stale for the current date/selection, **Check initial state** is disabled
+and the previous aggregate is not submitted. Retry the source read or switch
+to **Manual**.
+
+Source requests are tied to their date, Broker selection, request sequence,
+and signed-in account generation. Late or superseded responses are ignored;
+an account change stops the old account's request.
 
 ## ▶️ Run and revise
 
-1. Open **Tools**, then choose **PAC allocator**.
-2. Pick assets from **Your assets**, add manual rows, or both, then fill in
-   any remaining fields, including explicit empty cash or contribution
-   vectors where appropriate.
-3. Select **Check initial state**.
-4. Review the domain state, backend findings, totals, row facts, and native
-   cash pools.
-5. After editing the draft, run the analysis again for the new revision.
+1. Open **Tools**, choose **PAC allocator**, then confirm the reporting
+   currency and as-of date.
+2. Define existing cash first: leave it unknown, declare none, copy selected
+   OWNER Brokers, or enter it manually. Define new contributions separately,
+   including each contribution's monetary step.
+3. Select catalog Assets from the needed usage scopes, add manual rows, or
+   use both. Set every row's target and purchase grid.
+4. Add an explicit valuation rate for every non-report currency.
+5. Select **Check initial state**.
+6. Review the domain state, findings, four totals, row values and gaps, and
+   native cash pools. After any edit, run the analysis again.
 
-The result contains facts about the supplied initial state only. The pilot
-performs no database writes, creates no transactions or orders, has no
-broker routing, and runs no solver or optimization. Trade feasibility is
-explicitly **not evaluated**.
+The result contains facts about the supplied initial state only. The browser
+prepares the draft and presents the response. The backend performs the
+normalize → evaluate → report pipeline: validation, valuation, weights, gaps,
+totals, findings, and normalized values. It also owns the selected Broker-cash
+aggregate; the browser does not recompute it.
 
-The browser prepares and submits the exact draft. Validation, valuation,
-weights, gaps, totals, findings, and normalized values are calculated by the
-backend.
+Read the totals separately. **Initial invested** is the sum of reporting-value
+Asset rows and is the only denominator for current weights and target gaps.
+**Existing cash**, **Contributions**, and **Cash + contributions** are reported
+beside it but do not enter that denominator. Adding cash or a contribution
+therefore does not change P1 Asset weights or allocate that money.
 
 ## 🚫 Outside P1
 
-The current pilot has no optimization or historical optimizer, trade proposal,
-purchase or sale plan, order execution, or broker routing. It does not support
-short inventory, leverage/opening debt, or automatic FX funding. The purchase
-grid is an input fact for possible future purchase logic; P1 does not use it to
-recommend a quantity.
+P1 only normalizes, evaluates, and reports the initial state. Its output says
+`optimization = "not_run"` and `trade_feasibility = "not_evaluated"`.
+
+The pilot has no solver, order or recommendation generation, purchase or sale
+plan, order execution, Broker routing, or implicit FX. It does not support
+short inventory, leverage/opening debt, or automatic funding transfers. It
+does not invoke or change FIFO, WAC, tax, or Riskfolio analytics. Quantity and
+monetary steps are validated input facts — including contribution-step
+alignment — but P1 does not use them to recommend an amount or quantity.
 
 ## 🧭 Understand the result states
 
@@ -201,7 +267,7 @@ four PAC domain states are:
 | `ready` | The initial state is evaluable within P1. Informational findings can still be present, and the current allocation does not have to match its targets. |
 | `needs_input` | Required information is missing or incomplete, such as an unsupplied cash vector or a valuation rate for a foreign currency. |
 | `invalid` | Supplied data is malformed or inconsistent, such as scientific decimal notation, duplicate currencies, an observation after the as-of date, or targets that do not total `100`. |
-| `unsupported` | The input is understood but outside the P1 domain, such as quote base `3`, short inventory, opening cash debt, or a value beyond the supported numeric or currency bounds. |
+| `unsupported` | The input is understood but outside the P1 domain, such as short inventory, opening cash debt, or a value beyond the supported numeric or currency bounds. |
 
 Backend findings point to the affected field. Correct the draft and submit a
 new revision; a non-ready state is still a valid analysis response, not a
@@ -214,9 +280,12 @@ timeout is **not** evidence that the scenario is infeasible. The interface
 preserves the draft so you can review it or try again.
 
 If you edit the draft while a request is running, that response is ignored
-because it belongs to an older revision. A displayed result also becomes
-marked as stale after a later edit. Re-run the analyzer rather than
-treating a stale result as the answer to the current draft.
+because it belongs to an older revision. The same protection rejects a
+response after the Tool descriptor becomes incompatible or the signed-in
+account changes; sign-out or account switching also stops account-bound
+requests. A displayed result becomes marked as stale after a later edit.
+Re-run the analyzer rather than treating a stale result as the answer to the
+current draft.
 
 An invested value of exactly zero is a valid known total. However, weights,
 deviations, and gap scores have no non-zero denominator, so they remain
@@ -224,18 +293,15 @@ unavailable. This does not mean "no trade needed" or "optimal."
 
 ## 🔢 Exact and formatted views
 
-Use **Exact** (the default) when reconciling a result. Financial decimals
-are authoritative backend decimal strings, not browser floating-point
-numbers. Exact ratios are returned with their numerator, denominator, and
-unit; percentage points (`pp`) and squared percentage points (`pp²`) remain
-distinct.
-
-Use **Formatted** for a shorter, easier-to-read presentation. It may
-shorten a decimal or show the backend ratio approximation, but it does not
+Use **Formatted** (the default) for a shorter, easier-to-read presentation. It
+may shorten a decimal or show the backend ratio approximation, but it does not
 replace or change the exact result, run any solver, or certify feasibility
 — it only changes how the same backend-computed facts are displayed. The
-backend decimal strings and exact ratio numerator/denominator remain
-authoritative in both views. In a `ready` result, **Normalized input and
+backend decimal strings remain authoritative.
+
+Use **Exact** when reconciling a result. Exact ratios show their backend
+numerator and denominator; percentage points (`pp`) and squared percentage
+points (`pp²`) remain distinct. In a `ready` result, **Normalized input and
 units** shows the canonical input returned by the backend.
 
 The purchase grid never rounds existing inventory. For example, an opening
@@ -255,7 +321,8 @@ manually:
 
 Use `EUR` as the report currency and `2026-09-08` as the as-of, quote, and
 rate date. Enter existing cash of `0.005 EUR` and `10 USD`, a new
-contribution of `5 EUR`, and the valuation rate `1 USD = 0.9 EUR`.
+contribution of `5 EUR` with monetary step `0.01 EUR`, and the valuation rate
+`1 USD = 0.9 EUR`.
 
 The analyzer reports:
 
@@ -275,16 +342,18 @@ spending the `14.005 EUR`.
 
 ## 🔒 Privacy and safety
 
-Treat names, quantities, prices, cash, and rates as financial data. Two
-different reads happen behind this pilot, and it helps to keep them apart:
+Treat names, quantities, prices, cash, and rates as financial data. Keep two
+read boundaries apart:
 
-- The **Your assets** gallery reads your own OWNER custody positions from
-  your authenticated Portfolio, read-only, to offer them for copying. It
-  never writes back to your Asset, Broker, or Transaction records.
-- The **PAC calculation** itself receives only the scenario values present
-  in your draft — whether copied or typed — never a live link to your
-  Asset, Broker, or Portfolio records, and it does not call price, FX, or
-  other data providers.
+- The **allocation source** reads global Asset metadata and saved quotes, then
+  adds only your OWNER custody contexts and OWNER Broker native-cash facts.
+  The **Other users** scope exposes only shared catalog metadata plus a usage
+  class; it does not expose another user's identity, Broker, transaction
+  details, position, or cash. The source is read-only and never writes back to
+  Asset, Broker, or Transaction records.
+- The **PAC calculation** receives only scenario values present in the draft
+  — copied or typed — never a live link to Asset, Broker, Portfolio, FIFO,
+  WAC, tax, or Riskfolio data. It does not call price, FX, or other providers.
 
 Use synthetic labels for manual rows when real names are unnecessary, and
 protect any screenshots or copied exact output. The result is analysis, not

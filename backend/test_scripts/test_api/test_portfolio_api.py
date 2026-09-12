@@ -47,16 +47,41 @@ async def delete_current_test_user(client: httpx.AsyncClient, user_id: int) -> N
     """Delete only this test's authenticated account, with exact sole-admin fallback."""
     response = await client.delete(f"{API_BASE}/auth/users/me", timeout=TIMEOUT)
     if response.status_code == 400 and response.json().get("detail") == SOLE_ADMIN_DELETE_DETAIL:
+        is_test_db, _ = verify_test_database()
+        assert is_test_db, "Refusing sole-admin cleanup outside the test database"
         async with AsyncSession(get_async_engine()) as session:
             assert await user_service.delete_user(session, user_id)
         return
     assert response.status_code == 200, response.text
 
 
-async def create_broker(client: httpx.AsyncClient, name: str | None = None) -> int:
+async def get_current_user_id(client: httpx.AsyncClient) -> int:
+    resp = await client.get(f"{API_BASE}/auth/me", timeout=TIMEOUT)
+    assert resp.status_code == 200, resp.text
+    return resp.json()["user"]["id"]
+
+
+async def create_broker(
+    client: httpx.AsyncClient,
+    name: str | None = None,
+    *,
+    icon_url: str | None = None,
+    portal_url: str | None = None,
+    default_import_plugin: str | None = None,
+) -> int:
+    broker_payload = {
+        "name": name or f"Bk_{uuid.uuid4().hex[:6]}",
+        "allow_cash_overdraft": True,
+    }
+    if icon_url is not None:
+        broker_payload["icon_url"] = icon_url
+    if portal_url is not None:
+        broker_payload["portal_url"] = portal_url
+    if default_import_plugin is not None:
+        broker_payload["default_import_plugin"] = default_import_plugin
     resp = await client.post(
         f"{API_BASE}/brokers",
-        json=[{"name": name or f"Bk_{uuid.uuid4().hex[:6]}", "allow_cash_overdraft": True}],
+        json=[broker_payload],
         timeout=TIMEOUT,
     )
     assert resp.status_code == 200
@@ -538,15 +563,40 @@ class TestPortfolioReportEndpoint:
     async def test_report_allocation_source_authenticated_contract(self, test_server):
         """Opt-in source is serialized through /report without running other views."""
         print_section("Portfolio Report: allocation source contract")
-        broker_id: int | None = None
+        broker_ids: list[int] = []
         asset_id: int | None = None
         user_id: int | None = None
 
         async with httpx.AsyncClient() as client:
             await create_test_user(client)
+            user_id = await get_current_user_id(client)
             try:
                 broker_name = f"Allocation Broker {uuid.uuid4().hex}"
-                broker_id = await create_broker(client, broker_name)
+                broker_icon_url = "https://example.test/allocation-broker.svg"
+                broker_portal_url = "https://example.test/allocation-broker"
+                broker_default_import_plugin = "allocation_source_test"
+                broker_id = await create_broker(
+                    client,
+                    broker_name,
+                    icon_url=broker_icon_url,
+                    portal_url=broker_portal_url,
+                    default_import_plugin=broker_default_import_plugin,
+                )
+                broker_ids.append(broker_id)
+
+                cash_broker_name = f"Allocation Cash Broker {uuid.uuid4().hex}"
+                cash_broker_icon_url = "https://example.test/allocation-cash-broker.svg"
+                cash_broker_portal_url = "https://example.test/allocation-cash-broker"
+                cash_broker_default_import_plugin = "allocation_cash_source_test"
+                cash_broker_id = await create_broker(
+                    client,
+                    cash_broker_name,
+                    icon_url=cash_broker_icon_url,
+                    portal_url=cash_broker_portal_url,
+                    default_import_plugin=cash_broker_default_import_plugin,
+                )
+                broker_ids.append(cash_broker_id)
+
                 asset_name = f"Allocation Asset {uuid.uuid4().hex}"
                 ticker = f"AL{uuid.uuid4().hex[:8]}".upper()
                 icon_url = "https://example.test/allocation-source.svg"
@@ -569,9 +619,6 @@ class TestPortfolioReportEndpoint:
                 assert asset_result["success"] is True
                 asset_id = asset_result["asset_id"]
 
-                me_resp = await client.get(f"{API_BASE}/auth/me", timeout=TIMEOUT)
-                assert me_resp.status_code == 200, me_resp.text
-                user_id = me_resp.json()["user"]["id"]
                 access_resp = await client.put(
                     f"{API_BASE}/brokers/{broker_id}/access",
                     json=[
@@ -584,6 +631,18 @@ class TestPortfolioReportEndpoint:
                     timeout=TIMEOUT,
                 )
                 assert access_resp.status_code == 200, access_resp.text
+                cash_access_resp = await client.put(
+                    f"{API_BASE}/brokers/{cash_broker_id}/access",
+                    json=[
+                        {
+                            "user_id": user_id,
+                            "role": "OWNER",
+                            "share_percentage": 0.25,
+                        }
+                    ],
+                    timeout=TIMEOUT,
+                )
+                assert cash_access_resp.status_code == 200, cash_access_resp.text
 
                 await commit_batch(
                     client,
@@ -611,6 +670,27 @@ class TestPortfolioReportEndpoint:
                             "date": "2026-08-21",
                             "quantity": "100",
                             "cash": {"code": "JPY", "amount": "-10000"},
+                        },
+                        {
+                            "broker_id": cash_broker_id,
+                            "type": "DEPOSIT",
+                            "date": "2026-08-19",
+                            "quantity": "0",
+                            "cash": {"code": "EUR", "amount": "25"},
+                        },
+                        {
+                            "broker_id": cash_broker_id,
+                            "type": "DEPOSIT",
+                            "date": "2026-08-20",
+                            "quantity": "0",
+                            "cash": {"code": "JPY", "amount": "400"},
+                        },
+                        {
+                            "broker_id": cash_broker_id,
+                            "type": "DEPOSIT",
+                            "date": "2026-08-21",
+                            "quantity": "0",
+                            "cash": {"code": "JPY", "amount": "9999"},
                         },
                     ],
                 )
@@ -645,7 +725,10 @@ class TestPortfolioReportEndpoint:
                         "include_history": False,
                         "include_allocation_history": False,
                         "include_positions_contribution": False,
-                        "allocation_source": {"as_of_date": "2026-08-20"},
+                        "allocation_source": {
+                            "as_of_date": "2026-08-20",
+                            "selected_cash_broker_ids": [cash_broker_id, broker_id],
+                        },
                     },
                 )
                 assert resp.status_code == 200, resp.text
@@ -669,26 +752,40 @@ class TestPortfolioReportEndpoint:
                 assert report["metadata"]["included_features"] == ["allocation_source"]
 
                 source = report["allocation_source"]
-                assert set(source) == {"generated_at", "as_of_date", "assets"}
+                assert set(source) == {
+                    "generated_at",
+                    "as_of_date",
+                    "assets",
+                    "cash_sources",
+                    "selected_cash_balances",
+                }
                 assert source["as_of_date"] == "2026-08-20"
-                assets_by_id = {asset["asset_id"]: asset for asset in source["assets"]}
-                assert set(assets_by_id) == {asset_id}
-                asset = assets_by_id[asset_id]
+                asset = next(
+                    (candidate for candidate in source["assets"] if candidate["asset_id"] == asset_id),
+                    None,
+                )
+                assert asset is not None, f"Asset {asset_id} missing from allocation source"
                 assert set(asset) == {
                     "asset_id",
                     "instrument_key",
+                    "candidate_key",
                     "name",
                     "ticker",
                     "asset_type",
                     "icon_url",
+                    "active",
+                    "usage_scope",
                     "quote",
                     "contexts",
                 }
                 assert asset["instrument_key"] == f"asset:{asset_id}"
+                assert asset["candidate_key"] == f"asset:{asset_id}:candidate"
                 assert asset["name"] == asset_name
                 assert asset["ticker"] == ticker
                 assert asset["asset_type"] == "STOCK"
                 assert asset["icon_url"] == icon_url
+                assert asset["active"] is True
+                assert asset["usage_scope"] == "other_users"
 
                 assert set(asset["quote"]) == {
                     "raw_price",
@@ -707,30 +804,85 @@ class TestPortfolioReportEndpoint:
 
                 contexts_by_key = {context["context_key"]: context for context in asset["contexts"]}
                 context_key = f"asset:{asset_id}:broker:{broker_id}"
-                assert set(contexts_by_key) == {context_key}
+                assert context_key in contexts_by_key
                 context = contexts_by_key[context_key]
                 assert set(context) == {
                     "context_key",
                     "broker_id",
                     "broker_name",
+                    "broker_icon_url",
+                    "broker_portal_url",
+                    "broker_default_import_plugin",
                     "ownership_share_percent",
                     "custody_quantity",
                 }
                 assert context["broker_id"] == broker_id
                 assert context["broker_name"] == broker_name
+                assert context["broker_icon_url"] == broker_icon_url
+                assert context["broker_portal_url"] == broker_portal_url
+                assert context["broker_default_import_plugin"] == broker_default_import_plugin
                 assert Decimal(context["ownership_share_percent"]) == 0
                 assert Decimal(context["custody_quantity"]) == 10
+
+                cash_sources_by_id = {cash_source["broker_id"]: cash_source for cash_source in source["cash_sources"]}
+                assert broker_id in cash_sources_by_id
+                broker_cash_source = cash_sources_by_id[broker_id]
+                assert set(broker_cash_source) == {
+                    "broker_id",
+                    "broker_name",
+                    "broker_icon_url",
+                    "broker_portal_url",
+                    "broker_default_import_plugin",
+                    "ownership_share_percent",
+                    "balances",
+                }
+                assert broker_cash_source["broker_name"] == broker_name
+                assert broker_cash_source["broker_icon_url"] == broker_icon_url
+                assert broker_cash_source["broker_portal_url"] == broker_portal_url
+                assert broker_cash_source["broker_default_import_plugin"] == broker_default_import_plugin
+                assert Decimal(broker_cash_source["ownership_share_percent"]) == 0
+                assert all(set(balance) == {"currency", "amount"} for balance in broker_cash_source["balances"])
+                assert {balance["currency"]: Decimal(balance["amount"]) for balance in broker_cash_source["balances"]} == {"JPY": Decimal("-1000")}
+
+                assert cash_broker_id in cash_sources_by_id
+                selected_cash_source = cash_sources_by_id[cash_broker_id]
+                assert set(selected_cash_source) == {
+                    "broker_id",
+                    "broker_name",
+                    "broker_icon_url",
+                    "broker_portal_url",
+                    "broker_default_import_plugin",
+                    "ownership_share_percent",
+                    "balances",
+                }
+                assert selected_cash_source["broker_name"] == cash_broker_name
+                assert selected_cash_source["broker_icon_url"] == cash_broker_icon_url
+                assert selected_cash_source["broker_portal_url"] == cash_broker_portal_url
+                assert selected_cash_source["broker_default_import_plugin"] == cash_broker_default_import_plugin
+                assert Decimal(selected_cash_source["ownership_share_percent"]) == 25
+                assert all(set(balance) == {"currency", "amount"} for balance in selected_cash_source["balances"])
+                assert {balance["currency"]: Decimal(balance["amount"]) for balance in selected_cash_source["balances"]} == {
+                    "EUR": Decimal("25"),
+                    "JPY": Decimal("400"),
+                }
+
+                assert all(set(balance) == {"currency", "amount"} for balance in source["selected_cash_balances"])
+                assert {balance["currency"]: Decimal(balance["amount"]) for balance in source["selected_cash_balances"]} == {
+                    "EUR": Decimal("25"),
+                    "JPY": Decimal("-600"),
+                }
                 print_success("Allocation source API contract OK")
             finally:
-                if broker_id is not None:
+                if broker_ids:
                     cleanup_broker = await client.delete(
                         f"{API_BASE}/brokers",
-                        params={"ids": [broker_id], "force": True},
+                        params={"ids": broker_ids, "force": True},
                         timeout=TIMEOUT,
                     )
                     assert cleanup_broker.status_code == 200, cleanup_broker.text
                     broker_results = {item["id"]: item for item in cleanup_broker.json()["results"]}
-                    assert broker_results[broker_id]["success"] is True, cleanup_broker.text
+                    for created_broker_id in broker_ids:
+                        assert broker_results[created_broker_id]["success"] is True, cleanup_broker.text
                 if asset_id is not None:
                     cleanup_asset = await client.delete(
                         f"{API_BASE}/assets",
@@ -740,18 +892,213 @@ class TestPortfolioReportEndpoint:
                     assert cleanup_asset.status_code == 200, cleanup_asset.text
                     asset_results = {item["asset_id"]: item for item in cleanup_asset.json()["results"]}
                     assert asset_results[asset_id]["success"] is True, cleanup_asset.text
-                cleanup_user = await client.delete(
-                    f"{API_BASE}/auth/users/me",
+                if user_id is not None:
+                    await delete_current_test_user(client, user_id)
+
+    async def test_report_allocation_source_defaults_selected_cash_broker_ids(
+        self,
+        test_server,
+    ):
+        """Omitting selected_cash_broker_ids uses the empty-list default."""
+        print_section("Portfolio Report: allocation source cash selection default")
+
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            user_id = await get_current_user_id(client)
+            try:
+                response = await post_portfolio_report(
+                    client,
+                    {
+                        "include_summary": False,
+                        "include_history": False,
+                        "include_allocation_history": False,
+                        "include_positions_contribution": False,
+                        "allocation_source": {"as_of_date": "2026-08-20"},
+                    },
+                )
+                assert response.status_code == 200, response.text
+                report = response.json()
+                assert report["summary"] is None
+                assert report["history"] is None
+                assert report["allocation_history"] is None
+                assert report["data_quality"] is None
+                assert report["positions_contribution"] is None
+                assert report["metadata"]["included_features"] == ["allocation_source"]
+
+                source = report["allocation_source"]
+                assert set(source) == {
+                    "generated_at",
+                    "as_of_date",
+                    "assets",
+                    "cash_sources",
+                    "selected_cash_balances",
+                }
+                assert isinstance(source["assets"], list)
+                assert source["cash_sources"] == []
+                assert source["selected_cash_balances"] == []
+            finally:
+                await delete_current_test_user(client, user_id)
+
+        print_success("Allocation source cash selection defaults to empty")
+
+    @pytest.mark.parametrize(
+        ("selected_cash_broker_ids", "expected_error_type", "expected_location"),
+        [
+            pytest.param(
+                1,
+                "list_type",
+                ["body", "allocation_source", "selected_cash_broker_ids"],
+                id="scalar",
+            ),
+            pytest.param(
+                [True],
+                "int_type",
+                ["body", "allocation_source", "selected_cash_broker_ids", 0],
+                id="bool-item",
+            ),
+            pytest.param(
+                ["1"],
+                "int_type",
+                ["body", "allocation_source", "selected_cash_broker_ids", 0],
+                id="string-item",
+            ),
+            pytest.param(
+                [1.0],
+                "int_type",
+                ["body", "allocation_source", "selected_cash_broker_ids", 0],
+                id="float-item",
+            ),
+            pytest.param(
+                [0],
+                "greater_than",
+                ["body", "allocation_source", "selected_cash_broker_ids", 0],
+                id="zero-item",
+            ),
+            pytest.param(
+                [-1],
+                "greater_than",
+                ["body", "allocation_source", "selected_cash_broker_ids", 0],
+                id="negative-item",
+            ),
+            pytest.param(
+                [1, 1],
+                "value_error",
+                ["body", "allocation_source", "selected_cash_broker_ids"],
+                id="duplicate-items",
+            ),
+        ],
+    )
+    async def test_report_allocation_source_rejects_invalid_selected_cash_broker_ids(
+        self,
+        test_server,
+        selected_cash_broker_ids,
+        expected_error_type,
+        expected_location,
+    ):
+        """selected_cash_broker_ids is a strict positive unique integer list."""
+        print_section("Portfolio Report: invalid allocation cash broker selection")
+
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            user_id = await get_current_user_id(client)
+            try:
+                response = await post_portfolio_report(
+                    client,
+                    {
+                        "include_summary": False,
+                        "include_history": False,
+                        "include_allocation_history": False,
+                        "include_positions_contribution": False,
+                        "allocation_source": {
+                            "as_of_date": "2026-08-20",
+                            "selected_cash_broker_ids": selected_cash_broker_ids,
+                        },
+                    },
+                )
+                assert response.status_code == 422, response.text
+                assert [(error["loc"], error["type"]) for error in response.json()["detail"]] == [(expected_location, expected_error_type)]
+            finally:
+                await delete_current_test_user(client, user_id)
+
+        print_success("Invalid allocation cash broker selection rejected")
+
+    async def test_report_allocation_source_rejects_non_owner_cash_broker(
+        self,
+        test_server,
+    ):
+        """A real VIEWER broker selection is rejected with the public error contract."""
+        print_section("Portfolio Report: forbidden allocation cash broker")
+        owner_user_id: int | None = None
+        caller_user_id: int | None = None
+        broker_id: int | None = None
+
+        async with (
+            httpx.AsyncClient() as owner_client,
+            httpx.AsyncClient() as caller_client,
+        ):
+            await create_test_user(owner_client)
+            owner_user_id = await get_current_user_id(owner_client)
+            try:
+                broker_id = await create_broker(
+                    owner_client,
+                    f"Forbidden Cash Broker {uuid.uuid4().hex}",
+                )
+
+                await create_test_user(caller_client)
+                caller_user_id = await get_current_user_id(caller_client)
+
+                access_response = await owner_client.put(
+                    f"{API_BASE}/brokers/{broker_id}/access",
+                    json=[
+                        {
+                            "user_id": owner_user_id,
+                            "role": "OWNER",
+                            "share_percentage": 1,
+                        },
+                        {
+                            "user_id": caller_user_id,
+                            "role": "VIEWER",
+                            "share_percentage": 0,
+                        },
+                    ],
                     timeout=TIMEOUT,
                 )
-                if cleanup_user.status_code == 400 and cleanup_user.json().get("detail") == SOLE_ADMIN_DELETE_DETAIL:
-                    is_test_db, _ = verify_test_database()
-                    assert is_test_db, "Refusing sole-admin cleanup outside the test database"
-                    assert user_id is not None
-                    async with AsyncSession(get_async_engine()) as session:
-                        assert await user_service.delete_user(session, user_id)
-                else:
-                    assert cleanup_user.status_code == 200, cleanup_user.text
+                assert access_response.status_code == 200, access_response.text
+
+                response = await post_portfolio_report(
+                    caller_client,
+                    {
+                        "include_summary": False,
+                        "include_history": False,
+                        "include_allocation_history": False,
+                        "include_positions_contribution": False,
+                        "allocation_source": {
+                            "as_of_date": "2026-08-20",
+                            "selected_cash_broker_ids": [broker_id],
+                        },
+                    },
+                )
+                assert response.status_code == 403, response.text
+                assert response.json()["detail"] == {
+                    "code": "allocation_source_cash_broker_forbidden",
+                    "broker_ids": [broker_id],
+                }
+            finally:
+                if broker_id is not None:
+                    cleanup_broker = await owner_client.delete(
+                        f"{API_BASE}/brokers",
+                        params={"ids": [broker_id], "force": True},
+                        timeout=TIMEOUT,
+                    )
+                    assert cleanup_broker.status_code == 200, cleanup_broker.text
+                    broker_results = {item["id"]: item for item in cleanup_broker.json()["results"]}
+                    assert broker_results[broker_id]["success"] is True, cleanup_broker.text
+                if caller_user_id is not None:
+                    await delete_current_test_user(caller_client, caller_user_id)
+                if owner_user_id is not None:
+                    await delete_current_test_user(owner_client, owner_user_id)
+
+        print_success("Non-OWNER allocation cash broker selection rejected")
 
     async def test_report_serializes_typed_yield_on_cost_statuses_and_ignores_date_from(
         self,
