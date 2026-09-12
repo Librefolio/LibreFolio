@@ -22,6 +22,7 @@ from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
 from backend.app.schemas.portfolio import LotsAnalysisQuery, LotsAnalysisResponse, PortfolioReportQuery, PortfolioReportResponse, WACAnalyticsRequest, WACAnalyticsResponse, WACAnalyticsResultItem, WACSeriesPoint
 from backend.app.services.lots_analysis_service import LotsAnalysisService
+from backend.app.services.portfolio_allocation_source import PortfolioAllocationSourceAccessError
 from backend.app.services.portfolio_service import PortfolioService, compute_wac_iterative
 
 logger = get_logger(__name__)
@@ -151,7 +152,16 @@ async def get_portfolio_report(
         body.date_range = await resolve_date_sentinels(body.date_range, current_user.id, session, broker_ids=body.broker_ids)
 
     service = PortfolioService(session)
-    return await service.get_report(user_id=current_user.id, query=body)
+    try:
+        return await service.get_report(user_id=current_user.id, query=body)
+    except PortfolioAllocationSourceAccessError as exc:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "allocation_source_cash_broker_forbidden",
+                "broker_ids": list(exc.broker_ids),
+            },
+        ) from exc
 
 
 @portfolio_router.post(

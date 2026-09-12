@@ -1,7 +1,8 @@
 <script lang="ts">
     import {onDestroy} from 'svelte';
-    import {AlertTriangle, ChevronDown, CircleStop, LoaderCircle, Plus, RefreshCw, Trash2} from 'lucide-svelte';
+    import {AlertTriangle, ChevronDown, CircleStop, Info, LoaderCircle, Plus, RefreshCw, Trash2} from 'lucide-svelte';
     import {t} from '$lib/i18n';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import SingleDatePicker from '$lib/components/ui/date/SingleDatePicker.svelte';
     import ExactDecimalInput from '$lib/components/ui/input/ExactDecimalInput.svelte';
@@ -18,7 +19,7 @@
     import PacMoneySection from './PacMoneySection.svelte';
     import PacResultPanel from './PacResultPanel.svelte';
     import {fetchPacAllocationSource, type PacAllocationSource, type PacAllocationSourceAsset, type PacAllocationSourceContext} from './allocationSource';
-    import type {PacAssetChoice, PacDraft, PacDraftRow, PacEditorRow, PacMoneyInput, PacRateInput, PacRowSource, PacInput} from './editorTypes';
+    import type {PacAssetChoice, PacCashSourceState, PacContributionInput, PacContributionMode, PacDraft, PacDraftRow, PacEditorRow, PacMoneyInput, PacRateInput, PacRowSource, PacInput} from './editorTypes';
 
     let {descriptor, accountGeneration}: ToolHostPropsV1<'pac_allocator', '1.0.0'> = $props();
 
@@ -81,8 +82,8 @@
                 },
                 target_percent: '',
                 buy_grid: {
-                    mode: null,
-                    quantity_step: '',
+                    mode: 'whole',
+                    quantity_step: '1',
                 },
             },
         };
@@ -94,8 +95,16 @@
             report_currency: userSettings.get()?.base_currency ?? 'EUR',
             as_of_date: todayIso(),
             rows: [],
-            cashMode: 'not_supplied',
-            cashBalances: [],
+            cash: {
+                mode: 'not_supplied',
+                selectedBrokerIds: [],
+                sourceAsOfDate: null,
+                sourceFingerprint: null,
+                backendAggregatedBalances: [],
+                manualBalances: [],
+                sources: [],
+                stale: false,
+            },
             contributionMode: 'not_supplied',
             contributions: [],
             allowFx: false,
@@ -107,16 +116,20 @@
         return {currency, amount: ''};
     }
 
+    function createContribution(currency = ''): PacContributionInput {
+        return {currency, amount: '', monetary_step: '0.01'};
+    }
+
     function createRate(currency = ''): PacRateInput {
         return {currency, rate_to_report: '', reference_date: ''};
     }
 
-    function sourceRowValue(asset: PacAllocationSourceAsset, context: PacAllocationSourceContext, rowKey = context.contextKey): PacDraftRow {
+    function sourceRowValue(asset: PacAllocationSourceAsset, context: PacAllocationSourceContext | null, rowKey = context?.contextKey ?? asset.candidateKey): PacDraftRow {
         return {
             row_key: rowKey,
             instrument_key: asset.instrumentKey,
             name: asset.name,
-            initial_quantity: context.custodyQuantity,
+            initial_quantity: context?.custodyQuantity ?? '0',
             quote: {
                 raw_price: asset.quote.rawPrice,
                 currency: asset.quote.currency,
@@ -125,36 +138,68 @@
             },
             target_percent: '',
             buy_grid: {
-                mode: null,
-                quantity_step: '',
+                mode: 'whole',
+                quantity_step: '1',
             },
         };
     }
 
-    function sourceMetadata(asset: PacAllocationSourceAsset, context: PacAllocationSourceContext, sourceDate: string): PacRowSource {
+    function sourceMetadata(asset: PacAllocationSourceAsset, context: PacAllocationSourceContext | null, sourceDate: string): PacRowSource {
         return {
+            kind: context ? 'portfolio_context' : 'catalog_candidate',
             assetId: asset.assetId,
-            contextKey: context.contextKey,
-            brokerId: context.brokerId,
-            brokerName: context.brokerName,
-            ownershipSharePercent: context.ownershipSharePercent,
+            candidateKey: asset.candidateKey,
+            assetActive: asset.active,
+            assetType: asset.assetType,
+            assetIconUrl: asset.iconUrl,
+            usageScope: asset.usageScope,
+            contextKey: context?.contextKey ?? null,
+            brokerId: context?.brokerId ?? null,
+            brokerName: context?.brokerName ?? null,
+            brokerIconUrl: context?.brokerIconUrl ?? null,
+            brokerPortalUrl: context?.brokerPortalUrl ?? null,
+            brokerDefaultImportPlugin: context?.brokerDefaultImportPlugin ?? null,
+            ownershipSharePercent: context?.ownershipSharePercent ?? null,
             sourceAsOfDate: sourceDate,
             quoteSource: asset.quote.source,
             quoteReferenceDate: asset.quote.referenceDate,
         };
     }
 
+    function cashSelectionKey(brokerIds: readonly number[]): string {
+        return [...brokerIds].sort((left, right) => left - right).join(',');
+    }
+
+    function sameMoneyInputs(left: readonly PacMoneyInput[], right: readonly PacMoneyInput[]): boolean {
+        return JSON.stringify(left) === JSON.stringify(right);
+    }
+
+    function applyBrokerCashSource(source: PacAllocationSource, selectedBrokerIds: readonly number[]): boolean {
+        const balances = source.selectedCashBalances.map((balance) => ({...balance}));
+        const changed = !sameMoneyInputs(draft.cash.backendAggregatedBalances, balances);
+        draft.cash.backendAggregatedBalances = balances;
+        draft.cash.sources = source.cashSources;
+        draft.cash.sourceAsOfDate = source.asOfDate;
+        draft.cash.sourceFingerprint = `${source.generatedAt}|${source.asOfDate}|${cashSelectionKey(selectedBrokerIds)}`;
+        draft.cash.stale = false;
+        return changed;
+    }
+
     function markChangedSourceRowsStale(source: PacAllocationSource): void {
         for (const row of draft.rows) {
             if (!row.source || !row.importedValue) continue;
             const asset = source.assets.find((candidate) => candidate.assetId === row.source?.assetId);
-            const context = asset?.contexts.find((candidate) => candidate.contextKey === row.source?.contextKey);
-            if (!asset || !context) {
+            if (!asset) {
                 row.stale = true;
                 continue;
             }
-            const freshValue = sourceRowValue(asset, context, row.value.row_key);
-            const freshSource = sourceMetadata(asset, context, source.asOfDate);
+            const context = row.source.kind === 'portfolio_context' ? asset.contexts.find((candidate) => candidate.contextKey === row.source?.contextKey) : null;
+            if ((row.source.kind === 'portfolio_context' && !context) || (row.source.kind === 'catalog_candidate' && asset.contexts.length > 0)) {
+                row.stale = true;
+                continue;
+            }
+            const freshValue = sourceRowValue(asset, context ?? null, row.value.row_key);
+            const freshSource = sourceMetadata(asset, context ?? null, source.asOfDate);
             if (
                 sourceFieldsDiffer(freshValue, row.importedValue) ||
                 freshSource.sourceAsOfDate !== row.source.sourceAsOfDate ||
@@ -206,6 +251,7 @@
     let sourceFailure = $state.raw<ToolClientError | null>(null);
     let sourceRefreshToken = $state(0);
     let sourceRequestSequence = 0;
+    let allocationSourceCashSelectionKey = $state('');
     let sourceController: AbortController | null = null;
     let pendingConfirmation = $state.raw<PendingConfirmation | null>(null);
     let fxExpanded = $state(false);
@@ -219,39 +265,44 @@
     });
     const sourceIsCurrent = $derived(allocationSource?.asOfDate === draft.as_of_date);
     const staleSourceRows = $derived(draft.rows.filter((row) => row.source !== null && row.stale));
+    const cashSourceBlocked = $derived(draft.cash.mode === 'broker_copy' && (draft.cash.stale || sourceLoading || sourceFailure !== null || draft.cash.sourceAsOfDate !== draft.as_of_date));
     const foreignCurrencies = $derived.by(() => {
         const currencies = new Set<string>();
         for (const row of draft.rows) {
             const currency = row.value.quote.currency?.trim().toUpperCase();
             if (currency && currency !== draft.report_currency.trim().toUpperCase()) currencies.add(currency);
         }
-        const activeMoney = [...(draft.cashMode === 'custom' ? draft.cashBalances : []), ...(draft.contributionMode === 'custom' ? draft.contributions : [])];
+        const activeCash = draft.cash.mode === 'manual' ? draft.cash.manualBalances : draft.cash.mode === 'broker_copy' && !draft.cash.stale ? draft.cash.backendAggregatedBalances : [];
+        const activeMoney = [...activeCash, ...(draft.contributionMode === 'custom' ? draft.contributions : [])];
         for (const money of activeMoney) {
             const currency = money.currency?.trim().toUpperCase();
             if (currency && currency !== draft.report_currency.trim().toUpperCase()) currencies.add(currency);
         }
         return [...currencies].sort();
     });
+    const fxSectionVisible = $derived(foreignCurrencies.length > 0 || draft.allowFx || draft.valuationRates.length > 0);
     const assetChoices = $derived.by<PacAssetChoice[]>(() => {
         if (!allocationSource) return [];
         return allocationSource.assets.map((asset) => {
             const linkedRows = draft.rows.filter((row) => row.source?.assetId === asset.assetId);
+            const sourceKey = (row: PacEditorRow): string | null => row.source?.contextKey ?? row.source?.candidateKey ?? null;
             return {
                 ...asset,
-                selectedContextKeys: [...new Set(linkedRows.map((row) => row.source?.contextKey).filter((key): key is string => Boolean(key)))],
-                modifiedContextKeys: [
+                selected: linkedRows.length > 0,
+                selectedSourceKeys: [...new Set(linkedRows.map(sourceKey).filter((key): key is string => Boolean(key)))],
+                modifiedSourceKeys: [
                     ...new Set(
                         linkedRows
                             .filter(rowIsModified)
-                            .map((row) => row.source?.contextKey)
+                            .map(sourceKey)
                             .filter((key): key is string => Boolean(key)),
                     ),
                 ],
-                staleContextKeys: [
+                staleSourceKeys: [
                     ...new Set(
                         linkedRows
                             .filter((row) => row.stale)
-                            .map((row) => row.source?.contextKey)
+                            .map(sourceKey)
                             .filter((key): key is string => Boolean(key)),
                     ),
                 ],
@@ -261,11 +312,14 @@
 
     $effect(() => {
         const requestedDate = draft.as_of_date;
+        const requestedCashBrokerIds = draft.cash.mode === 'broker_copy' ? [...draft.cash.selectedBrokerIds].sort((left, right) => left - right) : [];
+        const requestedCashSelectionKey = cashSelectionKey(requestedCashBrokerIds);
         void sourceRefreshToken;
         if (!requestedDate) {
             allocationSource = null;
             sourceFailure = null;
             sourceLoading = false;
+            if (draft.cash.mode === 'broker_copy') draft.cash.stale = true;
             return;
         }
 
@@ -277,11 +331,17 @@
         sourceLoading = true;
         sourceFailure = null;
 
-        void fetchPacAllocationSource(requestedDate, generation, controller.signal)
+        void fetchPacAllocationSource(requestedDate, generation, {
+            selectedCashBrokerIds: requestedCashBrokerIds,
+            signal: controller.signal,
+        })
             .then((response) => {
-                if (sequence !== sourceRequestSequence || requestedDate !== draft.as_of_date || generation !== accountGeneration) return;
+                if (sequence !== sourceRequestSequence || requestedDate !== draft.as_of_date || requestedCashSelectionKey !== cashSelectionKey(draft.cash.mode === 'broker_copy' ? draft.cash.selectedBrokerIds : []) || generation !== accountGeneration) return;
                 markChangedSourceRowsStale(response);
                 allocationSource = response;
+                allocationSourceCashSelectionKey = requestedCashSelectionKey;
+                draft.cash.sources = response.cashSources;
+                if (draft.cash.mode === 'broker_copy' && applyBrokerCashSource(response, requestedCashBrokerIds)) markRevised();
             })
             .catch((caught) => {
                 if (sequence !== sourceRequestSequence || requestedDate !== draft.as_of_date || generation !== accountGeneration) return;
@@ -322,10 +382,12 @@
         for (const row of draft.rows) {
             if (row.source) row.stale = row.source.sourceAsOfDate !== value;
         }
+        if (draft.cash.mode === 'broker_copy') draft.cash.stale = true;
         markRevised();
     }
 
     function refreshAllocationSource(): void {
+        if (draft.cash.mode === 'broker_copy') draft.cash.stale = true;
         sourceRefreshToken += 1;
     }
 
@@ -340,18 +402,19 @@
 
     function addOwnedAsset(asset: PacAssetChoice): void {
         if (!allocationSource || !sourceIsCurrent) return;
-        if (draft.rows.length + asset.contexts.length > MAX_ROWS) {
+        const sourceContexts: readonly (PacAllocationSourceContext | null)[] = asset.contexts.length > 0 ? asset.contexts : [null];
+        if (draft.rows.length + sourceContexts.length > MAX_ROWS) {
             notify({
                 name: 'tool.pac-source-row-limit',
-                detail: {assetId: asset.assetId, requested: asset.contexts.length, available: MAX_ROWS - draft.rows.length},
+                detail: {assetId: asset.assetId, requested: sourceContexts.length, available: MAX_ROWS - draft.rows.length},
                 toast: {variant: 'warning', message: $t('tools.pacAllocator.atomicRowLimit')},
             });
             return;
         }
-        const rows = asset.contexts.map((context): PacEditorRow => {
+        const rows = sourceContexts.map((context): PacEditorRow => {
             const value = sourceRowValue(asset, context);
             return {
-                origin: 'portfolio',
+                origin: context ? 'portfolio_context' : 'catalog_candidate',
                 value,
                 source: sourceMetadata(asset, context, allocationSource!.asOfDate),
                 importedValue: cloneRowValue(value),
@@ -368,7 +431,7 @@
     }
 
     function toggleOwnedAsset(asset: PacAssetChoice): void {
-        if (asset.selectedContextKeys.length === 0) {
+        if (!asset.selected) {
             addOwnedAsset(asset);
             return;
         }
@@ -378,7 +441,7 @@
             pendingConfirmation = {
                 kind: 'deselect',
                 assetId: asset.assetId,
-                items: modifiedRows.map((row) => `${row.value.name || row.value.instrument_key} · ${row.source?.brokerName ?? row.value.row_key}`),
+                items: modifiedRows.map((row) => `${row.value.name || row.value.instrument_key} · ${row.source?.brokerName ?? row.source?.usageScope ?? row.value.row_key}`),
             };
             return;
         }
@@ -394,14 +457,12 @@
         if (!sourceRow) return;
         const value = cloneRowValue(sourceRow.value);
         value.row_key = nextRowKey('duplicate-row');
-        const baseline = sourceRow.importedValue ? cloneRowValue(sourceRow.importedValue) : null;
-        if (baseline) baseline.row_key = value.row_key;
         draft.rows.splice(index + 1, 0, {
-            origin: 'duplicate',
+            origin: 'manual_duplicate',
             value,
-            source: sourceRow.source ? {...sourceRow.source} : null,
-            importedValue: baseline,
-            stale: sourceRow.stale,
+            source: null,
+            importedValue: null,
+            stale: false,
         });
         markRevised();
     }
@@ -418,16 +479,20 @@
             pendingConfirmation = {
                 kind: 'remove-row',
                 index,
-                items: [`${row.value.name || row.value.instrument_key} · ${row.source.brokerName}`],
+                items: [`${row.value.name || row.value.instrument_key} · ${row.source.brokerName ?? row.source.usageScope}`],
             };
             return;
         }
         removeRow(index);
     }
 
-    function findFreshSource(row: PacEditorRow): {asset: PacAllocationSourceAsset; context: PacAllocationSourceContext} | null {
+    function findFreshSource(row: PacEditorRow): {asset: PacAllocationSourceAsset; context: PacAllocationSourceContext | null} | null {
         if (!allocationSource || !row.source) return null;
         const asset = allocationSource.assets.find((candidate) => candidate.assetId === row.source?.assetId);
+        if (!asset) return null;
+        if (row.source.kind === 'catalog_candidate') {
+            return asset.contexts.length === 0 ? {asset, context: null} : null;
+        }
         const context = asset?.contexts.find((candidate) => candidate.contextKey === row.source?.contextKey);
         return asset && context ? {asset, context} : null;
     }
@@ -446,7 +511,7 @@
             if (row.value.quote.currency !== row.importedValue.quote.currency) fields.push($t('common.currency'));
             if (row.value.quote.quote_base_quantity !== row.importedValue.quote.quote_base_quantity) fields.push($t('tools.pacAllocator.rows.quoteBasis'));
             if (row.value.quote.reference_date !== row.importedValue.quote.reference_date) fields.push($t('tools.pacAllocator.rows.quoteDate'));
-            items.push(`${row.value.name || row.value.instrument_key} · ${row.source.brokerName}: ${fields.join(', ')}`);
+            items.push(`${row.value.name || row.value.instrument_key} · ${row.source.brokerName ?? row.source.usageScope}: ${fields.join(', ')}`);
         }
         return items;
     }
@@ -467,10 +532,12 @@
             }
 
             const freshValue = sourceRowValue(fresh.asset, fresh.context, row.value.row_key);
+            const editableTarget = row.value.target_percent;
+            const editableGrid = {...row.value.buy_grid};
             const baselineTarget = row.importedValue?.target_percent ?? '';
-            const baselineGrid = row.importedValue?.buy_grid ?? {mode: null, quantity_step: ''};
-            freshValue.target_percent = baselineTarget;
-            freshValue.buy_grid = {...baselineGrid};
+            const baselineGrid = row.importedValue?.buy_grid ?? {mode: 'whole' as const, quantity_step: '1'};
+            freshValue.target_percent = editableTarget;
+            freshValue.buy_grid = editableGrid;
 
             row.value.instrument_key = freshValue.instrument_key;
             row.value.name = freshValue.name;
@@ -478,6 +545,8 @@
             row.value.quote = {...freshValue.quote};
             row.source = sourceMetadata(fresh.asset, fresh.context, allocationSource!.asOfDate);
             row.importedValue = cloneRowValue(freshValue);
+            row.importedValue.target_percent = baselineTarget;
+            row.importedValue.buy_grid = {...baselineGrid};
             row.stale = false;
             changed = true;
         }
@@ -509,27 +578,62 @@
         pendingConfirmation = null;
     }
 
-    function setMoneyMode(kind: 'cash' | 'contributions', mode: 'not_supplied' | 'none' | 'custom'): void {
-        if (kind === 'cash') {
-            draft.cashMode = mode;
-            if (mode === 'custom' && draft.cashBalances.length === 0) draft.cashBalances.push(createMoney(draft.report_currency));
+    function setCashMode(mode: PacCashSourceState['mode']): void {
+        if (mode === draft.cash.mode) return;
+        draft.cash.mode = mode;
+        if (mode === 'manual' && draft.cash.manualBalances.length === 0) {
+            draft.cash.manualBalances.push(createMoney(draft.report_currency));
+        }
+        if (mode === 'broker_copy') {
+            const selectionKey = cashSelectionKey(draft.cash.selectedBrokerIds);
+            if (allocationSource && sourceIsCurrent && allocationSourceCashSelectionKey === selectionKey) {
+                applyBrokerCashSource(allocationSource, draft.cash.selectedBrokerIds);
+            } else {
+                draft.cash.stale = true;
+            }
         } else {
-            draft.contributionMode = mode;
-            if (mode === 'custom' && draft.contributions.length === 0) draft.contributions.push(createMoney(draft.report_currency));
+            draft.cash.stale = false;
         }
         markRevised();
     }
 
+    function setContributionMode(mode: PacContributionMode): void {
+        draft.contributionMode = mode;
+        if (mode === 'custom' && draft.contributions.length === 0) draft.contributions.push(createContribution(draft.report_currency));
+        markRevised();
+    }
+
+    function handleCashMode(mode: string): void {
+        if (mode === 'not_supplied' || mode === 'none' || mode === 'broker_copy' || mode === 'manual') setCashMode(mode);
+    }
+
+    function handleContributionMode(mode: string): void {
+        if (mode === 'not_supplied' || mode === 'none' || mode === 'custom') setContributionMode(mode);
+    }
+
+    function toggleCashBroker(brokerId: number): void {
+        const selected = new Set(draft.cash.selectedBrokerIds);
+        if (selected.has(brokerId)) selected.delete(brokerId);
+        else selected.add(brokerId);
+        draft.cash.selectedBrokerIds = [...selected].sort((left, right) => left - right);
+        draft.cash.stale = true;
+        markRevised();
+    }
+
     function addMoney(kind: 'cash' | 'contributions'): void {
-        const values = kind === 'cash' ? draft.cashBalances : draft.contributions;
-        if (values.length >= MAX_CURRENCIES) return;
-        values.push(createMoney(draft.report_currency));
+        if (kind === 'cash') {
+            if (draft.cash.manualBalances.length >= MAX_CURRENCIES) return;
+            draft.cash.manualBalances.push(createMoney(draft.report_currency));
+        } else {
+            if (draft.contributions.length >= MAX_CURRENCIES) return;
+            draft.contributions.push(createContribution(draft.report_currency));
+        }
         markRevised();
     }
 
     function removeMoney(kind: 'cash' | 'contributions', index: number): void {
-        const values = kind === 'cash' ? draft.cashBalances : draft.contributions;
-        values.splice(index, 1);
+        if (kind === 'cash') draft.cash.manualBalances.splice(index, 1);
+        else draft.contributions.splice(index, 1);
         markRevised();
     }
 
@@ -584,14 +688,14 @@
             report_currency: draft.report_currency,
             as_of_date: draft.as_of_date,
             rows: draft.rows.map((row) => cloneRowValue(row.value)),
-            cash_balances: draft.cashMode === 'not_supplied' ? null : draft.cashMode === 'none' ? [] : draft.cashBalances.map((money) => ({...money})),
+            cash_balances: draft.cash.mode === 'not_supplied' ? null : draft.cash.mode === 'none' ? [] : draft.cash.mode === 'broker_copy' ? draft.cash.backendAggregatedBalances.map((money) => ({...money})) : draft.cash.manualBalances.map((money) => ({...money})),
             contributions: draft.contributionMode === 'not_supplied' ? null : draft.contributionMode === 'none' ? [] : draft.contributions.map((money) => ({...money})),
             valuation_rates: draft.allowFx ? draft.valuationRates.map((rate) => ({...rate})) : [],
         };
     }
 
     async function analyze(): Promise<void> {
-        if (busy || !descriptorIsCurrent()) return;
+        if (busy || cashSourceBlocked || !descriptorIsCurrent()) return;
         const draftRevision = revision;
         const generation = accountGeneration;
         const sequence = ++requestSequence;
@@ -672,6 +776,7 @@
     class="min-w-0 space-y-5"
     data-testid="pac-allocator-tool"
     data-busy={busy ? 'true' : 'false'}
+    data-cash-source={cashSourceBlocked ? 'pending' : 'ready'}
     data-revision={revision}
     aria-busy={busy}
     onsubmit={(event) => {
@@ -680,19 +785,77 @@
     }}
 >
     <section class="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800/60" data-testid="pac-scenario">
-        <div>
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{$t('tools.pacAllocator.scenario')}</h2>
-            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{$t('tools.pacAllocator.scenarioHint')}</p>
+        <div class="flex items-start gap-2">
+            <div class="min-w-0 flex-1">
+                <h2 class="text-base font-semibold text-gray-900 dark:text-white">
+                    {$t('tools.pacAllocator.valuationSettings', {default: 'Valuation settings'})}
+                </h2>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {$t('tools.pacAllocator.valuationSettingsHint', {
+                        default: 'Reporting currency values assets, cash, and contributions. The date is the inclusive cutoff for saved facts.',
+                    })}
+                </p>
+            </div>
+            <Tooltip
+                text={$t('tools.pacAllocator.valuationSettingsInfo', {
+                    default: 'These settings define one comparison unit and fact cutoff. They do not move cash or execute trades.',
+                })}
+                position="left"
+                maxWidth="320px"
+            >
+                <button type="button" class="inline-flex shrink-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" aria-label={$t('tools.pacAllocator.valuationSettingsInfo', {default: 'Valuation-setting details'})} data-testid="pac-valuation-settings-info">
+                    <Info size={16} />
+                </button>
+            </Tooltip>
         </div>
-        <div class="mt-4 grid gap-4 sm:grid-cols-2">
+        <div class="mt-3 grid gap-3 sm:grid-cols-2">
             <label class="field-label">
                 <span>{$t('tools.pacAllocator.reportCurrency')}</span>
-                <CurrencySearchSelect value={draft.report_currency} testId="pac-report-currency" onchange={setReportCurrency} />
+                <CurrencySearchSelect value={draft.report_currency} compact testId="pac-report-currency" onchange={setReportCurrency} />
             </label>
             <label class="field-label">
                 <span>{$t('tools.pacAllocator.asOfDate')}</span>
-                <SingleDatePicker value={draft.as_of_date} label={$t('tools.pacAllocator.asOfDate')} inputStyle onchange={setAsOfDate} testid="pac-as-of-date" />
+                <SingleDatePicker value={draft.as_of_date} label="" inputStyle onchange={setAsOfDate} testid="pac-as-of-date" />
             </label>
+        </div>
+    </section>
+
+    <section class="space-y-3" data-testid="pac-funding">
+        <div>
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{$t('tools.pacAllocator.fundsTitle', {default: '1. Available funds'})}</h2>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{$t('tools.pacAllocator.fundsHint', {default: 'Copy native OWNER broker cash or enter exact amounts manually. New contributions remain separate.'})}</p>
+        </div>
+        <div class="grid gap-4">
+            <PacMoneySection
+                kind="cash"
+                title={$t('tools.pacAllocator.cash.existing')}
+                description={$t('tools.pacAllocator.cash.existingHint')}
+                mode={draft.cash.mode}
+                values={draft.cash.manualBalances}
+                cashSources={draft.cash.sources}
+                selectedBrokerIds={draft.cash.selectedBrokerIds}
+                aggregatedBalances={draft.cash.backendAggregatedBalances}
+                {sourceLoading}
+                {sourceError}
+                sourceStale={draft.cash.stale}
+                onmodechange={handleCashMode}
+                onadd={() => addMoney('cash')}
+                onremove={(index) => removeMoney('cash', index)}
+                onchange={markRevised}
+                onbrokertoggle={toggleCashBroker}
+                onretry={refreshAllocationSource}
+            />
+            <PacMoneySection
+                kind="contributions"
+                title={$t('tools.pacAllocator.cash.contributions')}
+                description={$t('tools.pacAllocator.cash.contributionsHint')}
+                mode={draft.contributionMode}
+                values={draft.contributions}
+                onmodechange={handleContributionMode}
+                onadd={() => addMoney('contributions')}
+                onremove={(index) => removeMoney('contributions', index)}
+                onchange={markRevised}
+            />
         </div>
     </section>
 
@@ -718,7 +881,37 @@
                     <h3 class="text-base font-semibold text-gray-900 dark:text-white">{$t('tools.pacAllocator.selectedContexts')}</h3>
                     <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{$t('tools.pacAllocator.selectedContextsHint')}</p>
                 </div>
-                <span class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600 dark:bg-gray-700 dark:text-gray-200">{draft.rows.length}/{MAX_ROWS}</span>
+                <div class="flex flex-col items-end gap-1">
+                    <div class="flex items-center gap-1.5">
+                        <span class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600 dark:bg-gray-700 dark:text-gray-200" data-testid="pac-selected-context-count">
+                            {$t('tools.pacAllocator.selectedContextCount', {
+                                default: `${draft.rows.length} ${draft.rows.length === 1 ? 'context selected' : 'contexts selected'}`,
+                                values: {count: draft.rows.length},
+                            })}
+                        </span>
+                        <Tooltip
+                            text={$t('tools.pacAllocator.rowLimitHint', {
+                                default: `Maximum ${MAX_ROWS} contexts. Adding an Asset with multiple custody contexts is always all-or-nothing.`,
+                                values: {count: MAX_ROWS},
+                            })}
+                            position="top"
+                            maxWidth="300px"
+                        >
+                            <button type="button" class="inline-flex text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" aria-label={$t('tools.pacAllocator.rowLimitHint', {default: `Maximum ${MAX_ROWS} contexts`})} data-testid="pac-row-limit-info">
+                                <Info size={14} />
+                            </button>
+                        </Tooltip>
+                    </div>
+                    {#if draft.rows.length >= 28}
+                        <span class="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 dark:text-amber-300" data-testid="pac-row-limit-warning">
+                            <AlertTriangle size={12} />
+                            {$t('tools.pacAllocator.rowLimitWarning', {
+                                default: `${MAX_ROWS - draft.rows.length} slots remaining`,
+                                values: {count: MAX_ROWS - draft.rows.length},
+                            })}
+                        </span>
+                    {/if}
+                </div>
             </div>
 
             {#if draft.rows.length === 0}
@@ -736,107 +929,123 @@
         </div>
     </section>
 
-    <section class="grid gap-4 xl:grid-cols-2" data-testid="pac-cash">
-        <PacMoneySection
-            kind="cash"
-            title={$t('tools.pacAllocator.cash.existing')}
-            description={$t('tools.pacAllocator.cash.existingHint')}
-            mode={draft.cashMode}
-            bind:values={draft.cashBalances}
-            onmodechange={(mode) => setMoneyMode('cash', mode)}
-            onadd={() => addMoney('cash')}
-            onremove={(index) => removeMoney('cash', index)}
-            onchange={markRevised}
-        />
-        <PacMoneySection
-            kind="contributions"
-            title={$t('tools.pacAllocator.cash.contributions')}
-            description={$t('tools.pacAllocator.cash.contributionsHint')}
-            mode={draft.contributionMode}
-            bind:values={draft.contributions}
-            onmodechange={(mode) => setMoneyMode('contributions', mode)}
-            onadd={() => addMoney('contributions')}
-            onremove={(index) => removeMoney('contributions', index)}
-            onchange={markRevised}
-        />
-    </section>
-
-    <section class="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800/60" data-testid="pac-valuation-rates">
-        <button class="flex w-full items-start justify-between gap-3 text-left" type="button" onclick={() => (fxExpanded = !fxExpanded)} aria-expanded={fxExpanded}>
-            <span>
-                <span class="block text-base font-semibold text-gray-900 dark:text-white">{$t('tools.pacAllocator.rates.title')}</span>
-                <span class="mt-1 block text-xs text-gray-500 dark:text-gray-400">{$t('tools.pacAllocator.rates.description')}</span>
-            </span>
-            <ChevronDown class={`mt-1 shrink-0 transition-transform ${fxExpanded ? 'rotate-180' : ''}`} size={18} />
-        </button>
-
-        {#if foreignCurrencies.length > 0 && !draft.allowFx}
-            <p class="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/20 dark:text-amber-200" data-testid="pac-fx-needed">
-                {$t('tools.pacAllocator.rates.foreignCurrencies', {values: {currencies: foreignCurrencies.join(', ')}})}
-            </p>
-        {/if}
-
-        {#if fxExpanded}
-            <div class="mt-4 border-t border-gray-200 pt-4 dark:border-gray-700">
-                <label class="flex cursor-pointer items-center justify-between gap-3 rounded-lg bg-gray-50 px-3 py-2 dark:bg-gray-900/50">
+    {#if fxSectionVisible}
+        <section class="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800/60" data-testid="pac-valuation-rates">
+            <div class="flex items-start gap-2">
+                <button class="flex min-w-0 flex-1 items-start justify-between gap-3 text-left" type="button" onclick={() => (fxExpanded = !fxExpanded)} aria-expanded={fxExpanded} aria-controls="pac-valuation-rates-content" data-testid="pac-valuation-rates-toggle">
                     <span>
-                        <span class="block text-sm font-medium text-gray-800 dark:text-gray-100">{$t('tools.pacAllocator.rates.useManualRates')}</span>
-                        <span class="block text-xs text-gray-500 dark:text-gray-400">{$t('tools.pacAllocator.rates.noCashConversion')}</span>
+                        <span class="block text-base font-semibold text-gray-900 dark:text-white">
+                            {$t('tools.pacAllocator.rates.titleNumbered', {default: '3. Valuation exchange rates'})}
+                        </span>
+                        <span class="mt-1 block text-xs text-gray-500 dark:text-gray-400">
+                            {$t('tools.pacAllocator.rates.description', {
+                                default: 'Compare values in the reporting currency. No cash is exchanged, transferred, or merged.',
+                            })}
+                        </span>
                     </span>
-                    <input class="h-4 w-4 accent-libre-green" type="checkbox" checked={draft.allowFx} onchange={toggleFx} data-testid="pac-enable-rates" />
-                </label>
-
-                {#if draft.allowFx}
-                    <div class="mt-3 space-y-2">
-                        {#each draft.valuationRates as rate, index}
-                            <div class="grid gap-2 sm:grid-cols-[minmax(8rem,1fr)_minmax(0,2fr)_minmax(0,2fr)_auto]" data-testid="pac-rate-row">
-                                <CurrencySearchSelect
-                                    value={rate.currency ?? ''}
-                                    compact
-                                    testId={`pac-rate-currency-${index}`}
-                                    onchange={(value) => {
-                                        rate.currency = value;
-                                        markRevised();
-                                    }}
-                                />
-                                <ExactDecimalInput
-                                    value={rate.rate_to_report ?? ''}
-                                    step="0.0001"
-                                    maxIntegerDigits={12}
-                                    maxFractionDigits={12}
-                                    placeholder={$t('tools.pacAllocator.rates.value')}
-                                    ariaLabel={$t('tools.pacAllocator.rates.value')}
-                                    testid={`pac-rate-value-${index}`}
-                                    onchange={(value) => {
-                                        rate.rate_to_report = value;
-                                        markRevised();
-                                    }}
-                                />
-                                <SingleDatePicker
-                                    value={rate.reference_date ?? ''}
-                                    label={$t('tools.pacAllocator.rates.date')}
-                                    inputStyle
-                                    clearable
-                                    onchange={(value) => {
-                                        rate.reference_date = value;
-                                        markRevised();
-                                    }}
-                                    testid={`pac-rate-date-${index}`}
-                                />
-                                <button class="btn btn-danger px-2" type="button" onclick={() => removeValuationRate(index)} aria-label={$t('common.remove')} data-testid={`pac-remove-rate-${index}`}>
-                                    <Trash2 size={15} />
-                                </button>
-                            </div>
-                        {/each}
-                    </div>
-                    <button class="btn btn-secondary mt-3" type="button" onclick={addValuationRate} disabled={draft.valuationRates.length >= MAX_CURRENCIES} data-testid="pac-add-rate">
-                        <Plus size={14} />
-                        <span>{$t('tools.pacAllocator.rates.add')}</span>
+                    <ChevronDown class={`mt-1 shrink-0 transition-transform ${fxExpanded ? 'rotate-180' : ''}`} size={18} />
+                </button>
+                <Tooltip
+                    text={$t('tools.pacAllocator.rates.equationHint', {
+                        default: 'Example: 1 USD = 0.90 EUR means one USD is worth 0.90 EUR only for this report.',
+                    })}
+                    position="left"
+                    maxWidth="320px"
+                >
+                    <button type="button" class="mt-0.5 inline-flex shrink-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" aria-label={$t('tools.pacAllocator.rates.equationHint', {default: 'Valuation-rate details'})} data-testid="pac-rate-info">
+                        <Info size={16} />
                     </button>
-                {/if}
+                </Tooltip>
             </div>
-        {/if}
-    </section>
+
+            {#if foreignCurrencies.length > 0 && !draft.allowFx}
+                <p class="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/20 dark:text-amber-200" data-testid="pac-fx-needed">
+                    {$t('tools.pacAllocator.rates.foreignCurrencies', {values: {currencies: foreignCurrencies.join(', ')}})}
+                </p>
+            {/if}
+
+            {#if fxExpanded}
+                <div class="mt-4 border-t border-gray-200 pt-4 dark:border-gray-700" id="pac-valuation-rates-content">
+                    <label class="flex cursor-pointer items-center justify-between gap-3 rounded-lg bg-gray-50 px-3 py-2 dark:bg-gray-900/50">
+                        <span>
+                            <span class="block text-sm font-medium text-gray-800 dark:text-gray-100">{$t('tools.pacAllocator.rates.useManualRates')}</span>
+                            <span class="block text-xs text-gray-500 dark:text-gray-400">{$t('tools.pacAllocator.rates.noCashConversion')}</span>
+                        </span>
+                        <input class="h-4 w-4 accent-libre-green" type="checkbox" checked={draft.allowFx} onchange={toggleFx} data-testid="pac-enable-rates" />
+                    </label>
+
+                    {#if draft.allowFx}
+                        <div class="mt-3 space-y-3">
+                            {#each draft.valuationRates as rate, index}
+                                <div class="grid gap-2 rounded-lg border border-gray-200 p-3 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1.6fr)_minmax(0,1.4fr)_auto] sm:items-end dark:border-gray-700" data-testid="pac-rate-row">
+                                    <label class="field-label">
+                                        <span>{$t('tools.pacAllocator.rates.nativeCurrency', {default: 'Native currency'})}</span>
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-sm font-semibold text-gray-500 dark:text-gray-400">1</span>
+                                            <div class="min-w-0 flex-1">
+                                                <CurrencySearchSelect
+                                                    value={rate.currency ?? ''}
+                                                    compact
+                                                    testId={`pac-rate-currency-${index}`}
+                                                    onchange={(value) => {
+                                                        rate.currency = value;
+                                                        markRevised();
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
+                                    </label>
+                                    <label class="field-label">
+                                        <span>{$t('tools.pacAllocator.rates.value')}</span>
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-sm font-semibold text-gray-500 dark:text-gray-400">=</span>
+                                            <div class="min-w-0 flex-1">
+                                                <ExactDecimalInput
+                                                    value={rate.rate_to_report ?? ''}
+                                                    step="0.0001"
+                                                    maxIntegerDigits={12}
+                                                    maxFractionDigits={12}
+                                                    placeholder={$t('tools.pacAllocator.rates.value')}
+                                                    ariaLabel={$t('tools.pacAllocator.rates.value')}
+                                                    testid={`pac-rate-value-${index}`}
+                                                    onchange={(value) => {
+                                                        rate.rate_to_report = value;
+                                                        markRevised();
+                                                    }}
+                                                />
+                                            </div>
+                                            <span class="shrink-0 text-sm font-semibold text-gray-500 dark:text-gray-400">{draft.report_currency}</span>
+                                        </div>
+                                    </label>
+                                    <label class="field-label">
+                                        <span>{$t('tools.pacAllocator.rates.date')}</span>
+                                        <SingleDatePicker
+                                            value={rate.reference_date ?? ''}
+                                            label=""
+                                            inputStyle
+                                            clearable
+                                            onchange={(value) => {
+                                                rate.reference_date = value;
+                                                markRevised();
+                                            }}
+                                            testid={`pac-rate-date-${index}`}
+                                        />
+                                    </label>
+                                    <button class="btn btn-danger px-2" type="button" onclick={() => removeValuationRate(index)} aria-label={$t('common.remove')} data-testid={`pac-remove-rate-${index}`}>
+                                        <Trash2 size={15} />
+                                    </button>
+                                </div>
+                            {/each}
+                        </div>
+                        <button class="btn btn-secondary mt-3 text-sm" type="button" onclick={addValuationRate} disabled={draft.valuationRates.length >= MAX_CURRENCIES} data-testid="pac-add-rate">
+                            <Plus size={14} />
+                            <span>{$t('tools.pacAllocator.rates.add')}</span>
+                        </button>
+                    {/if}
+                </div>
+            {/if}
+        </section>
+    {/if}
 
     <section class="flex flex-col gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-gray-700 dark:bg-gray-900/50" data-testid="pac-actions">
         <div class="text-sm text-gray-600 dark:text-gray-400">
@@ -850,7 +1059,7 @@
                     {$t('tools.pacAllocator.stopWaiting')}
                 </button>
             {/if}
-            <button type="submit" disabled={busy} class="btn btn-primary" data-testid="pac-analyze">
+            <button type="submit" disabled={busy || cashSourceBlocked} class="btn btn-primary whitespace-nowrap text-sm" data-testid="pac-analyze">
                 {#if busy}
                     <LoaderCircle size={16} class="animate-spin motion-reduce:animate-none" />
                     {$t('tools.pacAllocator.analyzing', {values: {revision: requestRevision ?? revision}})}

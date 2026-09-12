@@ -40,6 +40,7 @@ from backend.app.schemas.portfolio import (
 )
 from backend.app.services.asset_source import AssetSourceManager
 from backend.app.services.broker_service import BrokerService
+from backend.app.services.portfolio_allocation_source import PortfolioAllocationSourceAccessError
 from backend.app.services.portfolio_service import (
     PortfolioService,
     _portfolio_l2_cache,
@@ -2574,8 +2575,16 @@ class TestPortfolioAllocationSource:
         label: str,
         role: UserRole = UserRole.OWNER,
         share_percentage: Decimal = Decimal("1"),
+        icon_url: str | None = None,
+        portal_url: str | None = None,
+        default_import_plugin: str | None = None,
     ) -> Broker:
-        broker = Broker(name=f"Allocation {label} {uuid4().hex}")
+        broker = Broker(
+            name=f"Allocation {label} {uuid4().hex}",
+            icon_url=icon_url,
+            portal_url=portal_url,
+            default_import_plugin=default_import_plugin,
+        )
         session.add(broker)
         await session.flush()
         session.add(
@@ -2596,6 +2605,7 @@ class TestPortfolioAllocationSource:
         *,
         currency: str = "EUR",
         quote_base_quantity: int = 1,
+        active: bool = True,
     ) -> Asset:
         suffix = uuid4().hex
         asset = Asset(
@@ -2604,6 +2614,7 @@ class TestPortfolioAllocationSource:
             currency=currency,
             asset_type=AssetType.STOCK,
             quote_base_quantity=quote_base_quantity,
+            active=active,
         )
         session.add(asset)
         await session.flush()
@@ -2627,14 +2638,27 @@ class TestPortfolioAllocationSource:
         )
 
     @staticmethod
-    def _source_query(report_broker: Broker, as_of_date: date) -> PortfolioReportQuery:
+    def _source_query(
+        report_broker: Broker,
+        as_of_date: date,
+        *,
+        selected_cash_broker_ids: list[int] | None = None,
+    ) -> PortfolioReportQuery:
+        allocation_source = (
+            PortfolioAllocationSourceRequest(as_of_date=as_of_date)
+            if selected_cash_broker_ids is None
+            else PortfolioAllocationSourceRequest(
+                as_of_date=as_of_date,
+                selected_cash_broker_ids=selected_cash_broker_ids,
+            )
+        )
         return PortfolioReportQuery(
             broker_ids=[report_broker.id],
             include_summary=False,
             include_history=False,
             include_allocation_history=False,
             include_positions_contribution=False,
-            allocation_source=PortfolioAllocationSourceRequest(as_of_date=as_of_date),
+            allocation_source=allocation_source,
         )
 
     @staticmethod
@@ -2647,6 +2671,15 @@ class TestPortfolioAllocationSource:
     @staticmethod
     def _contexts_by_key(source_asset):
         return {context.context_key: context for context in source_asset.contexts}
+
+    @staticmethod
+    def _cash_sources_by_broker_id(report):
+        assert report.allocation_source is not None
+        return {cash_source.broker_id: cash_source for cash_source in report.allocation_source.cash_sources}
+
+    @staticmethod
+    def _balances_by_currency(balances):
+        return {balance.currency: balance.amount for balance in balances}
 
     @staticmethod
     def _nested_keys(value) -> set[str]:
@@ -2684,10 +2717,13 @@ class TestPortfolioAllocationSource:
         user = await self._create_user(session, "source_only")
         broker = await self._create_broker(session, user=user, label="source only")
         cutoff = date(2026, 8, 20)
+        query = self._source_query(broker, cutoff)
+        assert query.allocation_source is not None
+        assert query.allocation_source.selected_cash_broker_ids == []
 
         report = await PortfolioService(session).get_report(
             user_id=user.id,
-            query=self._source_query(broker, cutoff),
+            query=query,
         )
 
         assert report.metadata.broker_ids == [broker.id]
@@ -2699,7 +2735,10 @@ class TestPortfolioAllocationSource:
         assert report.positions_contribution is None
         assert report.allocation_source is not None
         assert report.allocation_source.as_of_date == cutoff
-        assert report.allocation_source.assets == []
+        cash_sources = self._cash_sources_by_broker_id(report)
+        assert set(cash_sources) == {broker.id}
+        assert cash_sources[broker.id].balances == []
+        assert report.allocation_source.selected_cash_balances == []
         assert set(report.model_dump(exclude_none=True)) == {
             "metadata",
             "allocation_source",
@@ -2718,12 +2757,18 @@ class TestPortfolioAllocationSource:
             user=user,
             label="owner main",
             share_percentage=Decimal("0.25"),
+            icon_url="https://brokers.test.invalid/owner-main.svg",
+            portal_url="https://brokers.test.invalid/owner-main",
+            default_import_plugin="allocation-owner-main",
         )
         owner_zero = await self._create_broker(
             session,
             user=user,
             label="owner zero",
             share_percentage=Decimal("0"),
+            icon_url="https://brokers.test.invalid/owner-zero.svg",
+            portal_url="https://brokers.test.invalid/owner-zero",
+            default_import_plugin="allocation-owner-zero",
         )
         editor = await self._create_broker(
             session,
@@ -2761,6 +2806,22 @@ class TestPortfolioAllocationSource:
         editor_asset = await self._create_asset(session, "editor only")
         viewer_asset = await self._create_asset(session, "viewer only")
         foreign_asset = await self._create_asset(session, "foreign only")
+        observed_asset = await self._create_asset(session, "observed")
+        inactive_held_asset = await self._create_asset(
+            session,
+            "inactive held",
+            active=False,
+        )
+        inactive_zero_asset = await self._create_asset(
+            session,
+            "inactive zero",
+            active=False,
+        )
+        inactive_foreign_asset = await self._create_asset(
+            session,
+            "inactive foreign",
+            active=False,
+        )
         cutoff = date(2026, 8, 20)
 
         session.add_all(
@@ -2849,6 +2910,30 @@ class TestPortfolioAllocationSource:
                     day=cutoff,
                     quantity="6",
                 ),
+                self._transaction(
+                    owner_zero,
+                    inactive_held_asset,
+                    day=cutoff,
+                    quantity="2.75",
+                ),
+                self._transaction(
+                    owner_main,
+                    inactive_zero_asset,
+                    day=cutoff - timedelta(days=1),
+                    quantity="2",
+                ),
+                self._transaction(
+                    owner_main,
+                    inactive_zero_asset,
+                    day=cutoff,
+                    quantity="-2",
+                ),
+                self._transaction(
+                    foreign_owner,
+                    inactive_foreign_asset,
+                    day=cutoff,
+                    quantity="9",
+                ),
                 PriceHistory(
                     asset_id=shared_asset.id,
                     date=cutoff - timedelta(days=5),
@@ -2881,6 +2966,10 @@ class TestPortfolioAllocationSource:
             editor_asset.id,
             viewer_asset.id,
             foreign_asset.id,
+            observed_asset.id,
+            inactive_held_asset.id,
+            inactive_zero_asset.id,
+            inactive_foreign_asset.id,
         }
         prices_before = await self._scoped_price_rows(session, scoped_asset_ids)
 
@@ -2909,26 +2998,27 @@ class TestPortfolioAllocationSource:
         source = report.allocation_source
         assert source.as_of_date == cutoff
         assets_by_id = {asset.asset_id: asset for asset in source.assets}
-        assert set(assets_by_id) == {
+        assert {
             shared_asset.id,
             missing_price_asset.id,
-        }
-        assert [asset.asset_id for asset in source.assets] == [
-            asset.id
-            for asset in sorted(
-                (shared_asset, missing_price_asset),
-                key=lambda item: (item.display_name.casefold(), item.id),
-            )
-        ]
-        assert [asset.asset_id for asset in source.assets].count(shared_asset.id) == 1
-        assert {
             zero_asset.id,
             editor_asset.id,
             viewer_asset.id,
             foreign_asset.id,
+            observed_asset.id,
+            inactive_held_asset.id,
+        } <= set(assets_by_id)
+        assert [asset.asset_id for asset in source.assets].count(shared_asset.id) == 1
+        assert {
+            inactive_zero_asset.id,
+            inactive_foreign_asset.id,
         }.isdisjoint(assets_by_id)
 
         shared = assets_by_id[shared_asset.id]
+        assert shared.instrument_key == f"asset:{shared_asset.id}"
+        assert shared.candidate_key == f"asset:{shared_asset.id}:candidate"
+        assert shared.active is True
+        assert shared.usage_scope == "owned"
         shared_contexts = self._contexts_by_key(shared)
         main_key = f"asset:{shared_asset.id}:broker:{owner_main.id}"
         zero_key = f"asset:{shared_asset.id}:broker:{owner_zero.id}"
@@ -2940,8 +3030,16 @@ class TestPortfolioAllocationSource:
                 key=lambda item: (item.name.casefold(), item.id),
             )
         ]
+        assert shared_contexts[main_key].broker_name == owner_main.name
+        assert shared_contexts[main_key].broker_icon_url == owner_main.icon_url
+        assert shared_contexts[main_key].broker_portal_url == owner_main.portal_url
+        assert shared_contexts[main_key].broker_default_import_plugin == owner_main.default_import_plugin
         assert shared_contexts[main_key].ownership_share_percent == Decimal("25")
         assert shared_contexts[main_key].custody_quantity == Decimal("7")
+        assert shared_contexts[zero_key].broker_name == owner_zero.name
+        assert shared_contexts[zero_key].broker_icon_url == owner_zero.icon_url
+        assert shared_contexts[zero_key].broker_portal_url == owner_zero.portal_url
+        assert shared_contexts[zero_key].broker_default_import_plugin == owner_zero.default_import_plugin
         assert shared_contexts[zero_key].ownership_share_percent == Decimal("0")
         assert shared_contexts[zero_key].custody_quantity == Decimal("3.25")
         assert {
@@ -2955,6 +3053,44 @@ class TestPortfolioAllocationSource:
         missing_contexts = self._contexts_by_key(missing)
         assert set(missing_contexts) == {missing_key}
         assert missing_contexts[missing_key].custody_quantity == Decimal("2")
+
+        zero = assets_by_id[zero_asset.id]
+        assert zero.active is True
+        assert zero.usage_scope == "owned"
+        assert zero.contexts == []
+
+        for other_users_asset in (
+            assets_by_id[editor_asset.id],
+            assets_by_id[viewer_asset.id],
+            assets_by_id[foreign_asset.id],
+        ):
+            assert other_users_asset.active is True
+            assert other_users_asset.usage_scope == "other_users"
+            assert other_users_asset.contexts == []
+
+        observed = assets_by_id[observed_asset.id]
+        assert observed.active is True
+        assert observed.usage_scope == "observed"
+        assert observed.contexts == []
+
+        inactive_held = assets_by_id[inactive_held_asset.id]
+        assert inactive_held.active is False
+        assert inactive_held.usage_scope == "other_users"
+        inactive_key = f"asset:{inactive_held_asset.id}:broker:{owner_zero.id}"
+        assert set(self._contexts_by_key(inactive_held)) == {inactive_key}
+        assert self._contexts_by_key(inactive_held)[inactive_key].ownership_share_percent == Decimal("0")
+        assert self._contexts_by_key(inactive_held)[inactive_key].custody_quantity == Decimal("2.75")
+
+        cash_sources = self._cash_sources_by_broker_id(report)
+        assert set(cash_sources) == {owner_main.id, owner_zero.id}
+        assert {
+            editor.id,
+            viewer.id,
+            foreign_owner.id,
+        }.isdisjoint(cash_sources)
+        assert cash_sources[owner_main.id].broker_icon_url == owner_main.icon_url
+        assert cash_sources[owner_zero.id].broker_icon_url == owner_zero.icon_url
+        assert source.selected_cash_balances == []
 
         assert shared.quote.raw_price == Decimal("123.45")
         assert shared.quote.currency == "JPY"
@@ -2993,15 +3129,20 @@ class TestPortfolioAllocationSource:
             "generated_at",
             "as_of_date",
             "assets",
+            "cash_sources",
+            "selected_cash_balances",
         }
         for source_asset in source.assets:
             assert set(source_asset.model_dump()) == {
                 "asset_id",
                 "instrument_key",
+                "candidate_key",
                 "name",
                 "ticker",
                 "asset_type",
                 "icon_url",
+                "active",
+                "usage_scope",
                 "quote",
                 "contexts",
             }
@@ -3018,9 +3159,22 @@ class TestPortfolioAllocationSource:
                     "context_key",
                     "broker_id",
                     "broker_name",
+                    "broker_icon_url",
+                    "broker_portal_url",
+                    "broker_default_import_plugin",
                     "ownership_share_percent",
                     "custody_quantity",
                 }
+        for cash_source in source.cash_sources:
+            assert set(cash_source.model_dump()) == {
+                "broker_id",
+                "broker_name",
+                "broker_icon_url",
+                "broker_portal_url",
+                "broker_default_import_plugin",
+                "ownership_share_percent",
+                "balances",
+            }
 
         forbidden_editor_keys = {
             "target_percent",
@@ -3035,6 +3189,216 @@ class TestPortfolioAllocationSource:
             "optimization",
         }
         assert forbidden_editor_keys.isdisjoint(self._nested_keys(source.model_dump()))
+
+    @pytest.mark.asyncio
+    async def test_cash_sources_preserve_full_native_balances_and_selection(
+        self,
+        session,
+        monkeypatch,
+    ):
+        user = await self._create_user(session, "cash_sources")
+        other_user = await self._create_user(session, "cash_sources_foreign")
+        owner_quarter = await self._create_broker(
+            session,
+            user=user,
+            label="cash quarter",
+            share_percentage=Decimal("0.25"),
+            icon_url="https://brokers.test.invalid/cash-quarter.svg",
+            portal_url="https://brokers.test.invalid/cash-quarter",
+            default_import_plugin="allocation-cash-quarter",
+        )
+        owner_zero = await self._create_broker(
+            session,
+            user=user,
+            label="cash zero",
+            share_percentage=Decimal("0"),
+            icon_url="https://brokers.test.invalid/cash-zero.svg",
+            portal_url="https://brokers.test.invalid/cash-zero",
+            default_import_plugin="allocation-cash-zero",
+        )
+        owner_empty = await self._create_broker(
+            session,
+            user=user,
+            label="cash empty",
+            share_percentage=Decimal("0.5"),
+        )
+        editor = await self._create_broker(
+            session,
+            user=user,
+            label="cash editor",
+            role=UserRole.EDITOR,
+        )
+        foreign_owner = await self._create_broker(
+            session,
+            user=other_user,
+            label="cash foreign",
+        )
+        cutoff = date(2026, 8, 21)
+
+        session.add_all(
+            [
+                Transaction(
+                    broker_id=owner_quarter.id,
+                    type=TransactionType.DEPOSIT,
+                    date=cutoff - timedelta(days=1),
+                    amount=Decimal("100"),
+                    currency="EUR",
+                ),
+                Transaction(
+                    broker_id=owner_quarter.id,
+                    type=TransactionType.WITHDRAWAL,
+                    date=cutoff,
+                    amount=Decimal("-150"),
+                    currency="EUR",
+                ),
+                Transaction(
+                    broker_id=owner_quarter.id,
+                    type=TransactionType.DEPOSIT,
+                    date=cutoff,
+                    amount=Decimal("25"),
+                    currency="USD",
+                ),
+                Transaction(
+                    broker_id=owner_quarter.id,
+                    type=TransactionType.DEPOSIT,
+                    date=cutoff + timedelta(days=1),
+                    amount=Decimal("1000"),
+                    currency="EUR",
+                ),
+                Transaction(
+                    broker_id=owner_zero.id,
+                    type=TransactionType.DEPOSIT,
+                    date=cutoff - timedelta(days=2),
+                    amount=Decimal("12"),
+                    currency="EUR",
+                ),
+                Transaction(
+                    broker_id=owner_zero.id,
+                    type=TransactionType.WITHDRAWAL,
+                    date=cutoff,
+                    amount=Decimal("-12"),
+                    currency="EUR",
+                ),
+                Transaction(
+                    broker_id=owner_zero.id,
+                    type=TransactionType.DEPOSIT,
+                    date=cutoff,
+                    amount=Decimal("4"),
+                    currency="USD",
+                ),
+                Transaction(
+                    broker_id=editor.id,
+                    type=TransactionType.DEPOSIT,
+                    date=cutoff,
+                    amount=Decimal("77"),
+                    currency="GBP",
+                ),
+                Transaction(
+                    broker_id=foreign_owner.id,
+                    type=TransactionType.DEPOSIT,
+                    date=cutoff,
+                    amount=Decimal("88"),
+                    currency="CHF",
+                ),
+            ]
+        )
+        await session.flush()
+
+        async def fail_conversion(*args, **kwargs):
+            raise AssertionError("Allocation source cash must not call FX conversion")
+
+        monkeypatch.setattr(portfolio_service_module, "convert_bulk", fail_conversion)
+
+        report = await PortfolioService(session).get_report(
+            user_id=user.id,
+            query=self._source_query(
+                owner_quarter,
+                cutoff,
+                selected_cash_broker_ids=[owner_zero.id, owner_quarter.id],
+            ),
+        )
+
+        assert report.metadata.broker_ids == [owner_quarter.id]
+        assert report.allocation_source is not None
+        source = report.allocation_source
+        cash_sources = self._cash_sources_by_broker_id(report)
+        assert set(cash_sources) == {
+            owner_quarter.id,
+            owner_zero.id,
+            owner_empty.id,
+        }
+        assert {
+            editor.id,
+            foreign_owner.id,
+        }.isdisjoint(cash_sources)
+
+        quarter = cash_sources[owner_quarter.id]
+        assert quarter.broker_name == owner_quarter.name
+        assert quarter.broker_icon_url == owner_quarter.icon_url
+        assert quarter.broker_portal_url == owner_quarter.portal_url
+        assert quarter.broker_default_import_plugin == owner_quarter.default_import_plugin
+        assert quarter.ownership_share_percent == Decimal("25")
+        assert self._balances_by_currency(quarter.balances) == {
+            "EUR": Decimal("-50"),
+            "USD": Decimal("25"),
+        }
+
+        zero = cash_sources[owner_zero.id]
+        assert zero.broker_name == owner_zero.name
+        assert zero.broker_icon_url == owner_zero.icon_url
+        assert zero.broker_portal_url == owner_zero.portal_url
+        assert zero.broker_default_import_plugin == owner_zero.default_import_plugin
+        assert zero.ownership_share_percent == Decimal("0")
+        assert self._balances_by_currency(zero.balances) == {
+            "EUR": Decimal("0"),
+            "USD": Decimal("4"),
+        }
+
+        assert cash_sources[owner_empty.id].balances == []
+        assert self._balances_by_currency(source.selected_cash_balances) == {
+            "EUR": Decimal("-50"),
+            "USD": Decimal("29"),
+        }
+        for balance in [
+            *quarter.balances,
+            *zero.balances,
+            *source.selected_cash_balances,
+        ]:
+            assert set(balance.model_dump()) == {"currency", "amount"}
+
+    @pytest.mark.asyncio
+    async def test_selected_cash_brokers_must_be_owner_accessible(self, session):
+        user = await self._create_user(session, "cash_access")
+        other_user = await self._create_user(session, "cash_access_foreign")
+        report_broker = await self._create_broker(
+            session,
+            user=user,
+            label="cash access report",
+        )
+        viewer_broker = await self._create_broker(
+            session,
+            user=user,
+            label="cash access viewer",
+            role=UserRole.VIEWER,
+        )
+        foreign_broker = await self._create_broker(
+            session,
+            user=other_user,
+            label="cash access foreign",
+        )
+
+        forbidden_ids = sorted([foreign_broker.id, viewer_broker.id])
+        with pytest.raises(PortfolioAllocationSourceAccessError) as exc_info:
+            await PortfolioService(session).get_report(
+                user_id=user.id,
+                query=self._source_query(
+                    report_broker,
+                    date(2026, 8, 22),
+                    selected_cash_broker_ids=list(reversed(forbidden_ids)),
+                ),
+            )
+
+        assert exc_info.value.broker_ids == tuple(forbidden_ids)
 
     @pytest.mark.asyncio
     async def test_allocation_source_date_is_part_of_l2_cache_identity(self, session):
@@ -3095,6 +3459,167 @@ class TestPortfolioAllocationSource:
         assert self._contexts_by_key(first_again_asset)[context_key].custody_quantity == Decimal("2")
         assert first_again_asset.quote.raw_price == Decimal("10")
         assert first_again.model_dump() == first.model_dump()
+
+    @pytest.mark.asyncio
+    async def test_selected_cash_broker_ids_are_part_of_l2_cache_identity(self, session):
+        user = await self._create_user(session, "cache_cash_selection")
+        first_broker = await self._create_broker(
+            session,
+            user=user,
+            label="cache cash first",
+        )
+        second_broker = await self._create_broker(
+            session,
+            user=user,
+            label="cache cash second",
+        )
+        cutoff = date(2026, 6, 22)
+        session.add_all(
+            [
+                Transaction(
+                    broker_id=first_broker.id,
+                    type=TransactionType.DEPOSIT,
+                    date=cutoff,
+                    amount=Decimal("10"),
+                    currency="EUR",
+                ),
+                Transaction(
+                    broker_id=second_broker.id,
+                    type=TransactionType.DEPOSIT,
+                    date=cutoff,
+                    amount=Decimal("20"),
+                    currency="EUR",
+                ),
+            ]
+        )
+        await session.flush()
+
+        service = PortfolioService(session)
+        first_query = self._source_query(
+            first_broker,
+            cutoff,
+            selected_cash_broker_ids=[first_broker.id],
+        )
+        second_query = self._source_query(
+            first_broker,
+            cutoff,
+            selected_cash_broker_ids=[second_broker.id],
+        )
+
+        first = await service.get_report(user_id=user.id, query=first_query)
+        second = await service.get_report(user_id=user.id, query=second_query)
+        first_again = await service.get_report(user_id=user.id, query=first_query)
+
+        assert first.allocation_source is not None
+        assert second.allocation_source is not None
+        assert self._balances_by_currency(first.allocation_source.selected_cash_balances) == {
+            "EUR": Decimal("10"),
+        }
+        assert self._balances_by_currency(second.allocation_source.selected_cash_balances) == {
+            "EUR": Decimal("20"),
+        }
+        assert first_again is first
+
+    @pytest.mark.asyncio
+    async def test_owner_cash_transaction_invalidates_allocation_source_cache(self, session):
+        user = await self._create_user(session, "cache_owner_cash")
+        broker = await self._create_broker(
+            session,
+            user=user,
+            label="cache owner cash",
+        )
+        cutoff = date(2026, 6, 23)
+        session.add(
+            Transaction(
+                broker_id=broker.id,
+                type=TransactionType.DEPOSIT,
+                date=cutoff,
+                amount=Decimal("10"),
+                currency="EUR",
+            )
+        )
+        await session.flush()
+
+        service = PortfolioService(session)
+        query = self._source_query(
+            broker,
+            cutoff,
+            selected_cash_broker_ids=[broker.id],
+        )
+        first = await service.get_report(user_id=user.id, query=query)
+        first_cached = await service.get_report(user_id=user.id, query=query)
+        assert first_cached is first
+        assert first.allocation_source is not None
+        assert self._balances_by_currency(first.allocation_source.selected_cash_balances) == {
+            "EUR": Decimal("10"),
+        }
+
+        session.add(
+            Transaction(
+                broker_id=broker.id,
+                type=TransactionType.WITHDRAWAL,
+                date=cutoff,
+                amount=Decimal("-3"),
+                currency="EUR",
+            )
+        )
+        await session.flush()
+
+        refreshed = await service.get_report(user_id=user.id, query=query)
+        assert refreshed.allocation_source is not None
+        assert self._balances_by_currency(refreshed.allocation_source.selected_cash_balances) == {
+            "EUR": Decimal("7"),
+        }
+        assert self._balances_by_currency(self._cash_sources_by_broker_id(refreshed)[broker.id].balances) == {
+            "EUR": Decimal("7"),
+        }
+        assert self._balances_by_currency(first.allocation_source.selected_cash_balances) == {
+            "EUR": Decimal("10"),
+        }
+
+    @pytest.mark.asyncio
+    async def test_global_transaction_count_invalidates_usage_scope_cache(self, session):
+        user = await self._create_user(session, "cache_usage_scope")
+        other_user = await self._create_user(session, "cache_usage_scope_foreign")
+        report_broker = await self._create_broker(
+            session,
+            user=user,
+            label="cache usage report",
+        )
+        foreign_broker = await self._create_broker(
+            session,
+            user=other_user,
+            label="cache usage foreign",
+        )
+        asset = await self._create_asset(session, "cache usage")
+        cutoff = date(2026, 6, 24)
+
+        service = PortfolioService(session)
+        query = self._source_query(report_broker, cutoff)
+        first = await service.get_report(user_id=user.id, query=query)
+        first_asset = self._source_asset(first, asset.id)
+        assert first_asset.usage_scope == "observed"
+        assert first_asset.contexts == []
+
+        first_cached = await service.get_report(user_id=user.id, query=query)
+        assert first_cached is first
+
+        session.add(
+            self._transaction(
+                foreign_broker,
+                asset,
+                day=cutoff,
+                quantity="1",
+            )
+        )
+        await session.flush()
+
+        refreshed = await service.get_report(user_id=user.id, query=query)
+        refreshed_asset = self._source_asset(refreshed, asset.id)
+        assert refreshed_asset.usage_scope == "other_users"
+        assert refreshed_asset.contexts == []
+        assert foreign_broker.id not in self._cash_sources_by_broker_id(refreshed)
+        assert first_asset.usage_scope == "observed"
 
     @pytest.mark.asyncio
     async def test_transaction_in_other_owner_broker_invalidates_filtered_report_cache(
@@ -3216,30 +3741,36 @@ class TestPortfolioAllocationSource:
         assert self._contexts_by_key(first_other_asset)[other_key].custody_quantity == Decimal("2")
         assert first_other_asset.quote.raw_price == Decimal("10")
 
-        price.close = Decimal("22")
-        price.fetched_at = price.fetched_at + timedelta(seconds=1)
+        session.add(
+            PriceHistory(
+                asset_id=other_asset.id,
+                date=cutoff,
+                close=Decimal("22"),
+                currency="GBP",
+                source_plugin_key="allocation_cache_price_latest",
+            )
+        )
         await session.flush()
 
         refreshed = await service.get_report(user_id=user.id, query=query)
         refreshed_other_asset = self._source_asset(refreshed, other_asset.id)
         assert refreshed.metadata.broker_ids == [filtered_broker.id]
         assert refreshed_other_asset.quote.raw_price == Decimal("22")
+        assert refreshed_other_asset.quote.reference_date == cutoff
+        assert refreshed_other_asset.quote.source == "allocation_cache_price_latest"
         assert first_other_asset.quote.raw_price == Decimal("10")
 
     @pytest.mark.asyncio
     async def test_broker_rename_invalidates_allocation_source_cache(self, session):
-        """A renamed broker must never be served from the previous payload.
+        """Changed broker metadata must never be served from a previous payload.
 
-        `broker_name` is projected into every custody context, and nothing else
-        about the report changes when a broker is renamed: no transaction, no
-        price, no access row. Without the broker metadata in the L2 key the
-        fingerprint is therefore byte-identical and the editor keeps showing the
-        old custody label for half an hour.
+        Name, icon, portal and default import plugin are projected into custody
+        and cash contexts. None changes a transaction, price, or access row, so
+        every field must participate directly in the L2 fingerprint.
 
-        The unchanged repeat at the end is what makes the two assertions above
-        mean something: it proves this query really is served from the L2 cache
-        (same object, by identity), so a fresh name earlier is an invalidation
-        and not merely "nothing was ever cached".
+        The unchanged repeat before the mutations proves this query really is
+        served from the L2 cache (same object, by identity), so each fresh value
+        below is an invalidation and not merely "nothing was ever cached".
         """
         user = await self._create_user(session, "cache_broker_rename")
         broker = await self._create_broker(session, user=user, label="cache rename")
@@ -3265,19 +3796,41 @@ class TestPortfolioAllocationSource:
 
         refreshed = await service.get_report(user_id=user.id, query=query)
         assert self._contexts_by_key(self._source_asset(refreshed, asset.id))[context_key].broker_name == renamed
+        assert self._cash_sources_by_broker_id(refreshed)[broker.id].broker_name == renamed
+
+        broker.icon_url = f"https://brokers.test.invalid/{uuid4().hex}.svg"
+        await session.flush()
+        refreshed = await service.get_report(user_id=user.id, query=query)
+        assert self._contexts_by_key(self._source_asset(refreshed, asset.id))[context_key].broker_icon_url == broker.icon_url
+        assert self._cash_sources_by_broker_id(refreshed)[broker.id].broker_icon_url == broker.icon_url
+
+        broker.portal_url = f"https://brokers.test.invalid/{uuid4().hex}"
+        await session.flush()
+        refreshed = await service.get_report(user_id=user.id, query=query)
+        assert self._contexts_by_key(self._source_asset(refreshed, asset.id))[context_key].broker_portal_url == broker.portal_url
+        assert self._cash_sources_by_broker_id(refreshed)[broker.id].broker_portal_url == broker.portal_url
+
+        broker.default_import_plugin = f"allocation-cache-{uuid4().hex}"
+        await session.flush()
+        refreshed = await service.get_report(user_id=user.id, query=query)
+        assert self._contexts_by_key(self._source_asset(refreshed, asset.id))[context_key].broker_default_import_plugin == broker.default_import_plugin
+        assert self._cash_sources_by_broker_id(refreshed)[broker.id].broker_default_import_plugin == broker.default_import_plugin
+
         # The first payload is a separate object and keeps what it reported.
         assert self._contexts_by_key(self._source_asset(first, asset.id))[context_key].broker_name == original_name
+        assert self._contexts_by_key(self._source_asset(first, asset.id))[context_key].broker_icon_url is None
+        assert self._contexts_by_key(self._source_asset(first, asset.id))[context_key].broker_portal_url is None
+        assert self._contexts_by_key(self._source_asset(first, asset.id))[context_key].broker_default_import_plugin is None
 
     @pytest.mark.asyncio
     async def test_asset_metadata_and_quote_basis_changes_invalidate_allocation_source_cache(self, session):
         """Every Asset column the projection copies must sit in the L2 key.
 
         The projection copies `display_name`, `identifier_ticker`, `asset_type`,
-        `icon_url` and — when no saved price exists for the asset — the asset's
-        own `currency`, plus the `quote_base_quantity` the whole per-unit price
-        arithmetic is divided by. None of these move a transaction or a price
-        row, so the transaction/price fingerprints cannot see them: a stale
-        `quote_base_quantity` is a quote read at 1/100th of its true basis.
+        `icon_url`, `active` and — when no saved price exists for the asset —
+        the asset's own `currency`, plus the `quote_base_quantity` the whole
+        per-unit price arithmetic is divided by. Catalog additions and removals
+        also change the candidate set. None move a transaction or a price row.
 
         Each field is changed on its own and read back on its own, so a red
         names the one column that fell out of the key rather than "something
@@ -3304,6 +3857,7 @@ class TestPortfolioAllocationSource:
         assert baseline.quote.raw_price is None
         assert baseline.quote.currency == "EUR"
         assert baseline.quote.quote_base_quantity == 1
+        assert baseline.active is True
 
         renamed = f"{asset.display_name} renamed"
         asset.display_name = renamed
@@ -3331,9 +3885,30 @@ class TestPortfolioAllocationSource:
         await session.flush()
         assert (await read()).quote.quote_base_quantity == 100
 
+        asset.active = False
+        await session.flush()
+        assert (await read()).active is False
+
+        observed_asset = await self._create_asset(
+            session,
+            "cache catalog addition",
+        )
+        added_report = await service.get_report(user_id=user.id, query=query)
+        added = self._source_asset(added_report, observed_asset.id)
+        assert added.active is True
+        assert added.usage_scope == "observed"
+        assert added.contexts == []
+
+        observed_asset.active = False
+        await session.flush()
+        removed_report = await service.get_report(user_id=user.id, query=query)
+        assert removed_report.allocation_source is not None
+        assert observed_asset.id not in {source_asset.asset_id for source_asset in removed_report.allocation_source.assets}
+
         # The very first payload is untouched by all of the above: each read was
         # a fresh build, not a mutated cache entry handed back to every caller.
         assert baseline.name != renamed
         assert baseline.ticker != new_ticker
         assert baseline.asset_type == AssetType.STOCK.value
         assert baseline.icon_url is None
+        assert baseline.active is True

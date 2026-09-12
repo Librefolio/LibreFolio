@@ -1,5 +1,5 @@
 import type {ToolInput} from '$lib/features/tools/contracts';
-import type {PacAllocationSourceAsset} from './allocationSource';
+import type {PacAllocationSourceAsset, PacAllocationSourceCashSource, PacAllocationUsageScope} from './allocationSource';
 
 export type PacInput = ToolInput<'pac_allocator', '1.0.0'>;
 export type PacInputRow = NonNullable<PacInput['rows']>[number];
@@ -8,42 +8,67 @@ export type PacDraftRow = PacInputRow & {
     buy_grid: NonNullable<PacInputRow['buy_grid']>;
 };
 export type PacMoneyInput = NonNullable<PacInput['cash_balances']>[number];
+export type PacContributionInput = NonNullable<PacInput['contributions']>[number];
 export type PacRateInput = NonNullable<PacInput['valuation_rates']>[number];
 
 export interface PacRowSource {
+    kind: 'portfolio_context' | 'catalog_candidate';
     assetId: number;
-    contextKey: string;
-    brokerId: number;
-    brokerName: string;
-    ownershipSharePercent: string;
+    candidateKey: string;
+    assetActive: boolean;
+    assetType: string;
+    assetIconUrl: string | null;
+    usageScope: PacAllocationUsageScope;
+    contextKey: string | null;
+    brokerId: number | null;
+    brokerName: string | null;
+    brokerIconUrl: string | null;
+    brokerPortalUrl: string | null;
+    brokerDefaultImportPlugin: string | null;
+    ownershipSharePercent: string | null;
     sourceAsOfDate: string;
     quoteSource: string | null;
     quoteReferenceDate: string | null;
 }
 
+export type PacRowOrigin = 'manual' | 'portfolio_context' | 'catalog_candidate' | 'manual_duplicate';
+
 export interface PacEditorRow {
     value: PacDraftRow;
-    origin: 'manual' | 'portfolio' | 'duplicate';
+    origin: PacRowOrigin;
     source: PacRowSource | null;
     importedValue: PacDraftRow | null;
     stale: boolean;
 }
 
 export interface PacAssetChoice extends PacAllocationSourceAsset {
-    selectedContextKeys: readonly string[];
-    modifiedContextKeys: readonly string[];
-    staleContextKeys: readonly string[];
+    selected: boolean;
+    selectedSourceKeys: readonly string[];
+    modifiedSourceKeys: readonly string[];
+    staleSourceKeys: readonly string[];
 }
+
+export interface PacCashSourceState {
+    mode: 'not_supplied' | 'none' | 'broker_copy' | 'manual';
+    selectedBrokerIds: number[];
+    sourceAsOfDate: string | null;
+    sourceFingerprint: string | null;
+    backendAggregatedBalances: PacMoneyInput[];
+    manualBalances: PacMoneyInput[];
+    sources: readonly PacAllocationSourceCashSource[];
+    stale: boolean;
+}
+
+export type PacContributionMode = 'not_supplied' | 'none' | 'custom';
 
 export interface PacDraft {
     operation: 'analyze';
     report_currency: string;
     as_of_date: string;
     rows: PacEditorRow[];
-    cashMode: 'not_supplied' | 'none' | 'custom';
-    cashBalances: PacMoneyInput[];
-    contributionMode: 'not_supplied' | 'none' | 'custom';
-    contributions: PacMoneyInput[];
+    cash: PacCashSourceState;
+    contributionMode: PacContributionMode;
+    contributions: PacContributionInput[];
     allowFx: boolean;
     valuationRates: PacRateInput[];
 }

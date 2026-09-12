@@ -28,10 +28,11 @@
  *   2. against a synthetic payload authored in this file, which is the only way
  *      to pin the states the seeded fixture does not contain: a canonical asset
  *      held in three OWNER custody contexts (one of them at a 0 % ownership
- *      share), a superseded source response arriving late, and a source outage.
- *      It repeats the unpriced state so the exact null quote can be asserted on
- *      the wire. Synthetic mocks written inside a spec are ours to shape; the
- *      STOP rule covers captured real-world snapshots, which this is not.
+ *      share), a zero-position candidate, all three visibility scopes, OWNER
+ *      cash whose backend aggregate differs from any frontend sum, a
+ *      superseded source response arriving late, and a source outage.
+ *      Synthetic mocks written inside a spec are ours to shape; the STOP rule
+ *      covers captured real-world snapshots, which this is not.
  *
  * ## Selectors
  *
@@ -45,13 +46,14 @@
  *
  * ## Row identity
  *
- * `PacContextEditor` keys its fields by *position* (`pac-display-name-3`), and
- * position is mutable: a removal or a duplication renumbers everything after it.
- * So no assertion in this file trusts an index it did not just create. Rows are
- * located with `rowIndexWhere()`, which scans the rows and returns the index of
- * the one whose own field carries the value this test owns (the custody context
- * key of a source row, the display name of a manual row). Scanning to *find* an
- * identified row is the sanctioned shape; picking `.nth(0)` and hoping is not.
+ * `PacContextEditor` keys editable fields by *position* (`pac-display-name-3`),
+ * and position is mutable: a removal or a duplication renumbers everything
+ * after it. So no assertion in this file trusts an index it did not just create.
+ * Manual rows are found through their owned display-name value. Imported rows
+ * deliberately expose no canonical-id inputs; they are found through exact
+ * source facts from this spec's response and their own `data-row-index`.
+ * Scanning to find an identified row is the sanctioned shape; picking
+ * `.nth(0)` and hoping is not.
  *
  * ## Known observability gaps (asserted around, reported, not worked around)
  *
@@ -59,13 +61,14 @@
  *   snapshot date as bare text with no `data-testid` and no `data-*` attribute,
  *   so they are not independently machine-readable. The spec scopes itself to a
  *   `pac-row` by the fixture's untranslated broker name and verifies those
- *   literal source values in the row as well as the custody context key (which
- *   embeds the broker id), instrument key, display name, exact custody quantity,
- *   whole quote, and full row payload on the wire.
- * - `pac-cash` is used twice: once by the grid `<section>` in
- *   `PacAllocatorTool.svelte` and once by the cash `<article>` in
- *   `PacMoneySection.svelte`. The id is ambiguous, so this file never selects
- *   it and addresses the money sections through `pac-cash-*` / `pac-contributions-*`.
+ *   literal source values plus the exact locked facts and full payload on the
+ *   wire. Canonical instrument/context ids are intentionally absent from the
+ *   DOM and are verified only on the captured request.
+ * - The valuation-only tooltip meaning, native-cash explanation wording,
+ *   `CurrencySearchSelect` compact prop, and compact Analyze label have no
+ *   locale-independent state attribute. This spec asserts the identified
+ *   controls, equation/payload, and explanation structure, but does not infer
+ *   those semantics from translated copy or CSS.
  */
 import {expect, test, type Locator, type Page, type Request} from '../fixtures/playwright';
 import {login, navigateTo, openMobileMenu} from '../fixtures/auth-helpers';
@@ -87,7 +90,6 @@ const REFERENCE_DATE = '2026-09-08';
 const PRIMARY_NAME = 'PAC E2E primary context';
 const SECONDARY_NAME = 'PAC E2E secondary context';
 const REVISED_NAME = 'PAC E2E primary context revised';
-const SHARED_INSTRUMENT = 'pac-e2e-instrument';
 
 type TestUser = typeof TEST_USER;
 type PacInput = ToolInput<'pac_allocator', '1.0.0'>;
@@ -139,6 +141,9 @@ interface SourceContextWire {
     context_key: string;
     broker_id: number;
     broker_name: string;
+    broker_icon_url: string | null;
+    broker_portal_url: string | null;
+    broker_default_import_plugin: string | null;
     ownership_share_percent: string;
     custody_quantity: string;
 }
@@ -146,18 +151,38 @@ interface SourceContextWire {
 interface SourceAssetWire {
     asset_id: number;
     instrument_key: string;
+    candidate_key: string;
     name: string;
     ticker: string | null;
     asset_type: string;
     icon_url: string | null;
+    active: boolean;
+    usage_scope: 'owned' | 'other_users' | 'observed';
     quote: SourceQuoteWire;
     contexts: SourceContextWire[];
+}
+
+interface SourceCashBalanceWire {
+    currency: string;
+    amount: string;
+}
+
+interface SourceCashSourceWire {
+    broker_id: number;
+    broker_name: string;
+    broker_icon_url: string | null;
+    broker_portal_url: string | null;
+    broker_default_import_plugin: string | null;
+    ownership_share_percent: string;
+    balances: SourceCashBalanceWire[];
 }
 
 interface AllocationSourceWire {
     generated_at: string;
     as_of_date: string;
     assets: SourceAssetWire[];
+    cash_sources: SourceCashSourceWire[];
+    selected_cash_balances: SourceCashBalanceWire[];
 }
 
 /**
@@ -170,10 +195,13 @@ function multiContextAsset(referenceDate: string): SourceAssetWire {
     return {
         asset_id: 900_001,
         instrument_key: 'asset:900001',
+        candidate_key: 'candidate:asset:900001',
         name: 'PAC fixture multi-custody ETF',
         ticker: 'PACMC',
         asset_type: 'ETF',
         icon_url: null,
+        active: true,
+        usage_scope: 'owned',
         quote: {
             raw_price: '123.450000000001',
             currency: 'USD',
@@ -183,9 +211,36 @@ function multiContextAsset(referenceDate: string): SourceAssetWire {
             days_before_requested: 1,
         },
         contexts: [
-            {context_key: 'asset:900001:broker:9001', broker_id: 9001, broker_name: 'PAC fixture broker A', ownership_share_percent: '25', custody_quantity: '12.345678901234'},
-            {context_key: 'asset:900001:broker:9002', broker_id: 9002, broker_name: 'PAC fixture broker B', ownership_share_percent: '0', custody_quantity: '7.000000000001'},
-            {context_key: 'asset:900001:broker:9003', broker_id: 9003, broker_name: 'PAC fixture broker C', ownership_share_percent: '100', custody_quantity: '0.000000000001'},
+            {
+                context_key: 'asset:900001:broker:9001',
+                broker_id: 9001,
+                broker_name: 'PAC fixture broker A',
+                broker_icon_url: null,
+                broker_portal_url: null,
+                broker_default_import_plugin: null,
+                ownership_share_percent: '25',
+                custody_quantity: '12.345678901234',
+            },
+            {
+                context_key: 'asset:900001:broker:9002',
+                broker_id: 9002,
+                broker_name: 'PAC fixture broker B',
+                broker_icon_url: null,
+                broker_portal_url: null,
+                broker_default_import_plugin: null,
+                ownership_share_percent: '0',
+                custody_quantity: '7.000000000001',
+            },
+            {
+                context_key: 'asset:900001:broker:9003',
+                broker_id: 9003,
+                broker_name: 'PAC fixture broker C',
+                broker_icon_url: null,
+                broker_portal_url: null,
+                broker_default_import_plugin: null,
+                ownership_share_percent: '100',
+                custody_quantity: '0.000000000001',
+            },
         ],
     };
 }
@@ -195,17 +250,85 @@ function missingPriceAsset(): SourceAssetWire {
     return {
         asset_id: 900_002,
         instrument_key: 'asset:900002',
+        candidate_key: 'candidate:asset:900002',
         name: 'PAC fixture unpriced asset',
         ticker: null,
         asset_type: 'STOCK',
         icon_url: null,
+        active: true,
+        usage_scope: 'owned',
         quote: {raw_price: null, currency: 'EUR', quote_base_quantity: 1, reference_date: null, source: null, days_before_requested: null},
-        contexts: [{context_key: 'asset:900002:broker:9004', broker_id: 9004, broker_name: 'PAC fixture broker D', ownership_share_percent: '100', custody_quantity: '3'}],
+        contexts: [
+            {
+                context_key: 'asset:900002:broker:9004',
+                broker_id: 9004,
+                broker_name: 'PAC fixture broker D',
+                broker_icon_url: null,
+                broker_portal_url: null,
+                broker_default_import_plugin: null,
+                ownership_share_percent: '100',
+                custody_quantity: '3',
+            },
+        ],
     };
 }
 
-function sourcePayload(asOfDate: string, assets: SourceAssetWire[]): AllocationSourceWire {
-    return {generated_at: `${asOfDate}T12:00:00+00:00`, as_of_date: asOfDate, assets};
+function zeroCandidateAsset(): SourceAssetWire {
+    return {
+        asset_id: 900_003,
+        instrument_key: 'asset:900003',
+        candidate_key: 'candidate:asset:900003',
+        name: 'PAC fixture zero-position candidate',
+        ticker: 'PACZERO',
+        asset_type: 'ETF',
+        icon_url: null,
+        active: true,
+        usage_scope: 'owned',
+        quote: {
+            raw_price: '88.765432100001',
+            currency: 'CHF',
+            quote_base_quantity: 1000,
+            reference_date: REFERENCE_DATE,
+            source: 'pac-fixture-candidate-close',
+            days_before_requested: 0,
+        },
+        contexts: [],
+    };
+}
+
+function privateScopedAsset(scope: 'other_users' | 'observed', assetId: number): SourceAssetWire {
+    return {
+        ...zeroCandidateAsset(),
+        asset_id: assetId,
+        instrument_key: `asset:${assetId}`,
+        candidate_key: `candidate:asset:${assetId}`,
+        name: `PAC ${scope} candidate`,
+        ticker: scope === 'other_users' ? 'PACOTHER' : 'PACOBS',
+        usage_scope: scope,
+        active: scope === 'other_users',
+        contexts: [
+            {
+                context_key: `asset:${assetId}:broker:${assetId + 1000}`,
+                broker_id: assetId + 1000,
+                broker_name: `PAC private broker ${assetId}`,
+                broker_icon_url: null,
+                broker_portal_url: `https://private.invalid/${assetId}`,
+                broker_default_import_plugin: `private-plugin-${assetId}`,
+                ownership_share_percent: '37.500000000001',
+                custody_quantity: '987654.321000000001',
+            },
+        ],
+    };
+}
+
+function sourcePayload(asOfDate: string, assets: SourceAssetWire[], cash: {cashSources?: SourceCashSourceWire[]; selectedCashBalances?: SourceCashBalanceWire[]} = {}): AllocationSourceWire {
+    return {
+        generated_at: `${asOfDate}T12:00:00+00:00`,
+        as_of_date: asOfDate,
+        assets,
+        cash_sources: cash.cashSources ?? [],
+        selected_cash_balances: cash.selectedCashBalances ?? [],
+    };
 }
 
 // =========================================================================
@@ -233,9 +356,18 @@ function regexLiteral(value: string): string {
     return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function semanticDecimalText(value: string): string {
+    if (!value.includes('.')) return value;
+    return value.replace(/0+$/, '').replace(/\.$/, '');
+}
+
+function semanticDecimalOrDash(value: string | null): string {
+    return value === null ? '—' : semanticDecimalText(value);
+}
+
 async function expectSourceMetadata(row: Locator, context: SourceContextWire, sourceDate: string, quote: SourceQuoteWire): Promise<void> {
     await expect(row).toContainText(context.broker_name);
-    await expect(row).toContainText(new RegExp(`(?:^|\\s)${regexLiteral(context.ownership_share_percent)}%(?:\\s|$)`));
+    await expect(row).toContainText(new RegExp(`(?:^|\\s)${regexLiteral(semanticDecimalText(context.ownership_share_percent))}%(?:\\s|$)`));
     await expect(row).toContainText(sourceDate);
     if (quote.reference_date !== null) await expect(row).toContainText(quote.reference_date);
     if (quote.source !== null) await expect(row).toContainText(quote.source);
@@ -253,8 +385,13 @@ function isComputeRequest(request: Request): boolean {
 function sourceDateOf(request: Request): string | null {
     if (request.method() !== 'POST') return null;
     if (new URL(request.url()).pathname !== REPORT_PATH) return null;
-    const body = request.postDataJSON() as {allocation_source?: {as_of_date?: string} | null} | null;
+    const body = request.postDataJSON() as {allocation_source?: {as_of_date?: string; selected_cash_broker_ids?: number[]} | null} | null;
     return body?.allocation_source?.as_of_date ?? null;
+}
+
+function selectedCashBrokerIdsOf(request: Request): number[] {
+    const body = request.postDataJSON() as {allocation_source?: {selected_cash_broker_ids?: number[]} | null} | null;
+    return body?.allocation_source?.selected_cash_broker_ids ?? [];
 }
 
 type SourceOutcome = AllocationSourceWire | 'reject';
@@ -270,11 +407,11 @@ type SourceOutcome = AllocationSourceWire | 'reject';
  * what the resolver returns — including the ordering, which the gallery is
  * expected to preserve.
  */
-async function routeAllocationSource(page: Page, resolve: (asOfDate: string) => Promise<SourceOutcome> | SourceOutcome): Promise<void> {
+async function routeAllocationSource(page: Page, resolve: (asOfDate: string, selectedCashBrokerIds: readonly number[]) => Promise<SourceOutcome> | SourceOutcome): Promise<void> {
     await page.route(`**${REPORT_PATH}`, async (route) => {
         const asOfDate = sourceDateOf(route.request());
         if (asOfDate === null) return route.fallback();
-        const outcome = await resolve(asOfDate);
+        const outcome = await resolve(asOfDate, selectedCashBrokerIdsOf(route.request()));
         if (outcome === 'reject') {
             return route.fulfill({status: 503, contentType: 'application/json', body: JSON.stringify({detail: 'pac e2e: allocation source unavailable'})});
         }
@@ -394,18 +531,15 @@ async function selectCurrency(page: Page, testId: string, code: string): Promise
 }
 
 /**
- * Pick a `SimpleSelect` option *by its value*.
+ * Pick the contribution-mode `SimpleSelect` option *by its value*.
  *
  * Driven from the keyboard, and not because clicking is hard: the option list is
  * `position: fixed`, recomputed from the trigger on every scroll event, so a
  * pointer click makes the harness scroll to reach it and the reposition then
- * moves it again. On the 1280×720 desktop project that chase never converged —
- * the purchase-grid list of a row near the bottom of the page reported
- * "element is outside of the viewport" through 175 click retries, while the
- * same selection on the taller mobile viewport succeeded. So the list geometry
- * is *asserted* here (a list a user cannot see at all is a defect, and this
- * says so with the numbers in the message) and the selection itself goes
- * through `Home` + `ArrowDown`, which is the component's own keyboard model:
+ * moves it again. The list geometry is therefore *asserted* here (a list a user
+ * cannot see at all is a defect, and this says so with the numbers in the
+ * message) and the selection itself goes through `Home` + `ArrowDown`, which is
+ * the component's own keyboard model:
  * `aria-activedescendant` names the highlighted option by value, so nothing in
  * this helper depends on where an option sits in the list either.
  */
@@ -445,6 +579,27 @@ async function selectSimpleOption(page: Page, testId: string, value: string): Pr
     await expect(trigger).toHaveAttribute('aria-expanded', 'false');
 }
 
+type CashMode = 'not_supplied' | 'none' | 'broker_copy' | 'manual';
+
+async function selectCashMode(page: Page, mode: CashMode): Promise<void> {
+    const button = page.getByTestId(`pac-cash-mode-${mode.replace('_', '-')}`);
+    await expect(button).toBeVisible();
+    await button.click();
+    await expect(button).toHaveAttribute('aria-pressed', 'true');
+    if (mode === 'manual') await expect(page.getByTestId('pac-cash-row')).toHaveCount(1);
+    else if (mode === 'broker_copy') await expect(page.getByTestId('pac-cash-broker-copy')).toBeVisible();
+    else await expect(page.getByTestId(mode === 'none' ? 'pac-cash-none' : 'pac-cash-not-supplied')).toBeVisible();
+}
+
+async function setGridMode(page: Page, index: number, mode: 'whole' | 'fractional'): Promise<void> {
+    const selected = page.getByTestId(`pac-grid-${mode}-${index}`);
+    const other = page.getByTestId(`pac-grid-${mode === 'whole' ? 'fractional' : 'whole'}-${index}`);
+    await expect(selected).toBeVisible();
+    await selected.click();
+    await expect(selected).toHaveAttribute('aria-pressed', 'true');
+    await expect(other).toHaveAttribute('aria-pressed', 'false');
+}
+
 /**
  * The index of the row whose own `prefix` field holds `expected`.
  *
@@ -479,17 +634,34 @@ async function rowIndexWhere(page: Page, prefix: string, expected: string, label
     return found;
 }
 
-/** Every custody context key currently in the draft, in row order. */
-async function custodyKeys(page: Page): Promise<string[]> {
+/** A locked source row identified by an exact broker fact from the response. */
+async function sourceRowForContext(page: Page, context: SourceContextWire, label: string): Promise<{index: number; row: Locator}> {
+    const row = page.getByTestId('pac-row').filter({hasText: context.broker_name});
+    await expect(row, `${label}: source row`).toHaveCount(1);
+    const rawIndex = await row.getAttribute('data-row-index');
+    expect(rawIndex, `${label}: source row is missing data-row-index`).not.toBeNull();
+    const index = Number(rawIndex);
+    expect(Number.isSafeInteger(index), `${label}: source row has invalid data-row-index "${rawIndex}"`).toBe(true);
+    return {index, row};
+}
+
+/** The sole row carrying a given origin, found by its data contract. */
+async function rowIndexByOrigin(page: Page, origin: string, label: string): Promise<number> {
     const rows = page.getByTestId('pac-row');
     const total = await rows.count();
-    const keys: string[] = [];
+    const matches: number[] = [];
     for (let position = 0; position < total; position += 1) {
-        const index = await rows.nth(position).getAttribute('data-row-index');
-        if (index === null) continue;
-        keys.push(await page.getByTestId(`pac-custody-context-${index}`).inputValue());
+        const row = rows.nth(position);
+        if ((await row.getAttribute('data-origin')) !== origin) continue;
+        const rawIndex = await row.getAttribute('data-row-index');
+        if (rawIndex === null) continue;
+        const index = Number(rawIndex);
+        if (Number.isSafeInteger(index)) matches.push(index);
     }
-    return keys;
+    expect(matches, `${label}: rows with data-origin="${origin}"`).toHaveLength(1);
+    const [index] = matches;
+    if (index === undefined) throw new Error(`${label}: no row with data-origin="${origin}"`);
+    return index;
 }
 
 /** Add one manual row to a draft this test controls, and return its index. */
@@ -503,28 +675,24 @@ async function addManualRow(page: Page): Promise<number> {
     return before;
 }
 
-async function fillManualRow(page: Page, index: number, values: {instrument: string; name: string; quantity: string; price: string; currency: string; target: string; grid?: 'whole' | 'fractional'; step?: string; quoteDate?: string}): Promise<void> {
-    await field(page, 'pac-instrument-id', index).fill(values.instrument);
+async function fillManualRow(page: Page, index: number, values: {name: string; quantity: string; price: string; currency: string; target: string; grid?: 'whole' | 'fractional'; step?: string; quoteBasis?: string; quoteDate?: string}): Promise<void> {
     await field(page, 'pac-display-name', index).fill(values.name);
     await field(page, 'pac-initial-quantity', index).fill(values.quantity);
     await field(page, 'pac-raw-price', index).fill(values.price);
     await selectCurrency(page, `pac-asset-currency-${index}`, values.currency);
     await field(page, 'pac-target-weight', index).fill(values.target);
-    if (values.grid) await selectSimpleOption(page, `pac-grid-mode-${index}`, values.grid);
+    if (values.grid) await setGridMode(page, index, values.grid);
     if (values.step !== undefined) await field(page, 'pac-step-quantity', index).fill(values.step);
+    if (values.quoteBasis !== undefined) await field(page, 'pac-price-basis', index).fill(values.quoteBasis);
     if (values.quoteDate) await setDate(page, `pac-price-date-${index}`, values.quoteDate);
 }
 
 /** Open the collapsed FX section and turn on manual valuation rates. */
 async function enableManualRates(page: Page): Promise<void> {
-    // The collapsed disclosure does not publish its own test id. Reach it by
-    // keyboard from the next identified control rather than introducing a CSS,
-    // role, translated-text or coordinate selector.
-    const analyze = page.getByTestId('pac-analyze');
-    await expect(analyze).toBeVisible();
-    await analyze.focus();
-    await page.keyboard.press('Shift+Tab');
-    await page.keyboard.press('Enter');
+    await expect(page.getByTestId('pac-valuation-rates')).toBeVisible();
+    const disclosure = page.getByTestId('pac-valuation-rates-toggle');
+    await disclosure.click();
+    await expect(disclosure).toHaveAttribute('aria-expanded', 'true');
     const toggle = page.getByTestId('pac-enable-rates');
     await expect(toggle).toBeVisible();
     await toggle.click();
@@ -577,10 +745,10 @@ function ratio(numerator: string, denominator: string, approximation: string, un
 // =========================================================================
 // The deterministic manual scenario analysed against the real Tool API.
 //
-// Two custody rows on the *same* instrument (10 units at 10 EUR, and 0 units),
-// 50/50 targets, 10 USD of existing cash at an explicit 0.9 rate and 5 EUR of
-// contributions. Every number the backend derives from that is exact and is
-// asserted below, both on the wire and in the DOM.
+// Two manual rows (10 units at 10 EUR, and 0 units), 50/50 targets, 10 USD of
+// existing cash at an explicit 0.9 rate and 5 EUR of contributions. Manual
+// canonical ids remain hidden and distinct. Every number the backend derives
+// from the visible facts is exact and is asserted below, on the wire and DOM.
 // =========================================================================
 async function fillDeterministicScenario(page: Page): Promise<void> {
     await selectCurrency(page, 'pac-report-currency', 'EUR');
@@ -588,7 +756,6 @@ async function fillDeterministicScenario(page: Page): Promise<void> {
 
     const primary = await addManualRow(page);
     await fillManualRow(page, primary, {
-        instrument: SHARED_INSTRUMENT,
         name: PRIMARY_NAME,
         quantity: '10',
         price: '10',
@@ -598,10 +765,8 @@ async function fillDeterministicScenario(page: Page): Promise<void> {
         step: '1',
         quoteDate: REFERENCE_DATE,
     });
-
     const secondary = await addManualRow(page);
     await fillManualRow(page, secondary, {
-        instrument: SHARED_INSTRUMENT,
         name: SECONDARY_NAME,
         quantity: '0',
         price: '10',
@@ -612,7 +777,7 @@ async function fillDeterministicScenario(page: Page): Promise<void> {
         quoteDate: REFERENCE_DATE,
     });
 
-    await selectSimpleOption(page, 'pac-cash-mode', 'custom');
+    await selectCashMode(page, 'manual');
     await expect(page.getByTestId('pac-cash-row')).toHaveCount(1);
     await selectCurrency(page, 'pac-cash-currency-0', 'USD');
     await field(page, 'pac-cash-amount', 0).fill('10');
@@ -621,6 +786,7 @@ async function fillDeterministicScenario(page: Page): Promise<void> {
     await expect(page.getByTestId('pac-contributions-row')).toHaveCount(1);
     await selectCurrency(page, 'pac-contributions-currency-0', 'EUR');
     await field(page, 'pac-contributions-amount', 0).fill('5');
+    await field(page, 'pac-contributions-monetary-step', 0).fill('0.01');
 
     await enableManualRates(page);
     await page.getByTestId('pac-add-rate').click();
@@ -641,7 +807,7 @@ function assertScenarioRequest(parameters: PacInput): {primary: PacInputRow; sec
     expect(parameters.report_currency).toBe('EUR');
     expect(parameters.as_of_date).toBe(REFERENCE_DATE);
     expect(parameters.cash_balances).toEqual([{currency: 'USD', amount: '10'}]);
-    expect(parameters.contributions).toEqual([{currency: 'EUR', amount: '5'}]);
+    expect(parameters.contributions).toEqual([{currency: 'EUR', amount: '5', monetary_step: '0.01'}]);
     expect(parameters.valuation_rates).toEqual([{currency: 'USD', rate_to_report: '0.9', reference_date: REFERENCE_DATE}]);
     expect(parameters).not.toHaveProperty('solver');
     expect(parameters).not.toHaveProperty('orders');
@@ -651,11 +817,12 @@ function assertScenarioRequest(parameters: PacInput): {primary: PacInputRow; sec
     const primary = only(rows, (row) => row.name === PRIMARY_NAME, 'primary PAC input row');
     const secondary = only(rows, (row) => row.name === SECONDARY_NAME, 'secondary PAC input row');
     expect(primary.row_key).not.toBe(secondary.row_key);
-    expect(primary.instrument_key).toBe(SHARED_INSTRUMENT);
-    expect(secondary.instrument_key).toBe(SHARED_INSTRUMENT);
+    expect(primary.instrument_key).toBeTruthy();
+    expect(secondary.instrument_key).toBeTruthy();
+    expect(primary.instrument_key).not.toBe(secondary.instrument_key);
     expect(primary).toEqual({
         row_key: primary.row_key,
-        instrument_key: SHARED_INSTRUMENT,
+        instrument_key: primary.instrument_key,
         name: PRIMARY_NAME,
         initial_quantity: '10',
         quote: {raw_price: '10', currency: 'EUR', quote_base_quantity: 1, reference_date: REFERENCE_DATE},
@@ -664,7 +831,7 @@ function assertScenarioRequest(parameters: PacInput): {primary: PacInputRow; sec
     });
     expect(secondary).toEqual({
         row_key: secondary.row_key,
-        instrument_key: SHARED_INSTRUMENT,
+        instrument_key: secondary.instrument_key,
         name: SECONDARY_NAME,
         initial_quantity: '0',
         quote: {raw_price: '10', currency: 'EUR', quote_base_quantity: 1, reference_date: REFERENCE_DATE},
@@ -699,7 +866,7 @@ function assertReadyOutput(output: PacOutput, primaryInput: PacInputRow, seconda
     expect(primary).toEqual({
         row_index: 0,
         row_key: primaryInput.row_key,
-        instrument_key: SHARED_INSTRUMENT,
+        instrument_key: primaryInput.instrument_key,
         name: PRIMARY_NAME,
         quantity: available('10'),
         initial_value_native: available({currency: 'EUR', amount: '100'}),
@@ -711,7 +878,7 @@ function assertReadyOutput(output: PacOutput, primaryInput: PacInputRow, seconda
     expect(secondary).toEqual({
         row_index: 1,
         row_key: secondaryInput.row_key,
-        instrument_key: SHARED_INSTRUMENT,
+        instrument_key: secondaryInput.instrument_key,
         name: SECONDARY_NAME,
         quantity: available('0'),
         initial_value_native: available({currency: 'EUR', amount: '0'}),
@@ -757,10 +924,7 @@ function assertReadyOutput(output: PacOutput, primaryInput: PacInputRow, seconda
         {currency: 'EUR', amount: '0'},
         {currency: 'USD', amount: '10'},
     ]);
-    expect(output.normalized.contributions).toEqual([
-        {currency: 'EUR', amount: '5'},
-        {currency: 'USD', amount: '0'},
-    ]);
+    expect(output.normalized.contributions).toEqual([{currency: 'EUR', amount: '5', monetary_step: '0.01'}]);
     expect(output.normalized.valuation_rates).toEqual([
         {currency: 'EUR', rate_to_report: '1', reference_date: null},
         {currency: 'USD', rate_to_report: '0.9', reference_date: REFERENCE_DATE},
@@ -777,20 +941,43 @@ async function expectReadyDom(page: Page): Promise<void> {
     await expect(result).toBeVisible();
     await expect(result).toHaveAttribute('data-state', 'ready');
     await expect(result).toHaveAttribute('data-stale', 'false');
+    await expect(result).toHaveAttribute('data-view', 'formatted');
+    await expect(page.getByTestId('pac-view-formatted')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('pac-view-exact')).toHaveAttribute('aria-pressed', 'false');
     await expect(page.getByTestId('pac-total-invested')).toHaveText('100 EUR');
     await expect(page.getByTestId('pac-total-existing-cash')).toHaveText('9 EUR');
     await expect(page.getByTestId('pac-total-contributions')).toHaveText('5 EUR');
     await expect(page.getByTestId('pac-total-combined-cash')).toHaveText('14 EUR');
-    await expect(page.getByTestId('pac-max-gap')).toHaveText('5000 / 100');
-    await expect(page.getByTestId('pac-squared-gap')).toHaveText('50000000 / 10000');
+    await expect(page.getByTestId('pac-max-gap')).not.toContainText('/');
+    await expect(page.getByTestId('pac-squared-gap')).not.toContainText('/');
 
     const primary = page.getByTestId('pac-result-row').filter({hasText: PRIMARY_NAME});
     const secondary = page.getByTestId('pac-result-row').filter({hasText: SECONDARY_NAME});
     await expect(primary).toHaveCount(1);
     await expect(secondary).toHaveCount(1);
     await expect(primary).toContainText('100 EUR');
+    await expect(primary).not.toContainText('10000 / 100');
+    await expect(secondary).not.toContainText('-5000 / 100');
+    await expect(page.getByTestId('pac-denominator-note')).toBeVisible();
+
+    const cashPools = page.getByTestId('pac-cash-pools');
+    await expect(cashPools).toBeVisible();
+    const nativePoolExplanation = await cashPools.evaluate((section) => {
+        const child = section.children.item(1);
+        return {tagName: child?.tagName ?? null, hasText: Boolean(child?.textContent?.trim())};
+    });
+    expect(nativePoolExplanation).toEqual({tagName: 'P', hasText: true});
+    await expect(page.getByTestId('pac-cash-pool')).toHaveCount(2);
+
+    await page.getByTestId('pac-view-exact').click();
+    await expect(result).toHaveAttribute('data-view', 'exact');
+    await expect(page.getByTestId('pac-max-gap')).toHaveText('5000 / 100');
+    await expect(page.getByTestId('pac-squared-gap')).toHaveText('50000000 / 10000');
     await expect(primary).toContainText('10000 / 100');
     await expect(secondary).toContainText('-5000 / 100');
+
+    await page.getByTestId('pac-view-formatted').click();
+    await expect(result).toHaveAttribute('data-view', 'formatted');
     await expect(page.getByTestId('pac-normalized-details')).toBeVisible();
 }
 
@@ -883,9 +1070,11 @@ test.describe('PAC allocator', () => {
             const sample = () => {
                 if (!probe.running) return;
                 probe.frames += 1;
-                const nodes = document.querySelectorAll('[data-testid="tool-host-catalog-loading"],[data-testid="tool-host-component-loading"]');
-                for (const node of Array.from(nodes)) {
-                    if ((node as HTMLElement).getClientRects().length > 0) probe.seen = true;
+                for (const node of Array.from(document.getElementsByTagName('*'))) {
+                    const testId = node.getAttribute('data-testid');
+                    if ((testId === 'tool-host-catalog-loading' || testId === 'tool-host-component-loading') && (node as HTMLElement).getClientRects().length > 0) {
+                        probe.seen = true;
+                    }
                 }
                 requestAnimationFrame(sample);
             };
@@ -912,7 +1101,7 @@ test.describe('PAC allocator', () => {
         await waitForPacTool(page);
     });
 
-    test('opens on the local date, the account base currency and no rows, and accepts a manual asset while the source is still loading', async ({page}, testInfo) => {
+    test('opens with compact valuation settings and funding first, accepts manual input while loading, and enforces 28/32 capacity', async ({page}, testInfo) => {
         const user = principal(testInfo.project.name, TEST_USER, TEST_ALICE);
         await login(page, user);
 
@@ -936,29 +1125,64 @@ test.describe('PAC allocator', () => {
         await expect(page.getByTestId('pac-owned-assets-loading')).toBeVisible();
 
         const today = await browserDate(page);
-        await expect(page.getByTestId('pac-as-of-date')).toHaveValue(today);
-        await expect(page.getByTestId('pac-report-currency-trigger')).toContainText(baseCurrency);
+        const scenario = page.getByTestId('pac-scenario');
+        const reportCurrency = scenario.getByTestId('pac-report-currency');
+        const reportCurrencyTrigger = scenario.getByTestId('pac-report-currency-trigger');
+        const asOfRoot = scenario.getByTestId('pac-as-of-date-root');
+        const asOfDate = asOfRoot.getByTestId('pac-as-of-date');
+        await expect(reportCurrency).toContainText(baseCurrency);
+        await expect(reportCurrencyTrigger).toContainText(baseCurrency);
+        await expect(asOfDate).toHaveValue(today);
         await expect(page.getByTestId('pac-no-rows')).toBeVisible();
         await expect(page.getByTestId('pac-row')).toHaveCount(0);
+        await expect(scenario.getByTestId('pac-valuation-settings-info')).toBeVisible();
+        await expect(page.getByTestId('pac-valuation-rates')).toHaveCount(0);
 
-        // Custom controls, not native ones: a searchable currency select and a
-        // typed/calendar date picker rather than <input type="date">.
-        await expect(page.getByTestId('pac-as-of-date')).toHaveAttribute('type', 'text');
-        await expect(page.getByTestId('pac-as-of-date-root')).toHaveCount(1);
-        await expect(page.getByTestId('pac-report-currency-trigger')).toHaveCount(1);
+        // One compact currency control and one typed/calendar picker. The date
+        // label lives outside the picker exactly once; an empty picker `label`
+        // must not duplicate it inside the root.
+        await expect(reportCurrency).toHaveCount(1);
+        await expect(reportCurrencyTrigger).toHaveCount(1);
+        await expect(asOfRoot).toHaveCount(1);
+        await expect(asOfDate).toHaveAttribute('type', 'text');
+        const asOfStructure = await asOfRoot.evaluate((root) => {
+            const external = root.parentElement;
+            const externalText = external?.children.item(0)?.textContent?.trim() ?? '';
+            return {
+                externalTag: external?.tagName ?? null,
+                externalTextPresent: externalText.length > 0,
+                duplicatedInside: externalText.length > 0 && (root.textContent ?? '').includes(externalText),
+                internalLabels: root.getElementsByTagName('label').length,
+                valuationControlCount: external?.parentElement?.children.length ?? 0,
+            };
+        });
+        expect(asOfStructure).toEqual({externalTag: 'LABEL', externalTextPresent: true, duplicatedInside: false, internalLabels: 0, valuationControlCount: 2});
+
+        const orderedSections = tool.getByTestId(/^(pac-funding|pac-owned-assets)$/);
+        await expect(orderedSections).toHaveCount(2);
+        expect(await orderedSections.evaluateAll((sections) => sections.map((section) => section.getAttribute('data-testid'))), 'funding must precede the asset gallery').toEqual(['pac-funding', 'pac-owned-assets']);
 
         // Manual entry does not wait for the portfolio.
         const index = await addManualRow(page);
         await field(page, 'pac-display-name', index).fill('PAC manual while loading');
         await expect(page.getByTestId('pac-owned-assets-loading')).toBeVisible();
+        await expect(page.getByTestId(`pac-initial-state-${index}`)).toBeVisible();
+        await expect(page.getByTestId(`pac-target-state-${index}`)).toBeVisible();
         for (const prefix of ['pac-initial-quantity', 'pac-raw-price', 'pac-target-weight', 'pac-step-quantity']) {
             await expect(field(page, prefix, index)).toHaveAttribute('type', 'text');
             await expect(field(page, prefix, index)).toHaveAttribute('inputmode', 'decimal');
         }
         await expect(page.getByTestId(`pac-asset-currency-${index}-trigger`)).toHaveCount(1);
         await expect(page.getByTestId(`pac-price-date-${index}`)).toHaveAttribute('type', 'text');
-        await expect(page.getByTestId(`pac-price-basis-${index}-button`)).toHaveCount(1);
-        await expect(page.getByTestId(`pac-grid-mode-${index}-button`)).toHaveCount(1);
+        const quoteBasis = field(page, 'pac-price-basis', index);
+        await expect(quoteBasis).toHaveAttribute('type', 'number');
+        await expect(quoteBasis).toHaveAttribute('min', '1');
+        await expect(quoteBasis).toHaveAttribute('step', '1');
+        await quoteBasis.fill('1000');
+        await expect(quoteBasis).toHaveValue('1000');
+        await expect(page.getByTestId(`pac-grid-whole-${index}`)).toHaveAttribute('aria-pressed', 'true');
+        await expect(page.getByTestId(`pac-grid-fractional-${index}`)).toHaveAttribute('aria-pressed', 'false');
+        await expect(field(page, 'pac-step-quantity', index)).toHaveValue('1');
 
         held.open();
         await expect(page.getByTestId('pac-owned-asset-900001')).toBeVisible({timeout: 20_000});
@@ -967,21 +1191,29 @@ test.describe('PAC allocator', () => {
         // The row the user typed while the portfolio was loading is still there.
         await expect(field(page, 'pac-display-name', index)).toHaveValue('PAC manual while loading');
         await expect(tool).toHaveAttribute('data-busy', 'false');
+
+        for (let ownedRows = 1; ownedRows < 28; ownedRows += 1) {
+            await page.getByTestId('pac-add-manual-asset').click();
+        }
+        await expect(page.getByTestId('pac-row')).toHaveCount(28);
+        await expect(page.getByTestId('pac-selected-context-count')).toContainText('28');
+        await expect(page.getByTestId('pac-row-limit-warning')).toBeVisible();
+        for (let ownedRows = 28; ownedRows < 32; ownedRows += 1) {
+            await page.getByTestId('pac-add-manual-asset').click();
+        }
+        await expect(page.getByTestId('pac-row')).toHaveCount(32);
+        await expect(page.getByTestId('pac-selected-context-count')).toContainText('32');
+        await page.getByTestId('pac-add-manual-asset').click();
+        await expect(page.getByTestId('pac-row')).toHaveCount(32);
     });
 
     test('keeps manual entry available when the allocation source is empty and when it fails, and recovers on retry', async ({page}) => {
-        // TEST_USER_2 holds no OWNER access in the seeded fixture, so its
-        // allocation source is genuinely empty. Verified, not assumed.
         await login(page, TEST_USER_2);
-        const today = await browserDate(page);
-        const probe = await page.request.post(REPORT_PATH, {
-            data: {include_summary: false, include_history: false, include_allocation_history: false, include_positions_contribution: false, include_breakdown: false, allocation_source: {as_of_date: today}},
+        let sourceMode: 'empty' | 'failure' | 'recovered' = 'empty';
+        await routeAllocationSource(page, (asOfDate) => {
+            if (sourceMode === 'failure') return 'reject';
+            return sourcePayload(asOfDate, sourceMode === 'recovered' ? [missingPriceAsset()] : []);
         });
-        expect(probe.status(), 'allocation source probe').toBe(200);
-        const probeBody = (await probe.json()) as {allocation_source?: AllocationSourceWire | null};
-        if ((probeBody.allocation_source?.assets ?? []).length !== 0) {
-            throw new Error(`${TEST_USER_2.username} is expected to hold no OWNER broker access — see populate_broker_user_access() in backend/test_scripts/test_db/populate_mock_data.py`);
-        }
 
         await navigateTo(page, TOOL_ROUTE);
         await waitForPacTool(page);
@@ -989,11 +1221,9 @@ test.describe('PAC allocator', () => {
         const emptyRow = await addManualRow(page);
         await field(page, 'pac-display-name', emptyRow).fill('PAC manual without portfolio');
         await expect(field(page, 'pac-display-name', emptyRow)).toHaveValue('PAC manual without portfolio');
-
         // Now the failing source. The editor must stay usable and must offer an
         // explicit retry — nothing here retries on its own.
-        let sourceFails = true;
-        await routeAllocationSource(page, (asOfDate) => (sourceFails ? 'reject' : sourcePayload(asOfDate, [missingPriceAsset()])));
+        sourceMode = 'failure';
         await navigateTo(page, TOOL_ROUTE);
         await waitForPacTool(page);
         await expect(page.getByTestId('pac-owned-assets-error')).toBeVisible({timeout: 20_000});
@@ -1003,14 +1233,14 @@ test.describe('PAC allocator', () => {
         await field(page, 'pac-initial-quantity', fallbackRow).fill('4.500000000001');
         await expect(field(page, 'pac-initial-quantity', fallbackRow)).toHaveValue('4.500000000001');
 
-        sourceFails = false;
+        sourceMode = 'recovered';
         await page.getByTestId('pac-owned-assets-retry').click();
         await expect(page.getByTestId('pac-owned-asset-900002')).toBeVisible({timeout: 20_000});
         await expect(page.getByTestId('pac-owned-assets-error')).toHaveCount(0);
         await expect(field(page, 'pac-display-name', fallbackRow)).toHaveValue('PAC manual fallback');
     });
 
-    test('renders one card per canonical asset of the real allocation source and imports the contexts of an identified asset', async ({page}) => {
+    test('renders the real OWNER catalogue by canonical asset and imports identified contexts as locked facts with hidden ids', async ({page}) => {
         const user = TEST_ADMIN;
         await login(page, user);
 
@@ -1019,32 +1249,32 @@ test.describe('PAC allocator', () => {
         await waitForPacTool(page);
         const source = ((await (await sourceResponse).json()) as {allocation_source: AllocationSourceWire}).allocation_source;
 
-        if (source.assets.length === 0) {
+        const ownedAssets = source.assets.filter((asset) => asset.usage_scope === 'owned');
+        if (ownedAssets.length === 0) {
             throw new Error(`${user.username} is expected to own broker positions — see populate_mock_data.py (populate_broker_user_access / populate_transactions)`);
         }
 
-        // Canonical grouping: one card per asset id, and no card for anything
-        // the backend did not send. Both counts come from the response this
-        // page received, never from a hardcoded fixture size.
+        // The default scope is OWNER. Each card is tied to an id in this exact
+        // response, never to a global seeded count.
         await expect(page.getByTestId('pac-owned-assets-loading')).toHaveCount(0, {timeout: 20_000});
-        for (const asset of source.assets) {
+        for (const asset of ownedAssets) {
             await expect(page.getByTestId(`pac-owned-asset-${asset.asset_id}`), `card for asset ${asset.asset_id}`).toHaveCount(1);
         }
-        const unpricedAssets = source.assets.filter((asset) => asset.quote.raw_price === null);
+        const unpricedAssets = ownedAssets.filter((asset) => asset.quote.raw_price === null);
         if (unpricedAssets.length === 0) {
             throw new Error(`${user.username} is expected to own the seeded unpriced holding — see populate_assets / populate_transactions in backend/test_scripts/test_db/populate_mock_data.py`);
         }
         for (const asset of unpricedAssets) {
             await expect(page.getByTestId(`pac-owned-asset-${asset.asset_id}`), `unpriced card for asset ${asset.asset_id}`).toBeVisible();
         }
-        // `pac-owned-assets-*` (empty/loading/error/refresh/retry/search) never
-        // matches this prefix: those ids carry an `s` where this one has a dash.
-        await expect(page.getByTestId(/^pac-owned-asset-\d+$/)).toHaveCount(source.assets.length);
-
         // The asset under test is identified by id, chosen deterministically as
         // the one with the most custody contexts (ties resolved by id) — never
         // "the first card".
-        const target = source.assets.reduce((selected, candidate) => (candidate.contexts.length > selected.contexts.length || (candidate.contexts.length === selected.contexts.length && candidate.asset_id < selected.asset_id) ? candidate : selected));
+        const contextualAssets = ownedAssets.filter((asset) => asset.contexts.length > 0);
+        if (contextualAssets.length === 0) {
+            throw new Error(`${user.username} is expected to own at least one custody context — see populate_transactions in backend/test_scripts/test_db/populate_mock_data.py`);
+        }
+        const target = contextualAssets.reduce((selected, candidate) => (candidate.contexts.length > selected.contexts.length || (candidate.contexts.length === selected.contexts.length && candidate.asset_id < selected.asset_id) ? candidate : selected));
         const card = page.getByTestId(`pac-owned-asset-${target.asset_id}`);
         await expect(card).toHaveAttribute('aria-pressed', 'false');
         await card.click();
@@ -1055,19 +1285,23 @@ test.describe('PAC allocator', () => {
         await expect(card).toHaveAttribute('aria-pressed', 'true');
 
         for (const context of target.contexts) {
-            const index = await rowIndexWhere(page, 'pac-custody-context', context.context_key, `context ${context.context_key}`);
-            const sourceRow = page.getByTestId('pac-row').filter({hasText: context.broker_name});
-            await expect(sourceRow, `source metadata row for ${context.context_key}`).toHaveCount(1);
-            await expectSourceMetadata(sourceRow, context, source.as_of_date, target.quote);
-            await expect(field(page, 'pac-initial-quantity', index)).toHaveValue(context.custody_quantity);
-            await expect(field(page, 'pac-instrument-id', index)).toHaveValue(target.instrument_key);
-            await expect(field(page, 'pac-display-name', index)).toHaveValue(target.name);
-            await expect(field(page, 'pac-raw-price', index)).toHaveValue(target.quote.raw_price ?? '');
-            await expect(field(page, 'pac-price-date', index)).toHaveValue(target.quote.reference_date ?? '');
-            await expect(page.getByTestId(`pac-asset-currency-${index}-trigger`)).toContainText(target.quote.currency);
-            // The copy carries facts, never a decision: target and grid stay blank.
+            const {index, row} = await sourceRowForContext(page, context, `context ${context.context_key}`);
+            await expectSourceMetadata(row, context, source.as_of_date, target.quote);
+            await expect(page.getByTestId(`pac-imported-initial-quantity-${index}`)).toContainText(semanticDecimalText(context.custody_quantity));
+            await expect(page.getByTestId(`pac-imported-price-${index}`)).toContainText(semanticDecimalOrDash(target.quote.raw_price));
+            await expect(page.getByTestId(`pac-imported-price-${index}`)).toContainText(target.quote.currency);
+            await expect(page.getByTestId(`pac-imported-price-basis-${index}`)).toContainText(String(target.quote.quote_base_quantity));
+            for (const prefix of ['pac-display-name', 'pac-initial-quantity', 'pac-raw-price', 'pac-asset-currency', 'pac-price-basis', 'pac-price-date', 'pac-instrument-id', 'pac-custody-context']) {
+                await expect(page.getByTestId(`${prefix}-${index}`)).toHaveCount(0);
+            }
+            await expect(row).not.toContainText(target.instrument_key);
+            await expect(row).not.toContainText(context.context_key);
+            // The copy carries locked facts, while target and grid remain the
+            // user's editable decisions with coherent whole-unit defaults.
             await expect(field(page, 'pac-target-weight', index)).toHaveValue('');
-            await expect(field(page, 'pac-step-quantity', index)).toHaveValue('');
+            await expect(page.getByTestId(`pac-grid-whole-${index}`)).toHaveAttribute('aria-pressed', 'true');
+            await expect(page.getByTestId(`pac-grid-fractional-${index}`)).toHaveAttribute('aria-pressed', 'false');
+            await expect(field(page, 'pac-step-quantity', index)).toHaveValue('1');
         }
 
         // Unmodified copies are dropped without a question.
@@ -1077,53 +1311,112 @@ test.describe('PAC allocator', () => {
         await expect(card).toHaveAttribute('aria-pressed', 'false');
     });
 
-    test('imports every OWNER context of a canonical asset including a 0% share, keeps unpriced assets, and copies exact decimals', async ({page}, testInfo) => {
+    test('filters a multi-scope gallery without leaking foreign details and imports OWNER contexts plus a zero candidate as locked facts', async ({page}, testInfo) => {
         const user = principal(testInfo.project.name, TEST_USER, TEST_ALICE);
         await login(page, user);
         const asset = multiContextAsset(REFERENCE_DATE);
         const unpriced = missingPriceAsset();
-        await routeAllocationSource(page, (asOfDate) => sourcePayload(asOfDate, [asset, unpriced]));
+        const zeroCandidate = zeroCandidateAsset();
+        const otherUsers = privateScopedAsset('other_users', 900_004);
+        const observed = privateScopedAsset('observed', 900_005);
+        let requestedDate = '';
+        await routeAllocationSource(page, (asOfDate) => {
+            requestedDate = asOfDate;
+            return sourcePayload(asOfDate, [observed, asset, otherUsers, unpriced, zeroCandidate]);
+        });
         await rejectCompute(page);
 
         await navigateTo(page, TOOL_ROUTE);
         await waitForPacTool(page);
+        await selectCurrency(page, 'pac-report-currency', 'EUR');
 
         const card = page.getByTestId(`pac-owned-asset-${asset.asset_id}`);
         const unpricedCard = page.getByTestId(`pac-owned-asset-${unpriced.asset_id}`);
+        const zeroCard = page.getByTestId(`pac-owned-asset-${zeroCandidate.asset_id}`);
+        const otherCard = page.getByTestId(`pac-owned-asset-${otherUsers.asset_id}`);
+        const observedCard = page.getByTestId(`pac-owned-asset-${observed.asset_id}`);
         await expect(card).toHaveCount(1);
         // An asset with no saved price keeps its card: the user decides what to
         // do about the missing quote, the gallery does not decide for them.
         await expect(unpricedCard).toHaveCount(1);
         await expect(unpricedCard).toBeVisible();
+        await expect(zeroCard).toBeVisible();
+        await expect(otherCard).toHaveCount(0);
+        await expect(observedCard).toHaveCount(0);
+        await expect(page.getByTestId('pac-valuation-rates')).toHaveCount(0);
+
+        const ownedScope = page.getByTestId('pac-asset-scope-owned');
+        const otherScope = page.getByTestId('pac-asset-scope-other_users');
+        const observedScope = page.getByTestId('pac-asset-scope-observed');
+        await expect(ownedScope).toHaveAttribute('aria-pressed', 'true');
+        await expect(otherScope).toHaveAttribute('aria-pressed', 'false');
+        await expect(observedScope).toHaveAttribute('aria-pressed', 'false');
+        expect(await ownedScope.evaluate((button) => button.lastElementChild?.textContent?.trim())).toBe('3');
+        expect(await otherScope.evaluate((button) => button.lastElementChild?.textContent?.trim())).toBe('1');
+        expect(await observedScope.evaluate((button) => button.lastElementChild?.textContent?.trim())).toBe('1');
+
+        await otherScope.click();
+        await observedScope.click();
+        await expect(otherCard).toHaveAttribute('data-usage-scope', 'other_users');
+        await expect(otherCard).toHaveAttribute('data-lifecycle', 'active');
+        await expect(observedCard).toHaveAttribute('data-usage-scope', 'observed');
+        await expect(observedCard).toHaveAttribute('data-lifecycle', 'inactive');
+        for (const [privateCard, privateAsset] of [
+            [otherCard, otherUsers],
+            [observedCard, observed],
+        ] as const) {
+            const privateContext = only(privateAsset.contexts, () => true, `private context for ${privateAsset.asset_id}`);
+            await expect(privateCard).not.toContainText(privateContext.broker_name);
+            if (privateContext.broker_default_import_plugin) {
+                await expect(privateCard).not.toContainText(privateContext.broker_default_import_plugin);
+            }
+            await expect(privateCard).not.toContainText(semanticDecimalText(privateContext.ownership_share_percent));
+            await expect(privateCard).not.toContainText(semanticDecimalText(privateContext.custody_quantity));
+        }
 
         await card.click();
         await expect(page.getByTestId('pac-row')).toHaveCount(asset.contexts.length);
-        expect(new Set(await custodyKeys(page))).toEqual(new Set(asset.contexts.map((context) => context.context_key)));
+        await expect(page.getByTestId('pac-valuation-rates')).toBeVisible();
 
         for (const context of asset.contexts) {
-            const index = await rowIndexWhere(page, 'pac-custody-context', context.context_key, `fixture context ${context.context_key}`);
-            const sourceRow = page.getByTestId('pac-row').filter({hasText: context.broker_name});
-            await expect(sourceRow, `source metadata row for ${context.context_key}`).toHaveCount(1);
-            await expectSourceMetadata(sourceRow, context, REFERENCE_DATE, asset.quote);
-            await expect(field(page, 'pac-initial-quantity', index)).toHaveValue(context.custody_quantity);
-            await expect(field(page, 'pac-instrument-id', index)).toHaveValue(asset.instrument_key);
-            await expect(field(page, 'pac-display-name', index)).toHaveValue(asset.name);
-            await expect(field(page, 'pac-raw-price', index)).toHaveValue('123.450000000001');
-            await expect(field(page, 'pac-price-date', index)).toHaveValue(REFERENCE_DATE);
+            const {index, row} = await sourceRowForContext(page, context, `fixture context ${context.context_key}`);
+            await expectSourceMetadata(row, context, requestedDate, asset.quote);
+            await expect(page.getByTestId(`pac-imported-initial-quantity-${index}`)).toContainText(semanticDecimalText(context.custody_quantity));
+            await expect(page.getByTestId(`pac-imported-price-${index}`)).toContainText(semanticDecimalOrDash(asset.quote.raw_price));
+            await expect(page.getByTestId(`pac-imported-price-${index}`)).toContainText('USD');
+            await expect(page.getByTestId(`pac-imported-price-basis-${index}`)).toContainText('100');
+            await expect(page.getByTestId(`pac-imported-ownership-share-${index}`)).toContainText(`${semanticDecimalText(context.ownership_share_percent)}%`);
+            for (const prefix of ['pac-display-name', 'pac-initial-quantity', 'pac-raw-price', 'pac-asset-currency', 'pac-price-basis', 'pac-price-date', 'pac-instrument-id', 'pac-custody-context']) {
+                await expect(page.getByTestId(`${prefix}-${index}`)).toHaveCount(0);
+            }
+            await expect(row).not.toContainText(asset.instrument_key);
+            await expect(row).not.toContainText(context.context_key);
             await expect(field(page, 'pac-target-weight', index)).toHaveValue('');
-            await expect(field(page, 'pac-step-quantity', index)).toHaveValue('');
+            await expect(page.getByTestId(`pac-grid-whole-${index}`)).toHaveAttribute('aria-pressed', 'true');
+            await expect(page.getByTestId(`pac-grid-fractional-${index}`)).toHaveAttribute('aria-pressed', 'false');
+            await expect(field(page, 'pac-step-quantity', index)).toHaveValue('1');
         }
 
-        await unpricedCard.click();
+        await zeroCard.click();
         await expect(page.getByTestId('pac-row')).toHaveCount(asset.contexts.length + 1);
-        const unpricedContext = only(unpriced.contexts, (context) => context.broker_id === 9004, 'unpriced fixture context');
-        const unpricedIndex = await rowIndexWhere(page, 'pac-custody-context', unpricedContext.context_key, 'unpriced context');
-        await expect(field(page, 'pac-raw-price', unpricedIndex)).toHaveValue('');
-        await expect(field(page, 'pac-price-date', unpricedIndex)).toHaveValue('');
-        await expect(field(page, 'pac-initial-quantity', unpricedIndex)).toHaveValue('3');
+        const candidateRow = page.getByTestId('pac-row').filter({hasText: zeroCandidate.name});
+        await expect(candidateRow).toHaveCount(1);
+        const rawCandidateIndex = await candidateRow.getAttribute('data-row-index');
+        expect(rawCandidateIndex, 'zero candidate row is missing data-row-index').not.toBeNull();
+        const candidateIndex = Number(rawCandidateIndex);
+        expect(Number.isSafeInteger(candidateIndex), `zero candidate row index "${rawCandidateIndex}"`).toBe(true);
+        await expect(candidateRow).toHaveAttribute('data-origin', 'catalog_candidate');
+        await expect(candidateRow).toHaveAttribute('data-source-mode', 'locked');
+        await expect(page.getByTestId(`pac-imported-initial-quantity-${candidateIndex}`)).toContainText('0');
+        await expect(page.getByTestId(`pac-imported-price-${candidateIndex}`)).toContainText(semanticDecimalOrDash(zeroCandidate.quote.raw_price));
+        await expect(page.getByTestId(`pac-imported-price-${candidateIndex}`)).toContainText('CHF');
+        await expect(page.getByTestId(`pac-imported-price-basis-${candidateIndex}`)).toContainText('1000');
+        await expect(page.getByTestId(`pac-imported-ownership-share-${candidateIndex}`)).toHaveCount(0);
+        await expect(candidateRow).not.toContainText(zeroCandidate.instrument_key);
+        await expect(candidateRow).not.toContainText(zeroCandidate.candidate_key);
 
         // What actually leaves the browser: the same decimals, digit for digit,
-        // with the quote basis the source declared and no invented target/grid.
+        // with the quote basis the source declared and coherent default grid.
         const {parameters} = await analyzeAndCapture(page);
         expect(parameters.rows).toHaveLength(asset.contexts.length + 1);
         for (const context of asset.contexts) {
@@ -1135,17 +1428,24 @@ test.describe('PAC allocator', () => {
                 initial_quantity: context.custody_quantity,
                 quote: {raw_price: '123.450000000001', currency: 'USD', quote_base_quantity: 100, reference_date: REFERENCE_DATE},
                 target_percent: '',
-                buy_grid: {mode: null, quantity_step: ''},
+                buy_grid: {mode: 'whole', quantity_step: '1'},
             });
         }
-        const unpricedRow = only(parameters.rows ?? [], (candidate) => candidate.row_key === unpricedContext.context_key, 'wire row for the unpriced asset');
-        expect(unpricedRow.initial_quantity).toBe('3');
-        expect(unpricedRow.quote).toEqual({raw_price: null, currency: 'EUR', quote_base_quantity: 1, reference_date: null});
+        const candidateWire = only(parameters.rows ?? [], (candidate) => candidate.row_key === zeroCandidate.candidate_key, 'wire row for the zero-position candidate');
+        expect(candidateWire).toEqual({
+            row_key: zeroCandidate.candidate_key,
+            instrument_key: zeroCandidate.instrument_key,
+            name: zeroCandidate.name,
+            initial_quantity: '0',
+            quote: {raw_price: '88.765432100001', currency: 'CHF', quote_base_quantity: 1000, reference_date: REFERENCE_DATE},
+            target_percent: '',
+            buy_grid: {mode: 'whole', quantity_step: '1'},
+        });
 
         await expect(page.getByTestId('pac-client-error')).toHaveAttribute('data-error-code', 'request_rejected');
     });
 
-    test('duplicates the whole payload except the custody key, and confirms before dropping an edited copy', async ({page}, testInfo) => {
+    test('duplicates a locked import into a source-free editable manual row while keeping canonical ids hidden', async ({page}, testInfo) => {
         const user = principal(testInfo.project.name, TEST_USER, TEST_ALICE);
         await login(page, user);
         const base = multiContextAsset(REFERENCE_DATE);
@@ -1160,32 +1460,51 @@ test.describe('PAC allocator', () => {
         const card = page.getByTestId(`pac-owned-asset-${asset.asset_id}`);
         await card.click();
         const contextKey = sourceContext.context_key;
-        const original = await rowIndexWhere(page, 'pac-custody-context', contextKey, 'imported context');
+        const {index: original, row: originalRow} = await sourceRowForContext(page, sourceContext, 'imported context');
+        await expect(originalRow).toHaveAttribute('data-origin', 'portfolio_context');
+        await expect(originalRow).toHaveAttribute('data-source-mode', 'locked');
 
         await field(page, 'pac-target-weight', original).fill('42.5');
-        await selectSimpleOption(page, `pac-grid-mode-${original}`, 'whole');
+        await setGridMode(page, original, 'fractional');
         await field(page, 'pac-step-quantity', original).fill('2.500000000001');
 
         await page.getByTestId(`pac-duplicate-asset-${original}`).click();
         await expect(page.getByTestId('pac-row')).toHaveCount(2);
 
-        // The duplicate is found by the one field that must differ, not by index.
-        const keys = await custodyKeys(page);
-        const duplicateKey = only(keys, (key) => key !== contextKey, 'duplicated custody key');
-        expect(duplicateKey).not.toBe(contextKey);
-        const copy = await rowIndexWhere(page, 'pac-custody-context', duplicateKey, 'duplicated row');
-        const source = await rowIndexWhere(page, 'pac-custody-context', contextKey, 'source row after duplication');
+        const copy = await rowIndexByOrigin(page, 'manual_duplicate', 'source-free duplicate');
+        const copiedRow = page.getByTestId('pac-row').filter({has: field(page, 'pac-display-name', copy)});
+        await expect(copiedRow).toHaveCount(1);
+        await expect(copiedRow).toHaveAttribute('data-source-mode', 'manual');
+        await expect(copiedRow.getByTestId(`pac-initial-state-${copy}`)).toBeVisible();
+        await expect(copiedRow.getByTestId(`pac-target-state-${copy}`)).toBeVisible();
+        await expect(copiedRow.getByTestId(`pac-imported-initial-quantity-${copy}`)).toHaveCount(0);
+        await expect(copiedRow.getByTestId(`pac-provider-source-${copy}`)).toHaveCount(0);
+        await expect(field(page, 'pac-display-name', copy)).toBeEnabled();
+        await expect(field(page, 'pac-display-name', copy)).toHaveValue(asset.name);
+        await expect(field(page, 'pac-initial-quantity', copy)).toBeEnabled();
+        await expect(field(page, 'pac-initial-quantity', copy)).toHaveValue(sourceContext.custody_quantity);
+        await expect(field(page, 'pac-raw-price', copy)).toBeEnabled();
+        await expect(field(page, 'pac-raw-price', copy)).toHaveValue(asset.quote.raw_price ?? '');
+        await expect(page.getByTestId(`pac-asset-currency-${copy}-trigger`)).toContainText(asset.quote.currency);
+        await expect(field(page, 'pac-price-basis', copy)).toHaveValue(String(asset.quote.quote_base_quantity));
+        await expect(field(page, 'pac-price-date', copy)).toHaveValue(asset.quote.reference_date ?? '');
+        await expect(field(page, 'pac-target-weight', copy)).toHaveValue('42.5');
+        await expect(page.getByTestId(`pac-grid-fractional-${copy}`)).toHaveAttribute('aria-pressed', 'true');
+        await expect(field(page, 'pac-step-quantity', copy)).toHaveValue('2.500000000001');
 
-        for (const prefix of ['pac-instrument-id', 'pac-display-name', 'pac-initial-quantity', 'pac-raw-price', 'pac-price-date', 'pac-target-weight', 'pac-step-quantity']) {
-            expect(await field(page, prefix, copy).inputValue(), `${prefix} of the duplicate`).toBe(await field(page, prefix, source).inputValue());
+        for (const index of [original, copy]) {
+            await expect(page.getByTestId(`pac-instrument-id-${index}`)).toHaveCount(0);
+            await expect(page.getByTestId(`pac-custody-context-${index}`)).toHaveCount(0);
         }
+        await expect(originalRow).not.toContainText(asset.instrument_key);
+        await expect(originalRow).not.toContainText(contextKey);
 
         // The wire is the complete statement: everything but the row key.
         const {parameters} = await analyzeAndCapture(page);
         const rows = parameters.rows ?? [];
         expect(rows).toHaveLength(2);
         const sourceRow = only(rows, (row) => row.row_key === contextKey, 'source row on the wire');
-        const copyRow = only(rows, (row) => row.row_key === duplicateKey, 'duplicated row on the wire');
+        const copyRow = only(rows, (row) => row.row_key !== contextKey, 'duplicated row on the wire');
         const {row_key: sourceKey, ...sourcePayloadRest} = sourceRow;
         const {row_key: copiedKey, ...copyPayloadRest} = copyRow;
         expect(copiedKey).not.toBe(sourceKey);
@@ -1193,11 +1512,13 @@ test.describe('PAC allocator', () => {
         expect(sourcePayloadRest).toMatchObject({
             initial_quantity: sourceContext.custody_quantity,
             target_percent: '42.5',
-            buy_grid: {mode: 'whole', quantity_step: '2.500000000001'},
+            buy_grid: {mode: 'fractional', quantity_step: '2.500000000001'},
         });
+        await expect(copiedRow).not.toContainText(copyRow.instrument_key);
+        await expect(copiedRow).not.toContainText(copyRow.row_key);
 
-        // Now make the copy diverge from what was imported, and try to drop the
-        // asset: the edited copy must not disappear silently.
+        // The duplicate is independent. Deselecting the source asset confirms
+        // the modified locked row, then removes only that row.
         await field(page, 'pac-display-name', copy).fill('PAC edited duplicate');
         await card.click();
         const confirmation = page.getByTestId('pac-confirm-deselect');
@@ -1212,11 +1533,14 @@ test.describe('PAC allocator', () => {
         await card.click();
         await expect(confirmation).toBeVisible();
         await page.getByTestId('confirm-modal-confirm').click();
-        await expect(page.getByTestId('pac-row')).toHaveCount(0);
+        await expect(page.getByTestId('pac-row')).toHaveCount(1);
         await expect(card).toHaveAttribute('aria-pressed', 'false');
+        const remaining = await rowIndexWhere(page, 'pac-display-name', 'PAC edited duplicate', 'manual duplicate after source deselection');
+        await expect(page.getByTestId('pac-row')).toHaveAttribute('data-origin', 'manual_duplicate');
+        await expect(field(page, 'pac-display-name', remaining)).toHaveValue('PAC edited duplicate');
     });
 
-    test('asks before directly removing an edited source-linked copy', async ({page}, testInfo) => {
+    test('asks before directly removing a locked source row whose editable target changed', async ({page}, testInfo) => {
         const user = principal(testInfo.project.name, TEST_USER, TEST_ALICE);
         await login(page, user);
         const base = multiContextAsset(REFERENCE_DATE);
@@ -1229,18 +1553,20 @@ test.describe('PAC allocator', () => {
 
         const card = page.getByTestId(`pac-owned-asset-${asset.asset_id}`);
         await card.click();
-        const rowIndex = await rowIndexWhere(page, 'pac-custody-context', sourceContext.context_key, 'source-linked context');
-        await field(page, 'pac-display-name', rowIndex).fill('PAC edited before direct removal');
+        const {index: rowIndex, row} = await sourceRowForContext(page, sourceContext, 'source-linked context');
+        await expect(row).toHaveAttribute('data-source-mode', 'locked');
+        await field(page, 'pac-target-weight', rowIndex).fill('42.5');
 
         await page.getByTestId(`pac-remove-asset-${rowIndex}`).click();
         const confirmation = page.getByTestId('pac-confirm-deselect');
         await expect(confirmation).toBeVisible();
         await expect(page.getByTestId('pac-row')).toHaveCount(1);
-        await expect(field(page, 'pac-display-name', rowIndex)).toHaveValue('PAC edited before direct removal');
+        await expect(field(page, 'pac-target-weight', rowIndex)).toHaveValue('42.5');
 
         await page.getByTestId('confirm-modal-cancel').click();
         await expect(confirmation).toHaveCount(0);
         await expect(page.getByTestId('pac-row')).toHaveCount(1);
+        await expect(field(page, 'pac-target-weight', rowIndex)).toHaveValue('42.5');
 
         await page.getByTestId(`pac-remove-asset-${rowIndex}`).click();
         await expect(confirmation).toBeVisible();
@@ -1249,7 +1575,7 @@ test.describe('PAC allocator', () => {
         await expect(card).toHaveAttribute('aria-pressed', 'false');
     });
 
-    test('marks copied rows stale on a date change, ignores a superseded source response, and asks before overwriting edited facts', async ({page}, testInfo) => {
+    test('marks locked rows stale, ignores a superseded source response, and refreshes facts without replacing target or grid choices', async ({page}, testInfo) => {
         // Production cancels the preceding request as its first line of defence.
         // This test deliberately lets source requests outlive that cancellation
         // so it can exercise the independent sequence/date guard against a real
@@ -1271,7 +1597,6 @@ test.describe('PAC allocator', () => {
         const currentDate = await browserDate(page, -2);
         const base = multiContextAsset(REFERENCE_DATE);
         const sourceContext = only(base.contexts, (context) => context.broker_id === 9001, 'primary fixture context');
-        const contextKey = sourceContext.context_key;
         const initialQuantity = sourceContext.custody_quantity;
 
         const superseded = gate();
@@ -1303,11 +1628,10 @@ test.describe('PAC allocator', () => {
         await navigateTo(page, TOOL_ROUTE);
         await waitForPacTool(page);
         await page.getByTestId(`pac-owned-asset-${base.asset_id}`).click();
-        const index = await rowIndexWhere(page, 'pac-custody-context', contextKey, 'imported context');
+        const {index} = await sourceRowForContext(page, sourceContext, 'imported context');
 
-        await field(page, 'pac-display-name', index).fill('PAC edited local name');
         await field(page, 'pac-target-weight', index).fill('42.5');
-        await selectSimpleOption(page, `pac-grid-mode-${index}`, 'whole');
+        await setGridMode(page, index, 'fractional');
         await field(page, 'pac-step-quantity', index).fill('2.5');
         await page.evaluate(() => {
             document.documentElement.dataset.pacE2eAllowLateSource = 'true';
@@ -1346,39 +1670,69 @@ test.describe('PAC allocator', () => {
         expect(lateResponse.status()).toBe(200);
         await lateResponse.finished();
 
-        const afterResponses = await rowIndexWhere(page, 'pac-custody-context', contextKey, 'context after late responses');
-        await expect(field(page, 'pac-display-name', afterResponses)).toHaveValue('PAC edited local name');
-        await expect(field(page, 'pac-initial-quantity', afterResponses)).toHaveValue(initialQuantity);
+        const {index: afterResponses, row: staleRow} = await sourceRowForContext(page, sourceContext, 'context after late responses');
+        await expect(staleRow).toContainText(base.name);
+        await expect(staleRow).not.toContainText('PAC fresh name');
+        await expect(page.getByTestId(`pac-imported-initial-quantity-${afterResponses}`)).toContainText(semanticDecimalText(initialQuantity));
         // Arriving is not applying: a fresh source never rewrites the draft on its own.
         await expect(page.getByTestId('pac-stale-source')).toBeVisible();
 
         await page.getByTestId('pac-refresh-copied-facts').click();
-        const refreshConfirm = page.getByTestId('pac-confirm-refresh');
-        await expect(refreshConfirm).toBeVisible();
-        await page.getByTestId('confirm-modal-cancel').click();
-        await expect(refreshConfirm).toHaveCount(0);
-        await expect(field(page, 'pac-display-name', afterResponses)).toHaveValue('PAC edited local name');
+        await expect(page.getByTestId('pac-confirm-refresh')).toHaveCount(0);
 
-        await page.getByTestId('pac-refresh-copied-facts').click();
-        await expect(refreshConfirm).toBeVisible();
-        await page.getByTestId('confirm-modal-confirm').click();
-
-        const refreshed = await rowIndexWhere(page, 'pac-custody-context', contextKey, 'context after refresh');
-        await expect(field(page, 'pac-display-name', refreshed)).toHaveValue('PAC fresh name');
-        await expect(field(page, 'pac-initial-quantity', refreshed)).toHaveValue('99.000000000001');
-        await expect(field(page, 'pac-raw-price', refreshed)).toHaveValue('200.000000000001');
-        await expect(field(page, 'pac-price-date', refreshed)).toHaveValue(currentDate);
+        const refreshedContext = {...sourceContext, custody_quantity: '99.000000000001'};
+        const {index: refreshed, row: refreshedRow} = await sourceRowForContext(page, refreshedContext, 'context after refresh');
+        await expect(refreshedRow).toContainText('PAC fresh name');
+        await expect(refreshedRow).not.toContainText('PAC superseded name');
+        await expect(page.getByTestId(`pac-imported-initial-quantity-${refreshed}`)).toContainText('99.000000000001');
+        await expect(page.getByTestId(`pac-imported-price-${refreshed}`)).toContainText('200.000000000001');
+        await expect(refreshedRow).toContainText(currentDate);
         // The user's own decisions survive a refresh of the facts.
         await expect(field(page, 'pac-target-weight', refreshed)).toHaveValue('42.5');
         await expect(field(page, 'pac-step-quantity', refreshed)).toHaveValue('2.5');
+        await expect(page.getByTestId(`pac-grid-fractional-${refreshed}`)).toHaveAttribute('aria-pressed', 'true');
         await expect(page.getByTestId('pac-stale-source')).toHaveCount(0);
         expect(unexpectedDates, 'the tool asked the allocation source for a date this test did not set').toEqual([]);
     });
 
-    test('serializes cash and contributions by tri-state mode and never invents a valuation rate', async ({page}, testInfo) => {
+    test('uses OWNER backend cash aggregates, serializes contribution steps, and exposes a conditional valuation equation without converting locally', async ({page}, testInfo) => {
         const user = principal(testInfo.project.name, TEST_USER, TEST_USER_2);
         await login(page, user);
-        await routeAllocationSource(page, (asOfDate) => sourcePayload(asOfDate, []));
+        const cashSources: SourceCashSourceWire[] = [
+            {
+                broker_id: 9101,
+                broker_name: 'PAC OWNER cash A',
+                broker_icon_url: null,
+                broker_portal_url: null,
+                broker_default_import_plugin: null,
+                ownership_share_percent: '25',
+                balances: [
+                    {currency: 'EUR', amount: '100.10'},
+                    {currency: 'USD', amount: '5.50'},
+                ],
+            },
+            {
+                broker_id: 9102,
+                broker_name: 'PAC OWNER cash B',
+                broker_icon_url: null,
+                broker_portal_url: null,
+                broker_default_import_plugin: null,
+                ownership_share_percent: '75',
+                balances: [
+                    {currency: 'EUR', amount: '300.20'},
+                    {currency: 'CHF', amount: '7.25'},
+                ],
+            },
+        ];
+        const backendAggregate = [
+            {currency: 'EUR', amount: '777.770000000001'},
+            {currency: 'USD', amount: '8.880000000001'},
+        ];
+        await routeAllocationSource(page, (asOfDate, selectedBrokerIds) => {
+            const selection = [...selectedBrokerIds].sort((left, right) => left - right);
+            const selectedCashBalances = selection.join(',') === '9101,9102' ? backendAggregate : selection.join(',') === '9101' ? [{currency: 'EUR', amount: '111.110000000001'}] : [];
+            return sourcePayload(asOfDate, [], {cashSources, selectedCashBalances});
+        });
         await rejectCompute(page);
 
         await navigateTo(page, TOOL_ROUTE);
@@ -1386,17 +1740,19 @@ test.describe('PAC allocator', () => {
         await expect(page.getByTestId('pac-owned-assets-empty')).toBeVisible({timeout: 20_000});
 
         await selectCurrency(page, 'pac-report-currency', 'EUR');
+        await expect(page.getByTestId('pac-valuation-rates')).toHaveCount(0);
         const index = await addManualRow(page);
         await fillManualRow(page, index, {
-            instrument: SHARED_INSTRUMENT,
             name: PRIMARY_NAME,
             quantity: '1',
             price: '10',
             currency: 'USD',
             target: '100',
+            quoteBasis: '1000',
         });
 
         // A foreign currency is pointed out, never resolved behind the user's back.
+        await expect(page.getByTestId('pac-valuation-rates')).toBeVisible();
         await expect(page.getByTestId('pac-fx-needed')).toBeVisible();
         await expect(page.getByTestId('pac-rate-row')).toHaveCount(0);
 
@@ -1406,8 +1762,10 @@ test.describe('PAC allocator', () => {
         expect(omitted.parameters.cash_balances).toBeNull();
         expect(omitted.parameters.contributions).toBeNull();
         expect(omitted.parameters.valuation_rates).toEqual([]);
+        const omittedRow = only(omitted.parameters.rows ?? [], (row) => row.name === PRIMARY_NAME, 'omitted-mode PAC row');
+        expect(omittedRow.quote?.quote_base_quantity).toBe(1000);
 
-        await selectSimpleOption(page, 'pac-cash-mode', 'none');
+        await selectCashMode(page, 'none');
         await selectSimpleOption(page, 'pac-contributions-mode', 'none');
         await expect(page.getByTestId('pac-cash-none')).toBeVisible();
         await expect(page.getByTestId('pac-contributions-none')).toBeVisible();
@@ -1416,16 +1774,45 @@ test.describe('PAC allocator', () => {
         expect(explicitNone.parameters.contributions).toEqual([]);
         expect(explicitNone.parameters.valuation_rates).toEqual([]);
 
-        await selectSimpleOption(page, 'pac-cash-mode', 'custom');
+        await selectCashMode(page, 'broker_copy');
+        const brokerA = page.getByTestId('pac-cash-broker-9101');
+        const brokerB = page.getByTestId('pac-cash-broker-9102');
+        await expect(brokerA).toBeEnabled();
+        await expect(brokerB).toBeEnabled();
+        const brokerARequest = page.waitForRequest((request) => sourceDateOf(request) !== null && selectedCashBrokerIdsOf(request).join(',') === '9101', {timeout: 20_000});
+        await brokerA.click();
+        await brokerARequest;
+        await expect(page.getByTestId('pac-allocator-tool')).toHaveAttribute('data-cash-source', 'ready');
+
+        const bothBrokersRequest = page.waitForRequest((request) => sourceDateOf(request) !== null && selectedCashBrokerIdsOf(request).join(',') === '9101,9102', {timeout: 20_000});
+        await brokerB.click();
+        await bothBrokersRequest;
+        await expect(page.getByTestId('pac-allocator-tool')).toHaveAttribute('data-cash-source', 'ready');
+        await expect(page.getByTestId('pac-cash-aggregate-EUR')).toContainText('777.770000000001');
+        await expect(page.getByTestId('pac-cash-aggregate-USD')).toContainText('8.880000000001');
+        const copiedCash = await analyzeAndCapture(page);
+        expect(copiedCash.parameters.cash_balances).toEqual(backendAggregate);
+        expect(copiedCash.parameters.cash_balances).not.toEqual([
+            {currency: 'EUR', amount: '400.30'},
+            {currency: 'USD', amount: '5.50'},
+            {currency: 'CHF', amount: '7.25'},
+        ]);
+
+        await selectCashMode(page, 'manual');
         await selectSimpleOption(page, 'pac-contributions-mode', 'custom');
         await expect(page.getByTestId('pac-cash-row')).toHaveCount(1);
         await expect(page.getByTestId('pac-contributions-row')).toHaveCount(1);
+        await expect(field(page, 'pac-cash-monetary-step', 0)).toHaveCount(0);
+        const contributionStep = field(page, 'pac-contributions-monetary-step', 0);
+        await expect(contributionStep).toHaveValue('0.01');
         await selectCurrency(page, 'pac-cash-currency-0', 'USD');
         await field(page, 'pac-cash-amount', 0).fill('500.000000000001');
         await selectCurrency(page, 'pac-contributions-currency-0', 'EUR');
         await field(page, 'pac-contributions-amount', 0).fill('200.000000000001');
+        await contributionStep.fill('0.000000000001');
 
         await enableManualRates(page);
+        await expect(page.getByTestId('pac-rate-info')).toBeVisible();
         await expect(page.getByTestId('pac-rate-row')).toHaveCount(0);
         await page.getByTestId('pac-add-rate').click();
         await expect(page.getByTestId('pac-rate-row')).toHaveCount(1);
@@ -1433,13 +1820,48 @@ test.describe('PAC allocator', () => {
         await field(page, 'pac-rate-value', 0).fill('0.900000000001');
         await setDate(page, 'pac-rate-date-0', REFERENCE_DATE);
 
+        const rateRow = page.getByTestId('pac-rate-row');
+        await expect(rateRow).toContainText('1');
+        await expect(rateRow).toContainText('=');
+        await expect(rateRow).toContainText('EUR');
+        await expect(page.getByTestId('pac-rate-currency-0-trigger')).toContainText('USD');
+        await expect(field(page, 'pac-rate-value', 0)).toHaveValue('0.900000000001');
+        const equationTargetsReportCurrency = await rateRow.evaluate((row) => {
+            const text = row.textContent ?? '';
+            const one = text.indexOf('1');
+            const native = text.indexOf('USD', one + 1);
+            const equals = text.indexOf('=', native + 1);
+            const report = text.indexOf('EUR', equals + 1);
+            return one >= 0 && native > one && equals > native && report > equals;
+        });
+        expect(equationTargetsReportCurrency, 'valuation equation must read from one native unit into the current report currency').toBe(true);
+        const rateDateStructure = await page.getByTestId('pac-rate-date-0-root').evaluate((root) => {
+            let ancestorLabels = 0;
+            let ancestor: Element | null = root.parentElement;
+            while (ancestor) {
+                if (ancestor.tagName === 'LABEL') ancestorLabels += 1;
+                if ((ancestor as HTMLElement).dataset.testid === 'pac-rate-row') break;
+                ancestor = ancestor.parentElement;
+            }
+            return {
+                externalTag: root.parentElement?.tagName ?? null,
+                ancestorLabels,
+                internalLabels: root.getElementsByTagName('label').length,
+            };
+        });
+        expect(rateDateStructure).toEqual({externalTag: 'LABEL', ancestorLabels: 1, internalLabels: 0});
+
         const entered = await analyzeAndCapture(page);
         expect(entered.parameters.cash_balances).toEqual([{currency: 'USD', amount: '500.000000000001'}]);
-        expect(entered.parameters.contributions).toEqual([{currency: 'EUR', amount: '200.000000000001'}]);
+        expect(entered.parameters.contributions).toEqual([{currency: 'EUR', amount: '200.000000000001', monetary_step: '0.000000000001'}]);
         expect(entered.parameters.valuation_rates).toEqual([{currency: 'USD', rate_to_report: '0.900000000001', reference_date: REFERENCE_DATE}]);
+        const enteredRow = only(entered.parameters.rows ?? [], (row) => row.name === PRIMARY_NAME, 'entered-mode PAC row');
+        expect(enteredRow.quote).toMatchObject({currency: 'USD', raw_price: '10', quote_base_quantity: 1000});
+        expect(entered.parameters).not.toHaveProperty('solver');
+        expect(entered.parameters).not.toHaveProperty('orders');
     });
 
-    test('analyzes a deterministic manual scenario against the real tool API', async ({page}, testInfo) => {
+    test('analyzes ready facts in formatted and exact views, marks edits stale, and renders a real invalid result', async ({page}, testInfo) => {
         const user = principal(testInfo.project.name, TEST_BOB, TEST_CAROL);
         const tool = await openPacDirect(page, user);
         await fillDeterministicScenario(page);
@@ -1479,6 +1901,20 @@ test.describe('PAC allocator', () => {
         await field(page, 'pac-target-weight', primaryIndex).fill('49');
         await expect(page.getByTestId('pac-result')).toHaveAttribute('data-stale', 'true');
         await expect(page.getByTestId('pac-result-stale')).toBeVisible();
+
+        // A non-positive quote is accepted by the editor as an exact decimal
+        // and rejected by the domain contract, yielding a successful platform
+        // response whose PAC availability is `invalid`.
+        await field(page, 'pac-target-weight', primaryIndex).fill('50');
+        await field(page, 'pac-raw-price', primaryIndex).fill('0');
+        const invalidResponse = page.waitForResponse((candidate) => isComputeRequest(candidate.request()), {timeout: 30_000});
+        await page.getByTestId('pac-analyze').click();
+        expect((await invalidResponse).status()).toBe(200);
+        await expect(tool).toHaveAttribute('data-busy', 'false', {timeout: 40_000});
+        await expect(page.getByTestId('pac-result')).toHaveAttribute('data-state', 'invalid');
+        await expect(page.getByTestId('pac-result')).toHaveAttribute('data-view', 'formatted');
+        await expect(page.getByTestId('pac-issues')).toBeVisible();
+        await expect(page.getByTestId('pac-denominator-note')).toBeVisible();
     });
 
     test('ignores a real compute response when the draft changes in flight', async ({page}, testInfo) => {
@@ -1540,7 +1976,6 @@ test.describe('PAC allocator', () => {
         await setDate(page, 'pac-as-of-date', REFERENCE_DATE);
         const index = await addManualRow(page);
         await fillManualRow(page, index, {
-            instrument: SHARED_INSTRUMENT,
             name: PRIMARY_NAME,
             quantity: '10',
             price: '10',
@@ -1555,7 +1990,8 @@ test.describe('PAC allocator', () => {
             const row = await rowIndexWhere(page, 'pac-display-name', PRIMARY_NAME, 'manual row after a failure');
             await expect(page.getByTestId('pac-report-currency-trigger')).toContainText('EUR');
             await expect(page.getByTestId('pac-as-of-date')).toHaveValue(REFERENCE_DATE);
-            await expect(field(page, 'pac-instrument-id', row)).toHaveValue(SHARED_INSTRUMENT);
+            await expect(page.getByTestId(`pac-instrument-id-${row}`)).toHaveCount(0);
+            await expect(page.getByTestId(`pac-custody-context-${row}`)).toHaveCount(0);
             await expect(field(page, 'pac-initial-quantity', row)).toHaveValue('10');
             await expect(field(page, 'pac-raw-price', row)).toHaveValue('10');
             await expect(field(page, 'pac-target-weight', row)).toHaveValue('100');

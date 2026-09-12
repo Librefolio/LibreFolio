@@ -2,6 +2,7 @@
     import {_} from '$lib/i18n';
     import type {ToolOutput} from '$lib/features/tools/contracts';
     import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
+    import {Info} from 'lucide-svelte';
 
     type PacOutput = ToolOutput<'pac_allocator', '1.0.0'>;
     type ReportingFact = PacOutput['totals']['initial_invested_reporting'];
@@ -15,7 +16,7 @@
     }
 
     let {result, stale}: Props = $props();
-    let exactView = $state(true);
+    let exactView = $state(false);
 
     function displayDecimal(value: string, maxFrac = 8): string {
         return exactView ? value : formatDecimalForDisplay(value, {maxFrac});
@@ -45,7 +46,7 @@
     }
 </script>
 
-<section class="space-y-5 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800" data-testid="pac-result" data-state={result.availability} data-stale={stale ? 'true' : 'false'}>
+<section class="space-y-5 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800" data-testid="pac-result" data-state={result.availability} data-stale={stale ? 'true' : 'false'} data-view={exactView ? 'exact' : 'formatted'}>
     <header class="flex flex-wrap items-start justify-between gap-3">
         <div>
             <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -69,6 +70,15 @@
             <button type="button" onclick={() => (exactView = false)} aria-pressed={!exactView} class="rounded px-3 py-1.5 text-sm font-medium aria-pressed:bg-libre-green aria-pressed:text-white" data-testid="pac-view-formatted">{$_('tools.pacAllocator.formattedView')}</button>
         </div>
     </header>
+
+    <div class="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900 dark:border-blue-900/60 dark:bg-blue-950/20 dark:text-blue-200" data-testid="pac-denominator-note">
+        <Info class="mt-0.5 shrink-0" size={15} />
+        <p>
+            {$_('tools.pacAllocator.denominatorHint', {
+                default: 'Current weights and gaps use invested Asset value only. Existing cash and new contributions stay separate and do not change these P1 percentages.',
+            })}
+        </p>
+    </div>
 
     <dl class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4" data-testid="pac-totals">
         <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900/50">
@@ -143,6 +153,11 @@
 
     <section data-testid="pac-cash-pools">
         <h3 class="font-semibold text-gray-900 dark:text-gray-100">{$_('tools.pacAllocator.cashPools')}</h3>
+        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            {$_('tools.pacAllocator.cashPoolsHint', {
+                default: 'Native balances remain separate by currency. This report does not exchange, transfer, or merge cash.',
+            })}
+        </p>
         {#if result.cash_pools.availability === 'available'}
             <ul class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {#each result.cash_pools.value as pool}
