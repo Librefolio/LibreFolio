@@ -15,25 +15,55 @@ export interface PacAllocationSourceContext {
     contextKey: string;
     brokerId: number;
     brokerName: string;
+    brokerIconUrl: string | null;
+    brokerPortalUrl: string | null;
+    brokerDefaultImportPlugin: string | null;
     ownershipSharePercent: string;
     custodyQuantity: string;
 }
 
+export type PacAllocationUsageScope = 'owned' | 'other_users' | 'observed';
+
 export interface PacAllocationSourceAsset {
     assetId: number;
     instrumentKey: string;
+    candidateKey: string;
     name: string;
     ticker: string | null;
     assetType: string;
     iconUrl: string | null;
+    active: boolean;
+    usageScope: PacAllocationUsageScope;
     quote: PacAllocationSourceQuote;
     contexts: readonly PacAllocationSourceContext[];
+}
+
+export interface PacAllocationSourceCashBalance {
+    currency: string;
+    amount: string;
+}
+
+export interface PacAllocationSourceCashSource {
+    brokerId: number;
+    brokerName: string;
+    brokerIconUrl: string | null;
+    brokerPortalUrl: string | null;
+    brokerDefaultImportPlugin: string | null;
+    ownershipSharePercent: string;
+    balances: readonly PacAllocationSourceCashBalance[];
 }
 
 export interface PacAllocationSource {
     generatedAt: string;
     asOfDate: string;
     assets: readonly PacAllocationSourceAsset[];
+    cashSources: readonly PacAllocationSourceCashSource[];
+    selectedCashBalances: readonly PacAllocationSourceCashBalance[];
+}
+
+export interface FetchPacAllocationSourceOptions {
+    selectedCashBrokerIds?: readonly number[];
+    signal?: AbortSignal;
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -60,9 +90,19 @@ function numberValue(value: unknown): number {
     return value;
 }
 
+function booleanValue(value: unknown): boolean {
+    if (typeof value !== 'boolean') throw new ToolClientError('protocol', 'invalid_response');
+    return value;
+}
+
 function optionalNumber(value: unknown): number | null {
     if (value === null || value === undefined) return null;
     return numberValue(value);
+}
+
+function usageScopeValue(value: unknown): PacAllocationUsageScope {
+    if (value === 'owned' || value === 'other_users' || value === 'observed') return value;
+    throw new ToolClientError('protocol', 'invalid_response');
 }
 
 function arrayValue(value: unknown): readonly unknown[] {
@@ -82,10 +122,13 @@ function normalizeSource(value: unknown): PacAllocationSource {
             return {
                 assetId: numberValue(asset.asset_id),
                 instrumentKey: stringValue(asset.instrument_key),
+                candidateKey: stringValue(asset.candidate_key),
                 name: stringValue(asset.name),
                 ticker: optionalString(asset.ticker),
                 assetType: stringValue(asset.asset_type),
                 iconUrl: optionalString(asset.icon_url),
+                active: booleanValue(asset.active),
+                usageScope: usageScopeValue(asset.usage_scope),
                 quote: {
                     rawPrice: optionalString(quote.raw_price),
                     currency: stringValue(quote.currency),
@@ -100,16 +143,45 @@ function normalizeSource(value: unknown): PacAllocationSource {
                         contextKey: stringValue(context.context_key),
                         brokerId: numberValue(context.broker_id),
                         brokerName: stringValue(context.broker_name),
+                        brokerIconUrl: optionalString(context.broker_icon_url),
+                        brokerPortalUrl: optionalString(context.broker_portal_url),
+                        brokerDefaultImportPlugin: optionalString(context.broker_default_import_plugin),
                         ownershipSharePercent: stringValue(context.ownership_share_percent),
                         custodyQuantity: stringValue(context.custody_quantity),
                     };
                 }),
             };
         }),
+        cashSources: arrayValue(source.cash_sources).map((cashSourceValue): PacAllocationSourceCashSource => {
+            const cashSource = record(cashSourceValue);
+            return {
+                brokerId: numberValue(cashSource.broker_id),
+                brokerName: stringValue(cashSource.broker_name),
+                brokerIconUrl: optionalString(cashSource.broker_icon_url),
+                brokerPortalUrl: optionalString(cashSource.broker_portal_url),
+                brokerDefaultImportPlugin: optionalString(cashSource.broker_default_import_plugin),
+                ownershipSharePercent: stringValue(cashSource.ownership_share_percent),
+                balances: arrayValue(cashSource.balances).map((balanceValue): PacAllocationSourceCashBalance => {
+                    const balance = record(balanceValue);
+                    return {
+                        currency: stringValue(balance.currency),
+                        amount: stringValue(balance.amount),
+                    };
+                }),
+            };
+        }),
+        selectedCashBalances: arrayValue(source.selected_cash_balances).map((balanceValue): PacAllocationSourceCashBalance => {
+            const balance = record(balanceValue);
+            return {
+                currency: stringValue(balance.currency),
+                amount: stringValue(balance.amount),
+            };
+        }),
     };
 }
 
-export async function fetchPacAllocationSource(asOfDate: string, accountGeneration: number, signal?: AbortSignal): Promise<PacAllocationSource> {
+export async function fetchPacAllocationSource(asOfDate: string, accountGeneration: number, options: FetchPacAllocationSourceOptions = {}): Promise<PacAllocationSource> {
+    const {selectedCashBrokerIds = [], signal} = options;
     try {
         return await runToolSessionTask(
             accountGeneration,
@@ -121,7 +193,10 @@ export async function fetchPacAllocationSource(asOfDate: string, accountGenerati
                         include_allocation_history: false,
                         include_positions_contribution: false,
                         include_breakdown: false,
-                        allocation_source: {as_of_date: asOfDate},
+                        allocation_source: {
+                            as_of_date: asOfDate,
+                            selected_cash_broker_ids: [...selectedCashBrokerIds],
+                        },
                     },
                     {signal: requestSignal},
                 );

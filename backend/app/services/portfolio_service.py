@@ -1899,6 +1899,7 @@ class PortfolioService:
         date_from = query.date_range.resolved_start() if query.date_range else None
         date_to = query.date_range.resolved_end() if query.date_range else None
         allocation_source_date = query.allocation_source.as_of_date if query.allocation_source else None
+        allocation_cash_broker_ids = tuple(sorted(query.allocation_source.selected_cash_broker_ids)) if query.allocation_source else ()
         effective_date_to = date_to or today
         price_fingerprint_date = max(effective_date_to, allocation_source_date or effective_date_to)
 
@@ -1934,26 +1935,74 @@ class PortfolioService:
                 pf_row = (await self.db.execute(pf_stmt)).one()
                 price_fp = f"{pf_row[0] or 0}:{pf_row[1].isoformat() if pf_row[1] else 'none'}"
             if allocation_source_date is not None:
-                broker_metadata_rows = (await self.db.execute(select(Broker.id, Broker.name).where(Broker.id.in_(scope_broker_ids)))).all()
-                asset_metadata_rows = (
+                owner_broker_ids = {access.broker_id for access in scope_accesses if access.role == UserRole.OWNER}
+                broker_metadata_rows = (
                     (
                         await self.db.execute(
                             select(
-                                Asset.id,
-                                Asset.display_name,
-                                Asset.identifier_ticker,
-                                Asset.asset_type,
-                                Asset.icon_url,
-                                Asset.currency,
-                                Asset.quote_base_quantity,
-                            ).where(Asset.id.in_(held_ids))
+                                Broker.id,
+                                Broker.name,
+                                Broker.icon_url,
+                                Broker.portal_url,
+                                Broker.default_import_plugin,
+                            ).where(Broker.id.in_(owner_broker_ids))
                         )
                     ).all()
-                    if held_ids
+                    if owner_broker_ids
                     else []
                 )
+                asset_metadata_rows = (
+                    await self.db.execute(
+                        select(
+                            Asset.id,
+                            Asset.display_name,
+                            Asset.identifier_ticker,
+                            Asset.asset_type,
+                            Asset.icon_url,
+                            Asset.currency,
+                            Asset.quote_base_quantity,
+                            Asset.active,
+                        )
+                    )
+                ).all()
+                usage_count_rows = (
+                    await self.db.execute(
+                        select(
+                            Transaction.asset_id,
+                            func.count(Transaction.id),
+                        )
+                        .where(Transaction.asset_id.is_not(None))
+                        .group_by(Transaction.asset_id)
+                    )
+                ).all()
+                allocation_price_rows = (
+                    await self.db.execute(
+                        select(
+                            PriceHistory.asset_id,
+                            func.count(PriceHistory.id),
+                            func.max(PriceHistory.date),
+                            func.max(PriceHistory.fetched_at),
+                        )
+                        .where(
+                            PriceHistory.close.is_not(None),
+                            PriceHistory.date <= allocation_source_date,
+                        )
+                        .group_by(PriceHistory.asset_id)
+                    )
+                ).all()
                 allocation_metadata_fp = (
-                    tuple(sorted((broker_id, name) for broker_id, name in broker_metadata_rows)),
+                    tuple(
+                        sorted(
+                            (
+                                broker_id,
+                                name,
+                                icon_url,
+                                portal_url,
+                                default_import_plugin,
+                            )
+                            for broker_id, name, icon_url, portal_url, default_import_plugin in broker_metadata_rows
+                        )
+                    ),
                     tuple(
                         sorted(
                             (
@@ -1964,8 +2013,21 @@ class PortfolioService:
                                 icon_url,
                                 currency,
                                 quote_base_quantity,
+                                active,
                             )
-                            for asset_id, display_name, identifier_ticker, asset_type, icon_url, currency, quote_base_quantity in asset_metadata_rows
+                            for asset_id, display_name, identifier_ticker, asset_type, icon_url, currency, quote_base_quantity, active in asset_metadata_rows
+                        )
+                    ),
+                    tuple(sorted((asset_id, count) for asset_id, count in usage_count_rows)),
+                    tuple(
+                        sorted(
+                            (
+                                asset_id,
+                                count,
+                                latest_date,
+                                latest_fetch.isoformat() if latest_fetch else None,
+                            )
+                            for asset_id, count, latest_date, latest_fetch in allocation_price_rows
                         )
                     ),
                 )
@@ -1998,6 +2060,7 @@ class PortfolioService:
                 query.include_breakdown,
                 query.include_positions_contribution,
                 str(allocation_source_date),
+                allocation_cash_broker_ids,
                 tx_fp,
                 price_fp,
                 allocation_metadata_fp,
@@ -2016,6 +2079,7 @@ class PortfolioService:
                 self.db,
                 user_id=user_id,
                 as_of_date=allocation_source_date,
+                selected_cash_broker_ids=list(allocation_cash_broker_ids),
             )
 
         needs_engine = query.include_summary or query.include_history or query.include_allocation_history or query.include_positions_contribution
