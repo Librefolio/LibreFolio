@@ -130,8 +130,8 @@ Baseline `a9138140`; superfici, rischi e DoD in [06_piano_sprint.md](06_piano_sp
 
 | ID | Esito | Taglia | Sprint |
 |---|---|---|---|
-| G1a | Presentazione mancante, `total_pnl` già presente; cumulato confermato. | S | SP06 |
+| G1a | Aperto: presentazione mancante, `total_pnl` già presente; cumulato confermato. | S | SP07 |
 | G1b | Candele sintetiche approvate: EOD, no volume, aggregazione e zoom esistenti obbligatori. | L | SP07 |
-| G1c | Totali disponibili; serie incassi per tipo/data assente. | M | SP07 |
+| G1c | Aperto: totali disponibili; serie incassi per tipo/data assente. | M | SP06 |
 | G2 | ✅ Già consegnato come analisi lotti; non ripianificare la vecchia wishlist. | XS residua | Nessun codice |
-| G3 | Segnale presente; calendario e vista principale mancanti. | M | SP06 |
+| G3 | 🟡 Backend I10 integrato; vista Asset I60 implementata/validata sul branch I, follow-up UX attivo e integrazione finale pendente. | M | SP06 |

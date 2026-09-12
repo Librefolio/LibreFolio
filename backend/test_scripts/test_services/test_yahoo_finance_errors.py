@@ -5,8 +5,8 @@ module the provider imported is replaced by a fake exposing ``Ticker`` and
 ``Search``, so every branch the real API can force — missing price fields,
 empty / malformed history frames, NaN closes, dividends and splits, search
 failures, metadata assembly — is driven with exact, fixed inputs. No socket is
-opened. Error messages avoid the transient-retry keywords so ``_yf_with_retry``
-raises on the first attempt and never sleeps.
+opened. Non-retry cases avoid transient-retry keywords; the dedicated retry
+case stubs ``_time_mod.sleep`` and records the requested backoff delays.
 """
 
 from __future__ import annotations
@@ -32,12 +32,27 @@ INVALID_TYPE = IdentifierType.CUSIP
 class _FakeTicker:
     """Configurable stand-in for ``yfinance.Ticker``."""
 
-    def __init__(self, *, info=None, info_exc=None, fast_info=None, history=None, history_exc=None, dividends=None, dividends_exc=None, splits=None, splits_exc=None, isin=None, isin_exc=None):
+    def __init__(
+        self,
+        *,
+        info=None,
+        info_exc=None,
+        fast_info=None,
+        history=None,
+        history_exc=None,
+        dividends=None,
+        dividends_exc=None,
+        splits=None,
+        splits_exc=None,
+        isin=None,
+        isin_exc=None,
+    ):
         self._info = info if info is not None else {}
         self._info_exc = info_exc
         self._fast_info = fast_info if fast_info is not None else {}
         self._history = history
         self._history_exc = history_exc
+        self.history_calls: list[dict] = []
         self._dividends = dividends
         self._dividends_exc = dividends_exc
         self._splits = splits
@@ -56,6 +71,7 @@ class _FakeTicker:
         return self._fast_info
 
     def history(self, **kwargs):
+        self.history_calls.append(dict(kwargs))
         if self._history_exc is not None:
             raise self._history_exc
         return self._history
@@ -94,11 +110,25 @@ def _install_yf(monkeypatch, *, ticker=None, ticker_factory=None, search=None, s
         Ticker=ticker_factory or default_ticker_factory,
         Search=search_factory or default_search_factory,
     )
+    monkeypatch.setattr(yfp, "YFINANCE_AVAILABLE", True)
+    monkeypatch.setattr(yfp, "pd", pd)
     monkeypatch.setattr(yfp, "yf", fake)
 
 
 def _utc_index(days: list[str]):
     return pd.to_datetime(days).tz_localize("UTC")
+
+
+class _MalformedEventSeries:
+    """Series-like event data whose index fails during date normalization."""
+
+    empty = False
+
+    def __init__(self, value: float):
+        self._value = value
+
+    def items(self):
+        return [(object(), self._value)]
 
 
 # ── identity / pure ─────────────────────────────────────────────────────────
@@ -195,6 +225,37 @@ def _ohlcv(dates: list[str], closes: list[float]) -> pd.DataFrame:
 
 
 @pytest.mark.asyncio
+async def test_history_finite_range_uses_exclusive_remote_end_and_inclusive_utc_dates(monkeypatch):
+    requested_start = date(2026, 1, 2)
+    requested_end = date(2026, 1, 3)
+    hist = pd.DataFrame(
+        {
+            "Open": [89.0, 99.0, 109.0, 119.0],
+            "High": [91.0, 101.0, 111.0, 121.0],
+            "Low": [88.0, 98.0, 108.0, 118.0],
+            "Close": [90.0, 100.0, 110.0, 120.0],
+            "Volume": [900, 1000, 1100, 1200],
+        },
+        index=pd.to_datetime(
+            [
+                "2026-01-01 18:00:00-05:00",  # 2026-01-01 UTC, outside
+                "2026-01-01 20:00:00-05:00",  # 2026-01-02 UTC, start boundary
+                "2026-01-03 18:00:00-05:00",  # 2026-01-03 UTC, end boundary
+                "2026-01-03 20:00:00-05:00",  # 2026-01-04 UTC, outside
+            ]
+        ),
+    )
+    ticker = _FakeTicker(history=hist, info={"currency": "USD"})
+    _install_yf(monkeypatch, ticker=ticker)
+
+    result = await YahooFinanceProvider().get_history_value("AAPL", IdentifierType.TICKER, None, requested_start, requested_end)
+
+    assert ticker.history_calls == [{"start": "2026-01-02", "end": "2026-01-04"}]
+    assert [point.date for point in result.prices] == [requested_start, requested_end]
+    assert [point.close for point in result.prices] == [Decimal("100.0"), Decimal("110.0")]
+
+
+@pytest.mark.asyncio
 async def test_history_invalid_type():
     with pytest.raises(AssetSourceError) as exc:
         await YahooFinanceProvider().get_history_value("X", INVALID_TYPE, None, date(2026, 1, 1), date(2026, 1, 31))
@@ -266,11 +327,74 @@ async def test_history_all_nan_close_yields_no_data(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_history_nan_optional_fields_map_to_none_but_close_is_required(monkeypatch):
+    hist = pd.DataFrame(
+        {
+            "Open": [float("nan"), 10.0],
+            "High": [float("nan"), 12.0],
+            "Low": [float("nan"), 9.0],
+            "Close": [101.5, float("nan")],
+            "Volume": [float("nan"), 500.0],
+        },
+        index=_utc_index(["2026-01-05", "2026-01-06"]),
+    )
+    _install_yf(monkeypatch, ticker=_FakeTicker(history=hist, info={"currency": "USD"}))
+
+    result = await YahooFinanceProvider().get_history_value("AAPL", IdentifierType.TICKER, None, date(2026, 1, 1), date(2026, 1, 31))
+
+    assert [point.date for point in result.prices] == [date(2026, 1, 5)]
+    point = next(point for point in result.prices if point.date == date(2026, 1, 5))
+    assert point.close == Decimal("101.5")
+    assert point.open is None
+    assert point.high is None
+    assert point.low is None
+    assert point.volume is None
+
+
+@pytest.mark.asyncio
 async def test_history_fetch_error(monkeypatch):
     _install_yf(monkeypatch, ticker=_FakeTicker(history_exc=RuntimeError("kaboom")))
     with pytest.raises(AssetSourceError) as exc:
         await YahooFinanceProvider().get_history_value("AAPL", IdentifierType.TICKER, None, date(2026, 1, 1), date(2026, 1, 31))
     assert exc.value.error_code == "FETCH_ERROR"
+
+
+@pytest.mark.asyncio
+async def test_history_retries_transient_fetch_through_retry_boundary(monkeypatch):
+    hist = _ohlcv(["2026-01-05"], [100.0])
+
+    class _TransientHistoryTicker(_FakeTicker):
+        def __init__(self):
+            super().__init__(history=hist, info={"currency": "USD"})
+            self.attempts = 0
+
+        def history(self, **kwargs):
+            self.history_calls.append(dict(kwargs))
+            self.attempts += 1
+            if self.attempts < 3:
+                raise RuntimeError("connection reset by peer")
+            return self._history
+
+    ticker = _TransientHistoryTicker()
+    delays: list[float] = []
+    retry_labels: list[str] = []
+    real_retry = yfp._yf_with_retry
+
+    def recording_retry(fn, *, label="yfinance"):
+        retry_labels.append(label)
+        return real_retry(fn, label=label)
+
+    _install_yf(monkeypatch, ticker=ticker)
+    monkeypatch.setattr(yfp, "_yf_with_retry", recording_retry)
+    monkeypatch.setattr(yfp, "_time_mod", SimpleNamespace(sleep=delays.append))
+
+    result = await YahooFinanceProvider().get_history_value("AAPL", IdentifierType.TICKER, None, date(2026, 1, 1), date(2026, 1, 31))
+
+    expected_kwargs = {"start": "2026-01-01", "end": "2026-02-01"}
+    assert ticker.history_calls == [expected_kwargs, expected_kwargs, expected_kwargs]
+    assert retry_labels == ["history(AAPL)"]
+    assert delays == [1.5, 3.0]
+    assert [point.close for point in result.prices] == [Decimal("100.0")]
 
 
 @pytest.mark.asyncio
@@ -281,25 +405,59 @@ async def test_history_min_period_and_currency_fallback(monkeypatch):
     _install_yf(monkeypatch, ticker=ticker)
 
     result = await YahooFinanceProvider().get_history_value("AAPL", IdentifierType.TICKER, None, "min", date(2026, 1, 31))
+    assert ticker.history_calls == [{"period": "max"}]
     assert result.currency == "USD"
-    assert len(result.prices) == 1
+    assert [point.date for point in result.prices] == [date(2026, 1, 5)]
 
 
 @pytest.mark.asyncio
-async def test_history_empty_info_and_event_series_errors(monkeypatch):
-    # info present but falsy (355->360), and dividends/splits access raises (362-363, 366-367).
+async def test_history_falsy_info_falls_back_to_usd(monkeypatch):
     hist = _ohlcv(["2026-01-05"], [100.0])
-    ticker = _FakeTicker(
-        history=hist,
-        info={},  # falsy → currency stays USD, `if info:` false branch
-        dividends_exc=RuntimeError("dividends fetch failed"),
-        splits_exc=RuntimeError("splits fetch failed"),
-    )
+    ticker = _FakeTicker(history=hist, info={})
     _install_yf(monkeypatch, ticker=ticker)
 
     result = await YahooFinanceProvider().get_history_value("AAPL", IdentifierType.TICKER, None, date(2026, 1, 1), date(2026, 1, 31))
     assert result.currency == "USD"
-    assert result.events == []
+
+
+@pytest.mark.parametrize(
+    ("broken_kind", "failure_mode", "expected_type", "expected_amount"),
+    [
+        ("dividends", "acquisition", "SPLIT", Decimal("2.0")),
+        ("splits", "acquisition", "DIVIDEND", Decimal("0.5")),
+        ("dividends", "parsing", "SPLIT", Decimal("2.0")),
+        ("splits", "parsing", "DIVIDEND", Decimal("0.5")),
+    ],
+    ids=[
+        "dividend-acquisition",
+        "split-acquisition",
+        "dividend-parsing",
+        "split-parsing",
+    ],
+)
+@pytest.mark.asyncio
+async def test_history_event_failures_are_independent_best_effort(monkeypatch, broken_kind, failure_mode, expected_type, expected_amount):
+    hist = _ohlcv(["2026-01-05"], [100.0])
+    ticker_kwargs = {
+        "history": hist,
+        "info": {"currency": "USD"},
+        "dividends": pd.Series([0.5], index=_utc_index(["2026-01-05"])),
+        "splits": pd.Series([2.0], index=_utc_index(["2026-01-05"])),
+    }
+    if failure_mode == "acquisition":
+        ticker_kwargs[f"{broken_kind}_exc"] = RuntimeError(f"{broken_kind} fetch failed")
+    else:
+        ticker_kwargs[broken_kind] = _MalformedEventSeries(0.5 if broken_kind == "dividends" else 2.0)
+
+    _install_yf(monkeypatch, ticker=_FakeTicker(**ticker_kwargs))
+
+    result = await YahooFinanceProvider().get_history_value("AAPL", IdentifierType.TICKER, None, date(2026, 1, 1), date(2026, 1, 31))
+
+    assert [point.close for point in result.prices] == [Decimal("100.0")]
+    assert {event.type for event in result.events} == {expected_type}
+    event = next(event for event in result.events if event.type == expected_type)
+    assert event.date == date(2026, 1, 5)
+    assert event.value.amount == expected_amount
 
 
 @pytest.mark.asyncio

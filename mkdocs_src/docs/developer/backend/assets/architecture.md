@@ -2,11 +2,47 @@
 
 The Asset system in LibreFolio manages financial instruments (Stocks, ETFs, Bonds, Crypto, etc.), fetches their prices from external providers, and maintains their metadata.
 
+## 📦 Canonical Package and Compatibility
+
+Asset pricing services live in `backend/app/services/asset_sources/`. Each module owns one
+responsibility:
+
+| Module | Responsibility |
+|--------|----------------|
+| `core.py` | Provider contract and shared infrastructure: `AssetSourceProvider`, `AssetSourceError`, history start-date types, the five cache singletons, provider-parameter hashing, error sanitization, the OHLC guard, and `_run_provider_in_thread`. |
+| `provider_management.py` | Provider assignment, removal and lookup; parametric-provider data invalidation; and the non-persisting provider probe. |
+| `metadata.py` | Explicit provider metadata refresh, metadata caching, and application of returned patches through `AssetCRUDService`. |
+| `price_store.py` | Price and event upserts/deletes, currency-change market-data wipes, OHLC integrity checks, and bounded write chunks. |
+| `price_query.py` | DB-backed history/event queries, backward fill, FX and signal preparation, plus current-price lookup and today's OHLC write-back. |
+| `refresh.py` | Provider-driven price refresh and its explicit PREPARE/FETCH/PERSIST phases. |
+| `crud.py` | Asset create, list, patch, delete, and merge operations. |
+| `search.py` | Cross-provider batch search, SSE search, query caching, link-finder fallback, and URL resolution. |
+| `manager.py` | The single `AssetSourceManager` class, composed from the provider, metadata, store, query, and refresh operation mixins. |
+
+These are behavioral boundaries, not only file boundaries: `refresh.py` orchestrates remote
+acquisition, `price_store.py` owns reusable price/event persistence primitives, and
+`price_query.py` owns database-backed reads plus the separate live-quote path.
+
+`backend/app/services/asset_sources/__init__.py` exposes the canonical public objects.
+`backend/app/services/asset_source.py` remains a thin Release 2 compatibility facade: it
+re-exports those same class, error, type, and service objects rather than wrapping, copying, or
+subclassing them.
+
+!!! info "Canonical imports and legacy compatibility"
+
+    New code should import the provider base class and error from
+    `backend.app.services.asset_sources.core`. The thread runner and all cache patch points also
+    belong to that module. Existing public imports from
+    `backend.app.services.asset_source` remain supported during Release 2 and resolve to the
+    identical objects.
+
 ## 🧱 Core Components
 
 ### 1️⃣ `AssetSourceProvider` (Plugin Base Class)
 
-Abstract base class for all asset pricing plugins. Each provider auto-registers via `@register_provider(AssetProviderRegistry)`.
+Abstract base class for all asset pricing plugins, canonically defined in
+`backend/app/services/asset_sources/core.py`. Each provider auto-registers via
+`@register_provider(AssetProviderRegistry)`.
 
 | Property / Method | Required | Default | Description |
 |---|---|---|---|
@@ -33,12 +69,13 @@ Abstract base class for all asset pricing plugins. Each provider auto-registers 
 
 ### 2️⃣ `AssetSourceManager`
 
-Central service that coordinates all asset-related operations:
+The stable manager class in `asset_sources/manager.py` composes the responsibility-specific
+operation mixins:
 
 - **Provider Assignment**: Link an asset to a provider (e.g., "AAPL" → "yfinance").
 - **Price Sync**: 3-phase pipeline: PREPARE → FETCH → PERSIST (see [Data Flow](#data-flow-sync-pipeline) below).
 - **Price Query**: DB-only bulk query with backward-fill via `POST /assets/prices/query`.
-- **Current Price** *(new)*: Bulk live-price endpoint via `POST /assets/prices/current`. Calls each asset's provider `get_current_value()` with DB fallback. Used by the [LiveTicker](../../frontend/components/features/live-ticker.md) component.
+- **Current Price**: Bulk live-price endpoint via `POST /assets/prices/current`. Calls each asset's provider `get_current_value()` with DB fallback. Used by the [LiveTicker](../../frontend/components/features/live-ticker.md) component.
 - **Event Sync**: Persist asset events from providers into the `asset_events` table, filtered by `provider_assignment_id` (manual events survive sync).
 - **Probe**: Dry-run provider config testing via `probe_provider_config()`.
 
@@ -53,7 +90,10 @@ Stores asset-level events produced by providers or created manually by users. Ev
 - **Events** describe what happens to the **asset globally** (DIVIDEND, INTEREST, SPLIT, etc.)
 - **Transactions** describe what happens in a **user's portfolio** (BUY, SELL)
 
-**Dedup strategy**: Events with a `provider_assignment_id` (auto-generated) are deduped via DELETE+INSERT filtered by `(asset_id, provider_assignment_id)` during sync. Events with `provider_assignment_id = NULL` are user-created manual events and are **never** auto-deleted.
+**Dedup strategy**: Events with a `provider_assignment_id` (auto-generated) are replaced per
+`(asset_id, date, type, provider_assignment_id)` key during sync. Events with
+`provider_assignment_id = NULL` are user-created manual events and are **never** replaced by a
+provider upsert.
 
 See [Asset Events](events.md) for full details.
 
@@ -68,25 +108,25 @@ graph TD
     API["POST /assets/prices/sync"] --> Manager["AssetSourceManager.bulk_refresh_prices()"]
 
     subgraph "Phase 1 — PREPARE"
-        Manager --> DB1[(Database)]
-        DB1 -- "Provider assignments" --> Manager
-        Manager --> Registry["AssetProviderRegistry"]
-        Registry -- "Provider instances" --> Manager
+        Manager --> Prepare["refresh._prepare_refresh_items"]
+        Prepare --> DB1[("Caller AsyncSession<br/>(read-only)")]
+        Prepare --> Registry["AssetProviderRegistry"]
     end
 
     subgraph "Phase 2 — FETCH (parallel)"
-        Manager -- "get_history_value()" --> P1["Provider A"]
-        Manager -- "get_history_value()" --> P2["Provider B"]
-        P1 -- "FAHistoricalData" --> Manager
-        P2 -- "FAHistoricalData" --> Manager
+        Prepare --> Fetch["refresh._fetch_refresh_items<br/>(no database access)"]
+        Fetch --> Thread["core._run_provider_in_thread"]
+        Thread --> P1["Provider A"]
+        Thread --> P2["Provider B"]
     end
 
     subgraph "Phase 3 — PERSIST"
-        Manager -- "Upsert prices" --> DB2[(Database)]
-        Manager -- "Upsert events" --> DB2
+        Fetch --> Persist["refresh._persist_refresh_items"]
+        Persist --> Store["price_store operations"]
+        Store --> DB2[("One AsyncSession<br/>per asset")]
     end
 
-    DB2 -- "FABulkRefreshResponse" --> API
+    Persist -- "FARefreshResult per asset" --> API
 
     style P1 fill:#e3f2fd,stroke:#1565c0
     style P2 fill:#e3f2fd,stroke:#1565c0
@@ -94,12 +134,21 @@ graph TD
     style DB2 fill:#f3e5f5,stroke:#7b1fa2
 ```
 
-**Phase 2** uses `asyncio.Semaphore` to limit concurrent HTTP requests. Each provider fetch includes:
+1. **PREPARE** uses the caller's `AsyncSession` for reads only. It resolves assets,
+   assignments, provider instances, validated parameters, and `resume` dates into immutable
+   prepared records. It performs no provider I/O and no writes.
+2. **FETCH** receives no database session. It uses an `asyncio.Semaphore`, the core history and
+   current caches, and `core._run_provider_in_thread()` for provider history/current calls.
+   Price data and best-effort provider events remain in memory.
+3. **PERSIST** creates a distinct `AsyncSession` for each asset. It compares fetched points with
+   stored rows, then delegates price/event writes to `price_store.py`.
 
-- Price points (OHLCV)
-- Asset events (if `supports_events = True`)
-
-**Phase 3** upserts prices and events in a single transaction. Event sync respects `provider_assignment_id` — only auto-generated events for that provider are replaced.
+Persistence intentionally does **not** claim one atomic transaction for the whole refresh.
+`bulk_upsert_prices()` commits bounded chunks of
+`PRICE_UPSERT_CHUNK_SIZE = 1000`; event upserts commit their own bounded chunks; and
+`last_fetch_at` is committed separately afterwards. This keeps SQLite writer-lock windows bounded
+and preserves truthful partial results when one step fails. Provider-generated events remain
+scoped by `provider_assignment_id`, so manual events are not replaced.
 
 ---
 
@@ -111,7 +160,7 @@ graph TD
 graph LR
     FE["Frontend"] -- "POST /assets/prices/query" --> API["API Endpoint"]
     API --> Manager["AssetSourceManager.get_prices_bulk()"]
-    Manager -- "Single SQL query" --> DB[(Database)]
+    Manager -- "DB-only reads" --> DB[(Database)]
     DB -- "Raw prices" --> Manager
     Manager -- "Backward-fill gaps" --> Manager
     Manager -- "FAPriceQueryResponse" --> FE
@@ -123,6 +172,27 @@ Each query item can request:
 
 - `include_price: true` — price history with backward-fill
 - `include_events: true` — asset events in the date range
+
+`get_prices_bulk()` never invokes a provider. Provider acquisition belongs to
+`refresh.py` through `POST /assets/prices/sync`; the query path remains DB-only while retaining
+its warm-up, event, FX-conversion, signal-computation, and final response-slicing passes.
+
+### 💹 Current Quotes and Today's OHLC
+
+`get_current_prices_bulk()` is deliberately separate from the DB-only historical query. It checks
+the core current-price cache, calls an assigned provider through
+`core._run_provider_in_thread()`, and falls back to the latest `PriceHistory` row if the provider
+fails or is absent.
+
+A successful provider quote dated today is written back to today's OHLC row:
+
+- a missing row is created with `open = high = low = close = value` and `volume = None`;
+- an existing row keeps its volume, widens `low`/`high`, fills `open` only when it is missing,
+  and overwrites `close` with the latest quote;
+- a `db:last_known` fallback is never written as if it were a fresh quote.
+
+The write-back is best-effort: a commit failure is rolled back and logged without discarding the
+current-price response.
 
 ---
 
@@ -175,11 +245,19 @@ If a price is requested for a date where no data exists (e.g., Sunday), the syst
 
 ## ⚡ Cache & Performance
 
-- **`NamedCache`**: generic TTL-based in-memory cache used across services. Each cache instance has a name, max TTL, and automatic eviction. Used by `_asset_current_cache` for current-price lookups.
-- **`_asset_current_cache`**: caches `get_current_prices_bulk()` results keyed by `(asset_id, provider_id)`. Prevents redundant provider calls during UI refresh storms (e.g., scrolling through the asset list).
-- **Provider Pre-warm**: `_prewarm_provider_caches()` runs asynchronously in `main.py` lifespan — instantiates all registered providers at startup to prime internal caches (JustETF ETF list, yfinance search cache, etc.).
+- **Canonical cache ownership**: `asset_sources/core.py` owns the history, current, metadata,
+  search-result, and search-query singleton caches. Responsibility modules dereference these
+  objects through `core`, preserving one identity and one monkeypatch point.
+- **`_asset_current_cache`**: caches provider current-value results. The live-query path keys by
+  provider code, identifier, and identifier type; refresh keys also include the provider-parameter
+  hash so parameter changes cannot reuse stale data.
+- **Provider Pre-warm**: `_prewarm_provider_caches()` runs asynchronously in the application
+  lifespan, instantiating registered providers and allowing providers with internal data caches
+  to warm them.
 - **`supports_search` check**: Uses `test_search_query is not None` (local property), avoiding cold-start HTTP calls on `GET /assets/provider`.
-- **Bulk queries**: `get_prices_bulk()` uses a single SQL query for all requested assets, not N+1.
+- **Bulk historical queries**: `get_prices_bulk()` reads only the database. It loads the main
+  in-range price set in one query, then performs DB-only seed, event, FX, and signal work as
+  requested.
 
 ---
 
@@ -204,6 +282,7 @@ If a price is requested for a date where no data exists (e.g., Sunday), the syst
 | `POST /api/v1/assets/prices` | POST | Bulk upsert prices |
 | `DELETE /api/v1/assets/prices` | DELETE | Bulk delete price ranges |
 | `POST /api/v1/assets/prices/query` | POST | Bulk price query (DB-only, backward-fill) |
+| `POST /api/v1/assets/prices/current` | POST | Bulk current quotes with DB fallback and today's OHLC write-back |
 | `POST /api/v1/assets/prices/sync` | POST | Bulk refresh prices from provider |
 
 !!! tip "Interactive search internals"

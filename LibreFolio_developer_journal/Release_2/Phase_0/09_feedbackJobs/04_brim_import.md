@@ -7,7 +7,8 @@ Skill di riferimento per chi esegue: `brim-plugin`.
 > Generic CSV e vincolo "un file piatto per broker" sono stati corretti e
 > documentati in [14_feedbackImportUrgent](../14_feedbackImportUrgent/manifest-integrazione-E.md).
 > Il parser resta verbatim, non genera FX e il primo asset resta una scelta
-> esplicita. Le voci eToro B1 e delete-asset B3 sotto restano aperte.
+> esplicita. Le successive workstream F/G hanno chiuso B1 e B3; stato aggiornato
+> nella tabella finale.
 
 ---
 
@@ -103,6 +104,6 @@ Baseline `a9138140`; rischi, dipendenze e DoD in [06_piano_sprint.md](06_piano_s
 
 | ID | Esito | Sprint |
 |---|---|---|
-| B1 | Scarto confermato, effetto economico da provare; S–M se cambia parser, blocco esplicito altrimenti. | SP09 condizionale |
+| B1 | ✅ Integrato e developer-accepted con G: conversion fee nonzero come FEE separata, withdrawal preservato; assunzione documentata. [Piano](../18_brimTargeted/plan-phase00BrimTargeted.prompt.md). | SP09 |
 | B2 | ✅ Allocazione/net FIFO v4 già consegnati; WAC lordo separato intenzionalmente. | Nessun codice |
-| B3 | Aperto, M con correttezza della persistenza, count e link singolo/bulk/dettaglio. | SP03 |
+| B3 | ✅ Integrato e developer-reviewed con F: persistenza/count affidabili e link transazioni singolo/bulk/dettaglio. [Piano](../17_assetDataOperations/plan-phase00AssetDataOperations.prompt.md). | SP03 |
