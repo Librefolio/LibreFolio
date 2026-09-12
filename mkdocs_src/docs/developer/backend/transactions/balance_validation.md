@@ -1,101 +1,144 @@
-# Balance Validation
+# 🔒 Balance Validation
 
-After every mutation batch, LibreFolio performs a **chronological balance walk** to ensure no broker ends up in an invalid state. This is implemented in `TransactionService._validate_broker_balances()`.
+Transaction batches perform a final **end-of-day balance replay** before the
+response is finalized. The stage wrapper is
+`transaction_batch_stages.validate_balances()`; the broker replay itself remains
+`TransactionService._validate_broker_balances()`.
+
+This is validation inside the caller's current database transaction. It is not a
+commit and it does not own rollback.
 
 ---
 
-## What Is Validated
+## 🧭 Pipeline Boundary
 
-Two independent balance dimensions are tracked per broker:
+Balance replay runs after delete, split, update, updated-pair validation, create,
+promote, create-link resolution, inline WAC/FX handling, and required-cost-basis
+validation.
+
+`TransactionBatchContext.earliest_date_by_broker` is updated by successful
+mutation stages. For each broker, the context retains the minimum date reported
+by those operations; a moved update uses the earlier of its old and new dates.
+Immediately before replay, `validate_balances()`:
+
+1. calls `session.flush()` so queries see the staged mutations;
+2. maps successful result IDs back to their operation and batch index for issue
+   attribution; and
+3. calls `_validate_broker_balances(broker_id, from_date, batch_tx_ids=...)` for
+   each affected broker.
+
+---
+
+## ⚖️ What Is Validated
+
+Two independent dimensions are tracked per broker:
 
 | Dimension | Unit | Violation |
 |-----------|------|-----------|
-| **Cash balance** | Currency amount per currency code | Negative cash balance |
-| **Asset holdings** | Quantity per asset ID | Negative asset position (shorting) |
+| **Cash** | Amount per currency code | End-of-day cash balance below zero |
+| **Asset holdings** | Quantity per asset ID | End-of-day asset quantity below zero |
 
-These constraints can be **individually disabled per broker** via broker settings:
+Broker settings control each check:
 
 | Broker flag | Effect when `True` |
 |-------------|-------------------|
-| `allow_cash_overdraft` | Cash balance may go negative — no validation |
-| `allow_asset_shorting` | Asset quantity may go negative — no validation |
+| `allow_cash_overdraft` | Negative cash is permitted |
+| `allow_asset_shorting` | Negative asset quantity is permitted |
 
-When both flags are `True`, the balance walk is **skipped entirely** for that broker.
-
----
-
-## The Balance Walk
-
-The algorithm processes all transactions for a broker in **chronological order**, day by day:
-
-```
-For each day from start_date to end_date:
-    For each transaction on this day:
-        cash_balances[currency]  += transaction.amount
-        asset_balances[asset_id] += transaction.quantity
-
-    If not allow_cash_overdraft:
-        assert all cash_balances[c] >= 0
-
-    If not allow_asset_shorting:
-        assert all asset_balances[a] >= 0
-```
-
-When a mutation affects only transactions after a certain date, the walk is **incremental**: it starts from pre-computed balances up to `from_date - 1` (fetched by `_get_balances_before_date()`) and only replays transactions from `from_date` forward. This avoids full re-scans of large brokers.
+When both flags are true, `_validate_broker_balances()` returns without querying
+or replaying transactions.
 
 ---
 
-## Validation Errors
+## 📅 End-of-day Replay
 
-A violation raises `BalanceValidationError`, which is caught in `execute_batch()` and converted into a `TXValidationIssue`:
+For an incremental replay beginning at `from_date`, the service first obtains
+cash and asset balances from all rows with `date < from_date`. It then queries
+the broker's rows from `from_date` onward, groups them by date, and applies every
+row for a date before checking either balance dimension:
+
+```text
+balances = SUM(all rows before from_date)
+
+for each date through the final transaction date:
+    apply every cash and quantity delta dated that day
+    validate all cash balances unless overdraft is allowed
+    validate all asset balances unless shorting is allowed
+```
+
+The invariant is therefore **end-of-day**, not per-row or intraday. Opposing
+movements on the same date are netted before validation. A later date cannot
+repair an earlier negative close because each date is checked before replay
+advances.
+
+Starting at the earliest affected date preserves correctness for backdated
+creates, deletes, splits, promotions, and updates without replaying the broker's
+complete history on every batch.
+
+---
+
+## 🚨 Issue Shape and Stop Condition
+
+`BalanceValidationError` is defined in
+`backend/app/services/transaction_batch_context.py` and carries:
 
 ```python
-class BalanceValidationError(Exception):
-    broker_id: int
-    date: date
-    currency_or_asset: str   # e.g. "EUR" or "asset:42"
-    balance: Decimal
-    code: str                # TXValidationCode enum value
-    params: dict             # for frontend i18n interpolation
+broker_id: int
+date: date
+currency_or_asset: str
+balance: Decimal
+code: str
+params: dict
+batch_index: int
+batch_operation: str
 ```
+
+The two stable validation codes are:
 
 | Code | Condition |
 |------|-----------|
-| `BALANCE_CASH_NEGATIVE` | Cash for a currency goes below 0 |
-| `BALANCE_ASSET_NEGATIVE` | Quantity for an asset goes below 0 |
+| `balanceCashNegative` | A currency closes a day below zero |
+| `balanceAssetNegative` | An asset quantity closes a day below zero |
+
+When possible, the replay attributes the issue to the last staged batch
+transaction that reduced that currency or asset on the failing date. Otherwise
+it uses operation `create` and index `-1` as a broker-level fallback.
+
+`validate_balances()` wraps the broker loop in one `try` block. It catches the
+first `BalanceValidationError`, appends one `TXValidationIssue`, and exits the
+stage; it does not continue collecting later balance exceptions from other
+currencies, dates, or brokers. Unexpected replay exceptions likewise become one
+broker-level balance-validation issue.
 
 ---
 
-## Triggering Conditions
+## 🔁 Transaction Ownership
 
-Balance validation runs automatically after every `execute_batch()` commit for each broker touched by the batch. The set of brokers to validate is determined from:
+The replay only flushes the session. Neither the stage nor `execute_batch()`
+calls `commit()` or `rollback()`:
 
-- `broker_id` of every created/updated transaction
-- `broker_id` of every deleted transaction
-- Both sides of linked pairs (TRANSFER, FX_CONVERSION)
+- `/transactions/validate` always rolls back after receiving the response;
+- `/transactions/commit` commits only when `response.committed` is true;
+- any balance issue makes `committed` false, so the commit route rolls back all
+  staged mutations.
 
----
-
-## Design Rationale
-
-### Why day-by-day and not just a final snapshot?
-
-A transaction on 2024-01-05 might temporarily push cash negative even though a subsequent deposit on 2024-01-10 would bring it positive again. Day-by-day ensures **intra-period violations** are caught, not just end-state.
-
-### Why not a DB constraint?
-
-Running balances cannot be expressed as a simple DB constraint because they are **computed** from the aggregate of all prior transactions. A trigger-based approach would also be O(N) per row. The service-level walk runs once per batch at commit time, which is the correct trade-off.
+This caller-owned boundary is what makes a multi-broker batch atomic while still
+allowing the same service pipeline to power a dry run.
 
 ---
 
-## Broker Settings Reference
+## ❓ Why End-of-day Instead of a DB Constraint?
 
-See `admin/settings.md` for how to enable overdraft/shorting per broker in the admin panel.
+Running balances depend on the aggregate of all prior rows and cannot be
+expressed as a simple row constraint. Checking once after all rows for a date
+also avoids rejecting a valid same-day set merely because of insertion order,
+while still rejecting a negative close before a later day's deposit or
+acquisition can mask it.
 
 ---
 
-## Related
+## 🔗 Related
 
-- 🏗️ **[Transaction Service](service.md)** — Where the validation is called
-- ✂️ **[Split & Promote](split_promote.md)** — Validation runs after these too
+- 🏗️ **[Transaction Service](service.md)** — Ordered stages and response semantics
+- ✂️ **[Split & Promote](split_promote.md)** — Mutations that feed the replay boundary
 - 📖 **[Access Control (RBAC)](../../architecture/access_control.md)** — Broker ownership model
