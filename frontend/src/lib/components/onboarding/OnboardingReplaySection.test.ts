@@ -2,9 +2,9 @@
 /**
  * OnboardingReplaySection — component test (Vitest + jsdom).
  *
- * The Preferences "onboarding" panel: one row per `OnboardingProgressItem`
- * (welcome / intro_tour / import_guide), a per-row "Replay" button and a
- * "Replay all" button. The component is a thin orchestrator around three
+ * The Preferences "onboarding" panel: one row per `OnboardingProgressItem`,
+ * a per-row "Replay" button and a "Replay all" button. The component is a
+ * thin orchestrator around three
  * module singletons it imports directly (not as props), so all three are
  * replaced here:
  *
@@ -19,13 +19,10 @@
  *    `OnboardingCoachmark.test.ts` uses, so the real internals (e.g. the
  *    `INTRO_TOUR_STEP_IDS` / `IMPORT_GUIDE_STEP_IDS` constants `replayAll`
  *    uses internally to compute the first step id per flow) stay genuine
- *    while `startIntroReplay` / `prepareIntroReplay` / `startImportReplay`
- *    become spies. The per-row intro replay still goes through
- *    `startIntroReplay`; `replayAll` arms intro through `prepareIntroReplay`
- *    instead — a three-way contract (welcome via `onboarding.startReplay`,
- *    intro via `onboardingGuide.prepareIntroReplay`, import via
- *    `onboardingGuide.startImportReplay`) where only `prepareIntroReplay`
- *    does not itself activate the tour.
+ *    while `startIntroReplay` / `prepareIntroReplay` / `armReplay` become
+ *    spies. The per-row intro replay still goes through `startIntroReplay`;
+ *    all contextual flows use `armReplay`, while `replayAll` prepares intro
+ *    without activating it.
  *  - `appBootstrap` (`$lib/features/onboarding/appBootstrap.svelte`) — only
  *    `load` is used, by the load-error retry path.
  *  - `$app/navigation` — `goto` becomes a spy so "did it navigate to
@@ -40,7 +37,8 @@
  * supplied through the mocked controller, not a catalogue string.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import type {OnboardingFlow, OnboardingProgressItem} from '$lib/types/onboarding';
+import {ONBOARDING_FLOWS, type OnboardingFlow, type OnboardingProgressItem, type OnboardingStepProgressItem} from '$lib/types/onboarding';
+import {IMPORT_GUIDE_STEP_IDS, TRANSACTION_BULK_STEP_IDS} from '$lib/features/onboarding/onboardingGuideCatalog';
 
 const {onboardingState, onboardingMocks, guideState, guideMocks, appBootstrapMocks} = vi.hoisted(() => ({
     onboardingState: {
@@ -51,7 +49,7 @@ const {onboardingState, onboardingMocks, guideState, guideMocks, appBootstrapMoc
     },
     onboardingMocks: {
         hasReplay: vi.fn<(flow: OnboardingFlow, version: number) => boolean>(() => false),
-        startReplay: vi.fn<(flow: OnboardingFlow, version: number, stepId: string) => boolean>(() => true),
+        startReplay: vi.fn<(flow: OnboardingFlow, version: number, stepId: string, returnTo?: string, remainingStepIds?: string[], mode?: 'automatic' | 'replay') => boolean>(() => true),
         clearReplay: vi.fn<(flow: OnboardingFlow, version: number) => void>(),
         complete: vi.fn(),
         skip: vi.fn(),
@@ -62,7 +60,7 @@ const {onboardingState, onboardingMocks, guideState, guideMocks, appBootstrapMoc
     guideMocks: {
         startIntroReplay: vi.fn<() => boolean>(() => true),
         prepareIntroReplay: vi.fn<() => boolean>(() => true),
-        startImportReplay: vi.fn<() => boolean>(() => true),
+        armReplay: vi.fn<(flow: Exclude<OnboardingFlow, 'welcome' | 'intro_tour'>) => boolean>(() => true),
     },
     appBootstrapMocks: {
         load: vi.fn(async () => 'ready' as const),
@@ -103,7 +101,7 @@ vi.mock('$lib/features/onboarding/onboardingGuide.svelte', async (importOriginal
             },
             startIntroReplay: (...args: Parameters<typeof guideMocks.startIntroReplay>) => guideMocks.startIntroReplay(...args),
             prepareIntroReplay: (...args: Parameters<typeof guideMocks.prepareIntroReplay>) => guideMocks.prepareIntroReplay(...args),
-            startImportReplay: (...args: Parameters<typeof guideMocks.startImportReplay>) => guideMocks.startImportReplay(...args),
+            armReplay: (...args: Parameters<typeof guideMocks.armReplay>) => guideMocks.armReplay(...args),
         },
     };
 });
@@ -136,9 +134,27 @@ function progressItem(over: Partial<OnboardingProgressItem> & {flow: OnboardingF
     };
 }
 
+function stepProgressItem(stepId: string, status: OnboardingStepProgressItem['status'] = 'pending'): OnboardingStepProgressItem {
+    return {
+        step_id: stepId,
+        status,
+        version: 1,
+        current_version: 1,
+        update_available: false,
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-01T00:00:00Z',
+        completed_at: status === 'completed' ? '2024-01-01T00:00:00Z' : null,
+        skipped_at: status === 'skipped' ? '2024-01-01T00:00:00Z' : null,
+    };
+}
+
 /** Three pending, up-to-date flows — the neutral case most tests mount with. */
 function defaultFlows(): OnboardingProgressItem[] {
     return [progressItem({flow: 'welcome'}), progressItem({flow: 'intro_tour'}), progressItem({flow: 'import_guide'})];
+}
+
+function allFlows(): OnboardingProgressItem[] {
+    return ONBOARDING_FLOWS.map((flow) => progressItem({flow}));
 }
 
 function mountSection(flows: OnboardingProgressItem[] = defaultFlows()) {
@@ -171,7 +187,7 @@ beforeEach(async () => {
     onboardingMocks.skip.mockReset();
     guideMocks.startIntroReplay.mockReset().mockReturnValue(true);
     guideMocks.prepareIntroReplay.mockReset().mockReturnValue(true);
-    guideMocks.startImportReplay.mockReset().mockReturnValue(true);
+    guideMocks.armReplay.mockReset().mockReturnValue(true);
     appBootstrapMocks.load.mockReset().mockResolvedValue('ready');
     gotoMock.mockReset().mockResolvedValue(undefined);
 });
@@ -208,6 +224,37 @@ describe('OnboardingReplaySection — rendering flows', () => {
         expect(screen.getByTestId('onboarding-flow-import_guide-status')).toBeInTheDocument();
         expect(screen.queryByTestId('onboarding-flow-import_guide-update')).toBeNull();
     });
+
+    it('renders all 15 flows and one Bulk row with four step statuses', () => {
+        const flows = allFlows().map((item) =>
+            item.flow === 'transaction_bulk_guide'
+                ? {
+                      ...item,
+                      steps: TRANSACTION_BULK_STEP_IDS.map((stepId, index) => stepProgressItem(stepId, index === 0 ? 'completed' : index === 1 ? 'skipped' : 'pending')),
+                  }
+                : item.flow === 'import_guide'
+                  ? {...item, steps: IMPORT_GUIDE_STEP_IDS.map((stepId) => stepProgressItem(stepId))}
+                  : item,
+        );
+        mountSection(flows);
+
+        for (const flow of ONBOARDING_FLOWS) {
+            expect(screen.getByTestId(`onboarding-flow-${flow}`)).toBeInTheDocument();
+        }
+        const transactionsGroup = screen.getByTestId('onboarding-group-transactions');
+        expect(transactionsGroup).toContainElement(screen.getByTestId('onboarding-flow-transaction_bulk_guide'));
+        expect(screen.getByTestId('onboarding-replay-transaction_bulk_guide')).toBeEnabled();
+        expect(screen.getByTestId('onboarding-flow-transaction_bulk_guide-steps')).toBeInTheDocument();
+        for (const stepId of TRANSACTION_BULK_STEP_IDS) {
+            expect(screen.getByTestId(`onboarding-step-transaction_bulk_guide-${stepId}`)).toBeInTheDocument();
+        }
+        for (const stepId of IMPORT_GUIDE_STEP_IDS) {
+            expect(screen.getByTestId(`onboarding-step-import_guide-${stepId}`)).toBeInTheDocument();
+        }
+        expect(screen.queryByTestId('onboarding-flow-transaction_bulk_validation_guide')).toBeNull();
+        expect(screen.queryByTestId('onboarding-flow-transaction_bulk_selection_guide')).toBeNull();
+        expect(screen.queryByTestId('onboarding-flow-transaction_bulk_save_guide')).toBeNull();
+    });
 });
 
 // =========================================================================
@@ -234,7 +281,7 @@ describe('OnboardingReplaySection — welcome replay', () => {
 
         await fireEvent.click(screen.getByTestId('onboarding-replay-welcome'));
 
-        expect(onboardingMocks.startReplay).toHaveBeenCalledWith('welcome', 1, 'welcome');
+        expect(onboardingMocks.startReplay).toHaveBeenCalledWith('welcome', 1, 'welcome', undefined, undefined, 'replay');
         await waitFor(() => expect(gotoMock).toHaveBeenCalledWith('/welcome'));
     });
 
@@ -252,14 +299,14 @@ describe('OnboardingReplaySection — welcome replay', () => {
 
 // =========================================================================
 describe('OnboardingReplaySection — intro / import replay', () => {
-    it('delegates intro replay to onboardingGuide.startIntroReplay and never navigates', async () => {
+    it('delegates intro replay to onboardingGuide.startIntroReplay and navigates to its dashboard host', async () => {
         mountSection();
 
         await fireEvent.click(screen.getByTestId('onboarding-replay-intro_tour'));
 
         expect(guideMocks.startIntroReplay).toHaveBeenCalledTimes(1);
         expect(onboardingMocks.startReplay).not.toHaveBeenCalled();
-        expect(gotoMock).not.toHaveBeenCalled();
+        await waitFor(() => expect(gotoMock).toHaveBeenCalledExactlyOnceWith('/dashboard'));
     });
 
     it('surfaces the guide error when intro replay fails to arm', async () => {
@@ -275,7 +322,8 @@ describe('OnboardingReplaySection — intro / import replay', () => {
     it('arms the next import without navigating, and the armed badge appears once it succeeds', async () => {
         let importArmed = false;
         onboardingMocks.hasReplay.mockImplementation((flow) => flow === 'import_guide' && importArmed);
-        guideMocks.startImportReplay.mockImplementation(() => {
+        guideMocks.armReplay.mockImplementation((flow) => {
+            expect(flow).toBe('import_guide');
             importArmed = true;
             return true;
         });
@@ -284,40 +332,75 @@ describe('OnboardingReplaySection — intro / import replay', () => {
 
         await fireEvent.click(screen.getByTestId('onboarding-replay-import_guide'));
 
-        expect(guideMocks.startImportReplay).toHaveBeenCalledTimes(1);
+        expect(guideMocks.armReplay).toHaveBeenCalledExactlyOnceWith('import_guide');
         expect(onboardingMocks.startReplay).not.toHaveBeenCalled();
         expect(gotoMock).not.toHaveBeenCalled();
         await waitFor(() => expect(screen.getByTestId('onboarding-flow-import_guide-armed')).toBeInTheDocument());
     });
 });
 
+describe('OnboardingReplaySection — grouped Bulk replay', () => {
+    it('arms and cancels the single Bulk flow without touching persisted step statuses', async () => {
+        const armed = new Set<OnboardingFlow>();
+        onboardingMocks.hasReplay.mockImplementation((candidate) => armed.has(candidate));
+        onboardingMocks.clearReplay.mockImplementation((candidate) => {
+            armed.delete(candidate);
+        });
+        guideMocks.armReplay.mockImplementation((candidate) => {
+            armed.add(candidate);
+            return true;
+        });
+        const steps = TRANSACTION_BULK_STEP_IDS.map((stepId, index) => stepProgressItem(stepId, index === 0 ? 'completed' : index === 1 ? 'skipped' : 'pending'));
+        mountSection([progressItem({flow: 'transaction_bulk_guide', status: 'pending', steps})]);
+
+        const replay = screen.getByTestId('onboarding-replay-transaction_bulk_guide');
+        await fireEvent.click(replay);
+
+        expect(guideMocks.armReplay).toHaveBeenCalledExactlyOnceWith('transaction_bulk_guide');
+        await waitFor(() => expect(screen.getByTestId('onboarding-flow-transaction_bulk_guide-armed')).toBeInTheDocument());
+        expect(onboardingMocks.complete).not.toHaveBeenCalled();
+        expect(onboardingMocks.skip).not.toHaveBeenCalled();
+        expect(gotoMock).not.toHaveBeenCalled();
+
+        await fireEvent.click(replay);
+
+        expect(onboardingMocks.clearReplay).toHaveBeenCalledExactlyOnceWith('transaction_bulk_guide', 1);
+        await waitFor(() => expect(screen.queryByTestId('onboarding-flow-transaction_bulk_guide-armed')).toBeNull());
+        for (const step of steps) {
+            expect(screen.getByTestId(`onboarding-step-transaction_bulk_guide-${step.step_id}`)).toBeInTheDocument();
+        }
+    });
+});
+
 // =========================================================================
 describe('OnboardingReplaySection — replay all', () => {
-    it('arms welcome via onboarding.startReplay, intro via onboardingGuide.prepareIntroReplay, and import via onboardingGuide.startImportReplay, in that order, before navigating to /welcome', async () => {
-        mountSection();
+    it('arms welcome, prepares intro, then arms every contextual flow in source order before navigating', async () => {
+        mountSection(allFlows());
+        const contextualFlows = ONBOARDING_FLOWS.filter((flow) => flow !== 'welcome' && flow !== 'intro_tour');
 
         await fireEvent.click(screen.getByTestId('onboarding-replay-all'));
 
         // Welcome still goes through the generic controller; intro is armed
         // (not activated) through the guide's dedicated replay-prep entry
-        // point, and import through its own guide method — startIntroReplay
-        // (the per-row path) is never involved in "replay all".
+        // point, and every contextual flow through armReplay —
+        // startIntroReplay (the per-row path) is never involved in "replay all".
         expect(onboardingMocks.startReplay).toHaveBeenCalledTimes(1);
-        expect(onboardingMocks.startReplay).toHaveBeenNthCalledWith(1, 'welcome', 1, 'welcome');
+        expect(onboardingMocks.startReplay).toHaveBeenNthCalledWith(1, 'welcome', 1, 'welcome', undefined, undefined, 'replay');
         expect(guideMocks.prepareIntroReplay).toHaveBeenCalledTimes(1);
-        expect(guideMocks.startImportReplay).toHaveBeenCalledTimes(1);
+        expect(guideMocks.armReplay.mock.calls.map(([flow]) => flow)).toEqual(contextualFlows);
         expect(guideMocks.startIntroReplay).not.toHaveBeenCalled();
 
         await waitFor(() => expect(gotoMock).toHaveBeenCalledWith('/welcome'));
-        expect(guideMocks.prepareIntroReplay.mock.invocationCallOrder[0]).toBeGreaterThan(onboardingMocks.startReplay.mock.invocationCallOrder[0]);
-        expect(guideMocks.startImportReplay.mock.invocationCallOrder[0]).toBeGreaterThan(guideMocks.prepareIntroReplay.mock.invocationCallOrder[0]);
-        expect(gotoMock.mock.invocationCallOrder[0]).toBeGreaterThan(guideMocks.startImportReplay.mock.invocationCallOrder[0]);
+        expect(guideMocks.prepareIntroReplay.mock.invocationCallOrder.at(0) ?? 0).toBeGreaterThan(onboardingMocks.startReplay.mock.invocationCallOrder.at(0) ?? 0);
+        expect(guideMocks.armReplay.mock.invocationCallOrder.at(0) ?? 0).toBeGreaterThan(guideMocks.prepareIntroReplay.mock.invocationCallOrder.at(0) ?? 0);
+        expect(gotoMock.mock.invocationCallOrder.at(0) ?? 0).toBeGreaterThan(guideMocks.armReplay.mock.invocationCallOrder.at(-1) ?? 0);
     });
 
     it('rolls back the tokens already written when import fails to arm, and surfaces the failure', async () => {
         // Welcome and intro_tour arm successfully; import_guide's own guide
         // method is the one that fails, so it never made it into `started`.
-        guideMocks.startImportReplay.mockImplementation(() => {
+        guideMocks.armReplay.mockImplementation((flow) => {
+            expect(flow).toBe('import_guide');
             onboardingState.replayStorageError = 'STORAGE_FULL_TOKEN';
             return false;
         });

@@ -266,6 +266,11 @@ Frontend integration must resolve `component_key` through a **compiled literal m
 
 The custom component owns domain-specific input and result presentation while the backend owns the calculation. A descriptor and schema do not demonstrate that a corresponding UI, solver, or end-to-end pilot exists.
 
+Tool catalogue cards and the opened Tool host expose only the compatibility pair
+`Backend/API <contract_version> · UI <ui.version>`. Keep `implementation_version` in
+**Plugin diagnostics** rather than the public compatibility label: it identifies the deployed
+implementation but is not the frontend contract users need to match.
+
 Use `DocsLink` for documentation destinations. It builds `/mkdocs/` URLs from the current language and a relative path rather than forcing English. For an EN-only destination, a caller can supply an existing localized destination through `localizedFallbackPath`; the helper selects that fallback for non-English languages. It does not discover missing pages automatically.
 
 Keep submitted financial data out of documentation URLs, logs, and HTML attributes. Documentation metadata identifies a page and its version, not a scenario transport channel.

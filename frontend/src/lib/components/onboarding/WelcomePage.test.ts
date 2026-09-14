@@ -152,14 +152,14 @@ describe('WelcomePage — complete', () => {
 });
 
 describe('WelcomePage — skip', () => {
-    it('owns the permanent Skip above the form, runs it through busy, and clears busy on success', async () => {
+    it('routes the form Skip through busy and clears busy on success', async () => {
         const {onskip} = mount();
         const {promise, resolve} = deferred<void>();
         onskip.mockReturnValue(promise);
         const form = screen.getByTestId('welcome-form');
         const skip = screen.getByTestId('welcome-skip');
 
-        expect(form).not.toContainElement(skip);
+        expect(form).toContainElement(skip);
 
         await fireEvent.click(skip);
         expect(onskip).toHaveBeenCalledTimes(1);

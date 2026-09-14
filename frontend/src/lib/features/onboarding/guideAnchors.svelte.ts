@@ -10,6 +10,8 @@ export interface GuideAnchorRegistry {
     clear(): void;
 }
 
+export type GuideAnchorBinding = string | readonly string[];
+
 export function createGuideAnchorRegistry(): GuideAnchorRegistry {
     const anchors = new Map<string, HTMLElement>();
     let revision = $state(0);
@@ -56,18 +58,25 @@ export function createGuideAnchorRegistry(): GuideAnchorRegistry {
     };
 }
 
-export function createGuideAnchorAction(registry: GuideAnchorRegistry): Action<HTMLElement, string> {
-    return (node, id) => {
-        let unregister = registry.register(id, node);
+function normalizedAnchorIds(binding: GuideAnchorBinding): string[] {
+    const ids = typeof binding === 'string' ? [binding] : binding;
+    return [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
+}
+
+export function createGuideAnchorAction(registry: GuideAnchorRegistry): Action<HTMLElement, GuideAnchorBinding> {
+    return (node, binding) => {
+        let ids = normalizedAnchorIds(binding);
+        let unregister = ids.map((id) => registry.register(id, node));
         return {
-            update(nextId: string) {
-                if (nextId === id) return;
-                unregister();
-                id = nextId;
-                unregister = registry.register(id, node);
+            update(nextBinding: GuideAnchorBinding) {
+                const nextIds = normalizedAnchorIds(nextBinding);
+                if (nextIds.length === ids.length && nextIds.every((id, index) => id === ids[index])) return;
+                for (const cleanup of unregister) cleanup();
+                ids = nextIds;
+                unregister = ids.map((id) => registry.register(id, node));
             },
             destroy() {
-                unregister();
+                for (const cleanup of unregister) cleanup();
             },
         };
     };

@@ -183,13 +183,31 @@ describe('createGuideAnchorAction — the Svelte action wrapper', () => {
         mobile?.destroy?.();
         expect(registry.get('nav.toggle.mobile')).toBeNull();
     });
+
+    it('registers one actionable node under deduplicated aliases and updates them atomically', () => {
+        const registry = createGuideAnchorRegistry();
+        const guideAnchor = createGuideAnchorAction(registry);
+        const saveAll = fakeNode();
+
+        const lifecycle = guideAnchor(saveAll, ['import.bulk.save-all', 'transaction.bulk.save', 'import.bulk.save-all']);
+
+        expect(registry.get('import.bulk.save-all')).toBe(saveAll);
+        expect(registry.get('transaction.bulk.save')).toBe(saveAll);
+
+        lifecycle?.update?.(['transaction.bulk.save']);
+        expect(registry.get('import.bulk.save-all')).toBeNull();
+        expect(registry.get('transaction.bulk.save')).toBe(saveAll);
+
+        lifecycle?.destroy?.();
+        expect(registry.get('transaction.bulk.save')).toBeNull();
+    });
 });
 
 /**
  * `TransactionBulkModal`'s commit button (`tx-bulk-commit`) wires exactly two
  * things to its element: `onclick={requestCommit}` (a real user click handler)
- * and `use:guideAnchor={'import.bulk.save-all'}` (this action, purely so the
- * coachmark can find it to point at). The production risk this locks down is
+ * and a two-id `use:guideAnchor` alias (this action, purely so the Import and
+ * Bulk Save coachmarks can find the same real target). The production risk is
  * the anchor action ever growing a side channel that could trigger a commit on
  * its own — e.g. a "click the anchor to advance" convenience someone adds to
  * the guide later. `register()` above already proves the action never touches
