@@ -6,6 +6,8 @@
     import SingleDatePicker from '$lib/components/ui/date/SingleDatePicker.svelte';
     import ExactDecimalInput from '$lib/components/ui/input/ExactDecimalInput.svelte';
     import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
+    import {currencyStoreVersion, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
+    import {getIndexColor} from '$lib/utils/colors';
     import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
     import {assetProvidersVersion, ensureAssetProvidersCached, getAssetProviderIconUrl} from '$lib/utils/providerHelpers';
     import {AlertTriangle, Copy, Database, Info, LockKeyhole, Trash2} from 'lucide-svelte';
@@ -21,6 +23,8 @@
     }
 
     let {row = $bindable(), index, disabled = false, onduplicate, onremove, onchange}: Props = $props();
+    const SCOPE_ORDER = ['owned', 'other_users', 'observed'] as const;
+    const compactDecimalClass = 'min-h-10 !px-2 !py-1.5 text-sm sm:min-h-9';
 
     let providerIconUrl = $derived.by(() => {
         void $assetProvidersVersion;
@@ -39,6 +43,18 @@
         if (row.source?.usageScope === 'owned') return $_('tools.pacAllocator.gallery.owned', {default: 'Owned'});
         if (row.source?.usageScope === 'other_users') return $_('tools.pacAllocator.gallery.otherUsers', {default: 'Other users'});
         return $_('tools.pacAllocator.gallery.observed', {default: 'Observed'});
+    }
+
+    function sourceScopeStyle(): string {
+        const scope = row.source?.usageScope ?? 'observed';
+        const colors = getIndexColor(SCOPE_ORDER.indexOf(scope), 140);
+        return `--scope-bg:${colors.bg};--scope-text:${colors.text};--scope-dark-bg:${colors.darkBg};--scope-dark-text:${colors.darkText};--scope-border:${colors.vivid};`;
+    }
+
+    function currencyFlag(code: string | null | undefined): string {
+        void $currencyStoreVersion;
+        const flag = getCurrencyInfo(code ?? '').flag_emoji;
+        return flag === '🏳️' ? '' : flag;
     }
 
     function setPrice(value: string): void {
@@ -64,7 +80,7 @@
 </script>
 
 <article class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900/50" data-testid="pac-row" data-row-index={index} data-origin={row.origin} data-source-mode={row.source ? 'locked' : 'manual'}>
-    <div class="flex items-start gap-3 border-b border-gray-100 bg-gray-50/80 px-3 py-3 dark:border-gray-800 dark:bg-gray-900">
+    <div class="flex items-start gap-2.5 border-b border-gray-100 bg-gray-50/80 px-3 py-2.5 dark:border-gray-800 dark:bg-gray-900">
         <div class="flex shrink-0 items-center -space-x-2">
             <AssetIcon iconUrl={row.source?.assetIconUrl ?? null} assetType={row.source?.assetType ?? null} altText={row.value.name || $_('common.asset')} size="md" />
             {#if row.source?.brokerId !== null && row.source?.brokerId !== undefined}
@@ -88,7 +104,7 @@
                         {$_('tools.pacAllocator.fullCustody')}
                     </span>
                 {:else if row.source}
-                    <span class="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600 dark:bg-gray-800 dark:text-gray-300">{sourceScopeLabel()}</span>
+                    <span class="scope-badge rounded-full border px-2 py-0.5 text-[11px] font-medium" style={sourceScopeStyle()} data-scope-color={row.source.usageScope}>{sourceScopeLabel()}</span>
                 {:else}
                     <span class="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600 dark:bg-gray-800 dark:text-gray-300">
                         {row.origin === 'manual_duplicate' ? $_('tools.pacAllocator.manualCopy', {default: 'Independent manual copy'}) : $_('tools.pacAllocator.manual')}
@@ -133,15 +149,31 @@
             {/if}
         </div>
 
-        <div class="flex shrink-0 items-center gap-1">
-            <button class="btn btn-ghost px-2" type="button" onclick={onduplicate} {disabled} data-testid={`pac-duplicate-asset-${index}`} aria-label={$_('tools.pacAllocator.duplicate')}>
-                <Copy size={15} />
-                <span class="hidden sm:inline">{$_('tools.pacAllocator.duplicate')}</span>
-            </button>
-            <button class="btn btn-ghost px-2 text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950/30 dark:hover:text-red-300" type="button" onclick={onremove} {disabled} data-testid={`pac-remove-asset-${index}`} aria-label={$_('common.remove')}>
-                <Trash2 size={15} />
-                <span class="hidden sm:inline">{$_('common.remove')}</span>
-            </button>
+        <div class="flex shrink-0 items-center gap-0.5">
+            <Tooltip text={$_('tools.pacAllocator.duplicate')} position="top" interactiveChild>
+                <button
+                    class="inline-flex h-10 w-10 items-center justify-center rounded-md text-gray-500 transition hover:bg-gray-100 hover:text-libre-green focus:outline-none focus-visible:ring-2 focus-visible:ring-libre-green/70 disabled:cursor-not-allowed disabled:opacity-50 sm:h-8 sm:w-8 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-green-300"
+                    type="button"
+                    onclick={onduplicate}
+                    {disabled}
+                    data-testid={`pac-duplicate-asset-${index}`}
+                    aria-label={$_('tools.pacAllocator.duplicate')}
+                >
+                    <Copy size={15} />
+                </button>
+            </Tooltip>
+            <Tooltip text={$_('common.remove')} position="top" interactiveChild>
+                <button
+                    class="inline-flex h-10 w-10 items-center justify-center rounded-md text-red-600 transition hover:bg-red-50 hover:text-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/70 disabled:cursor-not-allowed disabled:opacity-50 sm:h-8 sm:w-8 dark:text-red-400 dark:hover:bg-red-950/30 dark:hover:text-red-300"
+                    type="button"
+                    onclick={onremove}
+                    {disabled}
+                    data-testid={`pac-remove-asset-${index}`}
+                    aria-label={$_('common.remove')}
+                >
+                    <Trash2 size={15} />
+                </button>
+            </Tooltip>
         </div>
     </div>
 
@@ -177,8 +209,9 @@
                     <div class="fact-cell">
                         <dt>{$_('tools.pacAllocator.nativePrice', {default: 'Native price'})}</dt>
                         <dd data-testid={`pac-imported-price-${index}`}>
-                            {displayDecimal(row.value.quote.raw_price)}
+                            {#if currencyFlag(row.value.quote.currency)}<span class="emoji-flag" aria-hidden="true">{currencyFlag(row.value.quote.currency)}</span>{/if}
                             {row.value.quote.currency ?? ''}
+                            {displayDecimal(row.value.quote.raw_price)}
                         </dd>
                     </div>
                     <div class="fact-cell">
@@ -194,7 +227,7 @@
                     <label class="field-label sm:col-span-2">
                         <span>{$_('common.name')}</span>
                         <input
-                            class="input-field"
+                            class="min-h-10 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 outline-none transition focus:border-libre-green focus:ring-1 focus:ring-libre-green disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-9 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
                             value={row.value.name ?? ''}
                             required
                             {disabled}
@@ -214,6 +247,7 @@
                             maxFractionDigits={12}
                             ariaLabel={$_('tools.pacAllocator.rows.initialQuantity')}
                             testid={`pac-initial-quantity-${index}`}
+                            className={compactDecimalClass}
                             {disabled}
                             onchange={(value) => {
                                 row.value.initial_quantity = value;
@@ -236,7 +270,18 @@
                     </label>
                     <label class="field-label">
                         <span>{$_('tools.pacAllocator.rows.price')}</span>
-                        <ExactDecimalInput value={row.value.quote.raw_price ?? ''} step="0.01" maxIntegerDigits={12} maxFractionDigits={12} placeholder={$_('common.optional')} ariaLabel={$_('tools.pacAllocator.rows.price')} testid={`pac-raw-price-${index}`} {disabled} onchange={setPrice} />
+                        <ExactDecimalInput
+                            value={row.value.quote.raw_price ?? ''}
+                            step="0.01"
+                            maxIntegerDigits={12}
+                            maxFractionDigits={12}
+                            placeholder={$_('common.optional')}
+                            ariaLabel={$_('tools.pacAllocator.rows.price')}
+                            testid={`pac-raw-price-${index}`}
+                            className={compactDecimalClass}
+                            {disabled}
+                            onchange={setPrice}
+                        />
                     </label>
                     <div class="field-label">
                         <span class="inline-flex items-center gap-1">
@@ -254,7 +299,7 @@
                             </Tooltip>
                         </span>
                         <input
-                            class="input-field"
+                            class="min-h-10 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 outline-none transition focus:border-libre-green focus:ring-1 focus:ring-libre-green disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-9 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
                             type="number"
                             min="1"
                             step="1"
@@ -290,6 +335,7 @@
                             maxFractionDigits={10}
                             ariaLabel={$_('tools.pacAllocator.rows.target')}
                             testid={`pac-target-weight-${index}`}
+                            className={compactDecimalClass}
                             {disabled}
                             onchange={(value) => {
                                 row.value.target_percent = value;
@@ -361,6 +407,7 @@
                         maxFractionDigits={row.value.buy_grid.mode === 'whole' ? 0 : 12}
                         ariaLabel={$_('tools.pacAllocator.rows.quantityStep')}
                         testid={`pac-step-quantity-${index}`}
+                        className={compactDecimalClass}
                         {disabled}
                         onchange={(value) => {
                             row.value.buy_grid.quantity_step = value;
@@ -431,5 +478,16 @@
 
     :global(.dark) .section-kicker {
         color: rgb(156 163 175);
+    }
+
+    .scope-badge {
+        border-color: color-mix(in srgb, var(--scope-border) 45%, transparent);
+        background: var(--scope-bg);
+        color: var(--scope-text);
+    }
+
+    :global(.dark) .scope-badge {
+        background: var(--scope-dark-bg);
+        color: var(--scope-dark-text);
     }
 </style>
