@@ -1,6 +1,6 @@
 <script lang="ts">
     import {onDestroy} from 'svelte';
-    import {AlertTriangle, ChevronDown, CircleStop, Info, LoaderCircle, Plus, RefreshCw, Trash2} from 'lucide-svelte';
+    import {AlertTriangle, CircleStop, CloudDownload, Info, LoaderCircle, PencilLine, Plus, RefreshCw, Trash2} from 'lucide-svelte';
     import {t} from '$lib/i18n';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
@@ -9,6 +9,9 @@
     import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
     import {notify} from '$lib/stores/app/notify.svelte';
     import {userSettings} from '$lib/stores/app/settings';
+    import {lookupFxRate} from '$lib/stores/fxStoreRegistry';
+    import {currencyStoreVersion, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
+    import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
     import {runTool} from '$lib/features/tools/client';
     import {ToolClientError, assertToolAccount, type ToolBatchMetrics, type ToolItemMetrics, type ToolOutput} from '$lib/features/tools/contracts';
     import {toolErrorMessage, toolViewError} from '$lib/features/tools/presentation';
@@ -19,7 +22,7 @@
     import PacMoneySection from './PacMoneySection.svelte';
     import PacResultPanel from './PacResultPanel.svelte';
     import {fetchPacAllocationSource, type PacAllocationSource, type PacAllocationSourceAsset, type PacAllocationSourceContext} from './allocationSource';
-    import type {PacAssetChoice, PacCashSourceState, PacContributionInput, PacContributionMode, PacDraft, PacDraftRow, PacEditorRow, PacMoneyInput, PacRateInput, PacRowSource, PacInput} from './editorTypes';
+    import type {PacAssetChoice, PacCashSourceState, PacContributionInput, PacDraft, PacDraftRow, PacEditorRow, PacMoneyInput, PacRateInput, PacRowSource, PacInput} from './editorTypes';
 
     let {descriptor, accountGeneration}: ToolHostPropsV1<'pac_allocator', '1.0.0'> = $props();
 
@@ -29,6 +32,13 @@
         code: string;
         retryable: boolean;
         issueCount: number;
+    }
+
+    interface ForeignCurrencyReason {
+        currency: string;
+        assetNames: string[];
+        existingCash: boolean;
+        contribution: boolean;
     }
 
     type PendingConfirmation = {kind: 'deselect'; assetId: number; items: string[]} | {kind: 'remove-row'; index: number; items: string[]} | {kind: 'refresh'; items: string[]};
@@ -96,7 +106,7 @@
             as_of_date: todayIso(),
             rows: [],
             cash: {
-                mode: 'not_supplied',
+                mode: 'broker_copy',
                 selectedBrokerIds: [],
                 sourceAsOfDate: null,
                 sourceFingerprint: null,
@@ -105,9 +115,8 @@
                 sources: [],
                 stale: false,
             },
-            contributionMode: 'not_supplied',
+            contributionMode: 'none',
             contributions: [],
-            allowFx: false,
             valuationRates: [],
         };
     }
@@ -254,7 +263,9 @@
     let allocationSourceCashSelectionKey = $state('');
     let sourceController: AbortController | null = null;
     let pendingConfirmation = $state.raw<PendingConfirmation | null>(null);
-    let fxExpanded = $state(false);
+    let fxCopySequence = 0;
+    let fxCopyingCurrency = $state<string | null>(null);
+    let fxCopyErrors = $state<Record<string, string>>({});
 
     const resultIsStale = $derived(result !== null && resultRevision !== revision);
     const clientErrorCopy = $derived(clientError ? toolErrorMessage(clientError) : null);
@@ -266,21 +277,38 @@
     const sourceIsCurrent = $derived(allocationSource?.asOfDate === draft.as_of_date);
     const staleSourceRows = $derived(draft.rows.filter((row) => row.source !== null && row.stale));
     const cashSourceBlocked = $derived(draft.cash.mode === 'broker_copy' && (draft.cash.stale || sourceLoading || sourceFailure !== null || draft.cash.sourceAsOfDate !== draft.as_of_date));
-    const foreignCurrencies = $derived.by(() => {
-        const currencies = new Set<string>();
+    const foreignCurrencyReasons = $derived.by<ForeignCurrencyReason[]>(() => {
+        const reasons = new Map<string, ForeignCurrencyReason>();
+        const reportCurrency = draft.report_currency.trim().toUpperCase();
+        const reasonFor = (currency: string): ForeignCurrencyReason => {
+            const current = reasons.get(currency);
+            if (current) return current;
+            const created = {currency, assetNames: [], existingCash: false, contribution: false};
+            reasons.set(currency, created);
+            return created;
+        };
         for (const row of draft.rows) {
             const currency = row.value.quote.currency?.trim().toUpperCase();
-            if (currency && currency !== draft.report_currency.trim().toUpperCase()) currencies.add(currency);
+            if (!currency || currency === reportCurrency) continue;
+            const reason = reasonFor(currency);
+            const name = row.value.name?.trim();
+            if (name && !reason.assetNames.includes(name)) reason.assetNames.push(name);
         }
         const activeCash = draft.cash.mode === 'manual' ? draft.cash.manualBalances : draft.cash.mode === 'broker_copy' && !draft.cash.stale ? draft.cash.backendAggregatedBalances : [];
-        const activeMoney = [...activeCash, ...(draft.contributionMode === 'custom' ? draft.contributions : [])];
-        for (const money of activeMoney) {
+        for (const money of activeCash) {
             const currency = money.currency?.trim().toUpperCase();
-            if (currency && currency !== draft.report_currency.trim().toUpperCase()) currencies.add(currency);
+            if (currency && currency !== reportCurrency) reasonFor(currency).existingCash = true;
         }
-        return [...currencies].sort();
+        if (draft.contributionMode === 'custom') {
+            for (const money of draft.contributions) {
+                const currency = money.currency?.trim().toUpperCase();
+                if (currency && currency !== reportCurrency) reasonFor(currency).contribution = true;
+            }
+        }
+        return [...reasons.values()].sort((left, right) => left.currency.localeCompare(right.currency));
     });
-    const fxSectionVisible = $derived(foreignCurrencies.length > 0 || draft.allowFx || draft.valuationRates.length > 0);
+    const foreignCurrencies = $derived(foreignCurrencyReasons.map((reason) => reason.currency));
+    const fxSectionVisible = $derived(foreignCurrencyReasons.length > 0 || draft.valuationRates.length > 0);
     const assetChoices = $derived.by<PacAssetChoice[]>(() => {
         if (!allocationSource) return [];
         return allocationSource.assets.map((asset) => {
@@ -370,14 +398,21 @@
         }
     }
 
+    function cancelFxCopy(): void {
+        fxCopySequence += 1;
+        fxCopyingCurrency = null;
+    }
+
     function setReportCurrency(value: string): void {
         if (value === draft.report_currency) return;
+        cancelFxCopy();
         draft.report_currency = value;
         markRevised();
     }
 
     function setAsOfDate(value: string): void {
         if (value === draft.as_of_date) return;
+        cancelFxCopy();
         draft.as_of_date = value;
         for (const row of draft.rows) {
             if (row.source) row.stale = row.source.sourceAsOfDate !== value;
@@ -597,18 +632,8 @@
         markRevised();
     }
 
-    function setContributionMode(mode: PacContributionMode): void {
-        draft.contributionMode = mode;
-        if (mode === 'custom' && draft.contributions.length === 0) draft.contributions.push(createContribution(draft.report_currency));
-        markRevised();
-    }
-
     function handleCashMode(mode: string): void {
-        if (mode === 'not_supplied' || mode === 'none' || mode === 'broker_copy' || mode === 'manual') setCashMode(mode);
-    }
-
-    function handleContributionMode(mode: string): void {
-        if (mode === 'not_supplied' || mode === 'none' || mode === 'custom') setContributionMode(mode);
+        if (mode === 'broker_copy' || mode === 'manual') setCashMode(mode);
     }
 
     function toggleCashBroker(brokerId: number): void {
@@ -626,6 +651,7 @@
             draft.cash.manualBalances.push(createMoney(draft.report_currency));
         } else {
             if (draft.contributions.length >= MAX_CURRENCIES) return;
+            draft.contributionMode = 'custom';
             draft.contributions.push(createContribution(draft.report_currency));
         }
         markRevised();
@@ -633,29 +659,103 @@
 
     function removeMoney(kind: 'cash' | 'contributions', index: number): void {
         if (kind === 'cash') draft.cash.manualBalances.splice(index, 1);
-        else draft.contributions.splice(index, 1);
+        else {
+            draft.contributions.splice(index, 1);
+            if (draft.contributions.length === 0) draft.contributionMode = 'none';
+        }
         markRevised();
     }
 
-    function toggleFx(): void {
-        draft.allowFx = !draft.allowFx;
-        fxExpanded = draft.allowFx;
-        markRevised();
-    }
-
-    function addValuationRate(): void {
+    function addValuationRate(currency = ''): void {
         if (draft.valuationRates.length >= MAX_CURRENCIES) return;
         const configured = new Set(draft.valuationRates.map((rate) => rate.currency));
-        const suggestedCurrency = foreignCurrencies.find((currency) => !configured.has(currency)) ?? '';
+        const suggestedCurrency = currency || foreignCurrencies.find((candidate) => !configured.has(candidate)) || '';
         draft.valuationRates.push(createRate(suggestedCurrency));
-        draft.allowFx = true;
-        fxExpanded = true;
         markRevised();
     }
 
     function removeValuationRate(index: number): void {
+        cancelFxCopy();
         draft.valuationRates.splice(index, 1);
         markRevised();
+    }
+
+    function setRateCurrency(rate: PacRateInput, value: string): void {
+        cancelFxCopy();
+        rate.currency = value;
+        fxCopyErrors = {};
+        markRevised();
+    }
+
+    function setRateValue(rate: PacRateInput, value: string): void {
+        cancelFxCopy();
+        rate.rate_to_report = value;
+        fxCopyErrors = {};
+        markRevised();
+    }
+
+    function setRateDate(rate: PacRateInput, value: string): void {
+        cancelFxCopy();
+        rate.reference_date = value;
+        fxCopyErrors = {};
+        markRevised();
+    }
+
+    function currencyFlag(code: string): string {
+        void $currencyStoreVersion;
+        const flag = getCurrencyInfo(code).flag_emoji;
+        return flag === '🏳️' ? '' : flag;
+    }
+
+    function hasValuationRate(currency: string): boolean {
+        const normalized = currency.trim().toUpperCase();
+        return draft.valuationRates.some((rate) => rate.currency?.trim().toUpperCase() === normalized);
+    }
+
+    async function copyValuationRate(currency: string): Promise<void> {
+        const nativeCurrency = currency.trim().toUpperCase();
+        const reportCurrency = draft.report_currency.trim().toUpperCase();
+        const asOfDate = draft.as_of_date;
+        if (!nativeCurrency || !reportCurrency || !asOfDate || nativeCurrency === reportCurrency) return;
+
+        const sequence = ++fxCopySequence;
+        const generation = accountGeneration;
+        const existing = draft.valuationRates.find((rate) => rate.currency?.trim().toUpperCase() === nativeCurrency);
+        const existingValue = existing?.rate_to_report ?? null;
+        const existingDate = existing?.reference_date ?? null;
+        fxCopyingCurrency = nativeCurrency;
+        const nextErrors = {...fxCopyErrors};
+        delete nextErrors[nativeCurrency];
+        fxCopyErrors = nextErrors;
+
+        try {
+            const point = await lookupFxRate(nativeCurrency, reportCurrency, asOfDate);
+            if (sequence !== fxCopySequence || generation !== accountGeneration || draft.report_currency.trim().toUpperCase() !== reportCurrency || draft.as_of_date !== asOfDate) {
+                return;
+            }
+            try {
+                assertToolAccount(generation);
+            } catch {
+                return;
+            }
+
+            const current = draft.valuationRates.find((rate) => rate.currency?.trim().toUpperCase() === nativeCurrency);
+            const fieldUnchanged = existing ? current === existing && current.rate_to_report === existingValue && current.reference_date === existingDate : current === undefined;
+            if (!fieldUnchanged) return;
+
+            if (!point || point.rate === null) {
+                fxCopyErrors = {...fxCopyErrors, [nativeCurrency]: 'missing'};
+                return;
+            }
+
+            const target = existing ?? createRate(nativeCurrency);
+            target.rate_to_report = formatDecimalForDisplay(String(point.rate), {maxFrac: 12});
+            target.reference_date = point.backwardFillInfo?.actualRateDate ?? point.date;
+            if (!existing) draft.valuationRates.push(target);
+            markRevised();
+        } finally {
+            if (sequence === fxCopySequence) fxCopyingCurrency = null;
+        }
     }
 
     function descriptorIsCurrent(): boolean {
@@ -688,9 +788,9 @@
             report_currency: draft.report_currency,
             as_of_date: draft.as_of_date,
             rows: draft.rows.map((row) => cloneRowValue(row.value)),
-            cash_balances: draft.cash.mode === 'not_supplied' ? null : draft.cash.mode === 'none' ? [] : draft.cash.mode === 'broker_copy' ? draft.cash.backendAggregatedBalances.map((money) => ({...money})) : draft.cash.manualBalances.map((money) => ({...money})),
-            contributions: draft.contributionMode === 'not_supplied' ? null : draft.contributionMode === 'none' ? [] : draft.contributions.map((money) => ({...money})),
-            valuation_rates: draft.allowFx ? draft.valuationRates.map((rate) => ({...rate})) : [],
+            cash_balances: draft.cash.mode === 'broker_copy' ? draft.cash.backendAggregatedBalances.map((money) => ({...money})) : draft.cash.manualBalances.map((money) => ({...money})),
+            contributions: draft.contributionMode === 'none' ? [] : draft.contributions.map((money) => ({...money})),
+            valuation_rates: draft.valuationRates.map((rate) => ({...rate})),
         };
     }
 
@@ -765,6 +865,7 @@
     onDestroy(() => {
         requestSequence += 1;
         sourceRequestSequence += 1;
+        fxCopySequence += 1;
         activeController?.abort();
         sourceController?.abort();
         activeController = null;
@@ -773,7 +874,7 @@
 </script>
 
 <form
-    class="min-w-0 space-y-5"
+    class="min-w-0 space-y-4"
     data-testid="pac-allocator-tool"
     data-busy={busy ? 'true' : 'false'}
     data-cash-source={cashSourceBlocked ? 'pending' : 'ready'}
@@ -784,10 +885,10 @@
         void analyze();
     }}
 >
-    <section class="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800/60" data-testid="pac-scenario">
+    <section class="rounded-xl border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800/60" data-testid="pac-scenario" data-density="compact">
         <div class="flex items-start gap-2">
             <div class="min-w-0 flex-1">
-                <h2 class="text-base font-semibold text-gray-900 dark:text-white">
+                <h2 class="text-sm font-semibold text-gray-900 dark:text-white">
                     {$t('tools.pacAllocator.valuationSettings', {default: 'Valuation settings'})}
                 </h2>
                 <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -822,8 +923,8 @@
 
     <section class="space-y-3" data-testid="pac-funding">
         <div>
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{$t('tools.pacAllocator.fundsTitle', {default: '1. Available funds'})}</h2>
-            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{$t('tools.pacAllocator.fundsHint', {default: 'Copy native OWNER broker cash or enter exact amounts manually. New contributions remain separate.'})}</p>
+            <h2 class="text-sm font-semibold text-gray-900 dark:text-white">{$t('tools.pacAllocator.fundsTitle', {default: '1. Available funds'})}</h2>
+            <p class="mt-0.5 text-xs leading-5 text-gray-500 dark:text-gray-400">{$t('tools.pacAllocator.fundsHint', {default: 'Copy native OWNER broker cash or enter exact amounts manually. New contributions remain separate.'})}</p>
         </div>
         <div class="grid gap-4">
             <PacMoneySection
@@ -851,7 +952,6 @@
                 description={$t('tools.pacAllocator.cash.contributionsHint')}
                 mode={draft.contributionMode}
                 values={draft.contributions}
-                onmodechange={handleContributionMode}
                 onadd={() => addMoney('contributions')}
                 onremove={(index) => removeMoney('contributions', index)}
                 onchange={markRevised}
@@ -859,7 +959,7 @@
         </div>
     </section>
 
-    <section class="space-y-4 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800/60">
+    <section class="space-y-3 rounded-xl border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800/60" data-density="compact">
         <OwnedAssetGallery assets={assetChoices} loading={sourceLoading} error={sourceError} disabled={!sourceIsCurrent || sourceLoading} ontoggle={toggleOwnedAsset} onretry={refreshAllocationSource} onaddmanual={addManualRow} />
 
         {#if staleSourceRows.length > 0}
@@ -868,7 +968,13 @@
                     <AlertTriangle class="mt-0.5 shrink-0" size={16} />
                     <span>{$t('tools.pacAllocator.staleSourceHint', {values: {count: staleSourceRows.length}})}</span>
                 </div>
-                <button class="btn btn-secondary shrink-0" type="button" onclick={refreshCopiedFacts} disabled={sourceLoading || !sourceIsCurrent} data-testid="pac-refresh-copied-facts">
+                <button
+                    class="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-md border border-amber-300 bg-white px-2.5 py-1.5 text-xs font-medium text-amber-900 transition hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-600/70 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-8 dark:border-amber-800 dark:bg-gray-900 dark:text-amber-200 dark:hover:bg-amber-950/40"
+                    type="button"
+                    onclick={refreshCopiedFacts}
+                    disabled={sourceLoading || !sourceIsCurrent}
+                    data-testid="pac-refresh-copied-facts"
+                >
                     <RefreshCw class={sourceLoading ? 'animate-spin' : ''} size={15} />
                     <span>{$t('tools.pacAllocator.refreshCopiedFacts')}</span>
                 </button>
@@ -878,7 +984,7 @@
         <div class="border-t border-gray-200 pt-4 dark:border-gray-700" data-testid="pac-rows">
             <div class="flex items-end justify-between gap-3">
                 <div>
-                    <h3 class="text-base font-semibold text-gray-900 dark:text-white">{$t('tools.pacAllocator.selectedContexts')}</h3>
+                    <h3 class="text-sm font-semibold text-gray-900 dark:text-white">{$t('tools.pacAllocator.selectedContexts')}</h3>
                     <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{$t('tools.pacAllocator.selectedContextsHint')}</p>
                 </div>
                 <div class="flex flex-col items-end gap-1">
@@ -930,21 +1036,18 @@
     </section>
 
     {#if fxSectionVisible}
-        <section class="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800/60" data-testid="pac-valuation-rates">
+        <section class="rounded-xl border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800/60" data-testid="pac-valuation-rates" data-density="compact">
             <div class="flex items-start gap-2">
-                <button class="flex min-w-0 flex-1 items-start justify-between gap-3 text-left" type="button" onclick={() => (fxExpanded = !fxExpanded)} aria-expanded={fxExpanded} aria-controls="pac-valuation-rates-content" data-testid="pac-valuation-rates-toggle">
-                    <span>
-                        <span class="block text-base font-semibold text-gray-900 dark:text-white">
-                            {$t('tools.pacAllocator.rates.titleNumbered', {default: '3. Valuation exchange rates'})}
-                        </span>
-                        <span class="mt-1 block text-xs text-gray-500 dark:text-gray-400">
-                            {$t('tools.pacAllocator.rates.description', {
-                                default: 'Compare values in the reporting currency. No cash is exchanged, transferred, or merged.',
-                            })}
-                        </span>
-                    </span>
-                    <ChevronDown class={`mt-1 shrink-0 transition-transform ${fxExpanded ? 'rotate-180' : ''}`} size={18} />
-                </button>
+                <div class="min-w-0 flex-1">
+                    <h2 class="text-sm font-semibold text-gray-900 dark:text-white">
+                        {$t('tools.pacAllocator.rates.titleNumbered', {default: '3. Valuation exchange rates'})}
+                    </h2>
+                    <p class="mt-0.5 text-xs leading-5 text-gray-500 dark:text-gray-400">
+                        {$t('tools.pacAllocator.rates.description', {
+                            default: 'Compare values in the reporting currency. No cash is exchanged, transferred, or merged.',
+                        })}
+                    </p>
+                </div>
                 <Tooltip
                     text={$t('tools.pacAllocator.rates.equationHint', {
                         default: 'Example: 1 USD = 0.90 EUR means one USD is worth 0.90 EUR only for this report.',
@@ -958,108 +1061,167 @@
                 </Tooltip>
             </div>
 
-            {#if foreignCurrencies.length > 0 && !draft.allowFx}
-                <p class="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/20 dark:text-amber-200" data-testid="pac-fx-needed">
-                    {$t('tools.pacAllocator.rates.foreignCurrencies', {values: {currencies: foreignCurrencies.join(', ')}})}
-                </p>
-            {/if}
-
-            {#if fxExpanded}
-                <div class="mt-4 border-t border-gray-200 pt-4 dark:border-gray-700" id="pac-valuation-rates-content">
-                    <label class="flex cursor-pointer items-center justify-between gap-3 rounded-lg bg-gray-50 px-3 py-2 dark:bg-gray-900/50">
-                        <span>
-                            <span class="block text-sm font-medium text-gray-800 dark:text-gray-100">{$t('tools.pacAllocator.rates.useManualRates')}</span>
-                            <span class="block text-xs text-gray-500 dark:text-gray-400">{$t('tools.pacAllocator.rates.noCashConversion')}</span>
-                        </span>
-                        <input class="h-4 w-4 accent-libre-green" type="checkbox" checked={draft.allowFx} onchange={toggleFx} data-testid="pac-enable-rates" />
-                    </label>
-
-                    {#if draft.allowFx}
-                        <div class="mt-3 space-y-3">
-                            {#each draft.valuationRates as rate, index}
-                                <div class="grid gap-2 rounded-lg border border-gray-200 p-3 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1.6fr)_minmax(0,1.4fr)_auto] sm:items-end dark:border-gray-700" data-testid="pac-rate-row">
-                                    <label class="field-label">
-                                        <span>{$t('tools.pacAllocator.rates.nativeCurrency', {default: 'Native currency'})}</span>
-                                        <div class="flex items-center gap-2">
-                                            <span class="text-sm font-semibold text-gray-500 dark:text-gray-400">1</span>
-                                            <div class="min-w-0 flex-1">
-                                                <CurrencySearchSelect
-                                                    value={rate.currency ?? ''}
-                                                    compact
-                                                    testId={`pac-rate-currency-${index}`}
-                                                    onchange={(value) => {
-                                                        rate.currency = value;
-                                                        markRevised();
-                                                    }}
-                                                />
-                                            </div>
-                                        </div>
-                                    </label>
-                                    <label class="field-label">
-                                        <span>{$t('tools.pacAllocator.rates.value')}</span>
-                                        <div class="flex items-center gap-2">
-                                            <span class="text-sm font-semibold text-gray-500 dark:text-gray-400">=</span>
-                                            <div class="min-w-0 flex-1">
-                                                <ExactDecimalInput
-                                                    value={rate.rate_to_report ?? ''}
-                                                    step="0.0001"
-                                                    maxIntegerDigits={12}
-                                                    maxFractionDigits={12}
-                                                    placeholder={$t('tools.pacAllocator.rates.value')}
-                                                    ariaLabel={$t('tools.pacAllocator.rates.value')}
-                                                    testid={`pac-rate-value-${index}`}
-                                                    onchange={(value) => {
-                                                        rate.rate_to_report = value;
-                                                        markRevised();
-                                                    }}
-                                                />
-                                            </div>
-                                            <span class="shrink-0 text-sm font-semibold text-gray-500 dark:text-gray-400">{draft.report_currency}</span>
-                                        </div>
-                                    </label>
-                                    <label class="field-label">
-                                        <span>{$t('tools.pacAllocator.rates.date')}</span>
-                                        <SingleDatePicker
-                                            value={rate.reference_date ?? ''}
-                                            label=""
-                                            inputStyle
-                                            clearable
-                                            onchange={(value) => {
-                                                rate.reference_date = value;
-                                                markRevised();
-                                            }}
-                                            testid={`pac-rate-date-${index}`}
-                                        />
-                                    </label>
-                                    <button class="btn btn-danger px-2" type="button" onclick={() => removeValuationRate(index)} aria-label={$t('common.remove')} data-testid={`pac-remove-rate-${index}`}>
-                                        <Trash2 size={15} />
-                                    </button>
+            {#if foreignCurrencyReasons.length > 0}
+                <div class="mt-3 space-y-2" data-testid="pac-fx-reasons">
+                    {#each foreignCurrencyReasons as reason (reason.currency)}
+                        <div class="rounded-lg border border-blue-200 bg-blue-50/70 p-2.5 text-xs text-blue-950 dark:border-blue-900/60 dark:bg-blue-950/20 dark:text-blue-100" data-testid={`pac-fx-reason-${reason.currency}`}>
+                            <div class="flex flex-wrap items-start justify-between gap-2">
+                                <div class="min-w-0 flex-1 space-y-1">
+                                    <p class="font-medium">
+                                        {#if currencyFlag(reason.currency)}<span class="emoji-flag" aria-hidden="true">{currencyFlag(reason.currency)}</span>{/if}
+                                        {$t('tools.pacAllocator.rates.reason', {
+                                            default: `${reason.currency} facts must be valued in ${draft.report_currency}.`,
+                                            values: {currency: reason.currency, reportCurrency: draft.report_currency},
+                                        })}
+                                    </p>
+                                    {#if reason.assetNames.length > 0}
+                                        <p data-testid={`pac-fx-reason-assets-${reason.currency}`}>
+                                            {$t('tools.pacAllocator.rates.reasonAssets', {
+                                                default: `Asset prices: ${reason.assetNames.join(', ')}`,
+                                                values: {assets: reason.assetNames.join(', ')},
+                                            })}
+                                        </p>
+                                    {/if}
+                                    {#if reason.existingCash}
+                                        <p data-testid={`pac-fx-reason-cash-${reason.currency}`}>{$t('tools.pacAllocator.rates.reasonCash', {default: 'Selected existing cash uses this currency.'})}</p>
+                                    {/if}
+                                    {#if reason.contribution}
+                                        <p data-testid={`pac-fx-reason-contribution-${reason.currency}`}>{$t('tools.pacAllocator.rates.reasonContribution', {default: 'A new contribution uses this currency.'})}</p>
+                                    {/if}
                                 </div>
-                            {/each}
+                                <div class="flex shrink-0 flex-wrap gap-1.5">
+                                    <button
+                                        class="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-md border border-blue-300 bg-white px-2.5 py-1.5 text-xs font-medium text-blue-800 transition hover:bg-blue-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/70 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-8 dark:border-blue-800 dark:bg-gray-900 dark:text-blue-200 dark:hover:bg-blue-950/50"
+                                        type="button"
+                                        disabled={fxCopyingCurrency !== null}
+                                        onclick={() => void copyValuationRate(reason.currency)}
+                                        data-testid={`pac-copy-rate-${reason.currency}`}
+                                    >
+                                        {#if fxCopyingCurrency === reason.currency}
+                                            <LoaderCircle class="animate-spin" size={14} />
+                                        {:else}
+                                            <CloudDownload size={14} />
+                                        {/if}
+                                        {$t('tools.pacAllocator.rates.copySaved', {default: 'Copy saved rate'})}
+                                    </button>
+                                    {#if !hasValuationRate(reason.currency)}
+                                        <button
+                                            class="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-libre-green/70 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-8 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
+                                            type="button"
+                                            onclick={() => addValuationRate(reason.currency)}
+                                            disabled={draft.valuationRates.length >= MAX_CURRENCIES}
+                                            data-testid={`pac-enter-rate-${reason.currency}`}
+                                        >
+                                            <PencilLine size={14} />
+                                            {$t('tools.pacAllocator.rates.enterManually', {default: 'Enter manually'})}
+                                        </button>
+                                    {/if}
+                                </div>
+                            </div>
+                            {#if fxCopyErrors[reason.currency]}
+                                <p class="mt-2 text-red-700 dark:text-red-300" role="alert" data-testid={`pac-copy-rate-error-${reason.currency}`}>
+                                    {$t('tools.pacAllocator.rates.copyUnavailable', {
+                                        default: `No saved ${reason.currency} to ${draft.report_currency} rate is available for ${draft.as_of_date}.`,
+                                        values: {currency: reason.currency, reportCurrency: draft.report_currency, date: draft.as_of_date},
+                                    })}
+                                </p>
+                            {/if}
                         </div>
-                        <button class="btn btn-secondary mt-3 text-sm" type="button" onclick={addValuationRate} disabled={draft.valuationRates.length >= MAX_CURRENCIES} data-testid="pac-add-rate">
-                            <Plus size={14} />
-                            <span>{$t('tools.pacAllocator.rates.add')}</span>
-                        </button>
-                    {/if}
+                    {/each}
                 </div>
             {/if}
+
+            {#if draft.valuationRates.length > 0}
+                <div class="mt-3 space-y-2 border-t border-gray-200 pt-3 dark:border-gray-700" data-testid="pac-valuation-rate-rows">
+                    {#each draft.valuationRates as rate, index}
+                        <div class="grid gap-2 rounded-lg border border-gray-200 p-2.5 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1.6fr)_minmax(0,1.4fr)_auto] sm:items-end dark:border-gray-700" data-testid="pac-rate-row">
+                            <label class="field-label">
+                                <span>{$t('tools.pacAllocator.rates.nativeCurrency', {default: 'Native currency'})}</span>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-sm font-semibold text-gray-500 dark:text-gray-400">1</span>
+                                    <div class="min-w-0 flex-1">
+                                        <CurrencySearchSelect value={rate.currency ?? ''} compact testId={`pac-rate-currency-${index}`} onchange={(value) => setRateCurrency(rate, value)} />
+                                    </div>
+                                </div>
+                            </label>
+                            <label class="field-label">
+                                <span>{$t('tools.pacAllocator.rates.value')}</span>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-sm font-semibold text-gray-500 dark:text-gray-400">=</span>
+                                    <div class="min-w-0 flex-1">
+                                        <ExactDecimalInput
+                                            value={rate.rate_to_report ?? ''}
+                                            step="0.0001"
+                                            maxIntegerDigits={12}
+                                            maxFractionDigits={12}
+                                            placeholder={$t('tools.pacAllocator.rates.value')}
+                                            ariaLabel={$t('tools.pacAllocator.rates.value')}
+                                            testid={`pac-rate-value-${index}`}
+                                            className="min-h-10 !px-2 !py-1.5 text-sm sm:min-h-9"
+                                            onchange={(value) => setRateValue(rate, value)}
+                                        />
+                                    </div>
+                                    <span class="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-gray-600 dark:text-gray-300">
+                                        {#if currencyFlag(draft.report_currency)}<span class="emoji-flag" aria-hidden="true">{currencyFlag(draft.report_currency)}</span>{/if}
+                                        {draft.report_currency}
+                                    </span>
+                                </div>
+                            </label>
+                            <label class="field-label">
+                                <span>{$t('tools.pacAllocator.rates.date')}</span>
+                                <SingleDatePicker value={rate.reference_date ?? ''} label="" inputStyle clearable onchange={(value) => setRateDate(rate, value)} testid={`pac-rate-date-${index}`} />
+                            </label>
+                            <Tooltip text={$t('common.remove')} position="top" interactiveChild wrapperClass="self-end">
+                                <button
+                                    class="inline-flex h-10 w-10 items-center justify-center rounded-md text-red-600 transition hover:bg-red-50 hover:text-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/70 sm:h-9 sm:w-9 dark:text-red-400 dark:hover:bg-red-950/30 dark:hover:text-red-300"
+                                    type="button"
+                                    onclick={() => removeValuationRate(index)}
+                                    aria-label={$t('common.remove')}
+                                    data-testid={`pac-remove-rate-${index}`}
+                                >
+                                    <Trash2 size={15} />
+                                </button>
+                            </Tooltip>
+                        </div>
+                    {/each}
+                </div>
+            {/if}
+            <button
+                class="mt-3 inline-flex min-h-10 items-center justify-center gap-1.5 rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-libre-green/70 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-8 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
+                type="button"
+                onclick={() => addValuationRate()}
+                disabled={draft.valuationRates.length >= MAX_CURRENCIES}
+                data-testid="pac-add-rate"
+            >
+                <Plus size={14} />
+                <span>{$t('tools.pacAllocator.rates.add')}</span>
+            </button>
         </section>
     {/if}
 
-    <section class="flex flex-col gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-gray-700 dark:bg-gray-900/50" data-testid="pac-actions">
-        <div class="text-sm text-gray-600 dark:text-gray-400">
+    <section class="flex flex-col gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 sm:flex-row sm:items-center sm:justify-between dark:border-gray-700 dark:bg-gray-900/50" data-testid="pac-actions" data-density="compact">
+        <div class="text-xs text-gray-600 dark:text-gray-400">
             <p>{$t('tools.pacAllocator.revision')}: <span class="font-mono" data-testid="pac-draft-revision">{revision}</span></p>
             <p>{$t('tools.pacAllocator.noOrders')}</p>
         </div>
         <div class="flex shrink-0 flex-wrap gap-2">
             {#if busy}
-                <button type="button" onclick={stopWaiting} class="btn btn-secondary text-amber-800 dark:text-amber-200" data-testid="pac-stop-waiting">
+                <button
+                    type="button"
+                    onclick={stopWaiting}
+                    class="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-md border border-amber-300 bg-white px-2.5 py-1.5 text-xs font-medium text-amber-800 transition hover:bg-amber-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-600/70 sm:min-h-9 dark:border-amber-800 dark:bg-gray-900 dark:text-amber-200 dark:hover:bg-amber-950/30"
+                    data-testid="pac-stop-waiting"
+                >
                     <CircleStop size={16} />
                     {$t('tools.pacAllocator.stopWaiting')}
                 </button>
             {/if}
-            <button type="submit" disabled={busy || cashSourceBlocked} class="btn btn-primary whitespace-nowrap text-sm" data-testid="pac-analyze">
+            <button
+                type="submit"
+                disabled={busy || cashSourceBlocked}
+                class="inline-flex min-h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-libre-green bg-libre-green px-3 py-1.5 text-sm font-semibold text-white transition hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-libre-green/70 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-9 dark:text-gray-950"
+                data-testid="pac-analyze"
+            >
                 {#if busy}
                     <LoaderCircle size={16} class="animate-spin motion-reduce:animate-none" />
                     {$t('tools.pacAllocator.analyzing', {values: {revision: requestRevision ?? revision}})}

@@ -84,6 +84,7 @@ const COMPUTE_PATH = '/api/v1/tools/compute';
 const CATALOG_PATH = '/api/v1/tools/catalog';
 const REPORT_PATH = '/api/v1/portfolio/report';
 const SETTINGS_PATH = '/api/v1/settings/user';
+const FX_CONVERT_PATH = '/api/v1/fx/currencies/convert';
 
 /** A past date, used wherever the scenario needs a fixed quote/rate reference. */
 const REFERENCE_DATE = '2026-09-08';
@@ -183,6 +184,20 @@ interface AllocationSourceWire {
     assets: SourceAssetWire[];
     cash_sources: SourceCashSourceWire[];
     selected_cash_balances: SourceCashBalanceWire[];
+}
+
+interface FxLookupRequestWire {
+    from_amount: {code: string; amount: string};
+    to: string;
+    date_range: {start: string; end: string};
+}
+
+interface FxLookupResultWire {
+    from_amount: {code: string; amount: string};
+    to_amount: {code: string; amount: string};
+    conversion_date: string;
+    rate: string | null;
+    backward_fill_info?: {actual_rate_date: string; days_back: number} | null;
 }
 
 /**
@@ -365,6 +380,10 @@ function semanticDecimalOrDash(value: string | null): string {
     return value === null ? '—' : semanticDecimalText(value);
 }
 
+async function expectFormattedCurrencyAmount(locator: Locator, currency: string, amount: string, flag: string): Promise<void> {
+    await expect(locator).toContainText(new RegExp(`${regexLiteral(flag)}\\s*${regexLiteral(currency)}\\s*${regexLiteral(semanticDecimalText(amount))}(?:\\s|$)`));
+}
+
 async function expectSourceMetadata(row: Locator, context: SourceContextWire, sourceDate: string, quote: SourceQuoteWire): Promise<void> {
     await expect(row).toContainText(context.broker_name);
     await expect(row).toContainText(new RegExp(`(?:^|\\s)${regexLiteral(semanticDecimalText(context.ownership_share_percent))}%(?:\\s|$)`));
@@ -422,6 +441,19 @@ async function routeAllocationSource(page: Page, resolve: (asOfDate: string, sel
                 metadata: {target_currency: 'EUR', generated_at: `${asOfDate}T12:00:00+00:00`},
                 allocation_source: outcome,
             }),
+        });
+    });
+}
+
+async function routeFxLookups(page: Page, resolve: (requests: readonly FxLookupRequestWire[]) => Promise<readonly FxLookupResultWire[]> | readonly FxLookupResultWire[]): Promise<void> {
+    await page.route(`**${FX_CONVERT_PATH}`, async (route) => {
+        if (route.request().method() !== 'POST') return route.fallback();
+        const requests = route.request().postDataJSON() as FxLookupRequestWire[];
+        const results = await resolve(requests);
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({results, success_count: results.length, signal_results: []}),
         });
     });
 }
@@ -530,65 +562,22 @@ async function selectCurrency(page: Page, testId: string, code: string): Promise
     await expect(trigger).toContainText(code);
 }
 
-/**
- * Pick the contribution-mode `SimpleSelect` option *by its value*.
- *
- * Driven from the keyboard, and not because clicking is hard: the option list is
- * `position: fixed`, recomputed from the trigger on every scroll event, so a
- * pointer click makes the harness scroll to reach it and the reposition then
- * moves it again. The list geometry is therefore *asserted* here (a list a user
- * cannot see at all is a defect, and this says so with the numbers in the
- * message) and the selection itself goes through `Home` + `ArrowDown`, which is
- * the component's own keyboard model:
- * `aria-activedescendant` names the highlighted option by value, so nothing in
- * this helper depends on where an option sits in the list either.
- */
-async function selectSimpleOption(page: Page, testId: string, value: string): Promise<void> {
-    const trigger = page.getByTestId(`${testId}-button`);
-    await expect(trigger).toBeVisible();
-    await trigger.click();
-    await expect(trigger).toHaveAttribute('aria-expanded', 'true');
-
-    const dropdown = page.getByTestId(`${testId}-dropdown`);
-    await expect(dropdown).toBeVisible();
-    const box = await dropdown.boundingBox();
-    const viewport = page.viewportSize();
-    expect(box, `${testId}: the open option list has no box`).not.toBeNull();
-    expect(viewport, 'viewport size').not.toBeNull();
-    if (!box || !viewport) throw new Error(`${testId}: option list geometry unavailable`);
-    const onScreen = box.y + box.height > 0 && box.y < viewport.height && box.x + box.width > 0 && box.x < viewport.width;
-    expect(onScreen, `${testId}: the open option list sits entirely outside the ${viewport.width}×${viewport.height} viewport (${JSON.stringify(box)}) — nobody can choose from it`).toBe(true);
-
-    const wanted = `-option-${value === '' ? '__empty__' : encodeURIComponent(value)}`;
-    await trigger.press('Home');
-    await expect(trigger).toHaveAttribute('aria-activedescendant', /-option-/);
-    const visited = new Set<string>();
-    let active = await trigger.getAttribute('aria-activedescendant');
-    while (active && !active.endsWith(wanted) && !visited.has(active)) {
-        visited.add(active);
-        await trigger.press('ArrowDown');
-        await expect
-            .poll(async () => trigger.getAttribute('aria-activedescendant'), {
-                message: `${testId}: keyboard navigation did not leave option "${active}"`,
-            })
-            .not.toBe(active);
-        active = await trigger.getAttribute('aria-activedescendant');
-    }
-    expect(active, `${testId}: option "${value}" was never highlighted`).toContain(wanted);
-    await trigger.press('Enter');
-    await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+async function useManualCash(page: Page): Promise<void> {
+    await page.getByTestId('pac-cash-use-manual').click();
+    await expect(page.getByTestId('pac-cash-row')).toHaveCount(1);
 }
 
-type CashMode = 'not_supplied' | 'none' | 'broker_copy' | 'manual';
+async function useBrokerCash(page: Page): Promise<void> {
+    await page.getByTestId('pac-cash-use-brokers').click();
+    await expect(page.getByTestId('pac-cash-broker-copy')).toBeVisible();
+}
 
-async function selectCashMode(page: Page, mode: CashMode): Promise<void> {
-    const button = page.getByTestId(`pac-cash-mode-${mode.replace('_', '-')}`);
-    await expect(button).toBeVisible();
-    await button.click();
-    await expect(button).toHaveAttribute('aria-pressed', 'true');
-    if (mode === 'manual') await expect(page.getByTestId('pac-cash-row')).toHaveCount(1);
-    else if (mode === 'broker_copy') await expect(page.getByTestId('pac-cash-broker-copy')).toBeVisible();
-    else await expect(page.getByTestId(mode === 'none' ? 'pac-cash-none' : 'pac-cash-not-supplied')).toBeVisible();
+async function addContribution(page: Page): Promise<number> {
+    const rows = page.getByTestId('pac-contributions-row');
+    const before = await rows.count();
+    await page.getByTestId('pac-add-contributions').click();
+    await expect(rows).toHaveCount(before + 1);
+    return before;
 }
 
 async function setGridMode(page: Page, index: number, mode: 'whole' | 'fractional'): Promise<void> {
@@ -687,16 +676,24 @@ async function fillManualRow(page: Page, index: number, values: {name: string; q
     if (values.quoteDate) await setDate(page, `pac-price-date-${index}`, values.quoteDate);
 }
 
-/** Open the collapsed FX section and turn on manual valuation rates. */
-async function enableManualRates(page: Page): Promise<void> {
-    await expect(page.getByTestId('pac-valuation-rates')).toBeVisible();
-    const disclosure = page.getByTestId('pac-valuation-rates-toggle');
-    await disclosure.click();
-    await expect(disclosure).toHaveAttribute('aria-expanded', 'true');
-    const toggle = page.getByTestId('pac-enable-rates');
-    await expect(toggle).toBeVisible();
-    await toggle.click();
-    await expect(page.getByTestId('pac-add-rate')).toBeVisible();
+async function scopeColorContract(locator: Locator, scope: 'owned' | 'other_users' | 'observed'): Promise<Record<string, string>> {
+    const contract = await locator.evaluate((element) => {
+        const html = element as HTMLElement;
+        return {
+            scope: html.dataset.scopeColor ?? '',
+            background: html.style.getPropertyValue('--scope-bg'),
+            text: html.style.getPropertyValue('--scope-text'),
+            darkBackground: html.style.getPropertyValue('--scope-dark-bg'),
+            darkText: html.style.getPropertyValue('--scope-dark-text'),
+            border: html.style.getPropertyValue('--scope-border'),
+        };
+    });
+    expect(contract.scope).toBe(scope);
+    expect(
+        Object.values(contract).every((value) => value.length > 0),
+        `${scope}: scope color contract must be complete`,
+    ).toBe(true);
+    return contract;
 }
 
 // =========================================================================
@@ -777,21 +774,19 @@ async function fillDeterministicScenario(page: Page): Promise<void> {
         quoteDate: REFERENCE_DATE,
     });
 
-    await selectCashMode(page, 'manual');
+    await useManualCash(page);
     await expect(page.getByTestId('pac-cash-row')).toHaveCount(1);
     await selectCurrency(page, 'pac-cash-currency-0', 'USD');
     await field(page, 'pac-cash-amount', 0).fill('10');
 
-    await selectSimpleOption(page, 'pac-contributions-mode', 'custom');
+    await addContribution(page);
     await expect(page.getByTestId('pac-contributions-row')).toHaveCount(1);
     await selectCurrency(page, 'pac-contributions-currency-0', 'EUR');
     await field(page, 'pac-contributions-amount', 0).fill('5');
     await field(page, 'pac-contributions-monetary-step', 0).fill('0.01');
 
-    await enableManualRates(page);
-    await page.getByTestId('pac-add-rate').click();
+    await page.getByTestId('pac-enter-rate-USD').click();
     await expect(page.getByTestId('pac-rate-row')).toHaveCount(1);
-    await selectCurrency(page, 'pac-rate-currency-0', 'USD');
     await field(page, 'pac-rate-value', 0).fill('0.9');
     await setDate(page, 'pac-rate-date-0', REFERENCE_DATE);
 
@@ -932,9 +927,9 @@ function assertReadyOutput(output: PacOutput, primaryInput: PacInputRow, seconda
 }
 
 /**
- * The DOM half of the same result. `PacResultPanel` composes these strings with
- * plain template literals (`${amount} ${currency}`, `${numerator} / ${denominator}`),
- * so they are exact backend decimals, not translated copy.
+ * The DOM half of the same result. Currency codes, flags, formatted decimals,
+ * and exact ratios are structural facts; translated labels are deliberately
+ * ignored.
  */
 async function expectReadyDom(page: Page): Promise<void> {
     const result = page.getByTestId('pac-result');
@@ -944,10 +939,10 @@ async function expectReadyDom(page: Page): Promise<void> {
     await expect(result).toHaveAttribute('data-view', 'formatted');
     await expect(page.getByTestId('pac-view-formatted')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByTestId('pac-view-exact')).toHaveAttribute('aria-pressed', 'false');
-    await expect(page.getByTestId('pac-total-invested')).toHaveText('100 EUR');
-    await expect(page.getByTestId('pac-total-existing-cash')).toHaveText('9 EUR');
-    await expect(page.getByTestId('pac-total-contributions')).toHaveText('5 EUR');
-    await expect(page.getByTestId('pac-total-combined-cash')).toHaveText('14 EUR');
+    await expectFormattedCurrencyAmount(page.getByTestId('pac-total-invested'), 'EUR', '100', '🇪🇺');
+    await expectFormattedCurrencyAmount(page.getByTestId('pac-total-existing-cash'), 'EUR', '9', '🇪🇺');
+    await expectFormattedCurrencyAmount(page.getByTestId('pac-total-contributions'), 'EUR', '5', '🇪🇺');
+    await expectFormattedCurrencyAmount(page.getByTestId('pac-total-combined-cash'), 'EUR', '14', '🇪🇺');
     await expect(page.getByTestId('pac-max-gap')).not.toContainText('/');
     await expect(page.getByTestId('pac-squared-gap')).not.toContainText('/');
 
@@ -955,7 +950,9 @@ async function expectReadyDom(page: Page): Promise<void> {
     const secondary = page.getByTestId('pac-result-row').filter({hasText: SECONDARY_NAME});
     await expect(primary).toHaveCount(1);
     await expect(secondary).toHaveCount(1);
-    await expect(primary).toContainText('100 EUR');
+    const primaryValue = primary.getByRole('cell').filter({hasText: /🇪🇺\s*EUR/});
+    await expect(primaryValue).toHaveCount(1);
+    await expectFormattedCurrencyAmount(primaryValue, 'EUR', '100', '🇪🇺');
     await expect(primary).not.toContainText('10000 / 100');
     await expect(secondary).not.toContainText('-5000 / 100');
     await expect(page.getByTestId('pac-denominator-note')).toBeVisible();
@@ -1137,6 +1134,19 @@ test.describe('PAC allocator', () => {
         await expect(page.getByTestId('pac-row')).toHaveCount(0);
         await expect(scenario.getByTestId('pac-valuation-settings-info')).toBeVisible();
         await expect(page.getByTestId('pac-valuation-rates')).toHaveCount(0);
+        await expect(page.getByTestId('pac-cash-broker-copy')).toBeVisible();
+        const cashAction = page.getByTestId('pac-cash-use-manual');
+        await expect(cashAction).toBeVisible();
+        expect(
+            await cashAction.evaluate((button) =>
+                Array.from(button.parentElement?.children ?? [])
+                    .filter((element) => element.tagName === 'BUTTON')
+                    .map((element) => (element as HTMLElement).dataset.testid ?? ''),
+            ),
+        ).toEqual(['pac-cash-use-manual']);
+        await expect(page.getByTestId('pac-cash-use-brokers')).toHaveCount(0);
+        await expect(page.getByTestId('pac-contributions-empty')).toBeVisible();
+        await expect(page.getByTestId('pac-contributions-row')).toHaveCount(0);
 
         // One compact currency control and one typed/calendar picker. The date
         // label lives outside the picker exactly once; an empty picker `label`
@@ -1354,6 +1364,20 @@ test.describe('PAC allocator', () => {
         expect(await ownedScope.evaluate((button) => button.lastElementChild?.textContent?.trim())).toBe('3');
         expect(await otherScope.evaluate((button) => button.lastElementChild?.textContent?.trim())).toBe('1');
         expect(await observedScope.evaluate((button) => button.lastElementChild?.textContent?.trim())).toBe('1');
+        const ownedColor = await scopeColorContract(ownedScope, 'owned');
+        const otherColor = await scopeColorContract(otherScope, 'other_users');
+        const observedColor = await scopeColorContract(observedScope, 'observed');
+        expect(new Set([ownedColor.background, otherColor.background, observedColor.background]).size, 'each usage scope keeps a language-independent color').toBe(3);
+        for (const chip of [ownedScope, otherScope, observedScope]) {
+            const translatedLabel = await chip.evaluate((button) => {
+                const count = button.lastElementChild?.textContent?.trim() ?? '';
+                return (button.textContent ?? '').replace(count, '').trim();
+            });
+            expect(translatedLabel.length, 'scope chip keeps its translated label beside the numeric count').toBeGreaterThan(0);
+        }
+        await expect(card).toContainText('🇺🇸');
+        await expect(card).toContainText('USD');
+        await expect(card).toContainText(semanticDecimalText(asset.quote.raw_price ?? ''));
 
         await otherScope.click();
         await observedScope.click();
@@ -1361,6 +1385,9 @@ test.describe('PAC allocator', () => {
         await expect(otherCard).toHaveAttribute('data-lifecycle', 'active');
         await expect(observedCard).toHaveAttribute('data-usage-scope', 'observed');
         await expect(observedCard).toHaveAttribute('data-lifecycle', 'inactive');
+        await expect(otherCard).toContainText('🇨🇭');
+        await expect(otherCard).toContainText('CHF');
+        await expect(otherCard).toContainText(semanticDecimalText(otherUsers.quote.raw_price ?? ''));
         for (const [privateCard, privateAsset] of [
             [otherCard, otherUsers],
             [observedCard, observed],
@@ -1373,6 +1400,16 @@ test.describe('PAC allocator', () => {
             await expect(privateCard).not.toContainText(semanticDecimalText(privateContext.ownership_share_percent));
             await expect(privateCard).not.toContainText(semanticDecimalText(privateContext.custody_quantity));
         }
+
+        const search = page.getByTestId('pac-owned-assets-search');
+        await search.fill('  pAc ObSeRvEd CaNdIdAtE  ');
+        await expect(observedCard).toBeVisible();
+        await expect(card).toHaveCount(0);
+        await expect(otherCard).toHaveCount(0);
+        await search.fill('');
+        await expect(card).toBeVisible();
+        await expect(otherCard).toBeVisible();
+        await expect(observedCard).toBeVisible();
 
         await card.click();
         await expect(page.getByTestId('pac-row')).toHaveCount(asset.contexts.length);
@@ -1695,7 +1732,7 @@ test.describe('PAC allocator', () => {
         expect(unexpectedDates, 'the tool asked the allocation source for a date this test did not set').toEqual([]);
     });
 
-    test('uses OWNER backend cash aggregates, serializes contribution steps, and exposes a conditional valuation equation without converting locally', async ({page}, testInfo) => {
+    test('starts with broker cash and empty contributions, submits backend aggregates, and copies retryable saved FX facts', async ({page}, testInfo) => {
         const user = principal(testInfo.project.name, TEST_USER, TEST_USER_2);
         await login(page, user);
         const cashSources: SourceCashSourceWire[] = [
@@ -1733,14 +1770,50 @@ test.describe('PAC allocator', () => {
             const selectedCashBalances = selection.join(',') === '9101,9102' ? backendAggregate : selection.join(',') === '9101' ? [{currency: 'EUR', amount: '111.110000000001'}] : [];
             return sourcePayload(asOfDate, [], {cashSources, selectedCashBalances});
         });
+        const fxLookupBodies: FxLookupRequestWire[][] = [];
+        const effectiveRateDate = '2026-09-06';
+        await routeFxLookups(page, (requests) => {
+            fxLookupBodies.push(requests.map((request) => ({...request, from_amount: {...request.from_amount}, date_range: {...request.date_range}})));
+            if (fxLookupBodies.length === 1) return [];
+            return [
+                {
+                    from_amount: {code: 'EUR', amount: '1'},
+                    to_amount: {code: 'USD', amount: '1.25'},
+                    conversion_date: REFERENCE_DATE,
+                    rate: '1.25',
+                    backward_fill_info: {actual_rate_date: effectiveRateDate, days_back: 2},
+                },
+            ];
+        });
         await rejectCompute(page);
 
         await navigateTo(page, TOOL_ROUTE);
-        await waitForPacTool(page);
+        const tool = await waitForPacTool(page);
         await expect(page.getByTestId('pac-owned-assets-empty')).toBeVisible({timeout: 20_000});
 
         await selectCurrency(page, 'pac-report-currency', 'EUR');
+        await setDate(page, 'pac-as-of-date', REFERENCE_DATE);
+        await expect(tool).toHaveAttribute('data-cash-source', 'ready');
         await expect(page.getByTestId('pac-valuation-rates')).toHaveCount(0);
+        await expect(page.getByTestId('pac-cash-broker-copy')).toBeVisible();
+        await expect(page.getByTestId('pac-cash-use-manual')).toBeVisible();
+        await expect(page.getByTestId('pac-cash-use-brokers')).toHaveCount(0);
+        await expect(page.getByTestId('pac-contributions-empty')).toBeVisible();
+        await expect(page.getByTestId('pac-contributions-row')).toHaveCount(0);
+
+        const brokerA = page.getByTestId('pac-cash-broker-9101');
+        const brokerB = page.getByTestId('pac-cash-broker-9102');
+        await expect(brokerA).toBeEnabled();
+        await expect(brokerB).toBeEnabled();
+        await expect(brokerA).toHaveAttribute('aria-pressed', 'false');
+        await expect(brokerB).toHaveAttribute('aria-pressed', 'false');
+        await expect(brokerA).toContainText('🇪🇺');
+        await expect(brokerA).toContainText('EUR');
+        await expect(brokerA).toContainText('100.1');
+        await expect(brokerA).toContainText('🇺🇸');
+        await expect(brokerA).toContainText('USD');
+        await expect(brokerA).toContainText('5.5');
+
         const index = await addManualRow(page);
         await fillManualRow(page, index, {
             name: PRIMARY_NAME,
@@ -1748,48 +1821,63 @@ test.describe('PAC allocator', () => {
             price: '10',
             currency: 'USD',
             target: '100',
+            grid: 'fractional',
+            step: '0.125',
             quoteBasis: '1000',
         });
 
-        // A foreign currency is pointed out, never resolved behind the user's back.
+        // A concrete foreign Asset explains why the section exists, but merely
+        // rendering that reason never performs a lookup.
         await expect(page.getByTestId('pac-valuation-rates')).toBeVisible();
-        await expect(page.getByTestId('pac-fx-needed')).toBeVisible();
+        await expect(page.getByTestId('pac-fx-reason-assets-USD')).toBeVisible();
+        await expect(page.getByTestId('pac-fx-reason-cash-USD')).toHaveCount(0);
+        await expect(page.getByTestId('pac-fx-reason-contribution-USD')).toHaveCount(0);
         await expect(page.getByTestId('pac-rate-row')).toHaveCount(0);
+        expect(fxLookupBodies).toHaveLength(0);
 
-        await expect(page.getByTestId('pac-cash-not-supplied')).toBeVisible();
-        await expect(page.getByTestId('pac-contributions-not-supplied')).toBeVisible();
-        const omitted = await analyzeAndCapture(page);
-        expect(omitted.parameters.cash_balances).toBeNull();
-        expect(omitted.parameters.contributions).toBeNull();
-        expect(omitted.parameters.valuation_rates).toEqual([]);
-        const omittedRow = only(omitted.parameters.rows ?? [], (row) => row.name === PRIMARY_NAME, 'omitted-mode PAC row');
-        expect(omittedRow.quote?.quote_base_quantity).toBe(1000);
+        const empty = await analyzeAndCapture(page);
+        expect(empty.parameters.cash_balances).toEqual([]);
+        expect(empty.parameters.contributions).toEqual([]);
+        expect(empty.parameters.valuation_rates).toEqual([]);
+        const emptyRow = only(empty.parameters.rows ?? [], (row) => row.name === PRIMARY_NAME, 'initial PAC row');
+        expect(emptyRow.quote?.quote_base_quantity).toBe(1000);
+        expect(emptyRow.buy_grid?.quantity_step).toBe('0.125');
+        expect(fxLookupBodies, 'rendering and submitting a mismatch must not fetch a saved FX rate').toHaveLength(0);
 
-        await selectCashMode(page, 'none');
-        await selectSimpleOption(page, 'pac-contributions-mode', 'none');
-        await expect(page.getByTestId('pac-cash-none')).toBeVisible();
-        await expect(page.getByTestId('pac-contributions-none')).toBeVisible();
-        const explicitNone = await analyzeAndCapture(page);
-        expect(explicitNone.parameters.cash_balances).toEqual([]);
-        expect(explicitNone.parameters.contributions).toEqual([]);
-        expect(explicitNone.parameters.valuation_rates).toEqual([]);
+        const firstContribution = await addContribution(page);
+        expect(firstContribution).toBe(0);
+        await expect(page.getByTestId('pac-contributions-currency-0-trigger')).toContainText('EUR');
+        await expect(field(page, 'pac-contributions-monetary-step', 0)).toHaveValue('0.01');
+        await expect(field(page, 'pac-step-quantity', index)).toHaveValue('0.125');
+        await page.getByTestId('pac-remove-contributions-0').click();
+        await expect(page.getByTestId('pac-contributions-empty')).toBeVisible();
+        await expect(page.getByTestId('pac-contributions-row')).toHaveCount(0);
 
-        await selectCashMode(page, 'broker_copy');
-        const brokerA = page.getByTestId('pac-cash-broker-9101');
-        const brokerB = page.getByTestId('pac-cash-broker-9102');
-        await expect(brokerA).toBeEnabled();
-        await expect(brokerB).toBeEnabled();
+        await addContribution(page);
+        await selectCurrency(page, 'pac-contributions-currency-0', 'CHF');
+        await field(page, 'pac-contributions-amount', 0).fill('200.000000000001');
+        await field(page, 'pac-contributions-monetary-step', 0).fill('0.000000000001');
+        await expect(field(page, 'pac-step-quantity', index)).toHaveValue('0.125');
+        await expect(page.getByTestId('pac-fx-reason-contribution-CHF')).toBeVisible();
+        await expect(page.getByTestId('pac-fx-reason-assets-CHF')).toHaveCount(0);
+        await expect(page.getByTestId('pac-fx-reason-cash-CHF')).toHaveCount(0);
+
         const brokerARequest = page.waitForRequest((request) => sourceDateOf(request) !== null && selectedCashBrokerIdsOf(request).join(',') === '9101', {timeout: 20_000});
         await brokerA.click();
         await brokerARequest;
-        await expect(page.getByTestId('pac-allocator-tool')).toHaveAttribute('data-cash-source', 'ready');
+        await expect(tool).toHaveAttribute('data-cash-source', 'ready');
+        await expect(brokerA).toHaveAttribute('aria-pressed', 'true');
 
         const bothBrokersRequest = page.waitForRequest((request) => sourceDateOf(request) !== null && selectedCashBrokerIdsOf(request).join(',') === '9101,9102', {timeout: 20_000});
         await brokerB.click();
         await bothBrokersRequest;
-        await expect(page.getByTestId('pac-allocator-tool')).toHaveAttribute('data-cash-source', 'ready');
+        await expect(tool).toHaveAttribute('data-cash-source', 'ready');
         await expect(page.getByTestId('pac-cash-aggregate-EUR')).toContainText('777.770000000001');
         await expect(page.getByTestId('pac-cash-aggregate-USD')).toContainText('8.880000000001');
+        await expect(page.getByTestId('pac-cash-aggregate-EUR')).toContainText('🇪🇺');
+        await expect(page.getByTestId('pac-cash-aggregate-USD')).toContainText('🇺🇸');
+        await expect(page.getByTestId('pac-fx-reason-cash-USD')).toBeVisible();
+        await expect(page.getByTestId('pac-fx-reason-assets-USD')).toBeVisible();
         const copiedCash = await analyzeAndCapture(page);
         expect(copiedCash.parameters.cash_balances).toEqual(backendAggregate);
         expect(copiedCash.parameters.cash_balances).not.toEqual([
@@ -1797,26 +1885,40 @@ test.describe('PAC allocator', () => {
             {currency: 'USD', amount: '5.50'},
             {currency: 'CHF', amount: '7.25'},
         ]);
+        expect(copiedCash.parameters.contributions).toEqual([{currency: 'CHF', amount: '200.000000000001', monetary_step: '0.000000000001'}]);
 
-        await selectCashMode(page, 'manual');
-        await selectSimpleOption(page, 'pac-contributions-mode', 'custom');
+        await useManualCash(page);
         await expect(page.getByTestId('pac-cash-row')).toHaveCount(1);
         await expect(page.getByTestId('pac-contributions-row')).toHaveCount(1);
         await expect(field(page, 'pac-cash-monetary-step', 0)).toHaveCount(0);
-        const contributionStep = field(page, 'pac-contributions-monetary-step', 0);
-        await expect(contributionStep).toHaveValue('0.01');
         await selectCurrency(page, 'pac-cash-currency-0', 'USD');
         await field(page, 'pac-cash-amount', 0).fill('500.000000000001');
-        await selectCurrency(page, 'pac-contributions-currency-0', 'EUR');
-        await field(page, 'pac-contributions-amount', 0).fill('200.000000000001');
-        await contributionStep.fill('0.000000000001');
+        await useBrokerCash(page);
+        await expect(tool).toHaveAttribute('data-cash-source', 'ready');
+        await expect(page.getByTestId('pac-cash-broker-9101')).toHaveAttribute('aria-pressed', 'true');
+        await expect(page.getByTestId('pac-cash-broker-9102')).toHaveAttribute('aria-pressed', 'true');
+        await useManualCash(page);
+        await expect(field(page, 'pac-cash-amount', 0)).toHaveValue('500.000000000001');
 
-        await enableManualRates(page);
+        // First lookup has no point and publishes a retryable error. The second
+        // returns a canonical EUR→USD point; lookupFxRate inverts it for the
+        // requested USD→EUR equation and copies the effective backward-fill date.
         await expect(page.getByTestId('pac-rate-info')).toBeVisible();
         await expect(page.getByTestId('pac-rate-row')).toHaveCount(0);
-        await page.getByTestId('pac-add-rate').click();
+        const copyRate = page.getByTestId('pac-copy-rate-USD');
+        await copyRate.click();
+        await expect.poll(() => fxLookupBodies.length).toBe(1);
+        expect(fxLookupBodies[0]).toEqual([{from_amount: {code: 'EUR', amount: '1'}, to: 'USD', date_range: {start: REFERENCE_DATE, end: REFERENCE_DATE}}]);
+        await expect(page.getByTestId('pac-copy-rate-error-USD')).toBeVisible();
+        await expect(copyRate).toBeEnabled();
+
+        await copyRate.click();
+        await expect.poll(() => fxLookupBodies.length).toBe(2);
+        await expect(page.getByTestId('pac-copy-rate-error-USD')).toHaveCount(0);
         await expect(page.getByTestId('pac-rate-row')).toHaveCount(1);
-        await selectCurrency(page, 'pac-rate-currency-0', 'USD');
+        await expect(field(page, 'pac-rate-value', 0)).toHaveValue('0.8');
+        await expect(field(page, 'pac-rate-date', 0)).toHaveValue(effectiveRateDate);
+
         await field(page, 'pac-rate-value', 0).fill('0.900000000001');
         await setDate(page, 'pac-rate-date-0', REFERENCE_DATE);
 
@@ -1853,12 +1955,19 @@ test.describe('PAC allocator', () => {
 
         const entered = await analyzeAndCapture(page);
         expect(entered.parameters.cash_balances).toEqual([{currency: 'USD', amount: '500.000000000001'}]);
-        expect(entered.parameters.contributions).toEqual([{currency: 'EUR', amount: '200.000000000001', monetary_step: '0.000000000001'}]);
+        expect(entered.parameters.contributions).toEqual([{currency: 'CHF', amount: '200.000000000001', monetary_step: '0.000000000001'}]);
         expect(entered.parameters.valuation_rates).toEqual([{currency: 'USD', rate_to_report: '0.900000000001', reference_date: REFERENCE_DATE}]);
         const enteredRow = only(entered.parameters.rows ?? [], (row) => row.name === PRIMARY_NAME, 'entered-mode PAC row');
         expect(enteredRow.quote).toMatchObject({currency: 'USD', raw_price: '10', quote_base_quantity: 1000});
+        expect(enteredRow.buy_grid?.quantity_step).toBe('0.125');
         expect(entered.parameters).not.toHaveProperty('solver');
         expect(entered.parameters).not.toHaveProperty('orders');
+
+        await page.getByTestId('pac-remove-contributions-0').click();
+        await expect(page.getByTestId('pac-contributions-empty')).toBeVisible();
+        const removedLastContribution = await analyzeAndCapture(page);
+        expect(removedLastContribution.parameters.contributions).toEqual([]);
+        expect(removedLastContribution.parameters.cash_balances).toEqual([{currency: 'USD', amount: '500.000000000001'}]);
     });
 
     test('analyzes ready facts in formatted and exact views, marks edits stale, and renders a real invalid result', async ({page}, testInfo) => {
@@ -2071,7 +2180,7 @@ test.describe('PAC allocator', () => {
         await expectDraftIntact();
     });
 
-    test('discards an in-flight response when the authenticated account changes', async ({page}, testInfo) => {
+    test('discards in-flight compute and saved-FX responses when the authenticated account changes', async ({page}, testInfo) => {
         const originalUser = principal(testInfo.project.name, TEST_ADMIN, TEST_ALICE);
         const replacementUser = principal(testInfo.project.name, TEST_USER_2, TEST_USER);
         await login(page, originalUser);
@@ -2079,12 +2188,20 @@ test.describe('PAC allocator', () => {
         await navigateTo(page, TOOL_ROUTE);
         const tool = await waitForPacTool(page);
 
+        await selectCurrency(page, 'pac-report-currency', 'EUR');
+        await setDate(page, 'pac-as-of-date', REFERENCE_DATE);
+        await expect(tool).toHaveAttribute('data-cash-source', 'ready');
         const index = await addManualRow(page);
         await field(page, 'pac-display-name', index).fill('PAC session-bound draft');
+        await selectCurrency(page, `pac-asset-currency-${index}`, 'USD');
 
         const requestArrived = gate();
         const releaseResponse = gate();
         const routeSettled = gate();
+        const fxRequestArrived = gate();
+        const releaseFxResponse = gate();
+        const fxRouteSettled = gate();
+        let fxRequestBody: FxLookupRequestWire[] | undefined;
         await page.route(`**${COMPUTE_PATH}`, async (route) => {
             requestArrived.open();
             await releaseResponse.promise;
@@ -2097,11 +2214,43 @@ test.describe('PAC allocator', () => {
                 routeSettled.open();
             }
         });
+        await page.route(`**${FX_CONVERT_PATH}`, async (route) => {
+            fxRequestBody = route.request().postDataJSON() as FxLookupRequestWire[];
+            fxRequestArrived.open();
+            await releaseFxResponse.promise;
+            try {
+                await route.fulfill({
+                    status: 200,
+                    contentType: 'application/json',
+                    body: JSON.stringify({
+                        results: [
+                            {
+                                from_amount: {code: 'EUR', amount: '1'},
+                                to_amount: {code: 'USD', amount: '1.25'},
+                                conversion_date: REFERENCE_DATE,
+                                rate: '1.25',
+                                backward_fill_info: null,
+                            },
+                        ],
+                        success_count: 1,
+                        signal_results: [],
+                    }),
+                });
+            } catch {
+                // Navigation after logout aborts the old document's lookup.
+            } finally {
+                fxRouteSettled.open();
+            }
+        });
 
         const since = await eventSeq(page);
+        await page.getByTestId('pac-copy-rate-USD').click();
+        await fxRequestArrived.promise;
+        expect(fxRequestBody).toEqual([{from_amount: {code: 'EUR', amount: '1'}, to: 'USD', date_range: {start: REFERENCE_DATE, end: REFERENCE_DATE}}]);
         await page.getByTestId('pac-analyze').click();
         await requestArrived.promise;
         await expect(tool).toHaveAttribute('data-busy', 'true');
+        await expect(page.getByTestId('pac-copy-rate-USD')).toBeDisabled();
 
         try {
             await openMobileMenu(page);
@@ -2109,8 +2258,9 @@ test.describe('PAC allocator', () => {
             await expect(page.getByTestId('login-page')).toBeVisible({timeout: 20_000});
         } finally {
             releaseResponse.open();
+            releaseFxResponse.open();
         }
-        await routeSettled.promise;
+        await Promise.all([routeSettled.promise, fxRouteSettled.promise]);
 
         const unexpectedEvents = await page.evaluate((after) => {
             const events = (window as unknown as {__lf?: {events?: {seq: number; name: string}[]}}).__lf?.events;
@@ -2124,8 +2274,10 @@ test.describe('PAC allocator', () => {
         await waitForPacTool(page);
         await expect(page.getByTestId('pac-no-rows')).toBeVisible();
         await expect(page.getByTestId('pac-row')).toHaveCount(0);
+        await expect(page.getByTestId('pac-rate-row')).toHaveCount(0);
         await expect(page.getByTestId('pac-result')).toHaveCount(0);
         await expect(page.getByTestId('pac-client-error')).toHaveCount(0);
         await expect(page.getByTestId('pac-platform-error')).toHaveCount(0);
+        await expect(page.getByTestId('pac-allocator-tool')).toHaveAttribute('data-busy', 'false');
     });
 });

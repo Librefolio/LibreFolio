@@ -49,7 +49,7 @@ export interface PacAssetChoice extends PacAllocationSourceAsset {
 }
 
 export interface PacCashSourceState {
-    mode: 'not_supplied' | 'none' | 'broker_copy' | 'manual';
+    mode: 'broker_copy' | 'manual';
     selectedBrokerIds: number[];
     sourceAsOfDate: string | null;
     sourceFingerprint: string | null;
@@ -59,7 +59,7 @@ export interface PacCashSourceState {
     stale: boolean;
 }
 
-export type PacContributionMode = 'not_supplied' | 'none' | 'custom';
+export type PacContributionMode = 'none' | 'custom';
 
 export interface PacDraft {
     operation: 'analyze';
@@ -69,6 +69,5 @@ export interface PacDraft {
     cash: PacCashSourceState;
     contributionMode: PacContributionMode;
     contributions: PacContributionInput[];
-    allowFx: boolean;
     valuationRates: PacRateInput[];
 }
