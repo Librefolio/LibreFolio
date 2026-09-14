@@ -1,6 +1,10 @@
 <script lang="ts">
     import {t} from '$lib/i18n';
     import AssetIcon from '$lib/components/assets/AssetIcon.svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
+    import {currencyStoreVersion, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
+    import {getIndexColor} from '$lib/utils/colors';
+    import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
     import {AlertCircle, Check, LoaderCircle, Plus, RefreshCw, Search} from 'lucide-svelte';
     import type {PacAllocationUsageScope} from './allocationSource';
     import type {PacAssetChoice} from './editorTypes';
@@ -49,6 +53,21 @@
         return $t('tools.pacAllocator.gallery.observed', {default: 'Observed'});
     }
 
+    function scopeStyle(scope: PacAllocationUsageScope): string {
+        const colors = getIndexColor(SCOPE_ORDER.indexOf(scope), 140);
+        return `--scope-bg:${colors.bg};--scope-text:${colors.text};--scope-dark-bg:${colors.darkBg};--scope-dark-text:${colors.darkText};--scope-border:${colors.vivid};`;
+    }
+
+    function displayDecimal(value: string | null | undefined): string {
+        return formatDecimalForDisplay(value, {maxFrac: 12}) || '0';
+    }
+
+    function currencyFlag(code: string | null | undefined): string {
+        void $currencyStoreVersion;
+        const flag = getCurrencyInfo(code ?? '').flag_emoji;
+        return flag === '🏳️' ? '' : flag;
+    }
+
     function cardClass(asset: PacAssetChoice): string {
         if (asset.selected && !asset.active) return 'border-libre-green bg-amber-50 ring-1 ring-libre-green/30 dark:border-green-600 dark:bg-amber-950/30';
         if (asset.selected) return 'border-libre-green bg-libre-green/5 dark:border-green-600 dark:bg-green-950/20';
@@ -65,12 +84,26 @@
                 {$t('tools.pacAllocator.gallery.hint', {default: 'Select current custody contexts or add a zero-position catalog candidate.'})}
             </p>
         </div>
-        <div class="flex shrink-0 items-center gap-2">
-            <button class="btn btn-ghost whitespace-nowrap px-2 text-xs" type="button" onclick={onretry} disabled={loading} data-testid="pac-owned-assets-refresh" aria-label={$t('common.refresh')}>
-                <RefreshCw class={loading ? 'animate-spin' : ''} size={15} />
-                <span class="hidden sm:inline">{$t('common.refresh')}</span>
-            </button>
-            <button class="btn btn-primary whitespace-nowrap px-2 text-xs sm:px-3" type="button" onclick={onaddmanual} data-testid="pac-add-manual-asset" aria-label={$t('tools.pacAllocator.addManualAsset')}>
+        <div class="flex shrink-0 items-center gap-1.5">
+            <Tooltip text={$t('common.refresh')} position="top" interactiveChild>
+                <button
+                    class="inline-flex h-10 w-10 items-center justify-center rounded-md text-gray-500 transition hover:bg-gray-100 hover:text-libre-green focus:outline-none focus-visible:ring-2 focus-visible:ring-libre-green/70 disabled:cursor-not-allowed disabled:opacity-50 sm:h-8 sm:w-8 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-green-300"
+                    type="button"
+                    onclick={onretry}
+                    disabled={loading}
+                    data-testid="pac-owned-assets-refresh"
+                    aria-label={$t('common.refresh')}
+                >
+                    <RefreshCw class={loading ? 'animate-spin' : ''} size={15} />
+                </button>
+            </Tooltip>
+            <button
+                class="inline-flex min-h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-libre-green bg-libre-green px-2.5 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-libre-green/70 sm:min-h-8 dark:text-gray-950"
+                type="button"
+                onclick={onaddmanual}
+                data-testid="pac-add-manual-asset"
+                aria-label={$t('tools.pacAllocator.addManualAsset')}
+            >
                 <Plus size={15} />
                 <span class="hidden sm:inline">{$t('tools.pacAllocator.addManualAsset')}</span>
             </button>
@@ -88,7 +121,13 @@
                 <AlertCircle size={17} />
                 <span>{error}</span>
             </div>
-            <button class="btn btn-secondary" type="button" onclick={onretry} disabled={loading} data-testid="pac-owned-assets-retry">
+            <button
+                class="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-libre-green/70 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-8 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
+                type="button"
+                onclick={onretry}
+                disabled={loading}
+                data-testid="pac-owned-assets-retry"
+            >
                 <RefreshCw class={loading ? 'animate-spin' : ''} size={15} />
                 <span>{$t('common.retry')}</span>
             </button>
@@ -105,13 +144,14 @@
                     {@const selected = selectedScopes.includes(scope)}
                     <button
                         type="button"
-                        class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-libre-green/50 {selected
-                            ? 'border-libre-green bg-libre-green text-white'
-                            : 'border-gray-300 bg-white text-gray-600 hover:border-libre-green/60 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-300'}"
+                        class="scope-badge inline-flex min-h-8 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-libre-green/60 {selected ? 'ring-1 ring-current' : 'opacity-80 hover:opacity-100'}"
+                        style={scopeStyle(scope)}
                         aria-pressed={selected}
                         onclick={() => toggleScope(scope)}
                         data-testid={`pac-asset-scope-${scope}`}
+                        data-scope-color={scope}
                     >
+                        {#if selected}<Check size={12} strokeWidth={3} />{/if}
                         {scopeLabel(scope)}
                         <span class="rounded-full bg-black/10 px-1.5 py-0.5 tabular-nums dark:bg-white/10">{scopeCounts[scope]}</span>
                     </button>
@@ -120,7 +160,7 @@
             <div class="relative w-full lg:max-w-sm">
                 <Search class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                 <input
-                    class="input-field w-full pl-9"
+                    class="min-h-10 w-full rounded-lg border border-gray-300 bg-white py-1.5 pr-2 pl-9 text-sm text-gray-900 outline-none transition focus:border-libre-green focus:ring-1 focus:ring-libre-green sm:min-h-9 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
                     type="search"
                     bind:value={query}
                     placeholder={$t('tools.pacAllocator.gallery.search', {default: 'Search by Asset name'})}
@@ -133,10 +173,18 @@
         {#if error}
             <div class="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200">
                 <span>{error}</span>
-                <button class="btn btn-ghost shrink-0" type="button" onclick={onretry} disabled={loading} data-testid="pac-owned-assets-retry-inline">
-                    <RefreshCw class={loading ? 'animate-spin' : ''} size={14} />
-                    <span class="hidden sm:inline">{$t('common.retry')}</span>
-                </button>
+                <Tooltip text={$t('common.retry')} position="top" interactiveChild>
+                    <button
+                        class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-amber-800 transition hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-600/70 disabled:cursor-not-allowed disabled:opacity-50 sm:h-8 sm:w-8 dark:text-amber-200 dark:hover:bg-amber-900/30"
+                        type="button"
+                        onclick={onretry}
+                        disabled={loading}
+                        data-testid="pac-owned-assets-retry-inline"
+                        aria-label={$t('common.retry')}
+                    >
+                        <RefreshCw class={loading ? 'animate-spin' : ''} size={14} />
+                    </button>
+                </Tooltip>
             </div>
         {/if}
 
@@ -146,7 +194,7 @@
                 {@const stale = asset.staleSourceKeys.length > 0}
                 <button
                     type="button"
-                    class={`group relative flex min-h-24 items-start gap-3 rounded-xl border p-3 text-left transition focus:outline-none focus:ring-2 focus:ring-libre-green/50 ${cardClass(asset)}`}
+                    class={`group relative flex min-h-20 items-start gap-2.5 rounded-lg border p-2.5 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-libre-green/60 ${cardClass(asset)}`}
                     aria-pressed={asset.selected}
                     onclick={() => ontoggle(asset)}
                     {disabled}
@@ -174,14 +222,15 @@
                             </span>
                         </span>
                         <span class="mt-2 flex flex-wrap items-center gap-1.5 text-[11px]">
-                            <span class="rounded-full bg-gray-100 px-2 py-0.5 text-gray-600 dark:bg-gray-800 dark:text-gray-300">{scopeLabel(asset.usageScope)}</span>
+                            <span class="scope-badge rounded-full border px-2 py-0.5" style={scopeStyle(asset.usageScope)} data-scope-color={asset.usageScope}>{scopeLabel(asset.usageScope)}</span>
                             {#if !asset.active}
                                 <span class="rounded-full bg-amber-100 px-2 py-0.5 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">{$t('tools.pacAllocator.gallery.inactive', {default: 'Inactive'})}</span>
                             {/if}
                             {#if asset.quote.rawPrice}
                                 <span class="rounded-full bg-gray-100 px-2 py-0.5 text-gray-600 dark:bg-gray-800 dark:text-gray-300">
-                                    {asset.quote.rawPrice}
+                                    {#if currencyFlag(asset.quote.currency)}<span class="emoji-flag" aria-hidden="true">{currencyFlag(asset.quote.currency)}</span>{/if}
                                     {asset.quote.currency}
+                                    <span class="font-mono">{displayDecimal(asset.quote.rawPrice)}</span>
                                 </span>
                             {:else}
                                 <span class="rounded-full bg-amber-100 px-2 py-0.5 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">{$t('tools.pacAllocator.missingPrice')}</span>
@@ -205,3 +254,16 @@
         {/if}
     {/if}
 </section>
+
+<style>
+    .scope-badge {
+        border-color: color-mix(in srgb, var(--scope-border) 45%, transparent);
+        background: var(--scope-bg);
+        color: var(--scope-text);
+    }
+
+    :global(.dark) .scope-badge {
+        background: var(--scope-dark-bg);
+        color: var(--scope-dark-text);
+    }
+</style>

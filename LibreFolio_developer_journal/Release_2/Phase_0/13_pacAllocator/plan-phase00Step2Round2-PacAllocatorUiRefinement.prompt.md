@@ -935,3 +935,5 @@ Test nuovi/modificati solo via `test-author`; docs EN via `docs-writer`.
 12. Asset global both-toggle verde, inattivi ambra in fondo.
 13. Gate verdi, nessun artifact privato/generato staged.
 14. Server review ricostruito e review first-hand chiusa dal developer.
+
+→ Follow-up: [PAC allocator UI acceptance - Round 3](plan-phase00Step2Round3-PacAllocatorUiAcceptance.prompt.md)

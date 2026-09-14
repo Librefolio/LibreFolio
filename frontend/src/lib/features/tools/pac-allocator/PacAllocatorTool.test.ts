@@ -35,6 +35,8 @@ import {beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import {getClientSessionGeneration, transitionClientSession} from '$lib/stores/app/clientSession';
 import {userSettings} from '$lib/stores/app/settings';
+import type {FxDataPoint} from '$lib/stores/fxStoreRegistry';
+import {getIndexColor} from '$lib/utils/colors';
 import {ToolClientError, getCompiledToolContract, validateToolCatalog, verifyToolDescriptor, type CompatibleToolDescriptor, type ToolBatchMetrics, type ToolInput, type ToolItemMetrics, type ToolOutput} from '$lib/features/tools/contracts';
 import type {ToolItemResult, ToolRunOptions} from '$lib/features/tools/client';
 import type {FetchPacAllocationSourceOptions, PacAllocationSource, PacAllocationSourceAsset, PacAllocationUsageScope} from './allocationSource';
@@ -46,21 +48,33 @@ import PacAllocatorTool from './PacAllocatorTool.svelte';
 // `vi.mock` factories are hoisted above ordinary `const` declarations, so the
 // mock itself must be created through `vi.hoisted` (see client.test.ts /
 // ProviderAssignmentSection.test.ts for the same idiom).
-const {runToolMock, fetchSourceMock, ensureCurrenciesLoadedMock} = vi.hoisted(() => ({
+const {runToolMock, fetchSourceMock, lookupFxRateMock, ensureCurrenciesLoadedMock} = vi.hoisted(() => ({
     runToolMock: vi.fn<(code: 'pac_allocator', version: '1.0.0', options: ToolRunOptions<'pac_allocator', '1.0.0'>) => Promise<ToolItemResult<'pac_allocator', '1.0.0'>>>(),
     fetchSourceMock: vi.fn<(asOfDate: string, accountGeneration: number, options?: FetchPacAllocationSourceOptions) => Promise<PacAllocationSource>>(),
+    lookupFxRateMock: vi.fn<(base: string, quote: string, date: string) => Promise<FxDataPoint | null>>(),
     ensureCurrenciesLoadedMock: vi.fn(),
 }));
 
 vi.mock('$lib/features/tools/client', () => ({runTool: runToolMock}));
 vi.mock('./allocationSource', () => ({fetchPacAllocationSource: fetchSourceMock}));
+vi.mock('$lib/stores/fxStoreRegistry', () => ({lookupFxRate: lookupFxRateMock}));
 vi.mock('$lib/stores/reference/currencyStore', () => ({
     ensureCurrenciesLoaded: ensureCurrenciesLoadedMock,
+    currencyStoreVersion: {
+        subscribe: (run: (value: number) => void) => {
+            run(0);
+            return () => undefined;
+        },
+    },
     getAllCurrencies: () => [
         {code: 'EUR', name: 'Euro fixture', symbol: '€', flag_emoji: '🇪🇺', country_codes: ['EU'], country_names: ['Fixture Europe']},
         {code: 'USD', name: 'Dollar fixture', symbol: '$', flag_emoji: '🇺🇸', country_codes: ['US'], country_names: ['Fixture United States']},
         {code: 'CHF', name: 'Franc fixture', symbol: 'CHF', flag_emoji: '🇨🇭', country_codes: ['CH'], country_names: ['Fixture Switzerland']},
     ],
+    getCurrencyInfo: (code: string) => {
+        const flags: Record<string, string> = {EUR: '🇪🇺', USD: '🇺🇸', CHF: '🇨🇭'};
+        return {flag_emoji: flags[code] ?? '🏳️'};
+    },
 }));
 vi.mock('$lib/utils/providerHelpers', () => ({
     assetProvidersVersion: {
@@ -536,6 +550,8 @@ beforeEach(() => {
     runToolMock.mockReset();
     fetchSourceMock.mockReset();
     fetchSourceMock.mockImplementation(async (asOfDate: string) => allocationSource(asOfDate));
+    lookupFxRateMock.mockReset();
+    lookupFxRateMock.mockResolvedValue(null);
     ensureCurrenciesLoadedMock.mockReset();
     ensureCurrenciesLoadedMock.mockResolvedValue(undefined);
 });
@@ -599,41 +615,31 @@ async function selectCurrency(testId: string, value: string): Promise<void> {
     await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
 }
 
-type CashMode = 'not_supplied' | 'none' | 'broker_copy' | 'manual';
-
-const CASH_MODE_TEST_ID: Record<CashMode, string> = {
-    not_supplied: 'pac-cash-mode-not-supplied',
-    none: 'pac-cash-mode-none',
-    broker_copy: 'pac-cash-mode-broker-copy',
-    manual: 'pac-cash-mode-manual',
-};
-
-async function selectCashMode(mode: CashMode): Promise<void> {
-    const button = screen.getByTestId(CASH_MODE_TEST_ID[mode]);
-    await fireEvent.click(button);
-    await waitFor(() => expect(button).toHaveAttribute('aria-pressed', 'true'));
-    if (mode === 'manual') await waitFor(() => expect(screen.getAllByTestId('pac-cash-row').length).toBeGreaterThan(0));
-    else if (mode === 'broker_copy') await waitFor(() => expect(screen.getByTestId('pac-cash-broker-copy')).toBeInTheDocument());
-    else await waitFor(() => expect(screen.getByTestId(`pac-cash-${mode === 'none' ? 'none' : 'not-supplied'}`)).toBeInTheDocument());
+async function useManualCash(): Promise<void> {
+    await fireEvent.click(screen.getByTestId('pac-cash-use-manual'));
+    await waitFor(() => expect(screen.getAllByTestId('pac-cash-row')).toHaveLength(1));
 }
 
-/**
- * The three contribution modes, in the order `PacMoneySection` declares them.
- * Home plus an absolute index avoids matching a translated option label.
- */
-const CONTRIBUTION_MODE_INDEX = {not_supplied: 0, none: 1, custom: 2} as const;
+async function useBrokerCash(): Promise<void> {
+    await fireEvent.click(screen.getByTestId('pac-cash-use-brokers'));
+    await waitFor(() => expect(screen.getByTestId('pac-cash-broker-copy')).toBeInTheDocument());
+}
 
-async function selectContributionMode(mode: keyof typeof CONTRIBUTION_MODE_INDEX): Promise<void> {
-    const trigger = screen.getByTestId('pac-contributions-mode-button');
-    await fireEvent.click(trigger);
-    await fireEvent.keyDown(trigger, {key: 'Home'});
-    for (let index = 0; index < CONTRIBUTION_MODE_INDEX[mode]; index += 1) {
-        await fireEvent.keyDown(trigger, {key: 'ArrowDown'});
-    }
-    await fireEvent.keyDown(trigger, {key: 'Enter'});
-    await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'false'));
-    if (mode === 'custom') await waitFor(() => expect(screen.getAllByTestId('pac-contributions-row').length).toBeGreaterThan(0));
-    else await waitFor(() => expect(screen.getByTestId(`pac-contributions-${mode === 'none' ? 'none' : 'not-supplied'}`)).toBeInTheDocument());
+async function addContribution(): Promise<void> {
+    const before = screen.queryAllByTestId('pac-contributions-row').length;
+    await fireEvent.click(screen.getByTestId('pac-add-contributions'));
+    await waitFor(() => expect(screen.getAllByTestId('pac-contributions-row')).toHaveLength(before + 1));
+}
+
+function expectScopeColor(element: HTMLElement, scope: PacAllocationUsageScope): void {
+    const scopeOrder: readonly PacAllocationUsageScope[] = ['owned', 'other_users', 'observed'];
+    const expected = getIndexColor(scopeOrder.indexOf(scope), 140);
+    expect(element).toHaveAttribute('data-scope-color', scope);
+    expect(element.style.getPropertyValue('--scope-bg')).toBe(expected.bg);
+    expect(element.style.getPropertyValue('--scope-text')).toBe(expected.text);
+    expect(element.style.getPropertyValue('--scope-dark-bg')).toBe(expected.darkBg);
+    expect(element.style.getPropertyValue('--scope-dark-text')).toBe(expected.darkText);
+    expect(element.style.getPropertyValue('--scope-border')).toBe(expected.vivid);
 }
 
 /**
@@ -709,6 +715,15 @@ describe('PacAllocatorTool (pac-allocator)', () => {
 
         await waitFor(() => expect(reportCurrencyTrigger).toHaveTextContent('CHF'));
         expect(screen.queryByTestId('pac-valuation-rates')).toBeNull();
+        expect(screen.getByTestId('pac-cash-broker-copy')).toBeInTheDocument();
+        const cashAction = screen.getByTestId('pac-cash-use-manual');
+        expect(cashAction).toBeInTheDocument();
+        const cashHeaderButtons = Array.from(cashAction.parentElement?.children ?? []).filter((element) => element.tagName === 'BUTTON');
+        expect(cashHeaderButtons).toHaveLength(1);
+        expect(cashHeaderButtons[0]).toBe(cashAction);
+        expect(screen.queryByTestId('pac-cash-use-brokers')).toBeNull();
+        expect(screen.getByTestId('pac-contributions-empty')).toBeInTheDocument();
+        expect(screen.queryAllByTestId('pac-contributions-row')).toHaveLength(0);
 
         const funding = screen.getByTestId('pac-funding');
         const gallery = await screen.findByTestId('pac-owned-assets');
@@ -751,7 +766,6 @@ describe('PacAllocatorTool (pac-allocator)', () => {
 
         await fireEvent.click(screen.getByTestId('pac-add-manual-asset'));
         await fireEvent.input(field('pac-display-name-0'), {target: {value: 'Draft survives source failure'}});
-        await selectCashMode('broker_copy');
         const broker = await screen.findByTestId('pac-cash-broker-3');
         await waitFor(() => expect(broker).toBeEnabled());
         await fireEvent.click(broker);
@@ -768,7 +782,7 @@ describe('PacAllocatorTool (pac-allocator)', () => {
         expect(rowByIndex(1)).toBeInTheDocument();
         await fireEvent.input(field('pac-display-name-1'), {target: {value: 'Manual fallback row'}});
 
-        await selectCashMode('manual');
+        await useManualCash();
         await selectCurrency('pac-cash-currency-0', 'EUR');
         await fireEvent.input(field('pac-cash-amount-0'), {target: {value: '321.450000000001'}});
 
@@ -858,20 +872,55 @@ describe('PacAllocatorTool (pac-allocator)', () => {
         expect(runToolMock).toHaveBeenCalledTimes(acceptedCalls);
     });
 
-    it('caps manual cash and custom contributions independently at four rows', async () => {
+    it('caps manual cash and contribution rows independently at four', async () => {
         renderTool();
 
-        await selectCashMode('manual');
+        await useManualCash();
         const addCash = screen.getByTestId('pac-add-cash');
         for (let index = 1; index < 4; index += 1) await fireEvent.click(addCash);
         expect(screen.getAllByTestId('pac-cash-row')).toHaveLength(4);
         expect(addCash).toBeDisabled();
 
-        await selectContributionMode('custom');
-        const addContribution = screen.getByTestId('pac-add-contributions');
-        for (let index = 1; index < 4; index += 1) await fireEvent.click(addContribution);
+        await addContribution();
+        const addContributionButton = screen.getByTestId('pac-add-contributions');
+        for (let index = 1; index < 4; index += 1) await fireEvent.click(addContributionButton);
         expect(screen.getAllByTestId('pac-contributions-row')).toHaveLength(4);
-        expect(addContribution).toBeDisabled();
+        expect(addContributionButton).toBeDisabled();
+    });
+
+    it('starts contributions empty, creates report-currency cents, and removes the last row without coupling quantity quantum', async () => {
+        renderTool();
+        await screen.findByTestId('pac-owned-assets-empty');
+
+        expect(screen.getByTestId('pac-contributions-empty')).toBeInTheDocument();
+        expect(screen.queryAllByTestId('pac-contributions-row')).toHaveLength(0);
+        const empty = await analyzeAndReadInput();
+        expect(empty.cash_balances).toEqual([]);
+        expect(empty.contributions).toEqual([]);
+
+        await addManualRow();
+        await fireEvent.input(field('pac-display-name-0'), {target: {value: 'Independent quantity quantum'}});
+        const quantityStep = field('pac-step-quantity-0');
+        await fireEvent.input(quantityStep, {target: {value: '0.125'}});
+
+        await addContribution();
+        expect(screen.getByTestId('pac-contributions-currency-0-trigger')).toHaveTextContent('EUR');
+        const monetaryStep = field('pac-contributions-monetary-step-0');
+        expect(monetaryStep).toHaveValue('0.01');
+        await fireEvent.input(field('pac-contributions-amount-0'), {target: {value: '200.000000000001'}});
+        await fireEvent.input(monetaryStep, {target: {value: '0.000000000001'}});
+        expect(quantityStep).toHaveValue('0.125');
+
+        const custom = await analyzeAndReadInput();
+        expect(custom.contributions).toEqual([{currency: 'EUR', amount: '200.000000000001', monetary_step: '0.000000000001'}]);
+        const ownedRow = custom.rows?.find((row) => row.name === 'Independent quantity quantum');
+        if (!ownedRow) throw new Error('manual row with independent quantity quantum was not serialized');
+        expect(ownedRow.buy_grid?.quantity_step).toBe('0.125');
+
+        await fireEvent.click(screen.getByTestId('pac-remove-contributions-0'));
+        expect(screen.getByTestId('pac-contributions-empty')).toBeInTheDocument();
+        expect(screen.queryAllByTestId('pac-contributions-row')).toHaveLength(0);
+        expect((await analyzeAndReadInput()).contributions).toEqual([]);
     });
 
     it('sends a manually filled draft without computing an economic result in the browser', async () => {
@@ -899,8 +948,8 @@ describe('PacAllocatorTool (pac-allocator)', () => {
         expect(parameters).toMatchObject({
             operation: 'analyze',
             report_currency: 'EUR',
-            cash_balances: null,
-            contributions: null,
+            cash_balances: [],
+            contributions: [],
             valuation_rates: [],
         });
         expect(parameters.rows).toHaveLength(1);
@@ -1031,6 +1080,11 @@ describe('PacAllocatorTool (pac-allocator)', () => {
         expect(scopeCount('owned')).toBe(2);
         expect(scopeCount('other_users')).toBe(2);
         expect(scopeCount('observed')).toBe(2);
+        for (const scope of ['owned', 'other_users', 'observed'] as const) {
+            const chip = scopeChip(scope);
+            expectScopeColor(chip, scope);
+            expect((chip.textContent ?? '').replace(String(scopeCount(scope)), '').trim()).not.toBe('');
+        }
         expect(visibleAssetCardTestIds()).toEqual(['pac-owned-asset-44', 'pac-owned-asset-41']);
         expect(screen.queryByTestId('pac-owned-asset-42')).toBeNull();
         expect(screen.queryByTestId('pac-owned-asset-43')).toBeNull();
@@ -1043,6 +1097,13 @@ describe('PacAllocatorTool (pac-allocator)', () => {
         expect(rowByIndex(0)).toHaveAttribute('data-source-mode', 'locked');
         expect(screen.getByTestId('pac-imported-initial-quantity-0')).toHaveTextContent('44.000000000001');
         expect(rowByIndex(0)).not.toHaveTextContent('asset:44:broker:944');
+        expect(selectedOwnedCard).toHaveTextContent('🇺🇸');
+        expect(selectedOwnedCard).toHaveTextContent('USD');
+        expect(selectedOwnedCard).toHaveTextContent('123.450000000001');
+        const ownedBadge = selectedOwnedCard.querySelector<HTMLElement>('[data-scope-color="owned"]');
+        expect(ownedBadge).not.toBeNull();
+        if (!ownedBadge) throw new Error('owned Asset card has no stable scope-color badge');
+        expectScopeColor(ownedBadge, 'owned');
 
         // Scope chips form a union, not a radio group. Within that union the
         // backend order is stable inside each active/inactive partition.
@@ -1065,11 +1126,19 @@ describe('PacAllocatorTool (pac-allocator)', () => {
 
         const otherCard = screen.getByTestId('pac-owned-asset-42');
         expect(otherCard).toHaveAttribute('data-usage-scope', 'other_users');
+        const otherBadge = otherCard.querySelector<HTMLElement>('[data-scope-color="other_users"]');
+        expect(otherBadge).not.toBeNull();
+        if (!otherBadge) throw new Error('other-users Asset card has no stable scope-color badge');
+        expectScopeColor(otherBadge, 'other_users');
         for (const privateFact of ['Foreign broker secret 42', 'foreign-secret-plugin-42', '37.5', '987654.321001', privateCashAmount]) {
             expect(otherCard).not.toHaveTextContent(privateFact);
         }
         const observedCard = screen.getByTestId('pac-owned-asset-43');
         expect(observedCard).toHaveAttribute('data-usage-scope', 'observed');
+        const observedBadge = observedCard.querySelector<HTMLElement>('[data-scope-color="observed"]');
+        expect(observedBadge).not.toBeNull();
+        if (!observedBadge) throw new Error('observed Asset card has no stable scope-color badge');
+        expectScopeColor(observedBadge, 'observed');
         for (const privateFact of ['Observed broker secret 43', 'foreign-secret-plugin-43', '62.5', '123456.789001', privateCashAmount]) {
             expect(observedCard).not.toHaveTextContent(privateFact);
         }
@@ -1732,7 +1801,7 @@ describe('PacAllocatorTool (pac-allocator)', () => {
         expect(parameters.rows?.map((row) => row.target_percent)).toEqual(['42.5', '57.5']);
     });
 
-    it('serializes all four existing-cash modes from OWNER sources, blocks stale selections, and keeps contributions separate', async () => {
+    it('starts in broker cash copy, submits only backend aggregates, and preserves guarded state across manual fallback', async () => {
         const today = localIsoOffset(0);
         const lateBrokerSelection = deferred<PacAllocationSource>();
         const matchingBrokerSelection = deferred<PacAllocationSource>();
@@ -1760,37 +1829,32 @@ describe('PacAllocatorTool (pac-allocator)', () => {
         renderTool();
         await screen.findByTestId('pac-owned-assets-empty');
 
-        const omitted = await analyzeAndReadInput();
-        expect(screen.getByTestId('pac-cash-mode-not-supplied')).toHaveAttribute('aria-pressed', 'true');
-        expect(omitted.cash_balances).toBeNull();
-        expect(omitted.contributions).toBeNull();
-
-        await selectCashMode('none');
-        await selectContributionMode('none');
-        const explicitNone = await analyzeAndReadInput();
-        expect(explicitNone.cash_balances).toEqual([]);
-        expect(explicitNone.contributions).toEqual([]);
-
-        await selectContributionMode('custom');
-        const contributionStep = field('pac-contributions-monetary-step-0');
-        expect(contributionStep).toHaveValue('0.01');
-        await selectCurrency('pac-contributions-currency-0', 'USD');
-        await fireEvent.input(field('pac-contributions-amount-0'), {target: {value: '200.000000000001'}});
-        await fireEvent.input(contributionStep, {target: {value: '0.000000000001'}});
-        const expectedContributions = [{currency: 'USD', amount: '200.000000000001', monetary_step: '0.000000000001'}];
-
-        await selectCashMode('broker_copy');
         const brokerA = await screen.findByTestId('pac-cash-broker-3');
         const brokerB = await screen.findByTestId('pac-cash-broker-4');
         await waitFor(() => expect(brokerA).toBeEnabled());
+        expect(screen.getByTestId('pac-cash-broker-copy')).toBeInTheDocument();
+        expect(screen.getByTestId('pac-cash-use-manual')).toBeInTheDocument();
+        expect(screen.queryByTestId('pac-cash-use-brokers')).toBeNull();
+        expect(brokerA).toHaveAttribute('aria-pressed', 'false');
+        expect(brokerB).toHaveAttribute('aria-pressed', 'false');
         expect(brokerA).toHaveTextContent('Fixture owner broker A');
         expect(brokerA).toHaveTextContent('25%');
-        expect(brokerA).toHaveTextContent('EUR 100.10');
-        expect(brokerA).toHaveTextContent('USD 5.50');
+        expect(brokerA).toHaveTextContent('🇪🇺');
+        expect(brokerA).toHaveTextContent('EUR');
+        expect(brokerA).toHaveTextContent('100.1');
+        expect(brokerA).toHaveTextContent('🇺🇸');
+        expect(brokerA).toHaveTextContent('USD');
+        expect(brokerA).toHaveTextContent('5.5');
         expect(brokerB).toHaveTextContent('Fixture owner broker B');
         expect(brokerB).toHaveTextContent('75%');
-        expect(brokerB).toHaveTextContent('EUR 300.20');
-        expect(brokerB).toHaveTextContent('CHF 7.25');
+        expect(brokerB).toHaveTextContent('🇪🇺');
+        expect(brokerB).toHaveTextContent('300.2');
+        expect(brokerB).toHaveTextContent('🇨🇭');
+        expect(brokerB).toHaveTextContent('7.25');
+
+        const initial = await analyzeAndReadInput();
+        expect(initial.cash_balances).toEqual([]);
+        expect(initial.contributions).toEqual([]);
 
         const firstSelectionCallIndex = fetchSourceMock.mock.calls.length;
         await fireEvent.click(brokerA);
@@ -1800,15 +1864,20 @@ describe('PacAllocatorTool (pac-allocator)', () => {
         expect(firstSelectionCall[0]).toBe(today);
         expect(firstSelectionCall[1]).toBe(accountGeneration);
         expect(firstSelectionCall[2]?.selectedCashBrokerIds).toEqual([3]);
+        expect(firstSelectionCall[2]?.signal?.aborted).toBe(false);
         await waitFor(() => expect(screen.getByTestId('pac-allocator-tool')).toHaveAttribute('data-cash-source', 'pending'));
         expect(screen.getByTestId('pac-analyze')).toBeDisabled();
 
-        // Change the requested selection while broker 3's first response is
-        // still in flight. Its late answer must not replace the accepted
-        // unselected source snapshot.
-        const clearSelectionCallIndex = fetchSourceMock.mock.calls.length;
-        await selectCashMode('none');
-        await waitFor(() => expect(fetchSourceMock.mock.calls.length).toBeGreaterThan(clearSelectionCallIndex));
+        // Manual fallback keeps the selected broker id and owns a separate
+        // draft. It also aborts the broker-copy request; the sequence guard is
+        // still required because a transport is allowed to settle late.
+        const manualSourceCallIndex = fetchSourceMock.mock.calls.length;
+        await useManualCash();
+        await waitFor(() => expect(fetchSourceMock.mock.calls.length).toBeGreaterThan(manualSourceCallIndex));
+        await waitFor(() => expect(firstSelectionCall[2]?.signal?.aborted).toBe(true));
+        await selectCurrency('pac-cash-currency-0', 'EUR');
+        await fireEvent.input(field('pac-cash-amount-0'), {target: {value: '500.000000000001'}});
+
         lateBrokerSelection.resolve(
             allocationSource(today, [], {
                 cashSources: OWNER_CASH_SOURCES.map((source) => (source.brokerId === 3 ? {...source, brokerName: 'Late stale broker'} : source)),
@@ -1817,11 +1886,12 @@ describe('PacAllocatorTool (pac-allocator)', () => {
         );
         await lateBrokerSelection.promise;
         await Promise.resolve();
+        expect(field('pac-cash-amount-0')).toHaveValue('500.000000000001');
 
-        // Re-select broker copy. The second request for broker 3 is now the
-        // only response allowed to clear the pending state.
+        // Returning to brokers preserves the selection. Only the matching
+        // request may clear the pending state or replace its backend aggregate.
         const matchingSelectionCallIndex = fetchSourceMock.mock.calls.length;
-        await selectCashMode('broker_copy');
+        await useBrokerCash();
         await waitFor(() => expect(fetchSourceMock.mock.calls.length).toBeGreaterThan(matchingSelectionCallIndex));
         await waitFor(() => expect(brokerThreeRequests).toBe(2));
         expect(screen.getByTestId('pac-allocator-tool')).toHaveAttribute('data-cash-source', 'pending');
@@ -1861,118 +1931,116 @@ describe('PacAllocatorTool (pac-allocator)', () => {
             {currency: 'USD', amount: '5.50'},
             {currency: 'CHF', amount: '7.25'},
         ]);
-        expect(brokerCopy.contributions).toEqual(expectedContributions);
+        expect(brokerCopy.contributions).toEqual([]);
 
-        await selectCashMode('manual');
+        await useManualCash();
         expect(screen.queryByTestId('pac-cash-monetary-step-0')).toBeNull();
-        await selectCurrency('pac-cash-currency-0', 'EUR');
-        await fireEvent.input(field('pac-cash-amount-0'), {target: {value: '500.000000000001'}});
-
         const manual = await analyzeAndReadInput();
         expect(manual.cash_balances).toEqual([{currency: 'EUR', amount: '500.000000000001'}]);
-        expect(manual.contributions).toEqual(expectedContributions);
-        expect(field('pac-contributions-monetary-step-0')).toHaveValue('0.000000000001');
+        expect(manual.contributions).toEqual([]);
+
+        await useBrokerCash();
+        await waitFor(() => expect(screen.getByTestId('pac-allocator-tool')).toHaveAttribute('data-cash-source', 'ready'));
+        expect(screen.getByTestId('pac-cash-broker-3')).toHaveAttribute('aria-pressed', 'true');
+        expect(screen.getByTestId('pac-cash-broker-4')).toHaveAttribute('aria-pressed', 'true');
+        await useManualCash();
+        expect(field('pac-cash-amount-0')).toHaveValue('500.000000000001');
     });
 
-    it('hides FX for report-only or inactive money and preserves an explicitly configured FX draft', async () => {
-        // Switching a money section back to `not_supplied` / `none` keeps the
-        // rows the user typed, so nothing is lost if they change their mind.
-        // They are not part of the request in those modes, though, so a foreign
-        // currency sitting in one of them must not ask for a rate that would
-        // never be used — and must not disappear from the draft either.
+    it('shows FX only for concrete active mismatches, publishes separate reasons, and retries a missing saved lookup', async () => {
         renderTool();
-        expect(screen.queryByTestId('pac-valuation-rates')).toBeNull();
-        expect(screen.queryByTestId('pac-fx-needed')).toBeNull();
+        await screen.findByTestId('pac-owned-assets-empty');
 
-        await selectCashMode('manual');
-        // A new row is created in the report currency, which is not foreign.
         expect(screen.queryByTestId('pac-valuation-rates')).toBeNull();
-        expect(screen.queryByTestId('pac-fx-needed')).toBeNull();
+
+        await addManualRow();
+        await fireEvent.input(field('pac-display-name-0'), {target: {value: 'Foreign Asset reason'}});
+        await selectCurrency('pac-asset-currency-0', 'USD');
+        const usdReason = screen.getByTestId('pac-fx-reason-USD');
+        expect(usdReason).toBeInTheDocument();
+        expect(within(usdReason).getByTestId('pac-fx-reason-assets-USD')).toBeInTheDocument();
+        expect(within(usdReason).queryByTestId('pac-fx-reason-cash-USD')).toBeNull();
+        expect(within(usdReason).queryByTestId('pac-fx-reason-contribution-USD')).toBeNull();
+
+        await useManualCash();
         await selectCurrency('pac-cash-currency-0', 'CHF');
         await fireEvent.input(field('pac-cash-amount-0'), {target: {value: '500'}});
-        expect(screen.getByTestId('pac-valuation-rates')).toBeInTheDocument();
-        expect(screen.getByTestId('pac-fx-needed')).toBeInTheDocument();
+        const chfReason = screen.getByTestId('pac-fx-reason-CHF');
+        expect(within(chfReason).getByTestId('pac-fx-reason-cash-CHF')).toBeInTheDocument();
+        expect(within(chfReason).queryByTestId('pac-fx-reason-assets-CHF')).toBeNull();
+        expect(within(chfReason).queryByTestId('pac-fx-reason-contribution-CHF')).toBeNull();
 
-        await selectContributionMode('custom');
-        expect(field('pac-contributions-monetary-step-0')).toHaveValue('0.01');
+        await addContribution();
         await selectCurrency('pac-contributions-currency-0', 'USD');
         await fireEvent.input(field('pac-contributions-amount-0'), {target: {value: '200'}});
-        expect(screen.getByTestId('pac-fx-needed')).toBeInTheDocument();
+        expect(within(usdReason).getByTestId('pac-fx-reason-assets-USD')).toBeInTheDocument();
+        expect(within(usdReason).getByTestId('pac-fx-reason-contribution-USD')).toBeInTheDocument();
+        expect(within(usdReason).queryByTestId('pac-fx-reason-cash-USD')).toBeNull();
 
-        // Cash goes quiet; the contribution in USD is still live, so the hint is
-        // still right to be there — which is what makes the next step a real
-        // assertion rather than a hint that happened to vanish.
-        await selectCashMode('none');
-        expect(screen.getByTestId('pac-fx-needed')).toBeInTheDocument();
+        expect(lookupFxRateMock).not.toHaveBeenCalled();
+        const copy = screen.getByTestId('pac-copy-rate-USD');
+        await fireEvent.click(copy);
+        await waitFor(() => expect(lookupFxRateMock).toHaveBeenCalledWith('USD', 'EUR', localIsoOffset(0)));
+        expect(await screen.findByTestId('pac-copy-rate-error-USD')).toBeInTheDocument();
+        expect(copy).toBeEnabled();
 
-        await selectContributionMode('not_supplied');
-        expect(screen.queryByTestId('pac-valuation-rates')).toBeNull();
-        expect(screen.queryByTestId('pac-fx-needed')).toBeNull();
+        await fireEvent.click(copy);
+        await waitFor(() => expect(lookupFxRateMock).toHaveBeenCalledTimes(2));
+        expect(await screen.findByTestId('pac-copy-rate-error-USD')).toBeInTheDocument();
+        expect(copy).toBeEnabled();
 
-        // Neither row was thrown away: both come back exactly as typed, and so
-        // does the hint they justify.
-        await selectCashMode('manual');
-        await selectContributionMode('custom');
-        expect(screen.getByTestId('pac-cash-currency-0-trigger')).toHaveTextContent('CHF');
-        expect(field('pac-cash-amount-0')).toHaveValue('500');
-        expect(screen.getByTestId('pac-contributions-currency-0-trigger')).toHaveTextContent('USD');
-        expect(field('pac-contributions-amount-0')).toHaveValue('200');
-        expect(field('pac-contributions-monetary-step-0')).toHaveValue('0.01');
-        expect(screen.getByTestId('pac-fx-needed')).toBeInTheDocument();
-
-        // `addValuationRate()` suggests the first active foreign currency. Once
-        // the user has explicitly configured that draft, the section remains
-        // available even if the money rows become inactive again.
-        await fireEvent.click(screen.getByTestId('pac-valuation-rates-toggle'));
-        await fireEvent.click(screen.getByTestId('pac-enable-rates'));
-        await fireEvent.click(screen.getByTestId('pac-add-rate'));
-        expect(screen.queryAllByTestId('pac-rate-row')).toHaveLength(1);
-        expect((await analyzeAndReadInput()).valuation_rates).toEqual([{currency: 'CHF', rate_to_report: '', reference_date: ''}]);
-
-        await selectCashMode('none');
-        await selectContributionMode('not_supplied');
-        expect(screen.getByTestId('pac-valuation-rates')).toBeInTheDocument();
-        expect(screen.getByTestId('pac-rate-row')).toBeInTheDocument();
-        const inactive = await analyzeAndReadInput();
-        expect(inactive.cash_balances).toEqual([]);
-        expect(inactive.contributions).toBeNull();
-        expect(inactive.valuation_rates).toEqual([{currency: 'CHF', rate_to_report: '', reference_date: ''}]);
+        await useBrokerCash();
+        await waitFor(() => expect(screen.queryByTestId('pac-fx-reason-CHF')).toBeNull());
+        await fireEvent.click(screen.getByTestId('pac-remove-contributions-0'));
+        await waitFor(() => expect(screen.getByTestId('pac-contributions-empty')).toBeInTheDocument());
+        await waitFor(() => expect(within(usdReason).queryByTestId('pac-fx-reason-contribution-USD')).toBeNull());
+        await fireEvent.click(screen.getByTestId('pac-remove-asset-0'));
+        await waitFor(() => expect(screen.queryByTestId('pac-valuation-rates')).toBeNull());
     });
 
-    it('keeps foreign-asset valuation manual and sends the exact equation rate and date to the current report currency', async () => {
+    it('copies a backward-filled saved FX rate into editable wire fields and rejects stale field, date, report, and account replies', async () => {
         const oneContext = ownedAsset({contexts: [ownedAsset().contexts[0]!]});
         fetchSourceMock.mockImplementation(async (asOfDate: string) => allocationSource(asOfDate, [oneContext]));
         renderTool();
-        await selectCurrency('pac-report-currency', 'CHF');
         await fireEvent.click(await screen.findByTestId('pac-owned-asset-17'));
 
         expect(screen.getByTestId('pac-valuation-rates')).toBeInTheDocument();
-        expect(screen.getByTestId('pac-fx-needed')).toBeInTheDocument();
+        expect(screen.getByTestId('pac-fx-reason-assets-USD')).toBeInTheDocument();
         expect(screen.queryAllByTestId('pac-rate-row')).toHaveLength(0);
         expect((await analyzeAndReadInput()).valuation_rates).toEqual([]);
+        expect(lookupFxRateMock).not.toHaveBeenCalled();
 
-        await fireEvent.click(screen.getByTestId('pac-valuation-rates-toggle'));
-        expect(screen.getByTestId('pac-rate-info')).toHaveAccessibleName();
-        await fireEvent.click(screen.getByTestId('pac-enable-rates'));
-        expect(screen.queryAllByTestId('pac-rate-row')).toHaveLength(0);
-        await fireEvent.click(screen.getByTestId('pac-add-rate'));
-        await selectCurrency('pac-rate-currency-0', 'USD');
-        await fireEvent.input(field('pac-rate-value-0'), {target: {value: '0.900000000001'}});
+        const requestedDate = localIsoOffset(0);
+        const effectiveDate = localIsoOffset(-2);
+        lookupFxRateMock.mockResolvedValueOnce({
+            date: requestedDate,
+            rate: 0.812345678901,
+            backwardFillInfo: {actualRateDate: effectiveDate, daysBack: 2},
+        });
+        const copy = screen.getByTestId('pac-copy-rate-USD');
+        await fireEvent.click(copy);
+        await waitFor(() => expect(lookupFxRateMock).toHaveBeenCalledWith('USD', 'EUR', requestedDate));
+        await waitFor(() => expect(screen.queryAllByTestId('pac-rate-row')).toHaveLength(1));
+        expect(copy).toBeEnabled();
+        expect(field('pac-rate-value-0')).toHaveValue('0.812345678901');
+        expect(field('pac-rate-date-0')).toHaveValue(effectiveDate);
+
         const rateDate = field('pac-rate-date-0');
+        await fireEvent.input(field('pac-rate-value-0'), {target: {value: '0.900000000001'}});
         await fireEvent.input(rateDate, {target: {value: localIsoOffset(-1)}});
         await fireEvent.blur(rateDate);
 
         const rateRow = screen.getByTestId('pac-rate-row');
         expect(rateRow).toHaveTextContent('1');
         expect(rateRow).toHaveTextContent('=');
-        expect(rateRow).toHaveTextContent('CHF');
+        expect(rateRow).toHaveTextContent('EUR');
         expect(within(rateRow).getByTestId('pac-rate-currency-0-trigger')).toHaveTextContent('USD');
         expect(field('pac-rate-value-0')).toHaveValue('0.900000000001');
         const equationText = rateRow.textContent ?? '';
         const one = equationText.indexOf('1');
         const native = equationText.indexOf('USD', one + 1);
         const equals = equationText.indexOf('=', native + 1);
-        const report = equationText.indexOf('CHF', equals + 1);
+        const report = equationText.indexOf('EUR', equals + 1);
         expect(one >= 0 && native > one && equals > native && report > equals).toBe(true);
         const rateDateRoot = within(rateRow).getByTestId('pac-rate-date-0-root');
         const rateDateLabels = Array.from(rateRow.getElementsByTagName('label')).filter((label) => label.contains(rateDateRoot));
@@ -1982,13 +2050,71 @@ describe('PacAllocatorTool (pac-allocator)', () => {
         const parameters = await analyzeAndReadInput();
         const imported = parameters.rows?.find((row) => row.name === oneContext.name);
         if (!imported) throw new Error('foreign imported row was not serialized');
-        expect(parameters.report_currency).toBe('CHF');
+        expect(parameters.report_currency).toBe('EUR');
         expect(imported.quote).toMatchObject({currency: 'USD', raw_price: '123.450000000001'});
         expect(parameters.valuation_rates).toEqual([{currency: 'USD', rate_to_report: '0.900000000001', reference_date: localIsoOffset(-1)}]);
+
+        const fieldReply = deferred<FxDataPoint | null>();
+        lookupFxRateMock.mockReturnValueOnce(fieldReply.promise);
+        await fireEvent.click(copy);
+        await waitFor(() => expect(lookupFxRateMock).toHaveBeenCalledTimes(2));
+        expect(lookupFxRateMock).toHaveBeenNthCalledWith(2, 'USD', 'EUR', requestedDate);
+        expect(copy).toBeDisabled();
+        await fireEvent.input(field('pac-rate-value-0'), {target: {value: '0.777777777777'}});
+        expect(copy).toBeEnabled();
+        fieldReply.resolve({date: requestedDate, rate: 0.5, backwardFillInfo: null});
+        await fieldReply.promise;
+        await Promise.resolve();
+        expect(field('pac-rate-value-0')).toHaveValue('0.777777777777');
+
+        const dateReply = deferred<FxDataPoint | null>();
+        lookupFxRateMock.mockReturnValueOnce(dateReply.promise);
+        await fireEvent.click(copy);
+        await waitFor(() => expect(lookupFxRateMock).toHaveBeenCalledTimes(3));
+        expect(lookupFxRateMock).toHaveBeenNthCalledWith(3, 'USD', 'EUR', requestedDate);
+        expect(copy).toBeDisabled();
+        const revisedDate = localIsoOffset(-3);
+        const asOfDate = field('pac-as-of-date');
+        await fireEvent.input(asOfDate, {target: {value: revisedDate}});
+        await fireEvent.blur(asOfDate);
+        dateReply.resolve({date: requestedDate, rate: 0.6, backwardFillInfo: null});
+        await dateReply.promise;
+        await Promise.resolve();
+        expect(field('pac-rate-value-0')).toHaveValue('0.777777777777');
+        expect(field('pac-rate-date-0')).toHaveValue(localIsoOffset(-1));
+        expect(copy).toBeEnabled();
+
+        const reportReply = deferred<FxDataPoint | null>();
+        lookupFxRateMock.mockReturnValueOnce(reportReply.promise);
+        await fireEvent.click(copy);
+        await waitFor(() => expect(lookupFxRateMock).toHaveBeenCalledTimes(4));
+        expect(lookupFxRateMock).toHaveBeenNthCalledWith(4, 'USD', 'EUR', revisedDate);
+        expect(copy).toBeDisabled();
+        await selectCurrency('pac-report-currency', 'CHF');
+        reportReply.resolve({date: revisedDate, rate: 0.7, backwardFillInfo: null});
+        await reportReply.promise;
+        await Promise.resolve();
+        expect(field('pac-rate-value-0')).toHaveValue('0.777777777777');
+        expect(copy).toBeEnabled();
+
+        const accountReply = deferred<FxDataPoint | null>();
+        lookupFxRateMock.mockReturnValueOnce(accountReply.promise);
+        await fireEvent.click(copy);
+        await waitFor(() => expect(lookupFxRateMock).toHaveBeenCalledTimes(5));
+        expect(lookupFxRateMock).toHaveBeenNthCalledWith(5, 'USD', 'CHF', revisedDate);
+        expect(copy).toBeDisabled();
+        transitionClientSession(`pac-fx-other-account-${++accountSequence}`);
+        accountReply.resolve({date: revisedDate, rate: 0.8, backwardFillInfo: null});
+        await accountReply.promise;
+        await waitFor(() => expect(copy).toBeEnabled());
+        expect(field('pac-rate-value-0')).toHaveValue('0.777777777777');
+        expect(screen.getByTestId('pac-allocator-tool')).toHaveAttribute('data-busy', 'false');
     });
 
     it('starts a ready result formatted, exposes backend exact facts on toggle, and keeps guidance beside independent metrics', async () => {
         renderTool();
+        await addManualRow();
+        await fireEvent.input(field('pac-display-name-0'), {target: {value: 'Ready result fixture'}});
         queueSuccess(readyOutput());
         await fireEvent.click(screen.getByTestId('pac-analyze'));
 
@@ -1998,10 +2124,17 @@ describe('PacAllocatorTool (pac-allocator)', () => {
         expect(screen.getByTestId('pac-view-formatted')).toHaveAttribute('aria-pressed', 'true');
         expect(screen.getByTestId('pac-view-exact')).toHaveAttribute('aria-pressed', 'false');
 
-        expect(screen.getByTestId('pac-total-invested')).toHaveTextContent('1150 EUR');
-        expect(screen.getByTestId('pac-total-existing-cash')).toHaveTextContent('500 EUR');
-        expect(screen.getByTestId('pac-total-contributions')).toHaveTextContent('200 EUR');
-        expect(screen.getByTestId('pac-total-combined-cash')).toHaveTextContent('700 EUR');
+        for (const [testid, amount] of [
+            ['pac-total-invested', '1150'],
+            ['pac-total-existing-cash', '500'],
+            ['pac-total-contributions', '200'],
+            ['pac-total-combined-cash', '700'],
+        ] as const) {
+            const money = screen.getByTestId(testid);
+            expect(money).toHaveTextContent('🇪🇺');
+            expect(money).toHaveTextContent('EUR');
+            expect(money).toHaveTextContent(amount);
+        }
         expect(screen.getByTestId('pac-max-gap')).toHaveTextContent('0');
         expect(screen.getByTestId('pac-max-gap')).not.toHaveTextContent('/');
 
@@ -2066,18 +2199,9 @@ describe('PacAllocatorTool (pac-allocator)', () => {
         const compute = deferred<PacSuccess>();
         runToolMock.mockImplementationOnce(() => compute.promise);
         const rendered = renderTool();
-        const oldGeneration = accountGeneration;
         await waitFor(() => expect(fetchSourceMock).toHaveBeenCalledTimes(1));
 
-        await fireEvent.click(screen.getByTestId('pac-analyze'));
-        await waitFor(() => expect(screen.getByTestId('pac-allocator-tool')).toHaveAttribute('data-busy', 'true'));
-        transitionClientSession(`pac-compute-other-account-${++accountSequence}`);
-        compute.resolve(successResult('c-account-stale', readyOutput(), oldGeneration));
-
-        await waitFor(() => expect(screen.getByTestId('pac-response-ignored')).toBeInTheDocument());
-        expect(screen.queryByTestId('pac-result')).toBeNull();
-        expect(screen.getByTestId('pac-allocator-tool')).toHaveAttribute('data-busy', 'false');
-
+        transitionClientSession(`pac-source-other-account-${++accountSequence}`);
         accountGeneration = getClientSessionGeneration();
         descriptor = makeDescriptor();
         await rendered.rerender({descriptor, accountGeneration});
@@ -2097,6 +2221,18 @@ describe('PacAllocatorTool (pac-allocator)', () => {
         await Promise.resolve();
         expect(screen.getByTestId('pac-owned-asset-17')).toBeInTheDocument();
         expect(screen.queryByTestId('pac-owned-asset-99')).toBeNull();
+
+        await addManualRow();
+        await fireEvent.input(field('pac-display-name-0'), {target: {value: 'Session-bound compute row'}});
+        const computeGeneration = accountGeneration;
+        await fireEvent.click(screen.getByTestId('pac-analyze'));
+        await waitFor(() => expect(screen.getByTestId('pac-allocator-tool')).toHaveAttribute('data-busy', 'true'));
+        transitionClientSession(`pac-compute-other-account-${++accountSequence}`);
+        compute.resolve(successResult('c-account-stale', readyOutput(), computeGeneration));
+
+        await waitFor(() => expect(screen.getByTestId('pac-response-ignored')).toBeInTheDocument());
+        expect(screen.queryByTestId('pac-result')).toBeNull();
+        expect(screen.getByTestId('pac-allocator-tool')).toHaveAttribute('data-busy', 'false');
     });
 
     // Three explicit cases rather than one `it.each`: each backend output
@@ -2107,6 +2243,8 @@ describe('PacAllocatorTool (pac-allocator)', () => {
     async function expectDomainState(availability: 'needs_input' | 'invalid' | 'unsupported', output: PacOutput): Promise<void> {
         runToolMock.mockResolvedValueOnce(successResult(`c-${availability}`, output, accountGeneration));
         renderTool();
+        await addManualRow();
+        await fireEvent.input(field('pac-display-name-0'), {target: {value: `${availability} result fixture`}});
 
         await fireEvent.click(screen.getByTestId('pac-analyze'));
 

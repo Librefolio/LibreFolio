@@ -1,6 +1,7 @@
 <script lang="ts">
     import {_} from '$lib/i18n';
     import type {ToolOutput} from '$lib/features/tools/contracts';
+    import {currencyStoreVersion, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
     import {Info} from 'lucide-svelte';
 
@@ -22,9 +23,10 @@
         return exactView ? value : formatDecimalForDisplay(value, {maxFrac});
     }
 
-    function displayReportingFact(fact: ReportingFact): string {
-        if (fact.availability === 'unavailable') return `— (${fact.reason_codes.join(', ')})`;
-        return `${displayDecimal(fact.value.amount)} ${fact.value.currency}`;
+    function currencyFlag(code: string): string {
+        void $currencyStoreVersion;
+        const flag = getCurrencyInfo(code).flag_emoji;
+        return flag === '🏳️' ? '' : flag;
     }
 
     function displayRatioFact(fact: RatioFact): string {
@@ -46,10 +48,22 @@
     }
 </script>
 
-<section class="space-y-5 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800" data-testid="pac-result" data-state={result.availability} data-stale={stale ? 'true' : 'false'} data-view={exactView ? 'exact' : 'formatted'}>
+{#snippet reportingValue(fact: ReportingFact)}
+    {#if fact.availability === 'unavailable'}
+        — ({fact.reason_codes.join(', ')})
+    {:else}
+        <span class="inline-flex items-center gap-1">
+            {#if currencyFlag(fact.value.currency)}<span class="emoji-flag" aria-hidden="true">{currencyFlag(fact.value.currency)}</span>{/if}
+            <span>{fact.value.currency}</span>
+            <span class="font-mono">{displayDecimal(fact.value.amount)}</span>
+        </span>
+    {/if}
+{/snippet}
+
+<section class="space-y-4 rounded-xl border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800" data-testid="pac-result" data-state={result.availability} data-stale={stale ? 'true' : 'false'} data-view={exactView ? 'exact' : 'formatted'} data-density="compact">
     <header class="flex flex-wrap items-start justify-between gap-3">
         <div>
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+            <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100">
                 {#if result.availability === 'ready'}
                     {$_('tools.pacAllocator.state.ready')}
                 {:else if result.availability === 'needs_input'}
@@ -60,14 +74,26 @@
                     {$_('tools.pacAllocator.state.unsupported')}
                 {/if}
             </h2>
-            <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">{$_('tools.pacAllocator.resultMeaning')}</p>
+            <p class="mt-1 text-xs text-gray-600 dark:text-gray-400">{$_('tools.pacAllocator.resultMeaning')}</p>
             {#if stale}
                 <p class="mt-2 text-sm font-medium text-amber-700 dark:text-amber-300" data-testid="pac-result-stale">{$_('tools.pacAllocator.stale.result')}</p>
             {/if}
         </div>
         <div class="inline-flex rounded-lg border border-gray-300 p-1 dark:border-gray-600" data-testid="pac-display-mode">
-            <button type="button" onclick={() => (exactView = true)} aria-pressed={exactView} class="rounded px-3 py-1.5 text-sm font-medium aria-pressed:bg-libre-green aria-pressed:text-white" data-testid="pac-view-exact">{$_('tools.pacAllocator.exactView')}</button>
-            <button type="button" onclick={() => (exactView = false)} aria-pressed={!exactView} class="rounded px-3 py-1.5 text-sm font-medium aria-pressed:bg-libre-green aria-pressed:text-white" data-testid="pac-view-formatted">{$_('tools.pacAllocator.formattedView')}</button>
+            <button
+                type="button"
+                onclick={() => (exactView = true)}
+                aria-pressed={exactView}
+                class="min-h-8 rounded px-2 py-1 text-xs font-medium aria-pressed:bg-libre-green aria-pressed:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-libre-green/70"
+                data-testid="pac-view-exact">{$_('tools.pacAllocator.exactView')}</button
+            >
+            <button
+                type="button"
+                onclick={() => (exactView = false)}
+                aria-pressed={!exactView}
+                class="min-h-8 rounded px-2 py-1 text-xs font-medium aria-pressed:bg-libre-green aria-pressed:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-libre-green/70"
+                data-testid="pac-view-formatted">{$_('tools.pacAllocator.formattedView')}</button
+            >
         </div>
     </header>
 
@@ -80,22 +106,22 @@
         </p>
     </div>
 
-    <dl class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4" data-testid="pac-totals">
-        <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900/50">
+    <dl class="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4" data-testid="pac-totals">
+        <div class="rounded-lg bg-gray-50 p-2.5 dark:bg-gray-900/50">
             <dt class="text-xs text-gray-500 dark:text-gray-400">{$_('tools.pacAllocator.totals.invested')}</dt>
-            <dd class="mt-1 break-words font-mono text-sm text-gray-900 dark:text-gray-100" data-testid="pac-total-invested">{displayReportingFact(result.totals.initial_invested_reporting)}</dd>
+            <dd class="mt-1 break-words text-sm text-gray-900 dark:text-gray-100" data-testid="pac-total-invested">{@render reportingValue(result.totals.initial_invested_reporting)}</dd>
         </div>
-        <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900/50">
+        <div class="rounded-lg bg-gray-50 p-2.5 dark:bg-gray-900/50">
             <dt class="text-xs text-gray-500 dark:text-gray-400">{$_('tools.pacAllocator.totals.existingCash')}</dt>
-            <dd class="mt-1 break-words font-mono text-sm text-gray-900 dark:text-gray-100" data-testid="pac-total-existing-cash">{displayReportingFact(result.totals.existing_cash_reporting)}</dd>
+            <dd class="mt-1 break-words text-sm text-gray-900 dark:text-gray-100" data-testid="pac-total-existing-cash">{@render reportingValue(result.totals.existing_cash_reporting)}</dd>
         </div>
-        <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900/50">
+        <div class="rounded-lg bg-gray-50 p-2.5 dark:bg-gray-900/50">
             <dt class="text-xs text-gray-500 dark:text-gray-400">{$_('tools.pacAllocator.totals.contributions')}</dt>
-            <dd class="mt-1 break-words font-mono text-sm text-gray-900 dark:text-gray-100" data-testid="pac-total-contributions">{displayReportingFact(result.totals.contributions_reporting)}</dd>
+            <dd class="mt-1 break-words text-sm text-gray-900 dark:text-gray-100" data-testid="pac-total-contributions">{@render reportingValue(result.totals.contributions_reporting)}</dd>
         </div>
-        <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900/50">
+        <div class="rounded-lg bg-gray-50 p-2.5 dark:bg-gray-900/50">
             <dt class="text-xs text-gray-500 dark:text-gray-400">{$_('tools.pacAllocator.totals.combinedCash')}</dt>
-            <dd class="mt-1 break-words font-mono text-sm text-gray-900 dark:text-gray-100" data-testid="pac-total-combined-cash">{displayReportingFact(result.totals.cash_plus_contributions_reporting)}</dd>
+            <dd class="mt-1 break-words text-sm text-gray-900 dark:text-gray-100" data-testid="pac-total-combined-cash">{@render reportingValue(result.totals.cash_plus_contributions_reporting)}</dd>
         </div>
     </dl>
 
@@ -114,16 +140,16 @@
             <tbody class="divide-y divide-gray-200 text-gray-800 dark:divide-gray-700 dark:text-gray-200">
                 {#each result.rows as row}
                     <tr data-testid="pac-result-row">
-                        <td class="max-w-48 break-words px-3 py-3">{row.name || row.row_key}</td>
-                        <td class="whitespace-nowrap px-3 py-3 font-mono">{row.quantity.availability === 'available' ? displayDecimal(row.quantity.value) : '—'}</td>
-                        <td class="whitespace-nowrap px-3 py-3 font-mono">{row.initial_value_reporting.availability === 'available' ? `${displayDecimal(row.initial_value_reporting.value.amount)} ${row.initial_value_reporting.value.currency}` : '—'}</td>
-                        <td class="px-3 py-3 font-mono">
+                        <td class="max-w-48 break-words px-3 py-2">{row.name || row.row_key}</td>
+                        <td class="whitespace-nowrap px-3 py-2 font-mono">{row.quantity.availability === 'available' ? displayDecimal(row.quantity.value) : '—'}</td>
+                        <td class="whitespace-nowrap px-3 py-2">{@render reportingValue(row.initial_value_reporting)}</td>
+                        <td class="px-3 py-2 font-mono">
                             <span>{displayRatioFact(row.current_weight_percent)}</span>
                             <span class="mt-1 block h-1.5 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
                                 <span class="block h-full rounded-full bg-blue-500" style={`width:${barWidth(row.current_weight_percent)}%`}></span>
                             </span>
                         </td>
-                        <td class="px-3 py-3 font-mono">
+                        <td class="px-3 py-2 font-mono">
                             {#if row.target_percent.availability === 'available'}
                                 <span>{displayDecimal(row.target_percent.value)}%</span>
                                 <span class="mt-1 block h-1.5 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
@@ -133,7 +159,7 @@
                                 —
                             {/if}
                         </td>
-                        <td class="whitespace-nowrap px-3 py-3 font-mono">{displayRatioFact(row.deviation_pp)}</td>
+                        <td class="whitespace-nowrap px-3 py-2 font-mono">{displayRatioFact(row.deviation_pp)}</td>
                     </tr>
                 {/each}
             </tbody>
@@ -152,7 +178,7 @@
     </dl>
 
     <section data-testid="pac-cash-pools">
-        <h3 class="font-semibold text-gray-900 dark:text-gray-100">{$_('tools.pacAllocator.cashPools')}</h3>
+        <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{$_('tools.pacAllocator.cashPools')}</h3>
         <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
             {$_('tools.pacAllocator.cashPoolsHint', {
                 default: 'Native balances remain separate by currency. This report does not exchange, transfer, or merge cash.',
@@ -161,8 +187,11 @@
         {#if result.cash_pools.availability === 'available'}
             <ul class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {#each result.cash_pools.value as pool}
-                    <li class="rounded-lg bg-gray-50 p-3 text-sm dark:bg-gray-900/50" data-testid="pac-cash-pool">
-                        <p class="font-semibold">{pool.currency}</p>
+                    <li class="rounded-lg bg-gray-50 p-2.5 text-sm dark:bg-gray-900/50" data-testid="pac-cash-pool">
+                        <p class="inline-flex items-center gap-1 font-semibold">
+                            {#if currencyFlag(pool.currency)}<span class="emoji-flag" aria-hidden="true">{currencyFlag(pool.currency)}</span>{/if}
+                            {pool.currency}
+                        </p>
                         <p class="mt-1 font-mono">{$_('tools.pacAllocator.totals.existingCash')}: {displayDecimal(pool.existing_amount)}</p>
                         <p class="font-mono">{$_('tools.pacAllocator.totals.contributions')}: {displayDecimal(pool.contribution_amount)}</p>
                         <p class="font-mono">{$_('tools.pacAllocator.totals.combinedCash')}: {displayDecimal(pool.combined_amount)}</p>
@@ -176,7 +205,7 @@
 
     {#if result.issues.length > 0}
         <section data-testid="pac-issues">
-            <h3 class="font-semibold text-gray-900 dark:text-gray-100">{$_('tools.pacAllocator.issues')}</h3>
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{$_('tools.pacAllocator.issues')}</h3>
             <ul class="mt-3 space-y-2">
                 {#each result.issues as issue}
                     <li class="rounded-lg border border-gray-200 p-3 text-sm dark:border-gray-700" data-testid="pac-issue" data-kind={issue.kind}>
