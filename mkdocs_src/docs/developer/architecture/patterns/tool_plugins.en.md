@@ -1,13 +1,13 @@
 ---
 title: Tool plugins
-description: Atomic Tool contracts, transactional discovery, process-owned execution, and requirements for frontend integration.
+description: Atomic Tool contracts, multi-service packages, transactional discovery, process-owned execution, generated codecs, and compiled frontend renderers.
 ---
 
 # 🧰 Tool plugins
 
 Tools package an **atomic calculation** behind a typed, versioned contract. The caller supplies a complete scenario; the backend computes a result without obtaining portfolio data or authority on the caller's behalf.
 
-This capability is experimental. The sources described here include transport models, discovery, schema publication, a per-process executor, worker/process-tree primitives, and configured API mounting and application lifecycle hooks. Source integration does **not** establish runtime validation, verified kernel-level cleanup coverage, or an end-to-end Tool pilot. Generation and frontend obligations below remain integration requirements, not a claim that those integrations have been delivered.
+This capability is experimental, but its boundaries are integrated in current source: transport models, multi-service discovery, schema export and generated codecs, authenticated API routes, a per-process executor, worker/process-tree ownership, catalogue cards, per-service frontend routes, and compiled custom renderers. The bundled `PacAllocatorTool` currently exposes the `pac_allocator` and `portfolio_rebalancer` services. Source integration still does **not** replace runtime evidence for every cancellation race or kernel-level descendant-cleanup scenario.
 
 ## 🎯 Scope and authority
 
@@ -29,19 +29,28 @@ Paths below are relative to the repository root.
 | Source | Responsibility |
 |--------|----------------|
 | `backend/app/schemas/tools.py` | Descriptors, policies, batch envelopes, errors, metrics, and diagnostics DTOs. |
-| `backend/app/services/tools/base.py` | `ToolPlugin`, `ToolExecutionContext`, and typed definition/execution errors. |
+| `backend/app/services/tools/base.py` | `ToolPlugin`, `ToolService`, `ToolExecutionContext`, and typed definition/execution errors. |
 | `backend/app/services/tools/registry.py` | Staged registration claims, quarantine, definition validation, and the published snapshot. |
 | `backend/app/services/tools/schema.py` | Pydantic schema profile, local references, operation discovery, and fingerprinting. |
+| `backend/app/services/tools/schema_export.py` | Build-only Tool manifest and schema bundles derived from registry definitions. |
 | `backend/app/services/tools/catalog.py` | Read-only catalogue projection and effective operation limits. |
 | `backend/app/services/tools/wire.py` | Unicode-safe bounded JSON and sanitized validation issues. |
 | `backend/app/services/tools/executor.py` | Per-process admission, item tickets, lane scheduling, absolute deadlines, handshake, cancellation, and cleanup ownership. |
 | `backend/app/services/tools/worker.py` | Child handshake, version-pin checks, validation, computation, and result frames. |
 | `backend/app/services/tools/process_tree.py` | Owned process identities, descendant tracking, and termination checks. |
+| `backend/app/services/tool_plugins/pac_allocator.py` | Current packaged plugin with two complete public services and code-based compute dispatch. |
 | `backend/app/api/v1/tools.py` | Bounded transport handlers, authentication dependencies, and disconnect handling. |
 | `backend/app/api/v1/router.py` | Inclusion of the Tool router in the API v1 router. |
 | `backend/app/api/v1/auth.py` | `get_current_user`, the authentication dependency used by all Tool routes. |
 | `backend/app/main.py` | API prefix mounting, off-event-loop catalogue initialization, and executor shutdown in the lifespan's `finally` block. |
 | `backend/app/services/provider_registry.py` | Shared discovery and `register_plugin`; existing domain base-class aliases are imported lazily. |
+| `frontend/scripts/generate-tools-client.mjs` | Strict codec generation and the generated code/version-to-codec map. |
+| `frontend/src/lib/api/tool-contract-map.generated.ts` | Generated service identities, schema fingerprints, UI versions, and codecs. |
+| `frontend/src/lib/features/tools/contracts.ts` | Runtime catalogue validation, compiled-contract compatibility, and typed execution preparation. |
+| `frontend/src/lib/features/tools/registry.ts` | Source-owned compiled renderer registrations and renderer resolution. |
+| `frontend/src/lib/features/tools/ToolsHub.svelte` | One catalogue card per returned service descriptor. |
+| `frontend/src/lib/features/tools/presentation.ts` | Stable `/tools/<tool_code>` frontend route construction. |
+| `frontend/src/routes/(app)/tools/[tool_code]/+page.svelte` | Dynamic per-service Tool host route. |
 | `frontend/src/lib/components/ui/DocsLink.svelte` | Language-aware documentation URLs and an optional localized fallback. |
 
 See also the [shared registry pattern](registry_pattern.md). Tools specialize that registry rather than inheriting provider capabilities.
@@ -50,22 +59,29 @@ See also the [shared registry pattern](registry_pattern.md). Tools specialize th
 
 ### 🏷️ Metadata
 
-`ToolPlugin[InputT: BaseModel, OutputT: BaseModel]` declares the following class attributes:
+The packaged plugin and its public services are distinct contract levels. `ToolPlugin` owns the package-wide versions and a nonempty `services: tuple[ToolService, ...]`; each `ToolService` is one complete public calculation.
 
-| Attribute | Contract |
-|-----------|----------|
-| `tool_code` | Stable identifier matching `[a-z][a-z0-9_]*`, at most 64 characters. |
-| `contract_version` | Semantic version of the public calculation contract. |
-| `implementation_version` | Separate semantic version identifying the implementation. |
-| `name`, `description` | Required human-readable metadata. |
-| `name_i18n_key`, `description_i18n_key` | Optional translation keys; both default to `None`. Preserve them in catalogue and frontend integration. |
-| `category`, `icon_key` | Required identifiers using the Tool code format. |
-| `ui` | Explicit `ToolUIDescriptor` with `kind="custom"`, a `component_key`, and `ui_contract_version`. The current integration contract uses version `1`. |
-| `documentation` | `ToolDocumentation(path=..., version=...)`, pointing to a real documentation destination. |
-| `operations` | A tuple of `ToolOperationPolicy` objects with unique operation names. |
-| `input_type`, `output_type` | Real Pydantic model types or supported model-union type expressions, used to construct `TypeAdapter` instances. |
+| Owner | Attribute | Contract |
+|-------|-----------|----------|
+| Packaged plugin | `contract_version` | String SemVer copied into every service descriptor in the package. |
+| Packaged plugin | `implementation_version` | Separate string SemVer for the packaged implementation, also copied into every service descriptor. |
+| Packaged plugin | `services` | One to sixteen statically declared `ToolService` values. |
+| Service | `tool_code` | Stable identifier matching `[a-z][a-z0-9_]*`, at most 64 characters. |
+| Service | `name`, `description` | Required human-readable metadata. |
+| Service | `name_i18n_key`, `description_i18n_key` | Optional translation keys; both default to `None`. Preserve them in catalogue and frontend integration. |
+| Service | `category`, `icon_key` | Required identifiers using the Tool code format. |
+| Service | `ui` | `ToolUIDescriptor(kind="custom", component_key=..., version="1.0.0")`, with a service-owned string SemVer at `ui.version`. |
+| Service | `documentation` | `ToolDocumentation(path=..., version=...)`, pointing to a real documentation destination. |
+| Service | `operations` | A nonempty tuple of `ToolOperationPolicy` objects with unique operation names. |
+| Service | `input_type`, `output_type` | Real Pydantic model types or supported model-union type expressions, used to construct `TypeAdapter` instances. |
 
-The UI descriptor requires an explicit positive version; the DTO alone does not prove that a frontend supports that version. A `component_key` is an identifier for a compiled renderer, not a module URL.
+`contract_version` and `implementation_version` belong to `ToolPlugin`, so every service in one packaged class shares them. UI compatibility is independent: each service owns `ToolUIDescriptor.version`, serialized as `descriptor.ui.version`. It is a SemVer string, not a numeric compatibility flag, and it does **not** inherit from or have to equal `implementation_version`, even when their current values happen to match.
+
+One package may therefore expose multiple complete service definitions and tool codes. The registry expands them independently; the catalogue publishes one descriptor per service; the frontend renders one catalogue card and `/tools/<tool_code>` route per descriptor; and compute resolves the submitted `tool_code` to that service's adapters and policy. These identities share the generic `/api/v1/tools/*` transport routes, not a service-specific backend endpoint.
+
+The current `PacAllocatorTool` demonstrates the model: one packaged class declares `pac_allocator` and `portfolio_rebalancer`, each with its own name, description, category/icon, policies, input/output models, UI descriptor, and documentation descriptor. Its synchronous dispatcher accepts the service code so it cannot confuse the two model pairs.
+
+A `component_key` is an identifier for a source-owned compiled renderer, not a module URL. The descriptor alone does not prove that the current frontend bundle contains a compatible registration.
 
 Documentation paths are relative, extensionless documentation routes. They cannot start with `/` or `mkdocs/`, contain empty interior segments, `.` or `..`, or include a URL, query, fragment, or escape. Documentation has its own semantic version; it is not the schema fingerprint.
 
@@ -83,7 +99,7 @@ Pydantic types are the canonical source for both validation and published schema
 
 ### ⏱️ Synchronous computation
 
-Implement synchronous `compute(parameters, context)` and return a `BaseModel` result belonging to the output contract. Coroutine implementations are rejected during definition validation.
+Implement synchronous `compute(tool_code, parameters, context)` and return a complete `BaseModel` result belonging to the selected service's output contract. Dispatch only declared service-code and input-model combinations. Coroutine implementations are rejected during definition validation.
 
 The class must be constructible with no arguments. Discovery checks this with signature binding without constructing the plugin. Worker construction is a single attempt; the Tool registry's instance helper likewise does not retry a constructor after `TypeError`.
 
@@ -93,23 +109,23 @@ A reusable calculation library can accept a no-argument checkpoint callback with
 
 ## 🔎 Discovery and version lifecycle
 
-`ToolPluginRegistry` extends `AbstractPluginRegistry`, selects the `tool_plugins` discovery folder, and uses `tool_code` as its identifier. Register packaged classes with `register_plugin(ToolPluginRegistry)`.
+`ToolPluginRegistry` extends `AbstractPluginRegistry`, selects the `tool_plugins` discovery folder, and registers packaged classes with `register_plugin(ToolPluginRegistry)`. Its static declaration is the `services` tuple; publication expands each service into a definition keyed by that service's `tool_code`.
 
 Discovery is transactional:
 
 1. The shared registry discovers modules; Tool registration stages claims attributed to the calling module, not merely to a class's mutable `__module__`.
-2. Canonical code collisions are collected across all claims, including claims made by a module whose import subsequently failed.
+2. Every packaged claim is expanded into its declared services. Canonical code collisions are collected across all service claims, including claims made by a module whose import subsequently failed.
 3. **Every claimant to a duplicate code is quarantined.** There is no first-wins or last-wins selection. Resolution prioritizes `duplicate_code`, then `import_failed`, then definition validation.
 4. Claims from failed imports cannot become usable partial registrations. Unrelated healthy definitions remain available.
-5. Publication creates a code-sorted, read-only definition mapping and a tuple of sanitized failures. New registration claims are closed after publication.
+5. Publication creates a code-sorted, read-only service-definition mapping and a tuple of sanitized failures. New registration claims are closed after publication.
 
-Definition validation checks a concrete `ToolPlugin` class, synchronous computation, the zero-argument constructor signature, real adapters, schema validity, operation agreement, and descriptor metadata. The shared registry keeps its existing domain base-class aliases lazy; importing the registry is not permission for a Tool to import or use provider services.
+Each expanded definition retains both the packaged class and its `ToolService`. Definition validation checks a concrete `ToolPlugin` class, synchronous computation, the zero-argument constructor signature, real adapters, schema validity, operation agreement, and the service's complete descriptor metadata. One invalid service is quarantined without hiding a healthy sibling service. The shared registry keeps its existing domain base-class aliases lazy; importing the registry is not permission for a Tool to import or use provider services.
 
 The schema fingerprint is SHA-256 over canonical JSON containing `input_schema`, `output_schema`, and sorted operation names. It is generated from the schemas, not supplied by a plugin author. Input schemas use Pydantic's **validation** mode; output schemas use **serialization** mode. Both include the Draft 2020-12 `$schema` declaration.
 
 Only resolvable local references are accepted, including discriminator mappings. `$id`, `$dynamicRef`, and `$recursiveRef` are rejected. There is no additional `jsonschema` validator dependency: Pydantic and `TypeAdapter` remain the schema source and validators.
 
-Keep contract and implementation versions deliberate. A fingerprint detects schema/operation changes, not every implementation change. A version pin is a consistency check, not automatic compatibility negotiation or hot replacement.
+The registry constructs each descriptor with package-owned `contract_version` and `implementation_version`, service-owned `ui` and `documentation`, and a generated fingerprint. Keep all four version/fingerprint concerns deliberate: a fingerprint detects schema/operation changes, the implementation pin identifies the live packaged code, and `descriptor.ui.version` selects a compatible compiled UI contract. None is automatic compatibility negotiation or hot replacement.
 
 The catalogue publishes full schemas, including their local definitions and references. It clamps operation limits to the platform policy and reserves output time within the hard deadline. An unusable effective operation policy makes that definition unavailable in the catalogue projection. Effective limit values are not additional inputs to the schema fingerprint.
 
@@ -119,7 +135,7 @@ The route module declares handlers on a `/tools` router. `api/v1/router.py` incl
 
 | Method and path | Purpose |
 |-----------------|---------|
-| `GET /api/v1/tools/catalog` | Catalogue version `"1"`, effective policy, full descriptors, and coarse unavailable summaries. |
+| `GET /api/v1/tools/catalog` | Catalogue version `"2"`, effective policy, one full descriptor per healthy service, and coarse unavailable summaries. |
 | `POST /api/v1/tools/compute` | One heterogeneous batch of atomic calculation items. |
 | `GET /api/v1/tools/diagnostics` | Sanitized, read-only diagnostics for the API process handling the request. |
 
@@ -182,7 +198,9 @@ Before dispatch, validation must be a gate, not a scenario rewrite. Preserve the
 
 ### ⚙️ Generation requirements
 
-The API-sync integration must root the real Tool adapters in a **build-only OpenAPI-like document with `paths: {}`**, then generate strict Tool codecs, transport types, and a literal Tool map. This is a generation requirement, not a runtime schema endpoint or a claim that generation has run.
+`schema_export.py` roots the real registry adapters in a **build-only OpenAPI 3.1 document with `paths: {}`**. It emits one manifest entry per `(tool_code, contract_version)` service identity with the schema fingerprint, `componentKey`, `uiVersion`, operation names, and separate validation/serialization schema roots. This is a build artifact, not a runtime schema endpoint.
+
+`frontend/scripts/generate-tools-client.mjs` validates that manifest, generates strict Zod transport and service codecs, and publishes `generated-tools.ts` with `tool-contract-map.generated.ts` as one generation. The literal map is keyed by service code and contract version and points to that service's input/output codecs. `implementation_version` is intentionally not a renderer or codec key; the client reads it from the live descriptor and pins it separately in every compute request.
 
 Cross-language acceptance must match for valid inputs, valid outputs, and error envelopes:
 
@@ -250,7 +268,7 @@ The following are initial `ToolPlatformPolicy` defaults, not measured throughput
 | Cleanup / response reserve | 2 s / 2 s |
 | Server request / Tool-specific client budget | 20 s / 25 s |
 
-The policy validates budget and envelope coherence. Catalogue operation limits can be stricter than platform limits. The client budget in this DTO is an integration setting, not evidence that a particular frontend client already applies it.
+The policy validates budget and envelope coherence. Catalogue operation limits can be stricter than platform limits. The frontend Tool client applies `client_timeout_ms` to the compute request; it remains a client transport budget, not a throughput or completion guarantee.
 
 ### 📊 Timing metrics
 
@@ -262,9 +280,11 @@ Do not sum parallel item durations and label the sum as request latency: their e
 
 ## 🖥️ Frontend and documentation
 
-Frontend integration must resolve `component_key` through a **compiled literal map of custom components**. A server descriptor must never select an arbitrary module URL. An unknown renderer or unsupported UI contract version makes the Tool unavailable; it must not trigger a generic generated form.
+Frontend compatibility first resolves the exact service code and contract version in the generated contract map, then compares the schema fingerprint, `descriptor.ui.component_key`, string SemVer `descriptor.ui.version`, and operation set. The request separately pins the live `descriptor.implementation_version`; UI version is never inferred from it.
 
-The custom component owns domain-specific input and result presentation while the backend owns the calculation. A descriptor and schema do not demonstrate that a corresponding UI, solver, or end-to-end pilot exists.
+`registry.ts` accepts only source-owned literal component imports. A registration repeats the service code, contract version, component key, and UI SemVer and must agree with the generated contract before it can bind a catalogue descriptor. Duplicate code/version registrations, cross-tool component-key collisions, missing registrations, and mismatches stay unavailable. A server descriptor never becomes an arbitrary module URL, and incompatibility never falls back to a generic generated financial form.
+
+The current compiled registry binds separate components for `pac_allocator` and `portfolio_rebalancer`, matching the two services exposed by the same backend package. Each custom component owns domain-specific input and result presentation while the backend owns the calculation. A future descriptor and schema still do not make a new service usable until its generated contract and compiled renderer registration are present and compatible.
 
 Use `DocsLink` for documentation destinations. It builds `/mkdocs/` URLs from the current language and a relative path rather than forcing English. For an EN-only destination, a caller can supply an existing localized destination through `localizedFallbackPath`; the helper selects that fallback for non-English languages. It does not discover missing pages automatically.
 
@@ -275,10 +295,10 @@ Keep submitted financial data out of documentation URLs, logs, and HTML attribut
 The following work must be completed and verified before presenting a new Tool as available:
 
 - [ ] Define the atomic boundary and pack every required input before dispatch. Exclude ambient authority and side effects.
-- [ ] Declare all metadata, including optional i18n keys where provided, explicit custom UI metadata, documentation, and version pins.
+- [ ] Declare package-wide contract/implementation versions and a nonempty service tuple; give every service complete metadata, policies, models, UI SemVer, and documentation.
 - [ ] Define strict nested models, operation discriminators without defaults, and matching operation policies.
-- [ ] Register the packaged class and verify healthy discovery, failed imports, duplicate-code quarantine, invalid definitions, and closed registration.
-- [ ] Implement a zero-argument constructor and synchronous computation with bounded checkpoints and job-scoped child work.
+- [ ] Register the packaged class and verify service expansion, healthy siblings, failed imports, duplicate-code quarantine, invalid definitions, and closed registration.
+- [ ] Implement a zero-argument constructor and synchronous code-based dispatch with bounded checkpoints and job-scoped child work.
 - [ ] Verify input/output adapters, schema references, fingerprints, Unicode and byte limits, safe errors, and unchanged caller scenarios.
 - [ ] Integrate generated codecs and the compiled renderer map; verify acceptance parity, unsupported renderer/version handling, and language-aware documentation links.
 - [ ] Verify authenticated route mounting, response order/cardinality/pins, platform-versus-domain outcomes, and process-local diagnostic privacy.

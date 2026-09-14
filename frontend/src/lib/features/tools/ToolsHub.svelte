@@ -221,22 +221,23 @@
                     >
                         <div class="flex items-start gap-3">
                             <Icon size={22} class="shrink-0 text-libre-green dark:text-green-400" aria-hidden="true" />
-                            <div class="min-w-0 flex-1">
-                                <h2 class="break-words font-semibold text-gray-900 dark:text-gray-100">{toolName(descriptor, $t)}</h2>
-                                <p class="mt-2 break-words text-sm text-gray-600 dark:text-gray-400">{toolDescription(descriptor, $t)}</p>
-                            </div>
+                            <h2 class="min-w-0 flex-1 break-words font-semibold text-gray-900 dark:text-gray-100">{toolName(descriptor, $t)}</h2>
                             {#if documentation}
                                 <span class="relative z-20 shrink-0">
                                     <DocsLink path={documentation} label={$t('common.documentation')} labelDisplay="responsive" icon="book" size={18} testId={`tool-docs-${descriptor.tool_code}`} />
                                 </span>
                             {:else}
-                                <span class="relative z-20 text-xs text-gray-500 dark:text-gray-400" data-testid="tool-docs-unavailable">
+                                <span class="relative z-20 shrink-0 text-xs text-gray-500 dark:text-gray-400" data-testid="tool-docs-unavailable">
                                     {$t('tools.documentationUnavailable', {default: 'Documentation link unavailable'})}
                                 </span>
                             {/if}
                         </div>
-                        <p class="break-words text-xs text-gray-500 dark:text-gray-400">
-                            {$t('tools.version', {default: 'Version'})}: {descriptor.contract_version}
+                        <p class="break-words text-sm text-gray-600 dark:text-gray-400">{toolDescription(descriptor, $t)}</p>
+                        <p class="break-words text-xs text-gray-500 dark:text-gray-400" data-testid="tool-compatibility-versions">
+                            {$t('tools.backendVersion', {default: 'Backend/API'})}
+                            {descriptor.contract_version}
+                            · {$t('tools.uiVersion', {default: 'UI'})}
+                            {descriptor.ui.version}
                         </p>
                         {#if entry.interfaceState === 'loading'}
                             <p class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400" role="status" data-testid="tool-interface-loading">
@@ -261,7 +262,7 @@
                                 data-testid="tool-open"
                                 data-sveltekit-preload-code="eager"
                             ></a>
-                            <ArrowRight size={18} class="pointer-events-none absolute bottom-5 right-5 text-gray-400 transition group-hover:translate-x-0.5 group-hover:text-libre-green dark:text-gray-500 dark:group-hover:text-green-400" aria-hidden="true" />
+                            <ArrowRight size={18} class="pointer-events-none absolute bottom-5 right-5 text-libre-green transition-transform group-hover:translate-x-1 dark:text-green-400" aria-hidden="true" data-testid="tool-open-arrow" />
                         {/if}
                     </li>
                 {/each}

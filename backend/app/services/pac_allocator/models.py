@@ -1,4 +1,4 @@
-"""Immutable numeric state shared by normalization and initial evaluation."""
+"""Immutable numeric state shared by allocation normalization and evaluation."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Callable
 
-from backend.app.schemas.pac_allocator import FactReason, GridMode, PacAnalyzeIssue
+from backend.app.schemas.pac_allocator import AllocationIssue, FactReason, GridMode
 
 Checkpoint = Callable[[], None]
 
@@ -28,6 +28,19 @@ class ParsedValue[T]:
 
 
 @dataclass(frozen=True, slots=True)
+class ParsedGrid:
+    mode: GridMode | None
+    step: ParsedValue[Decimal]
+
+
+@dataclass(frozen=True, slots=True)
+class ParsedAsset:
+    instrument_key: str
+    name: str | None
+    grid: ParsedGrid | None
+
+
+@dataclass(frozen=True, slots=True)
 class ParsedQuote:
     price: ParsedValue[Decimal]
     currency: ParsedValue[str]
@@ -37,20 +50,19 @@ class ParsedQuote:
 
 
 @dataclass(frozen=True, slots=True)
-class ParsedGrid:
-    mode: GridMode | None
-    step: ParsedValue[Decimal]
-
-
-@dataclass(frozen=True, slots=True)
-class ParsedRow:
+class ParsedHolding:
     row_key: str
     instrument_key: str
     name: str | None
     quantity: ParsedValue[Decimal]
     quote: ParsedQuote
-    target: ParsedValue[Decimal]
-    grid: ParsedGrid
+    grid: ParsedGrid | None
+
+
+@dataclass(frozen=True, slots=True)
+class ParsedTarget:
+    instrument_key: str
+    percent: ParsedValue[Decimal]
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,7 +86,10 @@ class ParsedContributionVector:
         return tuple((currency, amount) for currency, amount, _monetary_step in self.entries)
 
     def amounts(self) -> dict[str, Decimal]:
-        return dict(self.amount_entries())
+        totals: dict[str, Decimal] = {}
+        for currency, amount in self.amount_entries():
+            totals[currency] = totals.get(currency, Decimal(0)) + amount
+        return totals
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,7 +100,15 @@ class ParsedRate:
 
 
 @dataclass(frozen=True, slots=True)
-class InitialRow:
+class PacAsset:
+    instrument_key: str
+    name: str
+    grid_mode: GridMode | None
+    quantity_step: Decimal | None
+
+
+@dataclass(frozen=True, slots=True)
+class Holding:
     row_key: str
     instrument_key: str
     name: str
@@ -94,55 +117,125 @@ class InitialRow:
     currency: str
     quote_base_quantity: int
     reference_date: date | None
-    target_percent: Decimal
-    grid_mode: GridMode
-    quantity_step: Decimal
+    grid_mode: GridMode | None
+    quantity_step: Decimal | None
 
 
 @dataclass(frozen=True, slots=True)
-class InitialState:
+class Target:
+    instrument_key: str
+    percent: Decimal
+
+
+@dataclass(frozen=True, slots=True)
+class PacScenario:
     report_currency: str
     as_of_date: date | None
-    rows: tuple[InitialRow, ...]
+    assets: tuple[PacAsset, ...]
+    targets: tuple[Target, ...]
     cash_balances: tuple[tuple[str, Decimal], ...]
     contributions: tuple[tuple[str, Decimal, Decimal], ...]
     valuation_rates: tuple[ParsedRate, ...]
 
 
 @dataclass(frozen=True, slots=True)
-class NormalizationResult:
+class RebalanceScenario:
+    report_currency: str
+    as_of_date: date | None
+    holdings: tuple[Holding, ...]
+    targets: tuple[Target, ...]
+    cash_balances: tuple[tuple[str, Decimal], ...]
+    contributions: tuple[tuple[str, Decimal, Decimal], ...]
+    valuation_rates: tuple[ParsedRate, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class PacNormalizationResult:
     report_currency: ParsedValue[str]
     as_of_date: date | None
-    rows: tuple[ParsedRow, ...]
+    assets: tuple[ParsedAsset, ...]
+    targets: tuple[ParsedTarget, ...]
+    cash: ParsedMoneyVector
+    contributions: ParsedContributionVector
+    rates: tuple[ParsedRate, ...]
+    currencies: tuple[str, ...]
+    currency_domain_valid: bool
+    asset_identity_valid: bool
+    target_identity_valid: bool
+    target_total: ParsedValue[Decimal]
+    targets_valid: bool
+    issues: tuple[AllocationIssue, ...]
+    normalized: PacScenario | None
+
+    def rate_map(self) -> dict[str, ParsedValue[Decimal]]:
+        return {item.currency: item.rate for item in self.rates}
+
+    def target_map(self) -> dict[str, ParsedValue[Decimal]]:
+        return {item.instrument_key: item.percent for item in self.targets}
+
+
+@dataclass(frozen=True, slots=True)
+class RebalanceNormalizationResult:
+    report_currency: ParsedValue[str]
+    as_of_date: date | None
+    holdings: tuple[ParsedHolding, ...]
+    targets: tuple[ParsedTarget, ...]
     cash: ParsedMoneyVector
     contributions: ParsedContributionVector
     rates: tuple[ParsedRate, ...]
     currencies: tuple[str, ...]
     currency_domain_valid: bool
     row_identity_valid: bool
+    target_identity_valid: bool
     target_total: ParsedValue[Decimal]
     targets_valid: bool
-    issues: tuple[PacAnalyzeIssue, ...]
-    normalized: InitialState | None
+    issues: tuple[AllocationIssue, ...]
+    normalized: RebalanceScenario | None
 
     def rate_map(self) -> dict[str, ParsedValue[Decimal]]:
         return {item.currency: item.rate for item in self.rates}
 
+    def target_map(self) -> dict[str, ParsedValue[Decimal]]:
+        return {item.instrument_key: item.percent for item in self.targets}
+
+
+type NormalizationResult = PacNormalizationResult | RebalanceNormalizationResult
+
 
 @dataclass(frozen=True, slots=True)
-class InitialRowEvaluation:
+class MoneyEvaluation:
+    existing_cash: ParsedValue[Decimal]
+    contributions: ParsedValue[Decimal]
+    combined_cash: ParsedValue[Decimal]
+
+
+@dataclass(frozen=True, slots=True)
+class PacEvaluation:
+    money: MoneyEvaluation
+    allocations: tuple[ParsedValue[Decimal], ...]
+
+
+@dataclass(frozen=True, slots=True)
+class HoldingEvaluation:
     native_value: ParsedValue[Decimal]
     reporting_value: ParsedValue[Decimal]
 
 
 @dataclass(frozen=True, slots=True)
-class InitialEvaluation:
-    rows: tuple[InitialRowEvaluation, ...]
+class InstrumentEvaluation:
+    instrument_key: str
+    current_reporting: ParsedValue[Decimal]
+    target_value_reporting: ParsedValue[Decimal]
+    value_gap_reporting: ParsedValue[Decimal]
+    gap_numerator: Decimal | None
+
+
+@dataclass(frozen=True, slots=True)
+class RebalanceEvaluation:
+    holdings: tuple[HoldingEvaluation, ...]
+    instruments: tuple[InstrumentEvaluation, ...]
     invested: ParsedValue[Decimal]
-    existing_cash: ParsedValue[Decimal]
-    contributions: ParsedValue[Decimal]
-    combined_cash: ParsedValue[Decimal]
-    gap_numerators: tuple[Decimal, ...] | None
+    money: MoneyEvaluation
     max_gap_numerator: Decimal | None
     squared_gap_numerator: Decimal | None
 

@@ -106,7 +106,6 @@ function usageScopeValue(value: unknown): PacAllocationUsageScope {
 }
 
 function arrayValue(value: unknown): readonly unknown[] {
-    if (value === undefined) return [];
     if (!Array.isArray(value)) throw new ToolClientError('protocol', 'invalid_response');
     return value;
 }

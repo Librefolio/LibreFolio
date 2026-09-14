@@ -6,27 +6,27 @@
     import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
     import {currencyStoreVersion, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
-    import {AlertTriangle, Check, Landmark, LoaderCircle, PencilLine, Plus, RefreshCw, Trash2} from 'lucide-svelte';
+    import {Check, Info, Landmark, LoaderCircle, PencilLine, Plus, RefreshCw, Trash2} from 'lucide-svelte';
     import type {PacAllocationSourceCashSource} from './allocationSource';
     import type {PacCashSourceState, PacContributionInput, PacContributionMode, PacMoneyInput} from './editorTypes';
 
     type CashMode = PacCashSourceState['mode'];
     type MoneyMode = CashMode | PacContributionMode;
-    type PacMoneyEditorValue = PacMoneyInput & {monetary_step?: PacContributionInput['monetary_step']};
+    type MoneyEditorValue = PacMoneyInput & {monetary_step?: PacContributionInput['monetary_step']};
 
     interface Props {
         kind: 'cash' | 'contributions';
         title: string;
         description: string;
         mode: MoneyMode;
-        values: PacMoneyEditorValue[];
+        values: MoneyEditorValue[];
         cashSources?: readonly PacAllocationSourceCashSource[];
         selectedBrokerIds?: readonly number[];
-        aggregatedBalances?: readonly PacMoneyInput[];
         sourceLoading?: boolean;
         sourceError?: string | null;
         sourceStale?: boolean;
         disabled?: boolean;
+        maxEntries?: number;
         onmodechange?: (mode: MoneyMode) => void;
         onadd: () => void;
         onremove: (index: number) => void;
@@ -43,11 +43,11 @@
         values,
         cashSources = [],
         selectedBrokerIds = [],
-        aggregatedBalances = [],
         sourceLoading = false,
         sourceError = null,
         sourceStale = false,
         disabled = false,
+        maxEntries = 4,
         onmodechange = () => {},
         onadd,
         onremove,
@@ -79,7 +79,7 @@
         </div>
         {#if kind === 'cash'}
             <button
-                class="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-libre-green/70 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-8 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
+                class="inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-md border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 transition hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-libre-green/70 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
                 type="button"
                 {disabled}
                 onclick={() => onmodechange(mode === 'broker_copy' ? 'manual' : 'broker_copy')}
@@ -90,7 +90,7 @@
                     {$t('tools.pacAllocator.cash.enterAmounts')}
                 {:else}
                     <Landmark size={14} />
-                    {$t('tools.pacAllocator.cash.backToBrokers', {default: 'Back to brokers'})}
+                    {$t('tools.pacAllocator.cash.backToBrokers', {default: 'Use Broker reserves'})}
                 {/if}
             </button>
         {/if}
@@ -101,14 +101,29 @@
             {#if sourceLoading && cashSources.length === 0}
                 <div class="flex min-h-20 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-gray-50 text-xs text-gray-500 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-400" data-testid="pac-cash-sources-loading">
                     <LoaderCircle class="animate-spin" size={18} />
-                    <span>{$t('tools.pacAllocator.cash.loadingBrokerCash', {default: 'Loading broker cash balances…'})}</span>
+                    <span>{$t('tools.pacAllocator.cash.loadingBrokerCash', {default: 'Loading Broker reserves…'})}</span>
+                </div>
+            {:else if sourceError && cashSources.length === 0}
+                <div class="flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-200" role="alert" data-testid="pac-cash-source-error">
+                    <span>{sourceError}</span>
+                    <Tooltip text={$t('common.retry')} position="top" interactiveChild>
+                        <button
+                            class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-red-700 transition hover:bg-red-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/70 disabled:opacity-50 dark:text-red-200 dark:hover:bg-red-900/40"
+                            type="button"
+                            onclick={onretry}
+                            data-testid="pac-cash-source-retry"
+                            aria-label={$t('common.retry')}
+                        >
+                            <RefreshCw size={14} />
+                        </button>
+                    </Tooltip>
                 </div>
             {:else if cashSources.length === 0}
                 <div class="rounded-lg border border-dashed border-gray-300 px-3 py-4 text-center text-xs text-gray-500 dark:border-gray-700 dark:text-gray-400" data-testid="pac-cash-sources-empty">
-                    {$t('tools.pacAllocator.cash.noOwnerBrokers', {default: 'No OWNER brokers are available. Use manual cash entry instead.'})}
+                    {$t('tools.pacAllocator.cash.noOwnerBrokers', {default: 'No OWNER Broker is available. Enter cash manually.'})}
                 </div>
             {:else}
-                <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-3" data-testid="pac-cash-sources">
+                <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-3" data-testid="pac-cash-sources" aria-busy={sourceLoading}>
                     {#each cashSources as source (source.brokerId)}
                         {@const selected = isSelected(source.brokerId)}
                         <button
@@ -132,7 +147,10 @@
                                         <Check size={13} strokeWidth={3} />
                                     </span>
                                 </span>
-                                <span class="mt-2 flex flex-wrap gap-1.5 text-[11px]">
+                                <span class="mt-2 block text-[10px] font-medium text-gray-500 dark:text-gray-400">
+                                    {$t('tools.pacAllocator.cash.fullNativeReserve', {default: 'Full native reserve'})}
+                                </span>
+                                <span class="mt-1 flex flex-wrap gap-1.5 text-[11px]">
                                     {#each source.balances as balance (`${source.brokerId}:${balance.currency}`)}
                                         <span class="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-gray-700 dark:bg-gray-800 dark:text-gray-200">
                                             {#if currencyFlag(balance.currency)}<span class="emoji-flag" aria-hidden="true">{currencyFlag(balance.currency)}</span>{/if}
@@ -140,7 +158,7 @@
                                             <span class="font-mono">{displayDecimal(balance.amount)}</span>
                                         </span>
                                     {:else}
-                                        <span class="text-gray-500 dark:text-gray-400">{$t('tools.pacAllocator.cash.noNativeBalances', {default: 'No native balances'})}</span>
+                                        <span class="text-gray-500 dark:text-gray-400">{$t('tools.pacAllocator.cash.noNativeBalances', {default: 'No native reserve'})}</span>
                                     {/each}
                                 </span>
                             </span>
@@ -149,56 +167,33 @@
                 </div>
             {/if}
 
-            {#if sourceError}
+            {#if sourceLoading && cashSources.length > 0}
+                <p class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400" role="status" data-testid="pac-cash-source-pending">
+                    <LoaderCircle class="animate-spin" size={14} />
+                    {$t('tools.pacAllocator.cash.refreshingSelection', {default: 'Updating selected native reserves…'})}
+                </p>
+            {:else if sourceError && !sourceStale}
                 <div class="flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-200" role="alert" data-testid="pac-cash-source-error">
                     <span>{sourceError}</span>
                     <Tooltip text={$t('common.retry')} position="top" interactiveChild>
                         <button
-                            class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-red-700 transition hover:bg-red-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/70 disabled:opacity-50 sm:h-8 sm:w-8 dark:text-red-200 dark:hover:bg-red-900/40"
+                            class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-red-700 transition hover:bg-red-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/70 disabled:opacity-50 dark:text-red-200 dark:hover:bg-red-900/40"
                             type="button"
                             onclick={onretry}
-                            disabled={sourceLoading}
                             data-testid="pac-cash-source-retry"
                             aria-label={$t('common.retry')}
                         >
-                            <RefreshCw class={sourceLoading ? 'animate-spin' : ''} size={14} />
+                            <RefreshCw size={14} />
                         </button>
                     </Tooltip>
                 </div>
             {/if}
-
-            <div class="rounded-lg border border-gray-200 bg-gray-50 p-2.5 dark:border-gray-700 dark:bg-gray-900/50" data-testid="pac-cash-backend-aggregate">
-                <div class="flex items-center justify-between gap-3">
-                    <span class="text-xs font-semibold text-gray-700 dark:text-gray-200">{$t('tools.pacAllocator.cash.selectedReserves', {default: 'Selected native reserves'})}</span>
-                    {#if sourceLoading}
-                        <LoaderCircle class="animate-spin text-gray-400" size={15} />
-                    {/if}
-                </div>
-                {#if sourceStale}
-                    <p class="mt-2 flex items-start gap-2 text-xs text-amber-800 dark:text-amber-200" data-testid="pac-cash-source-stale">
-                        <AlertTriangle class="mt-0.5 shrink-0" size={14} />
-                        <span>{$t('tools.pacAllocator.cash.sourceStale', {default: 'Waiting for current broker balances. The previous snapshot will not be submitted.'})}</span>
-                    </p>
-                {:else}
-                    <div class="mt-2 flex flex-wrap gap-2">
-                        {#each aggregatedBalances as balance (balance.currency)}
-                            <span class="inline-flex items-center gap-1 rounded-full bg-white px-2 py-1 text-xs font-medium text-gray-800 shadow-sm dark:bg-gray-800 dark:text-gray-100" data-testid={`pac-cash-aggregate-${balance.currency}`}>
-                                {#if currencyFlag(balance.currency)}<span class="emoji-flag" aria-hidden="true">{currencyFlag(balance.currency)}</span>{/if}
-                                <span>{balance.currency}</span>
-                                <span class="font-mono">{displayDecimal(balance.amount)}</span>
-                            </span>
-                        {:else}
-                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('tools.pacAllocator.cash.noSelectedBalances', {default: 'No selected broker balance.'})}</span>
-                        {/each}
-                    </div>
-                {/if}
-            </div>
         </div>
     {:else if kind === 'contributions' && values.length === 0}
         <div class="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-2.5 dark:border-gray-700 dark:bg-gray-900/40" data-testid="pac-contributions-empty">
             <span class="text-xs text-gray-600 dark:text-gray-300">{$t('tools.pacAllocator.cash.noneContributions')}</span>
             <button
-                class="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-md border border-libre-green bg-libre-green px-2.5 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-libre-green/70 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-8 dark:text-gray-950"
+                class="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md border border-libre-green bg-libre-green px-2.5 py-1 text-xs font-semibold text-white transition hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-libre-green/70 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-950"
                 type="button"
                 onclick={onadd}
                 {disabled}
@@ -211,8 +206,32 @@
     {:else}
         <div class="mt-3 space-y-2">
             {#each values as money, index}
-                <div class={kind === 'contributions' ? 'grid grid-cols-[minmax(0,1fr)_auto] gap-2 sm:grid-cols-[minmax(8rem,1fr)_minmax(0,2fr)_minmax(0,2fr)_auto]' : 'grid grid-cols-[minmax(8rem,1fr)_minmax(0,2fr)_auto] gap-2'} data-testid={`pac-${kind}-row`}>
-                    <div class={kind === 'contributions' ? 'col-start-1 row-start-1 sm:col-auto sm:row-auto' : ''}>
+                <div
+                    class={kind === 'contributions'
+                        ? 'grid grid-cols-[minmax(0,1fr)_auto] gap-2 rounded-lg border border-gray-200 p-2 sm:grid-cols-[minmax(9rem,1.4fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_auto] sm:items-end dark:border-gray-700'
+                        : 'grid grid-cols-[minmax(0,1fr)_auto] gap-2 sm:grid-cols-[minmax(9rem,1.4fr)_minmax(8rem,1fr)_auto] sm:items-end'}
+                    data-testid={`pac-${kind}-row`}
+                >
+                    <label class="min-w-0 text-xs font-medium text-gray-600 dark:text-gray-300">
+                        <span class="mb-1 block">{$t('tools.pacAllocator.cash.amount')}</span>
+                        <ExactDecimalInput
+                            value={money.amount ?? ''}
+                            step="0.01"
+                            maxIntegerDigits={12}
+                            maxFractionDigits={12}
+                            placeholder="0,00"
+                            ariaLabel={$t('tools.pacAllocator.cash.amount')}
+                            testid={`pac-${kind}-amount-${index}`}
+                            className="min-h-9 !px-2 !py-1.5 text-sm"
+                            {disabled}
+                            onchange={(value) => {
+                                money.amount = value;
+                                onchange();
+                            }}
+                        />
+                    </label>
+                    <label class="min-w-0 text-xs font-medium text-gray-600 dark:text-gray-300">
+                        <span class="mb-1 block">{$t('common.currency')}</span>
                         <CurrencySearchSelect
                             value={money.currency ?? ''}
                             compact
@@ -223,46 +242,43 @@
                                 onchange();
                             }}
                         />
-                    </div>
-                    <div class={kind === 'contributions' ? 'col-start-1 row-start-2 sm:col-auto sm:row-auto' : ''}>
-                        <ExactDecimalInput
-                            value={money.amount ?? ''}
-                            step="0.01"
-                            maxIntegerDigits={12}
-                            maxFractionDigits={12}
-                            placeholder={$t('tools.pacAllocator.cash.amount')}
-                            ariaLabel={$t('tools.pacAllocator.cash.amount')}
-                            testid={`pac-${kind}-amount-${index}`}
-                            className="min-h-10 !px-2 !py-1.5 text-sm sm:min-h-9"
-                            {disabled}
-                            onchange={(value) => {
-                                money.amount = value;
-                                onchange();
-                            }}
-                        />
-                    </div>
+                    </label>
                     {#if kind === 'contributions'}
-                        <div class="col-start-1 row-start-3 sm:col-auto sm:row-auto">
+                        <label class="min-w-0 text-xs font-medium text-gray-600 dark:text-gray-300">
+                            <span class="mb-1 inline-flex items-center gap-1">
+                                {$t('tools.pacAllocator.cash.monetaryStep', {default: 'Amount increment'})}
+                                <Tooltip
+                                    text={$t('tools.pacAllocator.cash.monetaryStepHint', {
+                                        default: 'Smallest accepted increment for this contribution, for example 0.01 for cents.',
+                                    })}
+                                    position="top"
+                                    maxWidth="280px"
+                                >
+                                    <button type="button" class="inline-flex text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" aria-label={$t('tools.pacAllocator.cash.monetaryStepHint', {default: 'Smallest accepted increment for this contribution, for example 0.01 for cents.'})}>
+                                        <Info size={13} />
+                                    </button>
+                                </Tooltip>
+                            </span>
                             <ExactDecimalInput
                                 value={money.monetary_step ?? ''}
                                 step="0.01"
                                 maxIntegerDigits={12}
                                 maxFractionDigits={12}
-                                placeholder="0.01"
-                                ariaLabel={$t('tools.pacAllocator.cash.monetaryStep', {default: 'Monetary step'})}
+                                placeholder="0,01"
+                                ariaLabel={$t('tools.pacAllocator.cash.monetaryStep', {default: 'Amount increment'})}
                                 testid={`pac-${kind}-monetary-step-${index}`}
-                                className="min-h-10 !px-2 !py-1.5 text-sm sm:min-h-9"
+                                className="min-h-9 !px-2 !py-1.5 text-sm"
                                 {disabled}
                                 onchange={(value) => {
                                     money.monetary_step = value;
                                     onchange();
                                 }}
                             />
-                        </div>
+                        </label>
                     {/if}
-                    <Tooltip text={$t('common.remove')} position="top" interactiveChild wrapperClass={kind === 'contributions' ? 'col-start-2 row-start-1 row-span-3 self-start sm:col-auto sm:row-auto sm:row-span-1 sm:self-auto' : ''}>
+                    <Tooltip text={$t('common.remove')} position="top" interactiveChild wrapperClass="col-start-2 row-start-1 self-start sm:col-auto sm:row-auto sm:self-end">
                         <button
-                            class="inline-flex h-10 w-10 items-center justify-center rounded-md text-red-600 transition hover:bg-red-50 hover:text-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/70 disabled:cursor-not-allowed disabled:opacity-50 sm:h-9 sm:w-9 dark:text-red-400 dark:hover:bg-red-950/30 dark:hover:text-red-300"
+                            class="inline-flex h-9 w-9 items-center justify-center rounded-md text-red-600 transition hover:bg-red-50 hover:text-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/70 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-950/30 dark:hover:text-red-300"
                             type="button"
                             onclick={() => onremove(index)}
                             {disabled}
@@ -276,10 +292,10 @@
             {/each}
         </div>
         <button
-            class="mt-3 inline-flex min-h-10 items-center justify-center gap-1.5 rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-libre-green/70 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-8 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
+            class="mt-3 inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 transition hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-libre-green/70 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
             type="button"
             onclick={onadd}
-            disabled={disabled || values.length >= 4}
+            disabled={disabled || values.length >= maxEntries}
             data-testid={`pac-add-${kind}`}
         >
             <Plus size={14} />

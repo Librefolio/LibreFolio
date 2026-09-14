@@ -1,4 +1,5 @@
 import {beforeEach, describe, expect, it, vi} from 'vitest';
+import {ToolClientError} from '$lib/features/tools/contracts';
 import {getClientSessionGeneration, transitionClientSession} from '$lib/stores/app/clientSession';
 import {fetchPacAllocationSource} from './allocationSource';
 
@@ -96,6 +97,12 @@ function allocationSourceWire(overrides: Record<string, unknown> = {}): Record<s
     };
 }
 
+function withoutField(source: Record<string, unknown>, field: string): Record<string, unknown> {
+    const result = {...source};
+    delete result[field];
+    return result;
+}
+
 beforeEach(() => {
     reportMock.mockReset();
     safeToolTransportErrorMock.mockClear();
@@ -183,11 +190,14 @@ describe('PAC allocation source', () => {
         });
     });
 
-    it('sends an explicit empty cash-broker selection and defaults omitted top-level arrays', async () => {
+    it('sends an explicit empty cash-broker selection and normalizes explicit empty top-level collections', async () => {
         reportMock.mockResolvedValueOnce({
             allocation_source: {
                 generated_at: '2026-09-11T00:00:00Z',
                 as_of_date: '2026-09-10',
+                assets: [],
+                cash_sources: [],
+                selected_cash_balances: [],
             },
         });
 
@@ -216,7 +226,7 @@ describe('PAC allocation source', () => {
         });
     });
 
-    it('defaults omitted nested arrays and optional broker metadata', async () => {
+    it('normalizes explicit empty nested collections and defaults optional broker metadata', async () => {
         reportMock.mockResolvedValueOnce({
             allocation_source: {
                 generated_at: '2026-09-11T00:00:00Z',
@@ -234,6 +244,7 @@ describe('PAC allocation source', () => {
                             currency: 'EUR',
                             quote_base_quantity: 1,
                         },
+                        contexts: [],
                     },
                 ],
                 cash_sources: [
@@ -241,8 +252,10 @@ describe('PAC allocation source', () => {
                         broker_id: 4,
                         broker_name: 'Metadata-free owner broker',
                         ownership_share_percent: '50',
+                        balances: [],
                     },
                 ],
+                selected_cash_balances: [],
             },
         });
 
@@ -285,6 +298,60 @@ describe('PAC allocation source', () => {
                 },
             ],
             selectedCashBalances: [],
+        });
+    });
+
+    const missingCollectionFieldCases: ReadonlyArray<{
+        name: string;
+        source: () => Record<string, unknown>;
+    }> = [
+        {
+            name: 'root assets collection',
+            source: () => withoutField(allocationSourceWire(), 'assets'),
+        },
+        {
+            name: 'asset contexts collection',
+            source: () =>
+                allocationSourceWire({
+                    assets: [withoutField(assetWire(), 'contexts')],
+                }),
+        },
+        {
+            name: 'root cash_sources collection',
+            source: () => withoutField(allocationSourceWire(), 'cash_sources'),
+        },
+        {
+            name: 'cash-source balances collection',
+            source: () =>
+                allocationSourceWire({
+                    cash_sources: [withoutField(cashSourceWire(), 'balances')],
+                }),
+        },
+        {
+            name: 'root selected_cash_balances collection',
+            source: () => withoutField(allocationSourceWire(), 'selected_cash_balances'),
+        },
+    ];
+
+    it.each(missingCollectionFieldCases)('rejects a missing $name as a protocol error', async ({source}) => {
+        reportMock.mockResolvedValueOnce({allocation_source: source()});
+
+        let error: unknown;
+        try {
+            await fetchPacAllocationSource('2026-09-10', getClientSessionGeneration());
+        } catch (caught) {
+            error = caught;
+        }
+
+        expect(error).toBeInstanceOf(ToolClientError);
+        expect(error).toMatchObject({
+            name: 'ToolClientError',
+            message: 'invalid_response',
+            kind: 'protocol',
+            code: 'invalid_response',
+            httpStatus: undefined,
+            issues: [],
+            issueCount: 0,
         });
     });
 

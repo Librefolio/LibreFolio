@@ -476,3 +476,5 @@ Scenari:
 12. Solo dopo il punto 11 il coordinatore puo proporre D -> target.
 13. Nessun generated/runtime/private artifact staged; nessuna operazione Git
     mutante dall'agente.
+
+→ Follow-up: [Round 4 — PAC + Ribilanciamento P1 multi-servizio](plan-phase00Step2Round4-PacAndRebalancerUiAcceptance.prompt.md)

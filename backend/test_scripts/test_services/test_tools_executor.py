@@ -18,7 +18,7 @@ import threading
 import time
 from collections import deque
 from contextlib import asynccontextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from types import SimpleNamespace
 from typing import Literal
 from uuid import uuid4
@@ -32,12 +32,13 @@ from backend.app.schemas.tools import ToolComputeBatchRequest, ToolComputeItem, 
 from backend.app.services.tools import executor as executor_module
 from backend.app.services.tools import process_tree as tree_module
 from backend.app.services.tools import worker as worker_module
-from backend.app.services.tools.base import ToolExecutionError
+from backend.app.services.tools.base import ToolExecutionError, ToolPlugin
 from backend.app.services.tools.executor import ToolExecutor
 from backend.app.services.tools.registry import build_tool_definition
 from backend.app.services.tools.wire import decode_json, encode_json
 from backend.app.services.tools.worker import PipeCancellation, ToolWorkerJob
 from backend.test_scripts.test_services._tools_executor_fixtures import (
+    FIXTURE_TOOL_CODE,
     FixtureOutput,
     FixturePlugin,
     FixtureRegistry,
@@ -57,11 +58,74 @@ class _AliasedWorkerOutput(BaseModel):
 
 
 class _AliasedWorkerPlugin(FixturePlugin):
-    tool_code = "private_worker_alias"
-    output_type = _AliasedWorkerOutput
+    services = (
+        replace(
+            FixturePlugin.services[0],
+            tool_code="private_worker_alias",
+            ui=FixturePlugin.services[0].ui.model_copy(
+                update={
+                    "component_key": "private-worker-alias",
+                    "version": "2.0.0",
+                }
+            ),
+            output_type=_AliasedWorkerOutput,
+        ),
+    )
 
-    def compute(self, parameters, context):
+    def compute(self, tool_code, parameters, context):
+        assert tool_code == self.services[0].tool_code
         return _AliasedWorkerOutput.model_validate({"status": "ready", "wire_text": parameters.text})
+
+
+class _PrimaryDispatchOutput(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid")
+
+    service: Literal["private_worker_primary"]
+    text: str
+
+
+class _SecondaryDispatchOutput(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid")
+
+    service: Literal["private_worker_secondary"]
+    length: int
+
+
+class _TwoServiceWorkerPlugin(ToolPlugin):
+    contract_version = "3.2.1"
+    implementation_version = "7.8.9"
+    services = (
+        replace(
+            FixturePlugin.services[0],
+            tool_code="private_worker_primary",
+            ui=FixturePlugin.services[0].ui.model_copy(
+                update={
+                    "component_key": "private-worker-primary",
+                    "version": "3.0.0",
+                }
+            ),
+            output_type=_PrimaryDispatchOutput,
+        ),
+        replace(
+            FixturePlugin.services[0],
+            tool_code="private_worker_secondary",
+            ui=FixturePlugin.services[0].ui.model_copy(
+                update={
+                    "component_key": "private-worker-secondary",
+                    "version": "4.1.0",
+                }
+            ),
+            output_type=_SecondaryDispatchOutput,
+        ),
+    )
+
+    def compute(self, tool_code, parameters, context):
+        context.checkpoint()
+        if tool_code == "private_worker_primary":
+            return _PrimaryDispatchOutput(service=tool_code, text=parameters.text)
+        if tool_code == "private_worker_secondary":
+            return _SecondaryDispatchOutput(service=tool_code, length=len(parameters.text))
+        raise AssertionError(f"Worker dispatched an unknown private service: {tool_code}")
 
 
 def _policy(**changes) -> ToolPlatformPolicy:
@@ -83,7 +147,7 @@ def _policy(**changes) -> ToolPlatformPolicy:
 
 
 def _item(correlation: str, scenario: str = "echo", **parameters) -> ToolComputeItem:
-    descriptor = FixtureRegistry.get_definition(FixturePlugin.tool_code).descriptor
+    descriptor = FixtureRegistry.get_definition(FIXTURE_TOOL_CODE).descriptor
     return ToolComputeItem(
         correlation_id=correlation,
         tool_code=descriptor.tool_code,
@@ -275,6 +339,8 @@ async def test_independent_lanes_run_identical_items_without_coalescing(runtime)
     assert executor.snapshot().active == 2
     assert executor.snapshot().pending == 2
     for handle in handles:
+        compute_frames = [frame for frame in handle.frames if frame["kind"] == "compute"]
+        assert [frame["tool_code"] for frame in compute_frames] == [FIXTURE_TOOL_CODE]
         await asyncio.to_thread(handle.send, "release")
 
     response = await asyncio.wait_for(task, timeout=_WAIT)
@@ -920,7 +986,7 @@ def test_frame_completed_at_deadline_is_not_published_after_decode(monkeypatch):
 
 
 def test_worker_serializes_aliases_and_revalidates_the_exact_wire_payload():
-    definition = build_tool_definition(_AliasedWorkerPlugin)
+    definition = build_tool_definition(_AliasedWorkerPlugin, _AliasedWorkerPlugin.services[0])
 
     class AliasedRegistry:
         @classmethod
@@ -953,6 +1019,69 @@ def test_worker_serializes_aliases_and_revalidates_the_exact_wire_payload():
     assert frame["status"] == "success"
     assert frame["result"] == {"status": "ready", "wire_text": "private"}
     assert definition.output_adapter.validate_json(encode_json(frame["result"]), strict=True) == _AliasedWorkerOutput.model_validate({"status": "ready", "wire_text": "private"})
+
+
+@pytest.mark.parametrize(
+    ("tool_code", "output_type", "expected_result"),
+    [
+        (
+            "private_worker_primary",
+            _PrimaryDispatchOutput,
+            {"service": "private_worker_primary", "text": "private"},
+        ),
+        (
+            "private_worker_secondary",
+            _SecondaryDispatchOutput,
+            {"service": "private_worker_secondary", "length": 7},
+        ),
+    ],
+)
+def test_worker_dispatches_requested_sibling_service_and_validates_matching_output(
+    tool_code,
+    output_type,
+    expected_result,
+):
+    definitions = {service.tool_code: build_tool_definition(_TwoServiceWorkerPlugin, service) for service in _TwoServiceWorkerPlugin.services}
+
+    class DispatchRegistry:
+        @classmethod
+        def get_definition(cls, code):
+            return definitions.get(code)
+
+    class NeverCancelled:
+        @staticmethod
+        def is_set():
+            return False
+
+    definition = definitions[tool_code]
+    descriptor = definition.descriptor
+    now = time.monotonic()
+    job = ToolWorkerJob(
+        execution_id=uuid4().hex,
+        tool_code=tool_code,
+        contract_version=descriptor.contract_version,
+        implementation_version=descriptor.implementation_version,
+        schema_fingerprint=descriptor.schema_fingerprint,
+        parameters=encode_json(
+            {
+                "operation": "exercise",
+                "scenario": "echo",
+                "text": "private",
+            }
+        ),
+        soft_deadline=now + 50,
+        hard_deadline=now + 60,
+        max_parameter_bytes=131_072,
+        max_result_bytes=262_144,
+        max_json_depth=32,
+    )
+
+    frame = worker_module._execute(job, NeverCancelled(), DispatchRegistry)
+
+    assert frame["status"] == "success"
+    assert frame["result"] == expected_result
+    validated = definition.output_adapter.validate_python(frame["result"], strict=True)
+    assert type(validated) is output_type
 
 
 class _CancellationPipe:

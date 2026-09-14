@@ -22,24 +22,24 @@ vi.mock('./registry', () => ({resolveToolRenderer: resolveRendererMock}));
 
 const descriptor = {
     tool_code: 'pac_allocator',
-    contract_version: '1.0.0',
-    implementation_version: 'impl-fixture',
+    contract_version: '7.4.1',
+    implementation_version: 'impl-secret-99',
     schema_fingerprint: 'f'.repeat(64),
     category: 'analysis',
     description: 'Fixture tool description',
     description_i18n_key: null,
-    documentation: {path: 'tools/pac-allocator', version: '1.0.0'},
+    documentation: {path: 'tools/pac-allocator', version: '7.4.1'},
     icon_key: 'calculator',
     input_schema: {},
     name: 'Fixture PAC tool',
     name_i18n_key: null,
     operations: [{operation: 'analyze'}],
     output_schema: {},
-    ui: {kind: 'custom', component_key: 'pac-allocator', ui_contract_version: 1},
+    ui: {kind: 'custom', component_key: 'pac-allocator', version: '1.0.0'},
 } as const;
 
 const catalog = {
-    catalog_version: '1',
+    catalog_version: '2',
     items: [descriptor],
     unavailable: [],
     policy: {client_timeout_ms: 30_000},
@@ -120,7 +120,9 @@ describe('ToolHost', () => {
         expect(screen.queryByTestId('tool-host-catalog-loading')).toBeNull();
         expect(screen.queryByTestId('tool-host-component-loading')).toBeNull();
 
-        expect(screen.getByTestId('tool-host').textContent?.match(/1\.0\.0/g)).toHaveLength(1);
+        const versions = screen.getByTestId('tool-host-compatibility-versions');
+        expect(versions).toHaveTextContent(`Backend/API ${descriptor.contract_version} · UI ${descriptor.ui.version}`);
+        expect(versions).not.toHaveTextContent(descriptor.implementation_version);
         const refresh = screen.getByTestId('tool-host-refresh');
         const docs = screen.getByTestId('tool-host-docs');
         expect(refresh.getAttribute('aria-label')).toBeTruthy();

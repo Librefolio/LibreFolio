@@ -24,6 +24,15 @@ def decimal_text(value: Decimal) -> str:
     return "0" if text in ("0", "-0") else text
 
 
+def exact_holding_value(
+    quantity: Decimal,
+    raw_price: Decimal,
+    quote_base_quantity: int,
+) -> Decimal:
+    """Preserve exact products before applying the integer quote basis."""
+    return quantity * raw_price / Decimal(quote_base_quantity)
+
+
 def ratio_approximation(numerator: Decimal, denominator: Decimal) -> tuple[str, bool]:
     if denominator <= 0:
         raise ArithmeticError("PAC ratio denominator must be positive")

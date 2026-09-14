@@ -69,18 +69,28 @@ describe('ExactDecimalInput', () => {
         expect(signed.onchange).toHaveBeenLastCalledWith('-0.1');
     });
 
-    it.each(['Infinity', 'NaN', 'not-a-number'])('keeps invalid text %s visible and marked invalid on blur', async (raw) => {
+    it('rejects letters at the input boundary without discarding decimal punctuation or digits', async () => {
         const {input, onchange} = setup();
 
-        await fireEvent.input(input, {target: {value: raw}});
-        expect(input).toHaveValue(raw);
-        expect(input).toHaveAttribute('aria-invalid', 'true');
-        const callsBeforeBlur = onchange.mock.calls.length;
+        await fireEvent.input(input, {target: {value: 'EUR 12,34abc'}});
 
-        await fireEvent.blur(input);
+        expect(input).toHaveValue('12,34');
+        expect(onchange).toHaveBeenLastCalledWith('12,34');
+        expect(input).toHaveAttribute('aria-invalid', 'false');
+    });
 
-        expect(input).toHaveValue(raw);
-        expect(onchange).toHaveBeenCalledTimes(callsBeforeBlur);
+    it('preserves a partial comma draft and applies the sign policy while editing', async () => {
+        const unsigned = setup();
+
+        await fireEvent.input(unsigned.input, {target: {value: '-12,'}});
+        expect(unsigned.input).toHaveValue('12,');
+        expect(unsigned.onchange).toHaveBeenLastCalledWith('12,');
+
+        unsigned.unmount();
+        const signed = setup({allowNegative: true});
+        await fireEvent.input(signed.input, {target: {value: '-12,'}});
+        expect(signed.input).toHaveValue('-12,');
+        expect(signed.onchange).toHaveBeenLastCalledWith('-12,');
     });
 
     it('publishes the configured digit budget through maxlength', () => {
@@ -184,8 +194,9 @@ describe('ExactDecimalInput — Enter, and the form around it', () => {
         expect(String(Number(canonical))).not.toBe(canonical);
     });
 
-    it.each(['Infinity', 'not-a-number', '1000000000000.1'])('leaves %s invalid on Enter instead of coercing it to a number', async (raw) => {
+    it('leaves an over-budget decimal invalid on Enter instead of coercing it', async () => {
         const {input, onchange} = setupInForm();
+        const raw = '1000000000000.1';
 
         await fireEvent.input(input, {target: {value: raw}});
         const callsBeforeEnter = onchange.mock.calls.length;

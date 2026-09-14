@@ -133,7 +133,7 @@ def _execute(job: ToolWorkerJob, cancellation: CancellationSignal, registry_clas
         phase = "compute"
         started = time.monotonic_ns()
         try:
-            result = plugin.compute(parameters, context)
+            result = plugin.compute(definition.descriptor.tool_code, parameters, context)
         finally:
             metrics["compute_ms"] = _elapsed_ms(started)
         context.checkpoint()

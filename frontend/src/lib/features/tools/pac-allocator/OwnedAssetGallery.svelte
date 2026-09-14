@@ -13,7 +13,10 @@
         assets: readonly PacAssetChoice[];
         loading: boolean;
         error: string | null;
+        title?: string;
+        description?: string;
         disabled?: boolean;
+        manualDisabled?: boolean;
         ontoggle: (asset: PacAssetChoice) => void;
         onretry: () => void;
         onaddmanual: () => void;
@@ -21,7 +24,7 @@
 
     const SCOPE_ORDER: readonly PacAllocationUsageScope[] = ['owned', 'other_users', 'observed'];
 
-    let {assets, loading, error, disabled = false, ontoggle, onretry, onaddmanual}: Props = $props();
+    let {assets, loading, error, title = '', description = '', disabled = false, manualDisabled = false, ontoggle, onretry, onaddmanual}: Props = $props();
     let query = $state('');
     let selectedScopes = $state<PacAllocationUsageScope[]>(['owned']);
 
@@ -35,7 +38,10 @@
         const normalized = query.trim().toLocaleLowerCase();
         return assets
             .map((asset, index) => ({asset, index}))
-            .filter(({asset}) => selectedScopes.includes(asset.usageScope) && (!normalized || asset.name.toLocaleLowerCase().includes(normalized)))
+            .filter(({asset}) => {
+                const searchText = [asset.name, asset.ticker, asset.assetType, ...asset.contexts.map((context) => context.brokerName)].filter(Boolean).join(' ').toLocaleLowerCase();
+                return selectedScopes.includes(asset.usageScope) && (!normalized || searchText.includes(normalized));
+            })
             .sort((left, right) => Number(right.asset.active) - Number(left.asset.active) || left.index - right.index)
             .map(({asset}) => asset);
     });
@@ -54,7 +60,7 @@
     }
 
     function scopeStyle(scope: PacAllocationUsageScope): string {
-        const colors = getIndexColor(SCOPE_ORDER.indexOf(scope), 140);
+        const colors = getIndexColor(SCOPE_ORDER.indexOf(scope), 205);
         return `--scope-bg:${colors.bg};--scope-text:${colors.text};--scope-dark-bg:${colors.darkBg};--scope-dark-text:${colors.darkText};--scope-border:${colors.vivid};`;
     }
 
@@ -69,8 +75,8 @@
     }
 
     function cardClass(asset: PacAssetChoice): string {
-        if (asset.selected && !asset.active) return 'border-libre-green bg-amber-50 ring-1 ring-libre-green/30 dark:border-green-600 dark:bg-amber-950/30';
-        if (asset.selected) return 'border-libre-green bg-libre-green/5 dark:border-green-600 dark:bg-green-950/20';
+        if (asset.selected && !asset.active) return 'border-blue-500 bg-amber-50 ring-1 ring-blue-500/30 dark:border-blue-500 dark:bg-amber-950/30';
+        if (asset.selected) return 'border-blue-500 bg-blue-50/70 dark:border-blue-500 dark:bg-blue-950/20';
         if (!asset.active) return 'border-amber-300 bg-amber-50 hover:border-amber-400 dark:border-amber-800 dark:bg-amber-950/30 dark:hover:border-amber-700';
         return 'border-gray-200 bg-white hover:border-libre-green/60 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900/40 dark:hover:border-green-700 dark:hover:bg-gray-800';
     }
@@ -79,9 +85,9 @@
 <section class="space-y-3" data-testid="pac-owned-assets" data-gallery="catalog">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-            <h3 class="text-sm font-semibold text-gray-900 dark:text-white">{$t('tools.pacAllocator.gallery.title', {default: '2. Assets and targets'})}</h3>
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-white">{title || $t('tools.pacAllocator.gallery.title', {default: '2. Assets'})}</h3>
             <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                {$t('tools.pacAllocator.gallery.hint', {default: 'Select current custody contexts or add a zero-position catalog candidate.'})}
+                {description || $t('tools.pacAllocator.gallery.hint', {default: 'Select canonical Assets or add a manual one.'})}
             </p>
         </div>
         <div class="flex shrink-0 items-center gap-1.5">
@@ -101,6 +107,7 @@
                 class="inline-flex min-h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-libre-green bg-libre-green px-2.5 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-libre-green/70 sm:min-h-8 dark:text-gray-950"
                 type="button"
                 onclick={onaddmanual}
+                disabled={manualDisabled}
                 data-testid="pac-add-manual-asset"
                 aria-label={$t('tools.pacAllocator.addManualAsset')}
             >
@@ -163,8 +170,8 @@
                     class="min-h-10 w-full rounded-lg border border-gray-300 bg-white py-1.5 pr-2 pl-9 text-sm text-gray-900 outline-none transition focus:border-libre-green focus:ring-1 focus:ring-libre-green sm:min-h-9 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
                     type="search"
                     bind:value={query}
-                    placeholder={$t('tools.pacAllocator.gallery.search', {default: 'Search by Asset name'})}
-                    aria-label={$t('tools.pacAllocator.gallery.search', {default: 'Search by Asset name'})}
+                    placeholder={$t('tools.pacAllocator.gallery.search', {default: 'Search Assets or Brokers'})}
+                    aria-label={$t('tools.pacAllocator.gallery.search', {default: 'Search Assets or Brokers'})}
                     data-testid="pac-owned-assets-search"
                 />
             </div>
@@ -217,7 +224,7 @@
                                     {/if}
                                 </span>
                             </span>
-                            <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border {asset.selected ? 'border-libre-green bg-libre-green text-white' : 'border-gray-300 text-transparent dark:border-gray-600'}">
+                            <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border {asset.selected ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-300 text-transparent dark:border-gray-600'}">
                                 <Check size={13} strokeWidth={3} />
                             </span>
                         </span>
@@ -227,7 +234,8 @@
                                 <span class="rounded-full bg-amber-100 px-2 py-0.5 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">{$t('tools.pacAllocator.gallery.inactive', {default: 'Inactive'})}</span>
                             {/if}
                             {#if asset.quote.rawPrice}
-                                <span class="rounded-full bg-gray-100 px-2 py-0.5 text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                                <span class="rounded-full bg-gray-100 px-2 py-0.5 text-gray-600 dark:bg-gray-800 dark:text-gray-300" data-testid={`pac-owned-asset-price-${asset.assetId}`}>
+                                    <strong class="font-medium">{$t('common.currentPrice')}</strong>
                                     {#if currencyFlag(asset.quote.currency)}<span class="emoji-flag" aria-hidden="true">{currencyFlag(asset.quote.currency)}</span>{/if}
                                     {asset.quote.currency}
                                     <span class="font-mono">{displayDecimal(asset.quote.rawPrice)}</span>

@@ -1,5 +1,25 @@
 import {beforeEach, describe, expect, it, vi} from 'vitest';
-import {decimalArrowStep, exactDecimalArrowStep, normalizeDecimalInput, resetDecimalArrowHold, stepDecimalValue, stepExactDecimalValue} from '$lib/utils/core/parseDecimalInput';
+import {decimalArrowStep, exactDecimalArrowStep, filterDecimalInput, normalizeDecimalInput, resetDecimalArrowHold, stepDecimalValue, stepExactDecimalValue} from '$lib/utils/core/parseDecimalInput';
+
+describe('filterDecimalInput', () => {
+    it('drops letters immediately while preserving decimal punctuation and every digit', () => {
+        expect(filterDecimalInput('EUR 12,34abc')).toBe('12,34');
+        expect(filterDecimalInput('1x.2y,3z')).toBe('1.2,3');
+    });
+
+    it('preserves partial comma and dot drafts for later normalization', () => {
+        expect(filterDecimalInput('12,')).toBe('12,');
+        expect(filterDecimalInput('.')).toBe('.');
+        expect(filterDecimalInput(',5')).toBe(',5');
+    });
+
+    it('keeps only a permitted leading sign', () => {
+        expect(filterDecimalInput('-12,3')).toBe('12,3');
+        expect(filterDecimalInput('-12,3', true)).toBe('-12,3');
+        expect(filterDecimalInput('12-3', true)).toBe('123');
+        expect(filterDecimalInput('  -0.5', true)).toBe('-0.5');
+    });
+});
 
 describe('normalizeDecimalInput', () => {
     it('leaves canonical input untouched', () => {

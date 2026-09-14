@@ -271,8 +271,11 @@
         </div>
         {#if descriptor}
             <p class="break-words text-sm text-gray-600 dark:text-gray-400">{toolDescription(descriptor, $t)}</p>
-            <p class="break-words text-xs text-gray-500 dark:text-gray-400">
-                {$t('tools.version', {default: 'Version'})}: {descriptor.contract_version}
+            <p class="break-words text-xs text-gray-500 dark:text-gray-400" data-testid="tool-host-compatibility-versions">
+                {$t('tools.backendVersion', {default: 'Backend/API'})}
+                {descriptor.contract_version}
+                · {$t('tools.uiVersion', {default: 'UI'})}
+                {descriptor.ui.version}
             </p>
         {:else}
             <p class="text-sm text-gray-600 dark:text-gray-400">{$t('tools.subtitle', {default: 'Independent calculations. No portfolio changes are written.'})}</p>

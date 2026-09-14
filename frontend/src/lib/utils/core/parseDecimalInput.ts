@@ -20,6 +20,19 @@ import {ArrowHold} from './arrowHold';
 /** Canonical form: optional sign, digits, at most one dot. */
 const CANONICAL = /^-?(?:\d+\.?\d*|\.\d+)$/;
 
+/**
+ * Removes characters that can never belong to a decimal draft.
+ *
+ * This is intentionally weaker than normalization: grouping separators and
+ * half-typed values remain visible while letters and misplaced signs never
+ * enter the edit buffer.
+ */
+export function filterDecimalInput(value: string, allowNegative = false): string {
+    const hasLeadingMinus = allowNegative && value.trimStart().startsWith('-');
+    const body = value.replace(/[^\d.,-]/g, '').replace(/-/g, '');
+    return `${hasLeadingMinus ? '-' : ''}${body}`;
+}
+
 /** e.g. `1.234.567,89` — `group` marks thousands, `decimal` marks the fraction. */
 function groupedPattern(group: '.' | ',', decimal: '.' | ','): RegExp {
     return new RegExp(`^-?\\d{1,3}(?:\\${group}\\d{3})+(?:\\${decimal}\\d+)?$`);

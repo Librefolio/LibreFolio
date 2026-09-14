@@ -1,6 +1,6 @@
 <script lang="ts">
     import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
-    import {exactDecimalArrowStep, normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
+    import {exactDecimalArrowStep, filterDecimalInput, normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
 
     interface Props {
         value?: string;
@@ -49,7 +49,9 @@
     function handleInput(event: Event): void {
         const target = event.currentTarget;
         if (!(target instanceof HTMLInputElement)) return;
-        value = target.value;
+        const filtered = filterDecimalInput(target.value, allowNegative);
+        if (filtered !== target.value) target.value = filtered;
+        value = filtered;
         onchange?.(value);
     }
 
