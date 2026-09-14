@@ -29,7 +29,7 @@ DB, Portfolio, Broker, Asset, FX provider o clock.
 | `contract_version` | `1.0.0` |
 | `implementation_version` | `1.0.0` |
 | `component_key` | `pac-allocator` |
-| `ui_contract_version` | `1` |
+| `ui.version` | `"1.0.0"` |
 | operazione P1 | `analyze` |
 
 `operation` e un discriminatore obbligatorio senza default. I veri modelli Pydantic e

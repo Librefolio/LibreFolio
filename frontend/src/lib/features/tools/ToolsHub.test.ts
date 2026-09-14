@@ -18,24 +18,24 @@ vi.mock('./registry', () => ({resolveToolRenderer: resolveRendererMock}));
 
 const descriptor = {
     tool_code: 'pac_allocator',
-    contract_version: '1.0.0',
-    implementation_version: 'impl-fixture',
+    contract_version: '7.4.1',
+    implementation_version: 'impl-secret-99',
     schema_fingerprint: 'f'.repeat(64),
     category: 'analysis',
     description: 'Fixture tool description',
     description_i18n_key: null,
-    documentation: {path: 'tools/pac-allocator', version: '1.0.0'},
+    documentation: {path: 'tools/pac-allocator', version: '7.4.1'},
     icon_key: 'calculator',
     input_schema: {},
     name: 'Fixture PAC tool',
     name_i18n_key: null,
     operations: [{operation: 'analyze'}],
     output_schema: {},
-    ui: {kind: 'custom', component_key: 'pac-allocator', ui_contract_version: 1},
+    ui: {kind: 'custom', component_key: 'pac-allocator', version: '1.0.0'},
 } as const;
 
 const catalog = {
-    catalog_version: '1',
+    catalog_version: '2',
     items: [descriptor],
     unavailable: [],
     policy: {client_timeout_ms: 30_000},
@@ -112,8 +112,13 @@ describe('ToolsHub', () => {
         await fireEvent.click(documentation);
         expect(openWindow).toHaveBeenCalledTimes(1);
 
-        // The contract version is public exactly once; no duplicated badge/footer.
-        expect(card.textContent?.match(/1\.0\.0/g)).toHaveLength(1);
+        const description = within(card).getByText(descriptor.description, {exact: true});
+        expect(description.parentElement).toBe(card);
+        const versions = within(card).getByTestId('tool-compatibility-versions');
+        expect(versions).toHaveTextContent(`Backend/API ${descriptor.contract_version} · UI ${descriptor.ui.version}`);
+        expect(versions).not.toHaveTextContent(descriptor.implementation_version);
+        const arrow = within(card).getByTestId('tool-open-arrow');
+        expect(arrow.parentElement).toBe(card);
 
         const refresh = screen.getByTestId('tools-hub-refresh');
         const refreshLabel = refresh.getAttribute('aria-label');

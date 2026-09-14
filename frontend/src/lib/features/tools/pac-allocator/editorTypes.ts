@@ -1,15 +1,16 @@
 import type {ToolInput} from '$lib/features/tools/contracts';
-import type {PacAllocationSourceAsset, PacAllocationSourceCashSource, PacAllocationUsageScope} from './allocationSource';
+import type {PacAllocationSourceAsset, PacAllocationSourceCashSource, PacAllocationSourceContext, PacAllocationUsageScope} from './allocationSource';
 
 export type PacInput = ToolInput<'pac_allocator', '1.0.0'>;
-export type PacInputRow = NonNullable<PacInput['rows']>[number];
-export type PacDraftRow = PacInputRow & {
-    quote: NonNullable<PacInputRow['quote']>;
-    buy_grid: NonNullable<PacInputRow['buy_grid']>;
-};
+export type RebalancerInput = ToolInput<'portfolio_rebalancer', '1.0.0'>;
+
+export type PacAssetInput = NonNullable<PacInput['assets']>[number];
+export type RebalanceHoldingInput = NonNullable<RebalancerInput['holdings']>[number];
+export type AllocationTargetInput = NonNullable<PacInput['targets']>[number];
 export type PacMoneyInput = NonNullable<PacInput['cash_balances']>[number];
 export type PacContributionInput = NonNullable<PacInput['contributions']>[number];
 export type PacRateInput = NonNullable<PacInput['valuation_rates']>[number];
+export type AllocationBuyGridInput = NonNullable<PacAssetInput['buy_grid']>;
 
 export interface PacRowSource {
     kind: 'portfolio_context' | 'catalog_candidate';
@@ -31,14 +32,36 @@ export interface PacRowSource {
     quoteReferenceDate: string | null;
 }
 
-export type PacRowOrigin = 'manual' | 'portfolio_context' | 'catalog_candidate' | 'manual_duplicate';
+export interface PacAssetEditorValue extends PacAssetInput {
+    name: string;
+    buy_grid: AllocationBuyGridInput;
+}
 
-export interface PacEditorRow {
-    value: PacDraftRow;
-    origin: PacRowOrigin;
-    source: PacRowSource | null;
-    importedValue: PacDraftRow | null;
+export interface RebalanceHoldingEditorValue extends RebalanceHoldingInput {
+    name: string;
+    quantity: string;
+    quote: NonNullable<RebalanceHoldingInput['quote']>;
+    buy_grid: AllocationBuyGridInput;
+}
+
+export interface PacEditorAsset {
+    value: PacAssetEditorValue;
+    source: PacAllocationSourceAsset | null;
+    importedValue: PacAssetEditorValue | null;
     stale: boolean;
+}
+
+export interface RebalanceEditorHolding {
+    value: RebalanceHoldingEditorValue;
+    source: PacRowSource | null;
+    importedValue: RebalanceHoldingEditorValue | null;
+    stale: boolean;
+}
+
+export interface AllocationTargetDraft {
+    instrument_key: string;
+    name: string;
+    target_percent: string;
 }
 
 export interface PacAssetChoice extends PacAllocationSourceAsset {
@@ -61,13 +84,28 @@ export interface PacCashSourceState {
 
 export type PacContributionMode = 'none' | 'custom';
 
-export interface PacDraft {
-    operation: 'analyze';
-    report_currency: string;
-    as_of_date: string;
-    rows: PacEditorRow[];
+export interface AllocationFundingDraft {
     cash: PacCashSourceState;
     contributionMode: PacContributionMode;
     contributions: PacContributionInput[];
+}
+
+export interface AllocationScenarioDraft extends AllocationFundingDraft {
+    operation: 'analyze';
+    report_currency: string;
+    as_of_date: string;
+    targets: AllocationTargetDraft[];
     valuationRates: PacRateInput[];
+}
+
+export interface PacDraft extends AllocationScenarioDraft {
+    assets: PacEditorAsset[];
+}
+
+export interface RebalancerDraft extends AllocationScenarioDraft {
+    holdings: RebalanceEditorHolding[];
+}
+
+export function allocationSourceKey(asset: PacAllocationSourceAsset, context: PacAllocationSourceContext | null): string {
+    return context?.contextKey ?? asset.candidateKey;
 }

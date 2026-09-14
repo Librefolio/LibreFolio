@@ -49,7 +49,7 @@ class _PrivateOutput(BaseModel):
 
 
 def _ui() -> dict:
-    return {"kind": "custom", "component_key": "private-dto-probe", "ui_contract_version": 1}
+    return {"kind": "custom", "component_key": "private-dto-probe", "version": "1.0.0"}
 
 
 def _documentation() -> dict:
@@ -131,7 +131,7 @@ def _response() -> dict:
 
 def _catalog() -> dict:
     return {
-        "catalog_version": "1",
+        "catalog_version": "2",
         "policy": {},
         "items": [_descriptor()],
         "unavailable": [{"tool_code": "private_unavailable", "reason": "unavailable"}],
@@ -236,9 +236,11 @@ def test_transport_forbids_extras_at_each_envelope_level(model, factory, path):
         (ToolComputeBatchRequest, _request, ("items", 0), "schema_fingerprint", b"a" * 64),
         (ToolCatalogResponse, _catalog, ("policy",), "workers", True),
         (ToolCatalogResponse, _catalog, ("policy",), "max_parameter_bytes", "131072"),
-        (ToolCatalogResponse, _catalog, ("items", 0, "ui"), "ui_contract_version", "1"),
-        (ToolCatalogResponse, _catalog, ("items", 0, "ui"), "ui_contract_version", True),
-        (ToolCatalogResponse, _catalog, ("items", 0, "ui"), "ui_contract_version", 1.0),
+        (ToolCatalogResponse, _catalog, ("items", 0, "ui"), "version", "1"),
+        (ToolCatalogResponse, _catalog, ("items", 0, "ui"), "version", "01.0.0"),
+        (ToolCatalogResponse, _catalog, ("items", 0, "ui"), "version", True),
+        (ToolCatalogResponse, _catalog, ("items", 0, "ui"), "version", 1),
+        (ToolCatalogResponse, _catalog, ("items", 0, "ui"), "version", 1.0),
         (ToolCatalogResponse, _catalog, ("items", 0, "operations", 0), "deterministic", "true"),
         (ToolCatalogResponse, _catalog, ("items", 0, "operations", 0), "deterministic", 1),
         (ToolCatalogResponse, _catalog, ("items", 0, "operations", 0), "pure", 1),
@@ -264,7 +266,7 @@ def test_transport_does_not_coerce_nested_metadata_types(model, factory, path, f
 @pytest.mark.parametrize(
     ("model", "factory", "fields"),
     [
-        (ToolUIDescriptor, _ui, ("kind", "component_key", "ui_contract_version")),
+        (ToolUIDescriptor, _ui, ("kind", "component_key", "version")),
         (ToolCatalogResponse, _catalog, ("catalog_version",)),
         (ToolDiagnosticsResponse, _diagnostics, ("scope",)),
         (ToolOperationPolicy, _operation, ("operation",)),
@@ -297,8 +299,8 @@ def test_required_contract_fields_are_not_supplied_by_defaults(model, factory, f
     ("model", "factory", "field", "value"),
     [
         (ToolUIDescriptor, _ui, "kind", "generated"),
-        (ToolCatalogResponse, _catalog, "catalog_version", "2"),
-        (ToolCatalogResponse, _catalog, "catalog_version", 1),
+        (ToolCatalogResponse, _catalog, "catalog_version", "1"),
+        (ToolCatalogResponse, _catalog, "catalog_version", 2),
         (ToolDiagnosticsResponse, _diagnostics, "scope", "global"),
         (ToolComputeSuccess, _success, "status", "ready"),
         (ToolComputeFailure, _failure, "status", "failed"),
@@ -319,7 +321,7 @@ def test_literal_metadata_rejects_other_variants(model, factory, field, value):
     ("model", "field", "literal"),
     [
         (ToolUIDescriptor, "kind", "custom"),
-        (ToolCatalogResponse, "catalog_version", "1"),
+        (ToolCatalogResponse, "catalog_version", "2"),
         (ToolDiagnosticsResponse, "scope", "api_process"),
         (ToolComputeSuccess, "status", "success"),
         (ToolComputeFailure, "status", "error"),
@@ -329,6 +331,27 @@ def test_exported_literal_metadata_is_explicit_and_required(model, field, litera
     schema = model.model_json_schema(mode=mode)
     assert field in schema["required"]
     assert schema["properties"][field]["enum"] == [literal]
+
+
+def test_ui_descriptor_exports_only_the_strict_semver_version_contract():
+    descriptor = ToolUIDescriptor.model_validate(_ui())
+    assert descriptor.version == "1.0.0"
+    assert descriptor.model_dump(mode="json") == _ui()
+
+    schema = ToolUIDescriptor.model_json_schema(mode="serialization")
+    assert set(schema["properties"]) == {"kind", "component_key", "version"}
+    assert set(schema["required"]) == {"kind", "component_key", "version"}
+    assert schema["properties"]["version"]["type"] == "string"
+    assert "ui_contract_version" not in schema["properties"]
+
+    legacy = _ui()
+    legacy.pop("version")
+    legacy["ui_contract_version"] = 1
+    with pytest.raises(ValidationError) as caught:
+        ToolUIDescriptor.model_validate(legacy)
+    errors = caught.value.errors(include_input=False)
+    assert any(issue["type"] == "missing" and issue["loc"] == ("version",) for issue in errors)
+    assert any(issue["type"] == "extra_forbidden" and issue["loc"] == ("ui_contract_version",) for issue in errors)
 
 
 def test_descriptor_uses_optional_i18n_key_metadata():

@@ -50,7 +50,7 @@ def get_tool_catalog(policy: ToolPlatformPolicy, registry_class: type[ToolPlugin
     descriptors, failures = effective_catalog_entries(policy, registry_class)
     unavailable_codes = dict.fromkeys(failure.tool_code for failure in failures)
     return ToolCatalogResponse(
-        catalog_version="1",
+        catalog_version="2",
         policy=policy,
         items=descriptors,
         unavailable=[ToolUnavailableSummary(tool_code=code) for code in unavailable_codes],

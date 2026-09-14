@@ -24,7 +24,7 @@ const DEMO = vi.hoisted(() => {
         implementationVersion: 'impl-1',
         schemaFingerprint: 'fp-demo-v1',
         componentKey: 'DemoToolPanel',
-        uiContractVersion: 1,
+        uiVersion: '1.0.0',
         operation: 'compute',
     } as const;
 });
@@ -37,7 +37,7 @@ const STRICT = vi.hoisted(() => {
         implementationVersion: 'impl-1',
         schemaFingerprint: 'fp-strict-v1',
         componentKey: 'StrictSnapshotToolPanel',
-        uiContractVersion: 1,
+        uiVersion: '1.0.0',
         operation: 'compute',
     } as const;
 });
@@ -59,7 +59,7 @@ vi.mock('$lib/api/generated-tools', async () => {
     const toolUiSchema = z.object({
         kind: z.literal('custom'),
         component_key: z.string(),
-        ui_contract_version: z.number(),
+        version: z.string(),
     });
     const toolDescriptorSchema = z.object({
         tool_code: z.string(),
@@ -75,6 +75,7 @@ vi.mock('$lib/api/generated-tools', async () => {
     });
     const toolPolicySchema = z.object({client_timeout_ms: z.number()});
     const catalogSchema = z.object({
+        catalog_version: z.literal('2'),
         items: z.array(toolDescriptorSchema),
         unavailable: z.array(toolUnavailableSchema),
         policy: toolPolicySchema,
@@ -151,7 +152,7 @@ vi.mock('$lib/api/tool-contract-map.generated', async () => {
                     contractVersion: DEMO.contractVersion,
                     schemaFingerprint: DEMO.schemaFingerprint,
                     componentKey: DEMO.componentKey,
-                    uiContractVersion: DEMO.uiContractVersion,
+                    uiVersion: DEMO.uiVersion,
                     input: z.any(),
                     output: z.any(),
                     operations: [DEMO.operation],
@@ -163,7 +164,7 @@ vi.mock('$lib/api/tool-contract-map.generated', async () => {
                     contractVersion: STRICT.contractVersion,
                     schemaFingerprint: STRICT.schemaFingerprint,
                     componentKey: STRICT.componentKey,
-                    uiContractVersion: STRICT.uiContractVersion,
+                    uiVersion: STRICT.uiVersion,
                     input: z
                         .object({
                             mode: z.literal('plain'),
@@ -201,6 +202,7 @@ const toolContractMapForTest = toolContractMap as unknown as Record<
 /** Raw `/api/v1/tools/catalog` payload describing the compatible tools exercised in this file. */
 function rawCatalog() {
     return {
+        catalog_version: '2' as const,
         items: [
             {
                 tool_code: DEMO.toolCode,
@@ -210,7 +212,7 @@ function rawCatalog() {
                 ui: {
                     kind: 'custom' as const,
                     component_key: DEMO.componentKey,
-                    ui_contract_version: DEMO.uiContractVersion,
+                    version: DEMO.uiVersion,
                 },
                 operations: [{operation: DEMO.operation}],
             },
@@ -222,7 +224,7 @@ function rawCatalog() {
                 ui: {
                     kind: 'custom' as const,
                     component_key: STRICT.componentKey,
-                    ui_contract_version: STRICT.uiContractVersion,
+                    version: STRICT.uiVersion,
                 },
                 operations: [{operation: STRICT.operation}],
             },

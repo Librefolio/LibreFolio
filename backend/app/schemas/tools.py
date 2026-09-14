@@ -129,7 +129,7 @@ class ToolOperationPolicy(ToolTransportModel):
 class ToolUIDescriptor(ToolTransportModel):
     kind: Literal["custom"] = Field(..., json_schema_extra={"enum": ["custom"]})
     component_key: Annotated[str, Field(strict=True, min_length=1, max_length=64, pattern=r"^[a-z][a-z0-9-]*$")]
-    ui_contract_version: Annotated[int, Field(strict=True, ge=1)]
+    version: ToolVersion
 
 
 class ToolDocumentation(ToolTransportModel):
@@ -177,7 +177,7 @@ class ToolUnavailableSummary(ToolTransportModel):
 
 
 class ToolCatalogResponse(ToolTransportModel):
-    catalog_version: Literal["1"] = Field(..., json_schema_extra={"enum": ["1"]})
+    catalog_version: Literal["2"] = Field(..., json_schema_extra={"enum": ["2"]})
     policy: ToolPlatformPolicy
     items: list[ToolDescriptor]
     unavailable: list[ToolUnavailableSummary]

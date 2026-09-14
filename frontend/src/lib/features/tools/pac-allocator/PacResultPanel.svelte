@@ -1,226 +1,145 @@
 <script lang="ts">
-    import {_} from '$lib/i18n';
+    import {t} from '$lib/i18n';
+    import DataTable from '$lib/components/table/DataTable.svelte';
+    import type {ColumnDef} from '$lib/components/table/types';
     import type {ToolOutput} from '$lib/features/tools/contracts';
-    import {currencyStoreVersion, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
-    import {Info} from 'lucide-svelte';
+    import {Calculator, Info} from 'lucide-svelte';
+    import AllocationDiagnostics from './AllocationDiagnostics.svelte';
 
-    type PacOutput = ToolOutput<'pac_allocator', '1.0.0'>;
-    type ReportingFact = PacOutput['totals']['initial_invested_reporting'];
-    type RowRatioFact = PacOutput['rows'][number]['current_weight_percent'] | PacOutput['rows'][number]['deviation_pp'];
-    type TotalRatioFact = PacOutput['totals']['max_abs_gap_pp'] | PacOutput['totals']['squared_gap_pp2'];
-    type RatioFact = RowRatioFact | TotalRatioFact;
+    interface AllocationRow {
+        instrument_key: string;
+        name: string | null;
+        target_percent: {
+            availability: 'available' | 'unavailable';
+            value: string | null;
+            reason_codes: string[];
+        };
+        ideal_allocation_reporting: {
+            availability: 'available' | 'unavailable';
+            value: {amount: string; currency: string} | null;
+            reason_codes: string[];
+        };
+    }
 
     interface Props {
-        result: PacOutput;
-        stale: boolean;
+        output: ToolOutput<'pac_allocator', '1.0.0'> | null;
+        stale?: boolean;
     }
 
-    let {result, stale}: Props = $props();
-    let exactView = $state(false);
+    let {output, stale = false}: Props = $props();
 
-    function displayDecimal(value: string, maxFrac = 8): string {
-        return exactView ? value : formatDecimalForDisplay(value, {maxFrac});
+    function factText(fact: AllocationRow['target_percent']): string {
+        return fact.availability === 'available' && fact.value !== null ? formatDecimalForDisplay(fact.value, {maxFrac: 12}) : '—';
     }
 
-    function currencyFlag(code: string): string {
-        void $currencyStoreVersion;
-        const flag = getCurrencyInfo(code).flag_emoji;
-        return flag === '🏳️' ? '' : flag;
+    function moneyText(fact: AllocationRow['ideal_allocation_reporting']): string {
+        if (fact.availability !== 'available' || fact.value === null) return '—';
+        return `${formatDecimalForDisplay(fact.value.amount, {maxFrac: 12})} ${fact.value.currency}`;
     }
 
-    function displayRatioFact(fact: RatioFact): string {
-        if (fact.availability === 'unavailable') return `— (${fact.reason_codes.join(', ')})`;
-        return exactView ? `${fact.value.numerator} / ${fact.value.denominator}` : displayDecimal(fact.value.approximation, 6);
-    }
+    let columns = $derived<ColumnDef<AllocationRow>[]>([
+        {
+            id: 'asset',
+            header: () => $t('common.asset'),
+            type: 'text',
+            sortable: true,
+            filterable: false,
+            minWidth: 180,
+            cell: (row) => row.name || row.instrument_key,
+        },
+        {
+            id: 'target',
+            header: () => $t('tools.pacAllocator.rows.target'),
+            type: 'text',
+            sortable: false,
+            filterable: false,
+            width: 130,
+            cell: (row) => `${factText(row.target_percent)}%`,
+        },
+        {
+            id: 'allocation',
+            header: () => $t('tools.pacAllocator.results.idealAllocation', {default: 'Theoretical allocation'}),
+            type: 'text',
+            sortable: false,
+            filterable: false,
+            minWidth: 190,
+            cell: (row) => moneyText(row.ideal_allocation_reporting),
+        },
+    ]);
 
-    function barWidth(fact: RowRatioFact): number {
-        if (fact.availability === 'unavailable') return 0;
-        const parsed = Number(fact.value.approximation);
-        if (!Number.isFinite(parsed)) return 0;
-        return Math.max(0, Math.min(100, parsed));
-    }
-
-    function targetWidth(value: string): number {
-        const parsed = Number(value);
-        if (!Number.isFinite(parsed)) return 0;
-        return Math.max(0, Math.min(100, parsed));
-    }
+    let allocations = $derived((output?.allocations ?? []) as AllocationRow[]);
 </script>
 
-{#snippet reportingValue(fact: ReportingFact)}
-    {#if fact.availability === 'unavailable'}
-        — ({fact.reason_codes.join(', ')})
-    {:else}
-        <span class="inline-flex items-center gap-1">
-            {#if currencyFlag(fact.value.currency)}<span class="emoji-flag" aria-hidden="true">{currencyFlag(fact.value.currency)}</span>{/if}
-            <span>{fact.value.currency}</span>
-            <span class="font-mono">{displayDecimal(fact.value.amount)}</span>
-        </span>
-    {/if}
-{/snippet}
-
-<section class="space-y-4 rounded-xl border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800" data-testid="pac-result" data-state={result.availability} data-stale={stale ? 'true' : 'false'} data-view={exactView ? 'exact' : 'formatted'} data-density="compact">
-    <header class="flex flex-wrap items-start justify-between gap-3">
+<section class="space-y-3 rounded-xl border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800/60" data-testid="pac-result-panel">
+    <div class="flex items-start gap-2">
+        <Calculator class="mt-0.5 shrink-0 text-libre-green dark:text-green-300" size={18} />
         <div>
-            <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100">
-                {#if result.availability === 'ready'}
-                    {$_('tools.pacAllocator.state.ready')}
-                {:else if result.availability === 'needs_input'}
-                    {$_('tools.pacAllocator.state.needsInput')}
-                {:else if result.availability === 'invalid'}
-                    {$_('tools.pacAllocator.state.invalid')}
-                {:else}
-                    {$_('tools.pacAllocator.state.unsupported')}
-                {/if}
+            <h2 class="text-sm font-semibold text-gray-900 dark:text-white">
+                {$t('tools.pacAllocator.results.title', {default: '4. PAC analysis'})}
             </h2>
-            <p class="mt-1 text-xs text-gray-600 dark:text-gray-400">{$_('tools.pacAllocator.resultMeaning')}</p>
-            {#if stale}
-                <p class="mt-2 text-sm font-medium text-amber-700 dark:text-amber-300" data-testid="pac-result-stale">{$_('tools.pacAllocator.stale.result')}</p>
-            {/if}
+            <p class="mt-0.5 text-xs leading-5 text-gray-500 dark:text-gray-400">
+                {$t('tools.pacAllocator.results.hint', {
+                    default: 'P1 splits the available liquidity by target percentage. It does not calculate units, orders, feasibility or an optimum.',
+                })}
+            </p>
         </div>
-        <div class="inline-flex rounded-lg border border-gray-300 p-1 dark:border-gray-600" data-testid="pac-display-mode">
-            <button
-                type="button"
-                onclick={() => (exactView = true)}
-                aria-pressed={exactView}
-                class="min-h-8 rounded px-2 py-1 text-xs font-medium aria-pressed:bg-libre-green aria-pressed:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-libre-green/70"
-                data-testid="pac-view-exact">{$_('tools.pacAllocator.exactView')}</button
-            >
-            <button
-                type="button"
-                onclick={() => (exactView = false)}
-                aria-pressed={!exactView}
-                class="min-h-8 rounded px-2 py-1 text-xs font-medium aria-pressed:bg-libre-green aria-pressed:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-libre-green/70"
-                data-testid="pac-view-formatted">{$_('tools.pacAllocator.formattedView')}</button
-            >
-        </div>
-    </header>
-
-    <div class="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900 dark:border-blue-900/60 dark:bg-blue-950/20 dark:text-blue-200" data-testid="pac-denominator-note">
-        <Info class="mt-0.5 shrink-0" size={15} />
-        <p>
-            {$_('tools.pacAllocator.denominatorHint', {
-                default: 'Current weights and gaps use invested Asset value only. Existing cash and new contributions stay separate and do not change these P1 percentages.',
-            })}
-        </p>
     </div>
 
-    <dl class="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4" data-testid="pac-totals">
-        <div class="rounded-lg bg-gray-50 p-2.5 dark:bg-gray-900/50">
-            <dt class="text-xs text-gray-500 dark:text-gray-400">{$_('tools.pacAllocator.totals.invested')}</dt>
-            <dd class="mt-1 break-words text-sm text-gray-900 dark:text-gray-100" data-testid="pac-total-invested">{@render reportingValue(result.totals.initial_invested_reporting)}</dd>
+    {#if output === null}
+        <div class="rounded-lg border border-dashed border-gray-300 px-4 py-8 text-center text-xs text-gray-500 dark:border-gray-700 dark:text-gray-400">
+            {$t('tools.pacAllocator.results.empty', {default: 'Run the analysis to calculate the theoretical monetary allocation.'})}
         </div>
-        <div class="rounded-lg bg-gray-50 p-2.5 dark:bg-gray-900/50">
-            <dt class="text-xs text-gray-500 dark:text-gray-400">{$_('tools.pacAllocator.totals.existingCash')}</dt>
-            <dd class="mt-1 break-words text-sm text-gray-900 dark:text-gray-100" data-testid="pac-total-existing-cash">{@render reportingValue(result.totals.existing_cash_reporting)}</dd>
-        </div>
-        <div class="rounded-lg bg-gray-50 p-2.5 dark:bg-gray-900/50">
-            <dt class="text-xs text-gray-500 dark:text-gray-400">{$_('tools.pacAllocator.totals.contributions')}</dt>
-            <dd class="mt-1 break-words text-sm text-gray-900 dark:text-gray-100" data-testid="pac-total-contributions">{@render reportingValue(result.totals.contributions_reporting)}</dd>
-        </div>
-        <div class="rounded-lg bg-gray-50 p-2.5 dark:bg-gray-900/50">
-            <dt class="text-xs text-gray-500 dark:text-gray-400">{$_('tools.pacAllocator.totals.combinedCash')}</dt>
-            <dd class="mt-1 break-words text-sm text-gray-900 dark:text-gray-100" data-testid="pac-total-combined-cash">{@render reportingValue(result.totals.cash_plus_contributions_reporting)}</dd>
-        </div>
-    </dl>
+    {:else}
+        <AllocationDiagnostics availability={output.availability} issues={output.issues} />
 
-    <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-        <table class="min-w-full divide-y divide-gray-200 text-left text-sm dark:divide-gray-700" data-testid="pac-result-rows">
-            <thead class="bg-gray-50 text-xs text-gray-600 dark:bg-gray-900/50 dark:text-gray-400">
-                <tr>
-                    <th class="px-3 py-2 font-medium">{$_('tools.pacAllocator.result.row')}</th>
-                    <th class="px-3 py-2 font-medium">{$_('tools.pacAllocator.rows.initialQuantity')}</th>
-                    <th class="px-3 py-2 font-medium">{$_('tools.pacAllocator.result.value')}</th>
-                    <th class="min-w-36 px-3 py-2 font-medium">{$_('tools.pacAllocator.result.weight')}</th>
-                    <th class="min-w-36 px-3 py-2 font-medium">{$_('tools.pacAllocator.result.target')}</th>
-                    <th class="px-3 py-2 font-medium">{$_('tools.pacAllocator.result.gap')}</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-200 text-gray-800 dark:divide-gray-700 dark:text-gray-200">
-                {#each result.rows as row}
-                    <tr data-testid="pac-result-row">
-                        <td class="max-w-48 break-words px-3 py-2">{row.name || row.row_key}</td>
-                        <td class="whitespace-nowrap px-3 py-2 font-mono">{row.quantity.availability === 'available' ? displayDecimal(row.quantity.value) : '—'}</td>
-                        <td class="whitespace-nowrap px-3 py-2">{@render reportingValue(row.initial_value_reporting)}</td>
-                        <td class="px-3 py-2 font-mono">
-                            <span>{displayRatioFact(row.current_weight_percent)}</span>
-                            <span class="mt-1 block h-1.5 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-                                <span class="block h-full rounded-full bg-blue-500" style={`width:${barWidth(row.current_weight_percent)}%`}></span>
-                            </span>
-                        </td>
-                        <td class="px-3 py-2 font-mono">
-                            {#if row.target_percent.availability === 'available'}
-                                <span>{displayDecimal(row.target_percent.value)}%</span>
-                                <span class="mt-1 block h-1.5 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-                                    <span class="block h-full rounded-full bg-libre-green" style={`width:${targetWidth(row.target_percent.value)}%`}></span>
-                                </span>
-                            {:else}
-                                —
-                            {/if}
-                        </td>
-                        <td class="whitespace-nowrap px-3 py-2 font-mono">{displayRatioFact(row.deviation_pp)}</td>
-                    </tr>
-                {/each}
-            </tbody>
-        </table>
-    </div>
-
-    <dl class="grid grid-cols-1 gap-3 sm:grid-cols-2" data-testid="pac-distance-summary">
-        <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900/50">
-            <dt class="text-xs text-gray-500 dark:text-gray-400">{$_('tools.pacAllocator.totals.maxGap')}</dt>
-            <dd class="mt-1 break-words font-mono text-sm" data-testid="pac-max-gap">{displayRatioFact(result.totals.max_abs_gap_pp)}</dd>
-        </div>
-        <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900/50">
-            <dt class="text-xs text-gray-500 dark:text-gray-400">{$_('tools.pacAllocator.totals.squaredGap')}</dt>
-            <dd class="mt-1 break-words font-mono text-sm" data-testid="pac-squared-gap">{displayRatioFact(result.totals.squared_gap_pp2)}</dd>
-        </div>
-    </dl>
-
-    <section data-testid="pac-cash-pools">
-        <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{$_('tools.pacAllocator.cashPools')}</h3>
-        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            {$_('tools.pacAllocator.cashPoolsHint', {
-                default: 'Native balances remain separate by currency. This report does not exchange, transfer, or merge cash.',
-            })}
-        </p>
-        {#if result.cash_pools.availability === 'available'}
-            <ul class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {#each result.cash_pools.value as pool}
-                    <li class="rounded-lg bg-gray-50 p-2.5 text-sm dark:bg-gray-900/50" data-testid="pac-cash-pool">
-                        <p class="inline-flex items-center gap-1 font-semibold">
-                            {#if currencyFlag(pool.currency)}<span class="emoji-flag" aria-hidden="true">{currencyFlag(pool.currency)}</span>{/if}
-                            {pool.currency}
-                        </p>
-                        <p class="mt-1 font-mono">{$_('tools.pacAllocator.totals.existingCash')}: {displayDecimal(pool.existing_amount)}</p>
-                        <p class="font-mono">{$_('tools.pacAllocator.totals.contributions')}: {displayDecimal(pool.contribution_amount)}</p>
-                        <p class="font-mono">{$_('tools.pacAllocator.totals.combinedCash')}: {displayDecimal(pool.combined_amount)}</p>
-                    </li>
-                {/each}
-            </ul>
-        {:else}
-            <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">— ({result.cash_pools.reason_codes.join(', ')})</p>
+        {#if stale}
+            <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200" data-testid="pac-result-stale">
+                {$t('tools.allocation.results.stale', {default: 'Inputs changed after this result. Run the analysis again before using it.'})}
+            </div>
         {/if}
-    </section>
 
-    {#if result.issues.length > 0}
-        <section data-testid="pac-issues">
-            <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{$_('tools.pacAllocator.issues')}</h3>
-            <ul class="mt-3 space-y-2">
-                {#each result.issues as issue}
-                    <li class="rounded-lg border border-gray-200 p-3 text-sm dark:border-gray-700" data-testid="pac-issue" data-kind={issue.kind}>
-                        <p class="font-medium"><span class="font-mono">{issue.code}</span> · {issue.kind}</p>
-                        <p class="mt-1 break-words font-mono text-xs text-gray-600 dark:text-gray-400">{issue.path.join(' · ')}</p>
-                    </li>
-                {/each}
-            </ul>
-        </section>
-    {/if}
+        <div class="grid gap-2 sm:grid-cols-3">
+            <article class="rounded-lg border border-gray-200 bg-gray-50 p-2.5 dark:border-gray-700 dark:bg-gray-900/50">
+                <p class="text-[11px] text-gray-500 dark:text-gray-400">{$t('tools.pacAllocator.results.existingCash', {default: 'Existing cash'})}</p>
+                <p class="mt-1 font-mono text-sm font-semibold text-gray-900 dark:text-white">{moneyText(output.totals.existing_cash_reporting)}</p>
+            </article>
+            <article class="rounded-lg border border-gray-200 bg-gray-50 p-2.5 dark:border-gray-700 dark:bg-gray-900/50">
+                <p class="text-[11px] text-gray-500 dark:text-gray-400">{$t('tools.pacAllocator.results.contributions', {default: 'New contributions'})}</p>
+                <p class="mt-1 font-mono text-sm font-semibold text-gray-900 dark:text-white">{moneyText(output.totals.contributions_reporting)}</p>
+            </article>
+            <article class="rounded-lg border border-blue-200 bg-blue-50 p-2.5 dark:border-blue-900 dark:bg-blue-950/30">
+                <p class="text-[11px] text-blue-700 dark:text-blue-300">{$t('tools.pacAllocator.results.budget', {default: 'Investable budget'})}</p>
+                <p class="mt-1 font-mono text-sm font-semibold text-blue-950 dark:text-blue-100">{moneyText(output.totals.investable_budget_reporting)}</p>
+            </article>
+        </div>
 
-    {#if result.availability === 'ready'}
-        <details class="rounded-lg border border-gray-200 p-3 dark:border-gray-700" data-testid="pac-normalized-details">
-            <summary class="cursor-pointer font-medium">{$_('tools.pacAllocator.normalizedInput')}</summary>
-            <pre class="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-words text-xs">{JSON.stringify(result.normalized, null, 2)}</pre>
-        </details>
+        {#if allocations.length > 0}
+            <DataTable
+                data={allocations}
+                {columns}
+                getRowId={(row) => row.instrument_key}
+                storageKey="tool-pac-allocator-result-v1"
+                enableSelection={false}
+                enableActions={false}
+                enableSorting={true}
+                enableColumnFilters={false}
+                enableColumnResize={true}
+                enablePagination={false}
+                enableColumnVisibility={true}
+                stickyHeader={false}
+                enableContextMenu={false}
+                tableLayout="auto"
+            />
+        {/if}
+
+        <div class="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-900 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-100">
+            <Info class="mt-0.5 shrink-0" size={14} />
+            <p>
+                {$t('tools.pacAllocator.results.boundary', {
+                    default: 'These are theoretical money amounts. No price, quantity, Broker route, FX transfer or order has been selected.',
+                })}
+            </p>
+        </div>
     {/if}
 </section>

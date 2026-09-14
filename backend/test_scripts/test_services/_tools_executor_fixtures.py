@@ -34,7 +34,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from backend.app.schemas.tools import ToolDocumentation, ToolOperationPolicy, ToolUIDescriptor
 from backend.app.services.provider_registry import register_plugin
-from backend.app.services.tools.base import ToolExecutionContext, ToolPlugin
+from backend.app.services.tools.base import ToolExecutionContext, ToolPlugin, ToolService
 from backend.app.services.tools.registry import ToolPluginRegistry
 from backend.app.services.tools.wire import decode_json, encode_json
 from backend.app.services.tools.worker import PipeCancellation, ToolWorkerJob
@@ -43,6 +43,7 @@ _SETUP_TIMEOUT = 30.0
 _CLEANUP_TIMEOUT = 5.0
 _CHILD_CONTROL: Connection | None = None
 _CHILD_EXECUTION_ID: str | None = None
+FIXTURE_TOOL_CODE = "private_executor_fixture"
 
 type Frame = dict[str, Any]
 type Role = Literal["root", "child", "grandchild"]
@@ -263,38 +264,55 @@ def _wait_for_release(text: str) -> None:
 
 
 @register_plugin(FixtureRegistry)
-class FixturePlugin(ToolPlugin[FixtureInput, FixtureOutput]):
-    tool_code = "private_executor_fixture"
+class FixturePlugin(ToolPlugin):
     contract_version = "1.0.0"
     implementation_version = "1.0.0"
-    name = "Private executor fixture"
-    description = "Test-only typed computations and independently controlled process lifecycles."
-    category = "testing"
-    icon_key = "code"
-    ui = ToolUIDescriptor(kind="custom", component_key="private-executor-fixture", ui_contract_version=1)
-    documentation = ToolDocumentation(path="user/tools/private-executor-fixture/", version="1.0.0")
-    operations = (
-        ToolOperationPolicy(
-            operation="exercise",
-            deterministic=False,
-            max_parameter_bytes=1_048_576,
-            max_result_bytes=1_048_576,
-            queue_timeout_ms=120_000,
-            soft_timeout_ms=119_000,
-            job_timeout_ms=120_000,
+    services = (
+        ToolService(
+            tool_code=FIXTURE_TOOL_CODE,
+            name="Private executor fixture",
+            description="Test-only typed computations and independently controlled process lifecycles.",
+            category="testing",
+            icon_key="code",
+            ui=ToolUIDescriptor(
+                kind="custom",
+                component_key="private-executor-fixture",
+                version="1.0.0",
+            ),
+            documentation=ToolDocumentation(
+                path="user/tools/private-executor-fixture/",
+                version="1.0.0",
+            ),
+            operations=(
+                ToolOperationPolicy(
+                    operation="exercise",
+                    deterministic=False,
+                    max_parameter_bytes=1_048_576,
+                    max_result_bytes=1_048_576,
+                    queue_timeout_ms=120_000,
+                    soft_timeout_ms=119_000,
+                    job_timeout_ms=120_000,
+                ),
+            ),
+            input_type=FixtureInput,
+            output_type=FixtureOutput,
         ),
     )
-    input_type = FixtureInput
-    output_type = FixtureOutput
 
     def __init__(self) -> None:
         if _CHILD_EXECUTION_ID is not None:
             _report("constructed", _CHILD_EXECUTION_ID)
 
-    def compute(self, parameters: FixtureInput, context: ToolExecutionContext) -> FixtureOutput:
+    def compute(
+        self,
+        tool_code: str,
+        parameters: FixtureInput,
+        context: ToolExecutionContext,
+    ) -> FixtureOutput:
+        assert tool_code == FIXTURE_TOOL_CODE, f"Unexpected fixture Tool service: {tool_code}"
         if parameters.ignore_term:
             signal.signal(signal.SIGTERM, signal.SIG_IGN)
-        _report("compute", context.execution_id)
+        _report("compute", context.execution_id, tool_code=tool_code)
         if parameters.scenario == "crash":
             os._exit(23)
         if parameters.scenario == "descendants":
