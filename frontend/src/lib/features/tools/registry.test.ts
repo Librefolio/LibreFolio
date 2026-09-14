@@ -2,7 +2,7 @@ import {beforeEach, describe, expect, it, vi} from 'vitest';
 import type {Component} from 'svelte';
 import {getClientSessionGeneration, transitionClientSession} from '$lib/stores/app/clientSession';
 import {getCompiledToolContract, validateToolCatalog, type VerifiedToolCatalog} from './contracts';
-import {createToolRendererRegistry, defineToolRenderer} from './registry';
+import {createToolRendererRegistry, defineToolRenderer, resolveToolRenderer} from './registry';
 
 const fakeComponent = (() => undefined) as unknown as Component;
 let accountSequence = 0;
@@ -17,24 +17,27 @@ function deferred<T>(): {promise: Promise<T>; resolve: (value: T) => void} {
 }
 
 function makeCatalog(): VerifiedToolCatalog {
-    const contract = getCompiledToolContract('pac_allocator', '1.0.0');
-    if (!contract) throw new Error('pac_allocator/1.0.0 generated contract is required');
+    const contracts = [getCompiledToolContract('pac_allocator', '1.0.0'), getCompiledToolContract('portfolio_rebalancer', '1.0.0')];
+    if (contracts.some((contract) => !contract)) {
+        throw new Error('both Round 4 allocator contracts must be generated');
+    }
     return validateToolCatalog(
         {
-            catalog_version: '1',
-            items: [
-                {
+            catalog_version: '2',
+            items: contracts.map((contract) => {
+                if (!contract) throw new Error('allocator contract unexpectedly missing');
+                return {
                     tool_code: contract.toolCode,
                     contract_version: contract.contractVersion,
                     implementation_version: '1.0.0',
                     schema_fingerprint: contract.schemaFingerprint,
                     category: 'analysis',
-                    description: 'PAC fixture',
+                    description: `${contract.toolCode} fixture`,
                     description_i18n_key: null,
-                    documentation: {path: 'tools/pac-allocator', version: '1.0.0'},
+                    documentation: {path: `tools/${contract.componentKey}`, version: '1.0.0'},
                     icon_key: 'calculator',
                     input_schema: {},
-                    name: 'PAC fixture',
+                    name: contract.toolCode,
                     name_i18n_key: null,
                     operations: contract.operations.map((operation) => ({
                         operation,
@@ -51,10 +54,10 @@ function makeCatalog(): VerifiedToolCatalog {
                     ui: {
                         kind: 'custom',
                         component_key: contract.componentKey,
-                        ui_contract_version: contract.uiContractVersion,
+                        version: contract.uiVersion,
                     },
-                },
-            ],
+                };
+            }),
             policy: {
                 cleanup_timeout_ms: 5_000,
                 client_timeout_ms: 30_000,
@@ -86,7 +89,7 @@ function makeCatalog(): VerifiedToolCatalog {
 function registration(load: () => Promise<{default: Component}> = vi.fn(async () => ({default: fakeComponent}))) {
     return defineToolRenderer('pac_allocator', '1.0.0', {
         componentKey: 'pac-allocator',
-        uiContractVersion: 1,
+        uiVersion: '1.0.0',
         load,
     });
 }
@@ -104,6 +107,30 @@ beforeEach(() => {
 });
 
 describe('compiled tool renderer registry', () => {
+    it('resolves both Round 4 renderer identities from catalog v2 with SemVer UI versions', () => {
+        const pac = resolveToolRenderer(catalog, 'pac_allocator');
+        const rebalancer = resolveToolRenderer(catalog, 'portfolio_rebalancer');
+
+        expect(pac).toMatchObject({
+            status: 'ready',
+            binding: {
+                descriptor: {
+                    tool_code: 'pac_allocator',
+                    ui: {component_key: 'pac-allocator', version: '1.0.0'},
+                },
+            },
+        });
+        expect(rebalancer).toMatchObject({
+            status: 'ready',
+            binding: {
+                descriptor: {
+                    tool_code: 'portfolio_rebalancer',
+                    ui: {component_key: 'portfolio-rebalancer', version: '1.0.0'},
+                },
+            },
+        });
+    });
+
     it('deduplicates concurrent module preloads and exposes the loaded renderer through peek', async () => {
         const module = deferred<{default: Component}>();
         const load = vi.fn(() => module.promise);
@@ -138,7 +165,7 @@ describe('compiled tool renderer registry', () => {
     it('keeps registration metadata guarded against the compiled descriptor', () => {
         const invalid = defineToolRenderer('pac_allocator', '1.0.0', {
             componentKey: 'not-the-compiled-component',
-            uiContractVersion: 1,
+            uiVersion: '1.0.0',
             load: async () => ({default: fakeComponent}),
         });
 

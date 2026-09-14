@@ -32,6 +32,24 @@ TOKEN_RE = re.compile(r"^[!-~]{1,64}$")
 TOOL_CODE_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 
 CATALOG_KEYS = {"catalog_version", "policy", "items", "unavailable"}
+DESCRIPTOR_KEYS = {
+    "tool_code",
+    "contract_version",
+    "implementation_version",
+    "schema_fingerprint",
+    "name",
+    "description",
+    "name_i18n_key",
+    "description_i18n_key",
+    "category",
+    "icon_key",
+    "ui",
+    "documentation",
+    "input_schema",
+    "output_schema",
+    "operations",
+}
+UI_KEYS = {"kind", "component_key", "version"}
 POLICY_KEYS = {
     "workers",
     "max_batch_items",
@@ -270,9 +288,15 @@ async def test_tools_catalog_is_strict_and_read_only(test_server):
     payload = response.json()
     catalog = ToolCatalogResponse.model_validate(payload)
     assert set(payload) == CATALOG_KEYS
-    assert catalog.catalog_version == "1"
+    assert catalog.catalog_version == "2"
     assert set(payload["policy"]) == POLICY_KEYS
     descriptors = [ToolDescriptor.model_validate(item) for item in payload["items"]]
+    for raw_descriptor, descriptor in zip(payload["items"], descriptors, strict=True):
+        assert set(raw_descriptor) == DESCRIPTOR_KEYS
+        assert set(raw_descriptor["ui"]) == UI_KEYS
+        assert descriptor.ui.kind == "custom"
+        assert SEMVER_RE.fullmatch(descriptor.ui.version)
+        assert "ui_contract_version" not in raw_descriptor["ui"]
     descriptor_codes = {descriptor.tool_code for descriptor in descriptors}
     assert len(descriptor_codes) == len(descriptors)
     assert descriptor_codes.isdisjoint(item["tool_code"] for item in payload["unavailable"] if item["tool_code"] is not None)

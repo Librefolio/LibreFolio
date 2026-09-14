@@ -7,7 +7,17 @@ description: Standalone calculations, compatibility, diagnostics, and timing in 
 
 A **Tool** is a standalone calculation: you supply the data for one operation, and it returns a result or a structured error. It is not an instruction to modify your portfolio.
 
-The Tool platform is **experimental**. Its implemented [PAC allocator](pac-allocator/index.md) pilot analyzes an exact initial allocation state. It can start a scenario from your own owned assets or from fully manual rows, but it is intentionally narrower than a solver: it does not propose trades, optimize an allocation, or assess trade feasibility. Any future solver would be a separate capability with its own contract and interface.
+The Tool platform is **experimental**. Its two allocation pilots answer
+different questions:
+
+| Tool | What its target means |
+|---|---|
+| [PAC Allocator P1](pac-allocator/index.md) | Split existing cash and new contributions across selected Assets. Current holdings are not its denominator. |
+| [Portfolio Rebalancer P1](portfolio-rebalancer/index.md) | Compare the currently invested portfolio with a desired final allocation. Cash and contributions remain separate context. |
+
+Both can start from copied OWNER source facts or fully manual rows, and both
+are intentionally narrower than a solver: they do not propose trades,
+optimize an allocation, or assess trade feasibility.
 
 ## 🖱️ Opening a tool
 
