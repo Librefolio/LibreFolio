@@ -291,6 +291,7 @@
         await loadPairSources();
         // Load asset list for cross-domain signal selection
         loadAssetList();
+        onboardingGuide.maybeStartContextual('fx_page_guide');
     });
 
     // =========================================================================
@@ -779,6 +780,9 @@
     }
 
     function handleAddPair() {
+        if (onboardingGuide.active?.flow === 'fx_page_guide') {
+            onboardingGuide.dismissHost();
+        }
         fxTourPreview = false;
         addModalOpen = true;
         onboardingGuide.maybeStartContextual('fx_guide');
@@ -950,7 +954,7 @@
          philosophy as PageToolbar's own container-driven tiers, just via native CSS here since
          no JS threshold tuning is needed for a simple 2-block header). -->
     <div class="flex flex-wrap items-start justify-between gap-4">
-        <div>
+        <div use:guideAnchor={'fx.page.overview'} data-testid="fx-page-overview-guide-target">
             <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
                 {$_('fx.title')}
                 {#if pairs.length > 0}
@@ -976,7 +980,7 @@
                 />
             {/if}
             <ViewModeToggle bind:mode={viewMode} storageKey="fxViewMode" />
-            <button class="flex items-center gap-1.5 px-3 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors whitespace-nowrap" data-testid="fx-add-pair-button" use:guideAnchor={'fx.add'} onclick={handleAddPair}>
+            <button class="flex items-center gap-1.5 px-3 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors whitespace-nowrap" data-testid="fx-add-pair-button" use:guideAnchor={'fx.page.add'} onclick={handleAddPair}>
                 <Plus size={16} />
                 {$_('fx.actions.addPair')}
             </button>
@@ -1008,7 +1012,7 @@
                  to fill the capped width evenly instead of staying at their fixed w-28/w-40 and
                  leaving the extra space as empty justify-around gaps — wide components read
                  better than empty space between small fixed-width controls. -->
-            <div class="flex items-center gap-3 shrink-0 {filtersStacked ? 'w-full justify-around' : ''}" style={filtersStacked && pickerMaxWidth ? `max-width: ${pickerMaxWidth}px` : ''}>
+            <div class="flex items-center gap-3 shrink-0 {filtersStacked ? 'w-full justify-around' : ''}" style={filtersStacked && pickerMaxWidth ? `max-width: ${pickerMaxWidth}px` : ''} use:guideAnchor={'fx.page.filters'} data-testid="fx-page-filters">
                 <div class={filtersStacked ? 'flex-1 min-w-0' : 'w-28 sm:w-40'} data-testid="fx-currency-filter">
                     <CurrencySearchSelect
                         allowedCurrencies={allowedForFilter1}
@@ -1083,6 +1087,7 @@
             <button
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                 data-testid="fx-sync-all-button"
+                use:guideAnchor={'fx.page.sync'}
                 onclick={handleSyncAll}
             >
                 <RotateCw size={14} />

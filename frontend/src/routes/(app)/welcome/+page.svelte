@@ -46,7 +46,7 @@
         skip: $_(welcomeReplay ? 'onboarding.actions.exitTour' : 'onboarding.welcome.skip'),
         skipHint: '',
         continue: $_('common.continue'),
-        logout: $_('auth.logout'),
+        logout: $_('onboarding.welcome.logout'),
         completed: $_('onboarding.welcome.completed'),
         skipped: $_('onboarding.welcome.skipped'),
     });

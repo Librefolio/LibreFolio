@@ -3,7 +3,7 @@
     import {_} from '$lib/i18n';
     import {CheckCircle2, Compass, RotateCcw, X} from 'lucide-svelte';
     import {appBootstrap} from '$lib/features/onboarding/appBootstrap.svelte';
-    import {IMPORT_GUIDE_STEP_IDS, INTRO_TOUR_STEP_IDS, onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
+    import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
     import {onboarding} from '$lib/stores/app/onboarding.svelte';
     import type {OnboardingFlow, OnboardingProgressItem} from '$lib/types/onboarding';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
@@ -13,11 +13,32 @@
     let error = $state<string | null>(null);
     let replayRevision = $state(0);
 
+    const stepTitleKeys: Record<string, string> = {
+        'transaction.bulk.workspace': 'onboarding.transactionBulkGuide.steps.workspace.title',
+        'transaction.bulk.validation': 'onboarding.transactionBulkGuide.steps.validation.title',
+        'transaction.bulk.selection': 'onboarding.transactionBulkGuide.steps.selection.title',
+        'transaction.bulk.save': 'onboarding.transactionBulkGuide.steps.save.title',
+        'import.upload': 'onboarding.importGuide.steps.upload.title',
+        'import.select': 'onboarding.importGuide.steps.select.title',
+        'import.analyze': 'onboarding.importGuide.steps.analyze.title',
+        'import.assets': 'onboarding.importGuide.steps.assets.title',
+        'import.fix': 'onboarding.importGuide.steps.fix.title',
+        'import.duplicates': 'onboarding.importGuide.steps.duplicates.title',
+        'import.review': 'onboarding.importGuide.steps.review.title',
+        'import.bulk': 'onboarding.importGuide.steps.bulk.title',
+    };
+
     let flows = $derived(onboarding.progress?.flows ?? []);
     let flowGroups = $derived([
         {key: 'setup', items: flows.filter((item) => item.flow === 'welcome')},
         {key: 'core', items: flows.filter((item) => item.flow === 'intro_tour')},
-        {key: 'contextual', items: flows.filter((item) => !['welcome', 'intro_tour'].includes(item.flow))},
+        {
+            key: 'transactions',
+            items: flows.filter((item) => ['transactions_page_guide', 'transaction_create_guide', 'transaction_bulk_guide', 'import_guide'].includes(item.flow)),
+        },
+        {key: 'broker', items: flows.filter((item) => ['broker_page_guide', 'broker_guide', 'broker_detail_guide'].includes(item.flow))},
+        {key: 'fx', items: flows.filter((item) => ['fx_page_guide', 'fx_guide', 'fx_detail_guide'].includes(item.flow))},
+        {key: 'asset', items: flows.filter((item) => ['asset_page_guide', 'asset_guide', 'asset_detail_guide'].includes(item.flow))},
     ]);
 
     function replayIsArmed(item: OnboardingProgressItem): boolean {
@@ -34,7 +55,7 @@
         error = null;
         try {
             if (item.flow === 'welcome') {
-                if (!onboarding.startReplay('welcome', item.current_version, 'welcome')) {
+                if (!onboarding.startReplay('welcome', item.current_version, 'welcome', undefined, undefined, 'replay')) {
                     fail();
                     return;
                 }
@@ -83,15 +104,24 @@
     }
 
     function armedText(item: OnboardingProgressItem): string {
-        return $_(`onboarding.settings.armed.${item.flow}`);
+        return $_('onboarding.settings.armedAtNextTrigger', {
+            values: {flow: $_(`onboarding.flows.${item.flow}`)},
+        });
     }
 
     function replayActionLabel(item: OnboardingProgressItem): string {
-        if (item.flow === 'import_guide') return $_('onboarding.settings.replayOnNextImport');
-        if (['broker_guide', 'fx_guide', 'asset_guide'].includes(item.flow)) {
-            return $_(`onboarding.settings.replayAtNextTrigger.${item.flow}`);
+        if (!['welcome', 'intro_tour'].includes(item.flow)) {
+            return $_('onboarding.settings.replayNextTrigger');
         }
         return $_('onboarding.settings.replay');
+    }
+
+    function completedCount(items: OnboardingProgressItem[]): number {
+        return items.filter((item) => item.status === 'completed' && !item.update_available).length;
+    }
+
+    function completedStepCount(item: OnboardingProgressItem): number {
+        return item.steps?.filter((step) => step.status !== 'pending' && !step.update_available).length ?? 0;
     }
 
     async function replayAll(): Promise<void> {
@@ -100,8 +130,7 @@
         const started: Array<{flow: OnboardingFlow; version: number}> = [];
         try {
             for (const item of flows) {
-                const stepId = item.flow === 'welcome' ? 'welcome' : item.flow === 'intro_tour' ? INTRO_TOUR_STEP_IDS[0] : item.flow === 'import_guide' ? IMPORT_GUIDE_STEP_IDS[0] : item.flow === 'broker_guide' ? 'broker.overview' : item.flow === 'fx_guide' ? 'fx.currencies' : 'asset.search';
-                const startedReplay = item.flow === 'intro_tour' ? onboardingGuide.prepareIntroReplay() : item.flow === 'welcome' ? onboarding.startReplay(item.flow, item.current_version, stepId) : onboardingGuide.armReplay(item.flow);
+                const startedReplay = item.flow === 'intro_tour' ? onboardingGuide.prepareIntroReplay() : item.flow === 'welcome' ? onboarding.startReplay(item.flow, item.current_version, 'welcome', undefined, undefined, 'replay') : onboardingGuide.armReplay(item.flow);
                 if (!startedReplay) {
                     throw new Error(onboarding.replayStorageError ?? $_('onboarding.errors.replayStart'));
                 }
@@ -172,11 +201,21 @@
     {:else}
         <div class="mt-2 space-y-5">
             {#each flowGroups as group (group.key)}
-                <section aria-labelledby={`onboarding-group-${group.key}`}>
-                    <h5 id={`onboarding-group-${group.key}`} class="pt-2 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
-                        {$_(`onboarding.settings.groups.${group.key}`)}
-                    </h5>
-                    <div class="divide-y divide-gray-100 dark:divide-slate-700">
+                <details class="rounded-xl border border-gray-100 px-3 dark:border-slate-700" open={group.key === 'setup' || group.key === 'core'} data-testid={`onboarding-group-${group.key}`}>
+                    <summary class="flex cursor-pointer items-center justify-between gap-3 py-3">
+                        <span id={`onboarding-group-${group.key}`} class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                            {$_(`onboarding.settings.groups.${group.key}`)}
+                        </span>
+                        <span class="text-xs text-gray-400 dark:text-gray-500" data-testid={`onboarding-group-${group.key}-progress`}>
+                            {$_('onboarding.settings.groupProgress', {
+                                values: {
+                                    completed: completedCount(group.items),
+                                    total: group.items.length,
+                                },
+                            })}
+                        </span>
+                    </summary>
+                    <div class="divide-y divide-gray-100 border-t border-gray-100 dark:divide-slate-700 dark:border-slate-700">
                         {#each group.items as item (item.flow)}
                             {@const armed = replayIsArmed(item)}
                             <div class="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between" data-testid={`onboarding-flow-${item.flow}`} data-status={item.status} data-version={item.version} data-current-version={item.current_version}>
@@ -208,6 +247,28 @@
                                             },
                                         })}
                                     </p>
+                                    {#if item.steps?.length}
+                                        <details class="mt-2 text-xs text-gray-500 dark:text-gray-400" data-testid={`onboarding-flow-${item.flow}-steps`}>
+                                            <summary class="cursor-pointer font-medium">
+                                                {$_('onboarding.settings.groupProgress', {
+                                                    values: {
+                                                        completed: completedStepCount(item),
+                                                        total: item.steps.length,
+                                                    },
+                                                })}
+                                            </summary>
+                                            <ul class="mt-2 space-y-1.5 border-l border-gray-200 pl-3 dark:border-slate-600">
+                                                {#each item.steps as step (step.step_id)}
+                                                    <li class="flex items-center justify-between gap-3" data-testid={`onboarding-step-${item.flow}-${step.step_id}`}>
+                                                        <span>{$_(stepTitleKeys[step.step_id] ?? step.step_id)}</span>
+                                                        <span class="rounded-full bg-gray-100 px-2 py-0.5 dark:bg-slate-700">
+                                                            {$_(`onboarding.status.${step.status}`)}
+                                                        </span>
+                                                    </li>
+                                                {/each}
+                                            </ul>
+                                        </details>
+                                    {/if}
                                 </div>
                                 <button
                                     type="button"
@@ -222,7 +283,7 @@
                             </div>
                         {/each}
                     </div>
-                </section>
+                </details>
             {/each}
         </div>
     {/if}

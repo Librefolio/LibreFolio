@@ -44,9 +44,10 @@ Learn how to use the Broker Report Import Module (BRIM) to import your transacti
 ## 🧙 The Import Wizard Steps
 
 The wizard has **four steps you always see** and **three that appear only when your files
-actually need them**. The progress bar shows only the steps that apply to your import, so a
-clean single-file report stays a short flow, while a messy multi-file one gets exactly the extra
-questions it deserves — and no others.
+actually need them**. Those optional steps join the flow only when later analysis first
+encounters the relevant data. The progress bar and guide therefore use the current **N/M** for
+the steps that apply to this import: a clean single-file report stays short, while a messy
+multi-file one gets exactly the extra questions it deserves.
 
 | Step | Always shown? | Appears when |
 | :--- | :--- | :--- |
@@ -137,6 +138,10 @@ At the end of parsing, the table displays a summary of the processing for each f
       identifiers, so nothing your files knew is thrown away.
     - **Rename** a group with the pencil. A group already matching something in your library
       carries an **in archive** badge, and your library's own name wins.
+    - **Confirm all (N)** accepts only the proposals that are still open; it does not rewrite
+      confirmed, automatic, split, or manually adjusted groups. The shortcut appears when at
+      least two proposals are open. Any open proposal blocks **Continue**, so confirm or adjust
+      every remaining proposal before moving on.
     - **Restore automatic grouping**, at the top, undoes every merge, split and code election in
       one click if you want to start over.
 
@@ -330,11 +335,13 @@ nothing is written to the ledger yet. Give them one last look — or keep editin
 ## 🧭 Guided First Import {: #guided-first-import }
 
 The first time you open the Import Wizard, a contextual guide bubble follows you through the
-flow above, step by step.
+real conditional flow above. Import is one saved onboarding flow with per-step status, not a
+separate flow for every wizard screen.
 
-- **It tracks the wizard you're actually seeing.** The guide follows whichever steps your files
-  trigger — including the optional **Unify Assets**, **Corrections**, and **Duplicates** steps —
-  and skips the ones that don't apply, exactly like the wizard itself.
+- **It tracks the wizard you're actually seeing.** Its **Step N of M** label follows the current
+  visible steps. Optional **Unify Assets**, **Corrections**, and **Duplicates** guidance begins
+  only when the wizard first reaches that step; a step that does not apply remains available for
+  a later import that needs it.
 - **It yields to deeper dialog stacks.** The coachmark remains available through the wizard and
   one dialog opened above it. If that dialog opens another dialog, the coachmark temporarily
   hides and returns when the upper dialog closes.
@@ -342,22 +349,16 @@ flow above, step by step.
   duplicate check and that check reopens the **Duplicates** step, the guide follows you back
   there instead of getting stuck on the review step.
 - **It observes; it does not operate the wizard.** You still use the wizard's own controls. The
-  guide never restores a previous wizard draft, clicks a control, or uploads a file for you.
+  guide never restores a previous wizard draft, clicks a control, uploads a file, or changes a
+  row for you. Clicking the highlighted real action performs that normal action and advances the
+  guide.
 - **It ends by highlighting Save All — it never presses it.** Once your transactions reach the
   bulk editor, the guide's last stop highlights the **Save All** button and waits. It does not
   write any data for you.
-- **Only the automatic pending guide can be marked complete or skipped.** Its own **Finish
-  guide** button marks it complete; merely reaching the highlighted button or closing the wizard
-  does not. **Skip permanently** dismisses that pending guide for good. During a replay,
-  **Finish guide** and **Exit replay** only end the browser-session replay: neither action
-  completes or skips the guide on the server.
-
-In automatic pending mode, the top row offers **Skip permanently** and **X**; in replay mode,
-**Skip permanently** is replaced by **Exit replay**. **X** suspends rather than ends the guide
-and, for an import, resets the next guide entry to **Upload** while leaving the replay armed.
-Closing the wizard before the bulk-editor handoff does the same. This resets only the guide
-position — it does not reconstruct the wizard's in-memory draft. Ending a replay is strictly
-non-destructive: it neither writes transactions nor changes saved onboarding status.
+- **It saves progress one step at a time.** In automatic mode, **X** skips only the current
+  guide step; later steps remain due and start when the wizard reaches them. In replay mode,
+  exiting affects only that browser-session replay and never changes the saved onboarding
+  status.
 
 You can also re-arm the guide on demand from
 **[Settings → Preferences → Onboarding and guides](../../settings/preferences.md#onboarding-and-guides)**,

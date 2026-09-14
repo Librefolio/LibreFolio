@@ -1,10 +1,13 @@
 import {getClientSessionGeneration, getClientSessionUserId, isClientSessionCurrent, registerClientSessionReset} from '$lib/stores/app/clientSession';
-import type {OnboardingApi, OnboardingFlow, OnboardingLoadState, OnboardingProgressItem, OnboardingProgressResponse, OnboardingReplayState, OnboardingWelcomeCompleteRequest} from '$lib/types/onboarding';
+import type {OnboardingApi, OnboardingFlow, OnboardingLoadState, OnboardingProgressItem, OnboardingProgressResponse, OnboardingReplayState, OnboardingStepProgressItem, OnboardingWelcomeCompleteRequest} from '$lib/types/onboarding';
 
 interface RequestTicket {
     userId: string;
     generation: number;
+    epoch: number;
+    owner: string;
     sequence: number;
+    loadSequence: number;
 }
 
 interface OnboardingControllerDependencies {
@@ -33,6 +36,8 @@ function isReplayState(value: unknown): value is OnboardingReplayState {
         candidate.version >= 1 &&
         typeof candidate.stepId === 'string' &&
         typeof candidate.startedAt === 'number' &&
+        (candidate.mode === undefined || candidate.mode === 'automatic' || candidate.mode === 'replay') &&
+        (candidate.remainingStepIds === undefined || (Array.isArray(candidate.remainingStepIds) && candidate.remainingStepIds.every((stepId) => typeof stepId === 'string'))) &&
         (candidate.returnTo === undefined || typeof candidate.returnTo === 'string')
     );
 }
@@ -48,22 +53,29 @@ export function createOnboardingController(dependencies: OnboardingControllerDep
     let progress = $state<OnboardingProgressResponse | null>(null);
     let error = $state<string | null>(null);
     let transitioningFlow = $state<OnboardingFlow | null>(null);
+    let transitioningTicket: RequestTicket | null = null;
     let replay = $state<OnboardingReplayState | null>(null);
     let replayStorageError = $state<string | null>(null);
-    let sequence = 0;
+    let requestEpoch = 0;
+    const requestSequences = new Map<string, number>();
 
-    function captureRequest(): RequestTicket {
+    function captureRequest(owner: string): RequestTicket {
         const userId = getUserId();
         if (!userId) throw new Error('Onboarding requires an authenticated user');
+        const sequence = (requestSequences.get(owner) ?? 0) + 1;
+        requestSequences.set(owner, sequence);
         return {
             userId,
             generation: getGeneration(),
-            sequence: ++sequence,
+            epoch: requestEpoch,
+            owner,
+            sequence,
+            loadSequence: requestSequences.get('load') ?? 0,
         };
     }
 
     function requestIsCurrent(ticket: RequestTicket): boolean {
-        return ticket.sequence === sequence && ticket.userId === getUserId() && isCurrent(ticket.generation);
+        return ticket.epoch === requestEpoch && requestSequences.get(ticket.owner) === ticket.sequence && ticket.loadSequence === (requestSequences.get('load') ?? 0) && ticket.userId === getUserId() && isCurrent(ticket.generation);
     }
 
     function replayPrefix(userId: string, flow: OnboardingFlow): string {
@@ -108,6 +120,10 @@ export function createOnboardingController(dependencies: OnboardingControllerDep
         return progress?.flows.find((item) => item.flow === flow) ?? null;
     }
 
+    function findStep(flow: OnboardingFlow, stepId: string): OnboardingStepProgressItem | null {
+        return findFlow(flow)?.steps?.find((item) => item.step_id === stepId) ?? null;
+    }
+
     function replaceFlow(updated: OnboardingProgressItem): void {
         if (!progress) return;
         progress = {
@@ -116,8 +132,9 @@ export function createOnboardingController(dependencies: OnboardingControllerDep
     }
 
     async function load(api: OnboardingApi): Promise<OnboardingProgressResponse | null> {
-        const ticket = captureRequest();
+        const ticket = captureRequest('load');
         transitioningFlow = null;
+        transitioningTicket = null;
         state = 'loading';
         error = null;
         try {
@@ -135,8 +152,9 @@ export function createOnboardingController(dependencies: OnboardingControllerDep
     }
 
     async function transition(api: OnboardingApi, flow: OnboardingFlow, expectedVersion: number, target: 'complete' | 'skip'): Promise<OnboardingProgressItem | null> {
-        const ticket = captureRequest();
+        const ticket = captureRequest(`flow:${flow}`);
         transitioningFlow = flow;
+        transitioningTicket = ticket;
         error = null;
         try {
             const request = {expected_version: expectedVersion};
@@ -146,16 +164,20 @@ export function createOnboardingController(dependencies: OnboardingControllerDep
             return updated;
         } catch (requestError) {
             if (!requestIsCurrent(ticket)) return null;
-            error = errorMessage(requestError);
+            if (transitioningTicket === ticket) error = errorMessage(requestError);
             throw requestError;
         } finally {
-            if (ticket.sequence === sequence) transitioningFlow = null;
+            if (transitioningTicket === ticket) {
+                transitioningFlow = null;
+                transitioningTicket = null;
+            }
         }
     }
 
     async function completeWelcome(api: OnboardingApi, request: OnboardingWelcomeCompleteRequest): Promise<OnboardingProgressItem | null> {
-        const ticket = captureRequest();
+        const ticket = captureRequest('flow:welcome');
         transitioningFlow = 'welcome';
+        transitioningTicket = ticket;
         error = null;
         try {
             const updated = await api.completeWelcome(request);
@@ -164,19 +186,47 @@ export function createOnboardingController(dependencies: OnboardingControllerDep
             return updated;
         } catch (requestError) {
             if (!requestIsCurrent(ticket)) return null;
-            error = errorMessage(requestError);
+            if (transitioningTicket === ticket) error = errorMessage(requestError);
             throw requestError;
         } finally {
-            if (ticket.sequence === sequence) transitioningFlow = null;
+            if (transitioningTicket === ticket) {
+                transitioningFlow = null;
+                transitioningTicket = null;
+            }
         }
     }
 
-    function startReplay(flow: OnboardingFlow, version: number, stepId: string, returnTo?: string): boolean {
+    async function transitionStep(api: OnboardingApi, flow: OnboardingFlow, stepId: string, expectedVersion: number, target: 'complete' | 'skip'): Promise<OnboardingProgressItem | null> {
+        const ticket = captureRequest(`flow:${flow}`);
+        transitioningFlow = flow;
+        transitioningTicket = ticket;
+        error = null;
+        try {
+            const request = {expected_version: expectedVersion};
+            const updated = target === 'complete' ? await api.completeStep(flow, stepId, request) : await api.skipStep(flow, stepId, request);
+            if (!requestIsCurrent(ticket)) return null;
+            replaceFlow(updated);
+            return updated;
+        } catch (requestError) {
+            if (!requestIsCurrent(ticket)) return null;
+            if (transitioningTicket === ticket) error = errorMessage(requestError);
+            throw requestError;
+        } finally {
+            if (transitioningTicket === ticket) {
+                transitioningFlow = null;
+                transitioningTicket = null;
+            }
+        }
+    }
+
+    function startReplay(flow: OnboardingFlow, version: number, stepId: string, returnTo?: string, remainingStepIds?: string[], mode?: OnboardingReplayState['mode']): boolean {
         return writeReplay({
             flow,
             version,
             stepId,
             startedAt: now(),
+            ...(mode ? {mode} : {}),
+            ...(remainingStepIds ? {remainingStepIds} : {}),
             ...(returnTo ? {returnTo} : {}),
         });
     }
@@ -268,11 +318,13 @@ export function createOnboardingController(dependencies: OnboardingControllerDep
     }
 
     function reset(): void {
-        sequence += 1;
+        requestEpoch += 1;
+        requestSequences.clear();
         state = 'idle';
         progress = null;
         error = null;
         transitioningFlow = null;
+        transitioningTicket = null;
         replay = null;
         replayStorageError = null;
     }
@@ -297,11 +349,14 @@ export function createOnboardingController(dependencies: OnboardingControllerDep
             return replayStorageError;
         },
         findFlow,
+        findStep,
         requiresAutomaticFlow: (flow: OnboardingFlow) => findFlow(flow)?.status === 'pending',
         load,
         complete: (api: OnboardingApi, flow: OnboardingFlow, expectedVersion: number) => transition(api, flow, expectedVersion, 'complete'),
         completeWelcome,
         skip: (api: OnboardingApi, flow: OnboardingFlow, expectedVersion: number) => transition(api, flow, expectedVersion, 'skip'),
+        completeStep: (api: OnboardingApi, flow: OnboardingFlow, stepId: string, expectedVersion: number) => transitionStep(api, flow, stepId, expectedVersion, 'complete'),
+        skipStep: (api: OnboardingApi, flow: OnboardingFlow, stepId: string, expectedVersion: number) => transitionStep(api, flow, stepId, expectedVersion, 'skip'),
         startReplay,
         resumeReplay,
         hasReplay,

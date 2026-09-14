@@ -15,7 +15,7 @@
         onclose: () => void;
     }
 
-    let {open = false, durationMs = 10_000, busy = false, error = null, closeLabel = '', onstart, onclose}: Props = $props();
+    let {open = false, durationMs = 8_000, busy = false, error = null, closeLabel = '', onstart, onclose}: Props = $props();
 
     let phase = $state(0);
     let phraseMotion = $state<'enter' | 'hold' | 'exit'>('enter');
@@ -81,14 +81,14 @@
                 timers.push(
                     window.setTimeout(() => {
                         if (runId === thisRun) phraseMotion = 'hold';
-                    }, startAt + 400),
+                    }, startAt + 100),
                 );
                 timers.push(
                     window.setTimeout(
                         () => {
                             if (runId === thisRun) phraseMotion = 'exit';
                         },
-                        Math.max(phaseEnds[index] - 450, startAt + 500),
+                        Math.max(phaseEnds[index] - 350, startAt + 400),
                     ),
                 );
             });
@@ -145,7 +145,7 @@
                 {/if}
                 {#key reducedMotion ? 'reduced' : phase}
                     <p
-                        class="mt-6 max-w-xl text-lg leading-8 text-gray-600 transition-all duration-500 ease-out dark:text-gray-300 motion-reduce:transform-none motion-reduce:transition-none"
+                        class="mt-6 max-w-xl text-lg leading-8 text-gray-600 transition-all duration-300 ease-out dark:text-gray-300 motion-reduce:transform-none motion-reduce:transition-none"
                         class:opacity-100={reducedMotion || phraseMotion === 'hold'}
                         class:opacity-0={!reducedMotion && phraseMotion !== 'hold'}
                         class:translate-y-3={!reducedMotion && phraseMotion === 'enter'}
@@ -158,6 +158,15 @@
                         {phrase}
                     </p>
                 {/key}
+                <div class="mt-6 flex items-center justify-center gap-2" aria-label={$_('onboarding.intro.progress')} data-testid="onboarding-intro-progress">
+                    {#each phaseKeys as _key, index}
+                        <span
+                            class="h-1.5 rounded-full transition-all duration-300 motion-reduce:transition-none {reducedMotion || phase === index ? 'w-8 bg-libre-green dark:bg-emerald-300' : 'w-3 bg-gray-300 dark:bg-slate-600'}"
+                            data-testid={`onboarding-intro-progress-${index}`}
+                            data-active={reducedMotion || phase === index ? 'true' : 'false'}
+                        ></span>
+                    {/each}
+                </div>
             </div>
 
             <button
@@ -170,9 +179,6 @@
                 <Play size={18} />
                 {$_('onboarding.intro.start')}
             </button>
-            <p class="mt-3 text-xs text-gray-500 dark:text-gray-400">
-                {$_('onboarding.intro.autoStartHint')}
-            </p>
         </div>
     </div>
 {/if}

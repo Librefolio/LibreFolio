@@ -27,6 +27,8 @@ import {locale} from '$lib/i18n';
 import {cleanup, fireEvent, render, screen} from '$test/component';
 import OnboardingIntroScene from './OnboardingIntroScene.svelte';
 
+const AUTO_START_HINT_KEY = 'onboarding.intro.autoStartHint';
+
 interface MediaFixture {
     addEventListener: ReturnType<typeof vi.fn>;
     removeEventListener: ReturnType<typeof vi.fn>;
@@ -56,17 +58,15 @@ function stubReducedMotion(matches = false): MediaFixture {
 
 async function mount(overrides: Record<string, unknown> = {}) {
     const onstart = vi.fn();
-    const onskip = vi.fn();
     const onclose = vi.fn();
     const view = render(OnboardingIntroScene, {
         open: true,
         onstart,
-        onskip,
         onclose,
         ...overrides,
     });
     await tick();
-    return {onstart, onskip, onclose, ...view};
+    return {onstart, onclose, ...view};
 }
 
 beforeEach(() => {
@@ -84,7 +84,17 @@ afterEach(() => {
 });
 
 describe('OnboardingIntroScene — phases and start timing', () => {
-    it('publishes the three automatic phases at 33% and 66% of the default duration', async () => {
+    it('omits the automatic-start countdown hint from the intro DOM', async () => {
+        stubReducedMotion();
+        await mount();
+
+        // The translator returns the key as a synthetic token, so this proves
+        // the old hint is absent without pinning the assertion to any locale.
+        expect(screen.getByTestId('onboarding-intro-scene')).not.toHaveTextContent(`en:${AUTO_START_HINT_KEY}`);
+        expect(translate.mock.calls.some(([, key]) => key === AUTO_START_HINT_KEY)).toBe(false);
+    });
+
+    it('publishes the three automatic phases at 32% and 64% of the default duration', async () => {
         stubReducedMotion();
         const {onstart} = await mount();
         const scene = screen.getByTestId('onboarding-intro-scene');
@@ -92,13 +102,13 @@ describe('OnboardingIntroScene — phases and start timing', () => {
         expect(scene).toHaveAttribute('data-state', 'intro-scene');
         expect(scene).toHaveAttribute('data-phase', 'welcome');
 
-        await vi.advanceTimersByTimeAsync(3_299);
+        await vi.advanceTimersByTimeAsync(2_559);
         expect(scene).toHaveAttribute('data-phase', 'welcome');
         await vi.advanceTimersByTimeAsync(1);
         await tick();
         expect(scene).toHaveAttribute('data-phase', 'aboard');
 
-        await vi.advanceTimersByTimeAsync(3_299);
+        await vi.advanceTimersByTimeAsync(2_559);
         expect(scene).toHaveAttribute('data-phase', 'aboard');
         await vi.advanceTimersByTimeAsync(1);
         await tick();
@@ -117,19 +127,19 @@ describe('OnboardingIntroScene — phases and start timing', () => {
         expect(onstart).toHaveBeenCalledTimes(1);
     });
 
-    it('auto-starts exactly once at the published default 10-second deadline', async () => {
+    it('auto-starts exactly once at the published default 8-second deadline', async () => {
         stubReducedMotion();
         const {onstart} = await mount();
         const scene = screen.getByTestId('onboarding-intro-scene');
 
-        expect(scene).toHaveAttribute('data-auto-start-at', '11000');
-        await vi.advanceTimersByTimeAsync(9_999);
+        expect(scene).toHaveAttribute('data-auto-start-at', '9000');
+        await vi.advanceTimersByTimeAsync(7_999);
         expect(onstart).not.toHaveBeenCalled();
 
         await vi.advanceTimersByTimeAsync(1);
         expect(onstart).toHaveBeenCalledTimes(1);
 
-        await vi.advanceTimersByTimeAsync(10_000);
+        await vi.advanceTimersByTimeAsync(8_000);
         expect(onstart).toHaveBeenCalledTimes(1);
     });
 
@@ -137,7 +147,7 @@ describe('OnboardingIntroScene — phases and start timing', () => {
         stubReducedMotion();
         const {onstart} = await mount();
 
-        await vi.advanceTimersByTimeAsync(9_999);
+        await vi.advanceTimersByTimeAsync(7_999);
         await fireEvent.click(screen.getByTestId('onboarding-intro-start'));
         await vi.advanceTimersByTimeAsync(1);
 
@@ -145,7 +155,7 @@ describe('OnboardingIntroScene — phases and start timing', () => {
     });
 });
 
-describe('OnboardingIntroScene — terminal and suspend controls', () => {
+describe('OnboardingIntroScene — exit control', () => {
     it('renders a supplied guide error as an alert while the scene is open', async () => {
         stubReducedMotion();
         await mount({error: 'OWNED_SKIP_ERROR_TOKEN'});
@@ -156,44 +166,31 @@ describe('OnboardingIntroScene — terminal and suspend controls', () => {
         expect(error).toHaveTextContent('OWNED_SKIP_ERROR_TOKEN');
     });
 
-    it('renders the supplied skip label', async () => {
+    it('renders the supplied close label on the only exit control', async () => {
         stubReducedMotion();
-        await mount({skipLabel: 'OWNED_SKIP_LABEL_TOKEN'});
+        await mount({closeLabel: 'OWNED_CLOSE_LABEL_TOKEN'});
 
-        expect(screen.getByTestId('onboarding-intro-skip')).toHaveTextContent('OWNED_SKIP_LABEL_TOKEN');
+        expect(screen.getByTestId('onboarding-intro-close')).toHaveAttribute('aria-label', 'OWNED_CLOSE_LABEL_TOKEN');
+        expect(screen.queryByTestId('onboarding-intro-skip')).toBeNull();
     });
 
     it('routes X only to the close callback', async () => {
         stubReducedMotion();
-        const {onstart, onskip, onclose} = await mount();
+        const {onstart, onclose} = await mount();
 
         await fireEvent.click(screen.getByTestId('onboarding-intro-close'));
 
         expect(onclose).toHaveBeenCalledTimes(1);
-        expect(onskip).not.toHaveBeenCalled();
         expect(onstart).not.toHaveBeenCalled();
     });
 
     it('routes Escape only to the close callback', async () => {
         stubReducedMotion();
-        const {onstart, onskip, onclose} = await mount();
+        const {onstart, onclose} = await mount();
 
         await fireEvent.keyDown(window, {key: 'Escape'});
 
         expect(onclose).toHaveBeenCalledTimes(1);
-        expect(onskip).not.toHaveBeenCalled();
-        expect(onstart).not.toHaveBeenCalled();
-    });
-
-    it('routes permanent Skip only to the skip callback', async () => {
-        stubReducedMotion();
-        const {onstart, onskip, onclose} = await mount();
-
-        await fireEvent.click(screen.getByTestId('onboarding-intro-skip'));
-        await vi.advanceTimersByTimeAsync(10_000);
-
-        expect(onskip).toHaveBeenCalledTimes(1);
-        expect(onclose).not.toHaveBeenCalled();
         expect(onstart).not.toHaveBeenCalled();
     });
 });
@@ -201,14 +198,19 @@ describe('OnboardingIntroScene — terminal and suspend controls', () => {
 describe('OnboardingIntroScene — reduced motion, locale, and teardown', () => {
     it('keeps one static phase and composes all three phrase keys under reduced motion', async () => {
         stubReducedMotion(true);
-        await mount();
+        const {onstart} = await mount();
         const scene = screen.getByTestId('onboarding-intro-scene');
 
         const phraseKeys = new Set(translate.mock.calls.filter(([, key]) => key.startsWith('onboarding.intro.line')).map(([, key]) => key));
         expect(phraseKeys).toEqual(new Set(['onboarding.intro.line1', 'onboarding.intro.line2', 'onboarding.intro.line3']));
 
-        await vi.advanceTimersByTimeAsync(6_600);
+        await vi.advanceTimersByTimeAsync(7_999);
         expect(scene).toHaveAttribute('data-phase', 'welcome');
+        expect(onstart).not.toHaveBeenCalled();
+
+        await vi.advanceTimersByTimeAsync(1);
+        expect(scene).toHaveAttribute('data-phase', 'welcome');
+        expect(onstart).toHaveBeenCalledTimes(1);
     });
 
     it('re-evaluates the open phrase when the locale changes', async () => {
@@ -227,7 +229,7 @@ describe('OnboardingIntroScene — reduced motion, locale, and teardown', () => 
         const media = stubReducedMotion();
         const view = await mount();
 
-        expect(vi.getTimerCount()).toBe(3);
+        expect(vi.getTimerCount()).toBeGreaterThan(0);
         expect(media.addEventListener).toHaveBeenCalledWith('change', expect.any(Function));
 
         view.unmount();

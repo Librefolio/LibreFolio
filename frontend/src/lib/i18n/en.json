@@ -703,7 +703,8 @@
       "fromDbHint": "This security is already in the archive: the name is the stored one. Use the pencil above to change it.",
       "linkAll": "{reason} · all {n} extractions",
       "linkSome": "{reason} · {members}",
-      "linkScore": "{score}% similarity"
+      "linkScore": "{score}% similarity",
+      "confirmAll": "Confirm all ({count})"
     },
     "assetPicker": {
       "sectionImport": "In this import",
@@ -3329,9 +3330,8 @@
     },
     "pacAllocator": {
       "name": "PAC allocator",
-      "description": "Analyze the exact initial allocation state.",
+      "description": "Distribute investable liquidity across selected Assets by target percentage.",
       "pilotNotice": "Manual initial-state analysis only. No portfolio data is read, no orders are proposed, and nothing is saved.",
-      "scenario": "Scenario",
       "reportCurrency": "Reporting currency",
       "asOfDate": "As-of date (optional)",
       "rows": {
@@ -3362,20 +3362,45 @@
         "markNotSupplied": "Mark as not supplied",
         "contributions": "New contributions",
         "noneContributions": "Explicitly no new contributions",
-        "markNoneContributions": "No new contributions"
+        "markNoneContributions": "No new contributions",
+        "fromBrokers": "From brokers",
+        "loadingBrokerCash": "Loading Broker reserves…",
+        "noOwnerBrokers": "No OWNER Broker is available. Enter cash manually.",
+        "noNativeBalances": "No native reserve",
+        "backendAggregate": "Backend aggregate",
+        "sourceStale": "Waiting for current broker balances. The previous snapshot will not be submitted.",
+        "noSelectedBalances": "No selected broker balance.",
+        "monetaryStep": "Amount increment",
+        "addContribution": "Add contribution",
+        "backToBrokers": "Use Broker reserves",
+        "selectedReserves": "Selected native reserves",
+        "fullNativeReserve": "Full native reserve",
+        "monetaryStepHint": "Smallest accepted increment for this contribution, for example 0.01 for cents.",
+        "refreshingSelection": "Updating selected native reserves…"
       },
       "rates": {
-        "title": "Valuation exchange rates",
-        "description": "Reporting value of one native currency unit. These rates do not convert or move cash.",
+        "description": "Compare values in the reporting currency. No cash is exchanged, transferred, or merged.",
         "add": "Add rate",
         "value": "Rate to reporting currency",
-        "date": "Rate date (optional)"
+        "date": "Rate date (optional)",
+        "titleNumbered": "3. Valuation exchange rates",
+        "equationHint": "Example: 1 USD = 0.90 EUR means one USD is valued at 0.90 EUR in this report.",
+        "nativeCurrency": "Native currency",
+        "noCashConversion": "Valuation only: cash is not exchanged, transferred, or merged.",
+        "title": "Valuation exchange rates",
+        "copySaved": "Copy rate",
+        "copyUnavailable": "No saved {currency} to {reportCurrency} rate is available for {date}.",
+        "enterManually": "Enter manually",
+        "reason": "{currency} facts must be valued in {reportCurrency}.",
+        "reasonAssets": "Asset prices: {assets}",
+        "reasonCash": "Selected existing cash uses this currency.",
+        "reasonContribution": "A new contribution uses this currency."
       },
       "revision": "Draft revision",
       "noOrders": "Orders, feasibility, and optimization are not included in this pilot.",
       "stopWaiting": "Stop waiting",
       "analyzing": "Analyzing revision {revision}…",
-      "analyze": "Check initial state",
+      "analyze": "Analyze PAC allocation",
       "stale": {
         "pending": "Request revision {requestRevision} is still running, but the draft is now revision {draftRevision}. Its response will be ignored.",
         "ignored": "Response for revision {revision} was ignored because the draft or account changed.",
@@ -3410,7 +3435,201 @@
       },
       "cashPools": "Native cash pools",
       "issues": "Backend findings",
-      "normalizedInput": "Normalized input and units"
+      "normalizedInput": "Normalized input and units",
+      "valuationSettings": "Valuation settings",
+      "valuationSettingsHint": "Reporting currency values assets, cash, and contributions. The date is the inclusive cutoff for saved facts.",
+      "valuationSettingsInfo": "These settings define one comparison unit and fact cutoff. They do not move cash or execute trades.",
+      "fundsTitle": "1. Available funds",
+      "fundsHint": "Copy native OWNER Broker cash or enter exact amounts. New contributions remain separate.",
+      "selectedContextCount": "Selected contexts: {count}",
+      "rowLimitHint": "Maximum {count} contexts. Adding an Asset with multiple custody contexts is always all-or-nothing.",
+      "rowLimitWarning": "Remaining slots: {count}",
+      "gallery": {
+        "owned": "Owned",
+        "otherUsers": "Other users",
+        "observed": "Observed",
+        "title": "2. Assets",
+        "hint": "Select canonical Assets or add a manual one.",
+        "empty": "No Asset candidates found",
+        "search": "Search Assets or Brokers",
+        "zeroPosition": "initial quantity 0",
+        "inactive": "Inactive"
+      },
+      "newManualAsset": "Manual Asset",
+      "manualCopy": "Independent manual copy",
+      "importedSnapshot": "Imported custody snapshot",
+      "noCurrentCustody": "No current custody",
+      "readOnlyFacts": "source facts read-only",
+      "initialState": "Initial state",
+      "brokerCustody": "Broker custody",
+      "units": "units",
+      "economicShare": "Personal economic share",
+      "economicShareHint": "Informational ownership share. Imported custody quantities remain whole and are never scaled.",
+      "nativePrice": "Native price",
+      "quoteBasisHint": "Number of Asset units represented by the quoted price.",
+      "target": "Target",
+      "gridModeHint": "Controls only the quantity increment of future purchases. Existing fractional inventory is never rounded.",
+      "quantityStepHint": "Minimum quantity increment for new purchases. This is separate from contribution monetary step.",
+      "denominatorHint": "Current weights and gaps use invested Asset value only. Existing cash and new contributions stay separate and do not change these P1 percentages.",
+      "cashPoolsHint": "Native balances remain separate by currency. This report does not exchange, transfer, or merge cash.",
+      "loadingOwnedAssets": "Loading Asset catalog…",
+      "noOwnedAssetsHint": "You can still add a manual Asset.",
+      "noAssetMatches": "No Asset candidates match the current filters.",
+      "selectedContexts": "Selected Asset contexts",
+      "selectedContextsHint": "Imported source facts are read-only. Targets and purchase grids remain editable; manual rows are fully editable.",
+      "emptyRowsHint": "Select an Asset candidate above or add a manual Asset.",
+      "confirmDeselectTitle": "Remove imported Asset contexts?",
+      "confirmDeselectMessage": "Some linked rows were edited. Deselecting the Asset removes every linked imported context listed below. Independent manual copies remain.",
+      "scenario": "Scenario",
+      "assets": {
+        "hint": "Choose canonical Assets. Current prices are source context only and do not affect the P1 split.",
+        "title": "2. Assets to fund"
+      },
+      "customizedRemovalItems": "Settings that will be lost",
+      "customizedRemovalMessage": "Removing this Asset will discard its target and custom settings.",
+      "customizedRemovalTitle": "Remove customized Asset?",
+      "duplicate": "Duplicate as manual row",
+      "p1": {
+        "description": "Distributes available liquidity by target percentage. It does not inspect the current portfolio or generate orders.",
+        "title": "PAC Allocator P1"
+      },
+      "results": {
+        "boundary": "These are theoretical money amounts. No price, quantity, Broker route, FX transfer or order has been selected.",
+        "budget": "Investable budget",
+        "contributions": "New contributions",
+        "empty": "Run the analysis to calculate the theoretical monetary allocation.",
+        "existingCash": "Existing cash",
+        "hint": "P1 splits the available liquidity by target percentage. It does not calculate units, orders, feasibility or an optimum.",
+        "idealAllocation": "Theoretical allocation",
+        "title": "4. PAC analysis"
+      },
+      "targetEditor": {
+        "hint": "Set how the investable liquidity should be split. These percentages do not describe the current portfolio.",
+        "title": "3. Liquidity distribution"
+      }
+    },
+    "backendVersion": "Backend/API",
+    "uiVersion": "UI",
+    "allocation": {
+      "asset": {
+        "custodyCount": "{count} custody contexts",
+        "futureConstraints": "Future purchase constraints",
+        "futureConstraintsHint": "Recorded for the future solver. P1 does not quantize this theoretical monetary allocation."
+      },
+      "diagnostics": {
+        "invalid": "Correct the scenario",
+        "needsInput": "Complete the scenario",
+        "noIssues": "All required inputs are valid for this P1 analysis.",
+        "ready": "Scenario ready",
+        "technical": "Technical details",
+        "unsupported": "Scenario outside P1 boundaries"
+      },
+      "fundingSummary": {
+        "afterAnalysis": "after analysis",
+        "available": "Available",
+        "contributions": "Contributions",
+        "empty": "No cash or contribution entered.",
+        "existing": "Existing",
+        "hint": "Existing cash and new contributions remain separate facts. Combined totals are shown only after backend analysis.",
+        "title": "Available funds by currency",
+        "updating": "Updating…"
+      },
+      "issues": {
+        "assetsRequired": "Select at least one Asset.",
+        "cashRequired": "Enter cash rows, or keep an explicit empty list.",
+        "contributionStep": "The contribution must be a multiple of its monetary step.",
+        "currencyDomain": "This scenario contains more currencies than the P1 limit of {limit}.",
+        "duplicateCurrency": "{currency} appears more than once where only one row per currency is allowed.",
+        "duplicateInstrument": "This Asset is selected more than once.",
+        "duplicateRow": "Two custody rows have the same technical identity.",
+        "duplicateTarget": "This Asset has more than one target.",
+        "fieldRequired": "Complete this required field.",
+        "generic": "Review this scenario input.",
+        "holdingsRequired": "Select at least one portfolio holding.",
+        "identityRate": "The report currency {currency} must use an identity valuation rate of 1.",
+        "identityRateRedundant": "The report-currency rate is redundant and was treated as 1.",
+        "incompleteDecimal": "Complete the decimal value.",
+        "initialDebt": "Negative existing cash is outside this P1 analysis.",
+        "invalidCurrency": "Choose a valid three-letter currency.",
+        "invalidDate": "Enter a valid date.",
+        "invalidDecimal": "Enter a valid decimal number.",
+        "invalidQuoteBasis": "The quoted unit basis must be a positive whole number.",
+        "inventoryOffGrid": "Existing fractional custody does not match the future purchase step. It was preserved exactly.",
+        "negativeContribution": "A new contribution cannot be negative.",
+        "nonintegerWholeStep": "A whole-unit purchase step must be a whole number.",
+        "nonpositiveFxRate": "The valuation rate must be greater than zero.",
+        "nonpositiveMonetaryStep": "The monetary step must be greater than zero.",
+        "nonpositivePrice": "The current price must be greater than zero.",
+        "nonpositiveQuantityStep": "The purchase quantity step must be greater than zero.",
+        "numericDomain": "A number exceeds the supported exact numeric domain.",
+        "quoteRequired": "Enter the current price and its currency.",
+        "referenceAfterAsOf": "The source date cannot be after the analysis date.",
+        "referenceDateUnspecified": "A reference date was not provided; review data freshness manually.",
+        "shortInventory": "Short positions are outside this P1 analysis.",
+        "targetOutOfRange": "Each target must be between 0% and 100%.",
+        "targetRequired": "Every selected Asset needs a target percentage.",
+        "targetTotal": "Target percentages must total exactly 100%.",
+        "targetsRequired": "Set a target allocation for the selected Assets.",
+        "unselectedTarget": "A target refers to an Asset that is no longer selected.",
+        "unusedValuation": "The valuation rate for {currency} is not used by this scenario.",
+        "valuationRateRequired": "Enter a valuation rate for {currency}."
+      },
+      "path": {
+        "cash": "Existing cash",
+        "contributions": "Contributions",
+        "holdings": "Holdings",
+        "targets": "Targets",
+        "valuationRates": "Valuation rates"
+      },
+      "results": {
+        "stale": "Inputs changed after this result. Run the analysis again before using it."
+      },
+      "target": {
+        "remaining": "Remaining",
+        "selectAssetsFirst": "Select at least one Asset before setting targets.",
+        "total": "Total",
+        "visual": "Distribution"
+      }
+    },
+    "portfolioRebalancer": {
+      "analyze": "Analyze target gaps",
+      "custodyContext": "Custody context",
+      "customizedRemovalMessage": "Removing this holding will discard its scenario settings.",
+      "customizedRemovalTitle": "Remove customized holding?",
+      "description": "Compare current invested allocation with a final target.",
+      "funding": {
+        "hint": "Cash and contributions are reported separately. P1 does not use them to infer executable trades.",
+        "title": "Optional liquidity context"
+      },
+      "holdings": {
+        "hint": "Select Assets to copy all their custody contexts, or add a manual holding.",
+        "title": "1. Portfolio holdings"
+      },
+      "name": "Portfolio rebalancer",
+      "p1": {
+        "description": "Compares current invested allocation with a final target. It does not recommend or generate trades.",
+        "title": "Portfolio Rebalancer P1"
+      },
+      "results": {
+        "availableCash": "Cash and new contributions (context only)",
+        "boundary": "A positive or negative gap is descriptive, not a buy or sell instruction. No order, Broker route, FX transfer or tax action is generated.",
+        "currentValue": "Current value",
+        "currentWeight": "Current %",
+        "custodyContexts": "Custodies",
+        "empty": "Run the analysis to compare current and target allocation.",
+        "hint": "P1 compares current invested value with the final target. It does not propose trades or prove feasibility.",
+        "investedTotal": "Current invested value",
+        "targetValue": "Target value",
+        "title": "3. Allocation gaps",
+        "valueGap": "Value gap",
+        "zeroInvested": "Current invested value is zero, so current weights and percentage-point gaps are unavailable."
+      },
+      "targetEditor": {
+        "copyCurrent": "Use current distribution",
+        "hint": "Set the desired final allocation of the invested portfolio. Cash remains separate context.",
+        "title": "2. Final target allocation"
+      },
+      "uncustodied": "No custody"
     }
   },
   "onboarding": {
@@ -3427,7 +3646,8 @@
       "skip": "Skip setup permanently",
       "skipHint": "This will not be shown again automatically. You can replay it from Settings.",
       "completed": "Setup saved. You can continue to LibreFolio.",
-      "skipped": "Setup skipped. You can replay it later from Settings."
+      "skipped": "Setup skipped. You can replay it later from Settings.",
+      "logout": "Log out"
     },
     "errors": {
       "loadTitle": "We couldn't load onboarding",
@@ -3446,7 +3666,8 @@
       "back": "Back",
       "next": "Next",
       "exitTour": "Exit tour",
-      "skipCurrentTour": "Skip this tour"
+      "skipCurrentTour": "Skip this tour",
+      "gotIt": "Got it"
     },
     "guide": {
       "waiting": "Waiting for this area to become available…",
@@ -3470,7 +3691,7 @@
         },
         "dashboard": {
           "title": "Your portfolio at a glance",
-          "description": "The Dashboard is your starting point for portfolio value, performance, allocation, and data quality."
+          "description": "The Dashboard is your home for portfolio value, performance, allocation, and data quality."
         },
         "tools": {
           "title": "Analysis tools",
@@ -3526,7 +3747,7 @@
         },
         "toolsNav": {
           "title": "Tools",
-          "description": "Tools contains focused analyses such as PAC planning without executing orders."
+          "description": "Tools brings together programs and calculators for exploring scenarios and making more informed financial decisions."
         },
         "settingsNav": {
           "title": "Settings",
@@ -3540,7 +3761,16 @@
       "import_guide": "Import guide",
       "broker_guide": "Broker guide",
       "fx_guide": "FX guide",
-      "asset_guide": "Asset guide"
+      "asset_guide": "Asset guide",
+      "transactions_page_guide": "Transactions overview",
+      "transaction_create_guide": "Add transaction guide",
+      "transaction_bulk_guide": "Bulk workspace overview",
+      "broker_page_guide": "Brokers overview",
+      "broker_detail_guide": "Broker details guide",
+      "fx_page_guide": "FX overview",
+      "fx_detail_guide": "FX pair details guide",
+      "asset_page_guide": "Assets overview",
+      "asset_detail_guide": "Asset details guide"
     },
     "status": {
       "pending": "Pending",
@@ -3561,23 +3791,17 @@
       "groups": {
         "setup": "Setup",
         "core": "Core tour",
-        "contextual": "Contextual guides"
+        "contextual": "Contextual guides",
+        "transactions": "Transactions",
+        "broker": "Brokers",
+        "fx": "FX",
+        "asset": "Assets"
       },
       "armedToast": "{flow} is ready. Open its feature to start.",
       "cancelArmed": "Cancel activation",
-      "armed": {
-        "welcome": "Welcome replay is ready",
-        "intro_tour": "Core tour replay is ready",
-        "broker_guide": "Ready: choose Add Broker",
-        "fx_guide": "Ready: choose Add FX pair",
-        "asset_guide": "Ready: choose Add Asset",
-        "import_guide": "Ready: open Import"
-      },
-      "replayAtNextTrigger": {
-        "broker_guide": "Replay on next Add Broker",
-        "fx_guide": "Replay on next Add FX pair",
-        "asset_guide": "Replay on next Add Asset"
-      }
+      "groupProgress": "{completed}/{total} guides completed",
+      "armedAtNextTrigger": "Ready for the next trigger: {flow}.",
+      "replayNextTrigger": "Replay at next trigger"
     },
     "importGuide": {
       "steps": {
@@ -3587,7 +3811,7 @@
         },
         "select": {
           "title": "Choose files and parsers",
-          "description": "Select stored reports and choose the parser that matches each file."
+          "description": "Select one or more saved reports. Choose the appropriate analysis plugin for each file; when every selection is complete, use the button on the right to continue. Depending on the chosen plugin and extracted data, optional steps may appear to unify assets, correct rows, or manage duplicates."
         },
         "analyze": {
           "title": "Analyze extracted data",
@@ -3621,7 +3845,7 @@
       "line2": "It's great to have you on board.",
       "line3": "Here is a quick tour to help you get started.",
       "start": "Start tour",
-      "autoStartHint": "The tour starts automatically in 10 seconds."
+      "progress": "Intro progress"
     },
     "brokerGuide": {
       "steps": {
@@ -3664,6 +3888,194 @@
         "provider": {
           "title": "Configure the data provider",
           "description": "Select the provider, identifier, and parameters, or explicitly keep the asset without a provider."
+        }
+      }
+    },
+    "transactionsPageGuide": {
+      "steps": {
+        "overview": {
+          "title": "Manage all transactions",
+          "description": "This page brings together manual entries, imported operations, and the history used to build your portfolio."
+        },
+        "add": {
+          "title": "Add one transaction",
+          "description": "Add opens the guided form for a single operation. Its dedicated guide starts on first use."
+        },
+        "import": {
+          "title": "Import multiple operations",
+          "description": "Import reads broker reports and guides their review through to the bulk editor."
+        },
+        "columns": {
+          "title": "Filter and organize",
+          "description": "Use column filters, sorting, and column visibility to find and compare operations."
+        }
+      }
+    },
+    "transactionCreateGuide": {
+      "steps": {
+        "basics": {
+          "title": "Choose the transaction type",
+          "description": "The type defines the meaning and structure of the operation."
+        },
+        "amounts": {
+          "title": "Complete the required fields",
+          "description": "Required fields and valid combinations change according to the selected transaction type."
+        },
+        "details": {
+          "title": "Add optional information",
+          "description": "Include any additional details that make the transaction easier to understand and trace."
+        },
+        "save": {
+          "title": "Validate in the workspace context",
+          "description": "Validation evaluates this draft together with all other pending operations in the workspace. An error may depend on another draft or on the resulting balance, not only on this form; when available, the message identifies the affected rows and context."
+        }
+      }
+    },
+    "transactionBulkGuide": {
+      "steps": {
+        "workspace": {
+          "title": "Your transaction workspace",
+          "description": "Each row is a draft you can inspect and refine before the final save."
+        },
+        "validation": {
+          "title": "Validate and resolve issues",
+          "description": "Validation highlights incomplete or inconsistent rows and takes you directly to the fields to review."
+        },
+        "selection": {
+          "title": "Work on the selection",
+          "description": "Select rows to edit, clone, reset, link, or remove several drafts together."
+        },
+        "save": {
+          "title": "Complete with Save All",
+          "description": "Save All commits the valid drafts. Cancel closes the workspace and preserves the existing portfolio."
+        }
+      }
+    },
+    "brokerPageGuide": {
+      "steps": {
+        "overview": {
+          "title": "Your financial accounts",
+          "description": "Brokers group transactions by account and define ownership, editing permissions, and sharing."
+        },
+        "currency": {
+          "title": "Choose the reporting currency",
+          "description": "The selector recalculates the page summary in the currency you want to compare."
+        },
+        "views": {
+          "title": "Cards, table, and account actions",
+          "description": "Switch view to compare accounts, then open one to inspect balances, positions, transactions, and access."
+        },
+        "add": {
+          "title": "Add a broker",
+          "description": "Create the account that will receive transactions and imports. A dedicated guide follows the form."
+        }
+      }
+    },
+    "brokerDetailGuide": {
+      "steps": {
+        "header": {
+          "title": "Broker identity and actions",
+          "description": "The header identifies the account and provides its main edit, sync, sharing, and navigation actions."
+        },
+        "overview": {
+          "title": "Overview and cash",
+          "description": "Overview summarizes value, performance, allocation, and cash balances for this account."
+        },
+        "positions": {
+          "title": "Positions and lots",
+          "description": "Positions explains what the account holds and lets you inspect the lots behind each quantity and cost."
+        },
+        "transactions": {
+          "title": "Transactions and imports",
+          "description": "This tab filters the account history and provides the path for adding or importing its operations."
+        },
+        "info": {
+          "title": "Information and sharing",
+          "description": "Review account metadata and manage who can view or edit this broker."
+        }
+      }
+    },
+    "fxPageGuide": {
+      "steps": {
+        "overview": {
+          "title": "Your currency pairs",
+          "description": "FX pairs provide the conversion history LibreFolio needs to compare values expressed in different currencies."
+        },
+        "filters": {
+          "title": "Filter dates, currencies, and views",
+          "description": "Narrow the period and currencies, then choose cards or table according to the comparison you need."
+        },
+        "sync": {
+          "title": "Update exchange rates",
+          "description": "Sync requests fresh rates from each pair’s configured provider route."
+        },
+        "add": {
+          "title": "Add an FX pair",
+          "description": "Define a new conversion direction. A dedicated guide explains currencies and providers."
+        }
+      }
+    },
+    "fxDetailGuide": {
+      "steps": {
+        "header": {
+          "title": "Pair and conversion direction",
+          "description": "The header shows base and quote currencies and the actions for returning or swapping direction."
+        },
+        "provider": {
+          "title": "Provider route and sync",
+          "description": "Choose how rates are obtained, then sync when you need to refresh the series."
+        },
+        "chart": {
+          "title": "Explore rate history",
+          "description": "Use the chart, signals, and measurement tools to examine how the exchange rate changed over time."
+        },
+        "editor": {
+          "title": "Edit manual observations",
+          "description": "Open the data editor to review or maintain manual rate points for this pair."
+        }
+      }
+    },
+    "assetPageGuide": {
+      "steps": {
+        "overview": {
+          "title": "Your asset catalogue",
+          "description": "Assets connect transactions to instruments, currencies, prices, events, and market-data sources."
+        },
+        "filters": {
+          "title": "Search and compare assets",
+          "description": "Filter by name, status, currency, or type and switch between cards and table."
+        },
+        "sync": {
+          "title": "Refresh market data",
+          "description": "Sync requests current values and available history from each asset’s configured source."
+        },
+        "add": {
+          "title": "Add an asset",
+          "description": "Search or define a new instrument. A dedicated guide explains identity, currency, and provider."
+        }
+      }
+    },
+    "assetDetailGuide": {
+      "steps": {
+        "header": {
+          "title": "Asset identity and status",
+          "description": "The header identifies the instrument and gathers its status, navigation, and primary actions."
+        },
+        "chart": {
+          "title": "Price history and analysis",
+          "description": "Use the chart, technical signals, comparison, and measurement tools to explore the asset’s history."
+        },
+        "editor": {
+          "title": "Maintain prices and events",
+          "description": "Open the data editor to review manual prices and the events that affect the asset series."
+        },
+        "metadata": {
+          "title": "Identifiers and metadata",
+          "description": "Expand metadata to inspect identifiers, classification, currency, and provider configuration."
+        },
+        "risk": {
+          "title": "Risk scenarios",
+          "description": "Open Risk to examine historical measures, stress scenarios, simulations, and portfolio context."
         }
       }
     }

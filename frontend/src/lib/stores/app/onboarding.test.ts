@@ -3,7 +3,10 @@ import {describe, expect, it, vi, type Mock} from 'vitest';
 import {createAppBootstrap} from '$lib/features/onboarding/appBootstrap.svelte';
 import {createOnboardingController} from './onboarding.svelte';
 import {createOnboardingGuide, IMPORT_GUIDE_STEP_IDS, INTRO_TOUR_STEP_IDS} from '$lib/features/onboarding/onboardingGuide.svelte';
-import type {OnboardingApi, OnboardingProgressItem, OnboardingProgressResponse, OnboardingWelcomeCompleteRequest} from '$lib/types/onboarding';
+import {TRANSACTION_BULK_STEP_IDS, guideSteps, isCheckpointFlow, isStepManagedFlow, type ContextualOnboardingFlow} from '$lib/features/onboarding/onboardingGuideCatalog';
+import {onboardingApi} from '$lib/features/onboarding/onboardingApi';
+import {axiosInstance} from '$lib/api';
+import {ONBOARDING_FLOWS, isOnboardingProgressDue, isOnboardingStepProgressDue, type OnboardingApi, type OnboardingFlow, type OnboardingProgressItem, type OnboardingProgressResponse, type OnboardingStepProgressItem, type OnboardingWelcomeCompleteRequest} from '$lib/types/onboarding';
 import type {goto} from '$app/navigation';
 
 /**
@@ -44,9 +47,9 @@ function createMemoryStorage(overrides: Partial<Storage> = {}): Storage {
     return storage as unknown as Storage;
 }
 
-function progressItem(overrides: Partial<OnboardingProgressItem> = {}): OnboardingProgressItem {
+function stepProgressItem(stepId: string, overrides: Partial<OnboardingStepProgressItem> = {}): OnboardingStepProgressItem {
     return {
-        flow: 'welcome',
+        step_id: stepId,
         status: 'pending',
         version: 1,
         current_version: 1,
@@ -59,8 +62,52 @@ function progressItem(overrides: Partial<OnboardingProgressItem> = {}): Onboardi
     };
 }
 
+function progressItem(overrides: Partial<OnboardingProgressItem> = {}): OnboardingProgressItem {
+    const flow = overrides.flow ?? 'welcome';
+    const status = overrides.status ?? 'pending';
+    const managedStepIds = flow === 'import_guide' ? IMPORT_GUIDE_STEP_IDS : flow === 'transaction_bulk_guide' ? TRANSACTION_BULK_STEP_IDS : null;
+    return {
+        flow,
+        status,
+        version: 1,
+        current_version: 1,
+        update_available: false,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+        completed_at: null,
+        skipped_at: null,
+        ...(managedStepIds
+            ? {
+                  steps: managedStepIds.map((stepId) =>
+                      stepProgressItem(stepId, {
+                          status,
+                          completed_at: status === 'completed' ? '2026-01-01T00:00:00Z' : null,
+                          skipped_at: status === 'skipped' ? '2026-01-01T00:00:00Z' : null,
+                      }),
+                  ),
+              }
+            : {}),
+        ...overrides,
+    };
+}
+
 function progressResponse(items: OnboardingProgressItem[]): OnboardingProgressResponse {
     return {flows: items};
+}
+
+function wireProgressItem(item: OnboardingProgressItem): Record<string, unknown> {
+    const {completed_at: _completedAt, skipped_at: _skippedAt, steps, ...flowFields} = item;
+    return {
+        ...flowFields,
+        ...(steps
+            ? {
+                  steps: steps.map((step) => {
+                      const {completed_at: _stepCompletedAt, skipped_at: _stepSkippedAt, ...stepFields} = step;
+                      return stepFields;
+                  }),
+              }
+            : {}),
+    };
 }
 
 function deferred<T>() {
@@ -73,18 +120,22 @@ function deferred<T>() {
     return {promise, resolve, reject};
 }
 
-/** A fake API surface whose four proxied endpoints are independently controllable. */
+/** A fake API surface whose flow/step endpoints are independently controllable. */
 function fakeApi(): OnboardingApi & {
     getProgress: Mock<OnboardingApi['getProgress']>;
     completeFlow: Mock<OnboardingApi['completeFlow']>;
     completeWelcome: Mock<OnboardingApi['completeWelcome']>;
     skipFlow: Mock<OnboardingApi['skipFlow']>;
+    completeStep: Mock<OnboardingApi['completeStep']>;
+    skipStep: Mock<OnboardingApi['skipStep']>;
 } {
     return {
         getProgress: vi.fn<OnboardingApi['getProgress']>(),
         completeFlow: vi.fn<OnboardingApi['completeFlow']>(),
         completeWelcome: vi.fn<OnboardingApi['completeWelcome']>(),
         skipFlow: vi.fn<OnboardingApi['skipFlow']>(),
+        completeStep: vi.fn<OnboardingApi['completeStep']>(),
+        skipStep: vi.fn<OnboardingApi['skipStep']>(),
     };
 }
 
@@ -281,6 +332,44 @@ describe('onboarding controller — load', () => {
     });
 });
 
+describe('onboarding API — final contract', () => {
+    it('requests and parses the 15-flow wire shape with Import/Bulk steps', async () => {
+        const response = {
+            flows: ONBOARDING_FLOWS.map((flow) => wireProgressItem(progressItem({flow}))),
+        };
+        const get = vi.spyOn(axiosInstance, 'get').mockResolvedValue({data: response} as never);
+        try {
+            const parsed = await onboardingApi.getProgress();
+
+            expect(get).toHaveBeenCalledExactlyOnceWith('/api/v1/settings/onboarding');
+            expect(parsed.flows.map((item) => item.flow)).toEqual(ONBOARDING_FLOWS);
+            expect(parsed.flows.find((item) => item.flow === 'import_guide')?.steps?.map((step) => step.step_id)).toEqual(IMPORT_GUIDE_STEP_IDS);
+            expect(parsed.flows.find((item) => item.flow === 'transaction_bulk_guide')?.steps?.map((step) => step.step_id)).toEqual(TRANSACTION_BULK_STEP_IDS);
+            expect(parsed.flows.filter((item) => item.flow !== 'import_guide' && item.flow !== 'transaction_bulk_guide').every((item) => item.steps === undefined)).toBe(true);
+        } finally {
+            get.mockRestore();
+        }
+    });
+
+    it('posts complete and skip to the step-specific endpoints', async () => {
+        const updated = progressItem({flow: 'import_guide'});
+        const post = vi.spyOn(axiosInstance, 'post').mockResolvedValue({data: updated} as never);
+        try {
+            await onboardingApi.completeStep('import_guide', 'import.assets', {expected_version: 3});
+            await onboardingApi.skipStep('import_guide', 'import.fix', {expected_version: 3});
+
+            expect(post).toHaveBeenNthCalledWith(1, '/api/v1/settings/onboarding/import_guide/steps/import.assets/complete', {
+                expected_version: 3,
+            });
+            expect(post).toHaveBeenNthCalledWith(2, '/api/v1/settings/onboarding/import_guide/steps/import.fix/skip', {
+                expected_version: 3,
+            });
+        } finally {
+            post.mockRestore();
+        }
+    });
+});
+
 describe('onboarding controller — requiresAutomaticFlow (terminal status predicate)', () => {
     it('is true only for a pending flow, regardless of update_available', async () => {
         const {controller} = buildController();
@@ -298,6 +387,18 @@ describe('onboarding controller — requiresAutomaticFlow (terminal status predi
     it('is false for a flow that has not been loaded at all', () => {
         const {controller} = buildController();
         expect(controller.requiresAutomaticFlow('welcome')).toBe(false);
+    });
+});
+
+describe('onboarding due predicates — final flow and step state', () => {
+    it('treats pending records as due and terminal records as final', () => {
+        expect(isOnboardingProgressDue(progressItem({status: 'pending'}))).toBe(true);
+        expect(isOnboardingProgressDue(progressItem({status: 'completed'}))).toBe(false);
+        expect(isOnboardingProgressDue(progressItem({status: 'skipped'}))).toBe(false);
+
+        expect(isOnboardingStepProgressDue(stepProgressItem('import.assets', {status: 'pending'}))).toBe(true);
+        expect(isOnboardingStepProgressDue(stepProgressItem('import.assets', {status: 'completed'}))).toBe(false);
+        expect(isOnboardingStepProgressDue(stepProgressItem('import.assets', {status: 'skipped'}))).toBe(false);
     });
 });
 
@@ -390,6 +491,61 @@ describe('onboarding controller — transition (complete/skip)', () => {
         expect(loadResult).toEqual(freshResponse);
         expect(controller.progress).toEqual(freshResponse);
         expect(controller.state).toBe('ready');
+    });
+});
+
+describe('onboarding controller — step transition', () => {
+    it('keys the request by flow and step, exposes the in-flight flow, and replaces only that flow', async () => {
+        const {controller} = buildController();
+        const api = fakeApi();
+        const imported = progressItem({flow: 'import_guide'});
+        const bulk = progressItem({flow: 'transaction_bulk_guide'});
+        api.getProgress.mockResolvedValue(progressResponse([imported, bulk]));
+        await controller.load(api);
+
+        const request = deferred<OnboardingProgressItem>();
+        api.completeStep.mockReturnValue(request.promise);
+        const completedUpload = progressItem({
+            flow: 'import_guide',
+            steps: imported.steps?.map((step) => (step.step_id === 'import.upload' ? stepProgressItem(step.step_id, {status: 'completed', completed_at: '2026-01-02T00:00:00Z'}) : step)),
+        });
+
+        const pending = controller.completeStep(api, 'import_guide', 'import.upload', 1);
+        expect(controller.transitioningFlow).toBe('import_guide');
+        expect(api.completeStep).toHaveBeenCalledExactlyOnceWith('import_guide', 'import.upload', {
+            expected_version: 1,
+        });
+
+        request.resolve(completedUpload);
+        expect(await pending).toEqual(completedUpload);
+        expect(controller.transitioningFlow).toBeNull();
+        expect(controller.findStep('import_guide', 'import.upload')?.status).toBe('completed');
+        expect(controller.findStep('import_guide', 'import.select')?.status).toBe('pending');
+        expect(controller.findFlow('transaction_bulk_guide')).toEqual(bulk);
+    });
+
+    it('sends skip for only the addressed step and keeps the server aggregate payload', async () => {
+        const {controller} = buildController();
+        const api = fakeApi();
+        const initial = progressItem({flow: 'transaction_bulk_guide'});
+        api.getProgress.mockResolvedValue(progressResponse([initial]));
+        await controller.load(api);
+        const updated = progressItem({
+            flow: 'transaction_bulk_guide',
+            status: 'pending',
+            steps: initial.steps?.map((step) => (step.step_id === 'transaction.bulk.validation' ? stepProgressItem(step.step_id, {status: 'skipped', skipped_at: '2026-01-02T00:00:00Z'}) : step)),
+        });
+        api.skipStep.mockResolvedValue(updated);
+
+        const result = await controller.skipStep(api, 'transaction_bulk_guide', 'transaction.bulk.validation', 1);
+
+        expect(result).toEqual(updated);
+        expect(api.skipStep).toHaveBeenCalledExactlyOnceWith('transaction_bulk_guide', 'transaction.bulk.validation', {
+            expected_version: 1,
+        });
+        expect(api.skipFlow).not.toHaveBeenCalled();
+        expect(controller.findFlow('transaction_bulk_guide')?.status).toBe('pending');
+        expect(controller.findStep('transaction_bulk_guide', 'transaction.bulk.validation')?.status).toBe('skipped');
     });
 });
 
@@ -518,20 +674,6 @@ describe('onboarding controller — replay (session + account scoped)', () => {
         });
     });
 
-    it('removes a stale/invalid version and never applies it', () => {
-        const {controller, storage} = buildController();
-        controller.startReplay('welcome', 1, 'old-step');
-        const oldKey = 'lf_user-1_onboarding_replay_welcome_v1';
-        expect(storage.getItem(oldKey)).not.toBeNull();
-
-        // The content version moved on to v2 — resuming at v2 must drop the v1 residue,
-        // never resurrect it under a different key.
-        const resumed = controller.resumeReplay('welcome', 2, ['new-step'], 'new-step');
-
-        expect(resumed).toBeNull();
-        expect(storage.getItem(oldKey)).toBeNull();
-    });
-
     it('recovers to the fallback step when the saved step id is no longer valid', () => {
         const {controller} = buildController();
         controller.startReplay('welcome', 1, 'removed-step');
@@ -586,6 +728,51 @@ describe('onboarding controller — replay (session + account scoped)', () => {
             stepId: 'step-2',
             startedAt: 1000,
         });
+    });
+
+    it('persists and restores the remainingStepIds set for a step-managed replay', () => {
+        const {controller} = buildController();
+        controller.startReplay('import_guide', 1, 'import.upload', undefined, ['import.upload', 'import.assets', 'import.bulk']);
+
+        expect(controller.updateReplayStep('import.assets')).toBe(true);
+        expect(controller.replay).toEqual({
+            flow: 'import_guide',
+            version: 1,
+            stepId: 'import.assets',
+            remainingStepIds: ['import.upload', 'import.assets', 'import.bulk'],
+            startedAt: 1000,
+        });
+
+        expect(controller.resumeReplay('import_guide', 1, IMPORT_GUIDE_STEP_IDS, 'import.upload')).toEqual(controller.replay);
+    });
+
+    it('persists replay mode across step updates and a fresh resume', () => {
+        const {controller, storage} = buildController();
+        const key = replayKey('user-1', 'import_guide', 1);
+        const remainingStepIds = ['import.upload', 'import.assets', 'import.bulk'];
+
+        expect(controller.startReplay('import_guide', 1, 'import.upload', undefined, remainingStepIds, 'replay')).toBe(true);
+        expect(JSON.parse(storage.getItem(key) ?? '{}')).toEqual({
+            flow: 'import_guide',
+            version: 1,
+            stepId: 'import.upload',
+            mode: 'replay',
+            remainingStepIds,
+            startedAt: 1000,
+        });
+
+        expect(controller.updateReplayStep('import.assets')).toBe(true);
+        expect(controller.replay).toEqual({
+            flow: 'import_guide',
+            version: 1,
+            stepId: 'import.assets',
+            mode: 'replay',
+            remainingStepIds,
+            startedAt: 1000,
+        });
+
+        expect(controller.resumeReplay('import_guide', 1, IMPORT_GUIDE_STEP_IDS, 'import.upload')).toEqual(controller.replay);
+        expect(controller.replay?.mode).toBe('replay');
     });
 
     it('returns false updating a step when there is no active replay', () => {
@@ -771,25 +958,27 @@ describe('appBootstrap — load (user settings failure)', () => {
 });
 
 describe('appBootstrap — load (onboarding failure)', () => {
-    it('blocks on onboarding rejection when there is no cached welcome flow at all', async () => {
+    it('blocks when onboarding fails and there is no independently valid cached Welcome', async () => {
         const {bootstrap, loadOnboarding, setWelcome} = buildBootstrap();
         setWelcome(null);
         loadOnboarding.mockRejectedValue(new Error('onboarding endpoint down'));
 
         expect(await bootstrap.load()).toBe('blocked');
+        expect(bootstrap.ready).toBe(false);
         expect(bootstrap.error).toBe('onboarding endpoint down');
     });
 
-    it('blocks on onboarding rejection when the cached welcome flow is still pending', async () => {
+    it('blocks when onboarding fails and the cached Welcome is still pending', async () => {
         const {bootstrap, loadOnboarding, setWelcome} = buildBootstrap();
         setWelcome(progressItem({flow: 'welcome', status: 'pending'}));
         loadOnboarding.mockRejectedValue(new Error('onboarding endpoint down'));
 
         expect(await bootstrap.load()).toBe('blocked');
+        expect(bootstrap.ready).toBe(false);
         expect(bootstrap.error).toBe('onboarding endpoint down');
     });
 
-    it.each(['completed', 'skipped'] as const)('degrades (preserving the error) on onboarding rejection when the cached welcome flow is already %s', async (status) => {
+    it.each(['completed', 'skipped'] as const)('degrades only when the independently cached Welcome is already %s', async (status) => {
         const {bootstrap, loadOnboarding, setWelcome} = buildBootstrap();
         setWelcome(progressItem({flow: 'welcome', status}));
         loadOnboarding.mockRejectedValue(new Error('onboarding endpoint down'));
@@ -853,10 +1042,9 @@ describe('appBootstrap — resolveDestination (pending welcome flow)', () => {
 });
 
 describe('appBootstrap — resolveDestination (terminal welcome flow + replay)', () => {
-    it.each(['completed', 'skipped'] as const)('never forces welcome for a %s flow when checkWelcomeReplay reports no replay for the current version', (status) => {
-        const {bootstrap, setWelcome, setReplayVersion} = buildBootstrap();
-        setWelcome(progressItem({flow: 'welcome', status, current_version: 3}));
-        setReplayVersion(2, true); // a replay is stored, but for an older version than current_version
+    it.each(['completed', 'skipped'] as const)('never forces welcome for a %s flow when no replay is armed', (status) => {
+        const {bootstrap, setWelcome} = buildBootstrap();
+        setWelcome(progressItem({flow: 'welcome', status}));
 
         expect(bootstrap.resolveDestination('/dashboard')).toBe('/dashboard');
     });
@@ -980,21 +1168,110 @@ function replayKey(userId: string, flow: string, version: number): string {
     return `lf_${userId}_onboarding_replay_${flow}_v${version}`;
 }
 
-const EXPECTED_INTRO_TOUR_STEP_IDS = [
-    'intro.scene',
-    'intro.dashboard',
-    'intro.navigation',
-    'intro.transactions_nav',
-    'intro.transactions_import',
-    'intro.brokers_add',
-    'intro.brokers_currency',
-    'intro.fx_add',
-    'intro.fx_pair',
-    'intro.assets_add',
-    'intro.assets_config',
-    'intro.tools',
-    'intro.settings',
-] as const;
+const EXPECTED_INTRO_TOUR_STEP_IDS = ['intro.scene', 'intro.navigation', 'intro.dashboard', 'intro.transactions_nav', 'intro.brokers_nav', 'intro.fx_nav', 'intro.assets_nav', 'intro.tools_nav', 'intro.settings_nav'] as const;
+
+function progressForFlows(flows: readonly OnboardingFlow[], status: OnboardingProgressItem['status'] = 'pending'): OnboardingProgressItem[] {
+    return flows.map((flow) => progressItem({flow, status}));
+}
+
+describe('onboardingGuide — stored token terminal guards', () => {
+    it.each(['completed', 'skipped'] as const)('ignores and clears a stored automatic Intro token once the non-step flow is %s', async (status) => {
+        const {guide, controller, storage, api} = await buildGuide({
+            flows: [progressItem({flow: 'intro_tour', status})],
+        });
+        const key = replayKey('user-1', 'intro_tour', 1);
+        storage.setItem(
+            key,
+            JSON.stringify({
+                flow: 'intro_tour',
+                version: 1,
+                stepId: 'intro.navigation',
+                startedAt: 900,
+                mode: 'automatic',
+            }),
+        );
+
+        expect(guide.maybeStartIntro()).toBe(false);
+
+        expect(guide.active).toBeNull();
+        expect(controller.replay).toBeNull();
+        expect(storage.getItem(key)).toBeNull();
+        expect(api.completeFlow).not.toHaveBeenCalled();
+        expect(api.skipFlow).not.toHaveBeenCalled();
+    });
+
+    it('clears a stored automatic Import token instead of reactivating its now-terminal step', async () => {
+        const terminalStepId = 'import.assets';
+        const importFlow = progressItem({
+            flow: 'import_guide',
+            status: 'pending',
+            steps: IMPORT_GUIDE_STEP_IDS.map((stepId) =>
+                stepProgressItem(stepId, {
+                    status: stepId === terminalStepId ? 'completed' : 'pending',
+                    completed_at: stepId === terminalStepId ? '2026-01-02T00:00:00Z' : null,
+                }),
+            ),
+        });
+        const {guide, controller, storage, api} = await buildGuide({flows: [importFlow]});
+        const key = replayKey('user-1', 'import_guide', 1);
+        storage.setItem(
+            key,
+            JSON.stringify({
+                flow: 'import_guide',
+                version: 1,
+                stepId: terminalStepId,
+                startedAt: 900,
+                mode: 'automatic',
+                remainingStepIds: [terminalStepId],
+            }),
+        );
+
+        expect(guide.startImportAt(terminalStepId)).toBe(false);
+
+        expect(guide.active).toBeNull();
+        expect(controller.replay).toBeNull();
+        expect(storage.getItem(key)).toBeNull();
+        expect(controller.findStep('import_guide', terminalStepId)?.status).toBe('completed');
+        expect(api.completeStep).not.toHaveBeenCalled();
+        expect(api.skipStep).not.toHaveBeenCalled();
+    });
+
+    it('lets explicit replay reactivate only terminal Import IDs that remain in remainingStepIds', async () => {
+        const {guide, controller, storage, api} = await buildGuide({
+            flows: [progressItem({flow: 'import_guide', status: 'completed'})],
+        });
+        const key = replayKey('user-1', 'import_guide', 1);
+        const replayToken = {
+            flow: 'import_guide',
+            version: 1,
+            stepId: 'import.assets',
+            startedAt: 900,
+            mode: 'replay' as const,
+            remainingStepIds: ['import.assets'],
+        };
+        storage.setItem(key, JSON.stringify(replayToken));
+
+        expect(guide.startImportAt('import.review')).toBe(false);
+        expect(guide.active).toBeNull();
+        expect(storage.getItem(key)).toBe(JSON.stringify(replayToken));
+
+        expect(guide.startImportAt('import.assets')).toBe(true);
+        expect(guide.active).toEqual({
+            flow: 'import_guide',
+            version: 1,
+            stepId: 'import.assets',
+            mode: 'replay',
+        });
+        expect(controller.replay).toMatchObject({
+            flow: 'import_guide',
+            stepId: 'import.assets',
+            mode: 'replay',
+            remainingStepIds: ['import.assets'],
+        });
+        expect(api.completeStep).not.toHaveBeenCalled();
+        expect(api.skipStep).not.toHaveBeenCalled();
+    });
+});
 
 describe('onboardingGuide — intro tour auto-start', () => {
     it('auto-starts a pending intro at the scene exactly once, persists the replay, and preserves a safe returnTo', async () => {
@@ -1005,7 +1282,7 @@ describe('onboardingGuide — intro tour auto-start', () => {
 
         expect(started).toBe(true);
         expect(guide.active).toEqual({flow: 'intro_tour', version: 1, stepId: 'intro.scene', mode: 'automatic', returnTo: '/transactions/42'});
-        expect(storage.getItem(key)).toEqual(JSON.stringify({flow: 'intro_tour', version: 1, stepId: 'intro.scene', startedAt: 1000, returnTo: '/transactions/42'}));
+        expect(storage.getItem(key)).toEqual(JSON.stringify({flow: 'intro_tour', version: 1, stepId: 'intro.scene', startedAt: 1000, mode: 'automatic', returnTo: '/transactions/42'}));
 
         // Idempotent while still active: a second mount/re-render calling
         // maybeStartIntro must not re-activate, must not rewrite the replay, and
@@ -1040,7 +1317,7 @@ describe('onboardingGuide — intro tour auto-start', () => {
 
         expect(guide1.maybeStartIntro('/transactions/42')).toBe(true);
         guide1.nextIntro();
-        expect(guide1.active?.stepId).toBe('intro.dashboard');
+        expect(guide1.active?.stepId).toBe('intro.navigation');
 
         // Suspending clears `active`, but the replay token is still in storage.
         guide1.suspend();
@@ -1061,7 +1338,7 @@ describe('onboardingGuide — intro tour auto-start', () => {
         // guard and legitimately resumes the still-pending, still-stored replay.
         const guide2 = createOnboardingGuide({controller, api, navigate: vi.fn<typeof goto>().mockResolvedValue(undefined)});
         expect(guide2.maybeStartIntro()).toBe(true);
-        expect(guide2.active).toMatchObject({stepId: 'intro.dashboard', mode: 'automatic', returnTo: '/transactions/42'});
+        expect(guide2.active).toMatchObject({stepId: 'intro.navigation', mode: 'automatic', returnTo: '/transactions/42'});
 
         expect(api.completeFlow).not.toHaveBeenCalled();
         expect(api.skipFlow).not.toHaveBeenCalled();
@@ -1086,7 +1363,7 @@ describe('onboardingGuide — intro tour auto-start', () => {
         // The guard being clear lets the next maybeStartIntro() pick the
         // just-armed token back up, starting over at the first intro step.
         expect(guide.maybeStartIntro()).toBe(true);
-        expect(guide.active).toMatchObject({flow: 'intro_tour', stepId: INTRO_TOUR_STEP_IDS[0], mode: 'automatic'});
+        expect(guide.active).toMatchObject({flow: 'intro_tour', stepId: INTRO_TOUR_STEP_IDS[0], mode: 'replay'});
 
         expect(api.completeFlow).not.toHaveBeenCalled();
         expect(api.skipFlow).not.toHaveBeenCalled();
@@ -1118,11 +1395,11 @@ describe('onboardingGuide — intro tour auto-start', () => {
 });
 
 describe('onboardingGuide — intro tour navigation (next/back)', () => {
-    it('publishes the exact 13-step Round 1 sequence', () => {
+    it('publishes the approved Core sequence', () => {
         expect(INTRO_TOUR_STEP_IDS).toEqual(EXPECTED_INTRO_TOUR_STEP_IDS);
     });
 
-    it('starts in the scene and advances to the dashboard only when the scene starts', async () => {
+    it('starts in the scene and advances to navigation only when the scene starts', async () => {
         const {guide, controller, api} = await buildGuide();
 
         expect(guide.maybeStartIntro()).toBe(true);
@@ -1131,8 +1408,8 @@ describe('onboardingGuide — intro tour navigation (next/back)', () => {
 
         guide.nextIntro();
 
-        expect(guide.active?.stepId).toBe('intro.dashboard');
-        expect(controller.replay?.stepId).toBe('intro.dashboard');
+        expect(guide.active?.stepId).toBe('intro.navigation');
+        expect(controller.replay?.stepId).toBe('intro.navigation');
         expect(api.completeFlow).not.toHaveBeenCalled();
         expect(api.skipFlow).not.toHaveBeenCalled();
     });
@@ -1148,7 +1425,7 @@ describe('onboardingGuide — intro tour navigation (next/back)', () => {
             expect(controller.replay?.stepId).toBe(guide.active!.stepId);
         }
         expect(visitedForward).toEqual([...INTRO_TOUR_STEP_IDS]);
-        expect(visitedForward).toContain('intro.tools');
+        expect(visitedForward).toContain('intro.tools_nav');
 
         // Clamped at the last step: one call past the end is a no-op.
         guide.nextIntro();
@@ -1181,6 +1458,305 @@ describe('onboardingGuide — flow precedence', () => {
     });
 });
 
+describe('onboardingGuide — contextual FIFO and account reset', () => {
+    it('keeps FIFO entries distinct by (flow, step) and deduplicates only an exact pair', async () => {
+        const otherFlow: ContextualOnboardingFlow = 'transactions_page_guide';
+        const {guide} = await buildGuide({flows: progressForFlows([otherFlow, 'transaction_bulk_guide'])});
+
+        expect(guide.maybeStartContextual(otherFlow)).toBe(true);
+        guide.queueContextual('transaction_bulk_guide', 'transaction.bulk.workspace');
+        guide.queueContextual('transaction_bulk_guide', 'transaction.bulk.validation');
+        guide.queueContextual('transaction_bulk_guide', 'transaction.bulk.workspace');
+
+        expect(guide.queuedGuides).toEqual([
+            {flow: 'transaction_bulk_guide', stepId: 'transaction.bulk.workspace'},
+            {flow: 'transaction_bulk_guide', stepId: 'transaction.bulk.validation'},
+        ]);
+        expect(guide.queuedFlows).toEqual(['transaction_bulk_guide', 'transaction_bulk_guide']);
+
+        guide.dismissHost();
+        expect(guide.maybeStartQueued('transaction_bulk_guide', 'transaction.bulk.validation')).toBe(true);
+        expect(guide.active).toMatchObject({
+            flow: 'transaction_bulk_guide',
+            stepId: 'transaction.bulk.validation',
+        });
+        expect(guide.queuedGuides).toEqual([{flow: 'transaction_bulk_guide', stepId: 'transaction.bulk.workspace'}]);
+    });
+
+    it('clears one stale Bulk step without disturbing its sibling step or another flow', async () => {
+        const otherFlow: ContextualOnboardingFlow = 'transactions_page_guide';
+        const {guide} = await buildGuide({flows: progressForFlows(['transaction_bulk_guide', otherFlow])});
+
+        guide.queueContextual('transaction_bulk_guide', 'transaction.bulk.workspace');
+        guide.queueContextual('transaction_bulk_guide', 'transaction.bulk.validation');
+        guide.queueContextual(otherFlow);
+        guide.clearQueued('transaction_bulk_guide', 'transaction.bulk.workspace');
+
+        expect(guide.queuedGuides).toEqual([{flow: 'transaction_bulk_guide', stepId: 'transaction.bulk.validation'}, {flow: otherFlow}]);
+
+        guide.clearQueued('transaction_bulk_guide');
+        expect(guide.queuedGuides).toEqual([{flow: otherFlow}]);
+    });
+
+    it('drops active and queued contextual state at an account reset boundary', async () => {
+        const {guide, controller, setUserId} = await buildGuide({flows: progressForFlows(['transaction_bulk_guide'])});
+        expect(guide.maybeStartContextual('transaction_bulk_guide', 'transaction.bulk.workspace')).toBe(true);
+        guide.queueContextual('transaction_bulk_guide', 'transaction.bulk.validation');
+        expect(guide.queuedGuides).toEqual([{flow: 'transaction_bulk_guide', stepId: 'transaction.bulk.validation'}]);
+
+        setUserId('user-2');
+        guide.reset();
+        controller.reset();
+
+        expect(guide.active).toBeNull();
+        expect(guide.queuedFlow).toBeNull();
+        expect(guide.queuedFlows).toEqual([]);
+        expect(guide.maybeStartQueued()).toBe(false);
+        expect(controller.replay).toBeNull();
+    });
+});
+
+describe('onboardingGuide — final flow and step-managed Bulk contract', () => {
+    it('exports exactly the approved 15-flow runtime contract without draft Bulk ids', () => {
+        expect(ONBOARDING_FLOWS).toEqual([
+            'welcome',
+            'intro_tour',
+            'transactions_page_guide',
+            'transaction_create_guide',
+            'transaction_bulk_guide',
+            'import_guide',
+            'broker_page_guide',
+            'broker_guide',
+            'broker_detail_guide',
+            'fx_page_guide',
+            'fx_guide',
+            'fx_detail_guide',
+            'asset_page_guide',
+            'asset_guide',
+            'asset_detail_guide',
+        ]);
+        expect(ONBOARDING_FLOWS).not.toContain('transaction_bulk_validation_guide');
+        expect(ONBOARDING_FLOWS).not.toContain('transaction_bulk_selection_guide');
+        expect(ONBOARDING_FLOWS).not.toContain('transaction_bulk_save_guide');
+    });
+
+    it('registers one checkpoint-mode Bulk flow with four ordered persisted steps while Import stays sequential', () => {
+        expect(guideSteps('transaction_bulk_guide')).toEqual(TRANSACTION_BULK_STEP_IDS);
+        expect(TRANSACTION_BULK_STEP_IDS).toEqual(['transaction.bulk.workspace', 'transaction.bulk.validation', 'transaction.bulk.selection', 'transaction.bulk.save']);
+        expect(isStepManagedFlow('transaction_bulk_guide')).toBe(true);
+        expect(isStepManagedFlow('import_guide')).toBe(true);
+        expect(isStepManagedFlow('transactions_page_guide')).toBe(false);
+        expect(isCheckpointFlow('transaction_bulk_guide')).toBe(true);
+        expect(isCheckpointFlow('import_guide')).toBe(false);
+    });
+
+    it('Finish completes only the current Bulk step and preserves pending siblings', async () => {
+        const initial = progressItem({flow: 'transaction_bulk_guide'});
+        const {guide, controller, api} = await buildGuide({flows: [initial]});
+        const updated = progressItem({
+            flow: 'transaction_bulk_guide',
+            status: 'pending',
+            steps: initial.steps?.map((step) => (step.step_id === 'transaction.bulk.workspace' ? stepProgressItem(step.step_id, {status: 'completed', completed_at: '2026-01-02T00:00:00Z'}) : step)),
+        });
+        api.completeStep.mockResolvedValue(updated);
+
+        expect(guide.maybeStartContextual('transaction_bulk_guide', 'transaction.bulk.workspace')).toBe(true);
+        await guide.finish();
+
+        expect(api.completeStep).toHaveBeenCalledExactlyOnceWith('transaction_bulk_guide', 'transaction.bulk.workspace', {
+            expected_version: 1,
+        });
+        expect(api.completeFlow).not.toHaveBeenCalled();
+        expect(api.skipFlow).not.toHaveBeenCalled();
+        expect(controller.findFlow('transaction_bulk_guide')?.status).toBe('pending');
+        expect(controller.findStep('transaction_bulk_guide', 'transaction.bulk.workspace')?.status).toBe('completed');
+        expect(controller.findStep('transaction_bulk_guide', 'transaction.bulk.validation')?.status).toBe('pending');
+    });
+
+    it('X skips only the current Bulk step and leaves the aggregate pending', async () => {
+        const initial = progressItem({flow: 'transaction_bulk_guide'});
+        const {guide, controller, api} = await buildGuide({flows: [initial]});
+        const updated = progressItem({
+            flow: 'transaction_bulk_guide',
+            status: 'pending',
+            steps: initial.steps?.map((step) => (step.step_id === 'transaction.bulk.validation' ? stepProgressItem(step.step_id, {status: 'skipped', skipped_at: '2026-01-02T00:00:00Z'}) : step)),
+        });
+        api.skipStep.mockResolvedValue(updated);
+
+        expect(guide.maybeStartContextual('transaction_bulk_guide', 'transaction.bulk.validation')).toBe(true);
+        expect(await guide.exit()).toBe(true);
+
+        expect(api.skipStep).toHaveBeenCalledExactlyOnceWith('transaction_bulk_guide', 'transaction.bulk.validation', {
+            expected_version: 1,
+        });
+        expect(api.skipFlow).not.toHaveBeenCalled();
+        expect(api.completeFlow).not.toHaveBeenCalled();
+        expect(controller.findFlow('transaction_bulk_guide')?.status).toBe('pending');
+        expect(controller.findStep('transaction_bulk_guide', 'transaction.bulk.validation')?.status).toBe('skipped');
+        expect(controller.findStep('transaction_bulk_guide', 'transaction.bulk.selection')?.status).toBe('pending');
+    });
+
+    it('replay tracks remainingStepIds and consumes only the current step locally', async () => {
+        const {guide, controller, api} = await buildGuide({flows: [progressItem({flow: 'transaction_bulk_guide', status: 'completed'})]});
+
+        expect(guide.armReplay('transaction_bulk_guide')).toBe(true);
+        expect(controller.replay?.remainingStepIds).toEqual(TRANSACTION_BULK_STEP_IDS);
+        expect(guide.maybeStartContextual('transaction_bulk_guide', 'transaction.bulk.workspace')).toBe(true);
+        expect(guide.active).toMatchObject({
+            flow: 'transaction_bulk_guide',
+            stepId: 'transaction.bulk.workspace',
+            mode: 'replay',
+        });
+        await guide.finish();
+        expect(controller.replay).toMatchObject({
+            flow: 'transaction_bulk_guide',
+            stepId: 'transaction.bulk.validation',
+            remainingStepIds: ['transaction.bulk.validation', 'transaction.bulk.selection', 'transaction.bulk.save'],
+        });
+        expect(guide.maybeStartContextual('transaction_bulk_guide', 'transaction.bulk.validation')).toBe(true);
+        expect(guide.active).toMatchObject({stepId: 'transaction.bulk.validation', mode: 'replay'});
+        expect(api.completeFlow).not.toHaveBeenCalled();
+        expect(api.skipFlow).not.toHaveBeenCalled();
+        expect(api.completeStep).not.toHaveBeenCalled();
+        expect(api.skipStep).not.toHaveBeenCalled();
+    });
+
+    it('keeps an armed pending Bulk flow in replay mode, consumes only the current replay step, and later replays completed steps without backend writes', async () => {
+        const bulk = progressItem({
+            flow: 'transaction_bulk_guide',
+            status: 'pending',
+            steps: TRANSACTION_BULK_STEP_IDS.map((stepId) =>
+                stepProgressItem(stepId, {
+                    status: stepId === 'transaction.bulk.workspace' || stepId === 'transaction.bulk.selection' ? 'completed' : 'pending',
+                    completed_at: stepId === 'transaction.bulk.workspace' || stepId === 'transaction.bulk.selection' ? '2026-01-02T00:00:00Z' : null,
+                }),
+            ),
+        });
+        const {guide, controller, api, storage} = await buildGuide({flows: [bulk]});
+
+        expect(guide.armReplay('transaction_bulk_guide')).toBe(true);
+        expect(controller.replay).toMatchObject({
+            flow: 'transaction_bulk_guide',
+            stepId: 'transaction.bulk.workspace',
+            mode: 'replay',
+            remainingStepIds: TRANSACTION_BULK_STEP_IDS,
+        });
+        expect(JSON.parse(storage.getItem(replayKey('user-1', 'transaction_bulk_guide', 1)) ?? '{}').mode).toBe('replay');
+
+        expect(guide.maybeStartContextual('transaction_bulk_guide', 'transaction.bulk.workspace')).toBe(true);
+        expect(guide.active).toMatchObject({
+            flow: 'transaction_bulk_guide',
+            stepId: 'transaction.bulk.workspace',
+            mode: 'replay',
+        });
+        await guide.finish();
+        expect(controller.replay).toMatchObject({
+            stepId: 'transaction.bulk.validation',
+            mode: 'replay',
+            remainingStepIds: ['transaction.bulk.validation', 'transaction.bulk.selection', 'transaction.bulk.save'],
+        });
+
+        // Selection was already completed in persisted progress, but an explicit
+        // replay must still be able to visit it. Consuming it out of order must
+        // leave the other two replay steps armed.
+        expect(guide.maybeStartContextual('transaction_bulk_guide', 'transaction.bulk.selection')).toBe(true);
+        expect(guide.active).toMatchObject({
+            stepId: 'transaction.bulk.selection',
+            mode: 'replay',
+        });
+        await guide.finish();
+        expect(controller.replay).toMatchObject({
+            stepId: 'transaction.bulk.validation',
+            mode: 'replay',
+            remainingStepIds: ['transaction.bulk.validation', 'transaction.bulk.save'],
+        });
+
+        expect(controller.findStep('transaction_bulk_guide', 'transaction.bulk.workspace')?.status).toBe('completed');
+        expect(controller.findStep('transaction_bulk_guide', 'transaction.bulk.selection')?.status).toBe('completed');
+        expect(api.completeFlow).not.toHaveBeenCalled();
+        expect(api.skipFlow).not.toHaveBeenCalled();
+        expect(api.completeStep).not.toHaveBeenCalled();
+        expect(api.skipStep).not.toHaveBeenCalled();
+    });
+
+    it('does not re-arm a consumed pending Bulk replay step when its workspace is dismissed and reopened', async () => {
+        const {guide, controller, api} = await buildGuide({
+            flows: [progressItem({flow: 'transaction_bulk_guide', status: 'pending'})],
+        });
+        const remainingAfterWorkspace = ['transaction.bulk.validation', 'transaction.bulk.selection', 'transaction.bulk.save'] as const;
+
+        expect(guide.armReplay('transaction_bulk_guide')).toBe(true);
+        expect(guide.maybeStartContextual('transaction_bulk_guide', 'transaction.bulk.workspace')).toBe(true);
+        expect(guide.active).toEqual({
+            flow: 'transaction_bulk_guide',
+            version: 1,
+            stepId: 'transaction.bulk.workspace',
+            mode: 'replay',
+        });
+
+        await guide.finish();
+
+        expect(guide.active).toBeNull();
+        expect(controller.replay).toEqual({
+            flow: 'transaction_bulk_guide',
+            version: 1,
+            stepId: 'transaction.bulk.validation',
+            startedAt: 1000,
+            mode: 'replay',
+            remainingStepIds: remainingAfterWorkspace,
+        });
+
+        // The modal host can dismiss after the local acknowledgement and then
+        // publish its workspace checkpoint again when reopened. Membership in
+        // the explicit replay queue, not the still-pending backend row, decides
+        // whether that checkpoint may restart.
+        guide.dismissHost();
+        expect(guide.maybeStartContextual('transaction_bulk_guide', 'transaction.bulk.workspace')).toBe(false);
+        expect(guide.active).toBeNull();
+        expect(controller.replay).toEqual({
+            flow: 'transaction_bulk_guide',
+            version: 1,
+            stepId: 'transaction.bulk.validation',
+            startedAt: 1000,
+            mode: 'replay',
+            remainingStepIds: remainingAfterWorkspace,
+        });
+
+        expect(guide.maybeStartContextual('transaction_bulk_guide', 'transaction.bulk.validation')).toBe(true);
+        await guide.finish();
+        expect(guide.maybeStartContextual('transaction_bulk_guide', 'transaction.bulk.selection')).toBe(true);
+        await guide.finish();
+        expect(guide.maybeStartContextual('transaction_bulk_guide', 'transaction.bulk.save')).toBe(true);
+        await guide.finish();
+
+        expect(controller.replay).toBeNull();
+        expect(controller.findStep('transaction_bulk_guide', 'transaction.bulk.workspace')?.status).toBe('pending');
+
+        // Once the explicit replay is exhausted, the untouched pending row is
+        // again eligible under normal automatic semantics on a later trigger.
+        expect(guide.maybeStartContextual('transaction_bulk_guide', 'transaction.bulk.workspace')).toBe(true);
+        expect(guide.active).toEqual({
+            flow: 'transaction_bulk_guide',
+            version: 1,
+            stepId: 'transaction.bulk.workspace',
+            mode: 'automatic',
+        });
+        expect(controller.replay).toEqual({
+            flow: 'transaction_bulk_guide',
+            version: 1,
+            stepId: 'transaction.bulk.workspace',
+            startedAt: 1000,
+            mode: 'automatic',
+            remainingStepIds: ['transaction.bulk.workspace'],
+        });
+
+        expect(api.completeFlow).not.toHaveBeenCalled();
+        expect(api.skipFlow).not.toHaveBeenCalled();
+        expect(api.completeStep).not.toHaveBeenCalled();
+        expect(api.skipStep).not.toHaveBeenCalled();
+    });
+});
+
 describe('onboardingGuide — import guide start / suspend', () => {
     it('a pending import guide starts at whatever semantic step the caller asks for, not forced to the first', async () => {
         const {guide, controller} = await buildGuide({flows: [progressItem({flow: 'import_guide', status: 'pending'})]});
@@ -1196,7 +1772,7 @@ describe('onboardingGuide — import guide start / suspend', () => {
         const {guide, controller} = await buildGuide({flows: [progressItem({flow: 'import_guide', status: 'completed', version: 1, current_version: 1})]});
         // Simulates a replay left over from an earlier session, written directly
         // through the controller rather than through the guide.
-        controller.startReplay('import_guide', 1, 'import.duplicates');
+        controller.startReplay('import_guide', 1, 'import.duplicates', undefined, ['import.duplicates'], 'replay');
 
         const started = guide.startImportAt('import.duplicates');
 
@@ -1211,7 +1787,48 @@ describe('onboardingGuide — import guide start / suspend', () => {
         expect(guide.active).toBeNull();
     });
 
-    it('suspend({resetImport: true}) resets the stored replay to import.upload and calls no backend endpoint', async () => {
+    it('an optional step omitted on the first encounter remains due and starts when a later import exposes it', async () => {
+        const firstEncounter = progressItem({
+            flow: 'import_guide',
+            status: 'pending',
+            steps: IMPORT_GUIDE_STEP_IDS.map((stepId) =>
+                stepProgressItem(stepId, {
+                    status: stepId === 'import.assets' ? 'pending' : 'completed',
+                    completed_at: stepId === 'import.assets' ? null : '2026-01-02T00:00:00Z',
+                }),
+            ),
+        });
+        const {guide} = await buildGuide({flows: [firstEncounter]});
+
+        expect(guide.startImportAt('import.review')).toBe(false);
+        expect(guide.active).toBeNull();
+        expect(guide.startImportAt('import.assets')).toBe(true);
+        expect(guide.active).toMatchObject({
+            flow: 'import_guide',
+            stepId: 'import.assets',
+            mode: 'automatic',
+        });
+    });
+
+    it.each(['completed', 'skipped'] as const)('a terminal %s Import step never repeats without explicit replay', async (status) => {
+        const flow = progressItem({
+            flow: 'import_guide',
+            status: 'pending',
+            steps: IMPORT_GUIDE_STEP_IDS.map((stepId) =>
+                stepProgressItem(stepId, {
+                    status: stepId === 'import.assets' ? status : 'pending',
+                    completed_at: stepId === 'import.assets' && status === 'completed' ? '2026-01-02T00:00:00Z' : null,
+                    skipped_at: stepId === 'import.assets' && status === 'skipped' ? '2026-01-02T00:00:00Z' : null,
+                }),
+            ),
+        });
+        const {guide} = await buildGuide({flows: [flow]});
+
+        expect(guide.startImportAt('import.assets')).toBe(false);
+        expect(guide.active).toBeNull();
+    });
+
+    it('suspend({resetImport: true}) preserves the current step for a step-managed flow and calls no endpoint', async () => {
         const {guide, controller, api} = await buildGuide({flows: [progressItem({flow: 'import_guide', status: 'pending'})]});
         guide.startImportAt('import.review');
         expect(controller.replay?.stepId).toBe('import.review');
@@ -1219,9 +1836,11 @@ describe('onboardingGuide — import guide start / suspend', () => {
         guide.suspend({resetImport: true});
 
         expect(guide.active).toBeNull();
-        expect(controller.replay?.stepId).toBe(IMPORT_GUIDE_STEP_IDS[0]);
+        expect(controller.replay?.stepId).toBe('import.review');
         expect(api.completeFlow).not.toHaveBeenCalled();
         expect(api.skipFlow).not.toHaveBeenCalled();
+        expect(api.completeStep).not.toHaveBeenCalled();
+        expect(api.skipStep).not.toHaveBeenCalled();
         expect(api.getProgress).toHaveBeenCalledTimes(1); // only buildGuide's initial load
     });
 
@@ -1237,6 +1856,389 @@ describe('onboardingGuide — import guide start / suspend', () => {
 });
 
 describe('onboardingGuide — finish/skip (automatic transitions and replay-local exits)', () => {
+    it('keeps a replacement Analyze activation and replay token when Select completion succeeds late', async () => {
+        const initial = progressItem({flow: 'import_guide', status: 'pending'});
+        const {guide, controller, api, storage} = await buildGuide({flows: [initial]});
+        const selectCompletion = deferred<OnboardingProgressItem>();
+        api.completeStep.mockReturnValue(selectCompletion.promise);
+
+        expect(guide.startImportAt('import.select')).toBe(true);
+        const finishingSelect = guide.finish();
+        expect(guide.actionPending).toBe(true);
+        expect(api.completeStep).toHaveBeenCalledExactlyOnceWith('import_guide', 'import.select', {
+            expected_version: 1,
+        });
+
+        // Import hosts may advance while persistence for the previous semantic
+        // step is still in flight. The new activation writes its own replay
+        // token without starting another backend transition.
+        expect(guide.startImportAt('import.analyze')).toBe(true);
+        expect(guide.active).toEqual({
+            flow: 'import_guide',
+            version: 1,
+            stepId: 'import.analyze',
+            mode: 'automatic',
+        });
+        const analyzeReplay = {
+            flow: 'import_guide',
+            version: 1,
+            stepId: 'import.analyze',
+            startedAt: 1000,
+            mode: 'automatic' as const,
+            remainingStepIds: ['import.analyze'],
+        };
+        expect(controller.replay).toEqual(analyzeReplay);
+        expect(storage.getItem(replayKey('user-1', 'import_guide', 1))).toBe(JSON.stringify(analyzeReplay));
+
+        selectCompletion.resolve(
+            progressItem({
+                flow: 'import_guide',
+                status: 'pending',
+                steps: initial.steps?.map((step) => (step.step_id === 'import.select' ? stepProgressItem(step.step_id, {status: 'completed', completed_at: '2026-01-02T00:00:00Z'}) : step)),
+            }),
+        );
+
+        expect(await finishingSelect).toBeUndefined();
+        expect(guide.active).toEqual({
+            flow: 'import_guide',
+            version: 1,
+            stepId: 'import.analyze',
+            mode: 'automatic',
+        });
+        expect(controller.replay).toEqual(analyzeReplay);
+        expect(controller.findStep('import_guide', 'import.select')?.status).toBe('completed');
+        expect(controller.findStep('import_guide', 'import.analyze')?.status).toBe('pending');
+        expect(guide.error).toBeNull();
+        expect(guide.actionPending).toBe(false);
+    });
+
+    it('does not leak a late Select completion error into a replacement Analyze activation', async () => {
+        const {guide, controller, api} = await buildGuide({
+            flows: [progressItem({flow: 'import_guide', status: 'pending'})],
+        });
+        const selectCompletion = deferred<OnboardingProgressItem>();
+        api.completeStep.mockReturnValue(selectCompletion.promise);
+
+        expect(guide.startImportAt('import.select')).toBe(true);
+        const finishingSelect = guide.finish();
+        expect(guide.actionPending).toBe(true);
+        expect(guide.startImportAt('import.analyze')).toBe(true);
+
+        selectCompletion.reject(new Error('late Select completion failed'));
+
+        expect(await finishingSelect).toBeUndefined();
+        expect(guide.active).toEqual({
+            flow: 'import_guide',
+            version: 1,
+            stepId: 'import.analyze',
+            mode: 'automatic',
+        });
+        expect(controller.replay).toEqual({
+            flow: 'import_guide',
+            version: 1,
+            stepId: 'import.analyze',
+            startedAt: 1000,
+            mode: 'automatic',
+            remainingStepIds: ['import.analyze'],
+        });
+        expect(controller.findStep('import_guide', 'import.select')?.status).toBe('pending');
+        expect(guide.error).toBeNull();
+        expect(guide.actionPending).toBe(false);
+    });
+
+    it('keeps a reopened Select generation pending when the dismissed generation skips successfully late', async () => {
+        const initial = progressItem({flow: 'import_guide', status: 'pending'});
+        const {guide, controller, api, storage} = await buildGuide({flows: [initial]});
+        const oldSkip = deferred<OnboardingProgressItem>();
+        const replacementCompletion = deferred<OnboardingProgressItem>();
+        api.skipStep.mockReturnValue(oldSkip.promise);
+        api.completeStep.mockReturnValue(replacementCompletion.promise);
+
+        expect(guide.startImportAt('import.select')).toBe(true);
+        const skippingOldGeneration = guide.skip();
+        expect(guide.actionPending).toBe(true);
+
+        guide.dismissHost();
+        expect(guide.active).toBeNull();
+        expect(guide.actionPending).toBe(false);
+
+        const replacementReplay = {
+            flow: 'import_guide',
+            version: 1,
+            stepId: 'import.select',
+            startedAt: 1000,
+            mode: 'automatic' as const,
+            remainingStepIds: ['import.select'],
+        };
+        const replayWrite = vi.spyOn(storage, 'setItem');
+        expect(guide.startImportAt('import.select')).toBe(true);
+        expect(replayWrite).toHaveBeenCalledExactlyOnceWith(replayKey('user-1', 'import_guide', 1), JSON.stringify(replacementReplay));
+        expect(guide.active).toEqual({
+            flow: 'import_guide',
+            version: 1,
+            stepId: 'import.select',
+            mode: 'automatic',
+        });
+        expect(controller.replay).toEqual(replacementReplay);
+
+        oldSkip.resolve(
+            progressItem({
+                flow: 'import_guide',
+                status: 'pending',
+                steps: initial.steps?.map((step) => (step.step_id === 'import.select' ? stepProgressItem(step.step_id, {status: 'skipped', skipped_at: '2026-01-02T00:00:00Z'}) : step)),
+            }),
+        );
+
+        expect(await skippingOldGeneration).toBe(true);
+        expect(guide.active).toEqual({
+            flow: 'import_guide',
+            version: 1,
+            stepId: 'import.select',
+            mode: 'automatic',
+        });
+        expect(controller.replay).toEqual(replacementReplay);
+        expect(guide.error).toBeNull();
+        expect(guide.actionPending).toBe(false);
+
+        const finishingReplacement = guide.finish();
+        expect(guide.actionPending).toBe(true);
+
+        replacementCompletion.resolve(
+            progressItem({
+                flow: 'import_guide',
+                status: 'pending',
+                steps: initial.steps?.map((step) => (step.step_id === 'import.select' ? stepProgressItem(step.step_id, {status: 'completed', completed_at: '2026-01-03T00:00:00Z'}) : step)),
+            }),
+        );
+
+        expect(await finishingReplacement).toBeUndefined();
+        expect(guide.active).toBeNull();
+        expect(controller.replay).toBeNull();
+        expect(guide.error).toBeNull();
+        expect(guide.actionPending).toBe(false);
+        expect(api.skipStep).toHaveBeenCalledExactlyOnceWith('import_guide', 'import.select', {
+            expected_version: 1,
+        });
+        expect(api.completeStep).toHaveBeenCalledExactlyOnceWith('import_guide', 'import.select', {
+            expected_version: 1,
+        });
+    });
+
+    it('does not let a dismissed generation error or finally contaminate a pending reopened Select generation', async () => {
+        const {guide, controller, api} = await buildGuide({
+            flows: [progressItem({flow: 'import_guide', status: 'pending'})],
+        });
+        const oldSkip = deferred<OnboardingProgressItem>();
+        const replacementCompletion = deferred<OnboardingProgressItem>();
+        vi.spyOn(controller, 'skipStep').mockReturnValue(oldSkip.promise);
+        api.completeStep.mockReturnValue(replacementCompletion.promise);
+
+        expect(guide.startImportAt('import.select')).toBe(true);
+        const skippingOldGeneration = guide.skip();
+        guide.dismissHost();
+        expect(guide.startImportAt('import.select')).toBe(true);
+        const finishingReplacement = guide.finish();
+        expect(guide.actionPending).toBe(true);
+
+        oldSkip.reject(new Error('late dismissed Select skip failed'));
+
+        expect(await skippingOldGeneration).toBe(false);
+        expect(guide.active).toEqual({
+            flow: 'import_guide',
+            version: 1,
+            stepId: 'import.select',
+            mode: 'automatic',
+        });
+        expect(controller.replay).toEqual({
+            flow: 'import_guide',
+            version: 1,
+            stepId: 'import.select',
+            startedAt: 1000,
+            mode: 'automatic',
+            remainingStepIds: ['import.select'],
+        });
+        expect(guide.error).toBeNull();
+        expect(guide.actionPending).toBe(true);
+
+        replacementCompletion.reject(new Error('replacement Select completion failed'));
+
+        expect(await finishingReplacement).toBeUndefined();
+        expect(guide.active).toEqual({
+            flow: 'import_guide',
+            version: 1,
+            stepId: 'import.select',
+            mode: 'automatic',
+        });
+        expect(controller.replay).toEqual({
+            flow: 'import_guide',
+            version: 1,
+            stepId: 'import.select',
+            startedAt: 1000,
+            mode: 'automatic',
+            remainingStepIds: ['import.select'],
+        });
+        expect(guide.error).toBe('onboarding.errors.complete');
+        expect(guide.actionPending).toBe(false);
+    });
+
+    it('does not clear a newer host step when the prior target-click completion resolves late', async () => {
+        const initial = progressItem({flow: 'import_guide', status: 'pending'});
+        const {guide, api} = await buildGuide({flows: [initial]});
+        const request = deferred<OnboardingProgressItem>();
+        api.completeStep.mockReturnValue(request.promise);
+
+        expect(guide.startImportAt('import.upload')).toBe(true);
+        const finishing = guide.finish();
+        expect(guide.actionPending).toBe(true);
+
+        // The same real wizard click can mount the next host step before the
+        // persistence request for the previous one resolves.
+        expect(guide.startImportAt('import.select')).toBe(true);
+        expect(guide.active).toMatchObject({flow: 'import_guide', stepId: 'import.select'});
+        request.resolve(
+            progressItem({
+                flow: 'import_guide',
+                status: 'pending',
+                steps: initial.steps?.map((step) => (step.step_id === 'import.upload' ? stepProgressItem(step.step_id, {status: 'completed', completed_at: '2026-01-02T00:00:00Z'}) : step)),
+            }),
+        );
+
+        await finishing;
+        expect(guide.active).toMatchObject({flow: 'import_guide', stepId: 'import.select'});
+        expect(guide.actionPending).toBe(false);
+    });
+
+    it('does not clear a newly opened modal guide when the final page Add completion succeeds late', async () => {
+        const pageFlow = progressItem({flow: 'broker_page_guide', status: 'pending'});
+        const modalFlow = progressItem({flow: 'broker_guide', status: 'pending'});
+        const {guide, controller, api} = await buildGuide({flows: [pageFlow, modalFlow]});
+        const oldCompletion = deferred<OnboardingProgressItem>();
+        api.completeFlow.mockReturnValue(oldCompletion.promise);
+
+        expect(guide.maybeStartContextual('broker_page_guide')).toBe(true);
+        for (let index = 1; index < guideSteps('broker_page_guide').length; index += 1) guide.next();
+        expect(guide.active?.stepId).toBe('broker.page.add');
+
+        const finishingPageGuide = guide.finish();
+        expect(guide.actionPending).toBe(true);
+
+        // This is the production Add-click order: capture starts completion,
+        // then the page handler dismisses the page guide and opens its modal guide.
+        guide.dismissHost();
+        expect(guide.maybeStartContextual('broker_guide')).toBe(true);
+        expect(guide.active).toMatchObject({flow: 'broker_guide', stepId: 'broker.overview'});
+        expect(controller.replay).toMatchObject({flow: 'broker_guide', stepId: 'broker.overview'});
+
+        oldCompletion.resolve(progressItem({flow: 'broker_page_guide', status: 'completed'}));
+        await finishingPageGuide;
+
+        expect(guide.active).toMatchObject({flow: 'broker_guide', stepId: 'broker.overview'});
+        expect(controller.replay).toMatchObject({flow: 'broker_guide', stepId: 'broker.overview'});
+        expect(guide.error).toBeNull();
+    });
+
+    it('merges the late Broker page Add completion after the overlapping modal skip has completed', async () => {
+        const pageFlow = progressItem({flow: 'broker_page_guide', status: 'pending'});
+        const modalFlow = progressItem({flow: 'broker_guide', status: 'pending'});
+        const completedPageFlow = progressItem({flow: 'broker_page_guide', status: 'completed'});
+        const skippedModalFlow = progressItem({flow: 'broker_guide', status: 'skipped'});
+        const {guide, controller, api} = await buildGuide({flows: [pageFlow, modalFlow]});
+        const pageCompletion = deferred<OnboardingProgressItem>();
+        const modalSkip = deferred<OnboardingProgressItem>();
+        api.completeFlow.mockReturnValue(pageCompletion.promise);
+        api.skipFlow.mockReturnValue(modalSkip.promise);
+
+        expect(guide.maybeStartContextual('broker_page_guide')).toBe(true);
+        for (let index = 1; index < guideSteps('broker_page_guide').length; index += 1) guide.next();
+        expect(guide.active?.stepId).toBe('broker.page.add');
+
+        const finishingPageGuide = guide.finish();
+        expect(guide.actionPending).toBe(true);
+        expect(api.completeFlow).toHaveBeenCalledExactlyOnceWith('broker_page_guide', {
+            expected_version: 1,
+        });
+
+        guide.dismissHost();
+        expect(guide.maybeStartContextual('broker_guide')).toBe(true);
+        const skippingModalGuide = guide.skip();
+        expect(guide.actionPending).toBe(true);
+        expect(api.skipFlow).toHaveBeenCalledExactlyOnceWith('broker_guide', {
+            expected_version: 1,
+        });
+
+        modalSkip.resolve(skippedModalFlow);
+        expect(await skippingModalGuide).toBe(true);
+        expect(controller.findFlow('broker_page_guide')).toEqual(pageFlow);
+        expect(controller.findFlow('broker_guide')).toEqual(skippedModalFlow);
+        expect(guide.active).toBeNull();
+        expect(guide.actionPending).toBe(false);
+
+        pageCompletion.resolve(completedPageFlow);
+        expect(await finishingPageGuide).toBeUndefined();
+
+        expect(controller.findFlow('broker_page_guide')).toEqual(completedPageFlow);
+        expect(controller.findFlow('broker_guide')).toEqual(skippedModalFlow);
+        expect(guide.active).toBeNull();
+        expect(guide.actionPending).toBe(false);
+        expect(guide.error).toBeNull();
+    });
+
+    it('does not overwrite a new modal guide error when the final page Add completion fails late', async () => {
+        const pageFlow = progressItem({flow: 'broker_page_guide', status: 'pending'});
+        const modalFlow = progressItem({flow: 'broker_guide', status: 'pending'});
+        const {guide, api} = await buildGuide({flows: [pageFlow, modalFlow]});
+        const oldCompletion = deferred<OnboardingProgressItem>();
+        api.completeFlow.mockReturnValue(oldCompletion.promise);
+        api.skipFlow.mockRejectedValue(new Error('new modal skip failed'));
+
+        expect(guide.maybeStartContextual('broker_page_guide')).toBe(true);
+        for (let index = 1; index < guideSteps('broker_page_guide').length; index += 1) guide.next();
+        expect(guide.active?.stepId).toBe('broker.page.add');
+        const finishingPageGuide = guide.finish();
+
+        guide.dismissHost();
+        expect(guide.maybeStartContextual('broker_guide')).toBe(true);
+        expect(await guide.skip()).toBe(false);
+        expect(guide.active).toMatchObject({flow: 'broker_guide', stepId: 'broker.overview'});
+        expect(guide.error).toBe('onboarding.errors.skip');
+
+        oldCompletion.reject(new Error('old page completion failed'));
+        await finishingPageGuide;
+
+        expect(guide.active).toMatchObject({flow: 'broker_guide', stepId: 'broker.overview'});
+        expect(guide.error).toBe('onboarding.errors.skip');
+    });
+
+    it('does not let the final page Add completion finally clear the new modal guide pending state', async () => {
+        const pageFlow = progressItem({flow: 'broker_page_guide', status: 'pending'});
+        const modalFlow = progressItem({flow: 'broker_guide', status: 'pending'});
+        const {guide, api} = await buildGuide({flows: [pageFlow, modalFlow]});
+        const oldCompletion = deferred<OnboardingProgressItem>();
+        const modalCompletion = deferred<OnboardingProgressItem>();
+        api.completeFlow.mockReturnValueOnce(oldCompletion.promise).mockReturnValueOnce(modalCompletion.promise);
+
+        expect(guide.maybeStartContextual('broker_page_guide')).toBe(true);
+        for (let index = 1; index < guideSteps('broker_page_guide').length; index += 1) guide.next();
+        expect(guide.active?.stepId).toBe('broker.page.add');
+        const finishingPageGuide = guide.finish();
+
+        guide.dismissHost();
+        expect(guide.maybeStartContextual('broker_guide')).toBe(true);
+        const finishingModalGuide = guide.finish();
+        expect(guide.actionPending).toBe(true);
+
+        oldCompletion.resolve(progressItem({flow: 'broker_page_guide', status: 'completed'}));
+        await finishingPageGuide;
+
+        expect(guide.active).toMatchObject({flow: 'broker_guide', stepId: 'broker.overview'});
+        expect(guide.actionPending).toBe(true);
+        expect(guide.error).toBeNull();
+
+        modalCompletion.resolve(progressItem({flow: 'broker_guide', status: 'completed'}));
+        await finishingModalGuide;
+        expect(guide.actionPending).toBe(false);
+    });
+
     it('finish calls only completeFlow, clears the replay, and returns the preserved returnTo on success', async () => {
         const {guide, api, storage} = await buildGuide();
         api.completeFlow.mockResolvedValue(progressItem({flow: 'intro_tour', status: 'completed', version: 1, current_version: 1}));
@@ -1272,17 +2274,18 @@ describe('onboardingGuide — finish/skip (automatic transitions and replay-loca
         expect(guide.actionPending).toBe(false);
     });
 
-    it('skip calls only skipFlow, clears the replay, and returns true on success', async () => {
-        const {guide, api, storage} = await buildGuide({flows: [progressItem({flow: 'import_guide', status: 'pending'})]});
-        api.skipFlow.mockResolvedValue(progressItem({flow: 'import_guide', status: 'skipped', version: 1, current_version: 1}));
-        guide.startImportAt('import.upload');
-        const key = replayKey('user-1', 'import_guide', 1);
+    it('skip calls only skipFlow for a flow-managed guide, clears replay, and returns true', async () => {
+        const {guide, api, storage} = await buildGuide({flows: [progressItem({flow: 'intro_tour', status: 'pending'})]});
+        api.skipFlow.mockResolvedValue(progressItem({flow: 'intro_tour', status: 'skipped', version: 1, current_version: 1}));
+        guide.maybeStartIntro();
+        const key = replayKey('user-1', 'intro_tour', 1);
 
         const skipped = await guide.skip();
 
         expect(skipped).toBe(true);
         expect(api.skipFlow).toHaveBeenCalledOnce();
-        expect(api.skipFlow).toHaveBeenCalledWith('import_guide', {expected_version: 1});
+        expect(api.skipFlow).toHaveBeenCalledWith('intro_tour', {expected_version: 1});
+        expect(api.skipStep).not.toHaveBeenCalled();
         expect(api.completeFlow).not.toHaveBeenCalled();
         expect(api.completeWelcome).not.toHaveBeenCalled();
         expect(guide.active).toBeNull();
@@ -1290,9 +2293,9 @@ describe('onboardingGuide — finish/skip (automatic transitions and replay-loca
         expect(guide.error).toBeNull();
     });
 
-    it('skip retains the active guide and surfaces the error on failure', async () => {
+    it('step skip retains the active guide and surfaces the error on failure', async () => {
         const {guide, api, storage} = await buildGuide({flows: [progressItem({flow: 'import_guide', status: 'pending'})]});
-        api.skipFlow.mockRejectedValue(new Error('server exploded'));
+        api.skipStep.mockRejectedValue(new Error('server exploded'));
         guide.startImportAt('import.upload');
         const key = replayKey('user-1', 'import_guide', 1);
 
@@ -1302,48 +2305,42 @@ describe('onboardingGuide — finish/skip (automatic transitions and replay-loca
         expect(guide.active).not.toBeNull();
         expect(guide.error).toBe('onboarding.errors.skip');
         expect(storage.getItem(key)).not.toBeNull();
+        expect(api.skipStep).toHaveBeenCalledExactlyOnceWith('import_guide', 'import.upload', {
+            expected_version: 1,
+        });
+        expect(api.skipFlow).not.toHaveBeenCalled();
     });
 
-    it.each(['intro_tour', 'import_guide'] as const)('terminal %s replay Finish clears only session replay and preserves its returnTo', async (flow) => {
-        const {guide, controller, api, storage} = await buildGuide({flows: [progressItem({flow, status: 'completed'})]});
-        const expectedReturnTo = flow === 'intro_tour' ? '/transactions/9' : undefined;
-        if (flow === 'intro_tour') {
-            expect(guide.startIntroReplay(expectedReturnTo)).toBe(true);
-        } else {
-            expect(guide.startImportReplay()).toBe(true);
-            expect(guide.startImportAt('import.upload')).toBe(true);
-        }
-        const key = replayKey('user-1', flow, 1);
-        expect(guide.active).toMatchObject({flow, mode: 'replay'});
-        expect(guide.active?.returnTo).toBe(expectedReturnTo);
-        expect(controller.replay?.returnTo).toBe(expectedReturnTo);
+    it('terminal flow-managed replay Finish clears only session replay and preserves returnTo', async () => {
+        const {guide, controller, api, storage} = await buildGuide({flows: [progressItem({flow: 'intro_tour', status: 'completed'})]});
+        expect(guide.startIntroReplay('/transactions/9')).toBe(true);
+        const key = replayKey('user-1', 'intro_tour', 1);
+        expect(guide.active).toMatchObject({flow: 'intro_tour', mode: 'replay'});
+        expect(guide.active?.returnTo).toBe('/transactions/9');
+        expect(controller.replay?.returnTo).toBe('/transactions/9');
         expect(storage.getItem(key)).not.toBeNull();
 
         const returnTo = await guide.finish();
 
-        expect(returnTo).toBe(expectedReturnTo);
+        expect(returnTo).toBe('/transactions/9');
         expect(controller.replay).toBeNull();
         expect(guide.active).toBeNull();
         expect(storage.getItem(key)).toBeNull();
-        expect(controller.findFlow(flow)?.status).toBe('completed');
+        expect(controller.findFlow('intro_tour')?.status).toBe('completed');
         expect(api.completeFlow).not.toHaveBeenCalled();
         expect(api.skipFlow).not.toHaveBeenCalled();
+        expect(api.completeStep).not.toHaveBeenCalled();
+        expect(api.skipStep).not.toHaveBeenCalled();
         expect(api.completeWelcome).not.toHaveBeenCalled();
     });
 
-    it.each(['intro_tour', 'import_guide'] as const)('terminal %s replay Skip clears only session replay and preserves its returnTo until exit', async (flow) => {
-        const {guide, controller, api, storage} = await buildGuide({flows: [progressItem({flow, status: 'completed'})]});
-        const expectedReturnTo = flow === 'intro_tour' ? '/transactions/9' : undefined;
-        if (flow === 'intro_tour') {
-            expect(guide.startIntroReplay(expectedReturnTo)).toBe(true);
-        } else {
-            expect(guide.startImportReplay()).toBe(true);
-            expect(guide.startImportAt('import.upload')).toBe(true);
-        }
-        const key = replayKey('user-1', flow, 1);
-        expect(guide.active).toMatchObject({flow, mode: 'replay'});
-        expect(guide.active?.returnTo).toBe(expectedReturnTo);
-        expect(controller.replay?.returnTo).toBe(expectedReturnTo);
+    it('terminal flow-managed replay Skip clears only session replay and preserves returnTo until exit', async () => {
+        const {guide, controller, api, storage} = await buildGuide({flows: [progressItem({flow: 'intro_tour', status: 'completed'})]});
+        expect(guide.startIntroReplay('/transactions/9')).toBe(true);
+        const key = replayKey('user-1', 'intro_tour', 1);
+        expect(guide.active).toMatchObject({flow: 'intro_tour', mode: 'replay'});
+        expect(guide.active?.returnTo).toBe('/transactions/9');
+        expect(controller.replay?.returnTo).toBe('/transactions/9');
         expect(storage.getItem(key)).not.toBeNull();
 
         const skipped = await guide.skip();
@@ -1352,9 +2349,11 @@ describe('onboardingGuide — finish/skip (automatic transitions and replay-loca
         expect(controller.replay).toBeNull();
         expect(guide.active).toBeNull();
         expect(storage.getItem(key)).toBeNull();
-        expect(controller.findFlow(flow)?.status).toBe('completed');
+        expect(controller.findFlow('intro_tour')?.status).toBe('completed');
         expect(api.completeFlow).not.toHaveBeenCalled();
         expect(api.skipFlow).not.toHaveBeenCalled();
+        expect(api.completeStep).not.toHaveBeenCalled();
+        expect(api.skipStep).not.toHaveBeenCalled();
         expect(api.completeWelcome).not.toHaveBeenCalled();
     });
 });

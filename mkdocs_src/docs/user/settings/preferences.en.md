@@ -34,58 +34,56 @@ Each field tracks its own state:
 
 ## 🧭 Onboarding and guides {: #onboarding-and-guides }
 
-The **Onboarding** category groups together the **welcome setup**, the **quick tour**, and the
-**contextual import guide** — the screens new accounts see once, on their own. From here you can
-check their status and replay any of them without changing that status. Guide replays do not
-write app data; the Welcome replay saves only the preferences you explicitly submit.
+The **Onboarding** category shows all **15 independently versioned flows**. They are grouped by
+where they appear:
 
-| Column | Meaning |
+| Group | Flows |
 |---|---|
-| **Flow name** | *Welcome setup*, *Quick tour*, or *Import guide*. |
-| **Status badge** | **Pending** (never completed or skipped), **Completed**, or **Skipped**. |
-| **Update available** | Shown when LibreFolio ships a newer version of that guide's content than the one you last went through. |
-| **Seen vX · current vY** | The content version you last completed or skipped, versus the version currently shipped. |
+| **Setup** | Welcome setup |
+| **Core tour** | Quick navigation tour |
+| **Transactions** | Transactions overview, Add Transaction, bulk workspace, Import Wizard |
+| **Brokers** | Brokers overview, Add Broker, broker details |
+| **FX** | FX overview, Add Pair, pair details |
+| **Assets** | Assets overview, Add Asset, asset details |
 
-For each flow, a **Replay** button restarts it:
+Each flow has a **Pending**, **Completed**, or **Skipped** badge and a
+**Seen vX · current vY** line. **New version to view** means newer content is due even when the
+earlier version was completed or skipped; the flow reopens at the newer version when its trigger
+is reached.
 
-- **Welcome setup** and **Quick tour** replay immediately, taking you to the welcome page or
-  opening the tour's three-phrase narrative intro. From that intro, press **Start** or wait for
-  the one-shot automatic start after 10 seconds.
-- **Import guide** instead shows **Replay on next import** — clicking it doesn't launch anything
-  now; it arms the guide at **Upload** for the *next* time you open the Import Wizard (shown as a
-  **Ready for next import** badge until then).
+**Import Wizard** and **bulk workspace** are each one step-managed flow with individually saved
+steps. Expand either row to see its **N/M** progress and the status of each step. Optional Import
+steps (**Unify Assets**, **Corrections**, and **Duplicates**) stay pending until a real import
+first encounters them; they are not silently completed when an earlier import does not need
+them.
 
-A **Replay all** button in the header queues every flow at once and takes you to the welcome
-page, so the whole sequence — welcome, narrative intro and tour, then the import guide on your
-next import — runs again end to end. If you change the Welcome language and continue, that locale
-is saved through the normal user-settings update and active before the intro appears; the
-Welcome flow's existing **Completed** or **Skipped** status stays unchanged.
+For **Welcome setup** and **Quick tour**, **Replay** starts immediately. Contextual flows use
+**Replay at next trigger**: open the matching page, Add form, detail page, Import Wizard, or bulk
+workspace to begin. You can cancel an armed replay before its trigger. **Replay all** arms every
+flow and opens Welcome first.
 
-!!! info "Guide controls and non-writing previews"
+!!! info "Step-managed guides"
 
-    In an automatic pending quick tour or import guide, the coachmark's top row contains **Skip
-    permanently** and **X**. In replay mode, that first action is **Exit replay** instead. The
-    footer uses **Back**, **Next**, and **Finish** on the quick tour's last step. Only the
-    automatic pending flow's **Finish** or **Skip permanently** changes its saved status; replay
-    **Finish** and **Exit replay** only clear the session replay state.
+    In an automatic Import or bulk guide, **X** skips only the current step or checkpoint. It
+    does not mark the remaining steps skipped. The next due step starts when its real screen or
+    milestone is encountered.
 
-    The Broker, FX, and Asset screens opened by the tour are previews only and cannot save.
-    **X** suspends without ending the replay: the quick tour keeps its current position, while
-    the import guide resets its next entry to **Upload**. There is no Pause button. The guide
-    never restores a wizard draft, clicks controls, uploads a file, or presses **Save All** for
-    you.
+    In replay mode, exiting a step removes it only from the current browser-session replay. It
+    does not change the saved **Completed** or **Skipped** status.
 
 !!! note "Replay is non-destructive"
 
-    Replay state is scoped to your current browser session and account. Finishing or exiting a
-    quick-tour or import-guide replay never calls complete/skip and never changes the flow's
-    **Completed** or **Skipped** status. A Welcome replay has one explicit exception: **Continue**
-    can save the language, base currency, and avatar you selected through the normal
-    user-settings update, while still preserving its onboarding status. **Exit replay** saves
-    nothing.
+    Replays are scoped to your current browser session and account. Guides point at real controls
+    but do not click or write for you. A Welcome replay has one explicit exception:
+    **Continue** saves the language, base currency, and avatar you selected while preserving the
+    Welcome flow's onboarding status.
 
-If your onboarding status fails to load and no earlier flow list is available, this section shows
-a **Retry** button instead of the flow list.
+An onboarding refresh or bootstrap failure keeps the Dashboard available with an inline
+**Retry** banner only when LibreFolio already has a cached terminal Welcome state
+(**Completed** or **Skipped**) for your signed-in account. Without that cache — including on the
+first load or while Welcome is **Pending** — startup stays blocked and offers **Retry** and
+**Log out**. A user-settings failure also blocks startup. If this section has no flow list to
+retain, it shows its own **Retry** button.
 
 ---
 

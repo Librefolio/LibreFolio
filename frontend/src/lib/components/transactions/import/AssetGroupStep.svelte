@@ -51,6 +51,8 @@
         onpartition: (partition: string[][]) => void;
         /** The user accepted a proposal exactly as it stands. */
         onconfirm: (signature: string) => void;
+        /** Accept every currently open proposal without changing any other decision. */
+        onconfirmall?: () => void;
         /** The user promoted one code to lead its kind. */
         onprimary: (signature: string, kind: IdentifierKind, value: string) => void;
         /** Discard every decision on this step and go back to the engine's proposal. */
@@ -58,7 +60,9 @@
         oninspect?: (realAssetId: number) => void;
     }
 
-    let {groups, txCounts = {}, resolvedIds = {}, resolvedNames = {}, primaries = {}, touched = false, onpartition, onconfirm, onprimary, onreset, oninspect}: Props = $props();
+    let {groups, txCounts = {}, resolvedIds = {}, resolvedNames = {}, primaries = {}, touched = false, onpartition, onconfirm, onconfirmall, onprimary, onreset, oninspect}: Props = $props();
+
+    let openProposalCount = $derived(groups.filter((group) => group.state === 'proposed').length);
 
     // =========================================================================
     // Menu
@@ -336,6 +340,14 @@
          explanation into a narrow column for no gain. The reset sits on its own line, next to the
          legend that decodes the borders. -->
     <InfoBanner variant="info" message={$t('importWizard.assetUnify.intro')} />
+    {#if openProposalCount >= 2 && onconfirmall}
+        <div class="flex justify-end">
+            <button type="button" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700" onclick={onconfirmall} data-testid="asset-group-confirm-all">
+                <Check class="h-4 w-4" />
+                {$t('importWizard.assetUnify.confirmAll', {values: {count: openProposalCount}})}
+            </button>
+        </div>
+    {/if}
     <div class="flex flex-wrap items-center justify-between gap-2">
         <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-500 dark:text-gray-400">
             <span class="inline-flex items-center gap-1"><span class="h-3 w-5 rounded border-2 border-solid border-emerald-400 dark:border-emerald-600/60"></span>{$t('importWizard.assetUnify.legendConfirmed')}</span>

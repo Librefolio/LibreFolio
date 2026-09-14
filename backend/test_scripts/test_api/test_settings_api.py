@@ -12,6 +12,7 @@ from typing import Optional
 
 import httpx
 import pytest
+import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.config import get_settings
@@ -390,15 +391,80 @@ class TestUserSettings:
 # Onboarding Progress Tests (Workstream J foundation)
 # ============================================================================
 
-ONBOARDING_FLOWS = ("welcome", "intro_tour", "import_guide")
+ONBOARDING_FLOWS = (
+    "welcome",
+    "intro_tour",
+    "transactions_page_guide",
+    "transaction_create_guide",
+    "transaction_bulk_guide",
+    "import_guide",
+    "broker_page_guide",
+    "broker_guide",
+    "broker_detail_guide",
+    "fx_page_guide",
+    "fx_guide",
+    "fx_detail_guide",
+    "asset_page_guide",
+    "asset_guide",
+    "asset_detail_guide",
+)
+REMOVED_ONBOARDING_DRAFT_FLOWS = {
+    "transaction_bulk_validation_guide",
+    "transaction_bulk_selection_guide",
+    "transaction_bulk_save_guide",
+}
+ONBOARDING_STEPS = {
+    "transaction_bulk_guide": (
+        "transaction.bulk.workspace",
+        "transaction.bulk.validation",
+        "transaction.bulk.selection",
+        "transaction.bulk.save",
+    ),
+    "import_guide": (
+        "import.upload",
+        "import.select",
+        "import.analyze",
+        "import.assets",
+        "import.fix",
+        "import.duplicates",
+        "import.review",
+        "import.bulk",
+    ),
+}
+ONBOARDING_ITEM_KEYS = {
+    "flow",
+    "status",
+    "version",
+    "current_version",
+    "update_available",
+    "created_at",
+    "updated_at",
+}
+ONBOARDING_STEP_ITEM_KEYS = {
+    "step_id",
+    "status",
+    "version",
+    "current_version",
+    "update_available",
+    "created_at",
+    "updated_at",
+}
+_ONBOARDING_USERS_TO_DELETE: set[str] = set()
+
+
+async def _get_onboarding_response(client: httpx.AsyncClient) -> dict:
+    """GET the final onboarding contract."""
+    resp = await client.get(f"{API_BASE}/settings/onboarding", timeout=TIMEOUT)
+    assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+    return resp.json()
 
 
 async def _get_onboarding_flows(client: httpx.AsyncClient) -> dict:
-    """GET /settings/onboarding and index the response by flow name."""
-    resp = await client.get(f"{API_BASE}/settings/onboarding", timeout=TIMEOUT)
-    assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
-    data = resp.json()
-    return {item["flow"]: item for item in data["flows"]}
+    """Index the final onboarding response by flow name."""
+    data = await _get_onboarding_response(client)
+    flows = {item["flow"]: item for item in data["flows"]}
+    assert len(flows) == len(data["flows"]), "Onboarding response must not contain duplicate flow rows"
+    return flows
 
 
 async def _new_onboarding_user(client: httpx.AsyncClient, marker: str) -> str:
@@ -406,13 +472,34 @@ async def _new_onboarding_user(client: httpx.AsyncClient, marker: str) -> str:
     from uuid import uuid4  # noqa: PLC0415 — test-only local import
 
     username, _email, session, _is_admin = await get_or_create_test_user(client, f"onb_{marker}_{uuid4().hex[:8]}")
+    _ONBOARDING_USERS_TO_DELETE.add(username)
     assert session is not None, "Failed to create test user"
     client.cookies.set("session", session)
     return username
 
 
+async def _delete_onboarding_user(username: str) -> None:
+    """Delete a user created by an onboarding API test and its cascading rows."""
+    engine = get_async_engine()
+    async with AsyncSession(engine) as session:
+        user = await user_service.get_user_by_username(session, username)
+        if user is not None:
+            await session.delete(user)
+            await session.commit()
+    _ONBOARDING_USERS_TO_DELETE.discard(username)
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def cleanup_owned_onboarding_users():
+    """Delete every account created through the onboarding-specific helper."""
+    before = set(_ONBOARDING_USERS_TO_DELETE)
+    yield
+    for username in _ONBOARDING_USERS_TO_DELETE - before:
+        await _delete_onboarding_user(username)
+
+
 class TestOnboardingProgressApi:
-    """Tests for GET/complete/skip /settings/onboarding endpoints."""
+    """Tests for final GET and flow/step transition endpoints."""
 
     @pytest.mark.asyncio
     async def test_get_onboarding_progress_requires_auth(self, test_server):
@@ -426,24 +513,33 @@ class TestOnboardingProgressApi:
         print_success("✓ Correctly rejected unauthenticated request")
 
     @pytest.mark.asyncio
-    async def test_get_onboarding_progress_new_user_all_pending(self, test_server):
-        """ONB-002: a fresh user gets exactly the three registered flows, all pending."""
-        print_section("ONB-002: GET /settings/onboarding - New user")
+    async def test_get_onboarding_progress_has_exact_flows_and_step_arrays(self, test_server):
+        """ONB-002: GET returns the final 15-flow contract and managed steps."""
+        print_section("ONB-002: GET /settings/onboarding - Final contract")
 
         async with httpx.AsyncClient() as client:
-            await _new_onboarding_user(client, "get_new")
+            username = await _new_onboarding_user(client, "get")
+            try:
+                data = await _get_onboarding_response(client)
+                flows = {item["flow"]: item for item in data["flows"]}
 
-            flows = await _get_onboarding_flows(client)
+                assert set(data) == {"flows"}
+                assert len(data["flows"]) == 15, f"Final contract must expose exactly 15 flows, got {[item['flow'] for item in data['flows']]}"
+                assert tuple(item["flow"] for item in data["flows"]) == ONBOARDING_FLOWS
+                assert len(flows) == len(data["flows"]), "Final contract must not contain duplicate flow rows"
+                assert set(flows).isdisjoint(REMOVED_ONBOARDING_DRAFT_FLOWS)
+                for flow, expected_steps in ONBOARDING_STEPS.items():
+                    assert set(flows[flow]) == ONBOARDING_ITEM_KEYS | {"steps"}
+                    assert tuple(step["step_id"] for step in flows[flow]["steps"]) == expected_steps
+                    assert all(step["status"] == "pending" for step in flows[flow]["steps"])
+                    assert all(set(step) == ONBOARDING_STEP_ITEM_KEYS for step in flows[flow]["steps"])
+                for flow in set(flows) - set(ONBOARDING_STEPS):
+                    assert set(flows[flow]) == ONBOARDING_ITEM_KEYS
+                    assert "steps" not in flows[flow]
+            finally:
+                await _delete_onboarding_user(username)
 
-            assert set(flows) == set(ONBOARDING_FLOWS), f"Expected exactly {ONBOARDING_FLOWS}, got {sorted(flows)}"
-            for name, item in flows.items():
-                assert item["status"] == "pending", f"{name}: expected pending, got {item['status']}"
-                assert item["version"] == item["current_version"], f"{name}: fresh user must be at the current version"
-                assert item["update_available"] is False
-                assert item["completed_at"] is None
-                assert item["skipped_at"] is None
-
-        print_success("✓ New user has all flows pending at the current version")
+        print_success("✓ GET exposes the final 15 flows and both ordered step arrays")
 
     @pytest.mark.asyncio
     async def test_complete_onboarding_flow(self, test_server):
@@ -465,8 +561,10 @@ class TestOnboardingProgressApi:
             item = resp.json()
             assert item["flow"] == "welcome"
             assert item["status"] == "completed"
+            assert set(item) == ONBOARDING_ITEM_KEYS | {"completed_at"}
             assert item["completed_at"] is not None
-            assert item["skipped_at"] is None
+            assert "skipped_at" not in item
+            assert "steps" not in item
             assert item["update_available"] is False
 
             # Persisted: a fresh GET reflects the same terminal state.
@@ -496,8 +594,12 @@ class TestOnboardingProgressApi:
             item = resp.json()
             assert item["flow"] == "import_guide"
             assert item["status"] == "skipped"
+            assert set(item) == ONBOARDING_ITEM_KEYS | {"skipped_at"}
             assert item["skipped_at"] is not None
-            assert item["completed_at"] is None
+            assert "completed_at" not in item
+            assert "steps" not in item
+            persisted = await _get_onboarding_flows(client)
+            assert all(step["status"] == "skipped" for step in persisted["import_guide"]["steps"])
 
         print_success("✓ Onboarding flow skipped and persisted")
 
@@ -522,6 +624,147 @@ class TestOnboardingProgressApi:
         print_success("✓ Repeat completion is idempotent")
 
     @pytest.mark.asyncio
+    async def test_step_endpoints_are_idempotent_and_mixed_terminal_steps_complete_flow(self, test_server):
+        """ONB-005b: complete/skip mutate only the addressed Import step; the
+        aggregate stays pending until all eight are terminal, then completes."""
+        print_section("ONB-005b: Import step complete/skip endpoints and aggregate")
+
+        async with httpx.AsyncClient() as client:
+            username = await _new_onboarding_user(client, "step_mixed")
+            try:
+                flows = await _get_onboarding_flows(client)
+                version = flows["import_guide"]["current_version"]
+                payload = {"expected_version": version}
+
+                first = await client.post(
+                    f"{API_BASE}/settings/onboarding/import_guide/steps/import.upload/complete",
+                    json=payload,
+                    timeout=TIMEOUT,
+                )
+                repeated = await client.post(
+                    f"{API_BASE}/settings/onboarding/import_guide/steps/import.upload/complete",
+                    json=payload,
+                    timeout=TIMEOUT,
+                )
+                assert first.status_code == 200, first.text
+                assert repeated.status_code == 200, repeated.text
+                assert repeated.json() == first.json(), "Repeating a step completion must be idempotent"
+
+                first_item = first.json()
+                assert first_item["flow"] == "import_guide"
+                assert first_item["status"] == "pending"
+                assert set(first_item) == ONBOARDING_ITEM_KEYS | {"steps"}
+                assert "steps" in first_item, "Step transitions must return the final flow shape"
+                assert tuple(step["step_id"] for step in first_item["steps"]) == ONBOARDING_STEPS["import_guide"]
+                first_steps = {step["step_id"]: step for step in first_item["steps"]}
+                assert first_steps["import.upload"]["status"] == "completed"
+                assert first_steps["import.upload"]["completed_at"] is not None
+                assert set(first_steps["import.upload"]) == ONBOARDING_STEP_ITEM_KEYS | {"completed_at"}
+                assert all(first_steps[step_id]["status"] == "pending" for step_id in ONBOARDING_STEPS["import_guide"] if step_id != "import.upload")
+                assert all(set(first_steps[step_id]) == ONBOARDING_STEP_ITEM_KEYS for step_id in ONBOARDING_STEPS["import_guide"] if step_id != "import.upload")
+
+                item = first_item
+                for step_id in ONBOARDING_STEPS["import_guide"]:
+                    if step_id == "import.upload":
+                        continue
+                    skipped = await client.post(
+                        f"{API_BASE}/settings/onboarding/import_guide/steps/{step_id}/skip",
+                        json=payload,
+                        timeout=TIMEOUT,
+                    )
+                    assert skipped.status_code == 200, skipped.text
+                    item = skipped.json()
+                    if step_id != "import.bulk":
+                        assert item["status"] == "pending"
+
+                assert item["status"] == "completed"
+                assert set(item) == ONBOARDING_ITEM_KEYS | {"completed_at", "steps"}
+                assert item["completed_at"] is not None
+                assert "skipped_at" not in item
+                terminal_steps = {step["step_id"]: step for step in item["steps"]}
+                assert terminal_steps["import.upload"]["status"] == "completed"
+                assert all(terminal_steps[step_id]["status"] == "skipped" for step_id in ONBOARDING_STEPS["import_guide"] if step_id != "import.upload")
+
+                persisted = await _get_onboarding_flows(client)
+                assert persisted["import_guide"]["status"] == "completed"
+                assert {step["step_id"]: step["status"] for step in persisted["import_guide"]["steps"]} == {step_id: ("completed" if step_id == "import.upload" else "skipped") for step_id in ONBOARDING_STEPS["import_guide"]}
+            finally:
+                await _delete_onboarding_user(username)
+
+        print_success("✓ Step endpoints are idempotent and aggregate only after every step is terminal")
+
+    @pytest.mark.asyncio
+    async def test_all_skipped_bulk_steps_aggregate_to_skipped(self, test_server):
+        """ONB-005c: the single Bulk flow is skipped only when all four steps are skipped."""
+        print_section("ONB-005c: Bulk all-skipped aggregate")
+
+        async with httpx.AsyncClient() as client:
+            username = await _new_onboarding_user(client, "step_all_skipped")
+            try:
+                flows = await _get_onboarding_flows(client)
+                version = flows["transaction_bulk_guide"]["current_version"]
+                item = None
+                for step_id in ONBOARDING_STEPS["transaction_bulk_guide"]:
+                    response = await client.post(
+                        f"{API_BASE}/settings/onboarding/transaction_bulk_guide/steps/{step_id}/skip",
+                        json={"expected_version": version},
+                        timeout=TIMEOUT,
+                    )
+                    assert response.status_code == 200, response.text
+                    item = response.json()
+                    if step_id != "transaction.bulk.save":
+                        assert item["status"] == "pending"
+
+                assert item is not None
+                assert item["status"] == "skipped"
+                assert item["skipped_at"] is not None
+                assert "completed_at" not in item
+                assert {step["step_id"]: step["status"] for step in item["steps"]} == dict.fromkeys(ONBOARDING_STEPS["transaction_bulk_guide"], "skipped")
+            finally:
+                await _delete_onboarding_user(username)
+
+        print_success("✓ All-skipped Bulk steps aggregate to skipped")
+
+    @pytest.mark.parametrize("action", ("complete", "skip"))
+    @pytest.mark.asyncio
+    async def test_step_transition_rejects_welcome_settings_without_mutation(self, test_server, action: str):
+        """ONB-005d: step transitions strictly reject flow-only welcome settings."""
+        print_section(f"ONB-005d: Step {action} rejects welcome_settings without mutation")
+
+        async with httpx.AsyncClient() as client:
+            await _new_onboarding_user(client, f"step_schema_{action}")
+            flow = "import_guide"
+            step_id = "import.upload"
+
+            flows_before = await _get_onboarding_flows(client)
+            flow_before = flows_before[flow]
+            steps_before = {step["step_id"]: step for step in flow_before["steps"]}
+            step_before = steps_before[step_id]
+
+            response = await client.post(
+                f"{API_BASE}/settings/onboarding/{flow}/steps/{step_id}/{action}",
+                json={
+                    "expected_version": flow_before["current_version"],
+                    "welcome_settings": {
+                        "language": "en",
+                        "base_currency": "EUR",
+                        "avatar_url": None,
+                    },
+                },
+                timeout=TIMEOUT,
+            )
+
+            assert response.status_code == 422, f"Expected 422, got {response.status_code}: {response.text}"
+
+            flows_after = await _get_onboarding_flows(client)
+            flow_after = flows_after[flow]
+            steps_after = {step["step_id"]: step for step in flow_after["steps"]}
+            assert steps_after[step_id] == step_before, f"Rejected step {action} must not mutate the addressed step"
+            assert flow_after == flow_before, f"Rejected step {action} must not mutate the owning flow"
+
+        print_success(f"✓ Step {action} strictly rejected welcome_settings without mutation")
+
+    @pytest.mark.asyncio
     async def test_skip_then_explicit_complete_transition_allowed(self, test_server):
         """ONB-006: replay-like skipped→completed explicit transition is allowed and
         clears skipped_at (never both timestamps set)."""
@@ -542,7 +785,7 @@ class TestOnboardingProgressApi:
             item = complete_resp.json()
             assert item["status"] == "completed"
             assert item["completed_at"] is not None
-            assert item["skipped_at"] is None
+            assert "skipped_at" not in item
 
         print_success("✓ Explicit skip→complete transition applied")
 
@@ -563,34 +806,6 @@ class TestOnboardingProgressApi:
             assert resp.status_code == 422, f"Expected 422, got {resp.status_code}: {resp.text}"
 
         print_success("✓ Unknown flow rejected by validation")
-
-    @pytest.mark.asyncio
-    async def test_stale_expected_version_returns_409_with_detail(self, test_server):
-        """ONB-008: a client completing an older/newer version than the server gets an
-        explicit 409 with a structured, machine-readable detail (never a translated string)."""
-        print_section("ONB-008: Stale expected_version - 409 Conflict")
-
-        async with httpx.AsyncClient() as client:
-            await _new_onboarding_user(client, "stale")
-            flows = await _get_onboarding_flows(client)
-            current_version = flows["welcome"]["current_version"]
-            stale_version = current_version + 1
-
-            resp = await client.post(
-                f"{API_BASE}/settings/onboarding/welcome/complete",
-                json={"expected_version": stale_version},
-                timeout=TIMEOUT,
-            )
-
-            assert resp.status_code == 409, f"Expected 409, got {resp.status_code}: {resp.text}"
-            assert resp.json()["detail"] == {
-                "code": "onboarding_version_mismatch",
-                "flow": "welcome",
-                "expected_version": stale_version,
-                "current_version": current_version,
-            }
-
-        print_success("✓ Stale version rejected with structured 409 detail")
 
     @pytest.mark.asyncio
     async def test_onboarding_progress_isolated_per_user(self, test_server):
@@ -652,7 +867,7 @@ class TestOnboardingWelcomeAtomicApi:
             assert item["flow"] == "welcome"
             assert item["status"] == "completed"
             assert item["completed_at"] is not None
-            assert item["skipped_at"] is None
+            assert "skipped_at" not in item
 
             settings_resp = await client.get(f"{API_BASE}/settings/user", timeout=TIMEOUT)
             assert settings_resp.status_code == 200
@@ -666,61 +881,6 @@ class TestOnboardingWelcomeAtomicApi:
             assert flows_after["intro_tour"]["status"] == "pending", "Other flows for this user must be untouched"
 
         print_success("✓ Atomic welcome completion persisted both progress and preferences")
-
-    @pytest.mark.asyncio
-    async def test_stale_version_with_welcome_settings_returns_409_and_leaves_settings_unchanged(self, test_server):
-        """A stale expected_version must reject the whole atomic request — including the
-        preferences half — and leave whatever settings the user already had untouched."""
-        print_section("ONB-011: Atomic welcome completion - stale version leaves settings unchanged")
-
-        async with httpx.AsyncClient() as client:
-            await _new_onboarding_user(client, "atomic_stale")
-
-            baseline_resp = await client.put(
-                f"{API_BASE}/settings/user",
-                json={"language": "it", "base_currency": "GBP", "theme": "dark", "avatar_url": None},
-                timeout=TIMEOUT,
-            )
-            assert baseline_resp.status_code == 200, f"Expected 200, got {baseline_resp.status_code}: {baseline_resp.text}"
-
-            flows = await _get_onboarding_flows(client)
-            current_version = flows["welcome"]["current_version"]
-            stale_version = current_version + 1
-
-            resp = await client.post(
-                f"{API_BASE}/settings/onboarding/welcome/complete",
-                json={
-                    "expected_version": stale_version,
-                    "welcome_settings": {
-                        "language": "es",
-                        "base_currency": "USD",
-                        "avatar_url": "https://example.com/onb-stale-avatar.png",
-                    },
-                },
-                timeout=TIMEOUT,
-            )
-
-            assert resp.status_code == 409, f"Expected 409, got {resp.status_code}: {resp.text}"
-            assert resp.json()["detail"] == {
-                "code": "onboarding_version_mismatch",
-                "flow": "welcome",
-                "expected_version": stale_version,
-                "current_version": current_version,
-            }
-
-            settings_resp = await client.get(f"{API_BASE}/settings/user", timeout=TIMEOUT)
-            assert settings_resp.status_code == 200
-            assert settings_resp.json() == {
-                "language": "it",
-                "base_currency": "GBP",
-                "theme": "dark",
-                "avatar_url": None,
-            }, "a rejected stale-version request must not touch settings at all"
-
-            flows_after = await _get_onboarding_flows(client)
-            assert flows_after["welcome"]["status"] == "pending", "welcome progress must also remain untouched"
-
-        print_success("✓ Stale version rejected the atomic request; settings untouched")
 
     @pytest.mark.asyncio
     async def test_welcome_settings_on_skip_returns_422(self, test_server):

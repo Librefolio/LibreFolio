@@ -33,6 +33,8 @@
     import {fetchReport, invalidate, type AllocationHistoryDimensions, type PortfolioHistoryPoint, type PortfolioSummary, type PositionsContribution} from '$lib/stores/portfolio/portfolioStore.svelte';
     import {ensureBrokersLoaded, getAllBrokers, getBrokerRole, brokerStoreVersion} from '$lib/stores/reference/brokerStore';
     import {ensureAssetsLoaded, getAssetInfo, assetStoreVersion} from '$lib/stores/reference/assetStore';
+    import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
+    import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
     import {getAssetPanelAssetId, buildAssetPanelUrl} from '$lib/utils/broker/assetPanelUrl';
     import {buildTabUrl, getResolvedTabParam} from '$lib/utils/url/tabUrl';
     import {goto} from '$app/navigation';
@@ -195,11 +197,11 @@
     $: aiExportLabels = buildAiExportMenuLabels($_, aiExportCompatibility, $_('dashboard.aiExport'));
 
     $: brokerTabs = [
-        {id: 'panoramica', label: $_('brokers.overview'), icon: Briefcase, testId: 'broker-tab-panoramica'},
-        {id: 'posizioni', label: $_('brokers.positions'), icon: TrendingUp, testId: 'broker-tab-posizioni'},
+        {id: 'panoramica', label: $_('brokers.overview'), icon: Briefcase, testId: 'broker-tab-panoramica', guideAnchor: 'broker.detail.overview'},
+        {id: 'posizioni', label: $_('brokers.positions'), icon: TrendingUp, testId: 'broker-tab-posizioni', guideAnchor: 'broker.detail.positions'},
         {id: 'rischio', label: $_('risk.title'), icon: Shield, testId: 'broker-tab-risk'},
-        {id: 'transazioni', label: $_('transactions.title'), icon: ArrowRightLeft, testId: 'broker-tab-transazioni'},
-        {id: 'info', label: $_('brokers.info'), icon: Info, testId: 'broker-tab-info'},
+        {id: 'transazioni', label: $_('transactions.title'), icon: ArrowRightLeft, testId: 'broker-tab-transazioni', guideAnchor: 'broker.detail.transactions'},
+        {id: 'info', label: $_('brokers.info'), icon: Info, testId: 'broker-tab-info', guideAnchor: 'broker.detail.info'},
     ];
 
     async function loadAiExportCompatibility() {
@@ -237,9 +239,10 @@
         toasts.info(messages.privacyNotice);
     }
 
-    onMount(() => {
+    onMount(async () => {
         void loadAiExportCompatibility();
-        void Promise.all([loadBroker(), loadOverview(), ensureBrokersLoaded(), ensureAssetsLoaded()]);
+        await Promise.all([loadBroker(), loadOverview(), ensureBrokersLoaded(), ensureAssetsLoaded()]);
+        if (broker) onboardingGuide.maybeStartContextual('broker_detail_guide');
     });
 
     async function loadBroker() {
@@ -375,7 +378,7 @@
 </script>
 
 <div class="space-y-6" data-testid="broker-detail-page">
-    <div class="flex items-center space-x-4">
+    <div class="flex items-center space-x-4" use:guideAnchor={'broker.detail.header'} data-testid="broker-detail-header">
         <button class="p-2 text-gray-500 hover:text-libre-green hover:bg-libre-green/10 rounded-lg transition-colors" data-testid="broker-back-button" on:click={handleBack} title={$_('common.back')}>
             <ArrowLeft size={20} />
         </button>

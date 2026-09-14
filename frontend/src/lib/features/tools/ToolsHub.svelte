@@ -31,6 +31,11 @@
     const errorCopy = $derived(error ? toolErrorMessage(error) : null);
     const viewState = $derived(loading ? 'loading' : !account.authenticated ? 'anonymous' : error ? 'error' : !catalog ? 'idle' : catalog.unavailable.length || frontendUnavailable ? 'degraded' : entries.length ? 'ready' : 'empty');
 
+    function toolUiVersion(descriptor: ToolDescriptor): string {
+        const ui = descriptor.ui as unknown as {version?: string; ui_contract_version?: number};
+        return ui.version ?? String(ui.ui_contract_version ?? '');
+    }
+
     afterNavigate(() => heading?.focus({preventScroll: true}));
 
     function current(requestSequence: number, generation: number, request: AbortController): boolean {
@@ -186,16 +191,35 @@
                     {@const descriptor = entry.descriptor}
                     {@const Icon = toolIcon(descriptor.icon_key)}
                     {@const documentation = toolDocumentationPath(descriptor)}
-                    <li class="flex min-w-0 flex-col gap-4 rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-800" data-testid={`tool-card-${descriptor.tool_code}`}>
+                    <li class="group relative flex min-w-0 flex-col gap-4 rounded-xl border border-gray-200 bg-white p-5 transition-colors hover:border-libre-green/60 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-green-500/60" data-testid={`tool-card-${descriptor.tool_code}`}>
+                        {#if entry.resolution.status === 'ready'}
+                            <a
+                                href={toolRoute(descriptor)}
+                                class="absolute inset-0 z-10 rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green dark:focus-visible:outline-green-400"
+                                aria-label={`${$t('tools.open', {default: 'Open tool'})}: ${toolName(descriptor, $t)}`}
+                                data-testid="tool-open"
+                            ></a>
+                        {/if}
                         <div class="flex items-start gap-3">
                             <Icon size={22} class="shrink-0 text-libre-green dark:text-green-400" aria-hidden="true" />
-                            <div class="min-w-0">
-                                <h2 class="break-words font-semibold text-gray-900 dark:text-gray-100">{toolName(descriptor, $t)}</h2>
-                                <p class="mt-2 break-words text-sm text-gray-600 dark:text-gray-400">{toolDescription(descriptor, $t)}</p>
-                            </div>
+                            <h2 class="min-w-0 flex-1 break-words font-semibold text-gray-900 dark:text-gray-100">{toolName(descriptor, $t)}</h2>
+                            {#if documentation}
+                                <span class="relative z-20 inline-flex shrink-0 items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
+                                    <span class="hidden sm:inline">{$t('common.documentation')}</span>
+                                    <DocsLink path={documentation} label={$t('common.documentation')} icon="book" size={18} testId={`tool-docs-${descriptor.tool_code}`} />
+                                </span>
+                            {:else}
+                                <span class="relative z-20 shrink-0 text-xs text-gray-500 dark:text-gray-400" data-testid="tool-docs-unavailable">
+                                    {$t('tools.documentationUnavailable', {default: 'Documentation link unavailable'})}
+                                </span>
+                            {/if}
                         </div>
-                        <p class="break-words text-xs text-gray-500 dark:text-gray-400">
-                            {$t('tools.contractVersion', {default: 'Contract'})}: {descriptor.contract_version}
+                        <p class="break-words text-sm text-gray-600 dark:text-gray-400">{toolDescription(descriptor, $t)}</p>
+                        <p class="break-words text-xs text-gray-500 dark:text-gray-400" data-testid="tool-compatibility-versions">
+                            {$t('tools.backendVersion', {default: 'Backend/API'})}
+                            {descriptor.contract_version}
+                            · {$t('tools.uiVersion', {default: 'UI'})}
+                            {toolUiVersion(descriptor)}
                         </p>
                         {#if entry.resolution.status === 'unavailable'}
                             {@const message = unavailableMessage(entry.resolution.reason)}
@@ -203,32 +227,15 @@
                                 {$t(message.key, {default: message.fallback})}
                             </p>
                         {/if}
-                        <div class="mt-auto flex flex-wrap items-center justify-between gap-3">
-                            {#if entry.resolution.status === 'ready'}
-                                <a
-                                    href={toolRoute(descriptor)}
-                                    class="inline-flex items-center gap-2 rounded-lg bg-libre-green px-3 py-2 text-sm font-medium text-white hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green dark:focus-visible:outline-green-400"
-                                    data-testid="tool-open"
-                                >
-                                    {$t('tools.open', {default: 'Open tool'})}
-                                    <ArrowRight size={16} aria-hidden="true" />
-                                </a>
-                            {:else}
+                        {#if entry.resolution.status === 'ready'}
+                            <ArrowRight size={18} class="pointer-events-none absolute bottom-5 right-5 text-libre-green transition-transform group-hover:translate-x-1 dark:text-green-400" aria-hidden="true" data-testid="tool-open-arrow" />
+                        {:else}
+                            <div class="mt-auto flex items-center justify-end">
                                 <button type="button" disabled class="cursor-not-allowed rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-500 dark:bg-gray-700 dark:text-gray-400" data-testid="tool-open">
                                     {$t('tools.open', {default: 'Open tool'})}
                                 </button>
-                            {/if}
-                            {#if documentation}
-                                <span class="inline-flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
-                                    {$t('common.documentation')}
-                                    <DocsLink path={documentation} label={$t('common.documentation')} icon="book" size={18} testId={`tool-docs-${descriptor.tool_code}`} />
-                                </span>
-                            {:else}
-                                <span class="text-xs text-gray-500 dark:text-gray-400" data-testid="tool-docs-unavailable">
-                                    {$t('tools.documentationUnavailable', {default: 'Documentation link unavailable'})}
-                                </span>
-                            {/if}
-                        </div>
+                            </div>
+                        {/if}
                     </li>
                 {/each}
             </ul>

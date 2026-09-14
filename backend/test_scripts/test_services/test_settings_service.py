@@ -5,6 +5,7 @@ Tests for settings_service user settings behavior.
 import uuid
 
 import pytest
+import pytest_asyncio
 
 
 class TestGetOrCreateUserSettings:
@@ -470,6 +471,7 @@ class TestGetEffectiveBaseCurrency:
                     password="TestPass123!",
                 )
                 assert error is None
+                assert user is not None and user.id is not None
                 user_id = user.id  # capture now: the session expires ORM attrs on commit
                 await update_user_settings(user_id, UserSettingsUpdate(base_currency="CHF"), session)
 
@@ -598,6 +600,71 @@ class TestEngineBaseCurrencyBranch:
 # as `services settings`, and its domain (per-user settings.py surface) is the
 # natural home for the sibling onboarding surface without a runner edit.
 
+_OWNED_ONBOARDING_USER_IDS: set[int] = set()
+_ROUND5_ONBOARDING_FLOW_VERSIONS = {
+    "welcome": 1,
+    "intro_tour": 1,
+    "transactions_page_guide": 1,
+    "transaction_create_guide": 1,
+    "transaction_bulk_guide": 1,
+    "import_guide": 1,
+    "broker_page_guide": 1,
+    "broker_guide": 1,
+    "broker_detail_guide": 1,
+    "fx_page_guide": 1,
+    "fx_guide": 1,
+    "fx_detail_guide": 1,
+    "asset_page_guide": 1,
+    "asset_guide": 1,
+    "asset_detail_guide": 1,
+}
+_REMOVED_ONBOARDING_DRAFT_FLOWS = {
+    "transaction_bulk_validation_guide",
+    "transaction_bulk_selection_guide",
+    "transaction_bulk_save_guide",
+}
+_ROUND5_ONBOARDING_STEPS = {
+    "transaction_bulk_guide": (
+        "transaction.bulk.workspace",
+        "transaction.bulk.validation",
+        "transaction.bulk.selection",
+        "transaction.bulk.save",
+    ),
+    "import_guide": (
+        "import.upload",
+        "import.select",
+        "import.analyze",
+        "import.assets",
+        "import.fix",
+        "import.duplicates",
+        "import.review",
+        "import.bulk",
+    ),
+}
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def cleanup_owned_onboarding_service_users():
+    """Delete every account created through an onboarding test helper."""
+    before = set(_OWNED_ONBOARDING_USER_IDS)
+    yield
+    owned = _OWNED_ONBOARDING_USER_IDS - before
+    if not owned:
+        return
+
+    from sqlalchemy.ext.asyncio import AsyncSession  # noqa: PLC0415
+
+    from backend.app.db.models import User  # noqa: PLC0415
+    from backend.app.db.session import get_async_engine  # noqa: PLC0415
+
+    async with AsyncSession(get_async_engine()) as session:
+        for user_id in owned:
+            user = await session.get(User, user_id)
+            if user is not None:
+                await session.delete(user)
+        await session.commit()
+    _OWNED_ONBOARDING_USER_IDS.difference_update(owned)
+
 
 class TestOnboardingServiceEnsure:
     """Tests for ensure_onboarding_progress() (also exercised via get_onboarding_progress)."""
@@ -614,40 +681,79 @@ class TestOnboardingServiceEnsure:
             password="TestPassword123!",
         )
         assert error is None
-        return user.id  # capture now: the session expires ORM attrs on commit
+        user_id = user.id  # capture now: the session expires ORM attrs on commit
+        _OWNED_ONBOARDING_USER_IDS.add(user_id)
+        return user_id
+
+    def test_round5_registry_is_exactly_fifteen_flows_with_two_step_managed_flows(self):
+        """Model, flow registry and step registry share the final Round 5 contract."""
+        from backend.app.db.models import OnboardingFlow  # noqa: PLC0415
+        from backend.app.services.onboarding_service import ONBOARDING_FLOW_STEPS, ONBOARDING_FLOW_VERSIONS  # noqa: PLC0415
+
+        actual_versions = {flow.value: version for flow, version in ONBOARDING_FLOW_VERSIONS.items()}
+        actual_steps = {flow.value: step_ids for flow, step_ids in ONBOARDING_FLOW_STEPS.items()}
+
+        assert len(actual_versions) == 15
+        assert actual_versions == _ROUND5_ONBOARDING_FLOW_VERSIONS
+        assert {flow.value for flow in OnboardingFlow} == set(_ROUND5_ONBOARDING_FLOW_VERSIONS)
+        assert set(actual_versions).isdisjoint(_REMOVED_ONBOARDING_DRAFT_FLOWS)
+        assert actual_steps == _ROUND5_ONBOARDING_STEPS
+        assert set(actual_versions.values()) == {1}, "Every unreleased Round 5 flow must remain at version 1"
 
     @pytest.mark.asyncio
     async def test_ensure_creates_all_missing_rows_pending_current_version(self):
-        """A brand-new user has no rows: ensure() must insert all three flows,
-        each pending at the server's current content version."""
+        """A brand-new user gets all 15 flows and every registered step pending."""
         from sqlalchemy.ext.asyncio import AsyncSession  # noqa: PLC0415
 
-        from backend.app.db.models import OnboardingStatus  # noqa: PLC0415
+        from backend.app.db.models import OnboardingStatus, User  # noqa: PLC0415
         from backend.app.db.session import get_async_engine  # noqa: PLC0415
         from backend.app.services.onboarding_service import (  # noqa: PLC0415
             ONBOARDING_FLOW_VERSIONS,
             ensure_onboarding_progress,
+            get_onboarding_progress,
         )
 
         engine = get_async_engine()
         async with AsyncSession(engine) as session:
             user_id = await self._make_user(session, "ensure_all")
 
-            rows = await ensure_onboarding_progress(user_id, session)
+            try:
+                rows = await ensure_onboarding_progress(user_id, session)
 
-            assert set(rows) == set(ONBOARDING_FLOW_VERSIONS), "Every registered flow must get a row"
-            for flow, row in rows.items():
-                assert row.user_id == user_id
-                assert row.status == OnboardingStatus.PENDING
-                assert row.version == ONBOARDING_FLOW_VERSIONS[flow]
-                assert row.completed_at is None
-                assert row.skipped_at is None
+                assert len(rows) == 15, "A fresh user must receive exactly the Round 5 source-of-truth rows"
+                assert set(rows) == set(ONBOARDING_FLOW_VERSIONS), "Every registered flow must get a row"
+                for flow, row in rows.items():
+                    assert row.user_id == user_id
+                    assert row.status == OnboardingStatus.PENDING
+                    assert row.version == ONBOARDING_FLOW_VERSIONS[flow]
+                    assert row.completed_at is None
+                    assert row.skipped_at is None
+
+                response = await get_onboarding_progress(user_id, session)
+                items = {item.flow.value: item for item in response.flows}
+                assert set(items) == set(_ROUND5_ONBOARDING_FLOW_VERSIONS)
+                for flow, expected_step_ids in _ROUND5_ONBOARDING_STEPS.items():
+                    steps = items[flow].steps
+                    assert steps is not None
+                    assert tuple(step.step_id for step in steps) == expected_step_ids
+                    assert all(step.status == OnboardingStatus.PENDING for step in steps)
+                    assert all(step.version == 1 and step.current_version == 1 for step in steps)
+                for flow in set(items) - set(_ROUND5_ONBOARDING_STEPS):
+                    assert items[flow].steps is None
+            finally:
+                await session.rollback()
+                user = await session.get(User, user_id)
+                if user is not None:
+                    await session.delete(user)
+                    await session.commit()
 
     @pytest.mark.asyncio
     async def test_ensure_is_idempotent_on_second_call(self):
-        """Calling ensure() again must not insert duplicates or touch existing rows."""
+        """Calling ensure() again must not insert or touch flow or step rows."""
+        from sqlalchemy import select  # noqa: PLC0415
         from sqlalchemy.ext.asyncio import AsyncSession  # noqa: PLC0415
 
+        from backend.app.db.models import User, UserOnboardingStepProgress  # noqa: PLC0415
         from backend.app.db.session import get_async_engine  # noqa: PLC0415
         from backend.app.services.onboarding_service import (  # noqa: PLC0415
             ONBOARDING_FLOW_VERSIONS,
@@ -658,57 +764,165 @@ class TestOnboardingServiceEnsure:
         async with AsyncSession(engine) as session:
             user_id = await self._make_user(session, "ensure_idem")
 
-            first = await ensure_onboarding_progress(user_id, session)
-            first_snapshot = {flow: (row.id, row.status, row.version, row.updated_at) for flow, row in first.items()}
+            try:
+                first = await ensure_onboarding_progress(user_id, session)
+                first_snapshot = {flow: (row.id, row.status, row.version, row.updated_at) for flow, row in first.items()}
+                first_step_result = await session.execute(select(UserOnboardingStepProgress).where(UserOnboardingStepProgress.user_id == user_id))
+                first_step_snapshot = {(row.flow, row.step_id): (row.id, row.status, row.version, row.updated_at) for row in first_step_result.scalars().all()}
 
-            second = await ensure_onboarding_progress(user_id, session)
-            second_snapshot = {flow: (row.id, row.status, row.version, row.updated_at) for flow, row in second.items()}
+                second = await ensure_onboarding_progress(user_id, session)
+                second_snapshot = {flow: (row.id, row.status, row.version, row.updated_at) for flow, row in second.items()}
+                second_step_result = await session.execute(select(UserOnboardingStepProgress).where(UserOnboardingStepProgress.user_id == user_id))
+                second_step_snapshot = {(row.flow, row.step_id): (row.id, row.status, row.version, row.updated_at) for row in second_step_result.scalars().all()}
 
-            assert second_snapshot == first_snapshot, "Second ensure() must be a true no-op: same ids, same values"
-            assert len(second) == len(ONBOARDING_FLOW_VERSIONS), "No duplicate rows must be created for this user"
+                assert second_snapshot == first_snapshot, "Second ensure() must leave every flow row byte-identical"
+                assert second_step_snapshot == first_step_snapshot, "Second ensure() must leave every step row byte-identical"
+                assert len(second) == len(ONBOARDING_FLOW_VERSIONS), "No duplicate flow rows may be created"
+                assert len(second_step_snapshot) == sum(len(step_ids) for step_ids in _ROUND5_ONBOARDING_STEPS.values())
+            finally:
+                await session.rollback()
+                user = await session.get(User, user_id)
+                if user is not None:
+                    await session.delete(user)
+                    await session.commit()
+
+
+class TestOnboardingServiceStepTransition:
+    """Tests for step completion/skip and the owning flow aggregate."""
+
+    @staticmethod
+    async def _make_user(session, marker: str):
+        from backend.app.services import user_service  # noqa: PLC0415 — test setup — imports after db config
+
+        unique_id = uuid.uuid4().hex[:8]
+        user, error = await user_service.create_user(
+            session=session,
+            username=f"onbs_{marker}_{unique_id}",
+            email=f"onbs_{marker}_{unique_id}@example.com",
+            password=f"Onb9!{unique_id}",
+        )
+        assert error is None
+        assert user is not None and user.id is not None
+        user_id = user.id
+        _OWNED_ONBOARDING_USER_IDS.add(user_id)
+        return user_id
 
     @pytest.mark.asyncio
-    async def test_ensure_never_overwrites_completed_or_skipped_rows(self):
-        """A completed/skipped row must survive ensure(); only the still-pending
-        flow for this user may be touched."""
+    async def test_import_stays_pending_until_all_steps_terminal_then_completes_when_mixed(self):
+        """One completed step plus seven skipped steps aggregates to completed,
+        but not before the final pending step becomes terminal."""
         from sqlalchemy.ext.asyncio import AsyncSession  # noqa: PLC0415
 
-        from backend.app.db.models import OnboardingFlow, OnboardingStatus  # noqa: PLC0415
+        from backend.app.db.models import OnboardingFlow, OnboardingStatus, User  # noqa: PLC0415
         from backend.app.db.session import get_async_engine  # noqa: PLC0415
         from backend.app.services.onboarding_service import (  # noqa: PLC0415
+            ONBOARDING_FLOW_STEPS,
             ONBOARDING_FLOW_VERSIONS,
-            ensure_onboarding_progress,
-            transition_onboarding_progress,
+            transition_onboarding_step_progress,
         )
-        from backend.app.utils.datetime_utils import ensure_utc  # noqa: PLC0415
 
         engine = get_async_engine()
-        async with AsyncSession(engine) as session:
-            user_id = await self._make_user(session, "ensure_terminal")
-            await ensure_onboarding_progress(user_id, session)
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            user_id = await self._make_user(session, "mixed")
+            flow = OnboardingFlow.IMPORT_GUIDE
+            version = ONBOARDING_FLOW_VERSIONS[flow]
+            try:
+                first = await transition_onboarding_step_progress(
+                    user_id,
+                    flow,
+                    "import.upload",
+                    OnboardingStatus.COMPLETED,
+                    version,
+                    session,
+                )
+                repeated = await transition_onboarding_step_progress(
+                    user_id,
+                    flow,
+                    "import.upload",
+                    OnboardingStatus.COMPLETED,
+                    version,
+                    session,
+                )
 
-            completed = await transition_onboarding_progress(
-                user_id=user_id,
-                flow=OnboardingFlow.WELCOME,
-                target_status=OnboardingStatus.COMPLETED,
-                expected_version=ONBOARDING_FLOW_VERSIONS[OnboardingFlow.WELCOME],
-                session=session,
-            )
-            skipped = await transition_onboarding_progress(
-                user_id=user_id,
-                flow=OnboardingFlow.INTRO_TOUR,
-                target_status=OnboardingStatus.SKIPPED,
-                expected_version=ONBOARDING_FLOW_VERSIONS[OnboardingFlow.INTRO_TOUR],
-                session=session,
-            )
+                assert repeated.model_dump() == first.model_dump(), "Repeating a step completion must be idempotent"
+                assert first.status == OnboardingStatus.PENDING
+                assert first.completed_at is None
+                step_items = {step.step_id: step for step in first.steps or []}
+                assert tuple(step_items) == ONBOARDING_FLOW_STEPS[flow]
+                assert step_items["import.upload"].status == OnboardingStatus.COMPLETED
+                assert step_items["import.upload"].completed_at is not None
+                assert all(step_items[step_id].status == OnboardingStatus.PENDING for step_id in ONBOARDING_FLOW_STEPS[flow] if step_id != "import.upload")
 
-            rows = await ensure_onboarding_progress(user_id, session)
+                remaining = [step_id for step_id in ONBOARDING_FLOW_STEPS[flow] if step_id != "import.upload"]
+                result = first
+                for step_id in remaining:
+                    result = await transition_onboarding_step_progress(
+                        user_id,
+                        flow,
+                        step_id,
+                        OnboardingStatus.SKIPPED,
+                        version,
+                        session,
+                    )
+                    if step_id != "import.bulk":
+                        assert result.status == OnboardingStatus.PENDING
 
-            assert rows[OnboardingFlow.WELCOME].status == OnboardingStatus.COMPLETED
-            assert ensure_utc(rows[OnboardingFlow.WELCOME].completed_at) == ensure_utc(completed.completed_at)
-            assert rows[OnboardingFlow.INTRO_TOUR].status == OnboardingStatus.SKIPPED
-            assert ensure_utc(rows[OnboardingFlow.INTRO_TOUR].skipped_at) == ensure_utc(skipped.skipped_at)
-            assert rows[OnboardingFlow.IMPORT_GUIDE].status == OnboardingStatus.PENDING
+                assert result.status == OnboardingStatus.COMPLETED
+                assert result.completed_at is not None
+                assert result.skipped_at is None
+                terminal_steps = {step.step_id: step for step in result.steps or []}
+                assert terminal_steps["import.upload"].status == OnboardingStatus.COMPLETED
+                assert all(terminal_steps[step_id].status == OnboardingStatus.SKIPPED for step_id in remaining)
+            finally:
+                await session.rollback()
+                user = await session.get(User, user_id)
+                if user is not None:
+                    await session.delete(user)
+                    await session.commit()
+
+    @pytest.mark.asyncio
+    async def test_bulk_aggregate_is_skipped_only_when_every_step_is_skipped(self):
+        """Four skipped Bulk steps aggregate to skipped, never completed."""
+        from sqlalchemy.ext.asyncio import AsyncSession  # noqa: PLC0415
+
+        from backend.app.db.models import OnboardingFlow, OnboardingStatus, User  # noqa: PLC0415
+        from backend.app.db.session import get_async_engine  # noqa: PLC0415
+        from backend.app.services.onboarding_service import (  # noqa: PLC0415
+            ONBOARDING_FLOW_STEPS,
+            ONBOARDING_FLOW_VERSIONS,
+            transition_onboarding_step_progress,
+        )
+
+        engine = get_async_engine()
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            user_id = await self._make_user(session, "all_skipped")
+            flow = OnboardingFlow.TRANSACTION_BULK_GUIDE
+            version = ONBOARDING_FLOW_VERSIONS[flow]
+            try:
+                result = None
+                for step_id in ONBOARDING_FLOW_STEPS[flow]:
+                    result = await transition_onboarding_step_progress(
+                        user_id,
+                        flow,
+                        step_id,
+                        OnboardingStatus.SKIPPED,
+                        version,
+                        session,
+                    )
+                    if step_id != "transaction.bulk.save":
+                        assert result.status == OnboardingStatus.PENDING
+
+                assert result is not None
+                assert result.status == OnboardingStatus.SKIPPED
+                assert result.skipped_at is not None
+                assert result.completed_at is None
+                assert {step.step_id: step.status for step in result.steps or []} == dict.fromkeys(ONBOARDING_FLOW_STEPS[flow], OnboardingStatus.SKIPPED)
+            finally:
+                await session.rollback()
+                user = await session.get(User, user_id)
+                if user is not None:
+                    await session.delete(user)
+                    await session.commit()
 
 
 class TestOnboardingServiceTransition:
@@ -726,7 +940,10 @@ class TestOnboardingServiceTransition:
             password="TestPassword123!",
         )
         assert error is None
-        return user.id  # capture now: the session expires ORM attrs on commit
+        assert user is not None and user.id is not None
+        user_id = user.id  # capture now: the session expires ORM attrs on commit
+        _OWNED_ONBOARDING_USER_IDS.add(user_id)
+        return user_id
 
     @pytest.mark.asyncio
     async def test_complete_sets_completed_at_and_clears_skipped_at(self):
@@ -840,78 +1057,6 @@ class TestOnboardingServiceTransition:
             assert second.model_dump() == first.model_dump(), "Repeating the same terminal transition must be a byte-identical no-op"
 
     @pytest.mark.asyncio
-    async def test_stale_expected_version_raises_mismatch_error(self):
-        from sqlalchemy.ext.asyncio import AsyncSession  # noqa: PLC0415
-
-        from backend.app.db.models import OnboardingFlow, OnboardingStatus  # noqa: PLC0415
-        from backend.app.db.session import get_async_engine  # noqa: PLC0415
-        from backend.app.services.onboarding_service import (  # noqa: PLC0415
-            ONBOARDING_FLOW_VERSIONS,
-            OnboardingVersionMismatchError,
-            transition_onboarding_progress,
-        )
-
-        engine = get_async_engine()
-        async with AsyncSession(engine) as session:
-            user_id = await self._make_user(session, "stale")
-            flow = OnboardingFlow.WELCOME
-            current_version = ONBOARDING_FLOW_VERSIONS[flow]
-            stale_version = current_version + 1
-
-            with pytest.raises(OnboardingVersionMismatchError) as exc_info:
-                await transition_onboarding_progress(
-                    user_id=user_id,
-                    flow=flow,
-                    target_status=OnboardingStatus.COMPLETED,
-                    expected_version=stale_version,
-                    session=session,
-                )
-
-            err = exc_info.value
-            assert err.flow == flow
-            assert err.expected_version == stale_version
-            assert err.current_version == current_version
-
-    @pytest.mark.asyncio
-    async def test_passive_update_available_does_not_reopen_terminal_status(self, monkeypatch):
-        """A bumped content version must surface as `update_available` only — it
-        must never reset a completed/skipped row back to pending on its own."""
-        from sqlalchemy.ext.asyncio import AsyncSession  # noqa: PLC0415
-
-        from backend.app.db.models import OnboardingFlow, OnboardingStatus  # noqa: PLC0415
-        from backend.app.db.session import get_async_engine  # noqa: PLC0415
-        from backend.app.services.onboarding_service import (  # noqa: PLC0415
-            ONBOARDING_FLOW_VERSIONS,
-            get_onboarding_progress,
-            transition_onboarding_progress,
-        )
-
-        engine = get_async_engine()
-        async with AsyncSession(engine) as session:
-            user_id = await self._make_user(session, "passive")
-            flow = OnboardingFlow.WELCOME
-            persisted_version = ONBOARDING_FLOW_VERSIONS[flow]
-
-            completed = await transition_onboarding_progress(
-                user_id=user_id,
-                flow=flow,
-                target_status=OnboardingStatus.COMPLETED,
-                expected_version=persisted_version,
-                session=session,
-            )
-            assert completed.update_available is False
-
-            monkeypatch.setitem(ONBOARDING_FLOW_VERSIONS, flow, persisted_version + 1)
-
-            response = await get_onboarding_progress(user_id, session)
-            item = next(i for i in response.flows if i.flow == flow)
-
-            assert item.status == OnboardingStatus.COMPLETED, "A version bump must never reopen a terminal flow"
-            assert item.version == persisted_version, "The persisted version must not be silently rewritten"
-            assert item.current_version == persisted_version + 1
-            assert item.update_available is True
-
-    @pytest.mark.asyncio
     async def test_progress_is_isolated_per_user(self):
         from sqlalchemy.ext.asyncio import AsyncSession  # noqa: PLC0415
 
@@ -961,7 +1106,10 @@ class TestOnboardingServiceCompleteWelcome:
             password="TestPass123!",
         )
         assert error is None
-        return user.id  # capture now: the session expires ORM attrs on commit
+        assert user is not None and user.id is not None
+        user_id = user.id  # capture now: the session expires ORM attrs on commit
+        _OWNED_ONBOARDING_USER_IDS.add(user_id)
+        return user_id
 
     @pytest.mark.asyncio
     async def test_atomic_welcome_updates_language_currency_avatar_and_completes_progress(self):
@@ -1135,56 +1283,3 @@ class TestOnboardingServiceCompleteWelcome:
 
             progress_result = await verify_session.execute(select(UserOnboardingProgress).where(UserOnboardingProgress.user_id == user_id))
             assert progress_result.scalars().all() == [], "a commit failure must roll back the tentative progress insert too — not even a pending row survives"
-
-    @pytest.mark.asyncio
-    async def test_stale_expected_version_changes_neither_settings_nor_progress(self):
-        """A version mismatch must raise before touching either table: pre-existing
-        settings and progress must both be provably unchanged afterwards."""
-        from sqlalchemy import select  # noqa: PLC0415
-        from sqlalchemy.ext.asyncio import AsyncSession  # noqa: PLC0415
-
-        from backend.app.db.models import OnboardingFlow, OnboardingStatus, UserOnboardingProgress, UserSettings  # noqa: PLC0415
-        from backend.app.db.session import get_async_engine  # noqa: PLC0415
-        from backend.app.schemas.settings import OnboardingWelcomeSettings, UserSettingsUpdate  # noqa: PLC0415
-        from backend.app.services.onboarding_service import (  # noqa: PLC0415
-            ONBOARDING_FLOW_VERSIONS,
-            OnboardingVersionMismatchError,
-            complete_welcome_onboarding,
-            ensure_onboarding_progress,
-        )
-        from backend.app.services.settings_service import update_user_settings  # noqa: PLC0415
-
-        engine = get_async_engine()
-        async with AsyncSession(engine) as session:
-            user_id = await self._make_user(session, "stale")
-            await update_user_settings(
-                user_id,
-                UserSettingsUpdate(language="it", base_currency="GBP", theme="light", avatar_url=None),
-                session,
-            )
-            rows = await ensure_onboarding_progress(user_id, session)
-            assert rows[OnboardingFlow.WELCOME].status == OnboardingStatus.PENDING
-            current_version = ONBOARDING_FLOW_VERSIONS[OnboardingFlow.WELCOME]
-            stale_version = current_version + 1
-
-            with pytest.raises(OnboardingVersionMismatchError) as exc_info:
-                await complete_welcome_onboarding(
-                    user_id=user_id,
-                    expected_version=stale_version,
-                    welcome_settings=OnboardingWelcomeSettings(language="es", base_currency="USD", avatar_url="https://example.com/stale-avatar.png"),
-                    session=session,
-                )
-            err = exc_info.value
-            assert err.flow == OnboardingFlow.WELCOME
-            assert err.expected_version == stale_version
-            assert err.current_version == current_version
-
-        async with AsyncSession(engine) as verify_session:
-            settings_result = await verify_session.execute(select(UserSettings).where(UserSettings.user_id == user_id))
-            settings = settings_result.scalar_one()
-            assert settings.language == "it", "pre-existing settings must survive a rejected stale-version request"
-            assert settings.base_currency == "GBP"
-
-            progress_result = await verify_session.execute(select(UserOnboardingProgress).where(UserOnboardingProgress.user_id == user_id))
-            progress_row = next(r for r in progress_result.scalars().all() if r.flow == OnboardingFlow.WELCOME.value)
-            assert progress_row.status == OnboardingStatus.PENDING.value, "the welcome flow must remain pending after a rejected stale version"

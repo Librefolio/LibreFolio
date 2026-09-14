@@ -40,6 +40,11 @@
     const unavailableCopy = $derived(unavailable ? unavailableMessage(unavailable) : null);
     const cleanupCopy = $derived(cleanupError ? toolErrorMessage(cleanupError) : null);
 
+    function toolUiVersion(descriptor: ToolDescriptor): string {
+        const ui = descriptor.ui as unknown as {version?: string; ui_contract_version?: number};
+        return ui.version ?? String(ui.ui_contract_version ?? '');
+    }
+
     afterNavigate(() => heading?.focus({preventScroll: true}));
 
     function current(requestSequence: number, code: string, generation: number, request: AbortController): boolean {
@@ -255,9 +260,11 @@
                 </h1>
                 {#if descriptor}
                     <p class="mt-2 break-words text-sm text-gray-600 dark:text-gray-400">{toolDescription(descriptor, $t)}</p>
-                    <p class="mt-2 break-words text-xs text-gray-500 dark:text-gray-400">
-                        {$t('tools.contractVersion', {default: 'Contract'})}: {descriptor.contract_version}
-                        · {$t('tools.implementationVersion', {default: 'Implementation'})}: {descriptor.implementation_version}
+                    <p class="mt-2 break-words text-xs text-gray-500 dark:text-gray-400" data-testid="tool-host-compatibility-versions">
+                        {$t('tools.backendVersion', {default: 'Backend/API'})}
+                        {descriptor.contract_version}
+                        · {$t('tools.uiVersion', {default: 'UI'})}
+                        {toolUiVersion(descriptor)}
                     </p>
                 {:else}
                     <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">{$t('tools.subtitle', {default: 'Independent calculations. No portfolio changes are written.'})}</p>

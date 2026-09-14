@@ -208,7 +208,7 @@ test.describe('Integrated onboarding', () => {
     async function skipIntroScene(page: Page) {
         const scene = page.getByTestId('onboarding-intro-scene');
         await expect(scene).toHaveAttribute('data-state', 'intro-scene', {timeout: 10_000});
-        await page.getByTestId('onboarding-intro-skip').click();
+        await page.getByTestId('onboarding-intro-close').click();
         await expect(scene).toHaveCount(0, {timeout: 5_000});
     }
 
@@ -266,6 +266,28 @@ test.describe('Integrated onboarding', () => {
         await expect(page).toHaveURL(/.*dashboard.*/);
         await expect(page.getByTestId('welcome-shell')).toHaveCount(0);
         await expect(page.getByTestId('app-header')).toBeVisible();
+    });
+
+    test('onboarding bootstrap failure blocks at root when terminal Welcome cache is missing', async ({page}) => {
+        const onboardingEndpoint = /\/api\/v1\/settings\/onboarding(?:\?|$)/;
+        const failOnboarding: Parameters<Page['route']>[1] = async (route) => {
+            await route.fulfill({
+                status: 503,
+                contentType: 'application/json',
+                body: JSON.stringify({detail: 'ONBOARDING_UNAVAILABLE_TOKEN'}),
+            });
+        };
+        await page.route(onboardingEndpoint, failOnboarding);
+        try {
+            await login(page, TEST_USER);
+
+            await expect(page).toHaveURL(/^https?:\/\/[^/]+\/(?:[?#].*)?$/, {timeout: 15_000});
+            await expect(page.getByTestId('onboarding-bootstrap-blocked')).toBeVisible({timeout: 10_000});
+            await expect(page.getByTestId('dashboard-page')).toHaveCount(0);
+            await expect(page.getByTestId('onboarding-bootstrap-degraded')).toHaveCount(0);
+        } finally {
+            await page.unroute(onboardingEndpoint, failOnboarding);
+        }
     });
 
     test('2: a newly registered user is forced to /welcome behind a bare shell', async ({page, request}) => {

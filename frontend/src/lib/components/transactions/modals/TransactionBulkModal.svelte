@@ -82,6 +82,7 @@
     import {notify} from '$lib/stores/app/notify.svelte';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
+    import {TRANSACTION_BULK_STEP_IDS, type TransactionBulkStepId} from '$lib/features/onboarding/onboardingGuideCatalog';
     import {resolveFormItemsFromOps, type FormModalItems} from '../shared/resolveFormItems';
     import type {TXReadItem, ValidationIssue} from '../types';
     import type {TransactionCreateItem} from '$lib/types';
@@ -1356,6 +1357,10 @@
     onDestroy(() => {
         scheduler.dispose();
         if (suggestTimer) clearTimeout(suggestTimer);
+        if (onboardingGuide.active?.flow === 'transaction_bulk_guide') {
+            onboardingGuide.dismissHost({restartAtFirst: true});
+        }
+        onboardingGuide.clearQueued('transaction_bulk_guide');
     });
 
     /** Bugfix-4 §U16: track which draft state we last validated, so the UI
@@ -2175,6 +2180,13 @@
     // -------------------------------------------------------------------------
     let importWizardOpen = $state(false);
     let guideBulkObservedOpen = false;
+    let nestedGuideHostObserved = false;
+    let bulkGuideAttemptedForOpen = new Set<TransactionBulkStepId>();
+    let bulkValidationObserved = false;
+    let bulkSelectionObserved = false;
+    let bulkSaveObserved = false;
+    let importGuideBulkReady = $state(false);
+    let importGuideBulkProgress = $state<{current: number; total: number} | undefined>(undefined);
     let pendingCreateTransactions = $derived.by<TransactionCreateItem[]>(() =>
         ops.flatMap((op) => {
             if (op.op !== 'create') return [];
@@ -2259,7 +2271,7 @@
         return newOps;
     }
 
-    function onImportBatch(creates: Array<{tx: TransactionCreateItem; todos: ImportTodo[]}>) {
+    function onImportBatch(creates: Array<{tx: TransactionCreateItem; todos: ImportTodo[]}>, guideProgress?: {current: number; total: number}) {
         const newOps = creates.map((item) => {
             const op = txCreateItemToPendingOp(item.tx);
             if (item.todos.length > 0) op.todos = item.todos;
@@ -2267,6 +2279,8 @@
         });
         const linked = linkPairedImportOps(newOps);
         ops = [...ops, ...linked];
+        importGuideBulkReady = true;
+        importGuideBulkProgress = guideProgress;
         importWizardOpen = false;
         toasts.success($t('importWizard.importedCount', {values: {n: creates.length}}));
         scheduler.trigger('change');
@@ -2693,6 +2707,12 @@
     });
 
     $effect(() => {
+        if (!importWizardOpen) return;
+        importGuideBulkReady = false;
+        importGuideBulkProgress = undefined;
+    });
+
+    $effect(() => {
         const isOpen = open;
         if (isOpen && onboardingGuide.active?.flow === 'import_guide' && onboardingGuide.active.stepId === 'import.bulk') {
             guideBulkObservedOpen = true;
@@ -2702,6 +2722,75 @@
             onboardingGuide.dismissHost({restartAtFirst: true});
         }
         if (!isOpen) guideBulkObservedOpen = false;
+    });
+
+    $effect(() => {
+        const isOpen = open;
+        const nestedOpen = formOpen || importWizardOpen || pickerOpen || suggestPickerOpen || promoteMergeOpen;
+        const validationReady = scheduler.state.validateRuns > 0 && !scheduler.state.isPending && !scheduler.state.isValidating;
+        const selectionReady = bulkTableSelectedRows.length > 0;
+        const saveReady = visibleOps.length > 0 && !commitDisabled;
+        if (!isOpen) {
+            if (onboardingGuide.active?.flow === 'transaction_bulk_guide') {
+                onboardingGuide.dismissHost({restartAtFirst: true});
+            }
+            onboardingGuide.clearQueued('transaction_bulk_guide');
+            nestedGuideHostObserved = false;
+            bulkGuideAttemptedForOpen = new Set();
+            bulkValidationObserved = false;
+            bulkSelectionObserved = false;
+            bulkSaveObserved = false;
+            importGuideBulkReady = false;
+            importGuideBulkProgress = undefined;
+            return;
+        }
+        if (validationReady) bulkValidationObserved = true;
+        if (selectionReady) bulkSelectionObserved = true;
+        if (saveReady) bulkSaveObserved = true;
+        if (nestedOpen) {
+            nestedGuideHostObserved = true;
+            return;
+        }
+        const bridgeIntent = intent?.action === 'create' || intent?.action === 'import';
+        const overviewReady = !bridgeIntent || nestedGuideHostObserved;
+        if (!onboardingGuide.active && importGuideBulkReady) {
+            const started = onboardingGuide.startImportAt('import.bulk', importGuideBulkProgress);
+            importGuideBulkReady = false;
+            importGuideBulkProgress = undefined;
+            if (started) return;
+        }
+        const availability: Record<TransactionBulkStepId, boolean> = {
+            'transaction.bulk.workspace': overviewReady,
+            'transaction.bulk.validation': bulkValidationObserved && validationReady,
+            'transaction.bulk.selection': bulkSelectionObserved && selectionReady,
+            'transaction.bulk.save': bulkSaveObserved && saveReady,
+        };
+        for (const stepId of TRANSACTION_BULK_STEP_IDS) {
+            if (availability[stepId] && !bulkGuideAttemptedForOpen.has(stepId)) {
+                onboardingGuide.queueContextual('transaction_bulk_guide', stepId);
+            } else if (!availability[stepId] && !(onboardingGuide.active?.flow === 'transaction_bulk_guide' && onboardingGuide.active.stepId === stepId)) {
+                onboardingGuide.clearQueued('transaction_bulk_guide', stepId);
+            }
+        }
+        const activeFlow = onboardingGuide.active?.flow;
+        const activeStep = onboardingGuide.active?.stepId;
+        if (activeFlow === 'transaction_bulk_guide' && activeStep === 'transaction.bulk.selection' && !selectionReady) {
+            onboardingGuide.dismissHost({restartAtFirst: true});
+            bulkGuideAttemptedForOpen.delete('transaction.bulk.selection');
+            return;
+        }
+        if (activeFlow === 'transaction_bulk_guide' && activeStep === 'transaction.bulk.save' && !saveReady) {
+            onboardingGuide.dismissHost({restartAtFirst: true});
+            bulkGuideAttemptedForOpen.delete('transaction.bulk.save');
+            return;
+        }
+        if (onboardingGuide.active) return;
+        for (const stepId of TRANSACTION_BULK_STEP_IDS) {
+            if (!availability[stepId] || !onboardingGuide.queuedGuides.some((queued) => queued.flow === 'transaction_bulk_guide' && queued.stepId === stepId)) continue;
+            onboardingGuide.maybeStartQueued('transaction_bulk_guide', stepId);
+            bulkGuideAttemptedForOpen.add(stepId);
+            break;
+        }
     });
 
     /** Local promote suggestions: match new standalone ops against each other. */
@@ -2920,7 +3009,7 @@
     <div class="flex flex-col max-h-[90vh] min-h-[50vh]" data-testid="tx-bulk-modal-root" data-busy={scheduler.state.isPending || scheduler.state.isValidating || committing} data-validate-runs={scheduler.state.validateRuns}>
         <!-- Header -->
         <div class="flex items-center justify-between p-5 pb-4 border-b border-gray-100 dark:border-slate-700 shrink-0">
-            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100" data-testid="tx-bulk-title">
+            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100" data-testid="tx-bulk-title" use:guideAnchor={'transaction.bulk.workspace'}>
                 📋 {$t('transactions.bulk.title', {values: {total: visibleOps.length}})}
                 {#if actionCount > 0}
                     <span class="text-sm font-normal text-gray-500 dark:text-gray-400">
@@ -3178,7 +3267,7 @@
              TransactionFormModal that pushes its draft into the grid (no
              commit) so the user gets the structured single-row UX while
              staying in the bulk batch. -->
-        <div class="flex items-center gap-2 px-5 py-3 border-b border-gray-100 dark:border-slate-800 text-xs shrink-0">
+        <div class="flex items-center gap-2 px-5 py-3 border-b border-gray-100 dark:border-slate-800 text-xs shrink-0" use:guideAnchor={'transaction.bulk.add_import'}>
             <!-- Left: search & add -->
             {#if txStoreCount() > 0}
                 <button
@@ -3235,7 +3324,7 @@
                 {/if}
                 <ColumnVisibilityToggle tableRef={tableRefForToggle} />
                 {#if bulkTableSelectedRows.length > 0}
-                    <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-2" use:guideAnchor={'transaction.bulk.selection'}>
                         <button
                             type="button"
                             class="inline-flex items-center gap-1 px-2 py-1 rounded text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 text-[11px]"
@@ -3310,7 +3399,7 @@
              /issue-count — the green/warning banners above are the single
              source of truth for validate state). -->
         <div class="flex items-center justify-between gap-2 px-5 py-3 border-t border-gray-100 dark:border-slate-700 shrink-0 text-xs">
-            <div class="flex items-center gap-2 flex-wrap">
+            <div class="flex items-center gap-2 flex-wrap" use:guideAnchor={'transaction.bulk.validation'}>
                 <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={() => scheduler.trigger('manual')} data-testid="tx-bulk-validate-now" title={$t('transactions.validate.now')}>
                     ⚡ <span class="hidden sm:inline">{$t('transactions.validate.now')}</span>
                 </button>
@@ -3332,7 +3421,7 @@
                     class="px-4 py-2 text-sm rounded-lg text-white bg-libre-green hover:bg-libre-green/90 disabled:opacity-50 inline-flex items-center gap-1.5"
                     disabled={commitDisabled}
                     onclick={requestCommit}
-                    use:guideAnchor={'import.bulk.save-all'}
+                    use:guideAnchor={['import.bulk.save-all', 'transaction.bulk.save']}
                     data-testid="tx-bulk-commit"
                     title={hasTodoBlockers ? $t('importWizard.todoBlockerCommitHint') : commitLabel}
                 >

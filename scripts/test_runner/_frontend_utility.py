@@ -204,6 +204,8 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/settings/tabs/ProfileTab.test.ts",
             "src/lib/components/settings/tabs/AboutTab.test.ts",
             "src/lib/components/settings/tabs/GlobalSettingsTab.test.ts",
+            "src/lib/features/tools/ToolsHub.test.ts",
+            "src/lib/features/tools/ToolHost.test.ts",
             "src/lib/features/tools/pac-allocator/PacAllocatorTool.test.ts",
             *(["-t", "|".join(test_names)] if test_names else []),
         ],

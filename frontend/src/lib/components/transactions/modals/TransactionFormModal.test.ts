@@ -29,13 +29,16 @@
  *
  * Asserted: input values keyed by data-testid. Never a translated label.
  */
-import {beforeEach, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
+import {tick} from 'svelte';
 import {writable} from 'svelte/store';
-import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
+import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import {zodiosApi} from '$lib/api';
 import {schemas} from '$lib/api/generated';
 import {commitTransactions} from '$lib/utils/transactions/txCommitApi';
 import {ensureTypesLoaded} from '$lib/stores/transactions/transactionTypeStore';
+import {guideAnchors} from '$lib/features/onboarding/guideAnchors.svelte';
+import type {ContextualOnboardingFlow, GuideStepId, GuidedOnboardingFlow} from '$lib/features/onboarding/onboardingGuideCatalog';
 
 vi.mock('$lib/api', () => {
     const cache = new Map<string, ReturnType<typeof vi.fn>>();
@@ -83,6 +86,102 @@ vi.mock('$lib/utils/transactions/txCommitApi', () => ({
     commitTransactions: vi.fn(async () => ({committed: true, results: [], issues: []})),
     validateTransactions: vi.fn(async () => ({committed: true, issues: [], rawResponse: {wac_results: []}})),
 }));
+
+/**
+ * Keep the component at the public onboardingGuide boundary while owning the
+ * queue and active state in this file. The real controller's persistence and
+ * replay machinery is covered by onboardingGuide tests; these cases need the
+ * state transitions that make a queued guide observable across close/unmount.
+ */
+const {guideState, guideMocks} = vi.hoisted(() => {
+    const state = {
+        active: null as {
+            flow: GuidedOnboardingFlow;
+            version: number;
+            stepId: GuideStepId;
+            mode: 'automatic' | 'replay';
+        } | null,
+        queuedGuides: [] as Array<{flow: ContextualOnboardingFlow; stepId?: GuideStepId}>,
+    };
+
+    const queueContextual = vi.fn((flow: ContextualOnboardingFlow, stepId?: GuideStepId) => {
+        if (!state.queuedGuides.some((queued) => queued.flow === flow && queued.stepId === stepId)) {
+            state.queuedGuides = [...state.queuedGuides, {flow, ...(stepId ? {stepId} : {})}];
+        }
+    });
+    const maybeStartContextual = vi.fn((flow: ContextualOnboardingFlow, requestedStepId?: GuideStepId) => {
+        if (state.active) {
+            if (state.active.flow === flow && (!requestedStepId || state.active.stepId === requestedStepId)) return true;
+            queueContextual(flow, requestedStepId);
+            return false;
+        }
+        state.active = {
+            flow,
+            version: 1,
+            stepId: requestedStepId ?? 'transaction.create.basics',
+            mode: 'automatic',
+        };
+        return true;
+    });
+    const clearQueued = vi.fn((flow?: ContextualOnboardingFlow, stepId?: GuideStepId) => {
+        if (!flow) {
+            state.queuedGuides = [];
+        } else if (stepId) {
+            state.queuedGuides = state.queuedGuides.filter((queued) => queued.flow !== flow || queued.stepId !== stepId);
+        } else {
+            state.queuedGuides = state.queuedGuides.filter((queued) => queued.flow !== flow);
+        }
+    });
+    const maybeStartQueued = vi.fn((expectedFlow?: ContextualOnboardingFlow, expectedStepId?: GuideStepId) => {
+        if (state.active || state.queuedGuides.length === 0) return false;
+        const index = expectedFlow ? state.queuedGuides.findIndex((queued) => queued.flow === expectedFlow && (!expectedStepId || queued.stepId === expectedStepId)) : 0;
+        if (index < 0) return false;
+        const queued = state.queuedGuides[index];
+        const started = maybeStartContextual(queued.flow, queued.stepId);
+        state.queuedGuides = state.queuedGuides.filter((_, queuedIndex) => queuedIndex !== index);
+        return started;
+    });
+    const dismissHost = vi.fn((_options?: {restartAtFirst?: boolean}) => {
+        state.active = null;
+    });
+
+    return {
+        guideState: state,
+        guideMocks: {
+            queueContextual,
+            maybeStartContextual,
+            clearQueued,
+            maybeStartQueued,
+            dismissHost,
+        },
+    };
+});
+
+vi.mock('$lib/features/onboarding/onboardingGuide.svelte', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('$lib/features/onboarding/onboardingGuide.svelte')>();
+    return {
+        ...actual,
+        onboardingGuide: {
+            get active() {
+                return guideState.active;
+            },
+            get queuedFlow() {
+                return guideState.queuedGuides[0]?.flow ?? null;
+            },
+            get queuedFlows() {
+                return guideState.queuedGuides.map((queued) => queued.flow);
+            },
+            get queuedGuides() {
+                return guideState.queuedGuides;
+            },
+            maybeStartContextual: (...args: Parameters<typeof guideMocks.maybeStartContextual>) => guideMocks.maybeStartContextual(...args),
+            queueContextual: (...args: Parameters<typeof guideMocks.queueContextual>) => guideMocks.queueContextual(...args),
+            clearQueued: (...args: Parameters<typeof guideMocks.clearQueued>) => guideMocks.clearQueued(...args),
+            maybeStartQueued: (...args: Parameters<typeof guideMocks.maybeStartQueued>) => guideMocks.maybeStartQueued(...args),
+            dismissHost: (...args: Parameters<typeof guideMocks.dismissHost>) => guideMocks.dismissHost(...args),
+        },
+    };
+});
 
 const validMinimalTXTypesResponse = schemas.TXTypesResponse.parse({
     transaction_types: [
@@ -139,12 +238,49 @@ async function setCashAmount(testid: string, amount: string) {
     await fireEvent.blur(input);
 }
 
+function resetGuideState() {
+    guideState.active = null;
+    guideState.queuedGuides = [];
+}
+
 describe('TransactionFormModal — draft seeding (T1-b, T3)', () => {
     beforeEach(async () => {
         vi.clearAllMocks();
+        guideAnchors.clear();
+        resetGuideState();
         vi.mocked(zodiosApi.get_transaction_types_api_v1_transactions_types_get).mockResolvedValue(validMinimalTXTypesResponse);
         await setupI18n();
         await ensureTypesLoaded();
+    });
+
+    afterEach(() => {
+        cleanup();
+        guideAnchors.clear();
+        resetGuideState();
+    });
+
+    it('registers four distinct guide anchors for type, required fieldset, optional disclosure, and Save', async () => {
+        mount({mode: 'create'});
+
+        const basics = await screen.findByTestId('tx-form-type-wrap');
+        const amounts = screen.getByTestId('tx-form-required');
+        const details = screen.getByTestId('tx-form-optional-toggle');
+        const save = screen.getByTestId('tx-form-save');
+
+        await waitFor(() => {
+            expect(guideAnchors.get('transaction.create.basics')).toBe(basics);
+            expect(guideAnchors.get('transaction.create.amounts')).toBe(amounts);
+            expect(guideAnchors.get('transaction.create.details')).toBe(details);
+            expect(guideAnchors.get('transaction.create.save')).toBe(save);
+        });
+
+        expect(new Set([basics, amounts, details, save]).size).toBe(4);
+        expect(basics).toHaveAttribute('data-testid', 'tx-form-type-wrap');
+        expect(amounts.tagName).toBe('FIELDSET');
+        expect(amounts).toContainElement(basics);
+        expect(details.tagName).toBe('SUMMARY');
+        expect(details.closest('details')).not.toBeNull();
+        expect(save.tagName).toBe('BUTTON');
     });
 
     it('T1-b: create mode starts with an empty quantity field', async () => {
@@ -202,5 +338,107 @@ describe('TransactionFormModal — draft seeding (T1-b, T3)', () => {
             expect(screen.getByTestId('tx-form-validate-now')).toBeEnabled();
             expect(screen.getByTestId('tx-form-save')).toBeDisabled();
         });
+    });
+});
+
+describe('TransactionFormModal — create guide lifecycle', () => {
+    beforeEach(async () => {
+        vi.clearAllMocks();
+        guideAnchors.clear();
+        resetGuideState();
+        vi.mocked(zodiosApi.get_transaction_types_api_v1_transactions_types_get).mockResolvedValue(validMinimalTXTypesResponse);
+        await setupI18n();
+        await ensureTypesLoaded();
+    });
+
+    afterEach(() => {
+        cleanup();
+        guideAnchors.clear();
+        resetGuideState();
+    });
+
+    it('does not let a guide queued behind another active flow survive closing the observed form', async () => {
+        const otherGuide = {
+            flow: 'transactions_page_guide',
+            version: 1,
+            stepId: 'transactions.page.overview',
+            mode: 'automatic',
+        } as const;
+        guideState.active = otherGuide;
+        const {onClose, rerender} = mount();
+
+        await waitFor(() => {
+            expect(guideMocks.maybeStartContextual).toHaveBeenCalledExactlyOnceWith('transaction_create_guide');
+            expect(guideMocks.queueContextual).toHaveBeenCalledExactlyOnceWith('transaction_create_guide', undefined);
+            expect(guideState.queuedGuides).toEqual([{flow: 'transaction_create_guide'}]);
+        });
+
+        await fireEvent.click(await screen.findByTestId('tx-form-close'));
+        expect(onClose).toHaveBeenCalledTimes(1);
+        expect(guideMocks.clearQueued).not.toHaveBeenCalled();
+
+        await rerender({open: false});
+        await waitFor(() => {
+            expect(guideMocks.clearQueued).toHaveBeenCalledExactlyOnceWith('transaction_create_guide');
+            expect(guideState.queuedGuides).toEqual([]);
+        });
+        expect(guideMocks.dismissHost).not.toHaveBeenCalled();
+        expect(guideState.active).toEqual(otherGuide);
+
+        guideState.active = null;
+        expect(guideMocks.maybeStartQueued('transaction_create_guide')).toBe(false);
+        expect(guideState.queuedGuides).toEqual([]);
+        expect(guideState.active).toBeNull();
+        expect(guideMocks.maybeStartContextual).toHaveBeenCalledTimes(1);
+    });
+
+    it('clears a guide queued behind another active flow when the observed form unmounts', async () => {
+        const otherGuide = {
+            flow: 'transactions_page_guide',
+            version: 1,
+            stepId: 'transactions.page.overview',
+            mode: 'automatic',
+        } as const;
+        guideState.active = otherGuide;
+        const {unmount} = mount();
+
+        await waitFor(() => {
+            expect(guideMocks.maybeStartContextual).toHaveBeenCalledExactlyOnceWith('transaction_create_guide');
+            expect(guideState.queuedGuides).toEqual([{flow: 'transaction_create_guide'}]);
+        });
+
+        unmount();
+        await tick();
+
+        await waitFor(() => {
+            expect(guideMocks.clearQueued).toHaveBeenCalledExactlyOnceWith('transaction_create_guide');
+            expect(guideState.queuedGuides).toEqual([]);
+        });
+        expect(guideMocks.dismissHost).not.toHaveBeenCalled();
+        expect(guideState.active).toEqual(otherGuide);
+    });
+
+    it('dismisses the active create guide and clears its queued entry when the observed form unmounts', async () => {
+        guideState.queuedGuides = [{flow: 'transaction_create_guide'}];
+        const {unmount} = mount();
+
+        await waitFor(() => {
+            expect(guideMocks.maybeStartContextual).toHaveBeenCalledExactlyOnceWith('transaction_create_guide');
+            expect(guideState.active).toMatchObject({
+                flow: 'transaction_create_guide',
+                stepId: 'transaction.create.basics',
+            });
+        });
+
+        unmount();
+        await tick();
+
+        await waitFor(() => {
+            expect(guideMocks.dismissHost).toHaveBeenCalledExactlyOnceWith({restartAtFirst: true});
+            expect(guideMocks.clearQueued).toHaveBeenCalledExactlyOnceWith('transaction_create_guide');
+            expect(guideState.active).toBeNull();
+            expect(guideState.queuedGuides).toEqual([]);
+        });
+        expect(guideMocks.dismissHost.mock.invocationCallOrder.at(0) ?? 0).toBeLessThan(guideMocks.clearQueued.mock.invocationCallOrder.at(0) ?? 0);
     });
 });

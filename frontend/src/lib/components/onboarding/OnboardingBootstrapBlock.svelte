@@ -20,7 +20,7 @@
         </p>
         <div class="mt-5 flex justify-end gap-2">
             <button type="button" class="rounded-lg px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-800" onclick={onlogout} data-testid="onboarding-bootstrap-logout">
-                {$_('auth.logout')}
+                {$_('onboarding.welcome.logout')}
             </button>
             <button type="button" class="rounded-lg bg-libre-green px-4 py-2 text-sm font-medium text-white" onclick={onretry} data-testid="onboarding-bootstrap-retry">
                 {$_('common.retry')}
