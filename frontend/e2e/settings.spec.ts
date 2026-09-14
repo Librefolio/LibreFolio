@@ -694,6 +694,28 @@ test.describe('Settings', () => {
 // every other test running against it concurrently. Verifying that explicit
 // preference write therefore requires a disposable terminal account, not this
 // otherwise cheap replay-control block.
+const ONBOARDING_FLOW_IDS = [
+    'welcome',
+    'intro_tour',
+    'transactions_page_guide',
+    'transaction_create_guide',
+    'transaction_bulk_guide',
+    'import_guide',
+    'broker_page_guide',
+    'broker_guide',
+    'broker_detail_guide',
+    'fx_page_guide',
+    'fx_guide',
+    'fx_detail_guide',
+    'asset_page_guide',
+    'asset_guide',
+    'asset_detail_guide',
+] as const;
+const ONBOARDING_STEP_IDS = {
+    transaction_bulk_guide: ['transaction.bulk.workspace', 'transaction.bulk.validation', 'transaction.bulk.selection', 'transaction.bulk.save'],
+    import_guide: ['import.upload', 'import.select', 'import.analyze', 'import.assets', 'import.fix', 'import.duplicates', 'import.review', 'import.bulk'],
+} as const;
+
 test.describe('Onboarding replay controls', () => {
     async function openOnboardingSection(page: Page) {
         await navigateTo(page, '/settings');
@@ -701,6 +723,11 @@ test.describe('Onboarding replay controls', () => {
         const section = page.getByTestId('onboarding-replay-section');
         await expect(section).toBeVisible({timeout: 10_000});
         await expect(page.getByTestId('onboarding-flow-welcome')).toBeVisible({timeout: 10_000});
+        for (const group of ['transactions', 'broker', 'fx', 'asset'] as const) {
+            await section.getByTestId(`onboarding-group-${group}`).evaluate((element) => {
+                (element as HTMLDetailsElement).open = true;
+            });
+        }
         return section;
     }
 
@@ -714,11 +741,11 @@ test.describe('Onboarding replay controls', () => {
         return {requests, stop: () => page.off('request', record)};
     }
 
-    test('shows all three onboarding flows, each versioned and terminal for the canonical user', async ({page}) => {
+    test('shows all 15 terminal onboarding flows and the Import/Bulk step detail', async ({page}) => {
         await login(page, TEST_USER);
         await openOnboardingSection(page);
 
-        for (const flow of ['welcome', 'intro_tour', 'import_guide'] as const) {
+        for (const flow of ONBOARDING_FLOW_IDS) {
             const row = page.getByTestId(`onboarding-flow-${flow}`);
             await expect(row).toBeVisible();
             await expect(row).toHaveAttribute('data-status', 'completed');
@@ -731,6 +758,18 @@ test.describe('Onboarding replay controls', () => {
             await expect(page.getByTestId(`onboarding-flow-${flow}-update`)).toHaveCount(0);
             await expect(page.getByTestId(`onboarding-flow-${flow}-armed`)).toHaveCount(0);
         }
+        for (const [flow, stepIds] of Object.entries(ONBOARDING_STEP_IDS)) {
+            const details = page.getByTestId(`onboarding-flow-${flow}-steps`);
+            await details.evaluate((element) => {
+                (element as HTMLDetailsElement).open = true;
+            });
+            for (const stepId of stepIds) {
+                await expect(page.getByTestId(`onboarding-step-${flow}-${stepId}`)).toBeVisible();
+            }
+        }
+        await expect(page.getByTestId('onboarding-flow-transaction_bulk_validation_guide')).toHaveCount(0);
+        await expect(page.getByTestId('onboarding-flow-transaction_bulk_selection_guide')).toHaveCount(0);
+        await expect(page.getByTestId('onboarding-flow-transaction_bulk_save_guide')).toHaveCount(0);
     });
 
     test('replay welcome Exit clears client-side state and returns without a terminal mutation', async ({page}) => {
@@ -781,10 +820,10 @@ test.describe('Onboarding replay controls', () => {
         }
     });
 
-    test('Replay all arms every flow and routes to /welcome without a terminal mutation', async ({page}) => {
+    test('Replay all starts from a clean 15-flow state and routes to /welcome without a terminal mutation', async ({page}) => {
         // Seam, stated rather than faked: this proves the button arms *something*
         // (the observable, safe-to-verify effect — routing to /welcome without a
-        // terminal call) and that the three per-flow "-armed" badges are absent
+        // terminal call) and that all per-flow "-armed" badges are absent
         // beforehand. Once armed, `resolveDestination` keeps redirecting any route
         // back to /welcome for as long as the replay stays armed, so there is no
         // way to return to Settings from inside *this* test and read the
@@ -792,12 +831,12 @@ test.describe('Onboarding replay controls', () => {
         // skipping welcome — which would overwrite TEST_USER's persisted language/
         // currency for every other concurrent test — or (b) reaching past the
         // testid surface into sessionStorage directly, which this suite's rules
-        // treat as fabrication. Cross-verifying that Replay All arms all three
-        // flows together (not just welcome) is left for a disposable-account
-        // fixture in a future spec, or a manual runbook check.
+        // treat as fabrication. The component test verifies every armReplay call
+        // and its source order; this browser case verifies the real navigation
+        // and no-terminal-write boundary.
         await login(page, TEST_USER);
         await openOnboardingSection(page);
-        for (const flow of ['welcome', 'intro_tour', 'import_guide'] as const) {
+        for (const flow of ONBOARDING_FLOW_IDS) {
             await expect(page.getByTestId(`onboarding-flow-${flow}-armed`)).toHaveCount(0);
         }
         const tracker = trackOnboardingRequests(page);

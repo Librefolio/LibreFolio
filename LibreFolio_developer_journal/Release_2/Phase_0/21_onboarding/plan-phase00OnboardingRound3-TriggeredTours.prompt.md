@@ -6,17 +6,22 @@
 [Round 1](plan-phase00OnboardingRound1-UXRefinement.prompt.md) →
 [Round 2](plan-phase00OnboardingRound2-ModularGuides.prompt.md) → Round 3.
 
+→ Follow-up:
+[Onboarding Round 4 — geometry e milestone contestuali](plan-phase00OnboardingRound4-GeometryMilestones.prompt.md)
+
 ## Confine e stato
 
-**Baseline worktree:** `4a9ae876e4599b5fdec5ade512b65b9c31a584a5` più il delta
-Foundation/Round 1/Round 2 non committato.
+**Baseline worktree:** merge checkpoint pulito
+`8f7acd610127d1ba24dcddfef5b9acf4552d4f51`; target resta isolato a
+`4949b2f4c04050e46f643de848894b6706349f34`.
 
-**Stato:** pianificato; implementazione rinviata alla prossima iterazione.
+**Stato:** implementazione manual-first autorizzata.
 
-Questa iterazione chiude esclusivamente i record di coordinamento. Non modifica codice
-Round 3, non invoca test-author/docs-writer e non lancia suite funzionali. La review
-manuale ha intenzionalmente superseded il contratto UX Round 2; testarlo o documentarlo
-ora cristallizzerebbe comportamento già destinato a cambiare.
+**Autorizzazione developer relayed verbatim dal coordinator, 2026-09-11:**
+`Non mergiare ora: implementare Round 3 sul branch J, test/review umana, poi integrare tutto insieme (Consigliato)`.
+
+Round 3 viene implementato sul branch J isolato. Test-author/docs-writer e campagna
+funzionale completa restano bloccati fino all'OK UX developer sul nuovo prototipo.
 
 ## Feedback developer accettato
 
@@ -36,7 +41,8 @@ ora cristallizzerebbe comportamento già destinato a cambiare.
 - Granularità approvata: un flow persistito per ogni trigger.
 - Bulk: il primo trigger che vi entra la arma; appare quando la Bulk è topmost.
 - Nessuna nuova migrazione onboarding; `003` è ancora non pubblicata dopo 1.1.0.
-- Nessuna implementazione Round 3 in questa iterazione.
+- Implementazione Round 3 autorizzata in modalità manual-first; test-author e
+  docs-writer restano differiti fino all'OK UX.
 
 ## Contratti da preservare
 
@@ -316,12 +322,28 @@ Replay All arma tutti i token ma non apre route/modal/dettagli.
 
 ### Step 1 - Espansione flow
 
+**Stato:** ✅ completato (2026-09-11).
+
+> **Note implementazione:** aggiunti nove flow persistiti pagina/create/bulk/detail
+> mantenendo gli ID Add Round 2. Registry backend/frontend, Zod runtime, catalogo step
+> e migrazione non pubblicata `003` sono allineati a 15 flow totali, tutti v1.
+> Endpoint restano generici; richiesto API sync coordinator-owned.
+
 - enum/registry/tipi;
 - modifica esclusiva `003`;
 - seeder/ensure;
 - API sync.
 
 ### Step 2 - Trigger/coda
+
+**Stato:** ✅ completato (2026-09-11).
+
+> **Note implementazione:** aggiunta una coda contestuale transient e account-scoped.
+> I flow pagina e dettaglio partono dopo l'inizializzazione reale; Add apre la guida
+> del proprio host; Bulk attende la chiusura di Form/Import/nested modal e parte solo
+> quando è topmost. Se Import viene aperto durante la guida Bulk, Import prende la
+> priorità e Bulk viene riaccodata allo stesso cursore. Reset account/session e
+> chiusura host eliminano le code stale.
 
 - page-entry;
 - detail-entry;
@@ -331,11 +353,36 @@ Replay All arma tutti i token ma non apre route/modal/dettagli.
 
 ### Step 3 - Welcome/intro polish
 
+**Stato:** ✅ completato (2026-09-11).
+
+> **Note implementazione:** Welcome usa la chiave dedicata
+> `onboarding.welcome.logout`; Intro mostra tre indicatori di fase non interattivi e
+> usa enter rapido con gap ridotto, preservando il percorso reduced-motion.
+> Le traduzioni condivise vengono applicate dal coordinator nello Step 8.
+
 - Disconnettiti;
 - phase indicators;
 - gap fade.
 
 ### Step 4 - Geometry engine
+
+**Stato:** ❌ respinto dalla review UX (2026-09-11), superseded da Round 4.
+
+> **Esito review:** il gating a due frame e la separazione tra pannello/highlight
+> restano una base utile, ma la linea SVG, il placement Core centrato e lo scroll
+> implicito non sono accettati. Round 4 ripristina il cursor badge compatto, introduce
+> presentation per-step e misura la transition dell'host.
+
+> **Note implementazione:** separati pannello, spotlight e pointer. Il Core resta
+> centrato; il pointer SVG termina al centro del target reale, resta non interattivo e
+> viene pubblicato solo dopo due frame geometricamente identici. Resize, scroll,
+> transizioni e animazioni invalidano la misura; il pannello viene rimisurato su due
+> frame per evitare il salto iniziale osservato su Analyze.
+
+> **⚠️ Fuori pista:** il primo `front check` ha rilevato 8 errori TypeScript perché
+> Svelte restringeva gli state rect inizializzati a `null` a `never`. Gli state sono
+> stati dichiarati con generici `$state<AnchorRect | null>`; il rerun è verde con
+> 0 errori e 41 warning legacy in due file.
 
 - panel center;
 - pointer tip;
@@ -345,10 +392,25 @@ Replay All arma tutti i token ma non apre route/modal/dettagli.
 
 ### Step 5 - Transactions
 
+**Stato:** ✅ completato (2026-09-11).
+
+> **Note implementazione:** aggiunte guide distinte per pagina Transazioni, Form Add,
+> Bulk e Import. Gli anchor coprono overview, Add, Import, colonne, campi Form, toolbar,
+> validazione e Save All. Il bridge Create/Import mantiene la Bulk queued finché
+> l'host annidato ha priorità.
+
 - page/Create/Bulk;
 - Import stabilization.
 
 ### Step 6 - Broker/FX/Asset
+
+**Stato:** ✅ completato (2026-09-11).
+
+> **Note implementazione:** Broker, FX e Asset dispongono ora di flow pagina,
+> Add/modal e dettaglio indipendenti. TabBar accetta anchor semantici opzionali per i
+> tab di dettaglio; gli anchor pagina puntano a regioni compatte e azioni reali,
+> evitando rettangoli sull'intera pagina. Il copy Tool generalizzato è nel handoff
+> i18n coordinator-owned.
 
 - page e detail;
 - conservare Add guide;
@@ -356,10 +418,27 @@ Replay All arma tutti i token ma non apre route/modal/dettagli.
 
 ### Step 7 - Settings
 
+**Stato:** ✅ completato (2026-09-11).
+
+> **Note implementazione:** replay raggruppato in Setup/Core/Transazioni/Broker/FX/
+> Asset con summary N/M e disclosure. Replay e stato armed usano copy generico
+> scalabile per tutti i flow contestuali, mantenendo status/version/cancel per riga.
+
 - domain summaries/disclosures;
 - replay/armed.
 
 ### Step 8 - Manual-first checkpoint
+
+**Stato:** ✅ completato (2026-09-11).
+
+> **Note implementazione:** Prettier applicato ai soli file Round 3; `front check`
+> verde con 0 errori/41 warning legacy; Ruff e Black verdi sui tre file backend.
+> Il coordinator ha applicato i cataloghi esclusivamente via `dev.py i18n`: 96
+> chiavi aggiunte, 2 aggiornate e 9 per-flow obsolete rimosse; parità EN/IT/FR/ES
+> 2.988/2.988, 0 incomplete/backend missing e diff-check verde. API sync canonico
+> completo (OpenAPI, Zodios, discriminator fix e Tool generation) con exit 0 e
+> nessun delta generated tracked. Format-check, `front check` e build production
+> sono verdi; server manuale risponde HTTP 200 su `http://localhost:6158`.
 
 - coordinator i18n/API;
 - format/type-check/lint mirati;
@@ -369,6 +448,8 @@ Replay All arma tutti i token ma non apre route/modal/dettagli.
 Nessun test-agent/docs prima dell'OK UX.
 
 ### Step 9 - Dopo OK
+
+**Stato:** bloccato fino a OK developer.
 
 - test-author;
 - docs-writer;
@@ -392,7 +473,7 @@ Evidenze statiche valide:
 - Ruff/Black backend verdi;
 - diff-check verde.
 
-## Checkpoint persistente pre-Round 3
+## Checkpoint storico pre-Round 3 (superseded)
 
 **HEAD:** `4a9ae876e4599b5fdec5ade512b65b9c31a584a5`
 
@@ -437,6 +518,97 @@ coordinator. Nessun merge/staging/commit è stato eseguito da J.
 
 `feat(onboarding): add modular guide foundation`
 
+## Checkpoint manual-first Round 3
+
+**HEAD/base combinata:** `8f7acd610127d1ba24dcddfef5b9acf4552d4f51`.
+
+**Target isolato:** `4949b2f4c04050e46f643de848894b6706349f34`.
+
+**Branch:** `e-alfy-onboarding-foundation`.
+
+**Manifest:** 30 file tracked modificati; 0 staged, 0 untracked, 0 unmerged.
+
+**Lane manuale:** server test attivo su `http://localhost:6158`, data dir assoluta
+`/tmp/librefolio-r2-j-onboarding`, processo Python PID 22516, risposta root HTTP 200.
+
+**Evidenza statica:**
+
+- frontend format-check verde;
+- `front check` 0 errori / 41 warning legacy in due file;
+- build production frontend verde;
+- i18n 2.988/2.988 per EN/IT/FR/ES, 0 incomplete/backend missing;
+- Ruff + Black backend verdi sui tre file backend Round 3;
+- API sync completo, nessun delta generated tracked;
+- `git diff --check` e marker scan verdi.
+
+**Non eseguito per vincolo manual-first:** test-author, suite funzionali onboarding,
+E2E, docs-writer, MkDocs finali, review read-only conclusiva.
+
+**Esclusioni:** database e upload lane sotto `/tmp/librefolio-r2-j-onboarding`,
+frontend build, MkDocs site, cache e log sono runtime/generated e non vanno inclusi
+nel checkpoint.
+
+**Commit proposto dopo accettazione UX e campagna finale:**
+
+`feat(onboarding): add triggered guide flows`
+
+## Runbook review manuale Round 3
+
+Credenziali lane: `e2e_test_user` / `E2eTestPass123!`.
+
+1. Aprire `http://localhost:6158`, entrare in Impostazioni → Preferenze →
+   Primo utilizzo e scegliere **Ripeti tutto**.
+2. Welcome:
+   - cambiare lingua e verificare aggiornamento immediato;
+   - verificare la CTA **Disconnettiti**;
+   - completare senza dati finanziari demo.
+3. Intro/Core:
+   - verificare logo, tre indicatori, fade breve e reduced motion;
+   - al primo coachmark verificare Indietro disabilitato, pannello centrato e punta
+     sul pulsante Sync reale;
+   - proseguire su burger/sidebar, Transazioni, Broker, FX, Asset, Strumenti e
+     Impostazioni;
+   - su mobile verificare il target burger e il pointer dopo apertura/chiusura menu.
+4. Transazioni:
+   - completare i quattro step pagina (overview, Add, Import, colonne);
+   - aprire Add: completare i quattro step Form e chiudere senza salvare;
+   - verificare che Bulk parta solo dopo la chiusura del Form;
+   - controllare i cinque step Bulk, poi chiudere senza Salva tutto;
+   - riaprire Import e avanzare tramite le CTA reali del wizard; il pointer deve
+     essere corretto già al primo mount/Analyze;
+   - al handoff Bulk, completare Import e verificare la successiva guida Bulk.
+5. Broker:
+   - completare la guida pagina;
+   - aprire Aggiungi broker e verificare overview/plugin/icona;
+   - chiudere senza salvare;
+   - aprire un broker esistente e verificare header, overview, posizioni,
+     transazioni e info.
+6. FX:
+   - completare guida pagina;
+   - aprire Aggiungi coppia e verificare valute/provider;
+   - chiudere senza salvare;
+   - aprire una coppia esistente e verificare header, provider, grafico ed editor.
+7. Asset:
+   - completare guida pagina;
+   - aprire Aggiungi asset e verificare ricerca/identità/provider;
+   - chiudere senza salvare;
+   - aprire un asset esistente e verificare header, grafico, editor, metadati e
+     tab Rischio.
+8. Settings/replay:
+   - verificare gruppi Setup/Core/Transazioni/Broker/FX/Asset e summary N/M;
+   - armare un singolo flow, verificare feedback visibile e annullamento;
+   - riarmerlo, aprire il trigger reale e verificare che X chiuda solo il replay.
+9. Persistenza/transizioni:
+   - ricaricare a metà guida pagina: riprende dallo step corrente;
+   - ricaricare a metà guida modal: non riapre il modal, ma riprende quando il
+     trigger viene riaperto;
+   - passare a `e2e_test_admin` / `E2eAdminPass123!`: nessun active/queued/replay
+     del primo account deve trapelare.
+10. Errore opzionale:
+    - disattivare temporaneamente la rete prima di Finish/X automatico;
+    - verificare errore localizzato e coachmark ancora aperto;
+    - ripristinare la rete e ripetere l'azione.
+
 ## Definition of Done
 
 - Welcome usa Disconnettiti;
@@ -450,3 +622,7 @@ coordinator. Nessun merge/staging/commit è stato eseguito da J.
 - Settings leggibile con molti flow;
 - solo migrazione `003`;
 - manual review prima dei test/docs.
+
+La copy localizzata, la struttura dei flow pagina/Add/detail e il modello di
+persistenza Round 3 restano accettati. Geometry, Core 1/2 e Bulk lineare sono
+superseded dal piano Round 4 linkato sopra.

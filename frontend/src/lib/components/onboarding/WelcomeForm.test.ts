@@ -56,6 +56,7 @@ interface MountProps {
 
 function mount(props: MountProps = {}) {
     const onsubmit = vi.fn();
+    const onskip = vi.fn();
     const onavatarrequest = vi.fn();
     const onavatarclear = vi.fn();
     const utils = render(WelcomeForm, {
@@ -68,10 +69,11 @@ function mount(props: MountProps = {}) {
         error: null,
         ...props,
         onsubmit,
+        onskip,
         onavatarrequest,
         onavatarclear,
     });
-    return {onsubmit, onavatarrequest, onavatarclear, ...utils};
+    return {onsubmit, onskip, onavatarrequest, onavatarclear, ...utils};
 }
 
 describe('WelcomeForm — submit payload carries the staged draft', () => {
@@ -114,10 +116,13 @@ describe('WelcomeForm — submit payload carries the staged draft', () => {
         expect(onsubmit).toHaveBeenCalledWith(expect.objectContaining({language: other.code}));
     });
 
-    it('does not own the page-level permanent Skip action', () => {
-        mount();
+    it('delegates the permanent Skip action to its parent', async () => {
+        const {onskip, onsubmit} = mount();
 
-        expect(screen.queryByTestId('welcome-skip')).toBeNull();
+        await fireEvent.click(screen.getByTestId('welcome-skip'));
+
+        expect(onskip).toHaveBeenCalledTimes(1);
+        expect(onsubmit).not.toHaveBeenCalled();
     });
 });
 

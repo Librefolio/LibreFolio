@@ -38,49 +38,60 @@ After registering, you'll be redirected to the login page. Enter your credential
 
 ---
 
-## 🎉 3. Welcome Setup & Quick Tour (First Login Only) {: #welcome-setup }
+## 🎉 3. Welcome Setup & Quick Tour {: #welcome-setup }
 
-The very first time you log in, LibreFolio takes you to a dedicated **Welcome** page instead of
-the dashboard.
-
-!!! info "Only for brand-new accounts"
-
-    This screen only appears once, for accounts that have never completed or skipped it. If you
-    already had an account before this feature shipped, you are **grandfathered in** — you won't
-    see it retroactively, but you can still open it any time from
-    **[Settings → Preferences → Onboarding and guides](settings/preferences.md#onboarding-and-guides)**.
+When the Welcome flow is due, LibreFolio takes you to a dedicated **Welcome** page before the
+dashboard.
 
 On this page you can:
 
 - 🌍 **Confirm your language and base currency** — pre-filled from your administrator's
-  instance-wide defaults. When you continue, LibreFolio applies the selected language before
-  showing the intro and tour; your **theme** preference is left untouched.
-- 🖼️ **Add a profile picture** — optional; your initials are shown until you pick one.
-- ✅ Click **Continue** to save these choices, or **Skip setup permanently** if you'd rather
-  keep your existing settings and configure everything later from Settings. Either way you move
-  on immediately — nothing here blocks access to the app.
+  instance-wide defaults.
+- 🖼️ **Add a profile picture if you want** — your initials remain in place when you do not
+  choose one.
+- ✅ Select **Continue** to save the visible choices, or **Skip setup permanently** to keep the
+  existing settings and move on.
+- 🚪 Use the dedicated **Log out** action in the page header whenever you need to leave safely.
 
-If your onboarding status fails to load (e.g. a network hiccup), you'll see a **Retry** /
-**Logout** screen instead of a broken page — retry once you're back online, or log out safely.
+An onboarding refresh or bootstrap failure can fall back to the Dashboard with an inline
+**Retry** banner only when LibreFolio already has a cached terminal Welcome state
+(**Completed** or **Skipped**) for your signed-in account. Without that cache — including on the
+first load or while Welcome is **Pending** — startup stays blocked and offers **Retry** and
+**Log out** rather than showing the Dashboard. A user-settings failure also blocks startup.
 
-Right after Welcome, a narrative intro presents three short phrases. Press **Start** whenever
-you're ready; if you do nothing, it starts the tour once after 10 seconds.
+Right after Welcome, the intro cycles through three short phrases over **8 seconds**. Three
+progress marks show which phrase is active; there is no visible countdown. Select **Start tour**
+to begin immediately, or let the intro start it automatically.
 
-The guided stops then follow this order:
+The core tour is deliberately short and stays focused on navigation:
 
-**Dashboard** → **responsive sidebar toggle or mobile hamburger** → **Transactions navigation**
-→ **Import** → **Broker add**, then its **currency preview** → **FX add**, then its
-**base/quote preview** → **Asset add**, then its **currency/provider preview** → **Tools** →
-**Settings**.
+**Sidebar or mobile navigation control** → **Dashboard** → **Transactions** → **Brokers** →
+**FX** → **Assets** → **Tools** → **Settings**.
 
-During the automatic first-login tour, every coachmark keeps **Skip permanently** and an **X**
-in its top row. **X** suspends the tour without skipping it and preserves the current tour
-position; the footer uses **Back** and **Next**, changing to **Finish** on the final step. There
-is no separate Pause button. In a replay, **Skip permanently** becomes **Exit replay**:
-**Finish** and **Exit replay** only clear that browser-session replay and never complete, skip,
-or otherwise change the flow's saved onboarding status. The Broker, FX, and Asset creation
-screens opened by the tour are non-writing previews: they do not offer a save/create action and
-never persist anything.
+It points out the main destinations without opening forms or creating data.
+
+### 🧭 Contextual guides
+
+Short guides then appear where their controls are real and useful:
+
+| Area | Contextual guides |
+|---|---|
+| **Transactions** | Page overview, Add Transaction form, bulk workspace, and Import Wizard |
+| **Brokers** | Brokers page, Add Broker form, and broker details |
+| **FX** | FX page, Add Pair form, and pair details |
+| **Assets** | Assets page, Add Asset form, and asset details |
+
+These guides observe the interface; they never synthesize a click, upload, edit, or save. An
+informational area pulses, while a real action is marked with a translucent cursor. Clicking
+that real action performs the normal app action and advances the guide.
+
+The message panel becomes translucent after **3 seconds** so the underlying interface is easier
+to see, then returns to full strength when you hover it or move focus inside it. When LibreFolio
+scrolls to a target, the panel follows the moving target without flashing back to a waiting
+message.
+
+You can manually replay any flow from
+**[Settings → Preferences → Onboarding and guides](settings/preferences.md#onboarding-and-guides)**.
 
 ---
 
@@ -123,10 +134,11 @@ In LibreFolio, the fastest way to get started is by importing your transaction h
 
 !!! info "Guided first import"
 
-    The first time you open the Import Wizard, a contextual guide bubble follows you through
-    whichever steps your files actually trigger. It never uploads, clicks, or saves anything on
-    your behalf — it only highlights **Save All** at the end, and your import is only marked
-    "done" for the guide once you press its own **Finish guide** button. See
+    The first time you open the Import Wizard, a contextual guide follows the **N/M** steps your
+    files actually trigger. It never uploads, clicks, edits, or saves on your behalf. Its last
+    stop highlights the real **Save All** action; the guide advances when you click it, while the
+    write still comes from your explicit click. **X** skips only the current Import guide step.
+    See
     **[How to Import Transactions](transactions/import/how-to.md#guided-first-import)** for details.
 
 For the full walkthrough see **[How to Import Transactions](transactions/import/how-to.md)**; for the supported brokers and file formats see **[Import from Broker](transactions/import/index.md)**.

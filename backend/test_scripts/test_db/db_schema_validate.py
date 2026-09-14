@@ -409,7 +409,46 @@ _ALEMBIC_INI = PROJECT_ROOT / "backend" / "alembic.ini"
 _ALEMBIC_SCRIPT_LOCATION = PROJECT_ROOT / "backend" / "alembic"
 _PRE_ONBOARDING_REVISION = "5b1333fa6b07"
 _ONBOARDING_REVISION = "003_user_onboarding_progress"
-_ONBOARDING_MIGRATION_FLOWS = ("welcome", "intro_tour", "import_guide")
+_ONBOARDING_MIGRATION_FLOW_STATUSES = {
+    "welcome": "completed",
+    "intro_tour": "pending",
+    "transactions_page_guide": "pending",
+    "transaction_create_guide": "pending",
+    "transaction_bulk_guide": "pending",
+    "import_guide": "pending",
+    "broker_page_guide": "pending",
+    "broker_guide": "pending",
+    "broker_detail_guide": "pending",
+    "fx_page_guide": "pending",
+    "fx_guide": "pending",
+    "fx_detail_guide": "pending",
+    "asset_page_guide": "pending",
+    "asset_guide": "pending",
+    "asset_detail_guide": "pending",
+}
+_REMOVED_ONBOARDING_DRAFT_FLOWS = {
+    "transaction_bulk_validation_guide",
+    "transaction_bulk_selection_guide",
+    "transaction_bulk_save_guide",
+}
+_ONBOARDING_MIGRATION_STEPS = {
+    "transaction_bulk_guide": {
+        "transaction.bulk.workspace",
+        "transaction.bulk.validation",
+        "transaction.bulk.selection",
+        "transaction.bulk.save",
+    },
+    "import_guide": {
+        "import.upload",
+        "import.select",
+        "import.analyze",
+        "import.assets",
+        "import.fix",
+        "import.duplicates",
+        "import.review",
+        "import.bulk",
+    },
+}
 
 
 def _onboarding_migration_config(db_path):
@@ -464,6 +503,19 @@ def _fetch_onboarding_migration_rows(db_path, user_id: int):
         conn.close()
 
 
+def _fetch_onboarding_migration_step_rows(db_path, user_id: int):
+    import sqlite3  # noqa: PLC0415 — test-only, private migration harness
+
+    conn = sqlite3.connect(db_path)
+    try:
+        return conn.execute(
+            "SELECT flow, step_id, status, version, completed_at, skipped_at " "FROM user_onboarding_step_progress WHERE user_id = ? ORDER BY flow, step_id",
+            (user_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+
+
 @pytest.fixture()
 def onboarding_migration_db(tmp_path):
     """A fresh private SQLite file migrated up to (but not including) 003."""
@@ -473,8 +525,24 @@ def onboarding_migration_db(tmp_path):
     return db_path, cfg
 
 
-def test_onboarding_migration_backfills_existing_users_as_completed_current(onboarding_migration_db):
-    """Every pre-existing user gets all three flows as completed/current-version."""
+def test_onboarding_migration_003_is_the_only_round5_revision(tmp_path):
+    """Round 5 extends unreleased migration 003 in place and must not add 004."""
+    from alembic.script import ScriptDirectory  # noqa: PLC0415 — test-only migration inspection
+
+    cfg = _onboarding_migration_config(tmp_path / "onboarding_revision_contract.db")
+    scripts = ScriptDirectory.from_config(cfg)
+    revision = scripts.get_revision(_ONBOARDING_REVISION)
+    version_dir = _ALEMBIC_SCRIPT_LOCATION / "versions"
+    unexpected_004_files = sorted(path.name for path in version_dir.glob("004*.py"))
+
+    assert scripts.get_current_head() == _ONBOARDING_REVISION
+    assert revision is not None
+    assert revision.down_revision == _PRE_ONBOARDING_REVISION
+    assert not unexpected_004_files, f"Round 5 must amend migration 003; found forbidden migration files: {unexpected_004_files}"
+
+
+def test_onboarding_migration_backfills_existing_users_by_flow_and_step_policy(onboarding_migration_db):
+    """Existing users get 15 flows and all Import/Bulk steps at v1."""
     db_path, cfg = onboarding_migration_db
     user_a = _insert_migration_test_user(db_path, "mig_backfill_user_a")
     user_b = _insert_migration_test_user(db_path, "mig_backfill_user_b")
@@ -483,55 +551,118 @@ def test_onboarding_migration_backfills_existing_users_as_completed_current(onbo
 
     for user_id in (user_a, user_b):
         rows = _fetch_onboarding_migration_rows(db_path, user_id)
-        assert len(rows) == 3, f"user {user_id}: expected exactly the 3 registered flows, got {rows}"
-        assert {row[0] for row in rows} == set(_ONBOARDING_MIGRATION_FLOWS)
+        flow_names = {flow for flow, _status, _version, _completed_at, _skipped_at in rows}
+        assert len(rows) == 15, f"user {user_id}: expected exactly the 15 source-of-truth flows, got {rows}"
+        assert len(flow_names) == len(rows), f"user {user_id}: migration must not create duplicate flow rows"
+        assert flow_names == set(_ONBOARDING_MIGRATION_FLOW_STATUSES)
+        assert flow_names.isdisjoint(_REMOVED_ONBOARDING_DRAFT_FLOWS), f"user {user_id}: removed draft flows must not be seeded"
         for flow, status, version, completed_at, skipped_at in rows:
-            assert status == "completed", f"{flow}: expected completed, got {status}"
+            expected_status = _ONBOARDING_MIGRATION_FLOW_STATUSES[flow]
+            assert status == expected_status, f"{flow}: expected {expected_status}, got {status}"
             assert version == 1
-            assert completed_at is not None
+            if flow == "welcome":
+                assert completed_at is not None
+            else:
+                assert completed_at is None
             assert skipped_at is None
 
-    print("✅ Onboarding migration backfilled existing users as completed/current")
+        step_rows = _fetch_onboarding_migration_step_rows(db_path, user_id)
+        actual_steps = {(flow, step_id) for flow, step_id, _status, _version, _completed_at, _skipped_at in step_rows}
+        expected_steps = {(flow, step_id) for flow, step_ids in _ONBOARDING_MIGRATION_STEPS.items() for step_id in step_ids}
+        assert len(step_rows) == 12, f"user {user_id}: expected exactly 12 step rows, got {step_rows}"
+        assert len(actual_steps) == len(step_rows), f"user {user_id}: migration must not create duplicate step rows"
+        assert actual_steps == expected_steps
+        for flow, step_id, status, version, completed_at, skipped_at in step_rows:
+            assert step_id in _ONBOARDING_MIGRATION_STEPS[flow]
+            assert status == "pending"
+            assert version == 1
+            assert completed_at is None
+            assert skipped_at is None
+
+    print("✅ Onboarding migration backfilled 15 flows and 12 step rows at v1")
 
 
-def test_onboarding_migration_backfill_is_idempotent_at_insert_level(onboarding_migration_db):
-    """Re-running the exact backfill INSERT (INSERT OR IGNORE on the unique
-    (user_id, flow) constraint) must not duplicate or overwrite rows."""
+def test_onboarding_migration_step_table_schema_contract(onboarding_migration_db):
+    """Migration 003 owns the complete step table contract, including cascade and uniqueness."""
     db_path, cfg = onboarding_migration_db
-    user_id = _insert_migration_test_user(db_path, "mig_idempotent_user")
-
     command.upgrade(cfg, _ONBOARDING_REVISION)
-    before = _fetch_onboarding_migration_rows(db_path, user_id)
-    assert len(before) == 3
 
     import sqlite3  # noqa: PLC0415 — test-only, private migration harness
 
     conn = sqlite3.connect(db_path)
     try:
-        # Mirrors the backfill INSERT in 003_user_onboarding_progress.py's upgrade();
-        # keep in sync if that migration's backfill SQL ever changes.
-        conn.execute(
+        columns = {row[1]: {"not_null": bool(row[3]), "primary_key": bool(row[5])} for row in conn.execute("PRAGMA table_info(user_onboarding_step_progress)").fetchall()}
+        foreign_keys = conn.execute("PRAGMA foreign_key_list(user_onboarding_step_progress)").fetchall()
+        indexes = conn.execute("PRAGMA index_list(user_onboarding_step_progress)").fetchall()
+        unique_index_names = [row[1] for row in indexes if row[2]]
+        unique_columns = {tuple(column[0] for column in conn.execute("SELECT name FROM pragma_index_info(?) ORDER BY seqno", (name,)).fetchall()) for name in unique_index_names}
+    finally:
+        conn.close()
+
+    assert set(columns) == {
+        "id",
+        "user_id",
+        "flow",
+        "step_id",
+        "status",
+        "version",
+        "created_at",
+        "updated_at",
+        "completed_at",
+        "skipped_at",
+    }
+    assert columns["id"]["primary_key"] is True
+    for required in ("user_id", "flow", "step_id", "status", "version", "created_at", "updated_at"):
+        assert columns[required]["not_null"] is True
+    assert columns["completed_at"]["not_null"] is False
+    assert columns["skipped_at"]["not_null"] is False
+    assert ("user_id", "flow", "step_id") in unique_columns
+    assert any(row[2] == "users" and row[3] == "user_id" and row[4] == "id" and row[6].upper() == "CASCADE" for row in foreign_keys)
+
+
+def test_onboarding_migration_backfill_is_idempotent_at_insert_level(onboarding_migration_db):
+    """Replaying the 003 backfill values through INSERT OR IGNORE must not
+    duplicate or overwrite any existing (user_id, flow) row."""
+    db_path, cfg = onboarding_migration_db
+    user_id = _insert_migration_test_user(db_path, "mig_idempotent_user")
+
+    command.upgrade(cfg, _ONBOARDING_REVISION)
+    before = _fetch_onboarding_migration_rows(db_path, user_id)
+    before_steps = _fetch_onboarding_migration_step_rows(db_path, user_id)
+    assert len(before) == 15
+    assert len(before_steps) == 12
+
+    import sqlite3  # noqa: PLC0415 — test-only, private migration harness
+
+    conn = sqlite3.connect(db_path)
+    try:
+        # Replay the same source-of-truth rows through INSERT OR IGNORE. Existing
+        # terminal/pending rows must win over every attempted duplicate.
+        conn.executemany(
             """
             INSERT OR IGNORE INTO user_onboarding_progress
                 (user_id, flow, status, version, created_at, updated_at, completed_at)
-            SELECT users.id, flows.flow, 'completed', 1,
-                   CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-            FROM users
-            CROSS JOIN (
-                SELECT 'welcome' AS flow
-                UNION ALL SELECT 'intro_tour'
-                UNION ALL SELECT 'import_guide'
-            ) AS flows
-            WHERE users.id = ?
+            VALUES (?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
+                    CASE WHEN ? = 'completed' THEN CURRENT_TIMESTAMP ELSE NULL END)
             """,
-            (user_id,),
+            [(user_id, flow, status, status) for flow, status in _ONBOARDING_MIGRATION_FLOW_STATUSES.items()],
+        )
+        conn.executemany(
+            """
+            INSERT OR IGNORE INTO user_onboarding_step_progress
+                (user_id, flow, step_id, status, version, created_at, updated_at)
+            VALUES (?, ?, ?, 'pending', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            """,
+            [(user_id, flow, step_id) for flow, step_ids in _ONBOARDING_MIGRATION_STEPS.items() for step_id in step_ids],
         )
         conn.commit()
     finally:
         conn.close()
 
     after = _fetch_onboarding_migration_rows(db_path, user_id)
+    after_steps = _fetch_onboarding_migration_step_rows(db_path, user_id)
     assert after == before, "Re-running the backfill INSERT must be a byte-identical no-op"
+    assert after_steps == before_steps, "Re-running the step backfill INSERT must be a byte-identical no-op"
 
     print("✅ Onboarding migration backfill is idempotent at the INSERT level")
 
@@ -544,14 +675,16 @@ def test_onboarding_migration_new_user_after_migration_has_no_rows(onboarding_mi
 
     user_id = _insert_migration_test_user(db_path, "mig_post_migration_user")
     rows = _fetch_onboarding_migration_rows(db_path, user_id)
+    step_rows = _fetch_onboarding_migration_step_rows(db_path, user_id)
 
     assert rows == [], "A brand-new post-migration user must get no rows from the migration itself"
+    assert step_rows == [], "A brand-new post-migration user must get no step rows from the migration itself"
 
     print("✅ Post-migration user has no onboarding rows until the service creates them")
 
 
-def test_onboarding_migration_downgrade_drops_table_without_touching_users(onboarding_migration_db):
-    """Downgrade removes only user_onboarding_progress; users are untouched."""
+def test_onboarding_migration_downgrade_drops_both_tables_without_touching_users(onboarding_migration_db):
+    """Downgrade removes both onboarding tables without touching users."""
     db_path, cfg = onboarding_migration_db
     user_id = _insert_migration_test_user(db_path, "mig_downgrade_user")
     command.upgrade(cfg, _ONBOARDING_REVISION)
@@ -568,9 +701,10 @@ def test_onboarding_migration_downgrade_drops_table_without_touching_users(onboa
         conn.close()
 
     assert "user_onboarding_progress" not in tables
+    assert "user_onboarding_step_progress" not in tables
     assert user_row is not None, "Downgrade must not cascade into the users table"
 
-    print("✅ Downgrade drops user_onboarding_progress without touching users")
+    print("✅ Downgrade drops both onboarding progress tables without touching users")
 
 
 if __name__ == "__main__":

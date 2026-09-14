@@ -1,15 +1,22 @@
 <script lang="ts">
     import {browser} from '$app/environment';
     import {ArrowLeft, ArrowRight, LogOut, MousePointer2, X} from 'lucide-svelte';
+    import type {GuideHighlightMode, GuidePanelPlacement, GuidePointerMode, GuideScrollPolicy} from '$lib/features/onboarding/onboardingGuideCatalog';
 
     interface Props {
         open?: boolean;
+        suspended?: boolean;
         anchor?: HTMLElement | null;
         stepId: string;
         title: string;
         description: string;
         actionHint?: string;
-        presentation?: 'spotlight' | 'pointer';
+        pointer?: GuidePointerMode;
+        highlight?: GuideHighlightMode;
+        backdrop?: boolean;
+        panelPlacement?: GuidePanelPlacement;
+        scrollPolicy?: GuideScrollPolicy;
+        advanceOnTarget?: boolean;
         progressLabel?: string;
         backLabel?: string;
         nextLabel?: string;
@@ -20,15 +27,16 @@
         showBack?: boolean;
         backDisabled?: boolean;
         showNext?: boolean;
+        showNextArrow?: boolean;
         showSkip?: boolean;
         showClose?: boolean;
-        showBackdrop?: boolean;
         focusOnOpen?: boolean;
         busy?: boolean;
         onback?: () => void;
         onnext?: () => void;
         onskip?: () => void;
         onclose?: () => void;
+        ontargetactivate?: () => void;
     }
 
     interface AnchorRect {
@@ -40,14 +48,28 @@
         height: number;
     }
 
+    interface PanelGeometry {
+        left: number;
+        top: number;
+        width: number;
+        height: number;
+        placement: Exclude<GuidePanelPlacement, 'auto'>;
+    }
+
     let {
         open = false,
+        suspended = false,
         anchor = null,
         stepId,
         title,
         description,
         actionHint = '',
-        presentation = 'pointer',
+        pointer = 'none',
+        highlight = 'none',
+        backdrop = false,
+        panelPlacement = 'auto',
+        scrollPolicy = 'nearest-if-hidden',
+        advanceOnTarget = false,
         progressLabel = '',
         backLabel = 'Back',
         nextLabel = 'Next',
@@ -58,62 +80,117 @@
         showBack = true,
         backDisabled = false,
         showNext = true,
+        showNextArrow = true,
         showSkip = true,
         showClose = true,
-        showBackdrop = false,
         focusOnOpen = true,
         busy = false,
         onback,
         onnext,
         onskip,
         onclose,
+        ontargetactivate,
     }: Props = $props();
 
-    let panel: HTMLElement | null = $state(null);
-    let anchorRect: AnchorRect | null = $state(null);
+    let panel = $state<HTMLElement | null>(null);
+    let panelRect = $state<AnchorRect | null>(null);
+    let anchorRect = $state<AnchorRect | null>(null);
+    let candidateRect: AnchorRect | null = null;
+    let stableFrames = 0;
+    let targetStable = $state(false);
+    let geometryState = $state<'waiting' | 'revalidating' | 'stable'>('waiting');
     let viewportWidth = $state(0);
     let viewportHeight = $state(0);
     let mobile = $state(false);
     let focusedStepId = '';
+    let panelHovered = $state(false);
+    let panelFocused = $state(false);
+    let baseSubdued = $state(false);
+    let panelSubdued = $derived(baseSubdued && !panelHovered && !panelFocused);
 
     const titleId = 'onboarding-coachmark-title';
     const descriptionId = 'onboarding-coachmark-description';
-    let guideState = $derived(error ? 'error' : anchorRect ? 'anchored' : 'waiting');
+    const safeMargin = 16;
+    const targetGap = 16;
+    const cursorPadding = 6;
+    const cursorGlyphTip = 3;
+    let guideState = $derived(error ? 'error' : anchorRect && targetStable ? 'anchored' : 'waiting');
     let highlightStyle = $derived.by(() => {
         const rect = anchorRect;
         return rect ? `left:${Math.max(rect.left - 6, 4)}px;top:${Math.max(rect.top - 6, 4)}px;width:${Math.max(rect.width + 12, 12)}px;height:${Math.max(rect.height + 12, 12)}px;` : '';
     });
-    let pointerStyle = $derived.by(() => {
-        const rect = anchorRect;
-        if (!rect) return '';
-        const left = Math.min(Math.max(rect.right + 6, 8), Math.max(viewportWidth - 34, 8));
-        const top = Math.min(Math.max(rect.top - 14, 8), Math.max(viewportHeight - 34, 8));
-        return `left:${left}px;top:${top}px;`;
-    });
-    let panelStyle = $derived.by(() => {
-        if (mobile) return '';
-        if (!anchorRect || viewportWidth === 0 || viewportHeight === 0) {
-            return 'left:50%;top:50%;width:min(360px,calc(100vw - 2rem));transform:translate(-50%,-50%);';
-        }
-        const panelWidth = Math.min(360, viewportWidth - 32);
-        const estimatedHeight = 220;
-        const left = Math.min(Math.max(anchorRect.left, 16), Math.max(viewportWidth - panelWidth - 16, 16));
-        const below = anchorRect.bottom + 14;
-        const top = below + estimatedHeight <= viewportHeight ? below : Math.max(anchorRect.top - estimatedHeight - 14, 16);
-        return `left:${left}px;top:${top}px;width:${panelWidth}px;`;
-    });
+    let targetCenterX = $derived(anchorRect ? anchorRect.left + anchorRect.width / 2 : 0);
+    let targetCenterY = $derived(anchorRect ? anchorRect.top + anchorRect.height / 2 : 0);
+    let panelGeometry = $derived.by(() => resolvePanelGeometry());
+    let panelStyle = $derived(`left:${panelGeometry.left}px;top:${panelGeometry.top}px;width:${panelGeometry.width}px;`);
+    let pointerStyle = $derived(`left:${targetCenterX - cursorPadding - cursorGlyphTip}px;top:${targetCenterY - cursorPadding - cursorGlyphTip}px;`);
+    let panelMeasureKey = $derived([stepId, panelPlacement, anchorRect?.left ?? '', anchorRect?.top ?? '', anchorRect?.width ?? '', anchorRect?.height ?? '', viewportWidth, viewportHeight, mobile, title, description, actionHint, error ?? ''].join(':'));
 
-    function refreshPosition() {
-        if (!browser) return;
-        viewportWidth = window.innerWidth;
-        viewportHeight = window.innerHeight;
-        mobile = window.matchMedia('(max-width: 640px)').matches;
-        if (!anchor?.isConnected) {
-            anchorRect = null;
-            return;
+    function clamp(value: number, minimum: number, maximum: number): number {
+        return Math.min(Math.max(value, minimum), Math.max(maximum, minimum));
+    }
+
+    function intersectsTarget(candidate: PanelGeometry, target: AnchorRect): boolean {
+        return candidate.left < target.right + targetGap && candidate.left + candidate.width > target.left - targetGap && candidate.top < target.bottom + targetGap && candidate.top + candidate.height > target.top - targetGap;
+    }
+
+    function insideViewport(candidate: PanelGeometry): boolean {
+        return candidate.left >= safeMargin && candidate.top >= safeMargin && candidate.left + candidate.width <= viewportWidth - safeMargin && candidate.top + candidate.height <= viewportHeight - safeMargin;
+    }
+
+    function panelCandidate(placement: Exclude<GuidePanelPlacement, 'auto'>, width: number, height: number, target: AnchorRect): PanelGeometry {
+        const centerX = target.left + target.width / 2;
+        const centerY = target.top + target.height / 2;
+        if (placement === 'left') {
+            return {left: target.left - width - targetGap, top: clamp(centerY - height / 2, safeMargin, viewportHeight - height - safeMargin), width, height, placement};
         }
-        const rect = anchor.getBoundingClientRect();
-        anchorRect = {
+        if (placement === 'right') {
+            return {left: target.right + targetGap, top: clamp(centerY - height / 2, safeMargin, viewportHeight - height - safeMargin), width, height, placement};
+        }
+        if (placement === 'top') {
+            return {left: clamp(centerX - width / 2, safeMargin, viewportWidth - width - safeMargin), top: target.top - height - targetGap, width, height, placement};
+        }
+        if (placement === 'bottom') {
+            return {left: clamp(centerX - width / 2, safeMargin, viewportWidth - width - safeMargin), top: target.bottom + targetGap, width, height, placement};
+        }
+        return {
+            left: (viewportWidth - width) / 2,
+            top: (viewportHeight - height) / 2,
+            width,
+            height,
+            placement,
+        };
+    }
+
+    function resolvePanelGeometry(): PanelGeometry {
+        const width = Math.min(360, Math.max(viewportWidth - safeMargin * 2, 0));
+        const height = Math.min(panelRect?.height ?? 220, Math.max(viewportHeight - safeMargin * 2, 0));
+        const centered: PanelGeometry = {
+            left: Math.max((viewportWidth - width) / 2, safeMargin),
+            top: Math.max((viewportHeight - height) / 2, safeMargin),
+            width,
+            height,
+            placement: 'center',
+        };
+        const target = anchorRect;
+        if (!target || viewportWidth === 0 || viewportHeight === 0) return centered;
+
+        const available: Array<{placement: Exclude<GuidePanelPlacement, 'auto' | 'center'>; space: number}> = [
+            {placement: 'right', space: viewportWidth - target.right},
+            {placement: 'left', space: target.left},
+            {placement: 'bottom', space: viewportHeight - target.bottom},
+            {placement: 'top', space: target.top},
+        ];
+        available.sort((first, second) => second.space - first.space);
+        const automaticOrder = available.map(({placement}) => placement);
+        const requestedOrder = panelPlacement === 'auto' ? automaticOrder : [panelPlacement, ...automaticOrder.filter((placement) => placement !== panelPlacement)];
+        const placements = [...new Set<Exclude<GuidePanelPlacement, 'auto'>>([...requestedOrder, 'center'])];
+        const candidates = placements.map((placement) => panelCandidate(placement, width, height, target));
+        return candidates.find((candidate) => insideViewport(candidate) && !intersectsTarget(candidate, target)) ?? candidates.find(insideViewport) ?? centered;
+    }
+
+    function toAnchorRect(rect: DOMRect): AnchorRect {
+        return {
             left: rect.left,
             top: rect.top,
             right: rect.right,
@@ -123,8 +200,72 @@
         };
     }
 
+    function rectsMatch(first: AnchorRect | null, second: AnchorRect): boolean {
+        if (!first) return false;
+        return Math.abs(first.left - second.left) < 0.5 && Math.abs(first.top - second.top) < 0.5 && Math.abs(first.width - second.width) < 0.5 && Math.abs(first.height - second.height) < 0.5;
+    }
+
+    function guideScrollRoot(element: HTMLElement): HTMLElement | null {
+        const explicit = element.closest<HTMLElement>('[data-guide-scroll-root]');
+        if (explicit) return explicit;
+        let candidate = element.parentElement;
+        while (candidate && candidate !== document.body) {
+            const style = window.getComputedStyle(candidate);
+            if (/(auto|scroll|overlay)/.test(`${style.overflowX} ${style.overflowY}`)) return candidate;
+            candidate = candidate.parentElement;
+        }
+        return null;
+    }
+
+    function refreshPosition(commitTransient = false) {
+        if (!browser) return;
+        viewportWidth = window.innerWidth;
+        viewportHeight = window.innerHeight;
+        mobile = window.matchMedia('(max-width: 640px)').matches;
+        if (!anchor?.isConnected) {
+            anchorRect = null;
+            candidateRect = null;
+            stableFrames = 0;
+            targetStable = false;
+            geometryState = 'waiting';
+            return;
+        }
+        const measured = toAnchorRect(anchor.getBoundingClientRect());
+        if (commitTransient && anchorRect) {
+            anchorRect = measured;
+            candidateRect = measured;
+            stableFrames = 1;
+            targetStable = true;
+            geometryState = 'revalidating';
+            return;
+        }
+        if (rectsMatch(candidateRect, measured)) {
+            stableFrames += 1;
+        } else {
+            candidateRect = measured;
+            stableFrames = 1;
+        }
+        if (stableFrames >= 2) {
+            if (!rectsMatch(anchorRect, measured)) anchorRect = measured;
+            targetStable = true;
+            geometryState = 'stable';
+        } else {
+            if (anchorRect) {
+                targetStable = true;
+                geometryState = 'revalidating';
+            } else {
+                targetStable = false;
+                geometryState = 'waiting';
+            }
+        }
+    }
+
+    function refreshPanelRect() {
+        panelRect = panel?.isConnected ? toAnchorRect(panel.getBoundingClientRect()) : null;
+    }
+
     function closeFromEscape(event: KeyboardEvent) {
-        if (!open || busy || event.key !== 'Escape') return;
+        if (!open || suspended || busy || event.key !== 'Escape') return;
         event.stopPropagation();
         onclose?.();
     }
@@ -132,44 +273,135 @@
     $effect(() => {
         if (!browser || !open) {
             anchorRect = null;
+            panelRect = null;
+            targetStable = false;
+            geometryState = 'waiting';
             return;
         }
-        refreshPosition();
-        const observer = anchor && typeof ResizeObserver !== 'undefined' ? new ResizeObserver(refreshPosition) : null;
+        candidateRect = null;
+        stableFrames = 0;
+        targetStable = false;
+        geometryState = 'waiting';
+        let stabilityFrame: number | null = null;
+        const measureUntilStable = () => {
+            refreshPosition();
+            if (geometryState !== 'stable') {
+                stabilityFrame = requestAnimationFrame(measureUntilStable);
+            } else {
+                stabilityFrame = null;
+            }
+        };
+        const scheduleStableMeasurement = () => {
+            if (anchorRect) {
+                targetStable = true;
+                geometryState = 'revalidating';
+            } else {
+                targetStable = false;
+                geometryState = 'waiting';
+            }
+            stableFrames = 0;
+            if (stabilityFrame == null) stabilityFrame = requestAnimationFrame(measureUntilStable);
+        };
+        const observer = anchor && typeof ResizeObserver !== 'undefined' ? new ResizeObserver(scheduleStableMeasurement) : null;
         if (anchor) observer?.observe(anchor);
-        const motionRoot = anchor?.closest('nav') ?? anchor;
+        const motionRoot = anchor?.closest<HTMLElement>('.modal-content, nav') ?? anchor;
         let motionFrame: number | null = null;
         const followMotion = () => {
-            refreshPosition();
+            refreshPosition(true);
+            refreshPanelRect();
             const animations = typeof motionRoot?.getAnimations === 'function' ? motionRoot.getAnimations({subtree: true}) : [];
             if (animations.some((animation) => animation.playState === 'running')) {
                 motionFrame = requestAnimationFrame(followMotion);
             } else {
                 motionFrame = null;
+                scheduleStableMeasurement();
             }
         };
         const startFollowingMotion = () => {
+            if (anchorRect) {
+                targetStable = true;
+                geometryState = 'revalidating';
+            } else {
+                targetStable = false;
+                geometryState = 'waiting';
+            }
+            stableFrames = 0;
+            if (stabilityFrame != null) cancelAnimationFrame(stabilityFrame);
+            stabilityFrame = null;
             if (motionFrame == null) motionFrame = requestAnimationFrame(followMotion);
         };
         const finishFollowingMotion = () => {
             if (motionFrame != null) cancelAnimationFrame(motionFrame);
             motionFrame = null;
-            refreshPosition();
+            scheduleStableMeasurement();
         };
-        startFollowingMotion();
         motionRoot?.addEventListener('transitionrun', startFollowingMotion);
         motionRoot?.addEventListener('transitionend', finishFollowingMotion);
         motionRoot?.addEventListener('transitioncancel', finishFollowingMotion);
-        window.addEventListener('resize', refreshPosition);
-        window.addEventListener('scroll', refreshPosition, true);
+        window.addEventListener('resize', scheduleStableMeasurement);
+        const scrollRoot = anchor ? guideScrollRoot(anchor) : null;
+        const followScroll = () => {
+            refreshPosition(true);
+            scheduleStableMeasurement();
+        };
+        window.addEventListener('scroll', followScroll);
+        scrollRoot?.addEventListener('scroll', followScroll);
+        const runningAnimations = typeof motionRoot?.getAnimations === 'function' ? motionRoot.getAnimations({subtree: true}) : [];
+        if (runningAnimations.some((animation) => animation.playState === 'running')) {
+            startFollowingMotion();
+        } else {
+            scheduleStableMeasurement();
+        }
         return () => {
             observer?.disconnect();
+            if (stabilityFrame != null) cancelAnimationFrame(stabilityFrame);
             if (motionFrame != null) cancelAnimationFrame(motionFrame);
             motionRoot?.removeEventListener('transitionrun', startFollowingMotion);
             motionRoot?.removeEventListener('transitionend', finishFollowingMotion);
             motionRoot?.removeEventListener('transitioncancel', finishFollowingMotion);
-            window.removeEventListener('resize', refreshPosition);
-            window.removeEventListener('scroll', refreshPosition, true);
+            window.removeEventListener('resize', scheduleStableMeasurement);
+            window.removeEventListener('scroll', followScroll);
+            scrollRoot?.removeEventListener('scroll', followScroll);
+        };
+    });
+
+    $effect(() => {
+        if (!browser || !open || suspended || !anchor || !advanceOnTarget) return;
+        const linkedAnchor = anchor;
+        const activate = () => ontargetactivate?.();
+        linkedAnchor.addEventListener('click', activate, {capture: true});
+        return () => linkedAnchor.removeEventListener('click', activate, {capture: true});
+    });
+
+    $effect(() => {
+        void stepId;
+        void error;
+        void suspended;
+        baseSubdued = false;
+        if (!browser || !open || suspended) return;
+        const timer = window.setTimeout(() => {
+            baseSubdued = true;
+        }, 3_000);
+        return () => window.clearTimeout(timer);
+    });
+
+    $effect(() => {
+        void panelMeasureKey;
+        if (!browser || !open || !panel) {
+            panelRect = null;
+            return;
+        }
+        let secondFrame: number | null = null;
+        const frame = requestAnimationFrame(() => {
+            refreshPanelRect();
+            secondFrame = requestAnimationFrame(refreshPanelRect);
+        });
+        const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(refreshPanelRect) : null;
+        observer?.observe(panel);
+        return () => {
+            cancelAnimationFrame(frame);
+            if (secondFrame != null) cancelAnimationFrame(secondFrame);
+            observer?.disconnect();
         };
     });
 
@@ -178,13 +410,42 @@
         const linkedAnchor = anchor;
         const previousDescription = linkedAnchor.getAttribute('aria-describedby');
         linkedAnchor.setAttribute('aria-describedby', descriptionId);
-        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        linkedAnchor.scrollIntoView({
-            block: 'center',
-            inline: 'nearest',
-            behavior: reduceMotion ? 'auto' : 'smooth',
-        });
+        let scrollFrame: number | null = null;
+        if (targetStable && scrollPolicy === 'nearest-if-hidden') {
+            scrollFrame = requestAnimationFrame(() => {
+                const rect = linkedAnchor.getBoundingClientRect();
+                const scrollRoot = guideScrollRoot(linkedAnchor);
+                const appHeader = scrollRoot ? null : document.querySelector<HTMLElement>('[data-testid="app-header"]');
+                const bounds = scrollRoot?.getBoundingClientRect() ?? {
+                    left: 0,
+                    top: 0,
+                    right: window.innerWidth,
+                    bottom: window.innerHeight,
+                };
+                const safeTop = Math.max(bounds.top, (appHeader?.getBoundingClientRect().bottom ?? 0) + 8);
+                const outsideBounds = rect.right <= bounds.left || rect.left >= bounds.right || rect.bottom <= bounds.top || rect.top >= bounds.bottom;
+                const obscuredByHeader = !scrollRoot && rect.top < safeTop && rect.bottom > bounds.top;
+                if (!scrollRoot && rect.top < safeTop) {
+                    window.scrollBy({
+                        top: rect.top - safeTop,
+                        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+                    });
+                } else if (outsideBounds) {
+                    linkedAnchor.scrollIntoView({
+                        block: 'nearest',
+                        inline: 'nearest',
+                        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+                    });
+                } else if (obscuredByHeader) {
+                    window.scrollBy({
+                        top: rect.top - safeTop,
+                        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+                    });
+                }
+            });
+        }
         return () => {
+            if (scrollFrame != null) cancelAnimationFrame(scrollFrame);
             if (linkedAnchor.getAttribute('aria-describedby') === descriptionId) {
                 if (previousDescription) {
                     linkedAnchor.setAttribute('aria-describedby', previousDescription);
@@ -200,7 +461,7 @@
             focusedStepId = '';
             return;
         }
-        if (!browser || !focusOnOpen || !panel || focusedStepId === stepId) return;
+        if (!browser || suspended || !focusOnOpen || !panel || focusedStepId === stepId) return;
         focusedStepId = stepId;
         const frame = requestAnimationFrame(() => panel?.focus({preventScroll: true}));
         return () => cancelAnimationFrame(frame);
@@ -210,9 +471,27 @@
 <svelte:window onkeydown={closeFromEscape} />
 
 {#if open}
-    <div class="pointer-events-none fixed inset-0" style="z-index: 80;" data-testid="onboarding-coachmark" data-step-id={stepId} data-guide-state={guideState}>
-        {#if presentation === 'spotlight' || showBackdrop}
-            {#if anchorRect}
+    <div
+        class="pointer-events-none fixed inset-0"
+        class:invisible={suspended}
+        style="z-index: 80;"
+        data-testid="onboarding-coachmark"
+        data-step-id={stepId}
+        data-guide-state={guideState}
+        data-geometry-state={geometryState}
+        data-placement={panelGeometry.placement}
+        data-panel-placement={panelGeometry.placement}
+        data-pointer={pointer}
+        data-highlight={highlight}
+        data-target-stable={targetStable ? 'true' : 'false'}
+        data-target-center-x={targetStable ? targetCenterX : ''}
+        data-target-center-y={targetStable ? targetCenterY : ''}
+        data-pointer-hotspot-x={pointer === 'cursor' && targetStable ? targetCenterX : ''}
+        data-pointer-hotspot-y={pointer === 'cursor' && targetStable ? targetCenterY : ''}
+        aria-hidden={suspended}
+    >
+        {#if backdrop}
+            {#if anchorRect && targetStable}
                 <div class="pointer-events-auto fixed left-0 right-0 top-0 bg-black/45" style={`height:${Math.max(anchorRect.top - 8, 0)}px;`} data-testid="onboarding-spotlight-top"></div>
                 <div class="pointer-events-auto fixed bottom-0 left-0 right-0 bg-black/45" style={`top:${Math.min(anchorRect.bottom + 8, viewportHeight)}px;`} data-testid="onboarding-spotlight-bottom"></div>
                 <div class="pointer-events-auto fixed left-0 bg-black/45" style={`top:${Math.max(anchorRect.top - 8, 0)}px;width:${Math.max(anchorRect.left - 8, 0)}px;height:${Math.max(anchorRect.height + 16, 0)}px;`} data-testid="onboarding-spotlight-left"></div>
@@ -222,21 +501,20 @@
             {/if}
         {/if}
 
-        {#if anchorRect && presentation === 'spotlight'}
+        {#if anchorRect && targetStable && highlight === 'pulse'}
             <div class="absolute animate-pulse rounded-xl border-4 border-emerald-400 bg-transparent shadow-[0_0_0_5px_rgba(52,211,153,0.4),0_0_28px_rgba(52,211,153,0.95)] motion-reduce:animate-none" style={highlightStyle} data-testid="onboarding-coachmark-highlight"></div>
         {/if}
 
-        {#if anchorRect}
-            <div class="pointer-events-none fixed z-[82] animate-bounce rounded-full bg-white p-1.5 text-libre-green shadow-lg motion-reduce:animate-none dark:bg-slate-800 dark:text-emerald-300" style={pointerStyle} aria-hidden="true" data-testid="onboarding-coachmark-pointer">
+        {#if pointer === 'cursor' && anchorRect && targetStable}
+            <div class="pointer-events-none fixed z-[82] animate-bounce rounded-full bg-white/70 p-1.5 text-libre-green/80 shadow-lg motion-reduce:animate-none dark:bg-slate-800/70 dark:text-emerald-300/80" style={pointerStyle} aria-hidden="true" data-testid="onboarding-coachmark-pointer">
                 <MousePointer2 size={18} />
             </div>
         {/if}
 
         <div
             bind:this={panel}
-            class="pointer-events-auto fixed left-4 right-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-2xl outline-none dark:border-slate-700 dark:bg-slate-800 sm:left-auto sm:right-auto"
-            class:bottom-sheet={mobile && presentation === 'spotlight'}
-            style={mobile ? (presentation === 'spotlight' ? 'bottom:max(1rem, env(safe-area-inset-bottom));' : 'top:max(1rem, env(safe-area-inset-top));') : panelStyle}
+            class="pointer-events-auto fixed z-[83] rounded-2xl border border-gray-200 p-4 shadow-2xl outline-none transition-colors duration-500 motion-reduce:transition-none dark:border-slate-700 {panelSubdued ? 'bg-white/80 backdrop-blur-sm dark:bg-slate-800/80' : 'bg-white dark:bg-slate-800'}"
+            style={panelStyle}
             role="dialog"
             aria-modal="false"
             aria-labelledby={titleId}
@@ -245,6 +523,15 @@
             aria-busy={busy}
             tabindex="-1"
             data-testid="onboarding-coachmark-panel"
+            data-subdued={panelSubdued ? 'true' : 'false'}
+            onmouseenter={() => (panelHovered = true)}
+            onmouseleave={() => (panelHovered = false)}
+            onfocusin={(event) => {
+                if (event.target !== panel) panelFocused = true;
+            }}
+            onfocusout={(event) => {
+                if (!panel?.contains(event.relatedTarget as Node | null)) panelFocused = false;
+            }}
         >
             <div class="mb-3 flex items-start justify-between gap-3" data-testid="onboarding-coachmark-top-actions">
                 {#if showSkip}
@@ -318,7 +605,7 @@
                                 data-testid="onboarding-coachmark-next"
                             >
                                 {nextLabel}
-                                <ArrowRight size={15} />
+                                {#if showNextArrow}<ArrowRight size={15} />{/if}
                             </button>
                         {/if}
                     </div>

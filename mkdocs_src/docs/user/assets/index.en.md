@@ -27,6 +27,9 @@ Navigate to **Assets** in the sidebar to see all your assets. The list page prov
 - 🏷️ **Type Filters**: Filter the list to display only specific classes (e.g. ETFs, Stocks, Bonds, Crypto).
 - 🗃️ **Archived Assets**: Toggle between active holdings and archived assets to keep your list clean.
 - ⏱️ **Time Delta Selector**: Change the timeframe used to calculate price changes (e.g., `1W`, `1M`, `3M`, `6M`, `1Y`, `2Y`, `3Y`, `5Y`).
+- 📉 **Absolute / Percentage Delta**: In grid view, the toolbar's **Abs / %** control applies to
+  every asset card. The % button on an individual card changes only that card; using the toolbar
+  again clears local overrides and returns every card to the selected global mode.
 - 🔄 **Sync & Refresh**: Sync real-time pricing data for all configured providers or manually refresh the list.
 - 🖱️ **Context Menu**: Right-click any row in the data table layout for quick actions (**Sync**, **Refresh**, **Merge**, **Delete**). Sync is disabled for assets without a pricing provider and for archived assets; Merge folds a duplicate asset into another one — transactions, prices, and events converge on the target and the source asset is deleted.
 

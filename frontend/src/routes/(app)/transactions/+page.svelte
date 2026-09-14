@@ -14,6 +14,7 @@
     import {ensureCurrenciesLoaded} from '$lib/stores/reference/currencyStore';
     import {currentLanguage} from '$lib/stores/app/language';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
+    import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
     import {findPromoteMatch, ensureTypesLoaded, typesVersion} from '$lib/stores/transactions/transactionTypeStore';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import type {FilterValue} from '$lib/components/table/types';
@@ -169,6 +170,7 @@
         await Promise.all([ensureTypesLoaded(), loadBrokers(), ensureCurrenciesLoaded($currentLanguage)]);
         await reload();
         urlInitialized = true;
+        onboardingGuide.maybeStartContextual('transactions_page_guide');
     });
 
     $effect(() => {
@@ -193,13 +195,20 @@
         syncUrl();
     });
 
-    function onAddTransaction() {
-        bulkIntent = {action: 'create'};
+    function openBulk(intent: import('$lib/components/transactions/modals/TransactionBulkModal.svelte').WorkspaceIntent) {
+        if (onboardingGuide.active?.flow === 'transactions_page_guide') {
+            onboardingGuide.dismissHost();
+        }
+        onboardingGuide.queueContextual('transaction_bulk_guide', 'transaction.bulk.workspace');
+        bulkIntent = intent;
         bulkOpen = true;
     }
+
+    function onAddTransaction() {
+        openBulk({action: 'create'});
+    }
     function onImportFromBroker() {
-        bulkIntent = {action: 'import'};
-        bulkOpen = true;
+        openBulk({action: 'import'});
     }
 
     // =========================================================================
@@ -265,13 +274,11 @@
         if (selectedRows.length === 0) return;
         const rows = guardViewerOnly(selectedRows);
         if (!rows) return;
-        bulkIntent = {action: 'edit', txIds: rows.map((r) => r.id)};
-        bulkOpen = true;
+        openBulk({action: 'edit', txIds: rows.map((r) => r.id)});
     }
     function onCloneBulk() {
         if (selectedRows.length === 0) return;
-        bulkIntent = {action: 'clone', txIds: selectedRows.map((r) => r.id)};
-        bulkOpen = true;
+        openBulk({action: 'clone', txIds: selectedRows.map((r) => r.id)});
     }
     function handleFormCommitted() {
         formOpen = false;
@@ -311,8 +318,7 @@
         if (selectedRows.length === 0) return;
         const editableRows = guardViewerOnly(selectedRows);
         if (!editableRows) return;
-        bulkIntent = {action: 'delete', txIds: editableRows.map((r) => r.id)};
-        bulkOpen = true;
+        openBulk({action: 'delete', txIds: editableRows.map((r) => r.id)});
     }
 
     // =========================================================================
@@ -617,13 +623,11 @@
     }
 
     function handleEditRow(row: TXReadItem) {
-        bulkIntent = {action: 'edit', txIds: [row.id]};
-        bulkOpen = true;
+        openBulk({action: 'edit', txIds: [row.id]});
     }
 
     function handleCloneRow(row: TXReadItem) {
-        bulkIntent = {action: 'clone', txIds: [row.id]};
-        bulkOpen = true;
+        openBulk({action: 'clone', txIds: [row.id]});
     }
 
     function handleViewRow(row: TXReadItem) {
@@ -663,8 +667,7 @@
      * the user cannot access — surfaced inline by the row validation.
      */
     function handleDeleteRow(row: TXReadItem) {
-        bulkIntent = {action: 'delete', txIds: [row.id]};
-        bulkOpen = true;
+        openBulk({action: 'delete', txIds: [row.id]});
     }
     function handlePageChange(page: number) {
         filters = {...filters, page};
@@ -692,7 +695,7 @@
 <div class="space-y-6" aria-busy={loading} data-busy={loading ? 'true' : 'false'} data-testid="transactions-page">
     <!-- Header -->
     <div class="flex items-center justify-between flex-wrap gap-4">
-        <div>
+        <div use:guideAnchor={'transactions.page.overview'} data-testid="transactions-page-overview-guide-target">
             <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
                 {$_('transactions.title')}
                 {#if mainRows.length > 0}
@@ -717,7 +720,9 @@
                     }}
                 />
             {/if}
-            <ColumnVisibilityToggle tableRef={transactionsTableComponent?.getTableRef()} />
+            <div use:guideAnchor={'transactions.page.columns'} data-testid="transactions-columns-guide-target">
+                <ColumnVisibilityToggle tableRef={transactionsTableComponent?.getTableRef()} />
+            </div>
             <button
                 class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all disabled:opacity-50"
                 data-testid="tx-refresh-button"
@@ -738,13 +743,13 @@
             <button
                 class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all"
                 data-testid="tx-import-button"
-                use:guideAnchor={'transactions.import'}
+                use:guideAnchor={'transactions.page.import'}
                 onclick={onImportFromBroker}
             >
                 <Upload size={15} />
                 <span class="hidden sm:inline">{$_('common.import')}</span>
             </button>
-            <button class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-all" data-testid="tx-add-button" onclick={onAddTransaction}>
+            <button class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-all" data-testid="tx-add-button" use:guideAnchor={'transactions.page.add'} onclick={onAddTransaction}>
                 <Plus size={15} />
                 <span class="hidden sm:inline">{$_('transactions.addTransaction')}</span>
             </button>

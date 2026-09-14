@@ -42,6 +42,22 @@ class UserSettingsUpdate(BaseModel):
 # ============================================================================
 
 
+class OnboardingStepProgressItem(BaseModel):
+    """Versioned state for one step inside a step-managed onboarding flow."""
+
+    step_id: str
+    status: OnboardingStatus
+    version: int = Field(..., ge=1)
+    current_version: int = Field(..., ge=1)
+    update_available: bool
+    created_at: UTCDateTime
+    updated_at: UTCDateTime
+    completed_at: Optional[UTCDateTime] = None
+    skipped_at: Optional[UTCDateTime] = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class OnboardingProgressItem(BaseModel):
     """Versioned state for one independent onboarding flow."""
 
@@ -54,6 +70,7 @@ class OnboardingProgressItem(BaseModel):
     updated_at: UTCDateTime
     completed_at: Optional[UTCDateTime] = None
     skipped_at: Optional[UTCDateTime] = None
+    steps: Optional[list[OnboardingStepProgressItem]] = None
 
     model_config = ConfigDict(extra="forbid")
 
@@ -81,6 +98,14 @@ class OnboardingTransitionRequest(BaseModel):
 
     expected_version: int = Field(..., ge=1)
     welcome_settings: Optional[OnboardingWelcomeSettings] = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class OnboardingStepTransitionRequest(BaseModel):
+    """Complete or skip one step rendered from a specific content version."""
+
+    expected_version: int = Field(..., ge=1)
 
     model_config = ConfigDict(extra="forbid")
 

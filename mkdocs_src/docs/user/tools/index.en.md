@@ -25,6 +25,10 @@ A usable Tool needs both a compatible backend operation and its matching **tool-
 
 The frontend owns each tool's form and result presentation. The backend owns the calculation and validates its inputs and outputs. A catalogue entry does not download arbitrary interface code or create a generic form automatically.
 
+Every Tool card and opened Tool header shows the compatibility pair as
+`Backend/API <contract_version> · UI <ui.version>`. The implementation version is intentionally
+kept out of these everyday labels; find it only under **Settings → About → Plugin diagnostics**.
+
 ## 📦 Prepare the inputs first
 
 Each operation receives a complete, explicitly prepared set of inputs. Check the required values, units, dates, and other fields described by the individual tool before submitting them.
@@ -85,7 +89,7 @@ The diagnostics contract is available to **every authenticated user with an acti
 
 Diagnostics provide a read-only snapshot of:
 
-- Loaded tool descriptors, versions, schemas, and effective policies.
+- Loaded tool descriptors, including their contract and implementation versions, schemas, and effective policies.
 - Sanitized plugin-discovery failures.
 - Execution-pool availability, active and queued work, pending items, degraded lanes, and terminal-item counters.
 - A runtime identifier and an explicit `api_process` scope.

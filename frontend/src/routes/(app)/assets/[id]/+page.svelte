@@ -92,6 +92,8 @@
     import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
     import type {FxPairCreatedDetail, FxPairSyncCompleteDetail} from '$lib/services/fxCreationSync';
     import {buildTransactionsFiltersUrl} from '../../transactions/filterState';
+    import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
+    import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
 
     const DISABLED_AI_EXPORT_COMPATIBILITY = emptyAiExportCompatibility();
 
@@ -114,7 +116,7 @@
     let activeTab = $state<AssetDetailTabId>('overview');
     let assetDetailTabs = $derived([
         {id: 'overview', label: $t('risk.assetDetail.overviewTab'), testId: 'asset-detail-tab-overview'},
-        {id: 'risk', label: $t('risk.assetDetail.riskScenariosTab'), testId: 'asset-detail-tab-risk'},
+        {id: 'risk', label: $t('risk.assetDetail.riskScenariosTab'), testId: 'asset-detail-tab-risk', guideAnchor: 'asset.detail.risk'},
     ]);
 
     $effect(() => {
@@ -924,10 +926,11 @@
     // Track previous asset id for same-route navigation detection (plain var — not $state)
     let _prevAssetId: number | undefined;
 
-    onMount(() => {
+    onMount(async () => {
         _prevAssetId = data.assetId;
-        reloadPage();
+        await reloadPage();
         void loadAssetAiExportCompatibility();
+        if (assetInfo) onboardingGuide.maybeStartContextual('asset_detail_guide');
     });
 
     // Re-load everything when navigating to a different asset (same route pattern)
@@ -935,7 +938,9 @@
         const newId = data.assetId;
         if (_prevAssetId !== undefined && newId !== _prevAssetId) {
             _prevAssetId = newId;
-            reloadPage();
+            void reloadPage().then(() => {
+                if (assetInfo) onboardingGuide.maybeStartContextual('asset_detail_guide');
+            });
         }
     });
 
@@ -1798,7 +1803,7 @@
     <!-- ======================================================================= -->
     <!-- Header: asset info + back button -->
     <!-- ======================================================================= -->
-    <div class="flex items-center gap-3" data-testid="asset-detail-header">
+    <div class="flex items-center gap-3" data-testid="asset-detail-header" use:guideAnchor={'asset.detail.header'}>
         <button class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-gray-400 transition-colors" data-testid="asset-detail-back-btn" onclick={() => goBack('/assets')} title={$t('assetDetail.backToList')}>
             <ArrowLeft size={20} />
         </button>
@@ -2027,7 +2032,7 @@
         <!-- ======================================================================= -->
         <!-- Chart with left toolbar -->
         <!-- ======================================================================= -->
-        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-4" data-testid="asset-detail-chart" data-view-mode={viewMode}>
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-4" data-testid="asset-detail-chart" data-view-mode={viewMode} use:guideAnchor={'asset.detail.chart'}>
             {#if loading && lineData.length === 0}
                 <div class="h-96 flex items-center justify-center">
                     <div class="text-center">
@@ -2079,6 +2084,7 @@
                         </button>
                         <button
                             data-testid="asset-detail-editdata-btn"
+                            use:guideAnchor={'asset.detail.editor'}
                             class="p-1.5 rounded-lg transition-colors {showDataEditor
                                 ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 ring-1 ring-amber-300 dark:ring-amber-700'
                                 : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
@@ -2370,6 +2376,7 @@
                 <button
                     class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-xl"
                     data-testid="asset-detail-metadata-toggle"
+                    use:guideAnchor={'asset.detail.metadata'}
                     onclick={() => (showMetadata = !showMetadata)}
                 >
                     <span class="flex items-center gap-2">
