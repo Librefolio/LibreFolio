@@ -8,17 +8,24 @@
 > Fonte operativa: [06_piano_sprint.md](06_piano_sprint.md), T0/T1/T2 e SP12–14.
 > La piattaforma C è integrata. Il prototipo separato PAC/Rebalancer Round 4 è
 > preservato nel checkpoint D `d66f8e58e`, ma la review manuale ne ha respinto il
-> contratto analysis-only. È attivo un redesign collaborativo read-only di routing
-> Broker, funding, FX e allocazione discreta; nessun nuovo piano è ancora autorizzato.
+> contratto analysis-only. Il redesign operativo è ora materializzato nel
+> [design end-to-end approvato](../13_pacAllocator/pac-rebalancer-end-to-end-design.md),
+> nel [Round 6 UI approvato](../13_pacAllocator/plan-phase00Step2Round6-PacRebalancerUiBlueprint.prompt.md)
+> e nel [piano implementativo Round 7](../13_pacAllocator/plan-phase00Step2Round7-PacRebalancerOperationalMigration.prompt.md).
+> Il developer ha autorizzato la persistenza del bundle e il checkpoint coordinatore,
+> non ancora l'implementazione Gate P1.
+> La [cronologia](../13_pacAllocator/pac-rebalancer-decision-chronicle.md)
+> conserva approvazioni, rifiuti, audit matematico e detour.
 >
 > **Piano C attivo:** [Piattaforma Tool atomica](../16_toolPlatform/plan-phase00ToolPlatform.prompt.md)
 > — base generica completa; [handoff PAC D](../16_toolPlatform/handoff-pac-D.md)
 > pubblicato, pilot reale aperto.
 
 > **Raccordo decisioni 2026-09-08**: C/D hanno ripreso la progettazione, non il codice.
-> Le scelte successive confermano righe/target asset-broker separati, copia OWNER-only
-> a custodia intera e alternative A/B. Il passo monetario operativo è configurabile
-> e generico; non è una preferenza di visualizzazione.
+> Le scelte successive confermano target globali per Asset canonico, custodie e
+> route Asset×Broker separate, copia OWNER-only a custodia intera e alternative
+> base/residuo. Il passo monetario operativo è configurabile per Broker/valuta e
+> generico; non è una preferenza di visualizzazione.
 
 > **Autorizzazioni successive 2026-09-08, 15:48/15:51**: C può implementare la piattaforma
 > completa nei propri file; D il solo nucleo iniziale P1 e i relativi test backend.
@@ -100,15 +107,18 @@ senza avviare implicitamente una campagna di traduzione. Mount About dopo handof
 - **PAC puro**: patrimonio iniziale zero e target scelto dall'utente.
 - **Ribilanciamento**: patrimonio iniziale valorizzato.
 - **PAC ribilanciante**: patrimonio iniziale più nuovo versamento.
-- Input e target separati per **asset-broker**, anche per lo stesso asset su più broker.
-  Chiave di riga opaca e stabile; identità dello strumento esplicita per vietare buy/sell
-  dello stesso asset anche fra broker diversi. Non raggruppare dai nomi.
-- Liquidità aggregata **per valuta**: EUR dai broker con EUR, USD dai broker con USD, ecc.
-  Nessun vincolo di instradamento per broker; non trasformare tutto in una sola cassa.
+- Target globale per **Asset canonico**; custodie e route restano separate per
+  Asset×Broker. Chiave di riga opaca e stabile; identità dello strumento esplicita
+  per vietare BUY+SELL dello stesso Asset anche fra Broker diversi. Non
+  raggruppare dai nomi.
+- Liquidità distinta per **sorgente/Broker/valuta**. Solo l'importo selezionato
+  entra nel piano; trasferimenti e route operative sono espliciti. Non
+  trasformare tutto in una sola cassa.
 - Liquidità aggiuntiva non ancora nel sistema: **lista valuta/importo**, separata da quella
   copiata dal portafoglio.
-- Quote intere/frazionarie con passo esplicito; inserimento in quantità/valori con unità
-  chiare. Percentuali iniziali richiedono un totale, non bastano da sole.
+- Capability ordini frazionati per Broker/valuta; se ammessi, step monetario
+  esplicito. Quantità titoli o importo cash sono output backend, non modalità
+  utente. Percentuali iniziali richiedono un totale, non bastano da sole.
 - **Vendite opzionali**, con minimo/massimo per titolo; distinguere minimo obbligatorio da
   minimo applicato soltanto se si vende. Nessuno short/leva implicito.
 - **Conversioni FX opzionali** fra casse, con tassi, costi/margini, importi debitati/accreditati
@@ -198,16 +208,28 @@ dal modello numerico e dagli adapter di copia autorizzati.
 | ID | Esito e taglia | Sprint |
 |---|---|---|
 | T0 | ✅ Piattaforma Tool custom-first integrata (`570beb386`). | SP12 |
-| T1 — specifica/evaluator | 🟡 Nucleo Decimal e prototipo Round 4 preservati; il contratto prodotto è respinto e va ridisegnato prima di nuove modifiche. | SP13 |
-| T2 — snapshot | 🟡 Copie Asset/prezzi/custodie/cassa OWNER preservate; il nuovo modello operativo Broker/funding è ancora in discussione. | SP13 |
-| T1 — solver | Aperto: allocazione discreta buy/sell/FX, routing e stati di soluzione non sono implementati; obiettivi e policy non sono ancora congelati. | SP14 |
-| T2 — editor/report | 🟡 Le UI PAC/Rebalancer separate sono preservate come prototipo, ma la review prodotto è respinta; flussi e output Broker-facing devono essere riapprovati prima del piano. | SP14 |
+| T1 — specifica/evaluator | 🟡 Round 7 pronto, implementazione Gate P1 congelata: contratto operativo, ledger Decimal e clean break P1 definiti. | SP13 |
+| T2 — snapshot | 🟡 Round 7 pronto: funding/Broker separati, copy da API dominio, parametri operativi per-run; nessuna migration planner v1. | SP13 |
+| T1 — solver | 🟡 Round 7 pronto, non implementato: PAC proportional/min-fragmentation, Rebalancer invest-only/invest-and-sell, oracle, proof/status e gate capacità. | SP14 |
+| T2 — editor/report | 🟡 Round 6 UI approvato; Round 7 descrive migrazione e componenti shared. Nessuna UI operativa implementata. | SP14 |
 
 > **Aggiornamento 2026-09-14:** Round 4 ha completato implementazione e gate
 > automatici, ma la review ha confermato che il risultato teorico non soddisfa
 > l'obiettivo operativo. Il nuovo contratto deve produrre funding, conversioni e
 > azioni per Broker più una soluzione discreta eseguibile. Le decisioni vengono
 > raccolte una alla volta; questo aggiornamento non approva un'implementazione.
+>
+> **Aggiornamento 2026-09-15:** il developer ha approvato il design end-to-end,
+> la UI Round 6 e la persistenza del piano Round 7, ma non ancora l'avvio
+> implementativo Gate P1. Ultime correzioni: valuta di riferimento visibile e
+> pre-popolata; `order_instruction_kind = whole_quantity | monetary_amount`
+> per Broker/valuta; nessun booleano frazioni o `quantity_step`; aliquota
+> plusvalenze Asset prefill 26%; fee SELL e riserva fiscale prima del riuso dei
+> proventi; parametri Broker per-run, persistenza DB differita. Nessun blocker
+> prodotto aperto, ma implementazione ancora FROZEN. La review matematica finale
+> ha inoltre congelato cash order BUY/SELL, budget PAC candidato-dipendente,
+> denominatore investito comune, target Asset-level, bound derivati e confine
+> `no_op`/`infeasible_proven`.
 
 DoD, esempi numerici, superfici file:riga, rischi e oracoli indipendenti sono nel
 [piano sprint](06_piano_sprint.md). Nessun server MCP o cambiamento dei motori FIFO/WAC

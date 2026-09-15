@@ -1,8 +1,20 @@
 # Solver operativo PAC + Ribilanciamento
 
-**Stato:** DIFFERITO — parte solo dopo accettazione Round 4 P1
+**Stato:** SUPERATO / RE-SCOPED PRIMA DELL'IMPLEMENTAZIONE — Round 5 è storico;
+il perimetro attivo è Round 7
 
 ← Previous: [Round 4 — PAC + Ribilanciamento P1 multi-servizio](plan-phase00Step2Round4-PacAndRebalancerUiAcceptance.prompt.md)
+
+→ Replacement:
+[Round 5 — PAC/Rebalancer operational planner](plan-phase00Step2Round5-PacRebalancerOperationalPlanner.prompt.md)
+
+→ Current implementation plan:
+[Round 7 — PAC/Rebalancer operational migration](plan-phase00Step2Round7-PacRebalancerOperationalMigration.prompt.md)
+
+> Questo file conserva il primo abbozzo solver. `quantity_step`, assenza di
+> routing Broker, vecchi status e obiettivi non sono più contratto attivo.
+> Round 7 sostituisce integralmente lo scope eseguibile; nessuna implementazione
+> di questo piano storico è richiesta.
 
 ## 1. Obiettivo
 
@@ -84,3 +96,9 @@ Ribilanciamento:
 - Tabelle buy/sell/cash/FX complete.
 - Spiegazioni backend.
 - Nessun calcolo economico frontend.
+
+→ Follow-up:
+[Round 5 — PAC/Rebalancer operational planner](plan-phase00Step2Round5-PacRebalancerOperationalPlanner.prompt.md)
+
+→ Current implementation plan:
+[Round 7 — PAC/Rebalancer operational migration](plan-phase00Step2Round7-PacRebalancerOperationalMigration.prompt.md)

@@ -1,4 +1,11 @@
-# Contratto PAC P1-r3 - analisi della situazione iniziale
+# Contratto PAC P1-r3 — storico del prototipo respinto
+
+> **Autorità:** documento storico. Il contratto `analyze` non è il prodotto
+> attivo e sarà rimosso con clean break. Design corrente:
+> [PAC/Rebalancer end-to-end design](pac-rebalancer-end-to-end-design.md);
+> UI approvata [Round 6](plan-phase00Step2Round6-PacRebalancerUiBlueprint.prompt.md);
+> piano pending:
+> [Round 7](plan-phase00Step2Round7-PacRebalancerOperationalMigration.prompt.md).
 
 **Stato:** N1/C1/X1 approvati; implementazione D integrata con runtime a
 `d018e8a677289b9bc38e65b437a86e1f2684caa7`. Verifica combinata: 816 test schema,
