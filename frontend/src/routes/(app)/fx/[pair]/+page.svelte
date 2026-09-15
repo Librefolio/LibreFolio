@@ -75,6 +75,8 @@
     import {buildAiExportMenuLabels, getAiExportErrorMessage, getAiExportSuccessMessages} from '$lib/features/ai-export/ui';
     import {signalCatalogStore} from '$lib/stores/signalCatalogStore.svelte';
     import {clientSessionUserId, getClientSessionGeneration, getClientSessionUserId, isClientSessionCurrent} from '$lib/stores/app/clientSession';
+    import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
+    import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
     import {subscribeFxCreationSyncCompleted} from '$lib/services/fxCreationSync';
 
     const DISABLED_AI_EXPORT_COMPATIBILITY = emptyAiExportCompatibility();
@@ -578,16 +580,23 @@
 
     onMount(() => {
         pageMounted = true;
+        const initializeAndStartGuide = async () => {
+            await initializePage();
+            if (pageMounted) onboardingGuide.maybeStartContextual('fx_detail_guide');
+        };
         let initialSession = true;
         const unsubscribeSession = clientSessionUserId.subscribe(() => {
             connectCreationCompletion();
             if (!initialSession && getClientSessionUserId() !== null) {
-                if (signalDefinitionsReady) void loadChartData();
-                else void initializePage();
+                if (signalDefinitionsReady) {
+                    void loadChartData().then(() => {
+                        if (pageMounted) onboardingGuide.maybeStartContextual('fx_detail_guide');
+                    });
+                } else void initializeAndStartGuide();
             }
             initialSession = false;
         });
-        if (getClientSessionUserId() !== null) void initializePage();
+        if (getClientSessionUserId() !== null) void initializeAndStartGuide();
         return () => {
             pageMounted = false;
             chartLoadVersion += 1;
@@ -1010,7 +1019,7 @@
     <!-- ======================================================================= -->
     <!-- Header: pair info + back button -->
     <!-- ======================================================================= -->
-    <div class="flex items-center gap-3" data-testid="fx-detail-header">
+    <div class="flex items-center gap-3" data-testid="fx-detail-header" use:guideAnchor={'fx.detail.header'}>
         <button class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-gray-400 transition-colors" data-testid="fx-detail-back-btn" onclick={() => goBack('/fx')} title={$t('fxDetail.backToList')}>
             <ArrowLeft size={20} />
         </button>
@@ -1082,6 +1091,7 @@
             <button
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                 data-testid="fx-detail-provider-btn"
+                use:guideAnchor={'fx.detail.provider'}
                 onclick={() => (showProviderModal = true)}
             >
                 <Wrench size={14} />
@@ -1153,7 +1163,7 @@
     <!-- ======================================================================= -->
     <!-- Chart with left toolbar -->
     <!-- ======================================================================= -->
-    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-4" data-testid="fx-detail-chart" data-view-mode={viewMode}>
+    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-4" data-testid="fx-detail-chart" data-view-mode={viewMode} use:guideAnchor={'fx.detail.chart'}>
         {#if loading && lineData.length === 0}
             <div class="h-96 flex items-center justify-center">
                 <div class="text-center">
@@ -1204,6 +1214,7 @@
                     </button>
                     <button
                         data-testid="fx-detail-edit-btn"
+                        use:guideAnchor={'fx.detail.editor'}
                         class="p-1.5 rounded-lg transition-colors {showDataEditor
                             ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 ring-1 ring-amber-300 dark:ring-amber-700'
                             : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"

@@ -29,7 +29,7 @@
     import {loadAssetEditData, type AssetEditData} from '$lib/components/assets/assetEditData';
     import IdentifierPrimaryChooser from '$lib/components/assets/IdentifierPrimaryChooser.svelte';
     import {pendingIdentifier, needsPrimaryChoice, mergeOther, demotedValues} from '$lib/utils/assetIdentifiers';
-    import {electPrimary, groupExtractedAssets, groupSignature, orderedIdentifiers, representativeMap, representativeOf, type AssetGroup, type ExtractedAsset, type GroupOverride, type IdentifierKind, type PrimaryMap, type SimilarityLink} from '$lib/utils/assetGrouping';
+    import {clusterSignature, electPrimary, groupExtractedAssets, groupSignature, memberKey, orderedIdentifiers, representativeMap, representativeOf, type AssetGroup, type ExtractedAsset, type GroupOverride, type IdentifierKind, type PrimaryMap, type SimilarityLink} from '$lib/utils/assetGrouping';
     import AssetSelect from '$lib/components/ui/select/AssetSelect.svelte';
     import {getTransactionTypeIconUrl, getTypeRule, ensureTypesLoaded, TX_TYPES} from '$lib/stores/transactions/transactionTypeStore';
 
@@ -75,6 +75,8 @@
     import {createNamesFor, createOtherFor, duplicateCandidates, resolutionLabel as resolutionLabelPure} from '$lib/utils/transactions/importResolutionHelpers';
     import {brokerIdForTx, beforeOpeningInfo, isBeforeOpening as isBeforeOpeningPure, isRowAssetResolved as isRowAssetResolvedPure, shouldAutoSelectOnRecheck} from '$lib/utils/transactions/importRowState';
     import {groupPartitions as groupPartitionsPure, defaultKeeperIndices as defaultKeeperIndicesPure, resolverSelectionFor as resolverSelectionForPure, outlierIndexSet} from '$lib/utils/transactions/importDuplicateResolver';
+    import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
+    import {onboardingGuide, type ImportGuideStepId} from '$lib/features/onboarding/onboardingGuide.svelte';
 
     import type {TransactionCreateItem, BrimFile, BrimParseResponse, FilePreviewResponse} from '$lib/types';
 
@@ -94,7 +96,7 @@
          *  to-be-deleted rows is no longer flagged as a duplicate. */
         pendingDeleteTxIds?: number[];
         onClose: () => void;
-        onImportBatch: (creates: Array<{tx: TransactionCreateItem; todos: ImportTodo[]}>) => void;
+        onImportBatch: (creates: Array<{tx: TransactionCreateItem; todos: ImportTodo[]}>, guideProgress?: {current: number; total: number}) => void;
     }
 
     let {open, zIndex = 70, defaultBrokerId = null, pendingCreateTransactions = [], pendingDeleteTxIds = [], onClose, onImportBatch}: Props = $props();
@@ -140,6 +142,44 @@
     // =========================================================================
 
     let currentStepId = $state<StepId>('upload');
+    let guideObservedOpen = false;
+    let guideHandedOff = false;
+
+    function importGuideStep(id: StepId): ImportGuideStepId {
+        return `import.${id}` as ImportGuideStepId;
+    }
+
+    $effect(() => {
+        const isOpen = open;
+        const step = currentStepId;
+        const stepIndex = visibleSteps.findIndex((candidate) => candidate.id === step);
+        const progress = {
+            current: Math.max(stepIndex + 1, 1),
+            total: visibleSteps.length,
+        };
+        if (isOpen) {
+            if (!guideObservedOpen) {
+                guideObservedOpen = true;
+                guideHandedOff = false;
+                if (onboardingGuide.active?.flow === 'transaction_bulk_guide') {
+                    onboardingGuide.queueContextual('transaction_bulk_guide', onboardingGuide.active.stepId);
+                    onboardingGuide.dismissHost();
+                }
+            }
+            if (guideHandedOff) return;
+            if (onboardingGuide.active?.flow === 'import_guide' && onboardingGuide.active.stepId === importGuideStep(step)) {
+                onboardingGuide.setStep(importGuideStep(step), progress);
+            } else if (!onboardingGuide.active) {
+                onboardingGuide.startImportAt(importGuideStep(step), progress);
+            }
+            return;
+        }
+        if (guideObservedOpen && !guideHandedOff && onboardingGuide.active?.flow === 'import_guide') {
+            onboardingGuide.dismissHost({restartAtFirst: true});
+        }
+        guideObservedOpen = false;
+        guideHandedOff = false;
+    });
 
     // =========================================================================
     // Step 1 State — Upload & Assign Broker
@@ -1231,7 +1271,14 @@
                 }
             }
             if (step4HasUnresolvedSelected || step4SelectedCount === 0) return;
-            onImportBatch(buildFinalTxList());
+            const bulkProgress = {
+                current: visibleSteps.length + 1,
+                total: visibleSteps.length + 1,
+            };
+            onImportBatch(buildFinalTxList(), bulkProgress);
+            if (onboardingGuide.active?.flow === 'import_guide') {
+                guideHandedOff = true;
+            }
         } finally {
             importPreparing = false;
         }
@@ -2389,6 +2436,13 @@ ${arrow}<span>${label}</span></span>`,
     /** Accept a proposal as it stands — no reshaping, so the automatic partition still applies. */
     function confirmGroupProposal(signature: string) {
         assetGroupConfirmed = new Set([...assetGroupConfirmed, signature]);
+        mergeAllTransactions();
+    }
+
+    function confirmAllGroupProposals() {
+        const signatures = assetGroups.filter((group) => group.state === 'proposed').map((group) => clusterSignature(group.members.map(memberKey)));
+        if (signatures.length === 0) return;
+        assetGroupConfirmed = new Set([...assetGroupConfirmed, ...signatures]);
         mergeAllTransactions();
     }
 
@@ -3685,7 +3739,7 @@ ${arrow}<span>${label}</span></span>`,
     <!-- ================================================================== -->
     <!-- Content -->
     <!-- ================================================================== -->
-    <div class="p-5 space-y-4 max-h-[65vh] overflow-y-auto" data-testid="import-wizard-content" aria-busy={candidatesRefreshing || duplicateRecheckRunning || importPreparing} data-busy={candidatesRefreshing || duplicateRecheckRunning || importPreparing}>
+    <div class="p-5 space-y-4 max-h-[65vh] overflow-y-auto" data-testid="import-wizard-content" data-guide-scroll-root aria-busy={candidatesRefreshing || duplicateRecheckRunning || importPreparing} data-busy={candidatesRefreshing || duplicateRecheckRunning || importPreparing}>
         {#if candidatesError}
             <div role="alert" class="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300" data-testid="import-wizard-candidates-error">
                 <p>{candidatesError}</p>
@@ -4045,6 +4099,7 @@ ${arrow}<span>${label}</span></span>`,
                     touched={assetGroupingTouched}
                     onpartition={applyGroupPartition}
                     onconfirm={confirmGroupProposal}
+                    onconfirmall={confirmAllGroupProposals}
                     onprimary={electGroupPrimary}
                     onreset={resetGrouping}
                     oninspect={openAssetInspector}
@@ -4522,7 +4577,14 @@ ${arrow}<span>${label}</span></span>`,
                         {$t('common.clear') || 'Clear'}
                     </button>
                 {/if}
-                <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed" onclick={goNext} disabled={!step1CanProceed || uploading} data-testid="import-wizard-next">
+                <button
+                    type="button"
+                    class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                    onclick={goNext}
+                    disabled={!step1CanProceed || uploading}
+                    data-testid="import-wizard-next"
+                    use:guideAnchor={'import.action.upload'}
+                >
                     {#if uploading}
                         <LoadingSpinner size="sm" />
                     {:else if step1ValidCount > 0}
@@ -4549,7 +4611,7 @@ ${arrow}<span>${label}</span></span>`,
                     </span>
                 {/if}
             </div>
-            <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed" onclick={goNext} disabled={!step2CanParse} data-testid="import-wizard-parse">
+            <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed" onclick={goNext} disabled={!step2CanParse} data-testid="import-wizard-parse" use:guideAnchor={'import.action.select'}>
                 {$t('importWizard.parse', {values: {n: selectedFiles.length}})} ▶
             </button>
         {:else if currentStepId === 'analyze'}
@@ -4590,6 +4652,7 @@ ${arrow}<span>${label}</span></span>`,
                 onclick={goNext}
                 disabled={!step3CanContinue || candidatesRefreshing || duplicateRecheckRunning}
                 data-testid="import-wizard-continue"
+                use:guideAnchor={'import.action.analyze'}
             >
                 {$t('common.continue')} ▶
             </button>
@@ -4615,7 +4678,14 @@ ${arrow}<span>${label}</span></span>`,
                     </span>
                 {/if}
             </div>
-            <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50" onclick={goNext} disabled={candidatesRefreshing || duplicateRecheckRunning} data-testid="import-wizard-assets-continue">
+            <button
+                type="button"
+                class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50"
+                onclick={goNext}
+                disabled={assetGroupOpenProposals > 0 || candidatesRefreshing || duplicateRecheckRunning}
+                data-testid="import-wizard-assets-continue"
+                use:guideAnchor={'import.action.assets'}
+            >
                 {$t('common.continue')} ▶
             </button>
         {:else if currentStepId === 'fix'}
@@ -4641,6 +4711,7 @@ ${arrow}<span>${label}</span></span>`,
                 onclick={goNext}
                 disabled={fixStepPendingCount > 0 || duplicateRecheckRunning || candidatesRefreshing}
                 data-testid="import-wizard-fix-continue"
+                use:guideAnchor={'import.action.fix'}
             >
                 {#if duplicateRecheckRunning}
                     <LoadingSpinner size="sm" />
@@ -4665,7 +4736,14 @@ ${arrow}<span>${label}</span></span>`,
                     </span>
                 {/if}
             </div>
-            <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50" onclick={goNext} disabled={candidatesRefreshing || duplicateRecheckRunning} data-testid="import-wizard-duplicates-continue">
+            <button
+                type="button"
+                class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50"
+                onclick={goNext}
+                disabled={candidatesRefreshing || duplicateRecheckRunning}
+                data-testid="import-wizard-duplicates-continue"
+                use:guideAnchor={'import.action.duplicates'}
+            >
                 {$t('common.continue')} ▶
             </button>
         {:else}
@@ -4689,7 +4767,7 @@ ${arrow}<span>${label}</span></span>`,
                     </span>
                 {/if}
             </div>
-            <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed" onclick={handleImport} disabled={!step4CanImport} data-testid="import-wizard-import">
+            <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed" onclick={handleImport} disabled={!step4CanImport} data-testid="import-wizard-import" use:guideAnchor={'import.action.review'}>
                 {$t('importWizard.importToEditor', {values: {n: step4SelectedCount}})} ▶
             </button>
         {/if}

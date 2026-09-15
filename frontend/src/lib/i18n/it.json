@@ -703,7 +703,8 @@
       "fromDbHint": "Questo titolo è già in archivio: il nome è quello salvato. Usa la matita in alto per modificarlo.",
       "linkAll": "{reason} · tutte le {n} estrazioni",
       "linkSome": "{reason} · {members}",
-      "linkScore": "somiglianza {score}%"
+      "linkScore": "somiglianza {score}%",
+      "confirmAll": "Conferma tutte ({count})"
     },
     "assetPicker": {
       "sectionImport": "In questo import",
@@ -3648,5 +3649,453 @@
       "uncustodied": "Senza custodia"
     },
     "uiVersion": "UI"
+  },
+  "onboarding": {
+    "welcome": {
+      "title": "Benvenuto in LibreFolio",
+      "description": "Configura gli elementi essenziali prima di iniziare a monitorare il tuo portafoglio.",
+      "defaultsHint": "Lingua e valuta iniziano dai valori predefiniti dell'amministratore. Puoi modificarli ora o in seguito.",
+      "avatarLabel": "Immagine del profilo",
+      "avatarHint": "Facoltativa. Se non selezioni un'immagine, vengono usate le tue iniziali.",
+      "chooseAvatar": "Scegli immagine",
+      "removeAvatar": "Rimuovi immagine",
+      "avatarAlt": "Anteprima dell'immagine del profilo",
+      "themeHint": "La preferenza del tema attuale resta invariata.",
+      "skip": "Salta definitivamente la configurazione",
+      "skipHint": "Non verrà mostrata di nuovo automaticamente. Puoi ripeterla dalle Impostazioni.",
+      "completed": "Configurazione salvata. Puoi continuare in LibreFolio.",
+      "skipped": "Configurazione saltata. Puoi ripeterla più tardi dalle Impostazioni.",
+      "logout": "Disconnettiti"
+    },
+    "errors": {
+      "loadTitle": "Non siamo riusciti a caricare l'onboarding",
+      "loadDescription": "Riprova la configurazione o esci in sicurezza.",
+      "degraded": "Non è stato possibile aggiornare lo stato dell'onboarding. La configurazione completata resta attiva.",
+      "replayStart": "Impossibile avviare la guida. Riprova.",
+      "progressUnavailable": "L'avanzamento dell'onboarding non è disponibile. Ricarica e riprova.",
+      "complete": "Impossibile completare la guida. Riprova.",
+      "skip": "Impossibile saltare la guida. Riprova."
+    },
+    "actions": {
+      "finish": "Termina guida",
+      "skipPermanently": "Salta definitivamente",
+      "pause": "Metti in pausa",
+      "close": "Chiudi guida",
+      "back": "Indietro",
+      "next": "Avanti",
+      "exitTour": "Esci dal tour",
+      "skipCurrentTour": "Salta questo tour",
+      "gotIt": "Capito"
+    },
+    "guide": {
+      "waiting": "In attesa che quest'area sia disponibile…",
+      "useWizardAction": "Continua con il pulsante indicato.",
+      "exploreThenContinue": "Esplora il controllo indicato, poi continua."
+    },
+    "tour": {
+      "progress": "Passaggio {current} di {total}",
+      "steps": {
+        "transactionsImport": {
+          "title": "Inizia con un'importazione",
+          "description": "Apri lo strumento di importazione delle transazioni per trasformare i report dei broker in bozze. Nulla viene salvato automaticamente."
+        },
+        "brokers": {
+          "title": "Broker e accessi",
+          "description": "I broker rappresentano i conti e controllano proprietà, modifica e condivisione."
+        },
+        "assets": {
+          "title": "Il tuo catalogo di asset",
+          "description": "Gli asset contengono identificatori, valute, provider, prezzi ed eventi."
+        },
+        "dashboard": {
+          "title": "Il tuo portafoglio a colpo d’occhio",
+          "description": "La Dashboard è la pagina iniziale per valore, performance, allocazione e qualità dei dati del portafoglio."
+        },
+        "tools": {
+          "title": "Strumenti di analisi",
+          "description": "Gli strumenti offrono analisi guidate, come la pianificazione PAC, senza eseguire ordini."
+        },
+        "settings": {
+          "title": "Ripeti quando serve",
+          "description": "Dalle Impostazioni puoi ripetere questo tour, la configurazione iniziale o la guida all'importazione."
+        },
+        "navigation": {
+          "title": "Orientati nell'app",
+          "description": "Usa questo controllo per comprimere o espandere la barra laterale su desktop oppure aprire il menu di navigazione sugli schermi più piccoli."
+        },
+        "transactionsNav": {
+          "title": "Inizia dalle transazioni",
+          "description": "Transazioni contiene gli inserimenti manuali e la cronologia del portafoglio. Importa ha una guida contestuale dedicata."
+        },
+        "brokersAdd": {
+          "title": "Aggiungi un broker",
+          "description": "I broker rappresentano i conti che contengono le transazioni e definiscono proprietà e condivisione."
+        },
+        "brokersCurrency": {
+          "title": "Imposta la valuta del broker",
+          "description": "Scegli la valuta di ogni saldo iniziale. Questa anteprima non salva mai un broker."
+        },
+        "fxAdd": {
+          "title": "Aggiungi una coppia FX",
+          "description": "Le coppie FX consentono a LibreFolio di convertire i valori del portafoglio tra valute."
+        },
+        "fxPair": {
+          "title": "Scegli valuta base e quotata",
+          "description": "Definisci la coppia di valute necessaria. Questa anteprima non salva mai una coppia FX."
+        },
+        "assetsAdd": {
+          "title": "Aggiungi un asset",
+          "description": "Gli asset collegano le transazioni a strumenti, valute, prezzi e dati di mercato."
+        },
+        "assetsConfig": {
+          "title": "Configura l'asset",
+          "description": "Scegli la valuta di quotazione e il provider dati. Questa anteprima non salva mai un asset."
+        },
+        "brokersNav": {
+          "title": "Broker",
+          "description": "Apri Broker per configurare i tuoi conti. Una breve guida si avvia quando scegli Aggiungi broker."
+        },
+        "fxNav": {
+          "title": "Tassi di cambio",
+          "description": "Apri Tassi di cambio per configurare le coppie di valute e i relativi provider di dati."
+        },
+        "assetsNav": {
+          "title": "Asset",
+          "description": "Apri Asset per definire gli strumenti, le valute e i dati di mercato usati dal portafoglio."
+        },
+        "toolsNav": {
+          "title": "Strumenti",
+          "description": "Strumenti raccoglie programmi e calcolatori utili per esplorare scenari e prendere decisioni finanziarie più consapevoli."
+        },
+        "settingsNav": {
+          "title": "Impostazioni",
+          "description": "Le Impostazioni contengono le preferenze e permettono di ripetere qualsiasi guida quando serve."
+        }
+      }
+    },
+    "flows": {
+      "welcome": "Configurazione iniziale",
+      "intro_tour": "Tour rapido",
+      "import_guide": "Guida all'importazione",
+      "broker_guide": "Guida broker",
+      "fx_guide": "Guida FX",
+      "asset_guide": "Guida asset",
+      "transactions_page_guide": "Panoramica transazioni",
+      "transaction_create_guide": "Guida Aggiungi transazione",
+      "transaction_bulk_guide": "Panoramica workspace bulk",
+      "broker_page_guide": "Panoramica broker",
+      "broker_detail_guide": "Guida dettaglio broker",
+      "fx_page_guide": "Panoramica FX",
+      "fx_detail_guide": "Guida dettaglio coppia FX",
+      "asset_page_guide": "Panoramica asset",
+      "asset_detail_guide": "Guida dettaglio asset"
+    },
+    "status": {
+      "pending": "In sospeso",
+      "completed": "Completato",
+      "skipped": "Saltato"
+    },
+    "settings": {
+      "category": "Primo utilizzo",
+      "title": "Primo utilizzo e guide",
+      "description": "Ripeti la configurazione e le guide contestuali senza modificare i dati salvati.",
+      "replayAll": "Ripeti tutto",
+      "updateAvailable": "Nuova versione da vedere",
+      "nextImport": "Pronta per la prossima importazione",
+      "replayReady": "Ripetizione pronta",
+      "version": "Vista v{seen} · corrente v{current}",
+      "replayOnNextImport": "Ripeti alla prossima importazione",
+      "replay": "Ripeti",
+      "groups": {
+        "setup": "Configurazione",
+        "core": "Tour principale",
+        "contextual": "Guide contestuali",
+        "transactions": "Transazioni",
+        "broker": "Broker",
+        "fx": "FX",
+        "asset": "Asset"
+      },
+      "armedToast": "{flow}: avvio pronto. Apri la funzionalità per iniziare.",
+      "cancelArmed": "Annulla attivazione",
+      "groupProgress": "{completed}/{total} guide completate",
+      "armedAtNextTrigger": "Avvio pronto al prossimo ingresso: {flow}.",
+      "replayNextTrigger": "Ripeti al prossimo ingresso"
+    },
+    "importGuide": {
+      "steps": {
+        "upload": {
+          "title": "Carica report",
+          "description": "Aggiungi uno o più report e assegna ciascun report a un broker."
+        },
+        "select": {
+          "title": "Scegli file e parser",
+          "description": "Seleziona uno o più report salvati. Per ciascun file scegli il plugin di analisi adatto; quando tutte le selezioni sono complete, usa il pulsante a destra per continuare. In base al plugin e ai dati estratti potranno comparire passaggi opzionali per unificare asset, correggere righe o gestire duplicati."
+        },
+        "analyze": {
+          "title": "Analizza i dati estratti",
+          "description": "Esegui i parser e verifica record estratti, avvisi e risultati della validazione."
+        },
+        "assets": {
+          "title": "Unifica le identità degli asset",
+          "description": "Abbina i record estratti che potrebbero riferirsi allo stesso asset."
+        },
+        "fix": {
+          "title": "Risolvi le righe segnalate",
+          "description": "Correggi o mantieni esplicitamente le righe che il parser non ha risolto."
+        },
+        "duplicates": {
+          "title": "Scegli tra i duplicati",
+          "description": "Decidi quali righe importate sovrapposte mantenere."
+        },
+        "review": {
+          "title": "Rivedi l'importazione",
+          "description": "Seleziona le righe idonee e risolvi gli asset richiesti prima di aprire l’editor bulk."
+        },
+        "bulk": {
+          "title": "Salva tutto scrive le transazioni",
+          "description": "Rivedi e modifica le bozze delle transazioni, poi scegli Salva tutto quando sono pronte."
+        }
+      }
+    },
+    "intro": {
+      "title": "Benvenuto in LibreFolio",
+      "line1": "Benvenuto.",
+      "line2": "È bello averti con noi.",
+      "line3": "Ecco un tour rapido per aiutarti a iniziare.",
+      "start": "Inizia tour",
+      "progress": "Avanzamento introduzione"
+    },
+    "brokerGuide": {
+      "steps": {
+        "overview": {
+          "title": "Crea un broker",
+          "description": "Questo modulo definisce il conto che conterrà transazioni e importazioni."
+        },
+        "plugin": {
+          "title": "Scegli il plugin di importazione predefinito",
+          "description": "Il plugin predefinito viene preselezionato quando importi report da questo broker."
+        },
+        "icon": {
+          "title": "Aggiungi un’icona personalizzata",
+          "description": "Scegli un’immagine per questo broker oppure mantieni l’icona automatica derivata dal plugin o dal sito web."
+        }
+      }
+    },
+    "fxGuide": {
+      "steps": {
+        "currencies": {
+          "title": "Scegli la coppia di valute",
+          "description": "Seleziona le valute base e quotata tra cui LibreFolio deve effettuare la conversione."
+        },
+        "providers": {
+          "title": "Configura i provider dei tassi",
+          "description": "Scegli una rotta provider diretta o concatenata, oppure mantieni manuale la coppia quando nessuna fonte automatica è adatta."
+        }
+      }
+    },
+    "assetGuide": {
+      "steps": {
+        "search": {
+          "title": "Cerca prima di inserire i dati",
+          "description": "Cerca online per precompilare identificativi e metadati noti oppure inserisci l’asset manualmente."
+        },
+        "identity": {
+          "title": "Definisci l’asset",
+          "description": "Verifica nome, tipo, quantità base di quotazione e valuta."
+        },
+        "provider": {
+          "title": "Configura il provider di dati",
+          "description": "Seleziona provider, identificativo e parametri oppure mantieni esplicitamente l’asset senza provider."
+        }
+      }
+    },
+    "transactionsPageGuide": {
+      "steps": {
+        "overview": {
+          "title": "Gestisci tutte le transazioni",
+          "description": "Questa pagina riunisce inserimenti manuali, operazioni importate e la cronologia usata per costruire il portafoglio."
+        },
+        "add": {
+          "title": "Aggiungi una transazione",
+          "description": "Aggiungi apre il modulo guidato per una singola operazione. La guida dedicata parte al primo utilizzo."
+        },
+        "import": {
+          "title": "Importa più operazioni",
+          "description": "Importa legge i report dei broker e accompagna la revisione fino all’editor bulk."
+        },
+        "columns": {
+          "title": "Filtra e organizza",
+          "description": "Usa filtri di colonna, ordinamento e visibilità delle colonne per trovare e confrontare le operazioni."
+        }
+      }
+    },
+    "transactionCreateGuide": {
+      "steps": {
+        "basics": {
+          "title": "Scegli il tipo di transazione",
+          "description": "Il tipo definisce il significato e la struttura dell’operazione."
+        },
+        "amounts": {
+          "title": "Completa i campi obbligatori",
+          "description": "I campi obbligatori e le combinazioni valide cambiano in base al tipo di transazione selezionato."
+        },
+        "details": {
+          "title": "Aggiungi informazioni opzionali",
+          "description": "Inserisci eventuali dettagli aggiuntivi che rendono la transazione più comprensibile e rintracciabile."
+        },
+        "save": {
+          "title": "Valida nel contesto del workspace",
+          "description": "La validazione valuta questa bozza insieme a tutte le altre operazioni in sospeso nel workspace. Un errore può dipendere da un’altra bozza o dal saldo risultante, non soltanto da questo modulo; quando disponibile, il messaggio indica le righe e il contesto coinvolti."
+        }
+      }
+    },
+    "transactionBulkGuide": {
+      "steps": {
+        "workspace": {
+          "title": "Il workspace delle transazioni",
+          "description": "Ogni riga è una bozza che puoi controllare e perfezionare prima del salvataggio finale."
+        },
+        "validation": {
+          "title": "Valida e risolvi le segnalazioni",
+          "description": "La validazione evidenzia righe incomplete o incoerenti e porta direttamente ai campi da rivedere."
+        },
+        "selection": {
+          "title": "Lavora sulla selezione",
+          "description": "Seleziona le righe per modificare, clonare, ripristinare, collegare o rimuovere più bozze insieme."
+        },
+        "save": {
+          "title": "Completa con Salva tutto",
+          "description": "Salva tutto registra le bozze valide. Annulla chiude il workspace e lascia invariato il portafoglio esistente."
+        }
+      }
+    },
+    "brokerPageGuide": {
+      "steps": {
+        "overview": {
+          "title": "I tuoi conti finanziari",
+          "description": "I broker raggruppano le transazioni per conto e definiscono proprietà, permessi di modifica e condivisione."
+        },
+        "currency": {
+          "title": "Scegli la valuta di report",
+          "description": "Il selettore ricalcola il riepilogo della pagina nella valuta che vuoi confrontare."
+        },
+        "views": {
+          "title": "Schede, tabella e azioni sui conti",
+          "description": "Cambia vista per confrontare i conti, poi aprine uno per esaminare saldi, posizioni, transazioni e accessi."
+        },
+        "add": {
+          "title": "Aggiungi un broker",
+          "description": "Crea il conto che riceverà transazioni e importazioni. Una guida dedicata segue il modulo."
+        }
+      }
+    },
+    "brokerDetailGuide": {
+      "steps": {
+        "header": {
+          "title": "Identità e azioni del broker",
+          "description": "L’intestazione identifica il conto e raccoglie le principali azioni di modifica, sincronizzazione, condivisione e navigazione."
+        },
+        "overview": {
+          "title": "Panoramica e liquidità",
+          "description": "Panoramica riassume valore, performance, allocazione e saldi di liquidità di questo conto."
+        },
+        "positions": {
+          "title": "Posizioni e lotti",
+          "description": "Posizioni mostra cosa contiene il conto e permette di esaminare i lotti dietro quantità e costi."
+        },
+        "transactions": {
+          "title": "Transazioni e importazioni",
+          "description": "Questa scheda filtra la cronologia del conto e offre il percorso per aggiungere o importare le sue operazioni."
+        },
+        "info": {
+          "title": "Informazioni e condivisione",
+          "description": "Controlla i metadati del conto e gestisci chi può visualizzare o modificare questo broker."
+        }
+      }
+    },
+    "fxPageGuide": {
+      "steps": {
+        "overview": {
+          "title": "Le tue coppie di valute",
+          "description": "Le coppie FX forniscono la cronologia dei cambi necessaria a LibreFolio per confrontare valori espressi in valute diverse."
+        },
+        "filters": {
+          "title": "Filtra date, valute e viste",
+          "description": "Restringi periodo e valute, poi scegli schede o tabella in base al confronto che ti serve."
+        },
+        "sync": {
+          "title": "Aggiorna i tassi di cambio",
+          "description": "Sincronizza richiede tassi aggiornati alla rotta provider configurata per ciascuna coppia."
+        },
+        "add": {
+          "title": "Aggiungi una coppia FX",
+          "description": "Definisci una nuova direzione di conversione. Una guida dedicata spiega valute e provider."
+        }
+      }
+    },
+    "fxDetailGuide": {
+      "steps": {
+        "header": {
+          "title": "Coppia e direzione di conversione",
+          "description": "L’intestazione mostra valuta base e quotata e le azioni per tornare indietro o invertire la direzione."
+        },
+        "provider": {
+          "title": "Rotta provider e sincronizzazione",
+          "description": "Scegli come ottenere i tassi, poi sincronizza quando vuoi aggiornare la serie."
+        },
+        "chart": {
+          "title": "Esplora la cronologia dei tassi",
+          "description": "Usa grafico, segnali e strumenti di misura per esaminare come il cambio è variato nel tempo."
+        },
+        "editor": {
+          "title": "Modifica le osservazioni manuali",
+          "description": "Apri l’editor dati per controllare o gestire i punti cambio manuali della coppia."
+        }
+      }
+    },
+    "assetPageGuide": {
+      "steps": {
+        "overview": {
+          "title": "Il tuo catalogo di asset",
+          "description": "Gli asset collegano le transazioni a strumenti, valute, prezzi, eventi e fonti dei dati di mercato."
+        },
+        "filters": {
+          "title": "Cerca e confronta gli asset",
+          "description": "Filtra per nome, stato, valuta o tipo e passa tra schede e tabella."
+        },
+        "sync": {
+          "title": "Aggiorna i dati di mercato",
+          "description": "Sincronizza richiede valori correnti e cronologia disponibile alla fonte configurata per ciascun asset."
+        },
+        "add": {
+          "title": "Aggiungi un asset",
+          "description": "Cerca o definisci un nuovo strumento. Una guida dedicata spiega identità, valuta e provider."
+        }
+      }
+    },
+    "assetDetailGuide": {
+      "steps": {
+        "header": {
+          "title": "Identità e stato dell’asset",
+          "description": "L’intestazione identifica lo strumento e raccoglie stato, navigazione e azioni principali."
+        },
+        "chart": {
+          "title": "Cronologia prezzi e analisi",
+          "description": "Usa grafico, segnali tecnici, confronto e strumenti di misura per esplorare la cronologia dell’asset."
+        },
+        "editor": {
+          "title": "Gestisci prezzi ed eventi",
+          "description": "Apri l’editor dati per controllare prezzi manuali ed eventi che influenzano la serie dell’asset."
+        },
+        "metadata": {
+          "title": "Identificatori e metadati",
+          "description": "Espandi i metadati per controllare identificatori, classificazione, valuta e configurazione provider."
+        },
+        "risk": {
+          "title": "Scenari di rischio",
+          "description": "Apri Rischio per esaminare misure storiche, scenari di stress, simulazioni e contesto di portafoglio."
+        }
+      }
+    }
   }
 }

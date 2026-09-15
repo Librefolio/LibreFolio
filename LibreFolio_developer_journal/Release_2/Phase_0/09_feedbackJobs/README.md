@@ -11,11 +11,11 @@ di TODO_FUTURI.md (classificazione con l'utente) + gli 8 P4 ereditati dall'audit
 | [02_grafici_avanzati.md](02_grafici_avanzati.md) | Grafici | I10 calendar-return backend integrato; I60 Asset UI/follow-up attivi su I; P&L/candele/income ancora aperti |
 | [03_asset_dati_classificazione.md](03_asset_dati_classificazione.md) | Asset & dati | ✅ Settori bond e import CSV distribuzioni integrati e revisionati |
 | [04_brim_import.md](04_brim_import.md) | BRIM & import | ✅ eToro fee, refactor CA/helper maturity e delete-asset links integrati e revisionati |
-| [05_pac_allocation_tool.md](05_pac_allocation_tool.md) | Tool platform | Tool platform e PAC P1 integrati; Round 2 PAC completo in corso su D; solver ancora aperto |
+| [05_pac_allocation_tool.md](05_pac_allocation_tool.md) | Tool platform | Tool platform integrata; prototipo PAC/Rebalancer preservato, contratto operativo in redesign dopo review respinta |
 | [06_piano_sprint.md](06_piano_sprint.md) | Analysis and sprint plan | Current-code evidence, 16 sprints, parallel-work dependency map, shared-resource ownership and developer UI review gates |
 | [07_feedback_import_critici.md](07_feedback_import_critici.md) | Urgent import/UX/update feedback | ✅ E1-E9 plus U1/U4/U5/U7/U9 integrati in `dev_release2` (`ef722b552`) |
 
-## Stato esecutivo riconciliato — 2026-09-11
+## Stato esecutivo riconciliato — 2026-09-14
 
 Questa tabella prevale sulle note cronologiche più sotto, che restano come storico dei
 checkpoint intermedi.
@@ -29,9 +29,9 @@ checkpoint intermedi.
 | SP08 | ✅ Asset pricing refactor integrato con K (`3c85866dd`, combined `b72475f0e`): P4-1, P4-4 e S6 6.4 chiusi. |
 | SP09 | ✅ G integrato, developer-accepted e archiviato (`ebba209c5`, docs `4949b2f4c`). |
 | SP10 | ⏸️ Differito fino alla stabilizzazione chart/store. |
-| SP11 | 🟡 J Round 2 revisionato; Round 3 in implementazione sul branch J, non integrato. |
+| SP11 | ✅ Onboarding Round 6 implementato, verificato e developer-accepted; checkpoint J `580bd504f`, integrazione combinata in corso. |
 | SP12 | ✅ Piattaforma Tool integrata (`570beb386`). |
-| SP13–SP14 | 🟡 PAC P1 integrato; Round 2 completo attivo su D; solver SP14 ancora aperto. |
+| SP13–SP14 | 🟡 Prototipo PAC/Rebalancer Round 4 preservato in `d66f8e58e`; review prodotto respinta, redesign collaborativo read-only attivo e nuovo piano non ancora autorizzato. |
 | SP15 | ⛔ Attende SP07 + SP11 + SP14. |
 | SP16 | ✅ Refactor `execute_batch` integrato con L (`846aefb24`, combined `ed0f4ff30`); full backend e docs verdi. |
 
@@ -126,6 +126,23 @@ dependency-safe XL phase split. I10 signal-only calendar-return backend is integ
 (`d4b3deb2f`/`d54d74189`). H/YOC is integrated before I. I60 Asset UI is implemented
 and automatically validated on branch I; its developer-approved UX follow-up is active.
 I20–I50 and G1c remain unimplemented.
+
+## Onboarding final checkpoint - 2026-09-14
+
+[SP11 / U8](../21_onboarding/plan-phase00Onboarding.prompt.md) and its six review
+rounds are implemented and automatically verified. The developer accepted the
+final Welcome, Core, contextual and Import-guide UX in
+[Round 6](../21_onboarding/plan-phase00OnboardingRound6-FinalUX.prompt.md).
+Checkpoint J is `580bd504f`; integration into the combined baseline is in progress.
+
+## PAC/Rebalancer prototype checkpoint - 2026-09-14
+
+The separate PAC and Portfolio Rebalancer P1 Tools, shared multi-service plugin,
+source-copy workflows and automated evidence are preserved in checkpoint D
+`d66f8e58e`. Manual review rejected the analysis-only product contract: the next
+iteration requires a newly approved high-level design for Broker routing, funding,
+FX and executable discrete allocation. Collaborative redesign is active; no
+replacement implementation plan or solver is approved yet.
 
 ## Regole della cartella
 

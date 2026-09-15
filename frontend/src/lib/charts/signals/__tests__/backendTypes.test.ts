@@ -151,7 +151,7 @@ describe('backend signal series normalization', () => {
             unit: 'price',
             axis: priceAxis,
             kind: 'line',
-            points: [[first, second], third],
+            points: [[first, second], third] as unknown as BackendSignalLineSeries['points'],
         } satisfies Parameters<typeof normalizeBackendSignalSeries>[0];
 
         const normalized = normalizeBackendSignalSeries(generatedLine);

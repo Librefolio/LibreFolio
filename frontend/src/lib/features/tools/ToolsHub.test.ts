@@ -6,13 +6,15 @@ import type {VerifiedToolCatalog} from './contracts';
 import type {LoadedToolRenderer, ToolRendererBinding, ToolRendererResolution} from './registry';
 import ToolsHub from './ToolsHub.svelte';
 
-const {fetchCatalogMock, resolveRendererMock, afterNavigateMock} = vi.hoisted(() => ({
+const {fetchCatalogMock, resolveRendererMock, afterNavigateMock, guideAnchorMock} = vi.hoisted(() => ({
     fetchCatalogMock: vi.fn(),
     resolveRendererMock: vi.fn(),
     afterNavigateMock: vi.fn(),
+    guideAnchorMock: vi.fn(),
 }));
 
 vi.mock('$app/navigation', () => ({afterNavigate: afterNavigateMock}));
+vi.mock('$lib/features/onboarding/guideAnchors.svelte', () => ({guideAnchor: guideAnchorMock}));
 vi.mock('./client', () => ({fetchToolCatalog: fetchCatalogMock}));
 vi.mock('./registry', () => ({resolveToolRenderer: resolveRendererMock}));
 
@@ -75,6 +77,7 @@ beforeEach(() => {
     fetchCatalogMock.mockReset();
     resolveRendererMock.mockReset();
     afterNavigateMock.mockReset();
+    guideAnchorMock.mockReset();
     fetchCatalogMock.mockResolvedValue(catalog);
 });
 
@@ -93,6 +96,7 @@ describe('ToolsHub', () => {
         render(ToolsHub);
 
         const card = await screen.findByTestId('tool-card-pac_allocator');
+        expect(guideAnchorMock).toHaveBeenCalledWith(screen.getByTestId('tools-hub'), 'tools.hub');
         await waitFor(() => expect(card).toHaveAttribute('data-interface-state', 'loading'));
         expect(within(card).queryByTestId('tool-open')).toBeNull();
         expect(within(card).getByTestId('tool-interface-loading')).toBeInTheDocument();

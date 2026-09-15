@@ -6,8 +6,10 @@
 > **Analisi e decisioni 2026-09-07**: lo scope è stato ampliato durante la pianificazione.
 > La stima M–L del solo PAC euro buy-only non descrive più la richiesta completa.
 > Fonte operativa: [06_piano_sprint.md](06_piano_sprint.md), T0/T1/T2 e SP12–14.
-> La piattaforma C e il pilot PAC P1 sono integrati. Il redesign Round 2 completo
-> resta attivo sul branch D; il solo `monetary_step` non ne costituisce la chiusura.
+> La piattaforma C è integrata. Il prototipo separato PAC/Rebalancer Round 4 è
+> preservato nel checkpoint D `d66f8e58e`, ma la review manuale ne ha respinto il
+> contratto analysis-only. È attivo un redesign collaborativo read-only di routing
+> Broker, funding, FX e allocazione discreta; nessun nuovo piano è ancora autorizzato.
 >
 > **Piano C attivo:** [Piattaforma Tool atomica](../16_toolPlatform/plan-phase00ToolPlatform.prompt.md)
 > — base generica completa; [handoff PAC D](../16_toolPlatform/handoff-pac-D.md)
@@ -196,16 +198,16 @@ dal modello numerico e dagli adapter di copia autorizzati.
 | ID | Esito e taglia | Sprint |
 |---|---|---|
 | T0 | ✅ Piattaforma Tool custom-first integrata (`570beb386`). | SP12 |
-| T1 — specifica/evaluator | 🟡 P1 integrato; Phase A numerica e contratto Round 2 preservati su D, integrazione/finalizzazione pendenti. | SP13 |
-| T2 — snapshot | 🟡 Allocation source OWNER iniziale presente su D; catalogo completo, cash broker, privacy e fatti locked ancora in implementazione. | SP13 |
-| T1 — solver | Aperto: solver buy/sell/FX e prova di ottimalità non iniziati. | SP14 |
-| T2 — editor/report | 🟡 P1 integrato; redesign Round 2 completo riaperto dopo review respinta. Grafici/solver output restano aperti. | SP14 |
+| T1 — specifica/evaluator | 🟡 Nucleo Decimal e prototipo Round 4 preservati; il contratto prodotto è respinto e va ridisegnato prima di nuove modifiche. | SP13 |
+| T2 — snapshot | 🟡 Copie Asset/prezzi/custodie/cassa OWNER preservate; il nuovo modello operativo Broker/funding è ancora in discussione. | SP13 |
+| T1 — solver | Aperto: allocazione discreta buy/sell/FX, routing e stati di soluzione non sono implementati; obiettivi e policy non sono ancora congelati. | SP14 |
+| T2 — editor/report | 🟡 Le UI PAC/Rebalancer separate sono preservate come prototipo, ma la review prodotto è respinta; flussi e output Broker-facing devono essere riapprovati prima del piano. | SP14 |
 
-> **Aggiornamento 2026-09-11:** il primo server di review Round 2 mostrava solo
-> il controllo contributi `monetary_step`; la review è stata respinta perché non
-> rappresentava il redesign approvato. D sta eseguendo l'intera matrice gap
-> (cash broker, funding-first, catalogo Owned/Other/Observed, fatti importati
-> locked, editor current/target, quote base e polish) prima di una nuova review.
+> **Aggiornamento 2026-09-14:** Round 4 ha completato implementazione e gate
+> automatici, ma la review ha confermato che il risultato teorico non soddisfa
+> l'obiettivo operativo. Il nuovo contratto deve produrre funding, conversioni e
+> azioni per Broker più una soluzione discreta eseguibile. Le decisioni vengono
+> raccolte una alla volta; questo aggiornamento non approva un'implementazione.
 
 DoD, esempi numerici, superfici file:riga, rischi e oracoli indipendenti sono nel
 [piano sprint](06_piano_sprint.md). Nessun server MCP o cambiamento dei motori FIFO/WAC

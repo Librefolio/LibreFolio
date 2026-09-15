@@ -193,6 +193,68 @@ test.describe('Asset List Page', () => {
         await expect(page.locator('[data-testid="dt-select-all"]')).toHaveCount(0);
     });
 
+    test('global Abs/% controls update every rendered AssetCard data-view-mode', async ({page}) => {
+        await goToAssetsPage(page);
+        await page.getByTestId('view-mode-grid').click();
+        await waitForSettled(page.getByTestId('assets-page'), 20_000);
+        const cards = page.locator('[data-testid^="asset-card-"][data-view-mode]');
+        await expect.poll(() => cards.count(), {timeout: 10_000}).toBeGreaterThan(0);
+
+        const everyCardUses = async (mode: 'absolute' | 'percentage') => cards.evaluateAll((nodes, expected) => nodes.length > 0 && nodes.every((node) => (node as HTMLElement).dataset.viewMode === expected), mode);
+
+        await page.getByTestId('assets-global-view-absolute').click();
+        await expect.poll(() => everyCardUses('absolute'), {timeout: 5_000}).toBe(true);
+
+        await page.getByTestId('assets-global-view-percentage').click();
+        await expect.poll(() => everyCardUses('percentage'), {timeout: 5_000}).toBe(true);
+    });
+
+    test('one AssetCard can override Abs/% until a later global change', async ({page}) => {
+        await goToAssetsPage(page);
+        await page.getByTestId('view-mode-grid').click();
+        await waitForSettled(page.getByTestId('assets-page'), 20_000);
+
+        const cards = page.getByTestId(/^asset-card-\d+$/);
+        const chosenCard = cards.filter({hasText: 'Apple Inc.'});
+        await expect(chosenCard).toHaveCount(1);
+        await expect(chosenCard).toHaveAttribute('data-testid', /^asset-card-\d+$/);
+        const chosenCardTestId = await chosenCard.getAttribute('data-testid');
+        if (!chosenCardTestId) throw new Error('Seeded Apple Inc. card must expose its data-testid.');
+
+        const everyOtherCardUses = async (mode: 'absolute' | 'percentage') =>
+            cards.evaluateAll(
+                (nodes, expected) => {
+                    let foundOtherCard = false;
+                    const allOtherCardsUseMode = nodes.every((node) => {
+                        if (node.getAttribute('data-testid') === expected.chosenCardTestId) return true;
+                        foundOtherCard = true;
+                        return (node as HTMLElement).dataset.viewMode === expected.mode;
+                    });
+                    return foundOtherCard && allOtherCardsUseMode;
+                },
+                {chosenCardTestId, mode},
+            );
+        const expectEveryCardToUse = async (mode: 'absolute' | 'percentage') => {
+            await expect(chosenCard).toHaveAttribute('data-view-mode', mode);
+            await expect.poll(() => everyOtherCardUses(mode), {timeout: 5_000}).toBe(true);
+        };
+
+        await page.getByTestId('assets-global-view-absolute').click();
+        await expectEveryCardToUse('absolute');
+
+        await chosenCard.getByTestId('asset-card-view-toggle').click();
+        await expect(chosenCard).toHaveAttribute('data-view-mode', 'percentage');
+        await expect.poll(() => everyOtherCardUses('absolute'), {timeout: 5_000}).toBe(true);
+
+        await page.getByTestId('assets-global-view-percentage').click();
+        await expectEveryCardToUse('percentage');
+
+        // Changing again proves the local override was cleared, not merely
+        // hidden because it happened to match the first new global mode.
+        await page.getByTestId('assets-global-view-absolute').click();
+        await expectEveryCardToUse('absolute');
+    });
+
     // ========================================================================
     // Test 7: Add button is visible
     // ========================================================================

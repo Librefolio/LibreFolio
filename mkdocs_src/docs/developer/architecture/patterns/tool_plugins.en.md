@@ -286,6 +286,11 @@ Frontend compatibility first resolves the exact service code and contract versio
 
 The current compiled registry binds separate components for `pac_allocator` and `portfolio_rebalancer`, matching the two services exposed by the same backend package. Each custom component owns domain-specific input and result presentation while the backend owns the calculation. A future descriptor and schema still do not make a new service usable until its generated contract and compiled renderer registration are present and compatible.
 
+Tool catalogue cards and the opened Tool host expose only the compatibility pair
+`Backend/API <contract_version> · UI <ui.version>`. Keep `implementation_version` in
+**Plugin diagnostics** rather than the public compatibility label: it identifies the deployed
+implementation but is not the frontend contract users need to match.
+
 Use `DocsLink` for documentation destinations. It builds `/mkdocs/` URLs from the current language and a relative path rather than forcing English. For an EN-only destination, a caller can supply an existing localized destination through `localizedFallbackPath`; the helper selects that fallback for non-English languages. It does not discover missing pages automatically.
 
 Keep submitted financial data out of documentation URLs, logs, and HTML attributes. Documentation metadata identifies a page and its version, not a scenario transport channel.
