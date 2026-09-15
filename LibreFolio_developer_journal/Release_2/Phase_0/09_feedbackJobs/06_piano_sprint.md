@@ -33,8 +33,8 @@ La review indipendente ha aperto e chiuso il Round 5 sul challenge pubblico GHCR
 Manifest e prove: [14_feedbackImportUrgent](../14_feedbackImportUrgent/manifest-integrazione-E.md).
 Integrazione committata in `ef722b552433028c051ccb1207c84f1072e51bb7`;
 sessione/worktree E archiviati localmente il 2026-09-10. L'eventuale spostamento
-versionato del piano resta separato. U2, U3, U8, gli sprint non inclusi e
-F-MC-1/2/3 restano aperti.
+versionato del piano resta separato. U3 è integrato; U2, U8 Round 3, gli sprint non
+inclusi e F-MC-1/2/3 restano aperti.
 
 **Infrastruttura di parallelismo, 2026-09-09:** prima di riallineare B/C/D e'
 stato aperto il piano
@@ -120,8 +120,8 @@ La wiki ha fornito contesto utile su FIFO v4, batch e DataEditor; il grafo dichi
 | Privacy | **Globale**, con lucchetto aperto/chiuso nell'header autenticato. Nasconde importi e quantita personali; lascia visibili prezzi pubblici, cambi, percentuali e rapporti. |
 | Presentazione privacy | Meccanismo condiviso vicino ai campi sensibili. Patina sopra segnaposto, non blur dei numeri reali. Tooltip concettuali invariati; importi personali nei tooltip finanziari coperti. Non e un sistema di autorizzazione o redazione dei log. |
 | Header mobile | Nuova voce: scorrendo in basso scompare, scorrendo in alto ricompare. Desktop invariato. |
-| Onboarding | Pagina di benvenuto dedicata, preferenze dai default amministratore; poi tour breve in overlay e guida contestuale all'import. |
-| Skip e replay | Benvenuto e tour skippabili senza riproposta automatica; riavvio manuale da Settings. Nessun dato demo o salvataggio finanziario automatico. |
+| Onboarding | Round 6 completato e developer-accepted: Welcome, Core e guide contestuali versionate, progressione per step, replay e checkpoint Import. |
+| Skip e replay | Stato/versione persistiti backend; una versione nuova diventa dovuta anche dopo completed/skipped. Replay manuale non riscrive lo stato terminale. |
 | YOC | Distribuzioni lorde per quota nei 365 giorni fino alla data finale del report / WAC unitario residuo. UI `-` sia per nessun reddito sia per storia insufficiente, con motivo distinto; zero noto diverso da dato mancante. |
 | Help YOC | Nuova pagina EN nella teoria finanziaria e tooltip nell'header della colonna, condivisa da dashboard e broker. |
 | CSV distribuzioni | `weight` in percentuale **0-100**, senza inferenza automatica 0-1. |
@@ -721,7 +721,7 @@ L'ordine ordina **rischio e ampiezza**, non inventa dipendenze. Il primo sprint 
 | **SP08 - Pricing e confini del servizio** | P4-4, P4-1, S6 6.4 | Un'unica famiglia provider/manager; evita spostamenti concorrenti di asset_source. Yahoo locale -> mappa import/cache -> moduli -> fasi refresh nella destinazione scelta. | Parita provider e manager, ownership cache/thread/sessioni, sentinelle, chunk e risultati preservati. Nessun refactor FX/portfolio aggiuntivo. |
 | **SP09 - BRIM mirato** | B1 condizionale, P4-3 | Parsing broker e output di review. Risolvere gate eToro se disponibile -> caratterizzazione Credit Agricole -> estrazione locale -> eventuale secondo consumer. | Costi eToro riconciliati oppure blocco motivato mantenuto; output completo Credit Agricole equivalente. Nessuna falsa chiusura eToro per far risultare verde lo sprint. |
 | **SP10 - Cache con ownership** | P4-7 | Registry, serie e pool condividono confine di sessione e consumer chart. Misura -> decisione budget/policy -> implementazione -> rilascio/late responses. | Limiti motivati, oggetti e richieste realmente rilasciabili, cambio account sicuro, nessuna preferenza cancellata e nessun consumer interrotto arbitrariamente. |
-| **SP11 - Benvenuto e tour** | U8 | Auth, preferenze e overlay sono una sola catena UX. Analisi/stato/storyboard possono partire subito; implementazione di layout, replay e guida import segue il freeze delle superfici Tool/PAC e DataImport attive. Stato/migrazione -> welcome -> tour breve -> guida import -> replay/skip. | Nuovo utente guidato senza scritture finanziarie automatiche; default admin rispettati; skip/replay/refresh/account e overlay compatibili, guide riallineate. |
+| **SP11 - Benvenuto e tour** | U8 | ✅ [Implementato da J](../21_onboarding/plan-phase00OnboardingRound6-FinalUX.prompt.md): stato/migrazione -> welcome -> tour Core e contestuali -> guida Import -> replay/skip. Gate e review manuale developer completi; checkpoint `580bd504f`. | Nuovo utente guidato senza scritture finanziarie automatiche; default admin rispettati; skip/replay/refresh/account e overlay compatibili, guide riallineate. |
 | **SP12 - Piattaforma Tool** | T0, hub iniziale T2 | Contratto plugin/executor e catalogo con schemi completi. Registry -> API auth/bulk -> worker -> tipi/renderer -> hub. | Catalogo/compute/diagnostics protetti, riuso bulk corretto, errori/limiti onesti; nessun endpoint schema/prefill Tool e nessun PAC fittizio dichiarato funzionante. |
 | **SP13 - Modello e snapshot allocatore** | Gate T1, evaluator T1, copia T2 | Congela il significato dei parametri prima di cercare ottimi. Policy numerica -> normalizzazione/evaluator -> casse e FX -> copie da API di dominio -> preview. | Quantita/valori/target e casse per valuta riconciliati; semantica limiti/costi/FX firmata nel piano dedicato; input manuali e copie equivalenti. Nessun risultato chiamato ottimo senza solver. |
 | **SP14 - Allocatore e UI completa** | Solver T1, custom UI T2 | Un solo solver buy/sell/FX e le sue spiegazioni. Oracle piccolo -> ricerca/limiti -> risultato typed -> editor avanzato/grafici -> integrazione end-to-end. | PAC, rebalancing e PAC rebalancing realmente supportati; limiti vendite e conversioni opzionali, contributi per valuta, proof/status e tabelle completi; nessuna esecuzione ordini. |
@@ -739,9 +739,9 @@ L'ordine ordina **rischio e ampiezza**, non inventa dipendenze. Il primo sprint 
 | SP08 | ✅ Integrato: Yahoo refactor, scissione asset-source e refresh phases; full services/API e docs verdi. |
 | SP09 | ✅ G integrato, developer-accepted e archiviato. |
 | SP10 | ⏸️ Differito. |
-| SP11 | 🟡 J Round 3 in implementazione; nessuna integrazione target finché manca review finale. |
+| SP11 | ✅ Round 6 implementato, verificato e developer-accepted; checkpoint J `580bd504f`, integrazione combinata in corso. |
 | SP12 | ✅ Tool platform integrata. |
-| SP13–SP14 | 🟡 D Round 2 completo in implementazione; solver ancora aperto. |
+| SP13–SP14 | 🟡 Prototipo PAC/Rebalancer Round 4 preservato in `d66f8e58e`; review prodotto respinta, nuovo flusso operativo in redesign e solver non implementato. |
 | SP15 | ⛔ Bloccato da SP07 + SP11 + SP14. |
 | SP16 | ✅ Integrato: context/stage pipeline, full backend, docs e review verdi. |
 
@@ -769,8 +769,8 @@ dopo.
 | G-ROLLING | Nuovo modo G3 | Calendario/reference lookup, lookback e limiti di staleness senza cambiare i segnali a osservazioni esistenti. |
 | G-CANDLES | Nuovo DTO/calcolo G1b | Ancora P&L/non-prezzo, conversione giornaliera, posizioni negative e politica OHLC mancante. Natura sintetica, EOD e aggregazione gia approvate. |
 | G-CACHE | Scegliere eviction/rilascio P4-7 | Misura reale, budget e ownership documentati; nessun LRU o numero massimo scelto per intuito. |
-| G-ONBOARDING | Migrazione e guardia U8 | Stato/versione distinto per welcome/tour/import, gestione utenti esistenti, errori e resume. Formato/skip/replay gia approvati. |
-| G-PAC | Implementare solver T1 | Valute dei vincoli, cash/FX, cap min/max, quantum, fee/buffer, target/turnover, precisione, limiti e stati esatti. Perimetro funzionale gia approvato. |
+| G-ONBOARDING | Chiudere U8 | ✅ Stato/versione, utenti esistenti, errori, resume, skip, replay e walkthrough desktop/mobile completati fino al [Round 6](../21_onboarding/plan-phase00OnboardingRound6-FinalUX.prompt.md). |
+| G-PAC | Implementare solver T1 | ⛔ Il perimetro precedente non è più approvato: prima congelare con il developer routing Broker, funding/trasferimenti, FX, policy buy/sell, obiettivi, quantum, fee/buffer e stati di soluzione. |
 | G-PRIVACY | Mostrare il lucchetto globale U2 | Inventario campi/regioni, comportamento input/rivelazione ed export, idratazione per account; nessuna pubblicazione di copertura parziale spacciata per globale. |
 | G-UX-DESIGN | Realizzare UI nuova o modificata pesantemente | Viste ASCII degli stati/viewport, interazioni annotate, feedback misurato e approvazione del dev; regola nella sezione 12. |
 | G-UX-REVIEW | Dichiarare finita la relativa UI | Walkthrough del percorso reale, scenari/risultati attesi, feedback operativo e chiusura dei rilievi o rinvio esplicitamente accettato. |
@@ -926,9 +926,9 @@ Primo piano preso in carico: [SP04-SP05 - Contratti e Runes](../11_feedbackContr
 registra il contratto chiuso per G3/G1a/G1b/G1c, gli storyboard ASCII v2 e lo
 split per owner. Stato **PLANNED / implementation frozen**: il refresh tecnico
 post-F e' registrato su `0af66da5`; il dev ha autorizzato e I ha completato la
-sola slice I10 backend signal, ora in attesa di integrazione. H/YOC precede I
-su service/schema/test portfolio; UI G3 e I20+ restano congelati e I dovra'
-rileggere il target post-H. Il link non marca gli altri task implementati.
+sola slice I10 backend signal, ora integrata con H/YOC su service/schema/test
+portfolio. UI G3 e I20+ restano congelati e I dovra' rileggere il target combinato.
+Il link non marca gli altri task implementati.
 
 All'avvio effettivo di uno sprint: scegliere il prossimo `<NN_area>` libero in `Phase_0/`, aprire il piano `.prompt.md`, cross-linkare il task originale e marcare la presa in carico secondo la regola del backlog. Non creare oggi sedici piani vuoti. Dopo ogni step eseguito, aggiornare immediatamente quel piano con stato, data, nota di implementazione ed eventuale fuori pista.
 
@@ -1022,8 +1022,9 @@ richiedere un commit documentale successivo, non uno SHA futuro scritto in antic
 
 **Per E:** `14_feedbackImportUrgent` e tutti i round, report urgente
 `07_feedback_import_critici.md`, U1/U4/U5/U7/U9 nel file `01`, SP01/SP02, README e
-task E1-E9 sono riconciliati nel checkout target. Privacy, YOC, onboarding e i temi
-multicurrency futuri restano aperti. Il pacchetto e' committato in `ef722b55`;
+task E1-E9 sono riconciliati nel checkout target. YOC è ora integrato; privacy,
+onboarding Round 3 e i temi multicurrency futuri restano aperti. Il pacchetto e'
+committato in `ef722b55`;
 sessione/worktree E sono archiviati localmente. L'archivio documentale versionato
 resta un passo distinto.
 

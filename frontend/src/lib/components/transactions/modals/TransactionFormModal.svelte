@@ -77,6 +77,8 @@
     import {computeFxConversionInfo, buildFxTooltipData, buildFxTooltipHtml} from '$lib/utils/currency/fxConversionHelper';
     import type {TXReadItem} from '../types';
     import {type FormModalItems, isInaccessible} from '../shared/resolveFormItems';
+    import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
+    import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
 
     // =========================================================================
     // Types
@@ -175,6 +177,28 @@
         pendingTxIds = null,
         initialOptionalOpen = false,
     }: Props = $props();
+
+    let guideObservedOpen = false;
+
+    function releaseCreateGuideHost(): void {
+        if (onboardingGuide.active?.flow === 'transaction_create_guide') {
+            onboardingGuide.dismissHost({restartAtFirst: true});
+        }
+        onboardingGuide.clearQueued('transaction_create_guide');
+        guideObservedOpen = false;
+    }
+
+    $effect(() => {
+        const isOpen = open && mode === 'create';
+        if (isOpen && !guideObservedOpen) {
+            guideObservedOpen = true;
+            onboardingGuide.maybeStartContextual('transaction_create_guide');
+            return;
+        }
+        if (!isOpen && guideObservedOpen) {
+            releaseCreateGuideHost();
+        }
+    });
 
     // Internal derived: main row from items[0], partner info from items[1]
     let mainRow = $derived(items?.[0] ?? null);
@@ -914,7 +938,10 @@
         },
     });
 
-    onDestroy(() => scheduler.dispose());
+    onDestroy(() => {
+        scheduler.dispose();
+        if (guideObservedOpen) releaseCreateGuideHost();
+    });
 
     // Trigger 'change' on every meaningful draft mutation.
     let lastDraftKey = $state('');
@@ -1373,7 +1400,7 @@
         <!-- ============================================================= -->
         <!-- Body (scrollable) -->
         <!-- ============================================================= -->
-        <div class="overflow-y-auto flex-1 min-h-0 px-5 py-4 space-y-4" data-testid="tx-form-body">
+        <div class="overflow-y-auto flex-1 min-h-0 px-5 py-4 space-y-4" data-testid="tx-form-body" data-guide-scroll-root>
             <!-- Inline banners: red ⛔ for commit failure, green ✓ for valid,
                  yellow for validate issues. Both error types show categorized lists. -->
             {#if formError}
@@ -1458,13 +1485,13 @@
             <!-- DUAL FORM — FX / Transfer Asset / Transfer Cash -->
             <!-- ============================================================= -->
             {#if pairLayout}
-                <fieldset class="border border-gray-200 dark:border-slate-700 rounded-lg p-4" data-testid="tx-form-required">
+                <fieldset class="border border-gray-200 dark:border-slate-700 rounded-lg p-4" data-testid="tx-form-required" use:guideAnchor={'transaction.create.amounts'}>
                     <legend class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 px-1">{$t('transactions.form.sectionRequired')}</legend>
 
                     <!-- Type (date is now inside Da/A panels) -->
                     <div class="text-sm">
                         <!-- Type: editable in create dual mode (W41), readonly in edit/view -->
-                        <div class="flex flex-col gap-1" data-testid="tx-form-type-wrap">
+                        <div class="flex flex-col gap-1" data-testid="tx-form-type-wrap" use:guideAnchor={'transaction.create.basics'}>
                             <span class="text-xs text-gray-500 dark:text-gray-400">{$t('common.type')}</span>
                             {#if typeImmutable}
                                 <!-- Bugfix-4 §U17 + Bugfix-5 §U22: render the
@@ -1728,7 +1755,7 @@
                 <!-- ============================================================= -->
             {:else}
                 <!-- Required section -->
-                <fieldset class="border border-gray-200 dark:border-slate-700 rounded-lg p-4" data-testid="tx-form-required">
+                <fieldset class="border border-gray-200 dark:border-slate-700 rounded-lg p-4" data-testid="tx-form-required" use:guideAnchor={'transaction.create.amounts'}>
                     <legend class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 px-1">{$t('transactions.form.sectionRequired')}</legend>
 
                     <!-- Reordered to match table column order (Bugfix-1 §U5):
@@ -1749,7 +1776,7 @@
                         </div>
 
                         <!-- Type -->
-                        <div class="flex flex-col gap-1" data-testid="tx-form-type-wrap">
+                        <div class="flex flex-col gap-1" data-testid="tx-form-type-wrap" use:guideAnchor={'transaction.create.basics'}>
                             <span class="text-xs text-gray-500 dark:text-gray-400">{$t('common.type')}</span>
                             {#if typeImmutable}
                                 <!-- Bugfix-4 §U17 + Bugfix-5 §U22: render the
@@ -1965,7 +1992,7 @@
             <!-- Optional disclosure -->
             {#if !isReadonly || (draft.tags && draft.tags.length > 0) || (draft.description ?? '').trim() || draft.asset_event_id != null || draft.link_uuid != null || pairPartnerId != null}
                 <details class="border border-gray-200 dark:border-slate-700 rounded-lg" bind:open={optionalOpen}>
-                    <summary class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 px-4 py-3 cursor-pointer select-none" data-testid="tx-form-optional-toggle">{$t('transactions.form.sectionOptional')}</summary>
+                    <summary class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 px-4 py-3 cursor-pointer select-none" data-testid="tx-form-optional-toggle" use:guideAnchor={'transaction.create.details'}>{$t('transactions.form.sectionOptional')}</summary>
                     <div class="px-4 pb-4 space-y-3 text-sm">
                         <!-- 1. Asset event link (before tags) -->
                         {#if canShowAssetEvent}
@@ -2084,6 +2111,7 @@
                         disabled={committing || loadingPartner || !!dualValidationError || hasSignViolation || (!commitOnSave && !isFormComplete)}
                         onclick={commit}
                         data-testid="tx-form-save"
+                        use:guideAnchor={'transaction.create.save'}
                         title={committing ? $t('common.saving') : !commitOnSave ? $t('common.apply') : $t('common.save')}
                     >
                         {#if committing}

@@ -15,9 +15,9 @@ pur mantenendo writer separati per dashboard e dettaglio Asset.
 > gli storyboard ASCII v2, Gate 0 e lo split XL per owner sono nel
 > [piano performance charts](../20_performanceCharts/plan-phase00PerformanceCharts.prompt.md).
 > Il refresh tecnico post-F e' registrato su `0af66da5`; la sola slice I10
-> backend del rolling calendariale e' implementata/verificata nel worktree e
-> attende integrazione. UI G3 e tutte le superfici portfolio restano congelate;
-> H precede I20. Nessuna generazione, i18n o review operativa e' avviata.
+> backend del rolling calendariale e' implementata, verificata e integrata insieme
+> al prerequisito H/YOC. UI G3 e tutte le superfici portfolio restano congelate;
+> I20 deve rileggere il target combinato. Nessuna review operativa UI e' avviata.
 > Le stime storiche nella tabella finale restano evidenza dell'analisi del 07/09;
 > il piano 20 registra l'ampliamento corrente di G1a/G1c/G3.
 

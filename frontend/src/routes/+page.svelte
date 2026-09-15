@@ -10,6 +10,9 @@
     import HelpMenu from '$lib/components/layout/HelpMenu.svelte';
     import ThemeToggle from '$lib/components/ui/ThemeToggle.svelte';
     import {auth} from '$lib/stores/app/auth';
+    import {isAuthenticated} from '$lib/stores/app/auth';
+    import {appBootstrap} from '$lib/features/onboarding/appBootstrap.svelte';
+    import OnboardingBootstrapBlock from '$lib/components/onboarding/OnboardingBootstrapBlock.svelte';
     import {_} from '$lib/i18n';
     import {Coffee} from 'lucide-svelte';
     import {page} from '$app/stores';
@@ -27,12 +30,26 @@
     // Get redirect URL from query params (if coming from protected route)
     $: redirectTo = $page.url.searchParams.get('redirect') || '/dashboard';
 
+    async function routeAuthenticated(requestedPath: string): Promise<void> {
+        checkingAuth = true;
+        const state = await appBootstrap.load();
+        if (state === 'blocked') {
+            checkingAuth = false;
+            return;
+        }
+        if (state === 'ready' || state === 'degraded') {
+            await goto(appBootstrap.resolveDestination(requestedPath), {
+                replaceState: true,
+            });
+        }
+    }
+
     // Check if already authenticated and redirect
     onMount(async () => {
         if (browser) {
             const isAuth = await auth.checkAuth();
             if (isAuth) {
-                goto('/dashboard');
+                await routeAuthenticated(redirectTo);
                 return;
             }
         }
@@ -63,6 +80,23 @@
         successMessage = '';
         currentView = 'login';
     }
+
+    async function retryBootstrap(): Promise<void> {
+        checkingAuth = true;
+        const state = await appBootstrap.load(true);
+        if (state === 'ready' || state === 'degraded') {
+            await goto(appBootstrap.resolveDestination(redirectTo), {
+                replaceState: true,
+            });
+            return;
+        }
+        checkingAuth = false;
+    }
+
+    async function logout(): Promise<void> {
+        await auth.logout();
+        checkingAuth = false;
+    }
 </script>
 
 <AnimatedBackground />
@@ -72,6 +106,8 @@
     <div class="min-h-screen flex items-center justify-center" data-testid="auth-loading">
         <div class="text-libre-green text-xl">Loading...</div>
     </div>
+{:else if $isAuthenticated && appBootstrap.state === 'blocked'}
+    <OnboardingBootstrapBlock error={appBootstrap.error} onretry={retryBootstrap} onlogout={logout} />
 {:else}
     <div class="min-h-screen flex items-center justify-center p-4" data-testid="login-page">
         <!-- Language & Theme Selector (top right) -->
@@ -87,7 +123,7 @@
 
         <!-- Card Container - Cambio istantaneo senza transizione -->
         {#if currentView === 'login'}
-            <LoginCard {redirectTo} {successMessage} on:gotoRegister={handleGotoRegister} on:gotoForgot={handleGotoForgot} />
+            <LoginCard {redirectTo} {successMessage} onAuthenticated={routeAuthenticated} on:gotoRegister={handleGotoRegister} on:gotoForgot={handleGotoForgot} />
         {:else if currentView === 'register'}
             <RegisterCard on:gotoLogin={handleGotoLogin} />
         {:else if currentView === 'forgot-password'}
