@@ -153,6 +153,26 @@ describe('ToolHost', () => {
         expect(screen.getByTestId('fixture-tool-renderer')).toBeInTheDocument();
     });
 
+    it('publishes an unavailable renderer without loading an interface', async () => {
+        resolveRendererMock.mockReturnValue({
+            status: 'unavailable',
+            reason: 'renderer_missing',
+            descriptor,
+        });
+
+        render(ToolHost, {toolCode: 'pac_allocator'});
+
+        await waitFor(() => {
+            expect(screen.getByTestId('tool-host')).toHaveAttribute('data-state', 'unavailable');
+            expect(screen.getByTestId('tool-host-unavailable')).toHaveAttribute('data-reason', 'renderer_missing');
+        });
+        expect(screen.queryByTestId('tool-host-renderer')).toBeNull();
+        expect(screen.getByTestId('tool-host-refresh')).toBeEnabled();
+        const versions = screen.getByTestId('tool-host-compatibility-versions');
+        expect(versions).toHaveTextContent(`Backend/API ${descriptor.contract_version} · UI ${descriptor.ui.version}`);
+        expect(versions).not.toHaveTextContent(descriptor.implementation_version);
+    });
+
     it('does not reload a mounted draft until the loss confirmation is accepted', async () => {
         const first = rendererFixture();
         const second = rendererFixture();

@@ -197,6 +197,7 @@
        {cardSurfaceClass} {cardBorderClass}"
     data-testid="asset-card-{asset.id}"
     data-lifecycle={asset.active ? 'active' : 'inactive'}
+    data-view-mode={cardViewMode}
     onclick={handleCardClick}
     onkeydown={(e) => e.key === 'Enter' && handleCardClick()}
     role="button"
@@ -221,6 +222,7 @@
                 {/if}
                 <button
                     class="p-1 rounded-md transition-colors {cardViewMode === 'percentage' ? 'bg-libre-green/10 text-libre-green dark:bg-libre-green/20 dark:text-green-400' : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-600 dark:hover:text-gray-300'}"
+                    data-testid="asset-card-view-toggle"
                     onclick={(e) => {
                         stop(e);
                         localViewModeOverride = cardViewMode === 'absolute' ? 'percentage' : 'absolute';

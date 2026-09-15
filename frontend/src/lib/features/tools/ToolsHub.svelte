@@ -5,6 +5,7 @@
     import {t} from '$lib/i18n';
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
     import {notify} from '$lib/stores/app/notify.svelte';
+    import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import {fetchToolCatalog} from './client';
     import {getToolAccountState, observeToolAccount, type ToolAccountState, type ToolClientError, type ToolDescriptor, type VerifiedToolCatalog} from './contracts';
     import {resolveToolRenderer, type ToolRendererResolution} from './registry';
@@ -142,7 +143,7 @@
     });
 </script>
 
-<section class="min-w-0 space-y-6" data-testid="tools-hub" data-state={viewState} data-busy={busy ? 'true' : 'false'} aria-busy={busy}>
+<section class="min-w-0 space-y-6" data-testid="tools-hub" use:guideAnchor={'tools.hub'} data-state={viewState} data-busy={busy ? 'true' : 'false'} aria-busy={busy}>
     <header class="space-y-2">
         <div class="flex min-w-0 items-center justify-between gap-3">
             <h1 bind:this={heading} tabindex="-1" class="flex items-center gap-2 text-2xl font-bold text-gray-900 outline-none dark:text-gray-100">

@@ -15,6 +15,8 @@
     import {refreshAllBrokers, getAllBrokers, getAccessibleBrokers, invalidateBroker} from '$lib/stores/reference/brokerStore';
     import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
     import {notify} from '$lib/stores/app/notify.svelte';
+    import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
+    import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import type {Broker} from '$lib/types';
 
@@ -57,6 +59,7 @@
     let targetCurrencyInitialized = false;
 
     let modalOpen = false;
+    let brokerTourPreview = false;
     let modalMode: 'create' | 'edit' = 'create';
     let editingBrokerId: number | null = null;
     let editingBrokerData: {
@@ -99,6 +102,7 @@
 
     onMount(async () => {
         await loadBrokers();
+        onboardingGuide.maybeStartContextual('broker_page_guide');
     });
 
     function asBrokerBreakdowns(value: unknown): BrokerBreakdownView[] {
@@ -188,10 +192,15 @@
     }
 
     function openCreateModal() {
+        if (onboardingGuide.active?.flow === 'broker_page_guide') {
+            onboardingGuide.dismissHost();
+        }
+        brokerTourPreview = false;
         modalMode = 'create';
         editingBrokerId = null;
         editingBrokerData = {};
         modalOpen = true;
+        onboardingGuide.maybeStartContextual('broker_guide');
     }
 
     function handleEdit(event: CustomEvent<{id: number}>) {
@@ -315,6 +324,10 @@
 
     function handleModalClose() {
         modalOpen = false;
+        brokerTourPreview = false;
+        if (onboardingGuide.active?.flow === 'broker_guide') {
+            onboardingGuide.dismissHost({restartAtFirst: true});
+        }
     }
 
     async function handleCreated() {
@@ -332,13 +345,13 @@
          header row has room. Plain `flex-wrap` reacts to the row's OWN available width instead
          (see fx/+page.svelte's equivalent header for the full note). -->
     <div class="flex flex-wrap items-start justify-between gap-4">
-        <div>
+        <div use:guideAnchor={'broker.page.overview'} data-testid="broker-page-overview-guide-target">
             <h2 class="text-lg font-semibold text-gray-700">{$_('brokers.title')}</h2>
             <p class="text-gray-500 text-sm">{$_('brokers.subtitle')}</p>
         </div>
 
         <div class="flex flex-wrap items-center gap-2 justify-end">
-            <div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+            <div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400" use:guideAnchor={'broker.page.currency'} data-testid="broker-page-currency">
                 <span class="whitespace-nowrap">{$_('common.currency')}:</span>
                 <div class="w-28">
                     <CurrencySearchSelect
@@ -357,7 +370,7 @@
             <button class="p-2 text-gray-500 hover:text-libre-green hover:bg-libre-green/10 rounded-lg transition-colors disabled:opacity-50" data-testid="brokers-refresh" disabled={loading} on:click={loadBrokers} title="Refresh">
                 <RefreshCw class={loading ? 'animate-spin' : ''} size={18} />
             </button>
-            <button class="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-all" data-testid="add-broker-button" on:click={openCreateModal}>
+            <button class="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-all" data-testid="add-broker-button" use:guideAnchor={'broker.page.add'} on:click={openCreateModal}>
                 <Plus size={18} />
                 <span class="hidden sm:inline">{$_('brokers.addBroker')}</span>
             </button>
@@ -365,14 +378,14 @@
     </div>
 
     {#if loading && brokers.length === 0 && inaccessibleBrokers.length === 0}
-        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-12 text-center border border-gray-100 dark:border-slate-700">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-12 text-center border border-gray-100 dark:border-slate-700" use:guideAnchor={'broker.page.views'} data-testid="broker-page-views">
             <div class="inline-flex items-center justify-center w-16 h-16 bg-libre-green/10 rounded-full mb-4">
                 <RefreshCw class="text-libre-green animate-spin" size={32} />
             </div>
             <p class="text-gray-500 dark:text-gray-400">{$_('common.loading')}</p>
         </div>
     {:else if error}
-        <div class="bg-white rounded-xl shadow-sm p-12 text-center border border-red-100">
+        <div class="bg-white rounded-xl shadow-sm p-12 text-center border border-red-100" use:guideAnchor={'broker.page.views'} data-testid="broker-page-views">
             <div class="inline-flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mb-4">
                 <Briefcase class="text-red-600" size={32} />
             </div>
@@ -384,7 +397,7 @@
         </div>
     {:else}
         {#if brokers.length === 0}
-            <div class="bg-white rounded-xl shadow-sm p-12 text-center border border-gray-100">
+            <div class="bg-white rounded-xl shadow-sm p-12 text-center border border-gray-100" use:guideAnchor={'broker.page.views'} data-testid="broker-page-views">
                 <div class="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
                     <Briefcase class="text-blue-600" size={32} />
                 </div>
@@ -396,7 +409,7 @@
                 </button>
             </div>
         {:else}
-            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" use:guideAnchor={'broker.page.views'} data-testid="broker-page-views">
                 {#each brokers as broker (broker.id)}
                     <BrokerCard {broker} assetCount={brokerAssetCountById[broker.id] ?? 0} summary={brokerBreakdownById[broker.id] ?? null} {targetCurrency} on:edit={handleEdit} on:delete={handleDelete} on:share={handleShare} />
                 {/each}
@@ -419,7 +432,7 @@
     {/if}
 </div>
 
-<BrokerModal brokerId={editingBrokerId} initialData={editingBrokerData} isOpen={modalOpen} mode={modalMode} onclose={handleModalClose} oncreated={handleCreated} onupdated={handleUpdated} />
+<BrokerModal brokerId={editingBrokerId} initialData={editingBrokerData} isOpen={modalOpen} mode={modalMode} tourPreview={brokerTourPreview} onclose={handleModalClose} oncreated={handleCreated} onupdated={handleUpdated} />
 
 <DeleteBrokerDialog
     brokerName={deletingBroker?.name ?? ''}
