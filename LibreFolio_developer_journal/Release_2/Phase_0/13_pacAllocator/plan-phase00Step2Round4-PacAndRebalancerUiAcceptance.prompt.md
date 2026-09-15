@@ -1,10 +1,18 @@
 # Round 4 — PAC + Ribilanciamento P1 multi-servizio
 
-**Stato:** IN CORSO — autorizzato dal developer il 2026-09-14
+**Stato:** PROTOTIPO IMPLEMENTATO E VERIFICATO, MA RESPINTO COME PRODOTTO —
+il contratto analysis-only è superato; non è la specifica attiva
 
 ← Previous: [Round 3 — PAC UI acceptance](plan-phase00Step2Round3-PacAllocatorUiAcceptance.prompt.md)
 
-→ Follow-up solver: [PAC + Ribilanciamento operativo](plan-phase00Step3-PacRebalancingSolver.prompt.md)
+→ Replacement plan:
+[Round 5 — PAC/Rebalancer operational planner](plan-phase00Step2Round5-PacRebalancerOperationalPlanner.prompt.md)
+
+→ Historical solver draft, now superseded/re-scoped:
+[PAC + Ribilanciamento operativo](plan-phase00Step3-PacRebalancingSolver.prompt.md)
+
+> Round 4 resta evidenza storica del prototipo P1 e dei suoi gate. Non prova
+> accettazione prodotto e non autorizza il ripristino di `analyze`.
 
 ## 1. Obiettivo
 
@@ -882,3 +890,6 @@ Gate finali:
 9. Solver resta escluso e tracciato nel piano collegato.
 10. Nessun artifact privato/runtime/generated non autorizzato, staging o history
     mutation.
+
+→ Follow-up:
+[Round 5 — PAC/Rebalancer operational planner](plan-phase00Step2Round5-PacRebalancerOperationalPlanner.prompt.md)

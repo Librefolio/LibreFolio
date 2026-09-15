@@ -11,7 +11,7 @@ di TODO_FUTURI.md (classificazione con l'utente) + gli 8 P4 ereditati dall'audit
 | [02_grafici_avanzati.md](02_grafici_avanzati.md) | Grafici | I10 calendar-return backend integrato; I60 Asset UI/follow-up attivi su I; P&L/candele/income ancora aperti |
 | [03_asset_dati_classificazione.md](03_asset_dati_classificazione.md) | Asset & dati | ✅ Settori bond e import CSV distribuzioni integrati e revisionati |
 | [04_brim_import.md](04_brim_import.md) | BRIM & import | ✅ eToro fee, refactor CA/helper maturity e delete-asset links integrati e revisionati |
-| [05_pac_allocation_tool.md](05_pac_allocation_tool.md) | Tool platform | Tool platform integrata; prototipo PAC/Rebalancer preservato, contratto operativo in redesign dopo review respinta |
+| [05_pac_allocation_tool.md](05_pac_allocation_tool.md) | Tool platform | Tool platform integrata; prototipo respinto; design/UI approvati e Round 7 pronto, implementazione Gate P1 frozen |
 | [06_piano_sprint.md](06_piano_sprint.md) | Analysis and sprint plan | Current-code evidence, 16 sprints, parallel-work dependency map, shared-resource ownership and developer UI review gates |
 | [07_feedback_import_critici.md](07_feedback_import_critici.md) | Urgent import/UX/update feedback | ✅ E1-E9 plus U1/U4/U5/U7/U9 integrati in `dev_release2` (`ef722b552`) |
 
@@ -29,9 +29,9 @@ checkpoint intermedi.
 | SP08 | ✅ Asset pricing refactor integrato con K (`3c85866dd`, combined `b72475f0e`): P4-1, P4-4 e S6 6.4 chiusi. |
 | SP09 | ✅ G integrato, developer-accepted e archiviato (`ebba209c5`, docs `4949b2f4c`). |
 | SP10 | ⏸️ Differito fino alla stabilizzazione chart/store. |
-| SP11 | ✅ Onboarding Round 6 implementato, verificato e developer-accepted; checkpoint J `580bd504f`, integrazione combinata in corso. |
+| SP11 | ✅ Onboarding Round 6 implementato, verificato e developer-accepted; checkpoint J `580bd504f` integrato nella baseline combinata D `e38a521f0`, non ancora nel target `dev_release2`. |
 | SP12 | ✅ Piattaforma Tool integrata (`570beb386`). |
-| SP13–SP14 | 🟡 Prototipo PAC/Rebalancer Round 4 preservato in `d66f8e58e`; review prodotto respinta, redesign collaborativo read-only attivo e nuovo piano non ancora autorizzato. |
+| SP13–SP14 | 🟡 [Round 6 UI](../13_pacAllocator/plan-phase00Step2Round6-PacRebalancerUiBlueprint.prompt.md) approvato; [Round 7](../13_pacAllocator/plan-phase00Step2Round7-PacRebalancerOperationalMigration.prompt.md) pronto per checkpoint, implementazione Gate P1 non autorizzata. |
 | SP15 | ⛔ Attende SP07 + SP11 + SP14. |
 | SP16 | ✅ Refactor `execute_batch` integrato con L (`846aefb24`, combined `ed0f4ff30`); full backend e docs verdi. |
 
@@ -133,7 +133,8 @@ I20–I50 and G1c remain unimplemented.
 rounds are implemented and automatically verified. The developer accepted the
 final Welcome, Core, contextual and Import-guide UX in
 [Round 6](../21_onboarding/plan-phase00OnboardingRound6-FinalUX.prompt.md).
-Checkpoint J is `580bd504f`; integration into the combined baseline is in progress.
+Checkpoint J `580bd504f` is integrated into clean combined D baseline
+`e38a521f0`; that baseline is not yet integrated into target `dev_release2`.
 
 ## PAC/Rebalancer prototype checkpoint - 2026-09-14
 
@@ -142,7 +143,19 @@ source-copy workflows and automated evidence are preserved in checkpoint D
 `d66f8e58e`. Manual review rejected the analysis-only product contract: the next
 iteration requires a newly approved high-level design for Broker routing, funding,
 FX and executable discrete allocation. Collaborative redesign is active; no
-replacement implementation plan or solver is approved yet.
+replacement implementation plan or solver was approved at that 2026-09-14
+checkpoint.
+
+## PAC/Rebalancer operational planning checkpoint - 2026-09-15
+
+Il developer ha approvato il
+[design end-to-end](../13_pacAllocator/pac-rebalancer-end-to-end-design.md), il
+[Round 6 UI](../13_pacAllocator/plan-phase00Step2Round6-PacRebalancerUiBlueprint.prompt.md)
+e la persistenza del
+[Round 7](../13_pacAllocator/plan-phase00Step2Round7-PacRebalancerOperationalMigration.prompt.md).
+La [cronologia](../13_pacAllocator/pac-rebalancer-decision-chronicle.md) resta storica.
+Il checkpoint coordinatore precede una seconda richiesta Gate P1: nessun codice/test
+operativo è ancora autorizzato.
 
 ## Regole della cartella
 

@@ -334,7 +334,7 @@ Baseline `a9138140`; superfici, dipendenze, rischi e DoD completi in
 | U5 | ✅ Completato da E: tooltip breve localizzato. | SP01 |
 | U6 | ✅ Rimozione duplicate-mode e fast-open bulk confermati; form vivo da preservare. | Nessun codice |
 | U7 | ✅ Completato da E: supporto condiviso in DonationPopup/About e cinque social. | SP02 |
-| U8 | ✅ [IMPLEMENTATO, VERIFICATO E DEVELOPER-ACCEPTED](../21_onboarding/plan-phase00OnboardingRound6-FinalUX.prompt.md), checkpoint J `580bd504f`; integrazione nella baseline combinata in corso. | SP11 |
+| U8 | ✅ [IMPLEMENTATO, VERIFICATO E DEVELOPER-ACCEPTED](../21_onboarding/plan-phase00OnboardingRound6-FinalUX.prompt.md), checkpoint J `580bd504f` integrato nella baseline combinata D `e38a521f0`, non ancora nel target `dev_release2`. | SP11 |
 | U9 | ✅ Completato da E: header auto-hide desktop/mobile con guardie lifecycle. | SP02 |
 
 La [mappa nel piano](06_piano_sprint.md) separa corsie indipendenti da file condivisi:
