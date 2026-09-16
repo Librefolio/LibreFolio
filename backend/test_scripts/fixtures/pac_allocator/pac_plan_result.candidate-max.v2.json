@@ -1,0 +1,174 @@
+{
+  "operation": "plan",
+  "result_state": "ready_no_op",
+  "availability": "ready",
+  "outcome": "no_op",
+  "snapshot": {
+    "snapshot_id": "snapshot-pac-candidate-max",
+    "request_fingerprint": "fixture-pac-candidate-max-not-a-production-hash"
+  },
+  "catalogs": {
+    "assets": [
+      {"asset_id": "asset-01", "name": "Synthetic Asset 01", "ticker": "S01", "asset_class": "etf"},
+      {"asset_id": "asset-02", "name": "Synthetic Asset 02", "ticker": "S02", "asset_class": "etf"},
+      {"asset_id": "asset-03", "name": "Synthetic Asset 03", "ticker": "S03", "asset_class": "etf"},
+      {"asset_id": "asset-04", "name": "Synthetic Asset 04", "ticker": "S04", "asset_class": "etf"},
+      {"asset_id": "asset-05", "name": "Synthetic Asset 05", "ticker": "S05", "asset_class": "etf"},
+      {"asset_id": "asset-06", "name": "Synthetic Asset 06", "ticker": "S06", "asset_class": "etf"},
+      {"asset_id": "asset-07", "name": "Synthetic Asset 07", "ticker": "S07", "asset_class": "etf"},
+      {"asset_id": "asset-08", "name": "Synthetic Asset 08", "ticker": "S08", "asset_class": "etf"},
+      {"asset_id": "asset-09", "name": "Synthetic Asset 09", "ticker": "S09", "asset_class": "fund"},
+      {"asset_id": "asset-10", "name": "Synthetic Asset 10", "ticker": "S10", "asset_class": "fund"},
+      {"asset_id": "asset-11", "name": "Synthetic Asset 11", "ticker": "S11", "asset_class": "fund"},
+      {"asset_id": "asset-12", "name": "Synthetic Asset 12", "ticker": "S12", "asset_class": "fund"},
+      {"asset_id": "asset-13", "name": "Synthetic Asset 13", "ticker": "S13", "asset_class": "fund"},
+      {"asset_id": "asset-14", "name": "Synthetic Asset 14", "ticker": "S14", "asset_class": "fund"},
+      {"asset_id": "asset-15", "name": "Synthetic Asset 15", "ticker": "S15", "asset_class": "fund"},
+      {"asset_id": "asset-16", "name": "Synthetic Asset 16", "ticker": "S16", "asset_class": "fund"}
+    ],
+    "brokers": [
+      {"broker_id": "broker-eur", "name": "Synthetic EUR Broker"},
+      {"broker_id": "broker-usd", "name": "Synthetic USD Broker"},
+      {"broker_id": "broker-gbp", "name": "Synthetic GBP Broker"},
+      {"broker_id": "broker-jpy", "name": "Synthetic JPY Broker"}
+    ],
+    "currencies": [
+      {"currency": "EUR", "minor_unit": "0.01"},
+      {"currency": "USD", "minor_unit": "0.01"},
+      {"currency": "GBP", "minor_unit": "0.01"},
+      {"currency": "JPY", "minor_unit": "1"}
+    ]
+  },
+  "provenance": [
+    {
+      "kind": "manual",
+      "provenance_id": "prov-candidate-max",
+      "label": "Synthetic candidate-max fixture",
+      "entered_at": "2026-09-15T13:00:00Z"
+    }
+  ],
+  "scenario_basis": {
+    "as_of": "2026-09-15",
+    "valuation_currency": "EUR",
+    "policy": "min_fragmentation",
+    "counts": {
+      "assets": 16,
+      "brokers": 4,
+      "currencies": 4,
+      "holdings": 0,
+      "existing_cash": 4,
+      "contributions": 0,
+      "funding_routes": 0,
+      "capabilities": 4,
+      "valuation_rates": 3,
+      "fx_quotes": 3,
+      "fx_routes": 3,
+      "order_routes": 32,
+      "provenance": 1
+    },
+    "current_invested": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
+    "selected_funding": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
+    "reachable_funding": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
+    "trapped_funding": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
+    "fixed_reference": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}
+  },
+  "proof": {
+    "kind": "not_proven",
+    "reason_code": "allocation.exact_proof_not_established"
+  },
+  "stop_reason": "completed",
+  "solver_evidence": {
+    "kind": "not_run",
+    "reason": "allocation.solver_not_required"
+  },
+  "issues": [
+    {
+      "code": "allocation.zero_selected_funding",
+      "severity": "info",
+      "kind": "constraint",
+      "path": {
+        "kind": "section",
+        "section": "liquidity"
+      },
+      "message_key": "tools.allocation.issues.zeroSelectedFunding",
+      "params": []
+    }
+  ],
+  "primary_solution": {
+    "solution_id": "solution-pac-candidate-max-primary",
+    "solution_kind": "primary",
+    "validation": "decimal_verified",
+    "asset_rows": [
+      {"asset_id": "asset-01", "target_weight": {"kind": "finite_decimal", "value": "0.0625"}, "target_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "final_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "residual": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "final_weight": {"kind": "unavailable", "reason": "zero_final_invested"}, "buy_mid_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}},
+      {"asset_id": "asset-02", "target_weight": {"kind": "finite_decimal", "value": "0.0625"}, "target_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "final_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "residual": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "final_weight": {"kind": "unavailable", "reason": "zero_final_invested"}, "buy_mid_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}},
+      {"asset_id": "asset-03", "target_weight": {"kind": "finite_decimal", "value": "0.0625"}, "target_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "final_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "residual": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "final_weight": {"kind": "unavailable", "reason": "zero_final_invested"}, "buy_mid_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}},
+      {"asset_id": "asset-04", "target_weight": {"kind": "finite_decimal", "value": "0.0625"}, "target_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "final_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "residual": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "final_weight": {"kind": "unavailable", "reason": "zero_final_invested"}, "buy_mid_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}},
+      {"asset_id": "asset-05", "target_weight": {"kind": "finite_decimal", "value": "0.0625"}, "target_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "final_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "residual": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "final_weight": {"kind": "unavailable", "reason": "zero_final_invested"}, "buy_mid_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}},
+      {"asset_id": "asset-06", "target_weight": {"kind": "finite_decimal", "value": "0.0625"}, "target_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "final_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "residual": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "final_weight": {"kind": "unavailable", "reason": "zero_final_invested"}, "buy_mid_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}},
+      {"asset_id": "asset-07", "target_weight": {"kind": "finite_decimal", "value": "0.0625"}, "target_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "final_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "residual": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "final_weight": {"kind": "unavailable", "reason": "zero_final_invested"}, "buy_mid_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}},
+      {"asset_id": "asset-08", "target_weight": {"kind": "finite_decimal", "value": "0.0625"}, "target_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "final_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "residual": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "final_weight": {"kind": "unavailable", "reason": "zero_final_invested"}, "buy_mid_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}},
+      {"asset_id": "asset-09", "target_weight": {"kind": "finite_decimal", "value": "0.0625"}, "target_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "final_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "residual": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "final_weight": {"kind": "unavailable", "reason": "zero_final_invested"}, "buy_mid_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}},
+      {"asset_id": "asset-10", "target_weight": {"kind": "finite_decimal", "value": "0.0625"}, "target_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "final_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "residual": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "final_weight": {"kind": "unavailable", "reason": "zero_final_invested"}, "buy_mid_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}},
+      {"asset_id": "asset-11", "target_weight": {"kind": "finite_decimal", "value": "0.0625"}, "target_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "final_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "residual": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "final_weight": {"kind": "unavailable", "reason": "zero_final_invested"}, "buy_mid_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}},
+      {"asset_id": "asset-12", "target_weight": {"kind": "finite_decimal", "value": "0.0625"}, "target_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "final_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "residual": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "final_weight": {"kind": "unavailable", "reason": "zero_final_invested"}, "buy_mid_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}},
+      {"asset_id": "asset-13", "target_weight": {"kind": "finite_decimal", "value": "0.0625"}, "target_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "final_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "residual": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "final_weight": {"kind": "unavailable", "reason": "zero_final_invested"}, "buy_mid_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}},
+      {"asset_id": "asset-14", "target_weight": {"kind": "finite_decimal", "value": "0.0625"}, "target_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "final_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "residual": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "final_weight": {"kind": "unavailable", "reason": "zero_final_invested"}, "buy_mid_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}},
+      {"asset_id": "asset-15", "target_weight": {"kind": "finite_decimal", "value": "0.0625"}, "target_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "final_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "residual": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "final_weight": {"kind": "unavailable", "reason": "zero_final_invested"}, "buy_mid_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}},
+      {"asset_id": "asset-16", "target_weight": {"kind": "finite_decimal", "value": "0.0625"}, "target_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "final_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "residual": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "final_weight": {"kind": "unavailable", "reason": "zero_final_invested"}, "buy_mid_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}}
+    ],
+    "funding_actions": [],
+    "fx_actions": [],
+    "order_rows": [],
+    "ledger_rows": [
+      {"broker_id": "broker-eur", "currency": "EUR", "initial_selected": "0", "funding_in": "0", "funding_out": "0", "fx_debit": "0", "fx_credit": "0", "buy_debit": "0", "gross_sell_credit": "0", "buy_fees": "0", "sell_fees": "0", "fx_fees": "0", "broker_withheld_tax": "0", "self_reserved_tax": "0", "fx_buffer": "0", "rounding_delta": "0", "final_spendable": "0", "final_physical": "0"},
+      {"broker_id": "broker-usd", "currency": "USD", "initial_selected": "0", "funding_in": "0", "funding_out": "0", "fx_debit": "0", "fx_credit": "0", "buy_debit": "0", "gross_sell_credit": "0", "buy_fees": "0", "sell_fees": "0", "fx_fees": "0", "broker_withheld_tax": "0", "self_reserved_tax": "0", "fx_buffer": "0", "rounding_delta": "0", "final_spendable": "0", "final_physical": "0"},
+      {"broker_id": "broker-gbp", "currency": "GBP", "initial_selected": "0", "funding_in": "0", "funding_out": "0", "fx_debit": "0", "fx_credit": "0", "buy_debit": "0", "gross_sell_credit": "0", "buy_fees": "0", "sell_fees": "0", "fx_fees": "0", "broker_withheld_tax": "0", "self_reserved_tax": "0", "fx_buffer": "0", "rounding_delta": "0", "final_spendable": "0", "final_physical": "0"},
+      {"broker_id": "broker-jpy", "currency": "JPY", "initial_selected": "0", "funding_in": "0", "funding_out": "0", "fx_debit": "0", "fx_credit": "0", "buy_debit": "0", "gross_sell_credit": "0", "buy_fees": "0", "sell_fees": "0", "fx_fees": "0", "broker_withheld_tax": "0", "self_reserved_tax": "0", "fx_buffer": "0", "rounding_delta": "0", "final_spendable": "0", "final_physical": "0"}
+    ],
+    "exposure_rows": [
+      {"dimension": "asset_type", "category_id": "equity", "label": "Equity", "target_weight": {"kind": "finite_decimal", "value": "1"}, "final_weight": {"kind": "unavailable", "reason": "zero_final_invested"}, "provenance_ids": ["prov-candidate-max"]},
+      {"dimension": "sector", "category_id": "unknown", "label": "Unknown", "target_weight": {"kind": "finite_decimal", "value": "1"}, "final_weight": {"kind": "unavailable", "reason": "zero_final_invested"}, "provenance_ids": ["prov-candidate-max"]},
+      {"dimension": "geography", "category_id": "unknown", "label": "Unknown", "target_weight": {"kind": "finite_decimal", "value": "1"}, "final_weight": {"kind": "unavailable", "reason": "zero_final_invested"}, "provenance_ids": ["prov-candidate-max"]}
+    ],
+    "accounting": {
+      "current_invested": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
+      "selected_funding": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
+      "reachable_funding": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
+      "trapped_funding": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
+      "fixed_reference": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
+      "final_invested": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
+      "shortfall": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
+      "free_cash": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
+      "physical_reserves": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
+      "economic_losses": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
+      "rounding_delta": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
+      "rounding_bound": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
+      "identity_delta": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}
+    },
+    "costs": {
+      "buy_fees": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
+      "sell_fees": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
+      "fx_fees": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
+      "fx_spread_loss": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
+      "execution_margin_cost": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
+      "broker_withheld_tax": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
+      "self_reserved_tax": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
+      "fx_buffer": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}
+    },
+    "objectives": {
+      "stages": [
+        {"objective_code": "fixed_l2", "ordinal": 1, "sense": "min", "unit": {"kind": "valuation_money_squared", "currency_code": "EUR"}, "value": {"kind": "finite_decimal", "value": "0"}},
+        {"objective_code": "shortfall", "ordinal": 2, "sense": "min", "unit": {"kind": "valuation_money", "currency_code": "EUR"}, "value": {"kind": "finite_decimal", "value": "0"}},
+        {"objective_code": "split_asset_count", "ordinal": 3, "sense": "min", "unit": {"kind": "count"}, "value": {"kind": "finite_decimal", "value": "0"}},
+        {"objective_code": "active_order_rows", "ordinal": 4, "sense": "min", "unit": {"kind": "count"}, "value": {"kind": "finite_decimal", "value": "0"}},
+        {"objective_code": "route_priority", "ordinal": 5, "sense": "min", "unit": {"kind": "ordinal_penalty"}, "value": {"kind": "finite_decimal", "value": "0"}},
+        {"objective_code": "explicit_cost", "ordinal": 6, "sense": "min", "unit": {"kind": "valuation_money", "currency_code": "EUR"}, "value": {"kind": "finite_decimal", "value": "0"}}
+      ],
+      "tie_break": {"code": "canonical_key", "unit": {"kind": "canonical_key"}, "ordered_keys": []}
+    }
+  },
+  "deployment": {
+    "kind": "coincident",
+    "reason_code": "allocation.no_actions_selected"
+  }
+}
