@@ -88,6 +88,16 @@ def services_pac_analyze(verbose: bool = False, test_names: list = None) -> bool
     return run_command(cmd, "PAC initial-state analysis tests", verbose=verbose)
 
 
+def services_pac_planner_core(verbose: bool = False, test_names: list = None) -> bool:
+    """Test exact PAC/Rebalancer numeric primitives."""
+    print_section("Services: PAC/Rebalancer Exact Core")
+    cmd = _build_pytest_cmd(
+        "backend/test_scripts/test_services/test_pac_planner_exact.py",
+        test_names,
+    )
+    return run_command(cmd, "PAC/Rebalancer exact core tests", verbose=verbose)
+
+
 def services_fx_conversion(verbose: bool = False, test_names: list = None) -> bool:
     """Test FX conversion service logic."""
     print_section("Services: FX Conversion Logic")
@@ -797,6 +807,7 @@ Note: No backend server required.
         exclusive_because="its assertions are about the oldest and newest EUR/USD row in the whole fx_rates table (backward fill, missing-rate boundary), and the service under test queries that table without a source filter, so a neighbour inserting any EUR/USD rate moves the boundary this unit measures",
     )
     add_test(cat, "pac-analyze", services_pac_analyze, name="PAC Initial-State Analyze", desc="Exact initial quantities, native cash, reference FX, per-row target metrics and partial data", isolation="pure")
+    add_test(cat, "pac-planner-core", services_pac_planner_core, name="PAC/Rebalancer Exact Core", desc="Canonical rational arithmetic, posting, fee, FX and tax primitives", isolation="pure")
     add_test(cat, "asset-source", services_asset_source, name="Asset Source", desc="Provider assignment, synthetic yield")
     add_test(cat, "asset-source-refresh", services_asset_source_refresh, name="Asset Source Refresh", desc="Bulk refresh orchestration smoke test")
     add_test(cat, "provider-registry", services_provider_registry, name="Provider Registry", desc="Registration, lookup, priority, fallback")
