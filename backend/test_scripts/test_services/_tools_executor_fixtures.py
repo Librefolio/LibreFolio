@@ -284,14 +284,21 @@ class FixturePlugin(ToolPlugin):
                 version="1.0.0",
             ),
             operations=(
+                # Deliberately long-lived for real spawn/teardown probes, while
+                # expressing every generic resource-policy budget explicitly.
                 ToolOperationPolicy(
                     operation="exercise",
                     deterministic=False,
                     max_parameter_bytes=1_048_576,
                     max_result_bytes=1_048_576,
-                    queue_timeout_ms=120_000,
-                    soft_timeout_ms=119_000,
-                    job_timeout_ms=120_000,
+                    queue_timeout_ms=30_000,
+                    engine_timeout_ms=30_000,
+                    job_timeout_ms=60_000,
+                    soft_timeout_ms=50_000,
+                    cleanup_timeout_ms=5_000,
+                    request_timeout_ms=120_000,
+                    client_timeout_ms=130_000,
+                    memory_limit_bytes=1_073_741_824,
                 ),
             ),
             input_type=FixtureInput,

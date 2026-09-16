@@ -27,17 +27,45 @@ class ToolExecutionError(RuntimeError):
 
 
 @dataclass(frozen=True, slots=True)
+class ToolEngineWindow:
+    """One cooperative engine budget inside the Tool soft wall."""
+
+    deadline: float
+    timeout_ms: int
+    post_engine_reserve_ms: int
+
+
+@dataclass(frozen=True, slots=True)
 class ToolExecutionContext:
     execution_id: str
     soft_deadline: float
     hard_deadline: float
     cancelled: Callable[[], bool]
+    engine_timeout_ms: int = 4_000
 
     def checkpoint(self) -> None:
         if self.cancelled():
             raise ToolExecutionError("execution_limit", retryable=True)
         if time.monotonic() >= self.soft_deadline:
             raise ToolExecutionError("execution_limit", retryable=True)
+
+    def remaining_soft_ms(self) -> int:
+        return max(0, int((self.soft_deadline - time.monotonic()) * 1000))
+
+    def claim_engine_window(self, *, post_engine_reserve_ms: int) -> ToolEngineWindow:
+        """Reserve a full engine window plus caller-owned post-processing time."""
+        if type(post_engine_reserve_ms) is not int or post_engine_reserve_ms < 0:
+            raise ValueError("Post-engine reserve must be a non-negative integer")
+        self.checkpoint()
+        started = time.monotonic()
+        required_ms = self.engine_timeout_ms + post_engine_reserve_ms
+        if (self.soft_deadline - started) * 1000 < required_ms:
+            raise ToolExecutionError("execution_limit", retryable=True)
+        return ToolEngineWindow(
+            deadline=started + self.engine_timeout_ms / 1000,
+            timeout_ms=self.engine_timeout_ms,
+            post_engine_reserve_ms=post_engine_reserve_ms,
+        )
 
 
 @dataclass(frozen=True, slots=True)

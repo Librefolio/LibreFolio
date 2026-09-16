@@ -64,6 +64,8 @@ class ToolWorkerJob:
     max_parameter_bytes: int
     max_result_bytes: int
     max_json_depth: int
+    engine_timeout_ms: int = 4_000
+    memory_limit_bytes: int = 1_073_741_824
 
 
 def _elapsed_ms(started_ns: int) -> int:
@@ -116,7 +118,13 @@ def _error_code_for_phase(phase: str) -> ToolErrorCode:
 def _execute(job: ToolWorkerJob, cancellation: CancellationSignal, registry_class: type[ToolPluginRegistry]) -> dict[str, object]:
     metrics: dict[str, int | None] = {}
     phase = "definition"
-    context = ToolExecutionContext(job.execution_id, job.soft_deadline, job.hard_deadline, cancellation.is_set)
+    context = ToolExecutionContext(
+        execution_id=job.execution_id,
+        soft_deadline=job.soft_deadline,
+        hard_deadline=job.hard_deadline,
+        cancelled=cancellation.is_set,
+        engine_timeout_ms=job.engine_timeout_ms,
+    )
     try:
         context.checkpoint()
         definition = _job_definition(job, registry_class)
