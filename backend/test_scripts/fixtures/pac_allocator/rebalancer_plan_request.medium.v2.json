@@ -1,0 +1,878 @@
+{
+  "operation": "plan",
+  "snapshot": {
+    "snapshot_id": "snapshot-rebalancer-medium",
+    "draft_revision": 7,
+    "captured_at": "2026-09-15T12:30:00Z"
+  },
+  "as_of": "2026-09-15",
+  "valuation_currency": "EUR",
+  "currency_specs": [
+    {
+      "currency": "EUR",
+      "minor_unit": "0.01"
+    },
+    {
+      "currency": "USD",
+      "minor_unit": "0.01"
+    }
+  ],
+  "provenance": [
+    {
+      "kind": "domain_copy",
+      "provenance_id": "prov-portfolio",
+      "domain": "portfolio",
+      "source_ref": "synthetic-portfolio",
+      "source_label": "Synthetic portfolio fixture",
+      "captured_at": "2026-09-15T12:25:00Z"
+    },
+    {
+      "kind": "domain_copy",
+      "provenance_id": "prov-market",
+      "domain": "market_data",
+      "source_ref": "synthetic-market-snapshot",
+      "source_label": "Synthetic market fixture",
+      "captured_at": "2026-09-15T12:20:00Z"
+    },
+    {
+      "kind": "manual",
+      "provenance_id": "prov-manual",
+      "label": "Synthetic manual fixture",
+      "entered_at": "2026-09-15T12:30:00Z"
+    }
+  ],
+  "valuation_rates": [
+    {
+      "valuation_rate_id": "valuation-usd-eur",
+      "source_currency": "USD",
+      "destination_currency": "EUR",
+      "rate": "0.8",
+      "reference_date": "2026-09-15",
+      "freshness": {
+        "kind": "fresh"
+      },
+      "provenance_id": "prov-market"
+    }
+  ],
+  "assets": [
+    {
+      "asset_id": "asset-a",
+      "identity": {
+        "kind": "domain_asset",
+        "source_asset_id": "synthetic-asset-a",
+        "name": "Synthetic Asset A",
+        "ticker": "SYNA",
+        "asset_class": "etf"
+      },
+      "quote": {
+        "amount": "10",
+        "currency": "EUR",
+        "quote_base_quantity": "1",
+        "reference_date": "2026-09-15",
+        "freshness": {
+          "kind": "fresh"
+        },
+        "provenance_id": "prov-market"
+      },
+      "exposures": [
+        {
+          "dimension": "asset_type",
+          "category_id": "equity",
+          "label": "Equity",
+          "weight": "1",
+          "provenance_id": "prov-market"
+        },
+        {
+          "dimension": "sector",
+          "category_id": "sector-a",
+          "label": "Sector A",
+          "weight": "1",
+          "provenance_id": "prov-market"
+        },
+        {
+          "dimension": "geography",
+          "category_id": "unknown",
+          "label": "Unknown",
+          "weight": "1",
+          "provenance_id": "prov-market"
+        }
+      ]
+    },
+    {
+      "asset_id": "asset-b",
+      "identity": {
+        "kind": "domain_asset",
+        "source_asset_id": "synthetic-asset-b",
+        "name": "Synthetic Asset B",
+        "ticker": "SYNB",
+        "asset_class": "etf"
+      },
+      "quote": {
+        "amount": "20",
+        "currency": "EUR",
+        "quote_base_quantity": "1",
+        "reference_date": "2026-09-15",
+        "freshness": {
+          "kind": "fresh"
+        },
+        "provenance_id": "prov-market"
+      },
+      "exposures": [
+        {
+          "dimension": "asset_type",
+          "category_id": "equity",
+          "label": "Equity",
+          "weight": "1",
+          "provenance_id": "prov-market"
+        },
+        {
+          "dimension": "sector",
+          "category_id": "sector-b",
+          "label": "Sector B",
+          "weight": "1",
+          "provenance_id": "prov-market"
+        },
+        {
+          "dimension": "geography",
+          "category_id": "unknown",
+          "label": "Unknown",
+          "weight": "1",
+          "provenance_id": "prov-market"
+        }
+      ]
+    },
+    {
+      "asset_id": "asset-c",
+      "identity": {
+        "kind": "domain_asset",
+        "source_asset_id": "synthetic-asset-c",
+        "name": "Synthetic Asset C",
+        "ticker": "SYNC",
+        "asset_class": "etf"
+      },
+      "quote": {
+        "amount": "25",
+        "currency": "USD",
+        "quote_base_quantity": "1",
+        "reference_date": "2026-09-15",
+        "freshness": {
+          "kind": "fresh"
+        },
+        "provenance_id": "prov-market"
+      },
+      "exposures": [
+        {
+          "dimension": "asset_type",
+          "category_id": "equity",
+          "label": "Equity",
+          "weight": "1",
+          "provenance_id": "prov-market"
+        },
+        {
+          "dimension": "sector",
+          "category_id": "sector-c",
+          "label": "Sector C",
+          "weight": "1",
+          "provenance_id": "prov-market"
+        },
+        {
+          "dimension": "geography",
+          "category_id": "unknown",
+          "label": "Unknown",
+          "weight": "1",
+          "provenance_id": "prov-market"
+        }
+      ]
+    },
+    {
+      "asset_id": "asset-d",
+      "identity": {
+        "kind": "manual_asset",
+        "name": "Synthetic Asset D",
+        "ticker": "SYND",
+        "asset_class": "fund"
+      },
+      "quote": {
+        "amount": "5",
+        "currency": "EUR",
+        "quote_base_quantity": "1",
+        "reference_date": "2026-09-15",
+        "freshness": {
+          "kind": "fresh"
+        },
+        "provenance_id": "prov-manual"
+      },
+      "exposures": [
+        {
+          "dimension": "asset_type",
+          "category_id": "equity",
+          "label": "Equity",
+          "weight": "1",
+          "provenance_id": "prov-manual"
+        },
+        {
+          "dimension": "sector",
+          "category_id": "sector-d",
+          "label": "Sector D",
+          "weight": "1",
+          "provenance_id": "prov-manual"
+        },
+        {
+          "dimension": "geography",
+          "category_id": "unknown",
+          "label": "Unknown",
+          "weight": "1",
+          "provenance_id": "prov-manual"
+        }
+      ]
+    }
+  ],
+  "brokers": [
+    {
+      "broker_id": "broker-alpha",
+      "identity": {
+        "kind": "domain_broker",
+        "source_broker_id": "synthetic-broker-alpha",
+        "name": "Synthetic Broker Alpha",
+        "active": false
+      },
+      "provenance_id": "prov-portfolio",
+      "capabilities": [
+        {
+          "kind": "whole_quantity",
+          "capability_id": "cap-alpha-eur-whole",
+          "currency": "EUR",
+          "fx_mode": "native_currency_required",
+          "quantity_unit": "asset_unit",
+          "quantity_step": "1"
+        }
+      ],
+      "fee_schedules": [
+        {
+          "fee_schedule_id": "fee-alpha-eur-buy",
+          "capability_id": "cap-alpha-eur-whole",
+          "side": "buy",
+          "fixed_fee": {
+            "amount": "0",
+            "currency": "EUR"
+          },
+          "rate": "0",
+          "variable_floor": {
+            "amount": "0",
+            "currency": "EUR"
+          },
+          "variable_cap": {
+            "kind": "amount",
+            "amount": {
+              "amount": "0",
+              "currency": "EUR"
+            }
+          }
+        },
+        {
+          "fee_schedule_id": "fee-alpha-eur-sell",
+          "capability_id": "cap-alpha-eur-whole",
+          "side": "sell",
+          "fixed_fee": {
+            "amount": "0",
+            "currency": "EUR"
+          },
+          "rate": "0",
+          "variable_floor": {
+            "amount": "0",
+            "currency": "EUR"
+          },
+          "variable_cap": {
+            "kind": "amount",
+            "amount": {
+              "amount": "0",
+              "currency": "EUR"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "broker_id": "broker-beta",
+      "identity": {
+        "kind": "manual_broker",
+        "name": "Synthetic Broker Beta"
+      },
+      "provenance_id": "prov-manual",
+      "capabilities": [
+        {
+          "kind": "monetary_amount",
+          "capability_id": "cap-beta-eur-money",
+          "currency": "EUR",
+          "fx_mode": "native_currency_required",
+          "order_amount_step": {
+            "amount": "0.01",
+            "currency": "EUR"
+          }
+        },
+        {
+          "kind": "monetary_amount",
+          "capability_id": "cap-beta-usd-money",
+          "currency": "USD",
+          "fx_mode": "native_currency_required",
+          "order_amount_step": {
+            "amount": "0.01",
+            "currency": "USD"
+          }
+        }
+      ],
+      "fee_schedules": [
+        {
+          "fee_schedule_id": "fee-beta-eur-buy",
+          "capability_id": "cap-beta-eur-money",
+          "side": "buy",
+          "fixed_fee": {
+            "amount": "0",
+            "currency": "EUR"
+          },
+          "rate": "0",
+          "variable_floor": {
+            "amount": "0",
+            "currency": "EUR"
+          },
+          "variable_cap": {
+            "kind": "amount",
+            "amount": {
+              "amount": "0",
+              "currency": "EUR"
+            }
+          }
+        },
+        {
+          "fee_schedule_id": "fee-beta-eur-sell",
+          "capability_id": "cap-beta-eur-money",
+          "side": "sell",
+          "fixed_fee": {
+            "amount": "0.10",
+            "currency": "EUR"
+          },
+          "rate": "0.005",
+          "variable_floor": {
+            "amount": "0.25",
+            "currency": "EUR"
+          },
+          "variable_cap": {
+            "kind": "amount",
+            "amount": {
+              "amount": "1.00",
+              "currency": "EUR"
+            }
+          }
+        },
+        {
+          "fee_schedule_id": "fee-beta-usd-buy",
+          "capability_id": "cap-beta-usd-money",
+          "side": "buy",
+          "fixed_fee": {
+            "amount": "0",
+            "currency": "USD"
+          },
+          "rate": "0",
+          "variable_floor": {
+            "amount": "0",
+            "currency": "USD"
+          },
+          "variable_cap": {
+            "kind": "amount",
+            "amount": {
+              "amount": "0",
+              "currency": "USD"
+            }
+          }
+        },
+        {
+          "fee_schedule_id": "fee-beta-usd-sell",
+          "capability_id": "cap-beta-usd-money",
+          "side": "sell",
+          "fixed_fee": {
+            "amount": "0",
+            "currency": "USD"
+          },
+          "rate": "0",
+          "variable_floor": {
+            "amount": "0",
+            "currency": "USD"
+          },
+          "variable_cap": {
+            "kind": "amount",
+            "amount": {
+              "amount": "0",
+              "currency": "USD"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "holdings": [
+    {
+      "holding_id": "holding-a-alpha",
+      "asset_id": "asset-a",
+      "broker_id": "broker-alpha",
+      "custody_quantity": "8",
+      "economic_share": "1.25",
+      "planning_quantity": "8",
+      "quantity_unit": "asset_unit",
+      "provenance_id": "prov-portfolio"
+    },
+    {
+      "holding_id": "holding-b-beta",
+      "asset_id": "asset-b",
+      "broker_id": "broker-beta",
+      "custody_quantity": "1",
+      "economic_share": "1",
+      "planning_quantity": "1",
+      "quantity_unit": "asset_unit",
+      "provenance_id": "prov-portfolio"
+    },
+    {
+      "holding_id": "holding-c-beta",
+      "asset_id": "asset-c",
+      "broker_id": "broker-beta",
+      "custody_quantity": "2",
+      "economic_share": "1",
+      "planning_quantity": "2",
+      "quantity_unit": "asset_unit",
+      "provenance_id": "prov-portfolio"
+    },
+    {
+      "holding_id": "holding-d-alpha",
+      "asset_id": "asset-d",
+      "broker_id": "broker-alpha",
+      "custody_quantity": "2",
+      "economic_share": "1",
+      "planning_quantity": "2",
+      "quantity_unit": "asset_unit",
+      "provenance_id": "prov-manual"
+    }
+  ],
+  "existing_cash": [],
+  "contributions": [
+    {
+      "contribution_id": "contribution-eur",
+      "label": "Synthetic new contribution",
+      "amount": {
+        "amount": "50",
+        "currency": "EUR"
+      },
+      "provenance_id": "prov-manual"
+    }
+  ],
+  "funding_routes": [
+    {
+      "funding_route_id": "fund-contribution-alpha",
+      "source": {
+        "kind": "contribution",
+        "contribution_id": "contribution-eur"
+      },
+      "broker_id": "broker-alpha",
+      "currency": "EUR",
+      "priority": 1,
+      "transfer_cap": {
+        "amount": "10",
+        "currency": "EUR"
+      },
+      "provenance_id": "prov-manual"
+    },
+    {
+      "funding_route_id": "fund-contribution-beta",
+      "source": {
+        "kind": "contribution",
+        "contribution_id": "contribution-eur"
+      },
+      "broker_id": "broker-beta",
+      "currency": "EUR",
+      "priority": 2,
+      "transfer_cap": {
+        "amount": "40",
+        "currency": "EUR"
+      },
+      "provenance_id": "prov-manual"
+    }
+  ],
+  "order_routes": [
+    {
+      "route_id": "route-a-alpha-sell",
+      "asset_id": "asset-a",
+      "broker_id": "broker-alpha",
+      "capability_id": "cap-alpha-eur-whole",
+      "side": "sell",
+      "gross_amount_requested": null,
+      "priority": 1,
+      "minimum_if_active": {
+        "kind": "whole_quantity",
+        "quantity": "0",
+        "unit": "asset_unit"
+      },
+      "required_minimum": {
+        "kind": "none"
+      },
+      "cap": {
+        "kind": "quantity",
+        "quantity": "3",
+        "unit": "asset_unit"
+      },
+      "execution_margin_rate": "0",
+      "fee_schedule_id": "fee-alpha-eur-sell",
+      "provenance_id": "prov-manual"
+    },
+    {
+      "route_id": "route-a-alpha-buy",
+      "asset_id": "asset-a",
+      "broker_id": "broker-alpha",
+      "capability_id": "cap-alpha-eur-whole",
+      "side": "buy",
+      "priority": 1,
+      "minimum_if_active": {
+        "kind": "whole_quantity",
+        "quantity": "0",
+        "unit": "asset_unit"
+      },
+      "required_minimum": {
+        "kind": "none"
+      },
+      "cap": {
+        "kind": "quantity",
+        "quantity": "10",
+        "unit": "asset_unit"
+      },
+      "execution_margin_rate": "0",
+      "fee_schedule_id": "fee-alpha-eur-buy",
+      "provenance_id": "prov-manual"
+    },
+    {
+      "route_id": "route-b-beta-buy",
+      "asset_id": "asset-b",
+      "broker_id": "broker-beta",
+      "capability_id": "cap-beta-eur-money",
+      "side": "buy",
+      "priority": 1,
+      "minimum_if_active": {
+        "kind": "monetary_amount",
+        "amount": {
+          "amount": "0",
+          "currency": "EUR"
+        }
+      },
+      "required_minimum": {
+        "kind": "none"
+      },
+      "cap": {
+        "kind": "notional",
+        "amount": {
+          "amount": "30",
+          "currency": "EUR"
+        }
+      },
+      "execution_margin_rate": "0",
+      "fee_schedule_id": "fee-beta-eur-buy",
+      "provenance_id": "prov-manual"
+    },
+    {
+      "route_id": "route-b-beta-sell",
+      "asset_id": "asset-b",
+      "broker_id": "broker-beta",
+      "capability_id": "cap-beta-eur-money",
+      "side": "sell",
+      "gross_amount_requested": {
+        "amount": "20.00",
+        "currency": "EUR"
+      },
+      "priority": 1,
+      "minimum_if_active": {
+        "kind": "monetary_amount",
+        "amount": {
+          "amount": "5.00",
+          "currency": "EUR"
+        }
+      },
+      "required_minimum": {
+        "kind": "none"
+      },
+      "cap": {
+        "kind": "notional",
+        "amount": {
+          "amount": "20.00",
+          "currency": "EUR"
+        }
+      },
+      "execution_margin_rate": "0.01",
+      "fee_schedule_id": "fee-beta-eur-sell",
+      "provenance_id": "prov-manual"
+    },
+    {
+      "route_id": "route-b-alpha-buy",
+      "asset_id": "asset-b",
+      "broker_id": "broker-alpha",
+      "capability_id": "cap-alpha-eur-whole",
+      "side": "buy",
+      "priority": 2,
+      "minimum_if_active": {
+        "kind": "whole_quantity",
+        "quantity": "0",
+        "unit": "asset_unit"
+      },
+      "required_minimum": {
+        "kind": "none"
+      },
+      "cap": {
+        "kind": "quantity",
+        "quantity": "10",
+        "unit": "asset_unit"
+      },
+      "execution_margin_rate": "0",
+      "fee_schedule_id": "fee-alpha-eur-buy",
+      "provenance_id": "prov-manual"
+    },
+    {
+      "route_id": "route-c-beta-buy",
+      "asset_id": "asset-c",
+      "broker_id": "broker-beta",
+      "capability_id": "cap-beta-usd-money",
+      "side": "buy",
+      "priority": 1,
+      "minimum_if_active": {
+        "kind": "monetary_amount",
+        "amount": {
+          "amount": "0",
+          "currency": "USD"
+        }
+      },
+      "required_minimum": {
+        "kind": "none"
+      },
+      "cap": {
+        "kind": "notional",
+        "amount": {
+          "amount": "12.50",
+          "currency": "USD"
+        }
+      },
+      "execution_margin_rate": "0",
+      "fee_schedule_id": "fee-beta-usd-buy",
+      "provenance_id": "prov-manual"
+    },
+    {
+      "route_id": "route-c-alpha-buy",
+      "asset_id": "asset-c",
+      "broker_id": "broker-alpha",
+      "capability_id": "cap-alpha-eur-whole",
+      "side": "buy",
+      "priority": 2,
+      "minimum_if_active": {
+        "kind": "whole_quantity",
+        "quantity": "0",
+        "unit": "asset_unit"
+      },
+      "required_minimum": {
+        "kind": "none"
+      },
+      "cap": {
+        "kind": "quantity",
+        "quantity": "10",
+        "unit": "asset_unit"
+      },
+      "execution_margin_rate": "0",
+      "fee_schedule_id": "fee-alpha-eur-buy",
+      "provenance_id": "prov-manual"
+    },
+    {
+      "route_id": "route-d-alpha-buy",
+      "asset_id": "asset-d",
+      "broker_id": "broker-alpha",
+      "capability_id": "cap-alpha-eur-whole",
+      "side": "buy",
+      "priority": 1,
+      "minimum_if_active": {
+        "kind": "whole_quantity",
+        "quantity": "0",
+        "unit": "asset_unit"
+      },
+      "required_minimum": {
+        "kind": "none"
+      },
+      "cap": {
+        "kind": "quantity",
+        "quantity": "8",
+        "unit": "asset_unit"
+      },
+      "execution_margin_rate": "0",
+      "fee_schedule_id": "fee-alpha-eur-buy",
+      "provenance_id": "prov-manual"
+    },
+    {
+      "route_id": "route-d-beta-buy",
+      "asset_id": "asset-d",
+      "broker_id": "broker-beta",
+      "capability_id": "cap-beta-eur-money",
+      "side": "buy",
+      "priority": 2,
+      "minimum_if_active": {
+        "kind": "monetary_amount",
+        "amount": {
+          "amount": "0",
+          "currency": "EUR"
+        }
+      },
+      "required_minimum": {
+        "kind": "none"
+      },
+      "cap": {
+        "kind": "notional",
+        "amount": {
+          "amount": "40",
+          "currency": "EUR"
+        }
+      },
+      "execution_margin_rate": "0",
+      "fee_schedule_id": "fee-beta-eur-buy",
+      "provenance_id": "prov-manual"
+    }
+  ],
+  "fx_quotes": [
+    {
+      "fx_quote_id": "fxq-eur-usd",
+      "source_currency": "EUR",
+      "destination_currency": "USD",
+      "rate": "1.25",
+      "reference_date": "2026-09-15",
+      "freshness": {
+        "kind": "fresh"
+      },
+      "provenance_id": "prov-market"
+    }
+  ],
+  "fx_routes": [
+    {
+      "fx_route_id": "fxr-beta-eur-usd",
+      "broker_id": "broker-beta",
+      "fx_quote_id": "fxq-eur-usd",
+      "source_currency": "EUR",
+      "destination_currency": "USD",
+      "source_amount_step": {
+        "amount": "0.01",
+        "currency": "EUR"
+      },
+      "spread_rate": "0",
+      "safety_buffer_rate": "0",
+      "fixed_fee": {
+        "amount": "0",
+        "currency": "EUR"
+      },
+      "priority": 1,
+      "provenance_id": "prov-manual"
+    }
+  ],
+  "target_weights": [
+    {
+      "asset_id": "asset-a",
+      "weight": "0.25"
+    },
+    {
+      "asset_id": "asset-b",
+      "weight": "0.25"
+    },
+    {
+      "asset_id": "asset-c",
+      "weight": "0.25"
+    },
+    {
+      "asset_id": "asset-d",
+      "weight": "0.25"
+    }
+  ],
+  "policy": "invest_and_sell",
+  "sell_context": {
+    "cost_bases": [
+      {
+        "holding_id": "holding-a-alpha",
+        "average_unit_cost": {
+          "amount": "10",
+          "currency": "EUR"
+        },
+        "reference_date": "2026-09-15",
+        "provenance_id": "prov-portfolio"
+      },
+      {
+        "holding_id": "holding-b-beta",
+        "average_unit_cost": {
+          "amount": "20",
+          "currency": "EUR"
+        },
+        "reference_date": "2026-09-15",
+        "provenance_id": "prov-portfolio"
+      },
+      {
+        "holding_id": "holding-c-beta",
+        "average_unit_cost": {
+          "amount": "25",
+          "currency": "USD"
+        },
+        "reference_date": "2026-09-15",
+        "provenance_id": "prov-portfolio"
+      },
+      {
+        "holding_id": "holding-d-alpha",
+        "average_unit_cost": {
+          "amount": "5",
+          "currency": "EUR"
+        },
+        "reference_date": "2026-09-15",
+        "provenance_id": "prov-manual"
+      }
+    ],
+    "asset_taxes": [
+      {
+        "asset_id": "asset-a",
+        "tax_rate": "1.25",
+        "fiscal_currency": "EUR",
+        "provenance_id": "prov-manual"
+      },
+      {
+        "asset_id": "asset-b",
+        "tax_rate": "0.26",
+        "fiscal_currency": "EUR",
+        "provenance_id": "prov-manual"
+      },
+      {
+        "asset_id": "asset-c",
+        "tax_rate": "0.26",
+        "fiscal_currency": "USD",
+        "provenance_id": "prov-manual"
+      },
+      {
+        "asset_id": "asset-d",
+        "tax_rate": "0.26",
+        "fiscal_currency": "EUR",
+        "provenance_id": "prov-manual"
+      }
+    ],
+    "broker_withholding": [
+      {
+        "broker_id": "broker-alpha",
+        "withholding_kind": "self_reserved",
+        "carried_loss": {
+          "amount": "0",
+          "currency": "EUR"
+        },
+        "reference_date": "2026-09-15",
+        "provenance_id": "prov-manual"
+      },
+      {
+        "broker_id": "broker-beta",
+        "withholding_kind": "self_reserved",
+        "carried_loss": {
+          "amount": "0",
+          "currency": "EUR"
+        },
+        "reference_date": "2026-09-15",
+        "provenance_id": "prov-manual"
+      }
+    ]
+  }
+}
