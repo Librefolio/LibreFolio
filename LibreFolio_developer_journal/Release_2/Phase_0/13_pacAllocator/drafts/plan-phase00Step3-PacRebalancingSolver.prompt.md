@@ -1,20 +1,33 @@
 # Solver operativo PAC + Ribilanciamento
 
-**Stato:** SUPERATO / RE-SCOPED PRIMA DELL'IMPLEMENTAZIONE — Round 5 è storico;
-il perimetro attivo è Round 7
+> **ARCHIVIO:** piano solver superato, non specifica corrente. L'entrypoint
+> della suite target è
+> [`../plan-phase00PacRebalancerTargetDesign.prompt.md`](../plan-phase00PacRebalancerTargetDesign.prompt.md).
+
+**Stato:** SUPERATO / RE-SCOPED PRIMA DELL'IMPLEMENTAZIONE — Round 5 e Round 7
+sono tappe storiche; la suite target è l'unica autorità corrente.
 
 ← Previous: [Round 4 — PAC + Ribilanciamento P1 multi-servizio](plan-phase00Step2Round4-PacAndRebalancerUiAcceptance.prompt.md)
 
 → Replacement:
 [Round 5 — PAC/Rebalancer operational planner](plan-phase00Step2Round5-PacRebalancerOperationalPlanner.prompt.md)
 
-→ Current implementation plan:
+→ Piano implementativo successivo nel percorso storico:
 [Round 7 — PAC/Rebalancer operational migration](plan-phase00Step2Round7-PacRebalancerOperationalMigration.prompt.md)
 
 > Questo file conserva il primo abbozzo solver. `quantity_step`, assenza di
 > routing Broker, vecchi status e obiettivi non sono più contratto attivo.
 > Round 7 sostituisce integralmente lo scope eseguibile; nessuna implementazione
 > di questo piano storico è richiesta.
+>
+> **Correzione 2026-09-16:** tutte le formulazioni nel corpo sono storiche.
+> L'autorità corrente usa, per PAC e Rebalancer, il primario fixed-L2 globale:
+> primo tier MIQP, poi convex-MIQCP sul sublevel `L2_fixed` incumbent per
+> ottimizzare `U`; il sublevel è la faccia ottima solo dopo prova esatta.
+> La variante BUY-only usa `U → L2_fixed` su azioni congelate.
+> `F_ref` fissa target/accounting; percentuali/D∞/D1 sono diagnostici e SELL
+> resta funding-only quantum-minimal. PySCIPOpt/SCIP è candidato additivo
+> approvato, ma dependency/probe/capacità e payload restano gate Round 7.
 
 ## 1. Obiettivo
 

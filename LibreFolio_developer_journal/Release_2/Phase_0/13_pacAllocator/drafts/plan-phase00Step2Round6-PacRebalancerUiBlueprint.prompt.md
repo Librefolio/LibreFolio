@@ -1,7 +1,18 @@
 # Round 6 — PAC/Rebalancer UI Blueprint
 
+> **ARCHIVIO:** record di approvazione UI consolidato nella specifica target
+> unica
+> [`../plan-phase00PacRebalancerTargetDesign.prompt.md`](../plan-phase00PacRebalancerTargetDesign.prompt.md).
+
 **Stato:** ✅ COMPLETATO — configurazione UI approvata dal developer; design-only,
 nessuna implementazione production/test.
+
+> **Correzione semantica 2026-09-16:** estetica e wizard approvati restano
+> invariati. Entrambi i Tool mostrano primario globale fixed-L2 e variante
+> margine BUY-only; nel PAC le card riordinano tier operativi, nel Rebalancer
+> scelgono il dominio SELL. `L2_fixed/U` sono score normativi;
+> percentuali/D∞/D1 sono diagnostici. Ogni incumbent è Decimal-validato e lo
+> status floating non viene promosso a proof esatta.
 
 ← Previous:
 [Round 5 — PAC/Rebalancer operational planner](plan-phase00Step2Round5-PacRebalancerOperationalPlanner.prompt.md)
@@ -9,8 +20,8 @@ nessuna implementazione production/test.
 → Follow-up:
 [Round 7 — PAC/Rebalancer operational migration](plan-phase00Step2Round7-PacRebalancerOperationalMigration.prompt.md)
 
-**Artifact UX approvato:**
-[PAC/Rebalancer UI Blueprint](pac-rebalancer-ui-blueprint.md).
+**Artifact UX approvato, ora promosso nella suite target:**
+[PAC/Rebalancer UI completa](../plan-phase00PacRebalancerUiTarget.prompt.md).
 
 **Design prodotto normativo:**
 [PAC/Rebalancer end-to-end design](pac-rebalancer-end-to-end-design.md).
@@ -121,7 +132,7 @@ Nessun test/build/lint/server/DB/API sync è stato eseguito o richiesto per ques
 L'approvazione estetica non autorizza implementazione.
 
 SHA-256 live del Blueprint approvato:
-`88ef613b95e7b7eea57d2039b0f9055adfdc9423405d301292884128c54080e2`.
+`88b7665fc8c1ee98001a751e74207a4acbdd6ce015a8f2609042d82ab720b26d`.
 
 ## 7. Definition of done
 

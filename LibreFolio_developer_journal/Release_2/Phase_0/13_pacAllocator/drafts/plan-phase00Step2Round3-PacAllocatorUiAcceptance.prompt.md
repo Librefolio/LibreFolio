@@ -1,5 +1,8 @@
 # PAC allocator UI acceptance - Round 3
 
+> **ARCHIVIO:** piano non corrente. L'entrypoint della suite target è
+> [`../plan-phase00PacRebalancerTargetDesign.prompt.md`](../plan-phase00PacRebalancerTargetDesign.prompt.md).
+
 **Stato:** approvato dal developer; baseline rollback-safe A-F committata a
 `8504f0528`; aggiornamento target coordinato chiuso a `1e0b9bc519c1`. Round 3
 autorizzato sulle sole superfici PAC-owned. ToolHub, cataloghi i18n e CHANGELOG

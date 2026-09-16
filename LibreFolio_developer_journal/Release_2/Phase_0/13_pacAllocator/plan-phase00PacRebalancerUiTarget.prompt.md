@@ -1,11 +1,20 @@
-# PAC & Rebalancer — UI Blueprint
+# PAC & Rebalancer — UI target completa
 
-> **Stato:** Review A/B/C/D e configurazione finale approvate dal developer
-> **Tipo:** artifact visuale, non implementazione
-> **Fonte normativa:** `pac-rebalancer-end-to-end-design.md`
+> **Stato:** TARGET CORRENTE — Review A/B/C/D e configurazione finale approvate
+> dal developer; nessuna implementazione autorizzata da questo file.
+> **Tipo:** piano visuale completo con tutte le ASCII approvate.
+> **Suite target:** [piano maestro](plan-phase00PacRebalancerTargetDesign.prompt.md) ·
+> [nucleo matematico](plan-phase00PacRebalancerMathematicalCore.prompt.md) ·
+> [policy, obiettivi e vincoli](plan-phase00PacRebalancerPolicies.prompt.md) ·
+> [architettura](plan-phase00PacRebalancerArchitecture.prompt.md).
 > **Baseline letta:** P1 `pac_allocator` + `portfolio_rebalancer`, Tool Host generico
-> **Gate:** design approvato; nessun codice prima del checkpoint coordinatore e
-> della successiva autorizzazione implementativa Gate P1
+> **Gate:** rilievi della review indipendente incorporati il 2026-09-16; nuovo
+> piano implementativo non ancora scritto. Restano aperti risultato
+> product-shaped, dipendenza e capacità MIQP/MIQCP SCIP; proof/status sono
+> congelati.
+> **Correzione dati 2026-09-16:** layout approvato invariato; PAC e Rebalancer
+> mostrano un primario globale `L2_fixed` e una variante margine BUY-only che
+> congela il primario. D∞/D1 e percentuali finali sono diagnostici.
 
 ## Come leggere l'artifact
 
@@ -71,7 +80,7 @@ verranno disegnate nei blocchi successivi **dentro la shell approvata**.
 | `RebalanceHoldingEditor` | custodia per Broker, quantità esatta | PMC/tax/SELL assenti | holding completa, PMC e tax |
 | `AllocationTargetEditor` | totale Decimal esatto, DataTable | target dentro form lungo | step dedicato, nessuna preview |
 | `AllocationFxSection` | copy con stale guard | solo FX di report | FX operativo con spot/source/age/spread/buffer |
-| result panel P1 | DataTable e diagnostics | importi/gap teorici | piano operativo con base/ottimizzata |
+| result panel P1 | DataTable e diagnostics | importi/gap teorici | piano operativo con due profili confrontabili |
 
 ## 2.1 Componenti generici da riusare come linguaggio visuale
 
@@ -132,7 +141,7 @@ Tool bloccato e raccoglie data + valuta di riferimento.
 | 5 | Routing | Asset×Broker BUY | Asset×Broker BUY/SELL |
 | 6 | Target | pesi nuova allocazione | pesi finali intero portafoglio investito |
 | 7 | FX | conversioni potenziali | conversioni potenziali |
-| 8 | Strategia | Proporzionale / Minima frammentazione | Investi soltanto / Investi e vendi |
+| 8 | Strategia | Residuo proporzionale / Minima frammentazione | Investi soltanto / Investi e vendi |
 | 9 | Rivedi | snapshot PAC immutabile | snapshot Rebalancer immutabile |
 | 10 | Risultato | fuori dallo stepper di input | fuori dallo stepper di input |
 
@@ -162,7 +171,7 @@ calcolo. Tenerli in uno step corto:
 | FX | spot, source/date, spread, buffer, fee | dominio FX | età/staleness e coppie potenziali | conversioni scelte |
 | Strategia | enum e soli parametri del ramo | default dichiarato | spiegazione conseguenze | coefficienti nascosti |
 | Rivedi | conferme finali | nessun refresh automatico | diff/stato/completezza | compute parziale |
-| Risultato | selettore base/ottimizzata | risposta backend | formattazione e filtri | ricalcolo economico |
+| Risultato | selettore coppia risultati | risposta backend | formattazione e filtri | ricalcolo economico |
 
 ## 4.1 Stato di ogni step
 
@@ -306,7 +315,7 @@ Review B; qui conta la gerarchia.
 | PASSI                | ASSET x BROKER                                                     | RIEPILOGO PAC        |
 | v 1  Scenario        | Scegli dove ogni Asset può essere acquistato e con quali vincoli.  |                      |
 | v 2  Liquidità       |                                                                     | Liquidità nativa     |
-| v 3  Broker          | +-----------------------------------------------------------------+ | EUR  3.300,00       |
+| v 3  Broker          | +-----------------------------------------------------------------+ | EUR  3.500,00       |
 | v 4  Asset           | | XMAW World                                      2 route       | | USD    500,00       |
 | > 5  Routing         | | [contenuto dettagliato nei §§10-18]                           v | |                      |
 | ○ 6  Target          | +-----------------------------------------------------------------+ | Broker      2 v      |
@@ -452,7 +461,7 @@ Comportamento:
 | 15/09/2026 · EUR                            |
 |                                            |
 | Liquidità nativa                      v     |
-| EUR 3.300,00 · USD 500,00                   |
+| EUR 3.500,00 · USD 500,00                   |
 |                                            |
 | Broker                                v     |
 | Directa · Broker PAC Demo                   |
@@ -683,13 +692,13 @@ ma il contratto resta identico.
 +------------------------------------------------------------------------------------------------------------------+
 | PASSI                | LIQUIDITÀ E FONTI                                               | RIEPILOGO               |
 | v 1  Scenario        | Scegli esattamente quale liquidità può entrare nel piano.       | Liquidità nativa        |
-| > 2  Liquidità       | Il saldo non selezionato resta fuori dal calcolo.               | EUR  4.300,00            |
+| > 2  Liquidità       | Il saldo non selezionato resta fuori dal calcolo.               | EUR  3.500,00            |
 | ○ 3  Broker          |                                                                  | USD    500,00            |
 | ○ 4  Asset           | [ + Nuova liquidità ] [ Prendi da conto/Broker ] [ + Manuale ]  |                         |
 | ...                  |                                                                  | 3 fonti              v   |
 |                      | +----------------------------------------------------------------+ |                         |
 |                      | | Nuovo risparmio                             new_external [M]  | | Equivalente indicativo |
-|                      | | Importo da usare       1.000,00    Valuta EUR                | | 4.725,00 EUR           |
+|                      | | Importo da usare       1.000,00    Valuta EUR                | | 3.926,20 EUR           |
 |                      | | Etichetta              Risparmio settembre          [Edit]  | | FX dominio 15/09       |
 |                      | +----------------------------------------------------------------+ |                         |
 |                      | +----------------------------------------------------------------+ |                         |
@@ -709,6 +718,9 @@ ma il contratto resta identico.
 | [ <- Indietro ]                                                               [ Continua -> ]                    |
 +------------------------------------------------------------------------------------------------------------------+
 ```
+
+L'equivalente illustrativo usa `1 USD = 0,8524 EUR`: `3.500,00 EUR +
+500,00 USD = 3.926,20 EUR`. Non è ancora budget route né risultato planner.
 
 **Intento:** selezionare cash, non scegliere ancora dove investirlo.
 **Input:** tipo fonte, valuta, saldo dichiarato se manuale, importo usato, label.
@@ -860,21 +872,21 @@ zeri finali, frecce, blur formatting e sign hint.
 +------------------------------------------------------------------------------------------------------------------+
 | PASSI                | BROKER SU CUI OPERARE                                             | RIEPILOGO              |
 | v 1  Scenario        | Scegli i luoghi dove il backend può proporre BUY/SELL.            | Fonti        3 v        |
-| v 2  Liquidità       | [ Scegli Broker esistente ] [ + Broker manuale ]                  | Broker       2 !        |
+| v 2  Liquidità       | [ Scegli Broker esistente ] [ + Broker manuale ]                  | Broker       2 v        |
 | > 3  Broker          |                                                                      |                         |
 | ○ 4  Asset           | +--------------------------------+ +--------------------------------+ | Directa        v       |
-| ...                  | | Directa Demo        esistente | | Broker PAC Demo       manuale | | Broker PAC     !       |
+| ...                  | | Directa Demo        esistente | | Broker Margine Demo   manuale | | Broker Margine v       |
 |                      | | [S] aggiornato 15/09           | | [M] scenario-only              | |                         |
-|                      | | EUR · auto-FX                  | | EUR · nativo                   | | Funding link  2/3      |
-|                      | | Ordine EUR: numero quote      | | Ordine EUR: importo · incr. 1  | |                         |
-|                      | | BUY fee: zero                  | | BUY fee: 1,00 + 0,10%          | |                         |
-|                      | | SELL fee: configurata          | | SELL fee: incompleta       !   | |                         |
-|                      | | Regime: amministrato           | | Regime: dichiarativo           | |                         |
-|                      | | Funding: cash locale + Banca   | | Funding: non configurato   !   | |                         |
-|                      | | [ Modifica ] [ Rimuovi ]       | | [ Completa ] [ Rimuovi ]       | |                         |
+|                      | | EUR · auto-FX                  | | EUR · nativo                   | | Funding link  3/3      |
+|                      | | Ordine EUR: numero quote      | | Ordine EUR: importo · incr. 0,01| |                         |
+|                      | | BUY fee: zero                  | | BUY fee: zero                  | |                         |
+|                      | | SELL fee: configurata          | | SELL non usato                 | |                         |
+|                      | | Regime: dichiarativo           | | Regime: dichiarativo           | |                         |
+|                      | | Funding: cash locale + Banca   | | Funding: solo cash locale       | |                         |
+|                      | | [ Modifica ] [ Rimuovi ]       | | [ Modifica ] [ Rimuovi ]       | |                         |
 |                      | +--------------------------------+ +--------------------------------+ |                         |
 +----------------------+-----------------------------------------------------------------------+-------------------------+
-| [ <- Indietro ]                                      1 Broker incompleto       [ Continua -> ] disabled          |
+| [ <- Indietro ]                                                                  [ Continua -> ]                   |
 +------------------------------------------------------------------------------------------------------------------+
 ```
 
@@ -910,9 +922,9 @@ regime, minus, funding link.
 | [i] Min/max si applicano solo alla componente percentuale. 0 è valido.                             |
 |                                                                                                    |
 | FISCALITÀ                                                                                           |
-| Regime *             (o) Amministrato     ( ) Dichiarativo/libero                                  |
+| Regime *             ( ) Amministrato     (o) Dichiarativo/libero                                  |
 | Minus pregresse      [ 0,00 ] [ EUR v ]   Data [ 15/09/2026 ]                                     |
-| Ritenuta SELL        [D] Trattenuta dal Broker                                                     |
+| Ritenuta SELL        [D] Riserva fiscale self_reserved nel conto                                   |
 |                                                                                                    |
 | FUNDING AMMESSO                                                                                    |
 | [v] Cash locale Directa · nessun trasferimento                                                     |
@@ -939,6 +951,8 @@ regime, minus, funding link.
   possesso.
 - Nessun `quantity_step`.
 - Fee BUY e SELL sempre separate; fisso + percentuale possono coesistere.
+- `Margine prezzo BUY` e `Margine prezzo SELL` sono coefficienti route
+  espliciti, distinti da spread e buffer FX; lo zero resta visibile/editabile.
 - Fee dinamiche/per mercato non compaiono in v1.
 - `withholding_kind` è read-only derivato dal regime.
 - Carried losses sono fatti; v1 non promette compensazione.
@@ -1015,10 +1029,10 @@ non è passo ordine.
 | v 2  Liquidità       | [ Copia dal Portfolio ] [ + Asset/holding manuale ]                | Custodie         6     |
 | v 3  Broker          |                                                                      | Prezzi         4/4     |
 | > 4  Asset           | +--------------------------------------------------------------------------------------+ | PMC            5/6 !  |
-| ○ 5  Routing         | | XMAW World · prezzo 50,230 EUR / 1 · [S] 15/09                         [Modifica] | | Tax rate      4/4     |
+| ○ 5  Routing         | | XMAW World · prezzo 55,3165 EUR / 1 · [S] 15/09                        [Modifica] | | Tax rate      4/4     |
 | ...                  | |--------------------------------------------------------------------------------------| |                         |
 |                      | | Custodia        Intera     Quota personale   Q.tà piano [S]   PMC       Stato          | |                         |
-|                      | | Directa Demo    120,5      50%               60,25            42,10 EUR v             | |                         |
+|                      | | Directa Demo    523,5148   50%              261,7574          53,5780 EUR v           | |                         |
 |                      | | Fineco Demo      18        100%              18               —         !             | |                         |
 |                      | | [ + Aggiungi custodia manuale ]                                                   | |                         |
 |                      | +--------------------------------------------------------------------------------------+ |                         |
@@ -1041,6 +1055,8 @@ non è passo ordine.
 ## 18.10 ASCII B10 — Routing Asset×Broker
 
 PAC mostra solo tab BUY. Rebalancer mostra BUY e SELL.
+Il riquadro seguente illustra l'editor e non è lo snapshot numerico C1-C15; le
+route esatte dei due witness sono dichiarate subito dopo.
 
 ```text
 +------------------------------------------------------------------------------------------------------------------+
@@ -1057,6 +1073,7 @@ PAC mostra solo tab BUY. Rebalancer mostra BUY e SELL.
 |                      | | Obbligo route         [ Nessun ordine obbligatorio v ]                          | |
 |                      | | Cap massimo           [ Nessun cap v ]                                         | |
 |                      | | Fee BUY stimabile     0                                                        | |
+|                      | | Margine prezzo BUY   [ 0,00 ] % · esplicito anche senza FX                     | |
 |                      | +--------------------------------------------------------------------------------------+ |
 |                      | +--------------------------------------------------------------------------------------+ |
 |                      | | [v] Broker PAC Demo          Priorità [ 1 ]    EUR · cash amount · step 1 EUR     | |
@@ -1070,6 +1087,21 @@ PAC mostra solo tab BUY. Rebalancer mostra BUY e SELL.
 | [ <- Indietro ]                                                               [ Continua -> ]                   |
 +------------------------------------------------------------------------------------------------------------------+
 ```
+
+Nel witness PAC C1-C15, HEAL ha inoltre una seconda route BUY esclusiva su
+`Broker Margine Demo × EUR`: `monetary_amount`, step `0,01`, minimo se si opera
+`3,00`, cap route `3,00`, fee zero e cash locale selezionato `3,72`. Nel
+witness Rebalancer compare anche `Broker Baseline Demo`: l'`invest_only`
+congelato vi spende il contributo `1.252,00` su due route monetarie
+all-or-nothing, ciascuna con minimo se si opera uguale al cap: HEAL
+`1.164,50` e XDWI `87,50`. Directa non ha cash finché il SELL non accredita
+`1.094,33`, usati sulla route XDWF. La route HEAL-only su
+Broker Margine Demo ha minimo e cap `48,00`, finanziati dal saldo locale
+preesistente `48,00`: passare da residuo `-22,50` a `+25,50` peggiora L2,
+quindi resta inattiva sia nel baseline `invest_only` sia nel primario
+`invest_and_sell` e apre una nuova riga soltanto nella variante margine.
+Nessun altro Asset è eleggibile su Broker Margine Demo; su Broker Baseline Demo
+sono eleggibili soltanto le due route all-or-nothing dichiarate.
 
 ### Editor vincoli tipizzato
 
@@ -1093,9 +1125,9 @@ Required BUY + required SELL sullo stesso Asset viene bloccato prima di Review.
 ```text
 [ SELL ]
 +----------------------------------------------------------------------------------------------+
-| [v] Directa Demo · inventario disponibile 60,25 quote                                        |
+| [v] Directa Demo · inventario disponibile 261,7574 quote                                     |
 | Priorità [1]   Minimo se operi [25,00 EUR]   Obbligo [Nessuno v]   Cap [Quantità v] [20]     |
-| Fee SELL 5 + 0,19% · PMC 42,10 EUR · tax 26% · ritenuta Broker                              |
+| Fee SELL 4,00 flat · PMC 53,5780 EUR · tax 26% · self_reserved                              |
 | [i] “Investi soltanto” ignorerà tutti i vincoli SELL.                                        |
 +----------------------------------------------------------------------------------------------+
 ```
@@ -1112,9 +1144,9 @@ Required BUY + required SELL sullo stesso Asset viene bloccato prima di Review.
 |                      |                                                                     |                         |
 |                      | +-----------------------------+---------------+------------------+ | Totale      100,00% v  |
 |                      | | Asset                       | Target %      | Distribuzione    | | Restante      0,00%   |
-|                      | | XMAW World                  | [ 70,00 ]     | ##############   | |                         |
-|                      | | XDWF Financials             | [ 12,00 ]     | ##               | | Nessun valore futuro   |
-|                      | | XDWI Industrials            | [ 13,00 ]     | ###              | | calcolato               |
+|                      | | XMAW World                  | [ 70,05 ]     | ##############   | |                         |
+|                      | | XDWF Financials             | [ 12,71 ]     | ###              | | Nessun valore futuro   |
+|                      | | XDWI Industrials            | [ 12,24 ]     | ##               | | calcolato               |
 |                      | | HEAL Healthcare             | [  5,00 ]     | #                | |                         |
 |                      | +-----------------------------+---------------+------------------+ |                         |
 |                      |                                                                     |                         |
@@ -1196,16 +1228,16 @@ consiglio, non crea binding e non avvia compute.
 | Scegli come distribuire ordini fattibili. Tutti i vincoli precedenti restano rigidi.                             |
 |                                                                                                                  |
 | +----------------------------------------------------+ +-------------------------------------------------------+ |
-| | (o) Base proporzionale                             | | ( ) Minima frammentazione                            | |
+| | (o) Proporzionale                                 | | ( ) Minima frammentazione                           | |
 | |                                                    | |                                                       | |
-| | Avvicina gli acquisti ai pesi target.              | | Parte dalla qualità della soluzione proporzionale.   | |
-| | Consente split se migliora il risultato.           | | Poi riduce Asset divisi tra più Broker e righe.      | |
-| | A parità: priorità -> fee -> tie-break stabile.     | | Non investe meno e non peggiora il target.           | |
+| | Primario: L2 fixed -> U.                           | | Primario: L2 fixed -> U.                              | |
+| | Poi priorità -> fee -> righe -> tie-break.         | | Poi split -> righe -> priorità -> fee -> tie.         | |
+| | Variante: max BUY -> L2 -> costi/righe.            | | Variante: max BUY -> L2 -> costi/righe.               | |
 | |                                                    | |                                                       | |
 | | Parametri aggiuntivi: nessuno.                     | | Parametri aggiuntivi: nessuno.                       | |
 | +----------------------------------------------------+ +-------------------------------------------------------+ |
 |                                                                                                                  |
-| [i] L'ottimizzazione residuo viene calcolata sempre dopo la policy e non è un'opzione utente.                    |
+| [i] Entrambe usano target monetari fissi; cambiano soltanto i tier operativi dopo L2 fixed e U.                 |
 +------------------------------------------------------------------------------------------------------------------+
 ```
 
@@ -1213,19 +1245,19 @@ consiglio, non crea binding e non avvia compute.
 
 ```text
 +------------------------------------------------------------------------------------------------------------------+
-| STRATEGIA RIBILANCIAMENTO                                                                                         |
+| MODALITÀ RIBILANCIAMENTO                                                                                          |
 |                                                                                                                  |
 | +----------------------------------------------------+ +-------------------------------------------------------+ |
 | | (o) Investi soltanto · consigliata                 | | ( ) Investi e vendi                                  | |
 | |                                                    | |                                                       | |
 | | Usa liquidità e contributi verso gli Asset         | | Congela prima il miglior piano “Investi soltanto”.   | |
-| | sotto target. Non propone SELL.                    | | Poi vende sopra target per ridurre il gap residuo.   | |
-| | Restituisce il piano più vicino raggiungibile.      | | Mai oltre inventario; mai BUY+SELL stesso Asset.     | |
+| | sotto target. Il vincolo SELL=0 resta rigido.      | | SELL solo sopra target e solo per finanziare BUY.    | |
+| | Restituisce due profili di risultato confrontabili.| | Quantum minimo; mai sale-to-cash o BUY+SELL Asset.   | |
 | |                                                    | | Fee SELL e tax reserve riducono il cash riusabile.   | |
 | | Dati SELL richiesti: nessuno.                      | | Dati SELL: PMC, fee, aliquota e inventory completi.  | |
 | +----------------------------------------------------+ +-------------------------------------------------------+ |
 |                                                                                                                  |
-| Parametri aggiuntivi v1: nessuno. Turnover, costi e righe sono tie-break dichiarati.                             |
+| Vincoli comuni; cambia solo il dominio SELL. Ogni modalità restituisce primario e variante margine.             |
 +------------------------------------------------------------------------------------------------------------------+
 ```
 
@@ -1243,13 +1275,13 @@ Asset/Broker; nessun default fiscale viene inventato.
 | v 2  Liquidità       |                                                                     | Draft rev. 18           |
 | v 3  Broker          | +----------------------------------------------------------------+ | Sessione verificata     |
 | v 4  Asset           | | v Scenario       15/09/2026 · EUR                            | |                         |
-| v 5  Routing         | | v Liquidità      EUR 4.300 · USD 500 · 3 fonti               | | Fatti                  |
-| v 6  Target          | | v Broker         2 operativi · 3 funding link                 | | Freschi       21       |
-| v 7  FX              | | v Asset          4 · prezzi 4/4 · PMC 6/6                    | | Stale          1 !     |
-| v 8  Strategia       | | v Routing        7 BUY · 4 SELL                              | | Manuali        8       |
+| v 5  Routing         | | v Liquidità      EUR 1.300 · 2 fonti                         | | Fatti                  |
+| v 6  Target          | | v Broker         3 operativi · 2 funding link                 | | Freschi       21       |
+| v 7  FX              | | v Asset          4 · prezzi 4/4 · PMC 4/4                    | | Stale          0 v     |
+| v 8  Strategia       | | v Routing        4 BUY · 1 SELL                              | | Manuali        8       |
 | > 9  Rivedi          | | v Target         100,00%                                      | | Modificati     3       |
-|                      | | ! FX              1 tasso di 3 giorni fa, confermato           | |                         |
-|                      | | v Strategia       Investi soltanto                             | | Schema        1.0.0    |
+|                      | | v FX              nessuna conversione                         | |                         |
+|                      | | v Strategia       Investi e vendi                              | | Schema        1.0.0    |
 |                      | +----------------------------------------------------------------+ |                         |
 |                      |                                                                     |                         |
 |                      | [ Mostra snapshot completo ] [ Mostra solo modificati/stale ]      |                         |
@@ -1284,7 +1316,7 @@ Asset/Broker; nessun default fiscale viene inventato.
 | Route | priorità + vincoli tipizzati; SELL visibile solo Rebalancer |
 | Target | step isolato, nessun “Dopo” |
 | FX | spot/source/age/spread/buffer/fee; conversione finale backend |
-| Strategia | card enum; nessun parametro fittizio in v1 |
+| Policy/modalità | card enum; PAC riordina tier obiettivo, Rebalancer abilita/vieta SELL |
 | Primitive | input transazioni, selector, modali e DataTable riusati/generalizzati |
 | Review | snapshot completo; unico compute |
 
@@ -1299,7 +1331,7 @@ Asset/Broker; nessun default fiscale viene inventato.
 ```text
 Risultato
 ├── esito leggibile + status/proof/stop separati
-├── selettore Soluzione base / Residuo ottimizzato
+├── selettore Primario fixed-L2 / Variante margine
 ├── delta fra soluzioni
 ├── grafico primario specifico del Tool
 ├── KPI funding/costi/residui
@@ -1321,24 +1353,26 @@ draft intatto; una modifica rende il risultato stale.
 | PAC Allocator · Piano calcolato                                                                                  |
 | Snapshot 15/09/2026 14:35 · Valuta di riferimento EUR · schema 1.0.0                                            |
 +------------------------------------------------------------------------------------------------------------------+
-| [v] Piano disponibile    [Incumbent trovato]    [Ottimo provato]    [Completato]                                 |
-| Deviazione massima 0,47% · 0 hard constraint violati · nessun issue bloccante                                   |
+| [v] Piano disponibile    [Incumbent Decimal]      [Gap solver noto]   [Completato]                                |
+| L2 fixed 3,92421202 EUR² · U 3,725 EUR · 0 hard constraint violati · nessun issue bloccante                        |
 |                                                                                                                  |
 | [ Modifica configurazione ]                                                  [ Calcola nuovo piano ]             |
 +------------------------------------------------------------------------------------------------------------------+
 | SOLUZIONE VISUALIZZATA                                                                                           |
-| [ Base policy ] [ Residuo ottimizzato +3,00 EUR ]                    [ Confronta le due soluzioni ]              |
+| [ Primario · minimo L2 ] [ Variante margine +3,00 EUR ]              [ Confronta le due soluzioni ]              |
 +------------------------------------------------------------------------------------------------------------------+
 ```
 
-Badge non collassati:
+Badge non collassati della soluzione selezionata:
 
 - `availability=ready`;
-- `outcome=incumbent_found`;
-- `proof=optimal_proven`;
-- `stop_reason=completed`.
+- `variant_result.outcome=incumbent_found`;
+- `variant_result.proof=gap_bounded`;
+- `variant_result.stop_reason=completed`.
 
-Un incumbent con limite non usa icona/check “ottimo”.
+Il primario usa lo stesso envelope di ricerca e una validazione Decimal
+indipendente. `completed` o lo status floating `optimal` non usano icona/check
+“ottimo”: `optimal_proven` richiede una fonte esatta dichiarata.
 
 ---
 
@@ -1375,22 +1409,22 @@ Tabella sottostante resta fonte leggibile; nessun grafico sostituisce i numeri.
 
 ```text
 +------------------------------------------------------------------------------------------------------------------+
-| SOLUZIONE BASE · PROPORZIONALE                              [ Base policy | Residuo ottimizzato ]                |
+| PIANO PRIMARIO · MINIMO L2 FIXED                            [ Primario fixed-L2 | Variante margine ]              |
 +------------------------------------------------------------------------------------------------------------------+
 | TARGET ACQUISTI vs PIANO PROPOSTO · matrix mini-bar                                                    [i]       |
 |                                                                                                                  |
 | Asset                         Target                      Piano selezionato                 Delta                 |
-| [◎] XMAW World               |##############| 70,00%     |##############| 69,96%            -0,04 pp             |
-| [◎] XDWF Financials          |##            | 12,00%     |##            | 12,01%            +0,01 pp             |
-| [◎] XDWI Industrials         |###           | 13,00%     |###           | 12,99%            -0,01 pp             |
-| [◎] HEAL Healthcare          |#             |  5,00%     |#             |  5,04%            +0,04 pp             |
+| [◎] XMAW World               |##############| 70,05%     |##############| 70,08%            +0,03 pp             |
+| [◎] XDWF Financials          |###           | 12,71%     |###           | 12,71%             0,00 pp             |
+| [◎] XDWI Industrials         |##            | 12,24%     |##            | 12,22%            -0,02 pp             |
+| [◎] HEAL Healthcare          |#             |  5,00%     |#             |  4,98%            -0,02 pp             |
 |                                                                                                                  |
 | [ Apri tabella Asset ]             Scala 0-100% · stesso asse per tutte le celle                                |
 +----------------------+----------------------+----------------------+----------------------+----------------------+
 | Cash selezionato     | Valore investito     | Costi stimati        | Residuo spendibile   | Cash fisico finale   |
 | 3.659,00 EUR         | 3.655,28 EUR         | 0,00 EUR             | 3,72 EUR              | 3,72 EUR             |
 +----------------------+----------------------+----------------------+----------------------+----------------------+
-| Funding raggiungibile 3.659,00 · Cash intrappolato 0,00 · Max deviazione 0,47% · Righe ordine 4                |
+| F_ref 3.659,00 · L2 fixed 3,92421202 EUR² · U 3,725 · max |r|/F_ref 0,038% · Dinf pct 0,03 pp · Righe 4       |
 +------------------------------------------------------------------------------------------------------------------+
 ```
 
@@ -1402,18 +1436,23 @@ buffer restano costi/cash separati.
 
 ```text
 +------------------------------------------------------------------------------------------------------------------+
-| RESIDUO OTTIMIZZATO                                                                                              |
-| Parte dalla base; può solo aggiungere BUY senza peggiorare policy/target.                                        |
+| VARIANTE MARGINE                                                                                                 |
+| Congela il primario; aggiunge solo BUY. Massimizza impiego e mostra il delta L2 fixed.                           |
 +---------------------------+---------------------------+---------------------------+----------------------------+
 | Investimento aggiunto     | Fee aggiuntive            | Residuo recuperato        | Nuove righe                |
-| +3,00 EUR                 | +0,00 EUR                 | 3,00 EUR                  | 0                          |
+| +3,00 EUR                 | +0,00 EUR                 | 3,00 EUR                  | 1                          |
 +---------------------------+---------------------------+---------------------------+----------------------------+
-| Delta ordini · HEAL Healthcare · Directa Demo · BUY cash amount 182,00 -> 185,00 EUR                            |
+| Nuova riga · HEAL Healthcare · Broker Margine Demo · BUY cash amount 3,00 EUR                                  |
 | Tutte le altre righe invariate.                                                                                  |
 +------------------------------------------------------------------------------------------------------------------+
 ```
 
 “Residuo recuperato” include solo investimento addizionale, mai fee.
+Nel witness HEAL×Broker Margine Demo è l'unica route additiva ancora eleggibile:
+minimo e cap sono entrambi `3,00 EUR`, con step `0,01`; le quattro route
+primarie Directa sono `whole_quantity` e la quota successiva supera il residuo.
+Il BUY `+3,00` è quindi il massimo deployment ammissibile e apre una nuova riga
+senza modificare il BUY HEAL primario da `20` quote.
 
 ## 19.6 ASCII C4 — Esposizioni PAC
 
@@ -1423,13 +1462,13 @@ buffer restano costi/cash separati.
 +------------------------------------------------------------------------------------------------------------------+
 | SETTORE · Target -> Dopo · nastri verticali                                      [ Apri dettaglio v ]           |
 |                                                                                                                  |
-| TARGET      [ Broad 70,00% ][ Financial 12,00% ][ Industrial 13,00% ][ Health 5,00% ]                           |
+| TARGET      [ Broad 70,05% ][ Financial 12,71% ][ Industrial 12,24% ][ Health 5,00% ]                           |
 |                  ||||||||||          ||||              |||||             ||                                   |
 |                  |||||||||/          ||||              |||||             |/    larghezza varia per categoria  |
 |                  |||||||||           ||||              |||||             ||                                   |
-| DOPO        [ Broad 69,96% ][ Financial 12,01% ][ Industrial 12,99% ][ Health 5,04% ]                           |
+| DOPO        [ Broad 70,08% ][ Financial 12,71% ][ Industrial 12,22% ][ Health 4,98% ]                           |
 |                                                                                                                  |
-| Delta              -0,04 pp              +0,01 pp             -0,01 pp          +0,04 pp                        |
+| Delta              +0,03 pp               0,00 pp             -0,02 pp          -0,02 pp                        |
 | [i] Stesso ordine e stessa corsia: nessun incrocio/overlap. È confronto, non flusso monetario.                  |
 +------------------------------------------------------------------------------------------------------------------+
 | TIPO                                                                                       [ Apri dettaglio v ]    |
@@ -1473,59 +1512,78 @@ Tabella `DataTable` core. Target e residuo sono Asset-level, quindi non vengono
 duplicati per Broker.
 
 ```text
-+------------------------------------------------------------------------------------------------------------------+
-| ALLOCAZIONE PER ASSET                                               [Occhio Colonne] [Filtra] [Reset layout]      |
-+-------------------------------+----------------+--------------------+-------------------+-------------+-----------+
-| Asset                         | Target Asset   | Valore investito   | Margine inutilizz. | Margine %   | Route     |
-| [◎] XMAW World               | 2.563,00 EUR   | 2.561,73 EUR       | 1,27 EUR          | 0,050%      | 1         |
-| [◎] XDWF Financials          |   465,00 EUR   |   464,59 EUR       | 0,42 EUR          | 0,089%      | 1         |
-| [◎] XDWI Industrials         |   448,00 EUR   |   446,82 EUR       | 1,18 EUR          | 0,263%      | 1         |
-| [◎] HEAL Healthcare          |   183,00 EUR   |   182,14 EUR       | 0,86 EUR          | 0,470%      | 1         |
-+-------------------------------+----------------+--------------------+-------------------+-------------+-----------+
-| Totale                        | 3.659,00 EUR   | 3.655,28 EUR       | 3,72 EUR          | 0,102%      | 4         |
-+------------------------------------------------------------------------------------------------------------------+
++---------------------------------------------------------------------------------------------------+
+| ALLOCAZIONE PER ASSET                            [Occhio Colonne] [Filtra] [Reset layout]          |
++-------------------------------+----------------+--------------------+-------------+------------+-------+
+| Asset                         | Target fisso   | Valore investito   | Residuo €   | Dopo %     | Route |
+| [◎] XMAW World               | 2.563,13 EUR   | 2.561,73 EUR       | -1,40       | 70,08%     | 1     |
+| [◎] XDWF Financials          |   465,06 EUR   |   464,59 EUR       | -0,47       | 12,71%     | 1     |
+| [◎] XDWI Industrials         |   447,86 EUR   |   446,82 EUR       | -1,04       | 12,22%     | 1     |
+| [◎] HEAL Healthcare          |   182,95 EUR   |   182,14 EUR       | -0,81       | 4,98%      | 1     |
++-------------------------------+----------------+--------------------+-------------+------------+-------+
+| Totale                        | 3.659,00 EUR   | 3.655,28 EUR       | Σr -3,725  | 100,00%    | 4     |
++---------------------------------------------------------------------------------------------------+
 ```
 
 `Valore investito` = valore delle unità acquistate convertito a mid nella valuta di
 riferimento, costi esclusi. Differisce dall'addebito Broker quando esistono fee,
 spread o buffer. `Valore mid` resta nome tecnico di una colonna audit nascosta, non
-label default. Con target zero, Margine % = `—`, non infinito.
+label default. I target esatti non formattati sono `2.563,1295`, `465,0589`,
+`447,8616` e `182,9500`; le celle mostrano centesimi e i totali derivano dai
+Decimal originali. Qui `C_free=3,720` e `A_round=+0,005`, quindi `U=3,725`
+e `Σr=-3,725`: cash spendibile e shortfall contabile non sono la stessa
+grandezza. Per questo `C_free` appare soltanto nei KPI e nei ledger
+Broker×valuta, mai come colonna Asset.
+Il toggle colonne espone
+`Costi attribuiti`, `Buffer riservato`, decomposizione del residuo,
+`L2_fixed`, score normalizzato, D∞/D1 diagnostici, route rank e tie reason.
+Con target zero, il rapporto target-normalizzato è `—`, non infinito.
 
 ## 19.8 ASCII C6 — Rebalancer overview desktop
 
 ```text
 +------------------------------------------------------------------------------------------------------------------+
-| RIBILANCIATORE · INVESTI E VENDI · SOLUZIONE BASE                                                               |
+| RIBILANCIATORE · INVESTI E VENDI · PRIMARIO FIXED-L2                                                            |
 +------------------------------------------------------------------------------------------------------------------+
 | PORTAFOGLIO: PRIMA / TARGET / DOPO · matrix mini-bar                                                            |
 |                                                                                                                  |
 | Asset                         Prima              Target             Dopo               Gap dopo                  |
 | [◎] XMAW World               |########| 62,40%  |####### | 55,00%  |####### | 55,18%    +0,18 pp              |
-| [◎] XDWF Financials          |#       |  8,10%  |##      | 12,00%  |##      | 11,91%    -0,09 pp              |
-| [◎] XDWI Industrials         |###     | 18,50%  |###     | 18,00%  |###     | 17,94%    -0,06 pp              |
-| [◎] HEAL Healthcare          |##      | 11,00%  |##      | 15,00%  |##      | 14,97%    -0,03 pp              |
+| [◎] XDWF Financials          |#       |  8,10%  |##      | 12,00%  |##      | 11,92%    -0,08 pp              |
+| [◎] XDWI Industrials         |###     | 18,50%  |###     | 18,00%  |###     | 17,96%    -0,04 pp              |
+| [◎] HEAL Healthcare          |##      | 11,00%  |##      | 15,00%  |##      | 14,95%    -0,05 pp              |
 |                                                                                                                  |
 | [ Apri tabella Asset ]                                                                                        |
 +------------------------------------------------------------------------------------------------------------------+
-| MOVIMENTI · BUY 2.440,00 · SELL 1.200,00 · Nuova liquidità 1.300,00 · Costi+tax 60,00 · Residuo 0,00          |
+| MOVIMENTI · BUY 2.346,33 · SELL 1.106,33 · Nuova liquidità 1.252,00 · Cash locale 48,00 · Costi/tax 12,00 |
 +------------------------------------------------------------------------------------------------------------------+
 ```
 
 Il grafico usa l'intero portafoglio investito. BUY e SELL restano anche movimenti
 espliciti: la sola differenza percentuale non consente di ricostruirli.
+Nel witness `K_reachable=1.300,00` resta composto da due righe sorgente
+distinte: contributo nuovo `1.252,00` su Broker Baseline Demo e saldo
+preesistente selezionato `48,00` su Broker Margine Demo. Directa non riceve
+quel contributo: prima del SELL non ha cash selezionato.
 
 ## 19.9 ASCII C7 — KPI Rebalancer
 
 ```text
 +----------------------+----------------------+----------------------+----------------------+----------------------+
-| Investito prima      | Nuova liquidità      | Vendite lorde        | Costi + tax reserve  | Investito dopo       |
-| 24.800,00 EUR        | 1.300,00 EUR         | 1.200,00 EUR         | 60,00 EUR             | 26.040,00 EUR        |
+| Investito prima      | Funding raggiungibile| F_ref target/account | Investito dopo F_final| U = F_ref-F_final   |
+| 24.800,00 EUR        | 1.300,00 EUR         | 26.100,00 EUR        | 26.040,00 EUR         | 60,00 EUR            |
 +----------------------+----------------------+----------------------+----------------------+----------------------+
-| Max gap prima 7,40 pp | Max gap dopo 0,18 pp | Turnover 3.640,00 EUR | BUY 3 · SELL 1 · FX 1                     |
+| U 60,00: cash 48,00 · riserve fisiche 8,00 · perdite economiche 4,00 · rounding +0,00                    |
+| Max gap prima 7,40 pp | Max gap dopo 0,18 pp | Turnover 3.452,66 EUR | Ordini BUY 3 · SELL 1 · FX 0              |
 +------------------------------------------------------------------------------------------------------------------+
 ```
 
-Cash KPI resta separato da esposizioni Asset.
+Cash KPI resta separato da esposizioni Asset. `F_ref` non include vendite e
+genera i target monetari fissi; non è il denominatore delle percentuali
+diagnostiche: `Prima` usa il totale investito iniziale,
+`Dopo` usa `F_final`. `U` non è sinonimo di cash libero; la disclosure separa
+cash spendibile, riserve ancora fisiche, perdite/uscite economiche e rettifica
+rounding firmata.
 
 ## 19.10 ASCII C8 — Esposizioni Rebalancer
 
@@ -1544,8 +1602,8 @@ Geografia mantiene due mappe sincronizzate `Prima`/`Dopo`; toggle
 | TARGET      [ Broad 55% ][ Financial 12%][ Industrial 18% ][ Health 15% ]                                      |
 |                  ||||            |||               ||||              |||                                       |
 |                  ||||\           |||               ||||              |||                                       |
-| DOPO        [ Broad 55,18 ][ Financial 11,91 ][ Industrial 17,94 ][ Health 14,97 ]                              |
-| Delta target      +0,18 pp          -0,09 pp             -0,06 pp          -0,03 pp                            |
+| DOPO        [ Broad 55,18 ][ Financial 11,92 ][ Industrial 17,96 ][ Health 14,95 ]                              |
+| Delta target      +0,18 pp          -0,08 pp             -0,04 pp          -0,05 pp                            |
 +------------------------------------------------------------------------------------------------------------------+
 | [ Apri dettaglio v ]  DataTable: Prima | Target | Dopo | Delta target | assoluti | provenance                  |
 +------------------------------------------------------------------------------------------------------------------+
@@ -1564,17 +1622,19 @@ calcolati.
 +------------------------------------------------------------------------------------------------------------------+
 | PIANO PER ASSET                                                   [Occhio Colonne] [Filtra] [Reset layout]        |
 +--------------------------+-------------+-------------+-------------+-------------+-------------+----------------+
-| Asset                    | Valore prima| Target      | BUY invest. | SELL lordo | Valore dopo | Scostamento    |
-| [◎] XMAW World          | 15.475,20   | 14.322,00   |        —    | 1.153,20    | 14.322,00   | +0,18 pp       |
-| [◎] XDWF Financials     |  2.008,80   |  3.124,80   | 1.116,00    |       —     |  3.124,80   | -0,09 pp       |
-| [◎] XDWI Industrials    |  4.588,00   |  4.687,20   |    99,20    |       —     |  4.687,20   | -0,06 pp       |
-| [◎] HEAL Healthcare     |  2.728,00   |  3.906,00   | 1.178,00    |       —     |  3.906,00   | -0,03 pp       |
+| Asset                    | Valore prima| Target      | BUY invest. | SELL lordo | Valore dopo | r_a / % diag.  |
+| [◎] XMAW World          | 15.475,20   | 14.355,00   |        —    | 1.106,33    | 14.368,87   | +13,87/+0,18pp |
+| [◎] XDWF Financials     |  2.008,80   |  3.132,00   | 1.094,33    |       —     |  3.103,13   | -28,87/-0,08pp |
+| [◎] XDWI Industrials    |  4.588,00   |  4.698,00   |    87,50    |       —     |  4.675,50   | -22,50/-0,04pp |
+| [◎] HEAL Healthcare     |  2.728,00   |  3.915,00   | 1.164,50    |       —     |  3.892,50   | -22,50/-0,05pp |
 +--------------------------+-------------+-------------+-------------+-------------+-------------+----------------+
-| Totale · EUR             | 24.800,00   | 26.040,00   | 2.393,20    | 1.153,20    | 26.040,00   | max 0,18 pp    |
+| Totale · EUR             | 24.800,00   | 26.100,00   | 2.346,33    | 1.106,33    | 26.040,00   | Σr=-60,00      |
 +------------------------------------------------------------------------------------------------------------------+
 ```
 
 BUY e SELL dello stesso Asset non possono coesistere.
+`Target = w_aF_ref` e non totalizza a `Valore dopo`; la differenza monetaria
+firmata è `r_a` e `Σ_ar_a=-U`.
 
 ## 19.12 ASCII C10–C12 — Piano operativo unificato
 
@@ -1583,26 +1643,26 @@ sequenza e totale; apertura mostra il `DataTable` pertinente.
 
 ```text
 +------------------------------------------------------------------------------------------------------------------+
-| PIANO OPERATIVO · 6 azioni                               [ Sequenza ] [ Flusso Sankey ] [Espandi tutti]          |
+| PIANO OPERATIVO · 5 azioni                               [ Sequenza ] [ Flusso Sankey ] [Espandi tutti]          |
 +------------------------------------------------------------------------------------------------------------------+
-| v 1  FUNDING E TRASFERIMENTI             1 azione · 2.500,00 EUR · finanzia Directa Demo                       |
+| v 1  FUNDING E TRASFERIMENTI             1 azione · 3.655,28 EUR · finanzia Directa Demo                       |
 |   +----------------------------------------------------------------------------------------------------------+   |
 |   | [Colonne]  Azione | Da | A | Valuta | Importo | Motivo                                                  |   |
-|   |             Bonifico | Banca Demo | Directa Demo | EUR | 2.500,00 | Funding ordini                      |   |
+|   |             Bonifico | Banca Demo | Directa Demo | EUR | 3.655,28 | Funding ordini                      |   |
 |   +----------------------------------------------------------------------------------------------------------+   |
 |                                                                                                                  |
-| > 2  CONVERSIONI FX                       1 azione · 360,00 EUR -> 420,00 USD · buffer 3,60 EUR                  |
-|                                                                                                                  |
-| v 3  ORDINI · DIRECTA DEMO                4 BUY · valore investito 3.655,14 EUR · fee 0,00 EUR                  |
+| v 2  ORDINI · DIRECTA DEMO                4 BUY · valore investito 3.655,28 EUR · fee 0,00 EUR                  |
 |   +----------------------------------------------------------------------------------------------------------+   |
 |   | [Colonne] [Filtra]                                                                                       |   |
-|   | Asset               Lato Prezzo       Budget route Istruzione  Q.tà esatta/st. Investito Margine  Fee   |   |
-|   | [◎] XMAW World     BUY  50,230 EUR   2.563,00     51 quote    51 esatta       2.561,73  1,27    0,00  |   |
-|   | [◎] HEAL Health    BUY   9,107 EUR     183,00    182,00 EUR  19,985 st.        182,00  1,00    0,00  |   |
-|   | Totale                                              4 ordini                  3.655,14  3,86    0,00  |   |
+|   | Asset               Lato Prezzo       Istruzione  Q.tà esatta/st. Valore mid  Addebito  Fee             |   |
+|   | [◎] XMAW World     BUY  50,230 EUR   51 quote    51 esatta       2.561,73   2.561,73  0,00            |   |
+|   | [◎] HEAL Health    BUY   9,107 EUR   20 quote    20 esatta         182,14     182,14  0,00            |   |
+|   | Totale                               4 ordini                    3.655,28   3.655,28  0,00            |   |
 |   +----------------------------------------------------------------------------------------------------------+   |
-|   Saldo iniziale 3.659,00 · Addebiti 3.655,14 · Residuo spendibile/Cash fisico finale 3,86 EUR                  |
+|   Directa Demo · saldo iniziale 3.655,28 · addebiti 3.655,28 · residuo 0,00 EUR                                 |
+|   Broker Margine Demo · saldo iniziale 3,72 · addebiti 0,00 · residuo 3,72 EUR                                  |
 +------------------------------------------------------------------------------------------------------------------+
+| Totale scenario · selezionato 3.659,00 · addebiti 3.655,28 · cash 3,72 · A_round +0,005 · U 3,725              |
 | [i] Ordine consigliato. Verificare saldo, prezzi e mercato nel Broker; nessuna esecuzione o settlement impliciti.|
 +------------------------------------------------------------------------------------------------------------------+
 ```
@@ -1623,12 +1683,13 @@ Colonne default:
 |---|---|
 | Funding | azione, da, a, valuta, importo, motivo |
 | FX | Broker, coppia, debito, credito stimato, spot, spread, safety margin |
-| Ordini | Asset con icona, lato, prezzo corrente, budget route, istruzione Broker, quantità esatta/stimata, valore investito/lordo, margine, fee |
+| Ordini | Asset con icona, lato, prezzo corrente, istruzione Broker, quantità esatta/stimata, valore mid/lordo, addebito/accredito, costi, buffer, fee |
 
-`Budget route` è l'importo operativo assegnato dal risultato a quella route;
-`Margine inutilizzato = Budget route - Valore investito` e `Margine %` usa quel
-budget come denominatore. Target Asset aggregato resta nella tabella Asset, non
-viene duplicato come se ogni Broker dovesse raggiungerlo interamente.
+La v1 non inventa un `Budget route`: il target e $r_a$ restano Asset-level
+nella tabella Asset, mentre il cash finale resta Broker×valuta nei ledger.
+Ordini e renderer non derivano cash route sottraendo il target dal valore
+investito. Un futuro envelope route potrà esistere soltanto come fatto
+backend-authored con semantica propria.
 
 `ColumnVisibilityToggle` mostra/ordina colonne audit nascoste:
 
@@ -1638,6 +1699,7 @@ viene duplicato come se ogni Broker dovesse raggiungerlo interamente.
 - FX cost e tasso effettivo;
 - source/date/staleness;
 - tax reserve e `withholding_kind`;
+- rettifica posting rounding firmata;
 - vincoli attivi;
 - target Asset reference;
 - issue/provenance.
@@ -1654,11 +1716,13 @@ Espansione riga `DataTable`, non pannello ripetuto:
 | [◎] XMAW World · SELL · Directa Demo                                                                            |
 +----------------------+----------------------+----------------------+----------------------+----------------------+
 | Istruzione Broker    | Q.tà                 | Credito lordo        | Fee SELL             | Tax reserve          |
-| 20 quote             | 20 esatta            | 1.004,60 EUR         | 6,91 EUR             | 40,64 EUR            |
+| 20 quote             | 20 esatta            | 1.106,33 EUR         | 4,00 EUR             | 8,00 EUR             |
 +----------------------+----------------------+----------------------+----------------------+----------------------+
-| PMC 42,10 EUR · plus stimata 155,69 EUR · aliquota 26% · ritenuta Broker                                      |
-| Credito netto riusabile 957,05 EUR · BUY funding consentito soltanto su questo netto                           |
-| Prezzo/source 50,230 EUR · Provider Demo · 15/09/2026 · vincoli whole units · issue nessuno                    |
+| PMC 53,5780 EUR · plus lorda 34,77 · imponibile post-fee 30,77 · aliquota 26% · self_reserved                 |
+| Credito spendibile dopo fee e riserva 1.094,33 EUR · riserva fisica separata 8,00 EUR                         |
+| Funding SELL: contribuisce 1.094,33 EUR ai BUY · quantum 1 quota · gate locale verificato 2/2                  |
+| Controfattuale -1 quota/riga: funding insufficiente · global=gap_bounded                                       |
+| Prezzo/source 55,3165 EUR · Provider Demo · 15/09/2026 · vincoli whole units · issue nessuno                   |
 +------------------------------------------------------------------------------------------------------------------+
 ```
 
@@ -1674,21 +1738,52 @@ addebito totale, vincoli e provenance con stesso schema visuale.
 +------------------------------------------------------------------------------------------------------------------+
 | Dettagli calcolo                                                                                       [Apri v]  |
 +------------------------------------------------------------------------------------------------------------------+
-| Availability       ready                                                                                         |
-| Outcome            incumbent_found                                                                               |
-| Proof              optimal_proven · problema base e post-step                                                    |
-| Stop reason        completed                                                                                     |
-| Target deviation   max 0,47% · somma quadrati 0,0028                                                            |
-| Cash deficit       0                                                                                             |
+| Availability piano ready                                                                                         |
+| Primario            incumbent_found · proof gap_bounded · stop completed                                         |
+| Variante margine    incumbent_found · proof gap_bounded · stop completed                                         |
+| Validazione         decimal_verified · accounting e tupla obiettivo del candidato                                |
+| Solver evidence     SCIP x.y · reported optimal · primal/dual grezzi · tol 1e-7 · settings [Apri]               |
+| Objective primario  L2 fixed 3,92421202 EUR² · U 3,725 EUR · route/cost/rows/tie                                |
+| Variante            U 0,725 EUR · L2 fixed 8,06421202 EUR² · Delta L2 +4,14000000 EUR²                          |
+| Diagnostici         Dinf pct 0,03 pp · D1 pct 0,07 pp · percentuali finali [Apri]                               |
 | Limiti             tempo 5s · nodi 50.000 · usati 1.284                                                         |
-| Tie-break          target -> investimento -> split -> righe -> priorità -> fee -> Broker ID                      |
+| Policy primaria    proportional: L2 -> U -> priorità -> fee -> righe -> tie                                     |
+| Policy variante    U -> L2 risultante -> costi/righe incrementali -> tie                                        |
 | Snapshot           sha256: abcd... · schema 1.0.0                                                               |
-| Issue              fx_quote_stale_confirmed · non bloccante                                                     |
+| Issue              nessuno                                                                                       |
 +------------------------------------------------------------------------------------------------------------------+
 ```
 
+Lo status floating `reported optimal` resta evidenza numerica: non cambia il
+badge in `optimal_proven`. Il foldout mostra valori e unità di ogni bound/tier,
+tolleranze, versione e settings; se manca un bound coerente usa `not_proven`.
+
 Dettaglio non nasconde status critici: esito/proof/stop restano sintetizzati
 nell'header.
+
+Per Rebalancer lo stesso pannello usa righe specifiche:
+
+```text
++------------------------------------------------------------------------------------------------------------------+
+| Dettagli calcolo Rebalancer                                                                          [Apri v]  |
++------------------------------------------------------------------------------------------------------------------+
+| Primario            fixed_l2_primary · incumbent_found · proof gap_bounded · stop completed                      |
+| Riferimento         F_ref 26.100,00 EUR · target monetari fissi · F_final 26.040,00 EUR > 0                     |
+| Score primario      L2 fixed 2.038,3538 EUR² [bound solver grezzi nel foldout]                                  |
+| Accounting          F_ref 26.100,00 · U 60,00 = cash 48 + riserve 8 + perdite 4 + rounding +0                  |
+| SELL                local=verified 2/2 · global=gap_bounded · 1 quantum attivo · nessuna vendita verso cash idle|
+| Variante            margin_deployment · BUY-only su azioni primarie congelate · U 12,00 · Delta L2 +144,0000   |
+| Diagnostici         Dinf_pct 0,18 pp · D1_pct 0,36 pp · actual-final percentages                               |
+| Ordine primario     L2 fixed -> U -> turnover -> costi -> righe/split -> tie                                    |
+| Ordine variante     U -> L2 fixed risultante -> costi/righe incrementali -> tie                                 |
+| Coefficienti        scaling/GCD safe · activity safe · dynamic range safe                                        |
+| Snapshot            sha256: abcd... · schema 1.0.0                                                              |
++------------------------------------------------------------------------------------------------------------------+
+```
+
+I bound solver MIQP/MIQCP e la minimalità SELL mostrano soltanto la prova realmente
+ottenuta. “Localmente irriducibile” non diventa “SELL minimo globale”; uno
+status floating `optimal` non diventa `optimal_proven`.
 
 ## 19.15 Confronto base / ottimizzata
 
@@ -1696,22 +1791,52 @@ Modalità default: tab singola, perché riduce rumore. “Confronta” apre side
 
 ```text
 +---------------------------------------------------------+--------------------------------------------------------+
-| BASE PROPORZIONALE                                      | RESIDUO OTTIMIZZATO                                    |
+| PRIMARIO · MINIMO L2                                    | VARIANTE MARGINE                                       |
 | Investito 3.655,28                                      | Investito 3.658,28              +3,00                 |
 | Fee 0                                                   | Fee 0                             +0                    |
-| Residuo 3,72                                            | Residuo 0,72                     -3,00                 |
-| Max deviazione 0,47%                                    | Max deviazione 0,47%              =                    |
-| Righe 4                                                 | Righe 4                            =                    |
+| Cash spendibile 3,72                                   | Cash spendibile 0,72            -3,00                 |
+| U contabile 3,725                                      | U contabile 0,725               -3,000                |
+| L2 fixed 3,92421202 EUR²                                | L2 fixed 8,06421202 EUR²          +4,14000000 EUR²     |
+| Righe 4                                                 | Righe 5                           +1                    |
 +---------------------------------------------------------+--------------------------------------------------------+
-| Delta: HEAL +3,00 EUR · nessun'altra variazione                                                                  |
+| Delta: HEAL +3,00 EUR · cash/U -3,00 EUR · L2 +4,14000000 EUR² · Dinf/D1 diagnostici [Apri]                    |
 +------------------------------------------------------------------------------------------------------------------+
 ```
+
+Il confronto PAC usa la route HEAL-only di `Broker Margine Demo`, con minimo e
+cap `3,00 EUR`, dichiarata in B10/C3; senza quel dominio la route monetaria
+dovrebbe continuare a ridurre `U` e il witness non sarebbe un optimum della
+variante.
 
 Se le soluzioni coincidono:
 
 ```text
-[i] Nessun acquisto addizionale ammissibile. La soluzione ottimizzata coincide con la base.
+[i] Nessun acquisto addizionale ammissibile. La variante coincide con il primario.
 ```
+
+Nel Rebalancer la stessa interazione confronta primario e variante margine:
+
+```text
++---------------------------------------------------------+--------------------------------------------------------+
+| PRIMARIO FIXED-L2                                       | VARIANTE MARGINE                                       |
+| L2 fixed 2.038,3538 EUR²                                | L2 fixed 2.182,3538 EUR²         +144,0000 EUR²        |
+| U 60,00                                                 | U 12,00                          -48,00                 |
+| SELL 1.106,33 · 1 riga                                  | SELL invariato                    =                    |
+| BUY 2.346,33 · 3 righe                                  | BUY +48,00 · 1 riga              +                    |
++---------------------------------------------------------+--------------------------------------------------------+
+| Delta: HEAL BUY +48,00 (unica route residua eleggibile) · U -48,00 · SELL invariati · L2 +144,0000 [Apri]       |
++------------------------------------------------------------------------------------------------------------------+
+```
+
+Nel witness sintetico Rebalancer, `C_free=48,00` è già sul Broker Margine Demo.
+Una nuova route HEAL-only `monetary_amount` ha minimo se si opera e cap entrambi
+pari a `48,00`; nessun importo minore appartiene al dominio. Le route additive
+degli altri Asset sono già al cap o non eleggibili. Senza tali vincoli, un BUY
+minore su HEAL o un BUY di `48,00` su XDWF ridurrebbe `L2_fixed` e dovrebbe
+essere promosso a nuovo primario anziché apparire come variante peggiorativa.
+La sequenza congelata è esplicita: `invest_only` usa `1.164,50` su HEAL e
+`87,50` su XDWI, lasciando entrambi a residuo `-22,50`; il SELL successivo
+finanzia `1.094,33` su XDWF. La variante porta il solo residuo HEAL a `+25,50`.
 
 ## 19.16 Review C — decisioni applicate
 
@@ -1730,7 +1855,7 @@ Se le soluzioni coincidono:
 | Operatività | un solo blocco foldable: funding → FX → Broker |
 | Tabelle | `DataTable`; `ColumnVisibilityToggle`; layout condiviso fra Broker |
 | Tabella Broker core | prezzo, budget, istruzione, quantità, investito/lordo, margine, fee |
-| Base/residuo | tab default + confronto esplicito |
+| Coppia risultati | Primario fixed-L2 / Variante margine per entrambi i Tool |
 | Proof | status separati; mai “ottimo” senza prova |
 
 # 20. Review D — mobile e stati
@@ -1860,24 +1985,24 @@ Il cambio Asset mantiene tab BUY/SELL selezionata. Badge incompleto resta testua
 +--------------------------------------------+
 | PAC Allocator · Piano calcolato             |
 | 15/09/2026 · EUR                            |
-| [v] Fattibile · Ottimo provato              |
+| [v] Verificato Decimal · Gap solver noto    |
 | [ Modifica configurazione ]                 |
 +--------------------------------------------+
 | Soluzione                                   |
-| [ Base ] [ Residuo +3,00 EUR ]              |
+| [ Primario ] [ Variante margine +3,00 EUR ] |
 +--------------------------------------------+
 | Target acquisti vs piano · matrix           |
 | [◎] XMAW World                             |
-| Target 70,00 |##############|               |
-| Piano  69,96 |##############|  -0,04 pp     |
+| Target 70,05 |##############|               |
+| Piano  70,08 |##############|  +0,03 pp     |
 | [◎] XDWF Financials                        |
-| Target 12,00 |##            |               |
-| Piano  12,01 |##            |  +0,01 pp     |
+| Target 12,71 |###           |               |
+| Piano  12,71 |###           |   0,00 pp     |
 | [ Apri tabella Asset ]                      |
 +--------------------------------------------+
 | Valore investito                            |
 | 3.655,28 EUR                                |
-| Costi 0 · Residuo 3,72                      |
+| Costi 0 · Cash 3,72 · U 3,725               |
 +--------------------------------------------+
 | Esposizioni                                 |
 | Tipo · Target/Dopo                     [>]  |
@@ -1885,8 +2010,8 @@ Il cambio Asset mantiene tab BUY/SELL selezionata. Badge incompleto resta testua
 | Geografia · 2 mappe + delta            [>]  |
 +--------------------------------------------+
 | Asset · DataTable/card               4 [>]  |
-| Piano operativo                     6 [>]  |
-|   1 Funding · 2 FX · 3 Broker              |
+| Piano operativo                     5 [>]  |
+|   1 Funding · 0 FX · 1 Broker con ordini   |
 | Dettagli calcolo                       [>]  |
 +--------------------------------------------+
 ```
@@ -1908,17 +2033,17 @@ Funding→FX→Broker, non schermate duplicate.
 | 51 quote                                    |
 |                                            |
 | Prezzo corrente       50,230 EUR            |
-| Budget route          2.563,00 EUR          |
 | Quantità              51 esatta             |
 | Valore investito      2.561,730 EUR         |
-| Margine inutilizzato      1,270 EUR         |
-| Margine %                 0,050%            |
+| Costi attribuiti          0,000 EUR         |
+| Buffer riservato          0,000 EUR         |
 | Fee BUY               0,00 EUR              |
 | Addebito totale       2.561,73 EUR          |
 |                                            |
 | [ Colonne/dettagli audit v ]                |
 | Originale/mid/charge  50,230 / 50,230       |
-| Target Asset [ref]    2.563,00 EUR          |
+| Target Asset [ref]    2.563,1295 EUR        |
+| Residuo Asset [ref]      -1,3995 EUR        |
 | Provenance            Provider · 15/09      |
 +--------------------------------------------+
 ```
@@ -1932,17 +2057,18 @@ Istruzione operativa è sempre primo valore dopo titolo/lato/Broker.
 +--------------------------------------------+
 | Confronta soluzioni                      [x]|
 +--------------------------------------------+
-| Metrica              Base       Ottimizzata|
+| Metrica          Primario          Margine |
 | Investito         3.655,28        3.658,28 |
 | Fee                   0,00            0,00 |
-| Residuo               3,72            0,72 |
-| Max deviazione       0,47%           0,47% |
-| Righe                     4               4 |
+| Cash spendibile       3,72            0,72 |
+| U contabile          3,725           0,725 |
+| L2 fixed EUR²    3,92421202      8,06421202 |
+| Righe                     4               5 |
 |                                            |
 | Delta                                      |
 | HEAL · BUY +3,00 EUR                       |
 +--------------------------------------------+
-| [ Mostra ottimizzata ]                     |
+| [ Mostra variante margine ]                |
 +--------------------------------------------+
 ```
 
@@ -1955,7 +2081,7 @@ Istruzione operativa è sempre primo valore dopo titolo/lato/Broker.
 | CALCOLO IN CORSO                                                                                                 |
 | [spinner] Validazione e ricerca del piano operativo...                                                           |
 |                                                                                                                  |
-| Snapshot rev. 18 · 4 Asset · 2 Broker · 7 route · limite 5s                                                     |
+| Snapshot rev. 18 · 4 Asset · 3 Broker · 5 route · limite 5s                                                     |
 | La configurazione è bloccata finché questa richiesta è attiva.                                                   |
 |                                                                                                                  |
 | [ Interrompi attesa ]                                                                                           |
@@ -2034,8 +2160,8 @@ Scenario ben formato ma fuori dominio. Nessun fallback o semplificazione silenzi
 | Minimo ordine utile      25,00 EUR                                                                               |
 | Hard constraint violati  0                                                                                       |
 |                                                                                                                  |
-| Base                     0 ordini · residuo 20,00 EUR                                                            |
-| Residuo ottimizzato      coincide con base · delta 0                                                             |
+| Primario                 0 ordini · U 20,00 EUR · optimal_proven                                                 |
+| Variante margine         coincide con primario · delta 0                                                        |
 |                                                                                                                  |
 | [ Modifica liquidità ] [ Modifica vincoli ]                                                                      |
 +------------------------------------------------------------------------------------------------------------------+
@@ -2054,14 +2180,17 @@ No-op non è errore e non è infeasible.
 | XMAW World · Directa Demo · BUY obbligatorio 1.000 EUR                                                           |
 | Cash raggiungibile sulla route 800 EUR                                                                           |
 |                                                                                                                  |
-| Prova              infeasible_proven                                                                             |
+| Outcome            infeasible_proven · proof_source deterministic_conflict                                      |
+| Witness            mandatory debit 1.000 EUR > reachable cash 800 EUR · Decimal                                 |
 | Stop               completed                                                                                     |
 |                                                                                                                  |
 | [ Vai al vincolo ] [ Vai alla liquidità ]                                                                        |
 +------------------------------------------------------------------------------------------------------------------+
 ```
 
-Compare solo con prova backend.
+Compare solo con conflict witness Decimal deterministico o oracle esaustivo
+esatto. Uno status floating `infeasible` usa invece
+`no_incumbent/not_proven`, anche se lo stop è `completed`.
 
 ## 20.14 ASCII D13 — Incumbent con limite
 
@@ -2071,8 +2200,8 @@ Compare solo con prova backend.
 | Il limite di tempo è stato raggiunto. Le operazioni mostrate rispettano cash e vincoli, ma potrebbe esistere     |
 | una soluzione migliore.                                                                                          |
 +------------------------------------------------------------------------------------------------------------------+
-| Outcome      incumbent_found       Proof not_proven       Stop time_limit                                       |
-| Gap bound    1,8%                  Tempo 5,00s             Nodi 50.000                                           |
+| Outcome      incumbent_found       Proof gap_bounded      Stop time_limit                                       |
+| Validation   decimal_verified      Solver gap 1,8%        Tol/version/settings [Apri]                           |
 |                                                                                                                  |
 | [ Mostra piano fattibile ]                              [ Modifica scenario ]                                    |
 +------------------------------------------------------------------------------------------------------------------+
@@ -2132,18 +2261,32 @@ Comportamento:
 
 ## 20.18 Matrice status backend → UI
 
-| Availability | Outcome | Proof | Stop | Presentazione |
+| Availability | Outcome | Proof | Evidence | Presentazione |
 |---|---|---|---|---|
-| `needs_input` | — | — | — | issue azionabili; nessuna soluzione |
-| `unsupported` | — | — | — | confine v1; nessun fallback |
-| `ready` | `no_op` | coerente col run | `completed` o limite | zero ordini + motivi + due soluzioni zero |
-| `ready` | `infeasible_proven` | prova infeasible | `completed` | conflitto hard; nessuna soluzione |
-| `ready` | `incumbent_found` | `optimal_proven` | `completed` | piano + badge ottimo |
-| `ready` | `incumbent_found` | `gap_bounded` | limite | piano + gap noto |
-| `ready` | `incumbent_found` | `not_proven` | limite/cancel | piano fattibile + warning |
-| `ready` | `no_incumbent` | `not_proven` | limite/cancel | nessun piano; non infeasible |
+| `needs_input` | — | — | issue input | issue azionabili; nessuna soluzione |
+| `unsupported` | — | — | confine dichiarato | nessun fallback |
+| `ready` | `no_op` | `optimal_proven` | exact oracle/score-lattice | ricerca vuota provata + fonte |
+| `ready` | `infeasible_proven` | `infeasibility_proven` | conflict Decimal/exact oracle | dominio vuoto provato; nessuna soluzione |
+| `ready` | `incumbent_found` | `optimal_proven` | exact oracle/score-lattice | piano Decimal + badge/prova esatta |
+| `ready` | `incumbent_found` | `gap_bounded` | solver bound/tolleranze/versione/settings | piano Decimal + gap noto; stop completed o limite |
+| `ready` | `incumbent_found` | `not_proven` | bound assente/non confrontabile | piano Decimal + warning |
+| `ready` | `no_incumbent` | `not_proven` | limite/cancel o floating infeasible | nessun piano; non infeasible provato |
 
-`target_deviation`, `cash_deficit` e objective values restano metriche, non status.
+`L2_fixed`, `U`, diagnostici, `cash_deficit` e objective values restano
+metriche, non status.
+Ogni riga con piano espone `incumbent_validation=decimal_verified`; ciò certifica
+il candidato, non l’ottimalità. `reported optimal/infeasible` del solver resta nel
+foldout tecnico e non viene promosso. `proof_source=exhaustive_oracle |
+score_lattice_closure` è obbligatorio per `optimal_proven`; per
+`infeasible_proven` sono ammessi soltanto `deterministic_conflict |
+exhaustive_oracle`.
+
+I campi `availability`, `outcome`, `proof`, `proof_source` e `stop_reason`
+seguono le union discriminate del
+[piano architetturale §14](plan-phase00PacRebalancerArchitecture.prompt.md);
+non sono alias intercambiabili. La closure coefficient-safe è definita nel
+[nucleo matematico §19.2.1](plan-phase00PacRebalancerMathematicalCore.prompt.md),
+non dalla tolerance floating del solver.
 
 ---
 
@@ -2382,8 +2525,8 @@ Tools Hub
 | FX spot/age/spread/buffer/fee | sì |
 | Strategie v1 | sì |
 | Snapshot/compute unico | sì |
-| PAC base/ottimizzata | sì |
-| Rebalancer base/ottimizzata | sì |
+| PAC primario fixed-L2/variante margine | sì |
+| Rebalancer primario fixed-L2/variante margine | sì |
 | Grafici/esposizioni | sì |
 | Dettagli esposizione DataTable | sì |
 | Funding/FX/ordini | sì |
@@ -2413,7 +2556,7 @@ Tools Hub
 3. Geografia con mappe sincronizzate + delta divergente, senza archi.
 4. Tabelle desktop `DataTable` + proiezione card/accordion mobile.
 5. Unico Piano operativo foldable Funding → FX → Broker, con Sankey opzionale.
-6. Tab base/ottimizzata + compare esplicito.
+6. Tab della coppia Tool-specific + compare esplicito.
 7. Label `Routing` oppure alternativa più parlante.
 
 ---

@@ -1,5 +1,9 @@
 # Round 4 — PAC + Ribilanciamento P1 multi-servizio
 
+> **ARCHIVIO:** prototipo respinto, non specifica corrente. L'entrypoint della
+> suite target è
+> [`../plan-phase00PacRebalancerTargetDesign.prompt.md`](../plan-phase00PacRebalancerTargetDesign.prompt.md).
+
 **Stato:** PROTOTIPO IMPLEMENTATO E VERIFICATO, MA RESPINTO COME PRODOTTO —
 il contratto analysis-only è superato; non è la specifica attiva
 

@@ -1,5 +1,11 @@
 # Round 5 — PAC/Rebalancer operational planner
 
+> **ARCHIVIO:** piano superato, non specifica corrente. L'entrypoint della suite
+> target è
+> [`../plan-phase00PacRebalancerTargetDesign.prompt.md`](../plan-phase00PacRebalancerTargetDesign.prompt.md).
+> Ogni riferimento sotto a design o piano “corrente” conserva soltanto il
+> contesto storico del round in cui fu scritto.
+
 **Stato:** SUPERSEDED / STORICO — contratto raffinato dalla UI Round 6 approvata;
 esecuzione sostituita dal piano Round 7. Nessun codice production/test è stato
 autorizzato o consegnato da questo documento.
@@ -9,18 +15,25 @@ autorizzato o consegnato da questo documento.
 → Follow-up:
 [Round 6 — PAC/Rebalancer UI Blueprint](plan-phase00Step2Round6-PacRebalancerUiBlueprint.prompt.md)
 
-→ Piano implementativo corrente:
+→ Piano implementativo successivo nel percorso storico:
 [Round 7 — PAC/Rebalancer operational migration](plan-phase00Step2Round7-PacRebalancerOperationalMigration.prompt.md)
 
 ↔ Supersedes and re-scopes:
 [Solver operativo PAC + Ribilanciamento](plan-phase00Step3-PacRebalancingSolver.prompt.md)
 
-**Design prodotto normativo corrente:**
+**Design prodotto normativo del round storico:**
 [PAC/Rebalancer end-to-end design](pac-rebalancer-end-to-end-design.md).
 
 > Il corpo seguente conserva il gate operativo precedente alla review UI. Dove
 > differisce da Round 6, dal design end-to-end corrente o da Round 7, prevalgono
 > questi ultimi; Round 5 non è più un piano eseguibile.
+>
+> **Correzione successiva — 2026-09-16:** tutte le formulazioni PAC/Rebalancer
+> nel corpo sono storiche. L'autorità corrente usa target monetari fissi e
+> primario globale `L2_fixed → U`, con tier operativi distinti; la variante
+> congela tutte le azioni e aggiunge BUY secondo `U → L2_fixed`. Percentuali,
+> D∞ e D1 sono diagnostici. PySCIPOpt/SCIP è candidato additivo approvato, ma
+> dependency/probe/capacità e payload restano gate Round 7.
 
 **Cronologia storica:**
 [PAC/Rebalancer decision chronicle](pac-rebalancer-decision-chronicle.md).
@@ -69,16 +82,16 @@ Ordine di prevalenza:
 
 Fonti obbligatorie:
 
-- [backlog PAC/Tool](../09_feedbackJobs/05_pac_allocation_tool.md);
-- [piano sprint completo](../09_feedbackJobs/06_piano_sprint.md);
-- [indice feedback](../09_feedbackJobs/README.md);
-- [studio PAC multi-ETF](../../guida_allocazione_pac_multi_etf.md);
+- [backlog PAC/Tool](../../09_feedbackJobs/05_pac_allocation_tool.md);
+- [piano sprint completo](../../09_feedbackJobs/06_piano_sprint.md);
+- [indice feedback](../../09_feedbackJobs/README.md);
+- [studio PAC multi-ETF](../../../guida_allocazione_pac_multi_etf.md);
 - [Round 4 respinto](plan-phase00Step2Round4-PacAndRebalancerUiAcceptance.prompt.md);
 - [solver storico superato](plan-phase00Step3-PacRebalancingSolver.prompt.md);
 - [contratto P1 storico](pac-allocator-contract.md);
 - [UX P1 storica](pac-allocator-ux.md);
 - [evidenze P1](pac-allocator-evidence.md);
-- [deferred backlog](../../../../TODO_FUTURI.md).
+- [deferred backlog](../../../../../TODO_FUTURI.md).
 
 ## 1. Obiettivo
 
@@ -203,14 +216,14 @@ Il clean break è obbligatorio:
 | D09 | `fee_buy` e `fee_sell` indipendenti: fisso + rate + min/max. | CONGELATA | Nessuna fee implicita. |
 | D10 | FX solo single-hop dichiarato, debit/credit accoppiati, niente cicli. | CONGELATA | Invarianti cash/oracle. |
 | D11 | Buffer FX opzionale, default 0, resta cassa e non è fee. | CONGELATA | Non sottrarre due volte. |
-| D12 | PAC: `proportional`, `min_fragmentation`. | CONGELATA | Obiettivi lessicografici espliciti. |
+| D12 | PAC: base deterministica; `proportional`/`min_fragmentation` governano il solo residuo. | CORRETTA 2026-09-15 | Nessun solve minimax/D² per la base. |
 | D13 | Rebalancer: `invest_only`, `invest_and_sell`; default invest-only. | CONGELATA | Nuova liquidità prima delle vendite. |
-| D14 | Base + residual-optimized nello stesso output, senza booleano utente. | CONGELATA | Seconda soluzione monotona rispetto alla base. |
+| D14 | Base + residual-optimized nello stesso output, senza booleano utente. | CORRETTA 2026-09-15 | Ordini base monotoni; score può peggiorare con delta visibile. |
 | D15 | Valuta di riferimento è un campo Step 1, prefilled dalla valuta default utente e modificabile. | CONGELATA | Solo metro per pesi/grafici; worker non legge preferenze. |
 | D16 | Trasferimenti v1 dichiarati, gratuiti e immediati. | CONGELATA | Limiti/fee/settlement differiti. |
 | D17 | PMC, aliquota plusvalenze Asset, regime e minus pregresse entrano nello snapshot; v1 riserva imposta senza compensazioni nascoste. | CONGELATA | Fee SELL → gain positivo → tax reserve → cash netto. |
 | D18 | Minor unit valutaria è regola backend, `ROUND_HALF_UP`; non campo UI. | CONGELATA | Test per valuta. |
-| D19 | Nessuna tolleranza target nascosta: policy secondarie non peggiorano la tupla obiettivo base. | CONGELATA | Confronto Decimal esatto; nessun `epsilon` utente/implicito. |
+| D19 | Nessuna tolleranza target nascosta; il residuo può peggiorare D∞/D1 per aumentare l’investito e mostra il delta. | CORRETTA 2026-09-15 | Decimal canonicalizza entro una minor unit senza rilassare fattibilità fisica. |
 | D20 | Fiscalità SELL v1: aliquota Asset esplicita, prefill `26%`, applicata al gain positivo dopo fee SELL. | **RISOLTA 2026-09-15** | Formula e rounding testati; nessun input fiscale alternativo. |
 | D21 | `withholding_kind` è output derivato dal regime, non un altro input: `broker_withheld` per amministrato, `self_reserved` per dichiarativo/libero. | CONGELATA | Entrambi escludono la riserva dai BUY; solo il secondo resta cash fisico. |
 
@@ -449,13 +462,13 @@ Per notional `N` e lato `h`:
 \operatorname{fee}_h(N)=
 \begin{cases}
 0, & N=0\\
-f_h, & N>0 \land r_h=0\\
-f_h+\min(\max(r_hN,l_h),u_h), & N>0 \land r_h>0
+f_h+\min(\max(r_hN,l_h),u_h), & N>0
 \end{cases}
 ```
 
 `u_h=+∞` quando assente; `0<=l_h<=u_h`. Min/max si applicano alla componente
-percentuale. Fee per riga ordine, mai capitale investito.
+percentuale; rate zero con minimo positivo applica il minimo. Fee per riga
+ordine, mai capitale investito.
 
 ### 6.6 Asset, custodie e route
 
@@ -817,31 +830,23 @@ d_a(x)=
 \right|
 ```
 
-Il PAC base `proportional` ottimizza lessicograficamente:
-
-1. minimizza `max_a d_a`;
-2. minimizza `sum_a d_a^2`;
-3. minimizza fee/priorità secondo la policy;
-4. usa tie-break stabile.
+Il PAC base non ottimizza `d_a`. Calcola `T_a=w_aK_reachable`, assegna a ogni
+Asset il relativo envelope lordo, visita le route per priorità e sceglie per
+difetto la massima quantità intera o il massimo step monetario compatibile con
+envelope, cash nativo, fee, FX, buffer, minimi e cap. Target non disponibile
+resta residuo esplicito; D∞/D1 sono diagnostici.
 
 Se `K_reachable=0`, l'outcome è `no_op` e le deviazioni PAC restano `null`.
 Se `K_reachable>0` ma `B_actual=0`, per esempio sotto minimo condizionale,
 `d_a=|w_a|` e l'outcome resta `no_op`. Fee, tax, spread e buffer non sono
 investimento né denominatore.
 
-`min_fragmentation`:
-
-1. mantiene `B_actual>=B_base`;
-2. non peggiora la tupla obiettivo Decimal della soluzione proportional
-   (`max target deviation`, poi errore quadratico);
-3. minimizza Asset splittati;
-4. minimizza righe ordine;
-5. applica priorità Broker;
-6. minimizza fee a score uguale;
-7. usa ID stabile come ultimo tie-break.
-
-Gli indicatori ordine sono vincolati all'ordine: il piano nullo non può vincere
-perché “frammenta meno”.
+`proportional` e `min_fragmentation` non cambiano la base. Governano soltanto il
+post-step. Entrambe massimizzano prima l’investimento aggiuntivo; `proportional`
+ordina quindi D∞/D1 prima di priorità/costi/righe, mentre
+`min_fragmentation` ordina Asset splittati/righe prima di D∞/D1 e
+priorità/costi. Il piano nullo non può vincere contro un incremento con
+investimento mid maggiore.
 
 ### 7.5 Residual optimization
 
@@ -856,12 +861,13 @@ Può solo aggiungere BUY ammessi. Non può:
 - diminuire/spostare azioni base;
 - introdurre SELL;
 - superare cash/FX/fee/buffer;
-- peggiorare la tupla obiettivo base;
-- aumentare split con `min_fragmentation`.
+- conteggiare fee o buffer come investimento.
 
 Fra i candidati ammessi massimizza prima l'investimento mid aggiuntivo, poi
-minimizza fee/righe incrementali e usa tie-break stabile. Output separa
-investimento aggiuntivo e fee incrementali; può coincidere con la base.
+applica l’ordine `proportional` o `min_fragmentation` congelato nel design
+normativo.
+Può peggiorare lo score base per ridurre cash inattivo; output separa investimento,
+fee, residuo e delta score. Può coincidere con la base.
 
 ### 7.6 Rebalancer invest-only
 
@@ -1259,7 +1265,7 @@ sostanziale richiede nuova approvazione developer prima del codice viste.
 | Margine di sicurezza FX [1,00]%                                          |
 |----------------------------------------------------------------------------|
 | STRATEGIA                                                                  |
-| (●) Base proporzionale   ( ) Minima frammentazione                         |
+| (●) Residuo proporzionale   ( ) Residuo minima frammentazione              |
 |----------------------------------------------------------------------------|
 | REVIEW SNAPSHOT                                                            |
 | 3 fonti · 2 Broker · 2 Asset · 1 FX · 2 override · facts stale: 1         |
@@ -1576,13 +1582,13 @@ notional operativo, investimento mid e spread; invarianti verdi.
 **Azioni**
 
 1. Definire dominio massimo supportato e failure mode.
-2. Implementare oracle esaustivo completo per casi piccoli, non algoritmo
-   add-only equivalente.
-3. Implementare PAC proportional.
-4. Implementare min_fragmentation lessicografico.
+2. Implementare vettori indipendenti per la base PAC deterministica.
+3. Implementare oracle esaustivo completo per il residuo e il Rebalancer, non
+   algoritmo equivalente al solver.
+4. Implementare post-step PAC proportional/min_fragmentation.
 5. Implementare Rebalancer invest_only.
 6. Implementare invest_and_sell sequenziale con tax reserve per Asset.
-7. Implementare residual optimization monotona.
+7. Implementare residual optimization monotona sugli ordini, non sullo score.
 8. Derivare tutti gli upper bound da cash/inventario; vietare Big-M
    arbitrari.
 9. Separare outcome/proof/stop.
@@ -2009,7 +2015,7 @@ Aggiornare immediatamente questo piano; non accumulare note alla fine.
 
 | Famiglia | Witness minimo |
 |---|---|
-| PAC | zero initial, proportional, min-fragmentation, low budget, zero BUY fee, trapped cash excluded from denominator |
+| PAC | target×budget, floor whole/monetary, route fallback, unavailable target, residual proportional/min-fragmentation, low budget, zero BUY fee, trapped cash excluded from denominator |
 | Rebalancer | no-op, invest-only, zero new cash, sequential invest+sell, overweight zero target |
 | Asset/Broker | stesso Asset multi-Broker, priorità uguali/diverse, route esclusa |
 | Funding | new, existing, manual, source=trading Broker, partial cash selection |
@@ -2018,7 +2024,7 @@ Aggiornare immediatamente questo piano; non accumulare note alla fine.
 | Fee | fixed, rate, min, max, BUY 0/SELL nonzero |
 | FX | none, native, auto-buy, stale, spread witness, buffer rate/amount, fixed fee, missing pair |
 | Cash | native ledgers, transfer, gross SELL posting, fee, tax reserve, withholding kind, physical/spendable balance, net equivalence, no duplicate contribution |
-| Solver | oracle equal, sequential Rebalancer oracle, derived finite bounds, deterministic tie, incumbent/limit, no incumbent/limit |
+| Solver | PAC base direct-vector equality; residual/Rebalancer oracle equality, sequential Rebalancer oracle, derived finite bounds, deterministic tie, incumbent/limit, no incumbent/limit |
 | Status | no-op for low/blocked usefulness, needs-input, unsupported, hard-constraint infeasible proven, optimal proven |
 | Snapshot | manual/copy equivalent, override, stale response, account switch |
 | Auth/privacy | OWNER, OWNER0, unauthorized Broker, no personal values in logs |
