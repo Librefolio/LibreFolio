@@ -38,6 +38,8 @@ priorità fra le metriche**.
 | 2 | [`02-verdetti-per-strumento.md`](./02-verdetti-per-strumento.md) | Per ogni strumento: cosa fa, a che domanda risponde, verdetto e destinazione. |
 | 3 | [`03-mappa-livelli-pagine.md`](./03-mappa-livelli-pagine.md) | Mappa livelli × pagine, conseguenze architetturali, scomposizione del monolite. |
 | 4 | [`04-decisioni-e-questioni-aperte.md`](./04-decisioni-e-questioni-aperte.md) | Registro delle decisioni prese, dei rinvii, e di ciò che resta aperto. **Documento vivo.** |
+| 5 | [`05-grammatica-visiva-e-rappresentazioni.md`](./05-grammatica-visiva-e-rappresentazioni.md) | Diagnosi estetica, contratto di primitive, anatomia della card, sei rappresentazioni, dossier heatmap, layout per zona. |
+| 6 | [`06-matematica-librerie-e-reimplementazioni.md`](./06-matematica-librerie-e-reimplementazioni.md) | Le due sorgenti matematiche del progetto, confronto a tre vie con NumPy e Riskfolio, distorsione del CVaR, costo dei segnali rolling, piano di migrazione M1-M4. |
 
 ---
 
@@ -49,8 +51,9 @@ priorità fra le metriche**.
 | Tesi e quattro domande | ✅ 16 Set 2026 |
 | Verdetti per strumento | ✅ 16 Set 2026 |
 | Mappa livelli × pagine | ✅ 16 Set 2026 |
-| **UI/UX per zona e scelta dei grafici** | ⏳ prossimo blocco |
-| Piano esecutivo | ⏳ da scrivere dopo la UI/UX |
+| **UI/UX per zona e scelta dei grafici** | ✅ 16 Set 2026 |
+| **Matematica, librerie e reimplementazioni** | ✅ 16 Set 2026 |
+| Piano esecutivo | ⏳ prossimo blocco |
 
 ---
 
