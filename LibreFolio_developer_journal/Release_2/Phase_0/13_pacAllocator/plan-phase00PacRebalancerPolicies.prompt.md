@@ -8,7 +8,8 @@ controesempi; rilievi della review indipendente incorporati il 2026-09-16.
 **Suite target:** [master](plan-phase00PacRebalancerTargetDesign.prompt.md) ·
 [nucleo matematico](plan-phase00PacRebalancerMathematicalCore.prompt.md) ·
 [architettura](plan-phase00PacRebalancerArchitecture.prompt.md) ·
-[UI completa](plan-phase00PacRebalancerUiTarget.prompt.md).
+[UI completa](plan-phase00PacRebalancerUiTarget.prompt.md) ·
+[bundle implementativo](implementation/README.md).
 
 > Questo piano risponde a quattro domande:
 >
@@ -994,7 +995,7 @@ Dettagli contrattuali futuri non possono riaprire queste decisioni in silenzio.
 
 ---
 
-## 17. Gate prima del piano implementativo
+## 17. Gate recepiti dal piano implementativo
 
 - review della matrice policy contro il nucleo matematico;
 - conferma che ogni constraint abbia unità e predicate Decimal;
@@ -1004,3 +1005,6 @@ Dettagli contrattuali futuri non possono riaprire queste decisioni in silenzio.
 - benchmark delle cascade MIQP/MIQCP;
 - mapping esatto policy→UI explanation;
 - nessun default o coefficiente non visibile.
+
+L'ordine esecutivo e le prove sono nel
+[piano solver/policy](implementation/plan-phase00Step3PacRebalancerSolverPolicies.prompt.md).

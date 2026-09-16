@@ -9,10 +9,11 @@ al piano implementativo.
 **Suite target:** [master](plan-phase00PacRebalancerTargetDesign.prompt.md) ·
 [nucleo matematico](plan-phase00PacRebalancerMathematicalCore.prompt.md) ·
 [policy, obiettivi e vincoli](plan-phase00PacRebalancerPolicies.prompt.md) ·
-[UI completa](plan-phase00PacRebalancerUiTarget.prompt.md).
+[UI completa](plan-phase00PacRebalancerUiTarget.prompt.md) ·
+[bundle implementativo](implementation/README.md).
 
 > Questo piano definisce responsabilità e flussi, non nomi finali di ogni DTO o
-> file. Il futuro piano implementativo dovrà materializzare i contratti senza
+> file. Il bundle implementativo materializza i gate dei contratti senza
 > spostare calcoli fra layer o duplicare la piattaforma Tool del gruppo C.
 
 ---
@@ -1176,9 +1177,9 @@ Nessun broad catch produce un risultato “successo” vuoto.
 
 ---
 
-## 27. Confini del futuro piano implementativo
+## 27. Confini recepiti dal piano implementativo
 
-Il piano implementativo dovrà definire:
+Il [bundle implementativo](implementation/README.md) pianifica:
 
 - file reali;
 - DTO concreti;
