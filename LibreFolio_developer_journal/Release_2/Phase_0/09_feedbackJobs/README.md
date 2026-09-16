@@ -11,7 +11,7 @@ di TODO_FUTURI.md (classificazione con l'utente) + gli 8 P4 ereditati dall'audit
 | [02_grafici_avanzati.md](02_grafici_avanzati.md) | Grafici | I10 calendar-return backend integrato; I60 Asset UI/follow-up attivi su I; P&L/candele/income ancora aperti |
 | [03_asset_dati_classificazione.md](03_asset_dati_classificazione.md) | Asset & dati | ✅ Settori bond e import CSV distribuzioni integrati e revisionati |
 | [04_brim_import.md](04_brim_import.md) | BRIM & import | ✅ eToro fee, refactor CA/helper maturity e delete-asset links integrati e revisionati |
-| [05_pac_allocation_tool.md](05_pac_allocation_tool.md) | Tool platform | Tool platform integrata; prototipo respinto; design/UI approvati e Round 7 pronto, implementazione Gate P1 frozen |
+| [05_pac_allocation_tool.md](05_pac_allocation_tool.md) | Tool platform | Tool platform integrata; PAC/Rebalancer fixed-L2 congelati; SCIP dependency/capacità e payload ancora a gate |
 | [06_piano_sprint.md](06_piano_sprint.md) | Analysis and sprint plan | Current-code evidence, 16 sprints, parallel-work dependency map, shared-resource ownership and developer UI review gates |
 | [07_feedback_import_critici.md](07_feedback_import_critici.md) | Urgent import/UX/update feedback | ✅ E1-E9 plus U1/U4/U5/U7/U9 integrati in `dev_release2` (`ef722b552`) |
 
@@ -31,7 +31,7 @@ checkpoint intermedi.
 | SP10 | ⏸️ Differito fino alla stabilizzazione chart/store. |
 | SP11 | ✅ Onboarding Round 6 implementato, verificato e developer-accepted; checkpoint J `580bd504f` integrato nella baseline combinata D `e38a521f0`, non ancora nel target `dev_release2`. |
 | SP12 | ✅ Piattaforma Tool integrata (`570beb386`). |
-| SP13–SP14 | 🟡 [Round 6 UI](../13_pacAllocator/plan-phase00Step2Round6-PacRebalancerUiBlueprint.prompt.md) approvato; [Round 7](../13_pacAllocator/plan-phase00Step2Round7-PacRebalancerOperationalMigration.prompt.md) pronto per checkpoint, implementazione Gate P1 non autorizzata. |
+| SP13–SP14 | 🟡 [Suite target](../13_pacAllocator/plan-phase00PacRebalancerTargetDesign.prompt.md) con master + UI completa + matematica + policy/vincoli + architettura; review indipendente incorporata, approvazione developer e nuovo piano implementativo ancora da completare. Gate aperti: risultato product-shaped e capacità/packaging SCIP. |
 | SP15 | ⛔ Attende SP07 + SP11 + SP14. |
 | SP16 | ✅ Refactor `execute_batch` integrato con L (`846aefb24`, combined `ed0f4ff30`); full backend e docs verdi. |
 
@@ -148,14 +148,16 @@ checkpoint.
 
 ## PAC/Rebalancer operational planning checkpoint - 2026-09-15
 
-Il developer ha approvato il
-[design end-to-end](../13_pacAllocator/pac-rebalancer-end-to-end-design.md), il
-[Round 6 UI](../13_pacAllocator/plan-phase00Step2Round6-PacRebalancerUiBlueprint.prompt.md)
-e la persistenza del
-[Round 7](../13_pacAllocator/plan-phase00Step2Round7-PacRebalancerOperationalMigration.prompt.md).
-La [cronologia](../13_pacAllocator/pac-rebalancer-decision-chronicle.md) resta storica.
-Il checkpoint coordinatore precede una seconda richiesta Gate P1: nessun codice/test
-operativo è ancora autorizzato.
+Il developer ha approvato UX e nucleo matematico nei round successivi al
+prototipo respinto. La loro autorità corrente è ora la suite con
+[piano maestro target](../13_pacAllocator/plan-phase00PacRebalancerTargetDesign.prompt.md);
+la [catena precedente](../13_pacAllocator/drafts/README.md) resta storica.
+Nessun codice/test operativo è iniziato e il vecchio Round 7 non è più il piano
+attivo: la review indipendente della suite è stata incorporata e il nuovo
+piano implementativo verrà scritto dopo l'approvazione developer. Primario
+globale fixed-L2, policy operative distinte, variante
+margine BUY-only e proof/status conservativi restano congelati. SCIP è candidato
+additivo; dependency/probe/capacità e risultato product-shaped restano gate.
 
 ## Regole della cartella
 

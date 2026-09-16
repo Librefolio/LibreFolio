@@ -1,10 +1,15 @@
 # Contratto PAC P1-r3 — storico del prototipo respinto
 
+> **ARCHIVIO:** documento non corrente. L'entrypoint della suite target è
+> [`../plan-phase00PacRebalancerTargetDesign.prompt.md`](../plan-phase00PacRebalancerTargetDesign.prompt.md).
+> Ogni riferimento sotto a design o piano “corrente” conserva soltanto il
+> contesto storico del round in cui fu scritto.
+
 > **Autorità:** documento storico. Il contratto `analyze` non è il prodotto
 > attivo e sarà rimosso con clean break. Design corrente:
 > [PAC/Rebalancer end-to-end design](pac-rebalancer-end-to-end-design.md);
 > UI approvata [Round 6](plan-phase00Step2Round6-PacRebalancerUiBlueprint.prompt.md);
-> piano pending:
+> piano corrente, Step 0 frozen:
 > [Round 7](plan-phase00Step2Round7-PacRebalancerOperationalMigration.prompt.md).
 
 **Stato:** N1/C1/X1 approvati; implementazione D integrata con runtime a
@@ -258,9 +263,23 @@ Full solver futuro mantiene:
 - divieto globale buy+sell dello stesso `instrument_key`;
 - nessuna vendita oltre inventario;
 - nessun ciclo FX/arbitraggio;
-- A: minimo scostamento peggiore, poi errore quadratico;
-- B: stessa origine, score A preservato, sell congelati, buy solo crescenti,
-  massimo capitale investito;
+- PAC e Rebalancer: target monetari fissi `T_a=w_aF_ref` e primario globale
+  `L2_fixed=Σ_a(V_a_final-T_a)²`; PAC parte da `V₀=0`;
+- PAC: `proportional` e `min_fragmentation` cambiano soltanto i tier operativi
+  dopo `L2_fixed → U`;
+- entrambi: variante margine con azioni primarie congelate, BUY soltanto
+  crescenti e ordine `U → L2_fixed → costi/righe incrementali → tie`;
+- percentuali finali, D∞ e D1 sono diagnostici; quantità e valori finali sono
+  sempre non negativi;
+- route `whole_quantity` e `monetary_amount` possono coesistere; anche
+  `monetary_amount` usa tick interi di `order_amount_step`, non una soluzione
+  continua arrotondata come autorità;
+- ogni incumbent di ricerca è `decimal_verified`; status floating
+  `optimal/infeasible` non diventano prova esatta. `optimal_proven` richiede
+  oracle esaustivo o chiusura score-lattice coefficient-safe;
+  `infeasible_proven` richiede conflict witness Decimal o oracle esaustivo.
+  PySCIPOpt/SCIP è candidato additivo approvato, ma installazione/probe, capacità
+  MIQP/MIQCP convessa e payload restano gate separati;
 - no-op, infeasible provato e limit/timeout distinti;
 - quantum monetario operativo positivo e generico, separato da precisione display.
 

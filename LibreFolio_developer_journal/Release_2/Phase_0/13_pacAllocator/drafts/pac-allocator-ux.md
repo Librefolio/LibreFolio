@@ -1,5 +1,10 @@
 # PAC P1 — ASCII storico del prototipo respinto
 
+> **ARCHIVIO:** storyboard non corrente. L'entrypoint della suite target è
+> [`../plan-phase00PacRebalancerTargetDesign.prompt.md`](../plan-phase00PacRebalancerTargetDesign.prompt.md).
+> Ogni riferimento sotto a design o piano “corrente” conserva soltanto il
+> contesto storico del round in cui fu scritto.
+
 > **Autorità:** storyboard storico, non UI approvata. Flusso corrente:
 > [PAC/Rebalancer end-to-end design](pac-rebalancer-end-to-end-design.md);
 > UI approvata:

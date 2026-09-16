@@ -1,5 +1,8 @@
 # PAC allocator UI refinement - Round 2
 
+> **ARCHIVIO:** piano non corrente. L'entrypoint della suite target è
+> [`../plan-phase00PacRebalancerTargetDesign.prompt.md`](../plan-phase00PacRebalancerTargetDesign.prompt.md).
+
 **Stato:** approvato dal developer; Phase A numerica committata a `a6960ef04`;
 slice Asset global committata a `7a02517e6`; WIP Round 2 preservato a
 `8273335ff`; merge H chiuso dal developer a `d7d40c0ec`. Ripresa Round 2

@@ -1,5 +1,8 @@
 # Piano Phase 0 - Allocatore PAC e analisi iniziale P1
 
+> **ARCHIVIO:** piano P1 non corrente. L'entrypoint della suite target è
+> [`../plan-phase00PacRebalancerTargetDesign.prompt.md`](../plan-phase00PacRebalancerTargetDesign.prompt.md).
+
 **Stato:** core P1 verificato sulla revisione combinata; codec C/D reale ancora pendente
 
 **Data checkpoint:** 2026-09-10
