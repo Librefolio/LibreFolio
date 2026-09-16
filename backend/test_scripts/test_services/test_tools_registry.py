@@ -21,6 +21,12 @@ import pytest
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, computed_field
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 
+from backend.app.schemas.pac_allocator import (
+    PacAnalyzeInput,
+    PacAnalyzeOutput,
+    RebalanceAnalyzeInput,
+    RebalanceAnalyzeOutput,
+)
 from backend.app.schemas.tools import ToolDocumentation, ToolOperationPolicy, ToolPlatformPolicy, ToolUIDescriptor
 from backend.app.services.provider_registry import AbstractPluginRegistry, register_plugin
 from backend.app.services.tools.base import ToolDefinitionError, ToolPlugin, ToolService
@@ -190,6 +196,23 @@ def _private_service(code: object = "private_probe", **attributes) -> ToolServic
     }
     values.update(attributes)
     return ToolService(**values)
+
+
+def _long_operation_policy(operation: str = "inspect", *, deterministic: bool = True) -> ToolOperationPolicy:
+    return ToolOperationPolicy(
+        operation=operation,
+        deterministic=deterministic,
+        max_parameter_bytes=262_144,
+        max_result_bytes=524_288,
+        queue_timeout_ms=10_000,
+        engine_timeout_ms=35_000,
+        job_timeout_ms=50_000,
+        soft_timeout_ms=45_000,
+        cleanup_timeout_ms=7_000,
+        request_timeout_ms=70_000,
+        client_timeout_ms=75_000,
+        memory_limit_bytes=2_147_483_648,
+    )
 
 
 def _bundled_services() -> tuple[ToolService, ToolService]:
@@ -1093,36 +1116,139 @@ def test_catalog_order_and_fingerprint_are_stable_without_changing_registration_
     assert snapshot.definitions[_only_code(first)].descriptor.schema_fingerprint == snapshot.definitions[_only_code(second)].descriptor.schema_fingerprint
 
 
-def test_effective_policy_only_lowers_limits_and_reserves_output_time():
-    declared = ToolOperationPolicy(
-        operation="inspect",
-        deterministic=False,
-        max_parameter_bytes=262_144,
-        max_result_bytes=131_072,
-        queue_timeout_ms=9_000,
-        job_timeout_ms=3_000,
-        soft_timeout_ms=2_900,
+# Frozen before generic operation policy and platform resource fields were added.
+@pytest.mark.parametrize(
+    ("code", "input_type", "output_type", "expected_fingerprint"),
+    [
+        pytest.param(
+            "pac_allocator",
+            PacAnalyzeInput,
+            PacAnalyzeOutput,
+            "507e106cf2a2a2e3b78cc9f96053346cb785551231d8bbce86cd563e028ed495",
+            id="pac-allocator",
+        ),
+        pytest.param(
+            "portfolio_rebalancer",
+            RebalanceAnalyzeInput,
+            RebalanceAnalyzeOutput,
+            "cba2b73e9930c7f42ad92f2d43eb1cba91236ca0d2111d2cb454172243bf40b8",
+            id="portfolio-rebalancer",
+        ),
+    ],
+)
+def test_policy_and_resource_additions_do_not_change_financial_tool_fingerprints(
+    code,
+    input_type,
+    output_type,
+    expected_fingerprint,
+    discovery_factory,
+    plugin_factory,
+):
+    ordinary_plugin = plugin_factory(
+        code,
+        input_type=input_type,
+        output_type=output_type,
+        operations=(ToolOperationPolicy(operation="analyze"),),
     )
+    long_plugin = plugin_factory(
+        code,
+        input_type=input_type,
+        output_type=output_type,
+        operations=(_long_operation_policy("analyze"),),
+    )
+
+    assert _build(ordinary_plugin).descriptor.schema_fingerprint == expected_fingerprint
+    assert _build(long_plugin).descriptor.schema_fingerprint == expected_fingerprint
+
+    discovery = discovery_factory()
+    _publish(discovery, long_plugin)
+    platforms = (
+        ToolPlatformPolicy(),
+        ToolPlatformPolicy(
+            engine_timeout_ms=4_000,
+            job_timeout_ms=5_000,
+            soft_timeout_ms=4_000,
+            cleanup_timeout_ms=2_000,
+            request_timeout_ms=20_000,
+            client_timeout_ms=25_000,
+            memory_limit_bytes=536_870_912,
+        ),
+    )
+    effective_policies = []
+    for platform in platforms:
+        catalog = get_tool_catalog(platform, discovery.registry)
+        assert catalog.catalog_version == "2"
+        descriptor = {item.tool_code: item for item in catalog.items}[code]
+        assert descriptor.schema_fingerprint == expected_fingerprint
+        (effective_policy,) = descriptor.operations
+        effective_policies.append(effective_policy)
+
+    assert {
+        (
+            policy.engine_timeout_ms,
+            policy.job_timeout_ms,
+            policy.soft_timeout_ms,
+            policy.cleanup_timeout_ms,
+            policy.request_timeout_ms,
+            policy.client_timeout_ms,
+            policy.memory_limit_bytes,
+        )
+        for policy in effective_policies
+    } == {
+        (30_000, 45_000, 44_000, 5_000, 59_000, 65_000, 1_073_741_824),
+        (4_000, 5_000, 4_000, 2_000, 20_000, 25_000, 536_870_912),
+    }
+
+
+def test_effective_policy_only_lowers_limits_and_reserves_output_time():
+    declared = _long_operation_policy(deterministic=False)
     original = declared.model_dump()
 
     effective = effective_operation(declared, ToolPlatformPolicy())
 
-    assert effective.max_parameter_bytes == 131_072
-    assert effective.max_result_bytes == 131_072
-    assert effective.queue_timeout_ms == 5_000
-    assert effective.job_timeout_ms == 3_000
-    assert effective.soft_timeout_ms == 2_000
-    assert effective.pure is True
-    assert effective.deterministic is False
-    assert effective.deduplication == "none"
+    assert effective.model_dump(mode="json") == {
+        "operation": "inspect",
+        "pure": True,
+        "deterministic": False,
+        "deduplication": "none",
+        "max_parameter_bytes": 131_072,
+        "max_result_bytes": 262_144,
+        "queue_timeout_ms": 5_000,
+        "engine_timeout_ms": 30_000,
+        "job_timeout_ms": 45_000,
+        "soft_timeout_ms": 44_000,
+        "cleanup_timeout_ms": 5_000,
+        "request_timeout_ms": 59_000,
+        "client_timeout_ms": 65_000,
+        "memory_limit_bytes": 1_073_741_824,
+    }
     assert declared.model_dump() == original
+
+
+def test_effective_policy_rejects_request_without_platform_envelope_time():
+    declared = ToolOperationPolicy(
+        operation="inspect",
+        request_timeout_ms=13_000,
+    )
+
+    with pytest.raises(ToolDefinitionError) as caught:
+        effective_operation(declared, ToolPlatformPolicy())
+
+    assert caught.value.reason == "invalid_operation_policy"
 
 
 def test_one_invalid_effective_policy_does_not_hide_healthy_tools_or_poison_snapshot(discovery_factory, plugin_factory):
     discovery = discovery_factory()
     tight = plugin_factory(
         "private_tight_deadline",
-        operations=(ToolOperationPolicy(operation="inspect", job_timeout_ms=1_000, soft_timeout_ms=900),),
+        operations=(
+            ToolOperationPolicy(
+                operation="inspect",
+                engine_timeout_ms=800,
+                job_timeout_ms=1_000,
+                soft_timeout_ms=900,
+            ),
+        ),
     )
     healthy = plugin_factory("private_healthy")
     snapshot = _publish(discovery, tight, healthy)

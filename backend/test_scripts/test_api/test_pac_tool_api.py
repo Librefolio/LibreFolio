@@ -72,6 +72,7 @@ ITEM_METRIC_FIELDS = {
     "execution_ms",
     "cleanup_ms",
     "total_ms",
+    "resources",
 }
 
 
@@ -170,6 +171,22 @@ def _transport(payload: dict[str, object]) -> ToolComputeBatchResponse:
 def _assert_complete_success_metrics(metrics: ToolItemMetrics) -> None:
     values = metrics.model_dump(mode="json")
     assert set(values) == ITEM_METRIC_FIELDS
+    resources = values.pop("resources")
+    assert resources is not None
+    assert set(resources) == {"memory"}
+    assert set(resources["memory"]) == {
+        "mode",
+        "limit_bytes",
+        "peak_observed_bytes",
+    }
+    assert resources["memory"]["mode"] in {
+        "cgroup_v2_hard",
+        "process_tree_observed",
+    }
+    assert type(resources["memory"]["limit_bytes"]) is int
+    assert resources["memory"]["limit_bytes"] > 0
+    peak = resources["memory"]["peak_observed_bytes"]
+    assert peak is None or (type(peak) is int and peak >= 0)
     for value in values.values():
         assert type(value) is int
         assert value >= 0
@@ -327,8 +344,13 @@ async def test_catalog_publishes_both_services_with_shared_backend_versions(
             "max_parameter_bytes": 131_072,
             "max_result_bytes": 262_144,
             "queue_timeout_ms": 5_000,
+            "engine_timeout_ms": 4_000,
             "job_timeout_ms": 5_000,
             "soft_timeout_ms": 4_000,
+            "cleanup_timeout_ms": 2_000,
+            "request_timeout_ms": 20_000,
+            "client_timeout_ms": 25_000,
+            "memory_limit_bytes": 1_073_741_824,
         }
         assert descriptor.schema_fingerprint == schema_fingerprint(
             descriptor.input_schema,

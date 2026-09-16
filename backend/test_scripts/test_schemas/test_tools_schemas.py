@@ -26,8 +26,12 @@ from backend.app.schemas.tools import (
     ToolDiagnosticsResponse,
     ToolDocumentation,
     ToolItemMetrics,
+    ToolMemoryCapability,
+    ToolMemoryMetrics,
     ToolOperationPolicy,
     ToolPlatformPolicy,
+    ToolPoolResourceReservation,
+    ToolResourceMetrics,
     ToolUIDescriptor,
     ToolVersion,
 )
@@ -145,6 +149,12 @@ def _diagnostics() -> dict:
         "policy": {},
         "loaded": [_descriptor()],
         "failures": [{"tool_code": None, "filename": "private_broken.py", "reason": "import_failed"}],
+        "capabilities": {
+            "memory": {
+                "mode": "process_tree_observed",
+                "observation_interval_ms": 50,
+            }
+        },
         "pool": {
             "available": True,
             "active": 0,
@@ -153,6 +163,10 @@ def _diagnostics() -> dict:
             "degraded_lanes": 0,
             "completed": 0,
             "failed": 0,
+            "resources": {
+                "memory_capacity_bytes": 2_147_483_648,
+                "memory_reserved_bytes": 0,
+            },
         },
     }
 
@@ -172,6 +186,7 @@ def _boundary_policy() -> dict:
         "envelope_reserve_bytes": 16,
         "max_json_depth": 4,
         "queue_timeout_ms": 5,
+        "engine_timeout_ms": 4,
         "job_timeout_ms": 5,
         "soft_timeout_ms": 4,
         "output_reserve_ms": 1,
@@ -180,6 +195,7 @@ def _boundary_policy() -> dict:
         "response_reserve_ms": 2,
         "request_timeout_ms": 16,
         "client_timeout_ms": 17,
+        "memory_limit_bytes": 8,
     }
 
 
@@ -211,7 +227,10 @@ def _at(payload: dict, path: tuple[str | int, ...]) -> dict:
         pytest.param(ToolComputeBatchResponse, _response, ("results", 1, "error"), id="error"),
         pytest.param(ToolComputeBatchResponse, _response, ("results", 1, "error", "issues", 0), id="validation-issue"),
         pytest.param(ToolDiagnosticsResponse, _diagnostics, (), id="diagnostics"),
+        pytest.param(ToolDiagnosticsResponse, _diagnostics, ("capabilities",), id="capabilities"),
+        pytest.param(ToolDiagnosticsResponse, _diagnostics, ("capabilities", "memory"), id="memory-capability"),
         pytest.param(ToolDiagnosticsResponse, _diagnostics, ("pool",), id="pool"),
+        pytest.param(ToolDiagnosticsResponse, _diagnostics, ("pool", "resources"), id="pool-resources"),
         pytest.param(ToolDiagnosticsResponse, _diagnostics, ("failures", 0), id="discovery-failure"),
     ],
 )
@@ -248,8 +267,11 @@ def test_transport_forbids_extras_at_each_envelope_level(model, factory, path):
         (ToolComputeBatchResponse, _response, ("metrics",), "server_processing_ms", 7.0),
         (ToolComputeBatchResponse, _response, ("results", 1, "error"), "retryable", 0),
         (ToolComputeBatchResponse, _response, ("results", 1, "error"), "issue_count", "1"),
+        (ToolDiagnosticsResponse, _diagnostics, ("capabilities", "memory"), "observation_interval_ms", "50"),
         (ToolDiagnosticsResponse, _diagnostics, ("pool",), "available", 1),
         (ToolDiagnosticsResponse, _diagnostics, ("pool",), "active", False),
+        (ToolDiagnosticsResponse, _diagnostics, ("pool", "resources"), "memory_capacity_bytes", True),
+        (ToolDiagnosticsResponse, _diagnostics, ("pool", "resources"), "memory_reserved_bytes", "0"),
     ],
 )
 def test_transport_does_not_coerce_nested_metadata_types(model, factory, path, field, value):
@@ -268,7 +290,19 @@ def test_transport_does_not_coerce_nested_metadata_types(model, factory, path, f
     [
         (ToolUIDescriptor, _ui, ("kind", "component_key", "version")),
         (ToolCatalogResponse, _catalog, ("catalog_version",)),
-        (ToolDiagnosticsResponse, _diagnostics, ("scope",)),
+        (
+            ToolDiagnosticsResponse,
+            _diagnostics,
+            (
+                "scope",
+                "runtime_id",
+                "policy",
+                "loaded",
+                "failures",
+                "capabilities",
+                "pool",
+            ),
+        ),
         (ToolOperationPolicy, _operation, ("operation",)),
         (ToolDocumentation, _documentation, ("path", "version")),
         (
@@ -293,6 +327,27 @@ def test_required_contract_fields_are_not_supplied_by_defaults(model, factory, f
         with pytest.raises(ValidationError) as caught:
             model.model_validate(payload)
         assert any(issue["type"] == "missing" and issue["loc"] == (field,) for issue in caught.value.errors(include_input=False)), field
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        pytest.param(("capabilities", "memory"), id="memory-capability"),
+        pytest.param(("capabilities", "memory", "mode"), id="memory-capability-mode"),
+        pytest.param(("pool", "resources"), id="pool-resources"),
+        pytest.param(("pool", "resources", "memory_capacity_bytes"), id="memory-capacity"),
+        pytest.param(("pool", "resources", "memory_reserved_bytes"), id="memory-reserved"),
+    ],
+)
+def test_resource_contract_fields_are_required(path):
+    payload = _diagnostics()
+    parent = _at(payload, path[:-1])
+    del parent[path[-1]]
+
+    with pytest.raises(ValidationError) as caught:
+        ToolDiagnosticsResponse.model_validate(payload)
+
+    assert any(issue["loc"] == path for issue in caught.value.errors(include_input=False))
 
 
 @pytest.mark.parametrize(
@@ -577,13 +632,126 @@ _METRIC_PHASES = (
 
 
 def test_unobserved_metric_phases_serialize_as_null_not_zero():
-    expected = dict.fromkeys(_METRIC_PHASES)
+    expected = {**dict.fromkeys(_METRIC_PHASES), "resources": None}
     assert ToolItemMetrics().model_dump(mode="json") == expected
     assert ToolItemMetrics.model_validate(expected).model_dump(mode="json") == expected
 
     observed = ToolItemMetrics(queue_wait_ms=0, cleanup_ms=2)
     expected.update(queue_wait_ms=0, cleanup_ms=2)
     assert observed.model_dump(mode="json") == expected
+
+
+@pytest.mark.parametrize(
+    ("mode", "observation_interval_ms"),
+    [
+        pytest.param("cgroup_v2_hard", None, id="hard"),
+        pytest.param("process_tree_observed", 50, id="observed"),
+        pytest.param("unavailable", None, id="unavailable"),
+    ],
+)
+def test_memory_capability_accepts_only_coherent_mode_and_sampling_interval(
+    mode,
+    observation_interval_ms,
+):
+    capability = ToolMemoryCapability(
+        mode=mode,
+        observation_interval_ms=observation_interval_ms,
+    )
+    assert capability.model_dump(mode="json") == {
+        "mode": mode,
+        "observation_interval_ms": observation_interval_ms,
+    }
+
+
+@pytest.mark.parametrize(
+    ("mode", "observation_interval_ms"),
+    [
+        pytest.param("process_tree_observed", None, id="observed-without-interval"),
+        pytest.param("cgroup_v2_hard", 50, id="hard-with-interval"),
+        pytest.param("unavailable", 50, id="unavailable-with-interval"),
+    ],
+)
+def test_memory_capability_rejects_incoherent_sampling_metadata(
+    mode,
+    observation_interval_ms,
+):
+    with pytest.raises(ValidationError) as caught:
+        ToolMemoryCapability(
+            mode=mode,
+            observation_interval_ms=observation_interval_ms,
+        )
+    assert any(issue["type"] == "value_error" for issue in caught.value.errors(include_input=False))
+
+
+@pytest.mark.parametrize(
+    ("capacity", "reserved"),
+    [
+        pytest.param(0, 0, id="zero"),
+        pytest.param(2_147_483_648, 0, id="idle-two-gib"),
+        pytest.param(2_147_483_648, 1_073_741_824, id="one-of-two-gib"),
+        pytest.param(2_147_483_648, 2_147_483_648, id="full-two-gib"),
+    ],
+)
+def test_pool_memory_reservation_accepts_owned_capacity_boundaries(
+    capacity,
+    reserved,
+):
+    reservation = ToolPoolResourceReservation(
+        memory_capacity_bytes=capacity,
+        memory_reserved_bytes=reserved,
+    )
+    assert reservation.memory_capacity_bytes == capacity
+    assert reservation.memory_reserved_bytes == reserved
+
+
+@pytest.mark.parametrize(
+    ("capacity", "reserved"),
+    [
+        pytest.param(1, 2, id="reserved-over-capacity"),
+        pytest.param(-1, 0, id="negative-capacity"),
+        pytest.param(1, -1, id="negative-reservation"),
+        pytest.param(True, 0, id="boolean-capacity"),
+    ],
+)
+def test_pool_memory_reservation_rejects_invalid_byte_accounting(
+    capacity,
+    reserved,
+):
+    with pytest.raises(ValidationError):
+        ToolPoolResourceReservation(
+            memory_capacity_bytes=capacity,
+            memory_reserved_bytes=reserved,
+        )
+
+
+def test_item_resource_metrics_keep_bytes_nested_outside_duration_fields():
+    metrics = ToolItemMetrics(
+        total_ms=7,
+        resources=ToolResourceMetrics(
+            memory=ToolMemoryMetrics(
+                mode="process_tree_observed",
+                limit_bytes=1_073_741_824,
+                peak_observed_bytes=536_870_912,
+            )
+        ),
+    )
+
+    assert metrics.model_dump(mode="json") == {
+        **dict.fromkeys(_METRIC_PHASES),
+        "total_ms": 7,
+        "resources": {
+            "memory": {
+                "mode": "process_tree_observed",
+                "limit_bytes": 1_073_741_824,
+                "peak_observed_bytes": 536_870_912,
+            }
+        },
+    }
+    with pytest.raises(ValidationError):
+        ToolMemoryMetrics(
+            mode="unavailable",
+            limit_bytes=1_073_741_824,
+        )
 
 
 @pytest.mark.parametrize("phase", _METRIC_PHASES)
@@ -594,15 +762,35 @@ def test_observed_item_durations_are_strict_nonnegative_integers(phase, value):
     assert any(issue["loc"] == (phase,) for issue in caught.value.errors(include_input=False))
 
 
+@pytest.mark.parametrize(
+    ("field", "ceiling"),
+    [
+        ("queue_timeout_ms", 5_000),
+        ("engine_timeout_ms", 30_000),
+        ("job_timeout_ms", 45_000),
+        ("soft_timeout_ms", 44_000),
+        ("output_reserve_ms", 1_000),
+        ("cleanup_timeout_ms", 5_000),
+        ("request_timeout_ms", 59_000),
+        ("client_timeout_ms", 65_000),
+        ("memory_limit_bytes", 1_073_741_824),
+    ],
+)
+def test_platform_policy_exposes_long_operation_ceilings(field, ceiling):
+    assert getattr(ToolPlatformPolicy(), field) == ceiling
+
+
 def test_platform_policy_accepts_exact_envelope_and_deadline_boundaries():
     payload = _boundary_policy()
     policy = ToolPlatformPolicy.model_validate(payload)
     assert policy.model_dump() == payload
     assert policy.max_batch_items * policy.max_parameter_bytes + policy.envelope_reserve_bytes == policy.max_request_bytes
     assert policy.max_batch_items * policy.max_result_bytes + policy.envelope_reserve_bytes == policy.max_response_bytes
+    assert policy.engine_timeout_ms <= policy.soft_timeout_ms
     assert policy.soft_timeout_ms + policy.output_reserve_ms == policy.job_timeout_ms
     assert (policy.ingress_timeout_ms + policy.queue_timeout_ms + policy.job_timeout_ms + policy.cleanup_timeout_ms + policy.response_reserve_ms) == policy.request_timeout_ms
     assert policy.client_timeout_ms > policy.request_timeout_ms
+    assert policy.workers * policy.memory_limit_bytes <= 9_007_199_254_740_991
 
 
 @pytest.mark.parametrize(
@@ -610,6 +798,7 @@ def test_platform_policy_accepts_exact_envelope_and_deadline_boundaries():
     [
         ("workers", 9),
         ("max_pending_per_principal", 9),
+        ("engine_timeout_ms", 5),
         ("soft_timeout_ms", 5),
         ("output_reserve_ms", 2),
         ("queue_timeout_ms", 6),
@@ -625,6 +814,7 @@ def test_platform_policy_accepts_exact_envelope_and_deadline_boundaries():
         ("max_parameter_bytes", 9),
         ("max_result_bytes", 17),
         ("envelope_reserve_bytes", 17),
+        ("memory_limit_bytes", 4_503_599_627_370_496),
     ],
 )
 def test_platform_policy_rejects_incoherent_capacity_and_deadlines(field, value):
@@ -644,6 +834,8 @@ def test_platform_policy_rejects_incoherent_capacity_and_deadlines(field, value)
         ("max_batches_per_principal", 2),
         ("max_json_depth", 0),
         ("max_json_depth", 65),
+        ("engine_timeout_ms", 0),
+        ("memory_limit_bytes", 0),
     ],
 )
 def test_platform_policy_rejects_out_of_range_resource_limits(field, value):
@@ -661,11 +853,69 @@ def test_operation_policy_is_pure_without_deduplication():
     assert policy.deduplication == "none"
 
 
+def test_operation_policy_preserves_ordinary_defaults_and_generic_limits():
+    assert ToolOperationPolicy.model_validate(_operation()).model_dump(mode="json") == {
+        "operation": "inspect",
+        "pure": True,
+        "deterministic": True,
+        "deduplication": "none",
+        "max_parameter_bytes": 131_072,
+        "max_result_bytes": 262_144,
+        "queue_timeout_ms": 5_000,
+        "engine_timeout_ms": 4_000,
+        "job_timeout_ms": 5_000,
+        "soft_timeout_ms": 4_000,
+        "cleanup_timeout_ms": 2_000,
+        "request_timeout_ms": 20_000,
+        "client_timeout_ms": 25_000,
+        "memory_limit_bytes": 1_073_741_824,
+    }
+
+
 @pytest.mark.parametrize("soft_timeout", [5, 6])
 def test_operation_soft_deadline_must_precede_hard_deadline(soft_timeout):
     with pytest.raises(ValidationError) as caught:
         ToolOperationPolicy(operation="inspect", soft_timeout_ms=soft_timeout, job_timeout_ms=5)
     assert any(issue["type"] == "value_error" for issue in caught.value.errors(include_input=False))
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        pytest.param({"engine_timeout_ms": 4_001}, id="engine-after-soft"),
+        pytest.param({"cleanup_timeout_ms": 10_000}, id="request-has-no-slack"),
+        pytest.param({"request_timeout_ms": 12_000}, id="request-equals-inner-budgets"),
+        pytest.param({"client_timeout_ms": 20_000}, id="client-not-after-request"),
+    ],
+)
+def test_operation_policy_rejects_incoherent_generic_deadlines(changes):
+    with pytest.raises(ValidationError) as caught:
+        ToolOperationPolicy(operation="inspect", **changes)
+    assert any(issue["type"] == "value_error" for issue in caught.value.errors(include_input=False))
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "max_parameter_bytes",
+        "max_result_bytes",
+        "queue_timeout_ms",
+        "engine_timeout_ms",
+        "job_timeout_ms",
+        "soft_timeout_ms",
+        "cleanup_timeout_ms",
+        "request_timeout_ms",
+        "client_timeout_ms",
+        "memory_limit_bytes",
+    ],
+)
+def test_operation_policy_rejects_nonpositive_generic_limits(field):
+    with pytest.raises(ValidationError) as caught:
+        ToolOperationPolicy(
+            operation="inspect",
+            **{field: 0},
+        )
+    assert any(issue["loc"] == (field,) for issue in caught.value.errors(include_input=False))
 
 
 @pytest.mark.parametrize("path", ["user/tools/private-dto-probe", "user/tools/private-dto-probe/", "developer/tools_1"])

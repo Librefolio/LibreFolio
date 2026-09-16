@@ -10,6 +10,10 @@ from dataclasses import dataclass
 
 import psutil
 
+from backend.app.schemas.tools import ToolMemoryLimitMode, ToolMemoryMetrics, ToolResourceMetrics
+from backend.app.services.tools.base import ToolExecutionError
+from backend.app.services.tools.resources import CgroupV2MemoryGroup, ToolResourceController
+
 
 @dataclass(frozen=True, slots=True)
 class ProcessIdentity:
@@ -29,12 +33,31 @@ class ProcessIdentity:
 class OwnedProcessTree:
     """A fresh job session plus captured descendants, never a process-name match."""
 
-    def __init__(self, process: multiprocessing.Process):
+    def __init__(
+        self,
+        process: multiprocessing.Process,
+        *,
+        memory_limit_bytes: int = 1_073_741_824,
+        resource_controller: ToolResourceController | None = None,
+    ):
         self.process = process
+        self.memory_limit_bytes = memory_limit_bytes
+        self.resource_controller = resource_controller
+        self.memory_group: CgroupV2MemoryGroup | None = None
+        self.memory_mode: ToolMemoryLimitMode = "process_tree_observed"
+        self.peak_observed_bytes: int | None = None
+        self.memory_limit_exceeded = False
         self.root: ProcessIdentity | None = None
         self.group_id: int | None = None
         self.known: dict[int, ProcessIdentity] = {}
         self.closed = False
+
+    def prepare_resources(self, execution_id: str) -> None:
+        if self.resource_controller is None:
+            return
+        self.memory_group = self.resource_controller.prepare_memory_group(execution_id, self.memory_limit_bytes)
+        if self.memory_group is not None:
+            self.memory_mode = "cgroup_v2_hard"
 
     def bind_started_process(self) -> None:
         pid = self.process.pid
@@ -48,6 +71,16 @@ class OwnedProcessTree:
         if self.process.exitcode is None:
             self.root = identity
             self.known[pid] = identity
+            if self.memory_group is not None:
+                try:
+                    self.memory_group.attach(pid)
+                except (OSError, RuntimeError, ValueError):
+                    if not self.memory_group.close_if_empty():
+                        raise RuntimeError("Failed to release an unusable Tool memory cgroup") from None
+                    if self.resource_controller is not None:
+                        self.resource_controller.disable_hard_mode()
+                    self.memory_group = None
+                    self.memory_mode = "process_tree_observed"
 
     def confirm_session(self, *, pid: int, group_id: int, created_at: float) -> None:
         if pid != self.process.pid or group_id != pid or group_id == os.getpgrp():
@@ -121,7 +154,43 @@ class OwnedProcessTree:
                 members.append(process)
         return members
 
+    def observe_memory_limit(self) -> None:
+        """Record process-tree memory and raise only for a measured limit breach."""
+        try:
+            if self.memory_group is not None:
+                observation = self.memory_group.observe()
+                self.peak_observed_bytes = observation.peak_observed_bytes
+                exceeded = observation.limit_exceeded
+            else:
+                current = 0
+                for process in self.running_members():
+                    try:
+                        current += process.memory_info().rss
+                    except psutil.NoSuchProcess:
+                        continue
+                self.peak_observed_bytes = current if self.peak_observed_bytes is None else max(self.peak_observed_bytes, current)
+                exceeded = current > self.memory_limit_bytes
+        except (psutil.AccessDenied, PermissionError, OSError, RuntimeError, ValueError) as exc:
+            raise ToolExecutionError("service_unavailable", retryable=True) from exc
+        if exceeded:
+            self.memory_limit_exceeded = True
+            raise ToolExecutionError("memory_limit")
+
+    def resource_metrics(self) -> ToolResourceMetrics:
+        return ToolResourceMetrics(
+            memory=ToolMemoryMetrics(
+                mode=self.memory_mode,
+                limit_bytes=self.memory_limit_bytes,
+                peak_observed_bytes=self.peak_observed_bytes,
+            )
+        )
+
     def _signal(self, *, force: bool) -> None:
+        if force and self.memory_group is not None:
+            try:
+                self.memory_group.kill()
+            except OSError:
+                pass
         if self._group_is_owned():
             try:
                 os.killpg(self.group_id, signal.SIGKILL if force else signal.SIGTERM)
@@ -143,12 +212,35 @@ class OwnedProcessTree:
         while True:
             members = self.running_members()
             root_alive = self.process.exitcode is None
-            if not members and not root_alive and not self._group_exists():
+            memory_group_populated = self.memory_group is not None and self.memory_group.populated()
+            if not members and not root_alive and not self._group_exists() and not memory_group_populated:
                 return True
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 return False
             time.sleep(min(0.02, remaining))
+
+    def _terminate_before(self, deadline: float) -> bool:
+        if self._wait_empty(min(deadline, time.monotonic() + 0.02)):
+            return True
+        self._signal(force=False)
+        if self._wait_empty(min(deadline, time.monotonic() + 0.2)):
+            return True
+        self._signal(force=True)
+        return self._wait_empty(deadline)
+
+    def _close_empty_resources(self) -> bool:
+        if self.memory_group is not None:
+            try:
+                self.memory_group.observe()
+            except (OSError, RuntimeError, ValueError):
+                pass
+            self.peak_observed_bytes = self.memory_group.peak_observed_bytes
+            if not self.memory_group.close_if_empty():
+                return False
+        self.process.close()
+        self.closed = True
+        return True
 
     def cleanup(self, deadline: float) -> bool:
         """Return true only after observed termination; false retains every handle."""
@@ -156,21 +248,16 @@ class OwnedProcessTree:
             return True
         try:
             if self.process.pid is None:
-                self.process.close()
-                self.closed = True
-                return True
-            self.running_members()
-            if not self._wait_empty(min(deadline, time.monotonic() + 0.02)):
-                self._signal(force=False)
-                if not self._wait_empty(min(deadline, time.monotonic() + 0.2)):
-                    self._signal(force=True)
-                    if not self._wait_empty(deadline):
-                        return False
+                return self._close_empty_resources()
+            try:
+                self.observe_memory_limit()
+            except ToolExecutionError:
+                pass
+            if not self._terminate_before(deadline):
+                return False
             self.process.join(timeout=0)
             if self.process.is_alive():
                 return False
-            self.process.close()
-            self.closed = True
-            return True
+            return self._close_empty_resources()
         except (psutil.AccessDenied, PermissionError, OSError, ValueError):
             return False
