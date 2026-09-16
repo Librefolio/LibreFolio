@@ -1,6 +1,6 @@
 # Step 2 — normalizzazione, aritmetica esatta, evaluator e oracle
 
-**Stato:** PENDING CONTRACT FREEZE.
+**Stato:** IN PROGRESS — SLICE A CODE COMPLETE, TESTS PENDING; G3 REQUIRED FOR LATER SLICES.
 **Dipende da:** Step 1 MCP review + payload witness.
 **Non dipende da:** disponibilità del solver durante la prima slice.
 
@@ -46,6 +46,39 @@ backend/test_scripts/test_services/test_pac_planner_oracle.py
 
 Nessun modulo del core importa PySCIPOpt, DB, provider, HTTP o frontend DTO
 generati.
+
+### 2.1 Slice A autorizzata prima di G3 — 2026-09-16
+
+Lease writer temporanea:
+
+```text
+backend/app/services/pac_allocator/numeric.py
+```
+
+È ammessa soltanto implementazione additiva di:
+
+- `ExactRatio` canonico e errori aritmetici tipizzati;
+- conversione lossless da `Decimal` finito;
+- ordinamento via cross-product e proiezione Decimal esatta;
+- posting signed `ROUND_HALF_UP` su quantum esplicito, con rounding delta;
+- ceil-to-quantum units;
+- formule pure fee/effective-FX/tax con input completi caller-supplied.
+
+Non sono ancora autorizzati `models.py`, `issues.py`, normalizer, ledger
+strutturale, evaluator, oracle, report, export, schema pubblico, PySCIPOpt,
+DB/API, test o runner. Il currency minor-unit source resta esterno: Slice A
+riceve sempre il quantum esplicito.
+
+> **Note implementazione**: analisi Fleet `fleet-exact-core`
+> (`406804e6-ef88-43d3-b6c5-1aa1c70775d8`) accettata dal coordinator.
+> Confermati gap P1: nessun ratio non terminante, posting HALF_UP, ledger
+> Broker×currency, fee/FX/tax, fixed-L2, evaluator o oracle target. Le API P1
+> restano importabili e invarianti fino a CP5.
+>
+> **Note implementazione — Slice A 2026-09-16**: codice numerico additivo
+> completato nella lease; test/property test restano assegnati a `test-author`.
+> **Evidenza**: `git diff --check` completato con exit `0`; nessun runtime,
+> test, server, probe o dependency command eseguito.
 
 ## 3. `ExactRatio`
 
@@ -313,9 +346,63 @@ Casi obbligatori:
 
 - [ ] 1. Congelare modelli interni immutabili.
 - [ ] 2. Implementare e property-testare `ExactRatio`.
+  - [x] 2A. Implementare kernel additivo `ExactRatio`. — 2026-09-16
+  - [ ] 2B. Property test tramite `test-author`.
+  > **Note implementazione**: aggiunti rapporto canonico GCD/sign/zero,
+  > conversione lossless da `Decimal` finito, aritmetica e confronto
+  > cross-product interi, serializzazione frazionaria stabile e proiezione
+  > `Decimal` soltanto per denominatori terminanti. Le API P1 sono rimaste
+  > invariate.
+  > **Evidenza**: review statica di
+  > `backend/app/services/pac_allocator/numeric.py`; nessun comando runtime o
+  > test eseguito perché non autorizzato. Envelope di lunghezza/coefficienti
+  > e relativo errore overflow tipizzato restano intenzionalmente rinviati al
+  > freeze G3/G5: Slice A non dichiara completato tale invariante.
+  > **⚠️ Fuori pista**: la review statica ha rilevato che l'uguaglianza
+  > supportata con `int` richiede hash coerente; `ExactRatio(n, 1)` ora usa lo
+  > stesso hash di `n`.
+  > **⚠️ Fuori pista — formattazione selettiva 2026-09-16**: il checkpoint
+  > selettivo ha trovato Ruff verde ma Black non conforme su
+  > `backend/app/services/pac_allocator/numeric.py`. Su autorizzazione del
+  > coordinator, il numeric owner ha eseguito esclusivamente
+  > `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python -m black backend/app/services/pac_allocator/numeric.py`;
+  > Black ha riformattato un file. Nessuna modifica comportamentale/API/test;
+  > verifiche scoped finali verdi con
+  > `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python -m ruff check backend/app/services/pac_allocator/numeric.py`,
+  > `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python -m black --check backend/app/services/pac_allocator/numeric.py`
+  > e
+  > `git --no-pager diff --check -- backend/app/services/pac_allocator/numeric.py`.
+  > Nessun test o comando runtime eseguito; D-main riesegue i selector.
+  > **Evidenza aggiuntiva del checkpoint**: il controllo Black whole-file
+  > segnala anche `scripts/test_runner/_backend_services.py`, ma `black --diff`
+  > modifica soltanto righe preesistenti e non correlate intorno alla 956; la
+  > copia del file a baseline `HEAD` è identicamente Black-red e la hunk del
+  > selector non compare nel formatter diff. Il runner è D-main-owned, non è
+  > stato modificato da questo workstream e D-main documenterà l'eccezione di
+  > baseline.
 - [ ] 3. Implementare normalizer e issue taxonomy.
 - [ ] 4. Implementare posting/rounding.
+  - [x] 4A. Implementare posting signed `ROUND_HALF_UP` su quantum esplicito,
+        rounding delta e ceil-to-quantum units. — 2026-09-16
+  - [ ] 4B. Integrare le sette famiglie di posting e testarle tramite
+        `test-author` dopo G3.
+  > **Note implementazione**: `PostedAmount`, `post_half_up()` e
+  > `ceil_to_quantum_units()` operano soltanto su `ExactRatio`; nessuna lookup
+  > valuta/default minor-unit è stata introdotta.
+  > **Evidenza**: review statica del percorso leased; nessun comando runtime o
+  > test eseguito perché non autorizzato.
 - [ ] 5. Implementare fee, FX e tax.
+  - [x] 5A. Implementare formule numeriche pure fee/effective-FX/credito FX e
+        taxable-gain/tax reserve. — 2026-09-16
+  - [ ] 5B. Collegare formule a route, posting e withholding dopo G3.
+  > **Note implementazione**: tutti gli input economici sono obbligatori e
+  > caller-supplied; `cap=None` significa soltanto cap percentuale assente.
+  > Le formule restituiscono valori esatti pre-posting, quindi il chiamante
+  > applicherà una sola volta `post_half_up()` col quantum valuta esplicito.
+  > `approved_rate > 0` e `0 <= tax_rate <= 1` sono assunzioni policy correnti
+  > da congelare in G3, non nuovi bound pubblici dichiarati da Slice A.
+  > **Evidenza**: review statica del percorso leased; nessun comando runtime o
+  > test eseguito perché non autorizzato.
 - [ ] 6. Implementare ledger e inventory.
 - [ ] 7. Implementare fixed-reference/objective facts.
 - [ ] 8. Implementare evaluator completo.
