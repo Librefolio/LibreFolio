@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import errno
 import os
+import re
 import signal
 import struct
 import threading
@@ -19,6 +20,7 @@ import time
 from collections import deque
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field, replace
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Literal
 from uuid import uuid4
@@ -28,11 +30,23 @@ import pytest
 import pytest_asyncio
 from pydantic import BaseModel, ConfigDict, Field
 
-from backend.app.schemas.tools import ToolComputeBatchRequest, ToolComputeItem, ToolError, ToolItemMetrics, ToolPlatformPolicy
+from backend.app.schemas.tools import (
+    ToolComputeBatchRequest,
+    ToolComputeFailure,
+    ToolComputeItem,
+    ToolError,
+    ToolItemMetrics,
+    ToolMemoryMetrics,
+    ToolOperationPolicy,
+    ToolPlatformPolicy,
+    ToolResourceMetrics,
+)
+from backend.app.services.tools import base as base_module
 from backend.app.services.tools import executor as executor_module
 from backend.app.services.tools import process_tree as tree_module
+from backend.app.services.tools import resources as resources_module
 from backend.app.services.tools import worker as worker_module
-from backend.app.services.tools.base import ToolExecutionError, ToolPlugin
+from backend.app.services.tools.base import ToolExecutionContext, ToolExecutionError, ToolPlugin
 from backend.app.services.tools.executor import ToolExecutor
 from backend.app.services.tools.registry import build_tool_definition
 from backend.app.services.tools.wire import decode_json, encode_json
@@ -135,12 +149,14 @@ def _policy(**changes) -> ToolPlatformPolicy:
         "max_pending_items": 8,
         "max_pending_per_principal": 4,
         "queue_timeout_ms": 30_000,
+        "engine_timeout_ms": 30_000,
         "job_timeout_ms": 60_000,
         "soft_timeout_ms": 50_000,
         "output_reserve_ms": 5_000,
         "cleanup_timeout_ms": 5_000,
         "request_timeout_ms": 120_000,
         "client_timeout_ms": 130_000,
+        "memory_limit_bytes": 1_073_741_824,
     }
     values.update(changes)
     return ToolPlatformPolicy.model_validate(values)
@@ -282,6 +298,59 @@ class _Clock:
         return self.now
 
 
+def test_engine_window_starts_when_full_engine_and_post_processing_budget_remain(monkeypatch):
+    clock = _Clock(100.0)
+    monkeypatch.setattr(base_module, "time", clock)
+    context = ToolExecutionContext(
+        execution_id="owned-engine-window",
+        soft_deadline=105.0,
+        hard_deadline=106.0,
+        cancelled=lambda: False,
+        engine_timeout_ms=4_000,
+    )
+
+    window = context.claim_engine_window(post_engine_reserve_ms=1_000)
+
+    assert window.timeout_ms == 4_000
+    assert window.post_engine_reserve_ms == 1_000
+    assert window.deadline == 104.0
+
+
+@pytest.mark.parametrize(
+    ("cancelled", "remaining_ms"),
+    [
+        pytest.param(True, 10_000, id="disconnect-before-engine-start"),
+        pytest.param(False, 4_000, id="insufficient-soft-wall"),
+    ],
+)
+def test_engine_window_rejects_before_engine_start_when_cancelled_or_budget_cannot_fit(
+    monkeypatch,
+    cancelled,
+    remaining_ms,
+):
+    clock = _Clock(100.0)
+    monkeypatch.setattr(base_module, "time", clock)
+    context = ToolExecutionContext(
+        execution_id="owned-rejected-engine-window",
+        soft_deadline=clock.now + remaining_ms / 1_000,
+        hard_deadline=clock.now + 20,
+        cancelled=lambda: cancelled,
+        engine_timeout_ms=4_000,
+    )
+    engine_starts = []
+
+    def start_engine():
+        window = context.claim_engine_window(post_engine_reserve_ms=1_000)
+        engine_starts.append(window)
+
+    with pytest.raises(ToolExecutionError) as caught:
+        start_engine()
+
+    assert caught.value.code == "execution_limit"
+    assert caught.value.retryable is True
+    assert engine_starts == []
+
+
 class _AccountingOwner:
     """No native processes: an event-gated completion source for quota races."""
 
@@ -292,7 +361,7 @@ class _AccountingOwner:
         self.cleaned = cleaned
         self.tree = tree
 
-    def __call__(self, job, registry_class, cleanup_ms):
+    def __call__(self, job, registry_class, cleanup_ms, resource_controller=None):
         if self.tree is not None:
             job.tree = self.tree
         with self.entered:
@@ -324,6 +393,450 @@ async def _accounting_executor(monkeypatch, *, policy=None, owner=None):
         io_tasks = [job.io_task for job in owner.jobs if job.io_task is not None]
         if io_tasks:
             await asyncio.wait_for(asyncio.gather(*io_tasks, return_exceptions=True), timeout=_WAIT)
+
+
+_GIB = 1_073_741_824
+
+
+class _PerJobOwner:
+    """Release independently identified jobs without starting native processes."""
+
+    def __init__(self):
+        self._condition = threading.Condition()
+        self._gates: dict[str, threading.Event] = {}
+        self.jobs = []
+
+    def __call__(self, job, registry_class, cleanup_ms, resource_controller=None):
+        gate = threading.Event()
+        with self._condition:
+            self._gates[job.spec.execution_id] = gate
+            self.jobs.append(job)
+            self._condition.notify_all()
+        if not gate.wait(_WAIT):
+            raise AssertionError(f"The test did not release execution {job.spec.execution_id}")
+        metrics = ToolItemMetrics(
+            total_ms=7,
+            resources=ToolResourceMetrics(
+                memory=ToolMemoryMetrics(
+                    mode="process_tree_observed",
+                    limit_bytes=job.spec.memory_limit_bytes,
+                    peak_observed_bytes=job.spec.memory_limit_bytes // 2,
+                )
+            ),
+        )
+        value = FixtureOutput(
+            status="ready",
+            text="private",
+            pid=1,
+            execution_id=job.spec.execution_id,
+        ).model_dump()
+        return executor_module._Outcome(value, None, metrics, True)
+
+    def wait_for_jobs(self, count: int):
+        with self._condition:
+            if not self._condition.wait_for(lambda: len(self.jobs) >= count, timeout=_WAIT):
+                raise AssertionError(f"Expected {count} owned jobs, received {len(self.jobs)}")
+            return tuple(self.jobs)
+
+    def release_job(self, job) -> None:
+        with self._condition:
+            self._gates[job.spec.execution_id].set()
+
+    def release_all(self) -> None:
+        with self._condition:
+            for gate in self._gates.values():
+                gate.set()
+
+
+class _ImmediateOutcomeOwner:
+    def __init__(self, code: str, *, retryable: bool):
+        self.code = code
+        self.retryable = retryable
+
+    def __call__(self, job, registry_class, cleanup_ms, resource_controller=None):
+        metrics = ToolItemMetrics(
+            total_ms=7,
+            resources=ToolResourceMetrics(
+                memory=ToolMemoryMetrics(
+                    mode="process_tree_observed",
+                    limit_bytes=job.spec.memory_limit_bytes,
+                    peak_observed_bytes=536_870_912,
+                )
+            ),
+        )
+        return executor_module._Outcome(
+            None,
+            ToolError(code=self.code, retryable=self.retryable),
+            metrics,
+            True,
+        )
+
+
+class _CancellationOwner:
+    def __init__(self):
+        self._condition = threading.Condition()
+        self.job = None
+
+    def __call__(self, job, registry_class, cleanup_ms, resource_controller=None):
+        with self._condition:
+            self.job = job
+            self._condition.notify_all()
+        if not job.cancel.wait(_WAIT):
+            raise AssertionError("Executor cancellation did not reach the physical owner")
+        return executor_module._Outcome(
+            None,
+            ToolError(code="execution_limit", retryable=True),
+            ToolItemMetrics(
+                total_ms=7,
+                resources=ToolResourceMetrics(
+                    memory=ToolMemoryMetrics(
+                        mode="process_tree_observed",
+                        limit_bytes=job.spec.memory_limit_bytes,
+                        peak_observed_bytes=0,
+                    )
+                ),
+            ),
+            True,
+        )
+
+    def wait_for_job(self):
+        with self._condition:
+            if not self._condition.wait_for(lambda: self.job is not None, timeout=_WAIT):
+                raise AssertionError("Executor did not start the owned job")
+            return self.job
+
+
+class _PolicyExecutor(ToolExecutor):
+    def __init__(self, policy, operations):
+        super().__init__(policy, FixtureRegistry)
+        self.operations = operations
+
+    def _operation(self, item, snapshot):
+        operation = item.parameters.get("operation") if isinstance(item.parameters, dict) else None
+        try:
+            return executor_module.effective_operation(
+                self.operations[operation],
+                self.policy,
+            )
+        except KeyError as exc:
+            raise ToolExecutionError("invalid_parameters") from exc
+
+
+class _TwoLaneNoWaitQueue:
+    """Two immediate grants; later callers deterministically observe expiry."""
+
+    def __init__(self, clock):
+        self._lanes = deque((0, 1))
+        self._clock = clock
+
+    async def get(self):
+        if self._lanes:
+            return self._lanes.popleft()
+        self._clock.now = 105.0
+        raise TimeoutError
+
+    def put_nowait(self, lane):
+        self._lanes.append(lane)
+
+    def qsize(self):
+        return len(self._lanes)
+
+
+def _policy_item(correlation: str, operation: str) -> ToolComputeItem:
+    return _item(correlation, text=correlation).model_copy(
+        update={
+            "parameters": {
+                "operation": operation,
+                "scenario": "echo",
+                "text": correlation,
+            }
+        }
+    )
+
+
+@pytest.mark.asyncio
+async def test_two_lane_pool_accounts_zero_one_and_two_gibibyte_reservations(monkeypatch):
+    owner = _PerJobOwner()
+    executor = ToolExecutor(_policy(workers=2, memory_limit_bytes=_GIB), FixtureRegistry)
+    monkeypatch.setattr(executor_module, "_run_owned_job", owner)
+    first = second = None
+    try:
+        empty = executor.snapshot()
+        assert empty.resources.memory_capacity_bytes == 2 * _GIB
+        assert empty.resources.memory_reserved_bytes == 0
+
+        first = asyncio.create_task(
+            executor.compute(
+                _batch(_item("reservation-one")),
+                principal_key="reservation-principal-one",
+            )
+        )
+        (first_job,) = await asyncio.to_thread(owner.wait_for_jobs, 1)
+        one = executor.snapshot()
+        assert (one.active, one.pending) == (1, 1)
+        assert one.resources.memory_capacity_bytes == 2 * _GIB
+        assert one.resources.memory_reserved_bytes == _GIB
+
+        second = asyncio.create_task(
+            executor.compute(
+                _batch(_item("reservation-two")),
+                principal_key="reservation-principal-two",
+            )
+        )
+        jobs = await asyncio.to_thread(owner.wait_for_jobs, 2)
+        second_job = next(job for job in jobs if job.spec.execution_id != first_job.spec.execution_id)
+        full = executor.snapshot()
+        assert (full.active, full.pending) == (2, 2)
+        assert full.resources.memory_capacity_bytes == 2 * _GIB
+        assert full.resources.memory_reserved_bytes == 2 * _GIB
+
+        owner.release_job(first_job)
+        first_response = await asyncio.wait_for(first, timeout=_WAIT)
+        assert first_response.success_count == 1
+        await _until(
+            lambda: executor.snapshot().resources.memory_reserved_bytes == _GIB,
+            "one memory reservation released after proven cleanup",
+        )
+
+        owner.release_job(second_job)
+        second_response = await asyncio.wait_for(second, timeout=_WAIT)
+        assert second_response.success_count == 1
+        await _until(
+            lambda: executor.snapshot().resources.memory_reserved_bytes == 0,
+            "all memory reservations released after proven cleanup",
+        )
+        assert executor.snapshot().active == 0
+        assert executor._available.qsize() == 2
+    finally:
+        owner.release_all()
+        for task in (first, second):
+            if task is not None and not task.done():
+                task.cancel()
+        await asyncio.gather(
+            *(task for task in (first, second) if task is not None),
+            return_exceptions=True,
+        )
+        await executor.shutdown()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("code", "retryable"),
+    [
+        pytest.param("execution_timeout", True, id="hard-timeout"),
+        pytest.param("memory_limit", False, id="oom"),
+        pytest.param("worker_crashed", False, id="crash"),
+    ],
+)
+async def test_terminal_resource_failures_remain_platform_errors_and_release_reservation(
+    monkeypatch,
+    code,
+    retryable,
+):
+    executor = ToolExecutor(_policy(workers=2, memory_limit_bytes=_GIB), FixtureRegistry)
+    monkeypatch.setattr(
+        executor_module,
+        "_run_owned_job",
+        _ImmediateOutcomeOwner(code, retryable=retryable),
+    )
+    try:
+        response = await executor.compute(
+            _batch(_item(f"terminal-{code}")),
+            principal_key=f"terminal-principal-{code}",
+        )
+        (result,) = response.results
+        assert isinstance(result, ToolComputeFailure)
+        assert result.status == "error"
+        assert result.error.code == code
+        assert result.error.retryable is retryable
+        assert "result" not in result.model_dump(mode="json")
+        assert result.metrics.total_ms == 7
+        assert result.metrics.resources is not None
+        assert result.metrics.resources.memory.model_dump(mode="json") == {
+            "mode": "process_tree_observed",
+            "limit_bytes": _GIB,
+            "peak_observed_bytes": 536_870_912,
+        }
+        await _until(
+            lambda: executor.snapshot().resources.memory_reserved_bytes == 0,
+            f"{code} released its memory reservation after cleanup",
+        )
+        assert executor.snapshot().active == 0
+        assert executor._available.qsize() == 2
+    finally:
+        await executor.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_cancelled_compute_propagates_to_owner_and_releases_memory_only_after_cleanup(
+    monkeypatch,
+):
+    owner = _CancellationOwner()
+    executor = ToolExecutor(_policy(workers=1, memory_limit_bytes=_GIB), FixtureRegistry)
+    monkeypatch.setattr(executor_module, "_run_owned_job", owner)
+    task = asyncio.create_task(
+        executor.compute(
+            _batch(_item("disconnect-owned")),
+            principal_key="disconnect-principal",
+        )
+    )
+    try:
+        job = await asyncio.to_thread(owner.wait_for_job)
+        active = executor.snapshot()
+        assert active.resources.memory_capacity_bytes == _GIB
+        assert active.resources.memory_reserved_bytes == _GIB
+
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+        assert job.cancel.is_set()
+        await _until(
+            lambda: executor.snapshot().resources.memory_reserved_bytes == 0,
+            "disconnect cleanup released the memory reservation",
+        )
+        assert executor.snapshot().active == 0
+        assert executor._available.qsize() == 1
+    finally:
+        if owner.job is not None:
+            owner.job.cancel.set()
+        if not task.done():
+            task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        await executor.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_mixed_policy_batch_uses_longest_outer_budget_and_keeps_item_deadlines(
+    monkeypatch,
+):
+    short = ToolOperationPolicy(
+        operation="short",
+        queue_timeout_ms=1_000,
+    )
+    long = ToolOperationPolicy(
+        operation="long",
+        queue_timeout_ms=5_000,
+        engine_timeout_ms=30_000,
+        job_timeout_ms=45_000,
+        soft_timeout_ms=44_000,
+        cleanup_timeout_ms=5_000,
+        request_timeout_ms=59_000,
+        client_timeout_ms=65_000,
+    )
+    executor = _PolicyExecutor(
+        ToolPlatformPolicy(),
+        {"short": short, "long": long},
+    )
+    owner = _PerJobOwner()
+    clock = _Clock(100.0)
+    monkeypatch.setattr(executor_module, "_run_owned_job", owner)
+    monkeypatch.setattr(executor_module, "time", clock)
+    batch = _batch(
+        _policy_item("mixed-short", "short"),
+        _policy_item("mixed-long", "long"),
+    )
+    task = None
+    try:
+        snapshot = FixtureRegistry.get_snapshot()
+        assert executor.batch_request_timeout_ms(batch, snapshot) == 59_000
+        effective_by_operation = {item.parameters["operation"]: executor._operation(item, snapshot) for item in batch.items}
+        assert max(policy.client_timeout_ms for policy in effective_by_operation.values()) == 65_000
+        assert effective_by_operation["short"].queue_timeout_ms == 1_000
+        assert effective_by_operation["long"].queue_timeout_ms == 5_000
+
+        task = asyncio.create_task(
+            executor.compute(
+                batch,
+                principal_key="mixed-policy-principal",
+                request_started=clock.now,
+            )
+        )
+        jobs = await asyncio.to_thread(owner.wait_for_jobs, 2)
+        by_operation = {decode_json(job.spec.parameters)["operation"]: job for job in jobs}
+        assert by_operation["short"].spec.hard_deadline == 105.0
+        assert by_operation["short"].spec.soft_deadline == 104.0
+        assert by_operation["long"].spec.hard_deadline == 145.0
+        assert by_operation["long"].spec.soft_deadline == 144.0
+        assert by_operation["short"].spec.engine_timeout_ms == 4_000
+        assert by_operation["long"].spec.engine_timeout_ms == 30_000
+
+        owner.release_all()
+        response = await asyncio.wait_for(task, timeout=_WAIT)
+        assert {result.correlation_id for result in response.results} == {
+            "mixed-short",
+            "mixed-long",
+        }
+        assert all(result.status == "success" for result in response.results)
+    finally:
+        owner.release_all()
+        if task is not None and not task.done():
+            task.cancel()
+        if task is not None:
+            await asyncio.gather(task, return_exceptions=True)
+        await executor.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_four_long_items_on_two_lanes_timeout_the_second_wave_without_clock_wait(
+    monkeypatch,
+):
+    long = ToolOperationPolicy(
+        operation="long",
+        queue_timeout_ms=5_000,
+        engine_timeout_ms=30_000,
+        job_timeout_ms=45_000,
+        soft_timeout_ms=44_000,
+        cleanup_timeout_ms=5_000,
+        request_timeout_ms=59_000,
+        client_timeout_ms=65_000,
+    )
+    executor = _PolicyExecutor(
+        ToolPlatformPolicy(),
+        {"long": long},
+    )
+    clock = _Clock(100.0)
+    executor._available = _TwoLaneNoWaitQueue(clock)
+    owner = _AccountingOwner()
+    monkeypatch.setattr(executor_module, "_run_owned_job", owner)
+    monkeypatch.setattr(executor_module, "time", clock)
+    correlations = {
+        "long-alpha",
+        "long-beta",
+        "long-gamma",
+        "long-delta",
+    }
+    task = asyncio.create_task(
+        executor.compute(
+            _batch(*(_policy_item(correlation, "long") for correlation in correlations)),
+            principal_key="four-long-principal",
+        )
+    )
+    try:
+        jobs = await asyncio.to_thread(owner.wait_for_jobs, 2)
+        started = {decode_json(job.spec.parameters)["text"] for job in jobs}
+        assert len(started) == 2
+        assert clock.now == 105.0
+        owner.release.set()
+        response = await asyncio.wait_for(task, timeout=_WAIT)
+        successes = {result.correlation_id for result in response.results if result.status == "success"}
+        queue_timeouts = {result.correlation_id for result in response.results if result.status == "error" and result.error.code == "queue_timeout"}
+        assert successes == started
+        assert queue_timeouts == correlations - started
+        assert all(result.execution_id is None for result in response.results if result.correlation_id in queue_timeouts)
+        assert all(result.metrics.queue_wait_ms == 5_000 and result.metrics.total_ms == 5_000 for result in response.results if result.correlation_id in queue_timeouts)
+        assert long.queue_timeout_ms == 5_000
+        await _until(
+            lambda: executor.snapshot().resources.memory_reserved_bytes == 0,
+            "first wave released both reservations",
+        )
+        assert executor._available.qsize() == 2
+    finally:
+        owner.release.set()
+        if not task.done():
+            task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        await executor.shutdown()
 
 
 @pytest.mark.asyncio
@@ -508,6 +1021,7 @@ async def test_request_origin_caps_job_deadlines_before_startup(monkeypatch):
         workers=1,
         ingress_timeout_ms=1_000,
         queue_timeout_ms=1_000,
+        engine_timeout_ms=1_000,
         job_timeout_ms=2_000,
         soft_timeout_ms=1_000,
         output_reserve_ms=500,
@@ -770,10 +1284,14 @@ async def test_quarantine_retains_credit_and_prevents_singleton_replacement_unti
             owner.release.set()
             response = await asyncio.wait_for(task, timeout=_WAIT)
             (result,) = response.results
+            assert isinstance(result, ToolComputeFailure)
             assert result.status == "error"
             assert result.error.code == "cleanup_failed"
+            assert "result" not in result.model_dump(mode="json")
             snapshot = executor.snapshot()
             assert (snapshot.pending, snapshot.active, snapshot.degraded_lanes, snapshot.available) == (1, 1, 1, False)
+            assert snapshot.resources.memory_capacity_bytes == _GIB
+            assert snapshot.resources.memory_reserved_bytes == _GIB
             assert executor._available.qsize() == 0
             with pytest.raises(ToolExecutionError) as unavailable:
                 await executor.compute(_batch(_item("not-a-replacement")), principal_key="owned-other")
@@ -785,9 +1303,12 @@ async def test_quarantine_retains_credit_and_prevents_singleton_replacement_unti
             assert executor_module.get_tool_executor() is executor
             assert executor.snapshot().pending == 1
 
+            # ``can_clean`` is the fake subtree-empty proof. Until it becomes
+            # true, the lane credit and its memory reservation remain owned.
             tree.can_clean = True
             await executor_module.shutdown_tool_executor()
             assert executor.snapshot().pending == 0
+            assert executor.snapshot().resources.memory_reserved_bytes == 0
             assert executor_module._executor is None
             replacement = executor_module.get_tool_executor()
             assert replacement is not executor
@@ -871,12 +1392,85 @@ class _Commands:
 
 
 class _SessionWitness:
-    def __init__(self, events):
+    def __init__(self, events, *, outcome, error=None):
         self.events = events
-        self.process = SimpleNamespace(exitcode=None)
+        self.outcome = outcome
+        self.error = error
 
-    def confirm_session(self, **identity):
-        self.events.append(("adopt", identity))
+    def observe_memory_limit(self, root_pid, root_birth, process_group):
+        self.events.append(("observe", (root_pid, root_birth, process_group)))
+        if self.error is not None:
+            raise self.error
+        return self.outcome
+
+
+class _OwnedTreeWitness:
+    """No-argument owned-tree surface over the resource-session protocol."""
+
+    def __init__(
+        self,
+        events,
+        resource_session,
+        *,
+        root_pid,
+        root_birth,
+        process_group,
+        cleanup_outcome=True,
+    ):
+        if process_group != root_pid:
+            raise ValueError("Worker process is not contained in its own group")
+        self.events = events
+        self.resource_session = resource_session
+        self.process = SimpleNamespace(pid=root_pid, exitcode=None)
+        self.root_pid = root_pid
+        self.root_birth = root_birth
+        self.process_group = process_group
+        self.cleanup_outcome = cleanup_outcome
+        self.last_observation = None
+        self.closed = False
+        self.events.append(("identity", (self.root_pid, self.root_birth)))
+        self.events.append(("containment", self.process_group))
+        self.events.append(("session", "observed-ready"))
+
+    def observe_memory_limit(self):
+        try:
+            self.last_observation = self.resource_session.observe_memory_limit(
+                self.root_pid,
+                self.root_birth,
+                self.process_group,
+            )
+        except ToolExecutionError:
+            raise
+        except (PermissionError, OSError, RuntimeError, ValueError) as exc:
+            raise ToolExecutionError("service_unavailable", retryable=True) from exc
+
+    def confirm_session(self, *, pid, group_id, created_at):
+        if (pid, created_at) != (self.root_pid, self.root_birth) or group_id != self.process_group or group_id != pid:
+            raise ValueError("Worker session does not match captured ownership")
+        self.events.append(
+            (
+                "adopt",
+                {"pid": pid, "group_id": group_id, "created_at": created_at},
+            )
+        )
+
+    def cleanup(self, deadline):
+        assert deadline >= time.monotonic()
+        self.events.append(("cleanup", self.cleanup_outcome))
+        self.closed = self.cleanup_outcome
+        return self.cleanup_outcome
+
+
+def _prepared_observed_tree(events, *, outcome=None, error=None, cleanup_outcome=True):
+    session = _SessionWitness(events, outcome=outcome, error=error)
+    return _OwnedTreeWitness(
+        events,
+        session,
+        root_pid=101,
+        root_birth=1.25,
+        process_group=101,
+        cleanup_outcome=cleanup_outcome,
+    )
 
 
 def _ready(job):
@@ -896,26 +1490,39 @@ def _result(job):
 def test_ready_is_adopted_before_ack_and_result_consumption():
     job = _owned_job()
     events = []
-    job.tree = _SessionWitness(events)
+    observation = resources_module.MemoryObservation(
+        current_bytes=256,
+        peak_observed_bytes=512,
+        limit_exceeded=False,
+    )
+    job.tree = _prepared_observed_tree(events, outcome=observation)
     with _Frames([_ready(job), _result(job)], events) as frames:
         value, error = executor_module._wait_result(frames, _Commands(events), job)
 
     assert error is None
     assert value == {"private": True}
     assert events == [
+        ("identity", (101, 1.25)),
+        ("containment", 101),
+        ("session", "observed-ready"),
         ("read", "ready"),
+        ("observe", (101, 1.25, 101)),
+        ("observe", (101, 1.25, 101)),
         ("adopt", {"pid": 101, "group_id": 101, "created_at": 1.25}),
         ("command", b"\x00"),
         ("read", "result"),
+        ("observe", (101, 1.25, 101)),
+        ("observe", (101, 1.25, 101)),
     ]
     assert job.metrics.startup_ms is not None
+    assert job.tree.last_observation is observation
 
 
 @pytest.mark.parametrize("fault", ["result-before-ready", "duplicate-ready", "wrong-execution", "ready-extra", "ready-boolean-pid"])
 def test_malformed_handshake_cannot_authorize_or_publish_a_result(fault):
     job = _owned_job()
     events = []
-    job.tree = _SessionWitness(events)
+    job.tree = _prepared_observed_tree(events)
     ready = _ready(job)
     frames = [ready]
     if fault == "result-before-ready":
@@ -1122,12 +1729,537 @@ def test_ack_opens_start_once_and_later_cancellation_is_sticky():
     assert pipe.reads == reads == 2
 
 
+def _delegated_cgroup_tree(tmp_path: Path) -> tuple[Path, Path, Path]:
+    root = tmp_path / "cgroup-v2"
+    parent = root / "delegated"
+    parent.mkdir(parents=True)
+    (root / "cgroup.controllers").write_text("cpu memory\n", encoding="ascii")
+    (parent / "cgroup.controllers").write_text("cpu memory\n", encoding="ascii")
+    (parent / "cgroup.subtree_control").write_text("memory\n", encoding="ascii")
+    (parent / "cgroup.procs").write_text("", encoding="ascii")
+    (parent / "cgroup.events").write_text("populated 0\n", encoding="ascii")
+    proc_self_cgroup = tmp_path / "proc-self-cgroup"
+    proc_self_cgroup.write_text("0::/delegated\n", encoding="ascii")
+    return root, parent, proc_self_cgroup
+
+
+def test_resource_controller_advertises_hard_only_after_delegated_writable_proof(
+    tmp_path,
+    monkeypatch,
+):
+    root, parent, proc_self_cgroup = _delegated_cgroup_tree(tmp_path)
+    monkeypatch.setattr(resources_module.sys, "platform", "linux")
+
+    controller = resources_module.ToolResourceController(
+        cgroup_root=root,
+        proc_self_cgroup=proc_self_cgroup,
+    )
+
+    assert os.access(parent, os.W_OK | os.X_OK)
+    assert controller.memory_capability().model_dump(mode="json") == {
+        "mode": "cgroup_v2_hard",
+        "observation_interval_ms": None,
+    }
+
+
+@pytest.mark.parametrize(
+    "capability_gap",
+    [
+        pytest.param("macos", id="macos"),
+        pytest.param("not-delegated", id="linux-memory-not-delegated"),
+        pytest.param("not-writable", id="linux-parent-not-writable"),
+    ],
+)
+def test_resource_controller_falls_back_to_observed_and_never_claims_hard_without_proof(
+    tmp_path,
+    monkeypatch,
+    capability_gap,
+):
+    root, parent, proc_self_cgroup = _delegated_cgroup_tree(tmp_path)
+    monkeypatch.setattr(
+        resources_module.sys,
+        "platform",
+        "darwin" if capability_gap == "macos" else "linux",
+    )
+    if capability_gap == "not-delegated":
+        (parent / "cgroup.subtree_control").write_text("cpu\n", encoding="ascii")
+    elif capability_gap == "not-writable":
+        original_access = resources_module.os.access
+        monkeypatch.setattr(
+            resources_module.os,
+            "access",
+            lambda path, mode: (False if Path(path) == parent and mode == os.W_OK | os.X_OK else original_access(path, mode)),
+        )
+
+    capability = resources_module.ToolResourceController(
+        cgroup_root=root,
+        proc_self_cgroup=proc_self_cgroup,
+    ).memory_capability()
+
+    assert capability.mode == "process_tree_observed"
+    assert capability.observation_interval_ms == resources_module.MEMORY_OBSERVATION_INTERVAL_MS
+
+
+def test_hard_cgroup_name_is_digest_safe_and_limit_is_read_back(
+    tmp_path,
+    monkeypatch,
+):
+    root, parent, proc_self_cgroup = _delegated_cgroup_tree(tmp_path)
+    monkeypatch.setattr(resources_module.sys, "platform", "linux")
+    events = []
+    original_read_text = Path.read_text
+
+    def write_control(path, value):
+        events.append(("write", path.name, value))
+        path.write_text(value, encoding="ascii")
+        if path.name == "memory.max":
+            (path.parent / "memory.events").write_text(
+                "oom 0\noom_kill 0\noom_group_kill 0\n",
+                encoding="ascii",
+            )
+            (path.parent / "cgroup.events").write_text(
+                "populated 0\n",
+                encoding="ascii",
+            )
+            (path.parent / "cgroup.procs").write_text("", encoding="ascii")
+            (path.parent / "memory.current").write_text("0\n", encoding="ascii")
+
+    def read_control(path, *args, **kwargs):
+        value = original_read_text(path, *args, **kwargs)
+        if path.name == "memory.max":
+            events.append(("read", path.name, value.strip()))
+        return value
+
+    monkeypatch.setattr(
+        resources_module.CgroupV2MemoryGroup,
+        "_write",
+        staticmethod(write_control),
+    )
+    monkeypatch.setattr(Path, "read_text", read_control)
+    controller = resources_module.ToolResourceController(
+        cgroup_root=root,
+        proc_self_cgroup=proc_self_cgroup,
+    )
+
+    group = controller.prepare_memory_group(
+        "../../outside\nprivate",
+        536_870_912,
+    )
+
+    assert group is not None
+    assert group.path.parent == parent
+    assert re.fullmatch(
+        rf"librefolio-tool-{os.getpid()}-[a-f0-9]{{24}}",
+        group.path.name,
+    )
+    assert ".." not in group.path.name
+    assert "/" not in group.path.name
+    assert events.index(("write", "memory.max", "536870912")) < events.index(("read", "memory.max", "536870912"))
+    assert group.limit_bytes == 536_870_912
+    group.attach(4242)
+    assert (group.path / "cgroup.procs").read_text(encoding="ascii") == "4242"
+
+
+def test_cgroup_oom_delta_raises_typed_memory_limit_and_reports_bytes(
+    tmp_path,
+):
+    path = tmp_path / "owned-memory-group"
+    path.mkdir()
+    events = path / "memory.events"
+    events.write_text(
+        "oom 0\noom_kill 0\noom_group_kill 0\n",
+        encoding="ascii",
+    )
+    (path / "cgroup.events").write_text("populated 0\n", encoding="ascii")
+    (path / "memory.current").write_text("384\n", encoding="ascii")
+    (path / "memory.peak").write_text("768\n", encoding="ascii")
+    group = resources_module.CgroupV2MemoryGroup(path, 1_024)
+    events.write_text(
+        "oom 0\noom_kill 1\noom_group_kill 0\n",
+        encoding="ascii",
+    )
+    tree = tree_module.OwnedProcessTree(
+        _ProcessHandle(exitcode=0),
+        memory_limit_bytes=1_024,
+    )
+    tree.memory_group = group
+    tree.memory_mode = "cgroup_v2_hard"
+
+    with pytest.raises(ToolExecutionError) as caught:
+        tree.observe_memory_limit()
+
+    assert caught.value.code == "memory_limit"
+    assert caught.value.retryable is False
+    assert tree.memory_limit_exceeded is True
+    assert tree.resource_metrics().model_dump(mode="json") == {
+        "memory": {
+            "mode": "cgroup_v2_hard",
+            "limit_bytes": 1_024,
+            "peak_observed_bytes": 768,
+        }
+    }
+
+
+def test_empty_cgroup_directory_is_removed_once(
+    tmp_path,
+    monkeypatch,
+):
+    path = tmp_path / "empty-memory-group"
+    path.mkdir()
+    events = path / "memory.events"
+    events.write_text("oom 0\n", encoding="ascii")
+    group = resources_module.CgroupV2MemoryGroup(path, 1_024)
+    events.unlink()
+    monkeypatch.setattr(group, "populated", lambda: False)
+
+    assert group.close_if_empty() is True
+    assert not path.exists()
+    assert group.close_if_empty() is True
+
+
+class _CgroupDrainWitness:
+    def __init__(self, events):
+        self.events = events
+        self._populated = deque((True, False))
+        self.peak_observed_bytes = 512
+
+    def observe(self):
+        self.events.append("observe")
+        return resources_module.MemoryObservation(
+            current_bytes=256,
+            peak_observed_bytes=512,
+            limit_exceeded=False,
+        )
+
+    def populated(self):
+        self.events.append("populated")
+        return self._populated.popleft()
+
+    def kill(self):
+        self.events.append("kill")
+
+    def close_if_empty(self):
+        self.events.append("remove")
+        assert not self._populated
+        return True
+
+
+def test_cleanup_waits_for_empty_cgroup_subtree_before_removing_it(
+    monkeypatch,
+):
+    events = []
+    handle = _ProcessHandle(exitcode=0)
+    tree = tree_module.OwnedProcessTree(handle, memory_limit_bytes=1_024)
+    tree.memory_group = _CgroupDrainWitness(events)
+    tree.memory_mode = "cgroup_v2_hard"
+    monkeypatch.setattr(
+        tree_module.time,
+        "sleep",
+        lambda _duration: events.append("wait"),
+    )
+
+    assert tree.cleanup(time.monotonic() + 5) is True
+    assert events == [
+        "observe",
+        "populated",
+        "wait",
+        "populated",
+        "observe",
+        "remove",
+    ]
+    assert handle.calls == [("join", 0), ("close",)]
+    assert tree.closed is True
+
+
+class _OwnedRunEndpoint:
+    def __init__(self, events, name):
+        self.events = events
+        self.name = name
+
+    def close(self):
+        self.events.append(("close", self.name))
+
+    def send_bytes(self, value):
+        self.events.append(("command", self.name, value))
+
+
+class _OwnedRunProcess:
+    pid = 707
+    exitcode = 0
+
+    def __init__(self, events):
+        self.events = events
+
+    def start(self):
+        self.events.append("process-start")
+
+
+class _OwnedRunContext:
+    def __init__(self, events):
+        self.events = events
+        self._pipe_number = 0
+
+    def Pipe(self, duplex=True):
+        self._pipe_number += 1
+        return (
+            _OwnedRunEndpoint(self.events, f"parent-{self._pipe_number}"),
+            _OwnedRunEndpoint(self.events, f"child-{self._pipe_number}"),
+        )
+
+    def Process(self, **_kwargs):
+        return _OwnedRunProcess(self.events)
+
+
+class _OwnedRunTree:
+    def __init__(self, events, *, cleaned=True, memory_limit_exceeded=False):
+        self.events = events
+        self.cleaned = cleaned
+        self.memory_limit_exceeded = memory_limit_exceeded
+        self.closed = False
+
+    def prepare_resources(self, execution_id):
+        assert execution_id
+        self.events.extend(
+            (
+                "cgroup-created",
+                "memory-limit-written",
+                "memory-limit-read-back",
+            )
+        )
+
+    def bind_started_process(self):
+        self.events.append("worker-attached")
+
+    def cleanup(self, deadline):
+        assert deadline >= time.monotonic()
+        self.events.append("cleanup")
+        self.closed = self.cleaned
+        return self.cleaned
+
+    def resource_metrics(self):
+        return ToolResourceMetrics(
+            memory=ToolMemoryMetrics(
+                mode="cgroup_v2_hard",
+                limit_bytes=_GIB,
+                peak_observed_bytes=536_870_912,
+            )
+        )
+
+
+def _install_owned_run_fakes(
+    monkeypatch,
+    *,
+    cleaned=True,
+    memory_limit_exceeded=False,
+    wait_error=None,
+):
+    events = []
+    context = _OwnedRunContext(events)
+    tree = _OwnedRunTree(
+        events,
+        cleaned=cleaned,
+        memory_limit_exceeded=memory_limit_exceeded,
+    )
+    monkeypatch.setattr(
+        executor_module,
+        "multiprocessing",
+        SimpleNamespace(get_context=lambda method: context),
+    )
+    monkeypatch.setattr(
+        executor_module,
+        "OwnedProcessTree",
+        lambda process, **_kwargs: tree,
+    )
+
+    def wait_result(response, cancellation, job):
+        if wait_error is not None:
+            raise ToolExecutionError(
+                wait_error,
+                retryable=wait_error == "execution_timeout",
+            )
+        events.append("ready-accepted")
+        cancellation.send_bytes(b"\x00")
+        return {"availability": "private-domain-value"}, None
+
+    monkeypatch.setattr(executor_module, "_wait_result", wait_result)
+    return events, tree
+
+
+@pytest.mark.asyncio
+async def test_observation_failure_cleans_and_quarantines_before_ready_ack():
+    events = []
+    job = _owned_job()
+    tree = _prepared_observed_tree(
+        events,
+        error=PermissionError("observation denied"),
+        cleanup_outcome=False,
+    )
+    job.tree = tree
+    executor = ToolExecutor(
+        _policy(workers=1, memory_limit_bytes=job.spec.memory_limit_bytes),
+        FixtureRegistry,
+    )
+    executor._admit("observation-owner", 1)
+    job.principal_key = "observation-owner"
+    job.lane = executor._available.get_nowait()
+    executor._jobs[job.spec.execution_id] = job
+
+    try:
+        with _Frames([_ready(job), _result(job)], events) as response:
+            with pytest.raises(ToolExecutionError) as caught:
+                executor_module._wait_result(response, _Commands(events), job)
+        assert caught.value.code == "service_unavailable"
+        assert caught.value.retryable is True
+        cleaned = tree.cleanup(time.monotonic() + 1)
+        assert events == [
+            ("identity", (101, 1.25)),
+            ("containment", 101),
+            ("session", "observed-ready"),
+            ("read", "ready"),
+            ("observe", (101, 1.25, 101)),
+            ("cleanup", False),
+        ]
+
+        future = asyncio.get_running_loop().create_future()
+        future.set_result(
+            executor_module._Outcome(
+                None,
+                ToolError(code="cleanup_failed", retryable=False),
+                job.metrics,
+                cleaned,
+            )
+        )
+        job.io_task = future
+        executor._job_finished(job, future)
+        snapshot = executor.snapshot()
+        assert job.quarantined is True
+        assert (
+            snapshot.pending,
+            snapshot.active,
+            snapshot.degraded_lanes,
+            snapshot.resources.memory_reserved_bytes,
+        ) == (1, 1, 1, job.spec.memory_limit_bytes)
+        assert executor._available.qsize() == 0
+    finally:
+        tree.cleanup_outcome = True
+        await executor.shutdown()
+
+    released = executor.snapshot()
+    assert released.pending == 0
+    assert released.resources.memory_reserved_bytes == 0
+    assert tree.closed is True
+
+
+def test_hard_memory_group_is_prepared_and_attached_before_worker_ack(
+    monkeypatch,
+):
+    events, _tree = _install_owned_run_fakes(monkeypatch)
+    job = _owned_job()
+
+    outcome = executor_module._run_owned_job(
+        job,
+        FixtureRegistry,
+        resource_controller=object(),
+    )
+
+    # ``test_ready_is_adopted_before_ack_and_result_consumption`` exercises the
+    # real handshake. This seam proves all hard-memory setup precedes that path.
+    ordered = []
+    for event in events:
+        if isinstance(event, str) and event != "cleanup":
+            ordered.append(event)
+        elif isinstance(event, tuple) and event and event[0] == "command" and event[-1] == b"\x00":
+            ordered.append(event)
+    assert ordered == [
+        "cgroup-created",
+        "memory-limit-written",
+        "memory-limit-read-back",
+        "process-start",
+        "worker-attached",
+        "ready-accepted",
+        ("command", "child-2", b"\x00"),
+    ]
+    assert outcome.error is None
+    assert outcome.cleaned is True
+
+
+@pytest.mark.parametrize(
+    (
+        "wait_error",
+        "memory_limit_exceeded",
+        "cleaned",
+        "expected_code",
+    ),
+    [
+        pytest.param(
+            "execution_timeout",
+            False,
+            True,
+            "execution_timeout",
+            id="hard-timeout-survives-cleanup",
+        ),
+        pytest.param(
+            "worker_crashed",
+            True,
+            True,
+            "memory_limit",
+            id="oom-outranks-crash-after-cleanup",
+        ),
+        pytest.param(
+            "memory_limit",
+            True,
+            False,
+            "cleanup_failed",
+            id="cleanup-failure-outranks-oom",
+        ),
+    ],
+)
+def test_owned_job_error_precedence_and_nested_resource_metrics(
+    monkeypatch,
+    wait_error,
+    memory_limit_exceeded,
+    cleaned,
+    expected_code,
+):
+    _events, tree = _install_owned_run_fakes(
+        monkeypatch,
+        cleaned=cleaned,
+        memory_limit_exceeded=memory_limit_exceeded,
+        wait_error=wait_error,
+    )
+    job = _owned_job()
+
+    outcome = executor_module._run_owned_job(
+        job,
+        FixtureRegistry,
+        resource_controller=object(),
+    )
+
+    assert outcome.error is not None
+    assert outcome.error.code == expected_code
+    assert outcome.value is None
+    assert outcome.cleaned is cleaned
+    assert outcome.metrics.resources is not None
+    assert outcome.metrics.resources.model_dump(mode="json") == {
+        "memory": {
+            "mode": "cgroup_v2_hard",
+            "limit_bytes": _GIB,
+            "peak_observed_bytes": 536_870_912,
+        }
+    }
+    assert outcome.metrics.execution_ms is not None
+    assert outcome.metrics.cleanup_ms is not None
+    assert outcome.metrics.total_ms is not None
+    assert tree.closed is cleaned
+
+
 @dataclass
 class _NativeProcess:
     pid: int
     born: float
     state: str = "running"
     running: bool = True
+    rss: int = 0
     descendants: tuple = ()
     signals: list = field(default_factory=list)
     children_calls: list = field(default_factory=list)
@@ -1144,6 +2276,9 @@ class _NativeProcess:
     def children(self, recursive=False):
         self.children_calls.append(recursive)
         return list(self.descendants)
+
+    def memory_info(self):
+        return SimpleNamespace(rss=self.rss)
 
     def terminate(self):
         self.signals.append(signal.SIGTERM)
@@ -1202,6 +2337,67 @@ def _native_view(monkeypatch, processes, groups=None):
         SimpleNamespace(getpgrp=lambda: 999, getpgid=lambda pid: groups.get(pid, -1), killpg=lambda pgid, sig: events.append((pgid, sig))),
     )
     return events
+
+
+def test_observed_process_tree_sums_owned_rss_enforces_limit_and_leaves_sibling_alone(
+    monkeypatch,
+):
+    child = _NativeProcess(102, 1.5, rss=200)
+    grandchild = _NativeProcess(103, 1.75, rss=300)
+    sibling = _NativeProcess(201, 2.0, rss=50_000)
+    root = _NativeProcess(
+        101,
+        1.25,
+        rss=100,
+        descendants=(child, grandchild),
+    )
+    processes = {member.pid: member for member in (root, child, grandchild, sibling)}
+    group_signals = _native_view(
+        monkeypatch,
+        processes,
+        {
+            root.pid: root.pid,
+            child.pid: root.pid,
+            grandchild.pid: root.pid,
+            sibling.pid: sibling.pid,
+        },
+    )
+    tree = tree_module.OwnedProcessTree(
+        _ProcessHandle(pid=root.pid, exitcode=None),
+        memory_limit_bytes=600,
+    )
+    tree.confirm_session(
+        pid=root.pid,
+        group_id=root.pid,
+        created_at=root.born,
+    )
+
+    tree.observe_memory_limit()
+
+    assert tree.memory_mode == "process_tree_observed"
+    assert tree.peak_observed_bytes == 600
+    assert sibling.pid not in tree.known
+    grandchild.rss = 301
+    with pytest.raises(ToolExecutionError) as caught:
+        tree.observe_memory_limit()
+    assert caught.value.code == "memory_limit"
+    assert caught.value.retryable is False
+    assert tree.memory_limit_exceeded is True
+    assert tree.resource_metrics().model_dump(mode="json") == {
+        "memory": {
+            "mode": "process_tree_observed",
+            "limit_bytes": 600,
+            "peak_observed_bytes": 601,
+        }
+    }
+
+    tree._signal(force=True)
+
+    assert group_signals == [(root.pid, signal.SIGKILL)]
+    assert root.signals == [signal.SIGKILL]
+    assert child.signals == [signal.SIGKILL]
+    assert grandchild.signals == [signal.SIGKILL]
+    assert sibling.signals == []
 
 
 @pytest.mark.parametrize("state", ["different-birth", "zombie", "not-running", "gone"])
