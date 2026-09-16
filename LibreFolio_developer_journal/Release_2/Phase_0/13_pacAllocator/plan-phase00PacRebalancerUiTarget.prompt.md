@@ -6,10 +6,11 @@
 > **Suite target:** [piano maestro](plan-phase00PacRebalancerTargetDesign.prompt.md) ·
 > [nucleo matematico](plan-phase00PacRebalancerMathematicalCore.prompt.md) ·
 > [policy, obiettivi e vincoli](plan-phase00PacRebalancerPolicies.prompt.md) ·
-> [architettura](plan-phase00PacRebalancerArchitecture.prompt.md).
+> [architettura](plan-phase00PacRebalancerArchitecture.prompt.md) ·
+> [bundle implementativo](implementation/README.md).
 > **Baseline letta:** P1 `pac_allocator` + `portfolio_rebalancer`, Tool Host generico
-> **Gate:** rilievi della review indipendente incorporati il 2026-09-16; nuovo
-> piano implementativo non ancora scritto. Restano aperti risultato
+> **Gate:** rilievi della review indipendente incorporati il 2026-09-16; bundle
+> implementativo materializzato ma codice non autorizzato. Restano aperti risultato
 > product-shaped, dipendenza e capacità MIQP/MIQCP SCIP; proof/status sono
 > congelati.
 > **Correzione dati 2026-09-16:** layout approvato invariato; PAC e Rebalancer

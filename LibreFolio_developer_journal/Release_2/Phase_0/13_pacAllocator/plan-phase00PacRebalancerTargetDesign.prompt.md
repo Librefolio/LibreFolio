@@ -1,8 +1,8 @@
 # PAC & Rebalancer — piano maestro target
 
 **Stato:** TARGET MASTER — rilievi della review matematica/editoriale
-indipendente incorporati il 2026-09-16; attende approvazione developer prima
-del piano implementativo.
+indipendente incorporati il 2026-09-16; bundle implementativo approvato per il
+checkpoint planning-only.
 **Tipo:** indice e visione end-to-end; non sostituisce i quattro piani
 specialistici e non è un contratto wire definitivo.
 **Scope:** SP13–SP14.
@@ -15,9 +15,10 @@ specialistici e non è un contratto wire definitivo.
 > nell'[indice delle bozze](drafts/README.md), ma non è autorità concorrente.
 >
 > I dettagli di schema Pydantic/JSON, nomi finali dei componenti, cardinalità,
-> file ownership, task Fleet, runner e selettori di test saranno congelati nel
-> futuro piano implementativo. Questo documento stabilisce prima **che cosa**
-> deve fare il prodotto e quali invarianti non possono cambiare.
+> file ownership, task Fleet, runner e selettori di test sono pianificati nel
+> [bundle implementativo](implementation/README.md) e verranno congelati ai
+> relativi gate. Questo documento stabilisce **che cosa** deve fare il prodotto
+> e quali invarianti non possono cambiare.
 
 ---
 
@@ -30,6 +31,10 @@ specialistici e non è un contratto wire definitivo.
 | [Nucleo matematico](plan-phase00PacRebalancerMathematicalCore.prompt.md) | notazione, ledger, FX, fee/tax, fixed reference, L2, rounding, solver/proof |
 | [Policy, obiettivi e vincoli](plan-phase00PacRebalancerPolicies.prompt.md) | constraint comuni, pipeline lessicografiche, ragioni, controesempi e modalità |
 | [Architettura target](plan-phase00PacRebalancerArchitecture.prompt.md) | confini Tool/dominio, normalizer/compiler/solver/evaluator/reporter, frontend e lifecycle |
+
+L'esecuzione è descritta separatamente nell'[indice dei piani
+implementativi](implementation/README.md); quei piani non sono autorità
+concorrente sul prodotto.
 
 Ordine di lettura consigliato:
 
@@ -954,7 +959,7 @@ Gli step modificano soltanto il draft. Il risultato è read-only.
 
 ## 14. Gate aperti prima dell'implementazione
 
-1. **Approvazione developer della suite dopo la review indipendente.**
+1. **Checkpoint del bundle planning-only e autorizzazione prodotto separata.**
 2. **Contratto product-shaped:** derivare schema/output dalle tabelle e viste di
    §11; non replicare il precedente witness audit da `289436 B`.
 3. **Limite Tool:** dimostrare output object-only entro `262144 B` sui casi
@@ -969,8 +974,9 @@ Gli step modificano soltanto il draft. Il risultato è read-only.
    production.
 8. **Contratti:** Pydantic/JSON Schema object-union, extra-forbid, generated TS,
    codici issue, renderer key/versione e worker entry.
-9. **Piano implementativo:** file ownership, dipendenze, Fleet, test selector,
-   documentazione e runbook manuale.
+9. **Piano implementativo:** verificare al CP0 il
+   [bundle materializzato](implementation/README.md), inclusi ownership,
+   dipendenze, workstream, selector, documentazione e runbook.
 
 Nessuno di questi gate riapre automaticamente la funzione obiettivo o la UI.
 Un cambio a fatti, fee/FX/tax, constraint o obiettivi richiede nuova decisione
@@ -978,17 +984,19 @@ prodotto e nuova review matematica.
 
 ---
 
-## 15. Definition of Ready per il piano implementativo
+## 15. Definition of Ready per l'esecuzione
 
-Il futuro piano di esecuzione può essere scritto quando:
+Il codice prodotto può iniziare quando:
 
-- questa suite target è approvata;
+- questa suite target e il bundle implementativo sono checkpointati;
 - non esistono due documenti correnti con verità concorrenti;
 - la review non trova blocker matematici o UX;
-- il risultato product-shaped ha un witness sotto il cap;
-- il gate ambiente autorizza la valutazione SCIP;
+- il gate contract pianificato produce un witness product-shaped sotto il cap;
+- il gate ambiente autorizza update e valutazione SCIP;
 - responsabilità Gruppo C/D e file condivisi sono confermate;
 - le decisioni ancora aperte sono elencate senza default nascosti.
 
-Il piano implementativo dovrà poi formalizzare i contratti, non ridiscutere la
-direzione qui congelata.
+Il [piano implementativo](implementation/plan-phase00PacRebalancerImplementation.prompt.md)
+formalizza questi gate senza ridiscutere la direzione qui congelata.
+
+→ Implementazione: [bundle PAC & Rebalancer](implementation/README.md)

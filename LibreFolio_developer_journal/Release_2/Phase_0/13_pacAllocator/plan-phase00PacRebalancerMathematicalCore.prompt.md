@@ -8,7 +8,8 @@ review indipendente della suite incorporati il 2026-09-16.
 **Suite target:** [master](plan-phase00PacRebalancerTargetDesign.prompt.md) ·
 [policy, obiettivi e vincoli](plan-phase00PacRebalancerPolicies.prompt.md) ·
 [architettura](plan-phase00PacRebalancerArchitecture.prompt.md) ·
-[UI completa](plan-phase00PacRebalancerUiTarget.prompt.md).
+[UI completa](plan-phase00PacRebalancerUiTarget.prompt.md) ·
+[bundle implementativo](implementation/README.md).
 
 > Questo piano definisce quantità, unità, equazioni, identità contabili,
 > obiettivo fixed-L2, confine MIQP/MIQCP e significato della prova.
