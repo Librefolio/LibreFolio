@@ -80,6 +80,11 @@ RISK_SERVICE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_risk_spawn_worker.py",
 )
 
+PAC_PLANNER_CORE_TEST_PATHS = (
+    "backend/test_scripts/test_services/test_pac_planner_exact.py",
+    "backend/test_scripts/test_services/test_pac_planner_normalize.py",
+)
+
 
 def services_pac_analyze(verbose: bool = False, test_names: list = None) -> bool:
     """Test pure initial-state PAC normalization, valuation and row scores."""
@@ -89,12 +94,11 @@ def services_pac_analyze(verbose: bool = False, test_names: list = None) -> bool
 
 
 def services_pac_planner_core(verbose: bool = False, test_names: list = None) -> bool:
-    """Test exact PAC/Rebalancer numeric primitives."""
+    """Test exact PAC/Rebalancer primitives, models, and normalization."""
     print_section("Services: PAC/Rebalancer Exact Core")
-    cmd = _build_pytest_cmd(
-        "backend/test_scripts/test_services/test_pac_planner_exact.py",
-        test_names,
-    )
+    cmd = [*pipenv_prefix(), "python", "-m", "pytest", *PAC_PLANNER_CORE_TEST_PATHS, "-v"]
+    if test_names:
+        cmd.extend(["-k", " or ".join(test_names)])
     return run_command(cmd, "PAC/Rebalancer exact core tests", verbose=verbose)
 
 
@@ -807,7 +811,14 @@ Note: No backend server required.
         exclusive_because="its assertions are about the oldest and newest EUR/USD row in the whole fx_rates table (backward fill, missing-rate boundary), and the service under test queries that table without a source filter, so a neighbour inserting any EUR/USD rate moves the boundary this unit measures",
     )
     add_test(cat, "pac-analyze", services_pac_analyze, name="PAC Initial-State Analyze", desc="Exact initial quantities, native cash, reference FX, per-row target metrics and partial data", isolation="pure")
-    add_test(cat, "pac-planner-core", services_pac_planner_core, name="PAC/Rebalancer Exact Core", desc="Canonical rational arithmetic, posting, fee, FX and tax primitives", isolation="pure")
+    add_test(
+        cat,
+        "pac-planner-core",
+        services_pac_planner_core,
+        name="PAC/Rebalancer Exact Core",
+        desc="Canonical rational arithmetic, posting, fee, FX and tax primitives plus strict v2 normalization, exact model mapping and typed issue precedence",
+        isolation="pure",
+    )
     add_test(cat, "asset-source", services_asset_source, name="Asset Source", desc="Provider assignment, synthetic yield")
     add_test(cat, "asset-source-refresh", services_asset_source_refresh, name="Asset Source Refresh", desc="Bulk refresh orchestration smoke test")
     add_test(cat, "provider-registry", services_provider_registry, name="Provider Registry", desc="Registration, lookup, priority, fallback")

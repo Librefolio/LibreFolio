@@ -1,6 +1,6 @@
 # Step 2 — normalizzazione, aritmetica esatta, evaluator e oracle
 
-**Stato:** IN PROGRESS — SLICE A CODE COMPLETE, TESTS PENDING; G3 REQUIRED FOR LATER SLICES.
+**Stato:** IN PROGRESS — W1 MODELS/ISSUES/NORMALIZER CHECKPOINT VERIFIED, READY FOR SELECTIVE HANDOFF; EVALUATOR/ORACLE FROZEN.
 **Dipende da:** Step 1 MCP review + payload witness.
 **Non dipende da:** disponibilità del solver durante la prima slice.
 
@@ -344,7 +344,25 @@ Casi obbligatori:
 
 ## 12. Sequenza
 
-- [ ] 1. Congelare modelli interni immutabili.
+- [x] 1. Congelare modelli interni immutabili. — 2026-09-16
+  > **Note implementazione — Slice W1/G3**: aggiunti in modo esclusivamente
+  > additivo i fatti normalizzati esatti e immutabili per snapshot, provenance,
+  > valute, Asset, Broker, holding/cash/contributi, route funding/order/FX,
+  > target e contesto SELL. Congelata inoltre la frontiera data-only
+  > solver-neutral accettata nell'handshake W0/W1 (`ExactUnit`, ref
+  > decision/constraint/objective/tie/proof/gate, policy view, candidate ed
+  > evaluation), con quanta decisionali interi e unità monetarie sempre
+  > qualificate dalla valuta. I modelli P1 e le relative import restano
+  > invariati.
+  > **Evidenza**: review statica di
+  > `backend/app/services/pac_allocator/models.py`; nessun test, server, probe,
+  > install o comando runtime eseguito per la lane serializzata D-main.
+  > **⚠️ Fuori pista — riallineamento W0**: la seconda lettura field-by-field
+  > del wire congelato ha corretto lo scaffold prima del normalizer: policy PAC
+  > mantenuta come `proportional|min_fragmentation`, capability/FX mode e
+  > minimum/cap usano i discriminanti W0, entrambe le minimum order restano
+  > distinte e i fatti label/source/reference-date/withholding non vengono
+  > persi. Nessuna API P1 né comportamento eseguibile è stato modificato.
 - [ ] 2. Implementare e property-testare `ExactRatio`.
   - [x] 2A. Implementare kernel additivo `ExactRatio`. — 2026-09-16
   - [ ] 2B. Property test tramite `test-author`.
@@ -380,7 +398,156 @@ Casi obbligatori:
   > selector non compare nel formatter diff. Il runner è D-main-owned, non è
   > stato modificato da questo workstream e D-main documenterà l'eccezione di
   > baseline.
-- [ ] 3. Implementare normalizer e issue taxonomy.
+- [x] 3. Implementare normalizer e issue taxonomy. — 2026-09-16
+  - [x] 3A. Congelare taxonomy interna completa e precedenza. — 2026-09-16
+  - [x] 3B. Implementare normalizer v2. — 2026-09-16
+  - [x] 3C. Completare test normalizzati tramite `test-author`. — 2026-09-16
+  > **Note implementazione — taxonomy W1/G3**: il nuovo `issues.py` deriva dal
+  > `Literal` pubblico l'universo canonico di 89 code e fallisce su drift, ma
+  > non inventa default kind/severity per code non prodotti da W1. Ogni issue
+  > del normalizer passa invece da una `IssueDefinition` esplicita
+  > `w1_normalizer`; una definizione assente fallisce chiusa. Path/param,
+  > deduplica e ordine sono tipizzati e deterministici. La precedenza degli
+  > errori di input è `needs_input` > `invalid` > `unsupported`; warning/info
+  > non controllano availability. I warning source vengono importati e
+  > preservati; l'escalation operativa del Broker inattivo aggiunge una nuova
+  > issue con lo stesso code, `unsupported/error`, senza mutare il warning e
+  > senza riusare `broker_execution_profile_unsupported`.
+  > **Evidenza**: review statica di
+  > `backend/app/services/pac_allocator/issues.py`; nessun runtime/test eseguito
+  > e nessun file W0/shared modificato.
+  > **⚠️ Fuori pista — primo lint statico W1**: il comando
+  > `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python -m ruff check backend/app/services/pac_allocator/models.py backend/app/services/pac_allocator/issues.py backend/app/services/pac_allocator/normalize.py`
+  > è terminato prima di qualsiasi collection/runtime con exit `1`: un import
+  > block da ordinare, un loop variable inutilizzato, due closure B023 e sei
+  > segnalazioni C901 nei pass di validazione appena aggiunti. Nessun DB, file
+  > dati o server è stato toccato; i pass complessi vengono ora scomposti prima
+  > del nuovo check, senza suppressions globali.
+  > **⚠️ Fuori pista — Black W1**: il successivo
+  > `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python -m black --check backend/app/services/pac_allocator/models.py backend/app/services/pac_allocator/issues.py backend/app/services/pac_allocator/normalize.py`
+  > ha segnalato soltanto `normalize.py` da riformattare (exit `1`, nessun file
+  > toccato). È stato quindi applicato Black esclusivamente ai tre file leased
+  > con lo stesso prefisso ambiente; un solo file riformattato, nessuna modifica
+  > comportamentale. Ruff scoped, dopo la scomposizione, è verde.
+  > **Note implementazione — normalizer W1/G3**: aggiunti entry point v2
+  > separati (`normalize_planner_request`, `normalize_pac_plan`,
+  > `normalize_rebalancer_plan`) senza alterare `normalize_pac`/
+  > `normalize_rebalance` P1. Il mapping `FiniteDecimal|ExactRatio` usa
+  > esclusivamente `Decimal` finito e interi; i fatti validi vengono
+  > canonizzati in tuple immutabili esatte. I pass coprono ID/reference/
+  > provenance/currency, freshness, price/exposure/target, Broker/capability/
+  > fee, holding/cash/contribution/funding, order/FX e SELL tax/WAC/
+  > withholding. Un warning source per Broker domain inattivo resta
+  > non-controlling in sola custodia; capability, route o cash selezionato
+  > aggiungono la distinta escalation unsupported/error e il cash inattivo non
+  > diventa spendibile. La availability usa precedenza needs_input > invalid >
+  > unsupported. Il cap pubblico di 192
+  > caratteri per gli interi ExactRatio protegge il confine di mapping senza
+  > troncamento; limiti di cardinalità server-side restano il gate G5 e non
+  > sono stati inventati qui.
+  > **Evidenza statica**:
+  > `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python -m ruff check backend/app/services/pac_allocator/models.py backend/app/services/pac_allocator/issues.py backend/app/services/pac_allocator/normalize.py`
+  > e
+  > `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python -m black --check backend/app/services/pac_allocator/models.py backend/app/services/pac_allocator/issues.py backend/app/services/pac_allocator/normalize.py`
+  > verdi prima dell'addendum; il confronto shell del catalogue aveva confermato
+  > i 89 code pubblici. I check finali devono essere rieseguiti dopo il
+  > riallineamento additivo. Nessun test/runtime/server/probe/install eseguito;
+  > la lane 6153 resta a D-main.
+  > **⚠️ Fuori pista — addendum issue-map 2026-09-16**: una comunicazione W0
+  > intermedia ha contraddetto HEAD/relay dichiarando 88 code e classificazione
+  > diversa per stale-not-accepted; W1 e `test-author` sono stati congelati e
+  > il conflitto è stato escalato. L'addendum autoritativo successivo ha
+  > confermato l'universo committed a 89, stale-not-accepted invalid/error,
+  > mapping soltanto per producer W1 espliciti, warning source importati e
+  > precedenza needs_input→invalid→unsupported→ready. Produzione riallineata
+  > senza edit W0. Nel controllo statico del producer map, il primo comando
+  > shell ha trovato `rg: command not found` prima dell'analisi; nessun DB,
+  > file dati o server toccato. Il retry equivalente con `grep` ha confermato
+  > zero code W1 usati senza definizione; le tre definizioni non viste come
+  > literal diretti sono due branch dinamici fee/sell-fee e il gate capacity
+  > predisposto per G5.
+  > **Riconciliazione autoritativa**: il coordinator ha poi fissato come unica
+  > autorità il committed HEAD
+  > `921ad7eaa05ec463d11e794002ff7557a62ee6ce`; import probe diretto:
+  > `PlannerIssueCode=89`, `allocation.planning_quantity_negative` presente,
+  > `NotProvenReasonCode` composto esclusivamente da
+  > `allocation.exact_proof_not_established` e
+  > `portfolio_rebalancer.sell_irreducibility_unresolved`,
+  > `allocation.stale_observation_not_accepted=invalid/error`. Il report W0
+  > 88/unsupported è formalmente superseded e ritirato. W1 ha ripreso senza
+  > modifica di baseline, policy o test.
+  > **⚠️ Fuori pista — review duplicati W1 2026-09-16**: una fresh review dopo
+  > i selector consolidati D-main (`126/126`, P1 `97/97`) ha rilevato tre
+  > invarianti non coperti dal primo checkpoint. Correzione chirurgica:
+  > `DomainAssetIdentity.source_asset_id` e
+  > `DomainBrokerIdentity.source_broker_id` sono unici indipendentemente dagli
+  > ID planner locali; `(dimension, category_id)` è unico per le exposure di
+  > un Asset; `(asset_id, broker_id)` è unico per le holding. Ogni collisione
+  > usa `allocation.duplicate_id`, path deterministico ancorato all'ID locale
+  > minimo e param tipizzati; nessun grouping per alias/nome. Il binding SELL
+  > non costruisce più un dict last-wins: le coppie holding ambigue vengono
+  > fermate dal duplicate error e non alimentano WAC/inventory diagnostics.
+  > `ExactAsset` e `ExactPlannerScenario` replicano gli stessi fail-closed
+  > invariants per impedire costruzioni interne non normalizzate. Nessuna
+  > modifica a issue policy, W0, P1, evaluator o oracle; runtime non eseguito.
+  > **Evidenza review duplicati**: il primo comando scoped Ruff+Black si è
+  > fermato prima di Black con exit `1` per il solo `I001` introdotto dagli
+  > import dei param tipizzati; nessuna collection/runtime né DB/file
+  > dati/server toccato. Applicato il solo safe fix Ruff a `normalize.py`;
+  > successivi Ruff scoped su `models.py`/`normalize.py` e Black `--check`
+  > sugli stessi file verdi, due file unchanged.
+  > **⚠️ Fuori pista — static check test normalizer**: dopo l'handoff
+  > `test-author` (13 dichiarazioni/43 casi, nessun test eseguito), il comando
+  > `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python -m ruff check backend/app/services/pac_allocator/models.py backend/app/services/pac_allocator/issues.py backend/app/services/pac_allocator/normalize.py backend/test_scripts/test_services/test_pac_planner_normalize.py`
+  > è terminato prima della collection con exit `1`: soltanto nel nuovo file
+  > test, `I001`, `B010` e `C901`; nessun DB/file dati/server toccato.
+  > Produzione rimasta frozen; il medesimo `test-author` ha ricevuto la
+  > correzione statica owner-only, senza creare un nuovo agente e senza
+  > autorizzazione runtime.
+  > **⚠️ Fuori pista — Black test normalizer**: dopo la correzione owner-only,
+  > Ruff scoped è verde ma
+  > `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python -m black --check backend/app/services/pac_allocator/models.py backend/app/services/pac_allocator/issues.py backend/app/services/pac_allocator/normalize.py backend/test_scripts/test_services/test_pac_planner_normalize.py`
+  > termina con exit `1` perché riformatterebbe soltanto il nuovo file test; i
+  > tre file produzione sono conformi. Nessuna collection/runtime né DB/file
+  > dati/server toccato; chiesta allo stesso test owner la sola formattazione
+  > scoped.
+  > **Note implementazione — test normalizzati**: il `test-author` esistente
+  > `pac-numeric-tests` (`2b823683-8a4f-4573-9bbd-3d6ffab7658f`) ha aggiunto
+  > esclusivamente
+  > `backend/test_scripts/test_services/test_pac_planner_normalize.py`: 13
+  > dichiarazioni/43 casi per exact-number mapping, scenario canonico
+  > immutabile, universo 89 code e producer map fail-closed, precedenza,
+  > source-warning passthrough, freshness, Broker inattivo su tutte le
+  > superfici eseguibili, path/range, deduplica deterministica e fixture
+  > Rebalancer semanticamente invalida. Nessun test è stato eseguito per
+  > assenza di lane grant.
+  > **Evidenza finale statica**:
+  > `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python -m ruff check backend/app/services/pac_allocator/models.py backend/app/services/pac_allocator/issues.py backend/app/services/pac_allocator/normalize.py backend/test_scripts/test_services/test_pac_planner_normalize.py`,
+  > `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python -m black --check backend/app/services/pac_allocator/models.py backend/app/services/pac_allocator/issues.py backend/app/services/pac_allocator/normalize.py backend/test_scripts/test_services/test_pac_planner_normalize.py`
+  > e `git --no-pager diff --check` verdi. Black: quattro file unchanged.
+  > **Evidenza finale D-main — 2026-09-16**: il runner è stato consolidato dal
+  > coordinator: una sola action `services pac-planner-core` esegue exact +
+  > normalize, senza action normalize duplicata. Risultati:
+  > `services pac-planner-core` **137 collected / 137 passed** (83 exact + 54
+  > normalize) in **0.53s**; `services pac-analyze` **97/97 passed** in
+  > **0.49s**. Ruff scoped su models/issues/normalize/nuovo test/runner verde;
+  > Black scoped su models/issues/normalize/nuovo test verde, quattro file
+  > unchanged; `git diff --check` whole-worktree verde. Il Black whole-runner
+  > resta rosso soltanto sul blocco baseline identico `tools-lifecycle`
+  > (`HEAD` circa riga 956, worktree circa riga 988), estraneo a W1; la hunk
+  > PAC consolidata non compare nel formatter diff. Il primo post-test Black
+  > rosso e la correzione owner-only sono registrati sopra.
+  >
+  > **Review finale read-only**: CLEAN dopo i fix. Confermati tuple
+  > immutabili/canoniche e unicità semantiche; mapping ExactNumber lossless via
+  > Decimal/interi; universo 89 code con producer map esplicita fail-closed;
+  > warning importati preservati e non controlling; escalation Broker inattivo
+  > distinta per capability/funding/FX/BUY/SELL/cash selezionato; precedenza
+  > needs_input > invalid > unsupported; pass completi reference/FK/duplicate
+  > inclusa assenza di binding SELL ambiguo. I body P1 sono invariati
+  > (soltanto import e blocchi v2 additivi) e il core non importa solver, DB,
+  > provider o rete. Checkpoint W1 pronto per handoff selettivo; evaluator e
+  > oracle restano esplicitamente frozen.
 - [ ] 4. Implementare posting/rounding.
   - [x] 4A. Implementare posting signed `ROUND_HALF_UP` su quantum esplicito,
         rounding delta e ceil-to-quantum units. — 2026-09-16
