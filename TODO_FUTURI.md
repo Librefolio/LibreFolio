@@ -277,6 +277,8 @@ Diverse giurisdizioni usano metodi diversi per determinare quale lotto vendere i
 **Status**: 📋 FUTURO — estensione successiva al primo planner operativo
 **Priorità**: Media
 
+**Target v1 correlato:** [suite PAC/Rebalancer — piano maestro](LibreFolio_developer_journal/Release_2/Phase_0/13_pacAllocator/plan-phase00PacRebalancerTargetDesign.prompt.md).
+
 ### Confine della Prima Versione
 
 Il primo planner PAC/Rebalancer deve mantenere due profili indipendenti,
@@ -327,6 +329,8 @@ Questa famiglia di policy non rientra nella prima versione.
 **Data aggiunta**: 15 Settembre 2026
 **Status**: 📋 FUTURO — fuori dal primo planner operativo
 **Priorità**: Media
+
+**Target v1 correlato:** [suite PAC/Rebalancer — piano maestro](LibreFolio_developer_journal/Release_2/Phase_0/13_pacAllocator/plan-phase00PacRebalancerTargetDesign.prompt.md).
 
 ### Confine della Prima Versione
 
@@ -392,6 +396,24 @@ nella sezione precedente e non vengono duplicati qui.
   data e override per-run restano visibili.
 - Le strategie di chiusura/consolidamento non possono introdurre short, leverage,
   BUY+SELL dello stesso Asset o vendite oltre inventario.
+
+### Riuso futuro del solver discreto — senza migrazione Riskfolio
+
+PySCIPOpt/SCIP è il candidato additivo approvato per il planner fixed-L2
+(primo tier MIQP, tier lessicografici successivi convex-MIQCP); la dipendenza non
+è ancora installata e resta subordinata al freeze coordinato, all'update
+developer-owned/autorizzato e ai gate packaging/capacità. Dopo l'adozione
+effettiva, valutarne il riuso solo
+per nuovi problemi realmente misto-interi: cardinalità, lotti minimi, turnover,
+costi fissi, distribuzione proporzionale BUY/SELL fra Broker, chiusura o
+consolidamento di custodie, strategie fiscali discrete, fee dipendenti dalla
+sequenza e routing operativo di trasferimenti, settlement e FX.
+
+Riskfolio-Lib resta il motore di dominio per covariance, risk parity, frontiera
+efficiente e analisi rischio; SciPy resta disponibile per XIRR e calcolo numerico.
+Non reimplementare queste funzioni per eliminare una dipendenza. Un eventuale
+secondo backend richiede spike separato, parità completa degli output esistenti e
+benchmark che dimostri un vantaggio misurabile di capacità, latenza o memoria.
 
 ---
 
