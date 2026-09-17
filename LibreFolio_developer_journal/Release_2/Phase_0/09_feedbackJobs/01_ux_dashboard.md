@@ -324,12 +324,12 @@ Baseline `a9138140`; superfici, dipendenze, rischi e DoD completi in
 |---|---|---|
 | U1 | ✅ Completato da E: stato/generazioni del probe e metadata concorrente. | SP01 |
 | U2 | Scope globale concordato, non solo dashboard; primitive condivise. XL. | SP15 |
-| U3 | ✅ [IMPLEMENTATO, VERIFICATO E DEVELOPER-ACCEPTED](../19_yieldOnCost/plan-phase00YieldOnCost.prompt.md), checkpoint H `74afcebce`; merge target in corso. | SP06 |
+| U3 | ✅ [IMPLEMENTATO, VERIFICATO, DEVELOPER-ACCEPTED E INTEGRATO](../19_yieldOnCost/plan-phase00YieldOnCost.prompt.md), checkpoint H `74afcebce`, follow-up finale `f092a194b`. | SP06 |
 | U4 | ✅ Completato da E: colonna uploader ordinabile e filtro multi-selezione. | SP02 |
 | U5 | ✅ Completato da E: tooltip breve localizzato. | SP01 |
 | U6 | ✅ Rimozione duplicate-mode e fast-open bulk confermati; form vivo da preservare. | Nessun codice |
 | U7 | ✅ Completato da E: supporto condiviso in DonationPopup/About e cinque social. | SP02 |
-| U8 | Requisiti discussi; L per welcome, tour breve e guida import, con skip/replay. | SP11 |
+| U8 | 🟡 Round 2 revisionato; Round 3 triggered tours in implementazione sul branch J, non ancora integrato. | SP11 |
 | U9 | ✅ Completato da E: header auto-hide desktop/mobile con guardie lifecycle. | SP02 |
 
 La [mappa nel piano](06_piano_sprint.md) separa corsie indipendenti da file condivisi:
