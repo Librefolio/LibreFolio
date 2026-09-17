@@ -39,7 +39,7 @@ priorità fra le metriche**.
 | 3 | [`03-mappa-livelli-pagine.md`](./03-mappa-livelli-pagine.md) | Mappa livelli × pagine, conseguenze architetturali, scomposizione del monolite. |
 | 4 | [`04-decisioni-e-questioni-aperte.md`](./04-decisioni-e-questioni-aperte.md) | Registro delle decisioni prese, dei rinvii, e di ciò che resta aperto. **Documento vivo.** |
 | 5 | [`05-grammatica-visiva-e-rappresentazioni.md`](./05-grammatica-visiva-e-rappresentazioni.md) | Diagnosi estetica, contratto di primitive, anatomia della card, sei rappresentazioni, dossier heatmap, layout per zona. |
-| 6 | [`06-matematica-librerie-e-reimplementazioni.md`](./06-matematica-librerie-e-reimplementazioni.md) | Le due sorgenti matematiche del progetto, confronto a tre vie con NumPy e Riskfolio, distorsione del CVaR, costo dei segnali rolling, piano di migrazione M1-M4. |
+| 6 | [`06-matematica-librerie-e-reimplementazioni.md`](./06-matematica-librerie-e-reimplementazioni.md) | Le due sorgenti matematiche del progetto, confronto a tre vie con NumPy e Riskfolio, distorsione del CVaR, costo dei segnali rolling, setaccio delle 42 funzioni Riskfolio, piano di migrazione M1-M6. |
 
 ---
 
@@ -59,8 +59,13 @@ priorità fra le metriche**.
 
 ## Vincoli di scopo già fissati
 
-- **Asset Detail è parcheggiato in beta.** Non rientra in questo giro. La discussione si
-  concentra su **Dashboard**, **Broker Detail** e **Asset Global**.
+- **Asset Detail è parcheggiato in beta.** Non rientra in questo giro: si riapre a fine
+  catena (D47), quando i quattro livelli e la grammatica visiva saranno in piedi, così
+  eredita una direzione già decisa. La discussione si concentra su **Dashboard**,
+  **Broker Detail** e **Asset Global**.
+- **Si rilascia solo a catena completa** (D46). Il lavoro vive in un worktree separato
+  e non tocca `dev_release2` finché non è pronto; il banner beta si toglie a quel punto,
+  in un colpo solo.
 - **I segnali rolling restano dove sono** (Overview di Asset Detail). Non vengono
   spostati né duplicati.
 - **Il backend non viene riaperto** su: contratto matematico, QuantLib MC/QMC, obbligo
