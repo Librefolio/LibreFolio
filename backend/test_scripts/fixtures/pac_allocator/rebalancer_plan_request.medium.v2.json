@@ -502,7 +502,6 @@
       "broker_id": "broker-alpha",
       "capability_id": "cap-alpha-eur-whole",
       "side": "sell",
-      "gross_amount_requested": null,
       "priority": 1,
       "minimum_if_active": {
         "kind": "whole_quantity",
@@ -579,10 +578,6 @@
       "broker_id": "broker-beta",
       "capability_id": "cap-beta-eur-money",
       "side": "sell",
-      "gross_amount_requested": {
-        "amount": "20.00",
-        "currency": "EUR"
-      },
       "priority": 1,
       "minimum_if_active": {
         "kind": "monetary_amount",

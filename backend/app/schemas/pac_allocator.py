@@ -711,6 +711,10 @@ PlannerFixedDecimal = Annotated[
     StringConstraints(strict=True, min_length=1, max_length=96, pattern=_PLANNER_FIXED_DECIMAL),
     AfterValidator(_planner_fixed_decimal),
 ]
+PlannerWholeQuantityStep = Annotated[
+    str,
+    StringConstraints(strict=True, min_length=1, max_length=96, pattern=_PLANNER_INTEGER),
+]
 PlannerNonNegativeDecimal = Annotated[
     str,
     StringConstraints(strict=True, min_length=1, max_length=96, pattern=_NONNEGATIVE),
@@ -891,7 +895,7 @@ class WholeQuantityCapability(AllocationStrictModel):
     currency: CurrencyCode
     fx_mode: Literal["native_currency_required", "conversion_allowed"]
     quantity_unit: QuantityUnit
-    quantity_step: PlannerFixedDecimal
+    quantity_step: PlannerWholeQuantityStep
 
 
 class MonetaryAmountCapability(AllocationStrictModel):
@@ -1050,7 +1054,6 @@ class PlannerBuyOrderRouteInput(PlannerOrderRouteInput):
 
 class PlannerSellOrderRouteInput(PlannerOrderRouteInput):
     side: Literal["sell"]
-    gross_amount_requested: PlannerMoneyInput | None = Field(description="Required for a monetary SELL request; null for quantity-driven SELL routes.")
 
 
 type RebalancerOrderRouteInput = Annotated[

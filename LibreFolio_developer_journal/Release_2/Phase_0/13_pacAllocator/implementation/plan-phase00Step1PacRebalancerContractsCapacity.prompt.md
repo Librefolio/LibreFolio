@@ -315,7 +315,8 @@ deve costruire:
 7. input invalid, missing, unsupported.
 
 Almeno una request usa margine BUY non zero e una fee con floor/cap; almeno una
-SELL monetary dichiara importo lordo richiesto, PMC, tax rate e withholding.
+SELL monetary dichiara step, minimo/cap, PMC, tax rate e withholding. L'importo
+lordo scelto è output del solver, non input o autorizzazione dell'utente.
 
 Acceptance:
 
@@ -786,6 +787,105 @@ evidenza e fuori-pista.
 > `56e80e456c11a99b6a2d9ecad3f16ef66912d27852028ea443f656546b63573d`.
 > Nessun API sync, client generato, plugin, registry o runtime solver è stato
 > avviato. Porta `6153` verificata libera; staged/unmerged `0/0`.
+
+### 11.2 Correzione stretta route SELL/step whole — 2026-09-16
+
+> **⚠️ Fuori pista:** la review coordinator successiva al checkpoint G3 ha
+> rilevato due autorità spurie nel request v2. `gross_amount_requested`
+> trasformava una decisione monetaria del solver in input/autorizzazione
+> utente; `WholeQuantityCapability.quantity_step` accettava inoltre frazioni
+> fixed-point incompatibili con una capability whole. Nessun percorso di
+> compatibilità viene mantenuto perché il v2 non è ancora rilasciato.
+
+> **Note implementazione:** dal public `PlannerSellOrderRouteInput` è stato
+> rimosso `gross_amount_requested`. La SELL monetaria sceglie il lordo come
+> quanta interi di `order_amount_step`, entro minimo, cap notional e inventario;
+> `MonetaryAmountInstruction` nel result conserva l'importo scelto. Il
+> `quantity_step` request whole usa ora il dedicated
+> `PlannerWholeQuantityStep`: stringa intera canonica signed, massimo 96
+> caratteri. Zero e negativi restano shape-valid per G3 Option B e sono
+> classificati dal normalizer con
+> `allocation.nonpositive_quantity_step`; frazioni come `1.5` sono
+> transport-invalid. Gli alias output positive-whole e tutti i tipi/regex P1
+> restano invariati.
+
+> **Note implementazione — evidenza correzione:** baseline verificata
+> `509929ab3e151e796fe5807cb6db77b8fb4480fb`, staged/unmerged `0/0`. I sei
+> fixture passano import, strict validate/dump/revalidate; il request medium
+> corretto misura `21625/13690/117382 B`
+> (`source/emitted/headroom-emitted`). Gli altri cinque file fixture non sono
+> cambiati. Il probe puro accetta step `"1"`, `"0"`, `"-1"` e gli estremi
+> canonici da 96 caratteri; rifiuta `"1.5"`, `"+1"`, `"01"`, `"-0"`, 97
+> caratteri e JSON number. Il medesimo probe conferma
+> `extra_forbidden` se ricompare `gross_amount_requested`.
+
+> JSON Schema compatti correnti: PAC input/output `27329/70628 B`;
+> Rebalancer input/output `38069/78959 B`. Fingerprint correnti, che
+> sostituiscono come autorità wire i valori storici §11.1: PAC
+> `b76cc7114d6344bc54c844c2f85ccc45a39dbc0ddec4ad93d5a58aa4f8bc2ba1`;
+> Rebalancer
+> `df50a98897414b522e2bd498df20bb03387dedfd85e14174bee9d8a229fe2a0c`.
+> Comandi puri eseguiti:
+> `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python -m ruff
+> check backend/app/schemas/pac_allocator.py`; stesso ambiente con
+> `python -m black --check backend/app/schemas/pac_allocator.py`; stesso
+> ambiente con `python -c` per import schema, sei roundtrip strict, probe
+> lessicale/extra field, misura UTF-8 e fingerprint
+> `backend.app.services.tools.schema`. Nessuna suite runtime, API sync,
+> generazione client, plugin, registry o server è stata avviata.
+
+> **Note implementazione — gate correzione D-main 2026-09-17:** D-main ha
+> eseguito
+> `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test
+> --test-port 6153 --data-dir /tmp/librefolio-r2-d schemas pac-planner <six
+> correction test names>`. Collection completa: `453`; deselected `428`;
+> selected `25`. Esito `25/25 passed`, tempo pytest `0.73 s`, exit code `0`.
+> Le sei declaration selezionate coprono: matrice di accettazione whole step;
+> split schema request/output; rinvio al normalizer dei valori Option B
+> `<= 0`; SELL medium senza gross field; obsolete gross
+> `extra_forbidden`; deployment distinti senza proof annidato. Nessuna
+> mutazione server/DB di prodotto; il runner ha archiviato soltanto log e
+> snapshot test.
+
+> **Note implementazione — gate completo D-main 2026-09-17:** eseguito
+> `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test
+> --test-port 6153 --data-dir /tmp/librefolio-r2-d schemas pac-planner`:
+> `453/453 passed`, tempo pytest `1.64 s`, exit code `0`.
+
+> **Note implementazione — preservazione P1 D-main 2026-09-17:** eseguito
+> `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test
+> --test-port 6153 --data-dir /tmp/librefolio-r2-d schemas pac-analyze`:
+> `112/112 passed`, tempo pytest `0.73 s`, exit code `0`.
+
+> **Note implementazione — micro-gate finale D-main 2026-09-17:** Ruff
+> scoped su schema e schema-test `PASS`; Black `--check`: `2 files unchanged`.
+> Il probe indipendente strict validate/dump/revalidate dei sei fixture è
+> interamente verde. Byte `source/emitted`: PAC min request `3859/2481`, PAC
+> min result `10122/6404`, PAC candidate request `29737/26694`, PAC candidate
+> result `18363/15970`, Rebalancer medium request `21625/13690`, Rebalancer
+> medium result `33404/19499`; tutti sotto i ceiling request/result
+> `131072/262144 B`. Il profilo schema generato passa.
+
+> Fingerprint indipendenti: PAC
+> `b76cc7114d6344bc54c844c2f85ccc45a39dbc0ddec4ad93d5a58aa4f8bc2ba1`;
+> Rebalancer
+> `df50a98897414b522e2bd498df20bb03387dedfd85e14174bee9d8a229fe2a0c`.
+> `git diff --check` sull'intero worktree `PASS`; lane `6153` libera.
+
+> **Micro-review fresca:** `CLEAN`. Il public SELL gross field è
+> completamente rimosso e un extra omonimo è strict-rejected; il whole step
+> request è integer-only signed, bounded a 96 caratteri, con `<= 0` rinviato
+> al normalizer W1; l'output positive-whole è invariato. Una deployment
+> solution non contiene proof annidato o ereditato e lo rifiuta come extra.
+> Il diff schema scoped lascia P1 intatto; il profilo schema generato è verde.
+
+> **Dipendenza esplicita:** normalizer, model ed evaluator W1 già presenti
+> continuano intenzionalmente a referenziare la semantica gross obsoleta e
+> devono essere riconciliati immediatamente dopo il commit di questo
+> micro-contract. Il checkpoint stabilisce l'autorità wire; non dichiara
+> readiness runtime W1 standalone.
+
+> **Stato correzione:** `MICRO-GATE PASS — SELECTIVE CHECKPOINT READY`.
 
 ## 12. Definition of Done
 

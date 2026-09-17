@@ -108,6 +108,14 @@ def _reject(adapter: TypeAdapter[Any], payload: Any) -> None:
         adapter.validate_json(_wire(payload), strict=True)
 
 
+def _assert_extra_forbidden(adapter: TypeAdapter[Any], payload: Any, field_name: str) -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        adapter.validate_json(_wire(payload), strict=True)
+
+    errors = exc_info.value.errors(include_url=False)
+    assert any(error["type"] == "extra_forbidden" and error["loc"][-1] == field_name for error in errors), errors
+
+
 def _find(rows: list[JsonObject], field: str, value: Any) -> JsonObject:
     matches = [row for row in rows if row.get(field) == value]
     assert len(matches) == 1, f"expected exactly one {field}={value!r} row"
@@ -768,6 +776,10 @@ def test_six_authoritative_fixtures_strict_roundtrip_with_byte_headroom(
     if is_candidate:
         assert "not capacity proof" in CANDIDATE_FIXTURE_STATUS
         record_property("capacity_claim", CANDIDATE_FIXTURE_STATUS)
+    if "_request." in name:
+        source_wire = json.loads(source)
+        assert all("gross_amount_requested" not in route for route in source_wire["order_routes"])
+        assert all("gross_amount_requested" not in route for route in wire["order_routes"])
     if name == "rebalancer_plan_result.medium.v2.json":
         blocking_codes = {code for evidence in wire["primary_solution"]["sell_irreducibility"] for check in evidence["checks"] for code in check["blocking_issue_codes"]}
         assert blocking_codes == {"portfolio_rebalancer.sell_irreducibility_unresolved"}
@@ -776,6 +788,108 @@ def test_six_authoritative_fixtures_strict_roundtrip_with_byte_headroom(
 
 FIXED_DECIMAL_ADAPTER = TypeAdapter(PlannerFixedDecimal)
 INTEGER_TEXT_ADAPTER = TypeAdapter(pac_schemas.PlannerIntegerText)
+WHOLE_QUANTITY_STEP_ADAPTER = TypeAdapter(pac_schemas.PlannerWholeQuantityStep)
+POSITIVE_WHOLE_DECIMAL_ADAPTER = TypeAdapter(pac_schemas.PlannerPositiveWholeDecimal)
+
+WHOLE_QUANTITY_STEP_CASES = (
+    pytest.param("1", True, id="one"),
+    pytest.param("0", True, id="zero"),
+    pytest.param("-1", True, id="negative-one"),
+    pytest.param("1" * 96, True, id="positive-max-length"),
+    pytest.param("-" + "1" * 95, True, id="negative-max-length"),
+    pytest.param("1.5", False, id="fractional"),
+    pytest.param("+1", False, id="leading-plus"),
+    pytest.param("01", False, id="leading-zero"),
+    pytest.param("-0", False, id="negative-zero"),
+    pytest.param("-0.000", False, id="negative-zero-decimal"),
+    pytest.param("", False, id="empty"),
+    pytest.param("1" * 97, False, id="positive-overlength"),
+    pytest.param("-" + "1" * 96, False, id="negative-overlength"),
+    pytest.param(1, False, id="json-positive-integer"),
+    pytest.param(0, False, id="json-zero"),
+    pytest.param(-1, False, id="json-negative-integer"),
+    pytest.param(1.5, False, id="json-number"),
+)
+
+
+@pytest.mark.parametrize(("value", "accepted"), WHOLE_QUANTITY_STEP_CASES)
+def test_planner_whole_quantity_step_strictly_accepts_only_canonical_signed_bounded_integer_strings(
+    value: Any,
+    accepted: bool,
+) -> None:
+    if not accepted:
+        _reject(WHOLE_QUANTITY_STEP_ADAPTER, value)
+        return
+
+    parsed = WHOLE_QUANTITY_STEP_ADAPTER.validate_json(_wire(value), strict=True)
+    assert isinstance(parsed, str)
+    assert parsed == value
+    assert WHOLE_QUANTITY_STEP_ADAPTER.validate_json(WHOLE_QUANTITY_STEP_ADAPTER.dump_json(parsed), strict=True) == parsed
+
+
+def test_whole_quantity_step_schema_is_signed_request_only_while_output_whole_decimal_stays_positive() -> None:
+    keys = ("type", "pattern", "minLength", "maxLength")
+
+    def contract(schema: JsonObject) -> JsonObject:
+        return {key: schema[key] for key in keys}
+
+    signed_contract = {
+        "type": "string",
+        "pattern": r"^(?:0|[1-9][0-9]*|-[1-9][0-9]*)$",
+        "minLength": 1,
+        "maxLength": 96,
+    }
+    positive_contract = {
+        "type": "string",
+        "pattern": r"^[1-9][0-9]*$",
+        "minLength": 1,
+        "maxLength": 96,
+    }
+
+    assert contract(WHOLE_QUANTITY_STEP_ADAPTER.json_schema()) == signed_contract
+    assert contract(POSITIVE_WHOLE_DECIMAL_ADAPTER.json_schema()) == positive_contract
+    assert signed_contract["pattern"] != positive_contract["pattern"]
+    for pattern in (signed_contract["pattern"], positive_contract["pattern"]):
+        re.compile(pattern)
+        assert not any(fragment in pattern for fragment in ("(?=", "(?!", "(?<=", "(?<!"))
+
+    capability_schema = TypeAdapter(pac_schemas.WholeQuantityCapability).json_schema()
+    assert contract(capability_schema["properties"]["quantity_step"]) == signed_contract
+
+    for adapter in (PAC_PLAN_INPUT_ADAPTER, REBALANCER_PLAN_INPUT_ADAPTER):
+        schema = generate_tool_schema(adapter, "validation")
+        assert contract(schema["$defs"]["WholeQuantityCapability"]["properties"]["quantity_step"]) == signed_contract
+        assert "WholeQuantityInstruction" not in schema["$defs"]
+
+    for adapter in (PAC_PLAN_OUTPUT_ADAPTER, REBALANCER_PLAN_OUTPUT_ADAPTER):
+        schema = generate_tool_schema(adapter, "serialization")
+        assert contract(schema["$defs"]["WholeQuantityInstruction"]["properties"]["quantity_step"]) == positive_contract
+        assert "WholeQuantityCapability" not in schema["$defs"]
+
+    for value in ("1", "1" * 96):
+        parsed = POSITIVE_WHOLE_DECIMAL_ADAPTER.validate_json(_wire(value), strict=True)
+        assert POSITIVE_WHOLE_DECIMAL_ADAPTER.validate_json(POSITIVE_WHOLE_DECIMAL_ADAPTER.dump_json(parsed), strict=True) == value
+    for value in ("0", "-1", "1.5", "+1", "01", "1" * 97):
+        _reject(POSITIVE_WHOLE_DECIMAL_ADAPTER, value)
+
+
+@pytest.mark.parametrize("quantity_step", ("0", "-1"))
+def test_option_b_whole_quantity_step_defers_nonpositive_semantics_to_the_downstream_issue(
+    quantity_step: str,
+) -> None:
+    payload = _rebalancer_invest_and_sell_request()
+    broker = _find(payload["brokers"], "broker_id", "broker-alpha")
+    capability = _find(broker["capabilities"], "capability_id", "cap-alpha-eur-whole")
+    assert capability["kind"] == "whole_quantity"
+    capability["quantity_step"] = quantity_step
+
+    model, _emitted = _strict_roundtrip(REBALANCER_PLAN_INPUT_ADAPTER, payload)
+    wire = REBALANCER_PLAN_INPUT_ADAPTER.dump_python(model, mode="json")
+    emitted_broker = _find(wire["brokers"], "broker_id", "broker-alpha")
+    emitted_capability = _find(emitted_broker["capabilities"], "capability_id", "cap-alpha-eur-whole")
+
+    assert emitted_capability["quantity_step"] == quantity_step
+    assert "allocation.nonpositive_quantity_step" in get_args(pac_schemas.PlannerIssueCode)
 
 
 @pytest.mark.parametrize(
@@ -1657,6 +1771,15 @@ def test_rebalancer_invest_and_sell_requires_sell_context_and_at_least_one_sell_
     request = _rebalancer_invest_and_sell_request()
     _strict_roundtrip(REBALANCER_PLAN_INPUT_ADAPTER, request)
 
+    for removed_route_id, remaining_route_id in (
+        ("route-a-alpha-sell", "route-b-beta-sell"),
+        ("route-b-beta-sell", "route-a-alpha-sell"),
+    ):
+        with_one_sell = deepcopy(request)
+        with_one_sell["order_routes"] = [row for row in with_one_sell["order_routes"] if row["route_id"] != removed_route_id]
+        assert _find(with_one_sell["order_routes"], "route_id", remaining_route_id)["side"] == "sell"
+        _strict_roundtrip(REBALANCER_PLAN_INPUT_ADAPTER, with_one_sell)
+
     without_context = deepcopy(request)
     without_context.pop("sell_context")
     _reject(REBALANCER_PLAN_INPUT_ADAPTER, without_context)
@@ -1666,6 +1789,68 @@ def test_rebalancer_invest_and_sell_requires_sell_context_and_at_least_one_sell_
     assert buy_only["order_routes"]
     assert not any(row["side"] == "sell" for row in buy_only["order_routes"])
     _reject(REBALANCER_PLAN_INPUT_ADAPTER, buy_only)
+
+
+MEDIUM_SELL_ROUTE_CASES = (
+    pytest.param("route-a-alpha-sell", "whole_quantity", id="whole-quantity"),
+    pytest.param("route-b-beta-sell", "monetary_amount", id="monetary-amount"),
+)
+
+
+@pytest.mark.parametrize(("route_id", "capability_kind"), MEDIUM_SELL_ROUTE_CASES)
+def test_medium_fixture_sell_routes_strict_roundtrip_without_gross_amount_requested(
+    route_id: str,
+    capability_kind: str,
+) -> None:
+    payload = _rebalancer_invest_and_sell_request()
+    route = _find(payload["order_routes"], "route_id", route_id)
+    broker = _find(payload["brokers"], "broker_id", route["broker_id"])
+    capability = _find(broker["capabilities"], "capability_id", route["capability_id"])
+
+    assert route["side"] == "sell"
+    assert route["minimum_if_active"]["kind"] == capability_kind
+    assert capability["kind"] == capability_kind
+    assert "gross_amount_requested" not in route
+
+    adapter = TypeAdapter(pac_schemas.PlannerSellOrderRouteInput)
+    model, emitted = _strict_roundtrip(adapter, route)
+    assert json.loads(emitted) == route
+    assert "gross_amount_requested" not in adapter.dump_python(model, mode="json")
+
+    with_obsolete_field = deepcopy(route)
+    with_obsolete_field["gross_amount_requested"] = None
+    _assert_extra_forbidden(adapter, with_obsolete_field, "gross_amount_requested")
+
+
+OBSOLETE_GROSS_AMOUNT_ROOT_CASES = (
+    pytest.param(PAC_PLAN_INPUT_ADAPTER, _pac_request, "route-asset-one-broker-one-buy", id="pac"),
+    pytest.param(
+        REBALANCER_PLAN_INPUT_ADAPTER,
+        _rebalancer_invest_only_request,
+        "route-b-beta-buy",
+        id="rebalancer-invest-only",
+    ),
+    pytest.param(
+        REBALANCER_PLAN_INPUT_ADAPTER,
+        _rebalancer_invest_and_sell_request,
+        "route-a-alpha-sell",
+        id="rebalancer-invest-and-sell",
+    ),
+)
+
+
+@pytest.mark.parametrize(("adapter", "factory", "route_id"), OBSOLETE_GROSS_AMOUNT_ROOT_CASES)
+def test_planner_roots_reject_gross_amount_requested_as_an_extra_field(
+    adapter: TypeAdapter[Any],
+    factory: PayloadFactory,
+    route_id: str,
+) -> None:
+    payload = factory()
+    route = _find(payload["order_routes"], "route_id", route_id)
+    assert "gross_amount_requested" not in route
+    route["gross_amount_requested"] = None
+
+    _assert_extra_forbidden(adapter, payload, "gross_amount_requested")
 
 
 REBALANCER_READY_SELL_POLICY_CASES = (
@@ -2407,6 +2592,29 @@ def test_distinct_deployment_strict_roundtrip_covers_every_order_and_objective_d
     assert len(comparison["objective_deltas"]) == len(primary["objectives"]["stages"])
 
 
+DISTINCT_DEPLOYMENT_PRODUCT_CASES = (
+    pytest.param(PAC_PLAN_OUTPUT_ADAPTER, _distinct_deployment_pac_result, id="pac"),
+    pytest.param(REBALANCER_PLAN_OUTPUT_ADAPTER, _distinct_deployment_rebalancer_result, id="rebalancer"),
+)
+
+
+@pytest.mark.parametrize(("adapter", "factory"), DISTINCT_DEPLOYMENT_PRODUCT_CASES)
+def test_distinct_deployment_solution_has_no_inherited_proof_and_strictly_rejects_one(
+    adapter: TypeAdapter[Any],
+    factory: PayloadFactory,
+) -> None:
+    payload = factory()
+    assert "proof" in payload
+    assert "proof" not in payload["deployment"]["solution"]
+
+    model, _emitted = _strict_roundtrip(adapter, payload)
+    wire = adapter.dump_python(model, mode="json")
+    assert "proof" not in wire["deployment"]["solution"]
+
+    payload["deployment"]["solution"]["proof"] = deepcopy(payload["proof"])
+    _assert_extra_forbidden(adapter, payload, "proof")
+
+
 @pytest.mark.parametrize(
     "mutation",
     (
@@ -2487,6 +2695,33 @@ def test_p1_operation_contract_and_checked_in_schema_fingerprint_are_preserved_b
     assert entry["contractVersion"] == "1.0.0"
     assert entry["operations"] == ["analyze"]
     assert entry["schemaFingerprint"] == recomputed
+
+
+PLANNER_FULL_SCHEMA_FINGERPRINT_CASES = (
+    pytest.param(
+        PAC_PLAN_INPUT_ADAPTER,
+        PAC_PLAN_OUTPUT_ADAPTER,
+        "b76cc7114d6344bc54c844c2f85ccc45a39dbc0ddec4ad93d5a58aa4f8bc2ba1",
+        id="pac",
+    ),
+    pytest.param(
+        REBALANCER_PLAN_INPUT_ADAPTER,
+        REBALANCER_PLAN_OUTPUT_ADAPTER,
+        "df50a98897414b522e2bd498df20bb03387dedfd85e14174bee9d8a229fe2a0c",
+        id="rebalancer",
+    ),
+)
+
+
+@pytest.mark.parametrize(("input_adapter", "output_adapter", "expected_fingerprint"), PLANNER_FULL_SCHEMA_FINGERPRINT_CASES)
+def test_full_planner_schema_fingerprints_are_frozen(
+    input_adapter: TypeAdapter[Any],
+    output_adapter: TypeAdapter[Any],
+    expected_fingerprint: str,
+) -> None:
+    input_schema = generate_tool_schema(input_adapter, "validation")
+    output_schema = generate_tool_schema(output_adapter, "serialization")
+    assert schema_fingerprint(input_schema, output_schema, frozenset({"plan"})) == expected_fingerprint
 
 
 PLANNER_SCHEMA_CASES = (
