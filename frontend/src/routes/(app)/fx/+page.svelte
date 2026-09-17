@@ -120,6 +120,12 @@
     let settingsTargetSlug = $state<string | null>(null);
     /** Settings to pass to the modal (global or pair-specific) */
     let settingsForModal = $derived(settingsTargetSlug ? getSettingsForPair(settingsTargetSlug, 'fx') : getGlobalSettings('fx'));
+    let settingsAxisContext = $derived.by(() => {
+        if (!settingsTargetSlug) return $_('common.preview');
+        const pair = pairs.find((item) => item.config.slug === settingsTargetSlug);
+        if (!pair) return settingsTargetSlug.replace('-', '/');
+        return isCardInverted(settingsTargetSlug) ? `${pair.config.quote}/${pair.config.base}` : `${pair.config.base}/${pair.config.quote}`;
+    });
     let signalDefinitions = $state<SignalDefinition[]>([]);
     let signalResultsByPair = $state(new Map<string, SignalInstanceResult[]>());
     let signalCatalogFailed = $state(false);
@@ -1201,6 +1207,8 @@
 
 <!-- Chart Settings Modal (global or per-card depending on settingsTargetSlug) -->
 <ChartSettingsModal
+    axisContext={settingsAxisContext}
+    axisDomain="fx"
     availableAssets={availableAssetsList}
     availablePairs={pairs.map((p) => `${p.config.base}-${p.config.quote}`)}
     {signalDefinitions}

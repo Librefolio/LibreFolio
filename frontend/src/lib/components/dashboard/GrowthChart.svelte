@@ -24,6 +24,8 @@
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS, namedPoint} from '$lib/components/charts/echartsAnimationConfig';
     import {_, locale} from '$lib/i18n';
+    import {buildResponsiveXAxisPolicy} from '$lib/components/charts/responsiveXAxis';
+    import {clampGrowthLogicalRange, type GrowthLogicalRange} from './growthChartRange';
     import ResolutionBadge from '$lib/components/charts/ResolutionBadge.svelte';
     import {aggregateLineSeries, mapDateToBucket, cascadeResolution, chooseInitialResolution} from '$lib/components/charts/timeSeriesAggregation';
     import type {ChartResolution} from '$lib/components/charts/timeSeriesAggregation';
@@ -59,13 +61,30 @@
     let lastRenderedMode: 'eur' | 'pct' | null = null;
     let lastRenderedDark: boolean | null = null;
     let lastHistoryRef: PortfolioHistoryPoint[] | null = null;
+    let responsiveXAxisCompact = false;
     const resizeWatcher = createResizeWatcher(() => {
         chartInstance?.resize();
+        if (chartInstance && chartContainer && activeChartData) {
+            const policy = buildResponsiveXAxisPolicy({
+                width: chartContainer.clientWidth,
+                values: activeChartData.dates,
+                locale: $locale ?? undefined,
+                axisType: 'time',
+            });
+            const wasCompact = responsiveXAxisCompact;
+            responsiveXAxisCompact = policy.compact;
+            if (policy.axisLabel) {
+                chartInstance.setOption({xAxis: {splitNumber: policy.splitNumber, axisLabel: policy.axisLabel}}, {lazyUpdate: true});
+            } else if (wasCompact) {
+                renderChart(true);
+            }
+        }
         scheduleResolutionSync();
     });
     let darkModeObserver: MutationObserver | null = null;
     let visibleStartDate: string | null = null;
     let visibleEndDate: string | null = null;
+    let resolutionResetPending = true;
     let resolutionDebounceTimer: ReturnType<typeof setTimeout> | null = null;
     let dataZoomCleanup: (() => void) | null = null;
     /** True only for very first full render after `echarts.init()`. Later rebuilds
@@ -130,6 +149,7 @@
     // percentage/absolute-value merge conflict here — unlike AllocationHistoryChart — but
     // replacing it wholesale on a resolution switch is still the clearest way to reposition it).
     const CHART_SERIES_UPDATE_OPTS = {notMerge: false, replaceMerge: ['dataZoom']};
+    const CHART_FULL_UPDATE_OPTS = {...CHART_SET_OPTION_OPTS, replaceMerge: [...CHART_SET_OPTION_OPTS.replaceMerge, 'xAxis']};
 
     // =========================================================================
     // Derived data for chart
@@ -213,12 +233,14 @@
     const hasPctData = $derived(history.some((pt) => pt.mwrr_cumulative != null || pt.twrr != null || pt.roi != null));
     const hasNonZeroPctData = $derived(history.some((pt) => Number(pt.mwrr_cumulative ?? 0) !== 0 || Number(pt.twrr ?? 0) !== 0 || Number(pt.roi ?? 0) !== 0));
 
-    function resetResolutionState() {
+    function resetResolutionState(preservedRange: GrowthLogicalRange | null = null) {
         resolutionCache.clear();
         activeChartData = null;
         currentResolution = 'daily';
-        visibleStartDate = null;
-        visibleEndDate = null;
+        resolutionResetPending = true;
+        const nextRange = clampGrowthLogicalRange(preservedRange, dates);
+        visibleStartDate = nextRange?.startDate ?? null;
+        visibleEndDate = nextRange?.endDate ?? null;
     }
 
     function ensureLogicalRange(): {startDate: string; endDate: string} | null {
@@ -368,7 +390,8 @@
     }
 
     function getLogicalRangeFromChart(): {startDate: string; endDate: string} | null {
-        const entry = getResolutionData(currentResolution);
+        if (!activeChartData || activeChartData.resolution !== currentResolution) return null;
+        const entry = activeChartData;
         if (entry.buckets.length === 0) return null;
 
         const {start, end} = getZoomPercent();
@@ -505,10 +528,14 @@
     function updateChartData(entry: AggregatedResolutionData, isDark: boolean, zoomWindow: {start: number; end: number}, skipAnimation: boolean) {
         if (!chartInstance) return;
 
-        const series = buildChartUpdateSeries(isDark, entry).map((seriesEntry) => ({
-            name: seriesEntry.name,
-            data: seriesEntry.data,
-        }));
+        const seriesData = buildChartUpdateSeries(isDark, entry);
+        const xAxisPolicy = buildResponsiveXAxisPolicy({
+            width: chartContainer?.clientWidth ?? 0,
+            values: entry.dates,
+            locale: $locale ?? undefined,
+            axisType: 'time',
+        });
+        const wasCompact = responsiveXAxisCompact;
 
         // skipAnimation is only ever true for a resolution switch (daily <-> weekly/monthly),
         // where the data-point count per series changes drastically. If a tooltip is
@@ -520,6 +547,16 @@
             chartInstance.dispatchAction({type: 'hideTip'});
         }
 
+        if (wasCompact && !xAxisPolicy.compact) {
+            applyFullOption(isDark, buildFullSeries(isDark, seriesData), zoomWindow);
+            return;
+        }
+
+        responsiveXAxisCompact = xAxisPolicy.compact;
+        const series = seriesData.map((seriesEntry) => ({
+            name: seriesEntry.name,
+            data: seriesEntry.data,
+        }));
         chartInstance.setOption(
             {
                 ...(skipAnimation
@@ -530,6 +567,7 @@
                       }
                     : CHART_ANIMATION_CONFIG),
                 dataZoom: [{type: 'inside', ...INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG, start: zoomWindow.start, end: zoomWindow.end}],
+                xAxis: xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber, axisLabel: xAxisPolicy.axisLabel} : {},
                 series,
             },
             CHART_SERIES_UPDATE_OPTS,
@@ -599,8 +637,9 @@
         void $locale;
 
         if (history !== lastHistoryRef) {
+            const preservedRange = getLogicalRangeFromChart();
             lastHistoryRef = history;
-            resetResolutionState();
+            resetResolutionState(preservedRange);
         }
 
         if (chartContainer) {
@@ -619,7 +658,7 @@
         resizeWatcher.observe(chartContainer);
     }
 
-    function renderChart() {
+    function renderChart(forceFullXAxisRebuild = false) {
         if (!chartContainer || loading || history.length === 0) return;
 
         if (chartInstance && chartInstance.getDom() !== chartContainer) {
@@ -648,12 +687,18 @@
         }
 
         const isDark = document.documentElement.classList.contains('dark');
+        const liveRange = getLogicalRangeFromChart();
+        if (liveRange) {
+            visibleStartDate = liveRange.startDate;
+            visibleEndDate = liveRange.endDate;
+        }
         const logicalRange = ensureLogicalRange();
         if (!logicalRange) return;
 
-        if (currentResolution === 'daily' && visibleStartDate === dates[0] && visibleEndDate === dates[dates.length - 1]) {
+        if (resolutionResetPending) {
             const counts = computeBucketCounts(logicalRange.startDate, logicalRange.endDate);
             currentResolution = chooseInitialResolution(counts, chartInstance.getWidth());
+            resolutionResetPending = false;
         }
 
         const activeData = getResolutionData(currentResolution);
@@ -661,7 +706,7 @@
         activeChartData = activeData;
 
         // Determine if this is a data-only update (same mode, same dark) or full re-init
-        const needsFullInit = lastRenderedMode !== viewMode || lastRenderedDark !== isDark;
+        const needsFullInit = forceFullXAxisRebuild || lastRenderedMode !== viewMode || lastRenderedDark !== isDark;
         const seriesData = buildChartUpdateSeries(isDark, activeData);
 
         if (needsFullInit) {
@@ -678,6 +723,13 @@
         if (!chartInstance) return;
         const {bg: tooltipBg, border: tooltipBorder, textColor, mutedColor} = buildTooltipTheme(isDark);
         const gridColor = isDark ? '#1e293b' : '#f1f5f9';
+        const xAxisPolicy = buildResponsiveXAxisPolicy({
+            width: chartContainer?.clientWidth ?? 0,
+            values: activeChartData?.dates ?? dates,
+            locale: $locale ?? undefined,
+            axisType: 'time',
+        });
+        responsiveXAxisCompact = xAxisPolicy.compact;
 
         const yAxisFormatter =
             viewMode === 'eur'
@@ -770,7 +822,13 @@
             dataZoom: [{type: 'inside', ...INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG, start: zoomWindow.start, end: zoomWindow.end}],
             xAxis: {
                 type: 'time',
-                axisLabel: {color: textColor, fontSize: 14, rotate: 0},
+                ...(xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber} : {}),
+                axisLabel: {
+                    color: textColor,
+                    fontSize: 14,
+                    rotate: 0,
+                    ...(xAxisPolicy.axisLabel ?? {}),
+                },
                 axisLine: {lineStyle: {color: gridColor}},
                 splitLine: {show: false},
             },
@@ -786,7 +844,7 @@
             series,
         };
 
-        chartInstance.setOption(option, CHART_SET_OPTION_OPTS);
+        chartInstance.setOption(option, CHART_FULL_UPDATE_OPTS);
         // Bugfix: on mobile, the very FIRST render can happen while the surrounding
         // layout (KPI cards etc.) is still settling, so ECharts caches stale internal
         // dimensions — causing the position-aware tooltip (tooltipPositionSide) to

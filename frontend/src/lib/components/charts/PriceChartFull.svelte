@@ -25,8 +25,11 @@
     import {signalLabelToHtml, type SignalLabelInfo} from '$lib/charts/signalLabel';
     import {truncateName} from '$lib/utils/text';
     import {clearTimer} from '$lib/utils/core/clearTimer';
+    import type {AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {ChartLine, ChartCandlestick} from 'lucide-svelte';
     import {aggregateLineSeries, aggregateOHLCV, cascadeResolution, chooseInitialResolution, downsampleRenderedSignal, type ChartResolution} from './timeSeriesAggregation';
+    import {currentLanguage} from '$lib/stores/app/language';
+    import {buildResponsiveXAxisPolicy} from './responsiveXAxis';
     import {
         buildDeltaHtml,
         buildEventScatterGroups,
@@ -106,6 +109,8 @@
         yAxisMode?: 'auto' | 'include0' | 'custom';
         yAxisMin?: number;
         yAxisMax?: number;
+        /** Stable semantic settings for active non-primary axes. */
+        secondaryAxisScales?: Record<string, AxisScaleSettings>;
         /** Measure mode: enables click-to-place measurement points */
         measureMode?: boolean;
         onMeasureClick?: (date: string, value: number) => void;
@@ -175,6 +180,7 @@
         yAxisMode = 'auto',
         yAxisMin,
         yAxisMax,
+        secondaryAxisScales = {},
         measureMode = false,
         onMeasureClick,
         onMeasureHover,
@@ -222,6 +228,8 @@
     let lastRawDataRef: LineDataPoint[] | null = null;
     let lastDisplayDataRef: LineDataPoint[] | null = null;
     let lastRenderedResolution: ChartResolution | null = null;
+    let lastRenderedDates: string[] = [];
+    let responsiveXAxisCompact = false;
 
     $effect(() => {
         chartType = externalChartType ?? initialChartType;
@@ -284,11 +292,13 @@
             void yAxisMode;
             void yAxisMin;
             void yAxisMax;
+            void secondaryAxisScales;
             void mainSeriesLabel;
             void eventMarkers;
             void overlaySignalInfoMap;
             void mainIconUrl;
             void mainAssetType;
+            void $currentLanguage;
             tick().then(renderChart);
         }
     });
@@ -436,6 +446,21 @@
                 if (chartOptionSet) {
                     try {
                         chartInstance?.resize();
+                        if (chartInstance && lastRenderedDates.length > 0) {
+                            const policy = buildResponsiveXAxisPolicy({
+                                width: chartContainer?.clientWidth ?? 0,
+                                values: lastRenderedDates,
+                                locale: $currentLanguage,
+                                axisType: 'category',
+                            });
+                            const wasCompact = responsiveXAxisCompact;
+                            responsiveXAxisCompact = policy.compact;
+                            if (policy.axisLabel) {
+                                chartInstance.setOption({xAxis: {axisLabel: policy.axisLabel}}, {lazyUpdate: true});
+                            } else if (wasCompact) {
+                                renderChart();
+                            }
+                        }
                         if (chartInstance) updateArrowRotations(chartInstance);
                         // Bugfix: resizing the container (e.g. rotating a device, or
                         // shrinking a browser window to a narrow/mobile width) changes
@@ -672,6 +697,7 @@
 
         const {lineData: resolvedLineData} = getResolvedSeries(activeResolution);
         const dates = resolvedLineData.map((point) => point.date);
+        lastRenderedDates = dates;
         const bucketInfoByDate = new Map(dates.map((date, index) => [date, getBucketInfo(resolvedLineData[index], activeResolution)]));
         const useBaselineColoring = colorByBaseline;
         const baselineValue = isPercentage ? 0 : (resolvedLineData[0]?.value ?? 0);
@@ -842,7 +868,7 @@
             }
         }
 
-        const {axes: secondaryAxes, extraAxesCount} = buildSecondaryYAxes(resolvedOverlaySignals, isDark, 0);
+        const {axes: secondaryAxes, extraAxesCount} = buildSecondaryYAxes(resolvedOverlaySignals, isDark, 0, true, secondaryAxisScales);
         const colors = getChartColors(isDark);
         const staleLookup = new Map<string, number>();
         const fxStaleLookup = new Map<string, number>();
@@ -851,6 +877,13 @@
             if (point.fxStaleDays && point.fxStaleDays > 0) fxStaleLookup.set(point.date, point.fxStaleDays);
         }
         const zoomWindow = computeZoomWindow(resolvedLineData, activeResolution, logicalRange);
+        const xAxisPolicy = buildResponsiveXAxisPolicy({
+            width: rect.width,
+            values: dates,
+            locale: $currentLanguage,
+            axisType: 'category',
+        });
+        responsiveXAxisCompact = xAxisPolicy.compact;
 
         const option: echarts.EChartsOption = {
             animation: false,
@@ -861,7 +894,11 @@
                     data: dates,
                     gridIndex: 0,
                     axisLine: {lineStyle: {color: isDark ? '#475569' : '#d1d5db'}},
-                    axisLabel: {color: isDark ? '#94a3b8' : '#6b7280', fontSize: 14},
+                    axisLabel: {
+                        color: isDark ? '#94a3b8' : '#6b7280',
+                        fontSize: 14,
+                        ...(xAxisPolicy.axisLabel ?? {}),
+                    },
                     splitLine: {show: false},
                 },
             ],
@@ -1084,6 +1121,7 @@
                 {yAxisMode}
                 {yAxisMin}
                 {yAxisMax}
+                {secondaryAxisScales}
             />
         {/if}
     </div>
