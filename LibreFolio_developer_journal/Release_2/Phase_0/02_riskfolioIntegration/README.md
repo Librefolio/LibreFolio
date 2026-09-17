@@ -1,7 +1,7 @@
 # Risk Analysis — ripianificazione
 
 **Data apertura**: 16 Settembre 2026
-**Stato**: 🟡 analisi chiusa · pianificazione da scrivere
+**Stato**: 🟢 analisi e pianificazione chiuse · esecuzione da avviare
 **Premessa**: il sottosistema Risk è **rilasciato in beta** con un banner su ogni vista.
 
 ---
@@ -40,6 +40,8 @@ priorità fra le metriche**.
 | 4 | [`04-decisioni-e-questioni-aperte.md`](./04-decisioni-e-questioni-aperte.md) | Registro delle decisioni prese, dei rinvii, e di ciò che resta aperto. **Documento vivo.** |
 | 5 | [`05-grammatica-visiva-e-rappresentazioni.md`](./05-grammatica-visiva-e-rappresentazioni.md) | Diagnosi estetica, contratto di primitive, anatomia della card, sei rappresentazioni, dossier heatmap, layout per zona. |
 | 6 | [`06-matematica-librerie-e-reimplementazioni.md`](./06-matematica-librerie-e-reimplementazioni.md) | Le due sorgenti matematiche del progetto, confronto a tre vie con NumPy e Riskfolio, distorsione del CVaR, costo dei segnali rolling, setaccio delle 42 funzioni Riskfolio, piano di migrazione M1-M6. |
+| 7 | [`07-piano-esecutivo.md`](./07-piano-esecutivo.md) | **L'ordine.** Dodici flussi paralleli, cinque dipendenze, tre cancelli, la taglia in superficie misurata, l'indirizzo dell'oracolo M4, la banda di porte e la voce di CHANGELOG. Non riassume i precedenti: rimanda. |
+| 8 | [`implementation/`](./implementation/) | **I mandati.** Undici piani di lavoro assegnabili a sotto-agenti, uno per flusso, con lane, proprietà dei file e contratti. Il [`README`](./implementation/README.md) della cartella è la mappa di coordinamento; [`kickoff/`](./implementation/kickoff/) i prompt di avvio, [`contracts/`](./implementation/contracts/) i contratti K1-K8 e [`progress/`](./implementation/progress/) i piani vivi. |
 
 ---
 
@@ -53,7 +55,9 @@ priorità fra le metriche**.
 | Mappa livelli × pagine | ✅ 16 Set 2026 |
 | **UI/UX per zona e scelta dei grafici** | ✅ 16 Set 2026 |
 | **Matematica, librerie e reimplementazioni** | ✅ 16 Set 2026 |
-| Piano esecutivo | ⏳ prossimo blocco |
+| **Piano esecutivo** | ✅ 17 Set 2026 |
+| **Mandati di implementazione** | ✅ 17 Set 2026 |
+| Esecuzione | ⏳ da avviare |
 
 ---
 
@@ -72,6 +76,10 @@ priorità fra le metriche**.
   di processo `spawn`, serie canoniche, metadata di qualità del dato.
 - **La catena G6 non viene ripresa.** 23 item a catena singola con gate umani bloccanti
   si è dimostrato un modello fragile: un solo stop congela tutto il resto.
+- **Il backend non viene riaperto**, con due eccezioni decise il 17 Set: il filtro per
+  asset su `PortfolioRiskScope` (D58), che oggi sa affettare solo per broker, e
+  l'estensione di `AssetType` con i sottotipi (D52). Entrambe servono il confronto con
+  il riferimento giusto, che è il perno di L3.
 
 ---
 

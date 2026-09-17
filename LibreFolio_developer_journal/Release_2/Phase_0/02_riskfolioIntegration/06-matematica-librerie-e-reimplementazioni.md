@@ -1451,6 +1451,8 @@ Gli script di confronto sono in `/tmp/` e non fanno parte del repository:
 | `/tmp/libreFolio_kurt.py` | §7.3 | `RF.Kurtosis` = `sqrt(m₄)`, non standardizzata: controprova con t(3) |
 | `/tmp/libreFolio_kurt2.py` | §7.3 | stabilità della stima a 250/750/2500/12500 gg; sensibilità ai 10 estremi |
 | `/tmp/libreFolio_kurt3.py` | §7.3 | `rm="KT"`/`"SKT"` nell'ottimizzatore, `cokurt_matrix` |
+| `/tmp/libreFolio_dd_all.py` | `04` Q7 | inventario delle 14 funzioni drawdown con tempi; scopre `RLDaR_Rel = 0` su un seme e la tupla di `EDaR` |
+| `/tmp/libreFolio_dd_absrel.py` | `04` Q7 | legge il sorgente di `MDD_Abs`/`MDD_Rel` e ricostruisce a mano entrambi: `cumsum` contro `cumprod`, riscontro a sei decimali |
 
 Invocazione (lane worktree):
 
