@@ -76,6 +76,94 @@ describe('signal problem mapping', () => {
         });
     });
 
+    it('preserves undefined_metric as the unavailable reason code', () => {
+        const result = backendSignalSchemas.result.parse({
+            instance_id: config.id,
+            signal_code: 'CCI',
+            status: 'unavailable',
+            availability: {
+                domain_compatible: true,
+                can_compute: false,
+                input_coverage: inputCoverage(),
+                required_points: 20,
+                warmup_complete: false,
+                reason_code: 'undefined_metric',
+            },
+            warmup: {
+                requirement: {
+                    minimum_points: 20,
+                    stabilization_points: 0,
+                    total_points: 20,
+                },
+                loaded_points: 100,
+                used_points: 0,
+                complete: false,
+            },
+        });
+        const item: SignalInstanceResult = {
+            config,
+            source: 'backend',
+            status: 'unavailable',
+            result,
+            error: null,
+        };
+
+        expect(getSignalProblem(item)?.code).toBe('undefined_metric');
+    });
+
+    it('preserves partial_undefined_metric when its warning code is not a problem code', () => {
+        const backendMessage = 'Metric is undefined for part of the selected window';
+        const result = backendSignalSchemas.result.parse({
+            instance_id: config.id,
+            signal_code: 'CCI',
+            status: 'partial',
+            series: [
+                {
+                    kind: 'line',
+                    key: 'cci',
+                    label_key: 'signals.cci.label',
+                    semantic_id: 'momentum.cci',
+                    semantic_description: 'Commodity Channel Index momentum output.',
+                    unit: 'index',
+                    axis: {key: 'cci', role: 'independent'},
+                    points: [{date: '2026-01-01', value: 12}],
+                },
+            ],
+            availability: {
+                domain_compatible: true,
+                can_compute: true,
+                input_coverage: inputCoverage(),
+                required_points: 20,
+                warmup_complete: true,
+                partial_coverage_used: true,
+                reason_code: 'partial_undefined_metric',
+            },
+            warmup: {
+                requirement: {
+                    minimum_points: 20,
+                    stabilization_points: 0,
+                    total_points: 20,
+                },
+                loaded_points: 100,
+                used_points: 100,
+                complete: true,
+            },
+            warnings: [{code: 'undefined_metric_window', message: backendMessage}],
+        });
+        const item: SignalInstanceResult = {
+            config,
+            source: 'backend',
+            status: 'partial',
+            result,
+            error: null,
+        };
+
+        expect(getSignalProblem(item)).toMatchObject({
+            code: 'partial_undefined_metric',
+            message: backendMessage,
+        });
+    });
+
     it('reports incomplete warm-up counts for partial results', () => {
         const result = backendSignalSchemas.result.parse({
             instance_id: config.id,

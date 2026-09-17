@@ -27,6 +27,7 @@
     import {getSectorEmoji, ensureSectorsLoaded} from '$lib/stores/reference/sectorStore';
     import {sectorI18nKey} from '$lib/utils/assetTypes';
     import {currentLanguage} from '$lib/stores/app/language';
+    import {buildResponsiveXAxisPolicy} from '$lib/components/charts/responsiveXAxis';
 
     interface AllocationComponent {
         name: string;
@@ -78,12 +79,13 @@
     // conflict that collapses the visible window to empty (blank chart). Replacing
     // 'dataZoom' wholesale avoids that merge conflict.
     // https://github.com/apache/echarts/issues/8230
-    const CHART_SERIES_UPDATE_OPTS: {notMerge: boolean; replaceMerge: string[]} = {notMerge: false, replaceMerge: ['series', 'dataZoom']};
+    const CHART_SERIES_UPDATE_OPTS: {notMerge: boolean; replaceMerge: string[]} = {notMerge: false, replaceMerge: ['series', 'dataZoom', 'xAxis']};
 
     let {data = [], height = '100%', loading = false, dimension = 'type'}: Props = $props();
 
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | undefined = undefined;
+    let responsiveXAxisCompact = false;
     let dataZoomTouchPanHandle: DataZoomTouchPanHandle | null = null;
     let resizeObserver: ResizeObserver | null = null;
     let darkModeObserver: MutationObserver | null = null;
@@ -166,6 +168,22 @@
                 if (!resizeObserver && chartContainer) {
                     resizeObserver = new ResizeObserver(() => {
                         chartInstance?.resize();
+                        if (chartInstance && chartContainer) {
+                            const dataset = getResolutionDataset(currentResolution);
+                            const policy = buildResponsiveXAxisPolicy({
+                                width: chartContainer.clientWidth,
+                                values: dataset.dates,
+                                locale: $currentLanguage,
+                                axisType: 'time',
+                            });
+                            const wasCompact = responsiveXAxisCompact;
+                            responsiveXAxisCompact = policy.compact;
+                            if (policy.axisLabel) {
+                                chartInstance.setOption({xAxis: {splitNumber: policy.splitNumber, axisLabel: policy.axisLabel}}, {lazyUpdate: true});
+                            } else if (wasCompact) {
+                                renderChart();
+                            }
+                        }
                         scheduleResolutionCheck();
                     });
                     resizeObserver.observe(chartContainer);
@@ -515,6 +533,13 @@
         const gridColor = isDark ? '#1e293b' : '#f1f5f9';
         const tooltipBg = isDark ? '#1e293b' : '#ffffff';
         const tooltipBorder = isDark ? '#334155' : '#e2e8f0';
+        const xAxisPolicy = buildResponsiveXAxisPolicy({
+            width: chartContainer?.clientWidth ?? 0,
+            values: dataset.dates,
+            locale: $currentLanguage,
+            axisType: 'time',
+        });
+        responsiveXAxisCompact = xAxisPolicy.compact;
 
         const series: echarts.SeriesOption[] = dataset.sortedNames.map((name, index) => {
             const emoji = getCategoryEmoji(name);
@@ -612,7 +637,8 @@
             dataZoom: buildDataZoomOption(dataset, logicalRange),
             xAxis: {
                 type: 'time',
-                axisLabel: {color: textColor, fontSize: 14, rotate: 0},
+                ...(xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber} : {}),
+                axisLabel: {color: textColor, fontSize: 14, rotate: 0, ...(xAxisPolicy.axisLabel ?? {})},
                 axisLine: {lineStyle: {color: gridColor}},
                 splitLine: {show: false},
             },

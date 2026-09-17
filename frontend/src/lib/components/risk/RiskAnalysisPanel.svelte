@@ -59,7 +59,7 @@
         refreshVersion?: number;
         showHeaderActions?: boolean;
         showBetaBanner?: boolean;
-        onsynced?: () => void | Promise<void>;
+        onsynced?: (detail: {accepted: boolean}) => void | Promise<void>;
     }
 
     let {scope, dateStart, dateEnd, targetCurrency, assetIds = [], title = '', subtitle = '', internalSubset = false, assetClass = null, sectorExposure = null, geographyExposure = null, refreshVersion = 0, showHeaderActions = true, showBetaBanner = true, onsynced}: Props = $props();
@@ -699,7 +699,7 @@
         }
     }
 
-    async function handleSynced(): Promise<void> {
+    async function handleSynced(detail: {accepted: boolean}): Promise<void> {
         invalidateRisk();
         comparisonGeneration += 1;
         stressGeneration += 1;
@@ -710,7 +710,7 @@
         replayResult = null;
         simulationResult = null;
         await loadBase(true);
-        await onsynced?.();
+        await onsynced?.(detail);
     }
 
     function handleQualityAction(action: string, target: string | null): void {

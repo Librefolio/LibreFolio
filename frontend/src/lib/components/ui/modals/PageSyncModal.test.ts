@@ -62,6 +62,15 @@ function fxResponds(...results: WireResult[]) {
     syncRates.mockResolvedValue({results} as never);
 }
 
+/** A named, clock-free boundary that the test opens explicitly. */
+function gate() {
+    let release!: () => void;
+    const promise = new Promise<void>((resolve) => {
+        release = resolve;
+    });
+    return {promise, release};
+}
+
 function asset(id: number, over: Record<string, unknown> = {}) {
     return {id, display_name: `Asset ${id}`, provider_code: 'yfinance', ...over};
 }
@@ -199,6 +208,160 @@ describe('PageSyncModal — running both sections', () => {
         expect(rowIds(sectionOf('fx'))).toEqual(['EUR-USD']);
         expect(summary()).toMatchObject({success: 3, total: 3, fetched: 36, changed: 7});
         expect(onsynced).toHaveBeenCalledTimes(1);
+    });
+
+    it('reports acceptance per run without leaking it through reopen or retry', async () => {
+        syncPrices
+            .mockResolvedValueOnce({results: [{asset_id: 1, status: 'partial', points_fetched: 1, points_changed: 1}]} as never)
+            .mockResolvedValueOnce({results: [{asset_id: 1, status: 'failed', points_fetched: 0, points_changed: 0, errors: ['asset unavailable']}]} as never)
+            .mockResolvedValueOnce({results: [{asset_id: 1, status: 'failed', points_fetched: 0, points_changed: 0, errors: ['still unavailable']}]} as never);
+        syncRates
+            .mockResolvedValueOnce({results: [{pair: 'EUR-USD', status: 'failed', points_fetched: 0, points_changed: 0, errors: ['route unavailable']}]} as never)
+            .mockResolvedValueOnce({results: [{pair: 'EUR-USD', status: 'skipped', points_fetched: 0, points_changed: 0, message: 'Manual-only pair'}]} as never);
+        const {onsynced, onclose, rerender} = mount({assets: [asset(1)], fxPairs: ['EUR-USD']});
+
+        await startSync();
+        await settled();
+
+        expect(rowOf('1')).toHaveAttribute('data-status', 'partial');
+        expect(rowOf('EUR-USD')).toHaveAttribute('data-status', 'failed');
+        expect(onsynced).toHaveBeenCalledTimes(1);
+        expect(onsynced).toHaveBeenNthCalledWith(1, {accepted: true});
+
+        await fireEvent.click(screen.getByTestId('sync-modal-close'));
+        expect(onclose).toHaveBeenCalledTimes(1);
+        await rerender({open: false});
+        await waitFor(() => expect(screen.queryByTestId('page-sync-modal')).toBeNull());
+        await rerender({open: true});
+        await waitFor(() => {
+            expect(screen.getByTestId('sync-modal-body')).toHaveAttribute('data-busy', 'false');
+            expect(screen.queryByTestId('sync-modal-results')).toBeNull();
+        });
+
+        await startSync();
+        await settled();
+
+        expect(rowOf('1')).toHaveAttribute('data-status', 'failed');
+        expect(rowOf('EUR-USD')).toHaveAttribute('data-status', 'skipped');
+        expect(onsynced).toHaveBeenCalledTimes(2);
+        expect(onsynced).toHaveBeenNthCalledWith(2, {accepted: false});
+
+        // The same reopened session retries only its failed asset; the skipped
+        // FX outcome remains unaccepted, and no previous callback can taint it.
+        await startSync();
+        await settled();
+
+        expect(rowOf('1')).toHaveAttribute('data-status', 'failed');
+        expect(rowOf('EUR-USD')).toHaveAttribute('data-status', 'skipped');
+        expect(syncPrices).toHaveBeenCalledTimes(3);
+        expect(syncRates).toHaveBeenCalledTimes(2);
+        expect(onsynced.mock.calls).toEqual([[{accepted: true}], [{accepted: false}], [{accepted: false}]]);
+    });
+
+    it('keeps a stale accepted response out of the current generation callback', async () => {
+        const oldAssetRequestEntered = gate();
+        const oldFxRequestEntered = gate();
+        const currentAssetRequestEntered = gate();
+        const currentFxRequestEntered = gate();
+        const oldAssetResponseRelease = gate();
+        const oldFxResponseRelease = gate();
+        const currentAssetResponseRelease = gate();
+        const currentFxResponseRelease = gate();
+        const oldAcceptedAssetMapped = gate();
+        const currentFailedAssetMapped = gate();
+
+        syncPrices
+            .mockImplementationOnce(async () => {
+                oldAssetRequestEntered.release();
+                await oldAssetResponseRelease.promise;
+                return {
+                    results: [
+                        {
+                            asset_id: 1,
+                            get status() {
+                                oldAcceptedAssetMapped.release();
+                                return 'partial';
+                            },
+                            points_fetched: 1,
+                            points_changed: 1,
+                        },
+                    ],
+                } as never;
+            })
+            .mockImplementationOnce(async () => {
+                currentAssetRequestEntered.release();
+                await currentAssetResponseRelease.promise;
+                return {
+                    results: [
+                        {
+                            asset_id: 1,
+                            get status() {
+                                currentFailedAssetMapped.release();
+                                return 'failed';
+                            },
+                            points_fetched: 0,
+                            points_changed: 0,
+                            errors: ['current asset failure'],
+                        },
+                    ],
+                } as never;
+            });
+        syncRates
+            .mockImplementationOnce(async () => {
+                oldFxRequestEntered.release();
+                await oldFxResponseRelease.promise;
+                return {results: [{pair: 'EUR-USD', status: 'failed', points_fetched: 0, points_changed: 0, errors: ['old FX failure']}]} as never;
+            })
+            .mockImplementationOnce(async () => {
+                currentFxRequestEntered.release();
+                await currentFxResponseRelease.promise;
+                return {results: [{pair: 'EUR-USD', status: 'skipped', points_fetched: 0, points_changed: 0, message: 'current FX skipped'}]} as never;
+            });
+        const {onsynced, onclose, rerender} = mount({assets: [asset(1)], fxPairs: ['EUR-USD']});
+
+        await startSync();
+        await Promise.all([oldAssetRequestEntered.promise, oldFxRequestEntered.promise]);
+
+        oldFxResponseRelease.release();
+        await waitFor(() => expect(rowOf('EUR-USD')).toHaveAttribute('data-status', 'failed'));
+
+        await fireEvent.click(screen.getByTestId('sync-modal-close'));
+        expect(onclose).toHaveBeenCalledTimes(1);
+        await rerender({open: false});
+        await waitFor(() => expect(screen.queryByTestId('page-sync-modal')).toBeNull());
+        await rerender({open: true});
+        await waitFor(() => {
+            expect(screen.getByTestId('sync-modal-body')).toHaveAttribute('data-busy', 'false');
+            expect(screen.queryByTestId('sync-modal-results')).toBeNull();
+        });
+
+        await startSync();
+        await Promise.all([currentAssetRequestEntered.promise, currentFxRequestEntered.promise]);
+        expect(syncPrices).toHaveBeenCalledTimes(2);
+        expect(syncRates).toHaveBeenCalledTimes(2);
+
+        currentAssetResponseRelease.release();
+        await currentFailedAssetMapped.promise;
+        await waitFor(() => expect(rowOf('1')).toHaveAttribute('data-status', 'failed'));
+        expect(screen.getByTestId('sync-modal-body')).toHaveAttribute('data-busy', 'true');
+        expect(onsynced).not.toHaveBeenCalled();
+
+        // The old accepted result is mapped while the current run is still
+        // waiting on its final, skipped FX response.
+        oldAssetResponseRelease.release();
+        await oldAcceptedAssetMapped.promise;
+        expect(screen.getByTestId('sync-modal-body')).toHaveAttribute('data-busy', 'true');
+        expect(onsynced).not.toHaveBeenCalled();
+
+        currentFxResponseRelease.release();
+        await settled();
+
+        expect(rowOf('1')).toHaveAttribute('data-status', 'failed');
+        expect(rowOf('EUR-USD')).toHaveAttribute('data-status', 'skipped');
+        expect(onsynced).toHaveBeenCalledTimes(1);
+        expect(onsynced.mock.calls).toEqual([[{accepted: false}]]);
+        expect(syncPrices).toHaveBeenCalledTimes(2);
+        expect(syncRates).toHaveBeenCalledTimes(2);
     });
 
     it('keeps the successful section when the other one is down', async () => {

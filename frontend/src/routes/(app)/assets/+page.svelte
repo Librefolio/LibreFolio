@@ -1624,6 +1624,8 @@
 
 <!-- Chart Settings Modal (D4) -->
 <ChartSettingsModal
+    axisContext={settingsTargetId ? (assets.find((asset) => asset.id === Number(settingsTargetId))?.currency ?? '—') : $t('common.preview')}
+    axisDomain="asset"
     open={settingsModalOpen}
     mode={settingsTargetId ? 'pair' : 'global'}
     {signalDefinitions}
