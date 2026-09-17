@@ -64,5 +64,5 @@ export {mapSignalParamsSchema, UnsupportedSignalSchemaError} from './schemaMappe
 export {renderBackendSignalResult, type BackendSignalRendererOptions, type BackendSignalRenderOutcome} from './backendRenderer';
 export {buildBackendSignalRequestPlan, type BackendSignalRequestPlan} from './requestBuilder';
 export {mapSignalInstanceResults, SignalResultState, type SignalInstanceResult, type SignalInstanceStatus} from './resultMapper';
-export {getSignalProblem, getSignalProblemSeverity, type SignalProblem, type SignalProblemCode, type SignalProblemSeverity} from './signalProblem';
+export {getBackendSignalProblem, getSignalProblem, getSignalProblemSeverity, type SignalProblem, type SignalProblemCode, type SignalProblemSeverity} from './signalProblem';
 export {resolveSignalPreview, type BackendPreviewState, type SignalPreviewResolution} from './previewPolicy';

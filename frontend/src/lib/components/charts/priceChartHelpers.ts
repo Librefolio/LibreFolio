@@ -16,6 +16,8 @@
 import type {LineDataPoint} from './LineChart.svelte';
 import type {ViewMode} from './ChartToolbar.svelte';
 import type {EventMarker} from './PriceChartFull.svelte';
+import {backendSignalSchemas} from '$lib/charts/signals/backendTypes';
+import {getBackendSignalProblem, type SignalProblem} from '$lib/charts/signals/signalProblem';
 import {truncateName} from '$lib/utils/text';
 import {aggregateLineSeries, bucketEventMarkers, mapDateToBucket, type ChartResolution} from './timeSeriesAggregation';
 
@@ -34,7 +36,6 @@ export interface BucketInfo {
 export const CALENDAR_RETURN_SIGNAL_CODE = 'ASSET_CALENDAR_ROLLING_RETURN';
 export const CALENDAR_RETURN_INSTANCE_ID = 'asset-calendar-return';
 
-export type CalendarReturnWindowDays = 7 | 30 | 90 | 365;
 export type CalendarReturnViewState = 'idle' | 'loading' | 'ready' | 'partial' | 'unavailable' | 'error';
 export type CalendarReturnPointStatus = 'available' | 'missing_reference' | 'invalid_current_price' | 'invalid_reference_price';
 
@@ -51,14 +52,15 @@ export interface CalendarReturnView {
     state: CalendarReturnViewState;
     points: LineDataPoint[];
     contextByDate: Map<string, CalendarReturnPointContext>;
+    problem: SignalProblem | null;
 }
 
 const CALENDAR_RETURN_STATUSES = new Set<CalendarReturnPointStatus>(['available', 'missing_reference', 'invalid_current_price', 'invalid_reference_price']);
 const SIGNAL_RESULT_STATUSES = new Set(['ok', 'partial', 'unavailable', 'failed']);
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
-function emptyCalendarReturnView(state: CalendarReturnViewState): CalendarReturnView {
-    return {state, points: [], contextByDate: new Map()};
+function emptyCalendarReturnView(state: CalendarReturnViewState, problem: SignalProblem | null = null): CalendarReturnView {
+    return {state, points: [], contextByDate: new Map(), problem};
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -109,23 +111,27 @@ export function extractCalendarReturnView(rawResults: unknown, instanceId: strin
     if (!result || typeof result.status !== 'string' || !SIGNAL_RESULT_STATUSES.has(result.status)) {
         return emptyCalendarReturnView('error');
     }
-    if (result.status === 'unavailable') return emptyCalendarReturnView('unavailable');
-    if (result.status === 'failed') return emptyCalendarReturnView('error');
+    const parsedResult = backendSignalSchemas.result.safeParse(result);
+    const problem = parsedResult.success ? getBackendSignalProblem(parsedResult.data) : null;
+    if (result.status === 'unavailable') {
+        return parsedResult.success ? emptyCalendarReturnView('unavailable', problem) : emptyCalendarReturnView('error');
+    }
+    if (result.status === 'failed') return emptyCalendarReturnView('error', problem);
 
     const seriesCandidates = 'series' in result ? flattenOneLevel(result.series) : [result];
-    if (!seriesCandidates) return emptyCalendarReturnView('error');
+    if (!seriesCandidates) return emptyCalendarReturnView('error', problem);
     const series = seriesCandidates.find((item) => isRecord(item) && item.key === 'calendar_return');
-    if (!isRecord(series)) return emptyCalendarReturnView('error');
+    if (!isRecord(series)) return emptyCalendarReturnView('error', problem);
 
     const pointCandidates = flattenOneLevel(series.points);
-    if (!pointCandidates?.length) return emptyCalendarReturnView('error');
+    if (!pointCandidates?.length) return emptyCalendarReturnView('error', problem);
 
     const points: LineDataPoint[] = [];
     const contextByDate = new Map<string, CalendarReturnPointContext>();
     let hasMissing = false;
 
     for (const item of pointCandidates) {
-        if (!isRecord(item) || !isRecord(item.provenance)) return emptyCalendarReturnView('error');
+        if (!isRecord(item) || !isRecord(item.provenance)) return emptyCalendarReturnView('error', problem);
         const date = requiredIsoDate(item.date);
         const status = typeof item.provenance.status === 'string' && CALENDAR_RETURN_STATUSES.has(item.provenance.status as CalendarReturnPointStatus) ? (item.provenance.status as CalendarReturnPointStatus) : null;
         const referenceTargetDate = requiredIsoDate(item.provenance.reference_target_date);
@@ -158,7 +164,7 @@ export function extractCalendarReturnView(rawResults: unknown, instanceId: strin
             (referenceFxDate === null) !== (referenceFxDaysBack === null) ||
             contextByDate.has(date)
         ) {
-            return emptyCalendarReturnView('error');
+            return emptyCalendarReturnView('error', problem);
         }
 
         const fxStaleDays = Math.max(currentFxDaysBack ?? 0, referenceFxDaysBack ?? 0);
@@ -186,7 +192,18 @@ export function extractCalendarReturnView(rawResults: unknown, instanceId: strin
         state: result.status === 'partial' || hasMissing ? 'partial' : 'ready',
         points,
         contextByDate,
+        problem,
     };
+}
+
+export function extractCalendarReturnViewsByAsset(rawItems: unknown, assetIds: readonly number[], instanceId: string = CALENDAR_RETURN_INSTANCE_ID): Map<number, CalendarReturnView> {
+    const items = Array.isArray(rawItems) ? rawItems : [];
+    return new Map(
+        [...new Set(assetIds)].map((assetId) => {
+            const item = items.find((candidate) => isRecord(candidate) && candidate.asset_id === assetId);
+            return [assetId, item ? extractCalendarReturnView(item.signals, instanceId) : emptyCalendarReturnView('error')];
+        }),
+    );
 }
 
 /**

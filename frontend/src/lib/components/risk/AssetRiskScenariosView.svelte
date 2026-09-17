@@ -18,7 +18,7 @@
         rollingRiskSignals?: RenderedSignal[];
         refreshVersion?: number;
         onconfigure?: () => void | Promise<void>;
-        onsynced?: () => void | Promise<void>;
+        onsynced?: (detail: {accepted: boolean}) => void | Promise<void>;
     }
 
     let {assetId, dateStart, dateEnd, targetCurrency, assetClass = null, sectorExposure = null, geographyExposure = null, rollingRiskSignals = [], refreshVersion = 0, onconfigure, onsynced}: Props = $props();

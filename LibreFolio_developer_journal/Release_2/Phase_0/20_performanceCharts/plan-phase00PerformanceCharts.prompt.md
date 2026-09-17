@@ -1,11 +1,12 @@
 # Performance charts - SP06 G3/G1c and SP07 G1a/G1b
 
-**Status:** I10 and I60 calendar-return backend/Asset frontend integrated and
-automatically validated; I60 manual review remains pending.
+**Status:** I10 and initial I60 integrated/validated; I60
+UX/axis/comparison follow-up reopened for manual-review round 2.
 **Implementation:** I10 completed on 2026-09-10. I60 implementation and
-post-merge combined validation completed on 2026-09-11. All
-portfolio/GrowthChart phases remain FROZEN.
-**Revision:** 8 - I60 post-merge combined validation, 2026-09-11.
+post-merge combined validation completed on 2026-09-11. Manual review closed
+the I60 follow-up contract on 2026-09-11. All portfolio/GrowthChart phases
+remain FROZEN.
+**Revision:** 11 - I60 selected-range boundary and secondary-axis correction, 2026-09-12.
 **Analysis baseline:** `f90d9801bd7a2d74aac6a27efe305314c6c004cc`
 (`refs/heads/dev_release2`).
 **Gate-0 execution baseline:** `0af66da5f366a9559549154631a4ee15ca620915`,
@@ -16,6 +17,11 @@ developer authorization is limited to the signal-only I10 slice.
 including I10 and H.
 **I60 combined-validation baseline:** `5524a0eda664834bcc1fe4e0effe007d18564030`,
 including the committed I60 implementation and merged H renderer normalization.
+**I60 follow-up implementation baseline:**
+`9d270ccea9b6150eae9421385b3d12301a6e243e`, merge parents
+`7df7ccbabb181c9924dcaeef4aceb1032a1299e1` and coordinator target
+`4949b2f4c04050e46f643de848894b6706349f34`; exact clean baseline verified,
+target contained, port 6157 free.
 **Portfolio implementation baseline:** not yet authorized. It will be the later
 post-H target SHA supplied after the H-before-I integration gate.
 **Coordinator:** Release 2 coordinator, session
@@ -629,7 +635,7 @@ A separate owner integrates G3 after F and the backend calendar signal:
 | I30 | L | Portfolio backend integrator | I20 + same-resolver OHLC envelope | Daily total candles + flat fallback + strict close identity | BLOCKED |
 | I40 | M | Portfolio backend integrator + coordinator | I20 + I30 + post-H report contract | DTO/report/cache wiring, then coordinator API sync | BLOCKED |
 | I50 | L | GrowthChart owner | I40 | Value/Return/P&L core modes; Line/Candles/Income P&L submodes; broker lines and sum aggregation | BLOCKED |
-| I60 | M | G3 Asset UI owner | I10 + coordinator release after shared integration | Historical N-day primary mode in final Asset detail | AUTOMATED VALIDATION COMPLETE 2026-09-11; MANUAL REVIEW PENDING |
+| I60 | XL follow-up | G3 Asset UI + shared chart owner | Initial I60 integrated; explicit developer authorization | Compact duration, contextual Asset/FX axes, separate Return measures, same-N Asset comparisons | MANUAL REVIEW ROUND 2 IN PROGRESS 2026-09-12 |
 | I70 | L | Test author + owners | Relevant implementation phases; H test ownership released | Targeted backend/frontend regressions and integration gates | BLOCKED |
 | I80 | S | Docs writer + coordinator | Stable integrated UI | English docs, coordinator i18n/runner/changelog records | BLOCKED |
 | I90 | M | Developer + coordinator | I50 + I60 + I70 + I80 | Desktop/mobile operational review, corrections, integration handoff | BLOCKED |
@@ -1019,6 +1025,1941 @@ No product decision remains open. Readiness still requires:
 > Price/calendar state preservation, both request-race classes, FX fade,
 > Configure Signals navigation and the merged generated nested-series union.
 > Manual desktop/mobile visual review remains the only I60 gate not executed.
+
+### 6.6 I60 manual-review follow-up
+
+Developer authorization is explicit for this follow-up only. I20-I50 remain
+strictly out of scope.
+
+#### Closed product contract
+
+- Window controls are compact `1W | 1M | 3M | 1Y | Custom`, mapped to exact
+  fixed calendar days `7 | 30 | 90 | 365`.
+- Custom reuses DateRangePicker's compact amount+unit editor, allows positive
+  integers with abbreviated `W/M/Y`, starts at `3Y`, has no UX maximum and
+  converts by `W×7`, `M×30`, `Y×365`.
+- Last selected window/Custom amount/unit persists in the existing
+  account+asset client chart-settings cache. Reload starts in Price; entering
+  Return restores the saved window.
+- Price/Return controls gain `ChartLine`/`Percent` icons.
+- Area, baseline/zero color, grid and stale-gradient toggles are shared.
+- Replace the current single Y triple with client-only profiles:
+  `primary:absolute`, shared `primary:percentage` for Price `%` and Return, and
+  one stable `${axisRole}:${axisKey}` profile for every rendered secondary Y.
+- Aesthetics shows one Auto/Include0/Custom row per active axis. The shared
+  model applies to Asset and FX; v1 localStorage migrates to v2. No backend
+  model/API/DB persistence.
+- Price and Return use two independently mounted MeasurePanel tables. Return
+  displays `%` endpoints, delta `pp` and days, without currency, relative delta
+  or annualization.
+- Return Signals exposes only Asset comparison. It reuses the Price selection
+  and style but backend-computes the identical N-day calendar return for every
+  comparison asset in the same target currency. Incompatible Price signals
+  remain cached and hidden in Return.
+
+#### Persistence boundary
+
+| Data | Backend DB | Client persistent cache | Runtime only |
+|---|---|---|---|
+| Asset/provider identity, OHLCV, events, FX rates | Existing source tables | No durable copy | Read/cache copies |
+| Primary/comparison calendar returns + provenance | Never persisted; computed per request | Never | Page signal state |
+| Window selection | Never | account+asset chart-settings localStorage | Active request |
+| Visual and primary/secondary Y settings | Never | account/scoped/pair chart-settings localStorage | Hydrated copy |
+| Asset comparison IDs/styles | Never | existing signal configs in localStorage | Resolved lines |
+| Visible From/To | Never newly persisted | existing sessionStorage | Date store |
+| Primary mode | Never | Never | resets to Price |
+| Price/Return measures | Never | Never | separate mounted panels |
+| Request generation/loading/errors | Never | Never | page state |
+
+#### Execution ledger
+
+| Step | Scope | Status |
+|---|---|---|
+| I60F.0 | Preserve validation checkpoint, merge target, verify clean authorized baseline | COMPLETE 2026-09-11 |
+| I60F.1 | Generalize hidden calendar-return window to positive integer with safe date arithmetic | REOPENED - SELECTED-RANGE BOUNDARY |
+| I60F.2 | Extract reusable compact duration editor without DateRangePicker regression | COMPLETE 2026-09-12 |
+| I60F.3 | Upgrade shared Asset/FX contextual axis settings and localStorage migration | REOPENED - AUTO/INCLUDE0 |
+| I60F.4 | Persist duration badges, icons and state in Asset detail | REOPENED - RANGE AVAILABILITY |
+| I60F.5 | Mount separate Price/Return measurement tables and pp presentation | COMPLETE 2026-09-12 |
+| I60F.6 | Add same-N Asset comparison overlays to Return | COMPLETE 2026-09-12 |
+| I60F.7 | Backend/frontend/E2E/manual combined validation and frozen handoff | REOPENED - MANUAL ROUND 2 |
+
+> **Note implementazione (I60F.0, 2026-09-11):** coordinator completed hard
+> Gate 0 at clean merge HEAD
+> `9d270ccea9b6150eae9421385b3d12301a6e243e`; target
+> `4949b2f4c04050e46f643de848894b6706349f34` is a parent/ancestor. Manual-review
+> server was already stopped and port 6157 verified free. Developer explicitly
+> authorized the complete follow-up contract above. No I20-I50, portfolio,
+> i18n, docs, runner, staging or Git-history work is permitted.
+
+> **Note implementazione (I60F.1, 2026-09-11):** hidden calendar-return params
+> now accept strict positive integers, retain default 30 and use
+> implementation version 1.1.0. Window-one warm-up is exactly
+> `minimum=1/stabilization=0/total=1`; all other windows retain exact N-day
+> prehistory. Signal-owned date subtraction rejects visible references before
+> `date.min` as typed `INSUFFICIENT_HISTORY` and skips only impossible
+> pre-visible warm-up points, never clamping dates. `test-author` expanded only
+> the registry/risk/Asset-adapter tests. Integrated lane evidence:
+> signal-registry 65 pass; calendar risk selector 27 pass / 118 deselected;
+> calendar Asset adapter 4 pass / 14 deselected; Ruff green; Black normalized
+> the production plugin. Original 7/30/90/365/default behavior, arbitrary
+> 1/14/60/1095 windows, invalid params, huge-window unavailable behavior,
+> target-currency provenance and legacy observation return are pinned.
+
+> **Fuori pista (I60F desktop E2E measure retention, 2026-09-12):** first
+> registered Asset-detail desktop run returned 25 pass / 1 fail. The separate
+> Return MeasurePanel retained its definitions, but Calendar-to-Price cleared
+> `calendarReturnView`, so its hidden table had no source values and rendered no
+> rows. This contradicted the closed two-table preservation contract. Price
+> mode now keeps the last completed Return snapshot (still hidden and never
+> chart-rendered); entering Return still starts a fresh guarded request.
+
+> **Note implementazione (I60F.2-I60F.6 unit layer, 2026-09-12):** extracted
+> `CompactDurationBadge` and migrated DateRangePicker without changing its
+> D/W/M/Y, max-999, selector or auto-apply contract. Added fixed-window state
+> and account+asset localStorage persistence; shared Asset/FX absolute,
+> percentage and semantic-secondary axis profiles with v1→v2 migration;
+> contextual axis rows; separate mounted Price/Return measures with `%`, `pp`
+> and days semantics; Return-only Asset-comparison filtering and one bulk
+> same-window/target-currency query mapped by `asset_id`. `test-author` updated
+> ten registered files only. Integrated exact Vitest run passed 258/258 across
+> duration, helpers, settings/SSR, axes, measures and filtered signals.
+> `front check` is green with 0 errors and 42 merged warnings. Desktop/mobile
+> browser execution remains the completion gate.
+
+> **Fuori pista (I60F independent review, 2026-09-12):** independent review
+> found five medium defects before final gates: rejected Custom drafts could
+> appear committed; chart-settings persistence could serialize comparison
+> `_resolvedData`; missing peer points were joined because overlay lines
+> defaulted `connectNulls=true`; an in-flight Return request could erase the
+> hidden measure snapshot; and style-only comparison edits recomputed the full
+> bulk request. Fixes now separate draft/committed values with caller validation,
+> strip exactly `_resolvedData` centrally, preserve explicit gaps with
+> `connectNulls=false`, retain and refresh the last Return snapshot across mode
+> changes, and fingerprint only comparison asset IDs for recomputation. The same
+> reviewer re-read all five corrections and marked each resolved.
+
+> **Fuori pista (I60F formatter invocation, 2026-09-12):** two attempted bulk
+> Prettier wrappers failed before editing: the first resolved
+> `prettier-plugin-svelte` from the repository root, and the second used an
+> unsupported `git ls-files --relative` option. The corrected frontend-local
+> path pipeline formatted the exact modified frontend set; no dependency,
+> generated source or product file was changed by either failed invocation.
+
+> **Fuori pista (I60F style-editor E2E, 2026-09-12):** expanded comparison
+> style coverage first attempted to re-click a trigger behind its deliberate
+> modal backdrop; switching to the backdrop itself then failed on mobile where
+> the centered popover correctly covered that coordinate. Added semantic Escape
+> dismissal to `SignalStyleEditor` and changed the test to the keyboard
+> contract—no force click, coordinates, timeout increase or retry. The focused
+> Calendar workflow then passed on both desktop and mobile.
+
+> **Note implementazione (I60F automated completion, 2026-09-12):** final
+> integrated evidence: backend registry 65 pass, calendar risk 27 pass / 118
+> deselected, calendar Asset adapter 4 pass / 14 deselected; eight frontend
+> unit/component files 266/266; full `front check` 0 errors / 41 merged
+> warnings; canonical production build green; Asset detail 26/26 desktop +
+> 26/26 mobile; FX detail 14/14 desktop + 14/14 mobile. Strict MkDocs build and
+> cross-boundary link check (12/12) are green. Four English user pages document
+> the final backend/localStorage/sessionStorage/runtime ownership boundary;
+> translated siblings retain expected Aphra debt. Current coordinator target
+> advanced to `e1f3fe177861d2b9b953b218f66ea7d4714ab405` after implementation
+> started; no merge/rebase was attempted and integration must re-read overlap.
+
+> **Fuori pista (I60F manual review round 2, 2026-09-12):** developer review
+> clarified that the Calendar Return reference domain begins at the first
+> DateRangePicker day. The previous contract intentionally loaded N pre-visible
+> days, so a 1Y range + 1Y window produced almost a full series; this was
+> backend warm-up behavior, not frontend caching. New contract: points before
+> `selected_start + N` are expected gaps; a range with exactly N elapsed days
+> yields one point. Presets longer than the selected elapsed-day span are hidden;
+> Custom beyond it is invalid; shrinking the range auto-selects the longest
+> fitting preset; a range under 7 days returns to Price and disables Return.
+> Review also showed secondary Auto/Include0 were both honoring plugin bounds
+> (RSI stayed 0–100). Auto must fit visible data; Include0 must fit visible data
+> plus zero; only Custom supplies explicit limits. Server shell 721 was stopped
+> immediately and port 6157 proved free before correction work.
+
+> **Fuori pista (I60F E2E interaction repairs, 2026-09-12):** the expanded
+> Calendar workflow first exposed the hidden Return measure snapshot reset; its
+> product fix is recorded above. Later reruns reached two style-editor test
+> interaction defects: desktop tried to re-click a trigger behind the deliberate
+> modal backdrop, while mobile tried to click the backdrop through the popover
+> centered above it. `SignalStyleEditor` now provides semantic Escape dismissal;
+> `test-author` uses that keyboard contract and stable popover state. No force
+> click, coordinate selector, timeout increase or retry was introduced.
+
+> **Note implementazione (I60F selected-range correction, 2026-09-12):**
+> Calendar Return now constrains every reference target to the selected
+> DateRangePicker domain and emits a sorted, unique sparse subset of selected
+> dates; the signal service keeps dense output as the default contract and
+> validates the explicit sparse opt-in. Calendar Return declares zero
+> pre-visible warm-up. Asset detail hides overlong presets, rejects overlong
+> Custom windows, selects the longest fitting fallback after range shrink/MAX
+> resolution and disables Return below seven elapsed days. Secondary Auto and
+> Include 0 now aggregate finite visible extents across every series sharing
+> the semantic axis; Custom remains explicit. Backend gates pass 50 signal
+> service, 27 selected calendar-risk and 18 Asset-signal tests. Eight focused
+> frontend files pass 272/272; selected-range Calendar desktop/mobile and FX
+> shared-axis persistence focused browser checks pass. Full Asset detail now
+> passes 26/26 desktop and 26/26 mobile after the test-only collection/counter
+> repairs below. Full FX detail passes 14/14 desktop and 14/14 mobile. Final
+> strict MkDocs build and 12/12 cross-boundary link validation pass. Final
+> independent review and audit matrix remains in progress.
+
+> **Fuori pista (I60F final Asset collection, 2026-09-12):** the first full
+> Asset-detail rerun stopped before test collection because two new request
+> snapshots reused `overlongCalendarRequestCount` in one test scope. No product
+> test executed. `test-author` renamed the snapshots for their distinct
+> selected-range and provisional-MAX roles; Babel TypeScript parsing and exact
+> spec Prettier then passed without changing assertions or production code.
+
+> **Fuori pista (I60F MAX request-counter race, 2026-09-12):** the next
+> Asset-detail desktop run passed 25/26 and reached the complete Calendar
+> workflow, but its concrete-MAX successor assertion read the route counter one
+> microtask before the async route handler incremented it. The request event had
+> already captured and validated the exact 30-day successor; no product
+> regression occurred. `test-author` replaced only that immediate read with an
+> exact `expect.poll` equality. The unchanged post-response equality still
+> rejects duplicates. Targeted desktop rerun passed 1/1; exact-file Prettier
+> and `git diff --check` passed.
+
+> **Fuori pista (I60F round-2 independent review, 2026-09-12):** final
+> independent review found two medium product blockers. First, an all-null
+> Calendar Return result reaches `SignalLineSeries`, whose finite-value
+> invariant converts the intended typed `UNAVAILABLE/UNDEFINED_METRIC` outcome
+> into `FAILED/INVALID_OUTPUT`; the reviewer reproduced the dedicated
+> all-unusable test red while 154 neighboring tests passed. Second,
+> `setPairSettings()` removes comparison `_resolvedData` from the live reactive
+> settings object as well as the serialized localStorage payload, so an
+> unrelated axis/style save can erase rendered Asset comparisons without
+> triggering the intentionally asset-ID-only reload fingerprint. Current
+> authorization permits test repair and validation only, not further production
+> edits; workstream is frozen pending coordinator/developer disposition.
+
+> **Note implementazione (I60F blocker 1, 2026-09-14):** explicit surgical-fix
+> authorization reopened I60. Calendar Return now detects a non-empty all-null
+> selected-range result before constructing `SignalLineSeries` and raises
+> `SignalUnavailableError(UNDEFINED_METRIC)` with window and per-status details.
+> Generic finite-series validation remains unchanged. The plugin patch version
+> is `1.2.1`; regression and integration gates remain pending.
+
+> **Note implementazione (I60F blocker 2, 2026-09-14):** chart-settings live
+> normalization now retains complete signal params, including comparison
+> `_resolvedData`. A separate storage-copy sanitizer removes exactly that
+> runtime field while parsing/writing localStorage; persistence never mutates
+> the reactive pair override. Unrelated style/axis saves therefore preserve
+> rendered comparisons without widening the asset-ID reload fingerprint.
+> Regression and integration gates remain pending.
+
+> **Note implementazione (I60F blocker regressions, 2026-09-14):**
+> `test-author` strengthened the existing all-unusable Calendar Return test to
+> require `UNAVAILABLE`, `UNDEFINED_METRIC`, no error, complete zero warm-up and
+> no series. The existing chart-settings persistence regression now proves
+> `_resolvedData` survives live pair/scoped style and axis saves, is absent from
+> localStorage, and does not reappear after rehydration; durable private params
+> and account/scope isolation remain covered. Exact-file Ruff, Black, AST and
+> Prettier checks pass. Both exact red-before-fix selectors now pass: backend
+> 1/1 (145 deselected) and frontend 1/1 (1,988 skipped). Broader integration
+> gates remain pending.
+
+> **Note implementazione (I60F blocker backend gates, 2026-09-14):** combined
+> backend validation passes signal registry 65/65, signal service 50/50,
+> complete risk analysis 146/146 and Asset signal adapter 18/18 on isolated
+> lane data. This preserves generic dense/sparse output validation while
+> confirming the calendar-specific all-null classification.
+
+> **Note implementazione (I60F blocker frontend gates, 2026-09-14):** the exact
+> eight-file duration, chart-helper, settings/SSR, axes, measures and filtered
+> signal set remains green at 272/272, including the strengthened live-vs-stored
+> comparison payload regression.
+
+> **Note implementazione (I60F blocker frontend build, 2026-09-14):** full
+> `front check` remains green with 0 errors and 41 known warnings in two
+> unrelated files; the canonical production build completes successfully.
+
+> **Fuori pista (I60F build CDN cache, 2026-09-14):** the production build
+> could not verify the jsDelivr MathJax certificate, explicitly retained its
+> existing cached copy and completed green. No dependency, source or generated
+> API edit resulted.
+
+> **Note implementazione (I60F blocker Asset desktop, 2026-09-14):** registered
+> Asset detail passes 26/26 desktop, including the complete Calendar Return,
+> MAX fallback, comparison, settings, measures and request-race workflow.
+
+> **Fuori pista (I60F runner teardown, 2026-09-14):** after the green desktop
+> suite, the runner-owned shared backend did not exit within its five-second
+> SIGTERM allowance, so the runner killed its own process group. No manual
+> process action or force-server command was used; final port-freedom proof
+> remains mandatory.
+
+> **Note implementazione (I60F blocker Asset mobile, 2026-09-14):** the same
+> complete Asset detail suite passes 26/26 mobile; its Playwright-owned backend
+> completed graceful shutdown.
+
+> **Note implementazione (I60F blocker FX desktop, 2026-09-14):** registered FX
+> detail passes 14/14 desktop, including distinct primary scales and semantic
+> RSI scale persistence across reload.
+
+> **Note implementazione (I60F blocker FX mobile, 2026-09-14):** the same FX
+> detail suite passes 14/14 mobile and its Playwright-owned backend completed
+> graceful shutdown.
+
+> **Note implementazione (I60F blocker docs gates, 2026-09-14):** strict MkDocs
+> build and all 12/12 frontend/backend-to-doc links remain green. English-only
+> ownership documentation is unchanged by the surgical blockers; no
+> translation, stamp or docs server was run.
+
+> **Note implementazione (I60F blocker static gates, 2026-09-14):** exact
+> changed-file Prettier passes for every frontend TS/Svelte source, Ruff and
+> Black pass for all seven changed backend Python files, and `git diff --check`
+> is clean. Fresh independent review remains pending.
+
+> **Note implementazione (I60F blocker independent recheck, 2026-09-14):**
+> fresh read-only review marks both prior MEDIUM findings resolved and reports
+> no significant issue. It confirmed typed all-null unavailability without
+> weakening insufficient-history/partial/zero/empty distinctions, plus
+> clone-only localStorage scrubbing without shared-reference mutation.
+> Residual manual checks are limited to comparison-line flicker after unrelated
+> style/axis saves and the rendered all-invalid Calendar unavailable state.
+
+> **Note implementazione (I60F blocker final audit, 2026-09-14):** checkpoint
+> inventory is 43 tracked modified files plus two untracked source files, zero
+> staged, 45 intended paths total. Forbidden H renderer, D portfolio,
+> generated/API, i18n, changelog, navigation and shared-runner surfaces have no
+> overlap. HEAD remains `9d270ccea9b6150eae9421385b3d12301a6e243e`;
+> target `e1f3fe177861d2b9b953b218f66ea7d4714ab405` is not contained and the
+> merge base is `4949b2f4c04050e46f643de848894b6706349f34`; no merge/rebase occurred.
+> `git diff --check` is clean and lane port 6157 is free. I60F is ready for the
+> no-force manual-review server once the coordinator authorizes it.
+
+> **Fuori pista (I60F manual review round 3, 2026-09-14):** developer rejected
+> the review for two distinct work items. A Return Asset comparison selected
+> `Amundi MSCI Semico` in EUR but rendered warning/no data although its own
+> Asset detail had history and the user had synchronized both the Asset and
+> three years of FX; the main Return series remained ready. Triage must preserve
+> the exact typed peer status/reason and follow request shape → selected-range/N
+> coverage → source dates → evidenced FX route → `asset_id` join/client filter,
+> then add a `test-author` regression and fix the root cause. Separately, narrow
+> mobile charts show overlapping X-axis labels, especially Dashboard. That item
+> is analysis-only pending product review: inventory shared ECharts builders,
+> rendered options and affected charts, then propose one responsive policy
+> without implementing label hiding/rotation/abbreviation.
+
+> **Note implementazione (I60F review teardown, 2026-09-14):** exact attached
+> review shell `38` / uvicorn PID `83656` was stopped immediately after
+> rejection. Port 6157 proved free. Lane DB and log evidence were preserved;
+> no reset, repopulation, API sync, staging or Git mutation occurred.
+
+> **Fuori pista (I60F preserved-DB inspection, 2026-09-14):** the first
+> read-only SQLite lookup assumed an obsolete `assets.symbol` column and failed
+> during SQL preparation with `no such column: symbol`; no row or file was
+> changed. `PRAGMA table_info(assets)` confirmed current identifier fields and
+> the corrected lookup uses only real columns. The preserved manual log records
+> FX backward-fill activity and shutdown but does not serialize HTTP request or
+> typed response bodies, so the exact payload must be reconstructed from the
+> live client contract and preserved DB rather than guessed from access logs.
+
+> **Fuori pista (I60F manual-log parsing, 2026-09-14):** the first `jq`
+> extraction stopped at a non-JSON Alembic setup line in the mixed application
+> log after writing only a disposable partial file under `/tmp`. The preserved
+> lane log and database were read-only and untouched. The corrected evidence
+> pass filters JSON-object lines before timestamp selection; no server or test
+> rerun is used.
+
+> **Fuori pista (I60F read-only response probe bootstrap, 2026-09-14):** the
+> first `/tmp` diagnostic invocation failed before importing LibreFolio because
+> Python placed `/tmp`, not the worktree, on `sys.path`
+> (`ModuleNotFoundError: backend`). It did not open the DB or append application
+> logs. The retry supplies only worktree-local `PYTHONPATH=.` and the assigned
+> shared venv; no dependency/environment mutation or data write is involved.
+
+> **Note implementazione (I60F Amundi evidence/root cause, 2026-09-14):**
+> preserved DB identifies peer `asset_id=14`, Amundi MSCI Semiconductors
+> (`CHIP`), native EUR. It has 364 positive observed rows from 2025-09-14
+> through 2026-09-14; only the final weekend is a three-day source gap.
+> Manual-session logs reconstruct repeated EUR-target queries over
+> 2025-09-14..2026-09-14 after 363 historical rows were synchronized. A
+> read-only `AssetSourceManager.get_prices_bulk` probe using the exact two-item
+> main+peer shape, `include_price=false` for the peer and 7/30/90/365-day
+> windows returns peer status `OK` with 359/336/276/1 points respectively.
+> The exact 365-day result has coverage 366/366, 364 observed + 2 backfilled,
+> one +72% point on 2026-09-14 and no warnings/errors. Because peer and target
+> are both EUR, no FX conversion job exists; synchronized EUR/USD history is
+> not causal. Numeric `asset_id=14` is present in the response and the client
+> join contract is correct.
+
+> **Note implementazione (I60F Amundi UI diagnosis, 2026-09-14):** the false
+> warning is client-side. Calendar comparison summaries pass the first valid
+> point (`selected_start + N`, by contract) as generic `firstDate`; shared
+> `ChartSignalsSection` interprets every `firstDate > dateStart` as missing
+> source history, so even a typed `OK` peer receives a warning. Conversely,
+> `CalendarReturnView` reduces typed partial/unavailable/failed results to a
+> coarse state, so genuine `insufficient_history`/`undefined_metric` reasons
+> become generic no-data. Fix must suppress the generic first-date heuristic
+> for Calendar Return and feed each peer's typed backend problem into the
+> existing signal-problem formatter, while preserving no-line behavior only
+> for true unavailable/failed states.
+
+> **Note implementazione (I60F Amundi client fix, 2026-09-14):** Calendar
+> comparison response mapping now retains one typed `SignalProblem` per peer
+> from the backend result joined by numeric `asset_id`. Calendar summaries no
+> longer feed the expected `selected_start + N` first point into the generic
+> price-history warning; typed partial/unavailable/failed problems take
+> precedence and ready peers remain warning-free. `undefined_metric` is
+> preserved as a first-class problem code and uses the backend warning message
+> with the existing unavailable fallback. Signal issue icons expose
+> `data-problem-code` for stable, non-translated verification. Missing or
+> malformed peer results remain explicit `result_missing`; no peer is silently
+> dropped and FX remediation remains outside this identity-EUR path.
+
+> **Fuori pista (I60F typed-reason precedence, 2026-09-14):** review of the
+> new regression fixtures exposed an adjacent mapper defect before execution:
+> an unavailable result carries generic warning code `data_quality` alongside
+> the authoritative `availability.reason_code=insufficient_history`; the old
+> null-coalescing order selected the generic warning first, failed to recognize
+> it, and fell back to `unavailable`. Problem normalization now resolves the
+> typed availability reason first and uses recognized warning codes only as a
+> fallback. This also preserves `undefined_metric` when the warning code is
+> `undefined_metric_window`.
+
+> **Fuori pista (I60F typed-reason regression, 2026-09-14):** focused frontend
+> execution passed 30 tests and failed one existing partial-result test because
+> unconditional availability-first precedence changed
+> `incomplete_warmup` into the broader `partial_input_coverage`. Precedence is
+> now status-aware: unavailable results use their authoritative typed
+> availability reason; partial results retain the previous specific warning
+> priority. The assertion was not weakened.
+
+> **Fuori pista (I60F lane evidence lifecycle, 2026-09-14):** after completing
+> and recording the preserved manual-state investigation, the first canonical
+> `services asset-signals` validation automatically recreated the assigned test
+> DB before pytest. This was not used as a diagnostic workaround—the Amundi row
+> counts/date bounds, exact request probe JSON and filtered manual-session logs
+> had already been captured under `/tmp` and in this plan—but the mutable
+> post-review SQLite file itself is no longer available. The original
+> `librefolio.log` remains preserved. Future manual review requires ordinary
+> test fixture population; no attempt will be made to reconstruct or claim the
+> discarded DB state.
+
+> **Note implementazione (I60F Amundi focused regressions, 2026-09-14):**
+> `test-author` added an owned, rollback-only native-EUR main+peer service
+> matrix for 7/30/90/365 days and strengthened the existing Calendar browser
+> workflow for `selected_start + N`, exact one-point 365-day output, reversed
+> response order and typed ready/partial/unavailable/failed diagnostics.
+> Component/pure tests cover typed-problem precedence, machine-readable
+> `data-problem-code`, and exact `undefined_metric` formatting. Backend peer
+> selector passes 4/4; the corrected frontend mapper/component set passes
+> 31/31.
+
+> **Note implementazione (I60F Amundi integration units, 2026-09-14):** full
+> Asset signal service file passes 22/22 and the ten-file Calendar/settings/
+> measures/problem frontend matrix passes 298/298. This includes all four
+> selected windows, native-target currency identity, signal-only peer output,
+> status-aware reason precedence and the pre-existing Calendar interaction
+> contracts.
+
+> **Fuori pista (I60F Amundi type gate, 2026-09-14):** first post-fix
+> `front check` stopped before build with three TypeScript diagnostics in the
+> new unknown-response lookup: the compound `find` predicate did not expose its
+> record narrowing, so `item.signals` read as `{}` and the nested candidate
+> became implicit `any`. The callback now declares an explicit record type
+> predicate and the signal array is explicitly `unknown[]`; no cast or generated
+> type edit was introduced. The command did not mutate DB or start a server.
+
+> **Note implementazione (I60F Amundi frontend gate, 2026-09-14):** corrected
+> `front check` passes with 0 errors and the same 41 known warnings in two
+> unrelated files; canonical production build passes. The existing cached
+> MathJax copy was retained after the already-recorded jsDelivr certificate
+> warning.
+
+> **Fuori pista (I60F Amundi E2E fixture density, 2026-09-14):** full Asset
+> desktop passed 25/26; all new peer diagnostics and the 365-day exact-boundary
+> assertion passed, but a later measure-table check missed the ready peer. The
+> synthetic ready fixture emitted only `selected_start + N` and range end,
+> whereas the main measure anchors remained 2026-08-01/02; the real backend
+> emits every selected daily point after `start + N`. This is a test-fixture
+> assumption, not product state loss. `test-author` is adding the intermediate
+> overlapping dates while preserving the exact first point, one-point boundary,
+> and original measure expectation. The assertion is not relaxed.
+
+> **Note implementazione (I60F Amundi browser gates, 2026-09-14):**
+> `test-author` restored representative ready-peer density by keeping
+> `selected_start + N`, the existing measure-anchor dates and range end,
+> filtered/sorted/deduplicated; the exact 365-day range still emits one point.
+> Registered Asset detail now passes 26/26 desktop and 26/26 mobile, including
+> request shape, reversed `asset_id` order, typed peer diagnostics, exact
+> boundary, comparison style persistence, measures and stale-response races.
+> The desktop runner again killed only its own backend process group after the
+> green suite exceeded the five-second SIGTERM allowance; mobile shutdown was
+> graceful and final port proof remains pending.
+
+> **Fuori pista (I60F Amundi independent review, 2026-09-14):** fresh review
+> found two adjacent medium defects after the primary fix. First, the generic
+> generated signal schema accepts some Calendar-invalid `OK` payloads that the
+> strict extractor rejects; `getSignalProblem` would otherwise see `OK` and
+> reduce them to generic no-data. Peer problem mapping now treats strict-view
+> `error` as `result_missing` unless the backend explicitly returned `FAILED`,
+> whose calculation error remains authoritative. Second, a ready Calendar peer
+> could inherit stale `_conversionFailed` state from Price mode. Calendar
+> summaries now mark their backend status authoritative, bypassing only the
+> price-overlay conversion issue while leaving the flag intact for Price.
+> Page-level comparison/event FX diagnostics are likewise gated to Price mode;
+> the main chart FX pair remains active because it is still causal. New
+> regressions are delegated to `test-author`.
+
+> **Note implementazione (I60F adjacent-review regressions, 2026-09-14):**
+> `test-author` added a schema-valid but Calendar-invalid `OK` peer, ready-peer
+> stale Price conversion state, authoritative Calendar bypass, Price
+> restoration and page-level FX-banner mode assertions. Component/problem
+> selectors pass 33/33 and `front check` remains 0 errors / 41 known warnings.
+
+> **Note implementazione (I60F adjacent-review browser gates, 2026-09-14):**
+> full registered Asset detail passes 26/26 desktop and 26/26 mobile with the
+> malformed Calendar peer isolated as `result_missing`; a ready peer bypasses
+> stale Price conversion/card/banner state in Calendar mode, then restores the
+> Price diagnostic and FX banner when switching back. Typed partial,
+> insufficient-history and calculation-failure peers remain isolated.
+
+> **Note implementazione (I60F adjacent-review final frontend gates,
+> 2026-09-14):** final ten-file chart/settings/problem set passes 300/300;
+> production build is green and its embedded Svelte check confirms 0 errors /
+> 41 known warnings. The cached MathJax fallback warning is unchanged.
+
+> **Fuori pista (I60F Calendar FX actions recheck, 2026-09-14):** the next
+> independent pass found that authoritative Calendar state suppressed the stale
+> Price conversion icon and page banner but left the comparison card's add/sync
+> FX control visible. The complete comparison FX-control block is now gated to
+> non-authoritative (Price) summaries; the asset sync/detail controls and
+> currency badge remain available. Stable `signal-fx-create|sync|detail-*`
+> selectors were added for non-translated regression coverage. Price behavior
+> is preserved; `test-author` validation is pending.
+
+> **Fuori pista (I60F FX-action component fixture, 2026-09-14):** first
+> component run passed 6/8 and failed the two new action tests before their
+> assertions because `definitions: []` prevents the Asset-comparison parameter
+> and FX-control branch from mounting. Mere action absence would therefore be
+> vacuous. `test-author` is supplying a minimal real comparison definition and
+> asset metadata, retaining the parameter presence barrier and action
+> assertions; no product change or assertion removal is accepted.
+
+> **Note implementazione (I60F FX-action test repair, 2026-09-14):** the
+> component fixture now supplies a minimal real local Asset-comparison
+> definition, configured asset 42 (USD), EUR display target, configured
+> EUR-USD pair and create/sync callbacks. Both authoritative Calendar and
+> ordinary Price modes mount the actual parameter/FX controls; the exact
+> component file passes 8/8 with all presence and action assertions intact.
+
+> **Fuori pista (I60F final state-boundary review, 2026-09-14):** another
+> independent pass found three medium cross-state leaks. Changing a comparison
+> `assetId` retained the old target's resolved points, conversion error and
+> metadata; the actual parameter update path now removes exactly the
+> target-specific runtime keys before emitting the replacement config. Calendar
+> partial undefined windows carried typed `partial_undefined_metric` plus an
+> unrecognized `undefined_metric_window` warning; problem selection now chooses
+> the first recognized candidate with status-aware precedence, and formats the
+> typed partial reason using the backend message/existing partial fallback.
+> Finally, same-route Asset navigation could preserve mounted Calendar measure
+> anchors into the next asset; `MeasurePanel.clearMeasures()` resets committed,
+> pending, expanded, table-ref, ID/debounce and mode state, and `reloadPage()`
+> invokes it for both Price and Calendar panels before loading the new asset.
+> `test-author` regressions are pending; no B axis implementation was added.
+
+> **Note implementazione (I60F final state regressions, 2026-09-14):**
+> `test-author` drives the real Asset SearchSelect and proves all eight
+> target-runtime fields clear while style/durable params survive; maps and
+> formats `partial_undefined_metric` without weakening `incomplete_warmup`; and
+> invokes `MeasurePanel.clearMeasures()` after completed + pending work, proving
+> rows, overlays, mode, refs and ID sequence reset before a fresh measure. The
+> four exact files pass 57/57.
+
+> **Note implementazione (I60F final state frontend gates, 2026-09-14):**
+> complete ten-file chart/settings/problem matrix passes 304/304; `front check`
+> remains 0 errors / 41 known warnings and canonical production build is green.
+
+> **Note implementazione (I60F final state browser gates, 2026-09-14):**
+> complete Asset detail remains green at 26/26 desktop and 26/26 mobile after
+> peer-target runtime cleanup, typed partial-undefined mapping and same-route
+> measure resets.
+
+> **Fuori pista (I60F comparison async boundary, 2026-09-14):** final review
+> found the shared Price-comparison loader mutated captured signal configs
+> before the caller's stale-response guard and merged its event map with prior
+> peers. A late range/currency/peer response could therefore overwrite current
+> points or retain removed-peer markers/FX diagnostics. The loader now accepts
+> immutable peer IDs and returns per-peer runtime params/events without touching
+> caller state; a shared apply step mutates only current configs after validation
+> and rebuilds events solely from current peers. Asset detail adds a dedicated
+> generation + fingerprint over route/session, Price mode, peer IDs, range and
+> target currency; FX detail applies the same contract over route direction,
+> session, peer IDs and range. Empty peer sets invalidate in-flight work and
+> clear events. `test-author` owns loader/race regressions; B axis code remains
+> untouched.
+
+> **Note implementazione (I60F immutable comparison loader tests,
+> 2026-09-14):** `test-author` rewrote the loader suite as 18 immutable
+> load/apply contracts covering deduped IDs, request shape, response order,
+> nonmutation, currency filtering/provenance, explicit missing-result clears,
+> current-peer-only application, explicit eight-field invalidation and
+> event-map replacement. The existing Asset workflow now gates an old
+> long-range Price comparison response against a
+> 90-day successor and asserts current points/events/FX state survive. Loader
+> tests pass 18/18 and `front check` remains 0 errors / 41 known warnings.
+
+> **Fuori pista (I60F immutable apply boundary, 2026-09-14):** after request-
+> manager integration, the loader test passed 16/17: `applyComparisonAssetsData`
+> cleared a current config absent from that particular loaded result, while the
+> immutable contract correctly expects unmatched configs to remain untouched.
+> Explicit changed-fingerprint invalidation is now a separate
+> `clearComparisonAssetsData` operation; normal apply clears/replaces only
+> returned current peers. `test-author` is adding the direct clear contract.
+
+> **Fuori pista (I60F comparison race E2E string ID, 2026-09-14):** first
+> desktop run passed 25/26 but could not render the expected FX action because
+> seeded comparison configs used numeric IDs while the real SearchSelect stores
+> strings; request code coerced the numbers and masked the invalid card
+> precondition. `test-author` switched only seeded/persisted ID expectations to
+> strings; numeric bulk requests remain asserted. The immutable stale-vs-
+> successor workflow then passes in full: Asset detail 26/26 desktop and 26/26
+> mobile.
+
+> **Note implementazione (I60F immutable comparison integration,
+> 2026-09-14):** final eleven-file loader/chart/settings/problem matrix passes
+> 323/323; production build and embedded Svelte check are green (0 errors / 41
+> known warnings). Shared FX caller browser validation remains pending.
+
+> **Note implementazione (I60F immutable comparison browser gates,
+> 2026-09-14):** shared FX caller passes 14/14 desktop and 14/14 mobile. The
+> strengthened Asset stale-vs-successor workflow and all surrounding detail
+> behavior pass 26/26 desktop and 26/26 mobile. Both Playwright-owned mobile
+> servers shut down normally; lane teardown is rechecked at final audit.
+
+> **Fuori pista (I60F comparison race E2E fixture ID, 2026-09-14):** full
+> desktop reached the successor state but failed its ready-peer FX-action
+> assertion. The snapshot showed all comparison SearchSelect controls unresolved:
+> seeded configs used numeric `assetId`, while the real control and
+> `getParamString` contract store string IDs. Page-level numeric coercion still
+> produced requests/summaries, masking the invalid card precondition.
+> `test-author` is switching seeded IDs to the real string shape and updating
+> only persisted-value assertions; numeric request/join and all race/action
+> assertions remain unchanged.
+
+> **Note implementazione (I60F FX-action integration gates, 2026-09-14):**
+> complete ten-file chart/settings/problem matrix remains 300/300; `front
+> check` is 0 errors / 41 known warnings and the production build is green
+> after the final FX-control gate.
+
+> **Note implementazione (I60F FX-action browser gates, 2026-09-14):** complete
+> Asset detail remains green at 26/26 desktop and 26/26 mobile after hiding
+> stale comparison FX remediation in authoritative Calendar mode and preserving
+> it in Price. Desktop runner-owned backend again exceeded its five-second
+> teardown allowance; mobile shutdown completed normally.
+
+> **Note implementazione (I60F comparison request-manager closure,
+> 2026-09-14):** ordinary same-fingerprint loads now coalesce; style-only
+> signal edits do not request; force refreshes supersede in-flight work while
+> retaining already-applied same-fingerprint data if the refresh fails. A
+> changed fingerprint clears current runtime/events before loading so failure
+> cannot present old data under a new peer/range/currency. FX session and route
+> orientation changes invalidate comparison state and chain a replacement load.
+> Final shared results: loader 18/18, eleven-file matrix 322/322, Asset detail
+> 26/26 desktop + 26/26 mobile, FX detail 14/14 desktop + 14/14 mobile.
+
+> **Fuori pista (I60F comparison FX-sync closure, 2026-09-14):** closure
+> review found the Asset-page FX sync action refreshed the FX store and main
+> chart but not comparison runtime/events. The handler now invalidates any
+> pre-sync comparison request immediately. After a successful sync, Price mode
+> force-loads the same-fingerprint comparison so corrected points/events/
+> conversion status publish; Calendar mode clears stale hidden Price runtime
+> and relies on its refreshed typed Calendar response, forcing a new Price load
+> when the user returns. Failed sync retains the last applied valid comparison.
+> `test-author` regression is pending.
+
+> **Fuori pista (I60F definitive review follow-up, 2026-09-14):** review also
+> found that Asset sync itself did not invalidate a pre-sync Price comparison,
+> migrated chart settings stayed unsanitized on disk until a later edit, and
+> zero-warm-up Calendar `insufficient_history` rendered a contradictory
+> “0 required”. Asset sync now invalidates before I/O; successful Price sync
+> force-refreshes peers, successful Calendar sync clears hidden Price runtime
+> after its typed Calendar reload, and failed sync retains the last applied
+> data. Hydration immediately rewrites sanitized/migrated payloads under the
+> same localStorage key. Zero-required insufficient history uses its exact
+> backend reason; ordinary positive-required signals keep localized counts.
+> `test-author` regressions are pending.
+
+> **Note implementazione (I60F definitive-review regressions, 2026-09-14):**
+> `test-author` extended the existing workflow with pre-sync Price response →
+> Calendar Asset sync → Price successor → late-old-response rejection; added
+> immediate v1/v2 storage sanitization checks across account/global/scope/pair
+> state; and pinned zero-vs-positive insufficient-history formatting. Focused
+> storage/formatter tests pass 64/64 and `front check` remains 0 errors / 41
+> known warnings.
+
+> **Fuori pista (I60F FX-sync mobile activation, 2026-09-14):** final desktop
+> passes 26/26. Mobile reached the visible/enabled FX sync action, but its
+> pointer click was intercepted after scrolling by the sticky header/mobile
+> chevron; the armed response waiter then timed out. `test-author` is switching
+> only this activation to focus + Enter, the semantic button keyboard contract.
+> No force click, coordinate action, timeout increase or product edit is
+> permitted.
+
+> **Fuori pista (I60F FX-action keyboard semantics, 2026-09-14):** focus +
+> page-level Enter still emitted no request on mobile. The focused native button
+> was nested in Tooltip's default role-button wrapper; the wrapper's bubbling
+> keydown handler called `preventDefault`, cancelling the child's native Enter
+> activation. FX create/sync tooltips now declare `interactiveChild`, removing
+> wrapper keyboard semantics and preserving the button's own accessible
+> behavior. The same unchanged mobile regression verifies the fix.
+
+> **Note implementazione (I60F asset-sync closure gates, 2026-09-14):**
+> `test-author` extended the existing workflow through pre-sync Price request,
+> Calendar Asset sync, Price successor and late-old-response rejection. Final
+> Asset detail passes 26/26 desktop and 26/26 mobile, including native keyboard
+> activation and the corrected comparison/measure state.
+
+> **Note implementazione (I60F definitive frontend gates, 2026-09-14):**
+> final eleven-file loader/chart/settings/problem matrix passes 327/327;
+> `front check` remains 0 errors / 41 known warnings and canonical production
+> build is green after asset-sync invalidation, eager storage rewrite and
+> zero-warm-up reason formatting.
+
+> **Fuori pista (I60F FX action accessible names, 2026-09-14):** final review
+> found the icon-only create/sync FX buttons had no accessible names after their
+> Tooltip wrappers were correctly marked `interactiveChild`. Both native
+> buttons now carry localized `aria-label` values identifying the action and
+> pair; Tooltip text remains visual help. `test-author` owns the direct
+> accessibility assertions.
+
+> **Fuori pista (I60F sync result status, 2026-09-14):** closure review found
+> HTTP 200 sync envelopes with per-item `failed`, `skipped` or missing status
+> still entered refresh/clear paths. Both Asset and FX handlers now render the
+> standard result toast first, then treat only `ok` and `partial` as data-
+> changing success. Failed/skipped/missing results retain applied comparison
+> runtime/events while the already-bumped generation still prevents a pre-sync
+> response from publishing. `test-author` failure-path coverage is pending.
+
+> **Fuori pista (I60F failed-sync mode fixture, 2026-09-14):** first desktop
+> execution of the new failed-FX scenario entered Calendar and then expected
+> the Price-only FX sync action to remain visible, contradicting the already
+> closed authoritative-Calendar contract. `test-author` is keeping the full
+> HTTP-200/per-item-failed retention and late-response assertions in Price,
+> then entering Calendar for the existing accepted Asset-sync flow. Only the
+> impossible precondition moves; no counter/state assertion is removed.
+
+> **Note implementazione (I60F sync-status browser closure, 2026-09-14):**
+> final failed/partial/ok sync matrix passes in the full Asset workflow:
+> 26/26 desktop and 26/26 mobile. Failed HTTP-200 item status emits the error
+> toast, invalidates the pending response, launches no conversion/comparison/
+> Calendar successor and retains the applied Price comparison. Accepted FX and
+> Asset sync paths still refresh and reject late pre-sync payloads.
+
+> **Note implementazione (I60F definitive closure review, 2026-09-14):**
+> final independent review reports CLEAN for sync status gating, comparison
+> request invalidation/retention, eager localStorage sanitization, zero-warm-up
+> messaging and native accessible FX controls. It confirms B remains analysis-
+> only. Residual manual checks are the real Amundi 7/30/90/365 flow,
+> Calendar↔Price FX restoration, measure rows through live sync/same-route
+> navigation, and FX keyboard/touch/screen-reader behavior.
+
+> **Note implementazione (I60F FX action accessibility tests, 2026-09-14):**
+> real configured/missing FX controls are selected by stable test ID; both
+> `aria-label` and computed accessible name identify action + pair using
+> existing translations. Exact ChartSignalsSection component suite passes 9/9.
+
+> **Note implementazione (I60F accessibility closure gates, 2026-09-14):**
+> final Asset detail passes 26/26 desktop and 26/26 mobile after the localized
+> native-button labels; the mobile workflow activates FX sync through focused
+> Enter and completes both FX-sync and Asset-sync stale-response barriers.
+
+> **Note implementazione (I60F exact-final shared FX gates, 2026-09-14):**
+> after every shared settings, comparison-manager and accessible-control change,
+> FX detail passes 14/14 desktop and 14/14 mobile on the exact final source.
+
+> **Note implementazione (I60F FX-sync mobile closure, 2026-09-14):** after
+> `interactiveChild`, the full Asset detail suite passes 26/26 mobile including
+> focused native Enter activation, exact sync payload, forced corrected peer
+> response and rejection of the late pre-sync payload.
+
+> **Fuori pista (I60F FX-convert route fixture scope, 2026-09-14):** the next
+> desktop run passed the complete sync correction, then a legitimate later
+> long-range FX conversion hit the new global mock, which asserted every
+> post-sync request used the earlier 90-day range. `test-author` is narrowing
+> the exact payload/counter to the sync-specific call and returning coherent
+> deterministic data for other valid ranges. The sync count remains exactly
+> one; no product change or assertion removal is required.
+
+> **Fuori pista (I60F comparison-card reactivity, 2026-09-14):** the first FX
+> sync browser run confirmed the forced corrected response but the card's sync
+> action stayed visible. Runtime mutation already refreshed overlay lines and
+> summaries through `overlayDataVersion`; the separately compiled
+> `signals={[...signals]}` prop depended only on settings identity, so
+> ChartSignalsSection retained the old conversion flag. Asset and FX pages now
+> derive panel configs from both settings and `overlayDataVersion`, publishing
+> post-guard runtime changes without persisting them. The existing sync
+> regression remains unchanged and must turn green.
+
+> **Fuori pista (I60F comparison-card object identity, 2026-09-14):** the
+> follow-up desktop run still showed the stale sync action although corrected
+> summaries had landed. The panel's bindable local signal array retained its
+> previous object identities; rebuilding only the outer array was insufficient
+> to publish deep runtime-param changes. Asset and FX panel configs now clone
+> each signal and `params` whenever `overlayDataVersion` changes, forcing the
+> child to consume current conversion metadata without persisting runtime data.
+
+> **Fuori pista (I60F measure overlay reactivity, 2026-09-14):** the same
+> desktop run proved corrected peer cards/points/events but a later restored
+> Price measure table showed only the main row. `MeasurePanel`'s measurement
+> derived value tracked measures and chart data, while its summary helper's
+> `overlaySignals` dependency was opaque to Svelte's compiler. The derived
+> calculation now explicitly tracks overlay changes, so mounted measure rows
+> disappear while peer runtime is intentionally cleared and repopulate when the
+> guarded Price response lands, without recreating the measure. `test-author`
+> rerender coverage is pending.
+
+> **Fuori pista (I60F Price-race measure fixture, 2026-09-14):** after the
+> MeasurePanel dependency fix, the full desktop workflow still reached a
+> main-only Price measure table. Current peer cards correctly showed the
+> successor points, but that synthetic series contained only 90-day range
+> start/end while the preserved measure anchors were the interior
+> 2026-08-01/end dates. Real daily history contains the interior anchor.
+> `test-author` is adding it, changing the successor badge from two to three
+> points while retaining the stale one-point contrast and every race/event/FX
+> assertion. No product change or expectation removal is involved.
+
+> **Note implementazione (I60F comparison closure gates, 2026-09-14):**
+> final request-manager, FX-sync, runtime-publication and measure-overlay
+> behavior passes loader 18/18, eleven focused files 323/323, Asset detail 26/26
+> desktop + 26/26 mobile, and FX detail 14/14 desktop + 14/14 mobile. `front
+> check` and production build remain green; exact static audit is clean.
+
+> **Note implementazione (I60F defect-A closure review, 2026-09-14):** final
+> independent read-only review remains pending after the FX-sync correction.
+> Manual checks, once green, remain the real Amundi 7/30/90/365 flow,
+> Calendar↔Price FX restoration, measure rows through live sync/same-route
+> navigation, and keyboard/touch/screen-reader behavior.
+
+> **Fuori pista (I60F manual review round 4, 2026-09-14):** developer confirmed
+> that a three-year Amundi Calendar comparison works only after separately
+> synchronizing EUR/USD over the same range. The peer Asset sync currently does
+> not orchestrate its already-configured conversion FX pair, and the signal
+> surfaces the conversion gap as generic missing `close`. Review also rejected
+> native-looking Custom min/max typography, bare unit-only names for every
+> configurable Y-axis row, and the still-visible mobile X-axis overlap on
+> Dashboard. Exact review server shell 846 was stopped; port 6157 proved free.
+
+> **Note implementazione (I60F A1-A3+B authorization, 2026-09-14):** coordinator
+> relayed explicit implementation authorization. A1 synchronizes a comparison
+> Asset plus every already-configured required conversion pair for the same
+> selected range, never auto-registering a missing pair, and preserves exact FX
+> causality. A2 fixes compact numeric typography at the shared mobile anti-zoom
+> cascade. A3 gives every shared Asset/FX primary and contextual secondary Y
+> axis a localized semantic name; locale catalogs stay coordinator-owned and I
+> emit `/tmp/libreFolio_i60_axis_i18n_lease.json`. B applies one width-budget,
+> locale-aware, 0-degree responsive X-axis policy to Line, Candlestick,
+> PriceChartFull, Growth, AllocationHistory and the three lot charts;
+> PerformanceChart stays exempt. New/repaired tests remain `test-author` owned.
+> No target merge, staging, history, D portfolio, H renderer, shared runner or
+> generated API changes are authorized.
+
+> **Note implementazione (I60F A1, 2026-09-14):** comparison Asset sync now
+> resolves the peer native currency against the current target, filters to
+> already-configured route slugs, and submits those pairs in one FX sync for
+> the exact Asset sync range. Asset and FX outcomes are independent; any
+> accepted `ok|partial` leg triggers the guarded Calendar/Price recompute,
+> while failed legs retain applied data. Missing pairs are never registered.
+> Calendar peer mapping converts conversion-error-backed missing-close results
+> into typed `fx_conversion_unavailable` with the exact backend cause; truly
+> missing close remains `missing_input_fields`. Tests pending.
+
+> **Note implementazione (I60F A2, 2026-09-14):** Custom min/max use the shared
+> `lf-compact-number-input` typography contract. Desktop keeps Tailwind's
+> 0.75rem/1rem compact scale; the existing mobile anti-zoom rule still enforces
+> 16px, now paired with intentional inherited font, tabular numerals and a
+> coherent 1.25rem line-height. Surrounding Min/Max labels scale with the same
+> responsive row. No user-agent or browser-specific branch was added.
+
+> **Note implementazione (I60F A3, 2026-09-14):** new pure
+> `axisLabelHelpers.ts` resolves every Asset/FX configurable axis row through
+> semantic keys: price+currency, percentage, exchange-rate+pair, volume and a
+> generic signal-name axis for RSI/MACD/etc. Bare `%`/currency labels are gone.
+> Fallback English prevents raw keys before catalog integration. Exact EN/IT/
+> FR/ES lease is `/tmp/libreFolio_i60_axis_i18n_lease.json`; locale files remain
+> untouched.
+
+> **Note implementazione (I60F A3 i18n lease integration, 2026-09-14):**
+> coordinator applied the exact five-key lease to all four locale catalogs in
+> this worktree. Source artifact SHA-256 is
+> `276a56281e95cbd723e235a1f9dd810814f0c029dfdcc03f6a6eb9adf5c8d807`;
+> integrated patch `/tmp/libreFolio_i60_axis_i18n_integrated.patch` SHA-256 is
+> `95d2e25ec8b0c28dbd6cf764d2f8d90d4517679158a718d0e306df764d2e25`. I18n
+> audit reports 2765/2765 complete, zero incomplete/missing-backend and only
+> 122 pre-existing/shared unused keys; locale Prettier and diff-check pass.
+> Locale files remain coordinator-owned and will not be edited by I.
+
+> **Note implementazione (I60F B, 2026-09-14):** new shared
+> `responsiveXAxis.ts` computes usable-width/density compact mode, locale-aware
+> day/month/multi-year labels, category stride or time split budget, preserved
+> endpoints, `hideOverlap` and rotation 0. It is wired into LineChart,
+> CandlestickChart, PriceChartFull, GrowthChart, AllocationHistoryChart,
+> LotGantt, LotComparison and LotWacPrice. Resize callbacks patch xAxis only,
+> preserving dataZoom; resolution renders recompute the policy. PerformanceChart
+> is untouched. No 30-degree fallback was added. Tests pending.
+
+> **Note implementazione (I60F A1-A3+B test-author coverage, 2026-09-15):**
+> existing registered suites now cover A1 orchestration/causality and all
+> accepted/failed leg combinations; A2 compact class, decimal and arrow
+> interaction plus mobile computed typography; A3 exact semantic keys/params/
+> fallbacks; and B thresholds, density, stride, endpoints, time budgets,
+> locale/multi-year formatting, rotation 0, eight chart adoptions and explicit
+> PerformanceChart exclusion. Tests live only in registered
+> `asset-detail.spec.ts`, `chartCoreHelpers.test.ts` and
+> `ChartSignalsSection.test.ts`; inventory remains 197/197 with zero orphans.
+> Focused component/helper execution passes 52/52.
+
+> **⚠️ Fuori pista (I60F A1 fixture schema, 2026-09-15):**
+> `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test
+> --test-port 6157 --data-dir /tmp/librefolio-r2-i-charts front-asset
+> asset-detail` reached Playwright and passed 25/26 tests, but the extended
+> Calendar workflow stopped at its own precondition because
+> `buildFxConversionGapCalendarResult(30)` did not satisfy the current generated
+> `SignalResult` schema (`asset-detail.spec.ts:1181`). No product assertion ran
+> for that fixture; the runner populated only the isolated lane DB and stopped
+> its shared backend. Repair is test-author-owned before rerunning the selector.
+
+> **⚠️ Fuori pista (I60F A1 sync-idle observation, 2026-09-15):**
+> test-author corrected the FX-gap warning code from invalid
+> `missing_input_fields` to schema-valid `data_quality`, retaining
+> `availability.reason_code=missing_input_fields`, and the fixture now parses.
+> The next run again reached 25/26, then exposed a test assumption: after the
+> native comparison Sync button disables itself during the async operation, the
+> browser moves focus away, so `document.activeElement` becomes non-button
+> (`null`) and cannot prove idle. Added stable
+> `signal-sync-asset-${signal.id}` instrumentation; the regression must wait for
+> that exact control to become enabled, not infer readiness from focus.
+
+> **⚠️ Fuori pista (I60F date-range commit assumption, 2026-09-15):**
+> after the exact sync-button idle barrier passed, the workflow reached the next
+> range transition but `commitSyntheticRange()` tried to commit by clicking
+> `asset-detail-info`. The open DateRangePicker backdrop and retained failure
+> toasts legitimately intercepted that unrelated target, then the expected
+> response timed out. This is a test interaction assumption, not a product
+> failure: the helper must use the picker's documented keyboard commit/close
+> contract on the focused end field.
+
+> **Note implementazione (I60F Asset desktop gate, 2026-09-15):**
+> test-author changed the FX-gap warning to schema-valid `data_quality`, waits
+> for the exact `signal-sync-asset-${signalId}` control to re-enable, and commits
+> synthetic date ranges with Enter on the focused end input. All request,
+> response, typed-causality, keyboard activation and closed-picker assertions
+> remain. Exact registered lane command now passes 26/26 desktop Asset-detail
+> tests; the runner stopped its shared backend (forced process-group teardown
+> only after its normal five-second SIGTERM grace period).
+
+> **⚠️ Fuori pista (I60F mobile runner syntax, 2026-09-15):**
+> appending `--project mobile` to `dev.py test ... front-asset asset-detail`
+> failed at argument parsing before setup (`unrecognized arguments`), so no DB,
+> files or server were touched. The registered action is intentionally
+> desktop-only; mobile must use the same registered spec's Playwright project
+> with explicit `TEST_PORT=6157` and
+> `LIBREFOLIO_TEST_DATA_DIR=/tmp/librefolio-r2-i-charts`.
+
+> **⚠️ Fuori pista (I60F mobile Playwright venv, 2026-09-15):**
+> the first direct mobile-project invocation failed before collection: its
+> Playwright webServer runs repository `./dev.py`, and invoking npm outside
+> Pipenv selected an interpreter without `pydantic`. Port 6157 remained free;
+> no product test ran and no dependency was installed. The corrected invocation
+> wraps npm itself in the mandated shared `LibreFolio-SAUMUTtc` Pipenv so the
+> spawned webServer inherits the approved interpreter.
+
+> **Note implementazione (I60F Asset mobile gate, 2026-09-15):**
+> the corrected shared-venv mobile invocation passed 26/26 in 1.5 minutes,
+> including A1 configured-FX orchestration and exact typed causality, A2
+> computed compact-input typography, comparison refresh/race coverage and all
+> existing Asset-detail mobile interactions. Together with desktop, the
+> registered Asset spec is green 52/52. Playwright shut down PID 94891 through
+> its attached webServer lifecycle.
+
+> **Note implementazione (I60F focused/full frontend gates, 2026-09-15):**
+> registered Asset helper suite passed 277/277; registered Svelte component
+> suite passed 1805/1805 (only existing deprecation/localStorage warnings).
+> Full `front check` returned 0 errors / 41 baseline warnings. Canonical
+> production build completed both bundles in 17.05s / 27.20s; the external
+> MathJax refresh hit the known local certificate failure and retained the
+> cached resource, without failing the build.
+
+> **⚠️ Fuori pista (I60F A3 shared-modal audit, 2026-09-15):**
+> docs source verification found that Asset/FX detail panels used the approved
+> semantic axis resolver, but the shared global/per-card
+> `ChartSettingsModal` still built configurable rows as bare `Abs`, `%` and raw
+> secondary labels. This contradicts A3's every-row contract. The modal now
+> reuses the same five-key resolver, receives explicit Asset/FX domain plus
+> currency/pair context from both list pages, and keeps `Preview` as the
+> localized global synthetic context. No locale key or catalogue changed.
+
+> **Note implementazione (I60F A3 modal coverage, 2026-09-15):**
+> test-author extended the registered `chartCoreHelpers.test.ts` contract to
+> require all four semantic resolvers in `ChartSettingsModal`, reject bare
+> `Abs`/`%`/raw secondary row labels and require explicit Asset/FX domain plus
+> context at both list-page consumers. Focused file passes 43/43; Prettier and
+> scoped diff-check pass.
+
+> **⚠️ Fuori pista (I60F FX modal translator alias, 2026-09-15):**
+> the first post-gap full check failed before build with exactly two diagnostics
+> at the new FX list binding: that page imports the i18n store as `_` and
+> therefore exposes `$_`, not `$t`. Replaced only that alias; no runtime,
+> storage or localization contract changed.
+
+> **Note implementazione (I60F A3 modal/browser revalidation, 2026-09-15):**
+> registered Asset unit suite passes 280/280; full check is again 0 errors /
+> 41 baseline warnings; production bundles complete in 17.32s / 28.13s.
+> FX global settings modal passes 3/3 on desktop and 3/3 on mobile after the
+> semantic-row correction. Asset-list consumers pass 24/24 on each viewport.
+
+> **Note implementazione (I60F B browser gates, 2026-09-15):**
+> Dashboard registered chart/view-matrix spec passes 6/6 desktop and 6/6
+> mobile. Broker-detail passes 25/25 on each viewport, including WAC,
+> Gantt and comparison chart rendering/interactions. FX detail/settings passes
+> 17/17 desktop and 17/17 mobile before the shared-modal correction; the
+> corrected modal-specific rerun remains green 6/6 across viewports.
+
+> **Note implementazione (I60F docs/i18n/static audit, 2026-09-15):**
+> docs-writer aligned the four owned English pages with comparison Asset+FX
+> sync, exact conversion causality, semantic axes across detail/global/per-card
+> surfaces, compact Min/Max controls, responsive X axes and the storage
+> ownership matrix. Strict MkDocs build and all 12 cross-boundary links passed;
+> translation validation honestly reports substantive existing EN→IT/FR/ES
+> debt, so no stamp was applied. i18n audit is 2765/2765 in all four locales,
+> 0 incomplete, 0 missing backend keys and 122 pre-existing/shared unused.
+> Full frontend Prettier, backend Ruff and Black checks pass.
+
+> **⚠️ Fuori pista (I60F independent review blockers, 2026-09-15):**
+> fresh read-only review found six actionable gaps before manual review:
+> (1) the new modal-adoption test hard-coded `$t` although FX uses `$_`;
+> (2) peer Asset and FX sync legs read live range/context on opposite sides of
+> an await, permitting mixed requests after navigation/range changes;
+> (3) compact X-axis formatters are omitted rather than explicitly cleared on
+> compact→desktop merge updates;
+> (4) global/per-card axis scales saved by the shared modal do not reach
+> `AssetCard`/`FxCard` through `PriceChartCompact`;
+> (5) inverted FX cards label the modal axis with canonical rather than displayed
+> pair direction; and (6) comparison errors do not distinguish price conversion
+> from third-currency event conversion, so sync can target the wrong FX route.
+> Manual review remains blocked until all six have focused regressions and the
+> full affected gates return green.
+
+> **Note implementazione (I60F independent-review fixes, 2026-09-15):**
+> all six blockers were corrected surgically. The adoption test now recognizes
+> the consumer's actual Svelte translation-store alias; responsive policy
+> always supplies a desktop formatter and lot charts preserve their historical
+> formatter through the same helper; compact Asset/FX cards forward active
+> primary and semantic-secondary profiles; FX modal context follows persisted
+> inversion; comparison loading flags price conversion only from surviving
+> non-target price rows; converted/failed event currencies produce explicit,
+> deduplicated configured dependencies; and peer Asset+FX calls launch from one
+> captured range/context with stale-publication guards. No missing FX route is
+> registered.
+
+> **Note implementazione (I60F review-regression coverage, 2026-09-15):**
+> test-author added coverage only to existing registered files:
+> `chartCoreHelpers.test.ts`, `loadComparisonData.test.ts` and
+> `asset-detail.spec.ts`. Focused helper/loader tests pass 74/74. The expanded
+> Asset desktop workflow passes 28/28, including native+third-event FX pairs,
+> identical captured ranges, stale range/context suppression, event-only error
+> isolation and the accepted/failed leg matrix. Targeted Prettier and full
+> diff-check pass.
+
+> **⚠️ Fuori pista (I60F formatter reset typing, 2026-09-15):**
+> the first explicit reset used `formatter:null`, which is accepted by ECharts
+> at runtime but rejected by its TypeScript axis option. No build ran. The
+> policy now always returns a concrete formatter: compact uses its budget-aware
+> label, general desktop uses the shared locale-aware full date, and lot charts
+> inject their existing multi-year desktop formatter. This both replaces stale
+> compact merge state and stays type-safe without casts.
+
+> **⚠️ Fuori pista (I60F second independent review, 2026-09-15):**
+> the follow-up review found four further edge cases before manual review:
+> Calendar comparison requests omitted peer events and therefore could not know
+> third-currency dependencies in that mode; sync start invalidated an initial
+> comparison load even if both sync legs failed; MAX correctly sent `min` to
+> both backend sync legs but reused that sentinel for the in-memory FX cache
+> refill; and exact 365/366-day spans could format both endpoints without a
+> year. Calendar peer requests now fetch and atomically retain events without
+> rendering their markers, comparison invalidation waits for an accepted leg,
+> backend and concrete cache ranges are snapshotted separately, and year-bearing
+> labels begin at 365 elapsed days.
+
+> **Note implementazione (I60F second-review regression/gates, 2026-09-15):**
+> test-author extended the existing Asset-detail and chart helper suites for
+> Calendar peer `include_events`, third-currency dependency sync in Calendar
+> mode, total-failure preservation of the initial comparison request, separate
+> MAX backend/cache ranges and exact 365/366-day endpoint disambiguation.
+> Focused responsive tests pass 51/51; Asset detail passes 28/28 on desktop and
+> 28/28 on mobile; core suite passes 1992/1992. Final combined Dashboard +
+> broker-detail execution passes 62/62 across desktop/mobile. Full Prettier,
+> Svelte check (0 errors / 41 baseline warnings) and production build
+> (19.04s / 37.41s bundles) pass.
+
+> **⚠️ Fuori pista (I60F third independent review, 2026-09-15):**
+> a third review found four adjacent lifecycle/edge gaps: standalone required-FX
+> Sync still invalidated comparisons before success and used a resolved start
+> for MAX; a late Calendar response could publish removed peer events because
+> its peer fingerprint was not checked; local-midnight subtraction made a
+> 365-day span shorter across DST; and GrowthChart's series-only resolution
+> update did not refresh its x-axis policy. The standalone path now snapshots
+> and guards the full context, defers invalidation until accepted, separates
+> backend `min` from concrete cache range and preserves Calendar peer events.
+> Calendar peer publication checks the captured comparison fingerprint, day
+> spans use UTC calendar dates, and GrowthChart updates xAxis together with
+> series/dataZoom.
+
+> **⚠️ Fuori pista (I60F standalone-FX mobile test activation, 2026-09-15):**
+> the third-fix Asset mobile run reached 27/28; the new MAX standalone-FX
+> regression timed out before emitting its request because a mobile reorder
+> chevron overlapped the button's mouse hit point. The exact Sync button was
+> visible and enabled, so this is a pointer-assumption in the test, not missing
+> product wiring. The regression must activate that focusable control with
+> keyboard Enter, preserving the accessible path without force-click or sleep.
+
+> **Note implementazione (I60F third-review regression/gates, 2026-09-15):**
+> test-author added existing-suite coverage for stale Calendar peer-event
+> suppression, standalone FX failure/acceptance/context/MAX behavior, DST-safe
+> 365/366-day labels and GrowthChart xAxis+dataZoom updates. Focused tests pass
+> 52/52; Asset detail passes 28/28 on desktop and, after replacing an overlapped
+> mobile mouse click with focus+Enter, 28/28 on mobile. Core passes 1992/1992;
+> combined Dashboard+broker-detail passes 62/62 across both projects. Full
+> Prettier, Svelte check and production build pass.
+
+> **⚠️ Fuori pista (I60F fourth independent review, 2026-09-15):**
+> the lifecycle review found three last races: accepted sync invalidation still
+> waited until after FX cache refill; one global standalone-FX generation token
+> made different slugs supersede each other; and MAX resolution in Price could
+> reject a provisional comparison without scheduling its concrete successor.
+> Accepted coordinated/standalone syncs now invalidate chart+comparison
+> generations before the first post-acceptance await, while all-failed requests
+> remain untouched. Standalone generations are keyed per slug and the spinner
+> remains active until the map empties. Resolving MAX in Price schedules one
+> forced concrete-range comparison successor.
+
+> **⚠️ Fuori pista (I60F lifecycle regression diagnosis, 2026-09-15):**
+> the new concurrent-route regression first exposed a real Svelte keyed-list
+> crash: two `FX_PAIR_NO_DATA` rows shared the same `code`-only key, aborting
+> the reactive flush after comparison runtime data was applied. Every per-pair
+> missing/no-data/partial issue now carries `group_key=pair.slug`. The MAX
+> successor was already accepted and rendered in Candlestick mode; its test
+> helper falsely returned no series because Candlestick did not expose the
+> `__lfChart` E2E/gallery hook used by the line chart. Candlestick now exposes
+> and removes the same hook through its lifecycle.
+
+> **Note implementazione (I60F final Asset lifecycle gate, 2026-09-15):**
+> with per-pair issue identity, mode-independent chart instrumentation,
+> same-fingerprint in-flight joining, immediate accepted-sync invalidation,
+> per-slug standalone generations and Price MAX successor scheduling, the
+> expanded Asset workflow passes 28/28 on desktop and 28/28 on mobile.
+
+> **⚠️ Fuori pista (I60F final review corrections, 2026-09-15):**
+> the final review found three remaining contract edges: coordinated peer sync
+> invalidated a pending main chart but refreshed only local comparisons; a
+> forced comparison refresh could join pre-refresh same-fingerprint work; and
+> Calendar mapping treated any item error—including event-only FX failure—as
+> price conversion causality. Accepted Price peer sync now starts a guarded
+> `loadChartData` successor before reloading local comparisons; force bypasses
+> same-fingerprint in-flight joining after explicit ownership invalidation; and
+> Calendar remapping accepts only the first non-event error with explicit
+> FX/conversion/currency semantics.
+
+> **⚠️ Fuori pista (I60F final mobile toast cleanup, 2026-09-15):**
+> the post-final-correction mobile run reached 27/28; its synthetic workflow
+> cleanup read two actionable toasts, clicked one dismiss control, then asserted
+> exactly one remained. The other toast legitimately auto-expired in the same
+> interval, so the observed count jumped directly to zero. This is a
+> clock/count assumption in test cleanup, not product behavior; cleanup must
+> require monotonic progress to zero rather than an exact decrement of one.
+
+> **Note implementazione (I60F final corrections + closing gates, 2026-09-15):**
+> test-author extended the existing Asset workflow for accepted peer-sync chart
+> successors, forced-vs-non-force comparison ownership and Calendar event-only
+> FX causality; desktop passes 28/28. Mobile toast cleanup now requires monotonic
+> progress rather than an exact one-row decrement and mobile passes 28/28.
+> Coordinator-authorized serialized closing gates all pass on lane 6157:
+> core/lifecycle 1992/1992; Dashboard+broker responsive 62/62 across both
+> projects; Asset/FX list + settings-modal seams 78/78 across both projects;
+> full Prettier and Svelte check; canonical production build; backend Ruff and
+> Black on all seven changed Python files; i18n 2765/2765 per locale with zero
+> incomplete/missing-backend keys (122 pre-existing/shared unused); strict
+> MkDocs build and all 12 cross-boundary links. No review server is active.
+
+> **⚠️ Fuori pista (I60F exact-revision review, 2026-09-15):**
+> exact-revision review found five final lifecycle edges: Price/MAX refresh
+> duplicated its auto-scheduled forced comparison; a sub-seven-day Calendar MAX
+> fallback entered Price without refreshing backend signals; cosmetic settings
+> replaced the signal array reference and could abort an already-accepted sync
+> before its successor; deleting per-slug generations allowed ABA token reuse;
+> and FX-detail comparison-Asset sync force-refreshed failures/stale routes.
+> MAX refresh now joins its owned auto-successor, Calendar→Price fallback loads
+> Price backend data then comparisons, sync guards use a runtime-stripped
+> data-context fingerprint, per-slug counters remain monotonic with separate
+> active tokens, and FX-detail Asset sync snapshots route/session/range and
+> refreshes only current accepted results.
+
+> **Note implementazione (I60F exact-edge regressions, 2026-09-15):**
+> test-author extended only the registered Asset/FX detail workflows for
+> single-successor Price/MAX refresh, Calendar MAX `<7d` Price backend-signal
+> fallback, cosmetic-vs-computational sync ownership, same-slug ABA protection,
+> FX-detail accepted/failure outcome matrices and range/swap/navigation stale
+> completion. Prettier and diff-check pass; exact desktop Asset passes 28/28 and
+> exact desktop FX detail passes 17/17 on lane 6157.
+
+> **⚠️ Fuori pista (I60F exact-edge FX mobile activation, 2026-09-15):**
+> combined mobile Asset+FX detail passed Asset 28/28 and FX 16/17. The new
+> same-slug ABA regression never emitted its request because the visible/enabled
+> FX Sync button's mouse hit point was intercepted by the mobile reorder
+> chevron/header. This is the already-known mobile pointer assumption; activate
+> the exact focusable button with keyboard Enter, with no force-click or sleep.
+
+> **Note implementazione (I60F exact-edge mobile repair, 2026-09-15):**
+> test-author replaced all six potentially-overlapped actions in the FX
+> same-slug ABA scenario with focus+enabled+Enter on exact testids. Prettier and
+> diff-check pass; FX detail mobile passes 17/17. Together with the preceding
+> combined run, Asset detail mobile remains 28/28.
+
+> **Note implementazione (I60F exact final closing matrix, 2026-09-15):**
+> all coordinator-authorized serialized gates pass after the exact-edge fixes:
+> Asset detail 28/28 desktop and 28/28 mobile; FX detail 17/17 desktop and
+> 17/17 mobile; core/lifecycle 1992/1992; Dashboard+broker responsive 62/62;
+> Asset/FX list + settings-modal seams 78/78. Full Prettier and Svelte check,
+> canonical production build, backend Ruff + Black, strict MkDocs build and
+> 12/12 cross-boundary links pass. i18n remains 2765/2765 in every locale,
+> zero incomplete/missing-backend keys and 122 shared/pre-existing unused.
+
+> **⚠️ Fuori pista (I60F refresh ownership review, 2026-09-15):**
+> exact-final review found two orchestration gaps: a completed auto-scheduled
+> MAX comparison was forgotten after clearing `comparisonInFlight`, allowing a
+> later non-force owner to duplicate it; and stale Asset/FX refresh workflows
+> could continue after a newer range/route operation because callers could not
+> distinguish an obsolete `loadChartData` return from success. Non-force loads
+> now no-op on a successfully applied fingerprint (without caching the
+> peer-present/line-empty early state). Asset and FX refreshes use monotonic
+> operation tokens plus captured URL/route/mode/currency/runtime-stripped signal
+> context and re-check after every await.
+
+> **Note analisi/implementazione (I60G Growth Sep→Jan tick spacing, 2026-09-16):**
+> measured ECharts SSR with the reported one-year Sep→Sep span and 315/337px
+> chart widths. Existing time split `4` produced irregular interior gaps of
+> 67.6–72.7px (calendar-nice quarter ticks plus forced endpoints); split `5`
+> produced uniform two-month gaps of 43.4–48.2px. Plot margins were not causal.
+> Shared compact time-axis budget is therefore 48px instead of the category
+> budget 56px; category axes, outer grid, endpoints, rotation, hideOverlap and
+> dataZoom are unchanged.
+
+> **⚠️ Fuori pista (I60F refresh regression — Price measures, 2026-09-15):**
+> final refresh-ownership tests passed FX 17/17 and reached Asset 27/28. A
+> completed Price measure disappeared while its panel was hidden in Calendar:
+> a refresh transiently exposed empty `chartData`, and MeasurePanel's normal
+> non-preserve path interpreted that transport state as a definitive range
+> mismatch and deleted the measure. Auto-pruning now runs only against a
+> non-empty dataset; genuine non-empty range changes still remove incompatible
+> anchors, while temporary absence cannot mutate the Price table.
+
+> **Note implementazione (I60F MeasurePanel refresh regression, 2026-09-15):**
+> Price measures now retain their anchors across transient empty chart data and
+> restore the summary/`deltaPct` table when data returns; a later non-empty
+> incompatible range still prunes them. Focused MeasurePanel passes 23/23. The
+> stale Calendar→Price refresh test now correctly expects no stale comparison
+> continuation.
+
+> **⚠️ Fuori pista (I60F short-MAX fallback gate, 2026-09-15):**
+> the first reactive fallback effect tracked range/currency/signals after its
+> token and re-fired on later MAX selection; wrapping captures in `untrack`
+> fixed that. The remaining timeout was then diagnosed as a test circular wait:
+> product intentionally awaits Price backend data before comparison, while the
+> test awaited comparison before releasing the backend response. The gate now
+> validates backend request/response first, then comparison, with exact
+> no-duplicate counts. Asset desktop passes 28/28.
+
+> **⚠️ Fuori pista (I60G manual review — partial Calendar history, 2026-09-16):**
+> developer rejected the all-or-nothing selected-range contract. Calendar
+> output dates remain inside the selected range, but calculation may consume
+> factual source history before the selected start. For each primary/peer line,
+> the first output is the earliest selected date `t` where current price/FX at
+> `t` and reference `t-N` are both resolvable. Late inception, leading/interior
+> source gaps and FX gaps produce that line's own valid subset plus typed partial
+> causality; they never suppress other factual lines. Only zero valid outputs
+> are unavailable. No interpolation/fabrication; exact calendar-day N,
+> deterministic ordering and unique output dates remain mandatory. Price-%
+> comparison rebasing is unchanged.
+
+> **Note autorizzazione (I60G partial history + X-axis measurement, 2026-09-16):**
+> developer/coordinator authorized backend/service/API and frontend independent
+> primary+multi-peer corrections with test-author coverage. The reported
+> Sep→Jan Growth spacing is analysis-first: capture actual option, usable plot
+> width, selected ticks and pixels before any shared-policy adjustment; preserve
+> endpoints, hideOverlap, dataZoom and desktop density. No new lifecycle scope.
+
+> **Note implementazione (I60G partial Calendar histories, 2026-09-16):**
+> Calendar rolling return v1.3.0 now requests an exact `N`-day pre-visible
+> warmup, admits sparse input dates through an explicit plugin capability and
+> emits only selected-range dates from the first factual point onward. Leading,
+> interior and trailing source/FX gaps retain typed provenance and partial
+> causality; only zero factual outputs are unavailable. AssetSource passes the
+> target-currency-valid subset through mixed conversion history instead of
+> suppressing all signals. The Asset page maps primary and each peer
+> independently, renders their sorted union of dates with real gaps, preserves
+> each peer's own inception/FX status and keeps Price-% per-line rebasing
+> unchanged. Calendar Page Sync discovers already-configured primary, peer and
+> event FX routes regardless of the currently visible chart mode; it still
+> never auto-registers a missing pair.
+>
+> **Note implementazione (I60G responsive X-axis correction, 2026-09-16):**
+> measured ECharts SSR at 315/337px confirmed that split `4` created irregular
+> 67.6–72.7px gaps while split `5` produced approximately 43.4–48.2px spacing.
+> Only the shared compact time-axis label budget changed from 56px to 48px.
+> Category budgets, plot margins, endpoint preservation, `hideOverlap`, zero
+> rotation, dataZoom and desktop behavior remain unchanged. The rendered
+> regression reads actual ticks and pixel positions; its local structural
+> adapter avoids direct TypeScript access to ECharts' private `getModel`
+> declaration without weakening SVG/tick/pixel assertions.
+>
+> **Note implementazione (I60G exact closing gates, 2026-09-16):**
+> Calendar plugin passes 27/27, SignalService 50/50, focused first-factual-point
+> matrix 8/8 and Calendar AssetSource/API integration 7/7. Asset detail passes
+> 28/28 desktop and 28/28 mobile. Dashboard plus broker responsive coverage
+> passes 62/62 across desktop/mobile. Thirteen affected unit/component files
+> pass 465/465; the exact rendered responsive file passes 55/55 after the
+> type-safe test adapter. Prettier is clean, Svelte check reports 0 errors /
+> 41 baseline warnings, production build completes, and the eight changed
+> backend files pass Ruff plus Black. i18n is complete at 2765/2765 in all four
+> locales with 0 missing/incomplete keys and 122 pre-existing/shared unused
+> candidates. Strict MkDocs build and all 12 cross-boundary links pass.
+>
+> **⚠️ Fuori pista (I60G closing static/docs gates, 2026-09-16):**
+> the first Prettier check found only the Asset detail page and the first Black
+> check found only the Calendar plugin; canonical formatters normalized both.
+> The first full Svelte check then exposed a test-only access to ECharts'
+> private `getModel` declaration. Test-author replaced it with a narrow local
+> structural reader; focused Vitest stayed 55/55 and full check returned to
+> 0 errors. `mkdocs translate-validate` remains red on repository-wide Aphra
+> structural debt, including the intentionally rewritten English Asset chart,
+> measure, signal and FX settings pages; no IT/FR/ES documentation was edited
+> or stamped. Strict build and link validation are green.
+
+> **⚠️ Fuori pista (I60G exact-revision independent review, 2026-09-16):**
+> the single authorized final review did not clear manual review. It reported
+> three HIGH blockers: the frontend still rejects `N > selected range` despite
+> valid pre-range warmup; a current Calendar request failure can retain and
+> relabel stale primary/peer snapshots as current partial data; and the render
+> branch still gates on primary Price `lineData`, hiding a factual peer-only
+> Calendar union. It also reported three MEDIUM findings: trimmed leading
+> undefined windows can return `OK` instead of typed partial; the primary
+> Calendar view discards typed failure/problem detail; and the shared responsive
+> helper applies formatter/endpoint/overlap overrides above compact width,
+> changing desktop behavior. State is FROZEN before another implementation
+> loop. Findings remain inside the authorized Calendar/X-axis domains, but the
+> coordinator must confirm the repair loop because the prior scope was declared
+> exact/final; no review server may start on this revision.
+
+> **Note implementazione (I60G repair M1, 2026-09-16):**
+> finite output accompanied by `UNDEFINED_METRIC_WINDOW` now always receives
+> `PARTIAL_UNDEFINED_METRIC` availability before final status derivation,
+> including when the Calendar plugin trimmed leading undefined points. The
+> existing all-undefined branch still returns typed unavailable and deterministic
+> sparse dates/issues remain unchanged.
+
+> **Note implementazione (I60G repair H1, 2026-09-16):**
+> Calendar mode and every supported positive preset/custom `N` are now
+> independent of visible-range length. The old `<7d` disable/fallback, preset
+> filtering and `N <= selected span` validation were removed. Short visible
+> ranges keep the exact chosen `N`; the backend's factual pre-range lookback and
+> typed availability alone decide whether output exists.
+
+> **Note implementazione (I60G repair M2, 2026-09-16):**
+> `CalendarReturnView` now carries the primary signal's existing typed
+> `SignalProblem`, derived through the shared backend-result mapper rather than
+> a Calendar-specific issue taxonomy. The Asset chart exposes structured
+> primary problem code/status and renders its formatted cause independently
+> when peers remain factual, including unavailable, failed and partial results.
+
+> **Note implementazione (I60G repair H2, 2026-09-16):**
+> Calendar primary/peer snapshots are now owned by a full data fingerprint
+> (asset, selected range, target currency, exact window and peer set) in
+> addition to the monotonic request/session guards. A changed fingerprint starts
+> with empty loading state; a same-fingerprint refresh may retain only its own
+> current snapshot while loading. Any current request failure or missing primary
+> item clears primary points, peer views and peer problems before publishing
+> `error`, so an older peer can no longer promote the new failure to `partial`.
+
+> **Note implementazione (I60G repair H3, 2026-09-16):**
+> the chart shell now gates by active mode: Price still requires primary
+> `lineData`, while Calendar renders from its independent union/state even when
+> primary Price history is empty. The Price empty state keeps the primary mode
+> toggle available, so the user can enter Calendar and display a factual
+> peer-only series without fabricating primary points.
+
+> **Note implementazione (I60G repair M3, 2026-09-16):**
+> the shared responsive helper now emits formatter, interval, endpoints,
+> overlap, rotation and split overrides only while compact. Desktop initial
+> options retain each chart's prior contract: category charts add no responsive
+> keys, Growth/Allocation keep their original rotation, and lot charts keep
+> their existing formatter plus overlap policy. Each consumer tracks a compact
+> transition and performs a full x-axis rebuild when returning to desktop, while
+> existing logical/external dataZoom state remains reapplied.
+
+> **⚠️ Fuori pista (I60G repair MAX fingerprint, 2026-09-16):**
+> test-author identified that resolving a provisional MAX start to the first
+> factual date could make an accepted Calendar snapshot appear stale. The
+> fingerprint now uses the semantic URL range (`min`/`max` while MAX is active),
+> so factual resolution does not orphan the same request; ordinary concrete
+> range changes still produce distinct fingerprints.
+
+> **Note implementazione (I60G repair regressions, 2026-09-16):**
+> test-author added the required leading-undefined typed-partial backend case,
+> short-visible-range/exact-N helper coverage, primary typed problem mapping,
+> A-success/B-failure snapshot isolation, peer-only factual rendering contracts,
+> and compact-versus-exact-desktop x-axis assertions. Its permitted focused
+> evidence is 2/2 backend regressions, 34/34 Calendar helper tests and 290/290
+> Asset unit tests; Prettier, targeted Ruff/Black, Svelte check (0 errors / 41
+> baseline warnings) and `git diff --check` also pass. Playwright remains for
+> the parent-owned serialized lane gate.
+
+> **⚠️ Fuori pista (I60G repair backend gate, 2026-09-16):**
+> `... dev.py test --test-port 6157 --data-dir
+> /tmp/librefolio-r2-i-charts services risk-all calendar` collected 28 Calendar
+> tests and passed 27. The sole deterministic red is an older sibling-isolation
+> assertion expecting `DATA_GAP`; the authorized M1 contract now correctly
+> reports `PARTIAL_UNDEFINED_METRIC` because that sparse Calendar result contains
+> an undefined reference window plus later factual output. Collection/setup and
+> DB creation succeeded; test-author owns the superseded assertion repair.
+
+> **Note implementazione (I60G repair backend assertion, 2026-09-16):**
+> test-author updated only the superseded sibling-isolation expectation while
+> preserving its legacy-result identity and both `DATA_GAP` plus
+> `UNDEFINED_METRIC_WINDOW` warning checks. The parent-equivalent Calendar gate
+> now passes 28/28; the two coupled M1 cases pass 2/2.
+
+> **⚠️ Fuori pista (I60G repair selector, 2026-09-16):**
+> `... services signal-service calendar` exited 5 before test execution because
+> that file has no test name containing `calendar` (50 deselected). Database
+> setup succeeded and no server ran. Validation continues with the registered
+> full `signal-service` action, then the separate Calendar-filtered AssetSource
+> action; this is a selector error, not a product red.
+
+> **⚠️ Fuori pista (I60G repair AssetSource assertions, 2026-09-16):**
+> the corrected full SignalService gate passes 50/50. The subsequent Calendar
+> AssetSource gate passed 4/7; its three deterministic reds are older expected
+> reason codes (`PARTIAL_INPUT_COVERAGE` or `DATA_GAP`) on results that also
+> contain `UNDEFINED_METRIC_WINDOW`. Under the authorized M1 precedence these
+> are now `PARTIAL_UNDEFINED_METRIC`, while conversion/gap warnings and
+> independent line behavior remain separately asserted. Test-author owns these
+> three superseded expectations; no production rollback is warranted.
+
+> **Note implementazione (I60G repair AssetSource assertions, 2026-09-16):**
+> test-author updated only those three reason-code expectations and preserved
+> every mixed-currency, data-gap, deterministic point/provenance and sibling
+> isolation assertion. The exact Calendar AssetSource gate now passes 7/7.
+
+> **⚠️ Fuori pista (I60G repair Asset E2E gate, 2026-09-16):**
+> the combined desktop/mobile Asset detail run passed 54/56. Both deterministic
+> reds are the same timeout in the expanded Calendar workflow at
+> `waitForCalendarResponseForRange` after line 2712; all other 27 tests per
+> viewport pass. Server startup/setup and teardown completed normally. Per the
+> triage protocol this is not labeled flaky: test-author must determine whether
+> the expected short-range request was armed against the wrong transition or
+> whether product failed to issue the authorized request before any edit.
+
+> **⚠️ Fuori pista (shared-venv resume collision, 2026-09-16):**
+> the post-update import smoke confirmed NumPy 2.5.3, SciPy 1.18.1, highspy
+> 1.15.1 and PySCIPOpt 6.2.1. The first chained backend gate then stopped during
+> database setup, before collection, because test-author's already-authorized
+> focused Asset E2E had acquired lane 6157 between the precheck and migration.
+> Listener PID 76437 belongs to parent test command PID 76423. This is a
+> serialized-lane collision, not a dependency or product red; the backend gates
+> will resume only after that exact test command exits and the port is free.
+
+> **Note implementazione (I60G repair Calendar→Price MAX handoff, 2026-09-16):**
+> test-author proved the original E2E timeout was an assertion-order mistake:
+> the test expected a 7-day request without selecting 1W, and now performs that
+> explicit action with the listener armed immediately before it. The corrected
+> flow then exposed one product defect caused by the new fingerprint guard:
+> switching to Price before a still-current Calendar response returned discarded
+> the response's factual prices, so MAX could not resolve its concrete start or
+> schedule Price comparison. `loadChartData` now separates route/session/range/
+> currency ownership of the factual price/event payload from stricter
+> Calendar-mode snapshot publication. A current payload may resolve MAX after
+> mode change, while stale Calendar primary/peer state remains rejected.
+
+> **Note implementazione (I60G repair final gates, 2026-09-16):**
+> after the shared numerical environment update, imports report NumPy 2.5.3,
+> SciPy 1.18.1, highspy 1.15.1 and PySCIPOpt 6.2.1. Calendar backend gates pass
+> 28/28 risk/plugin, 50/50 SignalService and 7/7 AssetSource. The focused
+> corrected Calendar E2E passes 1/1 per viewport, then the complete Asset detail
+> matrix passes 28/28 desktop + 28/28 mobile. Responsive Dashboard, broker and
+> FX detail pass 96/96; Asset/FX list plus chart settings pass 78/78. Thirteen
+> affected unit/component files pass 463/463. Full Prettier is clean, Svelte
+> check reports 0 errors / 41 baseline warnings, production build completes
+> (cached MathJax retained after a certificate warning), and changed backend
+> files pass Ruff plus Black. i18n remains 2765/2765 in every UI locale, strict
+> MkDocs build passes and cross-boundary links pass 12/12.
+>
+> **⚠️ Fuori pista (I60G final translation validation, 2026-09-16):**
+> `mkdocs translate-validate` confirms the intentionally unstamped translation
+> debt: 159 repository-wide structural errors, 194 warnings and 472 localized
+> differences across 549 checks. This is known debt from substantial English
+> documentation work, not a docs build/link failure; no translated page was
+> edited.
+
+> **⚠️ Fuori pista (I60G repair exact-revision review, 2026-09-16):**
+> the single fresh review found two in-scope M3 defects. Growth's compact→desktop
+> callback calls `renderChart`, but its same-mode path uses `updateChartData`
+> with `replaceMerge: ['dataZoom']`, so compact x-axis keys survive. Candlestick
+> does fully rebuild its x-axis, but unlike Line/Price it does not preserve the
+> user's active dataZoom window around `setOption(option, true)`. Manual review
+> remains blocked until both transitions have runtime regressions and the
+> affected/final gates plus one new exact-revision review are green.
+
+> **Note implementazione (I60G repair Growth desktop reset, 2026-09-16):**
+> Growth's compact→desktop resize now explicitly forces its full-option path;
+> that path replace-merges `xAxis` and reapplies the current logical
+> `zoomWindow`. Same-mode data/resolution updates retain their lighter series +
+> dataZoom path, but can no longer prevent removal of compact-only axis keys.
+
+> **Note implementazione (I60G repair Candlestick zoom reset, 2026-09-16):**
+> Candlestick now snapshots the active inside-dataZoom percentage window before
+> any full option replacement and dispatches the same start/end immediately
+> afterward. Compact→desktop can therefore rebuild an exact desktop x-axis
+> without resetting the user's zoom/pan selection.
+
+> **Note implementazione (I60G review regressions, 2026-09-16):**
+> test-author added focused Growth compact→desktop full-axis/zoom-window and
+> Candlestick pre-rebuild zoom capture/post-rebuild restoration regressions.
+> The exact rendered/source-contract chart core file passes 55/55 with Prettier
+> and `git diff --check` clean; private chart/ResizeObserver closures remain
+> unexposed, so the tests combine runnable ECharts option evidence with explicit
+> operation-order contracts.
+
+> **⚠️ Fuori pista (I60G Growth data-density review, 2026-09-16):**
+> the next exact review found one remaining M3 transition: history/resolution
+> data could change Growth from compact to desktop without a resize. The
+> same-mode incremental path then sent an empty x-axis patch and retained
+> compact keys. `updateChartData` now compares the previous/new compact state
+> for every data update and routes compact→desktop through `applyFullOption`,
+> which replace-merges the full x-axis and reuses the current `zoomWindow`.
+> Ordinary compact or desktop updates stay incremental.
+
+> **Note implementazione (I60G Growth data-density regression, 2026-09-16):**
+> test-author replaced the prior empty-desktop-patch acceptance with a contract
+> that both Growth data-update paths detect compact→desktop, rebuild full
+> series, invoke the full x-axis replacement with the current zoom window, and
+> leave ordinary incremental updates distinct. The exact chart-core file passes
+> 55/55; the resize transition regression remains intact.
+
+> **Note implementazione (I60G final Growth density gates, 2026-09-16):**
+> Dashboard passes 6/6 per viewport (12/12 total) after the data-density
+> transition fix. Full Prettier is clean, Svelte check remains 0 errors / 41
+> baseline warnings and the production rebuild succeeds, retaining the cached
+> MathJax asset after the same external certificate warning.
+
+> **⚠️ Fuori pista (I60G Growth history-range review, 2026-09-16):**
+> the next exact review found that a new `history` reference still called
+> `resetResolutionState` before preserving the active chart range. Even though
+> the compact x-axis was rebuilt correctly, the rebuild received the full new
+> domain (0–100) instead of the user's zoomed range. This remained the sole
+> manual-review blocker at the developer hard stop.
+
+> **Note implementazione (I60G Growth history-range preservation, 2026-09-16):**
+> before clearing resolution caches for a new history reference, Growth now
+> resolves the visible logical range from the still-active old dataset and
+> ECharts dataZoom. The range is clamped to the new history domain and restored
+> into `visibleStartDate`/`visibleEndDate`; only a missing prior range defaults
+> to the full new domain. `getLogicalRangeFromChart` prefers `activeChartData`
+> so the old zoom cannot be interpreted against newly derived dates before the
+> cache reset. The subsequent compact→desktop full-axis path therefore receives
+> the preserved/clamped range rather than 0–100.
+
+> **Note implementazione (I60G Growth stateful range regressions, 2026-09-16):**
+> test-author added pure boundary cases for retained, left-clamped,
+> right-clamped, fully clamped and missing prior ranges, plus a real ECharts
+> SVG-SSR compact-dense → desktop-sparse transition. The transition proves the
+> formatter, interval and forced endpoint flags are removed while the non-full
+> logical/dataZoom range remains preserved; only the explicit no-prior-range
+> fallback maps to 0–100. The exact chart-core file passes 61/61.
+
+> **⚠️ Fuori pista (I60G Growth range-state review, 2026-09-16):**
+> the next exact review found three coupled edges in the same state machine:
+> empty history left stale ECharts zoom available for the next dataset; restored
+> partial ranges reset to daily without density-based resolution selection; and
+> a resize/mode full rebuild inside the 200ms debounce could use stale stored
+> bounds instead of the live chart zoom. All remain inside the authorized
+> history-range preservation contract.
+
+> **Note implementazione (I60G Growth range-state closure, 2026-09-16):**
+> `getLogicalRangeFromChart` now returns a range only when an active rendered
+> dataset matches the current resolution, so empty→populated cannot map stale
+> ECharts percentages onto new dates. Every history reset marks resolution
+> selection pending; the first render chooses density from the restored full,
+> partial or clamped logical range before building dataZoom. Every render also
+> synchronously captures the live chart range before a possible full option
+> replacement, closing the debounce race for resize and mode changes.
+
+> **Note implementazione (I60G Growth range-state regressions, 2026-09-16):**
+> test-author added stateful nonempty→empty→replacement history, clamped-range
+> resolution-selection and immediate live-zoom→full-rebuild cases. They verify
+> stale ECharts percentages are ignored without an active dataset, the restored
+> partial range—not the full domain or hardcoded daily—drives first resolution,
+> and live zoom wins over debounced stored bounds while compact-only x-axis keys
+> are cleared. Production-helper plus ECharts SVG-SSR evidence passes 64/64.
+
+> **Note implementazione (I60G Growth range-state final gates, 2026-09-16):**
+> parent rerun confirms chart core 64/64 and Dashboard 6/6 per viewport
+> (12/12). Full Prettier is clean, Svelte check reports 0 errors / 41 baseline
+> warnings and production build completes. No backend, locale or MkDocs source
+> changed in this final Growth-only loop; their preceding exact green gates
+> remain applicable.
+
+> **⚠️ Fuori pista (I60G deferred-history review, 2026-09-16):**
+> the next exact review found that two history references arriving before the
+> deferred render could preserve stored bounds after the first reset even though
+> no active dataset remained to prove them current. The history effect now
+> preserves only `getLogicalRangeFromChart()` evidence from active rendered
+> data; a null active range is passed through as null, so the next render
+> initializes the full new domain instead of recycling stale stored dates.
+
+> **Note implementazione (I60G deferred-history regression, 2026-09-16):**
+> test-author added a stateful A-partial-zoom → A-reset → B-before-render case.
+> It proves cleared active data yields null capture, B receives its own full
+> domain and 0–100 window, and no A date reaches B's range/zoom mapping. The
+> paired source-order contract rejects any `ensureLogicalRange` fallback in the
+> history-change effect. Chart core passes 65/65.
+
+> **Note implementazione (I60G deferred-history final gates, 2026-09-16):**
+> parent rerun confirms chart core 65/65 and Dashboard 6/6 per viewport
+> (12/12). Full Prettier is clean, Svelte check reports 0 errors / 41 baseline
+> warnings and production build completes. No backend, locale or MkDocs source
+> changed in this final narrow loop.
+
+> **Note review finale (I60G Growth range-state, 2026-09-16):**
+> the fresh exact-revision independent review reports `No blockers` and confirms
+> manual review is safe. Active-data ownership, empty/rapid history fallbacks,
+> clamping, resolution reselection, synchronous live-zoom capture and
+> compact→desktop x-axis replacement were reviewed together on the final
+> revision.
+
+> **⚠️ Fuori pista (manual review follow-up 3, 2026-09-16):**
+> developer accepted the overall Calendar/spacing/localization behavior and
+> reported two bounded sync defects. During a coordinated peer sync the Asset
+> can finish before required FX, so an existing typed FX banner is legitimate
+> while work remains; after all required configured FX routes are accepted the
+> current comparison facts must be reloaded so the banner disappears without a
+> page reload, while failed/skipped routes retain it. The peer Asset and every
+> required configured price/event FX route must also share a sync interval made
+> from the already-required Calendar lookback plus seven calendar days before
+> and up to seven after (capped at today). The review server was stopped first
+> and lane 6157 proved free.
+
+> **Note implementazione (I60H comparison sync padding, 2026-09-16):**
+> `buildComparisonSyncRange` now composes the selected start with the current
+> Calendar N-day warmup when applicable, then adds seven calendar days before;
+> it extends a historical end by seven days capped at the user's today and
+> never emits a future end. `min` remains the unbounded start sentinel. The same
+> immutable padded range is sent to the peer Asset sync and every required
+> configured price/event FX route; cache refill uses the equivalent concrete
+> padded range while chart/output queries keep the original selection. The
+> Calendar window is included in the request-current guard.
+
+> **Note implementazione (I60H FX banner lifecycle, 2026-09-16):**
+> Calendar comparison data quality now tracks price-conversion failures from
+> the current bulk response separately from general signal problems. During a
+> same-fingerprint coordinated sync the existing failure state stays visible;
+> only after all required FX requests settle and accepted data is reloaded does
+> the current response replace that state. Price mode continues to derive the
+> banner from refreshed comparison runtime data. Failed/skipped routes retain
+> their typed issue, and existing account/route/range/mode/window/generation
+> guards prevent stale completion from publishing or clearing it.
+
+> **⚠️ Fuori pista (I60H focused E2E triage, 2026-09-16):**
+> the first focused desktop/mobile run exposed two test assumptions, not product
+> defects. A global conversion count included an unrelated already-in-flight
+> Calendar conversion while both banners and reload counters correctly remained
+> unchanged before FX acceptance; the regression now identifies only owned
+> post-baseline refills by configured pair and exact padded interval. The MAX
+> refill expectation also omitted the 365-day Calendar warmup and now correctly
+> expects 365 + 7 days before the concrete cache start. The corrected focused
+> Calendar workflow passes 1/1 per viewport (2/2 total); an initial direct
+> non-Pipenv mobile invocation failed before collection and the canonical
+> shared-venv invocation passed.
+
+> **⚠️ Fuori pista (I60H final banner review, 2026-09-16):**
+> exact review found two remaining same-domain banner edges. A missing/rejected
+> same-fingerprint Calendar reload cleared prior FX diagnostics even though no
+> authoritative conversion result existed; and scanning every mixed error let
+> an event-only generic conversion message mark the peer price route failed.
+
+> **Note implementazione (I60H authoritative banner state, 2026-09-16):**
+> same-fingerprint Calendar reload failures now clear stale plotted peer views
+> but preserve the prior typed comparison problem/price-FX failure state until
+> a present current response replaces it. New fingerprints still clear all
+> prior diagnostics/events. Price-FX failure extraction is shared and ordered:
+> only the first non-event conversion error may classify the peer price route;
+> event-scoped failures continue through their own event dependency banner.
+> Present peers authoritatively clear or replace their failure, while a missing
+> peer item retains its previous failure rather than inventing success.
+
+> **⚠️ Fuori pista (I60H unavailable peer continuity, 2026-09-16):**
+> after test-author made Ready-peer selection an owned precondition, the
+> authoritative response proved a selected peer was present but returned typed
+> unavailable during its FX gap; replacing the complete view map removed the
+> peer's previously factual same-fingerprint line.
+
+> **Note implementazione (I60H factual peer continuity, 2026-09-16):**
+> a present peer whose current same-fingerprint result is explicitly
+> `unavailable` now keeps its last factual ready/partial line while adopting the
+> current typed problem and FX banner. This preservation is deliberately narrow:
+> absent peers, failed results and malformed responses are not retained; a new
+> fingerprint still clears all prior facts and diagnostics. A later present
+> factual response replaces the preserved line authoritatively.
+
+> **⚠️ Fuori pista (I60H Price runtime cache marker, 2026-09-16):**
+> the expanded missing-peer lifecycle returned from Calendar to Price after its
+> runtime comparison params had been cleared, but the applied Price fingerprint
+> still matched. `maybeLoadComparison` therefore treated an absent runtime
+> payload as a cache hit and emitted no authoritative Price peer query.
+
+> **Note implementazione (I60H authoritative Price runtime cache, 2026-09-16):**
+> a matching Price comparison fingerprint can now short-circuit only when every
+> requested comparison config retains the `_conversionFailed` runtime marker
+> written by `applyComparisonAssetsData` for both success and authoritative
+> no-data outcomes. Clearing runtime params deletes that marker, so returning to
+> Price necessarily reloads the current peer data even if a stale applied
+> fingerprint survived a Calendar path.
+
+> **Note implementazione (I60H authoritative banner final gates, 2026-09-16):**
+> the corrected focused lifecycle passes 1/1 per viewport and the complete
+> Asset detail matrix passes 28/28 per viewport (56/56). Seven affected
+> sync/chart unit files pass 285/285, including 33 ordered-error/padding loader
+> cases. The first final format check identified only Asset detail source and
+> its E2E file; canonical Prettier normalized both, then full Prettier passed.
+> Svelte check reports 0 errors / 41 baseline warnings and production build
+> completes.
+
+> **⚠️ Fuori pista (I60H event/cache final review, 2026-09-16):**
+> the next exact review found that Price's authoritative-runtime cache check
+> covered peer price markers but not the shared peer event map; a Calendar
+> fingerprint clear could therefore remove events while Price still
+> short-circuited. It also found that the factual-line continuity guard trusted
+> a raw `unavailable` string even when the result failed the generated backend
+> schema.
+
+> **Note implementazione (I60H complete runtime ownership, 2026-09-16):**
+> a Price comparison cache hit now requires both the loader-written
+> `_conversionFailed` marker and a `comparisonEvents` entry for every requested
+> peer, so returning after a Calendar event clear reloads price data, event
+> markers/counts and event-FX diagnostics together. Calendar parsing now rejects
+> any schema-invalid result as `error` before interpreting its status; only a
+> generated-schema-valid typed `unavailable` result can retain prior
+> same-fingerprint factual peer data.
+
+> **⚠️ Fuori pista (I60H unavailable schema seam, 2026-09-16):**
+> applying generated-schema validation before all Calendar normalization broke
+> the intentionally supported one-level nested ready/partial transport shapes
+> in five helper tests. Validation is now mandatory specifically before an
+> `unavailable` state can be accepted for factual-line retention; ready/partial
+> continue through the existing structural normalizer, while real schema-valid
+> responses still carry typed problems.
+
+> **⚠️ Fuori pista (I60H bulk transport isolation, 2026-09-16):**
+> the malformed-unavailable E2E then proved Zodios rejected the complete
+> `FAPriceQueryResponse` before per-asset parsing because one peer signal failed
+> `SignalResult`; valid primary and sibling results could not remain isolated.
+
+> **Note implementazione (I60H per-signal transport isolation, 2026-09-16):**
+> Asset detail's signal-bearing bulk query now uses the shared authenticated
+> Axios instance and validates every non-signal item field with the generated
+> `FAPriceQueryResult` schema after filtering only invalid signals for that
+> validation pass. It then restores the raw signal array for existing per-item
+> parsing, so one malformed peer becomes only that peer's typed error while
+> valid primary/siblings continue. Top-level, price, event and item-shape
+> failures still reject explicitly; `SignalResult` itself is not weakened.
+
+> **Note implementazione (I60H transport isolation final gates, 2026-09-16):**
+> the focused authoritative lifecycle passes 1/1 per viewport and the complete
+> Asset detail matrix passes 28/28 per viewport (56/56). Full parser/helper
+> coverage passes 117/117; the final loader/parser/chart-core aggregate passes
+> 215/215. Full Prettier is clean, Svelte check reports 0 errors / 41 baseline
+> warnings and production build completes.
+
+> **Note review finale (I60H, 2026-09-16):**
+> the fresh exact-revision independent review reports `No blockers` and marks
+> manual review safe. It reviewed padding, accepted-only banner transitions,
+> ordered event/price errors, valid-unavailable factual continuity,
+> price+event runtime ownership and per-signal transport isolation together.
+
+> **Note implementazione (I60H final focused gates, 2026-09-16):**
+> pure sync-range coverage passes 31/31; the corrected focused lifecycle passes
+> 1/1 per viewport; the complete Asset detail matrix passes 28/28 per viewport
+> (56/56); and seven affected sync/chart unit files pass 283/283. The first
+> final Prettier check identified only the Asset detail page, canonical format
+> normalized it, then full Prettier passed. Svelte check reports 0 errors / 41
+> baseline warnings and the production build completes. Backend, locale and
+> MkDocs sources were unchanged by I60H, so their preceding exact gates remain
+> applicable.
+
+> **Note implementazione (I60G Growth range final gates, 2026-09-16):**
+> parent rerun confirms chart core 61/61 and Dashboard 6/6 per viewport
+> (12/12 total). Full Prettier is clean, Svelte check reports 0 errors / 41
+> baseline warnings, production build succeeds and i18n remains complete at
+> 2765/2765 in EN/IT/FR/ES with 0 missing/incomplete keys. Backend and MkDocs
+> sources were unchanged by this final Growth-only correction, so their prior
+> exact green gates remain applicable.
+
+> **Note implementazione (I60G post-review gates, 2026-09-16):**
+> after the two M3 fixes, the complete 13-file affected unit aggregate passes
+> 465/465. The final combined Asset detail plus Dashboard matrix passes 34/34
+> per viewport (68/68 total), covering Calendar lifecycle, Candlestick rebuild
+> and Growth responsive rendering. Full Prettier remains clean, Svelte check
+> remains 0 errors / 41 baseline warnings, and the production frontend rebuild
+> completes; its external MathJax certificate warning used the existing cached
+> asset and did not affect the build.
+
+> **Note implementazione (I60G repair documentation, 2026-09-16):**
+> the English Asset chart guide now documents unrestricted positive Calendar
+> windows, selected-range output bounds with factual pre-range lookback,
+> line-local primary/peer inception and gaps, typed partial versus zero-valid
+> unavailable, and mode-independent Page Sync of already-configured
+> primary/peer/event FX routes. No translated page was edited or stamped.
+> Strict MkDocs build and all 12 cross-boundary links pass.
+
+> **Note autorizzazione (I60F final three lifecycle fixes, 2026-09-15):**
+> developer/coordinator explicitly authorized the three final MEDIUM findings:
+> force main asset-price reload when an accepted peer FX route is also the
+> main conversion route; invalidate hidden Price comparison state after an
+> accepted Calendar page sync; and move per-asset sync generation/active
+> ownership into Asset and FX page parents so panel remounts cannot admit stale
+> same-peer completions. No additional lifecycle or feature scope is authorized.
+
+> **Note implementazione (I60F final three lifecycle fixes, 2026-09-15):**
+> coordinated peer FX sync now detects an accepted route shared with the main
+> asset conversion, invalidates the converted main asset-price cache and forces
+> `include_price:true`; accepted Calendar Page Sync invalidates hidden Price
+> comparison runtime/fingerprint before refresh; and Asset+FX pages own
+> monotonic per-peer active sync tokens exposed to ChartSignalsSection across
+> true remounts. Test-author coverage passes ChartSignalsSection 13/13, Asset
+> desktop 28/28 and FX desktop 17/17, including no duplicate request after
+> collapse/reopen, refreshed main conversion, and exactly one fresh Price peer
+> query after Calendar Page Sync.
+
+> **⚠️ Fuori pista (I60F accepted Page Sync outcome, 2026-09-15):**
+> final three-fix review found that SyncModalBase invokes `onsynced` even when
+> every item fails or skips. PageSyncModal now reports current-run
+> `{accepted}` from actual `ok/partial` section results and resets that value on
+> callback/open. Calendar hidden Price invalidation is accepted-only; all-failed
+> still refreshes the visible page but preserves its valid hidden Price cache.
+> PageSyncModal passes 17/17 and Asset desktop passes 28/28, covering mixed
+> partial, reopen, retry, accepted fresh peers and all-failed reuse.
+
+> **⚠️ Fuori pista (I60F PageSync epoch + Risk forwarding, 2026-09-15):**
+> accepted-only review found that an abandoned accepted response could mutate a
+> component-wide flag after close/reopen, and Risk dropped the acceptance
+> detail. PageSyncModal now epochs each open/close generation and records
+> acceptance only for its still-open current generation. RiskAnalysisPanel and
+> AssetRiskScenariosView forward the same `{accepted}` object end-to-end.
+> Focused PageSync/Risk suites pass 82/82; Asset desktop passes 28/28.
+
+> **Note implementazione (I60F final three-fix mobile gate, 2026-09-15):**
+> the parent-owned sync, shared main-FX cache force and Calendar hidden-Price
+> invalidation regressions also pass on mobile: Asset detail 28/28 and FX detail
+> 17/17 in one serialized lane invocation. No deterministic red remains.
+
+> **Note implementazione (I60F final three-fix component gate, 2026-09-15):**
+> full registered Svelte component suite passes 1809/1809, including
+> ChartSignalsSection true-remount parent-owned sync state and MeasurePanel
+> transient-empty retention/non-empty pruning.
+
+> **⚠️ Fuori pista (I60F final frozen review, 2026-09-15):**
+> the final frozen review found one in-scope duplicate owner: an ordinary
+> Calendar range change below seven days incremented the Price fallback token,
+> while `handleDateRangeChange` also continued into its own chart/comparison
+> loads. The handler now snapshots the fallback generation and returns when
+> `ensureCalendarWindowFitsRange` schedules that token, leaving exactly one
+> sequential Price backend + comparison owner.
+
+> **Note implementazione (I60F final frozen-review gate, 2026-09-15):**
+> the ordinary six-day Calendar→Price regression now proves exactly one token-
+> owned main Price request followed by exactly one comparison request, with no
+> duplicate from `handleDateRangeChange`. Asset detail passes 28/28 desktop and
+> 28/28 mobile on the final revision; full Prettier, Svelte check and production
+> build pass after the fix.
+
+> **Note implementazione (I60F refresh ownership final gates, 2026-09-15):**
+> completed comparison fingerprints now survive promise cleanup for later
+> non-force owners, while peer-present/empty-main states remain retryable.
+> Asset and FX refresh workflows own monotonic tokens plus captured
+> route/range/mode/currency/runtime-stripped signal context. The Calendar
+> `<7d` fallback is owned by a token-only Svelte effect (`untrack` prevents
+> unrelated range re-runs), loads Price backend signals first, then comparisons;
+> its regression gate follows that sequential order. Exact final evidence:
+> Asset detail 28/28 desktop + 28/28 mobile; FX detail 17/17 desktop + 17/17
+> mobile; MeasurePanel 23/23; core 1992/1992; Dashboard+broker responsive 62/62;
+> Asset/FX list + settings modal 78/78; full Prettier/check/build, Ruff/Black,
+> i18n 2765/2765, strict docs and 12/12 links all pass.
+
+> **Note implementazione (I60F post-review combined gates, 2026-09-15):**
+> expanded Asset detail passes 28/28 desktop and 28/28 mobile; core unit suite
+> passes 1992/1992; Dashboard passes 6/6 per viewport; broker detail passes
+> 25/25 per viewport; Asset list passes 24/24 per viewport; FX list passes
+> 12/12 per viewport; corrected FX settings modal passes 3/3 per viewport.
+> Final Svelte check is 0 errors / 41 baseline warnings and production bundles
+> complete in 16.46s / 26.22s. Strict MkDocs build and 12/12 link check pass.
+
+> **Note analisi (mobile X-axis overlap, 2026-09-14 — implementation not
+> authorized):** confirmed date-axis owners are `LineChart.svelte` x-axis/
+> dataZoom at 565-660 (axis 605-611), `CandlestickChart.svelte` grids/axes at
+> 361-399 and option 491-509, `PriceChartFull.svelte` option 860-874,
+> `GrowthChart.svelte` option 760-786, and `AllocationHistoryChart.svelte`
+> `buildChartOption` around 656-739. Every affected axis keeps 11-14px date
+> labels but defines no shared `hideOverlap`, density interval or endpoint
+> policy; inside dataZoom/resolution changes do not thin the initial 430px
+> render. Dashboard `PerformanceChart.svelte` is a horizontal diverging bar
+> chart, not a Growth wrapper, and is exempt. LotGantt/LotComparison/
+> LotWacPrice are additional date-axis surfaces requiring an explicit inclusion
+> decision before implementation.
+>
+> Proposed shared policy: compute usable plot width after grid margins; enter
+> compact mode below 480px or when a category point receives <24px; budget
+> category labels at `min(12, floor(width/72))`, full-date time labels at
+> `floor(width/88)` and compact month labels at `floor(width/56)`. Preserve
+> first/last labels, enable `hideOverlap`, thin interior labels automatically,
+> keep rotation 0 and use 30 degrees only as a measured last fallback. Recompute
+> on initial render, ResizeObserver and resolution switch without altering the
+> dataZoom window; keep full dates in tooltips and desktop options unchanged
+> above budget. Future `test-author` work should cover the pure policy,
+> rendered x-axis options, 430x932 adjacent-label bounding boxes/endpoints and
+> desktop screenshots using `asset-detail-chart`, `candlestick-chart`,
+> `growth-chart`, and `allocation-history-chart`; `performance-chart` asserts
+> the exemption. Developer/coordinator must review formatter granularity,
+> lot-chart inclusion and rotation fallback before any B source edit.
+
+> **Note implementazione (I60F final automated gates, 2026-09-12):** final
+> backend results are signal registry 65 pass, calendar risk 27 pass / 118
+> deselected, and calendar Asset adapter 4 pass / 14 deselected. Eight focused
+> frontend files pass 266/266. Full frontend check reports 0 errors / 41 merged
+> warnings; canonical production build is green. Registered Asset detail passes
+> 26/26 desktop and 26/26 mobile; FX detail passes 14/14 desktop and 14/14
+> mobile. Strict MkDocs build and 12/12 cross-boundary links pass. English docs
+> cover chart, measures, signals and shared FX axis settings; translated siblings
+> intentionally retain Aphra structural debt. Independent review found five
+> medium issues and verified all five fixes. Manual desktop/mobile acceptance
+> remains the only open I60F gate.
+
+#### Follow-up validation
+
+- test-author owns every new/repaired backend, unit, component and E2E test;
+- arbitrary windows cover 1/14/60/1095 days, invalid values and huge safe
+  unavailable outcomes while preserving 7/30/90/365/default and legacy signal;
+- settings tests cover v1→v2 migration, sanitizer, account/scope isolation,
+  absolute/percentage separation and semantic secondary axes;
+- Return tests cover pp measurement, separate table state, same-N comparison
+  lines, partial peers and both request-race classes;
+- final gates: targeted backend/frontend, full front check/build, Asset desktop
+  + mobile, FX regressions, exact format/lint/diff checks, lane teardown and
+  manual desktop/mobile review.
 
 ## 7. ASCII storyboards v2
 

@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
-from typing import Literal
+from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -21,6 +21,7 @@ from backend.app.schemas.signals import (
     SignalCalendarReturnValuePoint,
     SignalCategory,
     SignalComputation,
+    SignalDataPolicy,
     SignalDomain,
     SignalEventPoint,
     SignalExecutionContext,
@@ -39,7 +40,7 @@ from backend.app.schemas.signals import (
 from backend.app.services.provider_registry import SignalPluginRegistry, register_plugin
 from backend.app.services.signal_plugins.base import SignalPlugin, SignalUnavailableError
 
-CalendarWindowDays = Literal[7, 30, 90, 365]
+CalendarWindowDays = Annotated[int, Field(strict=True, gt=0)]
 
 
 class CalendarRollingReturnParams(BaseModel):
@@ -69,6 +70,15 @@ def _resolved_provenance(
         getattr(info, "fx_rate_date", None),
         getattr(info, "fx_days_back", None),
     )
+
+
+def _reference_target_date(
+    current_date: date_type,
+    window_days: int,
+) -> date_type | None:
+    if window_days > (current_date - date_type.min).days:
+        return None
+    return current_date - timedelta(days=window_days)
 
 
 def _point_provenance(
@@ -104,7 +114,7 @@ class CalendarRollingReturnPlugin(SignalPlugin):
     """Compare each resolved daily price with the resolved price N calendar days earlier."""
 
     signal_code = "ASSET_CALENDAR_ROLLING_RETURN"
-    implementation_version = "1.0.0"
+    implementation_version = "1.3.0"
     display_name_key = "signals.riskRollingReturn.name"
     description_key = "signals.riskRollingReturn.description"
     semantic_id = "calendar_rolling_return"
@@ -113,8 +123,12 @@ class CalendarRollingReturnPlugin(SignalPlugin):
     category = SignalCategory.RISK
     params_model = CalendarRollingReturnParams
     catalog_visible = False
+    allows_sparse_output_dates = True
+    allows_sparse_input_dates = True
     input_requirements = SignalInputRequirements(
         price_fields=[SignalPriceField.CLOSE],
+        data_policy=SignalDataPolicy.ALLOW_PARTIAL_CONTIGUOUS,
+        minimum_coverage=0.0,
     )
     output_specs = (
         SignalOutputSpec(
@@ -151,8 +165,8 @@ class CalendarRollingReturnPlugin(SignalPlugin):
     ) -> SignalWarmupRequirement:
         del context
         return SignalWarmupRequirement(
-            minimum_points=2,
-            stabilization_points=params.window_days - 2,
+            minimum_points=1,
+            stabilization_points=params.window_days - 1,
             total_points=params.window_days,
             normalized_tolerance=1e-6,
         )
@@ -168,12 +182,17 @@ class CalendarRollingReturnPlugin(SignalPlugin):
         del event_points
         available_dates = {point.date for point in price_points}
         requested_end = context.requested_range.end or context.requested_range.start
-        visible_dates = (point.date for point in price_points if context.requested_range.start <= point.date <= requested_end)
-        if not any(current_date - timedelta(days=params.window_days) in available_dates for current_date in visible_dates):
+        visible_dates = [point.date for point in price_points if context.requested_range.start <= point.date <= requested_end]
+        reference_targets = [target for current_date in visible_dates if (target := _reference_target_date(current_date, params.window_days)) is not None]
+        if not any(target in available_dates for target in reference_targets):
             raise SignalUnavailableError(
-                "Calendar return has no visible point with a resolved reference date",
+                "Calendar return has no resolvable reference in the loaded history",
                 reason_code=SignalAvailabilityReason.INSUFFICIENT_HISTORY,
-                details={"window_days": params.window_days},
+                details={
+                    "window_days": params.window_days,
+                    "requested_start": context.requested_range.start.isoformat(),
+                    "requested_end": requested_end.isoformat(),
+                },
             )
 
     def compute(
@@ -192,7 +211,14 @@ class CalendarRollingReturnPlugin(SignalPlugin):
         requested_end = context.requested_range.end or context.requested_range.start
 
         for current in price_points:
-            reference_target_date = current.date - timedelta(days=params.window_days)
+            if not context.requested_range.start <= current.date <= requested_end:
+                continue
+            reference_target_date = _reference_target_date(
+                current.date,
+                params.window_days,
+            )
+            if reference_target_date is None:
+                continue
             reference = points_by_date.get(reference_target_date)
             if current.close <= 0:
                 status = SignalCalendarReturnPointStatus.INVALID_CURRENT_PRICE
@@ -206,7 +232,7 @@ class CalendarRollingReturnPlugin(SignalPlugin):
             else:
                 status = SignalCalendarReturnPointStatus.AVAILABLE
                 value = float((current.close / reference.close - one) * hundred)
-            if value is None and context.requested_range.start <= current.date <= requested_end:
+            if value is None:
                 unavailable_counts[status.value] += 1
             output_points.append(
                 SignalCalendarReturnValuePoint(
@@ -220,6 +246,23 @@ class CalendarRollingReturnPlugin(SignalPlugin):
                     ),
                 )
             )
+
+        if output_points and all(point.value is None for point in output_points):
+            raise SignalUnavailableError(
+                "Calendar return is undefined for every point in the selected range",
+                reason_code=SignalAvailabilityReason.UNDEFINED_METRIC,
+                details={
+                    "window_days": params.window_days,
+                    "unavailable_points": sum(unavailable_counts.values()),
+                    "reasons": dict(sorted(unavailable_counts.items())),
+                },
+            )
+        first_available_index = next(
+            (index for index, point in enumerate(output_points) if point.value is not None),
+            None,
+        )
+        if first_available_index is not None:
+            output_points = output_points[first_available_index:]
 
         spec = self.output_specs[0]
         warnings = (

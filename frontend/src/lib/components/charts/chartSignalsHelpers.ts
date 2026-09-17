@@ -60,10 +60,17 @@ export function formatSignalProblem(problem: SignalProblem, translate: SignalPro
                 requested: problemCount(problem.requestedPoints),
             });
         case 'insufficient_history':
+            if (problem.minimumPoints === 0 && problem.message) return problem.message;
             return translate('chartSettings.signalProblems.insufficientHistory', {
                 available: problemCount(problem.availablePoints),
                 required: problemCount(problem.minimumPoints),
             });
+        case 'fx_conversion_unavailable':
+            return problem.message || translate('chartSettings.signalProblems.unavailable');
+        case 'undefined_metric':
+            return problem.message || translate('chartSettings.signalProblems.unavailable');
+        case 'partial_undefined_metric':
+            return problem.message || translate('chartSettings.signalProblems.partialResult');
         case 'incomplete_warmup':
             return translate('chartSettings.signalProblems.incompleteWarmup', {
                 used: problemCount(problem.warmupUsedPoints),

@@ -12,15 +12,15 @@
      *
      * Uses Svelte 5 runes. Reference: fx/[pair]/+page.svelte
      */
-    import {onDestroy, onMount, tick, untrack} from 'svelte';
+    import {onDestroy, onMount, tick} from 'svelte';
     import {page} from '$app/stores';
     import {goto} from '$app/navigation';
     import {debug, isDebugEnabled} from '$lib/debug';
     import {_ as t} from '$lib/i18n';
     import {get} from 'svelte/store';
-    import {zodiosApi} from '$lib/api';
+    import {axiosInstance, schemas, zodiosApi} from '$lib/api';
     import {goBack} from '$lib/stores/app/navigationStore';
-    import {ArrowLeft, ChevronDown, ExternalLink, Info, Pencil, RefreshCw, RotateCw, Ruler, Settings, TrendingUp, X} from 'lucide-svelte';
+    import {ArrowLeft, ChartLine, ChevronDown, ExternalLink, Info, Pencil, Percent, RefreshCw, RotateCw, Ruler, Settings, TrendingUp, X} from 'lucide-svelte';
     import AssetDataEditorSection from '$lib/components/assets/AssetDataEditorSection.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import PriceChartFull from '$lib/components/charts/PriceChartFull.svelte';
@@ -42,6 +42,7 @@
     import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';
     import AssetRiskScenariosView from '$lib/components/risk/AssetRiskScenariosView.svelte';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
+    import CompactDurationBadge from '$lib/components/ui/date/CompactDurationBadge.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {
         backendSignalSchemas,
@@ -58,8 +59,9 @@
         type SignalConfig,
         type SignalDefinition,
         type SignalInstanceResult,
+        type SignalProblem,
     } from '$lib/charts/signals';
-    import {getSettingsForPair, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';
+    import {DEFAULT_AXIS_SCALE, normalizeAxisScaleSettings, setPairSettings, getSettingsForPair, type AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {invalidateFxRoutes} from '$lib/stores/reference/fxRoutesStore';
     import {currentLanguage} from '$lib/stores/app/language';
@@ -75,13 +77,17 @@
     import type {AssetDetail, ProviderAssignmentFlat} from '$lib/types';
     import type {SignalLabelInfo} from '$lib/charts/signalLabel';
     import {buildOverlaySignalInfoMap} from '$lib/charts/signalLabel';
-    import {loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
+    import {applyComparisonAssetsData, buildComparisonSyncRange, clearComparisonAssetsData, collectConfiguredComparisonFxSlugs, COMPARISON_ASSET_RUNTIME_PARAM_KEYS, getComparisonEventFxDependency, loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import {fetchCurrentPrices, computeDirection} from '$lib/services/livePriceService';
     import type {LivePriceDirection} from '$lib/services/livePriceService';
     import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';
     import {COLORS} from '$lib/components/charts/lineChartHelpers';
-    import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, extractCalendarReturnView, isCalendarReturnSignalResult, type CalendarReturnView, type CalendarReturnViewState, type CalendarReturnWindowDays} from '$lib/components/charts/priceChartHelpers';
+    import {collectConfigurableSecondaryAxes} from '$lib/components/charts/chartCoreHelpers';
+    import {percentageAxisLabel, priceAxisLabel, secondaryAxisLabel} from '$lib/components/charts/axisLabelHelpers';
+    import {formatSignalProblem} from '$lib/components/charts/chartSignalsHelpers';
+    import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, extractCalendarReturnView, extractCalendarReturnViewsByAsset, isCalendarReturnSignalResult, type CalendarReturnView, type CalendarReturnViewState} from '$lib/components/charts/priceChartHelpers';
+    import {CALENDAR_RETURN_PRESETS, DEFAULT_CALENDAR_RETURN_WINDOW, calendarReturnRangeDays, calendarReturnWindowDays, type CalendarReturnPresetKey, type CalendarReturnWindowSelection, type CalendarReturnWindowUnit} from '$lib/components/charts/calendarReturnWindow';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
     import AiExportMenu from '$lib/features/ai-export/AiExportMenu.svelte';
@@ -138,6 +144,11 @@
     let error: string | null = $state(null);
     let syncing = $state(false);
     let fxSyncing = $state(false);
+    const fxSyncRequestGenerations = new Map<string, number>();
+    const activeFxSyncRequests = new Map<string, number>();
+    const assetSyncRequestGenerations = new Map<number, number>();
+    const activeAssetSyncRequests = new Map<number, number>();
+    let syncingComparisonAssetIds = $state<Set<number>>(new Set());
 
     /** Reactively resolved error message — translates i18n keys when language changes */
     let errorMessage = $derived.by(() => {
@@ -175,15 +186,31 @@
     let chartType: ChartType = $state('line');
     let displayCurrency = $state('');
     type AssetChartPrimaryMode = 'price' | 'calendar-return';
-    const CALENDAR_RETURN_WINDOWS: CalendarReturnWindowDays[] = [7, 30, 90, 365];
     let primaryMode = $state<AssetChartPrimaryMode>('price');
-    let calendarWindowDays: CalendarReturnWindowDays = $state(30);
+    let calendarWindowSelection: CalendarReturnWindowSelection = $state({
+        ...DEFAULT_CALENDAR_RETURN_WINDOW,
+    });
+    let calendarCustomAmount = $state(DEFAULT_CALENDAR_RETURN_WINDOW.customAmount);
+    let calendarCustomUnit: CalendarReturnWindowUnit = $state(DEFAULT_CALENDAR_RETURN_WINDOW.customUnit);
+    let calendarCustomEditing = $state(false);
+    let calendarWindowHydratedScope: string | null = null;
+    let calendarWindowDays = $derived(calendarReturnWindowDays(calendarWindowSelection) ?? 30);
+    let calendarRangeDays = $derived(calendarReturnRangeDays(dateStart, dateEnd));
     let calendarReturnView: CalendarReturnView = $state(emptyCalendarReturnView());
+    let calendarComparisonViews: Map<number, CalendarReturnView> = $state(new Map());
+    let calendarComparisonProblems: Map<number, SignalProblem> = $state(new Map());
+    let calendarComparisonFxFailures: Set<number> = $state(new Set());
+    let calendarSnapshotFingerprint: string | null = $state(null);
     let chartRequestGeneration = 0;
+    let comparisonRequestGeneration = 0;
+    let refreshRequestGeneration = 0;
+    let comparisonAppliedFingerprint: string | null = null;
+    let comparisonInFlight: {fingerprint: string; promise: Promise<void>} | null = null;
 
     // Foldable panels
     let showAesthetics = $state(false);
     let showMeasures = $state(false);
+    let showCalendarMeasures = $state(false);
     let showSignals = $state(false);
     let showDataEditor = $state(false);
     let showMetadata = $state(false);
@@ -202,6 +229,7 @@
     // Chart settings
     let settings = $derived(getSettingsForPair(`asset-${data.assetId}`, 'assets'));
     let signals = $derived<SignalConfig[]>([...settings.signals]);
+    let calendarSnapshotIsCurrent = $derived.by(() => calendarSnapshotFingerprint === calendarDataFingerprint(signals));
     let signalDefinitions = $state<SignalDefinition[]>([]);
     let signalInstanceResults = $state<SignalInstanceResult[]>([]);
     let signalCatalogFailed = $state(false);
@@ -210,10 +238,38 @@
     const signalResultState = new SignalResultState();
     let signalBackendError = $derived(signalCatalogFailed ? $t('chartSettings.signalCatalogUnavailable') : signalRequestFailed ? $t('chartSettings.signalResultsUnavailable') : null);
 
+    $effect(() => {
+        const scope = `${getClientSessionGeneration()}:${data.assetId}`;
+        if (calendarWindowHydratedScope === scope) return;
+        calendarWindowSelection = {
+            ...settings.calendarReturnWindow,
+        };
+        calendarCustomAmount = settings.calendarReturnWindow.customAmount;
+        calendarCustomUnit = settings.calendarReturnWindow.customUnit;
+        calendarWindowHydratedScope = scope;
+    });
+    let calendarDurationOptions = $derived([
+        {
+            value: 'weeks',
+            label: $t('datePicker.granularity.weeksShort').toUpperCase(),
+        },
+        {
+            value: 'months',
+            label: $t('datePicker.granularity.monthsShort').toUpperCase(),
+        },
+        {
+            value: 'years',
+            label: $t('datePicker.granularity.yearsShort').toUpperCase(),
+        },
+    ]);
+
     // Measure panel
     let measureMode = $state(false);
     let measureSignals: RenderedSignal[] = $state([]);
     let measurePanel: MeasurePanel | undefined = $state(undefined);
+    let calendarMeasureMode = $state(false);
+    let calendarMeasureSignals: RenderedSignal[] = $state([]);
+    let calendarMeasurePanel: MeasurePanel | undefined = $state(undefined);
 
     // Editor panel state save/restore
     let savedPanelStates: {aesthetics: boolean; measures: boolean; signals: boolean} | null = $state(null);
@@ -225,6 +281,13 @@
     let assetDataEditorRef: AssetDataEditorSection | undefined = $state(undefined);
 
     let overlayDataVersion = $state(0);
+    let signalPanelConfigs = $derived.by(() => {
+        void overlayDataVersion;
+        return signals.map((signal) => ({
+            ...signal,
+            params: {...signal.params},
+        }));
+    });
     let editModalOpen = $state(false);
 
     // Edit data — computed on-demand when modal opens (NOT $derived, to avoid effect loops)
@@ -300,34 +363,101 @@
             volume: p.volume != null ? Number(p.volume) : null,
         })),
     );
-    let activeChartData = $derived(primaryMode === 'price' ? lineData : calendarReturnView.points);
+    let calendarChartData = $derived.by(() => {
+        if (!calendarSnapshotIsCurrent) return [];
+        const primaryByDate = new Map(calendarReturnView.points.map((point) => [point.date, point]));
+        const dates = new Set(primaryByDate.keys());
+        for (const assetId of comparisonAssetIds(signals)) {
+            const view = calendarComparisonViews.get(assetId);
+            if (!view || !['ready', 'partial'].includes(view.state)) continue;
+            for (const point of view.points) dates.add(point.date);
+        }
+        return [...dates].sort((left, right) => left.localeCompare(right)).map((date) => primaryByDate.get(date) ?? {date, value: 0, missing: true});
+    });
+    let calendarHasFactualPeerData = $derived(
+        calendarSnapshotIsCurrent &&
+            comparisonAssetIds(signals).some((assetId) => {
+                const view = calendarComparisonViews.get(assetId);
+                return !!view && ['ready', 'partial'].includes(view.state) && view.points.some((point) => !point.missing);
+            }),
+    );
+    let calendarChartState = $derived.by((): CalendarReturnViewState => {
+        if (primaryMode === 'calendar-return' && !calendarSnapshotIsCurrent) return 'loading';
+        if (calendarReturnView.state === 'loading') return 'loading';
+        if (calendarHasFactualPeerData && ['idle', 'unavailable', 'error'].includes(calendarReturnView.state)) return 'partial';
+        return calendarReturnView.state;
+    });
+    let activeChartData = $derived(primaryMode === 'price' ? lineData : calendarChartData);
     let calendarPointContext = $derived(primaryMode === 'calendar-return' ? calendarReturnView.contextByDate : undefined);
     let chartSeriesState = $derived.by(() => {
-        if (primaryMode === 'calendar-return') return calendarReturnView.state;
+        if (primaryMode === 'calendar-return') return calendarChartState;
         if (loading) return 'loading';
         return lineData.length > 0 ? 'ready' : error ? 'error' : 'unavailable';
     });
 
     function emptyCalendarReturnView(state: CalendarReturnViewState = 'idle'): CalendarReturnView {
-        return {state, points: [], contextByDate: new Map()};
+        return {state, points: [], contextByDate: new Map(), problem: null};
     }
+
+    function translateCalendarProblem(key: string, values?: Record<string, string | number>): string {
+        return values ? $t(key, {values}) : $t(key);
+    }
+
+    let calendarPrimaryProblemMessage = $derived(calendarReturnView.problem ? formatSignalProblem(calendarReturnView.problem, translateCalendarProblem, (field) => $t(`signals.dataFields.${field}`)) : null);
+    let calendarPrimaryProblemSeverity = $derived(calendarReturnView.problem ? getSignalProblemSeverity(calendarReturnView.problem) : null);
 
     function setPrimaryMode(mode: AssetChartPrimaryMode) {
         if (mode === primaryMode) return;
+        if (primaryMode === 'price') {
+            measurePanel?.stopMeasureMode();
+        } else {
+            calendarMeasurePanel?.stopMeasureMode();
+        }
         primaryMode = mode;
         if (mode === 'calendar-return') {
-            calendarReturnView = emptyCalendarReturnView('loading');
             void loadChartData(false);
         } else {
-            calendarReturnView = emptyCalendarReturnView();
+            calendarCustomEditing = false;
+            void maybeLoadComparison();
+            const hasBackendSignals = signals.some((config) => signalDefinitionsByType.get(config.signalType)?.source === 'backend');
+            if (hasBackendSignals) void loadChartData(false);
         }
     }
 
-    function setCalendarWindow(windowDays: CalendarReturnWindowDays) {
-        if (windowDays === calendarWindowDays) return;
-        calendarWindowDays = windowDays;
+    function persistCalendarWindow(selection: CalendarReturnWindowSelection): void {
+        calendarWindowSelection = selection;
+        setPairSettings(`asset-${data.assetId}`, {
+            ...settings,
+            calendarReturnWindow: {...selection},
+            signals: [...signals],
+        });
+    }
+
+    function setCalendarPreset(preset: CalendarReturnPresetKey) {
+        if (!CALENDAR_RETURN_PRESETS.some((candidate) => candidate.key === preset)) return;
+        if (calendarWindowSelection.kind === 'preset' && calendarWindowSelection.preset === preset) return;
+        calendarCustomEditing = false;
+        persistCalendarWindow({
+            ...calendarWindowSelection,
+            kind: 'preset',
+            preset,
+        });
         if (primaryMode === 'calendar-return') {
-            calendarReturnView = emptyCalendarReturnView('loading');
+            void loadChartData(false);
+        }
+    }
+
+    function setCalendarCustom(customAmount: number, customUnit: CalendarReturnWindowUnit): void {
+        const selection: CalendarReturnWindowSelection = {
+            ...calendarWindowSelection,
+            kind: 'custom',
+            customAmount,
+            customUnit,
+        };
+        if (calendarReturnWindowDays(selection) === null) return;
+        const changed = calendarWindowSelection.kind !== 'custom' || calendarWindowSelection.customAmount !== customAmount || calendarWindowSelection.customUnit !== customUnit;
+        persistCalendarWindow(selection);
+        if (changed && primaryMode === 'calendar-return') {
             void loadChartData(false);
         }
     }
@@ -350,7 +480,7 @@
         if (!hasOhlcv) chartType = 'line';
     });
     /** Settings that don't apply in candlestick mode — greyed out in aesthetics panel */
-    let disabledAesthetics = $derived((chartType as string) === 'candlestick' ? new Set(['colorByBaseline', 'areaFill', 'staleGradient']) : new Set<string>());
+    let disabledAesthetics = $derived(primaryMode === 'price' && (chartType as string) === 'candlestick' ? new Set(['colorByBaseline', 'areaFill', 'staleGradient']) : new Set<string>());
 
     /** First data point date — used for "no data before" banner */
     let firstDataDate = $derived(chartData.length > 0 ? chartData[0].date : null);
@@ -501,15 +631,15 @@
             seenSlugs.add(slug);
 
             const missing = !allConfiguredFxSlugs.includes(slug);
-            const convFailed = Boolean(cfg.params._conversionFailed);
-            const hasData = Boolean(cfg.params._resolvedData);
             let status: RequiredFxPairInfo['status'];
             if (missing) {
                 status = 'missing';
-            } else if (convFailed || !hasData) {
-                status = 'no-data';
+            } else if (primaryMode === 'calendar-return' && calendarSnapshotIsCurrent) {
+                status = calendarComparisonFxFailures.has(targetId) || calendarComparisonProblems.get(targetId)?.code === 'fx_conversion_unavailable' ? 'no-data' : 'ok';
             } else {
-                status = 'ok';
+                const convFailed = Boolean(cfg.params._conversionFailed);
+                const hasData = Boolean(cfg.params._resolvedData);
+                status = convFailed || !hasData ? 'no-data' : 'ok';
             }
             pairs.push({
                 slug,
@@ -527,38 +657,48 @@
         // duplicating detection code. `forAsset` uses an i18n-aware "for events"
         // label so the user understands the context.
         if (displayCurrency) {
-            const eventCurrencies = new Set<string>();
-            for (const ev of events) {
-                const c = ev.value?.code;
-                if (c && c !== displayCurrency) eventCurrencies.add(c);
-            }
-            for (const [, evts] of comparisonEvents) {
-                for (const ev of evts) {
-                    const c = ev.value?.code;
-                    if (c && c !== displayCurrency) eventCurrencies.add(c);
-                }
-            }
-            for (const evCur of eventCurrencies) {
-                const slug = toSlug(evCur, displayCurrency);
-                if (seenSlugs.has(slug)) continue;
-                seenSlugs.add(slug);
-                const missing = !allConfiguredFxSlugs.includes(slug);
-                // Check if there is at least one event in this currency that failed conversion.
-                const hasFailedConversion = events.some((ev) => ev.value?.code === evCur && !ev.original_value);
-                let status: RequiredFxPairInfo['status'];
-                if (missing) {
-                    status = 'missing';
-                } else if (hasFailedConversion) {
-                    status = 'no-data';
-                } else {
-                    status = 'ok';
-                }
-                pairs.push({
-                    slug,
-                    label: slug.replace('-', '/'),
+            const eventSources: Array<{
+                values: any[];
+                forAsset: string;
+                forAssetIconUrl?: string | null;
+                forAssetType?: string | null;
+            }> = [
+                {
+                    values: events,
                     forAsset: $t('events.fxBannerContext') ?? 'for dividend/cash events',
-                    status,
-                });
+                },
+                ...[...comparisonEvents].map(([assetId, values]) => {
+                    const asset = allAssets.find((candidate) => candidate.id === assetId);
+                    return {
+                        values,
+                        forAsset: asset?.display_name ?? `Asset #${assetId}`,
+                        forAssetIconUrl: asset?.icon_url,
+                        forAssetType: asset?.asset_type,
+                    };
+                }),
+            ];
+            for (const source of eventSources) {
+                for (const event of source.values) {
+                    const dependency = getComparisonEventFxDependency(event, displayCurrency);
+                    if (!dependency) continue;
+                    const slug = toSlug(dependency.sourceCurrency, displayCurrency);
+                    const missing = !allConfiguredFxSlugs.includes(slug);
+                    const existing = pairs.find((pair) => pair.slug === slug);
+                    if (existing) {
+                        if (missing) existing.status = 'missing';
+                        else if (dependency.failed && existing.status === 'ok') existing.status = 'no-data';
+                        continue;
+                    }
+                    seenSlugs.add(slug);
+                    pairs.push({
+                        slug,
+                        label: slug.replace('-', '/'),
+                        forAsset: source.forAsset,
+                        forAssetIconUrl: source.forAssetIconUrl,
+                        forAssetType: source.forAssetType,
+                        status: missing ? 'missing' : dependency.failed ? 'no-data' : 'ok',
+                    });
+                }
             }
         }
 
@@ -599,6 +739,7 @@
                         domain: 'forex',
                         code: 'FX_PAIR_MISSING',
                         severity: 'warning',
+                        group_key: pair.slug,
                         message_i18n_key: 'dataQuality.fxPairMissing',
                         affected_fx_pairs: [pair.slug],
                         affected_asset_names: [pair.forAsset],
@@ -610,6 +751,7 @@
                         domain: 'forex',
                         code: 'FX_PAIR_NO_DATA',
                         severity: 'warning',
+                        group_key: pair.slug,
                         message_i18n_key: 'dataQuality.fxPairNoData',
                         affected_fx_pairs: [pair.slug],
                         affected_asset_names: [pair.forAsset],
@@ -621,6 +763,7 @@
                         domain: 'forex',
                         code: 'FX_PAIR_PARTIAL_GAP',
                         severity: 'info',
+                        group_key: pair.slug,
                         message_i18n_key: 'dataQuality.fxPairPartialGap',
                         message_params: {date: pair.firstDate ?? ''},
                         affected_fx_pairs: [pair.slug],
@@ -722,6 +865,69 @@
     });
 
     let allOverlaySignals: RenderedSignal[] = $derived([...overlaySignals, ...measureSignals, ...(pendingPreviewSignal ? [pendingPreviewSignal] : [])]);
+    let calendarComparisonSignals: RenderedSignal[] = $derived.by(() => {
+        const rendered: RenderedSignal[] = [];
+        if (!calendarSnapshotIsCurrent) return rendered;
+        for (const config of signals) {
+            if (config.signalType !== 'asset-comparison') continue;
+            const assetId = Number(config.params.assetId);
+            const view = calendarComparisonViews.get(assetId);
+            if (!assetId || !view || !['ready', 'partial'].includes(view.state)) continue;
+            const target = allAssets.find((asset) => asset.id === assetId);
+            rendered.push({
+                id: `${config.id}:calendar-return`,
+                label: target?.display_name ?? String(config.params._assetDisplayName ?? `Asset #${assetId}`),
+                data: view.points,
+                color: config.style.color,
+                lineWidth: config.style.lineWidth,
+                lineType: config.style.lineType,
+                markerStart: config.style.markerStart,
+                markerEnd: config.style.markerEnd,
+                yAxisIndex: 0,
+                axisRole: 'price',
+                unit: 'percentage',
+                connectNulls: false,
+                aggregationProfile: 'last_with_range',
+                iconUrl: target?.icon_url ?? null,
+                assetType: target?.asset_type ?? null,
+            });
+        }
+        return rendered;
+    });
+    let calendarOverlaySignals = $derived([...calendarComparisonSignals, ...calendarMeasureSignals]);
+    let calendarComparisonState = $derived.by(() => {
+        const state: Record<CalendarReturnViewState, number[]> = {
+            idle: [],
+            loading: [],
+            ready: [],
+            partial: [],
+            unavailable: [],
+            error: [],
+        };
+        if (!calendarSnapshotIsCurrent) return state;
+        for (const [assetId, view] of calendarComparisonViews) {
+            state[view.state].push(assetId);
+        }
+        for (const ids of Object.values(state)) {
+            ids.sort((left, right) => left - right);
+        }
+        return state;
+    });
+    let activePrimaryAxisKind = $derived<'absolute' | 'percentage'>(primaryMode === 'calendar-return' || viewMode === 'percentage' ? 'percentage' : 'absolute');
+    let activePrimaryAxisScale = $derived(settings.axisScales[activePrimaryAxisKind]);
+    let activeSecondaryAxes = $derived(primaryMode === 'price' ? collectConfigurableSecondaryAxes(allOverlaySignals) : collectConfigurableSecondaryAxes(calendarOverlaySignals));
+    let aestheticsAxisRows = $derived([
+        {
+            key: `primary:${activePrimaryAxisKind}`,
+            label: activePrimaryAxisKind === 'percentage' ? percentageAxisLabel((key, values) => $t(key, {values})) : priceAxisLabel((key, values) => $t(key, {values}), displayCurrency || assetInfo?.currency || '—'),
+            settings: activePrimaryAxisScale,
+        },
+        ...activeSecondaryAxes.map((axis) => ({
+            key: axis.key,
+            label: secondaryAxisLabel((key, values) => $t(key, {values}), axis),
+            settings: settings.axisScales.secondary[axis.key] ?? DEFAULT_AXIS_SCALE,
+        })),
+    ]);
 
     // Signal label info for MeasurePanel and PriceChartFull tooltip
     let mainSignalInfo: SignalLabelInfo = $derived({
@@ -731,8 +937,16 @@
         isCrown: true,
         color: COLORS.lineLight,
     });
+    let calendarMainSignalInfo: SignalLabelInfo = $derived({
+        label: $t('signals.riskRollingReturn.name'),
+        iconUrl: assetInfo?.icon_url,
+        assetType: assetInfo?.asset_type,
+        isCrown: true,
+        color: COLORS.lineLight,
+    });
 
     let overlaySignalInfoMap = $derived(buildOverlaySignalInfoMap(overlaySignals));
+    let calendarOverlaySignalInfoMap = $derived(buildOverlaySignalInfoMap(calendarComparisonSignals));
 
     // Event markers for the chart (own events + comparison asset events)
     // E.8 — events whose FX conversion failed (conversion requested but original_value
@@ -821,6 +1035,18 @@
             } else if (cfg.signalType === 'asset-comparison') {
                 const targetId = Number(cfg.params.assetId);
                 if (!targetId) continue;
+                if (primaryMode === 'calendar-return') {
+                    const calendarView = calendarComparisonViews.get(targetId);
+                    const availablePoints = calendarView?.points.filter((point) => !point.missing) ?? [];
+                    result.set(cfg.id, {
+                        pointCount: availablePoints.length,
+                        eventCounts: {},
+                        firstDate: null,
+                        problem: calendarComparisonProblems.get(targetId) ?? undefined,
+                        comparisonStatusAuthoritative: true,
+                    });
+                    continue;
+                }
                 const resolvedData = cfg.params._resolvedData as Array<{date: string; value: number}> | undefined;
                 const evts = comparisonEvents.get(targetId) ?? [];
                 const eventCounts: Record<string, number> = {};
@@ -872,6 +1098,157 @@
         return value.map((item) => backendSignalSchemas.result.parse(item));
     }
 
+    type AssetPriceBulkQueryBody = Parameters<typeof zodiosApi.query_prices_bulk_api_v1_assets_prices_query_post>[0];
+
+    async function queryAssetPricesBulkWithSignalIsolation(body: AssetPriceBulkQueryBody): Promise<{items: Record<string, unknown>[]}> {
+        const response = await axiosInstance.post<unknown>('/api/v1/assets/prices/query', body);
+        if (!isRecord(response.data)) {
+            throw new Error('Invalid Asset price query response');
+        }
+        if (response.data.items === undefined) return {items: []};
+        if (!Array.isArray(response.data.items)) {
+            throw new Error('Invalid Asset price query items');
+        }
+
+        return {
+            items: response.data.items.map((rawItem, index) => {
+                if (!isRecord(rawItem)) {
+                    throw new Error(`Invalid Asset price query item at index ${index}`);
+                }
+                const rawSignals = rawItem.signals;
+                if (rawSignals !== undefined && !Array.isArray(rawSignals)) {
+                    throw new Error(`Invalid Asset signal collection at item index ${index}`);
+                }
+                const validSignals = (rawSignals ?? []).flatMap((signal) => {
+                    const parsed = backendSignalSchemas.result.safeParse(signal);
+                    return parsed.success ? [parsed.data] : [];
+                });
+                const parsedItem = schemas.FAPriceQueryResult.safeParse({
+                    ...rawItem,
+                    signals: validSignals,
+                });
+                if (!parsedItem.success) {
+                    throw new Error(`Invalid Asset price query item at index ${index}`);
+                }
+                return {
+                    ...parsedItem.data,
+                    signals: rawSignals ?? [],
+                };
+            }),
+        };
+    }
+
+    function isRecord(value: unknown): value is Record<string, unknown> {
+        return typeof value === 'object' && value !== null && !Array.isArray(value);
+    }
+
+    function priceConversionErrorFromItem(item: Record<string, unknown> | undefined): string | undefined {
+        const errors = item && Array.isArray(item.errors) ? item.errors.filter((error): error is string => typeof error === 'string') : [];
+        const firstError = errors[0];
+        return firstError && !/\bfor event on\b/i.test(firstError) && /\b(?:fx|conversion|currenc)/i.test(firstError) ? firstError : undefined;
+    }
+
+    function calendarComparisonProblemsFromResponse(responseItems: unknown[], configs: SignalConfig[], assetIds: number[], views: Map<number, CalendarReturnView>): Map<number, SignalProblem> {
+        const configByAssetId = new Map<number, SignalConfig>();
+        for (const config of configs) {
+            if (config.signalType !== 'asset-comparison') continue;
+            const assetId = Number(config.params.assetId);
+            if (Number.isSafeInteger(assetId) && assetId > 0) configByAssetId.set(assetId, config);
+        }
+        const problems = new Map<number, SignalProblem>();
+
+        for (const assetId of assetIds) {
+            const config = configByAssetId.get(assetId);
+            if (!config) continue;
+            const item = responseItems.find((candidate): candidate is Record<string, unknown> => isRecord(candidate) && candidate.asset_id === assetId);
+            const rawResults: unknown[] = item && Array.isArray(item.signals) ? item.signals : [];
+            const rawResult = rawResults.find((candidate) => isCalendarReturnSignalResult(candidate, CALENDAR_RETURN_INSTANCE_ID));
+            let instance: SignalInstanceResult;
+
+            if (!rawResult) {
+                instance = {
+                    config,
+                    source: 'backend',
+                    status: 'missing',
+                    result: null,
+                    error: `Calendar Return result for asset ${assetId} is missing`,
+                };
+            } else {
+                const parsed = backendSignalSchemas.result.safeParse(rawResult);
+                if (!parsed.success) {
+                    instance = {
+                        config,
+                        source: 'backend',
+                        status: 'missing',
+                        result: null,
+                        error: `Calendar Return result for asset ${assetId} is invalid`,
+                    };
+                } else {
+                    const result = parsed.data;
+                    const strictView = views.get(assetId);
+                    if (strictView?.state === 'error' && result.status !== 'failed') {
+                        instance = {
+                            config,
+                            source: 'backend',
+                            status: 'missing',
+                            result: null,
+                            error: `Calendar Return result for asset ${assetId} is invalid`,
+                        };
+                    } else {
+                        const resultError = Array.isArray(result.error) ? result.error.find((error) => error !== null)?.message : result.error?.message;
+                        instance = {
+                            config,
+                            source: 'backend',
+                            status: result.status,
+                            result,
+                            error: resultError ?? null,
+                        };
+                    }
+                }
+            }
+
+            let problem = getSignalProblem(instance);
+            const priceConversionError = priceConversionErrorFromItem(item);
+            const targetAsset = allAssets.find((asset) => asset.id === assetId);
+            if (problem?.code === 'missing_input_fields' && priceConversionError && targetAsset?.currency && displayCurrency && targetAsset.currency !== displayCurrency) {
+                problem = {
+                    ...problem,
+                    code: 'fx_conversion_unavailable',
+                    message: priceConversionError,
+                };
+            }
+            if (problem) problems.set(assetId, problem);
+        }
+        return problems;
+    }
+
+    function calendarComparisonFxFailuresFromResponse(responseItems: unknown[], assetIds: number[], previousFailures: ReadonlySet<number>): Set<number> {
+        const failedAssetIds = new Set<number>();
+        for (const assetId of assetIds) {
+            const item = responseItems.find((candidate): candidate is Record<string, unknown> => isRecord(candidate) && candidate.asset_id === assetId);
+            if (!item) {
+                if (previousFailures.has(assetId)) failedAssetIds.add(assetId);
+                continue;
+            }
+            if (priceConversionErrorFromItem(item)) failedAssetIds.add(assetId);
+        }
+        return failedAssetIds;
+    }
+
+    function preserveFactualCalendarPeersForCurrentUnavailable(previousViews: ReadonlyMap<number, CalendarReturnView>, nextViews: ReadonlyMap<number, CalendarReturnView>, responseItems: unknown[], assetIds: number[]): Map<number, CalendarReturnView> {
+        const merged = new Map(nextViews);
+        for (const assetId of assetIds) {
+            const itemPresent = responseItems.some((candidate) => isRecord(candidate) && candidate.asset_id === assetId);
+            const next = nextViews.get(assetId);
+            const previous = previousViews.get(assetId);
+            const previousHasFacts = previous && ['ready', 'partial'].includes(previous.state) && previous.points.some((point) => !point.missing);
+            if (itemPresent && next?.state === 'unavailable' && previousHasFacts) {
+                merged.set(assetId, previous);
+            }
+        }
+        return merged;
+    }
+
     function applyBackendSignalResults(configs: SignalConfig[], requestVersion: number, results: BackendSignalResult[]) {
         const plan = buildBackendSignalRequestPlan(configs, signalDefinitions);
         const mapped = mapSignalInstanceResults(configs, plan, results);
@@ -917,6 +1294,73 @@
         );
     }
 
+    const comparisonRuntimeParamKeys = new Set<string>(COMPARISON_ASSET_RUNTIME_PARAM_KEYS);
+
+    function signalDataContextFingerprint(configs: SignalConfig[]): string {
+        return JSON.stringify(
+            configs
+                .map((config) => ({
+                    id: config.id,
+                    signalType: config.signalType,
+                    params: Object.fromEntries(
+                        Object.entries(config.params)
+                            .filter(([key]) => !comparisonRuntimeParamKeys.has(key))
+                            .sort(([left], [right]) => left.localeCompare(right)),
+                    ),
+                }))
+                .sort((left, right) => left.id.localeCompare(right.id)),
+        );
+    }
+
+    function comparisonAssetIds(configs: SignalConfig[]): number[] {
+        return [
+            ...new Set(
+                configs
+                    .filter((config) => config.signalType === 'asset-comparison')
+                    .map((config) => Number(config.params.assetId))
+                    .filter((assetId) => Number.isSafeInteger(assetId) && assetId > 0 && assetId !== data.assetId),
+            ),
+        ].sort((left, right) => left - right);
+    }
+
+    function calendarComparisonFingerprint(configs: SignalConfig[]): string {
+        return JSON.stringify(comparisonAssetIds(configs));
+    }
+
+    function calendarDataFingerprint(configs: SignalConfig[], windowDays = calendarWindowDays): string {
+        return JSON.stringify({
+            assetId: data.assetId,
+            start: urlDateStart,
+            end: urlDateEnd,
+            targetCurrency: displayCurrency || assetInfo?.currency || '',
+            windowDays,
+            peers: comparisonAssetIds(configs),
+        });
+    }
+
+    function priceComparisonLoadFingerprint(configs: SignalConfig[]): string {
+        return JSON.stringify({
+            peers: configs
+                .filter((config) => config.signalType === 'asset-comparison')
+                .map((config) => ({configId: config.id, assetId: Number(config.params.assetId)}))
+                .filter((peer) => Number.isSafeInteger(peer.assetId) && peer.assetId > 0 && peer.assetId !== data.assetId)
+                .sort((left, right) => left.configId.localeCompare(right.configId)),
+            start: dateStart,
+            end: dateEnd,
+            targetCurrency: displayCurrency || '',
+        });
+    }
+
+    function priceComparisonRuntimeIsAuthoritative(configs: SignalConfig[]): boolean {
+        return configs
+            .filter((config) => config.signalType === 'asset-comparison')
+            .filter((config) => {
+                const assetId = Number(config.params.assetId);
+                return Number.isSafeInteger(assetId) && assetId > 0 && assetId !== data.assetId;
+            })
+            .every((config) => Object.hasOwn(config.params, '_conversionFailed') && comparisonEvents.has(Number(config.params.assetId)));
+    }
+
     async function retryBackendSignals() {
         await loadAssetSignalDefinitions(true);
         await loadChartData(false);
@@ -924,6 +1368,12 @@
 
     /** Full page reload: fetches all data for the current assetId */
     async function reloadPage() {
+        measurePanel?.clearMeasures();
+        calendarMeasurePanel?.clearMeasures();
+        measureSignals = [];
+        calendarMeasureSignals = [];
+        measureMode = false;
+        calendarMeasureMode = false;
         loading = true;
         error = null;
         // Reset state for new asset
@@ -934,9 +1384,15 @@
         signalInstanceResults = [];
         signalRequestFailed = false;
         primaryMode = 'price';
-        calendarWindowDays = 30;
         chartRequestGeneration += 1;
+        comparisonRequestGeneration += 1;
+        comparisonAppliedFingerprint = null;
+        comparisonInFlight = null;
         calendarReturnView = emptyCalendarReturnView();
+        calendarComparisonViews = new Map();
+        calendarComparisonProblems = new Map();
+        calendarComparisonFxFailures = new Set();
+        calendarSnapshotFingerprint = null;
         comparisonEvents = new Map();
         currentLivePrice = null;
         livePriceConversionFailed = false;
@@ -1137,6 +1593,14 @@
         dateStart = chartData[0].date;
         displayDateStart = dateStart;
         isMaxPending = false;
+        const resolvedStart = dateStart;
+        if (primaryMode === 'price') {
+            queueMicrotask(() => {
+                if (pageAlive && primaryMode === 'price' && !isMaxPending && dateStart === resolvedStart) {
+                    void maybeLoadComparison(false, signals, true);
+                }
+            });
+        }
     }
 
     /**
@@ -1161,14 +1625,25 @@
         const sessionGeneration = getClientSessionGeneration();
         const current = () => pageAlive && data.assetId === requestedAssetId && isClientSessionCurrent(sessionGeneration);
         if (!current()) return;
+        const requestedStart = dateStart;
+        const requestedEnd = dateEnd;
+        const requestedDisplayCurrency = displayCurrency;
+        const requestedNativeCurrency = assetInfo?.currency ?? '';
         const effectiveCurrency = displayCurrency && assetInfo?.currency && displayCurrency !== assetInfo.currency ? displayCurrency : (assetInfo?.currency ?? '');
         const targetCurrency = displayCurrency && assetInfo?.currency && displayCurrency !== assetInfo.currency ? displayCurrency : undefined;
-        const requestPlan = buildBackendSignalRequestPlan(requestedSignalConfigs, signalDefinitions);
+        const wantsCalendarReturn = primaryMode === 'calendar-return';
+        const backendSignalConfigs = wantsCalendarReturn ? [] : requestedSignalConfigs;
+        const requestPlan = buildBackendSignalRequestPlan(backendSignalConfigs, signalDefinitions);
         const requestVersion = signalResultState.beginRequest();
         const chartRequestVersion = ++chartRequestGeneration;
         const requestIsCurrent = () => current() && chartRequestVersion === chartRequestGeneration;
+        const dataRequestIsCurrent = () => requestIsCurrent() && dateStart === requestedStart && dateEnd === requestedEnd && displayCurrency === requestedDisplayCurrency && (assetInfo?.currency ?? '') === requestedNativeCurrency;
+        const requestedCalendarComparisonFingerprint = calendarComparisonFingerprint(requestedSignalConfigs);
+        const calendarComparisonsAreCurrent = () => dataRequestIsCurrent() && calendarComparisonFingerprint(signals) === requestedCalendarComparisonFingerprint;
         const requestedCalendarWindow = calendarWindowDays;
-        const wantsCalendarReturn = primaryMode === 'calendar-return';
+        const requestedCalendarFingerprint = wantsCalendarReturn ? calendarDataFingerprint(requestedSignalConfigs, requestedCalendarWindow) : null;
+        const retainCurrentCalendarDiagnostics = requestedCalendarFingerprint !== null && calendarSnapshotFingerprint === requestedCalendarFingerprint;
+        const calendarRequestIsCurrent = () => requestedCalendarFingerprint !== null && dataRequestIsCurrent() && primaryMode === 'calendar-return' && calendarDataFingerprint(signals, calendarWindowDays) === requestedCalendarFingerprint;
         const calendarRequests = wantsCalendarReturn
             ? [
                   {
@@ -1176,6 +1651,16 @@
                       signal_code: CALENDAR_RETURN_SIGNAL_CODE,
                       params: {window_days: requestedCalendarWindow},
                   },
+              ]
+            : [];
+        const calendarComparisonAssetIds = wantsCalendarReturn
+            ? [
+                  ...new Set(
+                      requestedSignalConfigs
+                          .filter((config) => config.signalType === 'asset-comparison')
+                          .map((config) => Number(config.params.assetId))
+                          .filter((assetId) => assetId > 0 && assetId !== requestedAssetId),
+                  ),
               ]
             : [];
         let pricesFromCache = false;
@@ -1216,10 +1701,24 @@
         loading = !pricesFromCache;
         error = null;
         signalRequestFailed = false;
-        signalsLoading = requestPlan.requests.length > 0;
-        if (wantsCalendarReturn) calendarReturnView = emptyCalendarReturnView('loading');
+        signalsLoading = requestPlan.requests.length > 0 || calendarComparisonAssetIds.length > 0;
+        if (requestedCalendarFingerprint !== null) {
+            calendarSnapshotFingerprint = requestedCalendarFingerprint;
+            if (retainCurrentCalendarDiagnostics) {
+                calendarReturnView = {
+                    ...calendarReturnView,
+                    state: 'loading',
+                };
+            } else {
+                calendarReturnView = emptyCalendarReturnView('loading');
+                calendarComparisonViews = new Map();
+                calendarComparisonProblems = new Map();
+                calendarComparisonFxFailures = new Set();
+                comparisonEvents = new Map();
+            }
+        }
         try {
-            const response = await zodiosApi.query_prices_bulk_api_v1_assets_prices_query_post([
+            const response = await queryAssetPricesBulkWithSignalIsolation([
                 {
                     asset_id: data.assetId,
                     date_range: {start: dateStart, end: dateEnd},
@@ -1228,19 +1727,42 @@
                     target_currency: targetCurrency,
                     signals: [...requestPlan.requests, ...calendarRequests],
                 },
+                ...calendarComparisonAssetIds.map((assetId) => ({
+                    asset_id: assetId,
+                    date_range: {start: dateStart, end: dateEnd},
+                    include_price: false,
+                    include_events: true,
+                    target_currency: effectiveCurrency || undefined,
+                    signals: calendarRequests,
+                })),
             ]);
-            if (!requestIsCurrent()) return;
-            const result = (response as any)?.items?.[0];
+            if (!dataRequestIsCurrent()) return;
+            const responseItems: any[] = Array.isArray((response as any)?.items) ? (response as any).items : [];
+            const result = responseItems.find((item) => item?.asset_id === requestedAssetId);
             if (result) {
                 if (!pricesFromCache) {
                     chartData = result.prices ?? [];
                 }
                 events = result.events ?? [];
                 const rawSignalResults: unknown[] = Array.isArray(result.signals) ? result.signals : [];
-                if (wantsCalendarReturn && requestedCalendarWindow === calendarWindowDays && primaryMode === 'calendar-return') {
+                if (wantsCalendarReturn && calendarRequestIsCurrent() && requestedCalendarWindow === calendarWindowDays) {
                     calendarReturnView = extractCalendarReturnView(rawSignalResults, CALENDAR_RETURN_INSTANCE_ID);
+                    if (calendarComparisonsAreCurrent()) {
+                        const nextComparisonViews = extractCalendarReturnViewsByAsset(responseItems, calendarComparisonAssetIds, CALENDAR_RETURN_INSTANCE_ID);
+                        calendarComparisonViews = retainCurrentCalendarDiagnostics ? preserveFactualCalendarPeersForCurrentUnavailable(calendarComparisonViews, nextComparisonViews, responseItems, calendarComparisonAssetIds) : nextComparisonViews;
+                        calendarComparisonProblems = calendarComparisonProblemsFromResponse(responseItems, requestedSignalConfigs, calendarComparisonAssetIds, calendarComparisonViews);
+                        calendarComparisonFxFailures = calendarComparisonFxFailuresFromResponse(responseItems, calendarComparisonAssetIds, calendarComparisonFxFailures);
+                        comparisonEvents = new Map(
+                            calendarComparisonAssetIds.map((assetId) => {
+                                const item = responseItems.find((candidate) => candidate?.asset_id === assetId);
+                                return [assetId, item && Array.isArray(item.events) ? [...item.events] : []];
+                            }),
+                        );
+                    }
                 }
-                applyBackendSignalResults(requestedSignalConfigs, requestVersion, parseBackendSignalResults(rawSignalResults.filter((item) => !isCalendarReturnSignalResult(item, CALENDAR_RETURN_INSTANCE_ID))));
+                if (!wantsCalendarReturn) {
+                    applyBackendSignalResults(backendSignalConfigs, requestVersion, parseBackendSignalResults(rawSignalResults.filter((item) => !isCalendarReturnSignalResult(item, CALENDAR_RETURN_INSTANCE_ID))));
+                }
                 // Populate the price cache (derive currency from response if not known yet)
                 const cacheCurrency = effectiveCurrency || chartData[0]?.currency || '';
                 if (!pricesFromCache && cacheCurrency && chartData.length > 0) {
@@ -1251,9 +1773,16 @@
             } else {
                 if (!pricesFromCache) chartData = [];
                 events = [];
-                applyBackendSignalResults(requestedSignalConfigs, requestVersion, []);
-                if (wantsCalendarReturn) {
+                if (!wantsCalendarReturn) {
+                    applyBackendSignalResults(backendSignalConfigs, requestVersion, []);
+                }
+                if (wantsCalendarReturn && calendarRequestIsCurrent()) {
                     calendarReturnView = emptyCalendarReturnView('error');
+                    calendarComparisonViews = new Map();
+                    if (!retainCurrentCalendarDiagnostics) {
+                        calendarComparisonProblems = new Map();
+                        calendarComparisonFxFailures = new Set();
+                    }
                 }
             }
             if (chartData.length === 0 && !error) {
@@ -1261,11 +1790,16 @@
             }
             resolveMaxStartFromChartData();
         } catch (e: any) {
-            if (!requestIsCurrent()) return;
+            if (!dataRequestIsCurrent()) return;
             console.error('Failed to load chart data:', e);
             signalRequestFailed = requestPlan.requests.length > 0;
-            if (wantsCalendarReturn) {
+            if (wantsCalendarReturn && calendarRequestIsCurrent()) {
                 calendarReturnView = emptyCalendarReturnView('error');
+                calendarComparisonViews = new Map();
+                if (!retainCurrentCalendarDiagnostics) {
+                    calendarComparisonProblems = new Map();
+                    calendarComparisonFxFailures = new Set();
+                }
             }
             if (chartData.length === 0) error = e?.message || 'Failed to load prices';
             if (propagateError) throw e;
@@ -1346,23 +1880,52 @@
      * Load comparison asset data if any comparison signals are configured.
      * Called explicitly from onMount, handleRefresh, handleDateRangeChange, handleSignalsChange.
      */
-    async function maybeLoadComparison(propagateError = false) {
+    function maybeLoadComparison(propagateError = false, requestedSignalConfigs: SignalConfig[] = signals, force = false): Promise<void> {
         const requestedAssetId = data.assetId;
         const sessionGeneration = getClientSessionGeneration();
-        const current = () => pageAlive && data.assetId === requestedAssetId && isClientSessionCurrent(sessionGeneration);
-        if (!current()) return;
-        const compSignals = signals.filter((s) => s.signalType === 'asset-comparison');
-        if (compSignals.length === 0 || lineData.length === 0) return;
-        try {
-            const loadedEvents = await loadComparisonAssetsData(compSignals, {start: dateStart, end: dateEnd}, allAssets, comparisonEvents, requestedAssetId, displayCurrency || undefined);
-            if (!current()) return;
-            comparisonEvents = loadedEvents;
-            overlayDataVersion++;
-        } catch (e) {
-            if (!current()) return;
-            console.error('Failed to load comparison asset data:', e);
-            if (propagateError) throw e;
+        const requestedFingerprint = priceComparisonLoadFingerprint(requestedSignalConfigs);
+        if (!force && comparisonInFlight?.fingerprint === requestedFingerprint) {
+            return comparisonInFlight.promise;
         }
+        if (!force && comparisonAppliedFingerprint === requestedFingerprint && priceComparisonRuntimeIsAuthoritative(requestedSignalConfigs)) {
+            return Promise.resolve();
+        }
+        comparisonInFlight = null;
+        const requestVersion = ++comparisonRequestGeneration;
+        const current = () => pageAlive && data.assetId === requestedAssetId && isClientSessionCurrent(sessionGeneration) && primaryMode === 'price' && requestVersion === comparisonRequestGeneration && priceComparisonLoadFingerprint(signals) === requestedFingerprint;
+        if (!current()) return Promise.resolve();
+        if (requestedFingerprint !== comparisonAppliedFingerprint) {
+            comparisonEvents = clearComparisonAssetsData(signals.filter((signal) => signal.signalType === 'asset-comparison'));
+            overlayDataVersion++;
+        }
+        const requestedAssetIds = comparisonAssetIds(requestedSignalConfigs);
+        if (requestedAssetIds.length === 0) {
+            comparisonAppliedFingerprint = requestedFingerprint;
+            return Promise.resolve();
+        }
+        if (lineData.length === 0) return Promise.resolve();
+        const promise = (async () => {
+            try {
+                const loaded = await loadComparisonAssetsData(requestedAssetIds, {start: dateStart, end: dateEnd}, allAssets, requestedAssetId, displayCurrency || undefined);
+                if (!current()) return;
+                comparisonEvents = applyComparisonAssetsData(
+                    signals.filter((signal) => signal.signalType === 'asset-comparison'),
+                    loaded,
+                );
+                comparisonAppliedFingerprint = requestedFingerprint;
+                overlayDataVersion++;
+            } catch (error) {
+                if (!current()) return;
+                console.error('Failed to load comparison asset data:', error);
+                if (propagateError) throw error;
+            }
+        })();
+        comparisonInFlight = {fingerprint: requestedFingerprint, promise};
+        const clearInFlight = () => {
+            if (comparisonInFlight?.promise === promise) comparisonInFlight = null;
+        };
+        void promise.then(clearInFlight, clearInFlight);
+        return promise;
     }
 
     // =========================================================================
@@ -1517,11 +2080,28 @@
     async function handleRefresh(propagateError = false) {
         const requestedAssetId = data.assetId;
         const sessionGeneration = getClientSessionGeneration();
-        const current = () => pageAlive && data.assetId === requestedAssetId && isClientSessionCurrent(sessionGeneration);
-        if (!current()) return;
+        const requestGeneration = ++refreshRequestGeneration;
+        const resolvingMax = activePreset === 'MAX';
+        const requestedMode = primaryMode;
+        const requestedCurrency = displayCurrency;
+        const requestedSignals = signals;
+        const requestedSignalDataFingerprint = signalDataContextFingerprint(requestedSignals);
         invalidateAssetPriceStore(requestedAssetId);
         rearmMaxPendingBeforeReload();
-        await loadChartData(true, signals, propagateError);
+        const requestedUrlStart = urlDateStart;
+        const requestedUrlEnd = urlDateEnd;
+        const current = () =>
+            pageAlive &&
+            data.assetId === requestedAssetId &&
+            isClientSessionCurrent(sessionGeneration) &&
+            requestGeneration === refreshRequestGeneration &&
+            urlDateStart === requestedUrlStart &&
+            urlDateEnd === requestedUrlEnd &&
+            primaryMode === requestedMode &&
+            displayCurrency === requestedCurrency &&
+            signalDataContextFingerprint(signals) === requestedSignalDataFingerprint;
+        if (!current()) return;
+        await loadChartData(true, requestedSignals, propagateError);
         if (!current()) return;
         // Invalidate FX overlay stores so they refetch updated rates
         for (const pair of requiredFxPairs) {
@@ -1531,7 +2111,7 @@
             if (!current()) return;
         }
         overlayDataVersion++;
-        await maybeLoadComparison(propagateError);
+        await maybeLoadComparison(propagateError, requestedSignals, !resolvingMax);
         if (current()) riskRefreshVersion += 1;
     }
 
@@ -1586,10 +2166,16 @@
         showPageSyncModal = true;
     }
 
-    async function handlePageSyncComplete() {
+    async function handlePageSyncComplete({accepted}: {accepted: boolean} = {accepted: true}) {
+        if (accepted && primaryMode === 'calendar-return') {
+            comparisonRequestGeneration += 1;
+            comparisonInFlight = null;
+            comparisonAppliedFingerprint = null;
+            comparisonEvents = clearComparisonAssetsData(signals.filter((signal) => signal.signalType === 'asset-comparison'));
+            overlayDataVersion++;
+        }
         await handleRefresh();
         await reloadMetadata();
-        await maybeLoadComparison();
         overlayDataVersion++;
     }
 
@@ -1646,33 +2232,153 @@
     }
 
     function handleMeasureClick(date: string, value: number) {
-        measurePanel?.addPoint(date, value);
+        if (primaryMode === 'price') {
+            measurePanel?.addPoint(date, value);
+        } else {
+            calendarMeasurePanel?.addPoint(date, value);
+        }
+    }
+
+    function activeMeasurePanel(): MeasurePanel | undefined {
+        return primaryMode === 'price' ? measurePanel : calendarMeasurePanel;
+    }
+
+    function activeMeasureMode(): boolean {
+        return primaryMode === 'price' ? measureMode : calendarMeasureMode;
+    }
+
+    function activeMeasuresOpen(): boolean {
+        return primaryMode === 'price' ? showMeasures : showCalendarMeasures;
+    }
+
+    function setActiveMeasuresOpen(open: boolean): void {
+        if (primaryMode === 'price') showMeasures = open;
+        else showCalendarMeasures = open;
     }
 
     function handleAestheticsChange(values: {colorByBaseline: boolean; areaFill: boolean; gridLines: boolean; staleGradient: boolean; yAxisMode: 'auto' | 'include0' | 'custom'; yAxisMin: number | undefined; yAxisMax: number | undefined}) {
-        setPairSettings(`asset-${data.assetId}`, {...settings, ...values, signals: [...signals]});
+        setPairSettings(`asset-${data.assetId}`, {
+            ...settings,
+            colorByBaseline: values.colorByBaseline,
+            areaFill: values.areaFill,
+            gridLines: values.gridLines,
+            staleGradient: values.staleGradient,
+            signals: [...signals],
+        });
+    }
+
+    function handleAxisScaleChange(key: string, scale: AxisScaleSettings) {
+        const normalized = normalizeAxisScaleSettings(scale, DEFAULT_AXIS_SCALE);
+        const axisScales = {
+            absolute: {...settings.axisScales.absolute},
+            percentage: {...settings.axisScales.percentage},
+            secondary: {...settings.axisScales.secondary},
+        };
+        if (key === 'primary:absolute') {
+            axisScales.absolute = normalized;
+        } else if (key === 'primary:percentage') {
+            axisScales.percentage = normalized;
+        } else {
+            axisScales.secondary[key] = normalized;
+        }
+        setPairSettings(`asset-${data.assetId}`, {
+            ...settings,
+            axisScales,
+            signals: [...signals],
+        });
     }
 
     function handleSignalsChange(newSignals: SignalConfig[]) {
         const shouldReloadBackend = backendRequestFingerprint(signals) !== backendRequestFingerprint(newSignals);
+        const shouldReloadCalendarComparisons = calendarComparisonFingerprint(signals) !== calendarComparisonFingerprint(newSignals);
+        const shouldReloadPriceComparisons = priceComparisonLoadFingerprint(signals) !== priceComparisonLoadFingerprint(newSignals);
         setPairSettings(`asset-${data.assetId}`, {...settings, signals: JSON.parse(JSON.stringify(newSignals))});
-        maybeLoadComparison(); // fire-and-forget: load data for newly added comparison signals
-        if (shouldReloadBackend) {
+        if (primaryMode === 'price' && shouldReloadPriceComparisons) {
+            void maybeLoadComparison(false, newSignals);
+        }
+        if ((primaryMode === 'calendar-return' && shouldReloadCalendarComparisons) || (primaryMode === 'price' && shouldReloadBackend)) {
             void loadChartData(false, newSignals);
         }
     }
 
     async function handleSyncAsset(assetId: number, opts: {silent?: boolean} = {}) {
-        const silent = opts.silent === true;
+        if (activeAssetSyncRequests.has(assetId)) return;
+        const requestGeneration = (assetSyncRequestGenerations.get(assetId) ?? 0) + 1;
+        assetSyncRequestGenerations.set(assetId, requestGeneration);
+        activeAssetSyncRequests.set(assetId, requestGeneration);
+        syncingComparisonAssetIds = new Set(activeAssetSyncRequests.keys());
         try {
-            const response = await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([
-                {
-                    asset_id: assetId,
-                    date_range: {start: syncDateStart, end: dateEnd},
-                },
-            ]);
+            await runSyncAsset(assetId, opts, requestGeneration);
+        } finally {
+            if (activeAssetSyncRequests.get(assetId) === requestGeneration) {
+                activeAssetSyncRequests.delete(assetId);
+            }
+            syncingComparisonAssetIds = new Set(activeAssetSyncRequests.keys());
+        }
+    }
+
+    async function runSyncAsset(assetId: number, opts: {silent?: boolean}, requestGeneration: number) {
+        const silent = opts.silent === true;
+        const pageAssetId = data.assetId;
+        const sessionGeneration = getClientSessionGeneration();
+        const requestedStart = syncDateStart;
+        const requestedCacheStart = dateStart;
+        const requestedEnd = dateEnd;
+        const requestedDisplayCurrency = displayCurrency;
+        const requestedPrimaryMode = primaryMode;
+        const requestedCalendarWindow = calendarWindowDays;
+        const calendarLookbackDays = requestedPrimaryMode === 'calendar-return' ? requestedCalendarWindow : 0;
+        const requestedSyncRange = buildComparisonSyncRange({start: requestedStart, end: requestedEnd}, {calendarLookbackDays});
+        const requestedCacheRange = buildComparisonSyncRange({start: requestedCacheStart, end: requestedEnd}, {calendarLookbackDays});
+        const requestedSignals = signals;
+        const requestedSignalDataFingerprint = signalDataContextFingerprint(requestedSignals);
+        const comparisonAsset = allAssets.find((asset) => asset.id === assetId);
+        const requiredFxSlugs = collectConfiguredComparisonFxSlugs(comparisonAsset?.currency, requestedDisplayCurrency, comparisonEvents.get(assetId) ?? [], allConfiguredFxSlugs);
+        const requestedMainAssetCurrency = assetInfo?.currency;
+        const mainConversionFxSlug = requestedMainAssetCurrency && requestedDisplayCurrency && requestedMainAssetCurrency !== requestedDisplayCurrency ? [requestedMainAssetCurrency, requestedDisplayCurrency].sort((left, right) => left.localeCompare(right)).join('-') : null;
+        const current = () =>
+            pageAlive &&
+            data.assetId === pageAssetId &&
+            isClientSessionCurrent(sessionGeneration) &&
+            activeAssetSyncRequests.get(assetId) === requestGeneration &&
+            syncDateStart === requestedStart &&
+            dateStart === requestedCacheStart &&
+            dateEnd === requestedEnd &&
+            displayCurrency === requestedDisplayCurrency &&
+            primaryMode === requestedPrimaryMode &&
+            (requestedPrimaryMode !== 'calendar-return' || calendarWindowDays === requestedCalendarWindow) &&
+            signalDataContextFingerprint(signals) === requestedSignalDataFingerprint;
+
+        const assetRequest = zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([
+            {
+                asset_id: assetId,
+                date_range: requestedSyncRange,
+            },
+        ]);
+        const fxRequest =
+            requiredFxSlugs.length > 0
+                ? zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({
+                      pairs: requiredFxSlugs,
+                      start: requestedSyncRange.start,
+                      end: requestedSyncRange.end,
+                  })
+                : Promise.resolve(null);
+        const [assetOutcome, fxOutcome] = await Promise.allSettled([assetRequest, fxRequest]);
+        if (!current()) return;
+
+        const tr = get(t);
+        let acceptedSyncInvalidated = false;
+        const invalidateAcceptedSyncRequests = () => {
+            if (acceptedSyncInvalidated) return;
+            acceptedSyncInvalidated = true;
+            chartRequestGeneration += 1;
+            comparisonRequestGeneration += 1;
+            comparisonInFlight = null;
+        };
+        let assetSyncAccepted = false;
+        if (assetOutcome.status === 'fulfilled') {
+            const response = assetOutcome.value;
             const r = (response as any)?.results?.[0];
-            const tr = get(t);
             if (!silent) {
                 if (r) {
                     const toast = buildAssetSyncToast(r, tr('common.sync'), tr);
@@ -1681,6 +2387,8 @@
                     toasts.error(`${tr('common.sync')} — ${tr('prices.sync.noResponse')}`);
                 }
             }
+            assetSyncAccepted = r?.status === 'ok' || r?.status === 'partial';
+            if (assetSyncAccepted) invalidateAcceptedSyncRequests();
 
             // I-bis #24 (2026-04-24) — targeted post-sync refresh.
             //
@@ -1702,9 +2410,9 @@
             //         flash wrong numbers in the middle of the series)
             //       - events changed (events are reloaded by the query
             //         endpoint, not present in ``changed_points``)
-            if (assetId === data.assetId && r?.asset_id === assetId) {
+            if (assetId === pageAssetId && r?.asset_id === assetId) {
                 const changedPoints = Array.isArray(r.changed_points) ? r.changed_points : null;
-                const isConvertedChart = !!(displayCurrency && assetInfo?.currency && displayCurrency !== assetInfo.currency);
+                const isConvertedChart = !!(requestedDisplayCurrency && assetInfo?.currency && requestedDisplayCurrency !== assetInfo.currency);
                 const eventsChanged = Number(r.events_changed ?? 0) > 0;
                 const DELTA_MERGE_LIMIT = 50;
 
@@ -1719,22 +2427,68 @@
                     if (!isConvertedChart) {
                         chartData = mergeChartPointsIncremental(chartData, changedPoints);
                     }
-                    invalidateAssetPriceStore(data.assetId);
+                    invalidateAssetPriceStore(pageAssetId);
                     rearmMaxPendingBeforeReload();
                     await loadChartData(true);
+                    if (!current()) return;
                 } else {
                     // No delta from backend (no changes, or above cap,
                     // or reload is needed anyway): full reload.
-                    invalidateAssetPriceStore(data.assetId);
+                    invalidateAssetPriceStore(pageAssetId);
                     rearmMaxPendingBeforeReload();
                     await loadChartData(true);
+                    if (!current()) return;
                 }
             }
-        } catch (e: any) {
-            if (!silent) toasts.error('Sync failed: ' + (e?.message || 'unknown'));
+        } else if (!silent) {
+            const reason = assetOutcome.reason;
+            toasts.error('Sync failed: ' + (reason instanceof Error ? reason.message : String(reason ?? 'unknown')));
         }
-        // Reload comparison data for the synced asset, then trigger UI update
-        await maybeLoadComparison();
+
+        let fxSyncAccepted = false;
+        const acceptedRequiredFxSlugs = new Set<string>();
+        let mainConversionFxAccepted = false;
+        if (fxOutcome.status === 'fulfilled' && fxOutcome.value) {
+            const fxResults = Array.isArray((fxOutcome.value as any)?.results) ? (fxOutcome.value as any).results : [];
+            for (const slug of requiredFxSlugs) {
+                const result = fxResults.find((candidate: any) => candidate?.pair === slug);
+                const toast = buildFxSyncToast(result, slug, tr);
+                if (!silent) toasts[toast.variant](toast.message);
+                if (result?.status === 'ok' || result?.status === 'partial') {
+                    fxSyncAccepted = true;
+                    acceptedRequiredFxSlugs.add(slug);
+                    if (slug === mainConversionFxSlug) mainConversionFxAccepted = true;
+                    invalidateAcceptedSyncRequests();
+                    getFxStore(slug).invalidateAll();
+                    try {
+                        await ensureFxRangeLoaded(slug, requestedCacheRange.start, requestedCacheRange.end);
+                    } catch (error: any) {
+                        if (current() && !silent) toasts.error(`FX sync failed: ${error?.message || 'unknown'}`);
+                    }
+                    if (!current()) return;
+                }
+            }
+        } else if (fxOutcome.status === 'rejected' && !silent) {
+            const reason = fxOutcome.reason;
+            toasts.error(`FX sync failed: ${reason instanceof Error ? reason.message : String(reason ?? 'unknown')}`);
+        }
+
+        if (!current() || (!assetSyncAccepted && !fxSyncAccepted)) return;
+        const allRequiredFxAccepted = requiredFxSlugs.length > 0 && requiredFxSlugs.every((slug) => acceptedRequiredFxSlugs.has(slug));
+        if (allRequiredFxAccepted) comparisonAppliedFingerprint = null;
+        if (mainConversionFxAccepted) invalidateAssetPriceStore(pageAssetId);
+        // Reload comparison data for the synced asset, then trigger UI update.
+        if (requestedPrimaryMode === 'calendar-return') {
+            await loadChartData(mainConversionFxAccepted, requestedSignals);
+            if (!current()) return;
+            comparisonAppliedFingerprint = null;
+            clearComparisonAssetsData(signals.filter((signal) => signal.signalType === 'asset-comparison'));
+        } else {
+            await loadChartData(mainConversionFxAccepted, requestedSignals);
+            if (!current()) return;
+            await maybeLoadComparison(false, requestedSignals, true);
+            if (!current()) return;
+        }
         overlayDataVersion++;
     }
 
@@ -1763,28 +2517,73 @@
     }
 
     async function handleSyncPair(slug: string) {
+        const pageAssetId = data.assetId;
+        const sessionGeneration = getClientSessionGeneration();
+        const requestGeneration = (fxSyncRequestGenerations.get(slug) ?? 0) + 1;
+        fxSyncRequestGenerations.set(slug, requestGeneration);
+        activeFxSyncRequests.set(slug, requestGeneration);
+        const requestedStart = syncDateStart;
+        const requestedCacheStart = dateStart;
+        const requestedEnd = dateEnd;
+        const requestedDisplayCurrency = displayCurrency;
+        const requestedPrimaryMode = primaryMode;
+        const requestedSignals = signals;
+        const requestedSignalDataFingerprint = signalDataContextFingerprint(requestedSignals);
+        const current = () =>
+            pageAlive &&
+            data.assetId === pageAssetId &&
+            isClientSessionCurrent(sessionGeneration) &&
+            requestGeneration === activeFxSyncRequests.get(slug) &&
+            syncDateStart === requestedStart &&
+            dateStart === requestedCacheStart &&
+            dateEnd === requestedEnd &&
+            displayCurrency === requestedDisplayCurrency &&
+            primaryMode === requestedPrimaryMode &&
+            signalDataContextFingerprint(signals) === requestedSignalDataFingerprint;
         fxSyncing = true;
         try {
             const syncResponse = await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({
                 pairs: [slug],
-                start: dateStart,
-                end: dateEnd,
+                start: requestedStart,
+                end: requestedEnd,
             });
-            // Refetch FX data into store after sync (invalidate + reload)
-            getFxStore(slug).invalidateAll();
-            await ensureFxRangeLoaded(slug, dateStart, dateEnd);
-            overlayDataVersion++;
-            // Reload asset chart data to apply updated FX conversion
-            invalidateAssetPriceStore(data.assetId);
-            await loadChartData(true);
+            if (!current()) return;
             const tr = get(t);
             const r = (syncResponse as any)?.results?.[0];
             const toast = buildFxSyncToast(r, slug, tr);
             toasts[toast.variant](toast.message);
+            if (r?.status !== 'ok' && r?.status !== 'partial') return;
+            chartRequestGeneration += 1;
+            comparisonRequestGeneration += 1;
+            comparisonInFlight = null;
+            // Refetch FX data into store after sync (invalidate + reload)
+            getFxStore(slug).invalidateAll();
+            try {
+                await ensureFxRangeLoaded(slug, requestedCacheStart, requestedEnd);
+            } catch (error: any) {
+                if (current()) toasts.error('FX sync failed: ' + (error?.message || 'unknown'));
+            }
+            if (!current()) return;
+            overlayDataVersion++;
+            // Reload asset chart data to apply updated FX conversion
+            invalidateAssetPriceStore(pageAssetId);
+            await loadChartData(true, requestedSignals);
+            if (!current()) return;
+            if (requestedPrimaryMode === 'price') {
+                await maybeLoadComparison(false, requestedSignals, true);
+                if (!current()) return;
+            } else {
+                comparisonAppliedFingerprint = null;
+                clearComparisonAssetsData(signals.filter((signal) => signal.signalType === 'asset-comparison'));
+                overlayDataVersion++;
+            }
         } catch (e: any) {
-            toasts.error('FX sync failed: ' + (e?.message || 'unknown'));
+            if (current()) toasts.error('FX sync failed: ' + (e?.message || 'unknown'));
         } finally {
-            fxSyncing = false;
+            if (requestGeneration === activeFxSyncRequests.get(slug)) {
+                activeFxSyncRequests.delete(slug);
+            }
+            if (pageAlive) fxSyncing = activeFxSyncRequests.size > 0;
         }
     }
 
@@ -2047,51 +2846,51 @@
         <!-- ======================================================================= -->
         <!-- Foldable Panel: Signals (ABOVE chart, replaces old Aesthetics position) -->
         <!-- ======================================================================= -->
-        {#if primaryMode === 'price'}
-            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
-                <div class="relative">
-                    <button type="button" class="absolute inset-0 z-0 w-full rounded-xl hover:bg-gray-50 dark:hover:bg-slate-700/50" data-testid="asset-detail-signals-toggle" aria-expanded={showSignals} aria-label={$t('common.signals')} onclick={() => (showSignals = !showSignals)}></button>
-                    <div class="relative z-10 pointer-events-none w-full flex items-center gap-1 px-2 py-1.5" data-testid="asset-detail-signals-header">
-                        <span class="flex items-center gap-2 px-2 py-1 text-sm font-medium text-gray-700 dark:text-gray-200">
-                            <TrendingUp class="text-blue-500" size={15} />
-                            {$t('common.signals')}
-                        </span>
-                        <div class="flex-1"></div>
-                        <span class="flex items-center px-1 py-1 text-gray-700 dark:text-gray-200" data-testid="asset-detail-signals-chevron">
-                            <ChevronDown class="transition-transform {showSignals ? 'rotate-180' : ''}" size={15} />
-                        </span>
-                    </div>
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
+            <div class="relative">
+                <button type="button" class="absolute inset-0 z-0 w-full rounded-xl hover:bg-gray-50 dark:hover:bg-slate-700/50" data-testid="asset-detail-signals-toggle" aria-expanded={showSignals} aria-label={$t('common.signals')} onclick={() => (showSignals = !showSignals)}></button>
+                <div class="relative z-10 pointer-events-none w-full flex items-center gap-1 px-2 py-1.5" data-testid="asset-detail-signals-header">
+                    <span class="flex items-center gap-2 px-2 py-1 text-sm font-medium text-gray-700 dark:text-gray-200">
+                        <TrendingUp class="text-blue-500" size={15} />
+                        {$t('common.signals')}
+                    </span>
+                    <div class="flex-1"></div>
+                    <span class="flex items-center px-1 py-1 text-gray-700 dark:text-gray-200" data-testid="asset-detail-signals-chevron">
+                        <ChevronDown class="transition-transform {showSignals ? 'rotate-180' : ''}" size={15} />
+                    </span>
                 </div>
-                {#if showSignals}
-                    <div data-testid="asset-detail-signals-panel" class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3">
-                        <ChartSignalsSection
-                            signals={[...signals]}
-                            definitions={signalDefinitions}
-                            backendError={signalBackendError}
-                            {signalsLoading}
-                            onretrybackend={retryBackendSignals}
-                            availablePairs={allConfiguredFxSlugs}
-                            availableAssets={allAssets.filter((a) => a.id !== data.assetId)}
-                            mainPairSlug={`asset-${data.assetId}`}
-                            onchange={handleSignalsChange}
-                            onsyncpair={handleSyncPair}
-                            ondetailpair={handleDetailPair}
-                            onsyncasset={handleSyncAsset}
-                            ondetailasset={handleDetailAsset}
-                            {signalSummaries}
-                            {dateStart}
-                            {displayCurrency}
-                            configuredFxSlugs={allConfiguredFxSlugs}
-                            oncreatefxpair={(slug) => {
-                                fxPairCreateSlug = slug;
-                                showFxPairAddModal = true;
-                            }}
-                            onsyncfxpair={handleSyncPair}
-                        />
-                    </div>
-                {/if}
             </div>
-        {/if}
+            {#if showSignals}
+                <div data-testid="asset-detail-signals-panel" class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3">
+                    <ChartSignalsSection
+                        signals={signalPanelConfigs}
+                        definitions={signalDefinitions}
+                        allowedSignalTypes={primaryMode === 'calendar-return' ? ['asset-comparison'] : undefined}
+                        backendError={primaryMode === 'price' ? signalBackendError : null}
+                        {signalsLoading}
+                        onretrybackend={retryBackendSignals}
+                        availablePairs={allConfiguredFxSlugs}
+                        availableAssets={allAssets.filter((a) => a.id !== data.assetId)}
+                        mainPairSlug={`asset-${data.assetId}`}
+                        onchange={handleSignalsChange}
+                        onsyncpair={handleSyncPair}
+                        ondetailpair={handleDetailPair}
+                        onsyncasset={handleSyncAsset}
+                        syncingAssetIds={syncingComparisonAssetIds}
+                        ondetailasset={handleDetailAsset}
+                        {signalSummaries}
+                        {dateStart}
+                        {displayCurrency}
+                        configuredFxSlugs={allConfiguredFxSlugs}
+                        oncreatefxpair={(slug) => {
+                            fxPairCreateSlug = slug;
+                            showFxPairAddModal = true;
+                        }}
+                        onsyncfxpair={handleSyncPair}
+                    />
+                </div>
+            {/if}
+        </div>
 
         <!-- ======================================================================= -->
         <!-- Chart with left toolbar -->
@@ -2102,57 +2901,96 @@
             data-view-mode={viewMode}
             data-primary-mode={primaryMode}
             data-window-days={primaryMode === 'calendar-return' ? calendarWindowDays : undefined}
+            data-window-kind={primaryMode === 'calendar-return' ? calendarWindowSelection.kind : undefined}
+            data-window-amount={primaryMode === 'calendar-return' && calendarWindowSelection.kind === 'custom' ? calendarWindowSelection.customAmount : undefined}
+            data-window-unit={primaryMode === 'calendar-return' && calendarWindowSelection.kind === 'custom' ? calendarWindowSelection.customUnit : undefined}
+            data-calendar-range-days={calendarRangeDays}
+            data-calendar-comparison-ready={primaryMode === 'calendar-return' ? calendarComparisonState.ready.join(',') : undefined}
+            data-calendar-comparison-partial={primaryMode === 'calendar-return' ? calendarComparisonState.partial.join(',') : undefined}
+            data-calendar-comparison-unavailable={primaryMode === 'calendar-return' ? calendarComparisonState.unavailable.join(',') : undefined}
+            data-calendar-comparison-error={primaryMode === 'calendar-return' ? calendarComparisonState.error.join(',') : undefined}
+            data-calendar-primary-problem-code={primaryMode === 'calendar-return' ? (calendarReturnView.problem?.code ?? undefined) : undefined}
+            data-calendar-primary-problem-status={primaryMode === 'calendar-return' ? (calendarReturnView.problem?.status ?? undefined) : undefined}
             data-series-state={chartSeriesState}
         >
-            {#if loading && lineData.length === 0}
+            {#if primaryMode === 'price' && loading && lineData.length === 0}
                 <div class="h-96 flex items-center justify-center">
                     <div class="text-center">
                         <RefreshCw size={24} class="animate-spin text-libre-green mx-auto mb-2" />
                         <p class="text-sm text-gray-500 dark:text-gray-400">{$t('assetDetail.loadingPrices')}</p>
                     </div>
                 </div>
-            {:else if lineData.length > 0}
+            {:else if (primaryMode === 'price' && lineData.length > 0) || primaryMode === 'calendar-return'}
                 <div class="mb-3 flex flex-wrap items-center justify-between gap-2" data-testid="asset-chart-primary-controls">
                     <div class="flex rounded-lg overflow-hidden border border-gray-200 dark:border-slate-600 text-xs font-medium">
                         <button
-                            class="px-3 py-1 transition-colors {primaryMode === 'price' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                            class="inline-flex items-center gap-1.5 px-3 py-1 transition-colors {primaryMode === 'price' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
                             data-testid="asset-chart-primary-price"
                             aria-pressed={primaryMode === 'price'}
                             onclick={() => setPrimaryMode('price')}
                         >
+                            <ChartLine size={14} data-testid="asset-chart-primary-price-icon" />
                             {$t('assetDetail.pricesTab')}
                         </button>
                         <button
-                            class="px-3 py-1 border-l border-gray-200 dark:border-slate-600 transition-colors {primaryMode === 'calendar-return' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                            class="inline-flex items-center gap-1.5 px-3 py-1 border-l border-gray-200 dark:border-slate-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed {primaryMode === 'calendar-return'
+                                ? 'bg-libre-green text-white'
+                                : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
                             data-testid="asset-chart-primary-calendar-return"
                             aria-pressed={primaryMode === 'calendar-return'}
                             onclick={() => setPrimaryMode('calendar-return')}
                         >
+                            <Percent size={14} data-testid="asset-chart-primary-calendar-return-icon" />
                             {$t('signals.riskRollingReturn.name')}
                         </button>
                     </div>
                     {#if primaryMode === 'calendar-return'}
                         <div class="flex flex-wrap items-center gap-1.5" data-testid="asset-calendar-window-controls">
                             <span class="text-xs text-gray-500 dark:text-gray-400">{$t('chartSettings.params.window')}</span>
-                            {#each CALENDAR_RETURN_WINDOWS as windowDays}
+                            {#each CALENDAR_RETURN_PRESETS as preset}
                                 <button
-                                    class="min-w-10 px-2 py-1 rounded-md border text-xs font-medium transition-colors {calendarWindowDays === windowDays
+                                    class="min-w-10 px-2 py-1 rounded-md border text-xs font-medium transition-colors {calendarWindowSelection.kind === 'preset' && calendarWindowSelection.preset === preset.key
                                         ? 'border-libre-green bg-libre-green text-white'
                                         : 'border-gray-200 dark:border-slate-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                                    data-testid={`asset-calendar-window-${windowDays}`}
-                                    aria-pressed={calendarWindowDays === windowDays}
-                                    title={`${$t('chartSettings.params.window')}: ${windowDays} ${$t('chartSettings.units.days')}`}
-                                    onclick={() => setCalendarWindow(windowDays)}
+                                    data-testid={`asset-calendar-window-${preset.key}`}
+                                    aria-pressed={calendarWindowSelection.kind === 'preset' && calendarWindowSelection.preset === preset.key}
+                                    title={`${$t('chartSettings.params.window')}: ${preset.windowDays} ${$t('chartSettings.units.days')}`}
+                                    onclick={() => setCalendarPreset(preset.key)}
                                 >
-                                    {windowDays}
+                                    {preset.label}
                                 </button>
                             {/each}
+                            <CompactDurationBadge
+                                bind:amount={calendarCustomAmount}
+                                bind:unit={calendarCustomUnit}
+                                bind:editing={calendarCustomEditing}
+                                active={calendarWindowSelection.kind === 'custom'}
+                                options={calendarDurationOptions}
+                                customLabel={$t('common.custom')}
+                                min={1}
+                                buttonTestId="asset-calendar-window-custom"
+                                amountTestId="asset-calendar-custom-amount"
+                                unitTestId="asset-calendar-custom-unit"
+                                isAllowed={(amount, unit) =>
+                                    unit !== 'days' &&
+                                    calendarReturnWindowDays({
+                                        ...calendarWindowSelection,
+                                        kind: 'custom',
+                                        customAmount: amount,
+                                        customUnit: unit,
+                                    }) !== null}
+                                onapply={(amount, unit) => {
+                                    if (unit !== 'days') {
+                                        setCalendarCustom(amount, unit);
+                                    }
+                                }}
+                            />
                         </div>
                     {/if}
                 </div>
 
                 <!-- Aesthetics panel (ABOVE chart, shown only when gear is active) -->
-                {#if primaryMode === 'price' && showAesthetics}
+                {#if showAesthetics}
                     <div data-testid="asset-detail-aesthetics-panel" class="mb-3 pb-3 border-b border-gray-100 dark:border-slate-700 relative">
                         <button class="absolute top-0 right-0 p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors" onclick={() => (showAesthetics = false)} title={$t('common.close')}>
                             <X size={16} />
@@ -2162,50 +3000,53 @@
                             areaFill={settings.areaFill}
                             gridLines={settings.gridLines}
                             staleGradient={settings.staleGradient}
-                            yAxisMode={settings.yAxisMode}
-                            yAxisMin={settings.yAxisMin}
-                            yAxisMax={settings.yAxisMax}
+                            axisRows={aestheticsAxisRows}
                             onchange={handleAestheticsChange}
+                            onaxischange={handleAxisScaleChange}
                             disabledFields={disabledAesthetics}
                         />
                     </div>
                 {/if}
 
-                {#if primaryMode === 'calendar-return' && calendarReturnView.state === 'loading'}
+                {#if primaryMode === 'calendar-return' && calendarChartState === 'loading'}
                     <div class="h-96 flex items-center justify-center" data-testid="asset-calendar-return-loading">
                         <RefreshCw size={24} class="animate-spin text-libre-green" />
                     </div>
-                {:else if primaryMode === 'calendar-return' && calendarReturnView.state === 'unavailable'}
+                {:else if primaryMode === 'calendar-return' && calendarChartState === 'unavailable'}
                     <div class="h-96 flex items-center justify-center text-sm text-gray-500 dark:text-gray-400" data-testid="asset-calendar-return-unavailable">
-                        {$t('chartSettings.signalProblems.unavailable')}
+                        <span data-testid="asset-calendar-primary-problem" data-problem-code={calendarReturnView.problem?.code} data-problem-status={calendarReturnView.problem?.status}>
+                            {calendarPrimaryProblemMessage ?? $t('chartSettings.signalProblems.unavailable')}
+                        </span>
                     </div>
-                {:else if primaryMode === 'calendar-return' && calendarReturnView.state === 'error'}
+                {:else if primaryMode === 'calendar-return' && calendarChartState === 'error'}
                     <div class="h-96 flex items-center justify-center text-sm text-red-600 dark:text-red-400" data-testid="asset-calendar-return-error">
-                        {$t('chartSettings.signalResultsUnavailable')}
+                        <span data-testid="asset-calendar-primary-problem" data-problem-code={calendarReturnView.problem?.code} data-problem-status={calendarReturnView.problem?.status}>
+                            {calendarPrimaryProblemMessage ?? $t('chartSettings.signalResultsUnavailable')}
+                        </span>
                     </div>
                 {:else}
                     <div class="relative">
                         <!-- Right toolbar -->
-                        {#if primaryMode === 'price'}
-                            <div class="absolute top-0 right-0 z-20 flex items-center gap-1.5">
-                                <button
-                                    data-testid="asset-detail-measure-btn"
-                                    class="p-1.5 rounded-lg transition-colors {measureMode
-                                        ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 ring-1 ring-violet-300 dark:ring-violet-700'
-                                        : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
-                                    onclick={async () => {
-                                        if (measureMode) {
-                                            measurePanel?.stopMeasureMode();
-                                        } else {
-                                            showMeasures = true;
-                                            await tick();
-                                            measurePanel?.startMeasureMode();
-                                        }
-                                    }}
-                                    title={measureMode ? $t('common.exitMeasure') : $t('common.addMeasure')}
-                                >
-                                    <Ruler size={16} />
-                                </button>
+                        <div class="absolute top-0 right-0 z-20 flex items-center gap-1.5">
+                            <button
+                                data-testid="asset-detail-measure-btn"
+                                class="p-1.5 rounded-lg transition-colors {activeMeasureMode()
+                                    ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 ring-1 ring-violet-300 dark:ring-violet-700'
+                                    : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
+                                onclick={async () => {
+                                    if (activeMeasureMode()) {
+                                        activeMeasurePanel()?.stopMeasureMode();
+                                    } else {
+                                        setActiveMeasuresOpen(true);
+                                        await tick();
+                                        activeMeasurePanel()?.startMeasureMode();
+                                    }
+                                }}
+                                title={activeMeasureMode() ? $t('common.exitMeasure') : $t('common.addMeasure')}
+                            >
+                                <Ruler size={16} />
+                            </button>
+                            {#if primaryMode === 'price'}
                                 <button
                                     data-testid="asset-detail-editdata-btn"
                                     class="p-1.5 rounded-lg transition-colors {showDataEditor
@@ -2233,39 +3074,40 @@
                                 >
                                     <Pencil size={16} />
                                 </button>
-                                <button
-                                    data-testid="asset-detail-aesthetics-toggle"
-                                    class="p-1.5 rounded-lg transition-colors {showAesthetics
-                                        ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-300 dark:ring-emerald-700'
-                                        : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
-                                    onclick={() => (showAesthetics = !showAesthetics)}
-                                    title={$t('common.aesthetics')}
-                                >
-                                    <Settings size={16} />
-                                </button>
-                            </div>
-                        {/if}
+                            {/if}
+                            <button
+                                data-testid="asset-detail-aesthetics-toggle"
+                                class="p-1.5 rounded-lg transition-colors {showAesthetics
+                                    ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-300 dark:ring-emerald-700'
+                                    : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
+                                onclick={() => (showAesthetics = !showAesthetics)}
+                                title={$t('common.aesthetics')}
+                            >
+                                <Settings size={16} />
+                            </button>
+                        </div>
 
                         <PriceChartFull
                             data={activeChartData}
                             currency={primaryMode === 'price' ? displayCurrency : ''}
                             mainSeriesLabel={primaryMode === 'price' ? (assetInfo?.display_name ?? '') : $t('signals.riskRollingReturn.name')}
                             chartHeight="400px"
-                            overlaySignals={primaryMode === 'price' ? allOverlaySignals : []}
+                            overlaySignals={primaryMode === 'price' ? allOverlaySignals : calendarOverlaySignals}
                             eventMarkers={primaryMode === 'price' ? chartEventMarkers : []}
-                            overlaySignalInfoMap={primaryMode === 'price' ? overlaySignalInfoMap : undefined}
+                            overlaySignalInfoMap={primaryMode === 'price' ? overlaySignalInfoMap : calendarOverlaySignalInfoMap}
                             mainIconUrl={assetInfo?.icon_url}
                             mainAssetType={assetInfo?.asset_type}
-                            colorByBaseline={primaryMode === 'calendar-return' ? true : settings.colorByBaseline}
-                            areaFill={primaryMode === 'price' ? settings.areaFill : false}
+                            colorByBaseline={settings.colorByBaseline}
+                            areaFill={settings.areaFill}
                             showGridLines={settings.gridLines}
                             showGradient={settings.staleGradient}
-                            yAxisMode={primaryMode === 'calendar-return' ? 'include0' : settings.yAxisMode}
-                            yAxisMin={primaryMode === 'price' ? settings.yAxisMin : undefined}
-                            yAxisMax={primaryMode === 'price' ? settings.yAxisMax : undefined}
-                            measureMode={primaryMode === 'price' && measureMode}
+                            yAxisMode={activePrimaryAxisScale.mode}
+                            yAxisMin={activePrimaryAxisScale.min}
+                            yAxisMax={activePrimaryAxisScale.max}
+                            secondaryAxisScales={settings.axisScales.secondary}
+                            measureMode={primaryMode === 'price' ? measureMode : calendarMeasureMode}
                             onMeasureClick={handleMeasureClick}
-                            onMeasureHover={(date, value) => measurePanel?.updatePendingEnd(date, value)}
+                            onMeasureHover={(date, value) => activeMeasurePanel()?.updatePendingEnd(date, value)}
                             hideToolbar={true}
                             externalChartType={primaryMode === 'price' ? chartType : 'line'}
                             onChartTypeChange={(t) => {
@@ -2299,13 +3141,39 @@
                             }}
                         />
                     </div>
-                    {#if primaryMode === 'calendar-return' && calendarReturnView.state === 'partial'}
+                    {#if primaryMode === 'calendar-return' && calendarReturnView.problem}
+                        <p
+                            class="mt-2 text-center text-xs {calendarPrimaryProblemSeverity === 'error' ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}"
+                            data-testid="asset-calendar-primary-problem"
+                            data-problem-code={calendarReturnView.problem.code}
+                            data-problem-status={calendarReturnView.problem.status}
+                        >
+                            {calendarPrimaryProblemMessage}
+                        </p>
+                    {:else if primaryMode === 'calendar-return' && calendarReturnView.state === 'partial'}
                         <p class="mt-2 text-center text-xs text-amber-600 dark:text-amber-400" data-testid="asset-calendar-return-partial">
                             {$t('chartSettings.signalProblems.partialResult')}
                         </p>
                     {/if}
                 {/if}
             {:else}
+                <div class="mb-3 flex flex-wrap items-center justify-between gap-2" data-testid="asset-chart-primary-controls">
+                    <div class="flex rounded-lg overflow-hidden border border-gray-200 dark:border-slate-600 text-xs font-medium">
+                        <button class="inline-flex items-center gap-1.5 px-3 py-1 transition-colors bg-libre-green text-white" data-testid="asset-chart-primary-price" aria-pressed="true" onclick={() => setPrimaryMode('price')}>
+                            <ChartLine size={14} data-testid="asset-chart-primary-price-icon" />
+                            {$t('assetDetail.pricesTab')}
+                        </button>
+                        <button
+                            class="inline-flex items-center gap-1.5 px-3 py-1 border-l border-gray-200 dark:border-slate-600 transition-colors bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700"
+                            data-testid="asset-chart-primary-calendar-return"
+                            aria-pressed="false"
+                            onclick={() => setPrimaryMode('calendar-return')}
+                        >
+                            <Percent size={14} data-testid="asset-chart-primary-calendar-return-icon" />
+                            {$t('signals.riskRollingReturn.name')}
+                        </button>
+                    </div>
+                </div>
                 <div class="h-96 flex items-center justify-center">
                     <div class="text-center">
                         {#if isManualOnly}
@@ -2443,24 +3311,24 @@
         <!-- ======================================================================= -->
         <!-- Foldable Panel: Measures -->
         <!-- ======================================================================= -->
-        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 {primaryMode === 'price' ? '' : 'hidden'}" data-testid="asset-detail-measures-section" aria-hidden={primaryMode !== 'price'} inert={primaryMode !== 'price'}>
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700" data-testid="asset-detail-measures-section" data-mode={primaryMode}>
             <div
                 class="flex items-center justify-between px-4 py-2.5 cursor-pointer select-none hover:bg-gray-50 dark:hover:bg-slate-750 transition-colors rounded-t-xl"
                 role="button"
                 tabindex="0"
                 data-testid="asset-detail-measures-toggle"
-                onclick={() => (showMeasures = !showMeasures)}
+                onclick={() => setActiveMeasuresOpen(!activeMeasuresOpen())}
                 onkeydown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
-                        showMeasures = !showMeasures;
+                        setActiveMeasuresOpen(!activeMeasuresOpen());
                     }
                 }}
             >
                 <div class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
                     <Ruler class="text-violet-500" size={15} />
                     {$t('common.measures')}
-                    {#if measureMode}
+                    {#if activeMeasureMode()}
                         <span class="text-[10px] px-1.5 py-0.5 bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 rounded-full">{$t('measure.active')}</span>
                     {/if}
                 </div>
@@ -2471,22 +3339,22 @@
                                    bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400
                                    hover:bg-violet-100 dark:hover:bg-violet-900/50
                                    transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        disabled={lineData.length < 2}
+                        disabled={activeChartData.filter((point) => !point.missing).length < 2}
                         data-testid="asset-detail-add-measure-btn"
                         onclick={(e) => {
                             e.stopPropagation();
-                            showMeasures = true;
-                            measurePanel?.addMeasureFromChartData();
+                            setActiveMeasuresOpen(true);
+                            activeMeasurePanel()?.addMeasureFromChartData();
                         }}
                         title={$t('common.addMeasure')}
                     >
                         <span class="text-sm leading-none">+</span>
                         <span class="hidden sm:inline">{$t('common.addMeasure')}</span>
                     </button>
-                    <ChevronDown class="transition-transform text-gray-400 {showMeasures ? 'rotate-180' : ''}" size={15} />
+                    <ChevronDown class="transition-transform text-gray-400 {activeMeasuresOpen() ? 'rotate-180' : ''}" size={15} />
                 </div>
             </div>
-            <div class={showMeasures ? 'px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3' : 'hidden'} data-testid="asset-detail-measures-panel">
+            <div class={primaryMode === 'price' && showMeasures ? 'px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3' : 'hidden'} data-testid="asset-detail-measures-panel" aria-hidden={primaryMode !== 'price' || !showMeasures} inert={primaryMode !== 'price' || !showMeasures}>
                 <MeasurePanel
                     bind:this={measurePanel}
                     chartData={lineData}
@@ -2499,6 +3367,26 @@
                     displayCurrencyFlag={displayCurrency !== assetInfo?.currency ? getCurrencyInfo(displayCurrency).flag_emoji : undefined}
                     mainCurrency={assetInfo?.currency ?? undefined}
                     mainCurrencyFlag={assetInfo?.currency ? getCurrencyInfo(assetInfo.currency).flag_emoji : undefined}
+                    preserveUnavailableMeasures={true}
+                />
+            </div>
+            <div
+                class={primaryMode === 'calendar-return' && showCalendarMeasures ? 'px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3' : 'hidden'}
+                data-testid="asset-detail-calendar-measures-panel"
+                aria-hidden={primaryMode !== 'calendar-return' || !showCalendarMeasures}
+                inert={primaryMode !== 'calendar-return' || !showCalendarMeasures}
+            >
+                <MeasurePanel
+                    bind:this={calendarMeasurePanel}
+                    chartData={calendarReturnView.points}
+                    onmeasuremodechange={(active) => (calendarMeasureMode = active)}
+                    onmeasureschange={(measures) => (calendarMeasureSignals = measures)}
+                    overlaySignals={calendarComparisonSignals}
+                    mainSignalInfo={calendarMainSignalInfo}
+                    viewMode="absolute"
+                    measurementUnit="percentage-points"
+                    preserveUnavailableMeasures={true}
+                    storageKeyPrefix="asset-calendar-measure-summary"
                 />
             </div>
         </div>

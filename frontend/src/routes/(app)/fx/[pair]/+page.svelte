@@ -51,7 +51,7 @@
         type SignalDefinition,
         type SignalInstanceResult,
     } from '$lib/charts/signals';
-    import {getSettingsForPair, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';
+    import {DEFAULT_AXIS_SCALE, getSettingsForPair, normalizeAxisScaleSettings, setPairSettings, type AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {currentLanguage} from '$lib/stores/app/language';
     import {globalSettings} from '$lib/stores/app/globalSettings';
@@ -64,10 +64,12 @@
     import {replaceHistoryDateRange} from '$lib/utils/url/dateRangeUrl';
     import type {SignalLabelInfo} from '$lib/charts/signalLabel';
     import {buildOverlaySignalInfoMap} from '$lib/charts/signalLabel';
-    import {loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
+    import {applyComparisonAssetsData, clearComparisonAssetsData, COMPARISON_ASSET_RUNTIME_PARAM_KEYS, loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';
     import {COLORS} from '$lib/components/charts/lineChartHelpers';
+    import {collectConfigurableSecondaryAxes} from '$lib/components/charts/chartCoreHelpers';
+    import {exchangeRateAxisLabel, percentageAxisLabel, secondaryAxisLabel} from '$lib/components/charts/axisLabelHelpers';
     import AiExportMenu from '$lib/features/ai-export/AiExportMenu.svelte';
     import {prepareAiExport, type PreparedAiExport} from '$lib/features/ai-export/aiExportClipboard';
     import type {AiExportOptionsSelection} from '$lib/features/ai-export/aiExportOptions';
@@ -206,6 +208,13 @@
 
     // Comparison events (asset-comparison signals)
     let comparisonEvents = $state<Map<number, any[]>>(new Map());
+    let comparisonRequestGeneration = 0;
+    let refreshRequestGeneration = 0;
+    let comparisonAppliedFingerprint: string | null = null;
+    let comparisonInFlight: {fingerprint: string; promise: Promise<void>} | null = null;
+    const assetSyncRequestGenerations = new Map<number, number>();
+    const activeAssetSyncRequests = new Map<number, number>();
+    let syncingComparisonAssetIds = $state<Set<number>>(new Set());
 
     // AI export (page toolbar) — dropdown open/position handled internally by AiExportMenu
     let fxAiExportCompatibility = $state<AiExportCatalogCompatibilityResult>(DISABLED_AI_EXPORT_COMPATIBILITY);
@@ -219,6 +228,13 @@
 
     /** Incremented to force overlay signals recomputation after store data changes */
     let overlayDataVersion = $state(0);
+    let signalPanelConfigs = $derived.by(() => {
+        void overlayDataVersion;
+        return signals.map((signal) => ({
+            ...signal,
+            params: {...signal.params},
+        }));
+    });
 
     // Page sync modal state
     let showPageSyncModal = $state(false);
@@ -380,6 +396,21 @@
 
     /** Combined overlay signals: computed from settings + measure signals */
     let allOverlaySignals: RenderedSignal[] = $derived([...overlaySignals, ...measureSignals, ...(pendingPreviewSignal ? [pendingPreviewSignal] : [])]);
+    let activePrimaryAxisKind = $derived<'absolute' | 'percentage'>(viewMode === 'percentage' ? 'percentage' : 'absolute');
+    let activePrimaryAxisScale = $derived(settings.axisScales[activePrimaryAxisKind]);
+    let activeSecondaryAxes = $derived(collectConfigurableSecondaryAxes(allOverlaySignals));
+    let aestheticsAxisRows = $derived([
+        {
+            key: `primary:${activePrimaryAxisKind}`,
+            label: activePrimaryAxisKind === 'percentage' ? percentageAxisLabel((key, values) => $t(key, {values})) : exchangeRateAxisLabel((key, values) => $t(key, {values}), `${displayBase}/${displayQuote}`),
+            settings: activePrimaryAxisScale,
+        },
+        ...activeSecondaryAxes.map((axis) => ({
+            key: axis.key,
+            label: secondaryAxisLabel((key, values) => $t(key, {values}), axis),
+            settings: settings.axisScales.secondary[axis.key] ?? DEFAULT_AXIS_SCALE,
+        })),
+    ]);
 
     // Trigger flag re-evaluation when currencies finish loading
     let flagVersion = $state(0);
@@ -514,6 +545,55 @@
         );
     }
 
+    const comparisonRuntimeParamKeys = new Set<string>(COMPARISON_ASSET_RUNTIME_PARAM_KEYS);
+
+    function signalDataContextFingerprint(configs: SignalConfig[]): string {
+        return JSON.stringify(
+            configs
+                .map((config) => ({
+                    id: config.id,
+                    signalType: config.signalType,
+                    params: Object.fromEntries(
+                        Object.entries(config.params)
+                            .filter(([key]) => !comparisonRuntimeParamKeys.has(key))
+                            .sort(([left], [right]) => left.localeCompare(right)),
+                    ),
+                }))
+                .sort((left, right) => left.id.localeCompare(right.id)),
+        );
+    }
+
+    function comparisonAssetIds(configs: SignalConfig[]): number[] {
+        return [
+            ...new Set(
+                configs
+                    .filter((config) => config.signalType === 'asset-comparison')
+                    .map((config) => Number(config.params.assetId))
+                    .filter((assetId) => Number.isSafeInteger(assetId) && assetId > 0),
+            ),
+        ].sort((left, right) => left - right);
+    }
+
+    function comparisonLoadFingerprint(configs: SignalConfig[]): string {
+        return JSON.stringify({
+            peers: configs
+                .filter((config) => config.signalType === 'asset-comparison')
+                .map((config) => ({configId: config.id, assetId: Number(config.params.assetId)}))
+                .filter((peer) => Number.isSafeInteger(peer.assetId) && peer.assetId > 0)
+                .sort((left, right) => left.configId.localeCompare(right.configId)),
+            start: dateStart,
+            end: dateEnd,
+        });
+    }
+
+    function invalidateComparisonState() {
+        comparisonRequestGeneration += 1;
+        comparisonAppliedFingerprint = null;
+        comparisonInFlight = null;
+        comparisonEvents = clearComparisonAssetsData(signals.filter((signal) => signal.signalType === 'asset-comparison'));
+        overlayDataVersion++;
+    }
+
     async function retryBackendSignals() {
         await loadFxSignalDefinitions(true);
         await loadChartData();
@@ -582,8 +662,10 @@
         const unsubscribeSession = clientSessionUserId.subscribe(() => {
             connectCreationCompletion();
             if (!initialSession && getClientSessionUserId() !== null) {
-                if (signalDefinitionsReady) void loadChartData();
-                else void initializePage();
+                invalidateComparisonState();
+                if (signalDefinitionsReady) {
+                    void loadChartData().then(() => maybeLoadComparison());
+                } else void initializePage();
             }
             initialSession = false;
         });
@@ -591,6 +673,8 @@
         return () => {
             pageMounted = false;
             chartLoadVersion += 1;
+            comparisonRequestGeneration += 1;
+            comparisonInFlight = null;
             unsubscribeCreationCompletion();
             unsubscribeSession();
         };
@@ -607,7 +691,10 @@
             previousDisplayOrientation = orientation;
             if (pageMounted) {
                 connectCreationCompletion();
-                if (signalDefinitionsReady) void loadChartData();
+                invalidateComparisonState();
+                if (signalDefinitionsReady) {
+                    void loadChartData().then(() => maybeLoadComparison());
+                }
             }
         }
     });
@@ -799,15 +886,53 @@
      * Load comparison asset data if any comparison signals are configured.
      * Called explicitly from onMount, handleRefresh, handleDateRangeChange, handleSignalsChange.
      */
-    async function maybeLoadComparison() {
-        const compSignals = signals.filter((s) => s.signalType === 'asset-comparison');
-        if (compSignals.length === 0 || lineData.length === 0) return;
-        try {
-            comparisonEvents = await loadComparisonAssetsData(compSignals, {start: dateStart, end: dateEnd}, allAssets, comparisonEvents);
-            overlayDataVersion++;
-        } catch (e) {
-            console.error('Failed to load comparison asset data:', e);
+    function maybeLoadComparison(requestedSignalConfigs: SignalConfig[] = signals, force = false): Promise<void> {
+        const slug = data.canonicalSlug;
+        const base = data.urlBase;
+        const quote = data.urlQuote;
+        const sessionGeneration = getClientSessionGeneration();
+        const requestedFingerprint = comparisonLoadFingerprint(requestedSignalConfigs);
+        if (!force && comparisonInFlight?.fingerprint === requestedFingerprint) {
+            return comparisonInFlight.promise;
         }
+        if (!force && comparisonAppliedFingerprint === requestedFingerprint) {
+            return Promise.resolve();
+        }
+        comparisonInFlight = null;
+        const requestVersion = ++comparisonRequestGeneration;
+        const current = () => pageMounted && isClientSessionCurrent(sessionGeneration) && data.canonicalSlug === slug && data.urlBase === base && data.urlQuote === quote && requestVersion === comparisonRequestGeneration && comparisonLoadFingerprint(signals) === requestedFingerprint;
+        if (!current()) return Promise.resolve();
+        if (requestedFingerprint !== comparisonAppliedFingerprint) {
+            comparisonEvents = clearComparisonAssetsData(signals.filter((signal) => signal.signalType === 'asset-comparison'));
+            overlayDataVersion++;
+        }
+        const requestedAssetIds = comparisonAssetIds(requestedSignalConfigs);
+        if (requestedAssetIds.length === 0) {
+            comparisonAppliedFingerprint = requestedFingerprint;
+            return Promise.resolve();
+        }
+        if (lineData.length === 0) return Promise.resolve();
+        const promise = (async () => {
+            try {
+                const loaded = await loadComparisonAssetsData(requestedAssetIds, {start: dateStart, end: dateEnd}, allAssets);
+                if (!current()) return;
+                comparisonEvents = applyComparisonAssetsData(
+                    signals.filter((signal) => signal.signalType === 'asset-comparison'),
+                    loaded,
+                );
+                comparisonAppliedFingerprint = requestedFingerprint;
+                overlayDataVersion++;
+            } catch (error) {
+                if (!current()) return;
+                console.error('Failed to load comparison asset data:', error);
+            }
+        })();
+        comparisonInFlight = {fingerprint: requestedFingerprint, promise};
+        const clearInFlight = () => {
+            if (comparisonInFlight?.promise === promise) comparisonInFlight = null;
+        };
+        void promise.then(clearInFlight, clearInFlight);
+        return promise;
     }
 
     // =========================================================================
@@ -815,22 +940,44 @@
     // =========================================================================
 
     async function handleRefresh() {
+        const slug = data.canonicalSlug;
+        const base = data.urlBase;
+        const quote = data.urlQuote;
+        const sessionGeneration = getClientSessionGeneration();
+        const requestGeneration = ++refreshRequestGeneration;
+        const requestedSignals = signals;
+        const requestedSignalDataFingerprint = signalDataContextFingerprint(requestedSignals);
         rearmMaxPendingBeforeReload();
-        const store = getFxStore(data.canonicalSlug);
+        const requestedUrlStart = urlDateStart;
+        const requestedUrlEnd = urlDateEnd;
+        const current = () =>
+            pageMounted &&
+            isClientSessionCurrent(sessionGeneration) &&
+            requestGeneration === refreshRequestGeneration &&
+            data.canonicalSlug === slug &&
+            data.urlBase === base &&
+            data.urlQuote === quote &&
+            urlDateStart === requestedUrlStart &&
+            urlDateEnd === requestedUrlEnd &&
+            signalDataContextFingerprint(signals) === requestedSignalDataFingerprint;
+        if (!current()) return;
+        const store = getFxStore(slug);
         store.invalidateRange(dateStart, dateEnd);
-        await loadChartData();
+        await loadChartData(requestedSignals);
+        if (!current()) return;
         // Also invalidate overlay pair stores so comparison signals refresh
-        for (const cfg of signals) {
+        for (const cfg of requestedSignals) {
             if (cfg.signalType === 'fx-pair') {
                 const pairSlug = String(cfg.params.pairSlug || '');
-                if (pairSlug && pairSlug !== data.canonicalSlug) {
+                if (pairSlug && pairSlug !== slug) {
                     getFxStore(pairSlug).invalidateRange(dateStart, dateEnd);
                     await ensureFxRangeLoaded(pairSlug, dateStart, dateEnd);
+                    if (!current()) return;
                 }
             }
         }
         overlayDataVersion++;
-        await maybeLoadComparison();
+        await maybeLoadComparison(requestedSignals, true);
     }
 
     async function loadFxAiExportCompatibility() {
@@ -873,7 +1020,6 @@
 
     async function handlePageSyncComplete() {
         await handleRefresh();
-        await maybeLoadComparison();
         overlayDataVersion++;
     }
 
@@ -897,13 +1043,42 @@
     }
 
     function handleAestheticsChange(values: {colorByBaseline: boolean; areaFill: boolean; gridLines: boolean; staleGradient: boolean; yAxisMode: 'auto' | 'include0' | 'custom'; yAxisMin: number | undefined; yAxisMax: number | undefined}) {
-        setPairSettings(data.canonicalSlug, {...settings, ...values, signals: [...signals]});
+        setPairSettings(data.canonicalSlug, {
+            ...settings,
+            colorByBaseline: values.colorByBaseline,
+            areaFill: values.areaFill,
+            gridLines: values.gridLines,
+            staleGradient: values.staleGradient,
+            signals: [...signals],
+        });
+    }
+
+    function handleAxisScaleChange(key: string, scale: AxisScaleSettings) {
+        const normalized = normalizeAxisScaleSettings(scale, DEFAULT_AXIS_SCALE);
+        const axisScales = {
+            absolute: {...settings.axisScales.absolute},
+            percentage: {...settings.axisScales.percentage},
+            secondary: {...settings.axisScales.secondary},
+        };
+        if (key === 'primary:absolute') {
+            axisScales.absolute = normalized;
+        } else if (key === 'primary:percentage') {
+            axisScales.percentage = normalized;
+        } else {
+            axisScales.secondary[key] = normalized;
+        }
+        setPairSettings(data.canonicalSlug, {
+            ...settings,
+            axisScales,
+            signals: [...signals],
+        });
     }
 
     function handleSignalsChange(newSignals: SignalConfig[]) {
         const shouldReloadBackend = backendRequestFingerprint(signals) !== backendRequestFingerprint(newSignals);
+        const shouldReloadComparison = comparisonLoadFingerprint(signals) !== comparisonLoadFingerprint(newSignals);
         setPairSettings(data.canonicalSlug, {...settings, signals: JSON.parse(JSON.stringify(newSignals))});
-        maybeLoadComparison(); // fire-and-forget: load data for newly added comparison signals
+        if (shouldReloadComparison) void maybeLoadComparison(newSignals);
         if (shouldReloadBackend) {
             void loadChartData(newSignals);
         }
@@ -944,13 +1119,48 @@
     }
 
     async function handleSyncAsset(assetId: number) {
+        if (activeAssetSyncRequests.has(assetId)) return;
+        const requestGeneration = (assetSyncRequestGenerations.get(assetId) ?? 0) + 1;
+        assetSyncRequestGenerations.set(assetId, requestGeneration);
+        activeAssetSyncRequests.set(assetId, requestGeneration);
+        syncingComparisonAssetIds = new Set(activeAssetSyncRequests.keys());
+        try {
+            await runSyncAsset(assetId, requestGeneration);
+        } finally {
+            if (activeAssetSyncRequests.get(assetId) === requestGeneration) {
+                activeAssetSyncRequests.delete(assetId);
+            }
+            syncingComparisonAssetIds = new Set(activeAssetSyncRequests.keys());
+        }
+    }
+
+    async function runSyncAsset(assetId: number, requestGeneration: number) {
+        const slug = data.canonicalSlug;
+        const base = data.urlBase;
+        const quote = data.urlQuote;
+        const sessionGeneration = getClientSessionGeneration();
+        const requestedStart = syncDateStart;
+        const requestedEnd = dateEnd;
+        const requestedSignals = signals;
+        const requestedFingerprint = comparisonLoadFingerprint(requestedSignals);
+        const current = () =>
+            pageMounted &&
+            isClientSessionCurrent(sessionGeneration) &&
+            data.canonicalSlug === slug &&
+            data.urlBase === base &&
+            data.urlQuote === quote &&
+            activeAssetSyncRequests.get(assetId) === requestGeneration &&
+            syncDateStart === requestedStart &&
+            dateEnd === requestedEnd &&
+            comparisonLoadFingerprint(signals) === requestedFingerprint;
         try {
             const response = await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([
                 {
                     asset_id: assetId,
-                    date_range: {start: syncDateStart, end: dateEnd},
+                    date_range: {start: requestedStart, end: requestedEnd},
                 },
             ]);
+            if (!current()) return;
             const r = (response as any)?.results?.[0];
             const tr = get(t);
             if (r) {
@@ -959,11 +1169,11 @@
             } else {
                 toasts.error(`${tr('common.sync')} — ${tr('prices.sync.noResponse')}`);
             }
+            if (r?.status !== 'ok' && r?.status !== 'partial') return;
+            await maybeLoadComparison(requestedSignals, true);
         } catch (e: any) {
-            toasts.error('Sync failed: ' + (e?.message || 'unknown'));
+            if (current()) toasts.error('Sync failed: ' + (e?.message || 'unknown'));
         }
-        // Reload comparison data for the synced asset
-        await maybeLoadComparison();
     }
 
     function handleDetailAsset(assetId: number) {
@@ -1130,7 +1340,7 @@
         {#if showSignals}
             <div data-testid="fx-detail-signals-panel" class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3">
                 <ChartSignalsSection
-                    signals={[...signals]}
+                    signals={signalPanelConfigs}
                     definitions={signalDefinitions}
                     backendError={signalBackendError}
                     {signalsLoading}
@@ -1142,6 +1352,7 @@
                     onsyncpair={handleSyncPair}
                     ondetailpair={handleDetailPair}
                     onsyncasset={handleSyncAsset}
+                    syncingAssetIds={syncingComparisonAssetIds}
                     ondetailasset={handleDetailAsset}
                     {signalSummaries}
                     {dateStart}
@@ -1168,16 +1379,7 @@
                     <button class="absolute top-0 right-0 p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors" onclick={() => (showAesthetics = false)} title={$t('common.close')}>
                         <X size={16} />
                     </button>
-                    <ChartAestheticsSection
-                        colorByBaseline={settings.colorByBaseline}
-                        areaFill={settings.areaFill}
-                        gridLines={settings.gridLines}
-                        staleGradient={settings.staleGradient}
-                        yAxisMode={settings.yAxisMode}
-                        yAxisMin={settings.yAxisMin}
-                        yAxisMax={settings.yAxisMax}
-                        onchange={handleAestheticsChange}
-                    />
+                    <ChartAestheticsSection colorByBaseline={settings.colorByBaseline} areaFill={settings.areaFill} gridLines={settings.gridLines} staleGradient={settings.staleGradient} axisRows={aestheticsAxisRows} onchange={handleAestheticsChange} onaxischange={handleAxisScaleChange} />
                 </div>
             {/if}
 
@@ -1253,9 +1455,10 @@
                     areaFill={settings.areaFill}
                     showGridLines={settings.gridLines}
                     showGradient={settings.staleGradient}
-                    yAxisMode={settings.yAxisMode}
-                    yAxisMin={settings.yAxisMin}
-                    yAxisMax={settings.yAxisMax}
+                    yAxisMode={activePrimaryAxisScale.mode}
+                    yAxisMin={activePrimaryAxisScale.min}
+                    yAxisMax={activePrimaryAxisScale.max}
+                    secondaryAxisScales={settings.axisScales.secondary}
                     {measureMode}
                     onMeasureClick={handleMeasureClick}
                     onMeasureHover={(date, value) => measurePanel?.updatePendingEnd(date, value)}

@@ -1169,6 +1169,13 @@
       "partialResult": "Esta señal solo está disponible parcialmente con los datos actuales.",
       "unavailable": "Esta señal no se puede calcular con los datos disponibles.",
       "partialContiguousSegment": "Señal calculada sobre el segmento contiguo completo {start}–{end}. Se excluyeron {excluded} puntos cargados porque faltaban fechas o campos obligatorios. Entrada completa: {available}/{requested} ({coverage}%, calentamiento incluido). Racha máxima ausente: {consecutive} puntos."
+    },
+    "axes": {
+      "exchangeRate": "Eje del tipo de cambio ({pair})",
+      "percentage": "Eje de porcentajes",
+      "price": "Eje de precios ({currency})",
+      "signal": "Eje {name}",
+      "volume": "Eje de volúmenes"
     }
   },
   "common": {

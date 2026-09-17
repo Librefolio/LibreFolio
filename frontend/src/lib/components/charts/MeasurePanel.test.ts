@@ -31,7 +31,7 @@
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import type {ComponentProps} from 'svelte';
-import {cleanup, fireEvent, render, setupI18n, waitFor} from '$test/component';
+import {cleanup, fireEvent, render, setupI18n, waitFor, within} from '$test/component';
 import MeasurePanel from './MeasurePanel.svelte';
 import type {LineDataPoint} from './LineChart.svelte';
 import type {RenderedSignal} from '$lib/charts/signals';
@@ -66,10 +66,17 @@ const baseData: LineDataPoint[] = [
     {date: '2024-01-31', value: 121},
 ];
 
+/** Valid chart data whose range cannot satisfy a measure anchored to baseData. */
+const incompatibleData: LineDataPoint[] = [
+    {date: '2099-01-01', value: 1},
+    {date: '2099-12-31', value: 2},
+];
+
 /** The exported instance methods MeasurePanel exposes to its parent chart. */
 interface PanelApi {
     startMeasureMode(): void;
     stopMeasureMode(): void;
+    clearMeasures(): void;
     updatePendingEnd(date: string, value: number): void;
     addPoint(date: string, value: number): void;
     addMeasureFromChartData(): void;
@@ -94,6 +101,18 @@ function mount(props: Partial<PanelProps> = {}) {
 function lastEmit(fn: ReturnType<typeof vi.fn>): RenderedSignal[] | undefined {
     const calls = fn.mock.calls;
     return calls.length ? (calls[calls.length - 1][0] as RenderedSignal[]) : undefined;
+}
+
+/** Find one DataTable row by its stable row identity without relying on DOM position. */
+function rowById(container: HTMLElement, id: string): HTMLElement | null {
+    return rowsById(container, id).at(0) ?? null;
+}
+
+/** Find all DataTable rows with a stable identity (one per completed measure). */
+function rowsById(container: HTMLElement, id: string): HTMLElement[] {
+    return within(container)
+        .queryAllByRole('row')
+        .filter((row) => row.getAttribute('data-row-id') === id);
 }
 
 /** An overlay signal covering the base date axis, cast past the profile boilerplate. */
@@ -254,6 +273,47 @@ describe('MeasurePanel — addMeasureFromChartData', () => {
     });
 });
 
+describe('MeasurePanel — clearMeasures', () => {
+    it('clears completed and pending state before accepting a fresh measure', async () => {
+        const {api, container, onmeasureschange, onmeasuremodechange} = mount();
+
+        api.addMeasureFromChartData();
+        api.addMeasureFromChartData();
+        await waitFor(() => expect(rowsById(container, 'main')).toHaveLength(2));
+        expect(lastEmit(onmeasureschange)?.map((signal) => signal.id)).toEqual(['measure-0', 'measure-1']);
+
+        const now = vi.spyOn(Date, 'now').mockReturnValue(1000);
+        api.startMeasureMode();
+        api.addPoint('2024-01-01', 100);
+        api.updatePendingEnd('2024-01-21', 115);
+        expect(lastEmit(onmeasureschange)?.map((signal) => signal.id)).toEqual(['measure-0', 'measure-1', '__pending__']);
+        expect(onmeasuremodechange).toHaveBeenLastCalledWith(true);
+
+        api.clearMeasures();
+        expect(lastEmit(onmeasureschange)).toEqual([]);
+        expect(onmeasuremodechange).toHaveBeenLastCalledWith(false);
+        await waitFor(() => expect(rowsById(container, 'main')).toHaveLength(0));
+
+        onmeasureschange.mockClear();
+        api.addPoint('2024-01-11', 108);
+        expect(onmeasureschange).not.toHaveBeenCalled();
+
+        api.startMeasureMode();
+        now.mockReturnValue(1000);
+        api.addPoint('2024-01-11', 108);
+        now.mockReturnValue(1400);
+        api.addPoint('2024-01-31', 121);
+
+        const rebuilt = lastEmit(onmeasureschange);
+        expect(rebuilt).toHaveLength(1);
+        const freshMeasure = rebuilt?.find((signal) => signal.id === 'measure-0');
+        expect(freshMeasure?.data.map((point) => point.date)).toEqual(['2024-01-11', '2024-01-21', '2024-01-31']);
+        expect(rebuilt?.some((signal) => signal.id === '__pending__')).toBe(false);
+        expect(onmeasuremodechange.mock.calls.map(([active]) => active)).toEqual([true, false, true, false]);
+        await waitFor(() => expect(rowsById(container, 'main')).toHaveLength(1));
+    });
+});
+
 describe('MeasurePanel — summary table (expanded card)', () => {
     it('renders a main row with the exact start/end/delta values', async () => {
         const {api, container} = mount();
@@ -301,6 +361,167 @@ describe('MeasurePanel — summary table (expanded card)', () => {
         // yAxisIndex 1 is excluded from the primary-axis summary.
         expect(container.querySelector('[data-row-id="sig-OtherAxis"]')).toBeNull();
     });
+
+    it('repopulates updated peer rows for the existing completed measure after overlays clear', async () => {
+        const peer = (label: string, values: [number, number, number, number]) =>
+            overlaySignal({
+                label,
+                data: baseData.map(({date}, index) => ({date, value: values[index]})),
+            });
+        const initialPeers = [peer('Peer-A', [200, 220, 240, 260]), peer('Peer-B', [80, 88, 96, 104])];
+        const correctedPeers = [peer('Peer-A', [300, 330, 360, 390]), peer('Peer-B', [40, 50, 60, 70])];
+        const {api, container, onmeasureschange, rerender} = mount({
+            overlaySignals: initialPeers,
+            preserveUnavailableMeasures: true,
+            storageKeyPrefix: 'test-overlay-repopulation',
+        });
+
+        api.addMeasureFromChartData();
+        await waitFor(() => {
+            expect(rowsById(container, 'main')).toHaveLength(1);
+            expect(rowsById(container, 'sig-Peer-A')).toHaveLength(1);
+            expect(rowsById(container, 'sig-Peer-B')).toHaveLength(1);
+        });
+        expect(rowById(container, 'main')).toHaveTextContent('100.0000');
+        expect(rowById(container, 'main')).toHaveTextContent('121.0000');
+        expect(rowById(container, 'sig-Peer-A')).toHaveTextContent('200.0000');
+        expect(rowById(container, 'sig-Peer-A')).toHaveTextContent('260.0000');
+        expect(rowById(container, 'sig-Peer-B')).toHaveTextContent('80.0000');
+        expect(rowById(container, 'sig-Peer-B')).toHaveTextContent('104.0000');
+        expect(within(container).getByTestId('date-range-input-start')).toHaveValue('2024-01-01');
+        expect(within(container).getByTestId('date-range-input-end')).toHaveValue('2024-01-31');
+        expect(lastEmit(onmeasureschange)?.map((signal) => signal.id)).toEqual(['measure-0']);
+
+        await rerender({
+            chartData: baseData,
+            overlaySignals: [],
+            preserveUnavailableMeasures: true,
+            storageKeyPrefix: 'test-overlay-repopulation',
+        } as PanelProps);
+        await waitFor(() => {
+            expect(rowsById(container, 'sig-Peer-A')).toHaveLength(0);
+            expect(rowsById(container, 'sig-Peer-B')).toHaveLength(0);
+        });
+        expect(rowsById(container, 'main')).toHaveLength(1);
+        expect(rowById(container, 'main')).toHaveTextContent('100.0000');
+        expect(rowById(container, 'main')).toHaveTextContent('121.0000');
+        expect(within(container).getByTestId('date-range-input-start')).toHaveValue('2024-01-01');
+        expect(within(container).getByTestId('date-range-input-end')).toHaveValue('2024-01-31');
+        expect(lastEmit(onmeasureschange)?.map((signal) => signal.id)).toEqual(['measure-0']);
+
+        await rerender({
+            chartData: baseData,
+            overlaySignals: correctedPeers,
+            preserveUnavailableMeasures: true,
+            storageKeyPrefix: 'test-overlay-repopulation',
+        } as PanelProps);
+        await waitFor(() => {
+            expect(rowsById(container, 'sig-Peer-A')).toHaveLength(1);
+            expect(rowsById(container, 'sig-Peer-B')).toHaveLength(1);
+        });
+        expect(rowsById(container, 'main')).toHaveLength(1);
+        expect(rowById(container, 'main')).toHaveTextContent('100.0000');
+        expect(rowById(container, 'main')).toHaveTextContent('121.0000');
+        expect(rowById(container, 'sig-Peer-A')).toHaveTextContent('300.0000');
+        expect(rowById(container, 'sig-Peer-A')).toHaveTextContent('390.0000');
+        expect(rowById(container, 'sig-Peer-A')).toHaveTextContent('+90.0000');
+        expect(rowById(container, 'sig-Peer-A')).not.toHaveTextContent('200.0000');
+        expect(rowById(container, 'sig-Peer-B')).toHaveTextContent('40.0000');
+        expect(rowById(container, 'sig-Peer-B')).toHaveTextContent('70.0000');
+        expect(rowById(container, 'sig-Peer-B')).toHaveTextContent('+30.0000');
+        expect(rowById(container, 'sig-Peer-B')).not.toHaveTextContent('80.0000');
+        expect(within(container).getByTestId('date-range-input-start')).toHaveValue('2024-01-01');
+        expect(within(container).getByTestId('date-range-input-end')).toHaveValue('2024-01-31');
+        expect(lastEmit(onmeasureschange)?.map((signal) => signal.id)).toEqual(['measure-0']);
+    });
+
+    it('presents return values as percentage points without price-only fields', async () => {
+        const {api, container} = mount({
+            measurementUnit: 'percentage-points',
+            mainCurrency: 'USD',
+            mainCurrencyFlag: '🇺🇸',
+            displayCurrency: 'EUR',
+            displayCurrencyFlag: '🇪🇺',
+            storageKeyPrefix: 'test-return-summary',
+        });
+        api.addMeasureFromChartData();
+
+        const table = within(container);
+        await waitFor(() => expect(table.queryByTestId('dt-header-days')).not.toBeNull());
+
+        expect(table.getByTestId('dt-header-valueStart')).toBeInTheDocument();
+        expect(table.getByTestId('dt-header-valueEnd')).toBeInTheDocument();
+        expect(table.getByTestId('dt-header-deltaAbs')).toBeInTheDocument();
+        expect(table.getByTestId('dt-header-days')).toBeInTheDocument();
+        expect(table.queryByTestId('dt-header-deltaPct')).toBeNull();
+        expect(table.queryByTestId('dt-header-annualizedPct')).toBeNull();
+
+        const main = rowById(container, 'main');
+        expect(main).not.toBeNull();
+        expect(main).toHaveTextContent('100.00%');
+        expect(main).toHaveTextContent('121.00%');
+        expect(main).toHaveTextContent('+21.00 pp');
+        expect(main).toHaveTextContent('30d');
+        expect(main).not.toHaveTextContent('USD');
+        expect(main).not.toHaveTextContent('EUR');
+        expect(main).not.toHaveTextContent('🇺🇸');
+        expect(main).not.toHaveTextContent('🇪🇺');
+        expect(rowById(container, 'main-original')).toBeNull();
+    });
+});
+
+describe('MeasurePanel — independent instances', () => {
+    it('keeps simultaneously mounted Price and Return panels isolated', async () => {
+        const price = mount({
+            mainCurrency: 'USD',
+            storageKeyPrefix: 'test-price-instance',
+        });
+        const returnData: LineDataPoint[] = [
+            {date: '2024-02-01', value: -5},
+            {date: '2024-02-11', value: 7},
+        ];
+        const returns = mount({
+            chartData: returnData,
+            measurementUnit: 'percentage-points',
+            preserveUnavailableMeasures: true,
+            mainCurrency: 'USD',
+            mainCurrencyFlag: '🇺🇸',
+            storageKeyPrefix: 'test-return-instance',
+        });
+
+        price.api.addMeasureFromChartData();
+        const priceTable = within(price.container);
+        await waitFor(() => expect(priceTable.queryByTestId('dt-header-deltaPct')).not.toBeNull());
+        expect(returns.onmeasureschange).not.toHaveBeenCalled();
+
+        const priceRendered = lastEmit(price.onmeasureschange);
+        expect(priceRendered).toHaveLength(1);
+        const priceMeasure = priceRendered?.find((signal) => signal.id === 'measure-0');
+        expect(priceMeasure?.data.map((point) => point.date)).toEqual(baseData.map((point) => point.date));
+
+        price.onmeasureschange.mockClear();
+        returns.api.addMeasureFromChartData();
+        const returnTable = within(returns.container);
+        await waitFor(() => expect(returnTable.queryByTestId('dt-header-days')).not.toBeNull());
+
+        expect(price.onmeasureschange).not.toHaveBeenCalled();
+        expect(priceTable.getByTestId('dt-header-deltaPct')).toBeInTheDocument();
+        expect(priceTable.getByTestId('dt-header-annualizedPct')).toBeInTheDocument();
+        expect(priceTable.queryByTestId('dt-header-days')).toBeNull();
+        expect(returnTable.getByTestId('dt-header-days')).toBeInTheDocument();
+        expect(returnTable.queryByTestId('dt-header-deltaPct')).toBeNull();
+        expect(returnTable.queryByTestId('dt-header-annualizedPct')).toBeNull();
+
+        const priceMain = rowById(price.container, 'main');
+        const returnMain = rowById(returns.container, 'main');
+        expect(priceMain).toHaveTextContent('USD');
+        expect(returnMain).not.toHaveTextContent('USD');
+
+        const returnRendered = lastEmit(returns.onmeasureschange);
+        expect(returnRendered).toHaveLength(1);
+        const returnMeasure = returnRendered?.find((signal) => signal.id === 'measure-0');
+        expect(returnMeasure?.data.map((point) => point.date)).toEqual(returnData.map((point) => point.date));
+    });
 });
 
 describe('MeasurePanel — card interactions', () => {
@@ -317,18 +538,115 @@ describe('MeasurePanel — card interactions', () => {
         expect(container.textContent ?? '').toContain('📏 2024-01-01 → 2024-01-31');
     });
 
-    it('auto-deletes a measure when its dates leave the data, re-emitting empty', async () => {
-        const {api, onmeasureschange, rerender} = mount();
+    it('auto-deletes a completed price measure by default when its dates leave non-empty data', async () => {
+        const storageKeyPrefix = 'test-price-default-pruning';
+        const {api, container, onmeasureschange, rerender} = mount({
+            measurementUnit: 'price',
+            storageKeyPrefix,
+        });
+        const panel = within(container);
+
+        api.addMeasureFromChartData();
+        await waitFor(() => {
+            expect(lastEmit(onmeasureschange)?.map((signal) => signal.id)).toEqual(['measure-0']);
+            expect(rowsById(container, 'main')).toHaveLength(1);
+            expect(panel.getByTestId('date-range-input-start')).toHaveValue('2024-01-01');
+            expect(panel.getByTestId('date-range-input-end')).toHaveValue('2024-01-31');
+        });
+
+        onmeasureschange.mockClear();
+        await rerender({
+            chartData: incompatibleData,
+            measurementUnit: 'price',
+            storageKeyPrefix,
+        } as PanelProps);
+        await waitFor(() => {
+            expect(lastEmit(onmeasureschange)).toEqual([]);
+            expect(rowsById(container, 'main')).toHaveLength(0);
+            expect(panel.queryByTestId('date-range-input-start')).toBeNull();
+            expect(panel.queryByTestId('date-range-input-end')).toBeNull();
+            expect(panel.queryByTestId('dt-header-deltaPct')).toBeNull();
+        });
+    });
+
+    it('preserves a completed price measure across incompatible data and restores its summary', async () => {
+        const storageKeyPrefix = 'test-price-unavailable-retention';
+        const {api, container, onmeasureschange, rerender} = mount({
+            measurementUnit: 'price',
+            preserveUnavailableMeasures: true,
+            storageKeyPrefix,
+        });
+        const panel = within(container);
+
+        api.addMeasureFromChartData();
+        await waitFor(() => {
+            expect(lastEmit(onmeasureschange)?.map((signal) => signal.id)).toEqual(['measure-0']);
+            expect(rowsById(container, 'main')).toHaveLength(1);
+            expect(panel.getByTestId('dt-header-deltaPct')).toBeInTheDocument();
+        });
+        expect(panel.getByTestId('date-range-input-start')).toHaveValue('2024-01-01');
+        expect(panel.getByTestId('date-range-input-end')).toHaveValue('2024-01-31');
+
+        onmeasureschange.mockClear();
+        await rerender({
+            chartData: incompatibleData,
+            measurementUnit: 'price',
+            preserveUnavailableMeasures: true,
+            storageKeyPrefix,
+        } as PanelProps);
+        await waitFor(() => {
+            expect(lastEmit(onmeasureschange)).toEqual([]);
+            expect(rowsById(container, 'main')).toHaveLength(0);
+            expect(panel.getByTestId('date-range-input-start')).toHaveValue('2024-01-01');
+            expect(panel.getByTestId('date-range-input-end')).toHaveValue('2024-01-31');
+            expect(panel.queryByTestId('dt-header-deltaPct')).toBeNull();
+        });
+
+        onmeasureschange.mockClear();
+        await rerender({
+            chartData: baseData,
+            measurementUnit: 'price',
+            preserveUnavailableMeasures: true,
+            storageKeyPrefix,
+        } as PanelProps);
+        await waitFor(() => {
+            expect(lastEmit(onmeasureschange)?.map((signal) => signal.id)).toEqual(['measure-0']);
+            expect(rowsById(container, 'main')).toHaveLength(1);
+            expect(panel.getByTestId('dt-header-deltaPct')).toBeInTheDocument();
+        });
+        expect(panel.getByTestId('date-range-input-start')).toHaveValue('2024-01-01');
+        expect(panel.getByTestId('date-range-input-end')).toHaveValue('2024-01-31');
+    });
+
+    it('retains its date anchors while preserved endpoints are unavailable', async () => {
+        const {api, container, onmeasureschange, rerender} = mount({
+            preserveUnavailableMeasures: true,
+            storageKeyPrefix: 'test-preserved-return',
+        });
         api.addMeasureFromChartData();
         await waitFor(() => expect(lastEmit(onmeasureschange)).toHaveLength(1));
+
         onmeasureschange.mockClear();
-        // A data range with neither endpoint of the measure invalidates it.
+        const unavailable = baseData.map((point) => (point.date === '2024-01-01' || point.date === '2024-01-31' ? {...point, missing: true} : point));
         await rerender({
-            chartData: [
-                {date: '2099-01-01', value: 1},
-                {date: '2099-12-31', value: 2},
-            ],
+            chartData: unavailable,
+            preserveUnavailableMeasures: true,
         } as PanelProps);
         await waitFor(() => expect(lastEmit(onmeasureschange)).toEqual([]));
+
+        const panel = within(container);
+        expect(panel.getByTestId('date-range-input-start')).toHaveValue('2024-01-01');
+        expect(panel.getByTestId('date-range-input-end')).toHaveValue('2024-01-31');
+
+        onmeasureschange.mockClear();
+        await rerender({
+            chartData: baseData,
+            preserveUnavailableMeasures: true,
+        } as PanelProps);
+        await waitFor(() => expect(lastEmit(onmeasureschange)).toHaveLength(1));
+
+        const restored = lastEmit(onmeasureschange);
+        const restoredMeasure = restored?.find((signal) => signal.id === 'measure-0');
+        expect(restoredMeasure?.data.map((point) => point.date)).toEqual(baseData.map((point) => point.date));
     });
 });

@@ -56,7 +56,7 @@ export class MeasureSignal extends ChartSignal {
 
         const start = baseData.find((d) => d.date === startDate);
         const end = baseData.find((d) => d.date === endDate);
-        if (!start || !end) return [];
+        if (!start || !end || start.missing || end.missing) return [];
 
         // Interpolate all dates between start and end so the line segment
         // remains visible when zoomed in (ECharts hides lines with both
@@ -94,7 +94,7 @@ export class MeasureSignal extends ChartSignal {
 
         const start = baseData.find((d) => d.date === startDate);
         const end = baseData.find((d) => d.date === endDate);
-        if (!start || !end) return null;
+        if (!start || !end || start.missing || end.missing) return null;
 
         const deltaAbs = end.value - start.value;
         const deltaPct = start.value !== 0 ? (deltaAbs / start.value) * 100 : 0;
@@ -125,7 +125,7 @@ export class MeasureSignal extends ChartSignal {
 
         const start = signalData.find((d) => d.date === startDate);
         const end = signalData.find((d) => d.date === endDate);
-        if (!start || !end) return null;
+        if (!start || !end || start.missing || end.missing) return null;
 
         const deltaAbs = end.value - start.value;
         const deltaPct = start.value !== 0 ? (deltaAbs / start.value) * 100 : 0;
