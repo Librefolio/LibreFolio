@@ -865,3 +865,24 @@ Possibilità di integrare queste informazioni nella UI e nei calcoli backend, ma
 
 ## Come per la valuta di esposizione, studiare come fare per aggiungere anche la distribuzione delle aziende, ma capendo come garantire di non avere Apple e apple SRL che sembrano diverse, ma in realtà sono la stessa.
 Possibile approccio: normalizzazione dei nomi, utilizzo di identificatori univoci (es. ISIN per le aziende quotate), e gestione dei casi ambigui tramite regole di matching o intervento manuale.
+
+## Stimatori robusti di covarianza per la matrice di correlazione (Riskfolio)
+**Priorità:** 🔽 bassa — dopo che la pagina correlazioni avrà una direzione chiara.
+
+`riskfolio.src.ParamsEstimation.covar_matrix` espone quindici stimatori oltre a quello
+storico: `ledoit`, `oas`, `shrunk`, `gl`, `jlogo`, `gerber1/2`, `ewma1/2`, `semi`, più
+tre metodi di denoising. Servono quando gli asset sono molti e le osservazioni poche —
+con cento asset e 750 giorni si stimano 5 050 parametri da 75 000 osservazioni, e la
+matrice campionaria diventa instabile: piccole variazioni nei dati muovono molto il
+risultato.
+
+**Perché non ora:** è un miglioramento di *qualità della stima*, non di prestazioni.
+Misurato: Ledoit-Wolf 25,4 ms contro 0,2 ms di `np.cov`, scarto massimo 1,2e-05.
+La migrazione M3 (vedi `02_riskfolioIntegration/06`) è deliberatamente a comportamento
+invariato: cambia il tempo, non i numeri mostrati. Mescolare le due cose renderebbe
+impossibile dire quale delle due ha causato una differenza.
+
+**Gate:** decidere prima se la pagina correlazioni serve la domanda L2 («sono
+diversificato come credo?») o una domanda di ottimizzazione. Se resta descrittiva, lo
+stimatore storico è quello onesto da mostrare. Se diventa prescrittiva, uno stimatore
+restretto è obbligatorio, e va dichiarato in UI con link alla wiki.
