@@ -21,35 +21,12 @@
       "entered_at": "2026-09-15T13:00:00Z"
     }
   ],
-  "valuation_rates": [
-    {
-      "valuation_rate_id": "valuation-usd-eur",
-      "source_currency": "USD",
-      "destination_currency": "EUR",
-      "rate": "0",
-      "reference_date": "2026-09-15",
-      "freshness": {"kind": "fresh"},
-      "provenance_id": "prov-candidate-max"
-    },
-    {
-      "valuation_rate_id": "valuation-gbp-eur",
-      "source_currency": "GBP",
-      "destination_currency": "EUR",
-      "rate": "1.2",
-      "reference_date": "2026-09-15",
-      "freshness": {"kind": "fresh"},
-      "provenance_id": "prov-candidate-max"
-    },
-    {
-      "valuation_rate_id": "valuation-jpy-eur",
-      "source_currency": "JPY",
-      "destination_currency": "EUR",
-      "rate": "0.006",
-      "reference_date": "2026-09-15",
-      "freshness": {"kind": "fresh"},
-      "provenance_id": "prov-candidate-max"
-    }
-  ],
+  "fx_rates": {
+    "EUR/GBP": "1.2",
+    "EUR/JPY": "0.006",
+    "EUR/USD": "0"
+  },
+  "fx_spread_rate": "1.2",
   "assets": [
     {"asset_id": "asset-01", "identity": {"kind": "manual_asset", "name": "Synthetic Asset 01", "ticker": "S01", "asset_class": "etf"}, "quote": {"amount": "-10", "currency": "EUR", "quote_base_quantity": "0", "reference_date": "2026-09-15", "freshness": {"kind": "fresh"}, "provenance_id": "prov-candidate-max"}, "exposures": [{"dimension": "asset_type", "category_id": "equity", "label": "Equity", "weight": "1.25", "provenance_id": "prov-candidate-max"}]},
     {"asset_id": "asset-02", "identity": {"kind": "manual_asset", "name": "Synthetic Asset 02", "ticker": "S02", "asset_class": "etf"}, "quote": {"amount": "10", "currency": "EUR", "quote_base_quantity": "1", "reference_date": "2026-09-15", "freshness": {"kind": "fresh"}, "provenance_id": "prov-candidate-max"}, "exposures": [{"dimension": "asset_type", "category_id": "equity", "label": "Equity", "weight": "1", "provenance_id": "prov-candidate-max"}]},
@@ -73,28 +50,28 @@
       "broker_id": "broker-eur",
       "identity": {"kind": "manual_broker", "name": "Synthetic EUR Broker"},
       "provenance_id": "prov-candidate-max",
-      "capabilities": [{"kind": "whole_quantity", "capability_id": "cap-eur-whole", "currency": "EUR", "fx_mode": "native_currency_required", "quantity_unit": "asset_unit", "quantity_step": "0"}],
+      "capabilities": [{"kind": "whole_quantity", "capability_id": "cap-eur-whole", "quantity_unit": "asset_unit", "quantity_step": "0"}],
       "fee_schedules": [{"fee_schedule_id": "fee-eur-buy", "capability_id": "cap-eur-whole", "side": "buy", "fixed_fee": {"amount": "-0.01", "currency": "EUR"}, "rate": "1.5", "variable_floor": {"amount": "-0.02", "currency": "EUR"}, "variable_cap": {"kind": "amount", "amount": {"amount": "-0.03", "currency": "EUR"}}}]
     },
     {
       "broker_id": "broker-usd",
       "identity": {"kind": "manual_broker", "name": "Synthetic USD Broker"},
       "provenance_id": "prov-candidate-max",
-      "capabilities": [{"kind": "monetary_amount", "capability_id": "cap-usd-money", "currency": "USD", "fx_mode": "native_currency_required", "order_amount_step": {"amount": "1", "currency": "USD"}}],
+      "capabilities": [{"kind": "monetary_amount", "capability_id": "cap-usd-money", "order_amount_step": {"amount": "1", "currency": "USD"}}],
       "fee_schedules": [{"fee_schedule_id": "fee-usd-buy", "capability_id": "cap-usd-money", "side": "buy", "fixed_fee": {"amount": "0", "currency": "USD"}, "rate": "0", "variable_floor": {"amount": "0", "currency": "USD"}, "variable_cap": {"kind": "amount", "amount": {"amount": "0", "currency": "USD"}}}]
     },
     {
       "broker_id": "broker-gbp",
       "identity": {"kind": "manual_broker", "name": "Synthetic GBP Broker"},
       "provenance_id": "prov-candidate-max",
-      "capabilities": [{"kind": "whole_quantity", "capability_id": "cap-gbp-whole", "currency": "GBP", "fx_mode": "native_currency_required", "quantity_unit": "asset_unit", "quantity_step": "1"}],
+      "capabilities": [{"kind": "whole_quantity", "capability_id": "cap-gbp-whole", "quantity_unit": "asset_unit", "quantity_step": "1"}],
       "fee_schedules": [{"fee_schedule_id": "fee-gbp-buy", "capability_id": "cap-gbp-whole", "side": "buy", "fixed_fee": {"amount": "0", "currency": "GBP"}, "rate": "0", "variable_floor": {"amount": "0", "currency": "GBP"}, "variable_cap": {"kind": "amount", "amount": {"amount": "0", "currency": "GBP"}}}]
     },
     {
       "broker_id": "broker-jpy",
       "identity": {"kind": "manual_broker", "name": "Synthetic JPY Broker"},
       "provenance_id": "prov-candidate-max",
-      "capabilities": [{"kind": "monetary_amount", "capability_id": "cap-jpy-money", "currency": "JPY", "fx_mode": "native_currency_required", "order_amount_step": {"amount": "100", "currency": "JPY"}}],
+      "capabilities": [{"kind": "monetary_amount", "capability_id": "cap-jpy-money", "order_amount_step": {"amount": "100", "currency": "JPY"}}],
       "fee_schedules": [{"fee_schedule_id": "fee-jpy-buy", "capability_id": "cap-jpy-money", "side": "buy", "fixed_fee": {"amount": "0", "currency": "JPY"}, "rate": "0", "variable_floor": {"amount": "0", "currency": "JPY"}, "variable_cap": {"kind": "amount", "amount": {"amount": "0", "currency": "JPY"}}}]
     }
   ],
@@ -139,16 +116,6 @@
     {"route_id": "route-15-usd", "asset_id": "asset-15", "broker_id": "broker-usd", "capability_id": "cap-usd-money", "side": "buy", "priority": 2, "minimum_if_active": {"kind": "monetary_amount", "amount": {"amount": "0", "currency": "USD"}}, "required_minimum": {"kind": "none"}, "cap": {"kind": "notional", "amount": {"amount": "100", "currency": "USD"}}, "execution_margin_rate": "0", "fee_schedule_id": "fee-usd-buy", "provenance_id": "prov-candidate-max"},
     {"route_id": "route-16-gbp", "asset_id": "asset-16", "broker_id": "broker-gbp", "capability_id": "cap-gbp-whole", "side": "buy", "priority": 1, "minimum_if_active": {"kind": "whole_quantity", "quantity": "0", "unit": "asset_unit"}, "required_minimum": {"kind": "none"}, "cap": {"kind": "quantity", "quantity": "10", "unit": "asset_unit"}, "execution_margin_rate": "0", "fee_schedule_id": "fee-gbp-buy", "provenance_id": "prov-candidate-max"},
     {"route_id": "route-16-jpy", "asset_id": "asset-16", "broker_id": "broker-jpy", "capability_id": "cap-jpy-money", "side": "buy", "priority": 2, "minimum_if_active": {"kind": "monetary_amount", "amount": {"amount": "0", "currency": "JPY"}}, "required_minimum": {"kind": "none"}, "cap": {"kind": "notional", "amount": {"amount": "10000", "currency": "JPY"}}, "execution_margin_rate": "0", "fee_schedule_id": "fee-jpy-buy", "provenance_id": "prov-candidate-max"}
-  ],
-  "fx_quotes": [
-    {"fx_quote_id": "fxq-usd-eur", "source_currency": "USD", "destination_currency": "EUR", "rate": "-0.8", "reference_date": "2026-09-15", "freshness": {"kind": "fresh"}, "provenance_id": "prov-candidate-max"},
-    {"fx_quote_id": "fxq-gbp-eur", "source_currency": "GBP", "destination_currency": "EUR", "rate": "1.2", "reference_date": "2026-09-15", "freshness": {"kind": "fresh"}, "provenance_id": "prov-candidate-max"},
-    {"fx_quote_id": "fxq-jpy-eur", "source_currency": "JPY", "destination_currency": "EUR", "rate": "0.006", "reference_date": "2026-09-15", "freshness": {"kind": "fresh"}, "provenance_id": "prov-candidate-max"}
-  ],
-  "fx_routes": [
-    {"fx_route_id": "fxr-usd-eur", "broker_id": "broker-usd", "fx_quote_id": "fxq-usd-eur", "source_currency": "USD", "destination_currency": "EUR", "source_amount_step": {"amount": "0", "currency": "USD"}, "spread_rate": "1.2", "safety_buffer_rate": "-0.1", "fixed_fee": {"amount": "-0.01", "currency": "USD"}, "priority": -1, "provenance_id": "prov-candidate-max"},
-    {"fx_route_id": "fxr-gbp-eur", "broker_id": "broker-gbp", "fx_quote_id": "fxq-gbp-eur", "source_currency": "GBP", "destination_currency": "EUR", "source_amount_step": {"amount": "0.01", "currency": "GBP"}, "spread_rate": "0", "safety_buffer_rate": "0", "fixed_fee": {"amount": "0", "currency": "GBP"}, "priority": 1, "provenance_id": "prov-candidate-max"},
-    {"fx_route_id": "fxr-jpy-eur", "broker_id": "broker-jpy", "fx_quote_id": "fxq-jpy-eur", "source_currency": "JPY", "destination_currency": "EUR", "source_amount_step": {"amount": "1", "currency": "JPY"}, "spread_rate": "0", "safety_buffer_rate": "0", "fixed_fee": {"amount": "0", "currency": "JPY"}, "priority": 1, "provenance_id": "prov-candidate-max"}
   ],
   "target_weights": [
     {"asset_id": "asset-01", "weight": "-0.25"},

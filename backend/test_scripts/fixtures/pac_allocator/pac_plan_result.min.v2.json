@@ -50,9 +50,7 @@
       "contributions": 0,
       "funding_routes": 0,
       "capabilities": 1,
-      "valuation_rates": 0,
-      "fx_quotes": 0,
-      "fx_routes": 0,
+      "fx_rates": 0,
       "order_routes": 1,
       "provenance": 1
     },
@@ -194,10 +192,8 @@
         "gross_sell_credit": "0",
         "buy_fees": "0",
         "sell_fees": "0",
-        "fx_fees": "0",
         "broker_withheld_tax": "0",
         "self_reserved_tax": "0",
-        "fx_buffer": "0",
         "rounding_delta": "0",
         "final_spendable": "5.00",
         "final_physical": "5.00"
@@ -349,12 +345,10 @@
     "costs": {
       "buy_fees": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
       "sell_fees": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
-      "fx_fees": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
       "fx_spread_loss": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
       "execution_margin_cost": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
       "broker_withheld_tax": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
-      "self_reserved_tax": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
-      "fx_buffer": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}
+      "self_reserved_tax": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}
     },
     "objectives": {
       "stages": [

@@ -887,6 +887,20 @@ evidenza e fuori-pista.
 
 > **Stato correzione:** `MICRO-GATE PASS — SELECTIVE CHECKPOINT READY`.
 
+> **⚠️ Fuori pista — redesign FX/funding/conversion 2026-09-17:** dopo il
+> commit `958527e0` il developer ha sostituito l'intero modello FX a route
+> (`PlannerValuationRateInput`/`PlannerFxQuoteInput`/`PlannerFxRouteInput`,
+> capability `currency`/`fx_mode`) con un modello a mappa canonica globale,
+> attraverso una sequenza di decisioni prodotto successive (multi-source BUY,
+> SELL mai converte, nessun `cash_ledger_currencies`, nessun
+> `conversion_mode`, regola strutturale anti-cascata a un solo hop, rimozione
+> capability `currency`). Analisi di riconciliazione completa (piano
+> delta-consistency finale, verdetto PASSED zero contraddizioni) prodotta
+> dall'agente di review e conservata nel workspace di sessione. Il developer
+> ha autorizzato l'implementazione in ordine W0→W1→W2, un checkpoint FROZEN
+> per stage. Questo Step1 riapre ora per lo stage W0 (schema §4/§5, fixture,
+> schema test); nuovo checkpoint dedicato prima di procedere a W1/W2.
+
 ## 12. Definition of Done
 
 - handshake C firmato;

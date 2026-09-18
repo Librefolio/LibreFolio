@@ -41,19 +41,10 @@
       "entered_at": "2026-09-15T12:30:00Z"
     }
   ],
-  "valuation_rates": [
-    {
-      "valuation_rate_id": "valuation-usd-eur",
-      "source_currency": "USD",
-      "destination_currency": "EUR",
-      "rate": "0.8",
-      "reference_date": "2026-09-15",
-      "freshness": {
-        "kind": "fresh"
-      },
-      "provenance_id": "prov-market"
-    }
-  ],
+  "fx_rates": {
+    "EUR/USD": "1.25"
+  },
+  "fx_spread_rate": "0",
   "assets": [
     {
       "asset_id": "asset-a",
@@ -241,8 +232,6 @@
         {
           "kind": "whole_quantity",
           "capability_id": "cap-alpha-eur-whole",
-          "currency": "EUR",
-          "fx_mode": "native_currency_required",
           "quantity_unit": "asset_unit",
           "quantity_step": "1"
         }
@@ -303,8 +292,6 @@
         {
           "kind": "monetary_amount",
           "capability_id": "cap-beta-eur-money",
-          "currency": "EUR",
-          "fx_mode": "native_currency_required",
           "order_amount_step": {
             "amount": "0.01",
             "currency": "EUR"
@@ -313,8 +300,6 @@
         {
           "kind": "monetary_amount",
           "capability_id": "cap-beta-usd-money",
-          "currency": "USD",
-          "fx_mode": "native_currency_required",
           "order_amount_step": {
             "amount": "0.01",
             "currency": "USD"
@@ -726,40 +711,6 @@
       },
       "execution_margin_rate": "0",
       "fee_schedule_id": "fee-beta-eur-buy",
-      "provenance_id": "prov-manual"
-    }
-  ],
-  "fx_quotes": [
-    {
-      "fx_quote_id": "fxq-eur-usd",
-      "source_currency": "EUR",
-      "destination_currency": "USD",
-      "rate": "1.25",
-      "reference_date": "2026-09-15",
-      "freshness": {
-        "kind": "fresh"
-      },
-      "provenance_id": "prov-market"
-    }
-  ],
-  "fx_routes": [
-    {
-      "fx_route_id": "fxr-beta-eur-usd",
-      "broker_id": "broker-beta",
-      "fx_quote_id": "fxq-eur-usd",
-      "source_currency": "EUR",
-      "destination_currency": "USD",
-      "source_amount_step": {
-        "amount": "0.01",
-        "currency": "EUR"
-      },
-      "spread_rate": "0",
-      "safety_buffer_rate": "0",
-      "fixed_fee": {
-        "amount": "0",
-        "currency": "EUR"
-      },
-      "priority": 1,
       "provenance_id": "prov-manual"
     }
   ],

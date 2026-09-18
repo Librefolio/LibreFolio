@@ -84,6 +84,7 @@ PAC_PLANNER_CORE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_pac_planner_exact.py",
     "backend/test_scripts/test_services/test_pac_planner_normalize.py",
 )
+PAC_PLANNER_EVALUATOR_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_evaluator.py"
 
 
 def services_pac_analyze(verbose: bool = False, test_names: list = None) -> bool:
@@ -100,6 +101,13 @@ def services_pac_planner_core(verbose: bool = False, test_names: list = None) ->
     if test_names:
         cmd.extend(["-k", " or ".join(test_names)])
     return run_command(cmd, "PAC/Rebalancer exact core tests", verbose=verbose)
+
+
+def services_pac_planner_evaluator(verbose: bool = False, test_names: list = None) -> bool:
+    """Test exact PAC/Rebalancer policy views, ledger replay, and evaluation."""
+    print_section("Services: PAC/Rebalancer Exact Evaluator")
+    cmd = _build_pytest_cmd(PAC_PLANNER_EVALUATOR_TEST_PATH, test_names)
+    return run_command(cmd, "PAC/Rebalancer exact evaluator tests", verbose=verbose)
 
 
 def services_fx_conversion(verbose: bool = False, test_names: list = None) -> bool:
@@ -484,6 +492,19 @@ def services_roi_fifo_engine(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "ROI/FIFO/Portfolio service tests", verbose=verbose)
 
 
+def services_portfolio_allocation_source(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the read-only PAC/Rebalancer portfolio source snapshot."""
+    print_section("Services: Portfolio Allocation Source")
+    print_info("Testing: backend/app/services/portfolio_allocation_source.py")
+    print_info("Tests: selectors, exact facts, saved evidence, provenance and no side effects")
+
+    cmd = _build_pytest_cmd(
+        "backend/test_scripts/test_services/test_portfolio_allocation_source.py",
+        test_names,
+    )
+    return run_command(cmd, "Portfolio allocation-source tests", verbose=verbose)
+
+
 def services_lots_analysis_pure(verbose: bool = False, test_names: list = None) -> bool:
     """Run the pure LotsAnalysisService builders (no DB, no server, no network)."""
     print_section("Services: Lots Analysis Pure Builders")
@@ -819,6 +840,14 @@ Note: No backend server required.
         desc="Canonical rational arithmetic, posting, fee, FX and tax primitives plus strict v2 normalization, exact model mapping and typed issue precedence",
         isolation="pure",
     )
+    add_test(
+        cat,
+        "pac-planner-evaluator",
+        services_pac_planner_evaluator,
+        name="PAC/Rebalancer Exact Evaluator",
+        desc="Exact policy views, Broker-qualified decisions, ledger replay, constraints, objectives and deterministic conflicts",
+        isolation="pure",
+    )
     add_test(cat, "asset-source", services_asset_source, name="Asset Source", desc="Provider assignment, synthetic yield")
     add_test(cat, "asset-source-refresh", services_asset_source_refresh, name="Asset Source Refresh", desc="Bulk refresh orchestration smoke test")
     add_test(cat, "provider-registry", services_provider_registry, name="Provider Registry", desc="Registration, lookup, priority, fallback")
@@ -873,6 +902,14 @@ Note: No backend server required.
     add_test(cat, "brim-create-transaction", services_brim_create_transaction, name="BRIM Create Transaction", desc="_create_transaction + _loc_to_field")
     add_test(cat, "financial-utils", services_financial_utils, name="Financial Utils", desc="WAC pure math (compute_wac_from_txlist, determine_target_currency)")
     add_test(cat, "roi-fifo-utils", services_roi_fifo_engine, name="ROI/FIFO/Portfolio Utils", desc="TWRR/MWRR/SimpleROI series, FIFO lots (FifoLotEngine), WAC multi-broker, price resolver")
+    add_test(
+        cat,
+        "portfolio-allocation-source",
+        services_portfolio_allocation_source,
+        name="Portfolio Allocation Source",
+        desc="Read-only exact planner facts, authorization boundaries, provenance and saved evidence",
+        isolation="pure",
+    )
     add_test(
         cat,
         "lots-analysis-pure",

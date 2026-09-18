@@ -1,15 +1,44 @@
 """Portfolio API tests for active /api/v1/portfolio endpoints."""
 
+import json
 import uuid
+from datetime import UTC, date, datetime
 from decimal import Decimal
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
+from fastapi import FastAPI, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.api.v1 import portfolio_api
+from backend.app.api.v1.auth import get_current_user
 from backend.app.config import get_settings
-from backend.app.db.session import get_async_engine
+from backend.app.db.models import UserRole
+from backend.app.db.session import get_async_engine, get_session_generator
+from backend.app.schemas.common import Currency
+from backend.app.schemas.portfolio import (
+    PortfolioAllocationSource,
+    PortfolioAllocationSourceAsset,
+    PortfolioAllocationSourceCashBalance,
+    PortfolioAllocationSourceCashSource,
+    PortfolioAllocationSourceContext,
+    PortfolioAllocationSourceQuote,
+    PortfolioPlannerSourceCurrencySpec,
+    PortfolioPlannerSourceProvenance,
+    PortfolioPlannerSourceResponse,
+    PortfolioPlannerSourceSnapshot,
+    PortfolioReportMetadata,
+    PortfolioReportResponse,
+)
+from backend.app.schemas.wac import WACPreviewResultItem, WACQualifyingTX
 from backend.app.services import user_service
+from backend.app.services.portfolio_allocation_source import (
+    PortfolioPlannerSourceAccessError,
+    PortfolioPlannerSourceAssetNotFoundError,
+    PortfolioPlannerSourceBrokerNotFoundError,
+)
 from backend.test_scripts.test_db_config import verify_test_database
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success
@@ -18,6 +47,7 @@ settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30
 SOLE_ADMIN_DELETE_DETAIL = "Cannot delete account: you are the only administrator"
+AS_OF = date(2026, 9, 15)
 
 
 # ---------------------------------------------------------------------------
@@ -1562,3 +1592,691 @@ class TestLotsAnalysisEndpoint:
             )
             assert resp.status_code in (400, 404, 422)
         print_success(f"Nonexistent asset rejected with {resp.status_code}")
+
+
+# ---------------------------------------------------------------------------
+# Focused ASGI compatibility tests for planner source and WAC authorization
+# ---------------------------------------------------------------------------
+
+
+class _ApiScalars:
+    def __init__(self, values):
+        self._values = list(values)
+
+    def __iter__(self):
+        return iter(self._values)
+
+    def all(self):
+        return list(self._values)
+
+
+class _ApiRows:
+    def __init__(self, values):
+        self._values = list(values)
+
+    def scalars(self):
+        return _ApiScalars(self._values)
+
+
+class _WacApiSession:
+    """Two-read WAC boundary: Broker access first, Asset identities second."""
+
+    def __init__(
+        self,
+        *,
+        broker_id: int,
+        accessible: bool,
+        access_role: UserRole | None = None,
+        accessible_ids=None,
+        assets=(),
+    ):
+        self.broker_id = broker_id
+        self.accessible = accessible
+        self.access_role = access_role
+        self.accessible_ids = (
+            list(accessible_ids)
+            if accessible_ids is not None
+            else ([broker_id] if accessible else [])
+        )
+        self.assets = list(assets)
+        self.statements = []
+
+    async def execute(self, statement):
+        self.statements.append(statement)
+        if len(self.statements) == 1:
+            assert "broker_user_access.role" not in str(statement)
+            return _ApiRows(self.accessible_ids)
+        if len(self.statements) == 2:
+            return _ApiRows(self.assets)
+        raise AssertionError("WAC endpoint performed an unexpected read")
+
+
+def _focused_portfolio_app(
+    *,
+    current_user,
+    session,
+) -> FastAPI:
+    app = FastAPI()
+    app.include_router(portfolio_api.portfolio_router, prefix="/api/v1")
+
+    async def override_session():
+        yield session
+
+    async def override_current_user():
+        if current_user is None:
+            raise HTTPException(status_code=401, detail="Not authenticated")
+        return current_user
+
+    app.dependency_overrides[get_session_generator] = override_session
+    app.dependency_overrides[get_current_user] = override_current_user
+    if current_user is not None:
+        app.dependency_overrides[
+            portfolio_api._get_allocation_source_user
+        ] = override_current_user
+    return app
+
+
+def _planner_source_payload() -> dict[str, object]:
+    return {
+        "as_of": "2026-09-15",
+        "target_currency": "EUR",
+        "requested_sections": ["assets"],
+        "broker_ids": [7],
+        "asset_ids": [],
+        "fx_pairs": [],
+    }
+
+
+def _empty_planner_source_response() -> PortfolioPlannerSourceResponse:
+    return PortfolioPlannerSourceResponse(
+        snapshot=PortfolioPlannerSourceSnapshot(
+            as_of=date(2026, 9, 15),
+            target_currency="EUR",
+            generated_at=datetime(2026, 9, 15, 12, 30, tzinfo=UTC),
+            requested_sections=["assets"],
+            source_revision="2.0.0",
+        ),
+        currency_specs=[
+            PortfolioPlannerSourceCurrencySpec(
+                currency="EUR",
+                minor_unit=Decimal("0.01"),
+            )
+        ],
+        provenance=[
+            PortfolioPlannerSourceProvenance(
+                provenance_id="source:portfolio-ledger",
+                kind="domain_copy",
+                domain="portfolio",
+                source_ref="transactions+broker_user_access",
+                source_label=None,
+                captured_at=datetime(2026, 9, 15, 12, 30, tzinfo=UTC),
+            )
+        ],
+        assets=[],
+        brokers=[],
+        holdings=[],
+        cash_balances=[],
+        prices=[],
+        classifications=[],
+        wac_contexts=[],
+        fx_quotes=[],
+        issues=[],
+    )
+
+
+@pytest.mark.asyncio
+async def test_allocation_source_post_returns_typed_uncached_response(
+    monkeypatch,
+):
+    expected = _empty_planner_source_response()
+    builder = AsyncMock(return_value=expected)
+    monkeypatch.setattr(
+        portfolio_api,
+        "build_portfolio_planner_source",
+        builder,
+    )
+    session = object()
+    app = _focused_portfolio_app(
+        current_user=SimpleNamespace(id=41, is_superuser=False),
+        session=session,
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        response = await client.post(
+            "/api/v1/portfolio/allocation-source",
+            json=_planner_source_payload(),
+        )
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert response.content == expected.model_dump_json().encode()
+    builder.assert_awaited_once()
+    assert builder.await_args.args == (session,)
+    assert builder.await_args.kwargs["user_id"] == 41
+    assert (
+        builder.await_args.kwargs["request"].model_dump(mode="json")
+        == _planner_source_payload()
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("error", "status_code", "error_code"),
+    [
+        pytest.param(
+            PortfolioPlannerSourceBrokerNotFoundError("missing"),
+            403,
+            "portfolio_planner_source_broker_forbidden",
+            id="missing-broker-indistinguishable",
+        ),
+        pytest.param(
+            PortfolioPlannerSourceAccessError("forbidden"),
+            403,
+            "portfolio_planner_source_broker_forbidden",
+            id="unauthorized-broker",
+        ),
+        pytest.param(
+            PortfolioPlannerSourceAssetNotFoundError("missing"),
+            404,
+            "portfolio_planner_source_asset_not_found",
+            id="missing-asset",
+        ),
+    ],
+)
+async def test_allocation_source_maps_focused_domain_errors(
+    monkeypatch,
+    error,
+    status_code,
+    error_code,
+):
+    builder = AsyncMock(side_effect=error)
+    monkeypatch.setattr(
+        portfolio_api,
+        "build_portfolio_planner_source",
+        builder,
+    )
+    app = _focused_portfolio_app(
+        current_user=SimpleNamespace(id=41, is_superuser=False),
+        session=object(),
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        response = await client.post(
+            "/api/v1/portfolio/allocation-source",
+            json=_planner_source_payload(),
+        )
+
+    assert response.status_code == status_code
+    assert response.json() == {
+        "detail": {
+            "code": error_code,
+        }
+    }
+    assert response.headers.get("cache-control") == "no-store"
+
+
+@pytest.mark.asyncio
+async def test_allocation_source_anonymous_is_401_before_service(
+    monkeypatch,
+):
+    builder = AsyncMock(
+        side_effect=AssertionError("Anonymous request reached source service")
+    )
+    monkeypatch.setattr(
+        portfolio_api,
+        "build_portfolio_planner_source",
+        builder,
+    )
+    app = _focused_portfolio_app(
+        current_user=None,
+        session=object(),
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        response = await client.post(
+            "/api/v1/portfolio/allocation-source",
+            json=_planner_source_payload(),
+        )
+
+    assert response.status_code == 401
+    assert response.headers.get("cache-control") == "no-store"
+    builder.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_allocation_source_superuser_has_no_implicit_broker_bypass(
+    monkeypatch,
+):
+    builder = AsyncMock(
+        side_effect=PortfolioPlannerSourceAccessError("forbidden")
+    )
+    monkeypatch.setattr(
+        portfolio_api,
+        "build_portfolio_planner_source",
+        builder,
+    )
+    app = _focused_portfolio_app(
+        current_user=SimpleNamespace(id=91, is_superuser=True),
+        session=object(),
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        response = await client.post(
+            "/api/v1/portfolio/allocation-source",
+            json=_planner_source_payload(),
+        )
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == (
+        "portfolio_planner_source_broker_forbidden"
+    )
+    assert response.headers.get("cache-control") == "no-store"
+    assert builder.await_args.kwargs["user_id"] == 91
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "role",
+    [
+        pytest.param(UserRole.VIEWER, id="viewer"),
+        pytest.param(UserRole.EDITOR, id="editor"),
+        pytest.param(UserRole.OWNER, id="owner"),
+    ],
+)
+async def test_legacy_wac_allows_every_authenticated_broker_access_role(role):
+    broker_id = 7
+    session = _WacApiSession(
+        broker_id=broker_id,
+        accessible=True,
+        access_role=role,
+    )
+    app = _focused_portfolio_app(
+        current_user=SimpleNamespace(id=41, is_superuser=False),
+        session=session,
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        response = await client.post(
+            "/api/v1/portfolio/wac",
+            json={
+                "queries": [
+                    {
+                        "broker_id": broker_id,
+                        "asset_id": 11,
+                    }
+                ]
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "results": [
+            {
+                "broker_id": broker_id,
+                "asset_id": 11,
+                "currency": "USD",
+                "series": [],
+                "missing_fx_pairs": [],
+            }
+        ]
+    }
+    assert len(session.statements) == 2
+    assert session.access_role == role
+
+
+@pytest.mark.asyncio
+async def test_legacy_wac_superuser_without_access_is_403_before_asset_read():
+    session = _WacApiSession(
+        broker_id=7,
+        accessible=False,
+    )
+    app = _focused_portfolio_app(
+        current_user=SimpleNamespace(id=91, is_superuser=True),
+        session=session,
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        response = await client.post(
+            "/api/v1/portfolio/wac",
+            json={
+                "queries": [
+                    {
+                        "broker_id": 7,
+                        "asset_id": 11,
+                    }
+                ]
+            },
+        )
+
+    assert response.status_code == 403
+    assert response.json() == {
+        "detail": {
+            "code": "portfolio_wac_broker_forbidden",
+        }
+    }
+    assert len(session.statements) == 1
+
+
+@pytest.mark.asyncio
+async def test_legacy_wac_mixed_access_scope_fails_atomically_before_asset_read():
+    session = _WacApiSession(
+        broker_id=7,
+        accessible=True,
+        accessible_ids=[7],
+    )
+    app = _focused_portfolio_app(
+        current_user=SimpleNamespace(id=41, is_superuser=False),
+        session=session,
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        response = await client.post(
+            "/api/v1/portfolio/wac",
+            json={
+                "queries": [
+                    {
+                        "broker_id": 7,
+                        "asset_id": 11,
+                    },
+                    {
+                        "broker_id": 99,
+                        "asset_id": 12,
+                    },
+                ]
+            },
+        )
+
+    assert response.status_code == 403
+    assert response.json() == {
+        "detail": {
+            "code": "portfolio_wac_broker_forbidden",
+        }
+    }
+    assert len(session.statements) == 1
+
+
+@pytest.mark.asyncio
+async def test_legacy_wac_anonymous_is_401_before_any_portfolio_read():
+    session = _WacApiSession(
+        broker_id=7,
+        accessible=True,
+    )
+    app = _focused_portfolio_app(
+        current_user=None,
+        session=session,
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        response = await client.post(
+            "/api/v1/portfolio/wac",
+            json={
+                "queries": [
+                    {
+                        "broker_id": 7,
+                        "asset_id": 11,
+                    }
+                ]
+            },
+        )
+
+    assert response.status_code == 401
+    assert session.statements == []
+
+
+@pytest.mark.asyncio
+async def test_legacy_wac_response_remains_byte_and_semantically_compatible(
+    monkeypatch,
+):
+    broker_id = 7
+    asset_id = 11
+    session = _WacApiSession(
+        broker_id=broker_id,
+        accessible=True,
+        assets=[SimpleNamespace(id=asset_id, currency="EUR")],
+    )
+    compute = AsyncMock(
+        return_value=WACPreviewResultItem(
+            wac=Currency(code="EUR", amount=Decimal("12.3400")),
+            wac_qualifying_txs=[
+                WACQualifyingTX(
+                    tx_id=101,
+                    type="BUY",
+                    date=date(2026, 1, 2),
+                    quantity=Decimal("2.500"),
+                    unit_cost=Decimal("12.3400"),
+                    currency="EUR",
+                    effect="add",
+                    running_wac=Decimal("12.3400"),
+                )
+            ],
+            wac_missing_pairs=[],
+        )
+    )
+    monkeypatch.setattr(
+        portfolio_api,
+        "compute_wac_iterative",
+        compute,
+    )
+    app = _focused_portfolio_app(
+        current_user=SimpleNamespace(id=41, is_superuser=False),
+        session=session,
+    )
+    expected = {
+        "results": [
+            {
+                "broker_id": broker_id,
+                "asset_id": asset_id,
+                "currency": "EUR",
+                "series": [
+                    {
+                        "date": "2026-01-02",
+                        "wac": "12.3400",
+                        "pool_qty": "2.500",
+                        "effect": "add",
+                    }
+                ],
+                "missing_fx_pairs": [],
+            }
+        ]
+    }
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        response = await client.post(
+            "/api/v1/portfolio/wac",
+            json={
+                "queries": [
+                    {
+                        "broker_id": broker_id,
+                        "asset_id": asset_id,
+                        "date_range": {
+                            "end": "2026-01-31",
+                        },
+                    }
+                ]
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json() == expected
+    assert response.content == json.dumps(
+        expected,
+        separators=(",", ":"),
+    ).encode()
+    compute.assert_awaited_once_with(
+        session=session,
+        broker_id=broker_id,
+        asset_id=asset_id,
+        as_of_date=date(2026, 1, 31),
+        asset_currency="EUR",
+    )
+
+
+def _legacy_report_response() -> PortfolioReportResponse:
+    generated_at = datetime(2026, 9, 15, 12, 30, tzinfo=UTC)
+    allocation_source = PortfolioAllocationSource(
+        generated_at=generated_at,
+        as_of_date=AS_OF,
+        assets=[
+            PortfolioAllocationSourceAsset(
+                asset_id=11,
+                instrument_key="asset:11",
+                candidate_key="asset:11:candidate",
+                name="Legacy Asset",
+                ticker="LEG",
+                asset_type="STOCK",
+                icon_url=None,
+                active=True,
+                usage_scope="owned",
+                quote=PortfolioAllocationSourceQuote(
+                    raw_price=Decimal("123.4500"),
+                    currency="EUR",
+                    quote_base_quantity=100,
+                    reference_date=AS_OF,
+                    source="SAVED_PRICE",
+                    days_before_requested=0,
+                ),
+                contexts=[
+                    PortfolioAllocationSourceContext(
+                        context_key="asset:11:broker:7",
+                        broker_id=7,
+                        broker_name="Legacy Broker",
+                        broker_icon_url=None,
+                        broker_portal_url=None,
+                        broker_default_import_plugin=None,
+                        ownership_share_percent=Decimal("25.0000"),
+                        custody_quantity=Decimal("2.5000"),
+                    )
+                ],
+            )
+        ],
+        cash_sources=[
+            PortfolioAllocationSourceCashSource(
+                broker_id=7,
+                broker_name="Legacy Broker",
+                broker_icon_url=None,
+                broker_portal_url=None,
+                broker_default_import_plugin=None,
+                ownership_share_percent=Decimal("25.0000"),
+                balances=[
+                    PortfolioAllocationSourceCashBalance(
+                        currency="EUR",
+                        amount=Decimal("9.8700"),
+                    )
+                ],
+            )
+        ],
+        selected_cash_balances=[
+            PortfolioAllocationSourceCashBalance(
+                currency="EUR",
+                amount=Decimal("9.8700"),
+            )
+        ],
+    )
+    return PortfolioReportResponse(
+        metadata=PortfolioReportMetadata(
+            broker_ids=[7],
+            target_currency="EUR",
+            requested_date_from=None,
+            requested_date_to=AS_OF,
+            computed_date_from=None,
+            computed_date_to=AS_OF,
+            generated_at=AS_OF,
+            allocation_dimensions=["type", "sector", "geography"],
+            included_features=["allocation_source"],
+        ),
+        allocation_source=allocation_source,
+    )
+
+
+@pytest.mark.asyncio
+async def test_legacy_report_allocation_source_remains_byte_and_semantically_compatible(
+    monkeypatch,
+):
+    expected = _legacy_report_response()
+    service = SimpleNamespace(
+        get_report=AsyncMock(return_value=expected),
+    )
+    service_factory = MagicMock(return_value=service)
+    monkeypatch.setattr(
+        portfolio_api,
+        "PortfolioService",
+        service_factory,
+    )
+    session = object()
+    app = _focused_portfolio_app(
+        current_user=SimpleNamespace(id=41, is_superuser=False),
+        session=session,
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        response = await client.post(
+            "/api/v1/portfolio/report",
+            json={
+                "broker_ids": [7],
+                "date_range": {
+                    "end": "2026-09-15",
+                },
+                "target_currency": "EUR",
+                "include_summary": False,
+                "include_history": False,
+                "include_allocation_history": False,
+                "include_breakdown": False,
+                "include_positions_contribution": False,
+                "allocation_source": {
+                    "as_of_date": "2026-09-15",
+                    "selected_cash_broker_ids": [7],
+                },
+            },
+        )
+
+    assert response.status_code == 200
+    response_payload = response.json()
+    assert response_payload == expected.model_dump(mode="json")
+    assert response.content == expected.model_dump_json().encode()
+    assert "snapshot" not in response_payload["allocation_source"]
+    legacy_asset = next(
+        asset
+        for asset in response_payload["allocation_source"]["assets"]
+        if asset["asset_id"] == 11
+    )
+    assert legacy_asset["quote"] == {
+        "raw_price": "123.4500",
+        "currency": "EUR",
+        "quote_base_quantity": 100,
+        "reference_date": "2026-09-15",
+        "source": "SAVED_PRICE",
+        "days_before_requested": 0,
+    }
+    service_factory.assert_called_once_with(session)
+    service.get_report.assert_awaited_once()
+    assert service.get_report.await_args.kwargs["user_id"] == 41

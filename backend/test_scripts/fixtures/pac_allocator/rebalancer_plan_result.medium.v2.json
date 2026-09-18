@@ -92,9 +92,7 @@
       "contributions": 1,
       "funding_routes": 2,
       "capabilities": 3,
-      "valuation_rates": 1,
-      "fx_quotes": 1,
-      "fx_routes": 1,
+      "fx_rates": 1,
       "order_routes": 9,
       "provenance": 3
     },
@@ -460,7 +458,7 @@
       {
         "action_id": "fx-action-beta-eur-usd",
         "sequence": 3,
-        "fx_route_id": "fxr-beta-eur-usd",
+        "order_route_id": "route-c-beta-buy",
         "broker_id": "broker-beta",
         "source_debit": {
           "amount": "10",
@@ -492,18 +490,6 @@
             "value": "0"
           },
           "currency": "EUR"
-        },
-        "fee": {
-          "amount": "0",
-          "currency": "EUR"
-        },
-        "buffer": {
-          "amount": "0",
-          "currency": "EUR"
-        },
-        "reference_date": "2026-09-15",
-        "freshness": {
-          "kind": "fresh"
         },
         "provenance_ids": [
           "prov-market",
@@ -934,10 +920,8 @@
         "gross_sell_credit": "30",
         "buy_fees": "0",
         "sell_fees": "0",
-        "fx_fees": "0",
         "broker_withheld_tax": "0",
         "self_reserved_tax": "0",
-        "fx_buffer": "0",
         "rounding_delta": "0",
         "final_spendable": "0",
         "final_physical": "0"
@@ -954,10 +938,8 @@
         "gross_sell_credit": "0",
         "buy_fees": "0",
         "sell_fees": "0",
-        "fx_fees": "0",
         "broker_withheld_tax": "0",
         "self_reserved_tax": "0",
-        "fx_buffer": "0",
         "rounding_delta": "0",
         "final_spendable": "0",
         "final_physical": "0"
@@ -974,10 +956,8 @@
         "gross_sell_credit": "0",
         "buy_fees": "0",
         "sell_fees": "0",
-        "fx_fees": "0",
         "broker_withheld_tax": "0",
         "self_reserved_tax": "0",
-        "fx_buffer": "0",
         "rounding_delta": "0",
         "final_spendable": "0",
         "final_physical": "0"
@@ -1255,12 +1235,10 @@
     "costs": {
       "buy_fees": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
       "sell_fees": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
-      "fx_fees": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
       "fx_spread_loss": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
       "execution_margin_cost": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
       "broker_withheld_tax": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
-      "self_reserved_tax": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
-      "fx_buffer": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}
+      "self_reserved_tax": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}
     },
     "objectives": {
       "stages": [

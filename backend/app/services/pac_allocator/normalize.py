@@ -88,8 +88,7 @@ from backend.app.services.pac_allocator.models import (
     ExactFeeSchedule,
     ExactFreshness,
     ExactFundingRoute,
-    ExactFxQuote,
-    ExactFxRoute,
+    ExactFxRate,
     ExactHolding,
     ExactMoney,
     ExactOrderCap,
@@ -101,7 +100,6 @@ from backend.app.services.pac_allocator.models import (
     ExactSellContext,
     ExactSnapshot,
     ExactTargetWeight,
-    ExactValuationRate,
     ExactWithholding,
     Holding,
     PacAsset,
@@ -953,13 +951,14 @@ class _PlannerV2Normalizer:
         self.currency_references: dict[str, PlannerIssuePath] = {}
         self.provenance_ids: set[str] = set()
         self.asset_ids: set[str] = set()
+        self.asset_by_id: dict[str, object] = {}
         self.broker_ids: set[str] = set()
         self.holding_ids: set[str] = set()
         self.cash_ids: set[str] = set()
         self.contribution_ids: set[str] = set()
-        self.fx_quote_ids: set[str] = set()
         self.capability_by_broker: dict[str, dict[str, object]] = {}
         self.fee_by_broker: dict[str, dict[str, object]] = {}
+        self.reported_fx_rate_missing: set[str] = set()
 
     def issue(self, code: PlannerIssueCode, path: PlannerIssuePath, *, params: tuple[PlannerIssueParam, ...] = ()) -> None:
         self.issues.append(make_issue(normalizer_issue_definition(code), path, params=params))
@@ -1055,43 +1054,13 @@ class _PlannerV2Normalizer:
             if currency not in currency_ids:
                 self.issue("allocation.currency_spec_missing", field_path("input", "currency", currency, "minor_unit"))
 
-    def validate_valuation_rates(self) -> None:
-        self.duplicates(
-            self.request.valuation_rates,
-            lambda item: item.valuation_rate_id,
-            lambda item, _item_id: field_path("fx", "currency", item.source_currency, "valuation_rate_id"),
-        )
-        rates_by_source: dict[str, list] = defaultdict(list)
-        for item in self.request.valuation_rates:
-            path = field_path("fx", "currency", item.source_currency, "rate")
-            self.currency(item.source_currency, path)
-            self.currency(item.destination_currency, path)
-            self.provenance(item.provenance_id, field_path("fx", "currency", item.source_currency, "provenance_id"))
-            self.freshness(item.freshness, field_path("fx", "currency", item.source_currency, "freshness"))
-            rate = self.ratio(item.rate, path)
-            if item.source_currency == item.destination_currency:
-                self.issue("allocation.identity_valuation_rate_not_allowed", path)
-            if item.destination_currency != self.request.valuation_currency:
-                self.issue("allocation.currency_mismatch", field_path("fx", "currency", item.source_currency, "destination_currency"))
-            if rate <= ExactRatio(0):
-                self.issue("allocation.nonpositive_valuation_rate", path)
-            rates_by_source[item.source_currency].append(item)
-        for source_currency, values in sorted(rates_by_source.items()):
-            if len(values) > 1:
-                self.issue("allocation.duplicate_id", field_path("fx", "currency", source_currency, "rate"))
-
-    def validate_required_valuation_rates(self) -> None:
-        sources = {item.source_currency for item in self.request.valuation_rates if item.destination_currency == self.request.valuation_currency}
-        for currency in sorted(self.currency_references):
-            if currency != self.request.valuation_currency and currency not in sources:
-                self.issue("allocation.saved_fx_missing", field_path("fx", "currency", currency, "rate"))
-
     def validate_assets(self) -> None:
         self.asset_ids = self.duplicates(
             self.request.assets,
             lambda item: item.asset_id,
             lambda _item, item_id: field_path("assets", "asset", item_id, "asset_id"),
         )
+        self.asset_by_id = {item.asset_id: item for item in self.request.assets}
         self.duplicate_groups(
             (item for item in self.request.assets if isinstance(item.identity, DomainAssetIdentity)),
             lambda item: item.identity.source_asset_id,
@@ -1182,7 +1151,6 @@ class _PlannerV2Normalizer:
             lambda source_broker_id: (TextIssueParam(kind="text", name="source_broker_id", value=source_broker_id),),
         )
         executable_broker_ids = {item.broker_id for item in self.request.funding_routes}
-        executable_broker_ids.update(item.broker_id for item in self.request.fx_routes)
         executable_broker_ids.update(item.broker_id for item in self.request.order_routes)
         executable_broker_ids.update(item.broker_id for item in self.request.existing_cash if self.ratio(item.selected.amount, field_path("cash", "cash", item.cash_id, "selected")) > ExactRatio(0))
         for broker in self.request.brokers:
@@ -1205,25 +1173,21 @@ class _PlannerV2Normalizer:
             for capability in broker.capabilities:
                 self.validate_capability(broker, capability)
             for fee in broker.fee_schedules:
-                self.validate_fee_schedule(broker, fee, capability_ids, capability_map)
+                self.validate_fee_schedule(broker, fee, capability_ids)
 
     def validate_capability(self, broker, capability) -> None:
         capability_path = field_path("brokers", "broker", broker.broker_id, "capabilities.quantity_step")
-        self.currency(capability.currency, capability_path)
         if isinstance(capability, WholeQuantityCapability):
             if self.ratio(capability.quantity_step, capability_path) <= ExactRatio(0):
                 self.issue("allocation.nonpositive_quantity_step", capability_path)
             return
         step_path = field_path("brokers", "broker", broker.broker_id, "capabilities.order_amount_step")
         step = self.money(capability.order_amount_step, step_path)
-        if capability.order_amount_step.currency != capability.currency:
-            self.issue("allocation.currency_mismatch", step_path)
         if step <= ExactRatio(0):
             self.issue("allocation.nonpositive_order_amount_step", step_path)
 
-    def validate_fee_schedule(self, broker, fee, capability_ids: set[str], capability_map: dict[str, object]) -> None:
+    def validate_fee_schedule(self, broker, fee, capability_ids: set[str]) -> None:
         fee_path = field_path("brokers", "broker", broker.broker_id, "fee_schedules")
-        capability = capability_map.get(fee.capability_id)
         if fee.capability_id not in capability_ids:
             self.issue("allocation.reference_not_found", field_path("brokers", "broker", broker.broker_id, "fee_schedules.capability_id"))
         fixed_fee = self.money(fee.fixed_fee, fee_path)
@@ -1237,12 +1201,10 @@ class _PlannerV2Normalizer:
             self.issue("allocation.fee_rate_out_of_range", fee_path)
         if cap is not None and variable_floor > cap:
             self.issue("allocation.fee_floor_exceeds_cap", fee_path)
-        if capability is None:
-            return
-        currencies = [fee.fixed_fee.currency, fee.variable_floor.currency]
+        currencies = {fee.fixed_fee.currency, fee.variable_floor.currency}
         if isinstance(fee.variable_cap, AmountFeeCap):
-            currencies.append(fee.variable_cap.amount.currency)
-        if any(currency != capability.currency for currency in currencies):
+            currencies.add(fee.variable_cap.amount.currency)
+        if len(currencies) != 1:
             self.issue("allocation.currency_mismatch", fee_path)
 
     def validate_holdings(self) -> None:
@@ -1384,9 +1346,8 @@ class _PlannerV2Normalizer:
             lambda _item, item_id: field_path("routing", "order_route", item_id, "route_id"),
         )
         for route in self.request.order_routes:
-            capability = self.validate_order_route_references(route)
-            self.validate_order_route_limits(route, capability)
-            self.validate_sell_gross_amount(route, capability)
+            capability, quote_currency = self.validate_order_route_references(route)
+            self.validate_order_route_limits(route, capability, quote_currency)
 
     def validate_order_route_references(self, route: PlannerOrderRouteInput):
         self.reference(route.asset_id, self.asset_ids, field_path("routing", "order_route", route.route_id, "asset_id"))
@@ -1400,17 +1361,21 @@ class _PlannerV2Normalizer:
         capability = self.capability_by_broker.get(route.broker_id, {}).get(route.capability_id)
         if capability is None:
             self.issue("allocation.reference_not_found", field_path("routing", "order_route", route.route_id, "capability_id"))
-        else:
-            self.currency(capability.currency, entity_path("routing", "order_route", route.route_id))
+        asset = self.asset_by_id.get(route.asset_id)
+        quote_currency = asset.quote.currency if asset is not None and asset.quote is not None else None
+        if quote_currency is not None:
+            self.currency(quote_currency, entity_path("routing", "order_route", route.route_id))
         fee_schedule = self.fee_by_broker.get(route.broker_id, {}).get(route.fee_schedule_id)
         if fee_schedule is None:
             code = "portfolio_rebalancer.sell_fee_missing" if route.side == "sell" else "allocation.fee_schedule_missing"
             self.issue(code, field_path("routing", "order_route", route.route_id, "fee_schedule_id"))
         elif fee_schedule.side != route.side or fee_schedule.capability_id != route.capability_id:
             self.issue("allocation.reference_not_found", field_path("routing", "order_route", route.route_id, "fee_schedule_id"))
-        return capability
+        elif quote_currency is not None and fee_schedule.fixed_fee.currency != quote_currency:
+            self.issue("allocation.currency_mismatch", field_path("routing", "order_route", route.route_id, "fee_schedule_id"))
+        return capability, quote_currency
 
-    def validate_order_route_limits(self, route: PlannerOrderRouteInput, capability) -> None:
+    def validate_order_route_limits(self, route: PlannerOrderRouteInput, capability, quote_currency: str | None) -> None:
         minimum_if_active, minimum_if_active_kind, minimum_if_active_currency = self.order_minimum(route.minimum_if_active, route, "minimum_if_active")
         required_minimum, required_minimum_kind, required_minimum_currency = self.order_minimum(route.required_minimum, route, "required_minimum")
         cap, cap_kind, cap_currency = self.order_cap(route)
@@ -1421,131 +1386,92 @@ class _PlannerV2Normalizer:
         if cap <= ExactRatio(0):
             self.issue("allocation.order_cap_nonpositive", field_path("routing", "order_route", route.route_id, "cap"))
         expected_kind = "quantity" if isinstance(capability, WholeQuantityCapability) else "notional" if isinstance(capability, MonetaryAmountCapability) else None
-        self.validate_order_minimum_kind(route, capability, expected_kind, minimum_if_active_kind, minimum_if_active_currency, "minimum_if_active")
-        self.validate_order_minimum_kind(route, capability, expected_kind, required_minimum_kind, required_minimum_currency, "required_minimum")
+        self.validate_order_minimum_kind(route, capability, expected_kind, minimum_if_active_kind, minimum_if_active_currency, quote_currency, "minimum_if_active")
+        self.validate_order_minimum_kind(route, capability, expected_kind, required_minimum_kind, required_minimum_currency, quote_currency, "required_minimum")
         if expected_kind is not None and cap_kind != expected_kind:
             self.issue("allocation.reference_not_found", field_path("routing", "order_route", route.route_id, "cap"))
-        if cap_currency is not None and isinstance(capability, MonetaryAmountCapability) and cap_currency != capability.currency:
+        if cap_currency is not None and isinstance(capability, MonetaryAmountCapability) and quote_currency is not None and cap_currency != quote_currency:
             self.issue("allocation.currency_mismatch", field_path("routing", "order_route", route.route_id, "cap"))
         if minimum_if_active_kind in {"none", cap_kind} and minimum_if_active > cap:
             self.issue("allocation.order_minimum_exceeds_cap", field_path("routing", "order_route", route.route_id, "minimum_if_active"))
         if required_minimum_kind in {"none", cap_kind} and required_minimum > cap:
             self.issue("allocation.order_minimum_exceeds_cap", field_path("routing", "order_route", route.route_id, "required_minimum"))
 
-    def validate_order_minimum_kind(self, route: PlannerOrderRouteInput, capability, expected_kind: str | None, minimum_kind: str, minimum_currency: str | None, field: str) -> None:
+    def validate_order_minimum_kind(self, route: PlannerOrderRouteInput, capability, expected_kind: str | None, minimum_kind: str, minimum_currency: str | None, quote_currency: str | None, field: str) -> None:
         if minimum_kind != "none" and expected_kind is not None and minimum_kind != expected_kind:
             self.issue("allocation.reference_not_found", field_path("routing", "order_route", route.route_id, field))
-        if minimum_currency is not None and isinstance(capability, MonetaryAmountCapability) and minimum_currency != capability.currency:
+        if minimum_currency is not None and isinstance(capability, MonetaryAmountCapability) and quote_currency is not None and minimum_currency != quote_currency:
             self.issue("allocation.currency_mismatch", field_path("routing", "order_route", route.route_id, field))
 
-    def validate_sell_gross_amount(self, route: PlannerOrderRouteInput, capability) -> None:
-        gross_amount = getattr(route, "gross_amount_requested", None)
-        path = field_path("routing", "order_route", route.route_id, "gross_amount_requested")
-        if route.side == "sell" and isinstance(capability, MonetaryAmountCapability):
-            if gross_amount is None:
-                self.issue("allocation.order_amount_step_missing", path)
-                return
-            gross = self.money(gross_amount, path)
-            if gross < ExactRatio(0):
-                self.issue("allocation.order_minimum_negative", path)
-            if gross_amount.currency != capability.currency:
-                self.issue("allocation.currency_mismatch", path)
-        elif gross_amount is not None and isinstance(capability, WholeQuantityCapability):
-            self.issue("allocation.reference_not_found", path)
-
-    def validate_fx(self) -> None:
-        self.fx_quote_ids = self.duplicates(
-            self.request.fx_quotes,
-            lambda item: item.fx_quote_id,
-            lambda _item, item_id: field_path("fx", "fx_quote", item_id, "fx_quote_id"),
-        )
-        quote_by_id = {item.fx_quote_id: item for item in self.request.fx_quotes}
-        quote_pairs: set[tuple[str, str]] = set()
-        for quote in self.request.fx_quotes:
-            self.validate_fx_quote(quote, quote_pairs)
-        self.duplicates(
-            self.request.fx_routes,
-            lambda item: item.fx_route_id,
-            lambda _item, item_id: field_path("fx", "fx_route", item_id, "fx_route_id"),
-        )
-        edges_by_broker: dict[str, set[tuple[str, str]]] = defaultdict(set)
-        for route in self.request.fx_routes:
-            self.validate_fx_route(route, quote_by_id)
-            edges_by_broker[route.broker_id].add((route.source_currency, route.destination_currency))
-        for broker_id, edges in sorted(edges_by_broker.items()):
-            if self._has_cycle(edges):
-                self.issue("allocation.fx_cycle_invalid", entity_path("fx", "broker", broker_id))
-            if any(first_destination == second_source and first_source != second_destination for first_source, first_destination in edges for second_source, second_destination in edges):
-                self.issue("allocation.fx_multi_hop_unsupported", entity_path("fx", "broker", broker_id))
-
-    def validate_fx_quote(self, quote, quote_pairs: set[tuple[str, str]]) -> None:
-        path = field_path("fx", "fx_quote", quote.fx_quote_id, "rate")
-        self.currency(quote.source_currency, path)
-        self.currency(quote.destination_currency, path)
-        self.provenance(quote.provenance_id, field_path("fx", "fx_quote", quote.fx_quote_id, "provenance_id"))
-        self.freshness(quote.freshness, field_path("fx", "fx_quote", quote.fx_quote_id, "freshness"))
-        rate = self.ratio(quote.rate, path)
-        if quote.source_currency == quote.destination_currency:
-            self.issue("allocation.identity_fx_quote_not_allowed", path)
-        if rate <= ExactRatio(0):
-            self.issue("allocation.nonpositive_fx_rate", path)
-        pair = (quote.source_currency, quote.destination_currency)
-        if pair in quote_pairs:
-            self.issue("allocation.duplicate_id", path)
-        quote_pairs.add(pair)
-
-    def validate_fx_route(self, route, quote_by_id: dict[str, object]) -> None:
-        self.reference(route.broker_id, self.broker_ids, field_path("fx", "fx_route", route.fx_route_id, "broker_id"))
-        self.provenance(route.provenance_id, field_path("fx", "fx_route", route.fx_route_id, "provenance_id"))
-        quote_path = field_path("fx", "fx_route", route.fx_route_id, "fx_quote_id")
-        quote = quote_by_id.get(route.fx_quote_id)
-        if quote is None:
-            self.issue("allocation.fx_quote_missing", quote_path)
-        elif quote.source_currency != route.source_currency or quote.destination_currency != route.destination_currency:
-            self.issue("allocation.currency_mismatch", quote_path)
-        self.currency(route.source_currency, field_path("fx", "fx_route", route.fx_route_id, "source_currency"))
-        self.currency(route.destination_currency, field_path("fx", "fx_route", route.fx_route_id, "destination_currency"))
-        source_step = self.money(route.source_amount_step, field_path("fx", "fx_route", route.fx_route_id, "source_amount_step"))
-        fixed_fee = self.money(route.fixed_fee, field_path("fx", "fx_route", route.fx_route_id, "fixed_fee"))
-        spread = self.ratio(route.spread_rate, field_path("fx", "fx_route", route.fx_route_id, "spread_rate"))
-        buffer = self.ratio(route.safety_buffer_rate, field_path("fx", "fx_route", route.fx_route_id, "safety_buffer_rate"))
-        if route.source_currency == route.destination_currency:
-            self.issue("allocation.identity_fx_quote_not_allowed", field_path("fx", "fx_route", route.fx_route_id, "destination_currency"))
-        if route.source_amount_step.currency != route.source_currency or route.fixed_fee.currency != route.source_currency:
-            self.issue("allocation.currency_mismatch", field_path("fx", "fx_route", route.fx_route_id, "source_currency"))
-        if source_step <= ExactRatio(0):
-            self.issue("allocation.nonpositive_fx_source_step", field_path("fx", "fx_route", route.fx_route_id, "source_amount_step"))
-        if fixed_fee < ExactRatio(0):
-            self.issue("allocation.negative_fx_fee", field_path("fx", "fx_route", route.fx_route_id, "fixed_fee"))
+    def validate_fx_rates(self) -> None:
+        for pair, rate in sorted(self.request.fx_rates.items()):
+            first, _, second = pair.partition("/")
+            path = field_path("fx", "fx_rate", pair, "rate")
+            self.currency(first, path)
+            self.currency(second, path)
+            value = self.ratio(rate, path)
+            if first >= second:
+                self.issue("allocation.identity_fx_rate_not_allowed", path)
+            elif value <= ExactRatio(0):
+                self.issue("allocation.nonpositive_fx_rate", path)
+        spread_path = field_path("input", "scenario", self.request.snapshot.snapshot_id, "fx_spread_rate")
+        spread = self.ratio(self.request.fx_spread_rate, spread_path)
         if not self._rate_in_half_open_unit_interval(spread):
-            self.issue("allocation.fx_spread_rate_out_of_range", field_path("fx", "fx_route", route.fx_route_id, "spread_rate"))
-        if not self._rate_in_half_open_unit_interval(buffer):
-            self.issue("allocation.fx_buffer_rate_out_of_range", field_path("fx", "fx_route", route.fx_route_id, "safety_buffer_rate"))
-        if route.priority < 0:
-            self.issue("allocation.route_priority_negative", field_path("fx", "fx_route", route.fx_route_id, "priority"))
+            self.issue("allocation.fx_spread_rate_out_of_range", spread_path)
 
     @staticmethod
-    def _has_cycle(edges: set[tuple[str, str]]) -> bool:
-        adjacency: dict[str, set[str]] = defaultdict(set)
-        for source, destination in edges:
-            adjacency[source].add(destination)
-        visited: set[str] = set()
-        active: set[str] = set()
+    def _fx_pair_key(first: str, second: str) -> str:
+        return "/".join(sorted((first, second)))
 
-        def visit(currency: str) -> bool:
-            if currency in active:
-                return True
-            if currency in visited:
-                return False
-            visited.add(currency)
-            active.add(currency)
-            for destination in sorted(adjacency.get(currency, set())):
-                if visit(destination):
-                    return True
-            active.remove(currency)
-            return False
+    def fx_rate(self, source: str, destination: str) -> ExactRatio | None:
+        if source == destination:
+            return ExactRatio(1)
+        raw = self.request.fx_rates.get(self._fx_pair_key(source, destination))
+        if raw is None:
+            return None
+        rate = ExactRatio.from_decimal(Decimal(raw))
+        if rate <= ExactRatio(0):
+            # A nonpositive stored rate is already reported by validate_fx_rates();
+            # treat it as unusable here too instead of dividing by zero/negative on
+            # the reciprocal branch. Callers already handle a ``None`` return.
+            return None
+        return rate if source < destination else ExactRatio(1) / rate
 
-        return any(visit(currency) for currency in sorted(adjacency))
+    def require_fx_pair(self, first: str, second: str) -> None:
+        if first == second:
+            return
+        pair = self._fx_pair_key(first, second)
+        if pair in self.request.fx_rates or pair in self.reported_fx_rate_missing:
+            return
+        self.reported_fx_rate_missing.add(pair)
+        self.issue("allocation.fx_rate_missing", field_path("fx", "fx_rate", pair, "rate"))
+
+    def _cash_pool_currencies_by_broker(self) -> dict[str, set[str]]:
+        pool_currencies_by_broker: dict[str, set[str]] = defaultdict(set)
+        for item in self.request.existing_cash:
+            pool_currencies_by_broker[item.broker_id].add(item.available.currency)
+        for item in self.request.funding_routes:
+            pool_currencies_by_broker[item.broker_id].add(item.currency)
+        for route in self.request.order_routes:
+            if route.side != "sell":
+                continue
+            asset = self.asset_by_id.get(route.asset_id)
+            if asset is not None and asset.quote is not None:
+                pool_currencies_by_broker[route.broker_id].add(asset.quote.currency)
+        return pool_currencies_by_broker
+
+    def validate_fx_pair_closure(self) -> None:
+        for currency in sorted(self.currency_references):
+            self.require_fx_pair(currency, self.request.valuation_currency)
+        pool_currencies_by_broker = self._cash_pool_currencies_by_broker()
+        for route in self.request.order_routes:
+            if route.side != "buy":
+                continue
+            asset = self.asset_by_id.get(route.asset_id)
+            if asset is None or asset.quote is None:
+                continue
+            for pool_currency in sorted(pool_currencies_by_broker.get(route.broker_id, set())):
+                self.require_fx_pair(pool_currency, asset.quote.currency)
 
     def validate_sell_context(self) -> None:
         if not isinstance(self.request, RebalancerInvestAndSellRequest):
@@ -1614,12 +1540,11 @@ class _PlannerV2Normalizer:
             holding_groups[(holding.asset_id, holding.broker_id)].append(holding)
         holdings_by_pair = {key: values[0] for key, values in holding_groups.items() if len(values) == 1}
         ambiguous_holding_pairs = {key for key, values in holding_groups.items() if len(values) > 1}
-        direct_rate_pairs = {(item.source_currency, item.destination_currency) for item in self.request.valuation_rates}
         fiscal_by_broker: dict[str, set[str]] = defaultdict(set)
         for route in self.request.order_routes:
             if route.side != "sell":
                 continue
-            self.validate_sell_route_requirement(route, holdings_by_pair, ambiguous_holding_pairs, cost_by_holding, tax_by_asset, withholding_by_broker, direct_rate_pairs, fiscal_by_broker)
+            self.validate_sell_route_requirement(route, holdings_by_pair, ambiguous_holding_pairs, cost_by_holding, tax_by_asset, withholding_by_broker, fiscal_by_broker)
         for broker_id, fiscal_currencies in sorted(fiscal_by_broker.items()):
             if len(fiscal_currencies) > 1:
                 self.issue("allocation.tax_netting_unsupported", field_path("policy", "broker", broker_id, "fiscal_currency"))
@@ -1636,7 +1561,6 @@ class _PlannerV2Normalizer:
         cost_by_holding: dict[str, object],
         tax_by_asset: dict[str, object],
         withholding_by_broker: dict[str, object],
-        direct_rate_pairs: set[tuple[str, str]],
         fiscal_by_broker: dict[str, set[str]],
     ) -> None:
         tax = tax_by_asset.get(route.asset_id)
@@ -1644,6 +1568,13 @@ class _PlannerV2Normalizer:
             self.issue("portfolio_rebalancer.tax_rate_missing", field_path("policy", "asset", route.asset_id, "tax_rate"))
         elif tax.fiscal_currency is not None:
             fiscal_by_broker[route.broker_id].add(tax.fiscal_currency)
+            asset = self.asset_by_id.get(route.asset_id)
+            quote_currency = asset.quote.currency if asset is not None and asset.quote is not None else None
+            # SELL always settles tax/withholding in the asset's own quote currency
+            # (no conversion at SELL time); the evaluator hard-asserts this, so it
+            # must be a typed issue here rather than a boundary crash.
+            if quote_currency is not None and tax.fiscal_currency != quote_currency:
+                self.issue("allocation.currency_mismatch", field_path("policy", "asset", route.asset_id, "fiscal_currency"))
         if route.broker_id not in withholding_by_broker:
             self.issue("portfolio_rebalancer.withholding_missing", field_path("policy", "broker", route.broker_id, "withholding"))
         holding_pair = (route.asset_id, route.broker_id)
@@ -1656,22 +1587,16 @@ class _PlannerV2Normalizer:
         cost_basis = cost_by_holding.get(holding.holding_id)
         if cost_basis is None:
             self.issue("allocation.wac_missing", field_path("policy", "holding", holding.holding_id, "average_unit_cost"))
-        elif tax is not None and tax.fiscal_currency is not None and cost_basis.average_unit_cost.currency != tax.fiscal_currency and (cost_basis.average_unit_cost.currency, tax.fiscal_currency) not in direct_rate_pairs:
-            self.issue("allocation.wac_fx_missing", field_path("policy", "holding", holding.holding_id, "average_unit_cost.currency"))
+        elif tax is not None and tax.fiscal_currency is not None:
+            self.require_fx_pair(cost_basis.average_unit_cost.currency, tax.fiscal_currency)
 
     def validate_current_portfolio(self) -> None:
         if isinstance(self.request, PacPlannerRequest) or not self.request.holdings:
             return
-        asset_by_id = {item.asset_id: item for item in self.request.assets}
-        rate_by_source = {
-            item.source_currency: self.ratio(item.rate, field_path("fx", "currency", item.source_currency, "rate"))
-            for item in self.request.valuation_rates
-            if item.destination_currency == self.request.valuation_currency and self.ratio(item.rate, field_path("fx", "currency", item.source_currency, "rate")) > ExactRatio(0)
-        }
         total = ExactRatio(0)
         complete = True
         for holding in self.request.holdings:
-            asset = asset_by_id.get(holding.asset_id)
+            asset = self.asset_by_id.get(holding.asset_id)
             if asset is None or asset.quote is None:
                 complete = False
                 continue
@@ -1681,13 +1606,10 @@ class _PlannerV2Normalizer:
             if quantity < ExactRatio(0) or price <= ExactRatio(0) or basis <= ExactRatio(0):
                 complete = False
                 continue
-            if asset.quote.currency == self.request.valuation_currency:
-                rate = ExactRatio(1)
-            else:
-                rate = rate_by_source.get(asset.quote.currency)
-                if rate is None:
-                    complete = False
-                    continue
+            rate = self.fx_rate(asset.quote.currency, self.request.valuation_currency)
+            if rate is None or rate <= ExactRatio(0):
+                complete = False
+                continue
             total += quantity * price * rate / basis
         if complete:
             if len(str(abs(total.numerator))) > _RATIO_WIRE_INTEGER_CHARS or len(str(total.denominator)) > _RATIO_WIRE_INTEGER_CHARS:
@@ -1785,8 +1707,6 @@ class _PlannerV2Normalizer:
                     ExactOrderCapability(
                         capability_id=capability.capability_id,
                         kind=capability.kind,
-                        currency=capability.currency,
-                        fx_mode=capability.fx_mode,
                         order_step=step,
                     )
                 )
@@ -1887,17 +1807,13 @@ class _PlannerV2Normalizer:
         )
 
     def build_scenario(self) -> ExactPlannerScenario:
-        valuation_rates = tuple(
-            ExactValuationRate(
-                rate_id=item.valuation_rate_id,
-                source_currency=item.source_currency,
-                destination_currency=item.destination_currency,
-                rate=ExactRatio.from_decimal(Decimal(item.rate)),
-                reference_date=date.fromisoformat(item.reference_date),
-                freshness=self.build_freshness(item.freshness),
-                provenance_id=item.provenance_id,
+        fx_rates = tuple(
+            ExactFxRate(
+                pair_first=pair.partition("/")[0],
+                pair_second=pair.partition("/")[2],
+                rate=ExactRatio.from_decimal(Decimal(rate)),
             )
-            for item in sorted(self.request.valuation_rates, key=lambda value: value.valuation_rate_id)
+            for pair, rate in sorted(self.request.fx_rates.items())
         )
         existing_cash = tuple(
             ExactExistingCash(
@@ -1945,38 +1861,9 @@ class _PlannerV2Normalizer:
                 cap=self.build_order_cap(item.cap),
                 execution_margin_rate=ExactRatio.from_decimal(Decimal(item.execution_margin_rate)),
                 priority=item.priority,
-                gross_amount_requested=self.build_money(item.gross_amount_requested) if getattr(item, "gross_amount_requested", None) is not None else None,
                 provenance_id=item.provenance_id,
             )
             for item in sorted(self.request.order_routes, key=lambda value: value.route_id)
-        )
-        fx_quotes = tuple(
-            ExactFxQuote(
-                quote_id=item.fx_quote_id,
-                source_currency=item.source_currency,
-                destination_currency=item.destination_currency,
-                rate=ExactRatio.from_decimal(Decimal(item.rate)),
-                reference_date=date.fromisoformat(item.reference_date),
-                freshness=self.build_freshness(item.freshness),
-                provenance_id=item.provenance_id,
-            )
-            for item in sorted(self.request.fx_quotes, key=lambda value: value.fx_quote_id)
-        )
-        fx_routes = tuple(
-            ExactFxRoute(
-                route_id=item.fx_route_id,
-                broker_id=item.broker_id,
-                quote_id=item.fx_quote_id,
-                source_currency=item.source_currency,
-                destination_currency=item.destination_currency,
-                source_amount_step=self.build_money(item.source_amount_step),
-                fixed_fee=self.build_money(item.fixed_fee),
-                spread_rate=ExactRatio.from_decimal(Decimal(item.spread_rate)),
-                buffer_rate=ExactRatio.from_decimal(Decimal(item.safety_buffer_rate)),
-                priority=item.priority,
-                provenance_id=item.provenance_id,
-            )
-            for item in sorted(self.request.fx_routes, key=lambda value: value.fx_route_id)
         )
         return ExactPlannerScenario(
             snapshot=ExactSnapshot(
@@ -1990,7 +1877,8 @@ class _PlannerV2Normalizer:
             valuation_currency=self.request.valuation_currency,
             currency_specs=tuple(ExactCurrencySpec(currency=item.currency, minor_unit=ExactRatio.from_decimal(Decimal(item.minor_unit))) for item in sorted(self.request.currency_specs, key=lambda value: value.currency)),
             provenance=self.build_provenance(),
-            valuation_rates=valuation_rates,
+            fx_rates=fx_rates,
+            fx_spread_rate=ExactRatio.from_decimal(Decimal(self.request.fx_spread_rate)),
             assets=self.build_assets(),
             brokers=self.build_brokers(),
             holdings=self.build_holdings(),
@@ -1998,8 +1886,6 @@ class _PlannerV2Normalizer:
             contributions=contributions,
             funding_routes=funding_routes,
             order_routes=order_routes,
-            fx_quotes=fx_quotes,
-            fx_routes=fx_routes,
             target_weights=tuple(ExactTargetWeight(asset_id=item.asset_id, weight=ExactRatio.from_decimal(Decimal(item.weight))) for item in sorted(self.request.target_weights, key=lambda value: value.asset_id)),
             sell_context=self.build_sell_context(),
         )
@@ -2011,13 +1897,12 @@ class _PlannerV2Normalizer:
         self.validate_holdings()
         self.validate_cash_and_contributions()
         self.validate_order_routes()
-        self.validate_fx()
+        self.validate_fx_rates()
         self.validate_targets()
-        self.validate_valuation_rates()
         self.validate_sell_context()
         self.validate_current_portfolio()
         self.validate_currency_specs()
-        self.validate_required_valuation_rates()
+        self.validate_fx_pair_closure()
         issues = canonicalize_issues(self.issues)
         availability = normalization_availability(issues)
         normalized = self.build_scenario() if availability == "ready" else None

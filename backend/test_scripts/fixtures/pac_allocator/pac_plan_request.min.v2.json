@@ -21,7 +21,8 @@
       "entered_at": "2026-09-15T12:00:00Z"
     }
   ],
-  "valuation_rates": [],
+  "fx_rates": {},
+  "fx_spread_rate": "0",
   "assets": [
     {
       "asset_id": "asset-one",
@@ -78,8 +79,6 @@
         {
           "kind": "whole_quantity",
           "capability_id": "cap-broker-one-eur-whole",
-          "currency": "EUR",
-          "fx_mode": "native_currency_required",
           "quantity_unit": "asset_unit",
           "quantity_step": "1"
         }
@@ -153,8 +152,6 @@
       "provenance_id": "prov-manual"
     }
   ],
-  "fx_quotes": [],
-  "fx_routes": [],
   "target_weights": [
     {
       "asset_id": "asset-one",

@@ -107,14 +107,16 @@ async def compute_wac_iterative(  # noqa: C901 — TODO(P2-refactor): staged WAC
     asset_currency: str,
     excluded_tx_ids: list[int] | None = None,
     target_currency_override: str | None = None,
+    use_cache: bool = True,
 ) -> WACPreviewResultItem:
     """Compute inventory-aware WAC (PMC) for an asset at a broker up to a date.
 
     Preparation layer: queries DB, handles FX conversion,
     then delegates to compute_wac_from_txlist() for pure math.
 
-    Results are cached per (broker_id, asset_id, as_of_date) with a fingerprint
-    based on the relevant transactions, so cache auto-invalidates on data changes.
+    By default, results are cached per (broker_id, asset_id, as_of_date) with a
+    transaction fingerprint. Callers that need an uncached domain snapshot can
+    set ``use_cache=False`` without mutating shared cache state.
     """
     excluded = set(excluded_tx_ids or [])
 
@@ -149,9 +151,10 @@ async def compute_wac_iterative(  # noqa: C901 — TODO(P2-refactor): staged WAC
     excluded_key = tuple(sorted(excluded)) if excluded else ()
     wac_cache_key = (broker_id, asset_id, as_of_date.isoformat(), asset_currency, target_currency_override, excluded_key, wac_fp)
 
-    cached_wac, wac_hit = _wac_cache.get(wac_cache_key)
-    if wac_hit:
-        return cached_wac
+    if use_cache:
+        cached_wac, wac_hit = _wac_cache.get(wac_cache_key)
+        if wac_hit:
+            return cached_wac
 
     # 2. Build unified row tuples from DB rows (minus excluded)
     # Tuple: (tx_id, type_str, date, quantity, amount, currency, cbo_amount, cbo_ccy, is_pending, cbm, is_split_linked)
@@ -346,7 +349,8 @@ async def compute_wac_iterative(  # noqa: C901 — TODO(P2-refactor): staged WAC
     )
 
     # Store in WAC cache
-    _wac_cache.set(wac_cache_key, result)
+    if use_cache:
+        _wac_cache.set(wac_cache_key, result)
 
     return result
 
