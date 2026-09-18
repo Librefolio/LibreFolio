@@ -3218,7 +3218,28 @@
         "contribution": "risk contribution",
         "lead": "{name} weighs {weight} but produces {contribution} of the risk",
         "showAll": "Show all",
-        "showLess": "Show less"
+        "showLess": "Show less",
+        "effectiveAssets": {
+          "label": "How many independent bets do I really hold?",
+          "aboveCount": "Above the {positions} measured positions: the excess is cash, and says nothing about the weights",
+          "belowCount": "Below the {positions} measured positions: the weights are lopsided, and a few carry the portfolio",
+          "evenCount": "Exactly the {positions} measured positions: even weights and no cash"
+        },
+        "diversificationRatio": {
+          "label": "Did spreading the money achieve anything?",
+          "caption": "1.00 means the holdings move as one; higher means they offset each other"
+        },
+        "uncovered": {
+          "label": "How much of me is not measured here?",
+          "caption": "Cash, plus every holding without a usable price series",
+          "residual": "The rows below describe the rest of the portfolio; {share} is not among them"
+        },
+        "rowsCaption": "The bar shows the gap between weight and risk: right means more risk than weight, left means less. Weights are shares of the whole portfolio.",
+        "correlation": {
+          "title": "Which of these are the same bet?",
+          "basis": "Measured over the historical window; the weights above are today's.",
+          "noRedundancy": "No pair in this set reaches the redundancy threshold."
+        }
       },
       "l3": {
         "title": "Am I being paid for this risk?",
