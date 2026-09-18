@@ -2991,7 +2991,42 @@
       "assetsTab": "Activos",
       "correlationTab": "Correlación",
       "addAsset": "Añadir activo a la matriz",
-      "maxAssets": "Se alcanzó el límite de la API de 100 activos."
+      "maxAssets": "Se alcanzó el límite de la API de 100 activos.",
+      "presetBroker": "Precargar los activos de…",
+      "presetNone": "Elige un bróker…",
+      "panelTitle": "Relaciones y escenarios",
+      "selectedCount": "{selected} seleccionados de {total}",
+      "nearIdentical": "casi idénticos",
+      "bulk": {
+        "selectAll": "Seleccionar todo",
+        "selectNone": "Deseleccionar todo",
+        "invert": "Invertir",
+        "mine": "Mis activos"
+      },
+      "filters": {
+        "type": "Tipo",
+        "currency": "Moneda",
+        "clear": "Borrar los filtros"
+      },
+      "band": {
+        "high": "se mueven juntos",
+        "moderate": "se mueven juntos en parte",
+        "low": "se mueven de forma independiente",
+        "inverse": "se mueven en direcciones opuestas"
+      },
+      "ordering": {
+        "label": "Orden de la matriz",
+        "similarity": "Por similitud",
+        "original": "Por nombre"
+      },
+      "pairs": {
+        "correlatedTitle": "Los más parecidos",
+        "correlatedHint": "Pares que se mueven juntos: tener ambos añade poco.",
+        "offsettingTitle": "Los que se compensan",
+        "offsettingHint": "Pares que se mueven en direcciones opuestas: uno amortigua al otro.",
+        "noneCorrelated": "Ningún par se mueve claramente junto.",
+        "noneOffsetting": "Ningún par compensa a otro: aquí nada amortigua nada."
+      }
     },
     "metrics": {
       "volatility": "Volatilidad",
