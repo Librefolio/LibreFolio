@@ -68,8 +68,72 @@ lo cerca.
 | Il colore è assegnato **per indice** | `AllocationPieChart:338` (`color: palette`) · `AllocationHistoryChart:531-533` e `:585` | Va sostituito con colore **per dato**: nella torta `itemStyle.color` sul singolo item; nello storico `lineStyle`, `areaStyle`, `itemStyle` **e il tooltip** — quattro punti, non uno |
 | Manca `hexToHsl` | `utils/colors.ts` ha **solo** `hslToHex` (`:123`) | Le due tavolozze sono esadecimali scritti a mano «a massima distanza cromatica»: per ricavarne sfumature serve la conversione inversa, che oggi non esiste |
 | L'alfa è concatenazione di stringa | `AllocationHistoryChart:532` — `palette[i] + '88'` | Funziona finché il colore è esadecimale a 6 cifre. Una sfumatura calcolata deve mantenere quel formato o passare a `rgba()` |
-| **Due temi** | `PALETTE_LIGHT` è **scura** (`#1a4031`), `PALETTE_DARK` è **chiara** (`#4ade80`) | La sfumatura **non può andare sempre verso il chiaro**: va calcolata rispetto al tema, o due sottotipi diventano indistinguibili in uno dei due |
+| **Due temi** | ⚠️ **premessa corretta il 18 Set** — vedi sotto | La regola giusta non è per tema ma **per colore base** |
 | La legenda si affolla | commento «up to 12» in `AllocationHistoryChart:107`; la torta ha già la paginazione | Con i sottotipi le voci possono superare la dozzina. Valutare se la legenda elenca i **primari** e il dettaglio resta al tooltip |
+
+---
+
+### 4.1 🔑 La regola di sfumatura, corretta da G eseguendo invece di leggere
+
+Il brief diceva *«`PALETTE_LIGHT` è scura (`#1a4031`)»*. **Generalizzazione da una voce
+sola.** G ha eseguito la conversione HSL su tutte e quattro le tavolozze:
+
+```text
+PIE_LIGHT   L 18→67  media 45   8/14 sotto 50
+PIE_DARK    L 50→82  media —    0/14 sotto 50
+HIST_LIGHT  L 18→67  media 52   4/12 sotto 50
+HIST_DARK   L 50→83  media —    0/12 sotto 50
+```
+
+Le *dark* sono davvero uniformemente chiare. **Le *light* no**: media 52 in HIST, e
+`#6366f1` (L=67) è più chiaro di metà tavolozza scura. `#1a4031` è **l'eccezione, non il
+rappresentante** — quindi una regola per tema (*«in chiaro schiarisci»*) slaverebbe
+proprio le voci già chiare.
+
+> ## 🔑 Per **colore base**: sfuma allontanandoti dall'estremo più vicino
+> `L < 50 → schiarisci · altrimenti scurisci`
+>
+> Garantisce **≥50 punti** di margine su ogni voce delle quattro tavolozze. La regola per
+> tema ne garantisce **17**. È dimostrabile **con un numero**, non con un'occhiata.
+
+### 4.2 Un solo scalino basta, e due costi del brief si sgonfiano
+
+Eseguendo K2: i 5 sottotipi hanno **5 genitori distinti** → **nessun gruppo supera 2
+membri**. Conseguenze:
+
+- **D72 (ciambella a due anelli) non serve**, e con essa **la trappola di riga 193 non si
+  apre nemmeno**;
+- **l'alfa `+'88'` non va toccata** — `hslToHex` produce sempre 6 cifre — **a condizione**
+  che il colore puro resti l'esadecimale originale **verbatim**, non un round-trip che
+  arrotonda.
+
+### 4.3 🔴 Tre buchi che il brief non vedeva
+
+| | Cosa | Perché conta |
+|---|---|---|
+| **A** | `AllocationHistoryChart` ha **12** colori, i primari possibili sono **13** (i 12 del codominio **più** `by_type["Liquidity"]`, Title Case e fuori enum) | `palette[i % 12]` **non solleva, avvolge**: il tredicesimo prende il colore del **primo**, che per costruzione è la categoria più grande. **Collisione cromatica**, non legenda affollata. → portare a **14** |
+| **B** | L'ordinamento gerarchico serve **anche** a `AllocationHistoryChart:289`, non solo alla torta | Con `stack: 'allocation'` l'ordine delle serie **è** l'ordine di impilamento verticale: due sottotipi finirebbero in bande separate da categorie estranee. *«La parentela non è solo invisibile: è contraddetta dalla geometria»* |
+| **C** | `AllocationPieChart` è usato anche da `assets/[id]/+page.svelte:2415` — **Asset Detail, parcheggiata** — e dal tab sector | Precedente in wiki: `problems/shared-component-option-changed-globally.md`, *«più piccolo è il diff, meno lo sembra»*. → tutto condizionato a `mode/dimension === 'type'`, e **sector/geo pinnati da un test** |
+
+### 4.4 Il colore base resta **per indice**
+
+«Stabile per tipo» è una funzionalità diversa — identità cromatica fra grafici — che
+nessuno ha chiesto, e per farla bene i colori dovrebbero coincidere con la **pastiglia**:
+Tailwind contro esadecimale ECharts, **nessun ponte esistente**, e costruirlo invade il
+mandato B.
+
+### 4.5 Il contratto cromatico lo porta Vitest, non un E2E
+
+⚠️ **ECharts disegna su canvas: un E2E non può asserire un colore.** L'unico appiglio è
+`__lfChart` (`PriceChartFull:453`), che questi due grafici non espongono.
+
+→ **ΔL misurato in Vitest** sulle tavolozze reali, in entrambi i temi. Risponde a
+«distinguibili, *verificato*» **con un numero invece che un'occhiata**, ed è più forte di
+uno screenshot.
+
+⚠️ E l'helper è **puro, senza rune**, con `resolvePrimary` **iniettato** invece che
+importato — così l'avviso su jsdom non si applica, e l'unit test non trascina
+`generated.ts` (che `assetTypes.ts:17` importa eseguendo `schemas.AssetType.options`).
 
 ---
 

@@ -205,8 +205,56 @@ Quattro misure, **tutte in variante `_Rel`**, e la variante non è un dettaglio.
 |---|---|
 | **MDD** | la discesa peggiore dal picco |
 | **DaR** | il quantile delle discese: «il 95% dei giorni sei sceso meno di così» |
-| **CDaR** | la media delle discese **oltre** quel quantile |
+| **CDaR** | ⚠️ **NON** la media delle discese oltre quel quantile — è la forma **Rockafellar-Uryasev**, normalizzata per **`alpha × T`** e non per il numero di osservazioni in coda |
 | **UCI** | l'indice di ulcera: penalizza le discese **lunghe**, non solo quelle profonde |
+
+
+> ### 🔴 Correzione del 18 Set — questa riga portava **il difetto**, non la definizione
+>
+> Diceva *« la media delle discese **oltre** quel quantile »*: **è la media aritmetica della coda,
+> cioè esattamente lo stimatore che M2 corregge per il CVaR.**
+>
+> 🔑 **E N l'aveva già confutata, parola per parola, senza che nessuno glielo dicesse.**
+> `acquired.py:128-131` (checkpoint `1aaea6949`) porta:
+>
+> > *« This is **not** the arithmetic mean of the worst `alpha` share of observations. It is the
+> > Rockafellar-Uryasev form, whose tail integral is normalized by `alpha * T`… Writing the naive
+> > mean here **reproduces exactly the historical CVaR defect this subsystem is being corrected
+> > for**. »*
+>
+> e `:143` implementa `quantile + excess / (alpha * len(ordered))`.
+>
+> ⚠️ **La docstring di N è la confutazione del brief di N — e il disaccordo non l'ha visto
+> nessuno, perché nessun gate confronta un brief col codice.**
+>
+> ### 🔴 Perché una specifica sbagliata che l'implementazione evita è pericolosa
+>
+> **Non danneggia nessuno oggi — ed è per questo che sopravvive.** La catena, e **ogni passo è
+> localmente ragionevole**:
+>
+> 1. un revisore confronta codice e brief → conclude *« il codice è sbagliato »*;
+> 2. lo corregge **verso il naive**;
+> 3. il test **differenziale** di N (`assert computed != approx(naive_mean)`) diventa **rosso**;
+> 4. un rosso differenziale **dopo una correzione plausibile** si legge come *« il test è sbagliato »*;
+> 5. si rilassa l'asserzione → **si spedisce esattamente il difetto M2 per cui esiste questa campagna.**
+>
+> 🔑 **E il test che avevamo appena dichiarato salvo è l'anello che cede.**
+>
+> ### ✅ Perché proprio questa riga, e solo questa
+>
+> **Risultato nullo misurato da I**: **zero** occorrenze, in tutto il journal, che descrivano
+> l'UCI come deviazione standard campionaria o Bessel. **Il trasporto non è sistematico: è
+> specifico.** E delle quattro righe di questa tabella, **MDD, DaR e UCI sono giuste**; l'unica
+> sbagliata è **l'unica la cui definizione corretta non ha forma breve**.
+>
+> > **Si trasportano le trappole che hanno una frase sbagliata fluente a disposizione.**
+> > *« La media della coda peggiore »* è la frase che viene in mente per il CDaR. L'UCI non ne ha
+> > una seducente — e infatti è intatto.
+>
+> 📌 **E l'ironia va nominata**: **due righe sotto** questa definizione c'è l'avvertimento
+> `_Rel`/`_Abs`, *« verificato sul sorgente e ricostruito a mano »*, con l'11 % di scarto.
+> **Siamo stati squisitamente attenti a una trappola di questa tabella e abbiamo scritto l'altra
+> nella colonna delle definizioni.**
 
 ⚠️ **`_Rel` contro `_Abs` — verificato sul sorgente e ricostruito a mano** (D56, e la
 trappola è già nell'oracolo di **A**): `_Abs` usa `cumsum` e misura in punti di

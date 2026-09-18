@@ -103,17 +103,56 @@ radice**, invece di aggiungere breakpoint a una griglia sbagliata.
 
 ---
 
-## 5. I due doppioni da far sparire
+## 5. Il doppione, e la cosa che sembrava un doppione e non lo è
 
-Non sono dettagli: sono la prova che le primitive esistenti non venivano trovate.
+⚠️ **Sezione corretta il 17 Set 2026 dopo l'analisi di D**, che ha verificato sul codice
+due affermazioni che questo brief dava per vere. Una era falsa.
 
-| Doppione | Dove | Sostituto |
+### 5.1 Le barre divergenti — doppione vero, ma **non** drop-in
+
+`RiskAnalysisPanel:858-870` disegna a mano `<div>` con `absolute left-1/2` e larghezze
+inline. Il sostituto è `KpiDivergingFlowBar` — ma **non nella sua forma attuale**:
+
+| | Barra a mano | `KpiDivergingFlowBar` oggi |
 |---|---|---|
-| Barre divergenti scritte a mano | `RiskAnalysisPanel:854-870` — `<div>` con `absolute left-1/2` e larghezze inline | `KpiDivergingFlowBar`, 55 righe testate e con tooltip |
-| Formattatore valuta | `riskAnalysisHelpers.ts:130` | `formatCurrencyAmountPlain`, condiviso |
+| Dato | **una** percentuale **con segno** | **due** magnitudini (`depositPct`, `withdrawPct`) |
+| Colori | `blue-500` / `red-500` (contributo) | `green-500` / `red-400` **fissi** (versamenti/prelievi) |
+| Altezza | `h-5` | `h-1.5` **fissa** |
+| Layout | griglia 3 colonne `nome │ barra │ valore` | etichetta e valore **sopra** la barra |
+| `data-testid` per riga | `risk-contribution-row-{asset_id}` | **nessuna prop** |
 
-La rimozione avviene dentro il mandato **E**, che possiede `components/risk/`. Questo
-mandato **fornisce il sostituto e lo comunica**; E lo adotta.
+> ## 🔑 Estendere la primitiva è **di questo mandato**, non di E.
+>
+> Servono `testId`, colori parametrici, altezza parametrica e una modalità «valore con
+> segno». Tutto **additivo**: la dashboard deve restare invariata.
+>
+> È esattamente il senso del mandato: E non deve scoprire a lavoro iniziato che il
+> sostituto promesso non entra nel buco.
+
+### 5.2 ❌ Il formattatore valuta **non è un doppione** — affermazione ritirata
+
+Questo brief diceva che `formatCurrencyAmount` (`riskAnalysisHelpers.ts:130`) andava
+sostituito con `formatCurrencyAmountPlain`. **È falso, ed è verificato**:
+
+| | Firma | `1234.5 USD` diventa |
+|---|---|---|
+| `formatCurrencyAmount` (rischio) | `(string \| array \| null, currency, locale?)` | **`$1,234.50`** |
+| `formatCurrencyAmountPlain` (`utils/currency/currencyFormat.ts:30`) | `(number, code, opts)` | **`1,234.50 $ 🇺🇸 USD`** |
+
+Producono **stringhe diverse**, e il sostituto perde due comportamenti: la narrowing di
+array (`singleValue`) e la guardia `Number.isFinite → '—'`. In più
+`riskAnalysisHelpers.test.ts:282-305` contiene **sei test** che asseriscono la forma
+attuale, con il locale fissato a `en-US` apposta per renderli deterministici.
+
+> Sostituirlo non sarebbe de-duplicazione: sarebbe un **cambiamento visibile
+> all'utente** più la cancellazione di sei test verdi. Nessuno l'ha chiesto.
+>
+> **Decisione: `formatCurrencyAmount` resta.** Non è un doppione, sono due
+> presentazioni diverse della stessa grandezza.
+
+La rimozione della barra a mano avviene dentro il mandato **E**, che possiede
+`components/risk/`. Questo mandato **fornisce la primitiva estesa e la comunica**; E la
+adotta.
 
 ---
 
@@ -154,6 +193,41 @@ accorgono a lavoro fatto.
 > sono ciò che lo **dimostra** quando E ed F avranno finito. Vanno isolati proprio
 > perché nessuno sia tentato di adattarli.
 
+### 5.1.1 ⚠️ La crepa nella rete, e perché non si allarga — risposta a Q-D3
+
+D ha posto l'obiezione giusta: *«una rete appesa a un file che l'imputato può modificare
+non è una rete»*. `risk-asset-detail.spec.ts` importerebbe `installRiskMocks` da
+`risk-mocks.ts`, che è di **E** — e che E **deve** cambiare quando arrivano K1 e K8.
+
+**Letti i due test, l'esposizione non si materializza, e il motivo è preciso**:
+
+| Test | Cosa asserisce |
+|---|---|
+| `:698` *«preserves Overview and exposes Risk»* | `data-testid` presenti o assenti, URL `?tab=risk`, conteggi del banner, `aria-expanded`. **Nessun valore numerico** |
+| `:719` *«runs typed scenarios…»* | controlli di confronto, bucket di stress, cambio vista simulazione. **Comportamento**, non cifre |
+
+> ## 🔑 Il mock produce **risposte API**. La rete misura **rendering di codice reale**.
+>
+> E non può far comparire `asset-detail-risk-panel` cambiando un mock: quel pannello lo
+> disegna il codice. Un'aggiunta di campi (K1, K8) non può mascherare una rottura
+> strutturale, e una rimozione distruttiva farebbe **fallire** il test — che è la rete
+> che funziona, non che cede.
+
+**Decisione: divisione letterale (a)**, senza duplicare 300 righe di mock, con due
+vincoli che chiudono il residuo:
+
+1. **Gli helper usati solo dalla rete vivono dentro la rete.** `openFirstAssetDetail`
+   serve **soltanto** ai due test congelati (mappatura verificata da D): va in
+   `risk-asset-detail.spec.ts`, non in `risk-mocks.ts`. Così la superficie condivisa si
+   riduce al minimo reale.
+2. **`risk-mocks.ts` è additivo per E**: può aggiungere campi e funzioni, **non può
+   rimuovere né rinominare** ciò che la rete importa. Entra nel contratto K5 come
+   clausola, insieme all'avvertimento su `resultFor`.
+
+Il costo di (b) — la rete autosufficiente — sarebbe ~300 righe di mock duplicate in un
+fixture di test: la classe di codice che marcisce per prima. Non vale una copertura che
+già regge.
+
 **Vincolo**: la divisione è **solo spostamento**. Nessun test cambia comportamento,
 nessuna asserzione cambia, il numero di test prima e dopo è lo stesso. Si registra poi
 i selettori nuovi in `scripts/test_runner/_frontend_portfolio.py`, dove oggi
@@ -173,8 +247,10 @@ i selettori nuovi in `scripts/test_runner/_frontend_portfolio.py`, dove oggi
 
 ## 6. Il canone dei contenitori
 
-Nei soli componenti rischio convivono due stili, e **cinque contenitori su nove sono
-piatti** — senza ombra. Il canone del progetto è
+Nei soli componenti rischio convivono due stili, e **nove contenitori su undici sono
+piatti** — senza ombra. ⚠️ *Misura corretta il 17 Set 2026: questo brief diceva «cinque
+su nove», D ha contato 11 righe `rounded-xl border` di cui solo 2 con `shadow-sm`. Il
+difetto è peggiore di come era descritto.* Il canone del progetto è
 `bg-white rounded-xl border border-gray-100 shadow-sm`, con 29 occorrenze concordi.
 
 > È il motivo per cui il pannello sembra un wireframe accanto al resto

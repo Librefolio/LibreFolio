@@ -234,12 +234,34 @@ M2 cambia un numero **già mostrato agli utenti** ([`06`](./06-matematica-librer
 e va creata — ci sono solo `### ✨ Added` e `### 🐛 Fixed`.
 
 **Cosa deve dire**, secondo le regole già fissate per il changelog: utente-visibile,
-niente interni. Tre fatti e nessuna scusa —
+niente interni.
 
-1. il CVaR mostrato cambia leggermente;
-2. cambia perché la stima precedente era **sistematicamente più bassa** del valore
-   corretto, non perché si sia cambiata convenzione;
-3. l'entità: circa lo 0,27% in valore relativo della misura.
+> ## 🔴 Correzione del 17 Set 2026 — questa voce era **doppiamente sbagliata**
+>
+> Diceva *«il CVaR mostrato cambia … circa lo 0,27%»*. Il mandato **A** l'ha misurata e
+> il coordinatore l'ha verificata indipendentemente. Due errori:
+>
+> **1. Non cambia solo il CVaR: cambia anche il VaR.** L'off-by-one è **lo stesso
+> indice** che produce entrambi. Misurato su 400 campioni per livello, il VaR nostro
+> differisce da `VaR_Hist` **sistematicamente**, non sporadicamente. La card ne mostra
+> **due**, di numeri (`RiskAnalysisPanel.svelte:880-881`), e cambiano tutti e due.
+>
+> **2. «0,27%» è una media al 95%, non un limite.** `confidence_level` è `gt=0, lt=1`
+> e **lo sceglie l'utente**. Più stretta è la coda, meno osservazioni la compongono, più
+> esplode l'errore dello stimatore ingenuo — lo scarto peggiore misurato al **99%** è di
+> un ordine di grandezza superiore a quello al 95%.
+>
+> Pubblicare «0,27%» significherebbe **rassicurare con un numero che vale solo per il
+> default**.
+
+Tre fatti, e nessuna scusa —
+
+1. **VaR e CVaR** mostrati cambiano leggermente;
+2. cambiano perché la stima precedente era **sistematicamente distorta**, non perché si
+   sia cambiata convenzione;
+3. l'entità **dipende dal livello di confidenza** e cresce al restringersi della coda:
+   si dichiara un ordine di grandezza per il default, **non** una percentuale unica
+   spacciata per limite.
 
 Va scritta **una volta sola a fine catena** (**D46**), insieme al resto. Non prima:
 finché il worktree non si riversa, il capitolo Unreleased descriverebbe qualcosa che
@@ -518,8 +540,58 @@ della cartella che appartiene al coordinatore, non a un mandato.
 - [`01-tesi-e-quattro-domande.md`](./01-tesi-e-quattro-domande.md) — la direzione
 - [`02-verdetti-per-strumento.md`](./02-verdetti-per-strumento.md) — verdetti e lezioni
 - [`03-mappa-livelli-pagine.md`](./03-mappa-livelli-pagine.md) — chi mostra cosa
-- [`04-decisioni-e-questioni-aperte.md`](./04-decisioni-e-questioni-aperte.md) — D1-D72, Q1-Q12
+- [`04-decisioni-e-questioni-aperte.md`](./04-decisioni-e-questioni-aperte.md) — il registro delle decisioni, Q1-Q12 *(il documento cresce: **non citare qui un intervallo**, che invecchia a ogni aggiunta. Si conta con `grep -c '^| D' 04-decisioni-e-questioni-aperte.md`)*
 - [`05-grammatica-visiva-e-rappresentazioni.md`](./05-grammatica-visiva-e-rappresentazioni.md) — grammatica e rappresentazioni
 - [`06-matematica-librerie-e-reimplementazioni.md`](./06-matematica-librerie-e-reimplementazioni.md) — matematica e piano M1-M6
 - [`implementation/`](./implementation/) — gli undici mandati di esecuzione
 - [`_archive-backendFirst-G0G6/`](./_archive-backendFirst-G0G6/) — prima campagna
+
+
+---
+
+# 14. 🔴 Esito reale dei flussi — 18 Set 2026
+
+> **Questo documento è un piano, non una cronaca.** La sezione §8 descrive i flussi **come sono
+> stati concepiti**; questa tabella dice **come sono andati**. Dove le due divergono, vale questa
+> — e la divergenza stessa è il risultato più importante della campagna.
+
+| flusso | mandato | esito | scarto rispetto a §8 |
+|---|---|---|---|
+| **W0** Oracolo | **A** | ✅ `risk-oracle` **200 passed** (da 43) | — |
+| **W1** Migrazione | **A** | ✅ ma **non nell'ordine prescritto** | 🔴 **M6 → 1 migrazione su 9** (era 0: A ha ribaltato il proprio rifiuto rifondando **prima** l'oracolo, D268) · 🔴 **M5 → declinata**, e la premessa che la declassava era falsa |
+| **W2** Tassonomia | **B** | ✅ `asset-unit` **264** · **44 reperti** | la rete K2 preesistente era **testuale**: verde sulla mutazione che uccide il contratto |
+| **W3** Affettamento | **C** | ✅ `FROZEN` | + un membro d'enum che il piano non prevedeva |
+| **W4** Primitive | **D** | ✅ `component-unit` **1808** | — |
+| **W5** Quattro livelli | **E** | 🔨 attivo | 🔴 **difetto trovato in corsa**: `percentage_contribution` letto come 0-100 mentre è una **frazione** |
+| **W6** Laboratorio | **F** | ✅ `FROZEN`, 4 gate su 4 | 🔴 **un rosso attribuito a E era causato da F** (D73 spegne `-trigger`) |
+| **W7** Gerarchia cromatica | **G** | ✅ `FROZEN` | il cancello prescritto dal coordinatore **non era esprimibile** — ritirato |
+| **W8** Monte Carlo | **H** | ✅ `FROZEN` | GJR-GARCH rinviato per **due muri indipendenti**, non per un'assenza |
+| **W9** Documentazione | **I** | 🔨 attivo, **19/22 pagine** | 🔴 **quattro punti ciechi dei gate**, tutti trovati scrivendo, nessuno da un cancello |
+| **W10** Acquisizioni | **N** | ✅ `FROZEN` | non era nel piano originale |
+| **W11** Chiusura | **J** | ⏳ **non creato** | eredita **quattro cancelli** che nessun altro può fare (brief §8) |
+
+## 🔑 La lezione che questo documento non poteva contenere quando è stato scritto
+
+> **Ogni mandato ha trovato premesse false nel brief scritto per lui.** Oltre settanta, contate
+> dai mandati stessi. Nessuna di quelle premesse era stata **misurata** prima di partire: erano
+> lette da codice, da piani precedenti, o da altri documenti che a loro volta le avevano lette
+> altrove.
+>
+> **La forma più cara non è l'errore: è il verde.** B, contando i propri 39 reperti:
+> *«i tre più costosi erano tutti **falsi positivi del verde**. Il comando passava, il test
+> passava, e la conclusione che se ne traeva era falsa.»*
+
+**Tre forme di oracolo cieco, trovate lo stesso giorno da tre mandati diversi:**
+
+| chi | forma | frase |
+|---|---|---|
+| **A** | l'aspettativa **chiama il soggetto** | *«un'aspettativa che chiama il soggetto non è un oracolo, è un'eco»* |
+| **E** | la fixture è scritta **dalla stessa mano** del difetto | *«un test scritto dalla stessa mano che ha scritto il difetto ne eredita il presupposto»* |
+| **I** | la sonda **non consuma la variabile del ciclo** | *«se l'output non può cambiare, non è evidenza»* |
+
+➕ **E una quarta, che le disattiva tutte**: *«**un 100 % spegne la verifica successiva**: nessuno
+ricontrolla una copertura totale»* — I, sul proprio `130/130`, che era **vero su un perimetro non
+dichiarato**.
+
+**L'unica uscita nota, usata due volte**: la **conferma incrociata da un metodo che non condivide
+nulla** con quello che ha prodotto il risultato.

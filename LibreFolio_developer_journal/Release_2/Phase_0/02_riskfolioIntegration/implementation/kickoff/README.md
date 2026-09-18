@@ -21,7 +21,7 @@ Sequenza, e non è negoziabile:
 
 1. il developer committa;
 2. il coordinatore legge lo SHA: `git rev-parse HEAD`;
-3. lo SHA sostituisce `<BASELINE>` qui sotto;
+3. lo SHA sostituisce il segnaposto — **fatto il 17 Set 2026: `cc33120ebfbc61efe4c6178218ff8d64dd4adf47`**;
 4. **solo allora** si creano le sessioni.
 
 Conseguenza utile: con `base_branch: e-alfy-risk-management-replan` **non serve alcun
@@ -68,7 +68,7 @@ nel worktree `e-alfy-ideal-eureka`. Riferisci a lui, non al developer direttamen
 
 ## Da dove nasci
 Branch base: `e-alfy-risk-management-replan`
-Baseline attesa: `<BASELINE>`
+Baseline attesa: `cc33120ebfbc61efe4c6178218ff8d64dd4adf47`
 
 ⚠️ **Prima cosa da fare**: `git rev-parse HEAD`. Se non coincide con la baseline
 attesa, **fermati e riportalo**. Non continuare l'analisi su una base diversa da
@@ -196,7 +196,7 @@ esiste **nel commit**, non solo sul disco del coordinatore — ed è già verifi
 `619c2d79e`, insieme a `release-coordinator` e alle skill citate (`test-triage`,
 `testing-*`, `lint-format-*`, `plan-archive`, `wiki-*`).
 
-Se la prima dà uno SHA diverso da `<BASELINE>`, **ci si ferma e si riconcilia**. Il
+Se la prima dà uno SHA diverso da `cc33120ebfbc61efe4c6178218ff8d64dd4adf47`, **ci si ferma e si riconcilia**. Il
 figlio deve fare la stessa verifica e riportare la discrepanza invece di continuare:
 per questo è il primo punto del preambolo.
 
@@ -227,3 +227,80 @@ Regola del contratto `release-coordinator`, e non si aggira:
 - alla prima autorizzazione **mai** `autopilot` né `autopilot_fleet`: si continua in
   `interactive`;
 - l'autorizzazione del developer si **riporta alla lettera**, non si parafrasa.
+
+---
+
+## ⚠️ Per ogni sessione creata DOPO il commit del 18 Set — J in particolare
+
+> ## 🔴 Lo SHA `cc33120eb…` scritto qui sopra **sarà sbagliato**.
+>
+> Vale per le undici sessioni dell'onda 1-2. **Chi crea una sessione nuova sostituisce lo
+> SHA con quello del commit corrente**, e la prima cosa che il mandato fa resta
+> `git rev-parse HEAD` **contro lo SHA del proprio kickoff, non contro questo file**.
+>
+> Se un mandato confrontasse contro `cc33120eb` troverebbe una differenza e la segnalerebbe
+> come baseline rotta: **un allarme falso prodotto da un documento invecchiato**, cioè il
+> difetto che questa campagna ha trovato **sette volte**.
+
+### Le sei regole operative scoperte durante l'esecuzione — da includere in ogni kickoff nuovo
+
+**1. 🔴 Prima di ogni cancello frontend: `api sync`.**
+```bash
+PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py api sync
+```
+`generated.ts` è **gitignorato e assente** da un worktree pulito, e `assetTypes.ts:17` esegue
+`schemas.AssetType.options` **all'import**: senza, `svelte-check` riporta **278-285 errori che
+non sono di nessuno**. Gira **in-process**, nessuna porta, ~1 minuto. Misurato
+indipendentemente da **F** (278 → 2) e **G** (285 → 2).
+
+**2. 🔴 Ordine obbligato dei cancelli backend.**
+```
+services risk-all  →  db populate --force --clean  →  api risk
+```
+`services risk-all` **ricrea un DB pulito e cancella le fixture di `api risk`**; il runner non
+ripopola. Provato da **C** in tre esecuzioni, confermato da **N** misurando il proprio DB
+(5612 record → zero).
+
+**3. Registrare i propri test nel catalogo è additivo e non si chiede.**
+Uno spec non registrato **è un difetto, non un'attesa**. Restano da chiedere riordini e
+modifiche a voci esistenti.
+
+**4. ⚠️ `./dev.py format` formatta l'albero intero** — **7 file estranei** con drift
+preesistente, due dei quali `schemas/*` a più scrittori. Rimedio di **H**:
+`git show HEAD:<path> > <path>` — **scrittura di file, nessun comando git proibito**.
+
+**5. ⚠️ `| tee log | head` tronca il log, e il log sembra completo.** Misurato: **9 122 righe
+su 20 000**. Con `tail` si salvano tutte. Su un produttore lungo: **redirigere su file e
+leggere dopo**.
+
+**6. 🔴 Un `PASSED` con `0ms` e `N skipped` non è un verde: è un'astensione travestita.**
+`-t` filtra sul **nome del test**, non sul file.
+
+> ⚠️ **E il discriminante non è «0 passed»: è l'ASSENZA del conteggio.** Misurato da F con un
+> refuso di un carattere — la riga `Tests 2063 skipped (2063)` **non contiene alcun token
+> `passed`**. Quindi:
+>
+> | chi controlla così | cosa vede |
+> |---|---|
+> | `grep PASSED` | ✅ **un verde** |
+> | `grep -E "passed\|failed"` | **niente** sulla riga che conta → **ripiega sul banner** |
+> | `echo $?` | **0** |
+>
+> **Tre modi ovvi di verificare, tre bugie.** ✅ **Affidabili**: cercare `tests 0ms`, oppure
+> pretendere **`Tests N passed` con N ≥ 1**.
+>
+> ✅ **E il discriminante più forte non è un conteggio**: un rosso che **cita il testo della
+> propria asserzione** è auto-autenticante — *«un filtro a vuoto non può fabbricare un
+> messaggio su misura»*.
+
+### E le due regole di prova
+
+**D100** — *un cancello che non hai falsificato non è evidenza*: chi consegna una rete nuova
+**la rompe una volta** e cita il rosso. ⚠️ **D125**: se due difese coprono lo stesso caso **in
+serie**, provarne una lascia l'altra non verificata.
+
+**D124** — chi dipende da un contratto non ancora fuso esegue **la prova dello shim** prima di
+dichiarare verdi i propri statici: **con un simbolo irrisolto TypeScript smette di controllare
+i suoi call-site**, quindi *«resta solo l'errore della mia dipendenza»* significa **che il
+resto non è stato controllato**. Shim con la firma esatta → check → **ripristino verificato
+con `git diff --stat` vuoto**.

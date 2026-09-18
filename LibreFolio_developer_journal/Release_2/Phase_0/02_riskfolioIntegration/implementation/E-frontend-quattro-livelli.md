@@ -209,8 +209,19 @@ clic**, con il dettaglio per bucket disponibile solo su richiesta.
 |---|---|
 | Tracking error e information ratio | Misurano l'aderenza a un **mandato** che un investitore privato non ha (**D5**). Backend intatto: è rimozione dalla UI, non dal dominio |
 | `sobol_start_index` (`:1224`) | È un controllo da quant, non da utente |
-| Le barre divergenti scritte a mano (`:854-870`) | Sostituite da `KpiDivergingFlowBar` del mandato D |
-| Il formattatore valuta duplicato (`riskAnalysisHelpers.ts:130`) | Sostituito da `formatCurrencyAmountPlain` |
+| Le barre divergenti scritte a mano (`:858-870`) | Sostituite da `KpiDivergingFlowBar` **estesa** dal mandato D — ⚠️ oggi **non è drop-in**: prende due magnitudini, non un valore con segno, e non ha `testId`. D la estende e te la consegna in K5 |
+
+> ## ⚠️ Il formattatore valuta **non** va sostituito — istruzione ritirata
+>
+> Questo brief diceva di rimpiazzare `formatCurrencyAmount`
+> (`riskAnalysisHelpers.ts:130`) con `formatCurrencyAmountPlain`. **È falso**, verificato
+> da D sul codice: producono stringhe **diverse** — `$1,234.50` contro
+> `1,234.50 $ 🇺🇸 USD` — e il sostituto perde la narrowing di array e la guardia
+> `Number.isFinite → '—'`. Sei test in `riskAnalysisHelpers.test.ts:282-305` asseriscono
+> la forma attuale.
+>
+> Non è de-duplicazione: sarebbe un **cambiamento visibile all'utente** più la
+> cancellazione di sei test verdi. **`formatCurrencyAmount` resta.**
 
 ⚠️ **Attenzione a un errore facile**: il benchmark persistente del mandato B **non
 riapre** TE/IR. La precondizione tecnica sarà soddisfatta, ma la ragione del taglio è
@@ -317,6 +328,15 @@ Per scrivere gli spec si invoca **`test-author`**, passandogli lane e file conse
 > Un mock stantio non fallisce: **rassicura**. È la stessa famiglia del CVaR rimasto
 > sbagliato per un anno.
 
+> ## 🔑 `risk-mocks.ts` è tuo, ma è **additivo**
+>
+> `risk-asset-detail.spec.ts` — la rete su Asset Detail, che non è di nessuno — importa
+> da lì. Puoi **aggiungere** campi e funzioni; **non puoi rimuovere né rinominare** ciò
+> che la rete importa.
+>
+> Non è una formalità: quella rete è l'unica prova che non hai toccato Asset Detail
+> (**D8**, **D47**). Se ti serve una rimozione, **chiedila al coordinatore**.
+
 ⚠️ **Selettori `data-testid` sempre**, mai classi CSS e **mai testo tradotto**: questa
 UI esiste in quattro lingue. E ogni test condivide DB e backend con i vicini — niente
 posizioni fisse, niente conteggi globali, niente attese sull'orologio.
@@ -341,7 +361,8 @@ PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc \
 - [ ] L3 mostra Sortino, non Sharpe, e il benchmark persistente;
 - [ ] L4 è **chiuso di default**, con i tre gradini in ordine di distanza dai dati;
 - [ ] TE, IR e `sobol_start_index` **spariti dalla UI**;
-- [ ] zero barre divergenti a mano, zero formattatori valuta duplicati;
+- [ ] zero barre divergenti a mano;
+- [ ] `formatCurrencyAmount` **conservato** — non è un doppione, e i suoi sei test restano verdi;
 - [ ] i cinque innesti ricevuti e collegati, o dichiarati mancanti;
 - [ ] lint, `svelte-check`, Vitest ed E2E verdi;
 - [ ] nessun processo in ascolto su `6244`.

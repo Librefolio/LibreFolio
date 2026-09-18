@@ -421,8 +421,58 @@ Confronto con `pandas.Series.rolling`, che calcola la stessa cosa in C:
 | 2500 × 250 | 87,14 ms | 0,089 ms | 975× | **sì** |
 | 5000 × 250 | 182,62 ms | 0,121 ms | **1 514×** | **sì** |
 
-`np.allclose` su tutti i valori definiti: **identici**. Nessuna scelta da fare,
-nessuna convenzione da discutere, nessun rischio semantico sulla matematica.
+> ## 🔴 Le due righe qui sopra sono FALSE. Corrette il 18 Set 2026 da **A**, misurando.
+>
+> ### 1. «Valori identici» — **zero su quattro sono bit-identici**
+>
+> | segnale | max \|Δ\| relativo | `allclose` | bit-identico |
+> |---|---|:---:|:---:|
+> | `rolling_return` | **9,77e-12** | ✅ | ❌ |
+> | `rolling_beta` | 1,06e-13 | ✅ | ❌ |
+> | `rolling_sharpe` | 6,08e-14 | ✅ | ❌ |
+> | `rolling_volatility` | 1,24e-15 | ✅ | ❌ |
+>
+> **Non è casuale**: le metriche usano `math.fsum` — somma **esattamente arrotondata** —
+> e pandas usa somma incrementale. **Due algoritmi diversi non danno lo stesso float.**
+> E `np.allclose` ha `rtol=1e-5`: **dire «identici» perché passa `allclose` è dire
+> «uguali a cinque cifre».**
+>
+> La deriva è **accettata** — sette ordini dentro il metro dichiarato, i grafici mostrano
+> 2-4 decimali, nessun test stringe più di `rel=1e-6` — ma ⚠️ **cambia la baseline di M6**:
+> dopo M1 il confronto di M6 va fatto **contro i numeri post-M1**, non contro quelli di oggi.
+> Chi confronta con oggi trova `1e-12` e **accusa di regressione il passo che esiste per
+> dimostrare l'invarianza**. Catena a tre anelli, ogni anello con la propria baseline:
+> **M1 muove → M6 non deve → A9 deve**.
+>
+> ### 2. «Nessuna scelta da fare» — **M1 non è implementabile in questo file**
+>
+> `rolling_single_values` e `rolling_pair_values` sono **funzioni di ordine superiore**:
+> ricevono la metrica come `Callable` e **non sanno cosa stanno calcolando**. L'unico modo
+> di vettorializzare un `Callable` arbitrario è `.rolling(W).apply(f)`, **che resta
+> interpretato** — esattamente ciò contro cui questo documento mette in guardia poche
+> righe più sotto.
+>
+> **La tabella di mappatura di §M1 è giusta, ma è *per segnale*, e il segnale si conosce
+> solo ai chiamanti.** → M1 si fa **nei quattro `rolling_*.py`**, non qui. L'estensione di
+> confine concessa ad A (**D90**) non era una comodità: **era l'unica strada.**
+>
+> *(Per la cronaca: i plugin rolling sono **cinque**. `calendar_rolling_return.py` esiste
+> ma **non usa gli helper**, quindi resta fuori — il conteggio a quattro è corretto per la
+> ragione giusta.)*
+>
+> ### 3. Il costo vero, in millisecondi invece che in rapporti
+>
+> | storia | tutti e quattro i segnali |
+> |---|---|
+> | 1 anno (250) | **11,6 ms** |
+> | 3 anni (750) — **tipico** | **45,9 ms** |
+> | 5 anni (1250) | 81,2 ms |
+> | 10 anni (2500) | 168,5 ms |
+> | **peggiore consentito** (`window=500`, 10 anni) | **sharpe 289 ms + beta 355 ms** |
+>
+> «1 514×» faceva sembrare M1 un'emergenza. **644 ms nel caso peggiore** dice la verità:
+> è un tetto che morde **solo agli estremi dello schema**. *Un rapporto senza unità di
+> misura è retorica.*
 
 E la differenza con le matrici è la frequenza. La matrice di correlazione vive nella
 pagina di laboratorio di Asset Global. **I segnali rolling girano a ogni caricamento
@@ -570,9 +620,92 @@ soli — e il CVaR dimostra che succede, in silenzio, per anni.
 | **M4** | Test-oracolo su `metrics.py` | Riskfolio | Rete di sicurezza per tutto il resto | nullo — solo test |
 | **M2** | `historical_var_cvar`, parte CVaR | `CVaR_Hist` | **Il nostro è distorto**: −0,27%, 2000 volte su 2000 | i numeri mostrati cambiano |
 | **M1** | `rolling_single_values`, `rolling_pair_values` | `pandas.rolling` | Fino a **1 514×** a valori identici, su ogni grafico | semantica dei buchi |
-| **M3** | `correlation_matrix`, `covariance_matrix` | **NumPy** | 3 682 ms → 0,2 ms su cento asset | `coverage`, e `None` contro `nan` |
-| **M5** | `risk_contributions_from_covariance` | `Risk_Contribution(rm="MV")` | Doppione verificato identico | serve portare i rendimenti a quel livello |
-| **M6** | I nove composti che la libreria non ha | **NumPy / SciPy** | Non esiste ragione per tenerli in `math` puro | segno, `None`, buchi nei dati |
+| **M3** | ⚠️ **il doppio ciclo N² di `correlation.py:72`** — *non* `correlation_matrix` | **NumPy** | **16 s → 21,6 ms** a 100 asset × 10 anni (**742×**) | `coverage`, e `None` contro `nan` |
+
+> ## 🔴 §M3 corretto il 18 Set 2026 da A, misurando i chiamanti
+>
+> | funzione | chiamanti di produzione |
+> |---|---|
+> | `correlation_matrix` | **NESSUNO** — compare solo in `__all__` |
+> | `covariance_matrix` | `risk_contribution.py:58` ✅ |
+> | **`pairwise_correlation`** | **`correlation.py:72`, doppio ciclo N²** ✅ |
+>
+> **Il guadagno intestato a `correlation_matrix` nessun utente lo vedrebbe.** Il costo vero
+> è nel doppio ciclo, che questo documento citava **in terza posizione**. → *Chi pianifica
+> su quella riga sta ottimizzando una funzione morta.*
+>
+> **Misura sul cammino che l'utente percorre davvero:**
+>
+> | Asset | prima (ciclo N²) | dopo | guadagno |
+> |---:|---:|---:|---:|
+> | 10 | 47,1 ms | 0,608 ms | 77× |
+> | 25 | 296,7 ms | 1,523 ms | 195× |
+> | 100 | 4 754,7 ms | 8,746 ms | 544× |
+> | **100 × T=2500** | **15 987 ms** | **21,6 ms** | **742×** |
+>
+> **Sedici secondi.** Girava in `asyncio.to_thread`, quindi non bloccava il loop — **ma
+> l'utente li aspettava.**
+>
+> ### 🔴 E la trappola del quasi-piatto, peggiore di quella di M1
+>
+> | serie | std | ciclo scalare | `np.corrcoef` |
+> |---|---|---|---|
+> | esattamente piatta | `0,000e+00` | `None` | `nan` |
+> | **quasi piatta** | `1,001e-17` | `None` | **`−0,02010614683967737`** |
+>
+> Sulla serie **esattamente** piatta le due letture coincidono **per caso** (`0/0` è `nan`).
+> Su dispersione soltanto *trascurabile*, NumPy restituisce **un numero finito, plausibile e
+> privo di significato**.
+>
+> > **In M1 leggere il `nan` dava un `nan`, cioè qualcosa di visibile. Qui darebbe `−0,02`:
+> > una correlazione che nessuno metterebbe in dubbio guardandola.**
+>
+> → **L'indefinito si prova sul denominatore, mai sul `nan` in uscita.** Regola da portare
+> con sé in M6 e in qualunque mandato tocchi una matrice.
+>
+> ✅ Corollari verificati da A: **nessuna contaminazione** (un asset piatto sposta le altre
+> celle di **esattamente 0.0**); una serie **costante non nulla** è piatta → `None`, non
+> `1.0`; **la diagonale non è esattamente 1.0 su nessuno dei due rami** — preesistente,
+> entrambi si affidano al clamp, **da non «aggiustare»**: sposterebbe numeri pubblicati.
+| **M5** | `risk_contributions_from_covariance` | `Risk_Contribution(rm="MV")` | Doppione verificato identico | ~~serve portare i rendimenti a quel livello~~ 🔴 **falso, vedi §M5** |
+| **M6** | I nove composti che la libreria non ha | **NumPy / SciPy** | ~~Non esiste ragione per tenerli in `math` puro~~ 🔴 **la ragione esiste ed è tripla** | segno, `None`, buchi nei dati |
+
+> ## 🔴 M6 è stata ESEGUITA e ha prodotto ZERO migrazioni su nove — A, 18 Set
+>
+> La giustificazione qui sopra è **dichiaratamente estetica** (*«non esiste ragione per tenerli
+> in `math` puro»*). **A ha misurato le nove funzioni una per una e la ragione esiste, ed è
+> tripla:**
+>
+> 1. **Due terzi di quelle funzioni sono la rete che prova le migrazioni già fatte.** Il caso
+>    limite è `wealth_index`, che era in **Fascia 1** *proprio perché* `max|delta| = 0,000e+00`
+>    su 6 casi. Ma `test_risk_metrics_oracle.py:206` la confronta **già** con
+>    `np.concatenate([[1.0], np.cumprod(1.0 + array)])` — **esattamente l'implementazione che la
+>    migrazione avrebbe scritto**. Migrarla renderebbe quel test `np.cumprod(x) == np.cumprod(x)`.
+>
+>    🔑 **«La bit-identità che rendeva la migrazione sicura è la stessa cosa che svuoterebbe il
+>    suo oracolo. Sono un fatto solo visto da due lati.»** Il numero letto come *«rischio nullo»*
+>    era la prova che il test **non distinguerebbe più i due rami**.
+>
+> 2. **Due sono sotto contratto** — `current_buy_and_hold_returns` (C) e `summarize_drawdown` (N).
+>    **Effetto collaterale utile**: le garanzie a C e N sono ora **più forti di quanto chiesto**,
+>    perché M6 quelle funzioni **non le tocca affatto, zero righe**.
+>
+> 3. **Il resto vale frazioni di millisecondo.** Ultima candidata, la più grossa:
+>    `comparison_summary`, T=2500, 40 ripetizioni → **intero 4,880 ms, nei chiamati 4,434 (90,9 %),
+>    codice proprio 0,295 ms (6,0 %)**. E i chiamati sono `pearson_correlation` · `beta` ·
+>    `wealth_index` ×2 · `underwater_drawdown` ×2 · `sample_standard_deviation` ·
+>    `compounded_return` ×2 — **tutti già esclusi per ragioni indipendenti**.
+>
+> **Nove su nove escluse. Guadagno rinunciato: ~0,3 ms.**
+>
+> 🔑 **E la ragione per cui la lista era sbagliata all'origine**: **è stata scritta prima che M1 e
+> M3 esistessero.** *«Un M6 eseguito alla lettera avrebbe smontato la rete che M1 e M3 avevano
+> appena steso.»*
+>
+> 📌 **La catena a tre anelli di `:445` (`M1 muove → M6 non deve → A9 deve`) resta una regola
+> giusta, ma non è più un rischio aperto**: M6 **non ha diff**, quindi non esiste codice a cui
+> attribuire un `1e-12`; M1 ha mosso entro `1e-11`; A9 ha mosso con la prova (difetto
+> ripristinato → **33 failed**, rimesso → **200 passed**).
 
 **L'ordine è vincolato, non arbitrario.** M4 va per prima perché è la rete sotto tutte
 le altre: senza oracolo, M1 e M3 sono riscritture non verificate di formule che
@@ -957,14 +1090,52 @@ La libreria produce lo **stesso identico output**. Qui non c'è discussione.
 | `correlation_matrix` / `covariance_matrix` | `np.corrcoef` / `np.cov` | identiche → M3 |
 | `risk_contributions_from_covariance` | `Risk_Contribution(rm="MV")` | **identiche**, verificato sotto |
 
-Su `Risk_Contribution` la verifica è netta: CCTR coincidenti, `np.allclose` vero, e
-la somma dei contributi riproduce la volatilità di portafoglio in entrambe. Nostro
-0,022 ms, riskfolio 0,058 ms — differenza irrilevante, come dicevo io stesso.
+Su `Risk_Contribution` i CCTR coincidono e la somma dei contributi riproduce la
+volatilità di portafoglio in entrambe.
 
-> Un attrito reale da registrare, non un'obiezione: `Risk_Contribution` vuole la
-> **matrice dei rendimenti**, la nostra vuole solo covarianza e pesi. Migrare
-> significa far arrivare i rendimenti fino a quel livello. È lavoro di idraulica,
-> non di matematica, ma va messo a preventivo.
+> ### 🔴 Tre correzioni misurate da A il 18 Set — il paragrafo originale è conservato sotto
+>
+> **(a) «`np.allclose` vero» è vero solo alle tolleranze predefinite.** Lo scarto reale è
+> `1,9e-11`; al nostro standard (`rel=1e-9`, `abs=1e-12`) `np.allclose` è **`False`**. Se M5
+> si facesse, l'asserzione andrebbe a `1e-7` relativo.
+>
+> **(b) 🔴 Il rapporto di velocità qui sotto è INVERTITO a N=6.** «Nostro 0,022 ms, riskfolio
+> 0,058 ms» è misurato a **N=3**. A **N=6 / T=750**: **nostro 0,563 ms, riskfolio 0,09-0,12 ms**
+> → **riskfolio ~4,6× più veloce**. La conclusione «differenza irrilevante» regge; **la
+> direzione dipende da N e non va citata da nessuno.**
+>
+> **(c) 🔴 E l'attrito dichiarato NON ESISTE.** Il paragrafo diceva: *«`Risk_Contribution`
+> vuole la matrice dei rendimenti, la nostra vuole solo covarianza e pesi. Migrare significa
+> far arrivare i rendimenti fino a quel livello. È lavoro di idraulica, non di matematica, ma
+> va messo a preventivo.»* **`risk_plugins/risk_contribution.py:55-58`:**
+>
+> ```python
+> rows = [prepared_asset_returns(context, asset_id)[1] for asset_id in asset_ids]
+> weights = [context.weights[asset_id] for asset_id in asset_ids]
+> summary = risk_contributions_from_covariance(covariance_matrix(rows), weights, ...)
+> ```
+>
+> **`rows` *è* la matrice dei rendimenti.** Il chiamante la costruisce e la consuma una riga
+> dopo. Provato eseguendo: **una trasposizione**, `shape (750, 6)`, `rk.Risk_Contribution`
+> gira. **Nessun dato nuovo, nessuna query, nessun parametro in più.**
+>
+> 🔑 **La premessa confonde la *firma* di `risk_contributions_from_covariance` — che davvero
+> prende covarianza e pesi — con la *disponibilità dei rendimenti presso il chiamante*, che
+> li ha. Un argomento sulla firma è stato letto come un argomento sull'architettura, ed è
+> sopravvissuto a tre documenti perché nessuno ha aperto il plugin.**
+>
+> ⚠️ **Conseguenza di piano: D39 non segue M5.** Il brief diceva *«Calmar e Martin pretendono
+> la matrice dei rendimenti, che è esattamente l'idraulica mancante di M5 → dopo M5, e solo
+> allora»*. **Se l'idraulica non manca, D39 è dietro Q7**, che è una decisione di prodotto.
+> Tecnicamente è a **una trasposizione e un `rm=`** di distanza — A l'ha eseguita.
+>
+> 📌 **E la forma in cui Q7 va posta**, che la rende decidibile invece che teorica:
+> **chi riprenderà D39 non deve preventivare idraulica: deve preventivare un grafico che
+> sappia disegnare valori negativi e somme oltre il 100 %.** Misurato su un portafoglio
+> casuale **senza patologie**: `ADD` dà una fetta da **113,68 %** e una da **−27,05 %**;
+> `UCI` dà **−20,44 / 107,89**; l'asset 4 passa da **+41,46 % con `MV`** a **−27,05 % con
+> `ADD`**. **Tre misure drawdown su tre.** *«Una torta con una fetta da 113,68 % e una da
+> −27,05 % non è una torta.»*
 
 #### Caso B — Composti: la libreria non li esprime 🟡
 
@@ -1019,14 +1190,42 @@ Doppione accertato: `np.allclose` vero contro il nostro
 `risk_contributions_from_covariance`, somma pari alla volatilità di portafoglio.
 Caso A puro, quindi si migra per principio.
 
-Bassa priorità per un attrito concreto: **riskfolio vuole la matrice dei rendimenti,
-noi le passiamo solo covarianza e pesi**. Il valore vero non è il numero — identico —
-ma il `rm=` che si sblocca dopo (§7.1): contributi al rischio di coda e al drawdown,
-non solo alla volatilità. Da fare quando si affronta quella funzionalità, non prima.
+> ## 🔴 M5 è DECLINATA, e la ragione qui sotto era falsa — A, 18 Set
+>
+> Il paragrafo originale diceva: *«Bassa priorità per un attrito concreto: **riskfolio vuole
+> la matrice dei rendimenti, noi le passiamo solo covarianza e pesi**.»*
+>
+> **`risk_contribution.py:55` costruisce `rows`, che *è* la matrice dei rendimenti, e la
+> consuma una riga dopo.** L'attrito non esiste (vedi §Caso A per la misura completa).
+>
+> **M5 resta declinata, ma per le ragioni vere**: l'output è identico (scarto `1,9e-11`), la
+> velocità è irrilevante **in entrambe le direzioni**, e l'unico valore vero — il `rm=` — è
+> **fuori mandato per dichiarazione del brief**, rinviato a **Q7**, e ora **misurato come
+> rompente per la UI in 3 casi su 3**.
 
-> **Avvertenza per la UI**: i contributi con `rm=` diverso da `MV` **possono essere
-> negativi**. È corretto — un asset può ridurre il rischio complessivo — ma rompe
-> l'ipotesi implicita di un grafico a torta.
+Il valore vero non è il numero — identico — ma il `rm=` che si sblocca dopo (§7.1):
+contributi al rischio di coda e al drawdown, non solo alla volatilità. **Ed è una
+decisione di prodotto (Q7), non un lavoro di idraulica.**
+
+> ## 🔴 Avvertenza per la UI — **misurata, e più forte di come era scritta**
+>
+> Diceva: *«i contributi con `rm=` diverso da `MV` **possono essere** negativi»*.
+> **Non "possono": lo sono sempre**, su un portafoglio casuale **senza alcuna patologia**.
+>
+> | `rm=` | contributi in % | negativi | costo |
+> |---|---|---|---|
+> | `MV` | `0,7 · 9,81 · 1,54 · 0,51 · 41,46 · 45,99` | no | 0,09 ms |
+> | `MAD` | `0,52 · 8,83 · 1,25 · 0,42 · 42,55 · 46,44` | no | 0,20 ms |
+> | `CVaR` | `1,21 · 12,48 · 2,3 · 0,8 · 36,07 · 47,15` | no | 0,61 ms |
+> | **`MDD`** | `−3,89 · −3,62 · 14,0 · −4,31 · 33,33 · 64,49` | **SÌ** | 8,49 ms |
+> | **`ADD`** | `−3,66 · 7,92 · 11,72 · −2,61 · **−27,05** · **113,68**` | **SÌ** | 15,70 ms |
+> | **`UCI`** | `−3,99 · 5,98 · 12,99 · −2,44 · **−20,44** · **107,89**` | **SÌ** | 18,41 ms |
+>
+> **Tre misure drawdown su tre.** E **il colpevole cambia**: l'asset 4 va da **+41,46 % con
+> `MV`** a **−27,05 % con `ADD`**.
+>
+> 🔑 **«Una torta con una fetta da 113,68 % e una da −27,05 % non è una torta.»** Non rompe
+> «l'ipotesi implicita di un grafico a torta»: **rende il grafico a torta il widget sbagliato.**
 
 ### 7.1 La famiglia drawdown: sette misure, non una
 
@@ -1129,7 +1328,25 @@ con due campi separati, `max_drawdown` e `max_duration`.
 | **ADD** — Average Drawdown | Quanto si sta sotto il picco *in media* | 1,49 ms |
 | **UCI** — Ulcer Index | Profondità e durata in un numero solo | 1,76 ms |
 | **DaR** 95% | Il drawdown superato solo nel 5% dei giorni: il «brutto tipico» | 1,10 ms |
-| **CDaR** 95% | La media di quel 5% peggiore — sta a DaR come CVaR sta a VaR | 1,02 ms |
+| **CDaR** 95% | ⚠️ **NON** la media di quel 5 % peggiore — è la forma **Rockafellar-Uryasev**, normalizzata per **`alpha × T`**; sta a DaR come CVaR sta a VaR, **stesso denominatore e stessa trappola** | 1,02 ms |
+
+> ### 🔴 Correzione del 18 Set — questa riga portava la definizione naive
+>
+> Diceva *« la media di quel 5 % peggiore »*. **È la definizione sbagliata**, ed è esattamente
+> quella che M2 corregge per il CVaR.
+>
+> 🔑 **E la diagnosi di I è più precisa di « svista »**: la campagna ha fatto **tutto** il lavoro
+> per il CVaR — formula con `1/αT` (`:252`), denominatore (`:275-293`), regola dell'intero (`:29`)
+> e persino la **licenza esplicita** alla frase sciolta (`:320`: *« la frase resta vera… chi lo
+> vuole trova la pagina »*). Per il CDaR c'era **una riga sola, in una tabella di benchmark
+> prestazionale**, senza formula e senza denominatore.
+>
+> > **La stessa frase è lecita dove una formula la sostiene e insidiosa dove non c'è.**
+> > **La campagna ha trasportato la glossa senza la formula.**
+>
+> ⚠️ **Non era un fatto falso: era un fatto NON SOSTENUTO** — e nessun gate vede
+> *« frase corretta priva di formula »*. È la parente del **silenzio**, travestita da presenza.
+
 | EDaR / RLDaR | Varianti entropiche, per l'ottimizzazione | **26,9 ms** ⚠️ solutore |
 
 #### Il parametro `rm=`: scegliere *quale* rischio scomporre
