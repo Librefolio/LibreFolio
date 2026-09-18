@@ -17,6 +17,26 @@
  * positive value gets a `+`, what to print when the value is missing, and how
  * many decimals. The `-0` guard was in only two of the copies and is now in all
  * of them — a negative zero prints as "-0.00%", which no user has ever wanted.
+ *
+ * ## Why `suffix` exists
+ *
+ * Because the unit is not always `%`. A *difference* between two percentages is
+ * measured in **percentage points**: a holding weighing 20% of a portfolio and
+ * producing 80% of its risk differs by `+60pp`, and writing that `+60%` states
+ * a different quantity. The two units look alike and are not, which is the same
+ * shape of trap as `scale` above.
+ *
+ * The illustration is round and invented on purpose. A real weight or risk
+ * share integrates over the query window that produced it, so a measured pair
+ * written here would go on reading as a fact long after it stopped being one —
+ * and this file is generic, so nobody arriving in it has the context to doubt it.
+ *
+ * Before this option the callers that needed `pp` had no way to ask for it, so
+ * they hand-rolled `toFixed` and lost the `-0` guard, the missing-value
+ * placeholder and the sign rule along with it. The alternative on offer was
+ * `formatPercent(...).replace('%', 'pp')`, which is worse than the problem: it
+ * rewrites a *formatted* string, so it also mangles any placeholder or future
+ * separator that happens to contain a `%`.
  */
 
 export interface FormatPercentOptions {
@@ -30,14 +50,22 @@ export interface FormatPercentOptions {
     empty?: string;
     /** Digits after the decimal point. */
     digits?: number;
+    /**
+     * Unit written after the number. Defaults to `%`.
+     *
+     * Pass `'pp'` for a difference between two percentages, and `''` for a bare
+     * number. `empty` is returned untouched, so the placeholder never acquires a
+     * unit it cannot carry.
+     */
+    suffix?: string;
 }
 
-export function formatPercent(value: number | null | undefined, {scale = 1, signed = true, empty = '—', digits = 2}: FormatPercentOptions = {}): string {
+export function formatPercent(value: number | null | undefined, {scale = 1, signed = true, empty = '—', digits = 2, suffix = '%'}: FormatPercentOptions = {}): string {
     if (value == null || !Number.isFinite(value)) return empty;
     const scaled = value * scale;
     // `-0` survives arithmetic and prints as "-0.00%", which reads as a loss that
     // is not there. Two of the five copies guarded against it; now all do.
     const normalized = Object.is(scaled, -0) ? 0 : scaled;
     const sign = signed && normalized > 0 ? '+' : '';
-    return `${sign}${normalized.toFixed(digits)}%`;
+    return `${sign}${normalized.toFixed(digits)}${suffix}`;
 }

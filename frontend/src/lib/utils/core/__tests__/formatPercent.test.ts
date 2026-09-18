@@ -103,4 +103,42 @@ describe('formatPercent', () => {
             expect(formatPercent(1.2345, {digits: 3})).toBe('+1.234%');
         });
     });
+
+    describe('suffix', () => {
+        it('writes a percent sign unless told otherwise', () => {
+            // The default is the whole safety of this option: every caller that
+            // existed before it keeps printing exactly what it printed.
+            expect(formatPercent(1.5)).toBe('+1.50%');
+            expect(formatPercent(0.015, {scale: 100})).toBe('+1.50%');
+        });
+
+        it('writes percentage points when the value is a difference of percentages', () => {
+            // A holding weighing 20% and producing 80% of the risk differs by 60
+            // POINTS, not by 60 percent. The two units read alike and are not.
+            //
+            // The numbers are round and invented deliberately: a measured pair
+            // would integrate over the window that produced it, and a fixture
+            // copied from a measurement gets read later as a reference value.
+            expect(formatPercent(0.6, {scale: 100, digits: 1, suffix: 'pp'})).toBe('+60.0pp');
+            expect(formatPercent(-0.3, {scale: 100, digits: 1, suffix: 'pp'})).toBe('-30.0pp');
+        });
+
+        it('drops the unit entirely when asked', () => {
+            expect(formatPercent(7.25, {signed: false, suffix: ''})).toBe('7.25');
+        });
+
+        it('leaves the placeholder alone', () => {
+            // The unit belongs to a number. Appending it to "—" would produce
+            // "—pp", which claims a missing measurement has a unit.
+            expect(formatPercent(null, {suffix: 'pp'})).toBe('—');
+            expect(formatPercent(NaN, {suffix: 'pp', empty: 'n/a'})).toBe('n/a');
+        });
+
+        it('keeps the sign and the negative-zero guard', () => {
+            // The guard lives before the suffix, so switching units cannot
+            // resurrect the "-0.00" that this function exists to prevent.
+            expect(formatPercent(-0, {suffix: 'pp'})).toBe('0.00pp');
+            expect(formatPercent(0, {suffix: 'pp'})).toBe('0.00pp');
+        });
+    });
 });
