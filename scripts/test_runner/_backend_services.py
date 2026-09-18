@@ -85,6 +85,9 @@ PAC_PLANNER_CORE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_pac_planner_normalize.py",
 )
 PAC_PLANNER_EVALUATOR_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_evaluator.py"
+PAC_PLANNER_ORACLE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_oracle.py"
+PAC_PLANNER_POLICIES_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_policies.py"
+PAC_PLANNER_SOLVER_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_solver.py"
 
 
 def services_pac_analyze(verbose: bool = False, test_names: list = None) -> bool:
@@ -108,6 +111,27 @@ def services_pac_planner_evaluator(verbose: bool = False, test_names: list = Non
     print_section("Services: PAC/Rebalancer Exact Evaluator")
     cmd = _build_pytest_cmd(PAC_PLANNER_EVALUATOR_TEST_PATH, test_names)
     return run_command(cmd, "PAC/Rebalancer exact evaluator tests", verbose=verbose)
+
+
+def services_pac_planner_oracle(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the zero-SCIP-dependency exhaustive oracle over one policy view's discrete domain."""
+    print_section("Services: PAC/Rebalancer Exhaustive Oracle")
+    cmd = _build_pytest_cmd(PAC_PLANNER_ORACLE_TEST_PATH, test_names)
+    return run_command(cmd, "PAC/Rebalancer exhaustive oracle tests", verbose=verbose)
+
+
+def services_pac_planner_policies(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the SCIP policy compiler: scenario facts, hard constraints, objective cascade and scope guard."""
+    print_section("Services: PAC/Rebalancer Policy Compiler")
+    cmd = _build_pytest_cmd(PAC_PLANNER_POLICIES_TEST_PATH, test_names)
+    return run_command(cmd, "PAC/Rebalancer policy compiler tests", verbose=verbose)
+
+
+def services_pac_planner_solver(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the lexicographic SCIP search adapter against the exhaustive oracle's exact optimum."""
+    print_section("Services: PAC/Rebalancer Lexicographic Solver")
+    cmd = _build_pytest_cmd(PAC_PLANNER_SOLVER_TEST_PATH, test_names)
+    return run_command(cmd, "PAC/Rebalancer lexicographic solver tests", verbose=verbose)
 
 
 def services_fx_conversion(verbose: bool = False, test_names: list = None) -> bool:
@@ -846,6 +870,30 @@ Note: No backend server required.
         services_pac_planner_evaluator,
         name="PAC/Rebalancer Exact Evaluator",
         desc="Exact policy views, Broker-qualified decisions, ledger replay, constraints, objectives and deterministic conflicts",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "pac-planner-oracle",
+        services_pac_planner_oracle,
+        name="PAC/Rebalancer Exhaustive Oracle",
+        desc="Exhaustive candidate enumeration, domain-size estimation and cap, lexicographic best-candidate selection and checkpoint cancellation",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "pac-planner-policies",
+        services_pac_planner_policies,
+        name="PAC/Rebalancer Policy Compiler",
+        desc="Scenario facts, hard constraint boundaries, objective cascade and scope guard over a compiled SCIP MIP",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "pac-planner-solver",
+        services_pac_planner_solver,
+        name="PAC/Rebalancer Lexicographic Solver",
+        desc="Lexicographic SCIP cascade adapter: exhaustive-oracle agreement, stage scoping, evidence shape, honest limits and floating infeasibility",
         isolation="pure",
     )
     add_test(cat, "asset-source", services_asset_source, name="Asset Source", desc="Provider assignment, synthetic yield")
