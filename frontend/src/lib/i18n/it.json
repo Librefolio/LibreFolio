@@ -2991,7 +2991,42 @@
       "assetsTab": "Asset",
       "correlationTab": "Correlazione",
       "addAsset": "Aggiungi asset alla matrice",
-      "maxAssets": "Raggiunto il limite API di 100 asset."
+      "maxAssets": "Raggiunto il limite API di 100 asset.",
+      "presetBroker": "Precarica gli asset di…",
+      "presetNone": "Scegli un broker…",
+      "panelTitle": "Relazioni e scenari",
+      "selectedCount": "{selected} selezionati su {total}",
+      "nearIdentical": "quasi identici",
+      "bulk": {
+        "selectAll": "Seleziona tutti",
+        "selectNone": "Deseleziona tutti",
+        "invert": "Inverti",
+        "mine": "I miei asset"
+      },
+      "filters": {
+        "type": "Tipo",
+        "currency": "Valuta",
+        "clear": "Azzera i filtri"
+      },
+      "band": {
+        "high": "si muovono insieme",
+        "moderate": "si muovono insieme in parte",
+        "low": "si muovono in modo indipendente",
+        "inverse": "si muovono in direzioni opposte"
+      },
+      "ordering": {
+        "label": "Ordine della matrice",
+        "similarity": "Per somiglianza",
+        "original": "Per nome"
+      },
+      "pairs": {
+        "correlatedTitle": "I più simili",
+        "correlatedHint": "Coppie che si muovono insieme: tenerle entrambe aggiunge poco.",
+        "offsettingTitle": "Quelli che si compensano",
+        "offsettingHint": "Coppie che si muovono in direzioni opposte: una attutisce l’altra.",
+        "noneCorrelated": "Nessuna coppia si muove chiaramente insieme.",
+        "noneOffsetting": "Nessuna coppia ne compensa un’altra: qui niente attutisce niente."
+      }
     },
     "metrics": {
       "volatility": "Volatilità",
