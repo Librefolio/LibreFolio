@@ -140,12 +140,20 @@ def test_comparison_identity_has_zero_te_ir_and_unit_beta():
 
 
 def test_historical_var_cvar_uses_positive_observed_loss_magnitudes():
+    """Coherent (Acerbi-Tasche) tail risk on loss magnitudes — see M2.
+
+    The nominal tail is ``m = (1 - confidence) * T`` observations; the boundary
+    observation counts for the fraction of it that falls inside the tail. Values
+    updated from the pre-M2 plug-in estimator, which counted it whole and understated
+    CVaR by a measured 0.27 %.
+    """
     tail = historical_var_cvar(
         [-0.1, -0.05, 0.0, 0.02, 0.03],
         confidence_level=0.8,
     )
-    assert tail.value_at_risk == pytest.approx(0.05)
-    assert tail.conditional_value_at_risk == pytest.approx(0.075)
+    # m = 0.2 * 5 = 1 exactly: the tail is the single worst loss, so VaR == CVaR.
+    assert tail.value_at_risk == pytest.approx(0.10)
+    assert tail.conditional_value_at_risk == pytest.approx(0.10)
     assert tail.conditional_value_at_risk >= tail.value_at_risk >= 0
 
     two_day = historical_var_cvar(
@@ -153,9 +161,10 @@ def test_historical_var_cvar_uses_positive_observed_loss_magnitudes():
         confidence_level=0.5,
         horizon_days=2,
     )
+    # m = 0.5 * 2 = 1: again the single worst two-day loss.
     assert two_day.horizon_returns == pytest.approx((-0.1, -0.2))
-    assert two_day.value_at_risk == pytest.approx(0.1)
-    assert two_day.conditional_value_at_risk == pytest.approx(0.15)
+    assert two_day.value_at_risk == pytest.approx(0.2)
+    assert two_day.conditional_value_at_risk == pytest.approx(0.2)
 
 
 def test_drawdown_episodes_report_no_drawdown_for_monotonic_growth():
