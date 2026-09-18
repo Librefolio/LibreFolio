@@ -103,6 +103,7 @@ class RiskExecutionContext:
     scope_value: Optional[Decimal] = None
     broker_ids: tuple[int, ...] = ()
     composition_as_of: Optional[date] = None
+    sliced_asset_ids: tuple[int, ...] = ()
     historical_replay: Optional[RiskHistoricalReplayContext] = None
     asset_classifications: Mapping[int, RiskAssetClassification] = field(default_factory=dict)
     geography_groups: Mapping[str, frozenset[str]] = field(default_factory=dict)
