@@ -230,7 +230,7 @@
         };
     }
 
-    const resolutionCache = new Map<ChartResolution, AggregatedResolutionData>();
+    const resolutionCache = new Map<ChartResolution, {inputs: AggregationInputs; data: AggregatedResolutionData}>();
     let activeChartData: AggregatedResolutionData | null = null;
     // IMPORTANT: 'series' must NOT be in replaceMerge here. updateChartData() below sends only
     // {name, data} per series (a deliberate partial update for smooth transitions, unchanged
@@ -388,31 +388,88 @@
         return dates.map((d) => byDate.get(d) ?? 0);
     });
 
+    // Values are split from labels deliberately: the aggregation memo reads ONLY these,
+    // so a language switch rebuilds `pctSeriesRaw` (names) without invalidating the cache.
+    const pctValuesRaw = $derived({
+        mwrrCum: history.map((pt) => (pt.mwrr_cumulative != null ? Number(pt.mwrr_cumulative) * 100 : null)),
+        twrr: history.map((pt) => (pt.twrr != null ? Number(pt.twrr) * 100 : null)),
+        roi: history.map((pt) => (pt.roi != null ? Number(pt.roi) * 100 : null)),
+    });
+
     const pctSeriesRaw = $derived([
         {
             key: 'mwrrCum' as const,
             name: $_('dashboard.mwrrCum'),
-            values: history.map((pt) => (pt.mwrr_cumulative != null ? Number(pt.mwrr_cumulative) * 100 : null)),
+            values: pctValuesRaw.mwrrCum,
             lineStyle: 'solid' as const,
             colorKey: 'nav' as const,
         },
         {
             key: 'twrr' as const,
             name: $_('dashboard.twrr'),
-            values: history.map((pt) => (pt.twrr != null ? Number(pt.twrr) * 100 : null)),
+            values: pctValuesRaw.twrr,
             lineStyle: 'dashed' as const,
             colorKey: 'invested' as const,
         },
         {
             key: 'roi' as const,
             name: $_('dashboard.roi'),
-            values: history.map((pt) => (pt.roi != null ? Number(pt.roi) * 100 : null)),
+            values: pctValuesRaw.roi,
             lineStyle: 'dotted' as const,
             colorKey: 'pctCash' as const,
         },
     ]);
     // Filter out series with all-null data (e.g. MWRR when marked unreliable)
     const pctSeries = $derived(pctSeriesRaw.filter((s) => s.values.some((v) => v != null)));
+
+    /**
+     * The COMPLETE set of reactive values `getResolutionData()` is allowed to read.
+     *
+     * This exists to make cache invalidation correct *by construction* rather than by a
+     * hand-maintained list somebody must remember to join. Because it is `$derived`, Svelte
+     * rebuilds this object — giving it a fresh identity — whenever any member changes; and
+     * because `getResolutionData()` reads its inputs ONLY from here, a new input physically
+     * cannot be consumed without first becoming a member, which automatically enrols it in
+     * invalidation. Adding a field is the whole ceremony.
+     *
+     * The bug this replaces (G1b): seven inputs woke the render effect while exactly ONE
+     * (`history`) cleared `resolutionCache`, whose key spanned only `resolution`. A lazily
+     * arriving prop (`pnlCandles`) therefore re-rendered against an entry computed before
+     * its data existed — every candle a `'-'` gap, forever, surviving re-entry.
+     *
+     * Deliberately EXCLUDED, and the exclusion matters: `eurLabels`, `pnlLabels`, `$locale`
+     * and `baseCurrency`. They are in the render effect's dependency list (labels must
+     * re-render on a language switch) but the aggregation never reads them — only
+     * `pctValuesRaw`, which is split from the labels for exactly this reason. Invalidating on them would trade a
+     * silent-wrong bug for a silent-slow one, discarding a memo that exists for a reason.
+     */
+    type AggregationInputs = {
+        dates: string[];
+        eurStackedData: typeof eurStackedData;
+        pctValuesRaw: typeof pctValuesRaw;
+        pnlBrokerSeriesRaw: typeof pnlBrokerSeriesRaw;
+        pnlCandleByDate: typeof pnlCandleByDate;
+        dividendValues: number[];
+        interestValues: number[];
+        costValues: number[];
+        depositValues: number[];
+        acqFromNewCapitalValues: number[];
+        acqFromReinvestedValues: number[];
+    };
+
+    const aggregationInputs: AggregationInputs = $derived({
+        dates,
+        eurStackedData,
+        pctValuesRaw,
+        pnlBrokerSeriesRaw,
+        pnlCandleByDate,
+        dividendValues,
+        interestValues,
+        costValues,
+        depositValues,
+        acqFromNewCapitalValues,
+        acqFromReinvestedValues,
+    });
 
     const hasPctData = $derived(history.some((pt) => pt.mwrr_cumulative != null || pt.twrr != null || pt.roi != null));
     const hasNonZeroPctData = $derived(history.some((pt) => Number(pt.mwrr_cumulative ?? 0) !== 0 || Number(pt.twrr ?? 0) !== 0 || Number(pt.roi ?? 0) !== 0));
@@ -434,7 +491,7 @@
         return {startDate: visibleStartDate, endDate: visibleEndDate};
     }
 
-    function buildBucketInfos(resolution: ChartResolution): BucketInfo[] {
+    function buildBucketInfos(resolution: ChartResolution, dates: string[]): BucketInfo[] {
         if (resolution === 'daily') {
             return dates.map((date) => ({
                 date,
@@ -603,51 +660,54 @@
     }
 
     function getResolutionData(resolution: ChartResolution): AggregatedResolutionData {
+        // Identity check, not an equality list: `aggregationInputs` is rebuilt by Svelte
+        // whenever any input changes, so a stale entry cannot be returned by construction.
+        const inputs = aggregationInputs;
         const cached = resolutionCache.get(resolution);
-        if (cached) return cached;
+        if (cached && cached.inputs === inputs) return cached.data;
 
-        const buckets = buildBucketInfos(resolution);
+        const buckets = buildBucketInfos(resolution, inputs.dates);
         const entry: AggregatedResolutionData = {
             resolution,
             dates: buckets.map((bucket) => bucket.date),
             buckets,
             eur: {
-                bookAssetLike: aggregateMetric(eurStackedData.bookAssetLike, resolution, buckets),
-                cashContributed: aggregateMetric(eurStackedData.cashContributed, resolution, buckets),
-                cashGenerated: aggregateMetric(eurStackedData.cashGenerated, resolution, buckets),
-                nav: aggregateMetric(eurStackedData.nav, resolution, buckets),
-                capitalBaseline: aggregateMetric(eurStackedData.capitalBaseline, resolution, buckets),
-                totalPnl: aggregateMetric(eurStackedData.totalPnl, resolution, buckets),
+                bookAssetLike: aggregateMetric(inputs.eurStackedData.bookAssetLike, resolution, buckets),
+                cashContributed: aggregateMetric(inputs.eurStackedData.cashContributed, resolution, buckets),
+                cashGenerated: aggregateMetric(inputs.eurStackedData.cashGenerated, resolution, buckets),
+                nav: aggregateMetric(inputs.eurStackedData.nav, resolution, buckets),
+                capitalBaseline: aggregateMetric(inputs.eurStackedData.capitalBaseline, resolution, buckets),
+                totalPnl: aggregateMetric(inputs.eurStackedData.totalPnl, resolution, buckets),
             },
             pct: {
-                mwrrCum: aggregateMetric(pctSeriesRaw[0].values, resolution, buckets),
-                twrr: aggregateMetric(pctSeriesRaw[1].values, resolution, buckets),
-                roi: aggregateMetric(pctSeriesRaw[2].values, resolution, buckets),
+                mwrrCum: aggregateMetric(inputs.pctValuesRaw.mwrrCum, resolution, buckets),
+                twrr: aggregateMetric(inputs.pctValuesRaw.twrr, resolution, buckets),
+                roi: aggregateMetric(inputs.pctValuesRaw.roi, resolution, buckets),
             },
             pnl: {
                 // Reuses the exact same Decimal-sourced totalPnl values as EUR mode's
                 // tooltip line — one canonical, non-rebased total_pnl series (plan §3.2).
-                total: aggregateMetric(eurStackedData.totalPnl, resolution, buckets),
-                brokers: pnlBrokerSeriesRaw.map((broker) => ({
+                total: aggregateMetric(inputs.eurStackedData.totalPnl, resolution, buckets),
+                brokers: inputs.pnlBrokerSeriesRaw.map((broker) => ({
                     brokerId: broker.brokerId,
                     brokerName: broker.brokerName,
                     metric: aggregateMetric(broker.values, resolution, buckets),
                 })),
-                candle: aggregateCandleMetric(pnlCandleByDate, resolution, buckets),
+                candle: aggregateCandleMetric(inputs.pnlCandleByDate, resolution, buckets),
                 income: {
-                    dividend: aggregateFlowMetric(dividendValues, resolution, buckets),
-                    interest: aggregateFlowMetric(interestValues, resolution, buckets),
+                    dividend: aggregateFlowMetric(inputs.dividendValues, resolution, buckets),
+                    interest: aggregateFlowMetric(inputs.interestValues, resolution, buckets),
                 },
-                costs: aggregateFlowMetric(costValues, resolution, buckets),
-                deposits: aggregateFlowMetric(depositValues, resolution, buckets),
+                costs: aggregateFlowMetric(inputs.costValues, resolution, buckets),
+                deposits: aggregateFlowMetric(inputs.depositValues, resolution, buckets),
                 acquisition: {
-                    fromNewCapital: aggregateFlowMetric(acqFromNewCapitalValues, resolution, buckets),
-                    fromReinvested: aggregateFlowMetric(acqFromReinvestedValues, resolution, buckets),
+                    fromNewCapital: aggregateFlowMetric(inputs.acqFromNewCapitalValues, resolution, buckets),
+                    fromReinvested: aggregateFlowMetric(inputs.acqFromReinvestedValues, resolution, buckets),
                 },
             },
         };
 
-        resolutionCache.set(resolution, entry);
+        resolutionCache.set(resolution, {inputs, data: entry});
         return entry;
     }
 
@@ -1188,7 +1248,10 @@
     });
 
     $effect(() => {
-        // Re-render when data, viewMode, or locale changes
+        // Re-render when data, viewMode, or locale changes.
+        // Every lazily-arriving data prop must be listed: the dashboard happens to assign
+        // the four income-family props in one contiguous block, so `incomeHistory` used to
+        // wake the effect for the other three — correct by adjacency, not by design.
         void history;
         void viewMode;
         void pnlSubmode;
@@ -1198,6 +1261,9 @@
         void brokerPnlHistory;
         void pnlCandles;
         void incomeHistory;
+        void costHistory;
+        void depositHistory;
+        void acquisitionFunding;
         void $locale;
 
         if (history !== lastHistoryRef) {

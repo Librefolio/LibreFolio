@@ -1929,11 +1929,11 @@ describe('canonical overlay axis and reference helpers', () => {
                 if (start < 0 || end <= start) throw new Error('GrowthChart getResolutionData contract not found');
 
                 const block = source.slice(start, end);
-                expect(block).toContain('const buckets = buildBucketInfos(resolution);');
+                expect(block).toContain('const buckets = buildBucketInfos(resolution, inputs.dates);');
                 expect(block).toContain('dates: buckets.map((bucket) => bucket.date),');
-                expect(block).toContain('total: aggregateMetric(eurStackedData.totalPnl, resolution, buckets),');
+                expect(block).toContain('total: aggregateMetric(inputs.eurStackedData.totalPnl, resolution, buckets),');
                 expect(block).toContain('metric: aggregateMetric(broker.values, resolution, buckets),');
-                expect(block).toContain('candle: aggregateCandleMetric(pnlCandleByDate, resolution, buckets),');
+                expect(block).toContain('candle: aggregateCandleMetric(inputs.pnlCandleByDate, resolution, buckets),');
                 // `buckets` is constructed exactly once per resolution-cache-miss — every
                 // series above threads that SAME reference, never a fresh computation.
                 const buildBucketInfosCallCount = (block.match(/buildBucketInfos\(/g) ?? []).length;
@@ -2333,7 +2333,7 @@ describe('canonical overlay axis and reference helpers', () => {
                 // If one of these went through aggregateMetric (end-of-period) instead, a
                 // weekly/monthly bar would silently show only the last day of the bucket.
                 const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
-                const start = source.indexOf('dividend: aggregateFlowMetric(dividendValues, resolution, buckets),');
+                const start = source.indexOf('dividend: aggregateFlowMetric(inputs.dividendValues, resolution, buckets),');
                 const end = source.indexOf('},\n        };', start);
                 expect(start).toBeGreaterThan(-1);
                 expect(end).toBeGreaterThan(start);
@@ -2341,12 +2341,12 @@ describe('canonical overlay axis and reference helpers', () => {
 
                 const block = source.slice(start, end);
                 for (const call of [
-                    'dividend: aggregateFlowMetric(dividendValues, resolution, buckets),',
-                    'interest: aggregateFlowMetric(interestValues, resolution, buckets),',
-                    'costs: aggregateFlowMetric(costValues, resolution, buckets),',
-                    'deposits: aggregateFlowMetric(depositValues, resolution, buckets),',
-                    'fromNewCapital: aggregateFlowMetric(acqFromNewCapitalValues, resolution, buckets),',
-                    'fromReinvested: aggregateFlowMetric(acqFromReinvestedValues, resolution, buckets),',
+                    'dividend: aggregateFlowMetric(inputs.dividendValues, resolution, buckets),',
+                    'interest: aggregateFlowMetric(inputs.interestValues, resolution, buckets),',
+                    'costs: aggregateFlowMetric(inputs.costValues, resolution, buckets),',
+                    'deposits: aggregateFlowMetric(inputs.depositValues, resolution, buckets),',
+                    'fromNewCapital: aggregateFlowMetric(inputs.acqFromNewCapitalValues, resolution, buckets),',
+                    'fromReinvested: aggregateFlowMetric(inputs.acqFromReinvestedValues, resolution, buckets),',
                 ]) {
                     expect(block).toContain(call);
                 }
