@@ -798,7 +798,10 @@ def cmd_mkdocs_build(args):
     print(Colors.success("Building MkDocs site..."))
     _check_admonition_empty_lines()
     copy_docs_assets()
-    result = run_pipenv(["mkdocs", "build", "-f", "mkdocs_src/mkdocs.yml"])
+    # --strict turns a nav entry pointing at a missing file from a silent warning
+    # into a failure. Measured before enabling: the tree builds strict-clean with
+    # zero warnings, so this adds a gate without importing pre-existing debt.
+    result = run_pipenv(["mkdocs", "build", "--strict", "-f", "mkdocs_src/mkdocs.yml"])
     if result == 0:
         _check_image_paths_in_built_site()
     return result
@@ -1070,6 +1073,96 @@ def cmd_mkdocs_gallery(args):
     return 1 if failures else 0
 
 
+# Declared perimeter of the explicit-anchor convention, measured 18 Sep 2026.
+#
+# Across the 22 risk-metrics pages there are 180 headings: 22 H1 page titles and
+# 158 at H2 or deeper. All 158 carry an explicit ``{: #slug }`` so the anchor
+# survives translation. The 22 H1s are excluded BY DESIGN, not by omission: a link
+# to a page is written ``.../slug/`` with no fragment and already lands at the top,
+# so ``.../value-at-risk/#value-at-risk`` would be a token with no future in which
+# it is needed.
+#
+# ⚠️ Cite this as "158 of 158 H2+, 22 H1 excluded by design, 180 total" — never as a
+# bare ratio. A full-coverage number with no stated perimeter reads as a finished
+# job and switches off the next inspection, which is how an earlier count of this
+# same convention reported 130/130 while silently measuring a subset. The figure
+# "136 of 158" is wrong in the other direction and shows why the perimeter has to
+# travel with the number: 158 is already the H1-excluded count, so subtracting the
+# 22 again removes them twice.
+def _mkdocs_anchor_slugs(md_file) -> set:
+    """Valid anchor ids for a MkDocs page: explicit attr_list ids + generated heading slugs.
+
+    attr_list accepts three syntaxes for a heading id and the project uses all three:
+    ``{: #id }``, ``{ #id }`` and ``{#id}``. Matching only one of them is how this
+    check previously reported healthy links as broken.
+
+    The ``^#{1,6}`` below deliberately spans H1 too: an earlier ``^#{2,6}`` skipped
+    page titles, so every generated-slug link into an H1 was judged against a set
+    that could not contain it.
+    """
+    content = md_file.read_text()
+    explicit = set(re.findall(r"\{:?[^}]*?#([A-Za-z0-9_-]+)[^}]*\}", content))
+    slugs = set(explicit)
+    for h in re.findall(r"^#{1,6}\s+(.+?)(?:\s*\{[^}]*\})?\s*$", content, re.MULTILINE):
+        slug = re.sub(r"[^\w\s-]", "", h.lower()).strip()
+        slugs.add(re.sub(r"[\s_]+", "-", slug).strip("-"))
+    return slugs
+
+
+# Anchors already shipped broken in translated pages, recorded 18 Sep 2026.
+#
+# Each entry is a link that resolves in English and lands on the wrong place — or
+# nowhere — in the listed languages, because the translated heading produced a
+# different slug. They are listed here instead of failing the gate because the fix
+# requires editing .it/.fr/.es bodies, which the English-only documentation rule
+# forbids: the debt is cleared by the translation pipeline, not by this campaign.
+#
+# ⚠️ THIS LIST MUST ONLY EVER SHRINK. A new broken anchor is a regression and must
+# turn the gate red; silencing it by adding a line here defeats the check entirely.
+MKDOCS_ANCHOR_EXCEPTIONS = {
+    "user/assets/create-edit#importing-a-distribution-csv": ("it", "fr", "es"),
+    "user/assets/providers/scheduled-investment#how-value-is-calculated": ("it", "fr", "es"),
+    "user/assets/providers/scheduled-investment#interest-schedule-editor": ("fr", "es"),
+}
+
+
+def _mkdocs_check_anchor(en_file, anchor: str, path: str, origin: str, docs_root):
+    """Validate an anchor in English *and* in every language that has a translation.
+
+    A page without a translation is safe: mkdocs-static-i18n falls back to the English
+    body, anchors included. A page *with* a translation serves the translated headings,
+    so an anchor added to the English file alone is dead there — silently, because the
+    English source still contains it.
+
+    Returns ``None`` when the anchor resolves everywhere, the string ``"KNOWN"`` for a
+    recorded exception, or an error message.
+    """
+    if anchor not in _mkdocs_anchor_slugs(en_file):
+        return f"  ⚠️  {path}\n     → File exists but anchor #{anchor} not found (from {origin})"
+
+    stem = en_file.name[: -len(".en.md")] if en_file.name.endswith(".en.md") else en_file.stem
+    broken = []
+    for lang in ("it", "fr", "es"):
+        translated = en_file.parent / f"{stem}.{lang}.md"
+        if translated.exists() and anchor not in _mkdocs_anchor_slugs(translated):
+            broken.append(lang)
+
+    if not broken:
+        return None
+
+    file_part = path.split("#", 1)[0].strip("/")
+    allowed = MKDOCS_ANCHOR_EXCEPTIONS.get(f"{file_part}#{anchor}")
+    if allowed is not None and set(broken) <= set(allowed):
+        print(f"  🟡 {path}  (known: dead in {', '.join(broken)} — awaiting translation)")
+        return "KNOWN"
+
+    return (
+        f"  ❌ {path}\n"
+        f"     → Anchor #{anchor} resolves in English but is missing in: {', '.join(broken)}\n"
+        f"       (from {origin}) — the translated heading produces a different slug"
+    )
+
+
 def cmd_mkdocs_check_links(args):
     """Validate cross-boundary links: frontend/backend → MkDocs docs.
 
@@ -1081,6 +1174,7 @@ def cmd_mkdocs_check_links(args):
     frontend_src = PROJECT_ROOT / "frontend" / "src"
     errors = []
     ok_count = 0
+    known_count = 0
 
     print(Colors.success("🔗 Checking cross-boundary links (frontend/backend → docs)...\n"))
 
@@ -1094,6 +1188,25 @@ def cmd_mkdocs_check_links(args):
         name = path.name
         return name.endswith((".test.ts", ".spec.ts"))
 
+    def _resolvable(raw: str) -> str | None:
+        """Return a statically checkable docs path, or None when it isn't one.
+
+        Template literals lose their ``${…}`` segments: what survives is checkable
+        only when it is still a real path. An *unbalanced* ``${`` — as produced by a
+        nested ternary like ``/mkdocs/${lang === 'en' ? '' : `${lang}/`}…`` — leaves a
+        fragment such as ``${lang``, which must be dropped rather than reported as a
+        missing file.
+        """
+        cleaned = re.sub(r"\$\{[^}]*\}", "", raw)
+        if any(ch in cleaned for ch in "${}"):
+            return None
+        # Normalise the trailing slash: `…/compound` and `…/compound/` are the same
+        # page, and without this they survive deduplication as two entries.
+        cleaned = cleaned.lstrip("/").rstrip("/")
+        if not cleaned or ":path" in cleaned:
+            return None
+        return cleaned
+
     docs_paths: list[tuple[str, str, int]] = []  # (path, file, line)
     for ext in ("*.ts", "*.svelte"):
         for f in frontend_src.rglob(ext):
@@ -1103,32 +1216,36 @@ def cmd_mkdocs_check_links(args):
                 # static docsPath = '...'  or  docsPath: '...'
                 m = re.search(r"""docsPath\s*[:=]\s*['"]([^'"]+)['"]""", line)
                 if m:
-                    raw = m.group(1)
-                    # Template literals with ${…} can't be resolved statically —
-                    # same handling as the /mkdocs/ scope below.
-                    if "${" in raw:
-                        clean = re.sub(r"\$\{[^}]+\}", "", raw).lstrip("/")
-                        if clean:
-                            docs_paths.append((clean, str(f.relative_to(PROJECT_ROOT)), i))
-                    else:
-                        docs_paths.append((raw, str(f.relative_to(PROJECT_ROOT)), i))
+                    candidate = _resolvable(m.group(1))
+                    if candidate:
+                        docs_paths.append((candidate, str(f.relative_to(PROJECT_ROOT)), i))
 
     # 1b. Collect /mkdocs/ URLs from window.open and href=
     for ext in ("*.ts", "*.svelte"):
         for f in frontend_src.rglob(ext):
             if _is_test_file(f):
                 continue
-                m = re.search(r"""/mkdocs/([^'"`,\s)]+)""", line)
-                if m:
-                    raw = m.group(1).rstrip("/")
-                    # Skip template variables like ${prefix}
-                    if "${" in raw:
-                        # Extract after the template var — e.g. ${prefix}user/assets → user/assets
-                        clean = re.sub(r"\$\{[^}]+\}", "", raw).lstrip("/")
-                        if clean:
-                            docs_paths.append((clean, str(f.relative_to(PROJECT_ROOT)), i))
-                    elif ":path" not in raw:
-                        docs_paths.append((raw, str(f.relative_to(PROJECT_ROOT)), i))
+            for i, line in enumerate(f.read_text().splitlines(), 1):
+                for m in re.finditer(r"""/mkdocs/([^'"`,\s)]+)""", line):
+                    candidate = _resolvable(m.group(1).rstrip("/"))
+                    if candidate:
+                        docs_paths.append((candidate, str(f.relative_to(PROJECT_ROOT)), i))
+
+    # 1c. Collect <DocsLink> props. The component prefixes /mkdocs/ at runtime
+    # (DocsLink.svelte → getDocsUrl), so the literal carries neither that prefix nor
+    # the `docsPath` name: without this scope every <DocsLink> in the app goes
+    # unchecked — which is precisely the link shape user-facing pages rely on.
+    # A dynamic `path={expr}` has no quotes and is skipped by construction.
+    for f in frontend_src.rglob("*.svelte"):
+        if _is_test_file(f):
+            continue
+        for i, line in enumerate(f.read_text().splitlines(), 1):
+            if "<DocsLink" not in line:
+                continue
+            for m in re.finditer(r"""\b(?:localizedFallbackPath|path)\s*=\s*['"]([^'"]+)['"]""", line):
+                candidate = _resolvable(m.group(1))
+                if candidate:
+                    docs_paths.append((candidate, str(f.relative_to(PROJECT_ROOT)), i))
 
     # Deduplicate
     seen = set()
@@ -1164,21 +1281,13 @@ def cmd_mkdocs_check_links(args):
         if not found_file:
             errors.append(f"  ❌ {path}\n     → File not found (from {src_file}:{line_no})")
         elif anchor:
-            # Check anchor exists in file content (heading slug)
-            content = found_file.read_text()
-            # Generate slugs from headings + attr_list explicit anchors
-            headings = re.findall(r"^#{1,6}\s+(.+?)(?:\s*\{[^}]*\})?\s*$", content, re.MULTILINE)
-            attr_anchors = re.findall(r"\{\s*#([a-z0-9_-]+)\s*\}", content)
-
-            slugs = set(attr_anchors)
-            for h in headings:
-                # Simple slug generation: lowercase, strip emoji, replace spaces/special with -
-                slug = re.sub(r"[^\w\s-]", "", h.lower()).strip()
-                slug = re.sub(r"[\s_]+", "-", slug).strip("-")
-                slugs.add(slug)
-
-            if anchor not in slugs:
-                errors.append(f"  ⚠️  {path}\n     → File exists but anchor #{anchor} not found (from {src_file}:{line_no})")
+            failure = _mkdocs_check_anchor(
+                found_file, anchor, path, f"{src_file}:{line_no}", docs_root
+            )
+            if failure == "KNOWN":
+                known_count += 1
+            elif failure:
+                errors.append(failure)
             else:
                 ok_count += 1
                 print(f"  ✅ {path}")
@@ -1221,16 +1330,11 @@ def cmd_mkdocs_check_links(args):
                 if not found_file:
                     errors.append(f"  ❌ {url}\n     → File not found (from {rel_src})")
                 elif anchor:
-                    fc = found_file.read_text()
-                    headings = re.findall(r"^#{1,6}\s+(.+?)(?:\s*\{[^}]*\})?\s*$", fc, re.MULTILINE)
-                    attr_anchors = re.findall(r"\{\s*#([a-z0-9_-]+)\s*\}", fc)
-                    slugs = set(attr_anchors)
-                    for h in headings:
-                        slug = re.sub(r"[^\w\s-]", "", h.lower()).strip()
-                        slug = re.sub(r"[\s_]+", "-", slug).strip("-")
-                        slugs.add(slug)
-                    if anchor not in slugs:
-                        errors.append(f"  ⚠️  {url}\n     → File exists but anchor #{anchor} not found (from {rel_src})")
+                    failure = _mkdocs_check_anchor(found_file, anchor, raw, rel_src, docs_root)
+                    if failure == "KNOWN":
+                        known_count += 1
+                    elif failure:
+                        errors.append(failure)
                     else:
                         ok_count += 1
                         print(f"  ✅ {url}")
@@ -1241,6 +1345,9 @@ def cmd_mkdocs_check_links(args):
     # ── Summary ───────────────────────────────────────────────────────────
     print(f"\n{Colors.CYAN}── Summary ──{Colors.NC}")
     print(f"  ✅ {ok_count} valid link(s)")
+    if known_count:
+        print(f"  🟡 {known_count} known-broken anchor(s) awaiting translation "
+              f"(see MKDOCS_ANCHOR_EXCEPTIONS — this list must only shrink)")
     if errors:
         print(f"  ❌ {len(errors)} broken link(s):\n")
         for e in errors:
