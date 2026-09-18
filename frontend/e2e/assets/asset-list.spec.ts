@@ -689,4 +689,138 @@ test.describe('Asset List Page', () => {
         // Same placement rule as the table: Apple is used on a broker TEST_USER owns.
         await expect(page.getByTestId('assets-panel-own').locator('[data-testid^="asset-card-"]').filter({hasText: /Apple/i}).first()).toBeVisible();
     });
+
+    // ========================================================================
+    // Test 19 (Mandate B): the taxonomy grew from 9 to 17 values, and every
+    // table keyed on it fails *silently* when it misses an entry — a missing
+    // PNG_MAP entry draws other.png, a missing filter entry makes the type
+    // un-filterable, and nothing throws anywhere. `assetTypeTables.test.ts`
+    // proves the tables agree with the Python enum as text; this proves the
+    // same thing at runtime and through the backend: a new-taxonomy asset is
+    // accepted, comes back with its type intact, draws its own icon, and is
+    // offered in the page's type filter.
+    //
+    // It seeds its own assets first, and that is not a convenience: the filter
+    // only lists types the user actually owns (`availableTypes` keeps the ones
+    // with typeCounts > 0, in +page.svelte), so a spec that asserted on the
+    // dropdown without seeding it would be asserting on whatever the shared
+    // database happened to be holding that minute.
+    // ========================================================================
+    test('new taxonomy types survive the round trip: API, card icon and type filter', async ({page}) => {
+        const token = uniqueToken(6);
+        const prefix = `E2E Taxonomy ${token}`;
+        // COMMODITY and REAL_ESTATE are new *primary* types and each owns an
+        // icon file — note the hyphen in real-estate.png against the underscore
+        // in the enum value, which is precisely the kind of mismatch that ends
+        // in a silent other.png. ETF_STOCK is a subtype and shares etf.png by
+        // design, so what it proves here is the enum round trip and the filter
+        // entry, not a distinct picture.
+        const seeds = [
+            {type: 'COMMODITY', icon: 'commodity.png'},
+            {type: 'REAL_ESTATE', icon: 'real-estate.png'},
+            {type: 'ETF_STOCK', icon: 'etf.png'},
+            // The control, and the reason there is one: "the type filter really
+            // filtered" needs something of this test's own that must DISAPPEAR
+            // when COMMODITY is selected. Without it the only proof available
+            // would be a count over rows this test does not own.
+            {type: 'STOCK', icon: 'stock.png'},
+        ] as const;
+        const nameFor = (type: string) => `${prefix} ${type}`;
+        /** Filled from the create response; every later step identifies rows through it. */
+        const seeded: Array<{type: string; icon: string; id: number}> = [];
+        /** Everything the backend actually created, asserted or not — this is what `finally` removes. */
+        const createdIds: number[] = [];
+        const idOf = (type: string) => seeded.find((s) => s.type === type)!.id;
+
+        try {
+            // ---- 1. the backend accepts the new enum values at all --------
+            // A 422 here is the whole mandate failing at its first step, and it
+            // is worth separating from every UI assertion below.
+            const createRes = await page.request.post('/api/v1/assets', {
+                data: seeds.map(({type}) => ({display_name: nameFor(type), currency: 'EUR', asset_type: type})),
+            });
+            expect(createRes.ok(), `creating one asset per taxonomy value must succeed: ${await createRes.text()}`).toBeTruthy();
+            const created = ((await createRes.json()) as {results: Array<{asset_id: number | null; success: boolean; message: string; display_name: string}>}).results;
+            // Register what exists BEFORE asserting anything about it: creates
+            // are per-item and partial success is allowed, so a value the enum
+            // rejects still leaves its predecessors in a shared database, and
+            // the first failing expect below would otherwise leak them.
+            for (const row of created) if (row.asset_id != null) createdIds.push(row.asset_id);
+
+            // Keyed on display_name, not on the position in `results`: the two
+            // happen to agree today, and relying on that would be exactly the
+            // assumption this suite does not make.
+            for (const {type, icon} of seeds) {
+                const row = created.find((r) => r.display_name === nameFor(type));
+                expect(row, `${type}: the create response must carry a result for "${nameFor(type)}"`).toBeTruthy();
+                expect(row!.success, `${type} must be a value the backend enum accepts: ${row!.message}`).toBe(true);
+                seeded.push({type, icon, id: row!.asset_id!});
+            }
+
+            // ---- 2. …and hands each value back unchanged ------------------
+            const listed = (await (await page.request.get(`/api/v1/assets/query?search=${encodeURIComponent(prefix)}`)).json()) as Array<{id: number; asset_type: string | null}>;
+            for (const {type, id} of seeded) {
+                const row = listed.find((a) => a.id === id);
+                expect(row, `${type}: the asset this test created must come back from /assets/query`).toBeTruthy();
+                expect(row!.asset_type, `${type} must not be silently degraded on the way back`).toBe(type);
+            }
+
+            // ---- 3. the grid draws each one with its own icon -------------
+            await goToAssetsPage(page);
+            // Grid is the default view, but ViewModeToggle remembers the last
+            // choice per user in localStorage — drive to the end state.
+            await page.getByTestId('view-mode-grid').click();
+            await page.getByTestId('assets-search-input').fill(prefix);
+            await waitForSettled(page.getByTestId('assets-page'), 20_000);
+
+            for (const {type, icon, id} of seeded) {
+                const card = page.getByTestId(`asset-card-${id}`);
+                // Presence barrier for the negative that follows: a card that
+                // has not mounted yet satisfies any absence assertion, so "it
+                // does not show other.png" only means something once the card
+                // and its icon are demonstrably on screen. The search box is
+                // debounced and `data-busy` does not cover the debounce, which
+                // is why this is a retrying assertion and not a count().
+                await expect(card, `${type}: the seeded card must reach the grid`).toBeVisible({timeout: 15_000});
+                // `.first()` on an already-filtered locator: a card legitimately
+                // paints this src twice (the round avatar and the type badge),
+                // and which one arrives first is not this test's business.
+                await expect(card.locator(`img[src="/icons/asset-types/${icon}"]`).first(), `${type} must resolve to ${icon}`).toBeVisible();
+                // The failure this whole workstream exists to prevent: an enum
+                // value PNG_MAP has never heard of is drawn as other.png and
+                // nothing complains. `toHaveCount(0)` is the honest matcher here
+                // — the fallback is never *hidden* when it happens, it is simply
+                // the src that got rendered.
+                await expect(card.locator('img[src="/icons/asset-types/other.png"]'), `${type} fell through to the silent other.png fallback`).toHaveCount(0);
+            }
+
+            // ---- 4. the page's own type filter offers the new values ------
+            // The dropdown used to carry a private nine-entry TYPE_ICON_MAP, so
+            // the icon inside the option row is a regression guard in its own
+            // right, not decoration.
+            await page.getByTestId('assets-type-filter').click();
+            for (const {type, icon} of seeded) {
+                const option = page.getByTestId(`assets-type-filter-option-${type}`);
+                await expect(option, `${type} must be offered in the type filter — this test owns one, so its count is > 0`).toBeVisible();
+                await expect(option.locator(`img[src="/icons/asset-types/${icon}"]`), `${type}'s filter row must draw through the shared icon map`).toHaveCount(1);
+            }
+
+            // ---- 5. …and selecting one really narrows the list ------------
+            await page.getByTestId('assets-type-filter-option-COMMODITY').click();
+            // Selecting does not close the fixed-position panel; close it on its
+            // own trigger and end on the post-condition rather than leaving an
+            // overlay over the grid the next assertions read.
+            await page.getByTestId('assets-type-filter').click();
+            await expect(page.getByTestId('assets-type-filter-option-COMMODITY')).toHaveCount(0);
+
+            await expect(page.getByTestId(`asset-card-${idOf('COMMODITY')}`), 'the COMMODITY asset must survive its own type filter').toBeVisible();
+            await expect(page.getByTestId(`asset-card-${idOf('STOCK')}`), 'the STOCK control must be filtered out — otherwise the type filter is not filtering').toHaveCount(0);
+        } finally {
+            // Scoped to what this test created: the ids come from its own create
+            // response, so nothing here can reach a neighbour's row.
+            for (const id of createdIds) {
+                await page.request.delete(`/api/v1/assets?asset_ids=${id}`).catch(() => {});
+            }
+        }
+    });
 });

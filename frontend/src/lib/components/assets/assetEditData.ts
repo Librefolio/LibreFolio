@@ -31,6 +31,7 @@ export async function loadAssetEditData(assetId: number): Promise<AssetEditData>
         icon_url: safeString(asset.icon_url),
         quote_base_quantity: safeNumber(asset.quote_base_quantity),
         active: asset.active,
+        is_benchmark: asset.is_benchmark,
         classification_params: classification
             ? {
                   short_description: safeString(classification.short_description),
