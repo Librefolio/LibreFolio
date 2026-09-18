@@ -6,6 +6,24 @@ repo_name: Librefolio/LibreFolio
 exclude_docs: |
   POC_UX/**
 
+# Anchor validation — one half of a two-part partition, not a duplicate.
+#
+#   MkDocs (here)  owns links *inside* the docs tree (markdown → markdown). It resolves
+#                  `page.md#anchor` against every translated file, so it catches an
+#                  anchor that dies because the translated heading produced a different
+#                  slug. It cannot see anything outside this tree.
+#   dev.py         owns links that *cross the boundary* — frontend .svelte/.ts and
+#                  backend provider docs_url. Those live outside mkdocs_src/ and are
+#                  structurally invisible here, so MkDocs will never validate them.
+#
+# The two link sets are disjoint. Neither validator replaces the other, and retiring
+# either one leaves its side of the boundary unwatched.
+#
+# `warn` is deliberate: combined with the `--strict` that `dev.py mkdocs build` passes,
+# a dead anchor is a build failure, while a plain `mkdocs serve` stays usable.
+validation:
+  anchors: warn
+
 theme:
   name: material
   custom_dir: overrides
@@ -231,10 +249,27 @@ plugins:
             Diversification: Diversificazione
             Asset Allocation: Allocazione degli Asset
             "⚠️ Risk Metrics": "⚠️ Metriche di Rischio"
+            "📉 How Much Can It Hurt?": "📉 Quanto Può Fare Male?"
             Sharpe Ratio: Indice di Sharpe
             Sortino Ratio: Indice di Sortino
             Max Drawdown: Massimo Drawdown
             Volatility: Volatilità
+            Current Drawdown: Drawdown Corrente
+            Worst Realization: Peggior Realizzazione
+            "🧩 Am I Diversified?": "🧩 Sono Diversificato?"
+            Correlation: Correlazione
+            Risk Contribution: Contributo al Rischio
+            Concentration: Concentrazione
+            "⚖️ Am I Paid for the Risk?": "⚖️ Sono Pagato per il Rischio?"
+            "Beta & Active Return": "Beta & Rendimento Attivo"
+            Benchmark Selection: Scelta del Benchmark
+            "🎲 What If…?": "🎲 Cosa Succede Se…?"
+            Historical Replay: Replica Storica
+            Hypothetical Shock: Shock Ipotetico
+            Simulation — What the Model Assumes: Simulazione — Cosa Assume il Modello
+            "🔧 Method": "🔧 Metodo"
+            Observed Annualization: Annualizzazione Osservata
+            Data Quality: Qualità dei Dati
             Weighted Average Cost: Costo Medio Ponderato
             FIFO Lot Analysis: Analisi Lotti FIFO
             NAV / Net Worth: NAV / Net Worth
@@ -409,10 +444,27 @@ plugins:
             Diversification: Diversification
             Asset Allocation: Allocation d'Actifs
             "⚠️ Risk Metrics": "⚠️ Métriques de Risque"
+            "📉 How Much Can It Hurt?": "📉 Jusqu'où Peut-on Perdre ?"
             Sharpe Ratio: Ratio de Sharpe
             Sortino Ratio: Ratio de Sortino
             Max Drawdown: Drawdown Maximum
             Volatility: Volatilité
+            Current Drawdown: Drawdown Actuel
+            Worst Realization: Pire Réalisation
+            "🧩 Am I Diversified?": "🧩 Suis-je Diversifié ?"
+            Correlation: Corrélation
+            Risk Contribution: Contribution au Risque
+            Concentration: Concentration
+            "⚖️ Am I Paid for the Risk?": "⚖️ Suis-je Payé pour le Risque ?"
+            "Beta & Active Return": "Bêta & Rendement Actif"
+            Benchmark Selection: Choix du Benchmark
+            "🎲 What If…?": "🎲 Et Si… ?"
+            Historical Replay: Rejeu Historique
+            Hypothetical Shock: Choc Hypothétique
+            Simulation — What the Model Assumes: Simulation — Ce que Suppose le Modèle
+            "🔧 Method": "🔧 Méthode"
+            Observed Annualization: Annualisation Observée
+            Data Quality: Qualité des Données
             Weighted Average Cost: Coût Moyen Pondéré
             FIFO Lot Analysis: Analyse des Lots FIFO
             NAV / Net Worth: NAV / Net Worth
@@ -587,10 +639,27 @@ plugins:
             Diversification: Diversificación
             Asset Allocation: Asignación de Activos
             "⚠️ Risk Metrics": "⚠️ Métricas de Riesgo"
+            "📉 How Much Can It Hurt?": "📉 ¿Cuánto Puede Doler?"
             Sharpe Ratio: Ratio de Sharpe
             Sortino Ratio: Ratio de Sortino
             Max Drawdown: Drawdown Máximo
             Volatility: Volatilidad
+            Current Drawdown: Drawdown Actual
+            Worst Realization: Peor Realización
+            "🧩 Am I Diversified?": "🧩 ¿Estoy Diversificado?"
+            Correlation: Correlación
+            Risk Contribution: Contribución al Riesgo
+            Concentration: Concentración
+            "⚖️ Am I Paid for the Risk?": "⚖️ ¿Me Pagan por el Riesgo?"
+            "Beta & Active Return": "Beta & Rentabilidad Activa"
+            Benchmark Selection: Elección del Benchmark
+            "🎲 What If…?": "🎲 ¿Qué Pasa Si…?"
+            Historical Replay: Repetición Histórica
+            Hypothetical Shock: Choque Hipotético
+            Simulation — What the Model Assumes: Simulación — Qué Supone el Modelo
+            "🔧 Method": "🔧 Método"
+            Observed Annualization: Anualización Observada
+            Data Quality: Calidad de los Datos
             Weighted Average Cost: Coste Medio Ponderado
             FIFO Lot Analysis: Análisis de Lotes FIFO
             NAV / Net Worth: NAV / Net Worth
@@ -835,10 +904,32 @@ nav:
               - Weighted Average Cost: financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md
           - ⚠️ Risk Metrics:
               - Overview: financial-theory/technical-analysis/risk-metrics/index.md
-              - Sharpe Ratio: financial-theory/technical-analysis/risk-metrics/sharpe-ratio.md
-              - Sortino Ratio: financial-theory/technical-analysis/risk-metrics/sortino-ratio.md
-              - Max Drawdown: financial-theory/technical-analysis/risk-metrics/max-drawdown.md
-              - Volatility: financial-theory/technical-analysis/risk-metrics/volatility.md
+              - "📉 How Much Can It Hurt?":
+                  - Max Drawdown: financial-theory/technical-analysis/risk-metrics/max-drawdown.md
+                  - Current Drawdown: financial-theory/technical-analysis/risk-metrics/current-drawdown.md
+                  - Drawdown at Risk: financial-theory/technical-analysis/risk-metrics/drawdown-at-risk.md
+                  - Conditional Drawdown at Risk: financial-theory/technical-analysis/risk-metrics/conditional-drawdown-at-risk.md
+                  - Ulcer Index: financial-theory/technical-analysis/risk-metrics/ulcer-index.md
+                  - Value at Risk: financial-theory/technical-analysis/risk-metrics/value-at-risk.md
+                  - Conditional Value at Risk: financial-theory/technical-analysis/risk-metrics/conditional-value-at-risk.md
+                  - Worst Realization: financial-theory/technical-analysis/risk-metrics/worst-realization.md
+              - "🧩 Am I Diversified?":
+                  - Correlation: financial-theory/technical-analysis/risk-metrics/correlation.md
+                  - Risk Contribution: financial-theory/technical-analysis/risk-metrics/risk-contribution.md
+                  - Concentration: financial-theory/technical-analysis/risk-metrics/concentration.md
+              - "⚖️ Am I Paid for the Risk?":
+                  - Volatility: financial-theory/technical-analysis/risk-metrics/volatility.md
+                  - Sharpe Ratio: financial-theory/technical-analysis/risk-metrics/sharpe-ratio.md
+                  - Sortino Ratio: financial-theory/technical-analysis/risk-metrics/sortino-ratio.md
+                  - Beta & Active Return: financial-theory/technical-analysis/risk-metrics/beta-active-return.md
+                  - Benchmark Selection: financial-theory/technical-analysis/risk-metrics/benchmark-selection.md
+              - "🎲 What If…?":
+                  - Historical Replay: financial-theory/technical-analysis/risk-metrics/historical-replay.md
+                  - Hypothetical Shock: financial-theory/technical-analysis/risk-metrics/hypothetical-shock.md
+                  - Simulation — What the Model Assumes: financial-theory/technical-analysis/risk-metrics/simulation-modes.md
+              - 🔧 Method:
+                  - Observed Annualization: financial-theory/technical-analysis/risk-metrics/observed-annualization.md
+                  - Data Quality: financial-theory/technical-analysis/risk-metrics/data-quality.md
       - 📖 Fundamentals:
           - Overview: financial-theory/fundamentals/index.md
           - Day Count Conventions: financial-theory/fundamentals/day-count.md

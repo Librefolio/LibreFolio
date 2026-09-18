@@ -4,9 +4,9 @@ Volatility measures the **dispersion of returns** — how much an asset's price 
 
 ---
 
-## 🔢 Formula
+## 🔢 Formula {: #formula }
 
-### 📐 Standard Deviation of Returns
+### 📐 Standard Deviation of Returns {: #standard-deviation-of-returns }
 
 $$
 \sigma = \sqrt{\frac{1}{N-1} \sum_{i=1}^{N} (R_i - \bar{R})^2}
@@ -14,24 +14,39 @@ $$
 
 where $R_i$ are individual period returns and $\bar{R}$ is the mean return.
 
-### 📈 Annualization
+### 📈 Annualization {: #annualization }
 
-Daily volatility is annualized by multiplying by the square root of the number of trading days:
+Per-period volatility is annualized by multiplying it by the square root of the number of periods a year contains:
 
 $$
-\sigma_{annual} = \sigma_{daily} \times \sqrt{252}
+\sigma_{annual} = \sigma_{period} \times \sqrt{f}
 $$
 
-!!! info "Why √252?"
+The factor $f$ is **measured from the observed data**, not fixed in advance: it is the number of returns actually used, rescaled to a full calendar year over the span they cover.
 
-    Returns are assumed to be independent across days. The variance of a sum of $N$ independent variables is $N$ times the individual variance. Therefore:
+$$
+f = \frac{N \times 365}{D}
+$$
 
-    $$\text{Var}_{annual} = 252 \times \text{Var}_{daily}$$
-    $$\sigma_{annual} = \sqrt{252} \times \sigma_{daily}$$
+where $N$ is the number of period returns and $D$ the calendar days they span.
+
+!!! info "Why a square root?"
+
+    Returns are assumed to be independent across periods. The variance of a sum of $f$ independent variables is $f$ times the individual variance. Therefore:
+
+    $$\text{Var}_{annual} = f \times \text{Var}_{period}$$
+
+    $$\sigma_{annual} = \sqrt{f} \times \sigma_{period}$$
+
+!!! info "√252 is a result, not a constant"
+
+    A daily-priced stock contributes roughly 252 returns over a full calendar year, so $f = 252 \times 365 / 365 = 252$ and the familiar $\sqrt{252}$ is recovered — as the outcome of the measurement, not as an assumption written into it. An instrument that trades every calendar day, such as crypto, gives $f \approx 365$ and therefore $\approx \sqrt{365}$: a hardcoded $\sqrt{252}$ would **understate** its annualized volatility. A weekly-priced fund gives $f \approx 52$.
+
+    → See **[Observed Annualization](observed-annualization.md)** for the derivation, the worked examples and what coverage adds to them.
 
 ---
 
-## 💡 Interpretation
+## 💡 Interpretation {: #interpretation }
 
 | Annualized Volatility | Typical Assets |
 |---|---|
@@ -43,9 +58,9 @@ $$
 
 ---
 
-## 📊 Realized vs Implied Volatility
+## 📊 Realized vs Implied Volatility {: #realized-vs-implied-volatility }
 
-### 📈 Realized (Historical) Volatility
+### 📈 Realized (Historical) Volatility {: #realized-historical-volatility }
 
 Computed from **past** price data. This is what LibreFolio computes:
 
@@ -53,7 +68,7 @@ $$
 \sigma_{realized} = \text{StdDev}(\text{historical returns})
 $$
 
-### 🔮 Implied Volatility
+### 🔮 Implied Volatility {: #implied-volatility }
 
 Extracted from **options prices** using the Black-Scholes model. It represents the market's **expectation** of future volatility:
 
@@ -65,7 +80,7 @@ Implied volatility is forward-looking but only available for optionable assets.
 
 ---
 
-## 🔄 Rolling Window Volatility
+## 🔄 Rolling Window Volatility {: #rolling-window-volatility }
 
 Rather than computing a single volatility number for the entire period, **rolling window volatility** computes $\sigma$ over a sliding window (e.g., 30 days), producing a time series that shows how volatility evolves:
 
@@ -81,7 +96,7 @@ This is useful for:
 
 ---
 
-## 📐 Volatility and Portfolio Theory
+## 📐 Volatility and Portfolio Theory {: #volatility-and-portfolio-theory }
 
 Volatility plays a central role in [Modern Portfolio Theory](../index.md):
 
@@ -92,7 +107,7 @@ Volatility plays a central role in [Modern Portfolio Theory](../index.md):
 
 ---
 
-## ⚠️ Limitations
+## ⚠️ Limitations {: #limitations }
 
 !!! warning "Volatility ≠ Risk"
 
@@ -110,7 +125,7 @@ Volatility plays a central role in [Modern Portfolio Theory](../index.md):
 
 ---
 
-## 🔗 Related
+## 🔗 Related {: #related }
 
 - 📐 **[Sharpe Ratio](sharpe-ratio.md)** — Uses volatility as risk denominator
 - 📊 **[Sortino Ratio](sortino-ratio.md)** — Downside-only volatility variant
