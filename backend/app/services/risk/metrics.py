@@ -170,6 +170,41 @@ def annualized_volatility(
     return sample_standard_deviation(returns) * math.sqrt(_positive_annualization_factor(annualization_factor))
 
 
+def annualized_expected_return(
+    returns: Sequence[float],
+    annualization_factor: float,
+) -> float:
+    """Annualize the **mean** period return, not the compounded one.
+
+    ⚠️ ARITHMETIC ON PURPOSE, AND IT IS NOT INTERCHANGEABLE WITH THE GEOMETRIC ONE.
+    This is the expected-return convention the rest of the risk stack already speaks:
+    ``riskfolio_worker`` scales the optimizer's expected return the same way
+    (``expected_period_return * annualization_factor``), and
+    :func:`annualized_sharpe` divides an arithmetic ``excess_mean`` by volatility.
+
+    The reason it matters beyond consistency is an identity, and an identity does not
+    depend on any dataset. Pair this with :func:`annualized_volatility` on the same
+    series and, at a zero risk-free rate::
+
+        (mean * f) / (stdev * sqrt(f)) == (mean / stdev) * sqrt(f) == Sharpe
+
+    So a line drawn from the risk-free intercept through ``(volatility, expected
+    return)`` has **exactly** the Sharpe ratio as its slope — which is what makes
+    "above the line" mean "better paid for the risk taken". Substituting a geometric
+    annualization keeps the point and tilts the line: the chart stays plausible and
+    stops being true, which is the failure mode nobody sees.
+
+    The two also differ in level, by the volatility drag, and the gap widens with
+    volatility — on a very volatile holding it is large enough to change the sign of a
+    reader's conclusion. Neither is wrong; they answer different questions. But it does
+    mean this value must never be labelled "what it returned".
+    """
+    values = _finite_values(returns, name="returns")
+    if not values:
+        raise ValueError("expected return requires at least one observation")
+    return math.fsum(values) / len(values) * _positive_annualization_factor(annualization_factor)
+
+
 def daily_risk_free_rate(annual_rate: float, periods_per_year: float) -> float:
     """Convert an effective annual risk-free rate into an effective per-observation rate.
 
@@ -867,6 +902,7 @@ __all__ = [
     "DrawdownSummary",
     "HistoricalTailRisk",
     "ReturnHistogram",
+    "annualized_expected_return",
     "annualized_sharpe",
     "annualized_sortino",
     "annualized_volatility",
