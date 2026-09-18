@@ -821,6 +821,7 @@ class RiskService:
             path_count=computation.path_count if computation is not None else None,
             random_seed=(computation.random_seed if computation is not None else None),
             sobol_start_index=(computation.sobol_start_index if computation is not None else None),
+            bootstrap_seed=(computation.bootstrap_seed if computation is not None else None),
             historical_replay_audit=(computation.historical_replay_audit if computation is not None else None),
         )
 
