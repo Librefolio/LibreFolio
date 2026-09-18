@@ -233,6 +233,7 @@ async def list_assets(
     currency: Optional[str] = Query(None, description="Filter by currency (ISO 4217, e.g., USD)"),
     asset_type: Optional[AssetType] = Query(None, description="Filter by asset type enum"),
     active: Optional[bool] = Query(None, description="Tri-state: true = only active, false = only inactive, omit = return both (default)"),
+    is_benchmark: Optional[bool] = Query(None, description="Tri-state: true = only benchmarks, false = only non-benchmarks, omit = return both (default)"),
     search: Optional[str] = Query(None, description="Search in display_name (partial match)"),
     isin: Optional[str] = Query(None, description="Exact ISIN match"),
     ticker: Optional[str] = Query(None, description="Exact ticker match"),
@@ -252,6 +253,7 @@ async def list_assets(
     - `currency`: Filter by currency code (e.g., "USD", "EUR")
     - `asset_type`: Filter by type enum (STOCK, ETF, BOND, etc.)
     - `active`: Include only active assets (default: true)
+    - `is_benchmark`: Include only assets flagged as comparison benchmarks (omit for both)
     - `search`: Search text in display_name (case-insensitive partial match)
     - `isin`: Exact ISIN match
     - `ticker`: Exact ticker match
@@ -280,6 +282,7 @@ async def list_assets(
             currency=currency,
             asset_type=asset_type,
             active=active,
+            is_benchmark=is_benchmark,
             search=search,
             isin=isin,
             ticker=ticker,
