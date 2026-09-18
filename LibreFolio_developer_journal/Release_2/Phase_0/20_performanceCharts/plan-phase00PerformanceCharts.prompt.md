@@ -1759,6 +1759,25 @@ A separate owner integrates G3 after F and the backend calendar signal:
 > `timeSeriesAggregationGolden.test.ts`) nell'insieme vitest raggiungibile da `all`. Un
 > "199/199" è un totale, non l'affermazione da dimostrare.
 
+> **Regola strumenti (forma durevole, 2026-09-18):** *un colore identifica una voce di
+> palette, non una serie.* Qualunque metrica basata sull'**aspetto** eredita ogni altro
+> elemento che condivide quell'aspetto — e in un grafico a tema la condivisione è per
+> costruzione, non per sfortuna. Questo spiega in una riga tutti e tre gli strumenti
+> ritirati in giornata: la somma di pixel non poteva codificare la visibilità; il profilo
+> run-length non separava una linea tratteggiata da una candela; l'exact-hex non separava
+> una candela dall'area P&L che ne condivide il riempimento. Il terzo era stato costruito
+> apposta per soddisfare la regola che il secondo violava.
+>
+> `convertToPixel` ha funzionato perché è keyed sulla **geometria di una serie nominata**:
+> non può rispondere sull'elemento sbagliato, perché non si può interrogarlo su un elemento
+> che non si è nominato. La proprietà da selezionare non è "soglie più accurate" ma
+> *l'impossibilità di rispondere sulla cosa sbagliata*.
+>
+> Corollario sugli aggregati, dalla stessa giornata: un totale verde (`199/199`) dimostra
+> che l'insieme non ha orfani, non che il tuo file ne faccia parte. Se il file fosse assente
+> dal corpus ispezionato, il totale sarebbe verde ugualmente. **Risolvi per nome ciò che
+> vuoi affermare per nome.**
+
 ## 6. Dependency-safe phases and owners
 
 | Phase | Size | Owner | Dependency | Deliverable | Status |
