@@ -25,11 +25,10 @@ from backend.app.schemas.signals import (
     SignalWarmupRequirement,
 )
 from backend.app.services.provider_registry import SignalPluginRegistry, register_plugin
-from backend.app.services.risk.metrics import compounded_return
 from backend.app.services.risk.signal_helpers import (
     build_line_computation,
     prepared_primary_returns,
-    rolling_single_values,
+    rolling_compounded_return_values,
 )
 from backend.app.services.signal_plugins.base import SignalPlugin
 
@@ -120,11 +119,7 @@ class RollingReturnPlugin(SignalPlugin):
     ) -> SignalComputation:
         del event_points
         returns = prepared_primary_returns(context, price_points)
-        values, _ = rolling_single_values(
-            returns,
-            params.window,
-            lambda window: compounded_return(window) * 100,
-        )
+        values, _ = rolling_compounded_return_values(returns, params.window, scale=100.0)
         return build_line_computation(self.output_specs[0], price_points, values)
 
 

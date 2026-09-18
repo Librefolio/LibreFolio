@@ -70,6 +70,7 @@ RISK_SERVICE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_quantlib_smoke.py",
     "backend/test_scripts/test_services/test_series_preparation.py",
     "backend/test_scripts/test_services/test_risk_metrics.py",
+    "backend/test_scripts/test_services/test_risk_metrics_oracle.py",
     "backend/test_scripts/test_services/test_risk_registry.py",
     "backend/test_scripts/test_services/test_risk_signal_plugins.py",
     "backend/test_scripts/test_services/test_risk_service.py",
@@ -166,6 +167,16 @@ def services_risk_workers(verbose: bool = False, test_names: list = None) -> boo
         test_names,
     )
     return run_command(cmd, "Risk worker tests", verbose=verbose)
+
+
+def services_risk_oracle(verbose: bool = False, test_names: list = None) -> bool:
+    """Pin hand-written risk mathematics against riskfolio, NumPy and SciPy."""
+    print_section("Services: Risk Metrics Oracle")
+    print_info("Testing: metrics.py and signal_helpers.py against independent references")
+    print_info("Guards: the four name traps, undefined-window semantics, matrix/scalar consistency")
+    print_info("Note: riskfolio is imported here and only here — never in the web process")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_risk_metrics_oracle.py", test_names)
+    return run_command(cmd, "Risk metrics oracle tests", verbose=verbose)
 
 
 def services_risk_all(verbose: bool = False, test_names: list = None) -> bool:
@@ -804,6 +815,7 @@ Note: No backend server required.
     add_test(cat, "risk-simulation", services_risk_simulation, name="Risk Simulation", desc="Serializable contracts, sampling, moments, chunking and cache")
     add_test(cat, "risk-optimization", services_risk_optimization, name="Risk Optimization", desc="Riskfolio objectives, estimators, constraints, frontier and cache")
     add_test(cat, "risk-workers", services_risk_workers, name="Risk Workers", desc="Spawn lifecycle, queue bounds, timeout, recycle and cancellation")
+    add_test(cat, "risk-oracle", services_risk_oracle, name="Risk Metrics Oracle", desc="riskfolio/NumPy/SciPy reference pins, name traps, undefined windows and matrix consistency", isolation="pure")
     add_test(cat, "risk-all", services_risk_all, name="Risk Analysis", desc="Complete canonical-series, analytic, QuantLib, Riskfolio and worker suite")
     add_test(cat, "series-preparation", services_series_preparation, name="Canonical Series", desc="Converted valuations, joint calendar, returns, annualization and FX fingerprint")
     add_test(cat, "signal-registry", services_signal_registry, name="Signal Registry", desc="SignalPlugin contract, strict discovery and duplicate rejection")
