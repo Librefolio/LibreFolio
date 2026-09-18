@@ -72,6 +72,25 @@ def front_portfolio_risk_unit(verbose: bool = False, ui: bool = False, headed: b
     return False
 
 
+def front_portfolio_allocation_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run allocation chart colour-hierarchy unit tests (Vitest)."""
+    print(f"\n{Colors.BLUE}Running: Allocation colour hierarchy Vitest unit tests{Colors.NC}")
+    result = subprocess.run(
+        ["npx", "vitest", "run", "src/lib/utils/__tests__/colors.test.ts", "src/lib/components/charts/__tests__/allocationHierarchy.test.ts"],
+        cwd="frontend",
+        capture_output=not verbose,
+    )
+    if result.returncode == 0:
+        print_success("Allocation colour hierarchy Vitest unit tests - PASSED")
+        return True
+
+    print_error(f"Allocation colour hierarchy Vitest unit tests - FAILED (exit code: {result.returncode})")
+    if not verbose:
+        print(result.stdout.decode() if result.stdout else "")
+        print(result.stderr.decode() if result.stderr else "")
+    return False
+
+
 def front_portfolio_risk(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run Risk analysis functional E2E tests."""
     print_section("Frontend Risk Analysis Tests")
@@ -108,6 +127,7 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "dashboard", front_portfolio_dashboard, name="Dashboard Chart Tests", desc="PositionsPanel 2x2 view matrix (treemap + perf chart), toggle persistence, AllocationPanel now/history, loading state", tests="portfolio/dashboard.spec.ts")
     add_test(cat, "risk-unit", front_portfolio_risk_unit, test_names=False, name="Risk Store Unit Tests", desc="Request-key cache, account isolation, invalidation and capability checks", tests="src/lib/stores/risk/riskStore.test.ts")
     add_test(cat, "store-unit", front_portfolio_store_unit, test_names=False, name="Portfolio Store Unit Tests", desc="portfolioStore + portfolioMutation vitest units", tests="src/lib/stores/portfolio/portfolioStore.test.ts")
+    add_test(cat, "allocation-unit", front_portfolio_allocation_unit, test_names=False, name="Allocation Colour Hierarchy Unit Tests", desc="hexToHsl round-trip on the real palettes, subtype grouping/ordering, measured shade contrast, legacy ordering pin", tests="src/lib/components/charts/__tests__/allocationHierarchy.test.ts")
     add_test(cat, "risk", front_portfolio_risk, name="Risk Analysis Tests", desc="Asset, asset-set and portfolio Risk UI integration", tests="portfolio/risk-analysis.spec.ts")
     add_test(cat, "all", front_portfolio_all, test_names=False, name="All Portfolio Tests", desc="Run all Portfolio frontend tests")
     registry["front-portfolio"] = cat
