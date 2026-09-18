@@ -1,8 +1,12 @@
 <!--
-  KpiMetricBar — Reusable horizontal bar for KPI card metrics.
+  KpiMetricBar — Horizontal labelled bar for a single metric.
 
   Shows: label (with optional tooltip), value, colored bar.
   Optional caret marker on the bar for start-of-period reference.
+
+  Generic on purpose: it has nothing to do with the dashboard, and lives here so
+  that anyone building a panel finds it. It was parked under `dashboard/` until
+  the risk work needed it and did not think to look there.
 
   Pattern: Svelte 5 Runes, Tailwind CSS 4.
 -->
@@ -28,8 +32,27 @@
 
     let {label, value, numericValue, formatValue, tooltip = '', tooltipHtml = '', barPct, barColor = 'bg-slate-400 dark:bg-slate-500', valueColor = 'text-gray-700 dark:text-gray-300', marker, markerTooltip = ''}: Props = $props();
 
-    const clampedBar = $derived(Math.max(0, Math.min(barPct, 100)));
-    const clampedMarker = $derived(marker != null ? Math.max(0, Math.min(marker, 100)) : null);
+    /**
+     * Clamp to 0..100, and send anything non-finite to 0.
+     *
+     * `width: NaN%` is invalid CSS, so the browser DISCARDS the declaration and
+     * the fill keeps whatever width it had before — a stale number presented as
+     * a current one. The dashboard never hit it because its caller divides by
+     * `|| 1`; the risk panels that now reuse this bar have no such guard.
+     */
+    const clampPct = (value: number): number => (Number.isFinite(value) ? Math.max(0, Math.min(value, 100)) : 0);
+
+    const clampedBar = $derived(clampPct(barPct));
+    /**
+     * A non-finite marker becomes "no marker".
+     *
+     * The template's `clampedMarker > 0` test already excluded NaN, because
+     * every comparison with NaN is false — but that is an accident of IEEE
+     * semantics that happens to help here, not an expressed intention, and it
+     * would stop helping the moment that condition is rewritten. Stating it
+     * makes the marker path safe for a reason instead of by luck.
+     */
+    const clampedMarker = $derived(marker != null && Number.isFinite(marker) ? clampPct(marker) : null);
 </script>
 
 <div class="flex flex-col gap-0.5">
