@@ -12,8 +12,8 @@
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
     import TweenedValue from '$lib/components/ui/TweenedValue.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
-    import KpiMetricBar from '$lib/components/dashboard/KpiMetricBar.svelte';
-    import KpiDivergingFlowBar from '$lib/components/dashboard/KpiDivergingFlowBar.svelte';
+    import KpiMetricBar from '$lib/components/ui/display/KpiMetricBar.svelte';
+    import KpiDivergingFlowBar from '$lib/components/ui/display/KpiDivergingFlowBar.svelte';
     import {safeString} from '$lib/types';
 
     interface Props {
