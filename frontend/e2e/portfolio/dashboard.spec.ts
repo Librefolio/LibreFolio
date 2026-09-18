@@ -153,6 +153,89 @@ test.describe('Dashboard charts and view matrix', () => {
         }
     });
 
+    test('Allocation by type carries a per-slice colour derived from its primary type', async ({page}) => {
+        // ECharts draws to a canvas, so a colour has no DOM to assert on. The
+        // component exposes its instance as `__lfChart` (same hook as
+        // PriceChartFull); reading the option is the only way to observe that the
+        // hierarchy actually reached the chart rather than merely compiling.
+        await page.goto('/dashboard');
+        await expect(page.getByTestId('dashboard-page')).toBeVisible({timeout: 15_000});
+        await expect(page.getByTestId('dashboard-page')).toHaveAttribute('data-busy', 'false', {timeout: 30_000});
+
+        const panel = page.getByTestId('allocation-panel');
+        await expect(panel).toBeVisible({timeout: 15_000});
+        // Never assume the default tab — select it.
+        await page.getByTestId('allocation-tab-type').click();
+
+        type Slice = {rawName: string; value: number; color: string | null; groupSize: number | null; primaryKey: string | null; primaryTotal: number | null};
+        const read = async (): Promise<{palette: unknown; slices: Slice[]} | null> =>
+            panel.evaluate((root) => {
+                for (const node of Array.from(root.querySelectorAll('*'))) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const chart = (node as any).__lfChart;
+                    if (!chart) continue;
+                    const option = chart.getOption();
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const series = ((option.series as any[]) ?? [])[0];
+                    if (series?.type !== 'pie') continue; // the history chart lives here too
+                    return {
+                        palette: option.color,
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        slices: ((series.data as any[]) ?? []).map((d) => ({
+                            rawName: String(d?.rawName ?? ''),
+                            value: Number(d?.value ?? 0),
+                            color: d?.itemStyle?.color ?? null,
+                            groupSize: d?.groupSize ?? null,
+                            primaryKey: d?.primaryKey ?? null,
+                            primaryTotal: d?.primaryTotal ?? null,
+                        })),
+                    };
+                }
+                return null;
+            });
+
+        // Poll rather than sleep: the pie mounts when the tab flips, so the first
+        // read can legitimately land before the instance exists.
+        await expect.poll(async () => (await read())?.slices.length ?? 0, {timeout: 15_000}).toBeGreaterThan(0);
+        const option = (await read())!;
+
+        // Option-level palette, grown to 14 so 13 possible primaries cannot wrap.
+        expect(Array.isArray(option.palette)).toBe(true);
+        expect((option.palette as string[]).length).toBe(14);
+
+        for (const slice of option.slices) {
+            // Per-datum colour: proves buildAllocationHierarchy ran. Before this
+            // change slices had no itemStyle at all and inherited the palette by index.
+            expect(slice.color, `slice ${slice.rawName} has no own colour`).toMatch(/^#[0-9a-f]{6}$/i);
+            expect(slice.groupSize).toBeGreaterThanOrEqual(1);
+            // A group total can never be smaller than one of its members.
+            expect(slice.primaryTotal).toBeGreaterThanOrEqual(slice.value - 0.01);
+        }
+
+        // No two categories may share a colour — the failure mode the 12-entry
+        // palette produced by wrapping with `% 12`.
+        const colors = option.slices.map((s) => String(s.color).toLowerCase());
+        expect(new Set(colors).size).toBe(colors.length);
+
+        // Members of one primary must be contiguous, otherwise a shared hue reads
+        // as coincidence rather than kinship. Holds trivially while every group is
+        // a singleton, and becomes load-bearing as soon as subtypes exist in the data.
+        // Non-decreasing first-occurrence indices is exactly contiguity: an
+        // interleaving like [A, A, B, C, B] breaks the order, and is caught.
+        const primaries = option.slices.map((s) => s.primaryKey);
+        const firstSeen = primaries.map((p) => primaries.indexOf(p));
+        expect(firstSeen).toEqual([...firstSeen].sort((a, b) => a - b));
+
+        // Legacy pin, observed end to end: with no subtype present every group is a
+        // singleton, so the result must still be the plain value-descending order
+        // painted with the palette in order — exactly what shipped before.
+        if (option.slices.every((s) => s.groupSize === 1)) {
+            const values = option.slices.map((s) => s.value);
+            expect(values).toEqual([...values].sort((a, b) => b - a));
+            expect(colors).toEqual((option.palette as string[]).slice(0, colors.length).map((c) => c.toLowerCase()));
+        }
+    });
+
     test('Positions panel publishes its loading state through data-busy', async ({page}) => {
         // Hold the FIRST portfolio report so the busy state is observable, then
         // release it. Synchronisation is on data-busy, never on the clock: the gate
