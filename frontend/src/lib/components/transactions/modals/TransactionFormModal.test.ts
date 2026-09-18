@@ -35,7 +35,7 @@ import {writable} from 'svelte/store';
 import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import {zodiosApi} from '$lib/api';
 import {schemas} from '$lib/api/generated';
-import {commitTransactions} from '$lib/utils/transactions/txCommitApi';
+import {commitTransactions, validateTransactions} from '$lib/utils/transactions/txCommitApi';
 import {ensureTypesLoaded} from '$lib/stores/transactions/transactionTypeStore';
 import {guideAnchors} from '$lib/features/onboarding/guideAnchors.svelte';
 import type {ContextualOnboardingFlow, GuideStepId, GuidedOnboardingFlow} from '$lib/features/onboarding/onboardingGuideCatalog';
@@ -186,6 +186,68 @@ vi.mock('$lib/features/onboarding/onboardingGuide.svelte', async (importOriginal
 const validMinimalTXTypesResponse = schemas.TXTypesResponse.parse({
     transaction_types: [
         {
+            code: 'BUY',
+            name: 'Buy',
+            description: 'Purchase asset with cash',
+            icon_slug: 'buy',
+            doc_slug: 'buy-sell',
+            asset_mode: 'required',
+            cash_mode: 'required',
+            quantity_mode: 'required',
+            requires_link: false,
+            quantity_sign: 'positive',
+            cash_sign: 'negative',
+            event_compatible: false,
+            cost_basis_mode: 'forbidden',
+        },
+        {
+            code: 'SELL',
+            name: 'Sell',
+            description: 'Sell asset for cash',
+            icon_slug: 'sell',
+            doc_slug: 'buy-sell',
+            asset_mode: 'required',
+            cash_mode: 'required',
+            quantity_mode: 'required',
+            requires_link: false,
+            quantity_sign: 'negative',
+            cash_sign: 'positive',
+            event_compatible: false,
+            cost_basis_mode: 'forbidden',
+        },
+        {
+            code: 'TRANSFER',
+            name: 'Asset Transfer',
+            description: 'Asset transfer between brokers',
+            icon_slug: 'transfer',
+            doc_slug: 'transfer',
+            asset_mode: 'required',
+            cash_mode: 'forbidden',
+            quantity_mode: 'required',
+            requires_link: true,
+            quantity_sign: 'nonzero',
+            cash_sign: 'zero',
+            event_compatible: false,
+            pair_form_layout: 'transfer_asset',
+            cost_basis_mode: 'forbidden',
+            cost_basis_pair: ['forbidden', 'required_qty_pos'],
+        },
+        {
+            code: 'ADJUSTMENT',
+            name: 'Adjustment',
+            description: 'Manual quantity correction',
+            icon_slug: 'adjustment',
+            doc_slug: 'adjustment',
+            asset_mode: 'required',
+            cash_mode: 'forbidden',
+            quantity_mode: 'required',
+            requires_link: false,
+            quantity_sign: 'nonzero',
+            cash_sign: 'zero',
+            event_compatible: true,
+            cost_basis_mode: 'required_qty_pos',
+        },
+        {
             code: 'FX_CONVERSION',
             name: 'FX Conversion',
             description: 'Currency exchange',
@@ -213,6 +275,48 @@ function mount(props: Record<string, unknown> = {}) {
     return {onClose, ...render(TransactionFormModal, {open: true, mode: 'create', items: null, onClose, ...props})};
 }
 
+function txRow(overrides: Record<string, unknown> = {}) {
+    return {
+        id: 101,
+        broker_id: 17,
+        asset_id: 42,
+        type: 'BUY',
+        date: '2024-03-10',
+        quantity: '1',
+        cash: {code: 'EUR', amount: '-100'},
+        related_transaction_id: null,
+        partner_broker_id: null,
+        tags: [],
+        description: '',
+        cost_basis_override: null,
+        cost_basis_mode: null,
+        asset_event_id: null,
+        ...overrides,
+    };
+}
+
+function transferPair(quantity = '999999999999.123455') {
+    const sender = txRow({
+        id: 101,
+        broker_id: 17,
+        type: 'TRANSFER',
+        quantity: `-${quantity}`,
+        cash: null,
+        related_transaction_id: 202,
+        partner_broker_id: 23,
+    });
+    const receiver = txRow({
+        id: 202,
+        broker_id: 23,
+        type: 'TRANSFER',
+        quantity,
+        cash: null,
+        related_transaction_id: 101,
+        partner_broker_id: 17,
+    });
+    return {sender, receiver};
+}
+
 function openTypeSelect() {
     return fireEvent.click(within(screen.getByTestId('tx-form-type')).getByRole('combobox'));
 }
@@ -236,6 +340,28 @@ async function setCashAmount(testid: string, amount: string) {
     const input = screen.getByTestId(`${testid}-amount`) as HTMLInputElement;
     await fireEvent.input(input, {target: {value: amount}});
     await fireEvent.blur(input);
+}
+
+function expectNoImportantNeutralQuantityBorder(input: HTMLInputElement) {
+    expect(input.classList).not.toContain('!border-gray-200');
+    expect(input.classList).not.toContain('dark:!border-slate-600');
+}
+
+async function validateAndFindOperation(operation: 'creates' | 'updates', predicate: (item: Record<string, unknown>) => boolean) {
+    const callsBefore = vi.mocked(validateTransactions).mock.calls.length;
+    await fireEvent.click(screen.getByTestId('tx-form-validate-now'));
+
+    let matched: Record<string, unknown> | undefined;
+    await waitFor(() => {
+        matched = vi
+            .mocked(validateTransactions)
+            .mock.calls.slice(callsBefore)
+            .flatMap(([payload]) => ((payload as unknown as Record<string, unknown>)[operation] as Array<Record<string, unknown>> | undefined) ?? [])
+            .find(predicate);
+        expect(matched).toBeDefined();
+    });
+    if (!matched) throw new Error(`manual validation did not publish a matching ${operation} item`);
+    return matched;
 }
 
 function resetGuideState() {
@@ -337,6 +463,455 @@ describe('TransactionFormModal — draft seeding (T1-b, T3)', () => {
         await waitFor(() => {
             expect(screen.getByTestId('tx-form-validate-now')).toBeEnabled();
             expect(screen.getByTestId('tx-form-save')).toBeDisabled();
+        });
+    });
+});
+
+describe('TransactionFormModal — exact quantity contract', () => {
+    beforeEach(async () => {
+        vi.clearAllMocks();
+        guideAnchors.clear();
+        resetGuideState();
+        vi.mocked(zodiosApi.get_transaction_types_api_v1_transactions_types_get).mockResolvedValue(validMinimalTXTypesResponse);
+        await setupI18n();
+        await ensureTypesLoaded();
+    });
+
+    afterEach(() => {
+        cleanup();
+        guideAnchors.clear();
+        resetGuideState();
+    });
+
+    function itemsFor(type: 'BUY' | 'SELL' | 'ADJUSTMENT' | 'TRANSFER') {
+        if (type === 'TRANSFER') {
+            const {sender, receiver} = transferPair();
+            return [sender, receiver];
+        }
+        if (type === 'ADJUSTMENT') {
+            return [
+                txRow({
+                    type,
+                    quantity: '1',
+                    cash: null,
+                    cost_basis_mode: 'manual',
+                }),
+            ];
+        }
+        return [
+            txRow({
+                type,
+                quantity: type === 'SELL' ? '-1' : '1',
+                cash: {code: 'EUR', amount: type === 'SELL' ? '100' : '-100'},
+            }),
+        ];
+    }
+
+    it.each([
+        ['TRANSFER', false],
+        ['BUY', true],
+        ['ADJUSTMENT', true],
+    ] as const)('%s renders one exact text quantity and links only a real branch hint', async (type, hasQuantityHint) => {
+        mount({
+            mode: 'create',
+            items: itemsFor(type),
+            commitOnSave: false,
+            onPushDraft: vi.fn(),
+        });
+
+        const input = (await screen.findByTestId('tx-form-quantity')) as HTMLInputElement;
+        expect(screen.getAllByTestId('tx-form-quantity')).toHaveLength(1);
+        expect(within(screen.getByTestId('tx-form-quantity-wrap')).getAllByRole('textbox')).toHaveLength(1);
+        expect(input).toHaveAttribute('type', 'text');
+        expect(input).toHaveAttribute('inputmode', 'decimal');
+        expect(input).toHaveAttribute('maxlength', '23');
+        expect(input).not.toHaveAttribute('aria-valuenow');
+        expectNoImportantNeutralQuantityBorder(input);
+        if (type === 'BUY') expect(screen.getByTestId('tx-form-cash-wrap')).toBeInTheDocument();
+        else expect(screen.queryByTestId('tx-form-cash-wrap')).toBeNull();
+
+        const idMatch = /^tx-form-quantity-([a-z0-9]{8})$/.exec(input.id);
+        if (!idMatch) throw new Error(`${type} quantity input has invalid nonce id ${input.id}`);
+        const nonce = idMatch[1];
+        expect(input.name).toBe(`qty-${nonce}`);
+
+        const expectedHintId = `tx-form-quantity-hint-${nonce}`;
+        if (!hasQuantityHint) {
+            expect(input).not.toHaveAttribute('aria-describedby');
+            expect(document.getElementById(expectedHintId)).toBeNull();
+            return;
+        }
+
+        const hintId = input.getAttribute('aria-describedby');
+        expect(hintId).toBe(expectedHintId);
+        if (!hintId) throw new Error(`${type} quantity input has no aria-describedby hint`);
+        expect(document.querySelectorAll(`[id="${hintId}"]`)).toHaveLength(1);
+    });
+
+    it('pushes a pre-blur high SELL as one normalized exact negative string', async () => {
+        const onPushDraft = vi.fn();
+        mount({
+            mode: 'create',
+            items: itemsFor('SELL'),
+            commitOnSave: false,
+            onPushDraft,
+        });
+        const input = await screen.findByTestId('tx-form-quantity');
+
+        await fireEvent.focus(input);
+        await fireEvent.input(input, {target: {value: '999999999999,123456'}});
+        expect(input).toHaveValue('999999999999,123456');
+        await waitFor(() => expect(screen.getByTestId('tx-form-save')).toBeEnabled());
+
+        await fireEvent.click(screen.getByTestId('tx-form-save'));
+
+        expect(input).toHaveValue('999999999999,123456');
+        expect(onPushDraft).toHaveBeenCalledTimes(1);
+        expect(onPushDraft.mock.calls[0]?.[0]).toMatchObject({
+            type: 'SELL',
+            quantity: '-999999999999.123456',
+        });
+        expect(commitTransactions).not.toHaveBeenCalled();
+    });
+
+    it('preserves an explicit manual override through create validation and commitOnSave=false draft push without a public mode', async () => {
+        const override = {code: 'EUR', amount: '123.450000'};
+        const onPushDraft = vi.fn();
+        mount({
+            mode: 'create',
+            items: [
+                txRow({
+                    type: 'ADJUSTMENT',
+                    quantity: '1',
+                    cash: null,
+                    cost_basis_mode: 'manual',
+                    cost_basis_override: null,
+                }),
+            ],
+            commitOnSave: false,
+            onPushDraft,
+        });
+
+        const amountInput = (await screen.findByTestId('tx-form-cost-basis-input-amount')) as HTMLInputElement;
+        expect(screen.getByTestId('tx-form-cost-basis-toggle-manual')).toHaveAttribute('aria-pressed', 'true');
+        await fireEvent.input(amountInput, {target: {value: override.amount}});
+        expect(amountInput).toHaveValue(override.amount);
+        await waitFor(() => {
+            expect(screen.getByTestId('tx-form-validate-now')).toBeEnabled();
+            expect(screen.getByTestId('tx-form-save')).toBeEnabled();
+        });
+
+        const validatedCreate = await validateAndFindOperation('creates', (item) => item.type === 'ADJUSTMENT' && (item.cost_basis_override as {amount?: string} | undefined)?.amount === override.amount);
+        expect(validatedCreate.cost_basis_override).toEqual(override);
+        expect(validatedCreate).not.toHaveProperty('cost_basis_mode');
+
+        await fireEvent.click(screen.getByTestId('tx-form-save'));
+        expect(onPushDraft).toHaveBeenCalledTimes(1);
+        const pushed = onPushDraft.mock.calls.at(-1)?.[0] as Record<string, unknown> | undefined;
+        if (!pushed) throw new Error('manual create did not publish its local draft');
+        expect(pushed.cost_basis_override).toEqual(override);
+        expect(pushed._cost_basis_mode).toBe('manual');
+        expect(pushed).not.toHaveProperty('cost_basis_mode');
+        expect(commitTransactions).not.toHaveBeenCalled();
+    });
+
+    it('preserves an edited manual override through update validation and commit without an implicit mode', async () => {
+        const override = {code: 'EUR', amount: '222.500000'};
+        mount({
+            mode: 'edit',
+            items: [
+                txRow({
+                    type: 'ADJUSTMENT',
+                    quantity: '1',
+                    cash: null,
+                    cost_basis_mode: 'manual',
+                    cost_basis_override: {code: 'EUR', amount: '10'},
+                }),
+            ],
+        });
+
+        const amountInput = (await screen.findByTestId('tx-form-cost-basis-input-amount')) as HTMLInputElement;
+        expect(screen.getByTestId('tx-form-cost-basis-toggle-manual')).toHaveAttribute('aria-pressed', 'true');
+        await fireEvent.input(amountInput, {target: {value: override.amount}});
+        expect(amountInput).toHaveValue(override.amount);
+        await waitFor(() => {
+            expect(screen.getByTestId('tx-form-validate-now')).toBeEnabled();
+            expect(screen.getByTestId('tx-form-save')).toBeEnabled();
+        });
+
+        const validatedUpdate = await validateAndFindOperation('updates', (item) => item.id === 101 && (item.cost_basis_override as {amount?: string} | undefined)?.amount === override.amount);
+        expect(validatedUpdate).toEqual({
+            id: 101,
+            cost_basis_override: override,
+        });
+        expect(validatedUpdate).not.toHaveProperty('cost_basis_mode');
+
+        const commitCallsBefore = vi.mocked(commitTransactions).mock.calls.length;
+        await fireEvent.click(screen.getByTestId('tx-form-save'));
+        await waitFor(() => expect(vi.mocked(commitTransactions).mock.calls.length).toBeGreaterThan(commitCallsBefore));
+        expect(vi.mocked(commitTransactions).mock.calls.at(-1)?.[0]).toEqual({
+            updates: [
+                {
+                    id: 101,
+                    cost_basis_override: override,
+                },
+            ],
+        });
+    });
+
+    it.each([
+        ['edit', 'edit'],
+        ['create-from-duplicate-draft', 'create'],
+    ] as const)('%s hydrates a high SELL as a positive magnitude and pushes the exact negative payload', async (_label, mode) => {
+        const onPushDraft = vi.fn();
+        const source = txRow({
+            type: 'SELL',
+            date: '2017-08-09',
+            quantity: '-999999999999.123456',
+            cash: {code: 'EUR', amount: '100'},
+        });
+        mount({mode, items: [source], commitOnSave: false, onPushDraft});
+
+        const input = await screen.findByTestId('tx-form-quantity');
+        expect(input).toHaveValue('999999999999.123456');
+        const dateInput = within(screen.getByTestId('tx-form-date-wrap')).getByRole('textbox');
+        expect(dateInput).toHaveValue('2017-08-09');
+
+        await waitFor(() => expect(screen.getByTestId('tx-form-save')).toBeEnabled());
+        await fireEvent.click(screen.getByTestId('tx-form-save'));
+
+        expect(onPushDraft).toHaveBeenCalledTimes(1);
+        expect(onPushDraft.mock.calls[0]?.[0]).toMatchObject({
+            type: 'SELL',
+            date: '2017-08-09',
+            quantity: '-999999999999.123456',
+        });
+    });
+
+    it.each([
+        {
+            label: 'auto receiver-first',
+            receiverFirst: true,
+            mode: 'auto',
+            initialOverride: {code: 'EUR', amount: '0'},
+            nextOverride: null,
+            expectedReceiverCostBasis: {
+                cost_basis_mode: 'auto',
+                cost_basis_override: {code: 'EUR', amount: '0'},
+            },
+        },
+        {
+            label: 'manual sender-first',
+            receiverFirst: false,
+            mode: 'manual',
+            initialOverride: {code: 'EUR', amount: '10'},
+            nextOverride: '222.5',
+            expectedReceiverCostBasis: {
+                cost_basis_override: {code: 'EUR', amount: '222.5'},
+            },
+        },
+    ] as const)('$label maps exact sender/receiver update legs and preserves allowed cost basis', async ({receiverFirst, mode, initialOverride, nextOverride, expectedReceiverCostBasis}) => {
+        const {sender, receiver} = transferPair('999999999999.123455');
+        Object.assign(receiver, {
+            cost_basis_mode: mode,
+            cost_basis_override: initialOverride,
+        });
+        mount({
+            mode: 'edit',
+            items: receiverFirst ? [receiver, sender] : [sender, receiver],
+        });
+        const input = await screen.findByTestId('tx-form-quantity');
+        expect(input).toHaveValue('999999999999.123455');
+
+        if (nextOverride) {
+            const amountInput = (await screen.findByTestId('tx-form-cost-basis-input-amount')) as HTMLInputElement;
+            await fireEvent.input(amountInput, {target: {value: nextOverride}});
+            expect(amountInput).toHaveValue(nextOverride);
+        }
+        await fireEvent.input(input, {target: {value: '999999999999,123456'}});
+        await waitFor(() => expect(screen.getByTestId('tx-form-save')).toBeEnabled());
+        await fireEvent.click(screen.getByTestId('tx-form-save'));
+
+        await waitFor(() => expect(commitTransactions).toHaveBeenCalledTimes(1));
+        expect(vi.mocked(commitTransactions).mock.calls[0]?.[0]).toEqual({
+            updates: [
+                {id: 101, quantity: '-999999999999.123456'},
+                {
+                    id: 202,
+                    quantity: '999999999999.123456',
+                    ...expectedReceiverCostBasis,
+                },
+            ],
+        });
+    });
+
+    it.each([
+        ['1,250000', '1.250000'],
+        ['0,000001', '0.000001'],
+    ])('preserves exact locale input %j in the pushed payload as %j', async (raw, expected) => {
+        const onPushDraft = vi.fn();
+        mount({
+            mode: 'create',
+            items: itemsFor('BUY'),
+            commitOnSave: false,
+            onPushDraft,
+        });
+        const input = await screen.findByTestId('tx-form-quantity');
+
+        await fireEvent.input(input, {target: {value: raw}});
+        expect(input).toHaveValue(raw);
+        await waitFor(() => expect(screen.getByTestId('tx-form-save')).toBeEnabled());
+        await fireEvent.click(screen.getByTestId('tx-form-save'));
+
+        expect(onPushDraft.mock.calls[0]?.[0]).toMatchObject({
+            type: 'BUY',
+            quantity: expected,
+        });
+    });
+
+    it.each(['1.1234567', '1000000000000.1'])('keeps precision overflow %j visible, invalid, and out of payloads', async (raw) => {
+        const onPushDraft = vi.fn();
+        mount({
+            mode: 'create',
+            items: itemsFor('BUY'),
+            commitOnSave: false,
+            onPushDraft,
+        });
+        const input = await screen.findByTestId('tx-form-quantity');
+
+        await fireEvent.input(input, {target: {value: raw}});
+        expect(input).toHaveValue(raw);
+        expect(input).toHaveAttribute('aria-invalid', 'true');
+        expect(input.classList).toContain('border-red-400');
+        expect(input.classList).toContain('dark:border-red-500');
+        expectNoImportantNeutralQuantityBorder(input);
+        await waitFor(() => expect(screen.getByTestId('tx-form-save')).toBeDisabled());
+
+        await fireEvent.blur(input);
+        expect(input).toHaveValue(raw);
+        expect(onPushDraft).not.toHaveBeenCalled();
+        expect(commitTransactions).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['BUY', '1', '163.223', true],
+        ['BUY', '-1', '25.331', false],
+        ['BUY', '-0.000000', '', false],
+        ['SELL', '1', '163.223', true],
+        ['SELL', '-1', '25.331', false],
+        ['TRANSFER', '1', '163.223', true],
+        ['TRANSFER', '-1', '25.331', false],
+        ['ADJUSTMENT', '1', '163.223', true],
+        ['ADJUSTMENT', '-1', '163.223', true],
+        ['ADJUSTMENT', '0', '25.331', false],
+        ['ADJUSTMENT', '-0.000000', '25.331', false],
+    ] as const)('%s quantity %j publishes matching hue and Save gate', async (type, raw, expectedHue, enabled) => {
+        mount({
+            mode: 'create',
+            items: itemsFor(type),
+            commitOnSave: false,
+            onPushDraft: vi.fn(),
+        });
+        const input = await screen.findByTestId('tx-form-quantity');
+
+        await fireEvent.input(input, {target: {value: raw}});
+
+        expectNoImportantNeutralQuantityBorder(input);
+        if (expectedHue) expect(input.getAttribute('style') ?? '').toContain(expectedHue);
+        else {
+            expect(input.getAttribute('style') ?? '').not.toContain('163.223');
+            expect(input.getAttribute('style') ?? '').not.toContain('25.331');
+        }
+        const signInvalid = expectedHue === '25.331';
+        expect(input).toHaveAttribute('aria-invalid', String(signInvalid));
+        if (signInvalid) {
+            expect(input.classList).toContain('border-red-400');
+            expect(input.classList).toContain('dark:border-red-500');
+        } else {
+            expect(input.classList).not.toContain('border-red-400');
+            expect(input.classList).not.toContain('dark:border-red-500');
+        }
+        await waitFor(() => {
+            if (enabled) expect(screen.getByTestId('tx-form-save')).toBeEnabled();
+            else expect(screen.getByTestId('tx-form-save')).toBeDisabled();
+        });
+    });
+
+    it('view mode keeps the exact disabled input visible with no Save or mutation path', async () => {
+        const onPushDraft = vi.fn();
+        mount({
+            mode: 'view',
+            items: [
+                txRow({
+                    quantity: '999999999999.123456',
+                }),
+            ],
+            commitOnSave: false,
+            onPushDraft,
+        });
+        const input = await screen.findByTestId('tx-form-quantity');
+
+        expect(input).toBeDisabled();
+        expect(input).toHaveValue('999999999999.123456');
+        expect(screen.queryByTestId('tx-form-save')).toBeNull();
+
+        await fireEvent.input(input, {target: {value: '1'}});
+        await fireEvent.keyDown(input, {key: 'ArrowDown'});
+        expect(input).toHaveValue('999999999999.123456');
+        expect(onPushDraft).not.toHaveBeenCalled();
+        expect(commitTransactions).not.toHaveBeenCalled();
+    });
+
+    it('open and openKey resets reseed the private raw buffer from the same model', async () => {
+        const source = txRow({quantity: '1.250000'});
+        const {rerender} = mount({
+            mode: 'create',
+            items: [source],
+            openKey: 0,
+            commitOnSave: false,
+            onPushDraft: vi.fn(),
+        });
+        let input = await screen.findByTestId('tx-form-quantity');
+
+        await fireEvent.input(input, {target: {value: '1,250000'}});
+        expect(input).toHaveValue('1,250000');
+
+        await rerender({open: true, openKey: 1});
+        input = await screen.findByTestId('tx-form-quantity');
+        expect(input).toHaveValue('1.25');
+
+        await fireEvent.input(input, {target: {value: '1,250000'}});
+        await rerender({open: false});
+        await waitFor(() => expect(screen.queryByTestId('tx-form-quantity')).toBeNull());
+        await rerender({open: true});
+        input = await screen.findByTestId('tx-form-quantity');
+        expect(input).toHaveValue('1.25');
+    });
+
+    it.each([
+        ['999999999999.123456', true],
+        ['-999999999999.123456', false],
+        ['-0.000000', false],
+    ] as const)('cost-basis warning follows exact quantity sign for %j', async (quantity, warningVisible) => {
+        mount({
+            mode: 'create',
+            items: [
+                txRow({
+                    type: 'ADJUSTMENT',
+                    quantity,
+                    cash: null,
+                    cost_basis_mode: 'manual',
+                    cost_basis_override: null,
+                }),
+            ],
+            commitOnSave: false,
+            onPushDraft: vi.fn(),
+        });
+
+        await screen.findByTestId('tx-form-quantity');
+        await waitFor(() => {
+            if (warningVisible) expect(screen.getByTestId('tx-form-cost-basis-warning')).toBeInTheDocument();
+            else expect(screen.queryByTestId('tx-form-cost-basis-warning')).toBeNull();
         });
     });
 });

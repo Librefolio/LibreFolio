@@ -6,7 +6,7 @@
  *
  * Prerequisites: backend in test mode (port 6041), at least 1 broker seeded.
  */
-import {expect, test, type Page} from '../fixtures/playwright';
+import {expect, test, type Locator, type Page} from '../fixtures/playwright';
 import {login, navigateTo, setLanguage} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {waitForSettled} from '../fixtures/app-events';
@@ -63,6 +63,21 @@ async function fillCashAmount(page: Page, amount: string) {
     // Blur commits the value through the locale parser; assert the commit
     // instead of sleeping through it.
     await expect(amountInput).not.toBeFocused({timeout: 3_000});
+}
+
+/** Compare the effective browser border color, not merely an inline declaration
+ * that an important Tailwind utility could still override. The probe lets
+ * Chromium choose its own supported serialization for OKLCH. */
+async function expectComputedBorderColor(page: Page, input: Locator, color: string, message: string) {
+    const expected = await page.evaluate((candidate) => {
+        const probe = document.createElement('span');
+        probe.style.color = candidate;
+        document.body.appendChild(probe);
+        const normalized = getComputedStyle(probe).color;
+        probe.remove();
+        return normalized;
+    }, color);
+    await expect.poll(() => input.evaluate((element) => getComputedStyle(element).borderTopColor), {timeout: 10_000, message}).toBe(expected);
 }
 
 /** Fill a minimal BUY transaction in the FormModal (assumes it's already open). */
@@ -648,12 +663,12 @@ test.describe('Transactions', () => {
             // Enter negative value → border-color should have red hue (~25 in oklch)
             await qtyInput.fill('');
             await qtyInput.type('-5');
-            await expect.poll(() => qtyInput.evaluate((el: HTMLElement) => el.style.borderColor), {timeout: 10_000, message: 'Negative qty on BUY should have red border-color'}).toContain('25.331');
+            await expectComputedBorderColor(page, qtyInput, 'oklch(0.637 0.237 25.331 / 0.7)', 'Negative qty on BUY should have the effective red border color');
 
             // Enter positive value → green hue (~163 in oklch)
             await qtyInput.fill('');
             await qtyInput.type('5');
-            await expect.poll(() => qtyInput.evaluate((el: HTMLElement) => el.style.borderColor), {timeout: 10_000, message: 'Positive qty on BUY should have green border-color'}).toContain('163.223');
+            await expectComputedBorderColor(page, qtyInput, 'oklch(0.765 0.177 163.223 / 0.7)', 'Positive qty on BUY should have the effective green border color');
 
             await closeAllModals(page);
         });
@@ -677,12 +692,12 @@ test.describe('Transactions', () => {
             // Enter positive → green (auto-negated = correct)
             await qtyInput.fill('');
             await qtyInput.type('10');
-            await expect.poll(() => qtyInput.evaluate((el: HTMLElement) => el.style.borderColor), {timeout: 10_000, message: 'Positive qty on SELL should show green'}).toContain('163.223');
+            await expectComputedBorderColor(page, qtyInput, 'oklch(0.765 0.177 163.223 / 0.7)', 'Positive qty on SELL should have the effective green border color');
 
             // Enter negative → red (double-negative = wrong)
             await qtyInput.fill('');
             await qtyInput.type('-10');
-            await expect.poll(() => qtyInput.evaluate((el: HTMLElement) => el.style.borderColor), {timeout: 10_000, message: 'Negative qty on SELL should show red'}).toContain('25.331');
+            await expectComputedBorderColor(page, qtyInput, 'oklch(0.637 0.237 25.331 / 0.7)', 'Negative qty on SELL should have the effective red border color');
 
             await closeAllModals(page);
         });

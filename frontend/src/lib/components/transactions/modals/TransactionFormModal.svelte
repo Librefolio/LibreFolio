@@ -47,6 +47,7 @@
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
     import SingleDatePicker from '$lib/components/ui/date/SingleDatePicker.svelte';
     import TagInput from '$lib/components/ui/input/TagInput.svelte';
+    import ExactQuantityInput from '$lib/components/ui/input/ExactQuantityInput.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import CompactCashCell from '$lib/components/ui/display/CompactCashCell.svelte';
@@ -68,11 +69,9 @@
     import {commitTransactions, validateTransactions} from '$lib/utils/transactions/txCommitApi';
     import {resolveIssueMessage, type ResolverContext} from '$lib/utils/transactions/resolveValidationMessage';
     import {generateUUID} from '$lib/utils/core/uuid';
-    import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
-    import {decimalArrowStep, normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
     import {computeSignHint} from '$lib/utils/transactions/signHintColor';
     import {deduplicateIssues, signLabel, signHintKey} from '$lib/utils/transactions/txFormFields';
-    import {buildCreatePayload, buildUpdateDiff, diffDualItem, buildDualCreatePayloads, upgradeAutoToDetail, type TxFields, type TxOriginal, type TxDualSide, type PairFormLayout as PayloadPairLayout} from '$lib/utils/transactions/txPayloadHelpers';
+    import {applySign, buildCreatePayload, buildUpdateDiff, diffDualItem, buildDualCreatePayloads, exactDecimalSign, upgradeAutoToDetail, type TxFields, type TxOriginal, type TxDualSide, type PairFormLayout as PayloadPairLayout} from '$lib/utils/transactions/txPayloadHelpers';
     import {lookupFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
     import {computeFxConversionInfo, buildFxTooltipData, buildFxTooltipHtml} from '$lib/utils/currency/fxConversionHelper';
     import type {TXReadItem} from '../types';
@@ -296,13 +295,13 @@
         // Also normalize paired types (transfer_asset, transfer_cash) — the dual
         // form always displays absolute values; sign is determined by From/To sides.
         let qty = tx.quantity;
-        if (Number(qty) < 0 && (txRule.quantityRule === 'negative' || txRule.pairFormLayout != null)) {
-            qty = String(Math.abs(Number(qty)));
+        if (txRule.quantityRule === 'negative' || txRule.pairFormLayout != null) {
+            qty = applySign(qty, 'positive');
         }
         let cash = tx.cash ? {code: tx.cash.code, amount: tx.cash.amount} : null;
         // Paired cash editors show magnitudes; the collector signs the two legs.
-        if (cash && (txRule.cashSign === 'negative' || (txRule.requiresPair && mode !== 'view')) && Number(cash.amount) < 0) {
-            cash = {code: cash.code, amount: cash.amount.replace(/^-/, '')};
+        if (cash && (txRule.cashSign === 'negative' || (txRule.requiresPair && mode !== 'view'))) {
+            cash = {code: cash.code, amount: applySign(cash.amount, 'positive')};
         }
         return {
             broker_id: tx.broker_id,
@@ -367,12 +366,8 @@
     /** Bug5-fix: broker_id of partner that the user cannot access.
      *  When set, the "To" side shows a locked placeholder instead of empty. */
     let inaccessiblePartnerBrokerId = $state<number | null>(null);
-    /** User-facing display string for `draft.quantity`. Decoupled from the
-     *  authoritative payload so the user can type freely (e.g. "0.0000")
-     *  without us reformatting mid-keystroke (Bugfix-4 §U18). The display
-     *  is reseeded from `draft.quantity` whenever the draft itself is reset
-     *  (modal open, type change reset). */
-    let qtyDisplay = $state('');
+    /** ExactQuantityInput owns the locale-specific edit buffer; the draft stays normalized. */
+    let quantityInputValid = $state(true);
 
     // Reset draft on open; broker store must be loaded first.
     $effect(() => {
@@ -395,6 +390,7 @@
             inaccessiblePartnerBrokerId = inaccessFromItems?.broker_id ?? null;
             partnerRow = null;
             loadingPartner = false;
+            quantityInputValid = true;
             formWacResult = null;
             wacCurrencyHint = null;
             dualTo = emptyDualTo();
@@ -511,7 +507,6 @@
             }
             lastTypeForReset = draft.type;
             initialDraftKey = JSON.stringify(draft) + JSON.stringify(dualTo);
-            qtyDisplay = formatDecimalForDisplay(draft.quantity);
         });
         // Async hydration (brokers + currencies + asset cache for the picked asset).
         void (async () => {
@@ -586,19 +581,19 @@
                 draft = fromTx(partner);
                 dualTo = {
                     broker_id: partner.broker_id,
-                    cash: row.cash ? {code: row.cash.code, amount: String(Math.abs(Number(row.cash.amount)))} : null,
+                    cash: row.cash ? {code: row.cash.code, amount: applySign(row.cash.amount, 'positive')} : null,
                     date: row.date,
                 };
             } else {
                 dualTo = {
                     broker_id: partner.broker_id,
-                    cash: partner.cash ? {code: partner.cash.code, amount: String(Math.abs(Number(partner.cash.amount)))} : null,
+                    cash: partner.cash ? {code: partner.cash.code, amount: applySign(partner.cash.amount, 'positive')} : null,
                     date: partner.date,
                 };
             }
         } else if (layout === 'transfer_asset') {
-            const myQty = Number(row.quantity);
-            if (myQty > 0) {
+            const myQtySign = exactDecimalSign(row.quantity) ?? 0;
+            if (myQtySign > 0) {
                 // row is receiver (qty>0), partner is sender (qty<0)
                 draft = fromTx(partner);
                 dualTo = {broker_id: row.broker_id, cash: null, date: row.date, cost_basis_override: row.cost_basis_override ? (typeof row.cost_basis_override === 'object' ? (row.cost_basis_override as {code: string; amount: string}) : null) : null};
@@ -609,20 +604,16 @@
             // Sender draft must have empty cost_basis_override
             draft = {...draft, cost_basis_override: null};
             // Dual form always shows absolute qty — sign is determined by From/To sides
-            if (Number(draft.quantity) < 0) {
-                draft = {...draft, quantity: String(Math.abs(Number(draft.quantity)))};
-            }
-            qtyDisplay = formatDecimalForDisplay(draft.quantity);
+            draft = {...draft, quantity: applySign(draft.quantity, 'positive')};
         } else if (layout === 'transfer_cash') {
             const myAmount = Number(row.cash?.amount ?? 0);
             const fromRow = myAmount < 0 ? row : partner;
             const toRow = myAmount < 0 ? partner : row;
             draft = fromTx(fromRow);
-            if (draft.cash && Number(draft.cash.amount) < 0) {
-                draft = {...draft, cash: {code: draft.cash.code, amount: String(Math.abs(Number(draft.cash.amount)))}};
+            if (draft.cash) {
+                draft = {...draft, cash: {code: draft.cash.code, amount: applySign(draft.cash.amount, 'positive')}};
             }
             dualTo = {broker_id: toRow.broker_id, cash: null, date: toRow.date};
-            qtyDisplay = formatDecimalForDisplay(draft.quantity);
         }
         // B1-fix: if the pair has mismatched description, concatenate with explanatory note
         const rowDesc = row.description ?? '';
@@ -682,7 +673,6 @@
             if (r.cashField === 'forbidden' && next.cash != null) next.cash = null;
             if (r.quantityMode === 'forbidden') {
                 next.quantity = '0';
-                qtyDisplay = '0';
             }
             // Clear linked event when no longer applicable.
             if (!r.eventLinkable && next.asset_event_id != null) next.asset_event_id = null;
@@ -734,8 +724,7 @@
     /** FX has one broker, including presets, late hydration and type switches.
      *  Keep the stored partner untouched in view mode so historical facts stay visible. */
     let effectiveDualTo = $derived<DualDraftTo>(pairLayout === 'fx' && mode !== 'view' ? {...dualTo, broker_id: draft.broker_id} : dualTo);
-    /** Auto-sign: user enters positive, backend expects negative. */
-    let autoNegateQty = $derived(rule.quantityRule === 'negative');
+    /** Auto-sign: user enters positive, backend expects negative cash. */
     let autoNegateCash = $derived(rule.cashSign === 'negative');
     let isReadonly = $derived(mode === 'view');
     // Bugfix-5 §A4: `unlockImmutable=true` (deep-edit from BulkModal) overrides
@@ -986,6 +975,8 @@
      *  defeat browser autofill heuristics (Bugfix-1 §U7). Stable per modal
      *  open. */
     const autocompleteNonce = $derived(Math.random().toString(36).slice(2, 10));
+    let quantityInputId = $derived(`tx-form-quantity-${autocompleteNonce}`);
+    let quantityHintId = $derived(`tx-form-quantity-hint-${autocompleteNonce}`);
 
     /** BrokerSearchSelect expects `BrokerSelectItem[]`; the brokerStore's
      *  `BrokerInfo` is structurally compatible (id/name/icon_url present)
@@ -1027,7 +1018,7 @@
             tags: draft.tags,
             description: draft.description,
             cost_basis_override: cbOverride,
-            cost_basis_mode: costBasisMode === 'auto' ? 'auto' : undefined,
+            cost_basis_mode: costBasisMode,
             asset_event_id: draft.asset_event_id,
             link_uuid: draft.link_uuid,
         };
@@ -1082,7 +1073,7 @@
                 toOrig = mainRow;
             }
         } else if (pairLayout === 'transfer_asset') {
-            if (Number(mainRow.quantity) > 0) {
+            if ((exactDecimalSign(mainRow.quantity) ?? 0) > 0) {
                 fromOrig = partnerRow;
                 toOrig = mainRow;
             }
@@ -1093,7 +1084,7 @@
             }
         }
 
-        const allItems = [diffDualItem(items[0], fromOrig as unknown as TxOriginal), diffDualItem(items[1], toOrig as unknown as TxOriginal)];
+        const allItems = [diffDualItem(items[0], fromOrig as unknown as TxOriginal, null), diffDualItem(items[1], toOrig as unknown as TxOriginal, costBasisMode)];
         // Only include items that have actual changes (more than just `id`)
         return allItems.filter((item) => Object.keys(item).length > 1);
     }
@@ -1228,17 +1219,8 @@
         if ((draft.tags ?? []).includes(v)) return;
         draft = {...draft, tags: [...(draft.tags ?? []), v]};
     }
-    function onQuantityInput(e: Event) {
-        const v = (e.currentTarget as HTMLInputElement).value;
-        qtyDisplay = v; // preserve raw user input mid-typing
-        setQuantity(normalizeDecimalInput(v));
-    }
-    /** The field is a text input (locale-safe), so the arrow keys are wired by hand. */
-    function onQuantityKeydown(e: KeyboardEvent) {
-        const stepped = decimalArrowStep(e, qtyDisplay);
-        if (stepped === null) return;
-        qtyDisplay = stepped;
-        setQuantity(stepped);
+    function onQuantityValidityChange(state: {valid: boolean}) {
+        quantityInputValid = state.valid;
     }
     function onDescriptionInput(e: Event) {
         draft = {...draft, description: (e.currentTarget as HTMLTextAreaElement).value};
@@ -1300,14 +1282,14 @@
     let cashHint = $derived(signHintText(rule.cashSign));
     let cashLabel = $derived(signLabel(rule.cashSign));
 
-    // Sign-based border coloring for quantity field (mirrors CompactCashCell pattern).
-    // Colors reflect whether the VALUE AFTER AUTO-FLIP conforms to the rule.
-    // Does NOT block input — purely visual guidance.
-    // In paired mode (transfer_asset/transfer_cash/fx), the form forces positive input
-    // (system balances both sides) → effective rule is 'positive', not raw type rule.
+    // The quantity editor classifies sign from the exact string. Negative backend
+    // rules are auto-flipped, so their user-facing entry rule is positive.
     let effectiveQtyRule = $derived(pairLayout != null ? 'positive' : rule.quantityRule);
-    let qtySignHint = $derived(computeSignHint(parseFloat(draft.quantity), effectiveQtyRule));
-    let qtyBorderColor = $derived(qtySignHint.bad ? 'oklch(0.637 0.237 25.331 / 0.7)' : qtySignHint.ok ? 'oklch(0.765 0.177 163.223 / 0.7)' : '');
+    let quantityInputSignRule = $derived.by<'positive' | 'nonzero' | 'zero' | 'any'>(() => {
+        if (effectiveQtyRule === 'positive' || effectiveQtyRule === 'negative') return 'positive';
+        if (effectiveQtyRule === 'nonzero' || effectiveQtyRule === 'zero') return effectiveQtyRule;
+        return 'any';
+    });
 
     // Cash sign validation — paired mode uses 'positive' (user enters positive, flip negates FROM).
     // Single mode uses the type's cashSign rule.
@@ -1315,9 +1297,9 @@
     let cashSignResult = $derived(computeSignHint(parseFloat(draft.cash?.amount ?? '0'), effectiveCashRule));
     let cashToSignViolation = $derived(pairLayout === 'fx' && computeSignHint(parseFloat(dualTo.cash?.amount ?? '0'), 'positive').bad);
 
-    // Block submit when any sign rule is violated (red border = bad).
-    // Only active when the field has a meaningful value (not empty/NaN).
-    let hasSignViolation = $derived(qtySignHint.bad || cashSignResult.bad || cashToSignViolation);
+    // Block submit for an invalid exact quantity (syntax, 12+6 budget, range or
+    // sign) and for the legacy cash-sign checks.
+    let hasSignViolation = $derived((rule.quantityMode !== 'forbidden' && !quantityInputValid) || cashSignResult.bad || cashToSignViolation);
 
     // =========================================================================
     // W39: Inline broker / asset creation modals
@@ -1543,21 +1525,23 @@
                             <span class="text-xs text-gray-500 dark:text-gray-400">
                                 {$t('transactions.table.quantity')} <span class="text-amber-500">(+)</span>
                             </span>
-                            <input
-                                type="text"
-                                inputmode="decimal"
-                                autocomplete="off"
-                                spellcheck="false"
+                            <ExactQuantityInput
+                                value={draft.quantity}
+                                onchange={setQuantity}
+                                onvaliditychange={onQuantityValidityChange}
+                                step="1"
+                                maxIntegerDigits={12}
+                                maxFractionDigits={6}
+                                allowNegative
+                                signRule={quantityInputSignRule}
+                                resetKey={`${open}:${openKey ?? 0}`}
+                                id={quantityInputId}
                                 name="qty-{autocompleteNonce}"
                                 placeholder="0"
-                                class="qty-input w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg text-right font-mono tabular-nums disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-libre-green/30"
-                                style:border-color={qtyBorderColor || undefined}
-                                value={qtyDisplay}
+                                ariaLabel={$t('transactions.table.quantity')}
+                                className="qty-input !rounded-lg !bg-white !px-3 !py-2 text-right tabular-nums focus:!ring-2 focus:!ring-libre-green/30 dark:!bg-slate-800"
                                 disabled={isReadonly}
-                                oninput={onQuantityInput}
-                                onkeydown={onQuantityKeydown}
-                                onblur={() => (qtyDisplay = formatDecimalForDisplay(draft.quantity))}
-                                data-testid="tx-form-quantity"
+                                testid="tx-form-quantity"
                             />
                         </div>
                     {/if}
@@ -1813,24 +1797,27 @@
                                     {$t('transactions.table.quantity')}{#if qtyLabel}
                                         <span class="text-amber-500">{qtyLabel}</span>{/if}
                                 </span>
-                                <input
-                                    type="text"
-                                    inputmode="decimal"
-                                    autocomplete="off"
-                                    spellcheck="false"
+                                <ExactQuantityInput
+                                    value={draft.quantity}
+                                    onchange={setQuantity}
+                                    onvaliditychange={onQuantityValidityChange}
+                                    step="1"
+                                    maxIntegerDigits={12}
+                                    maxFractionDigits={6}
+                                    allowNegative
+                                    signRule={quantityInputSignRule}
+                                    resetKey={`${open}:${openKey ?? 0}`}
+                                    id={quantityInputId}
                                     name="qty-{autocompleteNonce}"
                                     placeholder="0"
-                                    class="qty-input w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg text-right font-mono tabular-nums disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-libre-green/30"
-                                    style:border-color={qtyBorderColor || undefined}
-                                    value={qtyDisplay}
+                                    ariaLabel={$t('transactions.table.quantity')}
+                                    ariaDescribedby={qtyHint ? quantityHintId : undefined}
+                                    className="qty-input !rounded-lg !bg-white !px-3 !py-2 text-right tabular-nums focus:!ring-2 focus:!ring-libre-green/30 dark:!bg-slate-800"
                                     disabled={isReadonly}
-                                    oninput={onQuantityInput}
-                                    onkeydown={onQuantityKeydown}
-                                    onblur={() => (qtyDisplay = formatDecimalForDisplay(draft.quantity))}
-                                    data-testid="tx-form-quantity"
+                                    testid="tx-form-quantity"
                                 />
                                 {#if qtyHint}
-                                    <span class="text-[10px] text-gray-400">{qtyHint}</span>
+                                    <span id={quantityHintId} class="text-[10px] text-gray-400">{qtyHint}</span>
                                 {/if}
                             </div>
                             <div class="flex flex-col gap-1" data-testid="tx-form-cash-wrap">
@@ -1858,24 +1845,27 @@
                                     {$t('transactions.table.quantity')}{#if qtyLabel}
                                         <span class="text-amber-500">{qtyLabel}</span>{/if}
                                 </span>
-                                <input
-                                    type="text"
-                                    inputmode="decimal"
-                                    autocomplete="off"
-                                    spellcheck="false"
+                                <ExactQuantityInput
+                                    value={draft.quantity}
+                                    onchange={setQuantity}
+                                    onvaliditychange={onQuantityValidityChange}
+                                    step="1"
+                                    maxIntegerDigits={12}
+                                    maxFractionDigits={6}
+                                    allowNegative
+                                    signRule={quantityInputSignRule}
+                                    resetKey={`${open}:${openKey ?? 0}`}
+                                    id={quantityInputId}
                                     name="qty-{autocompleteNonce}"
                                     placeholder="0"
-                                    class="qty-input w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg text-right font-mono tabular-nums disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-libre-green/30"
-                                    style:border-color={qtyBorderColor || undefined}
-                                    value={qtyDisplay}
+                                    ariaLabel={$t('transactions.table.quantity')}
+                                    ariaDescribedby={qtyHint ? quantityHintId : undefined}
+                                    className="qty-input !rounded-lg !bg-white !px-3 !py-2 text-right tabular-nums focus:!ring-2 focus:!ring-libre-green/30 dark:!bg-slate-800"
                                     disabled={isReadonly}
-                                    oninput={onQuantityInput}
-                                    onkeydown={onQuantityKeydown}
-                                    onblur={() => (qtyDisplay = formatDecimalForDisplay(draft.quantity))}
-                                    data-testid="tx-form-quantity"
+                                    testid="tx-form-quantity"
                                 />
                                 {#if qtyHint}
-                                    <span class="text-[10px] text-gray-400">{qtyHint}</span>
+                                    <span id={quantityHintId} class="text-[10px] text-gray-400">{qtyHint}</span>
                                 {/if}
                             </div>
                         {:else if rule.cashField !== 'forbidden'}
@@ -1953,7 +1943,7 @@
                                 onOpenFxSync={handleSyncFx}
                                 quantity={draft.quantity}
                             />
-                            {#if Number(draft.quantity) > 0 && costBasisMode !== 'auto' && !draft.cost_basis_override?.amount?.trim()}
+                            {#if (exactDecimalSign(draft.quantity) ?? 0) > 0 && costBasisMode !== 'auto' && !draft.cost_basis_override?.amount?.trim()}
                                 <p class="text-xs text-amber-600 dark:text-amber-400 mt-1" data-testid="tx-form-cost-basis-warning">
                                     {$t('transactions.costBasisOverride.warningAdjustment') || 'No cost basis set — lot will be created with zero cost. Set a value if this is not a stock split or gift.'}
                                 </p>

@@ -1309,23 +1309,23 @@ class PortfolioPlannerSourceFxQuote(StrictModel):
 
 
 class PortfolioPlannerSourceRootPath(StrictModel):
-    kind: Literal["root"]
+    kind: Literal["root"] = Field(json_schema_extra={"enum": ["root"]})
 
 
 class PortfolioPlannerSourceSectionPath(StrictModel):
-    kind: Literal["section"]
+    kind: Literal["section"] = Field(json_schema_extra={"enum": ["section"]})
     section: PlannerSourceResponseSection
 
 
 class PortfolioPlannerSourceEntityPath(StrictModel):
-    kind: Literal["entity"]
+    kind: Literal["entity"] = Field(json_schema_extra={"enum": ["entity"]})
     section: PlannerSourceResponseSection
     entity_kind: PlannerSourceEntityKind
     entity_id: PlannerSourceEntityId
 
 
 class PortfolioPlannerSourceFieldPath(StrictModel):
-    kind: Literal["field"]
+    kind: Literal["field"] = Field(json_schema_extra={"enum": ["field"]})
     section: PlannerSourceResponseSection
     entity_kind: PlannerSourceEntityKind
     entity_id: PlannerSourceEntityId
@@ -1344,32 +1344,32 @@ PortfolioPlannerSourceIssuePath = Annotated[
 
 
 class PortfolioPlannerSourceTextParam(StrictModel):
-    kind: Literal["text"]
+    kind: Literal["text"] = Field(json_schema_extra={"enum": ["text"]})
     name: Annotated[str, Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.-]+$")]
     value: Annotated[str, Field(max_length=256)]
 
 
 class PortfolioPlannerSourceIntegerParam(StrictModel):
-    kind: Literal["integer"]
+    kind: Literal["integer"] = Field(json_schema_extra={"enum": ["integer"]})
     name: Annotated[str, Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.-]+$")]
     value: int
 
 
 class PortfolioPlannerSourceMoneyParam(StrictModel):
-    kind: Literal["money"]
+    kind: Literal["money"] = Field(json_schema_extra={"enum": ["money"]})
     name: Annotated[str, Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.-]+$")]
     amount: SafeDecimal
     currency: CurrencyCode
 
 
 class PortfolioPlannerSourceDateParam(StrictModel):
-    kind: Literal["date"]
+    kind: Literal["date"] = Field(json_schema_extra={"enum": ["date"]})
     name: Annotated[str, Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.-]+$")]
     value: date_type
 
 
 class PortfolioPlannerSourceEntityRefParam(StrictModel):
-    kind: Literal["entity_ref"]
+    kind: Literal["entity_ref"] = Field(json_schema_extra={"enum": ["entity_ref"]})
     name: Annotated[str, Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.-]+$")]
     entity_kind: PlannerSourceEntityKind
     entity_id: PlannerSourceEntityId

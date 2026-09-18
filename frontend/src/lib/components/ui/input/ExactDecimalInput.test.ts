@@ -1,12 +1,16 @@
 // @vitest-environment jsdom
 import {describe, expect, it, vi} from 'vitest';
-import {fireEvent, render, screen} from '$test/component';
+import {fireEvent, render, screen, waitFor} from '$test/component';
 import ExactDecimalInput from './ExactDecimalInput.svelte';
 
 const TID = 'exact-decimal';
 
 function setup(overrides: Record<string, unknown> = {}) {
     const onchange = vi.fn();
+    const oncommit = vi.fn();
+    const onvaliditychange = vi.fn();
+    const onfocus = vi.fn();
+    const onblur = vi.fn();
     const utils = render(ExactDecimalInput, {
         value: '',
         step: '0.000000000001',
@@ -14,9 +18,27 @@ function setup(overrides: Record<string, unknown> = {}) {
         maxFractionDigits: 12,
         testid: TID,
         onchange,
+        oncommit,
+        onvaliditychange,
+        onfocus,
+        onblur,
         ...overrides,
     });
-    return {input: screen.getByTestId(TID) as HTMLInputElement, onchange, ...utils};
+    return {
+        input: screen.getByTestId(String(overrides.testid ?? TID)) as HTMLInputElement,
+        onchange,
+        oncommit,
+        onvaliditychange,
+        onfocus,
+        onblur,
+        ...utils,
+    };
+}
+
+async function arrow(input: HTMLInputElement, key: 'ArrowUp' | 'ArrowDown', repeat = false, modifiers: Partial<KeyboardEventInit> = {}): Promise<KeyboardEvent> {
+    const event = new KeyboardEvent('keydown', {key, repeat, bubbles: true, cancelable: true, ...modifiers});
+    await fireEvent(input, event);
+    return event;
 }
 
 describe('ExactDecimalInput', () => {
@@ -34,26 +56,44 @@ describe('ExactDecimalInput', () => {
         expect(onchange).toHaveBeenLastCalledWith('1234.500000000001');
     });
 
-    it('accepts the full 12+12 digit budget and rejects either side exceeding it', async () => {
-        const {input} = setup();
+    it('accepts the full 12+12 digit budget and leaves either overflow visible and invalid', async () => {
+        const {input, onchange} = setup();
 
         await fireEvent.input(input, {target: {value: '999999999999.999999999999'}});
+        expect(input).toHaveValue('999999999999.999999999999');
         expect(input).toHaveAttribute('aria-invalid', 'false');
 
         await fireEvent.input(input, {target: {value: '1000000000000.1'}});
+        expect(input).toHaveValue('1000000000000.1');
+        expect(onchange).toHaveBeenLastCalledWith('1000000000000.1');
         expect(input).toHaveAttribute('aria-invalid', 'true');
 
         await fireEvent.input(input, {target: {value: '1.1234567890123'}});
+        expect(input).toHaveValue('1.1234567890123');
+        expect(onchange).toHaveBeenLastCalledWith('1.1234567890123');
         expect(input).toHaveAttribute('aria-invalid', 'true');
     });
 
-    it('steps twelve-place values exactly without IEEE-754 drift', async () => {
-        const {input, onchange} = setup({value: '0.300000000001'});
+    it('steps twelve-place subtraction and the 12+6 ceiling exactly', async () => {
+        const subtraction = setup({value: '0.300000000001'});
 
-        await fireEvent.keyDown(input, {key: 'ArrowDown'});
+        await arrow(subtraction.input, 'ArrowDown');
 
-        expect(input).toHaveValue('0.300000000000');
-        expect(onchange).toHaveBeenLastCalledWith('0.300000000000');
+        expect(subtraction.input).toHaveValue('0.300000000000');
+        expect(subtraction.onchange).toHaveBeenLastCalledWith('0.300000000000');
+
+        subtraction.unmount();
+        const ceiling = setup({
+            value: '999999999999.123455',
+            step: '0.000001',
+            maxFractionDigits: 6,
+            allowNegative: true,
+        });
+
+        await arrow(ceiling.input, 'ArrowUp');
+
+        expect(ceiling.input).toHaveValue('999999999999.123456');
+        expect(ceiling.onchange).toHaveBeenLastCalledWith('999999999999.123456');
     });
 
     it('clamps ArrowDown at zero unless negative values are explicitly allowed', async () => {
@@ -95,7 +135,216 @@ describe('ExactDecimalInput', () => {
 
     it('publishes the configured digit budget through maxlength', () => {
         const {input} = setup();
-        expect(input).toHaveAttribute('maxlength', '27');
+        expect(input).toHaveAttribute('maxlength', '28');
+    });
+
+    it('includes grouping punctuation and a sign in the maxlength budget', async () => {
+        const {input} = setup({maxFractionDigits: 6, allowNegative: true});
+        expect(input).toHaveAttribute('maxlength', '23');
+        await fireEvent.input(input, {target: {value: '-999999999999.123456'}});
+        expect(input).toHaveValue('-999999999999.123456');
+        expect(input).toHaveAttribute('aria-invalid', 'false');
+    });
+
+    it('keeps typed out-of-range values visible, while arrows clamp exactly to min/max', async () => {
+        const typed = setup({value: '10', step: '0.000001', min: '0.000001', max: '10.000001'});
+        await fireEvent.input(typed.input, {target: {value: '10.000002'}});
+        expect(typed.input).toHaveValue('10.000002');
+        expect(typed.input).toHaveAttribute('aria-invalid', 'true');
+        await fireEvent.blur(typed.input);
+        expect(typed.input).toHaveValue('10.000002');
+
+        typed.unmount();
+        const upper = setup({value: '10.000000', step: '0.000002', min: '0.000001', max: '10.000001'});
+        await arrow(upper.input, 'ArrowUp');
+        expect(upper.input).toHaveValue('10.000001');
+
+        upper.unmount();
+        const lower = setup({value: '0.000002', step: '0.000002', min: '0.000001', max: '10.000001'});
+        await arrow(lower.input, 'ArrowDown');
+        expect(lower.input).toHaveValue('0.000001');
+    });
+
+    it('does not accelerate unless explicitly enabled', async () => {
+        const {input} = setup({value: '0', step: '1', accelerateOnHold: false});
+
+        await arrow(input, 'ArrowUp');
+        for (let repeat = 1; repeat <= 20; repeat += 1) {
+            await arrow(input, 'ArrowUp', true);
+        }
+
+        expect(input).toHaveValue('21');
+    });
+
+    it('uses the deterministic opt-in hold cadence and resets on keyup or direction change', async () => {
+        const {input} = setup({value: '0', step: '1', accelerateOnHold: true});
+        const sequence: string[] = [];
+
+        await arrow(input, 'ArrowUp');
+        sequence.push(input.value);
+        for (let repeat = 1; repeat <= 20; repeat += 1) {
+            await arrow(input, 'ArrowUp', true);
+            sequence.push(input.value);
+        }
+
+        expect(sequence[0]).toBe('1');
+        expect(sequence[14]).toBe('15');
+        expect(sequence.slice(15, 20)).toEqual(['16', '17', '18', '19', '20']);
+        expect(sequence[20]).toBe('30');
+
+        await arrow(input, 'ArrowDown', true);
+        expect(input).toHaveValue('29');
+
+        await fireEvent.keyUp(input, {key: 'ArrowDown'});
+        await arrow(input, 'ArrowDown', true);
+        expect(input).toHaveValue('28');
+    });
+
+    it('starts a fresh base-step run when focus moves to another target', async () => {
+        const first = setup({testid: 'exact-decimal-first', value: '0', step: '1', accelerateOnHold: true});
+        const second = setup({testid: 'exact-decimal-second', value: '0', step: '1', accelerateOnHold: true});
+
+        await arrow(first.input, 'ArrowUp');
+        for (let repeat = 1; repeat <= 20; repeat += 1) await arrow(first.input, 'ArrowUp', true);
+        expect(first.input).toHaveValue('30');
+
+        await arrow(second.input, 'ArrowUp', true);
+        expect(second.input).toHaveValue('1');
+    });
+
+    it('accelerates fractional high-magnitude values without float residue', async () => {
+        const {input} = setup({
+            value: '999999999990.123450',
+            step: '0.000001',
+            maxFractionDigits: 6,
+            accelerateOnHold: true,
+        });
+
+        await arrow(input, 'ArrowUp');
+        for (let repeat = 1; repeat <= 20; repeat += 1) await arrow(input, 'ArrowUp', true);
+
+        expect(input).toHaveValue('999999999990.123480');
+    });
+
+    it.each([
+        ['ctrlKey', {ctrlKey: true}],
+        ['metaKey', {metaKey: true}],
+        ['altKey', {altKey: true}],
+    ] as const)('leaves modified arrows untouched (%s)', async (_name, modifiers) => {
+        const {input, onchange} = setup({value: '7', step: '1', accelerateOnHold: true});
+
+        const event = await arrow(input, 'ArrowUp', false, modifiers);
+
+        expect(event.defaultPrevented).toBe(false);
+        expect(input).toHaveValue('7');
+        expect(onchange).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['readonly', {readonly: true}],
+        ['disabled', {disabled: true}],
+    ] as const)('%s fields neither mutate nor emit', async (_name, state) => {
+        const {input, onchange, oncommit} = setup({value: '1.25', ...state});
+
+        await arrow(input, 'ArrowUp');
+        await fireEvent.keyDown(input, {key: 'Enter'});
+        await fireEvent.blur(input);
+
+        expect(input).toHaveValue('1.25');
+        expect(onchange).not.toHaveBeenCalled();
+        expect(oncommit).not.toHaveBeenCalled();
+    });
+
+    it('forwards form, accessibility, style, class, and focus/blur contracts', async () => {
+        const {input, onfocus, onblur} = setup({
+            value: '1.25',
+            id: 'exact-id',
+            name: 'exact-name',
+            required: true,
+            placeholder: 'placeholder-token',
+            ariaLabel: 'decimal-label-token',
+            ariaDescribedby: 'decimal-hint-token',
+            ariaErrormessage: 'decimal-error-token',
+            className: 'forwarded-class-token',
+            style: 'padding-left: 7px',
+        });
+
+        expect(input).toHaveAttribute('id', 'exact-id');
+        expect(input).toHaveAttribute('name', 'exact-name');
+        expect(input).toBeRequired();
+        expect(input).toHaveAttribute('placeholder', 'placeholder-token');
+        expect(input).toHaveAttribute('aria-label', 'decimal-label-token');
+        expect(input).toHaveAttribute('aria-describedby', 'decimal-hint-token');
+        expect(input).toHaveAttribute('aria-errormessage', 'decimal-error-token');
+        expect(input.classList.contains('forwarded-class-token')).toBe(true);
+        expect(input.style.paddingLeft).toBe('7px');
+        expect(input).toHaveAttribute('type', 'text');
+        expect(input).toHaveAttribute('inputmode', 'decimal');
+        expect(input).not.toHaveAttribute('aria-valuenow');
+
+        await fireEvent.focus(input);
+        await fireEvent.blur(input);
+        expect(onfocus).toHaveBeenCalledTimes(1);
+        expect(onblur).toHaveBeenCalledTimes(1);
+    });
+
+    it('publishes every required-empty validity field exactly', async () => {
+        const {input, onvaliditychange} = setup({required: true});
+
+        await waitFor(() => {
+            expect(onvaliditychange).toHaveBeenLastCalledWith({
+                normalized: '',
+                empty: true,
+                syntaxValid: true,
+                requiredValid: false,
+                digitsValid: true,
+                rangeValid: true,
+                valid: false,
+            });
+        });
+        expect(input.validity.valueMissing).toBe(true);
+        expect(input.checkValidity()).toBe(false);
+        expect(input).toHaveAttribute('aria-invalid', 'true');
+    });
+
+    it('externalInvalid changes only final validity', async () => {
+        const {input, onvaliditychange, rerender} = setup({value: '1.25'});
+        await waitFor(() => expect(onvaliditychange).toHaveBeenCalled());
+        const base = onvaliditychange.mock.calls.at(-1)?.[0];
+        expect(base).toEqual({
+            normalized: '1.25',
+            empty: false,
+            syntaxValid: true,
+            requiredValid: true,
+            digitsValid: true,
+            rangeValid: true,
+            valid: true,
+        });
+
+        await rerender({
+            value: '1.25',
+            step: '0.000000000001',
+            maxIntegerDigits: 12,
+            maxFractionDigits: 12,
+            testid: TID,
+            onchange: vi.fn(),
+            oncommit: vi.fn(),
+            onvaliditychange,
+            externalInvalid: true,
+        });
+
+        await waitFor(() => expect(onvaliditychange.mock.calls.at(-1)?.[0]).toEqual({...base, valid: false}));
+        expect(input).toHaveAttribute('aria-invalid', 'true');
+    });
+
+    it('commits on blur and Enter even when canonical, without emitting a change', async () => {
+        const {input, onchange, oncommit} = setup({value: '1.25'});
+
+        await fireEvent.blur(input);
+        await fireEvent.keyDown(input, {key: 'Enter'});
+
+        expect(oncommit.mock.calls).toEqual([['1.25'], ['1.25']]);
+        expect(onchange).not.toHaveBeenCalled();
     });
 });
 
@@ -106,10 +355,8 @@ describe('ExactDecimalInput', () => {
  * ever moving focus, and `1.234,50` left as typed is either rejected by the
  * backend or — far worse — read as `1.234`.
  *
- * The canonical string is also compared against its own float round trip. That
- * assertion is the whole point of this component: `Number()` is never involved,
- * so 23 significant digits survive, while the arithmetic route would quietly
- * return a different number and still look like a plausible one.
+ * The canonical string is asserted byte-for-byte. That is the whole point of
+ * this component: no floating-point round trip may reinterpret its 23 digits.
  */
 describe('ExactDecimalInput — Enter, and the form around it', () => {
     function setupInForm(overrides: Record<string, unknown> = {}) {
@@ -191,7 +438,7 @@ describe('ExactDecimalInput — Enter, and the form around it', () => {
 
         const canonical = onchange.mock.calls.at(-1)?.[0];
         expect(canonical).toBe('99999999999.123456789012');
-        expect(String(Number(canonical))).not.toBe(canonical);
+        expect(canonical).not.toBe('99999999999.12346');
     });
 
     it('leaves an over-budget decimal invalid on Enter instead of coercing it', async () => {

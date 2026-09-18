@@ -1,18 +1,21 @@
 # PAC & Rebalancer — piano implementativo maestro
 
-**Stato:** READY FOR PLANNING CHECKPOINT.
-**Baseline:** `b0a410b8805789b200aa7a66a2494c397fb1bc52`.
+**Stato:** IN IMPLEMENTATION — G3/G5 OPEN.
+**Baseline esecutiva:** `941834237696f32bbabfde62a08e070e4b23758e`.
 **Branch di authoring:** `e-alfy-allocatore-pac`.
-**Lane futura:** porta `6153`, data dir `/tmp/librefolio-r2-d`, venv condiviso
+**Lane:** porta `6153`, data dir `/tmp/librefolio-r2-d`, venv condiviso
 `LibreFolio-SAUMUTtc`.
-**Autorizzazione:** questo piano non autorizza codice prodotto, installazioni,
-probe, test o server.
+**Autorizzazione prodotto:** ricevuta dal developer il 2026-09-16 dopo il
+checkpoint planning `888f99a6c8641e063c979b4b315eb65367de7e4a`.
+**Dependency checkpoint:** `941834237696f32bbabfde62a08e070e4b23758e`
+(`build(deps): add PySCIPOpt solver`).
 
 ← Design: [PAC & Rebalancer target](../plan-phase00PacRebalancerTargetDesign.prompt.md)
 
 Subpiani:
 
 1. [Contratti e capacità](plan-phase00Step1PacRebalancerContractsCapacity.prompt.md)
+   - [Round 1 — capacità piattaforma Tool](plan-phase00Step1Round1-ToolPlatformCapacity.prompt.md)
 2. [Core esatto e oracle](plan-phase00Step2PacRebalancerExactCore.prompt.md)
 3. [Solver e policy](plan-phase00Step3PacRebalancerSolverPolicies.prompt.md)
 4. [Copie dominio](plan-phase00Step4PacRebalancerDomainCopies.prompt.md)
@@ -20,6 +23,87 @@ Subpiani:
 6. [Integrazione, test e docs](plan-phase00Step6PacRebalancerIntegrationTestsDocs.prompt.md)
 
 ---
+
+## 0. Registro esecutivo e Fleet
+
+### 0.1 Gate aperti
+
+- G0 ✅ bundle planning checkpointato.
+- G1 ✅ autorizzazione developer esplicita ricevuta.
+- G4 ✅ dependency checkpoint verificato dal coordinator.
+- G2 ✅ handshake C/D congelato. Diagnostics preserva il contratto piattaforma:
+  utente attivo autenticato, payload strutturale/sanitizzato, nessuno scenario
+  o valore personale; anonimo `401`.
+- G3/G5 ⏳ contract, witness e capacity non ancora congelati.
+
+> **Decisione developer capacity 2026-09-16**: ritirato il candidate
+> 16 Asset/4 Broker/32 route/4 valute come cap prodotto. G5 deve produrre una
+> curva di crescita sul compiler reale e un envelope anti-abuso alto,
+> resource-bound. Target: massimo circa `1 GB RSS` per singolo job; due worker
+> possono raggiungere circa `2 GB`; `30 s` riservati al solver per item, con
+> overhead end-to-end addizionale. Nessun nuovo probe lungo né cardinalità
+> pubblica finché Group C non definisce deadline/memory policy piattaforma.
+
+> **Note implementazione 2026-09-16**: baseline `941834237696f32bbabfde62a08e070e4b23758e`
+> verificata pulita; porta `6153` libera. Il dependency checkpoint contiene
+> PySCIPOpt `6.2.1`, SCIP `10.0.2`, NumPy `2.5.3`, SciPy `1.18.1` e highspy
+> `1.15.1`. Smoke developer MIQCP: `x=3`, epigrafo quadratico `z=0`, status
+> `optimal`, un thread e seed fisso.
+
+### 0.2 Ownership attiva prima dei writer Fleet
+
+| Owner | Workstream | Lease esclusiva | Dipende da | Runtime |
+|---|---|---|---|---|
+| `D-main/integration` | G2, capacity, integrazione | piani; `backend/app/services/tool_plugins/pac_allocator.py`; package export; generated client/API; Tool renderer registry; runner/catalogue; i18n; MkDocs nav/onboarding; `CHANGELOG.md` | coordinator per shared platform | unico owner lane `6153` quando concessa |
+| `fleet-contract` | W0 contract/wire/witness | `backend/app/schemas/pac_allocator.py`; fixture wire PAC/Rebalancer dedicate | G2 decisions | nessun server |
+| `fleet-exact-core` | W1 primitive/evaluator/oracle | `backend/app/services/pac_allocator/models.py`, `numeric.py`, `normalize.py`, `ledger.py`, `evaluator.py`, `oracle.py`, `issues.py` | contract interno congelato; solver non richiesto per prima slice | nessun runtime senza lease |
+| `fleet-domain-copy` | W2 source copy | `backend/app/services/portfolio_allocation_source.py`; `backend/app/schemas/portfolio.py`; `backend/app/api/v1/portfolio_api.py` | G2 + audit auth/source + symbol alignment G3 | nessun runtime senza lease |
+| `fleet-exact-input` | W3 exact input | `frontend/src/lib/utils/transactions/txPayloadHelpers.ts`; `frontend/src/lib/components/ui/input/ExactDecimalInput.svelte`; nuovo `ExactQuantityInput.svelte`; `frontend/src/lib/components/transactions/modals/TransactionFormModal.svelte` | G1 + audit componenti | nessun runtime senza lease |
+| `fleet-shell` | W4 shell fixture-driven | `frontend/src/lib/features/tools/pac-allocator/planner/**` | G3 + W3 | non avviato |
+| `test-author` | test nuovi/riparati | file test assegnati, mai file produzione o runner | contract/impl disponibili | lane serializzata su grant |
+| `docs-writer` | MkDocs EN | pagine MkDocs PAC/Rebalancer assegnate | G9 | nessun `mkdocs serve` |
+
+Un owner non modifica lease altrui. `D-main/integration` è l'unico writer delle
+superfici shared/generated per tutta l'esecuzione.
+
+### 0.3 Checkpoint e ordine integrazione
+
+1. `CP1`: contract/fixture/witness + dependency/capacity evidence; nessun
+   generated/shared edit fuori da `D-main/integration`.
+2. `CP2`: exact core/evaluator/oracle, dopo contract freeze.
+3. `CP3`: domain copy + exact input + shell fixture-driven; domain e frontend
+   restano merge semanticamente indipendenti.
+4. `CP4`: solver/policy/proof, dopo CP2 + capacity freeze.
+5. `CP5`: reporter/plugin/generated client, integrati dal writer unico.
+6. `CP6`: PAC UI e Rebalancer UI; poi review umana, non E2E completi.
+
+Ogni subagent parte con analisi e file map, poi riceve autorizzazione writer
+soltanto sulla lease registrata. I comandi runtime non vengono parallelizzati.
+
+> **⚠️ Fuori pista 2026-09-16**: il developer ha anticipato G4 prima della
+> chiusura G2/G3. Il lock ha aggiornato NumPy `2.5.2 -> 2.5.3`; il piano lo
+> accetta perché `numpy = "*"` e non richiede un lock delta minimale. Rischio
+> condiviso basso ma non nullo: prima dei gate estesi eseguire selector numerici
+> e portfolio esistenti.
+
+> **Decisione coordinator G2 2026-09-16**: la precedente ipotesi diagnostics
+> admin-only era stale. Il contratto storico e corrente di catalog/compute/
+> diagnostics è authenticated-user; `ToolAboutPanel` usa il diagnostics
+> sanitizzato. Nessuna modifica auth di produzione è richiesta.
+
+> **Note implementazione Slice A 2026-09-16**: il numeric kernel additivo è
+> completo e la review matematica indipendente non ha trovato blocker.
+> Registrato `services pac-planner-core`: `83/83` test nuovi verdi; regressione
+> P1 `services pac-analyze`: `97/97` verdi, lane `6153` serializzata.
+> Chiarimenti documentation-only, format e rerun completati; checkpoint
+> selettivo verificato dal coordinator:
+> `22cb18d1d60c8b1197627e6e8eff9cb55f001d3e`. Nessun export package
+> anticipato.
+
+> **Note implementazione exact input 2026-09-16**: la slice production
+> quattro-file è presente e FROZEN; test-author/component/E2E/format-check
+> restano obbligatori prima del checkpoint. Precisione transazioni `12+6`,
+> planner configurabile `12+12`; nessuna conversione quantità via `Number`.
 
 ## 1. Obiettivo
 
@@ -114,7 +198,7 @@ posting monetari. Uno status floating SCIP non diventa automaticamente
 | G2 Tool handshake | versioni, codici, renderer, worker, limits, writer | schema/plugin/client |
 | G3 Contract freeze | DTO, fixture, schema/codegen, MCP review, payload witness | core/shell/solver |
 | G4 Dependency update | `Pipfile` + lock developer-owned | import/probe SCIP |
-| G5 Capacity freeze | packaging, MIQP/MIQCP, 4/5 s, RSS, cancel, domain | solver integration |
+| G5 Capacity freeze | packaging, MIQP/MIQCP, scaling multi-asse, `1 GB/job`, `30 s solver`, RSS enforcement, cancel, dominio alto e finito | solver integration |
 | G6 Exact-core checkpoint | evaluator/oracle indipendenti verdi | policy integration |
 | G7 Solver checkpoint | fixed-L2/policy/proof/SELL verdi | Tool report |
 | G8 Domain-copy checkpoint | auth/provenance/missing facts verdi | copy UI |
