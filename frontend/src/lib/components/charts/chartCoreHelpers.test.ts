@@ -2801,13 +2801,13 @@ describe('canonical overlay axis and reference helpers', () => {
             });
         });
 
-        describe('income-submode window selector: selectIncomeWindow date maths', () => {
-            // Faithful reimplementation of computeIncomeWindowRange, pinned to the real
+        describe('P&L zoom-window selector: selectZoomWindow date maths', () => {
+            // Faithful reimplementation of computeZoomWindowRange, pinned to the real
             // source by the contract test at the end of this block. `dates` is the
             // component's ascending list of available ISO dates.
-            type IncomeWindowPreset = '1W' | '1M' | '1Y' | 'all';
+            type ZoomWindowPreset = '1W' | '1M' | '1Y' | 'all';
 
-            function computeIncomeWindowRangeImpl(dates: string[], preset: IncomeWindowPreset): {startDate: string; endDate: string} | null {
+            function computeZoomWindowRangeImpl(dates: string[], preset: ZoomWindowPreset): {startDate: string; endDate: string} | null {
                 if (dates.length === 0) return null;
                 const endDate = dates[dates.length - 1];
                 if (preset === 'all') return {startDate: dates[0], endDate};
@@ -2829,14 +2829,14 @@ describe('canonical overlay axis and reference helpers', () => {
             // Three full years of daily dates: long enough that even 1Y clamps to nothing.
             const threeYears = isoRange('2023-01-01', '2026-01-01');
 
-            const presetScenarios: Array<[IncomeWindowPreset, number]> = [
+            const presetScenarios: Array<[ZoomWindowPreset, number]> = [
                 ['1W', 7],
                 ['1M', 30],
                 ['1Y', 365],
             ];
 
             it.each(presetScenarios)('%s counts back exactly %i days from the LAST available date, not from today', (preset, daysBack) => {
-                const range = computeIncomeWindowRangeImpl(threeYears, preset);
+                const range = computeZoomWindowRangeImpl(threeYears, preset);
 
                 expect(range).not.toBeNull();
                 if (!range) throw new Error('unreachable');
@@ -2848,17 +2848,17 @@ describe('canonical overlay axis and reference helpers', () => {
             });
 
             it("'all' spans the entire available range, first date to last", () => {
-                expect(computeIncomeWindowRangeImpl(threeYears, 'all')).toEqual({startDate: '2023-01-01', endDate: '2026-01-01'});
+                expect(computeZoomWindowRangeImpl(threeYears, 'all')).toEqual({startDate: '2023-01-01', endDate: '2026-01-01'});
             });
 
-            const clampScenarios: Array<[IncomeWindowPreset, string[]]> = [
+            const clampScenarios: Array<[ZoomWindowPreset, string[]]> = [
                 ['1W', isoRange('2026-01-01', '2026-01-04')],
                 ['1M', isoRange('2025-12-20', '2026-01-04')],
                 ['1Y', isoRange('2025-06-01', '2026-01-04')],
             ];
 
             it.each(clampScenarios)('%s clamps to the earliest available date when the computed start precedes it', (preset, dates) => {
-                const range = computeIncomeWindowRangeImpl(dates, preset);
+                const range = computeZoomWindowRangeImpl(dates, preset);
 
                 expect(range).toEqual({startDate: dates[0], endDate: dates[dates.length - 1]});
             });
@@ -2867,14 +2867,14 @@ describe('canonical overlay axis and reference helpers', () => {
                 // Exactly 8 dates -> 1W's computed start (endDate - 7 days) IS dates[0].
                 const dates = isoRange('2026-01-01', '2026-01-08');
 
-                expect(computeIncomeWindowRangeImpl(dates, '1W')).toEqual({startDate: '2026-01-01', endDate: '2026-01-08'});
+                expect(computeZoomWindowRangeImpl(dates, '1W')).toEqual({startDate: '2026-01-01', endDate: '2026-01-08'});
                 // One extra day of history and the computed start is strictly inside.
-                expect(computeIncomeWindowRangeImpl(isoRange('2025-12-31', '2026-01-08'), '1W')).toEqual({startDate: '2026-01-01', endDate: '2026-01-08'});
+                expect(computeZoomWindowRangeImpl(isoRange('2025-12-31', '2026-01-08'), '1W')).toEqual({startDate: '2026-01-01', endDate: '2026-01-08'});
             });
 
             it('returns null for an empty dates array, so the caller leaves the zoom untouched', () => {
                 for (const preset of ['1W', '1M', '1Y', 'all'] as const) {
-                    expect(computeIncomeWindowRangeImpl([], preset)).toBeNull();
+                    expect(computeZoomWindowRangeImpl([], preset)).toBeNull();
                 }
             });
 
@@ -2884,15 +2884,15 @@ describe('canonical overlay axis and reference helpers', () => {
                 // buildZoomWindow resolves it by bucketEnd/bucketStart comparison, not by
                 // an exact lookup.
                 const sparse = ['2025-12-01', '2025-12-08', '2025-12-15', '2025-12-22', '2025-12-29'];
-                const range = computeIncomeWindowRangeImpl(sparse, '1W');
+                const range = computeZoomWindowRangeImpl(sparse, '1W');
 
                 expect(range).toEqual({startDate: '2025-12-22', endDate: '2025-12-29'});
                 expect(sparse).not.toContain('2025-12-23');
             });
 
-            it('mirrors the exact literal body of computeIncomeWindowRange in GrowthChart.svelte (ties the reimplementation above to the real source)', () => {
+            it('mirrors the exact literal body of computeZoomWindowRange in GrowthChart.svelte (ties the reimplementation above to the real source)', () => {
                 const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
-                const start = source.indexOf('function computeIncomeWindowRange(preset: IncomeWindowPreset): {startDate: string; endDate: string} | null {');
+                const start = source.indexOf('function computeZoomWindowRange(preset: ZoomWindowPreset): {startDate: string; endDate: string} | null {');
                 const end = source.indexOf('\n    function formatTooltipMonth(', start);
                 expect(start).toBeGreaterThan(-1);
                 expect(end).toBeGreaterThan(start);
@@ -2908,19 +2908,19 @@ describe('canonical overlay axis and reference helpers', () => {
                 expect(block).toContain('return {startDate: computedStart < dates[0] ? dates[0] : computedStart, endDate};');
             });
 
-            it('selectIncomeWindow drives the EXISTING shared zoom rather than a parallel windowing system', () => {
+            it('selectZoomWindow drives the EXISTING shared zoom rather than a parallel windowing system', () => {
                 // The preset must land in the same visibleStartDate/visibleEndDate +
                 // buildZoomWindow + dataZoom path a manual drag-zoom uses, or the two would
                 // fight and a submode switch would lose the window.
                 const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
-                const start = source.indexOf('function selectIncomeWindow(preset: IncomeWindowPreset) {');
+                const start = source.indexOf('function selectZoomWindow(preset: ZoomWindowPreset) {');
                 const end = source.indexOf('\n    function formatTooltipMonth(', start);
                 expect(start).toBeGreaterThan(-1);
                 expect(end).toBeGreaterThan(start);
-                if (start < 0 || end <= start) throw new Error('GrowthChart selectIncomeWindow contract not found');
+                if (start < 0 || end <= start) throw new Error('GrowthChart selectZoomWindow contract not found');
 
                 const block = source.slice(start, end);
-                expect(block).toContain('const range = computeIncomeWindowRange(preset);');
+                expect(block).toContain('const range = computeZoomWindowRange(preset);');
                 expect(block).toContain('if (!range || !chartInstance) return;');
                 expect(block).toContain('visibleStartDate = range.startDate;');
                 expect(block).toContain('visibleEndDate = range.endDate;');
@@ -2930,11 +2930,11 @@ describe('canonical overlay axis and reference helpers', () => {
 
             it('exposes one button per implemented preset — 1W/1M/1Y/All, with no Custom entry (a disclosed scope limitation, not a missing testid)', () => {
                 const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
-                const testids = [...source.matchAll(/data-testid="growth-income-window-([\w]+)"/g)].map((m) => m[1]);
+                const testids = [...source.matchAll(/data-testid="growth-zoom-window-([\w]+)"/g)].map((m) => m[1]);
 
                 expect(testids).toEqual(['1w', '1m', '1y', 'all']);
                 for (const preset of ['1W', '1M', '1Y', 'all'] as const) {
-                    expect(source).toContain(`onclick={() => selectIncomeWindow('${preset}')}`);
+                    expect(source).toContain(`onclick={() => selectZoomWindow('${preset}')}`);
                 }
             });
         });
