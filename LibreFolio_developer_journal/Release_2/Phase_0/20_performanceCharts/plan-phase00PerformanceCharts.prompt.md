@@ -623,6 +623,496 @@ A separate owner integrates G3 after F and the backend calendar signal:
 - existing faded gradient and tooltip provenance;
 - switching back restores existing Price state/settings.
 
+## 6.0 G1a/G1b/G1c Gate 0 release — 2026-09-17
+
+> **Note implementazione (Gate 0 re-verification for G1a/b/c + G3, 2026-09-17):**
+> re-verified exact baseline before any merge: HEAD `2d22130bd58471463c4ae600139939680ded2ef8`,
+> `dev_release2@e1f3fe177861d2b9b953b218f66ea7d4714ab405`,
+> merge-base `4949b2f4c04050e46f643de848894b6706349f34`. H (`74afcebce`/`f092a194b`)
+> and F (`e50d66408`/`cc57b6a38`) confirmed already-absorbed ancestors of both
+> sides. `dev_release2` gained exactly 9 commits since merge-base: two
+> unrelated-worktree merges, three docs-only commits, and two internal-only
+> refactors explicitly authorized as no-product-contract-change — Workstream K
+> (SP08, splits `asset_source.py` into `asset_sources/*.py`) and Workstream L
+> (SP16, splits `TransactionService.execute_batch`). Every shared surface named
+> in the original Gate 0 refresh (`portfolio_engine.py`, `portfolio_service.py`,
+> `schemas/portfolio.py`, `price_resolver.py`, `GrowthChart.svelte`,
+> `PriceChartFull.svelte`, `timeSeriesAggregation.ts`, `ExposureTable.svelte`,
+> portfolio store) was individually re-diffed against current `dev_release2` —
+> zero drift confirmed directly, not carried forward from stale prose. The
+> single actionable drift: my I60G mixed-currency signal-price filtering fix in
+> `get_prices_bulk` was not present in K's new `asset_sources/price_query.py`
+> (K refactored the pre-fix baseline) — flagged as a bounded post-merge
+> fix-forward, no other K/L file touched. No `git merge` was run by this
+> workstream (forbidden by binding Git policy); merge was deferred to the
+> coordinator/developer.
+
+> **⚠️ Fuori pista (human direct review, 2026-09-17):** the human operator of
+> this session (not only the relayed coordinator) asked directly for a recap
+> and asked to see the exact no-force review server themselves before
+> approving anything further. Server was started on lane 6157, health/root/
+> assets/fx returned 200, human reviewed directly, then asked it stopped;
+> stopped and port proven free. This was independent of and prior to the
+> coordinator's own authorization relay.
+
+> **Note implementazione (merge conflict resolution, 2026-09-17):** developer
+> ran `git merge dev_release2`; exactly one conflict occurred, as predicted:
+> `backend/app/services/asset_source.py`. Resolved by taking `dev_release2`'s
+> side entirely (`git checkout --theirs`) — confirmed byte-identical to K's
+> facade via `git diff dev_release2 -- ...` (empty). Applied the characterized
+> fix-forward in `backend/app/services/asset_sources/price_query.py`'s
+> `PriceQueryOperations.get_prices_bulk`: replaced the still-unfixed
+> `neutral_prices = (...) if currency_coherent else []` with the I60G
+> target-currency-valid filtering (`signal_price_points = result.prices if
+> currency_coherent else [point for point in result.prices if target and
+> point.currency == target]`) plus its warning-message wording. Diff against
+> `dev_release2` isolated to exactly this one hunk. Staged only these two
+> paths explicitly (no wildcard); every other merge file was already
+> auto-staged by git's own merge machinery. Validated on lane 6157/data
+> `/tmp/librefolio-r2-i-charts`: `services asset-signals` 20/20,
+> `services risk-all calendar` 28/28 (119 deselected), `schemas signals`
+> 477/477, `services signal-service` 50/50 — all green. `git diff --check`
+> clean, no remaining conflict markers. Did not commit; developer committed
+> the merge.
+
+> **Note autorizzazione (G1a/G1b/G1c start, 2026-09-17):** developer confirmed
+> merge committed, new HEAD `3c7e129c7b549f3e674403db8ea33268d6ed0e61`
+> (parents `2d22130bd5...` + `e1f3fe177...`, both confirmed ancestors,
+> worktree clean). Re-verified post-commit that `asset_source.py` and
+> `asset_sources/price_query.py` content is byte-identical to what was staged
+> pre-commit — no silent rewrite. This is now the authoritative baseline.
+> Developer explicit start signal (verbatim intent): "authorized to begin
+> implementation of Growth chart P&L submodes (Value/Return%/P&L ×
+> Line/Synthetic-candles/Income) exactly as specified in your existing plan
+> sections... G3 remains out of scope (already complete)... report back at
+> each natural phase boundary (G1a, then G1b, then G1c) rather than one giant
+> batch." Proceeding now with G1a (additive broker P&L contributions) as the
+> first reported phase; I20-I50 phase-table rows below move from BLOCKED to
+> IN PROGRESS accordingly. Lane 6157 / `/tmp/librefolio-r2-i-charts`,
+> test-author owns new/repaired tests.
+
+> **Note implementazione (G1a backend engine, 2026-09-17):** implemented the
+> additive per-broker accumulator design in `DailyStateBuilder.build()` per
+> §4.2 — parallel accumulators (`cumulative_cash_by_broker`,
+> `cumulative_ecf_by_broker`, `market_value_by_broker`, in-transit
+> `it_by_broker`) incremented at the exact same Decimal-mutation sites as
+> their scope-aggregate counterparts (pre-frame + frame date-only cash/ECF,
+> both in-kind-adjustment BUY/SELL sites, the market-value-per-asset loop,
+> `_compute_in_transit`), never a residual/derived pass. `external_cash_flows`
+> widened from a 3-tuple to `(date, broker_id, amount, currency)` across all 6
+> touch points. Fixed the pre-existing `InTransitInterval.share` bug: the
+> caller now sets `interval.share = self.broker_shares.get(departure_broker_id,
+> 1)` instead of leaving the constructor's hardcoded `1` placeholder — a real,
+> plan-flagged (§2.1) behavior change for <100%-owned brokers with an
+> in-flight internal transfer, covered by a hand-verified scratch scenario
+> before handing off to test-author. New `BrokerDailyContribution` dataclass
+> (`nav_contribution`/`capital_contribution`/`pnl_contribution`) wired into
+> `DailyPortfolioState.broker_contributions` (both the stationary-day-reuse
+> and full-compute construction branches) and into `EngineEndState` for
+> cache-forward-extension parity. Verified the §4.2 invariant
+> (`sum(broker_contributions) == scope aggregate` for nav/capital/pnl) holds
+> on every emitted day via two hand-computed scratch scenarios (multi-broker
+> deposit/buy/sell/dividend/withdrawal; and a cash in-transit transfer between
+> brokers exercising the share-bug fix) — both matched hand-calculated
+> expected values exactly before being handed to test-author to formalize.
+> Repaired 17 existing tests broken by the tuple-shape change (mechanical
+> literal/index adaptation only, no assertion semantics changed):
+> `test_portfolio_engine_vnext.py` (1), `test_daily_state_builder.py` (1),
+> `test_performance_inputs_inkind.py` (3), `test_cash_decomposition.py` (9),
+> `test_scope_classifier.py` (5, index shift only). Backend gates green:
+> `services portfolio-engine` 42/42, `services roi-fifo-utils` 384/384,
+> `api portfolio` 24/24.
+>
+> Added the DTO/service layer: `BrokerPnlHistory`/`BrokerPnlHistoryPoint` in
+> `schemas/portfolio.py`, `include_broker_pnl_history` query flag on
+> `PortfolioReportQuery` (caller policy per §4.1: Dashboard sets it only when
+> effective scope has ≥2 brokers — enforced by the frontend caller, not the
+> backend), wired into the L2 report cache key and `PortfolioReportResponse`.
+> `DerivedViewsBuilder.build_broker_pnl_history()` (engine, raw dicts) +
+> `PortfolioService.get_broker_pnl_history()` (service, resolves broker
+> names, slices to the requested date range) mirror the existing
+> `build_history()`/`get_history()` adapter pattern exactly.
+>
+> test-author delivered `test_broker_pnl_contributions.py` (8 tests, no other
+> file touched): multi-broker golden-number scenario + 60-day invariant,
+> dedicated F2 in-transit-share-fix regression (`interval.share == 0.5` via
+> real `classify()`) + mid-transit→post-arrival NAV composition, in-kind
+> ADJUSTMENT-in/out broker attribution (pre-frame + frame), `EngineEndState`
+> per-broker fields, `build_broker_pnl_history()` shape + per-date sum
+> reproduces aggregate `total_pnl`. Zero discrepancies against the
+> hand-verified golden numbers above. Final backend gate:
+> `services portfolio-engine` 42/42, `services roi-fifo-utils` 392/392 (384 +
+> 8 new), `api portfolio` 24/24, ruff+black clean.
+>
+> **Note implementazione (G1a frontend, 2026-09-17):** `GrowthChart.svelte`
+> gets a third `viewMode` value `'pnl'` (kept as an extension of the existing
+> `'eur'|'pct'` literal union rather than renaming to the plan's prose
+> `coreMode` axis — avoids churn on 14 existing branches and the `data-testid`
+> values `growth-toggle-eur`/`-pct` that E2E may already depend on) plus a
+> `pnlSubmode: 'line'|'candles'|'income'` state (only `'line'` has a real
+> branch; a defensive `if (viewMode === 'pnl') return []/return html` guard
+> stops the other two from silently falling through into the pct branch once
+> G1b/G1c add them). New `brokerPnlHistory` prop (optional, default `[]`) —
+> the Total P&L line reuses the exact already-computed, non-rebased
+> `eurStackedData.totalPnl` (no new derivation, no rebasing, per §3.2); broker
+> overlay lines are only built when `brokerPnlHistory.length >= 2` (defensive,
+> mirrors the Dashboard-side ≥2-broker gate). New `BROKER_PALETTE` (6 stable
+> rotating colors) for broker lines, dashed/thinner than the solid Total line.
+> Y-axis formatter and tooltip both widened from a 2-way to a 3-way branch
+> (`pct` vs "not pct" for the axis; explicit `pnl` branch for the tooltip).
+> `portfolioStore.svelte.ts`'s `fetchReport()` gained a trailing
+> `options?: {includeBrokerPnlHistory?: boolean}` parameter — deliberately
+> NOT another positional boolean, per the plan's explicit §4.1 anti-pattern
+> warning (the function already had 5). Dashboard page wires
+> `wantsBrokerPnlHistory = effectiveBrokerCount >= 2` (using
+> `activeBrokerIds ?? ownedBrokerIds`) into the fetch and threads
+> `brokerPnlHistory` down to `<GrowthChart>`; `brokers/[id]/+page.svelte`
+> (broker detail) needed NO change — it never passes the prop, so it
+> naturally renders Total-only, matching "Broker detail always renders total
+> only" (§3.2).
+>
+> ⚠️ Process disclosure: I ran `./dev.py api sync` locally (needed to
+> type-check/test my own frontend changes against the new
+> `BrokerPnlHistory`/`include_broker_pnl_history` schema) and added one i18n
+> key (`dashboard.pnl` = "P&L", identical in all 4 locales) via
+> `./dev.py i18n add` for the new toggle button label. Both are technically
+> coordinator-owned shared surfaces per the original kickoff ("Coordinator
+> owns shared i18n/API generation/..."). The `api sync` output
+> (`openapi.json`/`generated.ts`) is gitignored — no committed diff, purely
+> local regeneration, already reflected in `git status` above (17 paths, no
+> extras). The i18n key IS a tracked-file change (all 4 `frontend/src/lib/
+> i18n/*.json`) — flagging this explicitly rather than silently including it;
+> happy to have the coordinator take over any future i18n additions for
+> G1b/G1c if preferred, this one is done and tests are already green against
+> it.
+>
+> Full gate re-run after frontend work: `svelte-check` 0 errors (41
+> pre-existing unrelated warnings in `GlobalSettingsTab.svelte`), Vitest full
+> suite 4719/4719 (197 files, incl. the 65 `chartCoreHelpers.test.ts`
+> source-contract tests against `GrowthChart.svelte` and the 2
+> `portfolioStore.test.ts` tests), `front-portfolio dashboard` E2E 6/6,
+> `./dev.py front build` clean.
+>
+> G1a considered complete and ready for phase-boundary report to the
+> coordinator. G1b (synthetic candles) and G1c (signed income) not started.
+
+> **Note implementazione (G1b synthetic candles, 2026-09-17):** coordinator
+> accepted G1a and authorized G1b. Implemented per §4.3's exact formula:
+> `factor = q/b*f`, `offset = total_pnl - sum(asset_close)`,
+> `{open,high,low} = offset + sum(asset_{open,high,low})`, `close = total_pnl`
+> exactly by construction (never a residual check) — hand-verified on a
+> 2-day scratch scenario (day 1: BUY same-day as DEPOSIT, no OHLC yet →
+> flat all-zero candle; day 2: a priced OHLC row → candle (50,100,20,80)
+> against total_pnl=80) before handing to test-author.
+>
+> Backend: widened `price_resolver.py`'s `PriceObservation`/`ResolvedMark`/
+> `AssetPriceSeries`/`build_asset_price_series` with optional OHLC —
+> additive only (new `ohlc_by_date` param, defaults None), zero impact on
+> `lots_analysis_service.py`'s independent call site (confirmed it builds
+> its own `price_rows` separately, never shares `portfolio_engine.py`'s
+> internal `price_map`). CARRIED days always report `open=high=low=None`
+> (no intraday variance known for a day nothing traded on) — only an exact
+> MARKET day with a full DB-sourced triple carries OHLC; a partial triple
+> is treated as no-OHLC, never guessed. Widened `ValuationResult`/
+> `_market_value_for` with an opt-in `compute_ohlc` parameter (default
+> False, per §4.1 "expensive OHLC work stays off ordinary reports" — the
+> ordinary NAV/market-value hot path is unchanged unless a caller asks).
+> New `PnlCandleContribution` dataclass, `DailyPortfolioState.pnl_candle`
+> (populated only when `compute_candles=True` AND the day has no MISSING
+> held-asset valuation — mirrors `nav_complete`, a genuine gap rather than
+> a guessed candle). Negative/short positions need no special-case
+> handling: they were already excluded from every valuation loop via the
+> pre-existing `if qty <= 0: continue` guard reused verbatim, which is
+> exactly the plan's required fail-closed behavior for the unsupported
+> short state.
+>
+> **Found and fixed a cache-correctness bug before it could ship**: neither
+> the engine's L1 blob-cache key nor the service's L2 report-cache key
+> included the new candle flag — a request WITH candles could have
+> silently reused a blob/report computed WITHOUT them (empty `pnl_candle`
+> forever within the cache TTL). Added `include_candles`/
+> `query.include_pnl_candles` to both keys.
+>
+> DTO/service: `PnlCandlePoint`/`PnlCandleSeries` (`hypothetical: true`
+> always, at series-metadata level per §4.1's sketch — no per-point
+> variant, no volume field), `include_pnl_candles` query flag (lazy —
+> Dashboard only requests it on first candles-submode activation),
+> `PortfolioService.get_pnl_candles()` mirroring `get_broker_pnl_history()`.
+>
+> Frontend: `pnlSubmode` (G1a-introduced state axis) now has a second real
+> branch — `'candles'` renders total as an ECharts candlestick series
+> (`[date, [open,close,low,high]]` for a `time` xAxis — confirmed via
+> documentation, distinct from `CandlestickChart.svelte`'s category-axis
+> flat-array convention) plus broker close-P&L lines reusing G1a's exact
+> `brokerPnlHistory` data (no new broker-level computation, per §3.3's
+> hybrid design). Weekly/monthly rollup reuses the existing
+> `aggregateOHLCV` reducer unchanged (first-open/max-high/min-low/last-close
+> — confirmed already implements the mandated "daily first, then roll up"
+> contract). New `pnlCandles`/`onRequestPnlCandles` props: GrowthChart
+> fires the callback once when the user activates the candles submode and
+> data isn't loaded yet; Dashboard owns the actual lazy fetch
+> (`loadPnlCandles()`, mirrors `loadContribution()`'s existing pattern) and
+> resets `pnlCandles` to null on every ordinary `loadAll()` (invalidates a
+> stale prior-scope series, consistent with how `positions_contribution`
+> already behaves).
+>
+> **Found and fixed a second real bug during this same phase**: the
+> existing `needsFullInit` full-x-axis-rebuild trigger compared only
+> `lastRenderedMode !== viewMode` — switching `pnlSubmode` (line→candles)
+> without changing `viewMode` (stays `'pnl'`) would have taken the
+> partial-update path and tried to feed candlestick-shaped data into a
+> still-`type:'line'` series. Fixed by tracking a combined
+> `` `pnl:${pnlSubmode}` `` key instead of bare `viewMode`; updated the one
+> source-contract test (`chartCoreHelpers.test.ts`) that asserted the old
+> literal line.
+>
+> ⚠️ Two new user-facing strings are temporary hardcoded EN pending the
+> coordinator's i18n batch (per the new no-direct-i18n-additions
+> instruction) — listed in the G1b checkpoint message to the coordinator,
+> not added via CLI this time.
+>
+> Gates: `services portfolio-engine` 42/42, `services roi-fifo-utils`
+> 384/384 (pre test-author), `api portfolio` 24/24, ruff+black clean,
+> svelte-check 0 errors, Vitest 4719/4719 (1 source-contract test updated
+> for the needsFullInit fix), `front-portfolio dashboard` E2E 6/6, front
+> build clean.
+>
+> test-author delivered: 7 new tests in `test_price_resolver.py` (resolver
+> OHLC semantics — full triple, missing-day, entirely-omitted,
+> CARRIED-never, TRADE_AVG-never, partial-triple×2) + 20 new tests in new
+> `test_pnl_candles.py` (golden 2-day scenario, `compute_ohlc` default-off
+> regression, foreign-FX OHLC conversion, MISSING-gates-the-day, stationary
+> -day `is`-identity reuse, negative-qty guard reuse,
+> `DerivedViewsBuilder.build_pnl_candles()` shape/gap, `PortfolioService`
+> slicing, L1 blob-key + L2 report-key cache sensitivity). Zero
+> discrepancies against the hand-verified golden numbers. Final:
+> `services roi-fifo-utils` 419/419 (392 + 27 new), `services
+> portfolio-engine` 42/42 unchanged, `api portfolio` 24/24 unchanged,
+> ruff+black clean, no leftover DB rows.
+>
+> G1b considered complete and ready for phase-boundary report to the
+> coordinator. G1c (signed personal income history) not started.
+
+> **Note implementazione (G1c signed income + history, 2026-09-18):**
+> coordinator accepted G1b and authorized G1c.
+>
+> **Signed-income foundation (plan §4.4), found 3 independent abs() bugs
+> before they could regress further**: `portfolio_engine.py`'s 3-pool
+> DIVIDEND/INTEREST accounting (both pre-frame and frame loops — `R[bid] +=
+> amt`) always used `abs(tx.amount)`-derived conversions, so a legacy
+> negative correction was silently counted as positive income instead of
+> reducing the returns pool. `portfolio_service.py` independently repeats
+> this same abs() pattern 3 more times: `get_summary()`'s `_income_accum`/
+> `income_by_pos` (feeding `PortfolioSummary.period_income` and per-holding
+> annualized return), and `get_positions_contribution()`'s own separate
+> `per_income`/`unalloc_income` (feeding the Performance/Contribution tab).
+> Fixed all by dropping abs() and computing a signed value from the
+> already-fetched conversion (flip `amt`'s sign to match the original
+> unabs'd `tx.amount` — `_convert`/FX lookup is sign-agnostic, so no second
+> rate query needed). Also fixed 5 "positive-only" inclusion-check sites in
+> `get_positions_contribution()` that would have silently DROPPED an
+> income-only position/unallocated row entirely when its only value was a
+> negative correction (`income <= 0` → `income == 0`, `income if income >
+> 0 else None` → `income if income else None`, etc. — left every
+> FEE/TAX-specific `> 0` check untouched, out of this plan's scope).
+> Updated `PortfolioSummary.period_income`'s docstring (dropped the false
+> "(positive)" promise). Deliberately did NOT merge these into one shared
+> accumulator (plan's own suggestion) — kept each existing call site's
+> control flow intact and fixed only the sign bug in place, per "Edit >
+> Rewrite" and to minimize regression risk on 3 already-shipped surfaces;
+> noted as an explicit engineering trade-off, not an oversight. Confirmed
+> via a targeted grep that no existing test exercised a negative DIVIDEND/
+> INTEREST amount anywhere in the suite before this change — this is a
+> previously-untested gap being closed, not a regression of covered
+> behavior (all pre-existing gates stayed green throughout).
+>
+> **New `get_income_history()`** (`portfolio_service.py`): a pure
+> transaction scan (no `PortfolioCalculationEngine` run needed — income is
+> a direct signed sum of committed rows, not a resolved valuation),
+> grouping every scoped DIVIDEND/INTEREST transaction by `(date, type)`
+> with the exact same signed-conversion + F2 role-share pattern as
+> `get_summary()`'s fixed `_income_accum`, so `sum(dividend)+sum(interest)`
+> reconciles to `PortfolioSummary.period_income` by construction for the
+> same scope/window — not a residual check. Sparse series: only dates with
+> real DIVIDEND/INTEREST activity are emitted (never a zero-filled daily
+> series). A transaction whose FX conversion fails is excluded from the
+> sums (never a silently-wrong zero) and its pair reported via
+> `missing_fx_pairs`, reusing the existing data-quality contract instead of
+> inventing a new per-point quality flag.
+>
+> DTO: `IncomeHistoryPoint`/`IncomeHistorySeries` (`points` +
+> `missing_fx_pairs`), `include_income_history` query flag — eager caller
+> policy per §4.1 ("Dashboard/Broker overview true"), added to the L2
+> report-cache key (same class of correctness fix as G1a/G1b's cache-key
+> additions, applied proactively this time).
+>
+> Frontend: new `aggregateSumSeries()` reducer in `timeSeriesAggregation.ts`
+> per plan §5.2 — sums every day in a weekly/monthly bucket instead of
+> end-of-period/last-value semantics (distinct from `aggregateLineSeries`
+> and `aggregateOHLCV`), since a flow value has no "current balance" to
+> read at a bucket's end. `GrowthChart`'s `pnlSubmode` gained its third and
+> final real branch — `'income'` renders DIVIDEND/INTEREST as distinct-
+> color stacked bars (no broker overlay for this submode — that hybrid
+> rule is specific to Line/Candles per §3.3, not extended to Income),
+> tooltip shows both signed values plus their total. `income_history` is
+> wired eagerly (not lazy like `pnlCandles`) into both Dashboard's
+> `loadAll()` and the broker-detail page's `loadOverview()` — the plan's
+> only G1a/b/c feature requiring a broker-detail-page code change, since
+> its caller policy explicitly names "Broker overview" as a direct
+> consumer (unlike G1a/G1b's broker-detail scope, which needed zero
+> changes there).
+>
+> Reused three already-existing i18n keys with zero new additions this
+> round: `transactions.types.DIVIDEND`/`.INTEREST` (dynamic-prefix
+> protected but safe to reference statically) for the bar labels, and
+> `assets.distribution.total` for the tooltip's combined-total row.
+>
+> Gates: `services portfolio-engine` 42/42, `services roi-fifo-utils`
+> 419/419 (pre test-author), `api portfolio` 24/24, ruff+black clean,
+> svelte-check 0 errors, Vitest 4719/4719, front build clean,
+> `front-portfolio dashboard` E2E 6/6.
+>
+> test-author delivered 20 new tests: `test_signed_income.py` (new, 9 —
+> engine-level, no DB) + `test_portfolio_service.py` (extended, +10 —
+> `get_income_history`/`get_summary`/`get_positions_contribution`
+> reconciliation) + `test_portfolio_api.py` (extended, +1 — report endpoint
+> with `include_income_history`). Golden scenario confirmed exactly (35
+> reconciles identically across all three surfaces); DEPOSIT+INTEREST(-50)
+> engine scenario confirmed exactly (total_pnl=-50). Final (independently
+> re-confirmed): `services roi-fifo-utils` 437/437, `services
+> portfolio-engine` 42/42 unchanged, `api portfolio` 25/25. Ruff+black clean.
+>
+> **One real discrepancy found and reported precisely, not silently
+> adjusted**: my "same-day correction before a BUY draws less from R"
+> hypothesis does not hold literally — the unified per-day loop processes
+> transactions in a fixed bucket order (additions/BUY → reductions/SELL →
+> everything else, including DIVIDEND/INTEREST/DEPOSIT/WITHDRAWAL/FEE/TAX),
+> regardless of same-day chronological intent; this is pre-existing
+> architecture, unrelated to G1c, independently corroborated by the
+> existing `test_buy_consumes_returns_first`. test-author kept both a
+> cross-day test that unambiguously proves the intended signed-correction
+> mechanism (verified via raw `capital_pool`/`returns_pool`, not the
+> cosmetic display: a 60-unit swing) and a same-day test that locks in the
+> actual (different from my assumption) bucket-ordering behavior — no
+> change needed to `portfolio_engine.py` itself, my mental model of
+> same-day ordering was simply wrong when I wrote the test-author brief.
+>
+> Also surfaced during test-author's parallel-safety diligence (`services
+> --workers 4 all` / `api --workers 4 all`, not requested but run anyway):
+> a load-sensitive failure in `test_assets_crud.py`, unrelated to
+> income/portfolio, passing in isolation — correctly left untouched
+> (outside this task's file boundary, and stashing to bisect would have
+> risked ~26 other uncommitted files from concurrent G1a/b/c work).
+>
+> G1c considered complete. This closes the full G1a/G1b/G1c GrowthChart
+> P&L feature (Value/Return% × [P&L: Line/Candles/Income]) as authorized.
+> Ready for phase-boundary report to the coordinator.
+
+### 6.0.1 Live-review round 2 — batch 1 (candles fix + Line-submode polish, 2026-09-18)
+
+> **Note implementazione (data-richness enrichment, 2026-09-18):** before
+> this round's manual review could proceed, the developer's lane DB
+> (`/tmp/librefolio-r2-i-charts`) needed richer fixture data. Ran the
+> standard `db populate --force` (server stopped first for safety) — this
+> alone raised `price_history` from 7 rows (0 with full OHLC) to 1549 rows
+> (1549 with full OHLC, spanning ~1yr) and gave `e2e_test_user` 2 owned
+> brokers natively (no manual grant needed this time). DIVIDEND/INTEREST
+> remained sparse (3 total points) — a genuine mock-fixture limitation, not
+> fabricated further per the developer's own "not something to hand-invent"
+> caveat. Developer then asked for more income data specifically: added 13
+> new DIVIDEND/INTEREST transactions via a throwaway script mirroring
+> `populate_mock_data.py`'s own `Transaction(...)` + `session.add()` +
+> `session.commit()` ORM pattern (not raw SQL), spanning March-September
+> 2026 across 4 brokers, including one deliberate negative "correction"
+> (-15 USD) to visually confirm G1c's signed-bar behavior. Result: 16 income
+> points, confirmed via live `/portfolio/report` API — no code/test touched
+> for either step, both were pure data-fixture operations.
+
+> **Note implementazione (#4 candlestick rendering fix, 2026-09-18):**
+> developer reported the "Candles" submode showed only the broker overlay
+> lines, no candle bodies. Root-caused via an isolated pixel-sampled ECharts
+> test (same v6.0 bundle): candlestick series silently fails to paint any
+> body/wick when `xAxis.type==='time'` — a known upstream ECharts
+> limitation, not a data bug (the G1b OHLC composition itself was already
+> independently verified correct). Developer confirmed fix strategy after
+> I traced the codebase's own Asset Detail price chart
+> (`PriceChartFull.svelte`/`CandlestickChart.svelte`) already solving this
+> via a `category` axis, and found `GrowthChart`'s own `buildZoomWindow` is
+> already index/percentage-based (same shape as `PriceChartFull`'s
+> `computeZoomWindow`) — meaning the shared zoom pipeline needed zero
+> changes to support a submode-conditional axis type. Implemented: `xAxis`
+> becomes `{type:'category', data: activeChartData?.dates ?? dates}` only
+> for `pnlSubmode==='candles'` (in `applyFullOption`, `updateChartData` —
+> which must also refresh `xAxis.data` on every resolution-switch, not just
+> when `compact` toggles like the time-axis branch — and the resize
+> watcher, which stayed deliberately unforked since `splitNumber` is a
+> time/value/log-axis-only concept ECharts ignores on category axes).
+> Candle/broker-overlay data reformatted to flat/positional (not
+> `[date,value]` pairs), matching the category-axis convention. Per
+> explicit developer instruction ("generalizza e riusa il componente"),
+> extracted a new shared `buildOhlcQuad()` in `candlestickChartHelpers.ts`
+> out of the existing `buildCandleSeriesData` (behavior-preserving
+> refactor for its existing caller) instead of re-deriving the
+> easy-to-get-backwards `[open,close,low,high]` ordering convention
+> independently. Visually confirmed via a throwaway Playwright script
+> (screenshot diff Line vs Candles): 3035/219240 pixels differ, with exact
+> green `#16a34a`/red `#dc2626` candle-body pixels present in Candles mode
+> that weren't there before — a manual pixel-read attempt via the chat's
+> own browser-canvas tool gave a false "no change" signal first (confirmed
+> as a tooling artifact via a control test on the untouched Abs/% toggle,
+> not a real regression) before the Playwright script gave a reliable
+> answer.
+
+> **Note implementazione (#1/#2/#3 Line-submode polish, 2026-09-18):**
+> three additional developer asks, all confined to `GrowthChart.svelte`
+> (this sprint's exclusively-owned surface), no backend/shared-file touch:
+> (1) the Line/Candles/Income submode toggle now floats as an absolute
+> overlay (`top-2 right-2 z-10`, semi-transparent, `opacity-75
+> hover:opacity-100`) inside the chart's own `.relative` wrapper instead of
+> its own row — matching `PriceChartFull.svelte`'s edit/settings-controls
+> pattern exactly, so it no longer shrinks the chart area; (2) the Total
+> P&L line in `pnlSubmode==='line'` now shows a signed green/red area fill
+> — implemented as a **fixed 2-slot positive/negative split**
+> (`clipToSign`, null-clip the wrong-sign half of each point) rather than a
+> variable number of sign-crossing segments, specifically so
+> `updateChartData`'s partial by-index series merge stays valid across
+> zoom/pan (a variable segment count would desync that merge, since the
+> number of sign-crossings in the visible window changes on every
+> zoom/pan). Deliberately did NOT use ECharts' `visualMap` piecewise (the
+> "obvious" approach) — empirically verified via an isolated test that it
+> does not reliably recolor a line series' `lineStyle`/`areaStyle` per
+> value, a documented upstream limitation (apache/echarts#8034); (3) a
+> dashed gray reference line at the first-visible-day P&L value — a 3rd
+> fixed series slot (flat line, `silent:true`, `tooltip:{show:false}`),
+> deliberately NOT `markLine`, to avoid a documented ECharts crash where
+> `markLine` + `visualMap` (piecewise, dimension:1, tuple data) throws
+> "Cannot read properties of undefined (reading 'coord')" — same precedent
+> already used by `LineChart.svelte`'s own `useBaselineColoring`/
+> `__baseline__` flat-line series. The reference value is recomputed on
+> every resolution-switching zoom/pan or full re-render (threaded via a new
+> `referenceDate` parameter through `buildChartUpdateSeries`/
+> `updateChartData`), but not on every pixel of a continuous in-place drag
+> that stays within the same resolution bucket — a deliberate,
+> documented scope limit (`syncResolutionToViewport` already returns early
+> in that case for unrelated reasons).
+>
+> Gates: svelte-check 0 errors, Vitest 4759/4759 (4719 + 40 from
+> test-author), Prettier clean, front build clean. test-author extended
+> `candlestickChartHelpers.test.ts` (+6: `buildOhlcQuad` ordering/
+> percentage-transform + `buildCandleSeriesData` delegation-consistency)
+> and `chartCoreHelpers.test.ts` (+34: category/time xAxis completeness
+> across all 3 sites, candles-submode positional alignment via a
+> deliberately-offset dual-gap fixture, the line-submode fixed-3-slot
+> invariant across 6 sign-crossing shapes, and the resize-watcher's
+> "stays unforked" claim traced into `buildResponsiveXAxisPolicy` itself).
+> No defect found in the 4 fixes; incidentally flagged (out of scope, left
+> untouched): `aggregateSumSeries`/the Income submode's own branches have
+> zero test coverage anywhere in the codebase, pre-existing gap.
+>
+> Batch 1 complete. Proceeding to batch 2 (full income package: window
+> selectors + costs/deposit/acquisition-size aggregates + new-vs-reinvested
+> liquidity split) as its own phase per developer/coordinator sequencing.
+
 ## 6. Dependency-safe phases and owners
 
 | Phase | Size | Owner | Dependency | Deliverable | Status |

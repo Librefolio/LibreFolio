@@ -1461,7 +1461,13 @@
     "yieldOnCostValue": "Rendimento sul costo",
     "yieldOnCostPeriod": "Periodo",
     "yieldOnCostFxRateDate": "tasso del",
-    "yieldOnCostNoIncomeTitle": "Nessun reddito registrato"
+    "yieldOnCostNoIncomeTitle": "Nessun reddito registrato",
+    "pnl": "P&L",
+    "pnlSubmodeLine": "Linea",
+    "pnlSubmodeIncome": "Proventi",
+    "pnlSubmodeCandles": "Candele",
+    "pnlCandlesHypothetical": "Sintetico — i massimi/minimi cross-asset sono ipotetici e non simultanei, non una serie intraday reale.",
+    "pnlCandlesHypotheticalShort": "Sintetico — i massimi/minimi cross-asset sono ipotetici e non simultanei"
   },
   "dataQuality": {
     "headerInfoOnly": "Note sulla qualità dei dati",

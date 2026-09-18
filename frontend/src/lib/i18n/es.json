@@ -1461,7 +1461,13 @@
     "yieldOnCostValue": "Rendimiento sobre coste",
     "yieldOnCostPeriod": "Periodo",
     "yieldOnCostFxRateDate": "tipo del",
-    "yieldOnCostNoIncomeTitle": "Sin ingresos registrados"
+    "yieldOnCostNoIncomeTitle": "Sin ingresos registrados",
+    "pnl": "P&L",
+    "pnlSubmodeLine": "Línea",
+    "pnlSubmodeIncome": "Ingresos",
+    "pnlSubmodeCandles": "Velas",
+    "pnlCandlesHypothetical": "Sintético — los máximos/mínimos entre activos son hipotéticos y no simultáneos, no una serie intradía real.",
+    "pnlCandlesHypotheticalShort": "Sintético — los máximos/mínimos entre activos son hipotéticos y no simultáneos"
   },
   "dataQuality": {
     "headerInfoOnly": "Nota de calidad de datos",
