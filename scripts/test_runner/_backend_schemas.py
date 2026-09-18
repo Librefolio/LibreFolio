@@ -95,6 +95,13 @@ def schemas_pac_analyze(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "PAC analyze schema tests", verbose=verbose)
 
 
+def schemas_pac_planner(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the strict PAC/Rebalancer v2 planner wire contract."""
+    print_section("Schemas: PAC/Rebalancer Planner")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_schemas/test_pac_planner_schemas.py", test_names)
+    return run_command(cmd, "PAC/Rebalancer planner schema tests", verbose=verbose)
+
+
 def schemas_ai_export(verbose: bool = False, test_names: list = None) -> bool:
     """Test AI Export request, response, and catalog schemas."""
     print_section("Schemas: AI Export")
@@ -154,6 +161,14 @@ Tests for Pydantic/SQLModel schema validation:
     add_test(cat, "signals", schemas_signals, name="Signal Schemas", desc="Plugin, catalog, canonical output, status and availability contracts")
     add_test(cat, "risk", schemas_risk, name="Risk Schemas", desc="Canonical valuations, returns, metadata and data-quality contracts")
     add_test(cat, "pac-analyze", schemas_pac_analyze, name="PAC Analyze Schemas", desc="Strict P1 draft/result codecs, availability, exact string facts and wire bounds", isolation="pure")
+    add_test(
+        cat,
+        "pac-planner",
+        schemas_pac_planner,
+        name="PAC/Rebalancer Planner Schemas",
+        desc="Strict v2 request/result codecs, exact-number evidence, Option-B wire bounds and fixture roundtrips",
+        isolation="pure",
+    )
     add_test(cat, "ai-export", schemas_ai_export, name="AI Export Schemas", desc="Strict requests, responses, catalog, and typed problem contracts")
     add_test(
         cat,

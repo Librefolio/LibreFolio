@@ -20,8 +20,10 @@ ToolVersion = Annotated[
 ToolToken = Annotated[str, Field(strict=True, min_length=1, max_length=64, pattern=r"^[!-~]+$")]
 ToolFingerprint = Annotated[str, Field(strict=True, pattern=r"^[a-f0-9]{64}$")]
 ToolMilliseconds = Annotated[int, Field(strict=True, ge=0)]
+ToolBytes = Annotated[int, Field(strict=True, ge=0)]
 ToolPositiveInt = Annotated[int, Field(strict=True, gt=0)]
 ToolFieldPath = Annotated[list[Annotated[str, Field(strict=True, max_length=64)] | Annotated[int, Field(strict=True, ge=0)]], Field(max_length=16)]
+ToolMemoryLimitMode = Literal["cgroup_v2_hard", "process_tree_observed", "unavailable"]
 
 ToolErrorCode = Literal[
     "unknown_tool",
@@ -37,6 +39,7 @@ ToolErrorCode = Literal[
     "execution_failed",
     "invalid_output",
     "output_limit_exceeded",
+    "memory_limit",
     "cleanup_failed",
     "service_unavailable",
 ]
@@ -72,14 +75,16 @@ class ToolPlatformPolicy(ToolTransportModel):
     envelope_reserve_bytes: ToolPositiveInt = 65_536
     max_json_depth: Annotated[int, Field(strict=True, ge=1, le=64)] = 32
     queue_timeout_ms: ToolPositiveInt = 5_000
-    job_timeout_ms: ToolPositiveInt = 5_000
-    soft_timeout_ms: ToolPositiveInt = 4_000
+    engine_timeout_ms: ToolPositiveInt = 30_000
+    job_timeout_ms: ToolPositiveInt = 45_000
+    soft_timeout_ms: ToolPositiveInt = 44_000
     output_reserve_ms: ToolPositiveInt = 1_000
-    cleanup_timeout_ms: ToolPositiveInt = 2_000
+    cleanup_timeout_ms: ToolPositiveInt = 5_000
     ingress_timeout_ms: ToolPositiveInt = 2_000
     response_reserve_ms: ToolPositiveInt = 2_000
-    request_timeout_ms: ToolPositiveInt = 20_000
-    client_timeout_ms: ToolPositiveInt = 25_000
+    request_timeout_ms: ToolPositiveInt = 59_000
+    client_timeout_ms: ToolPositiveInt = 65_000
+    memory_limit_bytes: ToolPositiveInt = 1_073_741_824
 
     @model_validator(mode="after")
     def coherent_limits(self) -> Self:
@@ -87,6 +92,8 @@ class ToolPlatformPolicy(ToolTransportModel):
             raise ValueError("Worker count cannot exceed pending-item capacity")
         if self.max_pending_per_principal > self.max_pending_items:
             raise ValueError("Principal capacity cannot exceed process capacity")
+        if self.engine_timeout_ms > self.soft_timeout_ms:
+            raise ValueError("The engine budget cannot exceed the cooperative soft deadline")
         if self.soft_timeout_ms + self.output_reserve_ms > self.job_timeout_ms:
             raise ValueError("The job deadline must reserve time for validated output")
         server_bound = self.ingress_timeout_ms + self.queue_timeout_ms + self.job_timeout_ms + self.cleanup_timeout_ms + self.response_reserve_ms
@@ -98,6 +105,8 @@ class ToolPlatformPolicy(ToolTransportModel):
             raise ValueError("Response capacity must cover every item and its envelope")
         if self.max_batch_items * self.max_parameter_bytes + self.envelope_reserve_bytes > self.max_request_bytes:
             raise ValueError("Request capacity must cover every item and its envelope")
+        if self.workers * self.memory_limit_bytes > 9_007_199_254_740_991:
+            raise ValueError("Pool memory reservation must fit the safe JSON integer range")
         return self
 
 
@@ -109,8 +118,13 @@ class ToolOperationPolicy(ToolTransportModel):
     max_parameter_bytes: ToolPositiveInt = 131_072
     max_result_bytes: ToolPositiveInt = 262_144
     queue_timeout_ms: ToolPositiveInt = 5_000
+    engine_timeout_ms: ToolPositiveInt = 4_000
     job_timeout_ms: ToolPositiveInt = 5_000
     soft_timeout_ms: ToolPositiveInt = 4_000
+    cleanup_timeout_ms: ToolPositiveInt = 2_000
+    request_timeout_ms: ToolPositiveInt = 20_000
+    client_timeout_ms: ToolPositiveInt = 25_000
+    memory_limit_bytes: ToolPositiveInt = 1_073_741_824
 
     @field_validator("pure", mode="before")
     @classmethod
@@ -121,15 +135,21 @@ class ToolOperationPolicy(ToolTransportModel):
 
     @model_validator(mode="after")
     def ordered_deadlines(self) -> Self:
+        if self.engine_timeout_ms > self.soft_timeout_ms:
+            raise ValueError("The engine budget cannot exceed the cooperative soft deadline")
         if self.soft_timeout_ms >= self.job_timeout_ms:
             raise ValueError("Soft deadline must precede the hard job deadline")
+        if self.queue_timeout_ms + self.job_timeout_ms + self.cleanup_timeout_ms >= self.request_timeout_ms:
+            raise ValueError("The request deadline must leave time around queue, job and cleanup")
+        if self.client_timeout_ms <= self.request_timeout_ms:
+            raise ValueError("Client timeout must leave transport time after the server deadline")
         return self
 
 
 class ToolUIDescriptor(ToolTransportModel):
     kind: Literal["custom"] = Field(..., json_schema_extra={"enum": ["custom"]})
     component_key: Annotated[str, Field(strict=True, min_length=1, max_length=64, pattern=r"^[a-z][a-z0-9-]*$")]
-    ui_contract_version: Annotated[int, Field(strict=True, ge=1)]
+    version: ToolVersion
 
 
 class ToolDocumentation(ToolTransportModel):
@@ -177,7 +197,7 @@ class ToolUnavailableSummary(ToolTransportModel):
 
 
 class ToolCatalogResponse(ToolTransportModel):
-    catalog_version: Literal["1"] = Field(..., json_schema_extra={"enum": ["1"]})
+    catalog_version: Literal["2"] = Field(..., json_schema_extra={"enum": ["2"]})
     policy: ToolPlatformPolicy
     items: list[ToolDescriptor]
     unavailable: list[ToolUnavailableSummary]
@@ -215,6 +235,18 @@ class ToolError(ToolTransportModel):
     issue_count: Annotated[int, Field(strict=True, ge=0)] = 0
 
 
+class ToolMemoryMetrics(ToolTransportModel):
+    """Observed memory facts; enforcement strength is explicit in ``mode``."""
+
+    mode: Literal["cgroup_v2_hard", "process_tree_observed"]
+    limit_bytes: ToolPositiveInt
+    peak_observed_bytes: ToolBytes | None = None
+
+
+class ToolResourceMetrics(ToolTransportModel):
+    memory: ToolMemoryMetrics
+
+
 class ToolItemMetrics(ToolTransportModel):
     """Monotonic durations; unobserved phases are null, never invented zeroes."""
 
@@ -227,6 +259,7 @@ class ToolItemMetrics(ToolTransportModel):
     execution_ms: ToolMilliseconds | None = None
     cleanup_ms: ToolMilliseconds | None = None
     total_ms: ToolMilliseconds | None = None
+    resources: ToolResourceMetrics | None = None
 
 
 class ToolBatchMetrics(ToolTransportModel):
@@ -287,6 +320,32 @@ class ToolDiscoveryFailure(ToolTransportModel):
     reason: ToolDiscoveryReason
 
 
+class ToolMemoryCapability(ToolTransportModel):
+    mode: ToolMemoryLimitMode
+    observation_interval_ms: ToolPositiveInt | None = None
+
+    @model_validator(mode="after")
+    def observed_mode_has_interval(self) -> Self:
+        if (self.mode == "process_tree_observed") != (self.observation_interval_ms is not None):
+            raise ValueError("Only observed process-tree enforcement declares a sampling interval")
+        return self
+
+
+class ToolResourceCapabilities(ToolTransportModel):
+    memory: ToolMemoryCapability
+
+
+class ToolPoolResourceReservation(ToolTransportModel):
+    memory_capacity_bytes: ToolBytes
+    memory_reserved_bytes: ToolBytes
+
+    @model_validator(mode="after")
+    def reservation_fits_capacity(self) -> Self:
+        if self.memory_reserved_bytes > self.memory_capacity_bytes:
+            raise ValueError("Active memory reservation cannot exceed pool capacity")
+        return self
+
+
 class ToolPoolSnapshot(ToolTransportModel):
     available: bool
     active: Annotated[int, Field(strict=True, ge=0)]
@@ -295,6 +354,7 @@ class ToolPoolSnapshot(ToolTransportModel):
     degraded_lanes: Annotated[int, Field(strict=True, ge=0)]
     completed: Annotated[int, Field(strict=True, ge=0)]
     failed: Annotated[int, Field(strict=True, ge=0)]
+    resources: ToolPoolResourceReservation
 
 
 class ToolDiagnosticsResponse(ToolTransportModel):
@@ -303,4 +363,5 @@ class ToolDiagnosticsResponse(ToolTransportModel):
     policy: ToolPlatformPolicy
     loaded: list[ToolDescriptor]
     failures: list[ToolDiscoveryFailure]
+    capabilities: ToolResourceCapabilities
     pool: ToolPoolSnapshot

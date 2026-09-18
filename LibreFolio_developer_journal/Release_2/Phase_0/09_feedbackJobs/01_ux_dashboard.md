@@ -7,7 +7,8 @@ Stato corrente e dettagli in [06_piano_sprint.md](06_piano_sprint.md). Il bug re
 > **Chiusura Gruppo E — 2026-09-09:** U1, U4, U5, U7 e U9 sono stati
 > implementati, verificati e applicati al checkout `dev_release2`; piano ed
 > evidenze in [14_feedbackImportUrgent](../14_feedbackImportUrgent/manifest-integrazione-E.md).
-> U2 privacy, U3 YOC e U8 onboarding restano aperti.
+> U3 YOC è ora integrato; U2 privacy resta aperto. U8 onboarding ha un checkpoint
+> Round 2 manualmente revisionato e un Round 3 pianificato ma non implementato.
 
 ---
 
@@ -260,7 +261,11 @@ e' documentato, non mascherato da una falsa funzionalita'.
 
 > **Analisi 2026-09-07**: la stima iniziale M è stata sospesa prima del confronto.
 > Formato, skip e replay sono ora concordati; stato/migrazione e dettagli delle tappe
-> saranno fissati nel piano esecutivo. Nessuna implementazione avviata.
+> sono fissati nel [piano esecutivo](../21_onboarding/plan-phase00Onboarding.prompt.md).
+
+> **Stato 2026-09-11:** ✅ implementazione e gate automatici completati nel
+> workstream J. Restano obbligatori il walkthrough manuale developer su desktop/mobile
+> e l'eventuale giro di correzione prima della chiusura/archiviazione.
 
 ### Obiettivo
 Quando un utente appena registrato fa il **primo login**, guidarlo a scegliere subito le
@@ -329,7 +334,7 @@ Baseline `a9138140`; superfici, dipendenze, rischi e DoD completi in
 | U5 | ✅ Completato da E: tooltip breve localizzato. | SP01 |
 | U6 | ✅ Rimozione duplicate-mode e fast-open bulk confermati; form vivo da preservare. | Nessun codice |
 | U7 | ✅ Completato da E: supporto condiviso in DonationPopup/About e cinque social. | SP02 |
-| U8 | 🟡 Round 2 revisionato; Round 3 triggered tours in implementazione sul branch J, non ancora integrato. | SP11 |
+| U8 | ✅ [IMPLEMENTATO, VERIFICATO E DEVELOPER-ACCEPTED](../21_onboarding/plan-phase00OnboardingRound6-FinalUX.prompt.md), checkpoint J `580bd504f` integrato nella baseline combinata D `e38a521f0`, non ancora nel target `dev_release2`. | SP11 |
 | U9 | ✅ Completato da E: header auto-hide desktop/mobile con guardie lifecycle. | SP02 |
 
 La [mappa nel piano](06_piano_sprint.md) separa corsie indipendenti da file condivisi:

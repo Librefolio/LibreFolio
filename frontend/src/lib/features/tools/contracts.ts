@@ -109,7 +109,7 @@ export interface CompiledToolContract {
     readonly contractVersion: string;
     readonly schemaFingerprint: string;
     readonly componentKey: string;
-    readonly uiContractVersion: number;
+    readonly uiVersion: string;
     readonly input: z.ZodType<unknown>;
     readonly output: z.ZodType<unknown>;
     readonly operations: readonly string[];
@@ -283,7 +283,7 @@ export function inspectToolCompatibility(catalog: VerifiedToolCatalog, toolCode:
     const contract = getCompiledToolContract(descriptor.tool_code, descriptor.contract_version);
     if (!contract) return {status: 'unavailable', reason: 'contract_not_compiled'};
     if (descriptor.schema_fingerprint !== contract.schemaFingerprint) return {status: 'unavailable', reason: 'schema_mismatch'};
-    if (descriptor.ui.kind !== 'custom' || descriptor.ui.component_key !== contract.componentKey || descriptor.ui.ui_contract_version !== contract.uiContractVersion) {
+    if (descriptor.ui.kind !== 'custom' || descriptor.ui.component_key !== contract.componentKey || descriptor.ui.version !== contract.uiVersion) {
         return {status: 'unavailable', reason: 'ui_mismatch'};
     }
     const operations = new Set(descriptor.operations.map((operation) => operation.operation));

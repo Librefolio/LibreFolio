@@ -382,7 +382,7 @@ def build_tool_contracts_document(snapshot: ToolRegistrySnapshot) -> dict[str, J
                 "contractVersion": descriptor.contract_version,
                 "schemaFingerprint": fingerprint,
                 "componentKey": descriptor.ui.component_key,
-                "uiContractVersion": descriptor.ui.ui_contract_version,
+                "uiVersion": descriptor.ui.version,
                 "input": input_reference,
                 "output": output_reference,
                 "operations": sorted(operations),
@@ -400,11 +400,11 @@ def build_tool_contracts_document(snapshot: ToolRegistrySnapshot) -> dict[str, J
         }
     return {
         "openapi": "3.1.0",
-        "info": {"title": "LibreFolio bundled Tool contracts", "version": "1"},
+        "info": {"title": "LibreFolio bundled Tool contracts", "version": "2"},
         "paths": {},
         "components": {"schemas": dict(sorted(components.items()))},
         TOOL_MANIFEST_KEY: {
-            "manifestVersion": 1,
+            "manifestVersion": 2,
             "tools": tools,
             "transport": transport,
         },

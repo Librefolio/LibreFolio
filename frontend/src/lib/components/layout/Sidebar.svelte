@@ -9,6 +9,7 @@
     import {resetNavDepth} from '$lib/stores/app/navigationStore';
     import {ArrowRightLeft, BarChart3, Briefcase, Coins, Files, LayoutDashboard, LogOut, Settings, User, Wrench, X} from 'lucide-svelte';
     import {APP_VERSION} from '$lib/version';
+    import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import ChangelogModal from './ChangelogModal.svelte';
 
     // Mobile sidebar state (exported so parent can control it)
@@ -76,6 +77,14 @@
         isOpen = false;
         resetNavDepth();
     }
+
+    function navigationAnchorId(href: string): string {
+        return `nav.${href.slice(1).replaceAll('/', '.')}`;
+    }
+
+    function navigationTestId(href: string): string {
+        return `nav-${href.slice(1).replaceAll('/', '-')}`;
+    }
 </script>
 
 <!-- Mobile Overlay -->
@@ -91,7 +100,7 @@
 >
     <!-- Logo Header -->
     <div class="p-4 flex items-center border-b border-white/10 {collapsed ? 'justify-center' : 'justify-between'}">
-        <button class="flex items-center space-x-3 cursor-pointer" on:click={toggleCollapsed} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
+        <button class="flex items-center space-x-3 cursor-pointer" on:click={toggleCollapsed} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} data-testid="sidebar-collapse-toggle" use:guideAnchor={'nav.toggle.desktop'}>
             <div class="w-8 h-8 flex-shrink-0 rounded-lg flex items-center justify-center p-1" style="background:#fff">
                 <img alt="LibreFolio" class="max-w-full max-h-full object-contain" src="/logo.png" />
             </div>
@@ -115,7 +124,8 @@
                 <li>
                     <a
                         href={item.href}
-                        data-testid={item.href === '/tools' ? 'nav-tools' : undefined}
+                        data-testid={navigationTestId(item.href)}
+                        use:guideAnchor={navigationAnchorId(item.href)}
                         on:click={() => {
                             closeSidebar();
                             resetNavDepth();
@@ -148,6 +158,8 @@
                 <li>
                     <a
                         href={item.href}
+                        data-testid={navigationTestId(item.href)}
+                        use:guideAnchor={navigationAnchorId(item.href)}
                         on:click={() => {
                             closeSidebar();
                             resetNavDepth();
@@ -180,6 +192,8 @@
                 <li>
                     <a
                         href={item.href}
+                        data-testid={navigationTestId(item.href)}
+                        use:guideAnchor={navigationAnchorId(item.href)}
                         on:click={() => {
                             closeSidebar();
                             resetNavDepth();

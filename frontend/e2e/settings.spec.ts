@@ -674,3 +674,181 @@ test.describe('Settings', () => {
         });
     });
 });
+
+// ---------------------------------------------------------------------------
+// Onboarding replay controls (Preferences tab → OnboardingReplaySection)
+// ---------------------------------------------------------------------------
+//
+// TEST_USER is canonical and grandfathered `completed` on every flow (see
+// populate_mock_data's `_grandfather_onboarding_for_test_users`). "Replay" exists
+// precisely for this account shape: a user who already finished onboarding but
+// wants to see it again. Arming it writes only a client-side sessionStorage flag
+// (`onboardingGuide`/`onboarding.svelte.ts`'s `startReplay`) — it never calls a
+// `/settings/onboarding/*` transition endpoint, so it can never regress a
+// completed flow back to pending, and it is scoped per browser context, so two
+// tests sharing TEST_USER in parallel never see each other's armed replay.
+//
+// The Welcome case exercises replay Exit, which only clears this context's replay
+// token. None of these tests submits replay Continue: doing so on the shared
+// canonical account would overwrite its persisted language/currency settings for
+// every other test running against it concurrently. Verifying that explicit
+// preference write therefore requires a disposable terminal account, not this
+// otherwise cheap replay-control block.
+const ONBOARDING_FLOW_IDS = [
+    'welcome',
+    'intro_tour',
+    'transactions_page_guide',
+    'transaction_create_guide',
+    'transaction_bulk_guide',
+    'import_guide',
+    'broker_page_guide',
+    'broker_guide',
+    'broker_detail_guide',
+    'fx_page_guide',
+    'fx_guide',
+    'fx_detail_guide',
+    'asset_page_guide',
+    'asset_guide',
+    'asset_detail_guide',
+] as const;
+const ONBOARDING_STEP_IDS = {
+    transaction_bulk_guide: ['transaction.bulk.workspace', 'transaction.bulk.validation', 'transaction.bulk.selection', 'transaction.bulk.save'],
+    import_guide: ['import.upload', 'import.select', 'import.analyze', 'import.assets', 'import.fix', 'import.duplicates', 'import.review', 'import.bulk'],
+} as const;
+
+test.describe('Onboarding replay controls', () => {
+    async function openOnboardingSection(page: Page) {
+        await navigateTo(page, '/settings');
+        await page.getByTestId('settings-tab-preferences').click();
+        const section = page.getByTestId('onboarding-replay-section');
+        await expect(section).toBeVisible({timeout: 10_000});
+        await expect(page.getByTestId('onboarding-flow-welcome')).toBeVisible({timeout: 10_000});
+        for (const group of ['transactions', 'broker', 'fx', 'asset'] as const) {
+            await section.getByTestId(`onboarding-group-${group}`).evaluate((element) => {
+                (element as HTMLDetailsElement).open = true;
+            });
+        }
+        return section;
+    }
+
+    function trackOnboardingRequests(page: Page): {requests: string[]; stop: () => void} {
+        const requests: string[] = [];
+        const record = (req: Request) => {
+            const path = new URL(req.url()).pathname;
+            if (/^\/api\/v1\/settings\/onboarding(?:\/|$)/.test(path)) requests.push(`${req.method()} ${path}`);
+        };
+        page.on('request', record);
+        return {requests, stop: () => page.off('request', record)};
+    }
+
+    test('shows all 15 terminal onboarding flows and the Import/Bulk step detail', async ({page}) => {
+        await login(page, TEST_USER);
+        await openOnboardingSection(page);
+
+        for (const flow of ONBOARDING_FLOW_IDS) {
+            const row = page.getByTestId(`onboarding-flow-${flow}`);
+            await expect(row).toBeVisible();
+            await expect(row).toHaveAttribute('data-status', 'completed');
+            await expect(row).toHaveAttribute('data-version', /^\d+$/);
+            await expect(row).toHaveAttribute('data-current-version', /^\d+$/);
+            // Grandfathered at the current content version: nothing to update, and
+            // this fresh browser context has armed no replay yet.
+            const [version, currentVersion] = await Promise.all([row.getAttribute('data-version'), row.getAttribute('data-current-version')]);
+            expect(version).toBe(currentVersion);
+            await expect(page.getByTestId(`onboarding-flow-${flow}-update`)).toHaveCount(0);
+            await expect(page.getByTestId(`onboarding-flow-${flow}-armed`)).toHaveCount(0);
+        }
+        for (const [flow, stepIds] of Object.entries(ONBOARDING_STEP_IDS)) {
+            const details = page.getByTestId(`onboarding-flow-${flow}-steps`);
+            await details.evaluate((element) => {
+                (element as HTMLDetailsElement).open = true;
+            });
+            for (const stepId of stepIds) {
+                await expect(page.getByTestId(`onboarding-step-${flow}-${stepId}`)).toBeVisible();
+            }
+        }
+        await expect(page.getByTestId('onboarding-flow-transaction_bulk_validation_guide')).toHaveCount(0);
+        await expect(page.getByTestId('onboarding-flow-transaction_bulk_selection_guide')).toHaveCount(0);
+        await expect(page.getByTestId('onboarding-flow-transaction_bulk_save_guide')).toHaveCount(0);
+    });
+
+    test('replay welcome Exit clears client-side state and returns without a terminal mutation', async ({page}) => {
+        await login(page, TEST_USER);
+        await openOnboardingSection(page);
+        const tracker = trackOnboardingRequests(page);
+
+        try {
+            await page.getByTestId('onboarding-replay-welcome').click();
+            await expect(page).toHaveURL(/\/welcome/, {timeout: 10_000});
+            await expect(page.getByTestId('welcome-shell')).toBeVisible();
+            // The real, pre-filled form — never the "completed"/"skipped" outcome
+            // banner — because this account was never actually re-submitted.
+            await expect(page.getByTestId('welcome-page')).toHaveAttribute('data-outcome', 'pending');
+            await expect(page.getByTestId('welcome-form')).toBeVisible({timeout: 10_000});
+
+            await page.getByTestId('welcome-skip').click();
+            await expect(page).toHaveURL(/\/dashboard(?:[/?#]|$)/, {timeout: 10_000});
+            await expect(page.getByTestId('dashboard-page')).toBeVisible({timeout: 10_000});
+        } finally {
+            tracker.stop();
+        }
+        expect(tracker.requests, 'Arming and exiting a Welcome replay must call no onboarding endpoint').toEqual([]);
+
+        const section = await openOnboardingSection(page);
+        const welcome = section.getByTestId('onboarding-flow-welcome');
+        await expect(welcome).toHaveAttribute('data-status', 'completed');
+        await expect(page.getByTestId('onboarding-flow-welcome-armed')).toHaveCount(0);
+    });
+
+    test('replay import arms the next import without navigating or mutating anything', async ({page}) => {
+        await login(page, TEST_USER);
+        await openOnboardingSection(page);
+        const tracker = trackOnboardingRequests(page);
+
+        try {
+            await expect(page.getByTestId('onboarding-flow-import_guide-armed')).toHaveCount(0);
+            await page.getByTestId('onboarding-replay-import_guide').click();
+            await expect(page.getByTestId('onboarding-flow-import_guide-armed')).toBeVisible({timeout: 5_000});
+            // Unlike welcome, arming the import guide never navigates: it only
+            // takes effect the next time an Import Wizard is opened.
+            await expect(page).toHaveURL(/\/settings/);
+            await expect(page.getByTestId('onboarding-flow-welcome-armed')).toHaveCount(0);
+            await expect(page.getByTestId('onboarding-flow-intro_tour-armed')).toHaveCount(0);
+        } finally {
+            expect(tracker.requests, 'Arming a replay must never call an onboarding endpoint').toEqual([]);
+            tracker.stop();
+        }
+    });
+
+    test('Replay all starts from a clean 15-flow state and routes to /welcome without a terminal mutation', async ({page}) => {
+        // Seam, stated rather than faked: this proves the button arms *something*
+        // (the observable, safe-to-verify effect — routing to /welcome without a
+        // terminal call) and that all per-flow "-armed" badges are absent
+        // beforehand. Once armed, `resolveDestination` keeps redirecting any route
+        // back to /welcome for as long as the replay stays armed, so there is no
+        // way to return to Settings from inside *this* test and read the
+        // intro_tour/import_guide badges without either (a) actually completing or
+        // skipping welcome — which would overwrite TEST_USER's persisted language/
+        // currency for every other concurrent test — or (b) reaching past the
+        // testid surface into sessionStorage directly, which this suite's rules
+        // treat as fabrication. The component test verifies every armReplay call
+        // and its source order; this browser case verifies the real navigation
+        // and no-terminal-write boundary.
+        await login(page, TEST_USER);
+        await openOnboardingSection(page);
+        for (const flow of ONBOARDING_FLOW_IDS) {
+            await expect(page.getByTestId(`onboarding-flow-${flow}-armed`)).toHaveCount(0);
+        }
+        const tracker = trackOnboardingRequests(page);
+
+        try {
+            await expect(page.getByTestId('onboarding-replay-all')).toBeEnabled();
+            await page.getByTestId('onboarding-replay-all').click();
+            await expect(page).toHaveURL(/\/welcome/, {timeout: 10_000});
+            await expect(page.getByTestId('welcome-page')).toHaveAttribute('data-outcome', 'pending');
+        } finally {
+            expect(tracker.requests, 'Arming every replay must never call an onboarding endpoint').toEqual([]);
+            tracker.stop();
+        }
+    });
+});

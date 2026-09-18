@@ -33,8 +33,8 @@ La review indipendente ha aperto e chiuso il Round 5 sul challenge pubblico GHCR
 Manifest e prove: [14_feedbackImportUrgent](../14_feedbackImportUrgent/manifest-integrazione-E.md).
 Integrazione committata in `ef722b552433028c051ccb1207c84f1072e51bb7`;
 sessione/worktree E archiviati localmente il 2026-09-10. L'eventuale spostamento
-versionato del piano resta separato. U2, U3, U8, gli sprint non inclusi e
-F-MC-1/2/3 restano aperti.
+versionato del piano resta separato. U3 è integrato; U2, U8 Round 3, gli sprint non
+inclusi e F-MC-1/2/3 restano aperti.
 
 **Infrastruttura di parallelismo, 2026-09-09:** prima di riallineare B/C/D e'
 stato aperto il piano
@@ -51,11 +51,30 @@ D; D aggiunge plugin/renderer PAC e consegna il pilot `pac-analyze` end-to-end.
 Solo la branch combinata D verra' proposta al target. Solver avanzato, copia
 portfolio, migrazione Broker e UI dedicata restano fuori da questo pilot.
 
-I worktree C/D sono allineati a `4a73f5f6`; i loro piani devono distinguere contratti
-approvati, scelte residue e codice non ancora autorizzato. Il pilota manuale non aspetta
-solver completo, copie portfolio o migrazione Broker fractional. Le implementazioni e
-i relativi piani di avanzamento restano nei worktree owner fino a integrazione esplicita:
-questa nota non importa codice nel checkout principale.
+**Pianificazione operativa D, 2026-09-15:** la review manuale ha respinto il
+prodotto analysis-only Round 4. UX, matematica, policy e architettura approvate
+nei round successivi sono ora organizzate nella suite con
+[piano maestro PAC/Rebalancer](../13_pacAllocator/plan-phase00PacRebalancerTargetDesign.prompt.md);
+la [catena precedente](../13_pacAllocator/drafts/README.md) è storica. La
+review indipendente della suite è stata incorporata; nessun nuovo piano
+implementativo è attivo prima dell'approvazione developer.
+PAC e Rebalancer usano target monetari fissi e primario globale
+`L2_fixed → U`; la variante congela tutte le azioni e aggiunge BUY con
+`U → L2_fixed`. Percentuali/D∞/D1 sono diagnostici e proof/status restano
+conservativi; dependency/capacità SCIP e risultato product-shaped sono aperti.
+Il design separa input utente da output
+planner, rende la valuta di riferimento selezionabile con prefill account, usa
+`whole_quantity | monetary_amount` per Broker/valuta,
+calcola fee SELL e riserva fiscale con aliquota Asset prefill 26% e mantiene i
+parametri Broker per-run. Nessuna migration planner v1.
+
+**Nota storica di coordinamento, 2026-09-10:** i worktree C/D erano allora
+allineati a `4a73f5f6` e il pilot analysis-only non attendeva solver completo,
+copie Portfolio o migrazione Broker fractional. Questa nota non descrive lo stato
+corrente: la source baseline Round 5 era
+`e38a521f068c2d1b8d743775e90711fec1326fb3`, mentre il planning checkpoint
+corrente è `202e4056f2b915c055eeb8436eae765023201918`; il pilot è stato respinto
+come prodotto e nessuna implementazione operativa è iniziata.
 
 **Integrazione Gruppo B, 2026-09-10:** Contracts/Runes e Round 1 sono stati
 riconciliati con E/runtime nel merge `d9e8f6d3`; la review UI reale ha richiesto
@@ -120,8 +139,8 @@ La wiki ha fornito contesto utile su FIFO v4, batch e DataEditor; il grafo dichi
 | Privacy | **Globale**, con lucchetto aperto/chiuso nell'header autenticato. Nasconde importi e quantita personali; lascia visibili prezzi pubblici, cambi, percentuali e rapporti. |
 | Presentazione privacy | Meccanismo condiviso vicino ai campi sensibili. Patina sopra segnaposto, non blur dei numeri reali. Tooltip concettuali invariati; importi personali nei tooltip finanziari coperti. Non e un sistema di autorizzazione o redazione dei log. |
 | Header mobile | Nuova voce: scorrendo in basso scompare, scorrendo in alto ricompare. Desktop invariato. |
-| Onboarding | Pagina di benvenuto dedicata, preferenze dai default amministratore; poi tour breve in overlay e guida contestuale all'import. |
-| Skip e replay | Benvenuto e tour skippabili senza riproposta automatica; riavvio manuale da Settings. Nessun dato demo o salvataggio finanziario automatico. |
+| Onboarding | Round 6 completato e developer-accepted: Welcome, Core e guide contestuali versionate, progressione per step, replay e checkpoint Import. |
+| Skip e replay | Stato/versione persistiti backend; una versione nuova diventa dovuta anche dopo completed/skipped. Replay manuale non riscrive lo stato terminale. |
 | YOC | Distribuzioni lorde per quota nei 365 giorni fino alla data finale del report / WAC unitario residuo. UI `-` sia per nessun reddito sia per storia insufficiente, con motivo distinto; zero noto diverso da dato mancante. |
 | Help YOC | Nuova pagina EN nella teoria finanziaria e tooltip nell'header della colonna, condivisa da dashboard e broker. |
 | CSV distribuzioni | `weight` in percentuale **0-100**, senza inferenza automatica 0-1. |
@@ -133,14 +152,20 @@ La wiki ha fornito contesto utile su FIFO v4, batch e DataEditor; il grafo dichi
 | UI Tool | **Custom-first**, schemi input/output completi e descriptor estensibile. UI standard automatica rinviata a un secondo caso reale. |
 | Allocatore | Un unico modello per PAC puro, ribilanciamento e PAC ribilanciante. Il PAC puro parte da patrimonio iniziale zero. |
 | Vendite | Supportate come opzione, con limiti per singolo titolo. |
-| Aggregazione input | Stesso asset aggregato fra broker; liquidita aggregata **per valuta**, non convertita automaticamente in una sola cassa. |
+| Aggregazione input | Target globale per Asset canonico; custodie/route Asset×Broker separate; liquidita distinta per sorgente/Broker/valuta e mai convertita automaticamente in una sola cassa. |
 | Nuova liquidita | Lista di contributi aggiuntivi, uno per valuta, separati dalla liquidita gia esistente. |
 | FX nel tool | Conversioni fra casse valutarie proponibili come opzione esplicita. |
 | Copia dal portafoglio | Pulsanti espliciti per situazione iniziale, prezzi e distribuzione corrente da usare come punto di partenza del target. Snapshot modificabili, non collegamenti live che sovrascrivono il lavoro. |
 | API Tool, revisione | Schemi e parametri necessari alla UI nel catalogo; nessun endpoint schema separato o prefill Tool. Letture dalle API di dominio esistenti, estese solo se manca davvero un dato. |
-| Compute eterogeneo | Stesso tool ammesso in piu item con correlation ID distinti. Una richiesta bulk, non necessariamente un solo calcolo; riuso/deduplica solo quando semanticamente sicuri. |
+| Compute eterogeneo | Stesso tool ammesso in piu item con correlation ID distinti. Ogni item resta un job distinto; nessuna deduplica fisica. |
 | Parallelismo | I 16 sprint restano riferimenti di scope, non una catena obbligatoria. Task indipendenti in parallelo, file/integrazione/runtime condivisi con ownership esplicita. |
 | Confronto UI | Nuove UI o modifiche importanti: viste ASCII approvate dal dev prima della realizzazione; dopo, walkthrough operativo e feedback registrato prima della chiusura. |
+| Allocatore operativo Round 7 | PAC e Rebalancer restano servizi/UI distinti ma condividono compiler e obiettivo fixed-L2; primario globale + variante margine BUY-only; input completo → un compute atomico → funding/FX/ordini/risultati. |
+| Campi Broker | L'utente sceglie l'enum `whole_quantity | monetary_amount`; `order_amount_step` esiste solo nel secondo ramo. Quantità/importo finali sono output backend. |
+| Valuta di riferimento | Campo Step 1, pre-popolato dalla valuta default dell'utente e modificabile; non altera i ledger nativi. |
+| Fiscalità SELL v1 | Fee SELL, poi gain positivo contro PMC, poi aliquota Asset prefill 26%; solo cash netto finanzia BUY. Nessuna compensazione nascosta. |
+| Persistenza planner v1 | Nessun nuovo modello/migration: parametri Broker e aliquota Asset sono per-run; persistenza differita in `TODO_FUTURI.md`. |
+| Audit matematico Round 5 | Ordini cash BUY/SELL espliciti, target/residui Asset-level, ledger e bound finiti; ultima correzione: `L2_fixed` condiviso, nonnegatività hard, `U` esatto e variante add-only; `no_op` distinto da hard-constraint `infeasible_proven`. |
 
 ## 4. Analisi 00 - debito strutturale
 
@@ -654,17 +679,40 @@ L'endpoint non avvia calcoli, probe, download prezzi, reset o riparazioni; non r
 
 ### T1 - Unico allocatore PAC / ribilanciamento / PAC ribilanciante
 
-**Stato, aggiornato 2026-09-08:** implementazione del solo schema/core iniziale P1 autorizzata a D; allocatore completo, solver, copie e UI estesa non ancora implementati. **Taglia:** XL nello scope ampliato. La vecchia M-L per un PAC euro buy-only non e piu una stima dell'intero requisito.
+**Stato corrente, 2026-09-16:** UI e matematica fixed-L2 approvate sono raccolte
+nella suite con
+[piano maestro target](../13_pacAllocator/plan-phase00PacRebalancerTargetDesign.prompt.md).
+La review indipendente è stata incorporata; serve approvazione developer prima
+di scrivere il nuovo piano implementativo. Il testo
+storico sotto documenta l'evoluzione ma non prevale sulla suite target.
+In particolare sono superati `quantity_step`, assenza di routing Broker,
+`operation="analyze"` e vecchia gerarchia solver. **Taglia:** XL.
 
 **Studio letto:** [guida PAC multi-ETF](../../guida_allocazione_pac_multi_etf.md), 1.167 righe. La parte aggiunta modifica pesi d'esempio, budget e gerarchia obiettivi. Nessun ticker, peso o calendario personale dello studio diventa una costante di prodotto.
 
-**Evidenza numerica:** esempi originari spendono 3.484,14 e 3.493,24 su 3.500, ma non sono oracoli di ottimalita del criterio aggiornato. Floor seguito solo da acquisti aggiuntivi non esplora tutte le soluzioni: a volte serve ridurre una quantita iniziale per comprare meglio un'altra.
+**Evidenza numerica:** esempi originari spendono 3.484,14 e 3.493,24 su 3.500,
+ma non sono golden del Rebalancer né prova solver. Per il PAC restano soltanto
+witness aritmetici storici: le viste correnti sono primario globale fixed-L2 e
+variante add-only. La variante non può ridurre un'azione primaria.
 
-**Input concordati:** posizioni iniziali anche zero; distribuzione target; prezzi/valute; quote intere o frazionarie con passo esplicito; input in quantita o valori chiaramente denominati; vendite opzionali e limiti per titolo; liquidita esistente aggregata per valuta; lista nuovi contributi per valuta; conversioni FX opzionali; costi e margini espliciti.
+**Input correnti Round 7:** posizioni iniziali anche zero; target globale per
+Asset; prezzi/valute; enum ordine Broker/valuta e step monetario condizionale;
+vendite opzionali e limiti per titolo; liquidita distinta per
+sorgente/Broker/valuta; lista nuovi contributi; route/trasferimenti e FX
+single-hop espliciti; fee, riserve e margini. Quantità titoli/importo cash sono
+output backend.
 
-**Raccordo decisioni D, 2026-09-08:** input e target separati per riga asset/broker, anche per lo stesso asset su piu broker. Chiave di riga opaca/stabile e identita strumento esplicita per l'esclusione globale buy/sell; non aggregare i target fra broker o dedurre identita dai nomi. Il core non interpreta broker/ruoli/DB. L'input manuale resta possibile senza asset ID DB.
+**Raccordo storico D, 2026-09-08, superato in parte:** le righe
+Asset×Broker restano per custodia/route e chiave opaca, ma il target finale è
+aggregato per identità Asset canonica. Il core non interpreta ruoli/DB.
+L'input manuale resta possibile senza Asset ID DB.
 
-**Casse separate:** disponibilita EUR e USD non sono una cassa unica. Acquisti/vendite alimentano la valuta pertinente; contributi nuovi non entrano due volte nello snapshot. Con FX disabilitato, una valuta in eccesso non finanzia automaticamente un'altra. Con FX abilitato, mostrare conversione proposta, importi debitati/accreditati, tasso, costi/margini e cassa finale per valuta. Nessun vincolo di instradamento per broker richiesto.
+**Casse separate:** disponibilita EUR e USD non sono una cassa unica e neppure
+sono aggregate fra Broker. Acquisti/vendite alimentano il ledger
+Broker/valuta pertinente; contributi nuovi non entrano due volte nello
+snapshot. Con FX disabilitato, una valuta in eccesso non finanzia
+automaticamente un'altra. Con FX abilitato, mostrare conversione proposta,
+importi debitati/accreditati, tasso, costi/margini e cassa finale.
 
 **Gate numerico prima del solver:** congelare unita dei min/max di acquisto/vendita, minimo obbligatorio vs minimo se si opera, commissioni, riserve, passi frazionari, valuta di valutazione dei target, bande, ordine degli obiettivi e precisione. Quantita, valore e percentuali non sono intercambiabili senza prezzo e totale iniziale. Posizioni frazionarie pregresse non vanno arrotondate al passo intero delle nuove operazioni.
 
@@ -672,15 +720,40 @@ L'endpoint non avvia calcoli, probe, download prezzi, reset o riparazioni; non r
 
 **Conservazione:** nessuna vendita oltre l'inventario, nessuno short/leva implicito, niente acquisto e vendita simultanei dello stesso titolo per gonfiare l'obiettivo. Costi e margini non contano come capitale investito. Conservazione di ogni cassa prima/dopo operazioni e FX, con riconciliazione separata nella valuta di reporting. Tassi manuali/cicli di conversione non devono permettere arbitraggio artificiale creato dal modello.
 
-**Gerarchia approvata e riconfermata, 2026-09-08:** A minimizza il peggior scostamento delle righe target in punti percentuali, poi l'errore quadratico complessivo. B massimizza l'investito nel problema condizionale con A conservata come baseline immutabile, buy non decrescenti, sell congelate e vincoli hard originari. Alternative valutate separatamente dal medesimo stato iniziale, non ordini sequenziali con fee doppie; il soft score di A non diventa un vincolo hard nascosto di B. Il dev accetta per difetto o HALF_DOWN se rispettano questi obiettivi: il solver deve considerare valori operativamente ammissibili, non arrotondare a posteriori e dichiarare ottimalita. Restano da formalizzare spareggi, limiti, costi, FX e prove; nessun coefficiente o rilassamento implicito.
+**Gerarchia corrente, correzione 2026-09-16:** per entrambi i Tool,
+`T_a=w_aF_ref` e il primario minimizza
+`L2_fixed=Σ_a(V_a_final-T_a)²`, poi `U`. Il PAC applica quindi i tier
+`proportional` o `min_fragmentation`; il Rebalancer applica turnover,
+costi/righe e modalità `invest_only | invest_and_sell`.
+
+La variante automatica congela ogni azione primaria e aggiunge BUY secondo
+`U → L2_fixed → costi/righe incrementali → tie`. Percentuali finali, D∞ e D1
+sono diagnostici. SELL resta funding-only, quantum-minimal e senza sale-to-cash.
+`F_ref` fissa target e accounting; ogni quantità/valore finale è non negativo.
+Route intere e monetarie possono coesistere, ma `monetary_amount` resta su step
+discreti; il QP continuo è solo rilassamento diagnostico/bound.
+
+PySCIPOpt/SCIP è il candidato fixed-L2 additivo approvato per MIQP e tier
+convex-MIQCP; Riskfolio/SciPy restano invariati. Dependency update e probe
+attendono freeze globale/autorizzazione.
 
 **Minimo pilota separato:** `analyze` dello stato iniziale non emette ordini, soglie operative o settlement e non dichiara fattibilita/ottimalita del solver. Il suo contratto esatto e ASCII possono avanzare senza attendere questa griglia operativa completa, la migrazione Broker fractional o le copie dal portafoglio. Nessun formatter monetario globale modificato da questa decisione.
 
-**Stati onesti:** valido/no-trade, ottimo provato, fattibile non provato, infeasible provato, limite senza soluzione e guasto/unsupported distinti. La definizione esatta dell'enum e del supporto best-effort e parte del gate numerico, non lasciata alla libreria solver. Ogni candidato viene ricontrollato da un evaluator Decimal indipendente.
+**Stati onesti:** valido/no-trade, ottimo provato, fattibile non provato,
+infeasible provato, limite senza soluzione e guasto/unsupported distinti. Ogni
+incumbent è verificato da un evaluator Decimal indipendente, ma ciò non prova che
+non esista un piano migliore. Lo status floating `optimal/infeasible` resta al
+massimo `gap_bounded/not_proven`; prova esatta solo da oracle esaustivo, chiusura
+score-lattice coefficient-safe o conflict witness Decimal, secondo l’esito. La
+semantica non è lasciata alla libreria solver.
 
 ### T2 - Snapshot dal portafoglio e UI custom
 
-**Stato:** primitive esistenti, integrazione nuova. **Taglia:** M per snapshot autorizzati + L per editor/report/grafici dello scope completo.
+**Stato corrente, 2026-09-15:** copie P1 esistenti ma prodotto operativo non
+implementato. Round 7 pianifica input manuali/prefilled per-run, funding e Broker
+separati, snapshot review immutabile, output Broker-facing e stale guards.
+Nessuna migration planner v1. **Taglia:** M per snapshot autorizzati + L per
+editor/report/grafici.
 
 **Superfici riusabili:** `schemas/portfolio.py:257-290,347-377`; `portfolio_service.py:1885-1893`; `broker_service.py:356-394,438,493`; quote DB `api/v1/assets.py:740-753`; `AssetSelect`, `CompactCashCell`, DataTable. Sidebar `:36-43` e il punto di inserimento del nuovo hub.
 
@@ -688,15 +761,21 @@ L'endpoint non avvia calcoli, probe, download prezzi, reset o riparazioni; non r
 
 **Fonte scelta nel raccordo D, 2026-09-08:** solo broker con ruolo OWNER, incluso OWNER0; quota di possesso mostrata, quantita/cash a custodia intera senza scala di ownership. Il report esistente puo usare una proiezione diversa: non copiarla come equivalente e non cambiare il comportamento dashboard. Validare ogni broker richiesto, senza intersezione silenziosa che riduce lo scope; cash una sola volta per broker/valuta. Prezzi report sono gia convertiti; `quote_base_quantity` dei bond e obbligatorio. Non usare come refresh automatico `/assets/prices/current`, che puo persistere OHLC odierno.
 
-**Target copiato:** e distribuzione osservata come punto di partenza, non raccomandazione strategica. Ricavare i pesi delle righe asset/broker dai valori non arrotondati e indicare denominatore/esclusioni; non fondere i target dello stesso asset su broker diversi. La UI attuale arrotonda pesi a due decimali. Missing FX/prezzo non diventa zero e non causa esclusione silenziosa di titoli.
+**Target copiato:** e distribuzione osservata come punto di partenza, non raccomandazione strategica. Ricavare i pesi dai valori non arrotondati e indicare denominatore/esclusioni; un Asset canonico ha un solo target aggregato anche se custodito su più Broker, mentre le righe operative restano separate. La UI attuale arrotonda pesi a due decimali. Missing FX/prezzo non diventa zero e non causa esclusione silenziosa di titoli.
 
 **UI proposta:** hub con card da catalogo; editor per stato iniziale, target, casse/contributi, vincoli, frizioni e policy; sezioni avanzate progressive. Pulsanti indipendenti di copia, preview dei campi sostituiti e protezione delle modifiche intervenute durante il fetch. Risultato precedente marcato stale dopo edit. Calcoli/anteprime economiche dal backend, non duplicati nel browser.
 
-**Output completo:** per riga asset/broker identita, input normalizzati, prezzo/fonte/data/valuta, target, quantita iniziale, acquisti, vendite, quantita finale, nozionali/costi, pesi prima/target/dopo, scostamenti, vincoli attivi. Per valuta cassa iniziale, contributo, ricavi, spesa, fee, conversioni, riserva/residuo. Metadati con policy/versione, assunzioni, disponibilita, limiti e prova di ottimalita.
+**Output completo:** summary Asset con target fisso, valore finale, residuo,
+`L2_fixed`, diagnostici percentuali/D∞/D1, costo, buffer, cash e rounding; righe
+Broker separate con identità, input normalizzati, prezzo/fonte/data/valuta,
+quantità iniziale, acquisti, vendite, quantità finale, nozionali/costi e vincoli.
+Per valuta cassa iniziale, contributo, ricavi, spesa, fee, conversioni,
+riserva/residuo. Availability è plan-level; outcome/proof/stop/metriche sono per
+primario e deployment.
 
 **Grafici:** allocazione prima/target/dopo, bande/scostamenti, operazioni buy/sell e flussi di cassa/FX, tutti accompagnati da tabella leggibile. Privacy globale applicata a patrimonio, budget e operazioni personali; prezzi pubblici restano visibili. Nessun pulsante di esecuzione ordini.
 
-**Dipendenze hard:** contratti del catalogo/compute T0 e I/O numerico T1 per sviluppare il client; backend operativo e solver per l'integrazione finale. Copia e UI possono avanzare contro fixture di contratto mentre il solver viene realizzato. **DoD:** stessi input normalizzati danno stesso risultato nei tre preset; funzionamento manuale senza portafoglio; copia scope-safe e non distruttiva; oracolo esaustivo indipendente su casi piccoli, inclusi FX e limiti; budget sotto una quota, cash multi-valuta, stesso asset su piu broker con target distinti, no-op, limiti incompatibili e input non finiti; output e UI non spacciano un incumbent per ottimo.
+**Dipendenze hard:** contratti del catalogo/compute T0 e I/O numerico T1 per sviluppare il client; backend operativo e solver solo per residuo PAC/Rebalancer. Copia e UI possono avanzare contro fixture di contratto mentre il solver viene realizzato. **DoD:** stessi input normalizzati danno stesso risultato nelle policy equivalenti; funzionamento manuale senza portafoglio; copia scope-safe e non distruttiva; oracolo esaustivo indipendente su casi piccoli, inclusi FX e limiti; budget sotto una quota, cash multi-valuta, stesso Asset su più Broker con target unico, no-op, limiti incompatibili e input non finiti; output e UI non spacciano un incumbent per ottimo.
 
 **Gate UX:** storyboard ASCII di editor, input manuali/copiati, vincoli, contributi per valuta, risultati, grafici e stati invalid/infeasible/busy/stale, desktop/mobile; feedback misurato e approvazione del dev prima delle viste. Dopo implementazione, walkthrough da Tool fino a scenario manuale, copia, calcolo e lettura del risultato; raccolta feedback operativo e giro di correzione prima della chiusura.
 
@@ -721,10 +800,10 @@ L'ordine ordina **rischio e ampiezza**, non inventa dipendenze. Il primo sprint 
 | **SP08 - Pricing e confini del servizio** | P4-4, P4-1, S6 6.4 | Un'unica famiglia provider/manager; evita spostamenti concorrenti di asset_source. Yahoo locale -> mappa import/cache -> moduli -> fasi refresh nella destinazione scelta. | Parita provider e manager, ownership cache/thread/sessioni, sentinelle, chunk e risultati preservati. Nessun refactor FX/portfolio aggiuntivo. |
 | **SP09 - BRIM mirato** | B1 condizionale, P4-3 | Parsing broker e output di review. Risolvere gate eToro se disponibile -> caratterizzazione Credit Agricole -> estrazione locale -> eventuale secondo consumer. | Costi eToro riconciliati oppure blocco motivato mantenuto; output completo Credit Agricole equivalente. Nessuna falsa chiusura eToro per far risultare verde lo sprint. |
 | **SP10 - Cache con ownership** | P4-7 | Registry, serie e pool condividono confine di sessione e consumer chart. Misura -> decisione budget/policy -> implementazione -> rilascio/late responses. | Limiti motivati, oggetti e richieste realmente rilasciabili, cambio account sicuro, nessuna preferenza cancellata e nessun consumer interrotto arbitrariamente. |
-| **SP11 - Benvenuto e tour** | U8 | Auth, preferenze e overlay sono una sola catena UX. Analisi/stato/storyboard possono partire subito; implementazione di layout, replay e guida import segue il freeze delle superfici Tool/PAC e DataImport attive. Stato/migrazione -> welcome -> tour breve -> guida import -> replay/skip. | Nuovo utente guidato senza scritture finanziarie automatiche; default admin rispettati; skip/replay/refresh/account e overlay compatibili, guide riallineate. |
+| **SP11 - Benvenuto e tour** | U8 | ✅ [Implementato da J](../21_onboarding/plan-phase00OnboardingRound6-FinalUX.prompt.md): stato/migrazione -> welcome -> tour Core e contestuali -> guida Import -> replay/skip. Gate e review manuale developer completi; checkpoint `580bd504f`. | Nuovo utente guidato senza scritture finanziarie automatiche; default admin rispettati; skip/replay/refresh/account e overlay compatibili, guide riallineate. |
 | **SP12 - Piattaforma Tool** | T0, hub iniziale T2 | Contratto plugin/executor e catalogo con schemi completi. Registry -> API auth/bulk -> worker -> tipi/renderer -> hub. | Catalogo/compute/diagnostics protetti, riuso bulk corretto, errori/limiti onesti; nessun endpoint schema/prefill Tool e nessun PAC fittizio dichiarato funzionante. |
-| **SP13 - Modello e snapshot allocatore** | Gate T1, evaluator T1, copia T2 | Congela il significato dei parametri prima di cercare ottimi. Policy numerica -> normalizzazione/evaluator -> casse e FX -> copie da API di dominio -> preview. | Quantita/valori/target e casse per valuta riconciliati; semantica limiti/costi/FX firmata nel piano dedicato; input manuali e copie equivalenti. Nessun risultato chiamato ottimo senza solver. |
-| **SP14 - Allocatore e UI completa** | Solver T1, custom UI T2 | Un solo solver buy/sell/FX e le sue spiegazioni. Oracle piccolo -> ricerca/limiti -> risultato typed -> editor avanzato/grafici -> integrazione end-to-end. | PAC, rebalancing e PAC rebalancing realmente supportati; limiti vendite e conversioni opzionali, contributi per valuta, proof/status e tabelle completi; nessuna esecuzione ordini. |
+| **SP13 - Modello e snapshot allocatore** | Round 7 schema/evaluator/copie | Clean break P1 → snapshot completo per-run → normalizer/evaluator Decimal → ledger cash/FX/fee/tax. | Input utente distinti dagli output solver; valuta riferimento esplicita; manuale/copie equivalenti; nessun lookup worker; nessuna migration planner v1. |
+| **SP14 - Allocatore e UI completa** | PAC/Rebalancer fixed-L2 MIQP/MIQCP + oracle + custom UI | Primario fixed-L2, deployment BUY-only; PAC proportional/min-fragmentation; Rebalancer invest-only/invest-and-sell; report Broker. | Funding/FX/BUY/SELL, fee/tax reserve, proof/status, grafici e tabelle completi; nessuna esecuzione ordini; review developer separata. |
 | **SP15 - Privacy globale completa** | U2 | Trasversale; il contratto/inventario e la primitive possono essere analizzati prima, ma l'integrazione attende le nuove superfici SP07/SP14/F. Tre gate: U2-core -> adapter per owner UI -> audit/release globale. | Solo classi sensibili mascherate, prezzi/FX pubblici invariati, nessun dato reale sotto patina nelle superfici protette, nessun flash; confine visuale/log/export esplicito. |
 | **SP16 - Scomposizione batch transazioni** | P4-2 | Refactor strutturale, non nuova UX: dividere le ~637 righe di `TransactionService.execute_batch` negli otto stage oggi sequenziali (parse leniente, accesso, delete, update, create, link, balance walk, esito commit/rollback) con contesto esplicito. Ownership esclusiva di `transaction_service.py`; nessun cambio di contratto/policy. | Preview/commit/rollback e raccolta completa errori equivalenti; ordine e atomicita multi-broker invariati; link/promote/split, WAC e saldi equivalenti; commit ancora al chiamante, nessun commit interno ai nuovi stage. |
 
@@ -739,9 +818,9 @@ L'ordine ordina **rischio e ampiezza**, non inventa dipendenze. Il primo sprint 
 | SP08 | ✅ Integrato: Yahoo refactor, scissione asset-source e refresh phases; full services/API e docs verdi. |
 | SP09 | ✅ G integrato, developer-accepted e archiviato. |
 | SP10 | ⏸️ Differito. |
-| SP11 | 🟡 J Round 3 in implementazione; nessuna integrazione target finché manca review finale. |
+| SP11 | ✅ Round 6 implementato, verificato e developer-accepted; checkpoint J `580bd504f` integrato nella baseline combinata D `e38a521f0`, non ancora nel target `dev_release2`. |
 | SP12 | ✅ Tool platform integrata. |
-| SP13–SP14 | 🟡 D Round 2 completo in implementazione; solver ancora aperto. |
+| SP13–SP14 | 🟡 Design/UI approvati; Round 7 pronto per checkpoint, implementazione Gate P1 frozen. Round 4 resta prototipo respinto. |
 | SP15 | ⛔ Bloccato da SP07 + SP11 + SP14. |
 | SP16 | ✅ Integrato: context/stage pipeline, full backend, docs e review verdi. |
 
@@ -779,8 +858,8 @@ dopo.
 | G-ROLLING | Nuovo modo G3 | Calendario/reference lookup, lookback e limiti di staleness senza cambiare i segnali a osservazioni esistenti. |
 | G-CANDLES | Nuovo DTO/calcolo G1b | Ancora P&L/non-prezzo, conversione giornaliera, posizioni negative e politica OHLC mancante. Natura sintetica, EOD e aggregazione gia approvate. |
 | G-CACHE | Scegliere eviction/rilascio P4-7 | Misura reale, budget e ownership documentati; nessun LRU o numero massimo scelto per intuito. |
-| G-ONBOARDING | Migrazione e guardia U8 | Stato/versione distinto per welcome/tour/import, gestione utenti esistenti, errori e resume. Formato/skip/replay gia approvati. |
-| G-PAC | Implementare solver T1 | Valute dei vincoli, cash/FX, cap min/max, quantum, fee/buffer, target/turnover, precisione, limiti e stati esatti. Perimetro funzionale gia approvato. |
+| G-ONBOARDING | Chiudere U8 | ✅ Stato/versione, utenti esistenti, errori, resume, skip, replay e walkthrough desktop/mobile completati fino al [Round 6](../21_onboarding/plan-phase00OnboardingRound6-FinalUX.prompt.md). |
+| G-PAC | Implementare Round 7 | 🟡 Checkpoint e Gate P1 ottenuti; PAC, obiettivo e proof/status Rebalancer congelati. Step 0 resta riaperto per capacità solver e payload sotto cap. Nessun codice finché i gate non chiudono. |
 | G-PRIVACY | Mostrare il lucchetto globale U2 | Inventario campi/regioni, comportamento input/rivelazione ed export, idratazione per account; nessuna pubblicazione di copertura parziale spacciata per globale. |
 | G-UX-DESIGN | Realizzare UI nuova o modificata pesantemente | Viste ASCII degli stati/viewport, interazioni annotate, feedback misurato e approvazione del dev; regola nella sezione 12. |
 | G-UX-REVIEW | Dichiarare finita la relativa UI | Walkthrough del percorso reale, scenari/risultati attesi, feedback operativo e chiusura dei rilievi o rinvio esplicitamente accettato. |
@@ -949,7 +1028,7 @@ Il dev deve poter indicare una zona/controllo/stato preciso e ottenere una revis
 | G1a/b/c, G3 | Modi/controlli, assi/legenda, aggregazione e stati mancanti | Entry point, selettori, intervalli, zoom e lettura del risultato. |
 | A2 CSV | File/testo, preview, mapping, errori/duplicati/totale | Edit Asset geo/settore e compatibilita dei tre import dated esistenti. |
 | B3 delete | Risultati bloccati singolo/bulk e link dettaglio | Fixture eliminabile/bloccata, conteggio, navigazione filtrata e limiti di accesso. |
-| T0/T2 hub e PAC | Card, incompatibilita, editor/constraint, copie e report/grafici | Sidebar Tool, scenari manuali/copiati, calcolo, stati errore e lettura delle proposte. |
+| T0/T2 hub e PAC | Round 7: scope, funding, Broker, Asset/route, target, FX, strategy, review, risultati desktop/mobile | Sidebar Tool, scenari manuali/copiati, calcolo, stati invalid/infeasible/busy/stale e lettura delle azioni Broker. |
 
 U1/U5, A1 e i refactor senza cambiamento visivo non richiedono un redesign artificiale. Se l'implementazione introduce comunque nuove viste o altera pesantemente quelle esistenti, entra nello stesso gate. P4-5 deve dichiarare parita visiva, non sfruttare la migrazione Runes per ridisegnare le tab.
 
@@ -991,9 +1070,9 @@ Primo piano preso in carico: [SP04-SP05 - Contratti e Runes](../11_feedbackContr
 registra il contratto chiuso per G3/G1a/G1b/G1c, gli storyboard ASCII v2 e lo
 split per owner. Stato **PLANNED / implementation frozen**: il refresh tecnico
 post-F e' registrato su `0af66da5`; il dev ha autorizzato e I ha completato la
-sola slice I10 backend signal, ora in attesa di integrazione. H/YOC precede I
-su service/schema/test portfolio; UI G3 e I20+ restano congelati e I dovra'
-rileggere il target post-H. Il link non marca gli altri task implementati.
+sola slice I10 backend signal, ora integrata con H/YOC su service/schema/test
+portfolio. UI G3 e I20+ restano congelati e I dovra' rileggere il target combinato.
+Il link non marca gli altri task implementati.
 
 All'avvio effettivo di uno sprint: scegliere il prossimo `<NN_area>` libero in `Phase_0/`, aprire il piano `.prompt.md`, cross-linkare il task originale e marcare la presa in carico secondo la regola del backlog. Non creare oggi sedici piani vuoti. Dopo ogni step eseguito, aggiornare immediatamente quel piano con stato, data, nota di implementazione ed eventuale fuori pista.
 
@@ -1087,8 +1166,9 @@ richiedere un commit documentale successivo, non uno SHA futuro scritto in antic
 
 **Per E:** `14_feedbackImportUrgent` e tutti i round, report urgente
 `07_feedback_import_critici.md`, U1/U4/U5/U7/U9 nel file `01`, SP01/SP02, README e
-task E1-E9 sono riconciliati nel checkout target. Privacy, YOC, onboarding e i temi
-multicurrency futuri restano aperti. Il pacchetto e' committato in `ef722b55`;
+task E1-E9 sono riconciliati nel checkout target. YOC è ora integrato; privacy,
+onboarding Round 3 e i temi multicurrency futuri restano aperti. Il pacchetto e'
+committato in `ef722b55`;
 sessione/worktree E sono archiviati localmente. L'archivio documentale versionato
 resta un passo distinto.
 
