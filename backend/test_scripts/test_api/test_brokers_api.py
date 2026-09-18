@@ -261,9 +261,7 @@ class TestBrokerCreate:
 
             error_msg = data["results"][0]["error"]
             assert error_msg.startswith(f"You already have a broker named '{name}'")
-            assert error_msg.endswith(
-                "To resolve this, rename the existing broker or choose a different name for the broker you are adding."
-            )
+            assert error_msg.endswith("To resolve this, rename the existing broker or choose a different name for the broker you are adding.")
 
             print_success("✓ Got error for duplicate name")
 
@@ -295,9 +293,7 @@ class TestBrokerCreate:
 
             error_msg = data["results"][0]["error"]
             assert error_msg.startswith(f"Broker '{name}' already exists (owned by '{owner_username}')")
-            assert error_msg.endswith(
-                "To resolve this, rename the existing broker or choose a different name for the broker you are adding."
-            )
+            assert error_msg.endswith("To resolve this, rename the existing broker or choose a different name for the broker you are adding.")
 
             print_success("✓ Got owner-specific duplicate error for another user")
 

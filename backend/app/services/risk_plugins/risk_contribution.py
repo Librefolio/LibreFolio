@@ -13,6 +13,10 @@ from backend.app.schemas.risk import (
     RiskScopeKind,
 )
 from backend.app.services.provider_registry import RiskAnalyticRegistry, register_plugin
+from backend.app.services.risk.acquired import (
+    diversification_ratio,
+    effective_number_of_assets,
+)
 from backend.app.services.risk.analytic_helpers import (
     prepared_asset_returns,
     require_annualization_factor,
@@ -35,7 +39,7 @@ class RiskContributionParams(BaseModel):
 @register_plugin(RiskAnalyticRegistry)
 class RiskContributionAnalytic(RiskAnalytic):
     analytic_code = "risk_contribution"
-    algorithm_version = "1.0.0"
+    algorithm_version = "1.1.0"
     name_i18n_key = "risk.analytics.riskContribution.name"
     description_i18n_key = "risk.analytics.riskContribution.description"
     output_kind = RiskOutputKind.CONTRIBUTION
@@ -54,15 +58,32 @@ class RiskContributionAnalytic(RiskAnalytic):
             )
         rows = [prepared_asset_returns(context, asset_id)[1] for asset_id in asset_ids]
         weights = [context.weights[asset_id] for asset_id in asset_ids]
+        annualization = require_annualization_factor(context)
+        covariance = covariance_matrix(rows)
         summary = risk_contributions_from_covariance(
-            covariance_matrix(rows),
+            covariance,
             weights,
-            annualization_factor=require_annualization_factor(context),
+            annualization_factor=annualization,
         )
+        # Both sides of the ratio must sit at the same scale, and
+        # risk_contributions_from_covariance annualizes internally, so the diagonal is
+        # annualized here too. The ratio is invariant to that choice, but only when the
+        # numerator and denominator agree on it.
+        annualized_covariance = [[value * annualization for value in row] for row in covariance]
+        # Weights are consumed exactly as the context supplies them: they are already
+        # position value over net worth, the same denominator AI Export uses for its
+        # concentration figures. Renormalizing to the invested part would make the
+        # product state two different concentrations for one portfolio.
         return RiskComputation(
             output=RiskContributionOutput(
                 portfolio_volatility=summary.portfolio_volatility,
                 cash_weight=context.cash_weight,
+                effective_number_of_assets=effective_number_of_assets(weights),
+                diversification_ratio=diversification_ratio(
+                    annualized_covariance,
+                    weights,
+                    portfolio_volatility=summary.portfolio_volatility,
+                ),
                 items=[
                     RiskContributionItem(
                         asset_id=asset_id,
