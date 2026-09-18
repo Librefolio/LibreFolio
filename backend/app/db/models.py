@@ -149,23 +149,34 @@ class AssetType(StrEnum):
     Usage: Categorize assets by their nature for reporting and analysis.
 
     - STOCK: Individual company shares (e.g., Apple, Microsoft)
-    - ETF: Exchange Traded Fund (e.g., VWCE, SPY)
+    - ETF: Exchange Traded Fund with mixed or unstated content (e.g., balanced, multi-asset)
     - BOND: Fixed income securities (government or corporate bonds)
     - CRYPTO: Cryptocurrencies (e.g., Bitcoin, Ethereum)
     - FUND: Mutual funds or investment funds
-    - HOLD: Assets without automatic market pricing (real estate, art, collectibles, unlisted companies)
+    - HOLD: Assets without automatic market pricing (art, collectibles, unlisted companies)
     - CROWDFUND: Peer-to-peer lending or crowdfunding loans (e.g., Recrowd, Mintos)
+    - COMMODITY: Physical goods and their direct exposures (gold, oil, agricultural)
+    - REAL_ESTATE: Property exposure (REITs, listed real estate vehicles)
     - INDEX: Market indices and benchmarks (e.g., S&P 500, MSCI World) — no transactions allowed
     - OTHER: Any other asset type not listed above
 
+    ETF subtypes answer a single question: *which base type does this ETF contain?*
+    The second level is therefore not a parallel taxonomy — it is the set of base types.
+
+    - ETF_STOCK / ETF_BOND / ETF_COMMODITY / ETF_REAL_ESTATE / ETF_CRYPTO: named after
+      the base type they hold; plain ETF remains the residual for mixed content.
+    - ETF_MONETARY: money-market funds. The one subtype with **no** base-type counterpart,
+      because cash itself is an account balance, not an asset that is bought.
+
     Impact:
-    - Affects default valuation_model:
-      - CROWDFUND -> SCHEDULED_YIELD
-      - HOLD -> MANUAL
-      - INDEX -> MARKET_PRICE (read-only benchmark, no transactions)
-      - Others -> MARKET_PRICE
-    - Used for portfolio breakdown and allocation analysis
-    - May influence available data plugins (e.g., crypto uses different sources)
+    - INDEX forbids transactions (see transaction_batch_stages); every other value is
+      behaviourally inert in the backend.
+    - Drives portfolio breakdown and allocation analysis, where ETF subtypes roll up to
+      the base type they contain rather than to ETF.
+    - Supplies the `asset_class` buckets of stress scenarios. A type absent from a
+      scenario's bucket_shocks is shocked by zero **silently**, which is why the enum and
+      those tables are guarded by a dedicated coverage test.
+    - Selects the icon and the localized label in the UI.
     """
 
     STOCK = "STOCK"
@@ -175,8 +186,17 @@ class AssetType(StrEnum):
     FUND = "FUND"
     CROWDFUND = "CROWDFUND"
     HOLD = "HOLD"
+    COMMODITY = "COMMODITY"
+    REAL_ESTATE = "REAL_ESTATE"
     INDEX = "INDEX"
     OTHER = "OTHER"
+
+    ETF_STOCK = "ETF_STOCK"
+    ETF_BOND = "ETF_BOND"
+    ETF_COMMODITY = "ETF_COMMODITY"
+    ETF_REAL_ESTATE = "ETF_REAL_ESTATE"
+    ETF_CRYPTO = "ETF_CRYPTO"
+    ETF_MONETARY = "ETF_MONETARY"
 
 
 class AssetEventType(StrEnum):
@@ -506,6 +526,10 @@ class Asset(SQLModel, table=True):
     quote_base_quantity: Optional[int] = Field(default=1, description="How many units the raw market quote refers to (e.g. 100 for bonds quoted on base 100)")
 
     active: bool = Field(default=True)
+    is_benchmark: bool = Field(
+        default=False,
+        description="Asset is offered as a comparison benchmark in risk and chart selectors. Shared across users; independent from asset_type, so any asset can serve as a benchmark and INDEX assets are not forced to",
+    )
     user_url: Optional[str] = Field(default=None, description="User-defined URL (notes, external dashboard, etc.)")
 
     # Identifier columns - one per IdentifierType enum value
