@@ -1,0 +1,2542 @@
+{
+  "meta": {
+    "what": "Recorded output of the four groupPointsByBucket consumers (aggregateLineSeries, aggregateSumSeries, aggregateOHLCV, aggregateEnvelope) across all three resolutions.",
+    "capturedFrom": "LibreFolio commit eba37ba41, BEFORE the groupPointsByBucket parameter refactor. These numbers are an artefact of the old implementation, not of the current one.",
+    "why": "An identity test written after a refactor compares the new code against itself and passes forever while proving nothing. Recording the pre-refactor behaviour makes the post-refactor assertion a real comparison against a frozen record.",
+    "doNotEdit": "Never hand-edit a value here. Change the inputs in timeSeriesAggregationGoldenCases.ts, or re-record with regenerateTimeSeriesAggregationGolden.ts and then update GOLDEN_DIGEST in timeSeriesAggregationGolden.test.ts by hand, in the same commit, having read the drift the script prints."
+  },
+  "formatVersion": 1,
+  "entries": {
+    "aggregateLineSeries|empty|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": []
+    },
+    "aggregateLineSeries|empty|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": []
+    },
+    "aggregateLineSeries|empty|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": []
+    },
+    "aggregateLineSeries|single-point-midweek|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [{"date": "2026-01-07", "value": 101.5}]
+    },
+    "aggregateLineSeries|single-point-midweek|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-07", "representativeDate": "2026-01-07", "resolution": "weekly", "sourcePointCount": 1, "value": 101.5}]
+    },
+    "aggregateLineSeries|single-point-midweek|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-07", "representativeDate": "2026-01-07", "resolution": "monthly", "sourcePointCount": 1, "value": 101.5}]
+    },
+    "aggregateLineSeries|single-point-on-double-boundary|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [{"date": "2026-03-01", "value": 55}]
+    },
+    "aggregateLineSeries|single-point-on-double-boundary|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-03-01", "bucketStart": "2026-02-23", "date": "2026-03-01", "representativeDate": "2026-03-01", "resolution": "weekly", "sourcePointCount": 1, "value": 55}]
+    },
+    "aggregateLineSeries|single-point-on-double-boundary|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-03-31", "bucketStart": "2026-03-01", "date": "2026-03-01", "representativeDate": "2026-03-01", "resolution": "monthly", "sourcePointCount": 1, "value": 55}]
+    },
+    "aggregateLineSeries|all-missing-values|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-01-08", "missing": true, "value": 0},
+        {"date": "2026-01-09", "missing": true, "value": 0},
+        {"date": "2026-01-12", "missing": true, "value": 0},
+        {"date": "2026-01-13", "missing": true, "value": 0}
+      ]
+    },
+    "aggregateLineSeries|all-missing-values|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-09", "missing": true, "representativeDate": "2026-01-09", "resolution": "weekly", "sourcePointCount": 2, "value": 0},
+        {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "date": "2026-01-13", "missing": true, "representativeDate": "2026-01-13", "resolution": "weekly", "sourcePointCount": 2, "value": 0}
+      ]
+    },
+    "aggregateLineSeries|all-missing-values|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-13", "missing": true, "representativeDate": "2026-01-13", "resolution": "monthly", "sourcePointCount": 4, "value": 0}]
+    },
+    "aggregateLineSeries|partial-missing-bucket|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-01-06", "value": 100},
+        {"date": "2026-01-07", "missing": true, "value": 0},
+        {"date": "2026-01-08", "value": 102},
+        {"date": "2026-01-12", "value": 105},
+        {"date": "2026-01-13", "missing": true, "value": 0}
+      ]
+    },
+    "aggregateLineSeries|partial-missing-bucket|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-08", "representativeDate": "2026-01-08", "resolution": "weekly", "sourcePointCount": 3, "value": 102},
+        {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "date": "2026-01-13", "missing": true, "representativeDate": "2026-01-13", "resolution": "weekly", "sourcePointCount": 2, "value": 0}
+      ]
+    },
+    "aggregateLineSeries|partial-missing-bucket|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-13", "missing": true, "representativeDate": "2026-01-13", "resolution": "monthly", "sourcePointCount": 5, "value": 0}]
+    },
+    "aggregateLineSeries|unaligned-start-midweek|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-01-07", "value": 100},
+        {"date": "2026-01-08", "value": 101},
+        {"date": "2026-01-09", "value": 99},
+        {"date": "2026-01-12", "value": 104},
+        {"date": "2026-01-13", "value": 103}
+      ]
+    },
+    "aggregateLineSeries|unaligned-start-midweek|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-09", "representativeDate": "2026-01-09", "resolution": "weekly", "sourcePointCount": 3, "value": 99},
+        {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "date": "2026-01-13", "representativeDate": "2026-01-13", "resolution": "weekly", "sourcePointCount": 2, "value": 103}
+      ]
+    },
+    "aggregateLineSeries|unaligned-start-midweek|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-13", "representativeDate": "2026-01-13", "resolution": "monthly", "sourcePointCount": 5, "value": 103}]
+    },
+    "aggregateLineSeries|unaligned-start-midmonth|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-01-29", "value": 200},
+        {"date": "2026-01-30", "value": 201},
+        {"date": "2026-01-31", "value": 202},
+        {"date": "2026-02-01", "value": 203},
+        {"date": "2026-02-02", "value": 204}
+      ]
+    },
+    "aggregateLineSeries|unaligned-start-midmonth|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-02-01", "bucketStart": "2026-01-26", "date": "2026-02-01", "representativeDate": "2026-02-01", "resolution": "weekly", "sourcePointCount": 4, "value": 203},
+        {"bucketEnd": "2026-02-08", "bucketStart": "2026-02-02", "date": "2026-02-02", "representativeDate": "2026-02-02", "resolution": "weekly", "sourcePointCount": 1, "value": 204}
+      ]
+    },
+    "aggregateLineSeries|unaligned-start-midmonth|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-31", "representativeDate": "2026-01-31", "resolution": "monthly", "sourcePointCount": 3, "value": 202},
+        {"bucketEnd": "2026-02-28", "bucketStart": "2026-02-01", "date": "2026-02-02", "representativeDate": "2026-02-02", "resolution": "monthly", "sourcePointCount": 2, "value": 204}
+      ]
+    },
+    "aggregateLineSeries|month-end-31-january|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-01-30", "value": 10},
+        {"date": "2026-01-31", "value": 11},
+        {"date": "2026-02-01", "value": 12},
+        {"date": "2026-02-02", "value": 13}
+      ]
+    },
+    "aggregateLineSeries|month-end-31-january|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-02-01", "bucketStart": "2026-01-26", "date": "2026-02-01", "representativeDate": "2026-02-01", "resolution": "weekly", "sourcePointCount": 3, "value": 12},
+        {"bucketEnd": "2026-02-08", "bucketStart": "2026-02-02", "date": "2026-02-02", "representativeDate": "2026-02-02", "resolution": "weekly", "sourcePointCount": 1, "value": 13}
+      ]
+    },
+    "aggregateLineSeries|month-end-31-january|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-31", "representativeDate": "2026-01-31", "resolution": "monthly", "sourcePointCount": 2, "value": 11},
+        {"bucketEnd": "2026-02-28", "bucketStart": "2026-02-01", "date": "2026-02-02", "representativeDate": "2026-02-02", "resolution": "monthly", "sourcePointCount": 2, "value": 13}
+      ]
+    },
+    "aggregateLineSeries|month-end-28-non-leap-february|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-02-27", "value": 20},
+        {"date": "2026-02-28", "value": 21},
+        {"date": "2026-03-01", "value": 22},
+        {"date": "2026-03-02", "value": 23}
+      ]
+    },
+    "aggregateLineSeries|month-end-28-non-leap-february|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-03-01", "bucketStart": "2026-02-23", "date": "2026-03-01", "representativeDate": "2026-03-01", "resolution": "weekly", "sourcePointCount": 3, "value": 22},
+        {"bucketEnd": "2026-03-08", "bucketStart": "2026-03-02", "date": "2026-03-02", "representativeDate": "2026-03-02", "resolution": "weekly", "sourcePointCount": 1, "value": 23}
+      ]
+    },
+    "aggregateLineSeries|month-end-28-non-leap-february|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-02-28", "bucketStart": "2026-02-01", "date": "2026-02-28", "representativeDate": "2026-02-28", "resolution": "monthly", "sourcePointCount": 2, "value": 21},
+        {"bucketEnd": "2026-03-31", "bucketStart": "2026-03-01", "date": "2026-03-02", "representativeDate": "2026-03-02", "resolution": "monthly", "sourcePointCount": 2, "value": 23}
+      ]
+    },
+    "aggregateLineSeries|month-end-29-leap-february|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2024-02-27", "value": 30},
+        {"date": "2024-02-28", "value": 31},
+        {"date": "2024-02-29", "value": 32},
+        {"date": "2024-03-01", "value": 33}
+      ]
+    },
+    "aggregateLineSeries|month-end-29-leap-february|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2024-03-03", "bucketStart": "2024-02-26", "date": "2024-03-01", "representativeDate": "2024-03-01", "resolution": "weekly", "sourcePointCount": 4, "value": 33}]
+    },
+    "aggregateLineSeries|month-end-29-leap-february|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2024-02-29", "bucketStart": "2024-02-01", "date": "2024-02-29", "representativeDate": "2024-02-29", "resolution": "monthly", "sourcePointCount": 3, "value": 32},
+        {"bucketEnd": "2024-03-31", "bucketStart": "2024-03-01", "date": "2024-03-01", "representativeDate": "2024-03-01", "resolution": "monthly", "sourcePointCount": 1, "value": 33}
+      ]
+    },
+    "aggregateLineSeries|month-end-30-april|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-04-29", "value": 40},
+        {"date": "2026-04-30", "value": 41},
+        {"date": "2026-05-01", "value": 42},
+        {"date": "2026-05-02", "value": 43}
+      ]
+    },
+    "aggregateLineSeries|month-end-30-april|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-05-03", "bucketStart": "2026-04-27", "date": "2026-05-02", "representativeDate": "2026-05-02", "resolution": "weekly", "sourcePointCount": 4, "value": 43}]
+    },
+    "aggregateLineSeries|month-end-30-april|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-04-30", "bucketStart": "2026-04-01", "date": "2026-04-30", "representativeDate": "2026-04-30", "resolution": "monthly", "sourcePointCount": 2, "value": 41},
+        {"bucketEnd": "2026-05-31", "bucketStart": "2026-05-01", "date": "2026-05-02", "representativeDate": "2026-05-02", "resolution": "monthly", "sourcePointCount": 2, "value": 43}
+      ]
+    },
+    "aggregateLineSeries|iso-week-across-year-boundary|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2025-12-30", "value": 50},
+        {"date": "2025-12-31", "value": 51},
+        {"date": "2026-01-01", "value": 52},
+        {"date": "2026-01-02", "value": 53},
+        {"date": "2026-01-05", "value": 54}
+      ]
+    },
+    "aggregateLineSeries|iso-week-across-year-boundary|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-04", "bucketStart": "2025-12-29", "date": "2026-01-02", "representativeDate": "2026-01-02", "resolution": "weekly", "sourcePointCount": 4, "value": 53},
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-05", "representativeDate": "2026-01-05", "resolution": "weekly", "sourcePointCount": 1, "value": 54}
+      ]
+    },
+    "aggregateLineSeries|iso-week-across-year-boundary|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2025-12-31", "bucketStart": "2025-12-01", "date": "2025-12-31", "representativeDate": "2025-12-31", "resolution": "monthly", "sourcePointCount": 2, "value": 51},
+        {"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-05", "representativeDate": "2026-01-05", "resolution": "monthly", "sourcePointCount": 3, "value": 54}
+      ]
+    },
+    "aggregateLineSeries|multi-bucket-baseline|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-03-30", "value": 100},
+        {"date": "2026-03-31", "value": 102},
+        {"date": "2026-04-01", "value": 101},
+        {"date": "2026-04-02", "value": 105},
+        {"date": "2026-04-06", "value": 107},
+        {"date": "2026-04-07", "value": 106},
+        {"date": "2026-04-13", "value": 110},
+        {"date": "2026-04-14", "value": 109}
+      ]
+    },
+    "aggregateLineSeries|multi-bucket-baseline|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-04-05", "bucketStart": "2026-03-30", "date": "2026-04-02", "representativeDate": "2026-04-02", "resolution": "weekly", "sourcePointCount": 4, "value": 105},
+        {"bucketEnd": "2026-04-12", "bucketStart": "2026-04-06", "date": "2026-04-07", "representativeDate": "2026-04-07", "resolution": "weekly", "sourcePointCount": 2, "value": 106},
+        {"bucketEnd": "2026-04-19", "bucketStart": "2026-04-13", "date": "2026-04-14", "representativeDate": "2026-04-14", "resolution": "weekly", "sourcePointCount": 2, "value": 109}
+      ]
+    },
+    "aggregateLineSeries|multi-bucket-baseline|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-03-31", "bucketStart": "2026-03-01", "date": "2026-03-31", "representativeDate": "2026-03-31", "resolution": "monthly", "sourcePointCount": 2, "value": 102},
+        {"bucketEnd": "2026-04-30", "bucketStart": "2026-04-01", "date": "2026-04-14", "representativeDate": "2026-04-14", "resolution": "monthly", "sourcePointCount": 6, "value": 109}
+      ]
+    },
+    "aggregateLineSeries|bucket-gap-skips-a-whole-week|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-01-05", "value": 60},
+        {"date": "2026-01-06", "value": 61},
+        {"date": "2026-01-19", "value": 62}
+      ]
+    },
+    "aggregateLineSeries|bucket-gap-skips-a-whole-week|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-06", "representativeDate": "2026-01-06", "resolution": "weekly", "sourcePointCount": 2, "value": 61},
+        {"bucketEnd": "2026-01-25", "bucketStart": "2026-01-19", "date": "2026-01-19", "representativeDate": "2026-01-19", "resolution": "weekly", "sourcePointCount": 1, "value": 62}
+      ]
+    },
+    "aggregateLineSeries|bucket-gap-skips-a-whole-week|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-19", "representativeDate": "2026-01-19", "resolution": "monthly", "sourcePointCount": 3, "value": 62}]
+    },
+    "aggregateLineSeries|revisited-bucket-non-monotonic|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-01-05", "value": 70},
+        {"date": "2026-01-12", "value": 71},
+        {"date": "2026-01-06", "value": 72}
+      ]
+    },
+    "aggregateLineSeries|revisited-bucket-non-monotonic|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-05", "representativeDate": "2026-01-05", "resolution": "weekly", "sourcePointCount": 1, "value": 70},
+        {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "date": "2026-01-12", "representativeDate": "2026-01-12", "resolution": "weekly", "sourcePointCount": 1, "value": 71},
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-06", "representativeDate": "2026-01-06", "resolution": "weekly", "sourcePointCount": 1, "value": 72}
+      ]
+    },
+    "aggregateLineSeries|revisited-bucket-non-monotonic|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-06", "representativeDate": "2026-01-06", "resolution": "monthly", "sourcePointCount": 3, "value": 72}]
+    },
+    "aggregateLineSeries|fully-unsorted-descending|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-01-19", "value": 80},
+        {"date": "2026-01-12", "value": 81},
+        {"date": "2026-01-05", "value": 82}
+      ]
+    },
+    "aggregateLineSeries|fully-unsorted-descending|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-25", "bucketStart": "2026-01-19", "date": "2026-01-19", "representativeDate": "2026-01-19", "resolution": "weekly", "sourcePointCount": 1, "value": 80},
+        {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "date": "2026-01-12", "representativeDate": "2026-01-12", "resolution": "weekly", "sourcePointCount": 1, "value": 81},
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-05", "representativeDate": "2026-01-05", "resolution": "weekly", "sourcePointCount": 1, "value": 82}
+      ]
+    },
+    "aggregateLineSeries|fully-unsorted-descending|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-05", "representativeDate": "2026-01-05", "resolution": "monthly", "sourcePointCount": 3, "value": 82}]
+    },
+    "aggregateLineSeries|duplicate-dates|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-01-07", "value": 90},
+        {"date": "2026-01-07", "value": 91},
+        {"date": "2026-01-08", "value": 92}
+      ]
+    },
+    "aggregateLineSeries|duplicate-dates|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-08", "representativeDate": "2026-01-08", "resolution": "weekly", "sourcePointCount": 3, "value": 92}]
+    },
+    "aggregateLineSeries|duplicate-dates|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-08", "representativeDate": "2026-01-08", "resolution": "monthly", "sourcePointCount": 3, "value": 92}]
+    },
+    "aggregateLineSeries|signed-values-netting-to-zero|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-01-05", "value": -5},
+        {"date": "2026-01-06", "value": 5},
+        {"date": "2026-01-07", "value": 0},
+        {"date": "2026-01-12", "value": -3}
+      ]
+    },
+    "aggregateLineSeries|signed-values-netting-to-zero|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-07", "representativeDate": "2026-01-07", "resolution": "weekly", "sourcePointCount": 3, "value": 0},
+        {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "date": "2026-01-12", "representativeDate": "2026-01-12", "resolution": "weekly", "sourcePointCount": 1, "value": -3}
+      ]
+    },
+    "aggregateLineSeries|signed-values-netting-to-zero|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-12", "representativeDate": "2026-01-12", "resolution": "monthly", "sourcePointCount": 4, "value": -3}]
+    },
+    "aggregateLineSeries|metadata-carry-over|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-01-06", "originalCurrency": "USD", "originalCurrencyFlag": "🇺🇸", "originalValue": 110, "value": 100},
+        {"date": "2026-01-08", "fxStaleDays": 1, "originalCurrency": "USD", "originalCurrencyFlag": "🇺🇸", "originalValue": 111, "staleDays": 2, "value": 101},
+        {"date": "2026-01-12", "originalCurrency": "GBP", "originalCurrencyFlag": "🇬🇧", "originalValue": 88, "staleDays": 4, "value": 102}
+      ]
+    },
+    "aggregateLineSeries|metadata-carry-over|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {
+          "bucketEnd": "2026-01-11",
+          "bucketStart": "2026-01-05",
+          "date": "2026-01-08",
+          "fxStaleDays": 1,
+          "originalCurrency": "USD",
+          "originalCurrencyFlag": "🇺🇸",
+          "originalValue": 111,
+          "representativeDate": "2026-01-08",
+          "resolution": "weekly",
+          "sourcePointCount": 2,
+          "staleDays": 2,
+          "value": 101
+        },
+        {
+          "bucketEnd": "2026-01-18",
+          "bucketStart": "2026-01-12",
+          "date": "2026-01-12",
+          "originalCurrency": "GBP",
+          "originalCurrencyFlag": "🇬🇧",
+          "originalValue": 88,
+          "representativeDate": "2026-01-12",
+          "resolution": "weekly",
+          "sourcePointCount": 1,
+          "staleDays": 4,
+          "value": 102
+        }
+      ]
+    },
+    "aggregateLineSeries|metadata-carry-over|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {
+          "bucketEnd": "2026-01-31",
+          "bucketStart": "2026-01-01",
+          "date": "2026-01-12",
+          "originalCurrency": "GBP",
+          "originalCurrencyFlag": "🇬🇧",
+          "originalValue": 88,
+          "representativeDate": "2026-01-12",
+          "resolution": "monthly",
+          "sourcePointCount": 3,
+          "staleDays": 4,
+          "value": 102
+        }
+      ]
+    },
+    "aggregateLineSeries|ohlcv-full|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"close": 104, "date": "2026-01-06", "high": 105, "low": 99, "open": 100, "value": 104, "volume": 1000},
+        {"close": 106, "date": "2026-01-08", "high": 108, "low": 103, "open": 104, "value": 106, "volume": 1200},
+        {"close": 102, "date": "2026-01-12", "high": 107, "low": 101, "open": 106, "value": 102, "volume": 900},
+        {"close": 103, "date": "2026-01-13", "high": 104, "low": 100, "open": 102, "value": 103, "volume": 1100}
+      ]
+    },
+    "aggregateLineSeries|ohlcv-full|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "close": 106, "date": "2026-01-08", "high": 108, "low": 103, "open": 104, "representativeDate": "2026-01-08", "resolution": "weekly", "sourcePointCount": 2, "value": 106, "volume": 1200},
+        {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "close": 103, "date": "2026-01-13", "high": 104, "low": 100, "open": 102, "representativeDate": "2026-01-13", "resolution": "weekly", "sourcePointCount": 2, "value": 103, "volume": 1100}
+      ]
+    },
+    "aggregateLineSeries|ohlcv-full|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "close": 103, "date": "2026-01-13", "high": 104, "low": 100, "open": 102, "representativeDate": "2026-01-13", "resolution": "monthly", "sourcePointCount": 4, "value": 103, "volume": 1100}]
+    },
+    "aggregateLineSeries|ohlcv-all-fields-null|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"close": null, "date": "2026-01-06", "high": null, "low": null, "open": null, "value": 11, "volume": null},
+        {"close": null, "date": "2026-01-07", "high": null, "low": null, "open": null, "value": 12, "volume": null},
+        {"close": null, "date": "2026-01-12", "high": null, "low": null, "open": null, "value": 13, "volume": null}
+      ]
+    },
+    "aggregateLineSeries|ohlcv-all-fields-null|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "close": null, "date": "2026-01-07", "high": null, "low": null, "open": null, "representativeDate": "2026-01-07", "resolution": "weekly", "sourcePointCount": 2, "value": 12, "volume": null},
+        {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "close": null, "date": "2026-01-12", "high": null, "low": null, "open": null, "representativeDate": "2026-01-12", "resolution": "weekly", "sourcePointCount": 1, "value": 13, "volume": null}
+      ]
+    },
+    "aggregateLineSeries|ohlcv-all-fields-null|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "close": null, "date": "2026-01-12", "high": null, "low": null, "open": null, "representativeDate": "2026-01-12", "resolution": "monthly", "sourcePointCount": 3, "value": 13, "volume": null}]
+    },
+    "aggregateLineSeries|ohlcv-sparse-fields|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"close": 104, "date": "2026-01-06", "high": 105, "low": 99, "open": null, "value": 104, "volume": null},
+        {"close": null, "date": "2026-01-07", "high": null, "low": null, "open": 104, "value": 105, "volume": 1200},
+        {"close": 102, "date": "2026-01-12", "high": 107, "low": null, "open": 106, "value": 102, "volume": null},
+        {"close": null, "date": "2026-01-13", "high": null, "low": 100, "open": null, "value": 103, "volume": 300}
+      ]
+    },
+    "aggregateLineSeries|ohlcv-sparse-fields|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "close": null, "date": "2026-01-07", "high": null, "low": null, "open": 104, "representativeDate": "2026-01-07", "resolution": "weekly", "sourcePointCount": 2, "value": 105, "volume": 1200},
+        {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "close": null, "date": "2026-01-13", "high": null, "low": 100, "open": null, "representativeDate": "2026-01-13", "resolution": "weekly", "sourcePointCount": 2, "value": 103, "volume": 300}
+      ]
+    },
+    "aggregateLineSeries|ohlcv-sparse-fields|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "close": null, "date": "2026-01-13", "high": null, "low": 100, "open": null, "representativeDate": "2026-01-13", "resolution": "monthly", "sourcePointCount": 4, "value": 103, "volume": 300}]
+    },
+    "aggregateLineSeries|ohlcv-without-any-ohlcv-fields|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-01-06", "value": 21},
+        {"date": "2026-01-07", "value": 22},
+        {"date": "2026-01-12", "value": 23}
+      ]
+    },
+    "aggregateLineSeries|ohlcv-without-any-ohlcv-fields|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-07", "representativeDate": "2026-01-07", "resolution": "weekly", "sourcePointCount": 2, "value": 22},
+        {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "date": "2026-01-12", "representativeDate": "2026-01-12", "resolution": "weekly", "sourcePointCount": 1, "value": 23}
+      ]
+    },
+    "aggregateLineSeries|ohlcv-without-any-ohlcv-fields|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-12", "representativeDate": "2026-01-12", "resolution": "monthly", "sourcePointCount": 3, "value": 23}]
+    },
+    "aggregateSumSeries|empty|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": []
+    },
+    "aggregateSumSeries|empty|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": []
+    },
+    "aggregateSumSeries|empty|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": []
+    },
+    "aggregateSumSeries|single-point-midweek|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [{"date": "2026-01-07", "value": 101.5}]
+    },
+    "aggregateSumSeries|single-point-midweek|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-07", "representativeDate": "2026-01-07", "resolution": "weekly", "sourcePointCount": 1, "value": 101.5}]
+    },
+    "aggregateSumSeries|single-point-midweek|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-07", "representativeDate": "2026-01-07", "resolution": "monthly", "sourcePointCount": 1, "value": 101.5}]
+    },
+    "aggregateSumSeries|single-point-on-double-boundary|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [{"date": "2026-03-01", "value": 55}]
+    },
+    "aggregateSumSeries|single-point-on-double-boundary|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-03-01", "bucketStart": "2026-02-23", "date": "2026-03-01", "representativeDate": "2026-03-01", "resolution": "weekly", "sourcePointCount": 1, "value": 55}]
+    },
+    "aggregateSumSeries|single-point-on-double-boundary|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-03-31", "bucketStart": "2026-03-01", "date": "2026-03-01", "representativeDate": "2026-03-01", "resolution": "monthly", "sourcePointCount": 1, "value": 55}]
+    },
+    "aggregateSumSeries|all-missing-values|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-01-08", "missing": true, "value": 0},
+        {"date": "2026-01-09", "missing": true, "value": 0},
+        {"date": "2026-01-12", "missing": true, "value": 0},
+        {"date": "2026-01-13", "missing": true, "value": 0}
+      ]
+    },
+    "aggregateSumSeries|all-missing-values|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-09", "missing": true, "representativeDate": "2026-01-09", "resolution": "weekly", "sourcePointCount": 2, "value": 0},
+        {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "date": "2026-01-13", "missing": true, "representativeDate": "2026-01-13", "resolution": "weekly", "sourcePointCount": 2, "value": 0}
+      ]
+    },
+    "aggregateSumSeries|all-missing-values|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-13", "missing": true, "representativeDate": "2026-01-13", "resolution": "monthly", "sourcePointCount": 4, "value": 0}]
+    },
+    "aggregateSumSeries|partial-missing-bucket|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-01-06", "value": 100},
+        {"date": "2026-01-07", "missing": true, "value": 0},
+        {"date": "2026-01-08", "value": 102},
+        {"date": "2026-01-12", "value": 105},
+        {"date": "2026-01-13", "missing": true, "value": 0}
+      ]
+    },
+    "aggregateSumSeries|partial-missing-bucket|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-08", "representativeDate": "2026-01-08", "resolution": "weekly", "sourcePointCount": 3, "value": 202},
+        {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "date": "2026-01-13", "missing": true, "representativeDate": "2026-01-13", "resolution": "weekly", "sourcePointCount": 2, "value": 105}
+      ]
+    },
+    "aggregateSumSeries|partial-missing-bucket|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-13", "missing": true, "representativeDate": "2026-01-13", "resolution": "monthly", "sourcePointCount": 5, "value": 307}]
+    },
+    "aggregateSumSeries|unaligned-start-midweek|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-01-07", "value": 100},
+        {"date": "2026-01-08", "value": 101},
+        {"date": "2026-01-09", "value": 99},
+        {"date": "2026-01-12", "value": 104},
+        {"date": "2026-01-13", "value": 103}
+      ]
+    },
+    "aggregateSumSeries|unaligned-start-midweek|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-09", "representativeDate": "2026-01-09", "resolution": "weekly", "sourcePointCount": 3, "value": 300},
+        {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "date": "2026-01-13", "representativeDate": "2026-01-13", "resolution": "weekly", "sourcePointCount": 2, "value": 207}
+      ]
+    },
+    "aggregateSumSeries|unaligned-start-midweek|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-13", "representativeDate": "2026-01-13", "resolution": "monthly", "sourcePointCount": 5, "value": 507}]
+    },
+    "aggregateSumSeries|unaligned-start-midmonth|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-01-29", "value": 200},
+        {"date": "2026-01-30", "value": 201},
+        {"date": "2026-01-31", "value": 202},
+        {"date": "2026-02-01", "value": 203},
+        {"date": "2026-02-02", "value": 204}
+      ]
+    },
+    "aggregateSumSeries|unaligned-start-midmonth|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-02-01", "bucketStart": "2026-01-26", "date": "2026-02-01", "representativeDate": "2026-02-01", "resolution": "weekly", "sourcePointCount": 4, "value": 806},
+        {"bucketEnd": "2026-02-08", "bucketStart": "2026-02-02", "date": "2026-02-02", "representativeDate": "2026-02-02", "resolution": "weekly", "sourcePointCount": 1, "value": 204}
+      ]
+    },
+    "aggregateSumSeries|unaligned-start-midmonth|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-31", "representativeDate": "2026-01-31", "resolution": "monthly", "sourcePointCount": 3, "value": 603},
+        {"bucketEnd": "2026-02-28", "bucketStart": "2026-02-01", "date": "2026-02-02", "representativeDate": "2026-02-02", "resolution": "monthly", "sourcePointCount": 2, "value": 407}
+      ]
+    },
+    "aggregateSumSeries|month-end-31-january|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-01-30", "value": 10},
+        {"date": "2026-01-31", "value": 11},
+        {"date": "2026-02-01", "value": 12},
+        {"date": "2026-02-02", "value": 13}
+      ]
+    },
+    "aggregateSumSeries|month-end-31-january|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-02-01", "bucketStart": "2026-01-26", "date": "2026-02-01", "representativeDate": "2026-02-01", "resolution": "weekly", "sourcePointCount": 3, "value": 33},
+        {"bucketEnd": "2026-02-08", "bucketStart": "2026-02-02", "date": "2026-02-02", "representativeDate": "2026-02-02", "resolution": "weekly", "sourcePointCount": 1, "value": 13}
+      ]
+    },
+    "aggregateSumSeries|month-end-31-january|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-31", "representativeDate": "2026-01-31", "resolution": "monthly", "sourcePointCount": 2, "value": 21},
+        {"bucketEnd": "2026-02-28", "bucketStart": "2026-02-01", "date": "2026-02-02", "representativeDate": "2026-02-02", "resolution": "monthly", "sourcePointCount": 2, "value": 25}
+      ]
+    },
+    "aggregateSumSeries|month-end-28-non-leap-february|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-02-27", "value": 20},
+        {"date": "2026-02-28", "value": 21},
+        {"date": "2026-03-01", "value": 22},
+        {"date": "2026-03-02", "value": 23}
+      ]
+    },
+    "aggregateSumSeries|month-end-28-non-leap-february|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-03-01", "bucketStart": "2026-02-23", "date": "2026-03-01", "representativeDate": "2026-03-01", "resolution": "weekly", "sourcePointCount": 3, "value": 63},
+        {"bucketEnd": "2026-03-08", "bucketStart": "2026-03-02", "date": "2026-03-02", "representativeDate": "2026-03-02", "resolution": "weekly", "sourcePointCount": 1, "value": 23}
+      ]
+    },
+    "aggregateSumSeries|month-end-28-non-leap-february|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-02-28", "bucketStart": "2026-02-01", "date": "2026-02-28", "representativeDate": "2026-02-28", "resolution": "monthly", "sourcePointCount": 2, "value": 41},
+        {"bucketEnd": "2026-03-31", "bucketStart": "2026-03-01", "date": "2026-03-02", "representativeDate": "2026-03-02", "resolution": "monthly", "sourcePointCount": 2, "value": 45}
+      ]
+    },
+    "aggregateSumSeries|month-end-29-leap-february|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2024-02-27", "value": 30},
+        {"date": "2024-02-28", "value": 31},
+        {"date": "2024-02-29", "value": 32},
+        {"date": "2024-03-01", "value": 33}
+      ]
+    },
+    "aggregateSumSeries|month-end-29-leap-february|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2024-03-03", "bucketStart": "2024-02-26", "date": "2024-03-01", "representativeDate": "2024-03-01", "resolution": "weekly", "sourcePointCount": 4, "value": 126}]
+    },
+    "aggregateSumSeries|month-end-29-leap-february|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2024-02-29", "bucketStart": "2024-02-01", "date": "2024-02-29", "representativeDate": "2024-02-29", "resolution": "monthly", "sourcePointCount": 3, "value": 93},
+        {"bucketEnd": "2024-03-31", "bucketStart": "2024-03-01", "date": "2024-03-01", "representativeDate": "2024-03-01", "resolution": "monthly", "sourcePointCount": 1, "value": 33}
+      ]
+    },
+    "aggregateSumSeries|month-end-30-april|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-04-29", "value": 40},
+        {"date": "2026-04-30", "value": 41},
+        {"date": "2026-05-01", "value": 42},
+        {"date": "2026-05-02", "value": 43}
+      ]
+    },
+    "aggregateSumSeries|month-end-30-april|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-05-03", "bucketStart": "2026-04-27", "date": "2026-05-02", "representativeDate": "2026-05-02", "resolution": "weekly", "sourcePointCount": 4, "value": 166}]
+    },
+    "aggregateSumSeries|month-end-30-april|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-04-30", "bucketStart": "2026-04-01", "date": "2026-04-30", "representativeDate": "2026-04-30", "resolution": "monthly", "sourcePointCount": 2, "value": 81},
+        {"bucketEnd": "2026-05-31", "bucketStart": "2026-05-01", "date": "2026-05-02", "representativeDate": "2026-05-02", "resolution": "monthly", "sourcePointCount": 2, "value": 85}
+      ]
+    },
+    "aggregateSumSeries|iso-week-across-year-boundary|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2025-12-30", "value": 50},
+        {"date": "2025-12-31", "value": 51},
+        {"date": "2026-01-01", "value": 52},
+        {"date": "2026-01-02", "value": 53},
+        {"date": "2026-01-05", "value": 54}
+      ]
+    },
+    "aggregateSumSeries|iso-week-across-year-boundary|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-04", "bucketStart": "2025-12-29", "date": "2026-01-02", "representativeDate": "2026-01-02", "resolution": "weekly", "sourcePointCount": 4, "value": 206},
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-05", "representativeDate": "2026-01-05", "resolution": "weekly", "sourcePointCount": 1, "value": 54}
+      ]
+    },
+    "aggregateSumSeries|iso-week-across-year-boundary|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2025-12-31", "bucketStart": "2025-12-01", "date": "2025-12-31", "representativeDate": "2025-12-31", "resolution": "monthly", "sourcePointCount": 2, "value": 101},
+        {"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-05", "representativeDate": "2026-01-05", "resolution": "monthly", "sourcePointCount": 3, "value": 159}
+      ]
+    },
+    "aggregateSumSeries|multi-bucket-baseline|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-03-30", "value": 100},
+        {"date": "2026-03-31", "value": 102},
+        {"date": "2026-04-01", "value": 101},
+        {"date": "2026-04-02", "value": 105},
+        {"date": "2026-04-06", "value": 107},
+        {"date": "2026-04-07", "value": 106},
+        {"date": "2026-04-13", "value": 110},
+        {"date": "2026-04-14", "value": 109}
+      ]
+    },
+    "aggregateSumSeries|multi-bucket-baseline|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-04-05", "bucketStart": "2026-03-30", "date": "2026-04-02", "representativeDate": "2026-04-02", "resolution": "weekly", "sourcePointCount": 4, "value": 408},
+        {"bucketEnd": "2026-04-12", "bucketStart": "2026-04-06", "date": "2026-04-07", "representativeDate": "2026-04-07", "resolution": "weekly", "sourcePointCount": 2, "value": 213},
+        {"bucketEnd": "2026-04-19", "bucketStart": "2026-04-13", "date": "2026-04-14", "representativeDate": "2026-04-14", "resolution": "weekly", "sourcePointCount": 2, "value": 219}
+      ]
+    },
+    "aggregateSumSeries|multi-bucket-baseline|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-03-31", "bucketStart": "2026-03-01", "date": "2026-03-31", "representativeDate": "2026-03-31", "resolution": "monthly", "sourcePointCount": 2, "value": 202},
+        {"bucketEnd": "2026-04-30", "bucketStart": "2026-04-01", "date": "2026-04-14", "representativeDate": "2026-04-14", "resolution": "monthly", "sourcePointCount": 6, "value": 638}
+      ]
+    },
+    "aggregateSumSeries|bucket-gap-skips-a-whole-week|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-01-05", "value": 60},
+        {"date": "2026-01-06", "value": 61},
+        {"date": "2026-01-19", "value": 62}
+      ]
+    },
+    "aggregateSumSeries|bucket-gap-skips-a-whole-week|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-06", "representativeDate": "2026-01-06", "resolution": "weekly", "sourcePointCount": 2, "value": 121},
+        {"bucketEnd": "2026-01-25", "bucketStart": "2026-01-19", "date": "2026-01-19", "representativeDate": "2026-01-19", "resolution": "weekly", "sourcePointCount": 1, "value": 62}
+      ]
+    },
+    "aggregateSumSeries|bucket-gap-skips-a-whole-week|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-19", "representativeDate": "2026-01-19", "resolution": "monthly", "sourcePointCount": 3, "value": 183}]
+    },
+    "aggregateSumSeries|revisited-bucket-non-monotonic|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-01-05", "value": 70},
+        {"date": "2026-01-12", "value": 71},
+        {"date": "2026-01-06", "value": 72}
+      ]
+    },
+    "aggregateSumSeries|revisited-bucket-non-monotonic|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-05", "representativeDate": "2026-01-05", "resolution": "weekly", "sourcePointCount": 1, "value": 70},
+        {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "date": "2026-01-12", "representativeDate": "2026-01-12", "resolution": "weekly", "sourcePointCount": 1, "value": 71},
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-06", "representativeDate": "2026-01-06", "resolution": "weekly", "sourcePointCount": 1, "value": 72}
+      ]
+    },
+    "aggregateSumSeries|revisited-bucket-non-monotonic|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-06", "representativeDate": "2026-01-06", "resolution": "monthly", "sourcePointCount": 3, "value": 213}]
+    },
+    "aggregateSumSeries|fully-unsorted-descending|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-01-19", "value": 80},
+        {"date": "2026-01-12", "value": 81},
+        {"date": "2026-01-05", "value": 82}
+      ]
+    },
+    "aggregateSumSeries|fully-unsorted-descending|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-25", "bucketStart": "2026-01-19", "date": "2026-01-19", "representativeDate": "2026-01-19", "resolution": "weekly", "sourcePointCount": 1, "value": 80},
+        {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "date": "2026-01-12", "representativeDate": "2026-01-12", "resolution": "weekly", "sourcePointCount": 1, "value": 81},
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-05", "representativeDate": "2026-01-05", "resolution": "weekly", "sourcePointCount": 1, "value": 82}
+      ]
+    },
+    "aggregateSumSeries|fully-unsorted-descending|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-05", "representativeDate": "2026-01-05", "resolution": "monthly", "sourcePointCount": 3, "value": 243}]
+    },
+    "aggregateSumSeries|duplicate-dates|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-01-07", "value": 90},
+        {"date": "2026-01-07", "value": 91},
+        {"date": "2026-01-08", "value": 92}
+      ]
+    },
+    "aggregateSumSeries|duplicate-dates|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-08", "representativeDate": "2026-01-08", "resolution": "weekly", "sourcePointCount": 3, "value": 273}]
+    },
+    "aggregateSumSeries|duplicate-dates|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-08", "representativeDate": "2026-01-08", "resolution": "monthly", "sourcePointCount": 3, "value": 273}]
+    },
+    "aggregateSumSeries|signed-values-netting-to-zero|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-01-05", "value": -5},
+        {"date": "2026-01-06", "value": 5},
+        {"date": "2026-01-07", "value": 0},
+        {"date": "2026-01-12", "value": -3}
+      ]
+    },
+    "aggregateSumSeries|signed-values-netting-to-zero|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-07", "representativeDate": "2026-01-07", "resolution": "weekly", "sourcePointCount": 3, "value": 0},
+        {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "date": "2026-01-12", "representativeDate": "2026-01-12", "resolution": "weekly", "sourcePointCount": 1, "value": -3}
+      ]
+    },
+    "aggregateSumSeries|signed-values-netting-to-zero|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-12", "representativeDate": "2026-01-12", "resolution": "monthly", "sourcePointCount": 4, "value": -3}]
+    },
+    "aggregateSumSeries|metadata-carry-over|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-01-06", "originalCurrency": "USD", "originalCurrencyFlag": "🇺🇸", "originalValue": 110, "value": 100},
+        {"date": "2026-01-08", "fxStaleDays": 1, "originalCurrency": "USD", "originalCurrencyFlag": "🇺🇸", "originalValue": 111, "staleDays": 2, "value": 101},
+        {"date": "2026-01-12", "originalCurrency": "GBP", "originalCurrencyFlag": "🇬🇧", "originalValue": 88, "staleDays": 4, "value": 102}
+      ]
+    },
+    "aggregateSumSeries|metadata-carry-over|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {
+          "bucketEnd": "2026-01-11",
+          "bucketStart": "2026-01-05",
+          "date": "2026-01-08",
+          "fxStaleDays": 1,
+          "originalCurrency": "USD",
+          "originalCurrencyFlag": "🇺🇸",
+          "originalValue": 111,
+          "representativeDate": "2026-01-08",
+          "resolution": "weekly",
+          "sourcePointCount": 2,
+          "staleDays": 2,
+          "value": 201
+        },
+        {
+          "bucketEnd": "2026-01-18",
+          "bucketStart": "2026-01-12",
+          "date": "2026-01-12",
+          "originalCurrency": "GBP",
+          "originalCurrencyFlag": "🇬🇧",
+          "originalValue": 88,
+          "representativeDate": "2026-01-12",
+          "resolution": "weekly",
+          "sourcePointCount": 1,
+          "staleDays": 4,
+          "value": 102
+        }
+      ]
+    },
+    "aggregateSumSeries|metadata-carry-over|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {
+          "bucketEnd": "2026-01-31",
+          "bucketStart": "2026-01-01",
+          "date": "2026-01-12",
+          "originalCurrency": "GBP",
+          "originalCurrencyFlag": "🇬🇧",
+          "originalValue": 88,
+          "representativeDate": "2026-01-12",
+          "resolution": "monthly",
+          "sourcePointCount": 3,
+          "staleDays": 4,
+          "value": 303
+        }
+      ]
+    },
+    "aggregateSumSeries|ohlcv-full|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"close": 104, "date": "2026-01-06", "high": 105, "low": 99, "open": 100, "value": 104, "volume": 1000},
+        {"close": 106, "date": "2026-01-08", "high": 108, "low": 103, "open": 104, "value": 106, "volume": 1200},
+        {"close": 102, "date": "2026-01-12", "high": 107, "low": 101, "open": 106, "value": 102, "volume": 900},
+        {"close": 103, "date": "2026-01-13", "high": 104, "low": 100, "open": 102, "value": 103, "volume": 1100}
+      ]
+    },
+    "aggregateSumSeries|ohlcv-full|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "close": 106, "date": "2026-01-08", "high": 108, "low": 103, "open": 104, "representativeDate": "2026-01-08", "resolution": "weekly", "sourcePointCount": 2, "value": 210, "volume": 1200},
+        {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "close": 103, "date": "2026-01-13", "high": 104, "low": 100, "open": 102, "representativeDate": "2026-01-13", "resolution": "weekly", "sourcePointCount": 2, "value": 205, "volume": 1100}
+      ]
+    },
+    "aggregateSumSeries|ohlcv-full|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "close": 103, "date": "2026-01-13", "high": 104, "low": 100, "open": 102, "representativeDate": "2026-01-13", "resolution": "monthly", "sourcePointCount": 4, "value": 415, "volume": 1100}]
+    },
+    "aggregateSumSeries|ohlcv-all-fields-null|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"close": null, "date": "2026-01-06", "high": null, "low": null, "open": null, "value": 11, "volume": null},
+        {"close": null, "date": "2026-01-07", "high": null, "low": null, "open": null, "value": 12, "volume": null},
+        {"close": null, "date": "2026-01-12", "high": null, "low": null, "open": null, "value": 13, "volume": null}
+      ]
+    },
+    "aggregateSumSeries|ohlcv-all-fields-null|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "close": null, "date": "2026-01-07", "high": null, "low": null, "open": null, "representativeDate": "2026-01-07", "resolution": "weekly", "sourcePointCount": 2, "value": 23, "volume": null},
+        {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "close": null, "date": "2026-01-12", "high": null, "low": null, "open": null, "representativeDate": "2026-01-12", "resolution": "weekly", "sourcePointCount": 1, "value": 13, "volume": null}
+      ]
+    },
+    "aggregateSumSeries|ohlcv-all-fields-null|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "close": null, "date": "2026-01-12", "high": null, "low": null, "open": null, "representativeDate": "2026-01-12", "resolution": "monthly", "sourcePointCount": 3, "value": 36, "volume": null}]
+    },
+    "aggregateSumSeries|ohlcv-sparse-fields|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"close": 104, "date": "2026-01-06", "high": 105, "low": 99, "open": null, "value": 104, "volume": null},
+        {"close": null, "date": "2026-01-07", "high": null, "low": null, "open": 104, "value": 105, "volume": 1200},
+        {"close": 102, "date": "2026-01-12", "high": 107, "low": null, "open": 106, "value": 102, "volume": null},
+        {"close": null, "date": "2026-01-13", "high": null, "low": 100, "open": null, "value": 103, "volume": 300}
+      ]
+    },
+    "aggregateSumSeries|ohlcv-sparse-fields|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "close": null, "date": "2026-01-07", "high": null, "low": null, "open": 104, "representativeDate": "2026-01-07", "resolution": "weekly", "sourcePointCount": 2, "value": 209, "volume": 1200},
+        {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "close": null, "date": "2026-01-13", "high": null, "low": 100, "open": null, "representativeDate": "2026-01-13", "resolution": "weekly", "sourcePointCount": 2, "value": 205, "volume": 300}
+      ]
+    },
+    "aggregateSumSeries|ohlcv-sparse-fields|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "close": null, "date": "2026-01-13", "high": null, "low": 100, "open": null, "representativeDate": "2026-01-13", "resolution": "monthly", "sourcePointCount": 4, "value": 414, "volume": 300}]
+    },
+    "aggregateSumSeries|ohlcv-without-any-ohlcv-fields|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-01-06", "value": 21},
+        {"date": "2026-01-07", "value": 22},
+        {"date": "2026-01-12", "value": 23}
+      ]
+    },
+    "aggregateSumSeries|ohlcv-without-any-ohlcv-fields|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-07", "representativeDate": "2026-01-07", "resolution": "weekly", "sourcePointCount": 2, "value": 43},
+        {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "date": "2026-01-12", "representativeDate": "2026-01-12", "resolution": "weekly", "sourcePointCount": 1, "value": 23}
+      ]
+    },
+    "aggregateSumSeries|ohlcv-without-any-ohlcv-fields|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-12", "representativeDate": "2026-01-12", "resolution": "monthly", "sourcePointCount": 3, "value": 66}]
+    },
+    "aggregateOHLCV|empty|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": []
+    },
+    "aggregateOHLCV|empty|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": []
+    },
+    "aggregateOHLCV|empty|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": []
+    },
+    "aggregateOHLCV|single-point-midweek|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [{"date": "2026-01-07", "value": 101.5}]
+    },
+    "aggregateOHLCV|single-point-midweek|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "close": null, "date": "2026-01-07", "high": null, "low": null, "open": null, "representativeDate": "2026-01-07", "resolution": "weekly", "sourcePointCount": 1, "value": 101.5, "volume": null}]
+    },
+    "aggregateOHLCV|single-point-midweek|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "close": null, "date": "2026-01-07", "high": null, "low": null, "open": null, "representativeDate": "2026-01-07", "resolution": "monthly", "sourcePointCount": 1, "value": 101.5, "volume": null}]
+    },
+    "aggregateOHLCV|single-point-on-double-boundary|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [{"date": "2026-03-01", "value": 55}]
+    },
+    "aggregateOHLCV|single-point-on-double-boundary|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-03-01", "bucketStart": "2026-02-23", "close": null, "date": "2026-03-01", "high": null, "low": null, "open": null, "representativeDate": "2026-03-01", "resolution": "weekly", "sourcePointCount": 1, "value": 55, "volume": null}]
+    },
+    "aggregateOHLCV|single-point-on-double-boundary|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-03-31", "bucketStart": "2026-03-01", "close": null, "date": "2026-03-01", "high": null, "low": null, "open": null, "representativeDate": "2026-03-01", "resolution": "monthly", "sourcePointCount": 1, "value": 55, "volume": null}]
+    },
+    "aggregateOHLCV|all-missing-values|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-01-08", "missing": true, "value": 0},
+        {"date": "2026-01-09", "missing": true, "value": 0},
+        {"date": "2026-01-12", "missing": true, "value": 0},
+        {"date": "2026-01-13", "missing": true, "value": 0}
+      ]
+    },
+    "aggregateOHLCV|all-missing-values|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "close": null, "date": "2026-01-09", "high": null, "low": null, "missing": true, "open": null, "representativeDate": "2026-01-09", "resolution": "weekly", "sourcePointCount": 2, "value": 0, "volume": null},
+        {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "close": null, "date": "2026-01-13", "high": null, "low": null, "missing": true, "open": null, "representativeDate": "2026-01-13", "resolution": "weekly", "sourcePointCount": 2, "value": 0, "volume": null}
+      ]
+    },
+    "aggregateOHLCV|all-missing-values|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "close": null, "date": "2026-01-13", "high": null, "low": null, "missing": true, "open": null, "representativeDate": "2026-01-13", "resolution": "monthly", "sourcePointCount": 4, "value": 0, "volume": null}]
+    },
+    "aggregateOHLCV|partial-missing-bucket|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-01-06", "value": 100},
+        {"date": "2026-01-07", "missing": true, "value": 0},
+        {"date": "2026-01-08", "value": 102},
+        {"date": "2026-01-12", "value": 105},
+        {"date": "2026-01-13", "missing": true, "value": 0}
+      ]
+    },
+    "aggregateOHLCV|partial-missing-bucket|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "close": null, "date": "2026-01-08", "high": null, "low": null, "open": null, "representativeDate": "2026-01-08", "resolution": "weekly", "sourcePointCount": 3, "value": 102, "volume": null},
+        {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "close": null, "date": "2026-01-13", "high": null, "low": null, "missing": true, "open": null, "representativeDate": "2026-01-13", "resolution": "weekly", "sourcePointCount": 2, "value": 0, "volume": null}
+      ]
+    },
+    "aggregateOHLCV|partial-missing-bucket|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "close": null, "date": "2026-01-13", "high": null, "low": null, "missing": true, "open": null, "representativeDate": "2026-01-13", "resolution": "monthly", "sourcePointCount": 5, "value": 0, "volume": null}]
+    },
+    "aggregateOHLCV|unaligned-start-midweek|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-01-07", "value": 100},
+        {"date": "2026-01-08", "value": 101},
+        {"date": "2026-01-09", "value": 99},
+        {"date": "2026-01-12", "value": 104},
+        {"date": "2026-01-13", "value": 103}
+      ]
+    },
+    "aggregateOHLCV|unaligned-start-midweek|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "close": null, "date": "2026-01-09", "high": null, "low": null, "open": null, "representativeDate": "2026-01-09", "resolution": "weekly", "sourcePointCount": 3, "value": 99, "volume": null},
+        {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "close": null, "date": "2026-01-13", "high": null, "low": null, "open": null, "representativeDate": "2026-01-13", "resolution": "weekly", "sourcePointCount": 2, "value": 103, "volume": null}
+      ]
+    },
+    "aggregateOHLCV|unaligned-start-midweek|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "close": null, "date": "2026-01-13", "high": null, "low": null, "open": null, "representativeDate": "2026-01-13", "resolution": "monthly", "sourcePointCount": 5, "value": 103, "volume": null}]
+    },
+    "aggregateOHLCV|unaligned-start-midmonth|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-01-29", "value": 200},
+        {"date": "2026-01-30", "value": 201},
+        {"date": "2026-01-31", "value": 202},
+        {"date": "2026-02-01", "value": 203},
+        {"date": "2026-02-02", "value": 204}
+      ]
+    },
+    "aggregateOHLCV|unaligned-start-midmonth|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-02-01", "bucketStart": "2026-01-26", "close": null, "date": "2026-02-01", "high": null, "low": null, "open": null, "representativeDate": "2026-02-01", "resolution": "weekly", "sourcePointCount": 4, "value": 203, "volume": null},
+        {"bucketEnd": "2026-02-08", "bucketStart": "2026-02-02", "close": null, "date": "2026-02-02", "high": null, "low": null, "open": null, "representativeDate": "2026-02-02", "resolution": "weekly", "sourcePointCount": 1, "value": 204, "volume": null}
+      ]
+    },
+    "aggregateOHLCV|unaligned-start-midmonth|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "close": null, "date": "2026-01-31", "high": null, "low": null, "open": null, "representativeDate": "2026-01-31", "resolution": "monthly", "sourcePointCount": 3, "value": 202, "volume": null},
+        {"bucketEnd": "2026-02-28", "bucketStart": "2026-02-01", "close": null, "date": "2026-02-02", "high": null, "low": null, "open": null, "representativeDate": "2026-02-02", "resolution": "monthly", "sourcePointCount": 2, "value": 204, "volume": null}
+      ]
+    },
+    "aggregateOHLCV|month-end-31-january|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-01-30", "value": 10},
+        {"date": "2026-01-31", "value": 11},
+        {"date": "2026-02-01", "value": 12},
+        {"date": "2026-02-02", "value": 13}
+      ]
+    },
+    "aggregateOHLCV|month-end-31-january|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-02-01", "bucketStart": "2026-01-26", "close": null, "date": "2026-02-01", "high": null, "low": null, "open": null, "representativeDate": "2026-02-01", "resolution": "weekly", "sourcePointCount": 3, "value": 12, "volume": null},
+        {"bucketEnd": "2026-02-08", "bucketStart": "2026-02-02", "close": null, "date": "2026-02-02", "high": null, "low": null, "open": null, "representativeDate": "2026-02-02", "resolution": "weekly", "sourcePointCount": 1, "value": 13, "volume": null}
+      ]
+    },
+    "aggregateOHLCV|month-end-31-january|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "close": null, "date": "2026-01-31", "high": null, "low": null, "open": null, "representativeDate": "2026-01-31", "resolution": "monthly", "sourcePointCount": 2, "value": 11, "volume": null},
+        {"bucketEnd": "2026-02-28", "bucketStart": "2026-02-01", "close": null, "date": "2026-02-02", "high": null, "low": null, "open": null, "representativeDate": "2026-02-02", "resolution": "monthly", "sourcePointCount": 2, "value": 13, "volume": null}
+      ]
+    },
+    "aggregateOHLCV|month-end-28-non-leap-february|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-02-27", "value": 20},
+        {"date": "2026-02-28", "value": 21},
+        {"date": "2026-03-01", "value": 22},
+        {"date": "2026-03-02", "value": 23}
+      ]
+    },
+    "aggregateOHLCV|month-end-28-non-leap-february|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-03-01", "bucketStart": "2026-02-23", "close": null, "date": "2026-03-01", "high": null, "low": null, "open": null, "representativeDate": "2026-03-01", "resolution": "weekly", "sourcePointCount": 3, "value": 22, "volume": null},
+        {"bucketEnd": "2026-03-08", "bucketStart": "2026-03-02", "close": null, "date": "2026-03-02", "high": null, "low": null, "open": null, "representativeDate": "2026-03-02", "resolution": "weekly", "sourcePointCount": 1, "value": 23, "volume": null}
+      ]
+    },
+    "aggregateOHLCV|month-end-28-non-leap-february|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-02-28", "bucketStart": "2026-02-01", "close": null, "date": "2026-02-28", "high": null, "low": null, "open": null, "representativeDate": "2026-02-28", "resolution": "monthly", "sourcePointCount": 2, "value": 21, "volume": null},
+        {"bucketEnd": "2026-03-31", "bucketStart": "2026-03-01", "close": null, "date": "2026-03-02", "high": null, "low": null, "open": null, "representativeDate": "2026-03-02", "resolution": "monthly", "sourcePointCount": 2, "value": 23, "volume": null}
+      ]
+    },
+    "aggregateOHLCV|month-end-29-leap-february|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2024-02-27", "value": 30},
+        {"date": "2024-02-28", "value": 31},
+        {"date": "2024-02-29", "value": 32},
+        {"date": "2024-03-01", "value": 33}
+      ]
+    },
+    "aggregateOHLCV|month-end-29-leap-february|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2024-03-03", "bucketStart": "2024-02-26", "close": null, "date": "2024-03-01", "high": null, "low": null, "open": null, "representativeDate": "2024-03-01", "resolution": "weekly", "sourcePointCount": 4, "value": 33, "volume": null}]
+    },
+    "aggregateOHLCV|month-end-29-leap-february|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2024-02-29", "bucketStart": "2024-02-01", "close": null, "date": "2024-02-29", "high": null, "low": null, "open": null, "representativeDate": "2024-02-29", "resolution": "monthly", "sourcePointCount": 3, "value": 32, "volume": null},
+        {"bucketEnd": "2024-03-31", "bucketStart": "2024-03-01", "close": null, "date": "2024-03-01", "high": null, "low": null, "open": null, "representativeDate": "2024-03-01", "resolution": "monthly", "sourcePointCount": 1, "value": 33, "volume": null}
+      ]
+    },
+    "aggregateOHLCV|month-end-30-april|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-04-29", "value": 40},
+        {"date": "2026-04-30", "value": 41},
+        {"date": "2026-05-01", "value": 42},
+        {"date": "2026-05-02", "value": 43}
+      ]
+    },
+    "aggregateOHLCV|month-end-30-april|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-05-03", "bucketStart": "2026-04-27", "close": null, "date": "2026-05-02", "high": null, "low": null, "open": null, "representativeDate": "2026-05-02", "resolution": "weekly", "sourcePointCount": 4, "value": 43, "volume": null}]
+    },
+    "aggregateOHLCV|month-end-30-april|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-04-30", "bucketStart": "2026-04-01", "close": null, "date": "2026-04-30", "high": null, "low": null, "open": null, "representativeDate": "2026-04-30", "resolution": "monthly", "sourcePointCount": 2, "value": 41, "volume": null},
+        {"bucketEnd": "2026-05-31", "bucketStart": "2026-05-01", "close": null, "date": "2026-05-02", "high": null, "low": null, "open": null, "representativeDate": "2026-05-02", "resolution": "monthly", "sourcePointCount": 2, "value": 43, "volume": null}
+      ]
+    },
+    "aggregateOHLCV|iso-week-across-year-boundary|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2025-12-30", "value": 50},
+        {"date": "2025-12-31", "value": 51},
+        {"date": "2026-01-01", "value": 52},
+        {"date": "2026-01-02", "value": 53},
+        {"date": "2026-01-05", "value": 54}
+      ]
+    },
+    "aggregateOHLCV|iso-week-across-year-boundary|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-04", "bucketStart": "2025-12-29", "close": null, "date": "2026-01-02", "high": null, "low": null, "open": null, "representativeDate": "2026-01-02", "resolution": "weekly", "sourcePointCount": 4, "value": 53, "volume": null},
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "close": null, "date": "2026-01-05", "high": null, "low": null, "open": null, "representativeDate": "2026-01-05", "resolution": "weekly", "sourcePointCount": 1, "value": 54, "volume": null}
+      ]
+    },
+    "aggregateOHLCV|iso-week-across-year-boundary|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2025-12-31", "bucketStart": "2025-12-01", "close": null, "date": "2025-12-31", "high": null, "low": null, "open": null, "representativeDate": "2025-12-31", "resolution": "monthly", "sourcePointCount": 2, "value": 51, "volume": null},
+        {"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "close": null, "date": "2026-01-05", "high": null, "low": null, "open": null, "representativeDate": "2026-01-05", "resolution": "monthly", "sourcePointCount": 3, "value": 54, "volume": null}
+      ]
+    },
+    "aggregateOHLCV|multi-bucket-baseline|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-03-30", "value": 100},
+        {"date": "2026-03-31", "value": 102},
+        {"date": "2026-04-01", "value": 101},
+        {"date": "2026-04-02", "value": 105},
+        {"date": "2026-04-06", "value": 107},
+        {"date": "2026-04-07", "value": 106},
+        {"date": "2026-04-13", "value": 110},
+        {"date": "2026-04-14", "value": 109}
+      ]
+    },
+    "aggregateOHLCV|multi-bucket-baseline|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-04-05", "bucketStart": "2026-03-30", "close": null, "date": "2026-04-02", "high": null, "low": null, "open": null, "representativeDate": "2026-04-02", "resolution": "weekly", "sourcePointCount": 4, "value": 105, "volume": null},
+        {"bucketEnd": "2026-04-12", "bucketStart": "2026-04-06", "close": null, "date": "2026-04-07", "high": null, "low": null, "open": null, "representativeDate": "2026-04-07", "resolution": "weekly", "sourcePointCount": 2, "value": 106, "volume": null},
+        {"bucketEnd": "2026-04-19", "bucketStart": "2026-04-13", "close": null, "date": "2026-04-14", "high": null, "low": null, "open": null, "representativeDate": "2026-04-14", "resolution": "weekly", "sourcePointCount": 2, "value": 109, "volume": null}
+      ]
+    },
+    "aggregateOHLCV|multi-bucket-baseline|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-03-31", "bucketStart": "2026-03-01", "close": null, "date": "2026-03-31", "high": null, "low": null, "open": null, "representativeDate": "2026-03-31", "resolution": "monthly", "sourcePointCount": 2, "value": 102, "volume": null},
+        {"bucketEnd": "2026-04-30", "bucketStart": "2026-04-01", "close": null, "date": "2026-04-14", "high": null, "low": null, "open": null, "representativeDate": "2026-04-14", "resolution": "monthly", "sourcePointCount": 6, "value": 109, "volume": null}
+      ]
+    },
+    "aggregateOHLCV|bucket-gap-skips-a-whole-week|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-01-05", "value": 60},
+        {"date": "2026-01-06", "value": 61},
+        {"date": "2026-01-19", "value": 62}
+      ]
+    },
+    "aggregateOHLCV|bucket-gap-skips-a-whole-week|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "close": null, "date": "2026-01-06", "high": null, "low": null, "open": null, "representativeDate": "2026-01-06", "resolution": "weekly", "sourcePointCount": 2, "value": 61, "volume": null},
+        {"bucketEnd": "2026-01-25", "bucketStart": "2026-01-19", "close": null, "date": "2026-01-19", "high": null, "low": null, "open": null, "representativeDate": "2026-01-19", "resolution": "weekly", "sourcePointCount": 1, "value": 62, "volume": null}
+      ]
+    },
+    "aggregateOHLCV|bucket-gap-skips-a-whole-week|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "close": null, "date": "2026-01-19", "high": null, "low": null, "open": null, "representativeDate": "2026-01-19", "resolution": "monthly", "sourcePointCount": 3, "value": 62, "volume": null}]
+    },
+    "aggregateOHLCV|revisited-bucket-non-monotonic|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-01-05", "value": 70},
+        {"date": "2026-01-12", "value": 71},
+        {"date": "2026-01-06", "value": 72}
+      ]
+    },
+    "aggregateOHLCV|revisited-bucket-non-monotonic|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "close": null, "date": "2026-01-05", "high": null, "low": null, "open": null, "representativeDate": "2026-01-05", "resolution": "weekly", "sourcePointCount": 1, "value": 70, "volume": null},
+        {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "close": null, "date": "2026-01-12", "high": null, "low": null, "open": null, "representativeDate": "2026-01-12", "resolution": "weekly", "sourcePointCount": 1, "value": 71, "volume": null},
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "close": null, "date": "2026-01-06", "high": null, "low": null, "open": null, "representativeDate": "2026-01-06", "resolution": "weekly", "sourcePointCount": 1, "value": 72, "volume": null}
+      ]
+    },
+    "aggregateOHLCV|revisited-bucket-non-monotonic|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "close": null, "date": "2026-01-06", "high": null, "low": null, "open": null, "representativeDate": "2026-01-06", "resolution": "monthly", "sourcePointCount": 3, "value": 72, "volume": null}]
+    },
+    "aggregateOHLCV|fully-unsorted-descending|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-01-19", "value": 80},
+        {"date": "2026-01-12", "value": 81},
+        {"date": "2026-01-05", "value": 82}
+      ]
+    },
+    "aggregateOHLCV|fully-unsorted-descending|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-25", "bucketStart": "2026-01-19", "close": null, "date": "2026-01-19", "high": null, "low": null, "open": null, "representativeDate": "2026-01-19", "resolution": "weekly", "sourcePointCount": 1, "value": 80, "volume": null},
+        {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "close": null, "date": "2026-01-12", "high": null, "low": null, "open": null, "representativeDate": "2026-01-12", "resolution": "weekly", "sourcePointCount": 1, "value": 81, "volume": null},
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "close": null, "date": "2026-01-05", "high": null, "low": null, "open": null, "representativeDate": "2026-01-05", "resolution": "weekly", "sourcePointCount": 1, "value": 82, "volume": null}
+      ]
+    },
+    "aggregateOHLCV|fully-unsorted-descending|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "close": null, "date": "2026-01-05", "high": null, "low": null, "open": null, "representativeDate": "2026-01-05", "resolution": "monthly", "sourcePointCount": 3, "value": 82, "volume": null}]
+    },
+    "aggregateOHLCV|duplicate-dates|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-01-07", "value": 90},
+        {"date": "2026-01-07", "value": 91},
+        {"date": "2026-01-08", "value": 92}
+      ]
+    },
+    "aggregateOHLCV|duplicate-dates|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "close": null, "date": "2026-01-08", "high": null, "low": null, "open": null, "representativeDate": "2026-01-08", "resolution": "weekly", "sourcePointCount": 3, "value": 92, "volume": null}]
+    },
+    "aggregateOHLCV|duplicate-dates|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "close": null, "date": "2026-01-08", "high": null, "low": null, "open": null, "representativeDate": "2026-01-08", "resolution": "monthly", "sourcePointCount": 3, "value": 92, "volume": null}]
+    },
+    "aggregateOHLCV|signed-values-netting-to-zero|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-01-05", "value": -5},
+        {"date": "2026-01-06", "value": 5},
+        {"date": "2026-01-07", "value": 0},
+        {"date": "2026-01-12", "value": -3}
+      ]
+    },
+    "aggregateOHLCV|signed-values-netting-to-zero|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "close": null, "date": "2026-01-07", "high": null, "low": null, "open": null, "representativeDate": "2026-01-07", "resolution": "weekly", "sourcePointCount": 3, "value": 0, "volume": null},
+        {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "close": null, "date": "2026-01-12", "high": null, "low": null, "open": null, "representativeDate": "2026-01-12", "resolution": "weekly", "sourcePointCount": 1, "value": -3, "volume": null}
+      ]
+    },
+    "aggregateOHLCV|signed-values-netting-to-zero|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "close": null, "date": "2026-01-12", "high": null, "low": null, "open": null, "representativeDate": "2026-01-12", "resolution": "monthly", "sourcePointCount": 4, "value": -3, "volume": null}]
+    },
+    "aggregateOHLCV|metadata-carry-over|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-01-06", "originalCurrency": "USD", "originalCurrencyFlag": "🇺🇸", "originalValue": 110, "value": 100},
+        {"date": "2026-01-08", "fxStaleDays": 1, "originalCurrency": "USD", "originalCurrencyFlag": "🇺🇸", "originalValue": 111, "staleDays": 2, "value": 101},
+        {"date": "2026-01-12", "originalCurrency": "GBP", "originalCurrencyFlag": "🇬🇧", "originalValue": 88, "staleDays": 4, "value": 102}
+      ]
+    },
+    "aggregateOHLCV|metadata-carry-over|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {
+          "bucketEnd": "2026-01-11",
+          "bucketStart": "2026-01-05",
+          "close": null,
+          "date": "2026-01-08",
+          "fxStaleDays": 1,
+          "high": null,
+          "low": null,
+          "open": null,
+          "originalCurrency": "USD",
+          "originalCurrencyFlag": "🇺🇸",
+          "originalValue": 111,
+          "representativeDate": "2026-01-08",
+          "resolution": "weekly",
+          "sourcePointCount": 2,
+          "staleDays": 2,
+          "value": 101,
+          "volume": null
+        },
+        {
+          "bucketEnd": "2026-01-18",
+          "bucketStart": "2026-01-12",
+          "close": null,
+          "date": "2026-01-12",
+          "high": null,
+          "low": null,
+          "open": null,
+          "originalCurrency": "GBP",
+          "originalCurrencyFlag": "🇬🇧",
+          "originalValue": 88,
+          "representativeDate": "2026-01-12",
+          "resolution": "weekly",
+          "sourcePointCount": 1,
+          "staleDays": 4,
+          "value": 102,
+          "volume": null
+        }
+      ]
+    },
+    "aggregateOHLCV|metadata-carry-over|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {
+          "bucketEnd": "2026-01-31",
+          "bucketStart": "2026-01-01",
+          "close": null,
+          "date": "2026-01-12",
+          "high": null,
+          "low": null,
+          "open": null,
+          "originalCurrency": "GBP",
+          "originalCurrencyFlag": "🇬🇧",
+          "originalValue": 88,
+          "representativeDate": "2026-01-12",
+          "resolution": "monthly",
+          "sourcePointCount": 3,
+          "staleDays": 4,
+          "value": 102,
+          "volume": null
+        }
+      ]
+    },
+    "aggregateOHLCV|ohlcv-full|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"close": 104, "date": "2026-01-06", "high": 105, "low": 99, "open": 100, "value": 104, "volume": 1000},
+        {"close": 106, "date": "2026-01-08", "high": 108, "low": 103, "open": 104, "value": 106, "volume": 1200},
+        {"close": 102, "date": "2026-01-12", "high": 107, "low": 101, "open": 106, "value": 102, "volume": 900},
+        {"close": 103, "date": "2026-01-13", "high": 104, "low": 100, "open": 102, "value": 103, "volume": 1100}
+      ]
+    },
+    "aggregateOHLCV|ohlcv-full|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "close": 106, "date": "2026-01-08", "high": 108, "low": 99, "open": 100, "representativeDate": "2026-01-08", "resolution": "weekly", "sourcePointCount": 2, "value": 106, "volume": 2200},
+        {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "close": 103, "date": "2026-01-13", "high": 107, "low": 100, "open": 106, "representativeDate": "2026-01-13", "resolution": "weekly", "sourcePointCount": 2, "value": 103, "volume": 2000}
+      ]
+    },
+    "aggregateOHLCV|ohlcv-full|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "close": 103, "date": "2026-01-13", "high": 108, "low": 99, "open": 100, "representativeDate": "2026-01-13", "resolution": "monthly", "sourcePointCount": 4, "value": 103, "volume": 4200}]
+    },
+    "aggregateOHLCV|ohlcv-all-fields-null|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"close": null, "date": "2026-01-06", "high": null, "low": null, "open": null, "value": 11, "volume": null},
+        {"close": null, "date": "2026-01-07", "high": null, "low": null, "open": null, "value": 12, "volume": null},
+        {"close": null, "date": "2026-01-12", "high": null, "low": null, "open": null, "value": 13, "volume": null}
+      ]
+    },
+    "aggregateOHLCV|ohlcv-all-fields-null|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "close": null, "date": "2026-01-07", "high": null, "low": null, "open": null, "representativeDate": "2026-01-07", "resolution": "weekly", "sourcePointCount": 2, "value": 12, "volume": null},
+        {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "close": null, "date": "2026-01-12", "high": null, "low": null, "open": null, "representativeDate": "2026-01-12", "resolution": "weekly", "sourcePointCount": 1, "value": 13, "volume": null}
+      ]
+    },
+    "aggregateOHLCV|ohlcv-all-fields-null|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "close": null, "date": "2026-01-12", "high": null, "low": null, "open": null, "representativeDate": "2026-01-12", "resolution": "monthly", "sourcePointCount": 3, "value": 13, "volume": null}]
+    },
+    "aggregateOHLCV|ohlcv-sparse-fields|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"close": 104, "date": "2026-01-06", "high": 105, "low": 99, "open": null, "value": 104, "volume": null},
+        {"close": null, "date": "2026-01-07", "high": null, "low": null, "open": 104, "value": 105, "volume": 1200},
+        {"close": 102, "date": "2026-01-12", "high": 107, "low": null, "open": 106, "value": 102, "volume": null},
+        {"close": null, "date": "2026-01-13", "high": null, "low": 100, "open": null, "value": 103, "volume": 300}
+      ]
+    },
+    "aggregateOHLCV|ohlcv-sparse-fields|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "close": 104, "date": "2026-01-07", "high": 105, "low": 99, "open": 104, "representativeDate": "2026-01-07", "resolution": "weekly", "sourcePointCount": 2, "value": 104, "volume": 1200},
+        {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "close": 102, "date": "2026-01-13", "high": 107, "low": 100, "open": 106, "representativeDate": "2026-01-13", "resolution": "weekly", "sourcePointCount": 2, "value": 102, "volume": 300}
+      ]
+    },
+    "aggregateOHLCV|ohlcv-sparse-fields|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "close": 102, "date": "2026-01-13", "high": 107, "low": 99, "open": 104, "representativeDate": "2026-01-13", "resolution": "monthly", "sourcePointCount": 4, "value": 102, "volume": 1500}]
+    },
+    "aggregateOHLCV|ohlcv-without-any-ohlcv-fields|daily": {
+      "returnsInputByReference": true,
+      "mutatedInput": false,
+      "result": [
+        {"date": "2026-01-06", "value": 21},
+        {"date": "2026-01-07", "value": 22},
+        {"date": "2026-01-12", "value": 23}
+      ]
+    },
+    "aggregateOHLCV|ohlcv-without-any-ohlcv-fields|weekly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "close": null, "date": "2026-01-07", "high": null, "low": null, "open": null, "representativeDate": "2026-01-07", "resolution": "weekly", "sourcePointCount": 2, "value": 22, "volume": null},
+        {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "close": null, "date": "2026-01-12", "high": null, "low": null, "open": null, "representativeDate": "2026-01-12", "resolution": "weekly", "sourcePointCount": 1, "value": 23, "volume": null}
+      ]
+    },
+    "aggregateOHLCV|ohlcv-without-any-ohlcv-fields|monthly": {
+      "returnsInputByReference": false,
+      "mutatedInput": false,
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "close": null, "date": "2026-01-12", "high": null, "low": null, "open": null, "representativeDate": "2026-01-12", "resolution": "monthly", "sourcePointCount": 3, "value": 23, "volume": null}]
+    },
+    "aggregateEnvelope|empty|daily": {
+      "returnsInputByReference": {"upper": true, "middle": true, "lower": true},
+      "mutatedInput": false,
+      "result": {
+        "lower": [],
+        "middle": [],
+        "upper": []
+      }
+    },
+    "aggregateEnvelope|empty|weekly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [],
+        "middle": [],
+        "upper": []
+      }
+    },
+    "aggregateEnvelope|empty|monthly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [],
+        "middle": [],
+        "upper": []
+      }
+    },
+    "aggregateEnvelope|single-point-midweek|daily": {
+      "returnsInputByReference": {"upper": true, "middle": true, "lower": true},
+      "mutatedInput": false,
+      "result": {
+        "lower": [99.5],
+        "middle": [{"date": "2026-01-07", "value": 101.5}],
+        "upper": [103.5]
+      }
+    },
+    "aggregateEnvelope|single-point-midweek|weekly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [99.5],
+        "middle": [{"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-07", "representativeDate": "2026-01-07", "resolution": "weekly", "sourcePointCount": 1, "value": 101.5}],
+        "upper": [103.5]
+      }
+    },
+    "aggregateEnvelope|single-point-midweek|monthly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [99.5],
+        "middle": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-07", "representativeDate": "2026-01-07", "resolution": "monthly", "sourcePointCount": 1, "value": 101.5}],
+        "upper": [103.5]
+      }
+    },
+    "aggregateEnvelope|single-point-on-double-boundary|daily": {
+      "returnsInputByReference": {"upper": true, "middle": true, "lower": true},
+      "mutatedInput": false,
+      "result": {
+        "lower": [53],
+        "middle": [{"date": "2026-03-01", "value": 55}],
+        "upper": [57]
+      }
+    },
+    "aggregateEnvelope|single-point-on-double-boundary|weekly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [53],
+        "middle": [{"bucketEnd": "2026-03-01", "bucketStart": "2026-02-23", "date": "2026-03-01", "representativeDate": "2026-03-01", "resolution": "weekly", "sourcePointCount": 1, "value": 55}],
+        "upper": [57]
+      }
+    },
+    "aggregateEnvelope|single-point-on-double-boundary|monthly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [53],
+        "middle": [{"bucketEnd": "2026-03-31", "bucketStart": "2026-03-01", "date": "2026-03-01", "representativeDate": "2026-03-01", "resolution": "monthly", "sourcePointCount": 1, "value": 55}],
+        "upper": [57]
+      }
+    },
+    "aggregateEnvelope|all-missing-values|daily": {
+      "returnsInputByReference": {"upper": true, "middle": true, "lower": true},
+      "mutatedInput": false,
+      "result": {
+        "lower": [0, 0, 0, 0],
+        "middle": [
+          {"date": "2026-01-08", "missing": true, "value": 0},
+          {"date": "2026-01-09", "missing": true, "value": 0},
+          {"date": "2026-01-12", "missing": true, "value": 0},
+          {"date": "2026-01-13", "missing": true, "value": 0}
+        ],
+        "upper": [0, 0, 0, 0]
+      }
+    },
+    "aggregateEnvelope|all-missing-values|weekly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [0, 0],
+        "middle": [
+          {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-09", "missing": true, "representativeDate": "2026-01-09", "resolution": "weekly", "sourcePointCount": 2, "value": 0},
+          {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "date": "2026-01-13", "missing": true, "representativeDate": "2026-01-13", "resolution": "weekly", "sourcePointCount": 2, "value": 0}
+        ],
+        "upper": [0, 0]
+      }
+    },
+    "aggregateEnvelope|all-missing-values|monthly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [0],
+        "middle": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-13", "missing": true, "representativeDate": "2026-01-13", "resolution": "monthly", "sourcePointCount": 4, "value": 0}],
+        "upper": [0]
+      }
+    },
+    "aggregateEnvelope|partial-missing-bucket|daily": {
+      "returnsInputByReference": {"upper": true, "middle": true, "lower": true},
+      "mutatedInput": false,
+      "result": {
+        "lower": [99, -1, 101, 104, -1],
+        "middle": [
+          {"date": "2026-01-06", "value": 100},
+          {"date": "2026-01-07", "missing": true, "value": 0},
+          {"date": "2026-01-08", "value": 102},
+          {"date": "2026-01-12", "value": 105},
+          {"date": "2026-01-13", "missing": true, "value": 0}
+        ],
+        "upper": [101, 1, 103, 106, 1]
+      }
+    },
+    "aggregateEnvelope|partial-missing-bucket|weekly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [-1, -1],
+        "middle": [
+          {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-08", "representativeDate": "2026-01-08", "resolution": "weekly", "sourcePointCount": 3, "value": 102},
+          {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "date": "2026-01-13", "missing": true, "representativeDate": "2026-01-13", "resolution": "weekly", "sourcePointCount": 2, "value": 0}
+        ],
+        "upper": [103, 106]
+      }
+    },
+    "aggregateEnvelope|partial-missing-bucket|monthly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [-1],
+        "middle": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-13", "missing": true, "representativeDate": "2026-01-13", "resolution": "monthly", "sourcePointCount": 5, "value": 0}],
+        "upper": [106]
+      }
+    },
+    "aggregateEnvelope|unaligned-start-midweek|daily": {
+      "returnsInputByReference": {"upper": true, "middle": true, "lower": true},
+      "mutatedInput": false,
+      "result": {
+        "lower": [98, 99, 97, 102, 101],
+        "middle": [
+          {"date": "2026-01-07", "value": 100},
+          {"date": "2026-01-08", "value": 101},
+          {"date": "2026-01-09", "value": 99},
+          {"date": "2026-01-12", "value": 104},
+          {"date": "2026-01-13", "value": 103}
+        ],
+        "upper": [102, 103, 101, 106, 105]
+      }
+    },
+    "aggregateEnvelope|unaligned-start-midweek|weekly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [97, 101],
+        "middle": [
+          {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-09", "representativeDate": "2026-01-09", "resolution": "weekly", "sourcePointCount": 3, "value": 99},
+          {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "date": "2026-01-13", "representativeDate": "2026-01-13", "resolution": "weekly", "sourcePointCount": 2, "value": 103}
+        ],
+        "upper": [103, 106]
+      }
+    },
+    "aggregateEnvelope|unaligned-start-midweek|monthly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [97],
+        "middle": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-13", "representativeDate": "2026-01-13", "resolution": "monthly", "sourcePointCount": 5, "value": 103}],
+        "upper": [106]
+      }
+    },
+    "aggregateEnvelope|unaligned-start-midmonth|daily": {
+      "returnsInputByReference": {"upper": true, "middle": true, "lower": true},
+      "mutatedInput": false,
+      "result": {
+        "lower": [198, 199, 200, 201, 202],
+        "middle": [
+          {"date": "2026-01-29", "value": 200},
+          {"date": "2026-01-30", "value": 201},
+          {"date": "2026-01-31", "value": 202},
+          {"date": "2026-02-01", "value": 203},
+          {"date": "2026-02-02", "value": 204}
+        ],
+        "upper": [202, 203, 204, 205, 206]
+      }
+    },
+    "aggregateEnvelope|unaligned-start-midmonth|weekly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [198, 202],
+        "middle": [
+          {"bucketEnd": "2026-02-01", "bucketStart": "2026-01-26", "date": "2026-02-01", "representativeDate": "2026-02-01", "resolution": "weekly", "sourcePointCount": 4, "value": 203},
+          {"bucketEnd": "2026-02-08", "bucketStart": "2026-02-02", "date": "2026-02-02", "representativeDate": "2026-02-02", "resolution": "weekly", "sourcePointCount": 1, "value": 204}
+        ],
+        "upper": [205, 206]
+      }
+    },
+    "aggregateEnvelope|unaligned-start-midmonth|monthly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [198, 201],
+        "middle": [
+          {"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-31", "representativeDate": "2026-01-31", "resolution": "monthly", "sourcePointCount": 3, "value": 202},
+          {"bucketEnd": "2026-02-28", "bucketStart": "2026-02-01", "date": "2026-02-02", "representativeDate": "2026-02-02", "resolution": "monthly", "sourcePointCount": 2, "value": 204}
+        ],
+        "upper": [204, 206]
+      }
+    },
+    "aggregateEnvelope|month-end-31-january|daily": {
+      "returnsInputByReference": {"upper": true, "middle": true, "lower": true},
+      "mutatedInput": false,
+      "result": {
+        "lower": [9, 10, 11, 12],
+        "middle": [
+          {"date": "2026-01-30", "value": 10},
+          {"date": "2026-01-31", "value": 11},
+          {"date": "2026-02-01", "value": 12},
+          {"date": "2026-02-02", "value": 13}
+        ],
+        "upper": [11, 12, 13, 14]
+      }
+    },
+    "aggregateEnvelope|month-end-31-january|weekly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [9, 12],
+        "middle": [
+          {"bucketEnd": "2026-02-01", "bucketStart": "2026-01-26", "date": "2026-02-01", "representativeDate": "2026-02-01", "resolution": "weekly", "sourcePointCount": 3, "value": 12},
+          {"bucketEnd": "2026-02-08", "bucketStart": "2026-02-02", "date": "2026-02-02", "representativeDate": "2026-02-02", "resolution": "weekly", "sourcePointCount": 1, "value": 13}
+        ],
+        "upper": [13, 14]
+      }
+    },
+    "aggregateEnvelope|month-end-31-january|monthly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [9, 11],
+        "middle": [
+          {"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-31", "representativeDate": "2026-01-31", "resolution": "monthly", "sourcePointCount": 2, "value": 11},
+          {"bucketEnd": "2026-02-28", "bucketStart": "2026-02-01", "date": "2026-02-02", "representativeDate": "2026-02-02", "resolution": "monthly", "sourcePointCount": 2, "value": 13}
+        ],
+        "upper": [12, 14]
+      }
+    },
+    "aggregateEnvelope|month-end-28-non-leap-february|daily": {
+      "returnsInputByReference": {"upper": true, "middle": true, "lower": true},
+      "mutatedInput": false,
+      "result": {
+        "lower": [19, 20, 21, 22],
+        "middle": [
+          {"date": "2026-02-27", "value": 20},
+          {"date": "2026-02-28", "value": 21},
+          {"date": "2026-03-01", "value": 22},
+          {"date": "2026-03-02", "value": 23}
+        ],
+        "upper": [21, 22, 23, 24]
+      }
+    },
+    "aggregateEnvelope|month-end-28-non-leap-february|weekly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [19, 22],
+        "middle": [
+          {"bucketEnd": "2026-03-01", "bucketStart": "2026-02-23", "date": "2026-03-01", "representativeDate": "2026-03-01", "resolution": "weekly", "sourcePointCount": 3, "value": 22},
+          {"bucketEnd": "2026-03-08", "bucketStart": "2026-03-02", "date": "2026-03-02", "representativeDate": "2026-03-02", "resolution": "weekly", "sourcePointCount": 1, "value": 23}
+        ],
+        "upper": [23, 24]
+      }
+    },
+    "aggregateEnvelope|month-end-28-non-leap-february|monthly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [19, 21],
+        "middle": [
+          {"bucketEnd": "2026-02-28", "bucketStart": "2026-02-01", "date": "2026-02-28", "representativeDate": "2026-02-28", "resolution": "monthly", "sourcePointCount": 2, "value": 21},
+          {"bucketEnd": "2026-03-31", "bucketStart": "2026-03-01", "date": "2026-03-02", "representativeDate": "2026-03-02", "resolution": "monthly", "sourcePointCount": 2, "value": 23}
+        ],
+        "upper": [22, 24]
+      }
+    },
+    "aggregateEnvelope|month-end-29-leap-february|daily": {
+      "returnsInputByReference": {"upper": true, "middle": true, "lower": true},
+      "mutatedInput": false,
+      "result": {
+        "lower": [29, 30, 31, 32],
+        "middle": [
+          {"date": "2024-02-27", "value": 30},
+          {"date": "2024-02-28", "value": 31},
+          {"date": "2024-02-29", "value": 32},
+          {"date": "2024-03-01", "value": 33}
+        ],
+        "upper": [31, 32, 33, 34]
+      }
+    },
+    "aggregateEnvelope|month-end-29-leap-february|weekly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [29],
+        "middle": [{"bucketEnd": "2024-03-03", "bucketStart": "2024-02-26", "date": "2024-03-01", "representativeDate": "2024-03-01", "resolution": "weekly", "sourcePointCount": 4, "value": 33}],
+        "upper": [34]
+      }
+    },
+    "aggregateEnvelope|month-end-29-leap-february|monthly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [29, 32],
+        "middle": [
+          {"bucketEnd": "2024-02-29", "bucketStart": "2024-02-01", "date": "2024-02-29", "representativeDate": "2024-02-29", "resolution": "monthly", "sourcePointCount": 3, "value": 32},
+          {"bucketEnd": "2024-03-31", "bucketStart": "2024-03-01", "date": "2024-03-01", "representativeDate": "2024-03-01", "resolution": "monthly", "sourcePointCount": 1, "value": 33}
+        ],
+        "upper": [33, 34]
+      }
+    },
+    "aggregateEnvelope|month-end-30-april|daily": {
+      "returnsInputByReference": {"upper": true, "middle": true, "lower": true},
+      "mutatedInput": false,
+      "result": {
+        "lower": [39, 40, 41, 42],
+        "middle": [
+          {"date": "2026-04-29", "value": 40},
+          {"date": "2026-04-30", "value": 41},
+          {"date": "2026-05-01", "value": 42},
+          {"date": "2026-05-02", "value": 43}
+        ],
+        "upper": [41, 42, 43, 44]
+      }
+    },
+    "aggregateEnvelope|month-end-30-april|weekly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [39],
+        "middle": [{"bucketEnd": "2026-05-03", "bucketStart": "2026-04-27", "date": "2026-05-02", "representativeDate": "2026-05-02", "resolution": "weekly", "sourcePointCount": 4, "value": 43}],
+        "upper": [44]
+      }
+    },
+    "aggregateEnvelope|month-end-30-april|monthly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [39, 41],
+        "middle": [
+          {"bucketEnd": "2026-04-30", "bucketStart": "2026-04-01", "date": "2026-04-30", "representativeDate": "2026-04-30", "resolution": "monthly", "sourcePointCount": 2, "value": 41},
+          {"bucketEnd": "2026-05-31", "bucketStart": "2026-05-01", "date": "2026-05-02", "representativeDate": "2026-05-02", "resolution": "monthly", "sourcePointCount": 2, "value": 43}
+        ],
+        "upper": [42, 44]
+      }
+    },
+    "aggregateEnvelope|iso-week-across-year-boundary|daily": {
+      "returnsInputByReference": {"upper": true, "middle": true, "lower": true},
+      "mutatedInput": false,
+      "result": {
+        "lower": [48, 49, 50, 51, 52],
+        "middle": [
+          {"date": "2025-12-30", "value": 50},
+          {"date": "2025-12-31", "value": 51},
+          {"date": "2026-01-01", "value": 52},
+          {"date": "2026-01-02", "value": 53},
+          {"date": "2026-01-05", "value": 54}
+        ],
+        "upper": [52, 53, 54, 55, 56]
+      }
+    },
+    "aggregateEnvelope|iso-week-across-year-boundary|weekly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [48, 52],
+        "middle": [
+          {"bucketEnd": "2026-01-04", "bucketStart": "2025-12-29", "date": "2026-01-02", "representativeDate": "2026-01-02", "resolution": "weekly", "sourcePointCount": 4, "value": 53},
+          {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-05", "representativeDate": "2026-01-05", "resolution": "weekly", "sourcePointCount": 1, "value": 54}
+        ],
+        "upper": [55, 56]
+      }
+    },
+    "aggregateEnvelope|iso-week-across-year-boundary|monthly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [48, 50],
+        "middle": [
+          {"bucketEnd": "2025-12-31", "bucketStart": "2025-12-01", "date": "2025-12-31", "representativeDate": "2025-12-31", "resolution": "monthly", "sourcePointCount": 2, "value": 51},
+          {"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-05", "representativeDate": "2026-01-05", "resolution": "monthly", "sourcePointCount": 3, "value": 54}
+        ],
+        "upper": [53, 56]
+      }
+    },
+    "aggregateEnvelope|multi-bucket-baseline|daily": {
+      "returnsInputByReference": {"upper": true, "middle": true, "lower": true},
+      "mutatedInput": false,
+      "result": {
+        "lower": [97, 99, 96, 100, 104, 101, 107, 105],
+        "middle": [
+          {"date": "2026-03-30", "value": 100},
+          {"date": "2026-03-31", "value": 102},
+          {"date": "2026-04-01", "value": 101},
+          {"date": "2026-04-02", "value": 105},
+          {"date": "2026-04-06", "value": 107},
+          {"date": "2026-04-07", "value": 106},
+          {"date": "2026-04-13", "value": 110},
+          {"date": "2026-04-14", "value": 109}
+        ],
+        "upper": [103, 104, 106, 108, 109, 111, 112, 113]
+      }
+    },
+    "aggregateEnvelope|multi-bucket-baseline|weekly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [96, 101, 105],
+        "middle": [
+          {"bucketEnd": "2026-04-05", "bucketStart": "2026-03-30", "date": "2026-04-02", "representativeDate": "2026-04-02", "resolution": "weekly", "sourcePointCount": 4, "value": 105},
+          {"bucketEnd": "2026-04-12", "bucketStart": "2026-04-06", "date": "2026-04-07", "representativeDate": "2026-04-07", "resolution": "weekly", "sourcePointCount": 2, "value": 106},
+          {"bucketEnd": "2026-04-19", "bucketStart": "2026-04-13", "date": "2026-04-14", "representativeDate": "2026-04-14", "resolution": "weekly", "sourcePointCount": 2, "value": 109}
+        ],
+        "upper": [108, 111, 113]
+      }
+    },
+    "aggregateEnvelope|multi-bucket-baseline|monthly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [97, 96],
+        "middle": [
+          {"bucketEnd": "2026-03-31", "bucketStart": "2026-03-01", "date": "2026-03-31", "representativeDate": "2026-03-31", "resolution": "monthly", "sourcePointCount": 2, "value": 102},
+          {"bucketEnd": "2026-04-30", "bucketStart": "2026-04-01", "date": "2026-04-14", "representativeDate": "2026-04-14", "resolution": "monthly", "sourcePointCount": 6, "value": 109}
+        ],
+        "upper": [104, 113]
+      }
+    },
+    "aggregateEnvelope|bucket-gap-skips-a-whole-week|daily": {
+      "returnsInputByReference": {"upper": true, "middle": true, "lower": true},
+      "mutatedInput": false,
+      "result": {
+        "lower": [59, 60, 61],
+        "middle": [
+          {"date": "2026-01-05", "value": 60},
+          {"date": "2026-01-06", "value": 61},
+          {"date": "2026-01-19", "value": 62}
+        ],
+        "upper": [61, 62, 63]
+      }
+    },
+    "aggregateEnvelope|bucket-gap-skips-a-whole-week|weekly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [59, 61],
+        "middle": [
+          {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-06", "representativeDate": "2026-01-06", "resolution": "weekly", "sourcePointCount": 2, "value": 61},
+          {"bucketEnd": "2026-01-25", "bucketStart": "2026-01-19", "date": "2026-01-19", "representativeDate": "2026-01-19", "resolution": "weekly", "sourcePointCount": 1, "value": 62}
+        ],
+        "upper": [62, 63]
+      }
+    },
+    "aggregateEnvelope|bucket-gap-skips-a-whole-week|monthly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [59],
+        "middle": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-19", "representativeDate": "2026-01-19", "resolution": "monthly", "sourcePointCount": 3, "value": 62}],
+        "upper": [63]
+      }
+    },
+    "aggregateEnvelope|revisited-bucket-non-monotonic|daily": {
+      "returnsInputByReference": {"upper": true, "middle": true, "lower": true},
+      "mutatedInput": false,
+      "result": {
+        "lower": [69, 70, 71],
+        "middle": [
+          {"date": "2026-01-05", "value": 70},
+          {"date": "2026-01-12", "value": 71},
+          {"date": "2026-01-06", "value": 72}
+        ],
+        "upper": [71, 72, 73]
+      }
+    },
+    "aggregateEnvelope|revisited-bucket-non-monotonic|weekly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [69, 70, 71],
+        "middle": [
+          {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-05", "representativeDate": "2026-01-05", "resolution": "weekly", "sourcePointCount": 1, "value": 70},
+          {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "date": "2026-01-12", "representativeDate": "2026-01-12", "resolution": "weekly", "sourcePointCount": 1, "value": 71},
+          {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-06", "representativeDate": "2026-01-06", "resolution": "weekly", "sourcePointCount": 1, "value": 72}
+        ],
+        "upper": [71, 72, 73]
+      }
+    },
+    "aggregateEnvelope|revisited-bucket-non-monotonic|monthly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [69],
+        "middle": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-06", "representativeDate": "2026-01-06", "resolution": "monthly", "sourcePointCount": 3, "value": 72}],
+        "upper": [73]
+      }
+    },
+    "aggregateEnvelope|fully-unsorted-descending|daily": {
+      "returnsInputByReference": {"upper": true, "middle": true, "lower": true},
+      "mutatedInput": false,
+      "result": {
+        "lower": [79, 80, 81],
+        "middle": [
+          {"date": "2026-01-19", "value": 80},
+          {"date": "2026-01-12", "value": 81},
+          {"date": "2026-01-05", "value": 82}
+        ],
+        "upper": [81, 82, 83]
+      }
+    },
+    "aggregateEnvelope|fully-unsorted-descending|weekly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [79, 80, 81],
+        "middle": [
+          {"bucketEnd": "2026-01-25", "bucketStart": "2026-01-19", "date": "2026-01-19", "representativeDate": "2026-01-19", "resolution": "weekly", "sourcePointCount": 1, "value": 80},
+          {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "date": "2026-01-12", "representativeDate": "2026-01-12", "resolution": "weekly", "sourcePointCount": 1, "value": 81},
+          {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-05", "representativeDate": "2026-01-05", "resolution": "weekly", "sourcePointCount": 1, "value": 82}
+        ],
+        "upper": [81, 82, 83]
+      }
+    },
+    "aggregateEnvelope|fully-unsorted-descending|monthly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [79],
+        "middle": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-05", "representativeDate": "2026-01-05", "resolution": "monthly", "sourcePointCount": 3, "value": 82}],
+        "upper": [83]
+      }
+    },
+    "aggregateEnvelope|duplicate-dates|daily": {
+      "returnsInputByReference": {"upper": true, "middle": true, "lower": true},
+      "mutatedInput": false,
+      "result": {
+        "lower": [89, 90, 91],
+        "middle": [
+          {"date": "2026-01-07", "value": 90},
+          {"date": "2026-01-07", "value": 91},
+          {"date": "2026-01-08", "value": 92}
+        ],
+        "upper": [91, 92, 93]
+      }
+    },
+    "aggregateEnvelope|duplicate-dates|weekly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [89],
+        "middle": [{"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-08", "representativeDate": "2026-01-08", "resolution": "weekly", "sourcePointCount": 3, "value": 92}],
+        "upper": [93]
+      }
+    },
+    "aggregateEnvelope|duplicate-dates|monthly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [89],
+        "middle": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-08", "representativeDate": "2026-01-08", "resolution": "monthly", "sourcePointCount": 3, "value": 92}],
+        "upper": [93]
+      }
+    },
+    "aggregateEnvelope|signed-values-netting-to-zero|daily": {
+      "returnsInputByReference": {"upper": true, "middle": true, "lower": true},
+      "mutatedInput": false,
+      "result": {
+        "lower": [-7, 3, -2, -5],
+        "middle": [
+          {"date": "2026-01-05", "value": -5},
+          {"date": "2026-01-06", "value": 5},
+          {"date": "2026-01-07", "value": 0},
+          {"date": "2026-01-12", "value": -3}
+        ],
+        "upper": [-3, 7, 2, -1]
+      }
+    },
+    "aggregateEnvelope|signed-values-netting-to-zero|weekly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [-7, -5],
+        "middle": [
+          {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-07", "representativeDate": "2026-01-07", "resolution": "weekly", "sourcePointCount": 3, "value": 0},
+          {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "date": "2026-01-12", "representativeDate": "2026-01-12", "resolution": "weekly", "sourcePointCount": 1, "value": -3}
+        ],
+        "upper": [7, -1]
+      }
+    },
+    "aggregateEnvelope|signed-values-netting-to-zero|monthly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [-7],
+        "middle": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-12", "representativeDate": "2026-01-12", "resolution": "monthly", "sourcePointCount": 4, "value": -3}],
+        "upper": [7]
+      }
+    },
+    "aggregateEnvelope|metadata-carry-over|daily": {
+      "returnsInputByReference": {"upper": true, "middle": true, "lower": true},
+      "mutatedInput": false,
+      "result": {
+        "lower": [99, 100, 101],
+        "middle": [
+          {"date": "2026-01-06", "originalCurrency": "USD", "originalCurrencyFlag": "🇺🇸", "originalValue": 110, "value": 100},
+          {"date": "2026-01-08", "fxStaleDays": 1, "originalCurrency": "USD", "originalCurrencyFlag": "🇺🇸", "originalValue": 111, "staleDays": 2, "value": 101},
+          {"date": "2026-01-12", "originalCurrency": "GBP", "originalCurrencyFlag": "🇬🇧", "originalValue": 88, "staleDays": 4, "value": 102}
+        ],
+        "upper": [101, 102, 103]
+      }
+    },
+    "aggregateEnvelope|metadata-carry-over|weekly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [99, 101],
+        "middle": [
+          {
+            "bucketEnd": "2026-01-11",
+            "bucketStart": "2026-01-05",
+            "date": "2026-01-08",
+            "fxStaleDays": 1,
+            "originalCurrency": "USD",
+            "originalCurrencyFlag": "🇺🇸",
+            "originalValue": 111,
+            "representativeDate": "2026-01-08",
+            "resolution": "weekly",
+            "sourcePointCount": 2,
+            "staleDays": 2,
+            "value": 101
+          },
+          {
+            "bucketEnd": "2026-01-18",
+            "bucketStart": "2026-01-12",
+            "date": "2026-01-12",
+            "originalCurrency": "GBP",
+            "originalCurrencyFlag": "🇬🇧",
+            "originalValue": 88,
+            "representativeDate": "2026-01-12",
+            "resolution": "weekly",
+            "sourcePointCount": 1,
+            "staleDays": 4,
+            "value": 102
+          }
+        ],
+        "upper": [102, 103]
+      }
+    },
+    "aggregateEnvelope|metadata-carry-over|monthly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [99],
+        "middle": [
+          {
+            "bucketEnd": "2026-01-31",
+            "bucketStart": "2026-01-01",
+            "date": "2026-01-12",
+            "originalCurrency": "GBP",
+            "originalCurrencyFlag": "🇬🇧",
+            "originalValue": 88,
+            "representativeDate": "2026-01-12",
+            "resolution": "monthly",
+            "sourcePointCount": 3,
+            "staleDays": 4,
+            "value": 102
+          }
+        ],
+        "upper": [103]
+      }
+    },
+    "aggregateEnvelope|ohlcv-full|daily": {
+      "returnsInputByReference": {"upper": true, "middle": true, "lower": true},
+      "mutatedInput": false,
+      "result": {
+        "lower": [99, 103, 101, 100],
+        "middle": [
+          {"close": 104, "date": "2026-01-06", "high": 105, "low": 99, "open": 100, "value": 104, "volume": 1000},
+          {"close": 106, "date": "2026-01-08", "high": 108, "low": 103, "open": 104, "value": 106, "volume": 1200},
+          {"close": 102, "date": "2026-01-12", "high": 107, "low": 101, "open": 106, "value": 102, "volume": 900},
+          {"close": 103, "date": "2026-01-13", "high": 104, "low": 100, "open": 102, "value": 103, "volume": 1100}
+        ],
+        "upper": [105, 108, 107, 104]
+      }
+    },
+    "aggregateEnvelope|ohlcv-full|weekly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [99, 100],
+        "middle": [
+          {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "close": 106, "date": "2026-01-08", "high": 108, "low": 103, "open": 104, "representativeDate": "2026-01-08", "resolution": "weekly", "sourcePointCount": 2, "value": 106, "volume": 1200},
+          {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "close": 103, "date": "2026-01-13", "high": 104, "low": 100, "open": 102, "representativeDate": "2026-01-13", "resolution": "weekly", "sourcePointCount": 2, "value": 103, "volume": 1100}
+        ],
+        "upper": [108, 107]
+      }
+    },
+    "aggregateEnvelope|ohlcv-full|monthly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [99],
+        "middle": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "close": 103, "date": "2026-01-13", "high": 104, "low": 100, "open": 102, "representativeDate": "2026-01-13", "resolution": "monthly", "sourcePointCount": 4, "value": 103, "volume": 1100}],
+        "upper": [108]
+      }
+    },
+    "aggregateEnvelope|ohlcv-all-fields-null|daily": {
+      "returnsInputByReference": {"upper": true, "middle": true, "lower": true},
+      "mutatedInput": false,
+      "result": {
+        "lower": [10, 11, 12],
+        "middle": [
+          {"close": null, "date": "2026-01-06", "high": null, "low": null, "open": null, "value": 11, "volume": null},
+          {"close": null, "date": "2026-01-07", "high": null, "low": null, "open": null, "value": 12, "volume": null},
+          {"close": null, "date": "2026-01-12", "high": null, "low": null, "open": null, "value": 13, "volume": null}
+        ],
+        "upper": [12, 13, 14]
+      }
+    },
+    "aggregateEnvelope|ohlcv-all-fields-null|weekly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [10, 12],
+        "middle": [
+          {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "close": null, "date": "2026-01-07", "high": null, "low": null, "open": null, "representativeDate": "2026-01-07", "resolution": "weekly", "sourcePointCount": 2, "value": 12, "volume": null},
+          {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "close": null, "date": "2026-01-12", "high": null, "low": null, "open": null, "representativeDate": "2026-01-12", "resolution": "weekly", "sourcePointCount": 1, "value": 13, "volume": null}
+        ],
+        "upper": [13, 14]
+      }
+    },
+    "aggregateEnvelope|ohlcv-all-fields-null|monthly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [10],
+        "middle": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "close": null, "date": "2026-01-12", "high": null, "low": null, "open": null, "representativeDate": "2026-01-12", "resolution": "monthly", "sourcePointCount": 3, "value": 13, "volume": null}],
+        "upper": [14]
+      }
+    },
+    "aggregateEnvelope|ohlcv-sparse-fields|daily": {
+      "returnsInputByReference": {"upper": true, "middle": true, "lower": true},
+      "mutatedInput": false,
+      "result": {
+        "lower": [99, 100, 101, 100],
+        "middle": [
+          {"close": 104, "date": "2026-01-06", "high": 105, "low": 99, "open": null, "value": 104, "volume": null},
+          {"close": null, "date": "2026-01-07", "high": null, "low": null, "open": 104, "value": 105, "volume": 1200},
+          {"close": 102, "date": "2026-01-12", "high": 107, "low": null, "open": 106, "value": 102, "volume": null},
+          {"close": null, "date": "2026-01-13", "high": null, "low": 100, "open": null, "value": 103, "volume": 300}
+        ],
+        "upper": [105, 106, 107, 104]
+      }
+    },
+    "aggregateEnvelope|ohlcv-sparse-fields|weekly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [99, 100],
+        "middle": [
+          {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "close": null, "date": "2026-01-07", "high": null, "low": null, "open": 104, "representativeDate": "2026-01-07", "resolution": "weekly", "sourcePointCount": 2, "value": 105, "volume": 1200},
+          {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "close": null, "date": "2026-01-13", "high": null, "low": 100, "open": null, "representativeDate": "2026-01-13", "resolution": "weekly", "sourcePointCount": 2, "value": 103, "volume": 300}
+        ],
+        "upper": [106, 107]
+      }
+    },
+    "aggregateEnvelope|ohlcv-sparse-fields|monthly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [99],
+        "middle": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "close": null, "date": "2026-01-13", "high": null, "low": 100, "open": null, "representativeDate": "2026-01-13", "resolution": "monthly", "sourcePointCount": 4, "value": 103, "volume": 300}],
+        "upper": [107]
+      }
+    },
+    "aggregateEnvelope|ohlcv-without-any-ohlcv-fields|daily": {
+      "returnsInputByReference": {"upper": true, "middle": true, "lower": true},
+      "mutatedInput": false,
+      "result": {
+        "lower": [20, 21, 22],
+        "middle": [
+          {"date": "2026-01-06", "value": 21},
+          {"date": "2026-01-07", "value": 22},
+          {"date": "2026-01-12", "value": 23}
+        ],
+        "upper": [22, 23, 24]
+      }
+    },
+    "aggregateEnvelope|ohlcv-without-any-ohlcv-fields|weekly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [20, 22],
+        "middle": [
+          {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-07", "representativeDate": "2026-01-07", "resolution": "weekly", "sourcePointCount": 2, "value": 22},
+          {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "date": "2026-01-12", "representativeDate": "2026-01-12", "resolution": "weekly", "sourcePointCount": 1, "value": 23}
+        ],
+        "upper": [23, 24]
+      }
+    },
+    "aggregateEnvelope|ohlcv-without-any-ohlcv-fields|monthly": {
+      "returnsInputByReference": {"upper": false, "middle": false, "lower": false},
+      "mutatedInput": false,
+      "result": {
+        "lower": [20],
+        "middle": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-12", "representativeDate": "2026-01-12", "resolution": "monthly", "sourcePointCount": 3, "value": 23}],
+        "upper": [24]
+      }
+    }
+  }
+}
