@@ -41,6 +41,7 @@ class RiskReturnBasis(StrEnum):
 
     PRICE_ONLY = "price_only"
     TWRR = "twrr"
+    CURRENT_COMPOSITION_BACKTEST = "current_composition_backtest"
 
 
 class RiskScopeKind(StrEnum):
@@ -453,6 +454,10 @@ class RiskResultMetadata(StrictModel):
     scope: Optional[RiskScopeKind] = None
     scope_reference: Optional[str] = None
     broker_ids: Optional[List[PositiveInt]] = None
+    sliced_asset_ids: Optional[List[PositiveInt]] = Field(
+        None,
+        description="Effective asset slice of a portfolio scope. When set, weights are renormalized to 100% of the slice and no zero-return cash residual remains.",
+    )
     composition_as_of: Optional[date] = None
     method: Optional[str] = None
     params: Dict[str, JsonValue] = Field(default_factory=dict)
@@ -491,6 +496,17 @@ class RiskResultMetadata(StrictModel):
             raise ValueError("broker_ids must be unique")
         return sorted(value)
 
+    @field_validator("sliced_asset_ids")
+    @classmethod
+    def normalize_sliced_asset_ids(cls, value: Optional[List[int]]) -> Optional[List[int]]:
+        if value is None:
+            return None
+        if not value:
+            raise ValueError("sliced_asset_ids cannot be empty")
+        if len(value) != len(set(value)):
+            raise ValueError("sliced_asset_ids must be unique")
+        return sorted(value)
+
     @model_validator(mode="after")
     def validate_context(self) -> RiskResultMetadata:  # noqa: C901 — flat invariant raises, no nested logic
         if self.n_observations == 0:
@@ -508,6 +524,8 @@ class RiskResultMetadata(StrictModel):
             raise ValueError("current_composition requires a composition policy")
         if self.broker_ids is not None and self.scope != RiskScopeKind.PORTFOLIO:
             raise ValueError("broker_ids metadata requires portfolio scope")
+        if self.sliced_asset_ids is not None and self.scope != RiskScopeKind.PORTFOLIO:
+            raise ValueError("sliced_asset_ids metadata requires portfolio scope")
         if self.composition_as_of is not None and self.scope != RiskScopeKind.PORTFOLIO:
             raise ValueError("composition_as_of metadata requires portfolio scope")
         if self.sampling_method is None:
@@ -554,6 +572,12 @@ class PortfolioRiskScope(RiskScopeBase):
         max_length=100,
         description="Exact broker subset. None includes all brokers accessible to the user.",
     )
+    asset_ids: Optional[List[PositiveInt]] = Field(
+        None,
+        min_length=1,
+        max_length=100,
+        description=("Exact asset subset of the portfolio. None includes every held asset. The scope stays 'portfolio', and weights are renormalized to 100% of the slice."),
+    )
 
     @field_validator("broker_ids")
     @classmethod
@@ -562,6 +586,15 @@ class PortfolioRiskScope(RiskScopeBase):
             return None
         if len(value) != len(set(value)):
             raise ValueError("broker_ids must be unique")
+        return sorted(value)
+
+    @field_validator("asset_ids")
+    @classmethod
+    def normalize_asset_ids(cls, value: Optional[List[int]]) -> Optional[List[int]]:
+        if value is None:
+            return None
+        if len(value) != len(set(value)):
+            raise ValueError("asset_ids must be unique")
         return sorted(value)
 
 
