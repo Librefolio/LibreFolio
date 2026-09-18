@@ -152,6 +152,8 @@ Il principio è uno solo:
 |---|---|---|
 | `backend/app/services/risk/metrics.py` | **A** | 661 righe, cuore della migrazione |
 | `backend/app/services/risk/signal_helpers.py` | **A** | M1 |
+| `backend/app/services/signal_plugins/rolling_*.py` (4 file) | **A** | ⚠️ **concesso il 17 Set** — vedi §2.10 |
+| `risk_plugins/historical_var.py`, `risk_plugins/drawdown_summary.py` | **A** | ⚠️ **concesso il 17 Set** — producono i due campi di K1 |
 | `backend/test_scripts/test_services/test_risk_metrics*.py` | **A** | oracolo incluso |
 | `backend/app/db/models.py` + migrazione Alembic | **B** | **una sola** migrazione per tutta la campagna |
 | `frontend/src/lib/utils/assetTypes.ts` | **B** | vedi §2.3 |
@@ -163,6 +165,8 @@ Il principio è uno solo:
 | `risk_plugins/historical_kpi.py`, `risk_plugins/risk_contribution.py` | **N** | solo aggiunte additive |
 | `frontend/src/lib/components/ui/**` (primitive promosse) | **D** | |
 | `frontend/src/lib/components/risk/**` | **E** | compreso sostituire `RiskAnalysisPanel` |
+| `frontend/src/lib/stores/risk/**` e `frontend/src/lib/risk/**` | **E** | ⚠️ comprende `riskRequest.ts`, che porta `sobolStartIndex`: la rimozione dalla UI è di E, non di H |
+| `dev.py` → **solo** le funzioni mkdocs | **I** | riparazione di `check-links`, vedi §2.9 |
 | `frontend/src/routes/(app)/assets/+page.svelte` | **F** | |
 | `frontend/src/lib/components/risk/CorrelationHeatmap.svelte` | **F** | eccezione dichiarata dentro `risk/`, concordata con E |
 | `frontend/src/lib/components/charts/AllocationPieChart.svelte` | **G** | |
@@ -172,30 +176,33 @@ Il principio è uno solo:
 | `mkdocs_src/**` e `mkdocs.yml` | **I** | |
 | `CHANGELOG.md` | **J** | **nessun altro**, mai |
 
-### 2.2 `schemas/risk.py` — tre scrittori, e dove collidono davvero
+### 2.2 `schemas/risk.py` — **quattro** scrittori, e dove collidono davvero
 
-1 126 righe, e **tre** mandati devono toccarlo. Le regioni sono state **misurate**, non
-stimate:
+⚠️ *Corretto il 17 Set 2026: questa mappa ne dichiarava tre. **H** è il quarto*, perché
+gli schemi di parametri della simulazione vivono in questo stesso file.
+
+1 126 righe. Le regioni sono state **misurate**, non stimate:
 
 | Regione | Scrittore | Righe |
 |---|---|---|
 | `RiskScopeKind` | — | `:46` |
+| Parametri di simulazione | **H** | `:136-142`, `:172-182` |
 | Classi di **scope** | **C** | `:537-585` |
 | `RiskKpiOutput` — famiglia scalare di L1 | **N** | `:640-647` |
 | `RiskContributionOutput` — concentrazione L2 | **N** | `:676-680` |
 | `RiskVarCvarOutput` — bin dell'istogramma | **A** | `:820-835` |
+| `RiskSimulationOutput` e dintorni | **H** | `:836-880` |
 | `RiskDrawdownOutput` — serie underwater | **A** | `:945-1018` |
-| **`__all__`** | 🔴 **tutti e tre** | **`:1067-1126`** |
+| **`__all__`** | 🔴 **tutti e quattro** | **`:1067-1126`** |
 
-Le regioni di classe sono **lontane**: N sta fra `:640` e `:680`, A fra `:820` e
-`:1018`, C fra `:537` e `:585`. Nessuna confina con un'altra, quindi Git fonde senza
+Le regioni di classe sono **lontane** e nessuna confina con un'altra: Git fonde senza
 attrito.
 
 > ## 🔑 Il conflitto vero è `__all__`, non le classi.
 >
 > Il file **finisce** con una lista `__all__` di sessanta nomi **ordinata
 > alfabeticamente**. Chi aggiunge una classe deve inserire un nome **in mezzo** a quella
-> lista, quindi tre scrittori si ritrovano nello stesso blocco.
+> lista, quindi **quattro** scrittori si ritrovano nello stesso blocco.
 >
 > Appendere in coda al file — di solito il pattern multi-scrittore più sicuro — **qui
 > non funziona**, perché in coda c'è `__all__`.
@@ -205,11 +212,11 @@ attrito.
 > `__all__` è **l'unica regione dell'intera campagna** dove una risoluzione meccanica
 > del conflitto è autorizzata: **unione dei nomi + riordino alfabetico**. È
 > semanticamente sempre corretta, perché è una lista ordinata di nomi esportati e
-> nessuno dei tre ne rimuove uno.
+> nessuno dei quattro ne rimuove uno.
 
 **Ma il testo che si fonde non è la semantica che regge.** Ovunque altro vale la regola
 opposta: mai «ours», mai «theirs», mai un merge meccanico. E la regola operativa resta:
-nessuno dei tre riformatta il file, nessuno riordina gli import, nessuno tocca una
+nessuno dei quattro riformatta il file, nessuno riordina gli import, nessuno tocca una
 classe che non gli appartiene. Chi la viola produce un conflitto che Git risolve male
 proprio perché sembra facile.
 
@@ -330,6 +337,89 @@ immagini che mostrano una tavolozza che il prodotto non usa più.
 Non è un conflitto — nessuno scrive lo stesso file — è una **dipendenza invisibile**.
 Va rigenerata a valle: la rigenerazione appartiene a **J**, dopo che G è integrato,
 perché prima produrrebbe immagini di uno stato intermedio.
+
+### 2.9 🔴 `check-links` oggi non controlla i `DocsLink` — riparazione assegnata a I
+
+Scoperto dal mandato **I** e **verificato dal coordinatore**. È grave perché il gate
+esiste proprio per impedire che i link di **D4** restino appesi.
+
+**Due cause indipendenti**, entrambe misurate:
+
+1. **Codice morto in `dev.py:1119-1121`.** Lo scope «1b» ha perso il ciclo
+   `for i, line in enumerate(...)` e il corpo è finito **sotto un `continue`**:
+
+   ```python
+   for f in frontend_src.rglob(ext):
+       if _is_test_file(f):
+           continue
+           m = re.search(r"/mkdocs/([^'\"`,\s)]+)", line)   # ← irraggiungibile
+   ```
+
+   Risultato: **15 occorrenze letterali di `/mkdocs/`** nel frontend non validate.
+
+2. **Anche riparando 1b, `DocsLink` resta invisibile.** La prop è `path=`, non
+   `docsPath=`, e il valore **non contiene `/mkdocs/`** — lo aggiunge `getDocsUrl()` a
+   runtime. Nessuno dei due pattern cercati corrisponde: **9 `<DocsLink>`, 4 path
+   distinti, zero validati**.
+
+> ## 🔑 Il gate è verde perché non guarda.
+>
+> Se **I** producesse i mock e dichiarasse «`check-links` verde», consegnerebbe
+> esattamente la falsa sicurezza che **D55** esisteva per evitare — con l'aggravante di
+> **sembrare** una verifica.
+>
+> È la stessa famiglia del mock stantio (**D83**) e del CVaR sbagliato per un anno: non
+> un errore rumoroso, ma una verifica che ha smesso di verificare senza dirlo.
+
+**Proprietario: I**, ed è un'estensione di ambito deliberata. `dev.py` è condiviso, ma
+**nessun altro mandato ne tocca la sezione mkdocs**: A e H scrivono in
+`scripts/test_runner/`, file diversi. I limita il proprio diff alle funzioni mkdocs.
+
+⚠️ **La riparazione precede il primo tempo**: senza, i mock d'indice non dimostrano
+nulla, e E scriverebbe `DocsLink` dentro un gate cieco.
+
+### 2.10 🔴 Due estensioni di confine concesse ad A — e perché non c'era alternativa
+
+Entrambe sollevate dal mandato **A** e **verificate dal coordinatore**. Nessuna delle
+due era prevista; entrambe erano inevitabili.
+
+#### (a) I quattro `signal_plugins/rolling_*.py` — senza, M1 non esiste
+
+`rolling_single_values` e `rolling_pair_values` sono **funzioni di ordine superiore**:
+prendono un `metric: Callable` opaco. Verificato, tutti e quattro i chiamanti passano
+lambda che catturano parametri a runtime:
+
+```text
+rolling_sharpe.py:141      lambda w: annualized_sharpe(w, ann, annual_risk_free_rate=…)
+rolling_volatility.py:116  lambda w: annualized_volatility(w, ann) * 100
+rolling_return.py:123      lambda w: compounded_return(w) * 100
+rolling_beta.py:146        beta                               ← funzione nuda, due argomenti
+```
+
+> **Non si vettorializza una lambda arbitraria.** Qualunque forma reale di M1 richiede
+> di aprire quei quattro file — che **non erano in nessuna tabella di proprietà**.
+
+Le alternative erano due, e una sola regge: estendere i confini di A, oppure
+**rinunciare a M1**, cioè al guadagno fino a **1 514×** sul percorso più caldo del
+sottosistema. **Concesso ad A.** Nessun altro mandato li tocca.
+
+⚠️ Due dettagli che la mappatura di `06` §M1 **ometteva**, e che presi alla lettera
+cambierebbero i valori: `rolling_return` e `rolling_volatility` moltiplicano **×100**
+(l'unità è percentuale), e l'output ha **un `None` in testa** — `len(values)` è
+`len(returns) + 1`.
+
+#### (b) `historical_var.py` e `drawdown_summary.py` — senza, K1 è peso morto
+
+Un campo di schema senza produttore non serve a nessuno. Verificato: sono **esattamente
+questi due file** a costruire `RiskVarCvarOutput` e `RiskDrawdownOutput`.
+
+§2.6 assegnava `risk_plugins/` a **N**. Ma N scrive `historical_kpi.py` e
+`risk_contribution.py`, **H** scrive `simulation.py`: i due file di A **non sono di
+nessun altro**. Rischio testuale nullo. **Concesso ad A.**
+
+> Nota di metodo: A li ha **chiesti invece di prenderli**, pur avendone bisogno per
+> consegnare il contratto che blocca E. È il comportamento che questa struttura esiste
+> per ottenere.
 
 ---
 
@@ -525,6 +615,8 @@ Un mandato è finito quando **tutte** queste sono vere. Non alcune.
 Non appartengono a nessun mandato e **nessun figlio li modifica**:
 
 - questo `README.md` — lane, proprietà dei file, ordine, contratti;
+- [`STATO.md`](./STATO.md) — **il registro vivo**: quale sessione, quale worktree,
+  quale branch, quale lane, a che punto è. Se il contesto si azzera, si riprende da lì;
 - [`kickoff/`](./kickoff/) — i prompt di avvio delle sessioni e il cancello del commit;
 - [`contracts/`](./contracts/) — i contratti K1-K8 materializzati (§4.1);
 - [`progress/`](./progress/) — l'indice dei piani vivi; i singoli file dentro sono

@@ -64,10 +64,45 @@ l'oggetto più convincente della pagina, quindi il danno cognitivo è massimo.
 | # | Approccio | Cattura | Calibrabile? | Spiegabile | Ambito |
 |---|---|---|---|---|:---:|
 | 1 | **Block bootstrap** | code grasse, asimmetria, cluster di volatilità, sequenze di crisi — *sono dati veri* | non serve | ⭐⭐⭐ *«rimescolo a blocchi la storia vera»* | ✅ |
-| 2 | **GJR-GARCH** (nativo QuantLib) | cluster di volatilità + effetto leva | ✅ dalla sola serie prezzi | ⭐⭐ | ✅ |
+| 2 | **GJR-GARCH** | cluster di volatilità + effetto leva | ⚠️ **non da QuantLib** — vedi sotto | ⭐⭐ | 🟡 **condizionato** |
 | 3 | **Preset di regime prescritti** | fasi di mercato con vol, correlazioni e drift propri | ❌ dichiarati, non stimati | ⭐⭐⭐ se l'ipotesi è a schermo | ✅ |
 | 4 | Markov-switching calibrato | idem, stimato | ⚠️ overfitta su 3-5 anni | ⭐ | 🔴 TODO |
 | 5 | Heston / Bates / Merton | vol stocastica, salti | ❌ richiede dati di opzioni | ⭐ | 🔴 TODO |
+
+> ## 🔴 Correzione del 17 Set 2026 — «GJR-GARCH nativo QuantLib» era FALSO
+>
+> Questo brief diceva *«GJR-GARCH (nativo QuantLib), calibrabile dalla sola serie
+> prezzi»*. Misurato sul runtime reale (QuantLib **1.43**), e **verificato dal
+> coordinatore**:
+>
+> ```text
+> hasattr(ql, 'Garch11')                        -> False
+> ql.GJRGARCHModel.calibrate(...)               -> prende helper di OPZIONI
+> issubclass(GJRGARCHProcess, StochasticProcess1D) -> False   (factors() = 2)
+> ```
+>
+> `GJRGARCHModel` esiste ma è un modello di **option pricing**: la stessa API di
+> `HestonModel`. `ql.Garch11` — la classe che *davvero* calibra per massima
+> verosimiglianza da una serie di rendimenti — **non è esposta nei binding Python**.
+> QuantLib regala la **simulazione** di un GJR-GARCH, non la sua **calibrazione dai
+> prezzi**.
+>
+> E l'obiezione con cui questo stesso brief rinvia il livello 5 — *«richiede dati di
+> opzioni»* — **si applica identica** al percorso QuantLib del livello 2.
+>
+> In più `GJRGARCHProcess` ha **2 fattori** e l'architettura è uno
+> `StochasticProcessArray` di componenti **1-D**: non ci entra.
+>
+> **Conseguenza**: il livello 2 diventa **condizionato**. Esiste `arch 8.0.0`, che
+> calibra un GJR-GARCH in **22 ms misurati** — ma è una **transitiva di
+> `riskfolio-lib`, non dichiarata nel Pipfile**. Appoggiarcisi senza promuoverla è la
+> fragilità silenziosa che questa campagna continua a trovare: basta che riskfolio la
+> lasci cadere e il nostro GARCH sparisce.
+>
+> **Decisione del developer** (tocca `Pipfile` + rigenerazione del lock, lavoro a lane
+> congelate): promuovere `arch` a dipendenza diretta, oppure **rinviare il livello 2**
+> a `TODO_FUTURI.md` accanto ai livelli 4-5. Fino ad allora il passo GJR-GARCH **non si
+> esegue**; tutti gli altri passi sono sbloccati.
 
 > ## Il block bootstrap diventa il default
 >

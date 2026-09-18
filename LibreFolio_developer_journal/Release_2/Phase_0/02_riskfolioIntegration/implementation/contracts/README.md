@@ -18,6 +18,39 @@ esattamente quando serve.
 >
 > Il file qui dentro è l'unica copia durevole, e vive nel worktree del coordinatore.
 
+## 🔴 E il corollario che ho imparato sbagliando — 18 Set 2026
+
+**Il file da solo non consegna nulla.** L'ho scoperto creando il mandato **E** con un
+prompt che diceva *«i contratti sono già su file, leggili»*: E nasce dalla baseline
+committata, dove `contracts/` contiene **solo questo README**. I quattro file stavano
+**non committati nel worktree del coordinatore**, cioè nell'unico posto che nessun
+consumatore può raggiungere.
+
+L'ha visto il mandato **I**, e la sua frase è la diagnosi esatta:
+
+> *«Un contratto che una sola parte può vedere non è ancora un contratto.»*
+
+È l'ironia da tenere scritta: questo README argomenta che i contratti vanno
+materializzati **perché i worktree non condividono file**, e poi il coordinatore li ha
+lasciati esattamente lì.
+
+### La regola che ne discende
+
+| Momento | Come viaggia un contratto |
+|---|---|
+| **Prima del commit della baseline** | **relay inline**, dentro il messaggio al consumatore. Il file è il registro del coordinatore, non il canale |
+| **Dopo il commit** | il consumatore lo legge dal proprio worktree — ma **solo** se la sua baseline lo contiene |
+
+⚠️ **Verifica prima di dire «leggilo»**:
+
+```bash
+git -C <worktree-figlio> ls-tree HEAD <percorso-contratto>
+```
+
+Se non torna nulla, **il contratto va relayato nel messaggio**, per intero. Un rimando a
+un file che il destinatario non ha è peggio del silenzio: sembra un'istruzione
+eseguibile e non lo è.
+
 Ha un secondo effetto, meno ovvio e altrettanto utile: rende visibile un contratto
 **cambiato**. La differenza fra la versione scritta e quella nuova diventa un diff
 invece che un ricordo contraddittorio — ed è precisamente il tipo di disallineamento
@@ -29,16 +62,26 @@ che questa struttura esiste per intercettare.
 
 | # | Da | A | Oggetto | Stato |
 |---|---|---|---|---|
-| **K1** | A | E | Serie underwater (**D14**) e bin dell'istogramma (**D21**) | ⏳ || **K2** | B | G | `primaryAssetType(type)` — **mappa esplicita**, mai `split('_')` | ⏳ |
-| **K3** | B | E, F | Selettore benchmark ordinato a sezioni (**D50**) | ⏳ |
-| **K4** | C | E | Filtro per asset su `PortfolioRiskScope` + pesi rinormalizzati (**D59**) | ⏳ |
-| **K5** | D | E, F | Primitive promosse in `components/ui/`: nomi, percorsi, props | ⏳ |
-| **K6** | H | E | Modalità di simulazione e payload del cono | ⏳ |
-| **K7** | I | E, F, H | Slug delle pagine di documentazione | ⏳ |
-| **K8** | N | E | Campi nuovi su `RiskKpiOutput` e `RiskContributionOutput` | ⏳ |
+| **[K1](./K1.md)** | A | E | Serie underwater (**D14**) e bin dell’istogramma (**D21**) | ✅ |
+| **[K2](./K2.md)** | B | G | `primaryAssetType` — **contenuto** (D85). Codominio **12** valori enum, **13 chiavi** con `Liquidity`; ⚠️ **uppercasa**, non restituisce verbatim (D123) | ✅ |
+| **[K3](./K3.md)** | B | E, F | Selettore benchmark a sezioni: due prop su `AssetSelect` (**D50**) | ✅ |
+| **[K4](./K4.md)** | C | E, F, H | Filtro per asset su `PortfolioRiskScope` + pesi rinormalizzati (**D59**) + **quattro** dichiarazioni obbligatorie | ✅ |
+| **[K5](./K5.md)** | D | E, F | Primitive promosse **e** divisione dello spec E2E. ⚠️ Garanzia di non-salto **parziale**: `caption`/`sparkline`/`submetrics` sono del chiamante | ✅ **D FROZEN** |
+| **[K6](./K6.md)** | H | E | `process` × `regime` e cono. Didascalia shock **«applicato alla tua storia»**; chiavi i18n = **stringhe enum esatte**; ⚠️ `regime != none` **richiede** `block_bootstrap` → altrimenti **422** | ✅ **H FROZEN** |
+| **[K7](./K7.md)** | I | E, F, H | I **22** slug (21 metriche + hub), come stringa `path`, **generati a macchina**. ⚠️ Baseline del gate: **12** con il `dev.py` di baseline, **24** con la riparazione di I | ✅ |
+| **[K8](./K8.md)** | N | E, **I** | Campi nuovi su `RiskKpiOutput` e `RiskContributionOutput`. 🔴 **`effective_number_of_assets` può superare il numero di titoli** (11,44 su 2): non etichettarlo come conteggio | ✅ **N FROZEN** |
+| **[K9](./K9.md)** | E | F | `allowedStressMethods` + replay allargato ad `asset_set` con **audit mostrato**. 🔴 **Esteso**: guardia `scope.kind === 'portfolio'` sui due `formatAmount` — oggi **nulla protegge la regola degli importi** | ✅ **esteso** |
 
 Legenda: ⏳ atteso · 📝 concordato, non ancora implementato · ✅ consegnato e verificato
 · ⚠️ cambiato dopo la consegna
+
+> ⚠️ **K9 non era nel piano.** L'ha scoperto **F** misurando invece di assumere: il suo
+> cancello viveva dentro un file di **E**, e il suo brief non dichiarava alcun contratto
+> con lui. Un contratto mancante non si vede finché qualcuno non prova a lavorare.
+
+> ⚠️ **📝 non significa «fatto».** Significa che produttore e coordinatore si sono
+> accordati sulla forma, e che il consumatore può **costruirci contro**. Il passaggio a
+> ✅ lo fa il **produttore**, quando il codice esiste e i test lo coprono.
 
 ---
 
