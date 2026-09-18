@@ -135,9 +135,24 @@ class RiskHistoricalReplayExclusionTreatment(StrEnum):
 
 
 class RiskSimulationProcess(StrEnum):
-    """Stochastic process exposed by the first simulation implementation."""
+    """Stochastic or resampling process available to simulation."""
 
+    BLOCK_BOOTSTRAP = "block_bootstrap"
     GBM = "gbm"
+
+
+class RiskSimulationRegime(StrEnum):
+    """Prescribed market regime overlaid on a resampled simulation.
+
+    A regime is *declared*, never estimated from the data: every non-``NONE``
+    value applies a stated transformation whose hypothesis must be shown to the
+    user next to the choice that selects it.
+    """
+
+    NONE = "none"
+    CALM = "calm"
+    PROLONGED_CRISIS = "prolonged_crisis"
+    SHOCK_RECOVERY = "shock_recovery"
 
 
 class RiskSamplingStrategy(StrEnum):
@@ -174,12 +189,14 @@ class RiskSimulationDriftEstimator(StrEnum):
     """Drift estimator disclosed by simulation results."""
 
     HISTORICAL_LOG_MLE = "historical_log_mle"
+    EMPIRICAL_RESAMPLED = "empirical_resampled"
 
 
 class RiskSimulationCovarianceEstimator(StrEnum):
     """Covariance estimator disclosed by simulation results."""
 
     SAMPLE_LOG_RETURNS = "sample_log_returns"
+    NOT_ESTIMATED_JOINT_RESAMPLING = "not_estimated_joint_resampling"
 
 
 class RiskExcludedAsset(StrictModel):
@@ -473,6 +490,7 @@ class RiskResultMetadata(StrictModel):
     path_count: Optional[int] = Field(None, ge=1)
     random_seed: Optional[int] = Field(None, ge=0, le=2**32 - 1)
     sobol_start_index: Optional[int] = Field(None, ge=0, le=2**32 - 1)
+    bootstrap_seed: Optional[int] = Field(None, ge=0, le=2**32 - 1)
     historical_replay_audit: Optional[RiskHistoricalReplayAudit] = None
 
     @field_validator("currency")
@@ -958,9 +976,13 @@ class RiskSimulationOutput(StrictModel):
 
     kind: Literal[RiskOutputKind.SIMULATION] = Field(default=RiskOutputKind.SIMULATION, json_schema_extra={"enum": ["simulation"]})
     process: RiskSimulationProcess
+    regime: RiskSimulationRegime = RiskSimulationRegime.NONE
     sampling_method: RiskSamplingStrategy
     horizon_days: PositiveInt
     path_count: PositiveInt
+    block_length_days: PositiveInt | None = None
+    regime_declared_days: PositiveInt | None = None
+    regime_applied_days: PositiveInt | None = None
     drift_estimator: RiskSimulationDriftEstimator
     covariance_estimator: RiskSimulationCovarianceEstimator
     aggregation_policy: RiskCompositionPolicy
@@ -972,6 +994,26 @@ class RiskSimulationOutput(StrictModel):
     terminal_mean_return: FiniteFloat = Field(..., gt=-1)
     terminal_volatility: FiniteFloat = Field(..., ge=0)
     probability_of_loss: FiniteFloat = Field(..., ge=0, le=1)
+
+    @model_validator(mode="after")
+    def validate_regime_disclosure(self) -> RiskSimulationOutput:
+        """Force every prescribed hypothesis to be disclosed, never implied."""
+        if self.process == RiskSimulationProcess.BLOCK_BOOTSTRAP:
+            if self.block_length_days is None:
+                raise ValueError("block bootstrap results must disclose block_length_days")
+        elif self.block_length_days is not None:
+            raise ValueError("block_length_days is meaningful only for the block bootstrap process")
+        if self.regime == RiskSimulationRegime.NONE:
+            if self.regime_declared_days is not None or self.regime_applied_days is not None:
+                raise ValueError("regime day counts are meaningful only for a prescribed regime")
+            return self
+        if self.process != RiskSimulationProcess.BLOCK_BOOTSTRAP:
+            raise ValueError("prescribed regimes require the block bootstrap process")
+        if self.regime_declared_days is None or self.regime_applied_days is None:
+            raise ValueError("a prescribed regime must disclose declared and applied day counts")
+        if self.regime_applied_days > self.regime_declared_days:
+            raise ValueError("regime_applied_days cannot exceed regime_declared_days")
+        return self
 
     @model_validator(mode="after")
     def validate_band_horizon(self) -> RiskSimulationOutput:
@@ -1233,6 +1275,7 @@ __all__ = [
     "RiskSimulationDriftEstimator",
     "RiskSimulationOutput",
     "RiskSimulationProcess",
+    "RiskSimulationRegime",
     "RiskStressApplicationRule",
     "RiskStressBucketAudit",
     "RiskStressConfiguredBucketImpact",

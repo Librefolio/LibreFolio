@@ -18,9 +18,12 @@ from backend.app.schemas.risk import (
     RiskSimulationDriftEstimator,
     RiskSimulationOutput,
     RiskSimulationProcess,
+    RiskSimulationRegime,
 )
 from backend.app.services.risk.quant import engine as simulation_engine_module
+from backend.app.services.risk.quant import resampling as resampling_module
 from backend.app.services.risk.quant.engine import (
+    MAX_HISTORY_CELLS,
     SimulationResourceLimitError,
     clear_simulation_cache,
     run_simulation,
@@ -32,10 +35,15 @@ from backend.app.services.risk.quant.estimation import (
 from backend.app.services.risk.quant.models import (
     SimulationEngineRequest,
     SimulationEngineResult,
+    historical_returns_digest,
     simulation_cache_key,
 )
 from backend.app.services.risk.quant.quantlib_worker import (
     execute_simulation_job,
+)
+from backend.app.services.risk.quant.resampling import (
+    resolve_block_length,
+    resolve_regime_days,
 )
 from backend.app.services.risk.quant.spawn_worker import SpawnWorkerResult
 from backend.app.services.risk.quant.workers import (
@@ -46,6 +54,7 @@ from backend.app.services.risk_plugins.simulation import SimulationParams
 
 def engine_request(**overrides) -> SimulationEngineRequest:
     payload = {
+        "process": "gbm",
         "sampling_method": "mc",
         "asset_ids": [1, 2],
         "annual_drifts": [0.05, 0.03],
@@ -195,6 +204,7 @@ def test_simulation_params_normalize_legacy_sequence_contract():
     assert legacy_qmc == canonical_qmc
     assert legacy_mc.model_dump(mode="json", exclude_none=True) == {
         "process": "gbm",
+        "regime": "none",
         "sampling_method": "mc",
         "horizon_days": 365,
         "path_count": 1024,
@@ -202,6 +212,7 @@ def test_simulation_params_normalize_legacy_sequence_contract():
     }
     assert legacy_qmc.model_dump(mode="json", exclude_none=True) == {
         "process": "gbm",
+        "regime": "none",
         "sampling_method": "qmc",
         "horizon_days": 365,
         "path_count": 1024,
@@ -405,6 +416,7 @@ def test_quantlib_mc_matches_multivariate_gbm_oracle(
 ):
     asset_count = len(drifts)
     request = SimulationEngineRequest(
+        process="gbm",
         sampling_method="mc",
         asset_ids=list(range(1, asset_count + 1)),
         annual_drifts=drifts,
@@ -433,6 +445,7 @@ def test_quantlib_mc_matches_multivariate_gbm_oracle(
 
 def test_quantlib_handles_positive_semidefinite_and_zero_volatility():
     request = SimulationEngineRequest(
+        process="gbm",
         sampling_method="qmc",
         asset_ids=[1, 2, 3],
         annual_drifts=[0.05, 0.05, 0.01],
@@ -475,6 +488,7 @@ def test_quantlib_qmc_converges_over_dyadic_path_counts():
     for paths in (256, 1024, 4096):
         result = run_direct(
             SimulationEngineRequest(
+                process="gbm",
                 sampling_method="qmc",
                 asset_ids=[1, 2],
                 annual_drifts=drifts.tolist(),
@@ -660,3 +674,655 @@ def test_simulation_resource_limits_are_explicit():
         match="memory budget",
     ):
         validate_resource_budget(oversized)
+
+
+BOOTSTRAP_ALGORITHM_VERSION = "simulation@3.0.0-bootstrap-quantlib-1.43"
+
+
+def bootstrap_history(
+    *,
+    observations: int = 756,
+    asset_count: int = 2,
+    seed: int = 20260918,
+) -> np.ndarray:
+    """Build a synthetic simple-return history with a stable joint structure.
+
+    The draw is seeded because the correlation and dispersion expectations
+    below are read off *this* matrix: a history redrawn per run would turn
+    every one of them into a bet on the weather.
+    """
+    generator = np.random.default_rng(seed)
+    common = generator.normal(0.0002, 0.010, size=(observations, 1))
+    idiosyncratic = generator.normal(0.0, 0.0045, size=(observations, asset_count))
+    loadings = np.linspace(1.0, 0.85, asset_count)
+    return np.expm1(common * loadings + idiosyncratic)
+
+
+def bootstrap_request(
+    history: np.ndarray | None = None,
+    **overrides,
+) -> SimulationEngineRequest:
+    """Mirror ``engine_request`` for the resampling contract.
+
+    ``asset_ids`` and ``weights`` are derived from the matrix, so callers pass
+    a different history rather than re-declaring the two in step with it.
+    """
+    matrix = bootstrap_history() if history is None else history
+    asset_count = matrix.shape[1]
+    payload = {
+        "process": "block_bootstrap",
+        "sampling_method": "mc",
+        "asset_ids": list(range(1, asset_count + 1)),
+        "historical_returns": matrix.tolist(),
+        "historical_digest": historical_returns_digest(matrix),
+        "weights": [1 / asset_count] * asset_count,
+        "cash_weight": 0.0,
+        "horizon_days": 252,
+        "path_count": 4096,
+        "bootstrap_seed": 987654,
+    }
+    payload.update(overrides)
+    return SimulationEngineRequest.model_validate(payload)
+
+
+def terminal_log_dispersion(
+    result: SimulationEngineResult,
+) -> np.ndarray:
+    """Per-asset standard deviation of the terminal log return."""
+    return np.sqrt(
+        np.asarray(
+            result.terminal_asset_log_covariance,
+        ).diagonal(),
+    )
+
+
+def terminal_log_correlation(
+    result: SimulationEngineResult,
+) -> float:
+    """Pearson correlation between the first two resampled assets."""
+    covariance = np.asarray(
+        result.terminal_asset_log_covariance,
+    )
+    dispersion = np.sqrt(covariance.diagonal())
+    return float(
+        covariance[0, 1] / (dispersion[0] * dispersion[1]),
+    )
+
+
+def bootstrap_output(**overrides) -> RiskSimulationOutput:
+    """Build the renderer-facing result of a resampled simulation."""
+    payload = {
+        "process": RiskSimulationProcess.BLOCK_BOOTSTRAP,
+        "regime": RiskSimulationRegime.NONE,
+        "sampling_method": RiskSamplingStrategy.MC,
+        "horizon_days": 2,
+        "path_count": 512,
+        "block_length_days": 9,
+        "drift_estimator": (RiskSimulationDriftEstimator.EMPIRICAL_RESAMPLED),
+        "covariance_estimator": (RiskSimulationCovarianceEstimator.NOT_ESTIMATED_JOINT_RESAMPLING),
+        "aggregation_policy": (RiskCompositionPolicy.CURRENT_BUY_AND_HOLD),
+        "percentile_bands": [
+            RiskSimulationBandPoint(
+                day=day,
+                p05=-0.01 * day,
+                p50=0.0,
+                p95=0.01 * day,
+            )
+            for day in range(3)
+        ],
+        "terminal_mean_return": 0.01,
+        "terminal_volatility": 0.2,
+        "probability_of_loss": 0.4,
+    }
+    payload.update(overrides)
+    return RiskSimulationOutput(**payload)
+
+
+def test_block_bootstrap_is_reproducible_at_a_fixed_seed():
+    """Anchor every other resampling expectation in this file.
+
+    The bootstrap introduces a brand-new random draw. Without a seeded
+    reproducibility floor, a red anywhere below could always be blamed on the
+    sampler instead of on the claim under test.
+    """
+    request = bootstrap_request(horizon_days=120, path_count=2048)
+
+    first = run_direct(request)
+    second = run_direct(
+        SimulationEngineRequest.model_validate_json(
+            request.model_dump_json(),
+        ),
+    )
+
+    assert second == first
+    assert first.block_length_days == resolve_block_length(
+        len(request.historical_returns),
+    )
+    assert first.regime_declared_days is None
+    assert first.regime_applied_days is None
+
+
+def test_block_bootstrap_seed_selects_another_resample():
+    """Keep the reproducibility test above from passing on a constant."""
+    request = bootstrap_request(horizon_days=120, path_count=2048)
+
+    base = run_direct(request)
+    other = run_direct(
+        request.model_copy(update={"bootstrap_seed": 987655}),
+    )
+
+    assert other != base
+    assert other.percentile_paths != base.percentile_paths
+    assert other.block_length_days == base.block_length_days
+    assert other.terminal_volatility == pytest.approx(
+        base.terminal_volatility,
+        rel=0.2,
+    )
+
+
+def test_block_bootstrap_is_invariant_to_the_internal_chunk_boundary(
+    monkeypatch,
+):
+    """A machine with a different memory budget must simulate the same thing.
+
+    Block origins are drawn in one call before the work is sliced, so slicing
+    cannot move the seed. This configuration deliberately crosses the internal
+    boundary, and the assertion compares it against the same request run in a
+    single slice.
+    """
+    matrix = bootstrap_history(asset_count=4)
+    request = bootstrap_request(
+        matrix,
+        horizon_days=1000,
+        path_count=1536,
+    )
+    cells_per_path = request.horizon_days * len(request.asset_ids)
+    chunk_size = max(
+        1,
+        resampling_module._CELL_BUDGET // cells_per_path,
+    )
+
+    assert chunk_size < request.path_count
+    chunked = run_direct(request)
+
+    monkeypatch.setattr(
+        resampling_module,
+        "_CELL_BUDGET",
+        cells_per_path * request.path_count,
+    )
+    assert (resampling_module._CELL_BUDGET // cells_per_path) >= request.path_count
+    single_chunk = run_direct(request)
+
+    assert single_chunk == chunked
+
+
+def test_regimes_leave_the_resampled_correlation_invariant():
+    """Guard the on-screen claim that correlations stay those of the history.
+
+    Scaling dispersion and shifting level are the only two transformations a
+    regime applies, and both are correlation-preserving on a joint resample.
+    If this goes red, the hypothesis text became a lie.
+    """
+    matrix = bootstrap_history()
+    request = bootstrap_request(
+        matrix,
+        horizon_days=252,
+        path_count=4096,
+    )
+    correlations = {
+        regime: terminal_log_correlation(
+            run_direct(request.model_copy(update={"regime": regime})),
+        )
+        for regime in (
+            RiskSimulationRegime.NONE,
+            RiskSimulationRegime.CALM,
+            RiskSimulationRegime.PROLONGED_CRISIS,
+        )
+    }
+    observed_history = float(
+        np.corrcoef(np.log1p(matrix), rowvar=False)[0, 1],
+    )
+    baseline = correlations[RiskSimulationRegime.NONE]
+
+    assert baseline == pytest.approx(observed_history, abs=0.03)
+    for regime, correlation in correlations.items():
+        assert correlation == pytest.approx(baseline, abs=1e-9), regime
+
+
+def test_regime_dispersion_scales_by_the_declared_multiple():
+    """Calm narrows the spread to 0.7x, a prolonged crisis widens it to 2.5x.
+
+    The horizon is shorter than the crisis hypothesis, so the scale is uniform
+    over every simulated day and the log-scale ratio is exact. Do not reuse
+    that tolerance on a horizon long enough to outlast the regime window.
+    """
+    request = bootstrap_request(horizon_days=252, path_count=4096)
+
+    baseline = run_direct(request)
+    calm = run_direct(
+        request.model_copy(update={"regime": RiskSimulationRegime.CALM}),
+    )
+    crisis = run_direct(
+        request.model_copy(
+            update={"regime": RiskSimulationRegime.PROLONGED_CRISIS},
+        ),
+    )
+    calm_ratio = (terminal_log_dispersion(calm) / terminal_log_dispersion(baseline)).tolist()
+    crisis_ratio = (terminal_log_dispersion(crisis) / terminal_log_dispersion(baseline)).tolist()
+
+    assert calm_ratio == pytest.approx([0.7] * len(calm_ratio), rel=1e-9)
+    assert crisis_ratio == pytest.approx([2.5] * len(crisis_ratio), rel=1e-9)
+    assert calm.terminal_volatility / baseline.terminal_volatility == pytest.approx(0.7, abs=0.08)
+    assert crisis.terminal_volatility / baseline.terminal_volatility == pytest.approx(2.5, abs=0.25)
+    assert calm.regime_applied_days == request.horizon_days
+    assert crisis.regime_declared_days == 426
+    assert crisis.regime_applied_days == request.horizon_days
+
+
+def test_shock_recovery_regime_delivers_its_declared_fall():
+    """The preset is advertised as a 35% fall over two months."""
+    matrix = bootstrap_history(asset_count=1)
+    request = bootstrap_request(
+        matrix,
+        horizon_days=61,
+        path_count=8192,
+    )
+
+    baseline = run_direct(request)
+    shocked = run_direct(
+        request.model_copy(
+            update={"regime": RiskSimulationRegime.SHOCK_RECOVERY},
+        ),
+    )
+    baseline_median = baseline.percentile_paths[1][request.horizon_days]
+    shocked_median = shocked.percentile_paths[1][request.horizon_days]
+
+    assert shocked.regime_declared_days == 61
+    assert shocked.regime_applied_days == 61
+    # Exact, and independent of the history: the preset multiplies every path
+    # by one gross factor, and a quantile of a positively scaled sample scales
+    # with it.
+    assert (1 + shocked_median) / (1 + baseline_median) == pytest.approx(0.65, rel=1e-9)
+    # The figure the caption promises. It is approximate where the one above is
+    # exact, because what the user reads is the fall applied on top of the
+    # history's own drift -- here a median +1.6% over the two months.
+    assert shocked_median == pytest.approx(-0.35, abs=0.02)
+
+
+def test_prolonged_crisis_discloses_truncation_against_a_short_horizon():
+    """A 14-month crisis squeezed into a year is a different hypothesis."""
+    assert resolve_regime_days(
+        RiskSimulationRegime.PROLONGED_CRISIS,
+        365,
+    ) == (426, 365)
+    assert resolve_regime_days(
+        RiskSimulationRegime.PROLONGED_CRISIS,
+        500,
+    ) == (426, 426)
+    assert resolve_regime_days(
+        RiskSimulationRegime.SHOCK_RECOVERY,
+        30,
+    ) == (61, 30)
+    assert resolve_regime_days(RiskSimulationRegime.CALM, 30) == (30, 30)
+    assert resolve_regime_days(RiskSimulationRegime.NONE, 365) == (
+        None,
+        None,
+    )
+
+    request = bootstrap_request(
+        horizon_days=365,
+        path_count=1024,
+        regime=RiskSimulationRegime.PROLONGED_CRISIS,
+    )
+    truncated = run_direct(request)
+    untruncated = run_direct(
+        request.model_copy(update={"horizon_days": 500}),
+    )
+
+    assert truncated.regime_declared_days == 426
+    assert truncated.regime_applied_days == 365
+    assert untruncated.regime_declared_days == 426
+    assert untruncated.regime_applied_days == 426
+
+
+def test_simulation_output_refuses_an_undisclosed_regime():
+    """Disclosure is structural: the contract cannot be built without it."""
+    disclosed = bootstrap_output(
+        regime=RiskSimulationRegime.PROLONGED_CRISIS,
+        regime_declared_days=426,
+        regime_applied_days=365,
+    )
+
+    assert disclosed.regime_declared_days == 426
+    assert disclosed.regime_applied_days == 365
+
+    with pytest.raises(
+        ValidationError,
+        match="must disclose declared and applied",
+    ):
+        bootstrap_output(
+            regime=RiskSimulationRegime.PROLONGED_CRISIS,
+        )
+    with pytest.raises(
+        ValidationError,
+        match="must disclose declared and applied",
+    ):
+        bootstrap_output(
+            regime=RiskSimulationRegime.CALM,
+            regime_declared_days=365,
+        )
+    with pytest.raises(
+        ValidationError,
+        match="cannot exceed regime_declared_days",
+    ):
+        bootstrap_output(
+            regime=RiskSimulationRegime.PROLONGED_CRISIS,
+            regime_declared_days=61,
+            regime_applied_days=365,
+        )
+    with pytest.raises(
+        ValidationError,
+        match="must disclose block_length_days",
+    ):
+        bootstrap_output(block_length_days=None)
+    with pytest.raises(
+        ValidationError,
+        match="meaningful only for a prescribed regime",
+    ):
+        bootstrap_output(
+            regime_declared_days=365,
+            regime_applied_days=365,
+        )
+    with pytest.raises(
+        ValidationError,
+        match="meaningful only for the block bootstrap",
+    ):
+        bootstrap_output(process=RiskSimulationProcess.GBM)
+    with pytest.raises(
+        ValidationError,
+        match="require the block bootstrap process",
+    ):
+        bootstrap_output(
+            process=RiskSimulationProcess.GBM,
+            block_length_days=None,
+            regime=RiskSimulationRegime.CALM,
+            regime_declared_days=365,
+            regime_applied_days=365,
+        )
+
+
+def test_worker_rejects_history_that_does_not_match_its_digest():
+    """A cache key must never outlive the data it claims to describe."""
+    request = bootstrap_request(horizon_days=30, path_count=512)
+    stale_matrix = (np.asarray(request.historical_returns) * 1.5).tolist()
+
+    with pytest.raises(
+        ValueError,
+        match="do not match the digest",
+    ):
+        execute_simulation_job(
+            request.model_copy(
+                update={"historical_digest": "0" * 64},
+            ).model_dump(mode="json"),
+        )
+    with pytest.raises(
+        ValueError,
+        match="do not match the digest",
+    ):
+        execute_simulation_job(
+            request.model_copy(
+                update={"historical_returns": stale_matrix},
+            ).model_dump(mode="json"),
+        )
+
+    honest = run_direct(request)
+
+    assert honest.block_length_days == resolve_block_length(
+        len(request.historical_returns),
+    )
+
+
+def test_bootstrap_cache_key_is_content_addressed_and_bounded():
+    """The key is the digest, never the matrix: even a hit pays for the key."""
+    small = bootstrap_request(
+        bootstrap_history(observations=64),
+        horizon_days=30,
+        path_count=512,
+    )
+    large = bootstrap_request(
+        bootstrap_history(observations=5000, asset_count=50),
+        horizon_days=30,
+        path_count=512,
+    )
+    other_history = bootstrap_history(observations=64, seed=20260919)
+    changed = bootstrap_request(
+        other_history,
+        horizon_days=30,
+        path_count=512,
+    )
+    base_key = simulation_cache_key(
+        small,
+        algorithm_version=BOOTSTRAP_ALGORITHM_VERSION,
+    )
+
+    assert len(base_key) == 64
+    assert (
+        len(
+            simulation_cache_key(
+                large,
+                algorithm_version=BOOTSTRAP_ALGORITHM_VERSION,
+            ),
+        )
+        == 64
+    )
+    assert (
+        simulation_cache_key(
+            changed,
+            algorithm_version=BOOTSTRAP_ALGORITHM_VERSION,
+        )
+        != base_key
+    )
+    assert (
+        simulation_cache_key(
+            small.model_copy(update={"bootstrap_seed": 987655}),
+            algorithm_version=BOOTSTRAP_ALGORITHM_VERSION,
+        )
+        != base_key
+    )
+    assert (
+        simulation_cache_key(
+            small.model_copy(
+                update={"historical_returns": other_history.tolist()},
+            ),
+            algorithm_version=BOOTSTRAP_ALGORITHM_VERSION,
+        )
+        == base_key
+    )
+
+
+def test_bootstrap_and_parametric_contracts_are_mutually_exclusive():
+    """Neither contract can borrow a field that belongs to the other."""
+    with pytest.raises(
+        ValidationError,
+        match="must not carry an estimated drift",
+    ):
+        bootstrap_request(annual_drifts=[0.05, 0.03])
+    with pytest.raises(
+        ValidationError,
+        match="must not carry an estimated drift",
+    ):
+        bootstrap_request(
+            annual_covariance=[[0.04, 0.01], [0.01, 0.09]],
+        )
+    with pytest.raises(
+        ValidationError,
+        match="forbids random_seed and sobol_start_index",
+    ):
+        bootstrap_request(random_seed=7)
+    with pytest.raises(
+        ValidationError,
+        match="forbids random_seed and sobol_start_index",
+    ):
+        bootstrap_request(sobol_start_index=7)
+    with pytest.raises(
+        ValidationError,
+        match="requires mc sampling",
+    ):
+        bootstrap_request(sampling_method="qmc")
+    with pytest.raises(
+        ValidationError,
+        match="requires bootstrap_seed",
+    ):
+        bootstrap_request(bootstrap_seed=None)
+    with pytest.raises(
+        ValidationError,
+        match="requires aligned historical returns",
+    ):
+        bootstrap_request(
+            historical_returns=None,
+            historical_digest=None,
+        )
+    with pytest.raises(
+        ValidationError,
+        match="cannot exceed the observed history",
+    ):
+        bootstrap_request(block_length_days=5000)
+
+    for field, value in (
+        ("historical_returns", [[0.01, 0.02], [0.0, 0.0]]),
+        ("historical_digest", "0" * 64),
+        ("block_length_days", 5),
+        ("bootstrap_seed", 5),
+    ):
+        with pytest.raises(
+            ValidationError,
+            match=f"{field} is meaningful only",
+        ):
+            engine_request(**{field: value})
+    for regime in (
+        RiskSimulationRegime.CALM,
+        RiskSimulationRegime.PROLONGED_CRISIS,
+        RiskSimulationRegime.SHOCK_RECOVERY,
+    ):
+        with pytest.raises(
+            ValidationError,
+            match="require the block bootstrap process",
+        ):
+            engine_request(regime=regime)
+
+
+def test_block_length_follows_the_cube_root_rule_and_is_disclosed():
+    """The rule of thumb is a hypothesis about dependence: it must be shown."""
+    assert [resolve_block_length(observations) for observations in (30, 252, 1250, 2500)] == [3, 6, 11, 14]
+    assert resolve_block_length(30, 500) == 30
+    assert resolve_block_length(1250, 3) == 3
+
+    request = bootstrap_request(
+        bootstrap_history(observations=1250),
+        horizon_days=30,
+        path_count=512,
+    )
+    disclosed = run_direct(request)
+    overridden = run_direct(
+        request.model_copy(update={"block_length_days": 25}),
+    )
+
+    assert disclosed.block_length_days == 11
+    assert disclosed.regime_declared_days is None
+    assert disclosed.regime_applied_days is None
+    assert overridden.block_length_days == 25
+    assert overridden != disclosed
+
+
+def test_resource_budget_covers_history_as_well_as_paths():
+    """History crosses the process boundary, so it has to be budgeted too."""
+    oversized = bootstrap_request(
+        bootstrap_history(observations=2501, asset_count=100),
+        horizon_days=30,
+        path_count=256,
+    )
+    with pytest.raises(
+        SimulationResourceLimitError,
+        match="process-boundary budget",
+    ) as history_error:
+        validate_resource_budget(oversized)
+
+    assert history_error.value.metric == "history_cells"
+    assert history_error.value.actual == 2501 * 100
+    assert history_error.value.limit == MAX_HISTORY_CELLS
+
+    validate_resource_budget(
+        bootstrap_request(
+            bootstrap_history(observations=2500, asset_count=100),
+            horizon_days=30,
+            path_count=256,
+        ),
+    )
+
+    with pytest.raises(
+        SimulationResourceLimitError,
+        match="memory budget",
+    ) as portfolio_error:
+        validate_resource_budget(
+            bootstrap_request(horizon_days=365, path_count=100_000),
+        )
+    with pytest.raises(
+        SimulationResourceLimitError,
+        match="compute budget",
+    ) as stochastic_error:
+        validate_resource_budget(
+            bootstrap_request(
+                bootstrap_history(observations=60, asset_count=11),
+                horizon_days=365,
+                path_count=50_000,
+            ),
+        )
+
+    assert portfolio_error.value.metric == "portfolio_cells"
+    assert stochastic_error.value.metric == "stochastic_cells"
+    validate_resource_budget(
+        bootstrap_request(horizon_days=252, path_count=4096),
+    )
+
+
+def test_degenerate_collinear_history_still_resamples():
+    """A robustness floor, not a claim of accuracy.
+
+    A joint resample never inverts or factorises a covariance, so a perfectly
+    collinear history has no ill-conditioned matrix to reject: it must come
+    back with a result instead of the parametric path's INVALID_COVARIANCE.
+    """
+    matrix = bootstrap_history()
+    collinear = np.column_stack([matrix[:, 0], matrix[:, 0]])
+
+    result = run_direct(
+        bootstrap_request(
+            collinear,
+            horizon_days=60,
+            path_count=1024,
+        ),
+    )
+    covariance = np.asarray(
+        result.terminal_asset_log_covariance,
+    )
+
+    assert covariance[0, 0] == pytest.approx(
+        covariance[1, 1],
+        rel=1e-12,
+    )
+    assert covariance[0, 1] == pytest.approx(
+        covariance[0, 0],
+        rel=1e-12,
+    )
+    assert float(np.linalg.det(covariance)) == pytest.approx(0, abs=1e-12)
+    assert result.terminal_volatility > 0
+    assert result.block_length_days == resolve_block_length(
+        len(collinear),
+    )
+    assert all(
+        p05 <= p50 <= p95
+        for p05, p50, p95 in zip(
+            *result.percentile_paths,
+            strict=True,
+        )
+    )

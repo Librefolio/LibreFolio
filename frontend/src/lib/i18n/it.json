@@ -3060,7 +3060,33 @@
       "terminalDistribution": "Distribuzione finale",
       "p05": "P5 finale",
       "p50": "P50 finale",
-      "p95": "P95 finale"
+      "p95": "P95 finale",
+      "mode": {
+        "label": "Modalità di simulazione",
+        "recommended": "Consigliata",
+        "advanced": "Avanzata",
+        "block_bootstrap": {
+          "label": "Storia rimescolata",
+          "hypothesis": "I tuoi rendimenti reali, riordinati a blocchi. Nessuna ipotesi aggiunta."
+        },
+        "calm": {
+          "label": "Mercato calmo",
+          "hypothesis": "Ipotesi: le tue oscillazioni reali, ridotte del 30%. Correlazioni e direzione restano quelle della tua storia."
+        },
+        "prolonged_crisis": {
+          "label": "Crisi prolungata",
+          "hypothesis": "Ipotesi: oscillazioni ×2,5 e rendimento −20% annuo per 14 mesi. Le correlazioni restano quelle della tua storia."
+        },
+        "shock_recovery": {
+          "label": "Shock e recupero",
+          "hypothesis": "Ipotesi: un calo del 35% applicato alla tua storia in 2 mesi, poi la tua storia reale riprende."
+        },
+        "gbm": {
+          "label": "Curva normale (GBM)",
+          "hypothesis": "Modello classico: assume oscillazioni regolari e sottostima le code."
+        }
+      },
+      "regimeTruncated": "Questa ipotesi dura {declared} giorni; il tuo orizzonte ne copre solo {applied}."
     },
     "errors": {
       "analytic_not_found": "Analitica non disponibile.",

@@ -1,4 +1,4 @@
-"""QuantLib-only stochastic evolution executed inside a spawn worker."""
+"""Spawn-worker entry point for simulation: QuantLib evolution or resampling."""
 
 from __future__ import annotations
 
@@ -9,17 +9,19 @@ from typing import Any
 import numpy as np
 import QuantLib as ql
 
-from backend.app.schemas.risk import RiskSamplingStrategy
+from backend.app.schemas.risk import RiskSamplingStrategy, RiskSimulationProcess
 from backend.app.services.risk.quant.models import (
     SimulationEngineRequest,
     SimulationEngineResult,
 )
+from backend.app.services.risk.quant.resampling import run_block_bootstrap
 
 _PSD_RELATIVE_TOLERANCE = 1e-10
 _REQUIRED_QUANTLIB_VERSION = "1.43"
 
 
 def _validated_covariance(request: SimulationEngineRequest) -> np.ndarray:
+    assert request.annual_covariance is not None
     covariance = np.asarray(
         request.annual_covariance,
         dtype=np.float64,
@@ -72,6 +74,7 @@ def _build_process(
     request: SimulationEngineRequest,
     covariance: np.ndarray,
 ):
+    assert request.annual_drifts is not None
     volatilities = np.sqrt(
         np.clip(np.diag(covariance), 0.0, None),
     )
@@ -236,37 +239,48 @@ def _run_qmc(
 
 
 def execute_simulation_job(payload: dict[str, Any]) -> dict[str, Any]:
-    """Validate, evolve and aggregate one simulation request."""
+    """Validate, evolve or resample, then aggregate one simulation request."""
     total_started = time.perf_counter()
     if ql.__version__ != _REQUIRED_QUANTLIB_VERSION:
         raise RuntimeError(
             "risk simulation requires QuantLib 1.43",
         )
     request = SimulationEngineRequest.model_validate(payload)
-    covariance = _validated_covariance(request)
-    process_started = time.perf_counter()
-    process, dependencies = _build_process(
-        request,
-        covariance,
-    )
-    process_build_seconds = time.perf_counter() - process_started
-    if request.sampling_method == RiskSamplingStrategy.MC:
-        portfolio_returns, terminal_log_returns, stage_timings = _run_mc(
-            request,
-            process,
-        )
+    disclosure: dict[str, int | None] = {}
+    if request.process == RiskSimulationProcess.BLOCK_BOOTSTRAP:
+        process_build_seconds = 0.0
+        (
+            portfolio_returns,
+            terminal_log_returns,
+            stage_timings,
+            disclosure,
+        ) = run_block_bootstrap(request)
     else:
-        portfolio_returns, terminal_log_returns, stage_timings = _run_qmc(
+        covariance = _validated_covariance(request)
+        process_started = time.perf_counter()
+        process, dependencies = _build_process(
             request,
-            process,
+            covariance,
         )
+        process_build_seconds = time.perf_counter() - process_started
+        if request.sampling_method == RiskSamplingStrategy.MC:
+            portfolio_returns, terminal_log_returns, stage_timings = _run_mc(
+                request,
+                process,
+            )
+        else:
+            portfolio_returns, terminal_log_returns, stage_timings = _run_qmc(
+                request,
+                process,
+            )
+        _ = dependencies
     if not np.isfinite(portfolio_returns).all():
         raise FloatingPointError(
-            "QuantLib produced non-finite portfolio paths",
+            "simulation produced non-finite portfolio paths",
         )
     if not np.isfinite(terminal_log_returns).all():
         raise FloatingPointError(
-            "QuantLib produced non-finite terminal log returns",
+            "simulation produced non-finite terminal log returns",
         )
 
     aggregation_started = time.perf_counter()
@@ -278,7 +292,7 @@ def execute_simulation_job(payload: dict[str, Any]) -> dict[str, Any]:
             ddof=1,
         ),
     )
-    result_payload = {
+    result_payload: dict[str, Any] = {
         "percentile_paths": np.quantile(
             portfolio_returns,
             [0.05, 0.5, 0.95],
@@ -298,6 +312,7 @@ def execute_simulation_job(payload: dict[str, Any]) -> dict[str, Any]:
             axis=0,
         ).tolist(),
         "terminal_asset_log_covariance": log_covariance.tolist(),
+        **disclosure,
     }
     result_aggregation_seconds = time.perf_counter() - aggregation_started
     if request.diagnostics:
@@ -308,7 +323,6 @@ def execute_simulation_job(payload: dict[str, Any]) -> dict[str, Any]:
             "total_seconds": time.perf_counter() - total_started,
         }
     result = SimulationEngineResult(**result_payload)
-    _ = dependencies
     return result.model_dump(mode="json")
 
 
