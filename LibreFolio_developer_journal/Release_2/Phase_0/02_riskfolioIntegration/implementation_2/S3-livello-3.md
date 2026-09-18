@@ -72,8 +72,18 @@ backend/  — per volatilità e rendimento per-asset (concorda con il coordinato
 
 **① Il selettore del confronto tronca** invece di riposizionarsi. Il developer:
 *«dovrebbe scendere finché la pagina ha spazio, e nel caso mostrarsi verso l'alto»*.
-✅ **`Tooltip.svelte` ha già quella logica** — flip a `:267`, clamp a `:314`. `PRIMITIVE.md`
-la elenca. **Non scrivere un popover nuovo.**
+
+> 🔴 **Correzione (18 Set, trovata da S3).** Avevo scritto: *«`Tooltip.svelte` ha già quella
+> logica — flip a `:267`, clamp a `:314`. Non scrivere un popover nuovo.»* **`Tooltip` non
+> c'entra.** Il selettore non è un popover scritto a mano: è `AssetSelect` → **`SearchSelect`**,
+> che ha già `position: fixed` calcolata a mano (`:169-177`, quindi esce da qualunque
+> `overflow: hidden`) e `dropdownPosition: 'top' | 'bottom' | 'auto'` (`:153-166`).
+> `AssetSelect` inoltra già la prop (`:62`) e **`L3Benchmark.svelte:84` non la passa** → default
+> `'bottom'` → la lista **si tronca invece di ribaltarsi**. **La riparazione è una prop.**
+> ⚠️ E ci sono **due** troncature diverse — la lista che non si ribalta, e i nomi tagliati da
+> `max-w-xs` sul trigger: **quale intendesse il developer va visto nel browser**, non dedotto.
+> 📌 Ho indicato la primitiva sbagliata avendo verificato che `Tooltip` esiste e fa quel lavoro
+> **da un'altra parte**: R2-19, stessa forma delle altre quattro.
 
 **② Mancano i grafici concordati**: lo scatter §7.5 è il tuo, e con `ScatterChart` già pronto il
 costo è quasi tutto backend.

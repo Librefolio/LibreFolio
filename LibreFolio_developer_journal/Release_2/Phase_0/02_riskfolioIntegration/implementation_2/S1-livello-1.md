@@ -102,9 +102,16 @@ Underwater chart                       ← 7.1
 🔑 **L'Ulcer index sotto il grafico, non in una riga sua**: da solo è un numero senza unità che
 nessuno sa leggere. Sotto la curva che lo genera **diventa la sua didascalia e si spiega da sé**.
 
-⚠️ **Le quattro misure non hanno una pagina di documentazione.** Le 22 di I coprono il catalogo
-del design, e queste non c'erano. **Chiedile a T2 oppure consegna senza `DocsLink`** — mai con un
-link che punta al nulla, che è l'errore del round 1.
+> 🔴 **Correzione (18 Set, trovata da S1).** Avevo scritto: *«Le quattro misure non hanno una
+> pagina di documentazione. Chiedile a T2 oppure consegna senza `DocsLink`.»* **Falso: esistono
+> tutte e quattro**, 82/90/125/111 righe, sotto
+> `mkdocs_src/docs/financial-theory/technical-analysis/risk-metrics/`. ✅ **T2 esce dal percorso
+> critico di S1.** Il conteggio «22 pagine» era giusto — **non è mai stato usato per controllare
+> l'inventario**, ed è esattamente lì che ho sbagliato (R2-19).
+>
+> **URL corretto**: `financial-theory/technical-analysis/risk-metrics/<slug>/` — prefisso
+> completo, **senza `.md`**, **con lo slash finale**. ⚠️ Il cancello di `dev.py:1238` salta i
+> `path={espressione}`: **aprili nel browser**.
 
 ---
 
@@ -112,8 +119,13 @@ link che punta al nulla, che è l'errore del round 1.
 
 **① I link alla documentazione sono sbagliati in due modi.** I sei `DocsLink` dei livelli puntano
 a `user/analysis/risk.md#…`: quella cartella **non esiste**, e la forma con `.md#ancora` è
-sbagliata comunque perché `use_directory_urls` è `true` per default. **Non ripararli tu** — è di
-T2 — ma **non aggiungerne di nuovi sbagliati**. `PRIMITIVE.md` ha la convenzione.
+sbagliata comunque perché `use_directory_urls` è `true` per default.
+
+> 🔄 **Decisione cambiata (18 Set).** Avevo scritto *«non ripararli tu — è di T2»*. **Il debito
+> dei `DocsLink` è di chi possiede il file**, non di T2: T2 tiene solo quelli che stanno in file
+> di nessuno, più il cancello. Motivo, sollevato da S3: **non si possono aggiungere link corretti
+> accanto a tre sbagliati senza che la card si contraddica.** Ripara quelli che stanno in casa
+> tua, con il percorso verificato per intero.
 
 **② Niente `toFixed` nuovi.** Nel perimetro `components/risk/levels/` ce ne sono **16**; nel
 perimetro `components/risk/` sono **26**. *(Due numeri veri di due perimetri diversi: `PRIMITIVE.md`

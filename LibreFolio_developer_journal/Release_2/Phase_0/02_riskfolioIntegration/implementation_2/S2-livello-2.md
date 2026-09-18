@@ -64,6 +64,8 @@ documento e va riportato**, non aggirato.
 |---|---|---|
 | `effective_number_of_assets` | ✅ **14,97** | ✅ |
 | `diversification_ratio` | ✅ **1,94** | ✅ |
+
+> ⚠️ **`14,97` e `1,94` sono misure del 18 Set su corsia `aae526009`, finestra non dichiarata — e `1,94` ha da allora TRE referenti**: l'ANTE misurato da S2, il **post-A previsto da N (`1,9436`)**, e questa trascrizione. **Non usarli per un raffronto**: vale il vincolo Ⓕ di `_comune.md` — *nessun numero che integri sulla finestra*. Le cifre vive stanno in `progress/N2-esecuzione.md`, con corsia, finestra e `composition_as_of` accanto. Vedi **R2-42**, **R2-53**.
 | `cash_weight` | ✅ **0,493** | ✅ |
 
 **Questi tre ci sono già.** ⚠️ Ma `effective_number_of_assets` **non è un conteggio**, malgrado il
