@@ -1360,6 +1360,102 @@ A separate owner integrates G3 after F and the backend calendar signal:
 > portfolio-engine` 42/42, `api portfolio` 25/25, ruff clean, black clean,
 > svelte-check 0 errors, Vitest 4826/4826, Prettier clean, front build clean.
 
+### 6.0.4 Post-review crash fix — candles on a category axis (2026-09-18)
+
+> **⚠️ Fuori pista (batch 2 shipped broken; one `null` killed the whole chart, 2026-09-18):**
+> batch 2 was committed as `d5e834de4` and the developer's review found the Growth
+> chart dead: no candles, ~22 console errors on mouse-move, and an apparent freeze
+> where changing the date range repainted nothing. Three symptoms, **one cause**.
+>
+> `toCandlestickPoint` returned `null` for a gap bucket. On a **category** base axis
+> the candlestick series clones its data through
+> `whiskerBoxCommon.getInitialData`, which branches
+> `isArray(item) → … else if (isArray(item.value))` — so a `null` item dereferences
+> `null.value` and throws **inside `SeriesModel.init`**, before `GlobalModel`
+> finishes building. With no `_seriesIndices`, every subsequent `setOption`
+> silently no-ops: the data layer kept fetching correctly (the report POST fired on
+> every range change) but nothing could repaint, so the canvas kept showing the
+> *previous* submode's paint. That is why "Candles" was selected while a line with
+> an area fill was on screen — not a rendering bug, a dead model.
+>
+> Fixed by returning ECharts' documented empty-value sentinel `'-'` instead. The gap
+> must still **occupy its slot**: a category axis aligns by position, so omitting
+> gap points would desync every later candle. Verified against this exact echarts
+> build rather than inferred — `null` throws
+> `Cannot read properties of null (reading 'value')`, `'-'` renders. Both other
+> symptoms disappeared with that one line; no separate work was needed for either.
+>
+> **A second-order concern was raised and disproved.** The same ECharts loop does
+> `item.unshift(index)` with the comment "Modify current using data", which reads
+> like it mutates caller-owned arrays — dangerous for a design that reuses series
+> data across partial updates. Probed three ways (full `setOption`, then partial
+> `setOption` twice with `updateChartData`'s exact
+> `{notMerge:false, replaceMerge:['dataZoom']}`): the array came back untouched
+> every time. ECharts deep-clones the incoming option *before* that loop, so the
+> mutation hits its own clone. Recorded so nobody spends a cycle defending against
+> a hazard that the public API already closes.
+>
+> **Root-cause lesson: the test suite could not have caught this.** Every guard was
+> a source-contract/reimplementation test — they pin what the code *says*, and the
+> crash only exists when real ECharts initialises the series. The suite was green,
+> svelte-check was green, the production build was green, and the feature was
+> dead on arrival. Closed by a new SSR regression guard (see below): the class of
+> defect that reaches a developer is the one no layer of the pyramid was watching.
+
+> **Note implementazione (legend sentinel + layout swap, 2026-09-18):** two further
+> review findings fixed in the same pass.
+>
+> `legend` set no `data`, so ECharts derived entries from *every* series name and
+> the internal `__pnlReference__` decoration leaked into the UI. Rather than
+> hand-listing the real names (a second place that must remember the magic string),
+> the sentinel became a single module-level `PNL_REFERENCE_SERIES_NAME` constant
+> referenced at both construction sites, and `legend.data` is now **derived** from
+> the series array with that constant filtered out — so a future series is included
+> automatically and only genuine non-data decorations opt out. The `Set` dedupe is
+> deliberate: the positive/negative halves deliberately share `pnlLabels.total` and
+> must collapse to ONE "Total P&L" entry that toggles both halves.
+>
+> Layout swapped per the developer: submode toggle to the **left**, window selector
+> into the vacated **top-right**. Measured, not eyeballed (chart midpoint 606,
+> toggle x=306, window x=760). The move collided with `ResolutionBadge`'s former
+> solo top-left slot; reconciled by reusing `PriceChartFull`'s own established
+> pattern — its controls and the badge already share one left-aligned flex row with
+> the badge last — rather than inventing a placement or displacing the badge
+> silently. Note for future screenshots: `ResolutionBadge` self-hides at `daily`
+> resolution (pre-existing), so its absence is not a regression.
+
+> **Note implementazione (regression guard for the crash class, 2026-09-18):**
+> test-author re-pinned the 2 source-contract tests that correctly went red on the
+> deliberate literal changes, found **2 further knock-ons** coupled to the same
+> literals, and — asked whether a real guard was feasible — built one: **+6 tests**
+> driving a headless `echarts.init(null, null, {renderer:'svg', ssr:true})` with a
+> gap-containing candlestick on a category axis.
+>
+> Three details worth keeping. (1) `renderer:'svg'` is **load-bearing**: the canvas
+> painter dereferences the null root and dies inside zrender, so the choice is not
+> incidental. (2) The control asserts the *consequence*, not merely the throw —
+> probing found that on a crashed instance `chart.getOption().series` is `[]`, a
+> public, type-legal measurement of the dead-model diagnosis, with the green path
+> asserting the exact inverse (2 series, addressable via
+> `convertToPixel({seriesIndex: 0})`). That pins the whole
+> "throw → dead model → silent no-op → apparent freeze" chain rather than its first
+> link. (3) test-author closed its own loop: the guard exercises the
+> *reimplementation*, so it would still pass if the real source regressed — so a
+> further test asserts the fixture's sentinel is literally the one the component
+> declares. Verified by simulation: revert-to-null caught, sentinel changed to `''`
+> caught twice, constant removed caught.
+>
+> Also pinned deliberately: the candlestick gap is `'-'` while the broker-overlay
+> line gap stays `null` — these differ **on purpose** (different series types), and
+> the test says so, because it reads like an inconsistency someone would otherwise
+> "tidy" into one.
+>
+> Final gates: Vitest **4832/4832**, svelte-check 0 errors, Prettier clean, front
+> build clean. Backend untouched this round (495/495 from the previous round still
+> current). Browser-verified on the live lane: **181 green + 1331 red** candle-body
+> pixels, **zero** console errors, canvas signature **changes** on range change
+> (repaint live), legend reads `Total P&L · Interactive Brokers · Coinbase`.
+
 ## 6. Dependency-safe phases and owners
 
 | Phase | Size | Owner | Dependency | Deliverable | Status |
