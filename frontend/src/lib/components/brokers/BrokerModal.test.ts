@@ -174,6 +174,30 @@ function expectRetained(callbacks: Awaited<ReturnType<typeof mountAndSubmit>>) {
     expect(mocks.toasts.success).not.toHaveBeenCalled();
 }
 
+describe('BrokerModal — tour preview', () => {
+    it('exposes the currency anchor while removing every save path and refusing a forced form submit', async () => {
+        const {callbacks} = mountModal({
+            tourPreview: true,
+            initialData: {...BASE_INITIAL_DATA, name: 'Owned tour preview broker'},
+        });
+
+        const anchor = await screen.findByTestId('broker-tour-currency');
+        expect(anchor).toBeVisible();
+        expect(screen.queryByTestId('broker-form-submit')).toBeNull();
+
+        const form = anchor.closest('form');
+        if (!form) throw new Error('Broker tour currency anchor is not inside the preview form');
+        await fireEvent.submit(form);
+
+        expect(mocks.create).not.toHaveBeenCalled();
+        expect(mocks.update).not.toHaveBeenCalled();
+        expect(callbacks.oncreated).not.toHaveBeenCalled();
+        expect(callbacks.onupdated).not.toHaveBeenCalled();
+        expect(callbacks.onclose).not.toHaveBeenCalled();
+        expect(screen.getByTestId('broker-modal')).toBeVisible();
+    });
+});
+
 describe('BrokerModal — known duplicate responses', () => {
     it.each([
         {kind: 'self', message: `You already have a broker named '${NAME}'`, key: 'duplicate-own'},

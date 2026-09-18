@@ -135,6 +135,51 @@ describe('AssetModal — rendering & mode', () => {
         // A populated name makes the form valid → save enabled.
         await waitFor(() => expect(saveBtn()).toBeEnabled());
     });
+
+    it('keeps the configuration anchor explanatory in tour preview while removing save and every mutation path', async () => {
+        const oncreated = vi.fn();
+        const onupdated = vi.fn();
+        const onclose = vi.fn();
+        render(AssetModal, {
+            open: true,
+            tourPreview: true,
+            initialNoProvider: true,
+            oncreated,
+            onupdated,
+            onclose,
+        });
+        await waitForForm();
+
+        const anchor = screen.getByTestId('asset-modal-currency-group');
+        expect(anchor).toBeVisible();
+        const providerHeader = screen.getByTestId('asset-modal-provider-header');
+        expect(providerHeader).toHaveAttribute('role', 'button');
+        expect(providerHeader).toHaveAttribute('tabindex', '0');
+        await waitFor(() => expect(providerHeader).toHaveAttribute('data-expanded', 'true'));
+
+        const noProvider = screen.getByTestId('asset-modal-no-provider');
+        expect(noProvider).toBeEnabled();
+        expect(noProvider).not.toBeChecked();
+
+        const providerSelect = await screen.findByTestId('provider-code-select-button');
+        expect(providerSelect).toBeEnabled();
+        expect(screen.getByTestId('provider-identifier')).toBeEnabled();
+        expect(screen.queryByTestId('asset-modal-save')).toBeNull();
+
+        // Make the draft valid so the missing save path, rather than validation,
+        // is what prevents a write.
+        await fill('asset-modal-display-name', 'Owned tour preview asset');
+        expect(nameInput()).toHaveValue('Owned tour preview asset');
+        expect(screen.queryByTestId('asset-modal-save')).toBeNull();
+        expect(createFn()).not.toHaveBeenCalled();
+        expect(patchFn()).not.toHaveBeenCalled();
+        expect(zodiosApi.assign_providers_bulk_api_v1_assets_provider_post).not.toHaveBeenCalled();
+        expect(removeProviderFn()).not.toHaveBeenCalled();
+        expect(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post).not.toHaveBeenCalled();
+        expect(oncreated).not.toHaveBeenCalled();
+        expect(onupdated).not.toHaveBeenCalled();
+        expect(onclose).not.toHaveBeenCalled();
+    });
 });
 
 // =========================================================================

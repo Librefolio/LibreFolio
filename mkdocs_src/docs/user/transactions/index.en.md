@@ -38,6 +38,21 @@ Duplicating works the same way: **Clone** from the context menu stages a copy in
 
 | **Composite & Promotion** | Link single operations (like two cash legs) into a **Composite Transaction** via **Promotion** to enable advanced tracking and portfolio analytics, or split a composite transaction back into single operations. | [Transaction Form](form.md#composite-transactions) |
 
+## 🧭 Contextual guides
+
+The Transactions overview, **Add Transaction** form, bulk workspace, and
+**[Import Wizard](import/how-to.md#guided-first-import)** each have their own contextual guide.
+They start only when the matching page, form, or milestone is available and never edit a draft
+or press a button for you.
+
+The bulk guide uses four independent checkpoint notices: workspace, validation ready, row
+selection, and ready to save. Each notice uses **Got it**. It has no sequence number,
+**Back**, or **Finish** control, because a later checkpoint appears only when the bulk workspace
+actually reaches that state. **Save All** remains the explicit action that commits valid drafts.
+
+You can arm any of these guides again from
+**[Settings → Preferences → Onboarding and guides](../settings/preferences.md#onboarding-and-guides)**.
+
 ---
 
 ## 🔗 Related

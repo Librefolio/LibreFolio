@@ -2,13 +2,11 @@
 /**
  * AssetTable — component test (Vitest + jsdom).
  *
- * Subject: the F15 usage badge in the `txCount` column. The badge's colour IS
- * the feature — it is how the table tells "used by your brokers" (emerald)
- * from "used only by other users" (blue) from "never used / under analysis"
- * (gray) at a glance — so here, exceptionally, the assertion reads the class
- * token, because the class is the contract the fix delivers (this is the
- * badge-palette exception the F15 task sanctions; behaviour is still located
- * by row id and column, never by position).
+ * Subjects: the F15 usage badge plus lifecycle filtering, ordering and the
+ * inactive table/card treatments. Their colours ARE the features — usage scope
+ * and lifecycle are communicated visually at a glance — so here, exceptionally,
+ * assertions read the class tokens that deliver those contracts. Behaviour is
+ * still located by semantic attributes and deterministic ids, never by position.
  *
  * The store loaders the component kicks off (`ensureCurrenciesLoaded`,
  * `ensureAssetProvidersCached`) are fail-soft by design, so a `$lib/api` mock
@@ -30,15 +28,17 @@ vi.mock('$lib/api', () => ({
 }));
 
 import {render, screen, setupI18n, waitFor} from '$test/component';
+import AssetCard from './AssetCard.svelte';
 import AssetTable, {type AssetRow} from './AssetTable.svelte';
+import {matchesAssetLifecycle, orderAssetsByLifecycle} from './assetLifecycle';
 
-function row(id: number, txCount: number, txScope: AssetRow['txScope']): AssetRow {
+function row(id: number, txCount: number, txScope: AssetRow['txScope'], active = true): AssetRow {
     return {
         id,
         display_name: `Asset ${id}`,
         currency: 'EUR',
         asset_type: 'STOCK',
-        active: true,
+        active,
         txCount,
         txScope,
     };
@@ -58,6 +58,103 @@ function badgeIn(rowElement: HTMLElement): HTMLElement | null {
 
 beforeAll(async () => {
     await setupI18n();
+});
+
+describe('asset lifecycle', () => {
+    it.each([
+        {
+            label: 'active only',
+            showActive: true,
+            showInactive: false,
+            expected: ['active'],
+        },
+        {
+            label: 'inactive only',
+            showActive: false,
+            showInactive: true,
+            expected: ['inactive'],
+        },
+        {
+            label: 'both toggles form a union',
+            showActive: true,
+            showInactive: true,
+            expected: ['active', 'inactive'],
+        },
+        {
+            label: 'neither toggle means no lifecycle filter',
+            showActive: false,
+            showInactive: false,
+            expected: ['active', 'inactive'],
+        },
+    ])('$label', ({showActive, showInactive, expected}) => {
+        const assets = [
+            {name: 'active', active: true},
+            {name: 'inactive', active: false},
+        ];
+
+        expect(assets.filter((asset) => matchesAssetLifecycle(asset.active, showActive, showInactive)).map((asset) => asset.name)).toEqual(expected);
+    });
+
+    it('orders active assets first while preserving the prior name order within each group', () => {
+        const nameOrdered = [
+            {id: 1, name: 'Alpha inactive', active: false},
+            {id: 2, name: 'Bravo active', active: true},
+            {id: 3, name: 'Charlie active', active: true},
+            {id: 4, name: 'Delta inactive', active: false},
+        ];
+
+        expect(orderAssetsByLifecycle(nameOrdered).map((asset) => asset.name)).toEqual(['Bravo active', 'Charlie active', 'Alpha inactive', 'Delta inactive']);
+        expect(nameOrdered.map((asset) => asset.name)).toEqual(['Alpha inactive', 'Bravo active', 'Charlie active', 'Delta inactive']);
+    });
+
+    it('marks only the inactive table row and keeps both lifecycle status dots', async () => {
+        render(AssetTable, {
+            data: [row(21, 1, 'own'), row(22, 0, 'analysis', false)],
+        });
+
+        await waitFor(() => {
+            expect(document.querySelectorAll('tbody tr[data-row-id]')).toHaveLength(2);
+        });
+
+        const active = rowEl(21);
+        const inactive = rowEl(22);
+        expect(active).not.toHaveClass('asset-row-inactive');
+        expect(inactive).toHaveClass('asset-row-inactive');
+        expect(active.querySelector('span.w-2.h-2.rounded-full.bg-emerald-500')).not.toBeNull();
+        expect(inactive.querySelector('span.w-2.h-2.rounded-full.bg-red-400')).not.toBeNull();
+    });
+
+    it('publishes inactive card lifecycle and amber surfaces while the active card stays neutral', () => {
+        render(AssetCard, {
+            asset: {
+                id: 31,
+                display_name: 'Active card',
+                currency: 'EUR',
+                asset_type: 'STOCK',
+                provider_code: null,
+                active: true,
+            },
+        });
+        render(AssetCard, {
+            asset: {
+                id: 32,
+                display_name: 'Inactive card',
+                currency: 'EUR',
+                asset_type: 'STOCK',
+                provider_code: null,
+                active: false,
+            },
+        });
+
+        const active = screen.getByTestId('asset-card-31');
+        const inactive = screen.getByTestId('asset-card-32');
+        expect(active).toHaveAttribute('data-lifecycle', 'active');
+        expect(active).toHaveClass('bg-white', 'dark:bg-slate-800');
+        expect(active).not.toHaveClass('bg-amber-50');
+        expect(active).not.toHaveClass('dark:bg-amber-950/30');
+        expect(inactive).toHaveAttribute('data-lifecycle', 'inactive');
+        expect(inactive).toHaveClass('bg-amber-50', 'dark:bg-amber-950/30');
+    });
 });
 
 describe('AssetTable — F15 usage badge', () => {

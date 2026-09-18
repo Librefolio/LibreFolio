@@ -85,6 +85,7 @@ plugins:
             "🧠 AI Export": "🧠 Esportazione AI"
             "🧰 Tools": "🧰 Strumenti"
             PAC allocator: Allocatore PAC
+            Portfolio rebalancer: Ribilanciatore del portafoglio
             "🏦 Brokers": "🏦 Broker"
             Broker Sharing: Condivisione Broker
             Broker Transactions: Transazioni del broker
@@ -263,6 +264,7 @@ plugins:
             "🧠 AI Export": "🧠 Export IA"
             "🧰 Tools": "🧰 Outils"
             PAC allocator: Allocateur PAC
+            Portfolio rebalancer: Rééquilibreur de portefeuille
             "🏦 Brokers": "🏦 Courtiers"
             Broker Sharing: Partage de Courtier
             Broker Transactions: Transactions du broker
@@ -441,6 +443,7 @@ plugins:
             "🧠 AI Export": "🧠 Exportación de IA"
             "🧰 Tools": "🧰 Herramientas"
             PAC allocator: Asignador PAC
+            Portfolio rebalancer: Rebalanceador de cartera
             "🏦 Brokers": "🏦 Brokers"
             Broker Sharing: Compartir Broker
             Broker Transactions: Transacciones del bróker
@@ -683,6 +686,7 @@ nav:
       - 🧰 Tools:
           - Overview: user/tools/index.md
           - PAC allocator: user/tools/pac-allocator/index.md
+          - Portfolio rebalancer: user/tools/portfolio-rebalancer/index.md
       - 📈 Assets:
           - Overview: user/assets/index.md
           - Create & Edit: user/assets/create-edit.md

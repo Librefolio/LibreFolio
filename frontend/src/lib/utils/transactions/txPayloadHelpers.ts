@@ -79,6 +79,53 @@ export const PATCHABLE_FIELDS = new Set(['type', 'date', 'quantity', 'cash', 'ta
 //  Sign-flip helpers
 // =============================================================================
 
+interface ExactDecimalParts {
+    /** -1 for negative, 0 for every representation of zero, 1 for positive. */
+    sign: -1 | 0 | 1;
+    /** Input magnitude with its exact decimal digits preserved. */
+    unsigned: string;
+    /** Representation-normalized magnitude used only for exact equality. */
+    canonicalMagnitude: string;
+}
+
+/**
+ * Parse the plain-decimal strings accepted by transaction payloads without ever
+ * routing their digits through JavaScript's floating-point number type.
+ */
+function exactDecimalParts(value: unknown): ExactDecimalParts | null {
+    if (typeof value !== 'string') return null;
+    const trimmed = value.trim();
+    const match = /^([+-]?)(?:(\d+)(?:\.(\d*))?|\.(\d+))$/.exec(trimmed);
+    if (!match) return null;
+
+    const integer = match[2] ?? '';
+    const fraction = match[3] ?? match[4] ?? '';
+    const unsigned = trimmed.replace(/^[+-]/, '');
+    const zero = !/[1-9]/.test(`${integer}${fraction}`);
+    const canonicalInteger = (integer || '0').replace(/^0+(?=\d)/, '');
+    const canonicalFraction = fraction.replace(/0+$/, '');
+    const canonicalMagnitude = canonicalFraction ? `${canonicalInteger}.${canonicalFraction}` : canonicalInteger;
+    return {
+        sign: zero ? 0 : match[1] === '-' ? -1 : 1,
+        unsigned,
+        canonicalMagnitude,
+    };
+}
+
+/** Exact sign classification for a transaction decimal string. */
+export function exactDecimalSign(value: unknown): -1 | 0 | 1 | null {
+    return exactDecimalParts(value)?.sign ?? null;
+}
+
+/** Exact numeric equality for plain-decimal strings, ignoring representation-only zeros. */
+export function exactDecimalEqual(a: unknown, b: unknown): boolean {
+    const left = exactDecimalParts(a);
+    const right = exactDecimalParts(b);
+    if (!left || !right) return a === b;
+    if (left.sign !== right.sign) return false;
+    return left.sign === 0 || left.canonicalMagnitude === right.canonicalMagnitude;
+}
+
 /** Apply sign-flip rules based on the TypeRule. Pure function, no side effects.
  *
  * Both directions are enforced, not just the negative one: a rule that says "positive"
@@ -93,10 +140,13 @@ export function applySignRules(qty: string, cash: CashValue | null | undefined, 
 
 /** Coerce a numeric string to the sign a rule demands, leaving free-sign rules alone. */
 export function applySign(value: string, rule: string): string {
-    const n = Number(value);
-    if (!Number.isFinite(n)) return value;
-    if (rule === 'negative') return String(-Math.abs(n));
-    if (rule === 'positive') return String(Math.abs(n));
+    // Preserve the established payload fallback for an absent signed field
+    // without using Number('') as the coercion mechanism.
+    if (value.trim() === '' && (rule === 'negative' || rule === 'positive')) return '0';
+    const parsed = exactDecimalParts(value);
+    if (!parsed) return value;
+    if (rule === 'negative') return parsed.sign === 0 ? parsed.unsigned : `-${parsed.unsigned}`;
+    if (rule === 'positive') return parsed.unsigned;
     return value;
 }
 
@@ -115,7 +165,7 @@ export function buildSignedCash(cash: CashValue | null | undefined, rule: string
  *     `fieldsFromTx`), because the form shows a magnitude and the *type* carries the sign.
  *
  * Applying the type's sign rule is safe on both, because `applySign` is idempotent: `'negative'`
- * maps to `-Math.abs(n)`, so a value that is already negative comes back unchanged. Free-sign
+ * adds exactly one leading minus to a non-zero decimal magnitude. Free-sign
  * rules (`free`/`any`/`nonzero` — ADJUSTMENT, TRANSFER legs) pass through untouched, which is
  * required rather than incidental: there the sign *is* information.
  *
@@ -138,17 +188,17 @@ export function signedCashAmount(cash: CashValue | null | undefined, rule: TypeR
 /** Compare two field values with type-aware normalization.
  *  Prevents spurious diffs from format differences ("0.1" vs "0.100000"). */
 export function fieldEq(key: string, a: unknown, b: unknown): boolean {
-    // Numeric fields: compare as numbers to ignore string format diffs
+    // Decimal fields: compare exact digits while ignoring representation-only zeros.
     if (key === 'quantity') {
-        return Number(a) === Number(b);
+        return exactDecimalEqual(a, b);
     }
-    // Cash: compare code strict + numeric amount
+    // Cash: compare code strictly and amount as an exact decimal string.
     if (key === 'cash') {
         const ca = a as CashValue | null | undefined;
         const cb = b as CashValue | null | undefined;
         if (!ca && !cb) return true;
         if (!ca || !cb) return false;
-        return ca.code === cb.code && Number(ca.amount) === Number(cb.amount);
+        return ca.code === cb.code && exactDecimalEqual(ca.amount, cb.amount);
     }
     // String fields: normalize empty/null/undefined → ""
     if (key === 'description' || key === 'cost_basis_override') {
@@ -190,16 +240,18 @@ export function buildCreatePayload(fields: TxFields, rule: TypeRule): Record<str
     if (fields.asset_event_id != null && rule.eventLinkable) out.asset_event_id = fields.asset_event_id;
     // WAC: send cost_basis_mode only if the backend rule allows it for this type+side.
     // The rule comes from the server transaction type metadata (getCostBasisRule).
-    const qty = Number(fields.quantity ?? 0);
-    const side: 'from' | 'to' | 'self' = qty < 0 ? 'from' : qty > 0 ? 'to' : 'self';
+    const qtySign = exactDecimalSign(fields.quantity) ?? 0;
+    const side: 'from' | 'to' | 'self' = qtySign < 0 ? 'from' : qtySign > 0 ? 'to' : 'self';
     const cbRule = getCostBasisRule(fields.type, side);
-    const cbAllowed = cbRule !== 'forbidden' && !(cbRule === 'required_qty_pos' && qty <= 0);
+    const cbAllowed = cbRule !== 'forbidden' && !(cbRule === 'required_qty_pos' && qtySign <= 0);
 
-    if (fields.cost_basis_mode === 'auto' && cbAllowed) {
-        out.cost_basis_mode = 'auto';
-        out.cost_basis_override = fields.cost_basis_override ?? null;
-    } else if (fields.cost_basis_override) {
-        out.cost_basis_override = fields.cost_basis_override;
+    if (cbAllowed) {
+        if (fields.cost_basis_mode === 'auto') {
+            out.cost_basis_mode = 'auto';
+            out.cost_basis_override = fields.cost_basis_override ?? null;
+        } else if (fields.cost_basis_mode === 'manual' && fields.cost_basis_override) {
+            out.cost_basis_override = fields.cost_basis_override;
+        }
     }
     if (fields.link_uuid && rule.requiresPair) out.link_uuid = fields.link_uuid;
     return out;
@@ -215,6 +267,10 @@ export function buildCreatePayload(fields: TxFields, rule: TypeRule): Record<str
 export function buildUpdateDiff(current: TxFields, original: TxOriginal, currentRule: TypeRule, originalRule: TypeRule): Record<string, unknown> {
     const {signedQty, signedCash} = applySignRules(current.quantity, current.cash, currentRule);
     const {signedQty: origSignedQty, signedCash: origSignedCash} = applySignRules(original.quantity, original.cash, originalRule);
+    const qtySign = exactDecimalSign(current.quantity) ?? 0;
+    const side: 'from' | 'to' | 'self' = qtySign < 0 ? 'from' : qtySign > 0 ? 'to' : 'self';
+    const cbRule = getCostBasisRule(current.type, side);
+    const cbAllowed = cbRule !== 'forbidden' && !(cbRule === 'required_qty_pos' && qtySign <= 0);
 
     // Field definitions: [key, currentValue, originalValue]
     const fieldPairs: Array<[string, unknown, unknown]> = [
@@ -224,9 +280,11 @@ export function buildUpdateDiff(current: TxFields, original: TxOriginal, current
         ['cash', signedCash, origSignedCash],
         ['tags', current.tags, original.tags ?? []],
         ['description', current.description || null, original.description ?? null],
-        ['cost_basis_override', current.cost_basis_override || null, original.cost_basis_override ?? null],
         ['asset_event_id', current.asset_event_id, original.asset_event_id ?? null],
     ];
+    if (cbAllowed && current.cost_basis_mode === 'manual') {
+        fieldPairs.push(['cost_basis_override', current.cost_basis_override || null, original.cost_basis_override ?? null]);
+    }
 
     const changes: Record<string, unknown> = {id: original.id};
     for (const [key, cur, orig] of fieldPairs) {
@@ -240,15 +298,11 @@ export function buildUpdateDiff(current: TxFields, original: TxOriginal, current
             }
         }
     }
-    // WAC: send cost_basis_mode only if backend rule allows it for this type+side
-    const uQty = Number(current.quantity ?? 0);
-    const uSide: 'from' | 'to' | 'self' = uQty < 0 ? 'from' : uQty > 0 ? 'to' : 'self';
-    const uCbRule = getCostBasisRule(current.type, uSide);
-    const uCbAllowed = uCbRule !== 'forbidden' && !(uCbRule === 'required_qty_pos' && uQty <= 0);
-
-    if (current.cost_basis_mode === 'auto' && uCbAllowed) {
+    // Auto mode is meaningful only on a metadata-approved type/side. Explicit
+    // manual overrides were included in fieldPairs above under the same gate.
+    if (current.cost_basis_mode === 'auto' && cbAllowed) {
         changes.cost_basis_mode = 'auto';
-        changes.cost_basis_override = null;
+        changes.cost_basis_override = current.cost_basis_override ?? null;
     }
     return changes;
 }
@@ -256,13 +310,36 @@ export function buildUpdateDiff(current: TxFields, original: TxOriginal, current
 /** Build update diff for a dual-form item (from collectDualCreates output).
  *  Compares the full CREATE payload against original, filtering to PATCHABLE_FIELDS.
  *  Used by FormModal's collectDualUpdates(). */
-export function diffDualItem(item: Record<string, unknown>, orig: TxOriginal): Record<string, unknown> {
+export function diffDualItem(item: Record<string, unknown>, orig: TxOriginal, costBasisMode?: TxFields['cost_basis_mode']): Record<string, unknown> {
     const out: Record<string, unknown> = {id: orig.id};
     for (const key of PATCHABLE_FIELDS) {
+        // Cost basis is handled atomically below with its explicit mode and
+        // metadata gate. Never let the generic field loop detach the override.
+        if (key === 'cost_basis_override') continue;
         if (!(key in item)) continue;
         const origVal = (orig as unknown as Record<string, unknown>)[key];
         if (!fieldEq(key, item[key], origVal)) {
             out[key] = item[key];
+        }
+    }
+
+    const itemType = typeof item.type === 'string' ? item.type : orig.type;
+    const itemQuantity = item.quantity ?? orig.quantity;
+    const itemQuantitySign = exactDecimalSign(itemQuantity) ?? 0;
+    const itemSide: 'from' | 'to' | 'self' = itemQuantitySign < 0 ? 'from' : itemQuantitySign > 0 ? 'to' : 'self';
+    const itemCostBasisRule = getCostBasisRule(itemType, itemSide);
+    const cbAllowed = itemCostBasisRule !== 'forbidden' && !(itemCostBasisRule === 'required_qty_pos' && itemQuantitySign <= 0);
+    const explicitMode = costBasisMode !== undefined ? costBasisMode : item.cost_basis_mode === 'auto' || item.cost_basis_mode === 'manual' ? item.cost_basis_mode : null;
+
+    if (!cbAllowed || explicitMode == null) return out;
+    if (explicitMode === 'auto') {
+        out.cost_basis_mode = 'auto';
+        out.cost_basis_override = item.cost_basis_override ?? null;
+    } else if ('cost_basis_override' in item) {
+        const originalOverride = orig.cost_basis_override ?? null;
+        if (!fieldEq('cost_basis_override', item.cost_basis_override, originalOverride)) {
+            // Manual is an internal discriminator; its wire shape is override-only.
+            out.cost_basis_override = item.cost_basis_override;
         }
     }
     return out;
@@ -297,8 +374,8 @@ export function buildDualCreatePayloads(layout: PairFormLayout, from: TxFields, 
     const sharedDesc = (from.description ?? '').trim() || undefined;
 
     if (layout === 'fx') {
-        const fromCashAmt = from.cash?.amount ? `-${from.cash.amount.replace(/^[+-]/, '')}` : '0';
-        const toCashAmt = to.cash?.amount ? to.cash.amount.replace(/^[+-]/, '') : '0';
+        const fromCashAmt = from.cash?.amount ? applySign(from.cash.amount, 'negative') : '0';
+        const toCashAmt = to.cash?.amount ? applySign(to.cash.amount, 'positive') : '0';
         const fromItem: Record<string, unknown> = {
             broker_id: from.broker_id,
             type: 'FX_CONVERSION',
@@ -327,12 +404,12 @@ export function buildDualCreatePayloads(layout: PairFormLayout, from: TxFields, 
     }
 
     if (layout === 'transfer_asset') {
-        const absQty = String(Math.abs(Number(from.quantity)));
+        const absQty = applySign(from.quantity, 'positive');
         const fromItem: Record<string, unknown> = {
             broker_id: from.broker_id,
             type: 'TRANSFER',
             date: from.date,
-            quantity: String(-Math.abs(Number(from.quantity))),
+            quantity: applySign(from.quantity, 'negative'),
             link_uuid: linkUuid,
         };
         const toItem: Record<string, unknown> = {
@@ -368,14 +445,14 @@ export function buildDualCreatePayloads(layout: PairFormLayout, from: TxFields, 
     }
 
     // layout === 'transfer_cash'
-    const absAmount = from.cash?.amount ? String(Math.abs(Number(from.cash.amount))) : '0';
+    const absAmount = from.cash?.amount ? applySign(from.cash.amount, 'positive') : '0';
     const cashCode = from.cash?.code ?? '';
     const fromItem: Record<string, unknown> = {
         broker_id: from.broker_id,
         type: 'CASH_TRANSFER',
         date: from.date,
         quantity: '0',
-        cash: {code: cashCode, amount: String(-Math.abs(Number(absAmount)))},
+        cash: {code: cashCode, amount: applySign(absAmount, 'negative')},
         link_uuid: linkUuid,
     };
     const toItem: Record<string, unknown> = {
