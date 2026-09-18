@@ -69,7 +69,7 @@ Non il codice — **il documento**. Una pagina che ogni mandato di superficie de
 *prima* di scrivere una riga, e che risponde a:
 
 ```
-Cosa esiste già            LineChart (line · bar · band · scatter), RiskMetricCard,
+Cosa esiste già            LineChart (line · area · bar · band — NON scatter), RiskMetricCard,
                            KpiMetricBar, KpiDivergingFlowBar, CorrelationHeatmap,
                            Tooltip, SingleDatePicker, formatPercent, DocsLink
 Come si monta una card     props, slot, cosa passare durante il loading

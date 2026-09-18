@@ -1001,6 +1001,7 @@ describe('AssetModal provider lifecycle', () => {
                 icon_url: null,
                 quote_base_quantity: 1,
                 active: true,
+                is_benchmark: false,
                 user_url: null,
                 // Untouched classification is omitted, not sent as a clear.
                 identifier_isin: null,
@@ -1070,6 +1071,7 @@ describe('AssetModal provider lifecycle', () => {
                 icon_url: null,
                 quote_base_quantity: 1,
                 active: true,
+                is_benchmark: false,
                 user_url: null,
                 identifier_isin: null,
                 identifier_ticker: null,

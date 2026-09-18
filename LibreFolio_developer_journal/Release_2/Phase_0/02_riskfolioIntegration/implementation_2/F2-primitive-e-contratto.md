@@ -59,7 +59,7 @@ Cosa NON si costruisce     l'elenco esplicito delle cose che esistono e vanno ri
 | `RiskMetricCard` | `ui/display/` | `@container`, doppia etichetta, slot `submetrics` e `sparkline` |
 | `KpiMetricBar` | `ui/display/` | barra etichettata; **clampa i non-finiti a 0** |
 | `KpiDivergingFlowBar` | `ui/display/` | barra divergente |
-| `LineChart` | `components/charts/` | `seriesType`: `line` · `bar` · `band` |
+| `LineChart` | `components/charts/` | ⚠️ **solo serie storiche, asse categoriale sulle date.** `seriesType` vive su `RenderedSignal`, non è una prop: `line` · `area` · `bar` · `band`. **Nessuno scatter a X numerica** |
 | `CorrelationHeatmap` | `components/risk/` | costruita da F |
 | `Tooltip` | `ui/feedback/` | **ha già il riposizionamento** verso lo spazio disponibile |
 | `SingleDatePicker` | `ui/date/` | 389 righe, giunzione digitato/calendario |
