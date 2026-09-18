@@ -261,6 +261,73 @@ describe('riskPanelController', () => {
         stop();
     });
 
+    // ------------------------------------------------------------------
+    // The same repair, one level down: `queryRisk` answers in three ways — a
+    // response, a throw, and a *discard* (null, when the client session or the
+    // cache generation moved while the request was in flight). `?? []` folded the
+    // third into the first, which states something about the world when the fact
+    // is about this client. See riskStore.test.ts, 'discards an answer to a
+    // question asked before the identity existed', for where that null is born.
+    // ------------------------------------------------------------------
+    it('re-asks a question whose answer was discarded, instead of showing an empty result', async () => {
+        // Why 'ignores a stale answer that lands after a newer run started' and
+        // 'does not reload when the signature is unchanged' both passing was never
+        // enough, and why neither of them is wrong: the first says an answer whose
+        // question moved must be dropped, the second says a question that has not
+        // moved must not be re-asked. Both correct, and on a page reload their
+        // combination is a screen that lies — the answer is dropped by the guard,
+        // the signature never moves afterwards, so nothing ever asks again and the
+        // empty state is permanent. The missing party is the one that notices the
+        // discard and re-asks once, under the generation that caused it.
+        const {controller, stop} = mountController();
+
+        // One base load asks two questions in a single Promise.all — historical and
+        // current_composition — so the unit of discard is a wave, not a call. In the
+        // real defect both are discarded together: both were in flight when the
+        // first `/auth/me` landed, so both captured the same session generation.
+        const questionsPerWave = 2;
+        let asked = 0;
+        queryRisk.mockImplementation((request: {mode: string}) => {
+            asked += 1;
+            if (asked <= questionsPerWave) return Promise.resolve(null);
+            return Promise.resolve({items: [{analytic_code: request.mode === 'historical' ? 'historical_kpi' : 'risk_contribution'}]});
+        });
+
+        await controller.loadBase(false);
+
+        expect(controller.historicalResults, 'a discarded answer was folded into "no data" again: a complete response renders as an empty panel, and no signature change follows a reload to shake it loose').toEqual([{analytic_code: 'historical_kpi'}]);
+        expect(controller.currentResults, 'only half the wave was recovered, so the panel would show historical figures beside an empty composition it never failed to compute').toEqual([{analytic_code: 'risk_contribution'}]);
+        expect(asked, 'the discarded wave was not re-asked exactly once: either the controller gave up on a healthy answer, or it asked more times than the bound allows').toBe(2 * questionsPerWave);
+        expect(controller.loadDiscarded, 'a load that recovered still reports itself discarded, so a surface reading the flag would offer a retry for data it already has').toBe(false);
+        expect(controller.loadError, 'a discard was reported as a failure; nothing failed, and the user would be asked to retry something that never broke').toBe(false);
+        stop();
+    });
+
+    it('separates an answer that was discarded from one that came back empty', async () => {
+        // The counterpart to the test above, and the reason `loadDiscarded` exists at
+        // all: when the re-ask is discarded too, the honest report is "your answer was
+        // thrown away", which is neither an error nor an absence of data. Surrendering
+        // in silence is what produced the original defect; surrendering out loud is a
+        // state a surface can act on.
+        const {controller, stop} = mountController();
+
+        let asked = 0;
+        queryRisk.mockImplementation(() => {
+            asked += 1;
+            return Promise.resolve(null);
+        });
+
+        await controller.loadBase(false);
+
+        expect(controller.loadDiscarded, 'a load whose answer was discarded twice running says nothing about it, so an empty panel is indistinguishable from a portfolio with no data').toBe(true);
+        expect(controller.loadError, 'a discard was promoted to a failure; nothing failed, and an error banner would describe a breakage that did not happen').toBe(false);
+        expect(controller.historicalResults, 'an answer that was never accepted was filed as a result, which asserts an empty portfolio on the strength of a request this client threw away').toEqual([]);
+        expect(controller.currentResults, 'same for the current-composition half of the wave: a discard is not a measurement').toEqual([]);
+        expect(asked, 'the re-ask is not bounded at one retry: a session generation that keeps moving would spin here instead of surrendering, or the second discard was never attempted').toBe(4);
+        expect(controller.initialLoading, 'the panel is still spinning after the controller gave up, so the discard it just recorded can never be rendered').toBe(false);
+        stop();
+    });
+
     it('refreshes in place instead of blanking once results exist', async () => {
         const {controller, stop} = mountController();
         queryRisk.mockResolvedValue({items: [{analytic_code: 'historical_kpi'}]});

@@ -32,7 +32,9 @@
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
     import {singleValue} from '$lib/risk/riskTypes';
     import {fetchReport} from '$lib/stores/portfolio/portfolioStore.svelte';
+    import {assetStoreVersion, getAssetInfo} from '$lib/stores/reference/assetStore';
     import {brokerStoreVersion, ensureBrokersLoaded, getAccessibleBrokers} from '$lib/stores/reference/brokerStore';
+    import AssetSetCorrelationSection from './AssetSetCorrelationSection.svelte';
     import RiskAnalysisPanel from './RiskAnalysisPanel.svelte';
     import RiskBetaBanner from './RiskBetaBanner.svelte';
     import {applyBulkAction, applyFilters, MAX_SELECTED_ASSETS, readPersistedSelection, resolveInitialSelectionWithSource, writePersistedSelection, type BulkAction, type SelectionFilters, type SelectionSource} from './assetSetSelection';
@@ -96,6 +98,30 @@
      * chip here — present in the analysis, invisible in the controls.
      */
     let pageAssetIds = $derived(new Set(assets.map((asset) => asset.id)));
+
+    /**
+     * Names for the matrix's axes.
+     *
+     * Built from the page's own list first, because this panel already holds
+     * every display name it put in the selection: no store round-trip, no
+     * version token, and no `#id` for anything the reader picked themselves.
+     * The store is consulted only for the case the comment above describes —
+     * an id remembered from a previous visit that is no longer on the page,
+     * present in the analysis and invisible in the controls. Dropping that
+     * lookup would have been a quiet regression: the legacy resolved those ids
+     * through the store, so they show a name today.
+     */
+    let selectionLabels = $derived.by(() => {
+        void $assetStoreVersion;
+        const labels = new Map<number, string>();
+        for (const asset of selectedAssets) labels.set(asset.id, asset.display_name);
+        for (const assetId of selectedAssetIds) {
+            if (labels.has(assetId)) continue;
+            const name = getAssetInfo(assetId)?.display_name;
+            if (name) labels.set(assetId, name);
+        }
+        return labels;
+    });
 
     $effect(() => {
         untrack(() => void ensureBrokersLoaded());
@@ -282,6 +308,7 @@
     </section>
 
     {#if selectedAssetIds.length > 0}
+        <AssetSetCorrelationSection assetIds={selectedAssetIds} assetLabels={selectionLabels} {dateStart} {dateEnd} {targetCurrency} />
         <RiskAnalysisPanel scope={{kind: 'asset_set', asset_ids: selectedAssetIds}} {dateStart} {dateEnd} {targetCurrency} assetIds={selectedAssetIds} title={$t('risk.assetSet.panelTitle')} showBetaBanner={false} {onsynced} />
     {:else}
         <div class="rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 p-8 text-center text-sm text-gray-400 dark:text-gray-500" data-testid="risk-asset-set-empty">
