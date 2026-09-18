@@ -498,6 +498,15 @@
             code: 'simulation',
             mode: 'current_composition',
             parameters: buildSimulationParameters({
+                // This surface still prints the fixed `risk.simulation.assumptions`
+                // caption (:1058) and renders no provenance block, so it describes a
+                // lognormal process whatever the engine did. Moving it to the
+                // resampled default would put honest numbers under a caption that
+                // misdescribes them — which is the case `simulation.py:118-138`
+                // names when it keeps pre-resampler callers on the parametric
+                // engine. The mode selector lives on L4, and so does the default.
+                process: 'gbm',
+                regime: 'none',
                 samplingMethod: simulationSampling,
                 horizonDays: simulationHorizonDays,
                 pathCount: simulationPaths,

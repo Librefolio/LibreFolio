@@ -202,6 +202,21 @@ export interface BaseAnalyticsContext {
      * extrapolation — which is why it costs a second request.
      */
     includeMonthlyVar?: boolean;
+    /**
+     * Adds the risk/return pair for the composition held today: the KPI wave a
+     * second time on the backtest series, plus the per-asset scatter points.
+     *
+     * Opt-in for the same reason as the two above, and with a sharper edge. L3
+     * asks "am I being paid for this risk" in the present tense, so it needs a
+     * Sharpe, a Sortino and a beta that share one perimeter. The historical and
+     * current-composition perimeters can disagree on those ratios by more than
+     * half their own value, so mixing them is not untidy — it prints two
+     * incompatible claims on one row.
+     *
+     * Only the level panel renders either, so only the level panel pays. Asset
+     * Detail and the asset-set panel keep the wire they have.
+     */
+    includeCurrentCompositionRiskReturn?: boolean;
 }
 
 /** Horizon, in observations, used for L1's "bad month" row. */
@@ -245,6 +260,15 @@ export function buildBaseAnalytics(mode: RiskMode, ctx: BaseAnalyticsContext): R
         if (ctx.includeDrawdownSummary) add('drawdown_summary');
     } else {
         add('risk_contribution');
+        if (ctx.includeCurrentCompositionRiskReturn) {
+            // Same params as the historical wave: the risk-free rate is a property of
+            // the reader's setting, not of the series it is charged against.
+            add('historical_kpi', {
+                risk_free_annual_rate: ctx.appliedRiskFreePercent / 100,
+                target_annual_return: 0,
+            });
+            add('asset_risk_return');
+        }
     }
     return analytics;
 }

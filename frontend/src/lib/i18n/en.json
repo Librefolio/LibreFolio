@@ -2923,6 +2923,10 @@
         "name": "Risk contribution",
         "description": "Current-composition volatility contributions by asset."
       },
+      "assetRiskReturn": {
+        "name": "Risk and return by asset",
+        "description": "Volatility and expected annualised return of each asset and of the portfolio, on the current composition."
+      },
       "stress": {
         "name": "Stress test",
         "description": "Apply hypothetical shocks or replay a historical period."
@@ -3147,7 +3151,13 @@
       "insufficient_history": "Insufficient history for this calculation.",
       "undefined_metric": "The metric is undefined for these data.",
       "data_unavailable": "Required source data are unavailable.",
-      "execution_failed": "The backend calculation failed."
+      "execution_failed": "The backend calculation failed.",
+      "invalid_covariance": "The relationships between these assets could not be computed.",
+      "resource_limit": "This calculation is too large to run.",
+      "worker_busy": "The calculation service is busy. Try again shortly.",
+      "execution_timeout": "The calculation took too long and was stopped.",
+      "optimization_infeasible": "No allocation satisfies the requested constraints.",
+      "unknown": "This measurement did not return a result."
     },
     "warnings": {
       "sharpe_undefined": "Sharpe is undefined because volatility is zero.",
@@ -3207,10 +3217,35 @@
           "month": "A bad month (worst 5%)",
           "worst": "The worst fall (actually lived through)"
         },
+        "technical": {
+          "day": "CVaR · 1 day",
+          "month": "CVaR · 1 month",
+          "worst": "Maximum drawdown",
+          "current": "Current drawdown"
+        },
         "durationDays": "lasted {days} days",
         "requiredRecovery": "recovery needed {percent}",
         "currentDrawdown": "Currently down from the peak",
-        "sincePeak": "since {date}"
+        "sincePeak": "since {date}",
+        "tails": {
+          "worstRealization": "Worst day actually seen",
+          "worstRealizationOn": "on {date}",
+          "drawdownAtRisk": "Drawdown at risk ({confidence})",
+          "conditionalDrawdownAtRisk": "Average beyond that threshold",
+          "ulcerIndex": "Ulcer index {value}",
+          "ulcerIndexHint": "root-mean-square depth below the peak: lower is calmer"
+        },
+        "underwater": {
+          "title": "Time spent below the peak",
+          "empty": "No underwater curve available for this period."
+        },
+        "histogram": {
+          "title": "Distribution of daily returns",
+          "observations": "{count} days observed",
+          "cut": "VaR threshold at {value}",
+          "noCut": "No threshold published for this window.",
+          "empty": "No return distribution available for this period."
+        }
       },
       "l2": {
         "title": "Am I as diversified as I think?",
@@ -3218,7 +3253,28 @@
         "contribution": "risk contribution",
         "lead": "{name} weighs {weight} but produces {contribution} of the risk",
         "showAll": "Show all",
-        "showLess": "Show less"
+        "showLess": "Show less",
+        "effectiveAssets": {
+          "label": "How many independent bets do I really hold?",
+          "aboveCount": "Above the {positions} measured positions: the excess is cash, and says nothing about the weights",
+          "belowCount": "Below the {positions} measured positions: the weights are lopsided, and a few carry the portfolio",
+          "evenCount": "Exactly the {positions} measured positions: even weights and no cash"
+        },
+        "diversificationRatio": {
+          "label": "Did spreading the money achieve anything?",
+          "caption": "1.00 means the holdings move as one; higher means they offset each other"
+        },
+        "uncovered": {
+          "label": "How much of me is not measured here?",
+          "caption": "Cash, plus every holding without a usable price series",
+          "residual": "The rows below describe the rest of the portfolio; {share} is not among them"
+        },
+        "rowsCaption": "The bar shows the gap between weight and risk: right means more risk than weight, left means less. Weights are shares of the whole portfolio.",
+        "correlation": {
+          "title": "Which of these are the same bet?",
+          "basis": "Measured over the historical window; the weights above are today's.",
+          "noRedundancy": "No pair in this set reaches the redundancy threshold."
+        }
       },
       "l3": {
         "title": "Am I being paid for this risk?",
@@ -3229,7 +3285,20 @@
         "sortinoHelp": "Return per unit of downside risk. Unlike Sharpe, it does not penalise violent rises.",
         "sharpeHelp": "Return per unit of total volatility, so it penalises rises as well as falls.",
         "betaHelp": "How much this moves when the benchmark moves.",
-        "benchmark": "Compared with"
+        "benchmark": "Compared with",
+        "perimeter": {
+          "current_composition": "on the current composition",
+          "historical": "on the real history"
+        },
+        "scatter": {
+          "title": "Risk against return, asset by asset",
+          "portfolio": "Portfolio",
+          "axisVolatility": "Annualised volatility",
+          "axisReturn": "Expected annualised return",
+          "line": "Risk-return line",
+          "note": "Above the line means better paid for the risk taken. The dots show the mean-variance expected return, the quantity in which the line's slope is the Sharpe ratio: on a very volatile asset the return actually lived through is lower, because volatility erodes compounding.",
+          "cash": "Cash ({share} of net worth) is not a dot: under the model it returns exactly zero, and drawing it would turn that into a measurement."
+        }
       },
       "l4": {
         "title": "What if…?",
@@ -3254,12 +3323,18 @@
             "seed": "Seed"
           },
           "values": {
+            "block_bootstrap": "Moving-block bootstrap",
             "gbm": "Geometric Brownian motion",
             "mc": "Monte Carlo",
             "qmc": "Quasi-Monte Carlo",
             "historical_log_mle": "Historical log-return MLE",
+            "empirical_resampled": "Empirical, from resampled returns",
             "sample_log_returns": "Sample log-return covariance",
-            "current_buy_and_hold": "Current buy and hold"
+            "not_estimated_joint_resampling": "Not estimated: joint resampling",
+            "current_buy_and_hold": "Current buy and hold",
+            "calm": "Calm market",
+            "prolonged_crisis": "Prolonged crisis",
+            "shock_recovery": "Shock and recovery"
           },
           "days": "{count} days",
           "regimeValue": "{regime}, declared over {days} days",

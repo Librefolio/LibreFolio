@@ -3,7 +3,7 @@ import {describe, expect, it} from 'vitest';
 import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 
 import {DAILY_VAR_INSTANCE, MONTHLY_VAR_INSTANCE} from '../riskAnalysisHelpers';
-import {BACKTEST_RETURN_BASIS, backtestDeclared, buildConcentration, buildCurrentDrawdown, buildDivergenceRows, buildHurtRows, buildRiskAdjusted, comparedAssetId, degradedResults, resultReasons, leadDivergence, lossMagnitude, requiredRecovery, uncoveredWeight} from './levelHelpers';
+import {BACKTEST_RETURN_BASIS, backtestDeclared, buildConcentration, buildCurrentDrawdown, buildDivergenceRows, buildHurtRows, buildRiskAdjusted, comparedAssetId, degradedResults, resultErrorCodes, resultReasons, translateErrorCode, leadDivergence, lossMagnitude, requiredRecovery, uncoveredWeight} from './levelHelpers';
 
 /** A successful result carrying `output`, shaped like the API's. */
 function ok(analyticCode: string, output: Record<string, unknown>, instanceId = `base-historical-${analyticCode}`): RiskAnalyticResult {
@@ -444,5 +444,85 @@ describe('resultReasons', () => {
 
     it('ignores a warning carrying no readable sentence', () => {
         expect(resultReasons([warned('a', [{code: 'x', message: '   '}, {code: 'y'}, null])])).toEqual([]);
+    });
+
+    // The invariant this file's docstring records: `message` is backend prose,
+    // shown verbatim. If an error sentence ever leaks into `reasons`, a caller
+    // can no longer tell which entries it may translate — so the error travels
+    // in `resultErrorCodes` instead, and this asserts the separation holds.
+    it('leaves an outright failure out of the verbatim list', () => {
+        const failed = {analytic_code: 'correlation', instance_id: 'a', status: 'failed', error: {code: 'incompatible_scope', message: 'Not supported.'}} as unknown as RiskAnalyticResult;
+        expect(resultReasons([failed])).toEqual([]);
+    });
+});
+
+describe('resultErrorCodes', () => {
+    function failed(instanceId: string, error: unknown): RiskAnalyticResult {
+        return {analytic_code: 'correlation', instance_id: instanceId, status: 'failed', error} as unknown as RiskAnalyticResult;
+    }
+
+    it('gives back the code of a measurement that never ran', () => {
+        expect(resultErrorCodes([failed('a', {code: 'incompatible_scope'})])).toEqual(['incompatible_scope']);
+    });
+
+    // `RiskResultFrame:23` reads the same field through `singleValue` because the
+    // generated client types it as a value *or* a list. Reaching for
+    // `result.error.code` works on today's payload and returns `undefined` the
+    // day one arrives wrapped — an error that would then disclose nothing at all,
+    // with nothing turning red.
+    it('reads an error that arrives wrapped in a list', () => {
+        expect(resultErrorCodes([failed('a', [{code: 'insufficient_history'}])])).toEqual(['insufficient_history']);
+    });
+
+    it('says one cause once, however many measurements share it', () => {
+        expect(resultErrorCodes([failed('a', {code: 'incompatible_scope'}), failed('b', {code: 'incompatible_scope'})])).toEqual(['incompatible_scope']);
+    });
+
+    it('keeps two different causes apart, in the order they arrived', () => {
+        expect(resultErrorCodes([failed('a', {code: 'insufficient_history'}), failed('b', {code: 'incompatible_scope'})])).toEqual(['insufficient_history', 'incompatible_scope']);
+    });
+
+    it('stays empty for results that answered, or did not arrive', () => {
+        expect(resultErrorCodes([{analytic_code: 'x', instance_id: 'a', status: 'ok', output: {}} as unknown as RiskAnalyticResult])).toEqual([]);
+        expect(resultErrorCodes([null, undefined])).toEqual([]);
+        expect(resultErrorCodes([failed('a', null), failed('b', {}), failed('c', {code: '   '}), failed('d', {code: 7})])).toEqual([]);
+    });
+});
+
+describe('translateErrorCode', () => {
+    // Stands in for `svelte-i18n`, whose documented behaviour for a missing
+    // message is to return the key itself. That behaviour is the entire reason
+    // the guard exists, so the double has to reproduce it exactly.
+    const catalogue: Record<string, string> = {
+        'risk.errors.incompatible_scope': 'This analytic does not support the selected scope.',
+        'risk.errors.unknown': 'This measurement did not return a result.',
+    };
+    const translate = (key: string): string => catalogue[key] ?? key;
+
+    it('words a known code with its own sentence', () => {
+        expect(translateErrorCode('incompatible_scope', translate, 'risk.errors.unknown')).toBe('This analytic does not support the selected scope.');
+    });
+
+    // The defect recorded at `RiskResultFrame:108`: without the `translated === key`
+    // comparison, a code the backend gains tomorrow prints `risk.errors.<code>` on
+    // screen. Nothing else in the stack catches it — a key is a string, and a
+    // string renders.
+    it('falls back rather than printing its own key for a code nobody has seen', () => {
+        const rendered = translateErrorCode('a_code_added_next_month', translate, 'risk.errors.unknown');
+        expect(rendered).toBe('This measurement did not return a result.');
+        expect(rendered).not.toContain('risk.errors.');
+    });
+
+    it('falls back when there is no code at all', () => {
+        expect(translateErrorCode(null, translate, 'risk.errors.unknown')).toBe('This measurement did not return a result.');
+        expect(translateErrorCode('', translate, 'risk.errors.unknown')).toBe('This measurement did not return a result.');
+    });
+
+    // The translator is an argument, not an import, so that the call sits inside
+    // the caller's reactive scope: reading the store here would word the sentence
+    // once and keep it in the old language after a switch.
+    it('re-words through whichever translator it is handed', () => {
+        const italian = (key: string): string => (key === 'risk.errors.incompatible_scope' ? 'Questa analitica non supporta lo scope selezionato.' : key);
+        expect(translateErrorCode('incompatible_scope', italian, 'risk.errors.unknown')).toBe('Questa analitica non supporta lo scope selezionato.');
     });
 });

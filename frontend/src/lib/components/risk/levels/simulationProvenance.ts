@@ -22,8 +22,9 @@
  * cone that never said whether it charges costs has not said that it doesn't.
  */
 import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
+import {singleValue} from '$lib/risk/riskTypes';
 
-import {finite, okOutput} from './levelHelpers';
+import {finite, okOutput, record} from './levelHelpers';
 
 /** One provenance line: a label key plus whichever kind of value it carries. */
 export interface ProvenanceEntry {
@@ -76,6 +77,34 @@ function dayCount(value: unknown): number | null {
 }
 
 /**
+ * The seed that makes this run repeatable — read from the **metadata**.
+ *
+ * It is not in the output, and that is not an oversight to work around: a seed
+ * is a property of how the answer was computed, which is what `metadata` is
+ * for, while `output` carries what was computed. The distinction matters here
+ * because reading it from the wrong one is invisible — `undefined` yields no
+ * line rather than a wrong line, so the seed simply never appeared and no
+ * "does it render?" assertion could fail.
+ *
+ * Both engines are seeded, under different names, and both are equally
+ * reproducible: the resampler draws block starts with `bootstrap_seed`, the
+ * parametric engine draws normals with `random_seed`. A "Seed" line that
+ * appeared for one and not the other would suggest the other is not repeatable.
+ *
+ * `sobol_start_index` is deliberately **not** read. It is an entry point into a
+ * deterministic low-discrepancy sequence, not a seed, and labelling it as one
+ * would put a quant's knob on screen under a word that means something else.
+ */
+function simulationSeed(simulationResult: RiskAnalyticResult | null): number | null {
+    const metadata = record(singleValue(simulationResult?.metadata));
+    for (const field of ['bootstrap_seed', 'random_seed'] as const) {
+        const value = finite(metadata[field]);
+        if (value !== null && Number.isInteger(value)) return value;
+    }
+    return null;
+}
+
+/**
  * Describe a simulation from its own output.
  *
  * Returns null when there is no successful simulation to describe — the caller
@@ -113,8 +142,8 @@ export function buildSimulationProvenance(simulationResult: RiskAnalyticResult |
     }
     pushDays('blockLength', 'block_length_days');
 
-    const seed = finite(output.bootstrap_seed);
-    if (seed !== null && Number.isInteger(seed)) entries.push({key: 'seed', value: null, number: seed});
+    const seed = simulationSeed(simulationResult);
+    if (seed !== null) entries.push({key: 'seed', value: null, number: seed});
 
     const exclusions: SimulationEffect[] = [];
     const inclusions: SimulationEffect[] = [];
