@@ -502,7 +502,12 @@ async def test_portfolio_optimization_supports_all_scopes_and_strategies():
             {"ok", "partial"},
         ),
         (
-            {"kind": "portfolio"},
+            # Asset 17 (Test KRW Stock) carries transactions but no price history by
+            # design, so its series is unusable and the optimizer has nothing to work
+            # with. This case exists to cover the unavailable branch; it used to point
+            # at the whole portfolio, which was unavailable only because the seeded
+            # history was too short to optimize — a defect the fixtures no longer have.
+            {"kind": "asset_set", "asset_ids": [17]},
             "min_risk",
             {"unavailable"},
         ),
