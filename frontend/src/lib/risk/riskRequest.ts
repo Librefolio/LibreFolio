@@ -76,14 +76,25 @@ function canonicalizeAnalyticParameters(parameters: RiskAnalyticParameters): Ris
     return normalized;
 }
 
-function canonicalizeScope(scope: RiskScope): RiskScope {
+export function canonicalizeScope(scope: RiskScope): RiskScope {
     if (scope.kind === 'asset_set') {
         return {...scope, asset_ids: sortedNumbers(scope.asset_ids)};
     }
-    if (scope.kind === 'portfolio' && isNumberArray(scope.broker_ids)) {
-        return {...scope, broker_ids: sortedNumbers(scope.broker_ids)};
-    }
-    return scope;
+    if (scope.kind !== 'portfolio') return scope;
+
+    // A portfolio scope narrows by brokers, by assets, or by both, and the two
+    // narrowings are independent: a slice carrying only `asset_ids` must be ordered
+    // exactly like one carrying only `broker_ids`.
+    // `asset_ids` is read structurally because the generated client does not declare
+    // it yet; once K4 lands and `api sync` runs, this becomes a typed read and the
+    // cast below disappears.
+    const assetIds: unknown = (scope as {asset_ids?: unknown}).asset_ids;
+    if (!isNumberArray(scope.broker_ids) && !isNumberArray(assetIds)) return scope;
+
+    const normalized = {...scope};
+    if (isNumberArray(scope.broker_ids)) normalized.broker_ids = sortedNumbers(scope.broker_ids);
+    if (isNumberArray(assetIds)) (normalized as {asset_ids?: number[]}).asset_ids = sortedNumbers(assetIds);
+    return normalized;
 }
 
 function stableValue(value: unknown): unknown {
