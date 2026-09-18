@@ -95,6 +95,17 @@ export function resultByCode(results: RiskAnalyticResult[], analyticCode: string
 }
 
 /**
+ * Find a result by its instance id.
+ *
+ * Needed as soon as one batch runs the *same* analytic twice with different
+ * parameters — the daily and monthly VaR — where `resultByCode` would keep
+ * returning whichever came first and quietly label a monthly loss as daily.
+ */
+export function resultByInstance(results: RiskAnalyticResult[], instanceId: string): RiskAnalyticResult | null {
+    return results.find((result) => result.instance_id === instanceId) ?? null;
+}
+
+/**
  * Flatten a raw data-quality issue into the typed shape the banner consumes:
  * every scalar field the API may widen to an array (`count`, the CTA fields,
  * `group_key`) is narrowed back with `singleValue`; the list fields pass through.
@@ -136,6 +147,24 @@ export function formatCurrencyAmount(value: string | readonly (string | null)[] 
 }
 
 /**
+ * A currency amount is only meaningful on a `portfolio` scope, where every
+ * holding is a real position held in a real proportion. On an `asset` or
+ * `asset_set` scope the weights are implicit — the reader never chose them — so
+ * an impact in euros would be true arithmetic over a portfolio that does not
+ * exist. An invented euro reads exactly like a measured one (D107).
+ *
+ * Today the backend sends `null` for those scopes, so this returns the same `—`
+ * it would have returned anyway and no pixel moves. That is what makes the guard
+ * safe to add, and also why it is easy to delete during a cleanup: it never
+ * appears to fire. It exists for the day the backend starts sending a number,
+ * which is the day nothing else would stop it from being printed.
+ */
+export function formatScopedCurrencyAmount(value: string | readonly (string | null)[] | null | undefined, currency: string, scopeKind: string, locale?: string): string {
+    if (scopeKind !== 'portfolio') return '—';
+    return formatCurrencyAmount(value, currency, locale);
+}
+
+/**
  * Shift an ISO `YYYY-MM-DD` date by `days` (UTC-anchored so it never drifts
  * across a timezone boundary), used to label the simulation horizon axis. An
  * unparseable base date degrades to a stable `day-N` label rather than throwing.
@@ -152,22 +181,55 @@ export interface BaseAnalyticsContext {
     appliedRiskFreePercent: number;
     /** True when the backend advertises `code` for the current scope in `mode`. */
     hasCapability: (code: string, mode: RiskMode) => boolean;
+    /**
+     * Opt-in, per call site, never a default.
+     *
+     * Only the four-level composition asks for the drawdown summary, because it
+     * is the only surface that renders it. Turning it on here for everyone would
+     * silently change what Asset Detail puts on the wire — a parked surface —
+     * from a shared helper three files away. The asset-detail E2E asserts an
+     * exact set of requested analytic codes and would catch it, which is the
+     * point: the net is right and the default would have been wrong.
+     */
+    includeDrawdownSummary?: boolean;
+    /**
+     * Adds a second historical VaR over a ~1-month horizon, alongside the daily one.
+     *
+     * L1 puts a bad day and a bad month on the same scale, and the month may not
+     * be the day scaled by √21: that would be a model, and L1 states only what the
+     * sample actually did. The backend compounds real overlapping windows
+     * (`horizon_compounded_returns`), so this is a second observation, not an
+     * extrapolation — which is why it costs a second request.
+     */
+    includeMonthlyVar?: boolean;
 }
+
+/** Horizon, in observations, used for L1's "bad month" row. */
+export const MONTHLY_VAR_HORIZON_DAYS = 21;
+
+/** Instance id of the 1-day base VaR. */
+export const DAILY_VAR_INSTANCE = 'base-historical-historical_var';
+
+/** Instance id of the ~1-month base VaR, distinct so the two never get mixed up. */
+export const MONTHLY_VAR_INSTANCE = 'base-historical-historical_var-monthly';
 
 /**
  * The base analytics the panel requests for a mode, keeping only those the
  * backend advertises for the current scope:
  * - `historical` → KPI (seeded with the applied risk-free rate), correlation,
- *   and 1-day 95% historical VaR;
+ *   1-day 95% historical VaR, and — only when the call site opts in — the
+ *   drawdown summary;
  * - `current_composition` → risk contribution.
  * A capability the catalog does not list is silently omitted, so the request
- * never asks for something the backend cannot compute.
+ * never asks for something the backend cannot compute — `drawdown_summary`, for
+ * one, does not accept an asset set, because there is no single primary series
+ * to draw down.
  */
 export function buildBaseAnalytics(mode: RiskMode, ctx: BaseAnalyticsContext): RiskAnalyticRequest[] {
     const analytics: RiskAnalyticRequest[] = [];
-    const add = (code: string, parameters: RiskAnalyticParameters = {}) => {
+    const add = (code: string, parameters: RiskAnalyticParameters = {}, instanceId?: string) => {
         if (ctx.hasCapability(code, mode)) {
-            analytics.push(buildRiskAnalyticRequest(`base-${mode}-${code}`, code, parameters));
+            analytics.push(buildRiskAnalyticRequest(instanceId ?? `base-${mode}-${code}`, code, parameters));
         }
     };
     if (mode === 'historical') {
@@ -176,7 +238,11 @@ export function buildBaseAnalytics(mode: RiskMode, ctx: BaseAnalyticsContext): R
             target_annual_return: 0,
         });
         add('correlation');
-        add('historical_var', {confidence_level: 0.95, horizon_days: 1});
+        add('historical_var', {confidence_level: 0.95, horizon_days: 1}, DAILY_VAR_INSTANCE);
+        if (ctx.includeMonthlyVar) {
+            add('historical_var', {confidence_level: 0.95, horizon_days: MONTHLY_VAR_HORIZON_DAYS}, MONTHLY_VAR_INSTANCE);
+        }
+        if (ctx.includeDrawdownSummary) add('drawdown_summary');
     } else {
         add('risk_contribution');
     }

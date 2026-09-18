@@ -38,7 +38,7 @@
     import AllocationPanel from '$lib/components/dashboard/AllocationPanel.svelte';
     import GrowthChart from '$lib/components/dashboard/GrowthChart.svelte';
     import KpiSection from '$lib/components/dashboard/KpiSection.svelte';
-    import RiskAnalysisPanel from '$lib/components/risk/RiskAnalysisPanel.svelte';
+    import RiskLevelsPanel from '$lib/components/risk/levels/RiskLevelsPanel.svelte';
     import PositionsPanel from '$lib/components/dashboard/PositionsPanel.svelte';
     import LotsAnalysisPanel from '$lib/components/brokers/lots/LotsAnalysisPanel.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
@@ -749,12 +749,17 @@
         </div>
     {:else if activeTab === 'rischio'}
         <div data-testid="dashboard-risk-tab">
-            <RiskAnalysisPanel
+            <!-- The risk scope is the *whole* portfolio even when a broker filter
+                 is on, which is what the subtitle announces. `summary` follows the
+                 filter, so its net worth belongs to a different question: passing
+                 it would print one broker's money beside every broker's risk. -->
+            <RiskLevelsPanel
                 scope={{kind: 'portfolio'}}
                 dateStart={dateRangeCtl.start}
                 dateEnd={dateRangeCtl.end}
                 targetCurrency={appliedCurrency}
                 assetIds={[...new Set((summary?.holdings ?? []).map((holding) => holding.asset_id))]}
+                scopeValue={brokerFilterActive || !summary ? null : parseFloat(summary.net_worth.amount)}
                 title={$_('risk.dashboardTitle')}
                 subtitle={brokerFilterActive ? $_('risk.dashboardFullPortfolio') : ''}
                 onsynced={async () => {
