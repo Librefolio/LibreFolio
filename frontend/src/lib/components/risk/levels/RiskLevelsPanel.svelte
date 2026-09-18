@@ -14,7 +14,7 @@
     import L4Simulation from './l4/L4Simulation.svelte';
     import RiskLevelSection from './RiskLevelSection.svelte';
     import RiskPanelHeader from './RiskPanelHeader.svelte';
-    import {leadDivergence, buildDivergenceRows, degradedResults, resultReasons, backtestDeclared, comparedAssetId} from './levelHelpers';
+    import {leadDivergence, buildDivergenceRows, degradedResults, resultReasons, resultErrorCodes, levelMetadata, backtestDeclared, comparedAssetId} from './levelHelpers';
     import {resultByCode, DAILY_VAR_INSTANCE, MONTHLY_VAR_INSTANCE} from '../riskAnalysisHelpers';
 
     /**
@@ -109,6 +109,25 @@
     let l2Reasons = $derived(resultReasons([contributionResult]));
     let l3Reasons = $derived(resultReasons([controller.comparisonResult, ...historicalResults.filter((result) => L3_CODES.includes(result.analytic_code))]));
 
+    // The *codes* of what did not come back at all, from those same slices.
+    //
+    // Deliberately not folded into `l*Reasons`: those carry backend prose shown
+    // verbatim, these carry identifiers the section words itself. A level with
+    // no rows looks identical whether the analytic is out of scope, short of
+    // history, or still in flight — and says "unavailable for the selected
+    // data", blaming the reader's portfolio for a limit of the analytic.
+    let l1Errors = $derived(resultErrorCodes(historicalResults.filter((result) => L1_CODES.includes(result.analytic_code))));
+    let l2Errors = $derived(resultErrorCodes([contributionResult]));
+    let l3Errors = $derived(resultErrorCodes([controller.comparisonResult, ...historicalResults.filter((result) => L3_CODES.includes(result.analytic_code))]));
+
+    // What each level's figures were computed over. Same slices again: a window
+    // reported under a question that did not consult the measurement describes
+    // the wrong number, and describing the wrong number is worse than describing
+    // none, because it reads as an answer.
+    let l1Metadata = $derived(levelMetadata(historicalResults.filter((result) => L1_CODES.includes(result.analytic_code))));
+    let l2Metadata = $derived(levelMetadata([contributionResult]));
+    let l3Metadata = $derived(levelMetadata([controller.comparisonResult, ...historicalResults.filter((result) => L3_CODES.includes(result.analytic_code))]));
+
     /**
      * L4's three steps, for the same reason as the three levels above — and it
      * was the only section without them.
@@ -127,6 +146,8 @@
     let l4Results = $derived([controller.stressResult, controller.replayResult, controller.simulationResult]);
     let l4Health = $derived(degradedResults(l4Results));
     let l4Reasons = $derived(resultReasons(l4Results));
+    let l4Errors = $derived(resultErrorCodes(l4Results));
+    let l4Metadata = $derived(levelMetadata(l4Results));
 
     /**
      * K4. Declared once, above every level, because the basis is a property of
@@ -192,15 +213,15 @@
     {/if}
 
     {#if !loadError}
-        <RiskLevelSection level={1} title={$t('risk.levels.l1.title')} testId="risk-level-1" health={l1Health} reasons={l1Reasons}>
+        <RiskLevelSection level={1} title={$t('risk.levels.l1.title')} testId="risk-level-1" health={l1Health} reasons={l1Reasons} errorCodes={l1Errors} metadata={l1Metadata}>
             <L1HowMuchItHurts {historicalResults} {scopeValue} currency={targetCurrency} loading={initialLoading} />
         </RiskLevelSection>
 
-        <RiskLevelSection level={2} title={$t('risk.levels.l2.title')} lead={l2Lead} testId="risk-level-2" health={l2Health} reasons={l2Reasons}>
+        <RiskLevelSection level={2} title={$t('risk.levels.l2.title')} lead={l2Lead} testId="risk-level-2" health={l2Health} reasons={l2Reasons} errorCodes={l2Errors} metadata={l2Metadata}>
             <L2Diversification {contributionResult} {assetNames} loading={initialLoading} />
         </RiskLevelSection>
 
-        <RiskLevelSection level={3} title={$t('risk.levels.l3.title')} testId="risk-level-3" health={l3Health} reasons={l3Reasons}>
+        <RiskLevelSection level={3} title={$t('risk.levels.l3.title')} testId="risk-level-3" health={l3Health} reasons={l3Reasons} errorCodes={l3Errors} metadata={l3Metadata}>
             <L3Benchmark {controller} excludeAssetIds={assetIds} />
             <L3RiskAdjusted {historicalResults} comparisonResult={controller.comparisonResult} {benchmarkName} loading={initialLoading} />
         </RiskLevelSection>
@@ -208,7 +229,7 @@
         <!-- Closed until asked for, and the scenario catalogue is fetched on that
              first open only: reopening a drawer is not a change of question, so
              it must not start the work over. -->
-        <RiskLevelSection level={4} title={$t('risk.levels.l4.title')} collapsible testId="risk-level-4" health={l4Health} reasons={l4Reasons} onfirstopen={() => controller.loadScenarioCatalog()}>
+        <RiskLevelSection level={4} title={$t('risk.levels.l4.title')} collapsible testId="risk-level-4" health={l4Health} reasons={l4Reasons} errorCodes={l4Errors} metadata={l4Metadata} onfirstopen={() => controller.loadScenarioCatalog()}>
             <L4WhatIf>
                 {#snippet replay()}
                     <L4Replay {controller} {assetNames} currency={targetCurrency} {dateStart} {dateEnd} />

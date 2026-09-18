@@ -3147,7 +3147,13 @@
       "insufficient_history": "Storico insufficiente per questo calcolo.",
       "undefined_metric": "La metrica non è definita per questi dati.",
       "data_unavailable": "I dati sorgente richiesti non sono disponibili.",
-      "execution_failed": "Il calcolo backend non è riuscito."
+      "execution_failed": "Il calcolo backend non è riuscito.",
+      "invalid_covariance": "Non è stato possibile calcolare le relazioni tra questi asset.",
+      "resource_limit": "Questo calcolo è troppo grande per essere eseguito.",
+      "worker_busy": "Il servizio di calcolo è occupato. Riprova tra poco.",
+      "execution_timeout": "Il calcolo ha richiesto troppo tempo ed è stato interrotto.",
+      "optimization_infeasible": "Nessuna allocazione soddisfa i vincoli richiesti.",
+      "unknown": "Questa misurazione non ha restituito un risultato."
     },
     "warnings": {
       "sharpe_undefined": "Sharpe non definito perché la volatilità è zero.",
@@ -3207,10 +3213,35 @@
           "month": "Un mese storto (peggiori 5%)",
           "worst": "La peggior discesa (vissuta davvero)"
         },
+        "technical": {
+          "day": "CVaR · 1 giorno",
+          "month": "CVaR · 1 mese",
+          "worst": "Massimo drawdown",
+          "current": "Drawdown attuale"
+        },
         "durationDays": "durata {days} giorni",
         "requiredRecovery": "recupero richiesto {percent}",
         "currentDrawdown": "Attualmente sotto il massimo",
-        "sincePeak": "dal {date}"
+        "sincePeak": "dal {date}",
+        "tails": {
+          "worstRealization": "Il giorno peggiore davvero visto",
+          "worstRealizationOn": "il {date}",
+          "drawdownAtRisk": "Discesa a rischio ({confidence})",
+          "conditionalDrawdownAtRisk": "Media oltre quella soglia",
+          "ulcerIndex": "Indice di Ulcer {value}",
+          "ulcerIndexHint": "profondità quadratica media sotto il picco: più basso, più tranquillo"
+        },
+        "underwater": {
+          "title": "Tempo passato sotto il picco",
+          "empty": "Nessuna curva sotto il picco per questo periodo."
+        },
+        "histogram": {
+          "title": "Distribuzione dei rendimenti giornalieri",
+          "observations": "{count} giorni osservati",
+          "cut": "Soglia VaR a {value}",
+          "noCut": "Nessuna soglia pubblicata per questa finestra.",
+          "empty": "Nessuna distribuzione dei rendimenti per questo periodo."
+        }
       },
       "l2": {
         "title": "Sono diversificato come credo?",

@@ -3147,7 +3147,13 @@
       "insufficient_history": "Insufficient history for this calculation.",
       "undefined_metric": "The metric is undefined for these data.",
       "data_unavailable": "Required source data are unavailable.",
-      "execution_failed": "The backend calculation failed."
+      "execution_failed": "The backend calculation failed.",
+      "invalid_covariance": "The relationships between these assets could not be computed.",
+      "resource_limit": "This calculation is too large to run.",
+      "worker_busy": "The calculation service is busy. Try again shortly.",
+      "execution_timeout": "The calculation took too long and was stopped.",
+      "optimization_infeasible": "No allocation satisfies the requested constraints.",
+      "unknown": "This measurement did not return a result."
     },
     "warnings": {
       "sharpe_undefined": "Sharpe is undefined because volatility is zero.",
@@ -3207,10 +3213,35 @@
           "month": "A bad month (worst 5%)",
           "worst": "The worst fall (actually lived through)"
         },
+        "technical": {
+          "day": "CVaR · 1 day",
+          "month": "CVaR · 1 month",
+          "worst": "Maximum drawdown",
+          "current": "Current drawdown"
+        },
         "durationDays": "lasted {days} days",
         "requiredRecovery": "recovery needed {percent}",
         "currentDrawdown": "Currently down from the peak",
-        "sincePeak": "since {date}"
+        "sincePeak": "since {date}",
+        "tails": {
+          "worstRealization": "Worst day actually seen",
+          "worstRealizationOn": "on {date}",
+          "drawdownAtRisk": "Drawdown at risk ({confidence})",
+          "conditionalDrawdownAtRisk": "Average beyond that threshold",
+          "ulcerIndex": "Ulcer index {value}",
+          "ulcerIndexHint": "root-mean-square depth below the peak: lower is calmer"
+        },
+        "underwater": {
+          "title": "Time spent below the peak",
+          "empty": "No underwater curve available for this period."
+        },
+        "histogram": {
+          "title": "Distribution of daily returns",
+          "observations": "{count} days observed",
+          "cut": "VaR threshold at {value}",
+          "noCut": "No threshold published for this window.",
+          "empty": "No return distribution available for this period."
+        }
       },
       "l2": {
         "title": "Am I as diversified as I think?",
