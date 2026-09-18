@@ -886,3 +886,39 @@ impossibile dire quale delle due ha causato una differenza.
 diversificato come credo?») o una domanda di ottimizzazione. Se resta descrittiva, lo
 stimatore storico è quello onesto da mostrare. Se diventa prescrittiva, uno stimatore
 restretto è obbligatorio, e va dichiarato in UI con link alla wiki.
+
+## 🔄 Rivalutare le otto misure reimplementate da N contro riskfolio-lib
+
+**Posizione dello sviluppatore, 18 Set 2026** — da riprendere nel prossimo sprint:
+
+> *« Anche se è un wrapper di NumPy, è meglio usare una libreria collaudata, anche perché
+> nel tempo, se arrivano migliorie, le abbiamo **for free**. »*
+
+**Stato attuale**: `backend/app/services/risk/acquired.py` reimplementa otto misure
+(`worst_realization`, `maximum_drawdown`, `drawdown_at_risk`, `conditional_drawdown_at_risk`,
+`ulcer_index`, `effective_number_of_assets`, `diversification_ratio`) che **esistono già nel
+catalogo di riskfolio**.
+
+**La ragione data da N**: riskfolio è importabile **solo dentro il worker spawnato**
+(`risk/quant/riskfolio_worker.py`, decisione devWiki `risk-quant-engine-process-boundary`),
+mentre le analitiche che consumano queste misure implementano `RiskAnalytic.compute()`
+**sincrono**. Non si può chiamare un processo separato da lì.
+
+**La domanda vera da porsi, quindi, non è «reimplementare o delegare» ma**:
+
+1. Il confine processo/worker è ancora quello giusto, o si può allargare?
+2. Quanto costa davvero l'import (~340 MB nativi) in un processo che già carica NumPy/SciPy?
+3. Le due convenzioni piegate da N — **segno** (perdite negative) e **baseline** (la serie
+   underwater porta un elemento pre-rendimento che `MDD`/`UCI` consumano e `DaR`/`CDaR` no) —
+   sono esprimibili come adattatore sottile sopra la libreria, invece che come reimplementazione?
+
+⚠️ **Da non perdere nella rivalutazione**: `test_risk_metrics_oracle.py` **già confronta** le
+nostre implementazioni con riskfolio. **La rete per fare il passaggio in sicurezza esiste già** —
+è lo stesso oracolo, usato in direzione opposta.
+
+🔴 **E un divieto che resta valido comunque** (D130/D244): `riskfolio.SemiDeviation` **non** è la
+nostra deviazione di ribasso. Misura lo scarto dalla **propria media**, non da un MAR fisso: su
+un portafoglio che perde lo 0,5 % ogni giorno vale **esattamente zero**. **Quella sostituzione
+resta vietata indipendentemente dall'esito di questa rivalutazione.**
+
+**Priorità**: media. **Non blocca il rilascio** — è un lavoro di miglioramento.
