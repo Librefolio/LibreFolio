@@ -3218,7 +3218,28 @@
         "contribution": "contributo al rischio",
         "lead": "{name} pesa {weight} ma produce {contribution} del rischio",
         "showAll": "Mostra tutti",
-        "showLess": "Mostra meno"
+        "showLess": "Mostra meno",
+        "effectiveAssets": {
+          "label": "Quante scommesse indipendenti ho davvero?",
+          "aboveCount": "Sopra le {positions} posizioni misurate: l'eccesso è liquidità, e non dice nulla sui pesi",
+          "belowCount": "Sotto le {positions} posizioni misurate: i pesi sono sbilanciati, e poche portano il portafoglio",
+          "evenCount": "Pari alle {positions} posizioni misurate: pesi uniformi e nessuna liquidità"
+        },
+        "diversificationRatio": {
+          "label": "Distribuire il denaro è servito a qualcosa?",
+          "caption": "1,00 significa che le posizioni si muovono all'unisono; più alto, più si compensano"
+        },
+        "uncovered": {
+          "label": "Quanto di me non è misurato qui?",
+          "caption": "Liquidità, più ogni posizione senza una serie di prezzi utilizzabile",
+          "residual": "Le righe qui sotto descrivono il resto del portafoglio; {share} non è fra loro"
+        },
+        "rowsCaption": "La barra mostra lo scarto fra peso e rischio: a destra più rischio che peso, a sinistra meno. I pesi sono quote del portafoglio intero.",
+        "correlation": {
+          "title": "Quali di queste sono la stessa scommessa?",
+          "basis": "Misurata sulla finestra storica; i pesi qui sopra sono quelli di oggi.",
+          "noRedundancy": "Nessuna coppia di questo insieme raggiunge la soglia di ridondanza."
+        }
       },
       "l3": {
         "title": "Sto venendo pagato per questo rischio?",
