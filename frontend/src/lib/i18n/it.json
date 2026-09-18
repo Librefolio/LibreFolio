@@ -2987,7 +2987,8 @@
     },
     "returnBasis": {
       "price_only": "Solo prezzo",
-      "twrr": "TWRR portafoglio"
+      "twrr": "TWRR portafoglio",
+      "current_composition_backtest": "Backtest della composizione di oggi"
     },
     "valueStatus": {
       "ok": "Disponibile",
@@ -3050,7 +3051,7 @@
       "sharpe": "Sharpe",
       "sortino": "Sortino",
       "portfolioVolatility": "Volatilità portafoglio",
-      "cashWeight": "Peso liquidità",
+      "cashWeight": "Liquidità e non coperto",
       "var": "Value at Risk",
       "cvar": "VaR condizionale",
       "activeReturn": "Rendimento attivo",
@@ -3197,6 +3198,93 @@
     "betaBanner": {
       "title": "L'Analisi del rischio è in beta.",
       "description": "Calcoli, risultati e interfaccia possono cambiare prima del rilascio stabile."
+    },
+    "levels": {
+      "l1": {
+        "title": "Quanto può fare male?",
+        "rows": {
+          "day": "Una giornata storta (peggiori 5%)",
+          "month": "Un mese storto (peggiori 5%)",
+          "worst": "La peggior discesa (vissuta davvero)"
+        },
+        "durationDays": "durata {days} giorni",
+        "requiredRecovery": "recupero richiesto {percent}",
+        "currentDrawdown": "Attualmente sotto il massimo",
+        "sincePeak": "dal {date}"
+      },
+      "l2": {
+        "title": "Sono diversificato come credo?",
+        "weight": "peso",
+        "contribution": "contributo al rischio",
+        "lead": "{name} pesa {weight} ma produce {contribution} del rischio",
+        "showAll": "Mostra tutti",
+        "showLess": "Mostra meno"
+      },
+      "l3": {
+        "title": "Sto venendo pagato per questo rischio?",
+        "sortino": "Sortino",
+        "sharpe": "Sharpe",
+        "volatility": "Volatilità",
+        "beta": "Beta",
+        "sortinoHelp": "Rendimento per unità di rischio al ribasso. A differenza dello Sharpe non penalizza le salite violente.",
+        "sharpeHelp": "Rendimento per unità di volatilità totale: penalizza le salite quanto le discese.",
+        "betaHelp": "Quanto si muove rispetto al benchmark.",
+        "benchmark": "Confrontato con"
+      },
+      "l4": {
+        "title": "Cosa succede se…?",
+        "replay": "Replay storico",
+        "replayHint": "Rendimenti reali di un periodo reale.",
+        "shock": "Shock ipotetico",
+        "shockHint": "Deterministico, su un’ipotesi dichiarata da te.",
+        "simulation": "Simulazione",
+        "simulationHint": "Un modello probabilistico, sulle assunzioni del modello.",
+        "modelWarning": "È l’unico gradino che è un modello e non una misura. Leggilo come un ventaglio di possibilità, non come una previsione.",
+        "provenance": {
+          "title": "Che cosa ha assunto questa simulazione",
+          "hint": "Letto dal risultato stesso, non supposto da questa schermata.",
+          "labels": {
+            "process": "Processo stocastico",
+            "sampling": "Strategia di campionamento",
+            "driftEstimator": "Stimatore della deriva",
+            "covarianceEstimator": "Stimatore della covarianza",
+            "aggregation": "Politica di composizione",
+            "regime": "Regime",
+            "blockLength": "Lunghezza del blocco",
+            "seed": "Seme"
+          },
+          "values": {
+            "gbm": "Moto browniano geometrico",
+            "mc": "Monte Carlo",
+            "qmc": "Quasi-Monte Carlo",
+            "historical_log_mle": "MLE sui log-rendimenti storici",
+            "sample_log_returns": "Covarianza campionaria dei log-rendimenti",
+            "current_buy_and_hold": "Composizione attuale, mantenuta"
+          },
+          "days": "{count} giorni",
+          "regimeValue": "{regime}, dichiarato su {days} giorni",
+          "includes": "Compreso nel cono",
+          "excludes": "Fuori dal cono",
+          "effects": {
+            "costs": "costi",
+            "cashFlows": "flussi di cassa",
+            "inflation": "inflazione",
+            "rebalancing": "ribilanciamento"
+          },
+          "truncation": "Dichiarato su {declared} giorni, applicato su {applied}: il cono risponde alla domanda più breve."
+        },
+        "replayExcluded": "Esclusi:",
+        "replayNeedsChoice": "{name} non ha storico utilizzabile in questo periodo. Escludilo, oppure dagli un sostituto — un sostituto è un’opinione su come sarebbe andato.",
+        "replayProxyUnusable": "Anche il sostituto scelto per {name} non ha storico utilizzabile. Scegline un altro.",
+        "replayExcludeAndRetry": "Escludi e riprova",
+        "replayTotal": "Questa composizione avrebbe chiuso il periodo a {percent} {amount}",
+        "replayAudit": "Sostituti: {proxies} · Esclusi: {excluded} ({weight} della fetta, con rendimento zero)",
+        "shockShowDetail": "Mostra lo shock per bucket",
+        "shockHideDetail": "Nascondi lo shock per bucket",
+        "shockTotal": "Questo scenario muoverebbe la fetta di {percent} {amount}",
+        "shockCoverage": "Solo il {percent} della fetta è stato classificato: il totale parla solo per quella parte."
+      },
+      "backtestNotice": "Con una fetta attiva, questi numeri sono ricostruiti sulla composizione di oggi: dicono come *sarebbe* andata, non come è andata davvero."
     }
   },
   "updateCheck": {

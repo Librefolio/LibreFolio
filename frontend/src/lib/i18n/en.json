@@ -2987,7 +2987,8 @@
     },
     "returnBasis": {
       "price_only": "Price only",
-      "twrr": "Portfolio TWRR"
+      "twrr": "Portfolio TWRR",
+      "current_composition_backtest": "Backtest of today’s composition"
     },
     "valueStatus": {
       "ok": "Available",
@@ -3050,7 +3051,7 @@
       "sharpe": "Sharpe",
       "sortino": "Sortino",
       "portfolioVolatility": "Portfolio volatility",
-      "cashWeight": "Cash weight",
+      "cashWeight": "Cash and uncovered",
       "var": "Value at Risk",
       "cvar": "Conditional VaR",
       "activeReturn": "Active return",
@@ -3197,6 +3198,93 @@
     "betaBanner": {
       "title": "Risk Analysis is in beta.",
       "description": "Calculations, results, and the interface may change before the stable release."
+    },
+    "levels": {
+      "l1": {
+        "title": "How much can it hurt?",
+        "rows": {
+          "day": "A bad day (worst 5%)",
+          "month": "A bad month (worst 5%)",
+          "worst": "The worst fall (actually lived through)"
+        },
+        "durationDays": "lasted {days} days",
+        "requiredRecovery": "recovery needed {percent}",
+        "currentDrawdown": "Currently down from the peak",
+        "sincePeak": "since {date}"
+      },
+      "l2": {
+        "title": "Am I as diversified as I think?",
+        "weight": "weight",
+        "contribution": "risk contribution",
+        "lead": "{name} weighs {weight} but produces {contribution} of the risk",
+        "showAll": "Show all",
+        "showLess": "Show less"
+      },
+      "l3": {
+        "title": "Am I being paid for this risk?",
+        "sortino": "Sortino",
+        "sharpe": "Sharpe",
+        "volatility": "Volatility",
+        "beta": "Beta",
+        "sortinoHelp": "Return per unit of downside risk. Unlike Sharpe, it does not penalise violent rises.",
+        "sharpeHelp": "Return per unit of total volatility, so it penalises rises as well as falls.",
+        "betaHelp": "How much this moves when the benchmark moves.",
+        "benchmark": "Compared with"
+      },
+      "l4": {
+        "title": "What if…?",
+        "replay": "Historical replay",
+        "replayHint": "Real returns from a real period.",
+        "shock": "Hypothetical shock",
+        "shockHint": "Deterministic, on an assumption you state.",
+        "simulation": "Simulation",
+        "simulationHint": "A probabilistic model, on the model’s assumptions.",
+        "modelWarning": "This is the only rung that is a model rather than a measurement. Read it as a range of possibilities, not a forecast.",
+        "provenance": {
+          "title": "What this simulation assumed",
+          "hint": "Read from the result itself, not assumed by this screen.",
+          "labels": {
+            "process": "Stochastic process",
+            "sampling": "Sampling strategy",
+            "driftEstimator": "Drift estimator",
+            "covarianceEstimator": "Covariance estimator",
+            "aggregation": "Composition policy",
+            "regime": "Regime",
+            "blockLength": "Block length",
+            "seed": "Seed"
+          },
+          "values": {
+            "gbm": "Geometric Brownian motion",
+            "mc": "Monte Carlo",
+            "qmc": "Quasi-Monte Carlo",
+            "historical_log_mle": "Historical log-return MLE",
+            "sample_log_returns": "Sample log-return covariance",
+            "current_buy_and_hold": "Current buy and hold"
+          },
+          "days": "{count} days",
+          "regimeValue": "{regime}, declared over {days} days",
+          "includes": "Included in the cone",
+          "excludes": "Left out of the cone",
+          "effects": {
+            "costs": "costs",
+            "cashFlows": "cash flows",
+            "inflation": "inflation",
+            "rebalancing": "rebalancing"
+          },
+          "truncation": "Declared over {declared} days, applied over {applied}: the cone answers the shorter question."
+        },
+        "replayExcluded": "Left out:",
+        "replayNeedsChoice": "{name} has no usable history in this period. Leave it out, or give it a stand-in — a stand-in is an opinion about what it would have done.",
+        "replayProxyUnusable": "The stand-in chosen for {name} has no usable history either. Pick a different one.",
+        "replayExcludeAndRetry": "Leave it out and run again",
+        "replayTotal": "This composition would have ended the period at {percent} {amount}",
+        "replayAudit": "Stand-ins: {proxies} · Left out: {excluded} ({weight} of the scope, carried at zero return)",
+        "shockShowDetail": "Show the shock per bucket",
+        "shockHideDetail": "Hide the shock per bucket",
+        "shockTotal": "This scenario would move the scope by {percent} {amount}",
+        "shockCoverage": "Only {percent} of the scope could be classified, so the total speaks for that part alone."
+      },
+      "backtestNotice": "With a slice active, these figures are rebuilt from today’s composition: they say how it *would* have gone, not how it actually went."
     }
   },
   "updateCheck": {
