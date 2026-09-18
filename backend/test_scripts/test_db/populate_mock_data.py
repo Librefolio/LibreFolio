@@ -89,7 +89,13 @@ engine = create_engine(
 _ANNUAL_VOL = {
     "STOCK": 0.25,
     "CRYPTO": 0.65,
-    "CROWDFUND": 0.00,
+    # A crowdfunding loan barely moves, but it must not be *perfectly* flat: a zero
+    # volatility with a flat drift yields an identical return every day, hence zero
+    # return variance, a singular covariance matrix and undefined beta/correlation.
+    # Risk analytics would then answer "undefined" on a held asset — the very state
+    # this dataset exists to avoid.
+    "CROWDFUND": 0.04,
+    "INDEX": 0.15,
 }
 _DEFAULT_VOL = 0.25
 _INITIAL_DEPOSIT_DATE = date(2025, 9, 30)
@@ -863,6 +869,12 @@ def populate_assets(session: Session):
 
     for asset_data in assets:
         asset = Asset(**asset_data)
+        # Mirror migration 003, which seeds is_benchmark from asset_type == INDEX.
+        # That UPDATE runs at migration time, against a database these rows do not yet
+        # exist in, so a freshly populated dataset would otherwise carry zero benchmarks
+        # and leave the comparison analytic with nothing to compare against.
+        if asset.asset_type == AssetType.INDEX:
+            asset.is_benchmark = True
         session.add(asset)
         print(f"  ✅ {asset.display_name} ({asset.currency})")
 
@@ -2092,6 +2104,8 @@ def populate_price_history(session: Session):
     eth = session.exec(select(Asset).where(Asset.display_name == "Ethereum")).first()
     loan1 = session.exec(select(Asset).where(Asset.display_name == "RE Loan Milano")).first()
     loan2 = session.exec(select(Asset).where(Asset.display_name == "RE Loan Roma")).first()
+    sp500 = session.exec(select(Asset).where(Asset.display_name == "S&P 500")).first()
+    msci = session.exec(select(Asset).where(Asset.display_name == "MSCI World Index")).first()
 
     today = date.today()
 
@@ -2100,6 +2114,12 @@ def populate_price_history(session: Session):
 
     print(f"  📅 Coverage: {start_date} → {today} ({total_calendar_days} calendar days)")
 
+    # Daily growth factors of the equity assets, keyed by date. The benchmark indices
+    # are derived from these instead of being drawn independently: an index that does
+    # not track the market it indexes yields a beta near zero against every portfolio,
+    # which is a number on screen that means nothing.
+    equity_factors: dict[date, list[float]] = {}
+
     # Format: (asset, currency, start_price, end_price, asset_type_key, source, skip_weekends)
     price_configs = [
         (apple, "USD", Decimal("175.00"), Decimal("185.00"), "STOCK", "yfinance", True),
@@ -2107,6 +2127,16 @@ def populate_price_history(session: Session):
         (tesla, "USD", Decimal("220.00"), Decimal("245.00"), "STOCK", "yfinance", True),
         (btc, "USD", Decimal("42000.00"), Decimal("45000.00"), "CRYPTO", "yfinance", False),
         (eth, "USD", Decimal("2400.00"), Decimal("2650.00"), "CRYPTO", "yfinance", False),
+        # Crowdfunding loans. Held assets, so risk analytics intersect their calendar
+        # with everyone else's: a single nominal point used to clamp the joint window
+        # to its own date, leaving every analytic below its minimum observation count.
+        # The series ends at the nominal value the single point used to carry.
+        (loan1, "EUR", Decimal("9600.00"), Decimal("10000.00"), "CROWDFUND", "manual_seed", True),
+        (loan2, "EUR", Decimal("4800.00"), Decimal("5000.00"), "CROWDFUND", "manual_seed", True),
+        # Benchmarks. An asset flagged is_benchmark without a price series is an offer
+        # the app cannot honour: the comparison analytic would still refuse to produce
+        # a beta. The flag and the series have to ship together. Built in a second pass
+        # below, because an index has to track the market it indexes.
     ]
 
     for asset, currency, start_price, end_price, asset_type_key, source, skip_weekends in price_configs:
@@ -2136,6 +2166,8 @@ def populate_price_history(session: Session):
             variation = Decimal(str(random.uniform(-noise_range, noise_range)))
             daily_factor = Decimal(str(1.0 + drift_per_day)) + variation
             price = max(price * daily_factor, Decimal("0.01"))  # never go negative
+            if asset_type_key == "STOCK":
+                equity_factors.setdefault(price_date, []).append(float(daily_factor))
 
             ph = PriceHistory(
                 asset_id=asset.id,
@@ -2154,32 +2186,77 @@ def populate_price_history(session: Session):
 
         print(f"  ✅ {asset.display_name}: {count} price points ({start_date} → {today})")
 
-    loan_price_points = [
-        (loan1, Decimal("10000.00"), today - timedelta(days=20)),
-        (loan2, Decimal("5000.00"), today - timedelta(days=15)),
+    _populate_benchmark_indices(session, [sp500, msci], equity_factors)
+
+    session.commit()
+
+
+def _populate_benchmark_indices(
+    session: Session,
+    indices: list,
+    equity_factors: dict,
+):
+    """Create price series for the benchmark indices.
+
+    Each index is a blend of the equity assets' own daily growth factors plus a small
+    idiosyncratic tracking noise, so the series is genuinely correlated with the
+    portfolio that holds those equities. Drawing it independently instead yields a
+    beta near zero against every portfolio — a number on screen that means nothing.
+
+    An asset flagged is_benchmark without a price series is an offer the app cannot
+    honour: the comparison analytic refuses to produce a beta. Flag and series ship
+    together.
+    """
+    # (asset, start_price, end_price, annual tracking vol)
+    index_configs = [
+        (indices[0], Decimal("5800.00"), Decimal("6400.00"), 0.03),
+        (indices[1], Decimal("3600.00"), Decimal("3950.00"), 0.02),
     ]
-    for asset, nominal_price, first_buy_date in loan_price_points:
+
+    for asset, start_price, end_price, tracking_vol in index_configs:
         if not asset:
             continue
 
-        price_date = max(first_buy_date, start_date)
-        session.add(
-            PriceHistory(
+        trading_days = sorted(d for d in equity_factors if d.weekday() < 5)
+        n = len(trading_days)
+        if n == 0:
+            continue
+
+        daily_tracking = tracking_vol / math.sqrt(252)
+
+        # Raw path from the averaged equity factors, then tilted so it lands on
+        # end_price. The tilt is a constant per-day multiplier: it moves the level,
+        # not the shape, so the co-movement with the constituents survives intact.
+        raw = [1.0]
+        for price_date in trading_days:
+            random.seed(_stable_seed("index", asset.id, price_date.isoformat()))
+            factors = equity_factors[price_date]
+            blended = sum(factors) / len(factors)
+            blended += random.uniform(-daily_tracking, daily_tracking)
+            raw.append(raw[-1] * max(blended, 0.5))
+
+        tilt = (float(end_price / start_price) / raw[-1]) ** (1.0 / n)
+
+        count = 0
+        for i, price_date in enumerate(trading_days, start=1):
+            random.seed(_stable_seed("index_vol", asset.id, price_date.isoformat()))
+            price = max(start_price * Decimal(str(raw[i] * tilt**i)), Decimal("0.01"))
+            ph = PriceHistory(
                 asset_id=asset.id,
                 date=price_date,
-                open=nominal_price,
-                high=nominal_price,
-                low=nominal_price,
-                close=nominal_price,
-                volume=Decimal("1"),
-                adjusted_close=nominal_price,
-                currency="EUR",
-                source_plugin_key="manual_seed",
+                open=price * Decimal("0.998"),
+                high=price * Decimal("1.01"),
+                low=price * Decimal("0.99"),
+                close=price,
+                volume=Decimal(str(random.randint(1_000_000, 10_000_000))),
+                adjusted_close=price,
+                currency="USD",
+                source_plugin_key="yfinance",
             )
-        )
-        print(f"  ✅ {asset.display_name}: 1 nominal price point ({price_date})")
+            session.add(ph)
+            count += 1
 
-    session.commit()
+        print(f"  ✅ {asset.display_name}: {count} price points ({trading_days[0]} → {trading_days[-1]})")
 
 
 def populate_asset_events(session: Session):
