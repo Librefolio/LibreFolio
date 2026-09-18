@@ -195,8 +195,27 @@ mode=historical            → {"code":"incompatible_mode",
 mode=current_composition   → {"code":"insufficient_history", "observations":15, "required":20}
 ```
 
-**Il pannello chiede `historical`**, che `risk_contribution` non supporta
-(`risk_contribution.py:47  supported_modes = (RiskMode.CURRENT_COMPOSITION,)`).
+> ## 🔴 CORREZIONE del 18 Set, dopo la fase 1 — **questa diagnosi era sbagliata**
+>
+> Avevo scritto *«il pannello chiede `historical`, che `risk_contribution` non supporta»*.
+> **Falso.** Il controller di **E** instrada già per modo, e l'ho verificato leggendo il codice
+> invece di dedurlo dalla risposta dell'API:
+>
+> ```ts
+> riskPanelController.svelte.ts:205   buildBaseAnalytics('historical', …)
+> riskPanelController.svelte.ts:206   buildBaseAnalytics('current_composition', …)
+>                                     → due query in parallelo, una per modo
+> riskAnalysisHelpers.ts:235          if (mode === 'historical')  historical_kpi · drawdown_summary
+> riskAnalysisHelpers.ts:247          else                        risk_contribution
+> ```
+>
+> **La causa di L2 indisponibile era una sola: le 15 osservazioni.** Il modo non c'entrava.
+> ✅ **Con i dati di F1, `risk_contribution` esce `partial` e calcola**:
+> `effective_number_of_assets = 14,97`, `diversification_ratio = 1,94`.
+>
+> 📌 **Come ho sbagliato**: ho interrogato l'API a mano con `mode=historical`, ho ricevuto
+> `incompatible_mode`, e **ho attribuito al pannello la scelta che avevo fatto io**. La sonda
+> rispondeva per sé, non per il prodotto.
 
 ✅ **Il developer aveva ragione**: il banner FX su EUR/KRW **non c'entra**. Riguarda 1 data.
 
