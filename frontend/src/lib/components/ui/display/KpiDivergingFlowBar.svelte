@@ -60,6 +60,20 @@
         valueClass?: string;
         /** Stable E2E selector placed on the root element. */
         testId?: string;
+        /**
+         * Stable E2E selector placed on the VALUE element alone.
+         *
+         * Separate from `testId`, and not derived from it, because the two
+         * answer different questions. `testId` finds the row; this finds the
+         * number, and a test that asserts the number's exact text cannot use the
+         * root — the root also contains the label, so `toHaveText` would compare
+         * against "Apple Inc.+60.0pp".
+         *
+         * Without it a caller whose value text is under test has to render that
+         * text twice, once inside the bar and once in a span beside it, and two
+         * copies of one number is how the two start disagreeing.
+         */
+        valueTestId?: string;
     }
 
     let {
@@ -78,6 +92,7 @@
         inlineColumns = 'minmax(7rem,1fr) minmax(10rem,2fr) 5rem',
         valueClass = '',
         testId,
+        valueTestId,
     }: Props = $props();
 
     // An explicit pair always wins, so `signedPct` cannot silently override a
@@ -134,13 +149,13 @@
     <div class="grid items-center gap-2 text-xs" style="grid-template-columns: {inlineColumns}" data-testid={testId}>
         {@render labelNode()}
         {@render track()}
-        <span class="text-right whitespace-nowrap font-medium {valueColor} {valueClass}">{value}</span>
+        <span class="text-right whitespace-nowrap font-medium {valueColor} {valueClass}" data-testid={valueTestId}>{value}</span>
     </div>
 {:else}
     <div class="flex flex-col gap-0.5" data-testid={testId}>
         <div class="flex items-center justify-between gap-2 text-xs">
             {@render labelNode()}
-            <span class="shrink-0 whitespace-nowrap font-medium {valueColor} {valueClass}">{value}</span>
+            <span class="shrink-0 whitespace-nowrap font-medium {valueColor} {valueClass}" data-testid={valueTestId}>{value}</span>
         </div>
         {@render track()}
     </div>
