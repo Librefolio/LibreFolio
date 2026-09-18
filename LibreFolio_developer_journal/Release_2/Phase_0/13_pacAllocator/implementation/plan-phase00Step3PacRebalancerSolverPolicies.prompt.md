@@ -1006,4 +1006,556 @@ test (almeno `test_pac_planner_oracle.py`) verdi sotto test-author.
 > finché la campagna G5 non gira su un compiler rappresentativo (§16.4
 > rischio 3). Risposta onesta a oggi: *non misurato a scala rappresentativa*.
 
+### 16.13 Stage 4 — `proof.py` ✅ completato 2026-09-18
+
+> **Note implementazione**: creato
+> `backend/app/services/pac_allocator/proof.py` (nuovo, ~250 righe) per
+> §16.5 punto 4 — la terza delle tre dimensioni indipendenti di Proof
+> Semantics A (§16.3): la validazione dell'incumbent è di `evaluator.py`,
+> l'evidenza floating del solver è di `solver.py`, la **conclusione
+> matematica sul dominio discreto** è di questo modulo e solo di questo.
+>
+> Requisito del coordinatore, testuale: la transizione non sicura dev'essere
+> **irrappresentabile, non semplicemente non scritta** — "se ti trovi a
+> scrivere un commento che dice «non passare mai proven qui», il design è
+> sbagliato; rendi l'argomento impossibile". Implementato con **tre
+> meccanismi indipendenti**, di natura diversa per non cadere insieme:
+>
+> 1. **Assenza.** `conclude_without_proof(solver: SolverRunResult) ->
+>    UnprovenConclusion` è l'**unica** funzione che consuma evidenza solver,
+>    e il suo tipo di ritorno non ammette altro. **Non esiste** in tutto il
+>    modulo una funzione che mappi un `SolverRunResult` su un tipo proven:
+>    non c'è una guardia da aggirare, non c'è nulla da chiamare. Verificato
+>    in sorgente, non a occhio: `SolverRunResult` compare esattamente 3
+>    volte (docstring, import, quell'unica firma).
+> 2. **Impossibilità di tipo.** `UnprovenConclusion` è un dataclass frozen
+>    i cui unici campi sono `reason_code` e `kind`, con `kind` un
+>    `Literal["not_proven"]` a valore singolo. Non c'è niente da impostare
+>    male e niente da dimenticare di impostare.
+> 3. **Costruttore sigillato.** Entrambi i tipi witness richiedono il
+>    sentinella privato di modulo `_WITNESS_SEAL`, che non esce mai dal
+>    modulo; costruirne uno senza solleva `ProofForgeryError`. Anche codice
+>    che scavalca l'API pubblica non può fabbricare la chiave che sblocca
+>    una conclusione provata.
+>
+> Superficie: `ProofForgeryError`, `ExhaustiveOracleWitnessFacts`,
+> `DeterministicConflictWitnessFacts`, `OptimalProvenConclusion`,
+> `InfeasibilityProvenConclusion`, `UnprovenConclusion`, alias
+> `ProvenConclusion`/`PlanConclusion`, `conclude_without_proof`,
+> `conclude_with_oracle`, `conclude_infeasible_from_conflicts`,
+> `describe_conclusion`, costante `NOT_PROVEN_REASON`
+> (`allocation.exact_proof_not_established`, codice generico di fase 1 per
+> §16.7 Q2: time limit, node limit e dominio oracle troppo grande collassano
+> tutti su quello invece di inventare codici wire prima che la telemetria
+> lo giustifichi).
+>
+> **Punto semantico sottile, esplicitato perché era il posto dove sbagliare
+> senza accorgersene**: l'oracolo dimostra un enunciato sul **proprio**
+> ottimo, non su qualunque candidato il chiamante pubblichi. Se `published`
+> differisce dal `best_candidate` dell'oracolo — per esempio un incumbent
+> del solver che non concorda — la conclusione viene **degradata a
+> `not_proven`**, mai trasferita. Degradare è sempre corretto; trasferire
+> attaccherebbe silenziosamente una prova a un oggetto di cui non parlava.
+>
+> **`gap_bounded` deliberatamente NON implementato**: richiede un bound
+> duale valido, e ricavarlo dal duale floating di SCIP sarebbe esattamente
+> la promozione che questo file esiste per impedire. Spedirlo
+> "temporaneamente" avrebbe svuotato la garanzia al primo punto di comodo.
+> `score_lattice_closure` idem, rinviato. **Entrambe le assenze sono
+> asserite da un test**, quindi non possono ricomparire per sbaglio: è la
+> parte che rende il rinvio sicuro invece che solo posticipato.
+>
+> **Test**: test-author ha creato
+> `backend/test_scripts/test_services/test_pac_planner_proof.py`
+> (33 test). Verificato indipendentemente da me, non sul suo report:
+> `py_compile`/`ruff`/`black` puliti su entrambi i file nuovi, **33/33**
+> sulla suite proof, **374/374** sulle 7 suite PAC insieme (341 invariati +
+> 33 nuovi, zero regressioni). Prima ancora dei test avevo eseguito un
+> harness di smoke mio: **37/37**, che copre ogni percorso pubblico **e ogni
+> percorso di raise**.
+>
+> **Regola permanente del coordinatore applicata alla lettera**: ogni
+> percorso di `raise` è stato provato per il tipo di eccezione che
+> *dichiara*, non solo per il fatto che solleva — 14 percorsi distinti di
+> `ProofForgeryError`, ciascuno con `pytest.raises(ProofForgeryError)`, mai
+> `Exception` nudo. La regola nasce dall'incidente `scenario.scenario_id`
+> (§16.11): una guardia che solleva il tipo sbagliato è peggio di nessuna
+> guardia, perché sconfigge la gestione del chiamante sembrando
+> deliberata.
+>
+> **Mutation test della garanzia**, perché un'affermazione di
+> irrappresentabilità che non può fallire è decorazione. Rotta in tre modi
+> indipendenti, tutti rilevati: (1) `conclude_without_proof` che promuove un
+> incumbent a `optimal_proven` → 2 rossi; (2) controllo del sigillo
+> disattivato → 2 rossi; (3) ottimo dell'oracolo trasferito a qualunque
+> candidato pubblicato → 1 rosso. `proof.py` ripristinato **byte-identico**
+> dopo ognuna, 33/33 di nuovo verdi.
+>
+> **⚠️ Fuori pista**: nessun bug trovato in `proof.py` da test-author, e
+> nessuno trovato da me nello smoke — la prima volta in quattro stage. Va
+> però letta bene: `proof.py` è l'unico dei cinque moduli che **non
+> istanzia nulla a runtime e non parla con SCIP**, quindi è anche l'unico
+> dove i gate statici hanno davvero il potere che sembrano avere. Non è una
+> smentita della regola "smoke prima di fidarsi", è la sua conferma per
+> contrasto.
+>
+> **⚠️ Fuori pista (registrazione differita, transitoria e voluta)**:
+> `test_pac_planner_proof.py` esiste, è verde, ma **non è registrato** nel
+> runner, perché registrarlo significa modificare
+> `scripts/test_runner/_backend_services.py`, uno dei 10 path staged sotto
+> freeze. Conseguenza dichiarata apertamente invece che ammorbidita:
+> `dev.py test check-orphans` è **ROSSO** nel worktree, con
+> `test_services/ (1 orphan) • test_pac_planner_proof.py`.
+> Decisione del coordinatore: **opzione (b)**, lasciarlo così. Il
+> ragionamento va conservato perché non è ovvio a lettura veloce: il rosso è
+> una proprietà del **worktree in volo**, non di un commit. Il commit Stage
+> 3 cattura l'indice staged, che `test_pac_planner_proof.py` non contiene
+> affatto; su quella revisione `check-orphans` è verde e lo resterà. Quindi
+> l'opzione (a) — registrare subito — non comprerebbe nulla di durevole
+> (la storia è verde comunque) e costerebbe l'unica cosa che un checkpoint
+> serve a dare: uno SHA che significa esattamente ciò che è stato
+> rivisto. Alla revoca del freeze: registrare, riportare `check-orphans` a
+> verde, e far viaggiare il tutto nel commit Stage 4 insieme a `proof.py` e
+> alla sua suite. **Non è una svista**: è una condizione gestita e
+> temporanea.
+
+### 16.14 Stage 5 — `wire_numbers.py` / `planner_report.py` / `planner.py` ✅ completato 2026-09-18
+
+> Questa sezione era stata scritta in due file separati
+> (`plan-phase00Step3Stage4ProofSemantics.prompt.md`,
+> `plan-phase00Step3Stage5ReportProjection.prompt.md`) perché questo piano era
+> fra i 10 path staged sotto freeze e non poteva essere modificato. Col commit
+> `9229085e9` il freeze è caduto e i due file sono stati ripiegati qui e
+> cancellati: un documento, una cronologia. **Nessun errore è stato
+> ripulito nella fusione** — le conclusioni sbagliate restano scritte accanto
+> a quelle giuste, altrimenti averle annotate non serviva a niente.
+
+
+#### Decisioni di contratto ricevute dal coordinatore (2026-09-18)
+
+| Domanda | Risposta | Motivazione conservata |
+|---|---|---|
+| **Q1** `deployment` in fase 1 | `DeploymentUnavailable(reason_code="allocation.deployment_omitted")` | Dice "non l'abbiamo calcolato", che è vero. `primary_is_deployment` asserirebbe un'equivalenza mai stabilita: sarebbe un'affermazione, non un report. |
+| **Q2** `exposure_rows` | **Derivarle** (opzione i), fail-closed | `[]` è valido a schema ma semanticamente una bugia: il consumatore non distingue "nessuna esposizione" da "non calcolate" — la stessa degradazione silenziosa eliminata tre volte in questo workstream (ledger non arrotondato, `missing_fx_pairs`, famiglie arrotondate non modellate). Aggregare `ExactAsset.exposures` pesate per target e per valore finale è **aritmetica su quantità già decise**, stessa classe del sommare le righe ordine in un costo totale: nessuna nuova decisione economica, nessuna policy nuova, non può cambiare quale candidato vince → è una proiezione, sta in 5a. |
+| **Q3** `plan_rebalancing` | **Non spedirlo** | La risposta Q1 originale ("spedisci entrambe") riguardava il *confine di ownership*, non lo scope. Una funzione che esiste ma fallisce sempre è peggio di una assente, perché invita al cablaggio: qualcuno la importerà leggendo il nome e non il corpo. Assente → ImportError nel punto esatto in cui il lavoro mancante è ovvio. Arriva col lavoro SELL. |
+
+Condizione non opzionale su Q2: coperture parziali **mai normalizzate** per
+nascondere un ammanco; `target_weight` e `final_weight` sono proiezioni
+separate di quantità decise separatamente, mai derivate l'una dall'altra per
+comodità.
+
+#### Mappature verificate in sorgente (non assunte)
+
+Trappole trovate leggendo gli invarianti, prima di scrivere codice:
+
+1. **`PlannerAccountingSummary.rounding_delta` ← `ExactAccountingEvaluation.rounding_adjustment`**,
+   **non** `raw_rounding_delta`, nonostante la description del campo dica
+   "Raw posted-exact aggregate rounding delta". Deciso dall'identità, non
+   dal nome: `evaluator.py:2472` calcola
+   `identity_delta = shortfall - (free_cash + physical_reserves +
+   economic_losses + rounding_adjustment)` e lo schema
+   (`pac_allocator.py:2369`) richiede
+   `shortfall == free_cash + physical_reserves + economic_losses +
+   rounding_delta` **con `identity_delta == 0`**. Solo
+   `rounding_adjustment` chiude l'identità. Mappare il campo "raw"
+   avrebbe rotto il validator — ed è il tipo di errore che il nome del
+   campo attivamente suggerisce.
+2. **`PlannerLedgerRow.rounding_delta` ← `ExactBrokerLedgerEvaluation.raw_rounding_delta`**
+   (qui sì il grezzo): il validator di riga
+   (`pac_allocator.py:1962-1996`) **non include** alcun termine di
+   arrotondamento nella sua identità — `initial_selected + funding_in +
+   fx_credit + gross_sell_credit - funding_out - fx_debit - buy_debit -
+   buy_fees - sell_fees - tasse == final_spendable` — quindi lì
+   `rounding_delta` è informativo, non identitario. Due campi omonimi su
+   due modelli diversi con due sorgenti diverse: la coincidenza di nome è
+   una trappola, non un indizio.
+3. **L'identità di riga ledger gira sugli importi POSTATI.** Verificato sul
+   caso reale: cella destinazione/USD con `fx_credit = 10` (postato) e
+   `buy_debit = 10` → `final_spendable = 0` ✓. Se il wire pubblicasse
+   l'esatto `9.504` l'identità non chiuderebbe. È **conferma indipendente**
+   che il fix HALF_UP di §16.11 stava modellando la realtà del ledger e non
+   inventando una convenzione: il modello SCIP, il replay esatto e il
+   contratto wire ora concordano tutti sugli stessi importi postati.
+
+   Corollario che vale la pena fissare, perché è la corroborazione più forte
+   che abbiamo e impedisce a un lettore futuro di chiedersi se il fix fosse
+   over-engineering: **`PlannerLedgerRow` mappa uno-a-uno su
+   `ExactBrokerLedgerEvaluation`, `rounding_delta` incluso, e il contratto
+   wire era congelato molto prima che il difetto venisse trovato.** Il wire
+   portava già un campo per il residuo di arrotondamento. Quindi la
+   distinzione esatto/postato era reale nel dominio da sempre, e il modello
+   compilato era semplicemente l'unico posto che se l'era dimenticata — non
+   una complicazione aggiunta per far tornare i conti al solver.
+
+#### Q2 — correzione: il validator è la specifica, la union di tipi è solo il suo alfabeto
+
+La risposta Q2 iniziale (due bullet: "copertura parziale → `final_weight`
+unavailable" **e** "ammanco visibile, mai riscalare") si contraddiceva nel
+caso che conta: un asset con valore ma nessuna esposizione dichiarata in una
+dimensione. Ho argomentato — correttamente sui dati che avevo — che il
+vocabolario delle `reason` (`zero_current_invested`, `zero_final_invested`,
+`not_applicable`, `dependency_unavailable`: due guardie di denominatore zero,
+due di assenza genuina, **nessuna** `partial_coverage`) mostra che la forma
+unavailable è per i **calcoli indefiniti**, non per gli **input incompleti**.
+Quella lettura dell'enum era giusta. La conclusione era comunque sbagliata.
+
+Il coordinatore è andato a leggere il **validator**, e il contratto aveva già
+deciso in un modo che nessuno dei due aveva proposto. Verificato riga per riga
+da me prima di agire:
+
+- `_validate_weight_availability` (`schemas/pac_allocator.py:1251-1267`) è
+  **totale**, ammette esattamente due mondi:
+  - `total == 0` (`:1258-1263`): **ogni** peso della dimensione dev'essere
+    unavailable con reason esattamente `zero_final_invested`; un solo valore
+    disponibile solleva. Disponibilità mista: impossibile.
+  - `total != 0` (`:1264-1267`): **ogni** peso dev'essere disponibile, in
+    `[0,1]`, **e la dimensione deve sommare esattamente a 1** ("must form a
+    complete unit vector"). `value is None` solleva a `:1264`.
+- `_validate_exposure_projection` (`:2456-2460`) impone la stessa chiusura a
+  `target_weight`, **incondizionatamente**.
+
+Conseguenza: **entrambe le uscite sono chiuse.** Il bullet 1 è inemettibile
+appena `final_invested != 0` (`:1264` lo rifiuta); il bullet 2 è inemettibile
+(`:1266` sul finale, `:2460` sul target); il mio esempio (Tech a 0.5, dimensione
+che somma a 0.5) solleva `ValueError: sector final exposure weights must form a
+complete unit vector`.
+
+> **Lezione, stretta e da conservare**: quando un contratto wire ha un
+> validator, **il validator è la specifica e la union di tipi è soltanto il suo
+> alfabeto**. L'enum mi ha detto correttamente che `unavailable` non è per la
+> copertura parziale; non poteva dirmi che neanche il ramo numerico lo è.
+> Ragionare su cosa una tabella *dovrebbe* dire invece di leggere cosa il
+> validator permette di dire ha prodotto una risposta sbagliata che sembrava
+> ben argomentata.
+
+### Forma scelta: riga categoria residua (opzione 3)
+
+Le sole tre forme valide a schema erano: (1) omettere la dimensione, (2)
+`exposure_rows = []`, (3) rappresentare il residuo non categorizzato come una
+**propria riga categoria**, così che entrambi i vettori chiudano a 1 per
+costruzione. Scelta (3): (1) e (2) sono il fallimento "tabella vuota" con un
+altro cappello — il consumatore non distingue "non calcolato" da "nessuna
+esposizione" — e (1) per giunta **distrugge** l'affermazione corretta che Tech
+è davvero metà del portafoglio. (3) conserva quel `0.5` e trasforma la metà
+mancante da assenza in **fatto nominato**: non più un buco che la UI deve
+dedurre da una somma che non chiude, ma una fetta con un'etichetta.
+
+Derivazione, per dimensione, su tutti gli asset:
+`peso_categoria = Σ_asset w_asset × exposure_weight(asset, dim, categoria)`,
+`peso_residuo = Σ_asset w_asset × (1 − Σ_categorie exposure_weight(asset, dim))`,
+con `w_asset` = peso target per il vettore target, quota di valore finale per
+quello finale. La chiusura è quindi un'**identità**
+(`Σ_asset w_asset × 1 = 1`), **non** una normalizzazione — da asserire in
+aritmetica esatta, mai raggiunta riscalando, e il residuo non va mai fuso in
+una categoria reale.
+
+Vincoli tenuti: regola **uniforme** senza casi speciali (se nessun asset
+dichiara nulla, si emette il solo residuo a peso 1 — sopprimere la dimensione
+proprio quando il dato è al suo peggio invertirebbe il segnale); le
+dichiarazioni **parziali per asset** sono input reale, non solo gli asset del
+tutto non dichiarati (`normalize.py:1093-1109` valida intervallo e unicità
+`(dimension, category)` ma **non** richiede che una dimensione chiuda per
+asset, quindi un asset al 60% Tech contribuisce `0.4·w_asset` al residuo);
+`total == 0` va comunque nel mondo unavailable per **tutte** le righe residuo
+incluso, con reason `zero_final_invested`, mentre `target_weight` deve
+comunque chiudere a 1 perché i target non dipendono dal denominatore.
+
+### Provenance del residuo — risolta, non fabbricata
+
+`PacExposurePlanRow.provenance_ids` è `min_length=1` (`:2007`) e il residuo
+nasce proprio dove **non** esiste una dichiarazione di esposizione, quindi
+nessun `ExactExposure.provenance_id`. Punto di stop esplicito del
+coordinatore: derivarla se è possibile farlo in modo veritiero, altrimenti
+fermarsi invece di inventarla.
+
+È possibile, e senza sintetizzare nulla. Evidenza raccolta prima di decidere:
+
+1. Nel dominio **ogni record di input** porta il proprio `provenance_id`:
+   `ExactProvenance`, `ExactExposure`, `ExactAssetQuote`, `ExactBroker`,
+   `ExactHolding`, `ExactExistingCash`, `ExactContribution`,
+   `ExactFundingRoute`, `ExactOrderRoute`, `ExactCostBasis`, `ExactAssetTax`,
+   `ExactWithholding`.
+2. Lo schema tratta `provenance_ids` **uniformemente** su righe funding, fx,
+   ordine ed esposizione (`:2530-2534`): l'unione dev'essere inclusa nella
+   lista provenance pubblicata di primo livello, e gli id devono essere unici
+   per riga.
+
+Quindi la semantica del campo è "**i record di input da cui questa riga è
+stata derivata**", non "chi ha asserito questa classificazione". Sotto quella
+lettura il residuo ha una provenance veritiera: l'unione dei
+`quote.provenance_id` degli asset che vi contribuiscono, più i
+`exposure.provenance_id` delle dichiarazioni parziali che lo generano. Sono
+**id reali di record reali**, già pubblicati — nessuna sintesi, nessun
+"sembra tracciato e non lo è". Non afferma che qualcuno abbia classificato il
+residuo: dice da dove vengono i numeri che lo compongono.
+
+#### Regole generali ricavate in 5a (valgono oltre questo step)
+
+**Containment — rendere la regola incondizionata, non testare il ramo cattivo.**
+`_validate_ready_solution` (`:2531`) chiede che l'unione delle provenance
+citate dalle righe sia contenuta nella lista provenance pubblicata. Quella
+regola è **condizionale a una nostra scelta a monte**: se pubblicassimo solo
+le provenance "usate", il fallimento comparirebbe unicamente sugli scenari con
+asset non categorizzati, cioè una suite verde non proverebbe niente senza una
+fixture che azzecchi il ramo. Invece di aggiungere quella fixture,
+`build_planner_provenance` pubblica **l'intera** lista provenance dello
+scenario — fedele alla description del campo ("root provenance records
+referenced by every copied or manually supplied fact") e, soprattutto, la
+regola diventa **totale per costruzione**: nessuna riga può citare un id
+assente. Generalizzando:
+
+> Quando la regola di un validator è condizionale a una nostra scelta a monte,
+> **preferire rendere la regola inviolabile invece di aggiungere una fixture
+> che per caso esercita il ramo cattivo.** Le fixture decadono; una regola che
+> non può essere violata no.
+
+**Ogni turno con un risultato rilevante per il coordinatore finisce con
+`send_session_message`.** Riassumere solo all'utente ha un danno concreto, non
+procedurale: il coordinatore costruisce le direttive di ripresa da ciò che
+osserva dall'esterno (mtime, `py_compile`, `git diff`), e quella vista **non
+può vedere il lavoro completato**. Risultato: una lista di "remaining" stantia
+e mezzo turno speso a correggerla. Se un turno sta per finire senza quel
+messaggio, è già il segnale che qualcosa è andato storto.
+
+**Uno stub che solleva non può attraversare un confine di turno.** Durante la
+costruzione ho appeso un `raise NotImplementedError` e l'ho sostituito nello
+stesso turno. Non ha mai raggiunto un gate, ma se il turno fosse finito male
+sarebbe sopravvissuto — e `ruff`, `black` e `py_compile` sono **tutti
+contenti** di un `raise NotImplementedError` pulito. Sarebbe stato il quinto
+difetto invisibile all'analisi statica in sei stage, stessa famiglia
+dell'import sotto `TYPE_CHECKING` (§16.9) e di `scenario.scenario_id`
+inesistente (§16.11).
+
+#### 5b — due difetti veri, trovati da test-author, corretti (autorizzazione: Opzione 1)
+
+**Correzione che va contro di me, e il tempismo è la parte interessante.** Avevo
+riportato al coordinatore che far girare il solver anche quando decide
+l'oracolo era **"forzato dal contratto"**, perché
+`ReportedFloatingSolverEvidence.stages` è `min_length=1`. **Conclusione
+sbagliata.** `PlannerSolverEvidence` è una *union*
+(`SolverNotRunEvidence | ReportedFloatingSolverEvidence`, `:1519-1522`) e
+`_validate_stop_evidence` (`:2683-2688`) pretende evidenza floating **solo**
+quando `stop_reason != "completed"`; la regola finished/unfinished vale
+**solo dentro** il ramo floating. Quindi `completed` + `not_run` è
+perfettamente legale. Di più: `SolverNotRunReasonCode` (`:700`) ha **un solo
+valore**, `allocation.solver_not_required` — nessuno scrive un enum a valore
+singolo per un percorso che non si aspetta venga mai preso.
+
+> Ho letto il vincolo di un **campo** e mi sono fermato lì, invece di leggere
+> il **validator che governa la sua union**. È esattamente R1 — *il validator
+> è la specifica, la union di tipi è solo il suo alfabeto* — la regola che
+> avevo appena applicato al codice altrui e non al mio. Il coordinatore ha
+> commesso lo stesso errore lo stesso giorno, **a meno di un'ora** da quando
+> aveva scritto R1, sullo stesso file. Questo dice che razza di regola è R1:
+> non una lacuna di conoscenza che si chiude una volta, ma un **fallimento di
+> attenzione ricorrente che sopravvive al fatto di conoscerlo**. La
+> conclusione sbagliata resta scritta qui accanto a quella giusta: un registro
+> del debito che cancella i propri errori è un registro non verificabile.
+
+### Difetto A — `plan_pac_allocation` sollevava su un input legittimo
+
+Fixture + `required_minimum = 1 unità` (€5 di cassa contro €10 di prezzo
+unitario) faceva **sollevare** `ValidationError: Completed stops require
+finished stages`, violando la docstring stessa della funzione ("Never raises
+on a planning outcome"). Meccanismo: uno stage SCIP infeasible è
+necessariamente `unfinished` (uno `finished` deve portare un primal finito,
+che una risoluzione infeasible non ha), mentre
+`PacPlannerReadyInfeasibleResult` pinna `stop_reason="completed"` e il
+validator impone `completed ⇔ nessuno stage unfinished`. Contraddizione →
+**`ready_infeasible` era irraggiungibile ogni volta che il solver girava**,
+cioè sempre, a causa dell'errore qui sopra. Non è un caso esotico: è un utente
+con un minimo d'ordine che non riesce a coprire a inizio mese.
+
+**Fix (sottrattivo)**: l'oracolo si prova per primo; quando risolve, il solver
+**non gira** e il risultato porta
+`SolverNotRunEvidence(reason="allocation.solver_not_required")` con
+`stop_reason="completed"`. Sistema il crash **e** elimina la corsa ridondante
+del solver invece di scusarla.
+
+> **Costo onesto del fix, da non leggere come indebolimento**: la produzione
+> perde un *cross-check diagnostico* — un risultato deciso dall'oracolo non ha
+> più un incumbent del solver che potrebbe dissentire. Non è una perdita di
+> garanzia: l'oracolo è esaustivo, quindi la sua risposta **è** la risposta, e
+> un solver in disaccordo avrebbe segnalato un bug di modellazione, non un
+> risultato pubblicato sbagliato. Quel cross-check continua a vivere nel gate
+> oracle-agreement di `test_pac_planner_solver.py`, che è dove ha preso il
+> difetto HALF_UP. **Verificato prima di toccare qualunque cosa** che il gate
+> non passa dal service entry: chiama `compile_policy_program` +
+> `solve_policy_program` direttamente (`:73-74`) e `run_exhaustive_oracle`
+> (`:159`), zero riferimenti a `plan_pac_allocation`, su tutte e 5 le fixture
+> parametrizzate. Se fosse passato di lì, il gate sarebbe diventato **vacuo in
+> silenzio** — passando per sempre confrontando l'oracolo con niente.
+
+### Difetto B — vocabolario sbagliato, ed è un errore di Stage 4, non di 5b
+
+`_wire_infeasibility` passava `evaluation.conflict_codes` (codici di vincolo
+del dominio esatto, es. `ORDER_REQUIRED_MIN`) dentro
+`DeterministicConflictWitness.issue_codes`, tipato `list[PlannerIssueCode]`.
+Verificato: `"ORDER_REQUIRED_MIN" in PlannerIssueCode` → **False**; l'universo
+wire è `allocation.*` ed è **congelato a 80 valori** con guardia
+`RuntimeError` (`issues.py:48-50`). L'errore nasce in Stage 4:
+`proof.conclude_infeasible_from_conflicts(evaluation)` prendeva l'input dal
+dominio sbagliato; 5b è solo dove è stato eseguito per la prima volta.
+
+**Fix**: fase 1 **non emette** `deterministic_conflict`. L'infeasibilità
+provata viene dal solo oracolo; tutto il resto è onestamente `not_proven`.
+
+> Ragionamento da conservare, perché qualcuno lo ri-proporrà: **una
+> affermazione fatta al tempo della normalizzazione su input dichiarati e una
+> fatta al tempo della valutazione su un candidato non sono la stessa
+> affermazione.** Una tabella che mappasse `ORDER_REQUIRED_MIN` su
+> `allocation.order_minimum_exceeds_cap` fabbricherebbe un'equivalenza fra due
+> asserzioni diverse e la pubblicherebbe come **witness** — esattamente la
+> classe di cosa che `proof.py` esiste per rendere irrappresentabile.
+> Estendere l'enum non è disponibile: congelato, guardato, e non di nostra
+> competenza.
+
+### Limitazione di contratto trovata durante la verifica (segnalata, non corretta)
+
+Sul percorso over-cap **infeasible** (oracolo escluso, solver attivo) il
+risultato degrada onestamente a `ready_no_incumbent`/`not_proven`, ma
+`build_stop_reason` mappa a **`stop_reason == "time_limit"`** anche se la
+risoluzione non è stata fermata da un orologio: è infeasible. Non c'è una
+risposta onesta disponibile — l'enum ammette solo
+`completed | time_limit | node_limit`, `completed` è vietato perché gli stage
+sono `unfinished`, e nessuno dei due limiti rimasti è vero. È una **limitazione
+del contratto congelato**, non un difetto nostro. test-author ha
+correttamente asserito l'invariante robusto (`stop_reason != "completed"` in
+presenza di stage unfinished) invece di pinnare `"time_limit"`.
+
+#### 5b — decisioni che vanno lette, non dedotte
+
+**`plan_pac_allocation` NON è ri-esportata dal `__init__` del package, ed è
+deliberato.** L'istruzione iniziale del coordinatore diceva "esportata da
+`__init__.py`"; era **sbagliata** e la correzione è sua. La ragione è
+concreta, non stilistica: la catena di import è
+`planner → compiler:54 → pyscipopt` (`compiler.py` importa `Model` a livello
+di modulo perché, a differenza di `constraints`/`objectives`, ne istanzia uno
+davvero). Ri-esportare farebbe trascinare **SCIP a import-time a ogni
+consumatore delle analisi P1 leggere** (`analyze_pac_budget`,
+`analyze_rebalancing`) per un solver che non chiamano mai, e falsificherebbe
+in silenzio la docstring del package — *"Pure P1 allocation analyses. No
+solver, order, lookup, or persistence."* — cioè esattamente la promessa su cui
+un lettore si basa per decidere se importare il package costa poco.
+
+Verificato, non asserito: importare `backend.app.services.pac_allocator`
+lascia `pyscipopt` **assente** da `sys.modules`; importare `planner` ce lo
+mette.
+
+> Un export **assente e non spiegato** è indistinguibile da una svista: il
+> prossimo contributore che nota che `plan_pac_allocation` non è importabile
+> dal package lo aggiungerà volentieri, senza accorgersi che così il package
+> importa SCIP. Perciò la decisione è (a) scritta nella docstring di
+> `planner.py` dove verrà letta, e (b) **resa una proprietà**: un test in
+> **subprocess** asserisce `"pyscipopt" not in sys.modules` dopo l'import del
+> package. Subprocess perché in-process il modulo è già caricato dalle suite
+> sorelle e l'asserzione sarebbe vacua — la solita forma "passa perché non ha
+> mai valutato niente". È la regola R2 (rendere la regola inviolabile invece
+> di documentarla) applicata a un grafo di import invece che a un validator.
+
+**~~Il solver gira anche quando decide l'oracolo — forzato dal contratto, non
+scelto.~~ ⛔ RITIRATO — vedi §16.14 «due difetti veri» (Difetto A).** Quanto
+segue è la conclusione **sbagliata** che avevo tratto il 2026-09-18 alle
+18:39, lasciata scritta apposta perché il registro sia verificabile:
+
+> `ReportedFloatingSolverEvidence.stages` è `min_length=1`
+> (`schemas/pac_allocator.py:1505`), e ogni risultato ready lo richiede: senza
+> almeno uno stage di evidenza il risultato non è emettibile. Registrato come
+> **costo noto, non difetto**, con la mitigazione che lo rende limitato: il
+> percorso oracolo si prende solo quando
+> `estimate_oracle_domain_size(view) <= MAX_EXHAUSTIVE_ORACLE_CANDIDATES`, cioè
+> esattamente sui domini piccoli dove una corsa ridondante del solver costa
+> poco. Il costo **non può crescere con la scala**, perché a scala l'oracolo non
+> viene consultato affatto.
+
+**Perché era sbagliata**: `min_length=1` vincola quella *variante* di
+evidenza, ma `PlannerSolverEvidence` è una **union**, e
+`_validate_stop_evidence` pretende evidenza floating solo quando
+`stop_reason != "completed"`. `completed` + `SolverNotRunEvidence` è legale, e
+`SolverNotRunReasonCode` ha un **solo** valore — `allocation.solver_not_required`
+— cioè il contratto prevedeva esplicitamente questo percorso. Il solver non era
+affatto obbligatorio: era una mia scelta implementativa, e sbagliata, che
+rendeva `ready_infeasible` inemettibile e faceva **sollevare** il planner su un
+input legittimo.
+
+**Fixture con ottimo degenere: requisito permanente, non aneddoto.** Il bug
+del no-op (costruivo `PacIncumbentSolution`, che pretende ≥1 riga ordine,
+*prima* di verificare il no-op) è stato preso dalla prima esecuzione
+end-to-end perché la fixture dello schema ha un **ottimo degenere**: €5
+contro un prezzo unitario di €10, quindi non fare nulla è corretto. Se avessi
+esercitato solo uno scenario con un acquisto fattibile, il difetto sarebbe
+arrivato in produzione e avrebbe fallito **la prima volta che un utente è a
+corto di cassa** — che per uno strumento PAC non è un caso raro ma il più
+comune a inizio mese. Perciò la suite permanente **deve** mantenere una
+fixture il cui ottimo è no-op, e il test deve asserire `ready_no_op` **con**
+`optimal_proven`, non semplicemente "nessuna eccezione".
+
+**Quando si devia da uno scope concordato perché lo scope era sbagliato, va
+detto esplicitamente.** Avevo riportato `__all__ == ["plan_pac_allocation"]`
+senza nominare il file, mentre lo scope diceva "esportata da `__init__.py`":
+letti insieme suggerivano che la superficie del *package* esportasse ormai
+solo il planner, cioè che gli export P1 fossero stati persi. Sono serviti tre
+comandi al coordinatore per stabilire che la verità era migliore di entrambe
+le letture. **La deviazione è la parte interessante del report**, non un
+dettaglio da far dedurre da un path da ricostruire.
+
+#### Debito registrato (non rimosso, non ammorbidito)
+| Item | Stato | Trigger |
+|---|---|---|
+| `stop_reason`: i rami `time_limit`/`node_limit` sono esercitati su uno stage **truccato** (`dataclasses.replace` su un `SolverRunResult` reale), non su una terminazione per limite genuina | Accettato per 5a | **Filato contro G5.** `build_stop_reason` è funzione pura degli stati di stage, quindi la *mappatura* è coperta fedelmente; ciò che manca è una terminazione reale. Forzare SCIP a un limite su uno scenario giocattolo non è deterministico e un test costruito ad arte sarebbe fragile. Una campagna a scala rappresentativa (G5) rende disponibile una terminazione vera **gratis** invece che manufatta. Trasforma un asterisco permanente in un task con un innesco. |
+| Ordine ascendente **per sezione** provato in modo non vacuo solo sulla sezione BUY (2 righe); l'unicità globale è provata su tutte e tre le sezioni | Accettato per 5a | La proprietà protegge da un refactor futuro che rinumeri per sezione, e una sezione a una riga non può rilevarlo. **Quando le fixture di 5b avranno una sezione funding o FX multi-riga, estendere lì l'asserzione** invece di aggiungere una fixture solo per questo. |
+| Path a scala ridotta della display projection coperto solo via il suo raise, non via una proiezione riuscita a scala più grossolana | Accettato così | Nessun follow-up. |
+
+> Un checkpoint che elenca ciò che **non** ha dimostrato vale più di uno che
+> lascia intendere di aver dimostrato tutto.
+
+#### Rami irraggiungibili: documentare, non rimuovere
+
+`terminating_decimal_text` contiene due rami (`rstrip("0")` e il fallback a
+frazione vuota) **irraggiungibili** per un `ExactRatio` canonico. Decisione:
+documentarli in-code con **l'argomento di raggiungibilità per esteso**, non
+con la parola "unreachable".
+
+Motivazione generalizzabile: un ramo irraggiungibile **non documentato** è
+instabile in un modo preciso — comparirà in ogni coverage report da qui in
+avanti, e **entrambe** le azioni disponibili sono cattive. Cancellarlo fa
+sparire una difesa reale sulla forza di un numero di copertura. Coprirlo
+obbliga a costruire un `ExactRatio` non normalizzato, cioè a scrivere un test
+che **asserisce comportamento per un input che il tipo vieta**, fissando un
+contratto che nessuno ha progettato e facendo sembrare una regressione un
+futuro irrigidimento dell'invariante. Documentarlo chiude la questione una
+volta sola. L'argomento va scritto perché, se `ExactRatio` smettesse di
+normalizzare in costruzione, il ramo diventerebbe vivo e il commento è
+l'avviso che qualcosa si è mosso sotto.
+
+> **Regola promossa al piano master**: una mutazione sopravvissuta è evidenza
+> di una lacuna nei test **solo se la mutazione cambia davvero il
+> comportamento**. Corollario altrettanto importante: *verificare che la
+> propria mutazione sia una mutazione vera prima di trarre qualunque
+> conclusione dalla sua sopravvivenza*, perché una mutazione rotta è
+> indistinguibile da una robusta al livello di "la suite è diventata rossa?".
+> Ordine corretto: dimostrare per argomento, **poi** confermare
+> empiricamente — il solo controllo empirico sarebbe compatibile con "nessun
+> campione ha colpito il ramo".
+
+> **Tecnica da nominare** (test-author, Mutation A): disabilitare la guardia
+> di produzione così che il rosso venga dalla **ri-derivazione indipendente**
+> dell'invariante da parte del test. *Un test che ri-deriva l'invariante è un
+> test; un test che si limita a osservare che l'asserzione di produzione non
+> scatta è un'eco.* La regola del mutation-test esiste perché il secondo tipo
+> passa anche quando l'asserzione viene saltata in silenzio.
+
+#### Vincoli forzati dallo schema (non scelte)
+
+- **Gli stage `tie:<decision_id>` vanno filtrati da `solver_evidence`**: il
+  `ObjectiveCode` wire non ha un membro `tie:*`, quindi non esiste
+  alternativa. Va commentato nel codice al punto del filtro, perché
+  altrimenti è silenzioso: un lettore che vede meno stage di evidenza di
+  quanti il solver ne ha eseguiti sospetterebbe perdita di dati.
+- **`stop_reason` è determinato, non scelto**: `_validate_stop_evidence`
+  (`pac_allocator.py:2680-2688`) impone `completed` ⇔ nessuno stage
+  `unfinished`, che combacia esattamente con
+  `SolverRunResult.finished_stage_count`. Da commentare dove vive la
+  mappatura, così il prossimo lettore non la ri-deriva.
+
 → Step 4: [Copie dominio](plan-phase00Step4PacRebalancerDomainCopies.prompt.md)

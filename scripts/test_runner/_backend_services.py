@@ -88,6 +88,10 @@ PAC_PLANNER_EVALUATOR_TEST_PATH = "backend/test_scripts/test_services/test_pac_p
 PAC_PLANNER_ORACLE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_oracle.py"
 PAC_PLANNER_POLICIES_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_policies.py"
 PAC_PLANNER_SOLVER_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_solver.py"
+PAC_PLANNER_PROOF_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_proof.py"
+PAC_PLANNER_WIRE_NUMBERS_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_wire_numbers.py"
+PAC_PLANNER_REPORT_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_report.py"
+PAC_PLANNER_SERVICE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_planner.py"
 
 
 def services_pac_analyze(verbose: bool = False, test_names: list = None) -> bool:
@@ -132,6 +136,34 @@ def services_pac_planner_solver(verbose: bool = False, test_names: list = None) 
     print_section("Services: PAC/Rebalancer Lexicographic Solver")
     cmd = _build_pytest_cmd(PAC_PLANNER_SOLVER_TEST_PATH, test_names)
     return run_command(cmd, "PAC/Rebalancer lexicographic solver tests", verbose=verbose)
+
+
+def services_pac_planner_proof(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that a floating solve structurally cannot express a proven outcome."""
+    print_section("Services: PAC/Rebalancer Proof Semantics")
+    cmd = _build_pytest_cmd(PAC_PLANNER_PROOF_TEST_PATH, test_names)
+    return run_command(cmd, "PAC/Rebalancer proof semantics tests", verbose=verbose)
+
+
+def services_pac_planner_wire_numbers(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the exact-rational to wire-number projection every published figure passes through."""
+    print_section("Services: PAC/Rebalancer Wire Numbers")
+    cmd = _build_pytest_cmd(PAC_PLANNER_WIRE_NUMBERS_TEST_PATH, test_names)
+    return run_command(cmd, "PAC/Rebalancer wire number tests", verbose=verbose)
+
+
+def services_pac_planner_report(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the wire projection: rows, exposure closure, solver evidence and proof."""
+    print_section("Services: PAC/Rebalancer Wire Projection")
+    cmd = _build_pytest_cmd(PAC_PLANNER_REPORT_TEST_PATH, test_names)
+    return run_command(cmd, "PAC/Rebalancer wire projection tests", verbose=verbose)
+
+
+def services_pac_planner_service(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the plan orchestration end to end, from a wire request to a wire result."""
+    print_section("Services: PAC/Rebalancer Plan Orchestration")
+    cmd = _build_pytest_cmd(PAC_PLANNER_SERVICE_TEST_PATH, test_names)
+    return run_command(cmd, "PAC/Rebalancer plan orchestration tests", verbose=verbose)
 
 
 def services_fx_conversion(verbose: bool = False, test_names: list = None) -> bool:
@@ -894,6 +926,38 @@ Note: No backend server required.
         services_pac_planner_solver,
         name="PAC/Rebalancer Lexicographic Solver",
         desc="Lexicographic SCIP cascade adapter: exhaustive-oracle agreement, stage scoping, evidence shape, honest limits and floating infeasibility",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "pac-planner-proof",
+        services_pac_planner_proof,
+        name="PAC/Rebalancer Proof Semantics",
+        desc="Sealed witnesses, oracle-only promotion and the structural impossibility of a floating solve claiming a proof",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "pac-planner-wire-numbers",
+        services_pac_planner_wire_numbers,
+        name="PAC/Rebalancer Wire Numbers",
+        desc="Lossless exact-to-wire projection, canonical spelling, non-authoritative display and fail-closed envelope limits",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "pac-planner-report",
+        services_pac_planner_report,
+        name="PAC/Rebalancer Wire Projection",
+        desc="Asset, action, ledger and exposure rows, exact exposure closure, tie-filtered solver evidence and proof projection",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "pac-planner-service",
+        services_pac_planner_service,
+        name="PAC/Rebalancer Plan Orchestration",
+        desc="plan_pac_allocation end to end: ready states, failure availabilities, oracle-settled evidence and SCIP import isolation",
         isolation="pure",
     )
     add_test(cat, "asset-source", services_asset_source, name="Asset Source", desc="Provider assignment, synthetic yield")
