@@ -148,9 +148,9 @@ def test_risk_metrics_match_hand_derived_formulas():
     assert sample_variance([1.0, 2.0, 3.0]) == pytest.approx(1.0)
     assert sample_covariance([1.0, 2.0, 3.0], [2.0, 4.0, 6.0]) == pytest.approx(2.0)
     assert annualized_volatility([0.1, -0.1], 365.0) == pytest.approx(math.sqrt(0.02) * math.sqrt(365.0))
-    assert daily_risk_free_rate(0.05) == pytest.approx((1.05 ** (1 / 365)) - 1)
+    assert daily_risk_free_rate(0.05, 365.0) == pytest.approx((1.05 ** (1 / 365)) - 1)
 
-    daily_rf = daily_risk_free_rate(0.05)
+    daily_rf = daily_risk_free_rate(0.05, 365.0)
     returns = [0.01, 0.02, 0.03]
     expected_sharpe = (sum(returns) / len(returns) - daily_rf) / math.sqrt(0.0001) * math.sqrt(365.0)
     assert annualized_sharpe(
