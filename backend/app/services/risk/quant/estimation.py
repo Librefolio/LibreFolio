@@ -59,7 +59,29 @@ def estimate_gbm_parameters(
     )
 
 
+def align_simple_returns(
+    returns_by_asset: Mapping[int, Sequence[float]],
+    asset_ids: Sequence[int],
+) -> np.ndarray:
+    """Stack aligned per-asset simple returns into an observation-by-asset matrix.
+
+    Resampling needs the raw matrix rather than estimated parameters: rows are
+    drawn whole, so the columns must line up in time exactly as they do here.
+    """
+    if not asset_ids:
+        raise ValueError("return alignment requires at least one asset")
+    rows = [np.asarray(returns_by_asset[asset_id], dtype=float) for asset_id in asset_ids]
+    observations = len(rows[0])
+    if observations < 2 or any(len(row) != observations for row in rows):
+        raise ValueError("return alignment requires aligned series with at least two observations")
+    matrix = np.column_stack(rows)
+    if not np.isfinite(matrix).all() or np.any(matrix <= -1):
+        raise ValueError("return alignment requires finite simple returns greater than -1")
+    return matrix
+
+
 __all__ = [
     "GbmParameterEstimates",
+    "align_simple_returns",
     "estimate_gbm_parameters",
 ]
