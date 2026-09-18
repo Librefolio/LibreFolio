@@ -3254,12 +3254,18 @@
             "seed": "Seme"
           },
           "values": {
+            "block_bootstrap": "Bootstrap a blocchi mobili",
             "gbm": "Moto browniano geometrico",
             "mc": "Monte Carlo",
             "qmc": "Quasi-Monte Carlo",
             "historical_log_mle": "MLE sui log-rendimenti storici",
+            "empirical_resampled": "Empirica, da rendimenti ricampionati",
             "sample_log_returns": "Covarianza campionaria dei log-rendimenti",
-            "current_buy_and_hold": "Composizione attuale, mantenuta"
+            "not_estimated_joint_resampling": "Non stimata: ricampionamento congiunto",
+            "current_buy_and_hold": "Composizione attuale, mantenuta",
+            "calm": "Mercato calmo",
+            "prolonged_crisis": "Crisi prolungata",
+            "shock_recovery": "Shock e recupero"
           },
           "days": "{count} giorni",
           "regimeValue": "{regime}, dichiarato su {days} giorni",

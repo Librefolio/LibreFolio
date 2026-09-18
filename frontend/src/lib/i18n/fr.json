@@ -3254,12 +3254,18 @@
             "seed": "Graine"
           },
           "values": {
+            "block_bootstrap": "Bootstrap par blocs mobiles",
             "gbm": "Mouvement brownien géométrique",
             "mc": "Monte-Carlo",
             "qmc": "Quasi-Monte-Carlo",
             "historical_log_mle": "MLE sur log-rendements historiques",
+            "empirical_resampled": "Empirique, à partir de rendements rééchantillonnés",
             "sample_log_returns": "Covariance empirique des log-rendements",
-            "current_buy_and_hold": "Composition actuelle, conservée"
+            "not_estimated_joint_resampling": "Non estimée : rééchantillonnage conjoint",
+            "current_buy_and_hold": "Composition actuelle, conservée",
+            "calm": "Marché calme",
+            "prolonged_crisis": "Crise prolongée",
+            "shock_recovery": "Choc et reprise"
           },
           "days": "{count} jours",
           "regimeValue": "{regime}, déclaré sur {days} jours",

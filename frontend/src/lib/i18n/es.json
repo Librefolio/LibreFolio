@@ -3254,12 +3254,18 @@
             "seed": "Semilla"
           },
           "values": {
+            "block_bootstrap": "Bootstrap por bloques móviles",
             "gbm": "Movimiento browniano geométrico",
             "mc": "Monte Carlo",
             "qmc": "Cuasi-Monte Carlo",
             "historical_log_mle": "MLE sobre log-rendimientos históricos",
+            "empirical_resampled": "Empírica, a partir de rendimientos remuestreados",
             "sample_log_returns": "Covarianza muestral de log-rendimientos",
-            "current_buy_and_hold": "Composición actual, mantenida"
+            "not_estimated_joint_resampling": "No estimada: remuestreo conjunto",
+            "current_buy_and_hold": "Composición actual, mantenida",
+            "calm": "Mercado tranquilo",
+            "prolonged_crisis": "Crisis prolongada",
+            "shock_recovery": "Shock y recuperación"
           },
           "days": "{count} días",
           "regimeValue": "{regime}, declarado sobre {days} días",

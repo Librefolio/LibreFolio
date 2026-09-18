@@ -4,7 +4,7 @@
     import {schemas} from '$lib/api';
     import {_ as t} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/app/language';
-    import {riskOutput} from '$lib/risk/riskTypes';
+    import {riskMetadata, riskOutput, singleValue} from '$lib/risk/riskTypes';
     import {buildHypotheticalShockParameters, type RiskScenarioDimension} from '$lib/risk/riskRequest';
     import type {RiskPanelController} from '$lib/stores/risk/riskPanelController.svelte';
 
@@ -28,9 +28,29 @@
         controller: RiskPanelController;
         assetNames: Record<number, string>;
         currency: string;
+        /**
+         * Whether this surface may state amounts in money — `undefined` means
+         * "decide from the answer".
+         *
+         * Two separate questions hide here, and conflating them produced two
+         * wrong designs in a row. **How it is known**: reading the scope off
+         * `metadata` is fail-closed, because a caller cannot forget it; a prop
+         * alone is fail-open, so a future mount on `asset_set` that omits it
+         * brings the euros back. **What is returned**: `''` makes the amount
+         * absent, which is right everywhere, whereas the `—` of
+         * `formatScopedCurrencyAmount` is right inside a card and wrong inside a
+         * sentence — "would have ended the period at −12.30% —" reads as a
+         * number that failed to load, not as one that does not apply.
+         *
+         * So the default is derived from the payload and the prop is an explicit
+         * override. The condition is the one `formatScopedCurrencyAmount:163`
+         * already uses, reused rather than restated, so the guards across the
+         * subsystem converge on the same predicate even where the string differs.
+         */
+        showMoney?: boolean;
     }
 
-    let {controller, assetNames, currency}: Props = $props();
+    let {controller, assetNames, currency, showMoney: showMoneyOverride}: Props = $props();
 
     let presetId = $state('');
     let dimension = $state<RiskScenarioDimension>('asset_class');
@@ -40,6 +60,8 @@
     let options = $derived(shockOptions(controller.scenarioCatalog, $currentLanguage));
     let result = $derived(controller.stressResult);
     let output = $derived(riskOutput(result, schemas.RiskStressOutput));
+    let scopeKind = $derived(singleValue(riskMetadata(result)?.scope) ?? '');
+    let showMoney = $derived(showMoneyOverride ?? scopeKind === 'portfolio');
     let rows = $derived(tornadoRows(output));
     let buckets = $derived(Object.keys(bucketShocks).sort((left, right) => left.localeCompare(right)));
 
@@ -83,7 +105,7 @@
     }
 
     function rowAmount(row: TornadoRow): string {
-        return row.amount === null ? '' : formatCurrencyAmount(String(row.amount), currency);
+        return !showMoney || row.amount === null ? '' : formatCurrencyAmount(String(row.amount), currency);
     }
 </script>
 
@@ -92,7 +114,7 @@
         {#each options as option (option.value)}
             <button
                 type="button"
-                class="rounded-full border px-3 py-1 text-xs {presetId === option.value ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200' : 'border-gray-200 text-gray-700 dark:border-slate-600 dark:text-gray-200'}"
+                class="rounded-full border px-3 py-1 text-xs {presetId === option.value ? 'border-libre-green bg-libre-green/10 text-libre-green dark:bg-libre-green/20 dark:text-green-400' : 'border-gray-300 text-gray-700 dark:border-slate-600 dark:text-gray-200'}"
                 onclick={() => choose(option.value)}
                 disabled={controller.stressLoading}
                 data-testid="risk-shock-preset"
@@ -129,7 +151,7 @@
                     <span class="text-gray-400">%</span>
                 </div>
             {/each}
-            <button type="button" class="col-span-full justify-self-start rounded-lg bg-blue-600 px-3 py-1.5 text-sm text-white disabled:opacity-50" onclick={run} disabled={controller.stressLoading} data-testid="risk-shock-run">
+            <button type="button" class="col-span-full justify-self-start rounded-lg bg-libre-green px-3 py-1.5 text-sm text-white hover:bg-primary-600 disabled:opacity-50" onclick={run} disabled={controller.stressLoading} data-testid="risk-shock-run">
                 {$t('risk.actions.runScenario')}
             </button>
         </div>
@@ -140,7 +162,7 @@
             {$t('risk.levels.l4.shockTotal', {
                 values: {
                     percent: output.portfolio_return == null ? '—' : `${output.portfolio_return < 0 ? '−' : '+'}${(Math.abs(output.portfolio_return) * 100).toFixed(2)}%`,
-                    amount: output.impact_amount == null ? '' : formatCurrencyAmount(output.impact_amount, currency),
+                    amount: !showMoney || output.impact_amount == null ? '' : formatCurrencyAmount(output.impact_amount, currency),
                 },
             })}
         </p>
