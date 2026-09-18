@@ -263,18 +263,18 @@ questi") — è un complemento naturale di `risk_contribution` e **non richiede 
 ## 🎲 Risk Analysis — Monte Carlo avanzato: regimi calibrati e volatilità stocastica
 
 **Data aggiunta**: 16 Settembre 2026
-**Status**: 📋 FUTURO — livelli 4 e 5 della scaletta simulazione
+**Status**: 📋 FUTURO — livelli **2, 4 e 5** della scaletta simulazione
 **Priorità**: 🔽 BASSA
 
 ### Contesto
 
-La riorganizzazione Risk prevede di rilavorare la simulazione fino al **livello 3**
-della scaletta seguente, e di rinviare i livelli 4 e 5:
+La riorganizzazione Risk prevede di rilavorare la simulazione ai **livelli 1 e 3**
+della scaletta seguente, e di rinviare i livelli 2, 4 e 5:
 
 | # | Approccio | Stato |
 |---|---|---|
 | 1 | Block bootstrap (rimescolo a blocchi della storia reale) | ✅ in scope |
-| 2 | GJR-GARCH (cluster di volatilità + effetto leva, nativo QuantLib) | ✅ in scope |
+| 2 | GJR-GARCH (cluster di volatilità + effetto leva) | 📋 **rinviato — non calibrabile da QuantLib** (D88) |
 | 3 | Preset di regime **prescritti** (ipotesi dichiarate, non stimate) | ✅ in scope |
 | 4 | Markov-switching / HMM **calibrato** | 📋 rinviato — questo TODO |
 | 5 | Heston / Bates / Merton (volatilità stocastica, salti) | 📋 rinviato — questo TODO |
