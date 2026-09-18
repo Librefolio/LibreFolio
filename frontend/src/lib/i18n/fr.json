@@ -1461,7 +1461,13 @@
     "yieldOnCostValue": "Rendement sur coût",
     "yieldOnCostPeriod": "Période",
     "yieldOnCostFxRateDate": "taux du",
-    "yieldOnCostNoIncomeTitle": "Aucun revenu enregistré"
+    "yieldOnCostNoIncomeTitle": "Aucun revenu enregistré",
+    "pnl": "P&L",
+    "pnlSubmodeLine": "Ligne",
+    "pnlSubmodeIncome": "Revenus",
+    "pnlSubmodeCandles": "Bougies",
+    "pnlCandlesHypothetical": "Synthétique — les plus hauts/bas cross-actifs sont hypothétiques et non simultanés, pas une véritable série intrajournalière.",
+    "pnlCandlesHypotheticalShort": "Synthétique — les plus hauts/bas cross-actifs sont hypothétiques et non simultanés"
   },
   "dataQuality": {
     "headerInfoOnly": "Note de qualité des données",

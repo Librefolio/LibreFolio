@@ -488,7 +488,7 @@ class PortfolioSummary(StrictModel):
     period_unrealized_gain_loss_end: Optional[Currency] = Field(None, description="Unrealized G/L at end of period (snapshot)")
     period_unrealized_gain_loss_delta: Optional[Currency] = Field(None, description="Change in unrealized G/L over the period")
     period_realized_gain_loss: Optional[Currency] = Field(None, description="Realized G/L from sales in period (WAC-based)")
-    period_income: Optional[Currency] = Field(None, description="DIVIDEND + INTEREST in period (positive)")
+    period_income: Optional[Currency] = Field(None, description="DIVIDEND + INTEREST in period, signed — a legacy negative correction reduces this value rather than being folded into the reconciliation residual")
     period_fees_taxes: Optional[Currency] = Field(None, description="FEE + TAX in period (positive value, shown negative in UI)")
     period_fees: Optional[Currency] = Field(None, description="FEE only in period (commissions)")
     period_taxes: Optional[Currency] = Field(None, description="TAX only in period")
@@ -539,6 +539,90 @@ class PortfolioHistoryPoint(BaseModel):
     mwrr_annualized: Optional[SafeDecimal] = Field(None, description="Annualized MWRR at this point")
     mwrr_cumulative: Optional[SafeDecimal] = Field(None, description="Cumulative MWRR at this point: (1+r_ann)^(days/365)-1")
     roi: Optional[SafeDecimal] = Field(None, description="Simple ROI series point")
+
+
+class BrokerPnlHistoryPoint(BaseModel):
+    """Single day's additive P&L contribution for one broker (G1a)."""
+
+    date: date_type
+    total_pnl: Currency = Field(..., description="This broker's slice of the scope total_pnl for this day")
+
+
+class BrokerPnlHistory(StrictModel):
+    """One broker's full additive P&L history (G1a — GrowthChart P&L broker overlay).
+
+    Points are built from the same Decimal components as the scope-aggregate
+    PortfolioHistoryPoint.total_pnl at each date, so for every date, summing
+    total_pnl across all BrokerPnlHistory entries reproduces the aggregate
+    PortfolioHistoryPoint.total_pnl exactly (see DailyStateBuilder §4.2).
+    """
+
+    broker_id: int
+    broker_name: str
+    points: List[BrokerPnlHistoryPoint] = Field(default_factory=list)
+
+
+class PnlCandlePoint(BaseModel):
+    """One day's synthetic total-P&L candle (G1b, plan §4.3).
+
+    ``close`` always equals the canonical ``PortfolioHistoryPoint.total_pnl`` for the
+    same date exactly (built by construction from the same Decimal components, not a
+    residual check). Days whose candle is unavailable (a held asset's valuation was
+    MISSING that day) are omitted from the series entirely — a genuine gap, never a
+    guessed or zeroed candle.
+    """
+
+    date: date_type
+    open: Currency
+    high: Currency
+    low: Currency
+    close: Currency
+
+
+class PnlCandleSeries(StrictModel):
+    """The full synthetic P&L candle series (G1b — GrowthChart P&L candles submode).
+
+    Cross-asset high/low are explicitly synthetic and potentially non-simultaneous
+    (plan §3.3) — ``hypothetical`` is always ``True`` at this series-metadata level so
+    the frontend can render the required always-visible label; there is no per-point
+    variant since every point in this series carries the same caveat. No volume field
+    by design (plan §3.3).
+    """
+
+    hypothetical: bool = Field(True, description="Always true: cross-asset high/low are synthetic/non-simultaneous, never a real intraday series")
+    points: List[PnlCandlePoint] = Field(default_factory=list)
+
+
+class IncomeHistoryPoint(BaseModel):
+    """One day's signed personal income (G1c, plan §3.4/§4.4).
+
+    Source is every scoped, committed DIVIDEND/INTEREST Transaction — asset-linked
+    and broker-level (``asset_id=None``) rows alike, never a global AssetEvent
+    declaration. Signed: a legacy negative correction reduces the bucket, it is
+    never abs()'d away. Days with no DIVIDEND/INTEREST activity are omitted from
+    the series entirely (a sparse economic-flow series, not a dense one with
+    false zeros) — this point type itself never carries a "no data" sentinel.
+    """
+
+    date: date_type
+    dividend: Currency = Field(..., description="Signed sum of DIVIDEND transactions for this date")
+    interest: Currency = Field(..., description="Signed sum of INTEREST transactions for this date")
+
+
+class IncomeHistorySeries(StrictModel):
+    """The full signed personal income history (G1c — GrowthChart P&L income submode).
+
+    ``sum(dividend) + sum(interest)`` across every point reproduces the canonical
+    signed ``PortfolioSummary.period_income`` exactly for the same scope/date
+    range (plan §3.4) — same signed-conversion pattern as the summary's own
+    income accumulator, not a residual reconciliation. ``missing_fx_pairs``
+    reuses the existing portfolio data-quality contract: a day whose income
+    transaction could not be converted is omitted from the sums (never a
+    silently-wrong zero) and its currency pair is reported here instead.
+    """
+
+    points: List[IncomeHistoryPoint] = Field(default_factory=list)
+    missing_fx_pairs: List[str] = Field(default_factory=list, description="'FROM/TO' pairs that could not be converted — affected days are excluded from the sums, not zeroed")
 
 
 # =============================================================================
@@ -953,6 +1037,9 @@ class PortfolioReportQuery(StrictModel):
     include_allocation_history: bool = Field(True, description="Include allocation history by all dimensions.")
     include_breakdown: bool = Field(False, description="Include per-broker breakdown in summary.")
     include_positions_contribution: bool = Field(False, description="Include per-asset period P&L contribution.")
+    include_broker_pnl_history: bool = Field(False, description="Include per-broker additive P&L history (G1a). Caller sets true only when effective scope has ≥2 brokers.")
+    include_pnl_candles: bool = Field(False, description="Include the synthetic total-P&L candle series (G1b). Lazy: caller sets true only on first candle-submode activation — expensive OHLC work stays off ordinary reports.")
+    include_income_history: bool = Field(False, description="Include the signed personal DIVIDEND/INTEREST income history (G1c). Caller policy: Dashboard/Broker overview set true eagerly — a sparse, cheap payload, unlike include_pnl_candles.")
 
 
 class PortfolioReportResponse(StrictModel):
@@ -968,3 +1055,6 @@ class PortfolioReportResponse(StrictModel):
     allocation_history: Optional[AllocationHistoryDimensions] = None
     data_quality: Optional[DataQualityReport] = None
     positions_contribution: Optional[PositionsContribution] = Field(None, description="Per-asset period P&L contribution. Only when include_positions_contribution=True.")
+    broker_pnl_history: Optional[List[BrokerPnlHistory]] = Field(None, description="Per-broker additive P&L history (G1a). Only when include_broker_pnl_history=True.")
+    pnl_candles: Optional[PnlCandleSeries] = Field(None, description="Synthetic total-P&L candle series (G1b). Only when include_pnl_candles=True.")
+    income_history: Optional[IncomeHistorySeries] = Field(None, description="Signed personal DIVIDEND/INTEREST income history (G1c). Only when include_income_history=True.")

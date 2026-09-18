@@ -9,6 +9,7 @@ import {exchangeRateAxisLabel, percentageAxisLabel, priceAxisLabel, secondaryAxi
 import {CHART_SET_OPTION_OPTS} from './echartsAnimationConfig';
 import {buildSignalReferencePrimitives} from './lineChartHelpers';
 import {buildResponsiveXAxisPolicy, formatCompactXAxisDate} from './responsiveXAxis';
+import {buildOhlcQuad} from './candlestickChartHelpers';
 import {buildBucketInfos, buildZoomWindowForRange, computeBucketCounts, logicalRangeFromBuckets} from '../brokers/lots/lotComparisonChartHelpers';
 import {clampGrowthLogicalRange, type GrowthLogicalRange} from '../dashboard/growthChartRange';
 import {chooseInitialResolution, type ChartResolution} from './timeSeriesAggregation';
@@ -490,6 +491,17 @@ describe('canonical overlay axis and reference helpers', () => {
             expect(policy.compact).toBe(true);
             expect(policy.maxLabels).toBe(5);
             expect(responsiveAxisLabel(policy).interval).toBe(2);
+        });
+
+        it('never sets splitNumber for a category-axis policy, compact or not — the GrowthChart resize watcher relies on exactly this to stay unforked when the P&L candles submode switches the axis to category (splitNumber is a time/value/log-axis-only concept)', () => {
+            const compactCategory = buildResponsiveXAxisPolicy({width: 320, values: JANUARY_X_AXIS_DATES, axisType: 'category'});
+            const desktopCategory = buildResponsiveXAxisPolicy({width: 1000, values: JANUARY_X_AXIS_DATES, axisType: 'category'});
+
+            expect(compactCategory.compact).toBe(true);
+            expect(desktopCategory.compact).toBe(false);
+            expect(compactCategory).not.toHaveProperty('splitNumber');
+            expect(desktopCategory).not.toHaveProperty('splitNumber');
+            expect(compactCategory.splitNumber).toBeUndefined();
         });
 
         it.each([
@@ -1327,24 +1339,35 @@ describe('canonical overlay axis and reference helpers', () => {
             expect(updateEnd).toBeGreaterThan(updateStart);
             expect(fullOptionStart).toBeGreaterThan(updateEnd);
             expect(fullOptionEnd).toBeGreaterThan(fullOptionStart);
-            expect(dataUpdateCalls).toEqual(['updateChartData(entry, isDark, zoomWindow, true);', 'updateChartData(activeData, isDark, zoomWindow, false);']);
+            expect(dataUpdateCalls).toEqual(['updateChartData(entry, isDark, zoomWindow, true, logicalRange.startDate);', 'updateChartData(activeData, isDark, zoomWindow, false, logicalRange.startDate);']);
             if (updateStart < 0 || updateEnd <= updateStart || fullOptionStart <= updateEnd || fullOptionEnd <= fullOptionStart) {
                 throw new Error('GrowthChart data-update compact-to-desktop contract not found');
             }
 
             const updateChartData = source.slice(updateStart, updateEnd);
             const fullOption = source.slice(fullOptionStart, fullOptionEnd);
-            expect(updateChartData).toMatch(/const xAxisPolicy = buildResponsiveXAxisPolicy\(\{\s*width: chartContainer\?\.clientWidth \?\? 0,\s*values: entry\.dates,\s*locale: \$locale \?\? undefined,\s*axisType: 'time',\s*\}\);/);
+            expect(updateChartData).toMatch(
+                /const isCandlesSubmode = viewMode === 'pnl' && pnlSubmode === 'candles';\s*const xAxisPolicy = buildResponsiveXAxisPolicy\(\{\s*width: chartContainer\?\.clientWidth \?\? 0,\s*values: entry\.dates,\s*locale: \$locale \?\? undefined,\s*axisType: isCandlesSubmode \? 'category' : 'time',\s*\}\);/,
+            );
             expect(updateChartData).toMatch(/const wasCompact = responsiveXAxisCompact;[\s\S]*?if \(wasCompact && !xAxisPolicy\.compact\) \{\s*applyFullOption\(isDark, buildFullSeries\(isDark, seriesData\), zoomWindow\);\s*return;\s*\}\s*responsiveXAxisCompact = xAxisPolicy\.compact;/);
             expect(updateChartData).toContain("dataZoom: [{type: 'inside', ...INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG, start: zoomWindow.start, end: zoomWindow.end}],");
-            expect(updateChartData).toContain('xAxis: xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber, axisLabel: xAxisPolicy.axisLabel}');
+            // Candles submode's category axis needs `data` refreshed on every partial
+            // update (resolution switch changes bucket dates) — the time-axis branch
+            // only needs a label/splitNumber refresh, gated behind `compact`.
+            expect(updateChartData).toContain('xAxis: isCandlesSubmode ? {data: entry.dates, ...(xAxisPolicy.compact ? {axisLabel: xAxisPolicy.axisLabel} : {})} : xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber, axisLabel: xAxisPolicy.axisLabel}');
             expect(updateChartData).toMatch(/chartInstance\.setOption\([\s\S]*?CHART_SERIES_UPDATE_OPTS,\s*\);/);
             expect(source).toContain("const CHART_SERIES_UPDATE_OPTS = {notMerge: false, replaceMerge: ['dataZoom']};");
             expect(source).toContain("const CHART_FULL_UPDATE_OPTS = {...CHART_SET_OPTION_OPTS, replaceMerge: [...CHART_SET_OPTION_OPTS.replaceMerge, 'xAxis']};");
             expect(source).not.toContain('const entry = activeChartData?.resolution === currentResolution ? activeChartData : getResolutionData(currentResolution);');
             expect(source).toContain('if (!activeChartData || activeChartData.resolution !== currentResolution) return null;');
             expect(fullOption).toContain("dataZoom: [{type: 'inside', ...INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG, start: zoomWindow.start, end: zoomWindow.end}],");
-            expect(fullOption).toContain('xAxis: {');
+            // G1b-candles-fix: xAxis is now a submode-conditional ternary (category for
+            // candles — a `time` xAxis silently fails to paint any candlestick body/wick,
+            // a known upstream ECharts limitation — time for everything else), not a
+            // single unconditional object.
+            expect(fullOption).toContain('xAxis: isCandlesSubmode');
+            expect(fullOption).toContain("type: 'category',");
+            expect(fullOption).toContain('data: activeChartData?.dates ?? dates,');
             expect(fullOption).toContain('chartInstance.setOption(option, CHART_FULL_UPDATE_OPTS);');
         });
 
@@ -1531,12 +1554,17 @@ describe('canonical overlay axis and reference helpers', () => {
 
             expect(resizeCallback).toMatch(/const wasCompact = responsiveXAxisCompact;\s*responsiveXAxisCompact = policy\.compact;[\s\S]*?if \(policy\.axisLabel\) \{[\s\S]*?\} else if \(wasCompact\) \{\s*renderChart\(true\);\s*\}/);
             expect(renderChart).toContain('const zoomWindow = buildZoomWindow(currentResolution, logicalRange.startDate, logicalRange.endDate);');
-            expect(renderChart).toContain('const needsFullInit = forceFullXAxisRebuild || lastRenderedMode !== viewMode || lastRenderedDark !== isDark;');
-            expect(renderChart).toMatch(/if \(needsFullInit\) \{\s*applyFullOption\(isDark, buildFullSeries\(isDark, seriesData\), zoomWindow\);\s*\} else \{\s*updateChartData\(activeData, isDark, zoomWindow, false\);\s*\}/);
+            // G1b: needsFullInit now keys on (viewMode, pnlSubmode) via renderedModeKey, not
+            // viewMode alone — a pnlSubmode change (line -> candles) changes the series TYPE
+            // (line -> candlestick) while viewMode stays 'pnl', which the partial-update path
+            // cannot express, so it must also force a full rebuild.
+            expect(renderChart).toContain("const renderedModeKey = viewMode === 'pnl' ? `pnl:${pnlSubmode}` : viewMode;");
+            expect(renderChart).toContain('const needsFullInit = forceFullXAxisRebuild || lastRenderedMode !== renderedModeKey || lastRenderedDark !== isDark;');
+            expect(renderChart).toMatch(/if \(needsFullInit\) \{\s*applyFullOption\(isDark, buildFullSeries\(isDark, seriesData\), zoomWindow\);\s*\} else \{\s*updateChartData\(activeData, isDark, zoomWindow, false, logicalRange\.startDate\);\s*\}/);
             expect(source).toContain("const CHART_SERIES_UPDATE_OPTS = {notMerge: false, replaceMerge: ['dataZoom']};");
             expect(source).toContain("const CHART_FULL_UPDATE_OPTS = {...CHART_SET_OPTION_OPTS, replaceMerge: [...CHART_SET_OPTION_OPTS.replaceMerge, 'xAxis']};");
             expect(fullOption).toContain("dataZoom: [{type: 'inside', ...INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG, start: zoomWindow.start, end: zoomWindow.end}],");
-            expect(fullOption).toContain('xAxis: {');
+            expect(fullOption).toContain('xAxis: isCandlesSubmode');
             expect(fullOption).toContain('...(xAxisPolicy.axisLabel ?? {}),');
             expect(fullOption).toContain('chartInstance.setOption(option, CHART_FULL_UPDATE_OPTS);');
         });
@@ -1597,6 +1625,444 @@ describe('canonical overlay axis and reference helpers', () => {
 
             expect(source).not.toContain('responsiveXAxis');
             expect(source).not.toContain('buildResponsiveXAxisPolicy');
+        });
+    });
+
+    describe('GrowthChart P&L mode (G1a/G1b/G1c) series-shape and axis regressions', () => {
+        // -------------------------------------------------------------------
+        // Fixture builders, mirroring GrowthChart.svelte's own namedPoint/
+        // toSeriesPoint shapes: SeriesPoint = {name, value: [date, value|null],
+        // bucketStart, bucketEnd, resolution}; CandleSeriesPoint adds
+        // open/high/low/close on top (see the component-local type declarations
+        // just above buildChartUpdateSeries in GrowthChart.svelte).
+        // -------------------------------------------------------------------
+        interface FixtureSeriesPoint {
+            name: string;
+            value: [string, number | null];
+            bucketStart: string;
+            bucketEnd: string;
+            resolution: 'daily';
+        }
+
+        interface FixtureCandlePoint extends FixtureSeriesPoint {
+            open: number | null;
+            high: number | null;
+            low: number | null;
+            close: number | null;
+        }
+
+        function seriesPoint(date: string, value: number | null, bucketEnd: string = date): FixtureSeriesPoint {
+            return {name: date, value: [date, value], bucketStart: date, bucketEnd, resolution: 'daily'};
+        }
+
+        function candlePoint(date: string, ohlc: {open: number; high: number; low: number; close: number} | null): FixtureCandlePoint {
+            return {...seriesPoint(date, ohlc?.close ?? null), open: ohlc?.open ?? null, high: ohlc?.high ?? null, low: ohlc?.low ?? null, close: ohlc?.close ?? null};
+        }
+
+        function candlePointRaw(date: string, open: number | null, close: number | null, low: number | null, high: number | null): FixtureCandlePoint {
+            return {...seriesPoint(date, close), open, close, low, high};
+        }
+
+        // -------------------------------------------------------------------
+        // Faithful reimplementations of GrowthChart.svelte's component-local
+        // helpers. They are not exported (closures inside the component's
+        // <script>), so — following this file's own established pattern for
+        // testing GrowthChart-local logic (see "GrowthChart stateful reset and
+        // rebuild regressions" above, which reimplements getLogicalRangeFromChart
+        // / resetResolutionState the same way) — each is (a) copied here
+        // verbatim for real execution, and (b) pinned against the actual source
+        // text by the source-contract test immediately below, so an edit to the
+        // real function forces this reimplementation to be revisited too.
+        // -------------------------------------------------------------------
+        function toCandlestickPointImpl(point: FixtureCandlePoint): number[] | null {
+            if (point.open == null || point.close == null || point.low == null || point.high == null) return null;
+            return buildOhlcQuad(point.open, point.close, point.low, point.high, false, 1);
+        }
+
+        function toPositionalValueImpl(point: FixtureSeriesPoint): number | null {
+            return point.value[1];
+        }
+
+        function clipToSignImpl(point: FixtureSeriesPoint, keepPositive: boolean): FixtureSeriesPoint {
+            const v = point.value[1];
+            if (v == null || v >= 0 === keepPositive) return point;
+            return {...point, value: [point.value[0], null]};
+        }
+
+        function findReferenceTotalPnlImpl(points: FixtureSeriesPoint[], referenceDate: string | null): number | null {
+            if (points.length === 0) return null;
+            const point = (referenceDate != null && points.find((p) => p.bucketEnd >= referenceDate)) || points[0];
+            return point.value[1];
+        }
+
+        it('mirrors the exact literal bodies of toCandlestickPoint / toPositionalValue / clipToSign / findReferenceTotalPnl in GrowthChart.svelte (ties every reimplementation above to the real source)', () => {
+            const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
+            const start = source.indexOf('function toCandlestickPoint(point: CandleSeriesPoint): number[] | null {');
+            const end = source.indexOf('\n    function buildChartUpdateSeries(', start);
+            expect(start).toBeGreaterThan(-1);
+            expect(end).toBeGreaterThan(start);
+            if (start < 0 || end <= start) throw new Error('GrowthChart P&L local-helper contract not found');
+
+            const block = source.slice(start, end);
+            // toCandlestickPoint
+            expect(block).toContain('if (point.open == null || point.close == null || point.low == null || point.high == null) return null;');
+            expect(block).toContain('return buildOhlcQuad(point.open, point.close, point.low, point.high, false, 1);');
+            // toPositionalValue
+            expect(block).toContain('function toPositionalValue(point: SeriesPoint): number | null {');
+            expect(block).toContain('return point.value[1];');
+            // clipToSign
+            expect(block).toContain('function clipToSign(point: SeriesPoint, keepPositive: boolean): SeriesPoint {');
+            expect(block).toContain('const v = point.value[1];');
+            expect(block).toContain('if (v == null || v >= 0 === keepPositive) return point;');
+            expect(block).toContain('return {...point, value: [point.value[0], null]};');
+            // findReferenceTotalPnl
+            expect(block).toContain('function findReferenceTotalPnl(entry: AggregatedResolutionData, referenceDate: string | null): number | null {');
+            expect(block).toContain('const points = entry.pnl.total.points;');
+            expect(block).toContain('if (points.length === 0) return null;');
+            expect(block).toContain('const point = (referenceDate != null && points.find((p) => p.bucketEnd >= referenceDate)) || points[0];');
+        });
+
+        describe('toCandlestickPoint', () => {
+            it('returns the [open, close, low, high] quad, via the real buildOhlcQuad, in absolute mode (base=1) regardless of any outer view mode', () => {
+                const point = candlePoint('2026-01-05', {open: 100, close: 110, low: 95, high: 115});
+                expect(toCandlestickPointImpl(point)).toEqual([100, 110, 95, 115]);
+                expect(toCandlestickPointImpl(point)).toEqual(buildOhlcQuad(100, 110, 95, 115, false, 1));
+            });
+
+            const missingLegScenarios: Array<[string, number | null, number | null, number | null, number | null]> = [
+                ['open', null, 1, 1, 1],
+                ['close', 1, null, 1, 1],
+                ['low', 1, 1, null, 1],
+                ['high', 1, 1, 1, null],
+            ];
+
+            it.each(missingLegScenarios)('returns null (a genuine gap, never a synthesized flat bar) when only %s is missing', (_field, open, close, low, high) => {
+                expect(toCandlestickPointImpl(candlePointRaw('2026-01-05', open, close, low, high))).toBeNull();
+            });
+
+            it('returns a quad when all four legs are present, even when one leg is exactly zero (zero is not "missing")', () => {
+                expect(toCandlestickPointImpl(candlePointRaw('2026-01-05', 0, 5, 0, 10))).toEqual([0, 5, 0, 10]);
+            });
+        });
+
+        describe('toPositionalValue', () => {
+            it('extracts the bare numeric value, discarding the date half of the [date, value] tuple', () => {
+                expect(toPositionalValueImpl(seriesPoint('2026-01-01', 123.45))).toBe(123.45);
+            });
+
+            it('preserves null (a gap) rather than coercing it to 0 or dropping the point', () => {
+                expect(toPositionalValueImpl(seriesPoint('2026-01-01', null))).toBeNull();
+            });
+
+            it('is a pure 1:1 positional map — mapping it over an array never changes length or order', () => {
+                const dates = ['2026-01-01', '2026-01-02', '2026-01-03', '2026-01-04'];
+                const values: Array<number | null> = [10, null, -5, 0];
+                const points = dates.map((d, i) => seriesPoint(d, values[i]));
+                expect(points.map(toPositionalValueImpl)).toEqual(values);
+            });
+        });
+
+        describe('clipToSign', () => {
+            it('keeps a positive value unchanged (same object reference) when keepPositive is true', () => {
+                const point = seriesPoint('2026-01-01', 50);
+                expect(clipToSignImpl(point, true)).toBe(point);
+            });
+
+            it('keeps a negative value unchanged (same object reference) when keepPositive is false', () => {
+                const point = seriesPoint('2026-01-01', -50);
+                expect(clipToSignImpl(point, false)).toBe(point);
+            });
+
+            it('treats an exact zero as positive: kept when keepPositive is true, nulled when keepPositive is false', () => {
+                const point = seriesPoint('2026-01-01', 0);
+                expect(clipToSignImpl(point, true)).toBe(point);
+                expect(clipToSignImpl(point, false).value[1]).toBeNull();
+            });
+
+            it('nulls only the value (not the date/name/bucket metadata) when the sign does not match', () => {
+                const point = seriesPoint('2026-01-01', -50, '2026-01-02');
+                const clipped = clipToSignImpl(point, true);
+                expect(clipped).not.toBe(point);
+                expect(clipped.value).toEqual(['2026-01-01', null]);
+                expect(clipped.name).toBe(point.name);
+                expect(clipped.bucketStart).toBe(point.bucketStart);
+                expect(clipped.bucketEnd).toBe(point.bucketEnd);
+            });
+
+            it('preserves a null point unchanged (same reference) for BOTH keepPositive branches — a missing day is a gap in both series, never fabricated', () => {
+                const point = seriesPoint('2026-01-01', null);
+                expect(clipToSignImpl(point, true)).toBe(point);
+                expect(clipToSignImpl(point, false)).toBe(point);
+            });
+        });
+
+        describe('findReferenceTotalPnl', () => {
+            const dates = ['2026-01-05', '2026-01-12', '2026-01-19', '2026-01-26'];
+            const values = [100, 150, 90, 200];
+            const points = dates.map((d, i) => seriesPoint(d, values[i], d));
+
+            it('returns null for an empty series (nothing to draw a reference against)', () => {
+                expect(findReferenceTotalPnlImpl([], '2026-01-12')).toBeNull();
+            });
+
+            it('falls back to the first point when referenceDate is null', () => {
+                expect(findReferenceTotalPnlImpl(points, null)).toBe(100);
+            });
+
+            it('picks the first bucket whose bucketEnd reaches a referenceDate that falls strictly between two buckets', () => {
+                // 01-08 sits between bucket 1 (ends 01-05) and bucket 2 (ends 01-12): the
+                // first bucket that "closes over" it is bucket 2 (150), not bucket 1.
+                expect(findReferenceTotalPnlImpl(points, '2026-01-08')).toBe(150);
+            });
+
+            it('matches on an exact bucketEnd', () => {
+                expect(findReferenceTotalPnlImpl(points, '2026-01-19')).toBe(90);
+            });
+
+            it('falls back to the first point when referenceDate is after every bucket', () => {
+                expect(findReferenceTotalPnlImpl(points, '2099-01-01')).toBe(100);
+            });
+
+            it('can itself return null when the located bucket has no P&L value that day (a genuine gap is a valid reference, never guessed)', () => {
+                const withGap = [seriesPoint('2026-01-05', null), seriesPoint('2026-01-12', 50)];
+                expect(findReferenceTotalPnlImpl(withGap, '2026-01-05')).toBeNull();
+            });
+        });
+
+        describe('resize watcher keeps the splitNumber/axisLabel update unconditional across submodes', () => {
+            it('computes isCandlesSubmode and forwards it to buildResponsiveXAxisPolicy, but does not fork the actual setOption call on it (splitNumber is undefined-by-construction for category — see the policy test above)', () => {
+                const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
+                const resizeStart = source.indexOf('const resizeWatcher = createResizeWatcher(() => {');
+                const resizeEnd = source.indexOf('\n    let darkModeObserver', resizeStart);
+                expect(resizeStart).toBeGreaterThan(-1);
+                expect(resizeEnd).toBeGreaterThan(resizeStart);
+                if (resizeStart < 0 || resizeEnd <= resizeStart) throw new Error('GrowthChart resize watcher contract not found');
+
+                const resizeCallback = source.slice(resizeStart, resizeEnd);
+                expect(resizeCallback).toContain("const isCandlesSubmode = viewMode === 'pnl' && pnlSubmode === 'candles';");
+                expect(resizeCallback).toContain("axisType: isCandlesSubmode ? 'category' : 'time',");
+                // The actual xAxis update stays a SINGLE unconditional object — unlike
+                // updateChartData's category branch, it never refreshes `data`: a resize
+                // never changes which dates are on screen, only the pixel budget for labels.
+                expect(resizeCallback).toContain('chartInstance.setOption({xAxis: {splitNumber: policy.splitNumber, axisLabel: policy.axisLabel}}, {lazyUpdate: true});');
+                expect(resizeCallback).not.toContain('data: activeChartData.dates');
+                expect(resizeCallback).not.toContain('data: entry.dates');
+                // Exactly ONE isCandlesSubmode ternary in this block (the axisType line
+                // above) — if a future edit also forked the setOption call, this count
+                // would become 2 and this assertion would catch it.
+                const isCandlesSubmodeTernaryCount = (resizeCallback.match(/isCandlesSubmode\s*\?/g) ?? []).length;
+                expect(isCandlesSubmodeTernaryCount).toBe(1);
+            });
+        });
+
+        describe('applyFullOption completes the category-vs-time xAxis ternary on both branches', () => {
+            it('sets category type/data/boundaryGap and time type/splitNumber, sharing the axisLabel merge / axisLine / splitLine exactly once per branch', () => {
+                const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
+                const fullOptionStart = source.indexOf('function applyFullOption(');
+                const fullOptionEnd = source.indexOf('\n</script>', fullOptionStart);
+                expect(fullOptionStart).toBeGreaterThan(-1);
+                expect(fullOptionEnd).toBeGreaterThan(fullOptionStart);
+                if (fullOptionStart < 0 || fullOptionEnd <= fullOptionStart) throw new Error('GrowthChart applyFullOption contract not found');
+
+                const fullOption = source.slice(fullOptionStart, fullOptionEnd);
+                const xAxisStart = fullOption.indexOf('xAxis: isCandlesSubmode');
+                const xAxisEnd = fullOption.indexOf('yAxis: {', xAxisStart);
+                expect(xAxisStart).toBeGreaterThan(-1);
+                expect(xAxisEnd).toBeGreaterThan(xAxisStart);
+                if (xAxisStart < 0 || xAxisEnd <= xAxisStart) throw new Error('GrowthChart applyFullOption xAxis ternary not found');
+
+                const xAxisBlock = fullOption.slice(xAxisStart, xAxisEnd);
+                // Category branch (candles submode).
+                expect(xAxisBlock).toContain("type: 'category',");
+                expect(xAxisBlock).toContain('data: activeChartData?.dates ?? dates,');
+                expect(xAxisBlock).toContain('boundaryGap: true,');
+                // Time branch (every other mode/submode) — not just spot-checked, but
+                // proven present alongside the category branch above, in the same slice.
+                expect(xAxisBlock).toContain("type: 'time',");
+                expect(xAxisBlock).toContain('...(xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber} : {}),');
+
+                // Shared theming appears exactly twice (once per branch) — catches a
+                // future edit that updates one branch and forgets its sibling.
+                const axisLabelMergeCount = (xAxisBlock.match(/\.\.\.\(xAxisPolicy\.axisLabel \?\? \{\}\),/g) ?? []).length;
+                const axisLineCount = (xAxisBlock.match(/axisLine: \{lineStyle: \{color: gridColor\}\},/g) ?? []).length;
+                const splitLineCount = (xAxisBlock.match(/splitLine: \{show: false\},/g) ?? []).length;
+                expect(axisLabelMergeCount).toBe(2);
+                expect(axisLineCount).toBe(2);
+                expect(splitLineCount).toBe(2);
+            });
+        });
+
+        describe('candles-submode positional alignment: candlestick quad and broker overlay line up 1:1 with dates', () => {
+            it('mirrors getResolutionData: dates, pnl.total, pnl.candle and every pnl.brokers[].metric are all built from the exact same buckets array (never a second, independently computed one)', () => {
+                const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
+                const start = source.indexOf('function getResolutionData(resolution: ChartResolution): AggregatedResolutionData {');
+                const end = source.indexOf('\n    function computeBucketCounts(', start);
+                expect(start).toBeGreaterThan(-1);
+                expect(end).toBeGreaterThan(start);
+                if (start < 0 || end <= start) throw new Error('GrowthChart getResolutionData contract not found');
+
+                const block = source.slice(start, end);
+                expect(block).toContain('const buckets = buildBucketInfos(resolution);');
+                expect(block).toContain('dates: buckets.map((bucket) => bucket.date),');
+                expect(block).toContain('total: aggregateMetric(eurStackedData.totalPnl, resolution, buckets),');
+                expect(block).toContain('metric: aggregateMetric(broker.values, resolution, buckets),');
+                expect(block).toContain('candle: aggregateCandleMetric(pnlCandleByDate, resolution, buckets),');
+                // `buckets` is constructed exactly once per resolution-cache-miss — every
+                // series above threads that SAME reference, never a fresh computation.
+                const buildBucketInfosCallCount = (block.match(/buildBucketInfos\(/g) ?? []).length;
+                expect(buildBucketInfosCallCount).toBe(1);
+            });
+
+            it('mirrors the buildChartUpdateSeries candles-submode mapping calls exactly: toCandlestickPoint for the total slot, toPositionalValue for every broker slot', () => {
+                const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
+                const functionStart = source.indexOf('function buildChartUpdateSeries(');
+                const start = source.indexOf("if (viewMode === 'pnl' && pnlSubmode === 'candles') {", functionStart);
+                const end = source.indexOf("if (viewMode === 'pnl' && pnlSubmode === 'income') {", start);
+                expect(functionStart).toBeGreaterThan(-1);
+                expect(start).toBeGreaterThan(functionStart);
+                expect(end).toBeGreaterThan(start);
+                if (functionStart < 0 || start <= functionStart || end <= start) throw new Error('GrowthChart candles-submode series contract not found');
+
+                const block = source.slice(start, end);
+                expect(block).toContain('entry.pnl.candle.points.map(toCandlestickPoint)');
+                expect(block).toContain('broker.metric.points.map(toPositionalValue)');
+            });
+
+            it('keeps candlestick quads and broker overlay values 1:1 by array position with dates — a gap at one position never shifts a later one', () => {
+                const dates = ['2026-01-01', '2026-01-02', '2026-01-03', '2026-01-04', '2026-01-05'];
+                // Distinct sentinel OHLC/values per position so any transposition/shift is
+                // caught. The candle is missing (a genuine gap) at position 2; the broker
+                // value is missing at position 1 — deliberately DIFFERENT positions, to
+                // prove the two series are independently, not jointly, null-preserving.
+                const candles: Array<{open: number; high: number; low: number; close: number} | null> = [{open: 10, close: 11, low: 9, high: 12}, {open: 20, close: 22, low: 19, high: 23}, null, {open: 40, close: 38, low: 37, high: 41}, {open: 50, close: 55, low: 49, high: 56}];
+                const brokerValues: Array<number | null> = [100, null, 300, 400, 500];
+
+                const candlePoints = dates.map((d, i) => candlePoint(d, candles[i]));
+                const brokerPoints = dates.map((d, i) => seriesPoint(d, brokerValues[i]));
+
+                const candleSeries = candlePoints.map(toCandlestickPointImpl);
+                const brokerSeries = brokerPoints.map(toPositionalValueImpl);
+
+                expect(candleSeries).toHaveLength(dates.length);
+                expect(brokerSeries).toHaveLength(dates.length);
+
+                dates.forEach((_date, i) => {
+                    const ohlc = candles[i];
+                    if (ohlc == null) {
+                        expect(candleSeries[i]).toBeNull();
+                    } else {
+                        expect(candleSeries[i]).toEqual(buildOhlcQuad(ohlc.open, ohlc.close, ohlc.low, ohlc.high, false, 1));
+                    }
+                    expect(brokerSeries[i]).toBe(brokerValues[i]);
+                });
+
+                // The two gaps are genuinely independent, at different positions — if
+                // either mapping ever filtered instead of preserving position (the exact
+                // off-by-one risk this fix calls out), the two arrays would desync both
+                // from `dates` and from each other.
+                expect(candleSeries[2]).toBeNull();
+                expect(candleSeries[1]).not.toBeNull();
+                expect(brokerSeries[1]).toBeNull();
+                expect(brokerSeries[2]).not.toBeNull();
+                expect(candleSeries).toHaveLength(brokerSeries.length);
+            });
+        });
+
+        describe('line-submode fixed 3-slot P&L split (positive / negative / reference)', () => {
+            it('mirrors the exact buildChartUpdateSeries / buildFullSeries series-shape contract: 3 fixed slots (line submode) or 1 fixed slot (candles submode) before the variable broker spread', () => {
+                const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
+                const updateStart = source.indexOf('function buildChartUpdateSeries(');
+                const updateEnd = source.indexOf('\n    function buildFullSeries(', updateStart);
+                const fullStart = source.indexOf('function buildFullSeries(', updateEnd);
+                const fullEnd = source.indexOf('\n    function updateChartData(', fullStart);
+                expect(updateStart).toBeGreaterThan(-1);
+                expect(updateEnd).toBeGreaterThan(updateStart);
+                expect(fullStart).toBeGreaterThan(updateEnd);
+                expect(fullEnd).toBeGreaterThan(fullStart);
+                if (updateStart < 0 || updateEnd <= updateStart || fullStart <= updateEnd || fullEnd <= fullStart) {
+                    throw new Error('GrowthChart buildChartUpdateSeries/buildFullSeries contract not found');
+                }
+
+                const updateSeries = source.slice(updateStart, updateEnd);
+                const fullSeries = source.slice(fullStart, fullEnd);
+
+                // buildChartUpdateSeries: line submode is exactly [positive, negative,
+                // reference, ...brokers] — 3 fixed named slots, then the variable spread.
+                expect(updateSeries).toContain('const referenceValue = findReferenceTotalPnl(entry, referenceDate);');
+                expect(updateSeries).toContain('const referencePoints: SeriesPoint[] = entry.pnl.total.points.map((p) => ({...p, value: [p.value[0], referenceValue]}));');
+                expect(updateSeries).toContain('{name: pnlLabels.total, data: entry.pnl.total.points.map((p) => clipToSign(p, true))},');
+                expect(updateSeries).toContain('{name: pnlLabels.total, data: entry.pnl.total.points.map((p) => clipToSign(p, false))},');
+                expect(updateSeries).toContain("{name: '__pnlReference__', data: referencePoints},");
+                expect(updateSeries).toContain('...entry.pnl.brokers.map((broker) => ({name: broker.brokerName, data: broker.metric.points})),');
+
+                // buildChartUpdateSeries: candles submode is exactly [candle, ...brokers] —
+                // a single fixed slot, then the variable spread.
+                expect(updateSeries).toContain('{name: pnlLabels.total, data: entry.pnl.candle.points.map(toCandlestickPoint) as unknown as SeriesPoint[]},');
+                expect(updateSeries).toContain('...entry.pnl.brokers.map((broker) => ({name: broker.brokerName, data: broker.metric.points.map(toPositionalValue) as unknown as SeriesPoint[]}))];');
+
+                // buildFullSeries: line submode consumes seriesData[0]/[1]/[2] for
+                // positive/negative/reference, then slices from index 3 for brokers —
+                // matching the 3 fixed slots above exactly (not slice(1) or slice(2)).
+                expect(fullSeries).toMatch(/data: seriesData\[0\]\.data,\s*smooth: false,\s*connectNulls: false,/);
+                expect(fullSeries).toMatch(/data: seriesData\[1\]\.data,\s*smooth: false,\s*connectNulls: false,/);
+                expect(fullSeries).toContain('data: seriesData[2].data,');
+                expect(fullSeries).toContain('const brokerSeries: echarts.SeriesOption[] = seriesData.slice(3).map((s, index) => ({');
+                expect(fullSeries).toContain('return [positiveSeries, negativeSeries, referenceSeries, ...brokerSeries];');
+
+                // buildFullSeries: candles submode consumes seriesData[0] for the
+                // candlestick, then slices from index 1 for brokers — matching the single
+                // fixed candle slot above exactly (not slice(2) or higher).
+                expect(fullSeries).toContain('const brokerSeries: echarts.SeriesOption[] = seriesData.slice(1).map((s, index) => ({');
+                expect(fullSeries).toContain('return [candleSeries, ...brokerSeries];');
+            });
+
+            const signCrossingScenarios: Array<[string, Array<number | null>]> = [
+                ['all positive', [10, 20, 30]],
+                ['all negative', [-10, -20, -30]],
+                ['odd number of sign crossings', [5, -5, 5, -5, 5]],
+                ['even number of sign crossings', [5, -5, 5, -5]],
+                ['many crossings interleaved with gaps', [10, null, -10, 0, -5, null, 20, -20, 0]],
+                ['a single point', [42]],
+            ];
+
+            it.each(signCrossingScenarios)('keeps exactly 3 fixed-length series (positive/negative/reference) for %s — the slot count never varies with the number of sign crossings', (_label, values) => {
+                const dates = values.map((_v, i) => `2026-01-${String(i + 1).padStart(2, '0')}`);
+                const points = dates.map((d, i) => seriesPoint(d, values[i]));
+
+                const positive = points.map((p) => clipToSignImpl(p, true));
+                const negative = points.map((p) => clipToSignImpl(p, false));
+                const referenceValue = findReferenceTotalPnlImpl(points, null);
+                const referencePoints = points.map((p) => ({...p, value: [p.value[0], referenceValue] as [string, number | null]}));
+
+                // FIXED length: each of the 3 series has one entry per source point —
+                // exactly what keeps updateChartData's partial by-index series merge
+                // valid across zoom/pan (see clipToSign's own docstring in GrowthChart.svelte).
+                expect(positive).toHaveLength(values.length);
+                expect(negative).toHaveLength(values.length);
+                expect(referencePoints).toHaveLength(values.length);
+
+                // Completeness + mutual exclusivity per point: a non-null value survives in
+                // EXACTLY one of positive/negative; a null value is preserved as null in
+                // BOTH (a genuine gap, never fabricated into a zero).
+                values.forEach((v, i) => {
+                    if (v == null) {
+                        expect(positive[i].value[1]).toBeNull();
+                        expect(negative[i].value[1]).toBeNull();
+                    } else if (v >= 0) {
+                        expect(positive[i].value[1]).toBe(v);
+                        expect(negative[i].value[1]).toBeNull();
+                    } else {
+                        expect(positive[i].value[1]).toBeNull();
+                        expect(negative[i].value[1]).toBe(v);
+                    }
+                });
+
+                // The reference line is flat: the SAME single value at every position,
+                // regardless of how many points/sign-crossings are in the series.
+                const distinctReferenceValues = new Set(referencePoints.map((p) => p.value[1]));
+                expect(distinctReferenceValues.size).toBe(1);
+                expect(referencePoints[0].value[1]).toBe(referenceValue);
+            });
         });
     });
 
