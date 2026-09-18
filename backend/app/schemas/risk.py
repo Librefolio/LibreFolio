@@ -645,6 +645,31 @@ class RiskKpiOutput(StrictModel):
     max_drawdown_duration_days: int = Field(..., ge=0)
     sharpe: Optional[FiniteFloat] = None
     sortino: Optional[FiniteFloat] = None
+    # Acquired measures. Sign convention for this output: drawdowns and returns are
+    # negative, dispersions are non-negative — so ulcer_index is ge=0 like volatility
+    # above, while every other field added here is le=0.
+    # max_drawdown already *is* the peak-relative maximum drawdown; no second field
+    # restates it.
+    worst_realization: Optional[FiniteFloat] = Field(None, le=0)
+    worst_realization_date: Optional[date] = None
+    drawdown_confidence_level: Optional[FiniteFloat] = Field(None, gt=0, lt=1)
+    drawdown_at_risk: Optional[FiniteFloat] = Field(None, le=0)
+    conditional_drawdown_at_risk: Optional[FiniteFloat] = Field(None, le=0)
+    ulcer_index: Optional[FiniteFloat] = Field(None, ge=0)
+
+    @model_validator(mode="after")
+    def validate_drawdown_tail_ordering(self) -> RiskKpiOutput:
+        """Catches a swapped assignment, which no range constraint can see.
+
+        Both values are negative and both are plausible on their own; only their
+        order distinguishes the quantile from its conditional mean. Mirrors
+        ``RiskVarCvarOutput.validate_tail_ordering`` with the sign reversed.
+        """
+        if self.drawdown_at_risk is not None and self.conditional_drawdown_at_risk is not None and self.conditional_drawdown_at_risk > self.drawdown_at_risk:
+            raise ValueError("conditional_drawdown_at_risk must be <= drawdown_at_risk")
+        if self.conditional_drawdown_at_risk is not None and self.max_drawdown > self.conditional_drawdown_at_risk:
+            raise ValueError("conditional_drawdown_at_risk must be >= max_drawdown")
+        return self
 
 
 class RiskMatrixCell(StrictModel):
@@ -679,6 +704,14 @@ class RiskContributionOutput(StrictModel):
     portfolio_volatility: FiniteFloat = Field(..., ge=0)
     cash_weight: FiniteFloat = Field(0, ge=0)
     items: List[RiskContributionItem] = Field(default_factory=list)
+    # Concentration, acquired. These two are published together on purpose: the
+    # effective count is blind to correlation, so ten equally weighted holdings score
+    # ten whether they are independent or move as one. Only the ratio tells them apart.
+    # Unit of effective_number_of_assets is *positions*, never a percentage.
+    effective_number_of_assets: Optional[FiniteFloat] = Field(None, gt=0)
+    # >= 1 for long-only weights by Cauchy-Schwarz, but constrained only to gt=0 so a
+    # portfolio sitting exactly at the bound cannot fail validation on a rounding.
+    diversification_ratio: Optional[FiniteFloat] = Field(None, gt=0)
 
 
 class RiskStressBucketAudit(StrictModel):
