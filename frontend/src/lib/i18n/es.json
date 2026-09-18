@@ -3218,7 +3218,28 @@
         "contribution": "contribución al riesgo",
         "lead": "{name} pesa {weight} pero produce {contribution} del riesgo",
         "showAll": "Mostrar todos",
-        "showLess": "Mostrar menos"
+        "showLess": "Mostrar menos",
+        "effectiveAssets": {
+          "label": "¿Cuántas apuestas independientes tengo realmente?",
+          "aboveCount": "Por encima de las {positions} posiciones medidas: el exceso es liquidez, y no dice nada de los pesos",
+          "belowCount": "Por debajo de las {positions} posiciones medidas: los pesos están desequilibrados, y unas pocas sostienen la cartera",
+          "evenCount": "Igual a las {positions} posiciones medidas: pesos uniformes y ninguna liquidez"
+        },
+        "diversificationRatio": {
+          "label": "¿Repartir el dinero ha servido de algo?",
+          "caption": "1,00 significa que las posiciones se mueven al unísono; más alto, más se compensan"
+        },
+        "uncovered": {
+          "label": "¿Cuánto de mí no se mide aquí?",
+          "caption": "Liquidez, más toda posición sin una serie de precios utilizable",
+          "residual": "Las filas de abajo describen el resto de la cartera; {share} no está entre ellas"
+        },
+        "rowsCaption": "La barra muestra la diferencia entre peso y riesgo: a la derecha más riesgo que peso, a la izquierda menos. Los pesos son cuotas de la cartera entera.",
+        "correlation": {
+          "title": "¿Cuáles de estas son la misma apuesta?",
+          "basis": "Medida sobre la ventana histórica; los pesos de arriba son los de hoy.",
+          "noRedundancy": "Ninguna pareja de este conjunto alcanza el umbral de redundancia."
+        }
       },
       "l3": {
         "title": "¿Me están pagando por este riesgo?",
