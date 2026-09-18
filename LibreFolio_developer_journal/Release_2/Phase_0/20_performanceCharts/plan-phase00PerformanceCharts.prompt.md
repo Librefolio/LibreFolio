@@ -1778,6 +1778,43 @@ A separate owner integrates G3 after F and the backend calendar signal:
 > dal corpus ispezionato, il totale sarebbe verde ugualmente. **Risolvi per nome ciò che
 > vuoi affermare per nome.**
 
+### 6.0.7 Precondizioni di ripresa (scritte il 2026-09-18, da leggere PRIMA di toccare sorgente)
+
+Stato al congelamento: branch `e-alfy-performance-charts-plan`, HEAD **`69d0d27c6`**, albero
+pulito, lane 6157 + `/tmp/librefolio-r2-i-charts`.
+
+**Il target si muove sotto questo branch.** Il developer integra D (PAC allocator) in
+`dev_release2`: 27 commit, 275 file, ~106k righe, dormiente da settimane. Questo workstream
+**non** viene integrato nello stesso passaggio — diverge perché è *attivo*, mentre D divergeva
+perché era *fermo*; e l'arco corrente non è chiuso (la ladder di larghezza candele, che è la
+lamentela reale del developer, non è iniziata).
+
+Conseguenza operativa: al risveglio questo branch passa da ~9 a circa **36 commit indietro, su
+275 file mai visti**.
+
+**Prima azione alla ripresa, prima di qualunque edit:** richiedere al coordinatore un
+aggiornamento di baseline `target -> branch` e rivalidare la **revisione combinata**. Il verde
+ottenuto su `69d0d27c6` non si trasferisce: una suite passata su questo HEAD non afferma nulla
+su questo codice appoggiato a un allocatore PAC che non esisteva quando è girata. È la regola
+di tutta la giornata in un altro costume — **una misura su uno stato non dice niente su uno
+stato diverso** — e vale anche per le verifiche di merge: un `I -> target` pulito verificato
+*ora* descrive un target che dopo D non esiste più, quindi va rifatto, non riportato.
+
+Il merge lo esegue il developer. Questo workstream non esegue mai merge/rebase/commit.
+
+**Lavoro aperto, in ordine e non iniziato:**
+1. ladder di risoluzione a 8 rung (goldens già a terra, `d87d45e07`) — è il difetto di
+   leggibilità reale, DBT-7; deve partire dalla vista del developer, non da questa pianificazione;
+2. generalizzazione del parametro di `groupPointsByBucket` (4 consumer, `aggregateEnvelope`
+   incluso);
+3. fix del flag `missing` in `aggregateSumSeries` — **dopo** che i goldens hanno provato
+   l'identità del refactor, come commit separato in cui il delta golden è l'evidenza;
+4. decisione su `aggregateEnvelope`, esportata e senza chiamante di produzione.
+
+Nota di verifica per chi guarda le candele: a questa finestra un render **corretto** dà corpi
+~1,8 px sotto stoppini ~18 px. Sottile è l'aspetto atteso della composizione sintetica, non un
+difetto residuo.
+
 ## 6. Dependency-safe phases and owners
 
 | Phase | Size | Owner | Dependency | Deliverable | Status |
