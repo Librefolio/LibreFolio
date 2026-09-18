@@ -2080,6 +2080,48 @@ def populate_wac_test_transactions(session: Session):
     print(f"  📈 WAC test ADJ #{tx_wac_transfer.id}: -3 override=$160 (day -20)")
 
 
+def _daily_variation(
+    asset_id: int,
+    price_date: date,
+    variation_raw: float,
+    noise_range: float,
+    correlation_plan: dict[int, tuple[int, float]],
+    guide_ids: set[int],
+    guide_noise: dict[int, dict[date, float]],
+) -> Decimal:
+    """Own the whole per-day noise policy for one asset.
+
+    Records the day's normalized noise when this asset guides another, and blends it
+    with its guide's when this asset follows one:
+
+        u_dep = c * u_guide + sqrt(1 - c^2) * u_idio    ->    corr(u_dep, u_guide) = c
+
+    The coefficient is the target correlation itself, and the variance is preserved
+    exactly (c^2/3 + (1-c^2)/3 = 1/3), so the dependent's volatility does not move.
+    The one-factor form sqrt(c)*u_guide + sqrt(1-c)*u_idio yields sqrt(c) instead,
+    because here the guide is an asset rather than a latent factor: both preserve
+    variance, only one hits the target.
+
+    An asset with no role gets back the exact expression it had. Normalizing and
+    rescaling a float is not the identity, and a 1-ULP drift would become a different
+    decimal string, hence a different price and a different transaction amount.
+    """
+    if asset_id in guide_ids:
+        guide_noise.setdefault(asset_id, {})[price_date] = variation_raw / noise_range
+
+    plan = correlation_plan.get(asset_id)
+    if plan is None:
+        return Decimal(str(variation_raw))
+
+    guide_id, rho = plan
+    guide_u = guide_noise.get(guide_id, {}).get(price_date)
+    if guide_u is None:
+        return Decimal(str(variation_raw))
+
+    blended_u = rho * guide_u + math.sqrt(1.0 - rho * rho) * (variation_raw / noise_range)
+    return Decimal(str(blended_u * noise_range))
+
+
 def populate_price_history(session: Session):
     """Create price history for market-priced assets.
 
@@ -2119,6 +2161,35 @@ def populate_price_history(session: Session):
     # not track the market it indexes yields a beta near zero against every portfolio,
     # which is a number on screen that means nothing.
     equity_factors: dict[date, list[float]] = {}
+
+    # Correlation injection between held assets. With every asset drawing independent
+    # noise, no pair of the portfolio clears 0.14: the correlation matrix is 49 nearly
+    # white cells, and the panel that exists to reveal "these two are the same product
+    # bought twice" has nothing to reveal. Each dependent below reuses its guide's
+    # normalized daily noise:
+    #
+    #     u_dep = c * u_guide + sqrt(1 - c^2) * u_idio     ->   corr(u_dep, u_guide) = c
+    #
+    # The coefficient is the target correlation itself. The one-factor form
+    # sqrt(c)*u_guide + sqrt(1-c)*u_idio yields sqrt(c) instead, because here the guide
+    # is an asset rather than a latent factor: both preserve variance, only one hits
+    # the target. Pairs are chosen for contrast, not coverage — a matrix where
+    # everything correlates with everything is empty in the opposite way.
+    #
+    # Only the dependent's series changes. Guides and unrelated assets keep the exact
+    # expression they had, so their prices stay byte-identical: normalizing and
+    # rescaling a float is not the identity.
+    correlation_plan: dict[int, tuple[int, float]] = {}
+    if loan1 and loan2:
+        # Two real-estate loans from the same originator: above the redundancy
+        # threshold, the case the heatmap exists to surface.
+        correlation_plan[loan2.id] = (loan1.id, 0.93)
+    if btc and eth:
+        # Two crypto assets: visibly linked, deliberately below the redundancy
+        # threshold, so the matrix shows a gradient instead of a binary.
+        correlation_plan[eth.id] = (btc.id, 0.70)
+    guide_ids = {guide_id for guide_id, _ in correlation_plan.values()}
+    guide_noise: dict[int, dict[date, float]] = {}
 
     # Format: (asset, currency, start_price, end_price, asset_type_key, source, skip_weekends)
     price_configs = [
@@ -2163,7 +2234,16 @@ def populate_price_history(session: Session):
             random.seed(_stable_seed("price", asset.id, price_date.isoformat()))
             # Uniform ≈ ±2σ noise (simple, deterministic-friendly)
             noise_range = 2.0 * daily_vol
-            variation = Decimal(str(random.uniform(-noise_range, noise_range)))
+            variation_raw = random.uniform(-noise_range, noise_range)
+            variation = _daily_variation(
+                asset.id,
+                price_date,
+                variation_raw,
+                noise_range,
+                correlation_plan,
+                guide_ids,
+                guide_noise,
+            )
             daily_factor = Decimal(str(1.0 + drift_per_day)) + variation
             price = max(price * daily_factor, Decimal("0.01"))  # never go negative
             if asset_type_key == "STOCK":

@@ -158,6 +158,39 @@ describe('KpiDivergingFlowBar', () => {
             expect(root).toHaveTextContent('-3.20%');
         });
 
+        it('can name the value element apart from the row, in both layouts', async () => {
+            // The root carries the label too, so a caller asserting the exact
+            // text of the number cannot use it: `toHaveText` would be comparing
+            // against "Apple Inc.+60.0pp". Selecting the value alone is what
+            // spares such a caller from rendering the number a second time
+            // beside the bar — and two copies of one number is how the two
+            // start disagreeing.
+            //
+            // The figure is round and invented: a measured gap integrates over
+            // the window it came from, and a fixture copied from a measurement
+            // gets read later as a reference value.
+            await setupI18n();
+            const inline = render(KpiDivergingFlowBar, {
+                props: {label: 'Apple Inc.', value: '+60.0pp', signedPct: 60, layout: 'inline', testId: 'l2-row-1', valueTestId: 'l2-divergence-1'},
+            });
+
+            expect(screen.getByTestId('l2-divergence-1')).toHaveTextContent(/^\+60\.0pp$/);
+            expect(screen.getByTestId('l2-row-1')).toHaveTextContent('Apple Inc.');
+            inline.unmount();
+
+            render(KpiDivergingFlowBar, {props: {label: 'Apple Inc.', value: '+60.0pp', signedPct: 60, valueTestId: 'stacked-value'}});
+            expect(screen.getByTestId('stacked-value')).toHaveTextContent(/^\+60\.0pp$/);
+        });
+
+        it('leaves the value unlabelled when no valueTestId is given', async () => {
+            // The dashboard passes neither id, and an attribute that appears
+            // without being asked for is how a "no-op" prop stops being one.
+            await setupI18n();
+            const {container} = render(KpiDivergingFlowBar, {props: {label: 'Net flow', value: '+120', depositPct: 10, withdrawPct: 0}});
+
+            expect(container.querySelectorAll('[data-testid]')).toHaveLength(0);
+        });
+
         it('honours overridden colours and height without touching the geometry', async () => {
             await setupI18n();
             const {container} = render(KpiDivergingFlowBar, {

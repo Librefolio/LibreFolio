@@ -71,6 +71,14 @@ export interface RiskControllerOptions {
      * state a bad month as something the sample did rather than a scaled bad day.
      */
     includeMonthlyVar?: boolean;
+    /**
+     * Adds the current-composition KPI wave and the per-asset risk/return points.
+     *
+     * Opt-in like the two above: L3 is the only surface that reads either, and the
+     * pair travels together because the scatter's portfolio dot and the card's
+     * Sharpe have to come from the same series or the chart contradicts the cards.
+     */
+    includeCurrentCompositionRiskReturn?: boolean;
 }
 
 /**
@@ -208,6 +216,7 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
                 hasCapability: (code: string, mode: RiskMode) => hasRiskCapability(catalog, code, scope.kind, mode),
                 includeDrawdownSummary: options.includeDrawdownSummary === true,
                 includeMonthlyVar: options.includeMonthlyVar === true,
+                includeCurrentCompositionRiskReturn: options.includeCurrentCompositionRiskReturn === true,
             };
             const historicalAnalytics = buildBaseAnalytics('historical', context);
             const currentAnalytics = buildBaseAnalytics('current_composition', context);

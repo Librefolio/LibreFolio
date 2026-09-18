@@ -26,7 +26,11 @@ from backend.app.services.risk.base import (
     RiskComputation,
     RiskUnavailableError,
 )
-from backend.app.services.risk.metrics import comparison_summary
+from backend.app.services.risk.metrics import (
+    annualized_expected_return,
+    annualized_volatility,
+    comparison_summary,
+)
 
 
 class ComparisonParams(BaseModel):
@@ -85,9 +89,10 @@ class ComparisonAnalytic(RiskAnalytic):
         baseline_date = comparison_points[common_dates[0]]
         calendar_days = (common_dates[-1] - baseline_date).days
         annualization_factor = len(common_dates) * 365 / calendar_days if calendar_days > 0 else require_annualization_factor(context)
+        comparison_common_returns = [comparison_map[point_date] for point_date in common_dates]
         summary = comparison_summary(
             [primary_map[point_date] for point_date in common_dates],
-            [comparison_map[point_date] for point_date in common_dates],
+            comparison_common_returns,
             annualization_factor,
         )
         warnings: list[RiskWarning] = []
@@ -114,6 +119,13 @@ class ComparisonAnalytic(RiskAnalytic):
                 correlation=summary.correlation,
                 beta=summary.beta,
                 observations=len(common_dates),
+                # The reference's own risk and reward, measured on the same common days
+                # as everything above. A risk/return plot needs the benchmark placed
+                # next to the holdings; computing it here costs one pass over a series
+                # already in hand, and keeps the arithmetic convention in the backend
+                # where the rest of it lives.
+                comparison_volatility=annualized_volatility(comparison_common_returns, annualization_factor),
+                comparison_expected_annual_return=annualized_expected_return(comparison_common_returns, annualization_factor),
                 series=[
                     RiskComparisonPoint(
                         date=point_date,
