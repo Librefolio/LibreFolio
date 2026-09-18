@@ -478,6 +478,105 @@ async def test_risk_query_runs_all_analytics_against_populated_test_database():
 
 
 @pytest.mark.asyncio
+async def test_risk_query_simulates_with_canonical_names_and_no_seed():
+    """The canonical dialect, which no other API test speaks.
+
+    Every other end-to-end simulation case sends the legacy aliases
+    (``paths``/``seed``), and ``_infer_process`` deliberately routes legacy
+    callers to GBM. That compatibility shield is correct policy — but it also
+    exempted the whole suite from ever exercising the *default* engine, so a
+    contradiction between the params validator (which forbids ``random_seed``
+    under the block bootstrap) and the metadata validator (which used to
+    require it) reached ``_success`` and returned 500 with every green gate
+    still green. This test is that missing composition: canonical field names,
+    no seed supplied, default process.
+    """
+    user_id = await fixture_user_id()
+
+    app = FastAPI()
+    app.include_router(router, prefix="/api/v1")
+
+    async def current_user():
+        return SimpleNamespace(id=user_id)
+
+    app.dependency_overrides[get_current_user] = current_user
+    end = date.today() - timedelta(days=3)
+    start = end - timedelta(days=297)
+
+    payload = {
+        "scope": {"kind": "portfolio", "broker_ids": [3]},
+        "date_range": {"start": start.isoformat(), "end": end.isoformat()},
+        "target_currency": "EUR",
+        "mode": "current_composition",
+        "composition_policy": "current_buy_and_hold",
+        "analytics": [
+            # The two controls travel in the same query as the subject. A lone
+            # subject returning 200 proves only that it did not raise; sharing a
+            # portfolio, a window and a response with two known-good dialects is
+            # what makes its outcome comparable.
+            {
+                "instance_id": "control_legacy",
+                "analytic_code": "simulation",
+                "parameters": {"horizon_days": 30, "paths": 256, "seed": 123},
+            },
+            {
+                "instance_id": "control_gbm",
+                "analytic_code": "simulation",
+                "parameters": {
+                    "horizon_days": 30,
+                    "path_count": 256,
+                    "process": "gbm",
+                    "random_seed": 123,
+                },
+            },
+            {
+                "instance_id": "subject_canonical",
+                "analytic_code": "simulation",
+                "parameters": {"horizon_days": 30, "path_count": 256},
+            },
+        ],
+    }
+
+    try:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://test",
+        ) as client:
+            response = await client.post(f"{API_BASE}/query", json=payload)
+    finally:
+        await get_async_engine().dispose()
+
+    assert response.status_code == 200, response.text
+    items = {item["instance_id"]: item for item in response.json()["items"]}
+    assert set(items) == {"control_legacy", "control_gbm", "subject_canonical"}
+    # The subject must not merely succeed: it must degrade exactly as much as
+    # the controls do. `partial` is a property of the fixture portfolio, so an
+    # equality here stays honest if the fixtures change, while `== "ok"` would
+    # be a false red on a correct product.
+    statuses = {key: item["status"] for key, item in items.items()}
+    assert statuses["subject_canonical"] == statuses["control_legacy"] == statuses["control_gbm"], statuses
+    assert statuses["subject_canonical"] not in {"unavailable", "failed"}, items["subject_canonical"]
+
+    # The legacy dialect is deliberately routed to GBM by `_infer_process`; that
+    # policy is what kept the default engine out of every end-to-end test.
+    assert items["control_legacy"]["output"]["process"] == "gbm"
+    assert items["control_gbm"]["output"]["process"] == "gbm"
+
+    output = items["subject_canonical"]["output"]
+    metadata = items["subject_canonical"]["metadata"]
+    assert output["process"] == "block_bootstrap"
+    assert output["sampling_method"] == "mc"
+    assert output["path_count"] == 256
+    # The bootstrap discloses reproducibility through its own seed, never a
+    # `random_seed`: the two are mutually exclusive by construction.
+    assert metadata["bootstrap_seed"] is not None
+    assert metadata["random_seed"] is None
+    assert metadata["sobol_start_index"] is None
+    assert output["block_length_days"] is not None
+    assert len(output["percentile_bands"]) == 31
+
+
+@pytest.mark.asyncio
 async def test_portfolio_optimization_supports_all_scopes_and_strategies():
     user_id = await fixture_user_id()
 
