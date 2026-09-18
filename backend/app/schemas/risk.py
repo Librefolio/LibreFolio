@@ -817,6 +817,34 @@ class RiskComparisonOutput(StrictModel):
     series: List[RiskComparisonPoint] = Field(default_factory=list)
 
 
+class RiskVarCvarBin(StrictModel):
+    """One bucket of the horizon-compounded return distribution.
+
+    ⚠️ SIGN CONVENTION — this model lives in **signed return space**: a loss is a
+    negative bound, so the left-hand bins are the losing ones. Its sibling fields
+    ``value_at_risk`` and ``conditional_value_at_risk`` on :class:`RiskVarCvarOutput`
+    are **positive loss magnitudes** instead, because a zero floor is applied there.
+    Two conventions therefore coexist in one payload, deliberately: the histogram
+    must show gains, while the headline tail figures must never render negative.
+    Cross the boundary with :attr:`RiskVarCvarOutput.var_bin_edge`, which is the
+    same cut expressed in this model's space.
+
+    Bounds are decimal ratios (``-0.1`` == a 10% loss over the horizon), never
+    percentages. The interval is half-open ``[lower_bound, upper_bound)`` except for
+    the last bin of a series, which includes its upper bound.
+    """
+
+    lower_bound: FiniteFloat
+    upper_bound: FiniteFloat
+    count: int = Field(..., ge=0)
+
+    @model_validator(mode="after")
+    def validate_bin_width(self) -> RiskVarCvarBin:
+        if self.upper_bound <= self.lower_bound:
+            raise ValueError("upper_bound must be greater than lower_bound")
+        return self
+
+
 class RiskVarCvarOutput(StrictModel):
 
     kind: Literal[RiskOutputKind.VAR_CVAR] = Field(default=RiskOutputKind.VAR_CVAR, json_schema_extra={"enum": ["var_cvar"]})
@@ -825,11 +853,22 @@ class RiskVarCvarOutput(StrictModel):
     observations: PositiveInt
     value_at_risk: FiniteFloat = Field(..., ge=0)
     conditional_value_at_risk: FiniteFloat = Field(..., ge=0)
+    return_bins: List[RiskVarCvarBin] = Field(default_factory=list)
+    var_bin_edge: Optional[FiniteFloat] = None
 
     @model_validator(mode="after")
     def validate_tail_ordering(self) -> RiskVarCvarOutput:
         if self.conditional_value_at_risk < self.value_at_risk:
             raise ValueError("conditional_value_at_risk must be >= value_at_risk")
+        return self
+
+    @model_validator(mode="after")
+    def validate_return_bins(self) -> RiskVarCvarOutput:
+        previous: Optional[RiskVarCvarBin] = None
+        for current in self.return_bins:
+            if previous is not None and current.lower_bound <= previous.lower_bound:
+                raise ValueError("return_bins must be ordered by ascending lower_bound")
+            previous = current
         return self
 
 
@@ -942,6 +981,18 @@ class RiskPortfolioOptimizationOutput(StrictModel):
     algorithm_version: str = Field(..., min_length=1)
 
 
+class RiskDrawdownPoint(StrictModel):
+    """One dated point of the underwater (peak-relative) drawdown curve.
+
+    ``drawdown`` is a decimal ratio and never positive: ``0.0`` means the series is
+    at a new high, ``-0.1`` means 10% below the running peak. The convention matches
+    :class:`RiskComparisonPoint`, and percentage formatting stays a renderer concern.
+    """
+
+    date: date
+    drawdown: FiniteFloat = Field(..., le=0)
+
+
 class RiskDrawdownOutput(StrictModel):
     """Renderer-neutral current and maximum drawdown episode summary.
 
@@ -967,6 +1018,7 @@ class RiskDrawdownOutput(StrictModel):
     coverage: FiniteFloat = Field(..., ge=0, le=1)
     calculation_basis: str = Field(..., min_length=1)
     return_basis: RiskReturnBasis
+    underwater_series: List[RiskDrawdownPoint] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_episode_contract(self) -> RiskDrawdownOutput:  # noqa: C901 — flat status-branch invariant raises
@@ -1087,6 +1139,7 @@ __all__ = [
     "RiskCorrelationOutput",
     "RiskDataFrequency",
     "RiskDrawdownOutput",
+    "RiskDrawdownPoint",
     "RiskDrawdownRecoveryStatus",
     "RiskError",
     "RiskErrorCode",
@@ -1121,6 +1174,7 @@ __all__ = [
     "RiskStressMethod",
     "RiskStressOutput",
     "RiskValueStatus",
+    "RiskVarCvarBin",
     "RiskVarCvarOutput",
     "RiskWarning",
 ]
