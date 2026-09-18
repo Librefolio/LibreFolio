@@ -7,8 +7,15 @@
  * markup plus a handful of `$derived` reads.
  */
 import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
+import {singleValue} from '$lib/risk/riskTypes';
 
 import {DAILY_VAR_INSTANCE, MONTHLY_VAR_INSTANCE, resultByCode, resultByInstance} from '../riskAnalysisHelpers';
+
+// Provenance lives in its own module — this file is at its size ceiling and the
+// subject is a separate one — but consumers keep a single door onto the level
+// helpers, so it is re-exported rather than imported from two places.
+export type {LevelMetadataRow} from './levelMetadata';
+export {levelMetadata, translateOrRaw} from './levelMetadata';
 
 /**
  * View a value as a plain record without discarding anything.
@@ -147,6 +154,62 @@ export function resultReasons(results: ReadonlyArray<RiskAnalyticResult | null |
         }
     }
     return [...byMessage.values()];
+}
+
+/**
+ * The error codes of results that failed outright, deduplicated, in arrival order.
+ *
+ * **Codes, never sentences, and never translations.** `resultReasons` above
+ * carries backend prose verbatim, and mixing a translated string into that list
+ * would make the list's own contract unreadable: a caller could no longer tell
+ * which entries it may show to a user in another language. So the two travel
+ * separately, and this one carries the *identifier* while the rendering layer
+ * owns the wording.
+ *
+ * ⚠️ Read through `singleValue`, exactly as `RiskResultFrame:23` does. The field
+ * is typed as a value *or a list* by the generated client, so `result.error.code`
+ * happens to work on today's payload and returns `undefined` the day one arrives
+ * wrapped — disclosing nothing, silently.
+ *
+ * Why this exists at all: the levels decide their empty state from the *shape of
+ * the derived rows*, so "out of scope", "not enough history", "no result" and
+ * "the answer has not arrived yet" all render one sentence — and that sentence
+ * blames the user's data for a limit of the analytic. The legacy frame told the
+ * truth here, and the redesign lost it.
+ */
+export function resultErrorCodes(results: ReadonlyArray<RiskAnalyticResult | null | undefined>): string[] {
+    const codes: string[] = [];
+    for (const result of results) {
+        if (!result) continue;
+        const code = singleValue(result.error)?.code;
+        if (typeof code !== 'string') continue;
+        const trimmed = code.trim();
+        if (trimmed === '' || codes.includes(trimmed)) continue;
+        codes.push(trimmed);
+    }
+    return codes;
+}
+
+/**
+ * One backend error code as a sentence, falling back rather than leaking the key.
+ *
+ * ⚠️ `translated === key` is the whole mechanism, and it is not a precaution:
+ * `svelte-i18n` returns the key itself when no message exists, so without this
+ * comparison an error code the backend gains tomorrow prints `risk.errors.foo`
+ * on screen. That is the defect recorded at `RiskResultFrame:108`, which is why
+ * this is a function with tests rather than three lines inlined in a component.
+ *
+ * The translator is **passed in** rather than imported. `$t` is a store, and a
+ * module reading it through `get()` computes the sentence once, at derivation
+ * time: the text would then survive a language change unchanged until the data
+ * happened to move. Taking it as an argument keeps the call inside the caller's
+ * reactive scope, where switching locale re-runs it.
+ */
+export function translateErrorCode(code: string | null | undefined, translate: (key: string) => string, fallbackKey: string): string {
+    if (!code) return translate(fallbackKey);
+    const key = `risk.errors.${code}`;
+    const translated = translate(key);
+    return translated === key ? translate(fallbackKey) : translated;
 }
 
 /**
@@ -422,8 +485,9 @@ export function leadDivergence(rows: DivergenceRow[], minimumGap = 0.05): Diverg
  * ten equally weighted holdings score 10,00 whether their pairwise correlation
  * is 0 or 0,95. Shown alone it congratulates a portfolio that is one bet wearing
  * ten names — precisely the illusion L2 exists to break. The diversification
- * ratio is what notices: on those same three portfolios it reads 3,15, then
- * 1,35, then 1,02.
+ * ratio is what notices: for those ten holdings it is `1/√(0,1 + 0,9ρ)`, so it
+ * reads 3,16 at ρ = 0, about 1,35 at ρ = 0,5, and 1,02 at ρ = 0,95 — collapsing
+ * to "no benefit" exactly where the other number still says ten.
  *
  * Making the pair a single nullable value means a caller *cannot* render one
  * without the other by accident. It is not a guideline if the type enforces it.
@@ -433,13 +497,21 @@ export interface Concentration {
      * Concentration index, **not** a count of holdings, despite the name.
      *
      * `1/Σw²` over weights that are fractions of NAV, with cash in the
-     * denominator but never a term of its own. On the test portfolio that is
-     * `Σw = 0,408` against `cash = 0,592`, so it reads **11,44 on 2 positions** —
-     * 5,7× the number of holdings. The arithmetic is right and the parity with
-     * AI Export (`broker_concentration_context.py:97`) depends on it; the word
-     * "count" is what would be wrong. An index promises no maximum, a count
-     * does — and a card reading "effective number of assets: 11,4" above two
-     * holdings tells the reader the software is broken.
+     * denominator but never a term of its own. So whenever cash is a large
+     * share of NAV the positions' own weights are small, their squares smaller
+     * still, and the index rises **far above the number of holdings** — it can
+     * read in double figures over a mere handful of positions. The arithmetic is
+     * right and the parity with AI Export (`broker_concentration_context.py:97`)
+     * depends on it; the word "count" is what would be wrong. An index promises
+     * no maximum, a count does — and a card whose "effective number of assets"
+     * plainly exceeds the holdings listed beneath it tells the reader the
+     * software is broken.
+     *
+     * The case is described in shape and not in figures on purpose: the mock
+     * seeds its RNG per `(asset, date)` (`populate_mock_data.py:2162`) while the
+     * window ends at `date.today()`, so a single date's price is stable forever
+     * but **anything integrating over the window moves every day**. A measured
+     * aggregate written here would be false tomorrow, and nothing would fail.
      *
      * Never alone, and never without the cash weight beside it.
      */
