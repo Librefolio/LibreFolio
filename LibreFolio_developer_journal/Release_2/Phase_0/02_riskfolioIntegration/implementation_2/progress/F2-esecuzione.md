@@ -207,10 +207,46 @@ dentro il file che nessuno apre. F2 non la ripara: la rende **trovabile** e **di
   **la coppia «disegno non testato + helper testato» che credevo di aver deciso io per
   `ScatterChart` + `scatterChartHelpers` era già la convenzione del repo.**
 
-  Riscritta §3 così: non «la regola che ho deciso», ma «la regola che il repo già segue,
-  con il file che sembra violarla e invece la dimostra». Per un mandato di superficie è
-  un argomento incomparabilmente più forte. Aggiunte le **tre** trappole di conteggio
-  (cartella · occorrenze-vs-file · le 5 che disegnano **fuori** da `charts/`).
+- **Passo 6quinquies — il quinto numero, e un edit a quattro mani sullo stesso file.**
+  Il coordinatore, verificando il mio **15**, ha trovato che *«5 stanno fuori da
+  `charts/`»* era sbagliato: sono **8**. Misurato qui:
+
+  | dove | |
+  |---|---:|
+  | `components/charts/` | 7 |
+  | `components/dashboard/` | 4 |
+  | `components/brokers/lots/` | 3 |
+  | `components/risk/` | 1 |
+  | **totale che disegna** | **15** |
+
+  Era una **sottrazione sbagliata su un elenco che avevo davanti** (15 − 7 = 8, avevo
+  scritto 5). Ma la cosa che conta non è la cifra: **8 su 15 non è un'eccezione notevole,
+  è la maggioranza.** `components/charts/` contiene la *minoranza* dei grafici del
+  progetto, quindi la «trappola della cartella» non è una nota a piè di pagina —
+  **è la regola generale**, e l'ho promossa a trappola ① riscrivendola come tale.
+
+  🔑 **E il coordinatore ha trovato un difetto nel suo stesso metodo**, che ho messo in §3
+  come corollario: il suo grep era `echarts\.init(` — ristretto **convinto** di escludere
+  i commenti. Non li esclude: *un commento che cita una chiamata contiene la chiamata.*
+  ```
+  echartsTooltipHelpers.ts:251   * `echarts.init()`. It deliberately avoids…
+  ```
+  Il suo primo conteggio dichiarava «0 solo-commento» e ne trovava zero **perché cercava
+  male**. Non è «lo strumento risponde a una domanda più stretta»: è **ho ristretto io la
+  domanda, e ho ristretto la cosa sbagliata.**
+
+  > **⚠️ Fuori pista — scoperto a posteriori: il file è stato editato a quattro mani.**
+  > Il coordinatore aveva già applicato lui la correzione 5 → 8 nel mio albero e
+  > l'aveva **stagiata** (indice a 333 righe), poi mi ha chiesto di applicarla. Me ne
+  > sono accorto trovando **due frammenti penzolanti** dove il suo testo e il mio si
+  > sovrapponevano: una riga `(brokers/lots/, dashboard/, risk/).` orfana e il paragrafo
+  > «Il discrimine non è la cartella…» **duplicato**. Entrambi rimossi.
+  >
+  > 🔑 **Nessuno dei due avrebbe visto la malformazione leggendo il proprio diff**: la sua
+  > era completa, la mia era completa, ed è la *sovrapposizione* a essere rotta. È la
+  > prima volta in questa campagna che il difetto non sta in una misura ma nel **confine
+  > fra due scritture corrette** — e si vede solo rileggendo il file intero, non i due
+  > contributi.
 
 - [x] **5. Gate** — ✅ 2026-09-18, in corsia `6152` / `/tmp/librefolio-r2-f2`
   > **Note implementazione**: vedi §Evidenza. Due categorie, non una:

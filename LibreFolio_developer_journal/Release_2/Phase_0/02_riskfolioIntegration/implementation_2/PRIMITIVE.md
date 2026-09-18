@@ -8,8 +8,8 @@
 > Serve a rispondere a quattro domande e a nessun'altra:
 > **cosa esiste già · come si monta una card · come si monta un grafico · cosa NON si costruisce.**
 >
-> 📌 **Quattro numeri di questa pagina erano sbagliati, e il quarto è il più istruttivo
-> perché l'ho scritto io *correggendo* il terzo.**
+> 📌 **Cinque numeri di questa pagina erano sbagliati, e i più istruttivi sono gli ultimi
+> due, scritti *correggendo* i precedenti.**
 >
 > Il primo: `SingleDatePicker` era dato per 389 righe; ne ha **388**. L'avevo **fatto
 > notare a voce** al coordinatore — e poi ho scritto 389 qui, **in due punti**. L'errore è
@@ -30,11 +30,20 @@
 > `src/lib`, è **15**. Ho commesso l'errore contro cui avevo appena scritto la regola,
 > nel paragrafo in cui la scrivevo.
 >
-> 🔑 **La regola di questa pagina, pagata quattro volte**: se citi una misura, misurala —
+> **Il quinto l'ho scritto correggendo il quarto**: «5 stanno fuori da `charts/`», quando
+> sono **8** — sottrazione sbagliata su un elenco che avevo davanti. E cambia
+> l'argomento, non solo la cifra: 8 su 15 non è *un'eccezione notevole*, è **la
+> maggioranza**. La cartella dei grafici contiene la minoranza dei grafici.
+>
+> 🔑 **La regola di questa pagina, pagata cinque volte**: se citi una misura, misurala —
 > `wc -l` e `grep -l`, non la memoria — **e scrivi accanto il perimetro.** Un numero senza
 > perimetro è un'affermazione **incompleta che ha la forma di una completa**: non si
 > riconosce come dubbia, quindi non si ricontrolla. I percorsi qui sotto sono verificati
 > con `ls`; ma un percorso che esiste non dice **nulla** sul numero che lo accompagna.
+>
+> E un corollario, perché è costato un sesto errore a chi verificava: **restringere una
+> ricerca non la rende più giusta.** Il grep `echarts\.init(` sembra escludere i commenti
+> e non lo fa, perché *un commento che cita una chiamata contiene la chiamata* (§3, ③).
 
 Il *perché* di ogni primitiva resta nell'intestazione del suo file — è là che va
 letto quando serve modificarla. Qui c'è solo ciò che serve per **adottarla**,
@@ -243,9 +252,6 @@ Il modello approvato è `CorrelationHeatmap.svelte`. Copia il blocco di import
    echartsTooltipHelpers.ts:251    * `echarts.init()`. It deliberately avoids…
    echartsDataZoomTouchPan.ts:31   *   element passed to `echarts.init()`).
    ```
-
-   **Il discrimine non è la cartella né il grep: è se il componente disegna.** Dove c'è
-   logica si testa, dove c'è una canvas si testa l'opzione che la riempie.
 
    **Il discrimine non è la cartella né il grep: è se il componente disegna.** Dove c'è
    logica si testa, dove c'è una canvas si testa l'opzione che la riempie.
