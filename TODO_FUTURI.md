@@ -1068,3 +1068,157 @@ cambio è osservabile ovunque**, perché il formattatore del denaro è usato in 
 
 **Priorità**: media. **Non blocca il rischio**, e va fatto come lavoro di progetto con la sua
 verifica, non infilato dentro un pacchetto di superficie.
+
+---
+
+## Il generatore di dati di prova non onora i bersagli `end_price`, e lo scarto è sistematico
+
+**Misurato da N il 18 Set**, corsia 6151, finestra dichiarata.
+
+| asset | bersaglio | ottenuto | scarto |
+|---|---:|---:|---:|
+| Apple | 185,00 | 264,57 | **+43,0 %** |
+| Bitcoin | 45 000 | 25 889,81 | **−42,5 %** |
+| Ethereum | 2 650 | 1 290,41 | **−51,3 %** |
+| RE Loan Roma | 5 000 | 5 010,52 | +0,2 % |
+
+### 🔴 La causa — e l'etichetta che le avevo dato era sbagliata
+
+> **Correzione del 18 Set, di N.** Questa voce diceva *«deriva di Jensen: `uniform(−a,+a)`
+> applicato moltiplicativamente ha media logaritmica negativa `≈ −σ²/2`»*. **Non è Jensen**,
+> e l'etichetta manderebbe chi apre il lavoro a cercare un bias che non c'è.
+
+**I segni sono discordi**, e Jensen spingerebbe tutti dalla stessa parte:
+
+| asset | bersaglio | consegnato | scarto |
+|---|---:|---:|---:|
+| Apple | 185,00 | 264,57 | **+43,0 %** |
+| Microsoft | 390,00 | 322,03 | **−17,4 %** |
+| Bitcoin | 45 000 | 25 889,81 | **−42,5 %** |
+
+Le ampiezze sono **esattamente quelle che la volatilità configurata prevede**: rumore
+uniforme su ±2σ dà deviazione `2σ/√3` al giorno, che su 267 giorni fa **≈ 30 %** per le
+azioni e **≈ 91 %** per la cripto su 373. **Tutti e tre cadono entro ~1,2 σ.**
+
+> 🔑 **Non è un difetto di calcolo: `end_price` è un'attesa, non un bersaglio.**
+> `drift_per_day = (end/start)^(1/n) − 1` centra il valore **in media sulle realizzazioni**, e
+> ogni popolamento ne pesca **una sola**. Il commento nel codice dice *«so the final price
+> arrives near end_price»*, e su una cripto «near» significa **±91 %**.
+
+### E la forma vera, che è più interessante del difetto
+
+Gli **indici centrano il bersaglio** (`6399,99999999994`, `3949,99999999998`) perché
+`_populate_benchmark_indices` **normalizza**. Gli altri no, perché **nessuno li normalizza**.
+
+> **Due metà dello stesso generatore trattano la stessa configurazione in due modi diversi**
+> — una la onora esattamente, l'altra solo in media — **e la struttura dati non distingue i
+> due casi.** È la stessa famiglia delle due convenzioni coerenti ciascuna con sé e
+> incoerenti a vista dentro lo stesso oggetto.
+
+**Il lavoro vero**, quindi, non è «correggere una deriva»: è **decidere se `end_price` è un
+contratto o un'aspettativa, e renderlo esplicito nella struttura dati** — oppure normalizzare
+anche le serie non-indice, come già si fa per gli indici.
+
+### ⛔ Perché non è stato riparato subito
+
+Ripararlo porterebbe Apple da **264,57 a 185,00** e Bitcoin da **25 890 a 45 000**. Al momento
+della scoperta, **cinque superfici stavano misurando e pubblicando numeri su quelle serie**:
+ogni misura presa quel giorno sarebbe stata invalidata **senza che nessuno sapesse perché**.
+
+📌 È lo stesso criterio per cui non si infila uno spostamento grande di numeri già pubblicati
+dentro un passo che ha un'altra proprietà definente.
+
+### Quando farlo, e con cosa
+
+**Dopo la fase 2**, come lavoro suo, con il raffronto ante/post su tutte le superfici che
+leggono quelle serie. La correzione naturale è compensare la deriva logaritmica nel
+`drift_per_day` (aggiungere `+σ²/2`), oppure applicare il rumore in forma additiva sui
+log-rendimenti invece che moltiplicativa sui prezzi.
+
+**Priorità**: media. **Non blocca nulla oggi** — i dati sono plausibili, semplicemente non
+sono quelli dichiarati.
+
+---
+
+## Un commento di test è un'asserzione senza cancello
+
+`frontend/e2e/gallery.spec.ts:710-716` motiva la scelta di non usare `.first()` così:
+
+> *«"RE Loan Milano" … has exactly ONE PriceHistory row ever (see populate_mock_data.py
+> populate_price_history() `loan_price_points`) so its WAC/Market chart renders empty»*
+
+Dopo F1 quell'asset ha **267 righe di prezzo**, e `loan_price_points` **non esiste più in quella
+forma**. Il test **non fallisce** — punta ad Apple per nome — ma **la ragione scritta è falsa e
+cita un simbolo che non c'è**.
+
+🔑 **Il fatto generale**: un commento che spiega *perché* un test è scritto in un certo modo
+**è un'asserzione che nessuno esegue**, quindi nessuno la vede scadere. È il secondo caso nella
+campagna in cui una modifica ai dati di prova invalida in silenzio un presupposto scritto
+altrove.
+
+**Priorità**: bassa come riparazione, **alta come avvertimento**. Da sistemare quando si tocca
+`gallery.spec.ts`.
+
+---
+
+## Avanzamento della simulazione Monte Carlo — si può fare, e si sa già dove è difficile
+
+**Misurato da S4 il 18 Set.** Non è più *«forse si può»*: la domanda binaria è chiusa.
+
+### ✅ Il worker sa a che punto è, su tutti e tre i rami
+
+```
+resampling.py:172        for start in range(0, path_count, chunk_size)   ← BLOCK BOOTSTRAP (default)
+quantlib_worker.py:143   for path_index in range(request.path_count)     ← GBM / MC
+quantlib_worker.py:199   for path_index in range(request.path_count)     ← GBM / QMC
+```
+
+**Nessuno è una scala finta**: il contatore *è* l'unità di lavoro reale. `path_index / path_count`
+è esatto e monotono — niente «finzione a scalini».
+
+### 🔑 E il ramo predefinito ha l'aggancio di forma migliore
+
+```python
+chunk_size = max(1, _CELL_BUDGET // max(1, horizon_days * asset_count))
+```
+
+Il bootstrap è **già affettato**, con blocchi derivati dalla taglia del problema. Una callback sul
+confine del chunk costa **una chiamata per chunk**, e **il numero di tick si autoregola**:
+problema grande → più chunk → più avanzamenti.
+
+> ⚠️ Ribalta la previsione ragionevole — il ramo *nuovo* è il comodo, i due GBM (per-cammino)
+> richiederebbero una soglia. E la ragione non c'entra con l'avanzamento: il chunking esiste per
+> il **budget di memoria** (`:169`), e `:116` dichiara che *«la riproducibilità non deve dipendere
+> da come il lavoro è affettato»*. **Un aggancio lì riusa una garanzia già difesa invece di
+> introdurne una nuova.**
+
+### ⚠️ Il criterio di accettazione, da rispettare o non farlo
+
+Il sorteggio degli inizi di blocco (`resampling.py:148-155`) è **fuori dal ciclo**, vettorizzato;
+nel GBM stanno fuori `_validated_covariance` e `_build_process`. Una barra guidata dal solo
+contatore **resta a 0 % per tutta quella fase, poi parte**.
+
+> **Una barra ferma a 0 % è peggio di nessuna barra: l'utente conclude che è bloccata.**
+
+✅ **Il numero per deciderlo esiste già nel payload** — `rng_seconds`,
+`process_evolution_seconds`, `generation_evolution_seconds`, `path_aggregation_seconds`: il worker
+**già misura dove è finito il tempo**. Se le fasi fuori ciclo pesano, la strumentazione giusta è
+**un avanzamento a fasi, non a cammini**.
+
+### 🔴 Il costo vero non è il worker
+
+Il salto worker→web ha tre soluzioni (multi-frame sul pipe · canale laterale · contatore
+condiviso). ⚠️ Ma `SpawnWorkerPool` è generico e ha **due utenti** — simulazione **e
+ottimizzazione**: toccare il protocollo tocca anche l'ottimizzazione.
+
+**Il salto web→client non ha un appiglio.** `query_risk` è **sincrona, richiesta/risposta**, e
+**non esiste un id di lavoro**: non c'è nulla da interrogare né a cui abbonarsi. SSE, websocket e
+polling **richiedono tutti e tre lo stesso prerequisito che oggi manca**. E la richiesta è
+**bulk**: «la simulazione» è *una* analitica dentro un lotto, quindi una percentuale della
+richiesta non è la percentuale della simulazione.
+
+**Il lavoro vero è invertire l'API in «invia → segui», o trasmettere dentro la stessa risposta
+HTTP.** È architetturale.
+
+**Priorità**: media-bassa. **Prerequisito**: leggere i quattro tempi di fase da un payload reale
+prima di scegliere la forma della barra.
