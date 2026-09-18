@@ -36,6 +36,7 @@
     import {INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG} from '$lib/components/charts/chartCoreHelpers';
     import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from '$lib/components/charts/echartsDataZoomTouchPan';
     import {buildOhlcQuad} from '$lib/components/charts/candlestickChartHelpers';
+    import {ChartLine, ChartCandlestick, Coins} from 'lucide-svelte';
 
     // =========================================================================
     // Props
@@ -81,9 +82,13 @@
     // pnlSubmode = line|candles|income (plan §5.1); only 'line' has a real branch until
     // G1b/G1c land — no submode picker UI is shown while the other two are inert.
     let pnlSubmode: 'line' | 'candles' | 'income' = $state('line');
-    // Batch 2 — Income submode's own window-selector preset (see selectIncomeWindow).
-    type IncomeWindowPreset = '1W' | '1M' | '1Y' | 'all';
-    let incomeWindowPreset: IncomeWindowPreset = $state('1M');
+    // Zoom-window preset, shared by ALL THREE P&L submodes (see selectZoomWindow).
+    // Named for the zoom it drives, NOT for a submode: it began life income-only, but
+    // the mechanism was always the shared visible range. Deliberately "zoom" and not
+    // "window" alone, to keep it distinct from the candle-WIDTH ladder (DBT-7), which
+    // is a different control answering a different question.
+    type ZoomWindowPreset = '1W' | '1M' | '1Y' | 'all';
+    let zoomWindowPreset: ZoomWindowPreset = $state('1M');
     let currentResolution: ChartResolution = $state('daily');
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | undefined = undefined;
@@ -247,6 +252,14 @@
      *  AND the legend exclusion in applyFullOption) so the sentinel never becomes a
      *  magic string that a second site has to remember independently. */
     const PNL_REFERENCE_SERIES_NAME = '__pnlReference__';
+    /** Left inset of the plot area, in px. Used for BOTH `grid.left` and the floating
+     *  overlay cluster's `left`, so the controls clear the y-axis label gutter by
+     *  construction rather than by a coincidence that holds for today's tick labels.
+     *  Deliberately a single shared constant: with `containLabel: true` the gutter
+     *  width is computed by ECharts from the widest label, so any independently-chosen
+     *  CSS offset would silently desynchronise the moment a label grew (a different
+     *  base currency, a larger portfolio, a negative thousands value). */
+    const CHART_PLOT_LEFT_PX = 52;
     const CHART_FULL_UPDATE_OPTS = {...CHART_SET_OPTION_OPTS, replaceMerge: [...CHART_SET_OPTION_OPTS.replaceMerge, 'xAxis']};
 
     // =========================================================================
@@ -715,7 +728,7 @@
      *  to set visibleStartDate/visibleEndDate + the resulting dataZoom percentages,
      *  exactly as a manual zoom gesture would. Shared with Line/Candles since they use
      *  the same underlying state: switching submodes after picking a window keeps it. */
-    function computeIncomeWindowRange(preset: IncomeWindowPreset): {startDate: string; endDate: string} | null {
+    function computeZoomWindowRange(preset: ZoomWindowPreset): {startDate: string; endDate: string} | null {
         if (dates.length === 0) return null;
         const endDate = dates[dates.length - 1];
         if (preset === 'all') return {startDate: dates[0], endDate};
@@ -725,9 +738,9 @@
         return {startDate: computedStart < dates[0] ? dates[0] : computedStart, endDate};
     }
 
-    function selectIncomeWindow(preset: IncomeWindowPreset) {
-        incomeWindowPreset = preset;
-        const range = computeIncomeWindowRange(preset);
+    function selectZoomWindow(preset: ZoomWindowPreset) {
+        zoomWindowPreset = preset;
+        const range = computeZoomWindowRange(preset);
         if (!range || !chartInstance) return;
         visibleStartDate = range.startDate;
         visibleEndDate = range.endDate;
@@ -1304,7 +1317,23 @@
         const option: echarts.EChartsOption = {
             ...CHART_ANIMATION_CONFIG,
             backgroundColor: 'transparent',
-            grid: {left: '3%', right: '4%', bottom: '30px', top: '10px', containLabel: true},
+            // `top` reserves a band for the floating overlay controls (submode toggle
+            // left, window selector right) so they never sit on top of the plot or its
+            // y-axis labels — the developer's review found the toggle drawn over the
+            // axis "600" label. Reserving in the grid rather than nudging the overlay
+            // keeps the plot honest at small heights: the chart shrinks by exactly the
+            // band it gives away, instead of silently drawing content underneath a
+            // control. Only P&L mode shows those overlays, so only it pays the cost.
+            // `left` is an explicit px constant shared with the floating overlay cluster
+            // (see CHART_PLOT_LEFT_PX): the controls must clear the y-axis label gutter,
+            // and with `containLabel: true` that gutter is COMPUTED from the widest tick
+            // label — so a hardcoded Tailwind offset on the overlay would align only by
+            // coincidence and break the first time a label got wider (another currency,
+            // a larger portfolio). One number, two uses, agreeing by construction.
+            // `top` stays 10px in every mode: the toggle is an OVERLAY and must float on
+            // the plot, not push it down (developer review — reserving a band shortened
+            // the chart, which was never what was asked for).
+            grid: {left: CHART_PLOT_LEFT_PX, right: '4%', bottom: '30px', top: '10px', containLabel: true},
             tooltip: {
                 trigger: 'axis',
                 // Bugfix: `appendToBody` moves the tooltip DOM to `document.body`, which
@@ -1576,29 +1605,52 @@
              established pattern — its controls and ResolutionBadge already share a
              single left-aligned flex row with the badge last — rather than inventing
              a new placement or silently displacing the badge. -->
-        <div class="absolute top-2 left-2 z-10 flex flex-wrap items-center gap-1.5">
+        <div class="absolute top-2 z-10 flex flex-wrap items-center gap-1.5" style="left: {CHART_PLOT_LEFT_PX}px">
             {#if viewMode === 'pnl'}
+                <!-- Icon + label. Below `sm` the label folds away and only the icon
+                     remains (developer review), but the label text is NOT lost: it stays
+                     reachable as `title`/`aria-label` on the button in BOTH states, so the
+                     control remains usable with a screen reader exactly where it is
+                     hardest to use. `data-testid` is deliberately identical across
+                     breakpoints — a testid that changes with viewport would make every
+                     E2E selector viewport-dependent. -->
                 <div class="flex rounded-lg border border-gray-200/70 dark:border-slate-600/70 overflow-hidden shadow-sm opacity-75 hover:opacity-100 transition-opacity text-xs font-medium">
                     <button
-                        class="px-3 py-1 transition-colors {pnlSubmode === 'line' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        class="px-2 sm:px-3 py-1 transition-colors inline-flex items-center gap-1.5 {pnlSubmode === 'line' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
                         onclick={() => (pnlSubmode = 'line')}
+                        title={$_('dashboard.pnlSubmodeLine')}
+                        aria-label={$_('dashboard.pnlSubmodeLine')}
+                        aria-pressed={pnlSubmode === 'line'}
                         data-testid="growth-pnl-submode-line"
                     >
-                        {$_('dashboard.pnlSubmodeLine')}
+                        <ChartLine size={14} aria-hidden="true" />
+                        <span class="hidden sm:inline">{$_('dashboard.pnlSubmodeLine')}</span>
                     </button>
                     <button
-                        class="px-3 py-1 transition-colors border-l border-gray-200/70 dark:border-slate-600/70 {pnlSubmode === 'candles' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        class="px-2 sm:px-3 py-1 transition-colors inline-flex items-center gap-1.5 border-l border-gray-200/70 dark:border-slate-600/70 {pnlSubmode === 'candles'
+                            ? 'bg-libre-green text-white'
+                            : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
                         onclick={() => (pnlSubmode = 'candles')}
+                        title={$_('dashboard.pnlSubmodeCandles')}
+                        aria-label={$_('dashboard.pnlSubmodeCandles')}
+                        aria-pressed={pnlSubmode === 'candles'}
                         data-testid="growth-pnl-submode-candles"
                     >
-                        {$_('dashboard.pnlSubmodeCandles')}
+                        <ChartCandlestick size={14} aria-hidden="true" />
+                        <span class="hidden sm:inline">{$_('dashboard.pnlSubmodeCandles')}</span>
                     </button>
                     <button
-                        class="px-3 py-1 transition-colors border-l border-gray-200/70 dark:border-slate-600/70 {pnlSubmode === 'income' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        class="px-2 sm:px-3 py-1 transition-colors inline-flex items-center gap-1.5 border-l border-gray-200/70 dark:border-slate-600/70 {pnlSubmode === 'income'
+                            ? 'bg-libre-green text-white'
+                            : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
                         onclick={() => (pnlSubmode = 'income')}
+                        title={$_('dashboard.pnlSubmodeIncome')}
+                        aria-label={$_('dashboard.pnlSubmodeIncome')}
+                        aria-pressed={pnlSubmode === 'income'}
                         data-testid="growth-pnl-submode-income"
                     >
-                        {$_('dashboard.pnlSubmodeIncome')}
+                        <Coins size={14} aria-hidden="true" />
+                        <span class="hidden sm:inline">{$_('dashboard.pnlSubmodeIncome')}</span>
                     </button>
                 </div>
             {/if}
@@ -1606,34 +1658,39 @@
                 <ResolutionBadge resolution={currentResolution} />
             </div>
         </div>
-        {#if viewMode === 'pnl' && pnlSubmode === 'income'}
-            <!-- Batch 2 — Income submode window selector (1W/1M/1Y/All). Occupies the
-                 top-RIGHT slot per the developer's review ("dove sta ora il selettore,
-                 andava la finestra"), swapping places with the submode toggle that
-                 moved to top-left. Not a parallel windowing system: sets the SAME
-                 shared visibleStartDate/EndDate + dataZoom the chart already uses for
-                 drag/scroll zoom (see selectIncomeWindow) — just a convenient preset. -->
+        {#if viewMode === 'pnl'}
+            <!-- Zoom-window selector (1W/1M/1Y/All), top-RIGHT. Shown in ALL THREE P&L
+                 submodes (developer review: "i range li hai messi solo negli income!
+                 devi farli anche nelle candele"). Only the guard was ever
+                 income-specific — `selectZoomWindow` has always written the SHARED
+                 `visibleStartDate`/`visibleEndDate` + dataZoom, so a window picked in one
+                 submode already carried across the others; widening the guard exposes a
+                 mechanism that was there, it does not add one.
+                 NOTE this is a ZOOM selector, not the candle-width ladder (DBT-7): both
+                 are wanted and neither substitutes for the other. The `income*` naming
+                 below is now inaccurate and a rename is proposed separately — testids are
+                 developer-visible churn, so it is not done unilaterally here. -->
             <div class="absolute top-2 right-2 z-10 flex items-center gap-1.5">
                 <div class="flex rounded-lg border border-gray-200/70 dark:border-slate-600/70 overflow-hidden shadow-sm opacity-75 hover:opacity-100 transition-opacity text-xs font-medium">
                     <button
-                        class="px-2.5 py-1 transition-colors {incomeWindowPreset === '1W' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                        onclick={() => selectIncomeWindow('1W')}
-                        data-testid="growth-income-window-1w">1W</button
+                        class="px-2.5 py-1 transition-colors {zoomWindowPreset === '1W' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        onclick={() => selectZoomWindow('1W')}
+                        data-testid="growth-zoom-window-1w">1W</button
                     >
                     <button
-                        class="px-2.5 py-1 transition-colors border-l border-gray-200/70 dark:border-slate-600/70 {incomeWindowPreset === '1M' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                        onclick={() => selectIncomeWindow('1M')}
-                        data-testid="growth-income-window-1m">1M</button
+                        class="px-2.5 py-1 transition-colors border-l border-gray-200/70 dark:border-slate-600/70 {zoomWindowPreset === '1M' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        onclick={() => selectZoomWindow('1M')}
+                        data-testid="growth-zoom-window-1m">1M</button
                     >
                     <button
-                        class="px-2.5 py-1 transition-colors border-l border-gray-200/70 dark:border-slate-600/70 {incomeWindowPreset === '1Y' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                        onclick={() => selectIncomeWindow('1Y')}
-                        data-testid="growth-income-window-1y">1Y</button
+                        class="px-2.5 py-1 transition-colors border-l border-gray-200/70 dark:border-slate-600/70 {zoomWindowPreset === '1Y' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        onclick={() => selectZoomWindow('1Y')}
+                        data-testid="growth-zoom-window-1y">1Y</button
                     >
                     <button
-                        class="px-2.5 py-1 transition-colors border-l border-gray-200/70 dark:border-slate-600/70 {incomeWindowPreset === 'all' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                        onclick={() => selectIncomeWindow('all')}
-                        data-testid="growth-income-window-all">All</button
+                        class="px-2.5 py-1 transition-colors border-l border-gray-200/70 dark:border-slate-600/70 {zoomWindowPreset === 'all' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        onclick={() => selectZoomWindow('all')}
+                        data-testid="growth-zoom-window-all">All</button
                     >
                 </div>
             </div>
