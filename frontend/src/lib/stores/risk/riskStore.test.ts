@@ -15,7 +15,7 @@ vi.mock('$lib/api', async (importOriginal) => {
     };
 });
 
-import {buildHistoricalReplayParameters, buildRiskQueryRequest, buildSimulationParameters} from '$lib/risk/riskRequest';
+import {buildHistoricalReplayParameters, buildRiskQueryRequest, buildSimulationParameters, canonicalizeScope, type RiskScope} from '$lib/risk/riskRequest';
 import {transitionClientSession} from '$lib/stores/app/clientSession';
 import {notifyPortfolioMutation} from '$lib/stores/portfolio/portfolioMutation';
 
@@ -74,6 +74,48 @@ describe('riskStore', () => {
         };
 
         expect(makeRiskRequestKey(first)).toBe(makeRiskRequestKey(second));
+    });
+
+    it('canonicalizes a portfolio slice that carries no broker subset', () => {
+        // The Dashboard mounts `{kind: 'portfolio'}` with no broker subset, so an asset
+        // slice there reaches canonicalization with `broker_ids` absent. Ordering must
+        // not depend on the presence of the other narrowing.
+        // Asserted on `canonicalizeScope` directly and not through the request key,
+        // because the key currently cannot see the field at all — see the boundary
+        // test below, which is what makes this one non-vacuous.
+        const sliced = (assetIds: number[]) => canonicalizeScope({kind: 'portfolio', asset_ids: assetIds} as unknown as RiskScope) as unknown as {asset_ids: number[]};
+
+        expect(sliced([9, 3]).asset_ids).toEqual([3, 9]);
+        expect(sliced([3, 9]).asset_ids).toEqual([3, 9]);
+    });
+
+    it('keeps the broker and asset narrowings independent', () => {
+        const scoped = canonicalizeScope({kind: 'portfolio', broker_ids: [9, 3], asset_ids: [4, 2]} as unknown as RiskScope) as unknown as {
+            broker_ids: number[];
+            asset_ids: number[];
+        };
+
+        expect(scoped.broker_ids).toEqual([3, 9]);
+        expect(scoped.asset_ids).toEqual([2, 4]);
+    });
+
+    it('cannot yet express an asset slice in the request key — the schema strips it', () => {
+        transitionClientSession(105);
+        // `canonicalizeRiskRequest` ends in `schemas.RiskQueryRequest.parse(...)`, and
+        // Zod drops unknown keys. Until C's `asset_ids` reaches the generated client,
+        // a sliced portfolio scope is indistinguishable from the whole portfolio — and
+        // the request that goes on the wire has lost the slice too. That is not a cache
+        // that doubles: it is the unsliced portfolio, served under a sliced heading.
+        //
+        // This assertion is deliberately the wrong-looking one. It goes red the day the
+        // field lands, and that red is the signal to assert the real invariant instead:
+        // two different slices must produce two different keys.
+        const scoped = (assetIds: number[]) => ({
+            ...baseRequest,
+            scope: {kind: 'portfolio', asset_ids: assetIds} as unknown as (typeof baseRequest)['scope'],
+        });
+
+        expect(makeRiskRequestKey(scoped([2, 4]))).toBe(makeRiskRequestKey(scoped([2, 5])));
     });
 
     it('canonicalizes asset universes, replay proxies, exclusions, and currency', () => {

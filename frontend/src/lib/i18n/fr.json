@@ -2972,7 +2972,8 @@
     },
     "returnBasis": {
       "price_only": "Prix uniquement",
-      "twrr": "TWRR du portefeuille"
+      "twrr": "TWRR du portefeuille",
+      "current_composition_backtest": "Backtest de la composition actuelle"
     },
     "valueStatus": {
       "ok": "Disponible",
@@ -3000,7 +3001,7 @@
       "sharpe": "Sharpe",
       "sortino": "Sortino",
       "portfolioVolatility": "Volatilité du portefeuille",
-      "cashWeight": "Poids des liquidités",
+      "cashWeight": "Liquidités et non couvert",
       "var": "Valeur à risque",
       "cvar": "VaR conditionnelle",
       "activeReturn": "Rendement actif",
@@ -3121,6 +3122,93 @@
     "betaBanner": {
       "title": "L'analyse des risques est en version bêta.",
       "description": "Les calculs, les résultats et l'interface peuvent évoluer avant la version stable."
+    },
+    "levels": {
+      "l1": {
+        "title": "Quel mal cela peut-il faire ?",
+        "rows": {
+          "day": "Une mauvaise journée (pires 5%)",
+          "month": "Un mauvais mois (pires 5%)",
+          "worst": "La pire baisse (réellement vécue)"
+        },
+        "durationDays": "durée {days} jours",
+        "requiredRecovery": "reprise nécessaire {percent}",
+        "currentDrawdown": "Actuellement sous le sommet",
+        "sincePeak": "depuis le {date}"
+      },
+      "l2": {
+        "title": "Suis-je aussi diversifié que je le crois ?",
+        "weight": "poids",
+        "contribution": "contribution au risque",
+        "lead": "{name} pèse {weight} mais produit {contribution} du risque",
+        "showAll": "Tout afficher",
+        "showLess": "Afficher moins"
+      },
+      "l3": {
+        "title": "Suis-je payé pour ce risque ?",
+        "sortino": "Sortino",
+        "sharpe": "Sharpe",
+        "volatility": "Volatilité",
+        "beta": "Bêta",
+        "sortinoHelp": "Rendement par unité de risque baissier. Contrairement au Sharpe, il ne pénalise pas les hausses violentes.",
+        "sharpeHelp": "Rendement par unité de volatilité totale : il pénalise les hausses autant que les baisses.",
+        "betaHelp": "Ampleur du mouvement par rapport à l’indice de référence.",
+        "benchmark": "Comparé à"
+      },
+      "l4": {
+        "title": "Que se passe-t-il si… ?",
+        "replay": "Rejeu historique",
+        "replayHint": "Rendements réels d’une période réelle.",
+        "shock": "Choc hypothétique",
+        "shockHint": "Déterministe, sur une hypothèse que vous énoncez.",
+        "simulation": "Simulation",
+        "simulationHint": "Un modèle probabiliste, sur les hypothèses du modèle.",
+        "modelWarning": "C’est le seul échelon qui soit un modèle et non une mesure. À lire comme un éventail de possibilités, non comme une prévision.",
+        "provenance": {
+          "title": "Ce que cette simulation a supposé",
+          "hint": "Lu dans le résultat lui-même, et non supposé par cet écran.",
+          "labels": {
+            "process": "Processus stochastique",
+            "sampling": "Stratégie d’échantillonnage",
+            "driftEstimator": "Estimateur de dérive",
+            "covarianceEstimator": "Estimateur de covariance",
+            "aggregation": "Politique de composition",
+            "regime": "Régime",
+            "blockLength": "Longueur de bloc",
+            "seed": "Graine"
+          },
+          "values": {
+            "gbm": "Mouvement brownien géométrique",
+            "mc": "Monte-Carlo",
+            "qmc": "Quasi-Monte-Carlo",
+            "historical_log_mle": "MLE sur log-rendements historiques",
+            "sample_log_returns": "Covariance empirique des log-rendements",
+            "current_buy_and_hold": "Composition actuelle, conservée"
+          },
+          "days": "{count} jours",
+          "regimeValue": "{regime}, déclaré sur {days} jours",
+          "includes": "Inclus dans le cône",
+          "excludes": "Hors du cône",
+          "effects": {
+            "costs": "coûts",
+            "cashFlows": "flux de trésorerie",
+            "inflation": "inflation",
+            "rebalancing": "rééquilibrage"
+          },
+          "truncation": "Déclaré sur {declared} jours, appliqué sur {applied} : le cône répond à la question la plus courte."
+        },
+        "replayExcluded": "Exclus :",
+        "replayNeedsChoice": "{name} n’a pas d’historique exploitable sur cette période. Excluez-le, ou donnez-lui un substitut — un substitut est une opinion sur ce qu’il aurait fait.",
+        "replayProxyUnusable": "Le substitut choisi pour {name} n’a pas non plus d’historique exploitable. Choisissez-en un autre.",
+        "replayExcludeAndRetry": "Exclure et relancer",
+        "replayTotal": "Cette composition aurait terminé la période à {percent} {amount}",
+        "replayAudit": "Substituts : {proxies} · Exclus : {excluded} ({weight} du périmètre, à rendement nul)",
+        "shockShowDetail": "Afficher le choc par compartiment",
+        "shockHideDetail": "Masquer le choc par compartiment",
+        "shockTotal": "Ce scénario déplacerait le périmètre de {percent} {amount}",
+        "shockCoverage": "Seuls {percent} du périmètre ont pu être classés : le total ne parle que de cette part."
+      },
+      "backtestNotice": "Avec un sous-ensemble actif, ces chiffres sont reconstruits à partir de la composition actuelle : ils disent ce qui *se serait* passé, pas ce qui s’est réellement passé."
     }
   },
   "updateCheck": {
