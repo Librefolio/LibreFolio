@@ -2923,6 +2923,10 @@
         "name": "Contributo al rischio",
         "description": "Contributi alla volatilità per asset sulla composizione corrente."
       },
+      "assetRiskReturn": {
+        "name": "Rischio e rendimento per asset",
+        "description": "Volatilità e rendimento annualizzato atteso di ogni asset e del portafoglio, sulla composizione corrente."
+      },
       "stress": {
         "name": "Stress test",
         "description": "Applica shock ipotetici o replica un periodo storico."
@@ -3229,7 +3233,20 @@
         "sortinoHelp": "Rendimento per unità di rischio al ribasso. A differenza dello Sharpe non penalizza le salite violente.",
         "sharpeHelp": "Rendimento per unità di volatilità totale: penalizza le salite quanto le discese.",
         "betaHelp": "Quanto si muove rispetto al benchmark.",
-        "benchmark": "Confrontato con"
+        "benchmark": "Confrontato con",
+        "perimeter": {
+          "current_composition": "sulla composizione attuale",
+          "historical": "sullo storico reale"
+        },
+        "scatter": {
+          "title": "Rischio contro rendimento, asset per asset",
+          "portfolio": "Portafoglio",
+          "axisVolatility": "Volatilità annualizzata",
+          "axisReturn": "Rendimento annualizzato atteso",
+          "line": "Retta rischio-rendimento",
+          "note": "Sopra la retta significa pagato meglio per il rischio preso. I punti mostrano il rendimento atteso in media-varianza, la grandezza in cui la pendenza della retta è lo Sharpe: su un asset molto volatile il rendimento realmente vissuto è più basso, perché la volatilità erode il composto.",
+          "cash": "La liquidità ({share} del patrimonio) non è un punto: nel modello rende esattamente zero, e disegnarla la trasformerebbe in una misura."
+        }
       },
       "l4": {
         "title": "Cosa succede se…?",

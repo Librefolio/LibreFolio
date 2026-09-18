@@ -42,7 +42,11 @@ export interface RiskMockOptions {
 
 const CATALOG = {
     items: [
-        definition('historical_kpi', 'kpi', ['asset', 'portfolio'], ['historical'], 'historicalKpi', 20),
+        // `current_composition` is advertised so the E2E exercises L3's *primary*
+        // branch. The card falls back to the historical KPI when the backend does not
+        // offer this mode, and a catalogue that withheld it here would have pinned the
+        // fallback forever: green, and measuring the road users do not take.
+        definition('historical_kpi', 'kpi', ['asset', 'portfolio'], ['historical', 'current_composition'], 'historicalKpi', 20),
         definition('correlation', 'matrix', ['asset_set', 'portfolio'], ['historical', 'current_composition'], 'correlation', 2),
         definition('risk_contribution', 'contribution', ['portfolio'], ['current_composition'], 'riskContribution', 20),
         definition('stress', 'stress', ['asset', 'asset_set', 'portfolio'], ['current_composition'], 'stress', 1),

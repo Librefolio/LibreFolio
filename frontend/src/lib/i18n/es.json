@@ -2923,6 +2923,10 @@
         "name": "Contribución al riesgo",
         "description": "Contribuciones de cada activo a la volatilidad de la composición actual."
       },
+      "assetRiskReturn": {
+        "name": "Riesgo y rentabilidad por activo",
+        "description": "Volatilidad y rentabilidad anualizada esperada de cada activo y de la cartera, sobre la composición actual."
+      },
       "stress": {
         "name": "Prueba de estrés",
         "description": "Aplica shocks hipotéticos o reproduce un período histórico."
@@ -3229,7 +3233,20 @@
         "sortinoHelp": "Rendimiento por unidad de riesgo a la baja. A diferencia del Sharpe, no penaliza las subidas violentas.",
         "sharpeHelp": "Rendimiento por unidad de volatilidad total: penaliza las subidas igual que las bajadas.",
         "betaHelp": "Cuánto se mueve respecto al índice de referencia.",
-        "benchmark": "Comparado con"
+        "benchmark": "Comparado con",
+        "perimeter": {
+          "current_composition": "sobre la composición actual",
+          "historical": "sobre el histórico real"
+        },
+        "scatter": {
+          "title": "Riesgo frente a rentabilidad, activo por activo",
+          "portfolio": "Cartera",
+          "axisVolatility": "Volatilidad anualizada",
+          "axisReturn": "Rentabilidad anualizada esperada",
+          "line": "Recta riesgo-rentabilidad",
+          "note": "Por encima de la recta significa mejor pagado por el riesgo asumido. Los puntos muestran la rentabilidad esperada en media-varianza, la magnitud en la que la pendiente de la recta es el ratio de Sharpe: en un activo muy volátil la rentabilidad realmente vivida es menor, porque la volatilidad erosiona la capitalización.",
+          "cash": "La liquidez ({share} del patrimonio) no es un punto: en el modelo rinde exactamente cero, y dibujarla la convertiría en una medición."
+        }
       },
       "l4": {
         "title": "¿Qué pasa si…?",
