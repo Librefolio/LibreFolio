@@ -212,6 +212,8 @@ mode=current_composition   → {"code":"insufficient_history", "observations":15
 > **La causa di L2 indisponibile era una sola: le 15 osservazioni.** Il modo non c'entrava.
 > ✅ **Con i dati di F1, `risk_contribution` esce `partial` e calcola**:
 > `effective_number_of_assets = 14,97`, `diversification_ratio = 1,94`.
+> ⚠️ **`14,97` e `1,94` sono misure del 18 Set su corsia `aae526009`, finestra non dichiarata — e `1,94` ha da allora TRE referenti**: l'ANTE misurato da S2, il **post-A previsto da N (`1,9436`)**, e questa trascrizione. **Non usarli per un raffronto**: vale il vincolo Ⓕ di `_comune.md` — *nessun numero che integri sulla finestra*. Le cifre vive stanno in `progress/N2-esecuzione.md`, con corsia, finestra e `composition_as_of` accanto. Vedi **R2-42**, **R2-53**.
+
 >
 > 📌 **Come ho sbagliato**: ho interrogato l'API a mano con `mode=historical`, ho ricevuto
 > `incompatible_mode`, e **ho attribuito al pannello la scelta che avevo fatto io**. La sonda
