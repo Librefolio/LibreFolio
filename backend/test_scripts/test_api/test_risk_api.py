@@ -131,6 +131,7 @@ async def test_risk_catalog_requires_auth_and_lists_plugins():
         response = await client.get(f"{API_BASE}/catalog")
         assert response.status_code == 200
         assert [item["analytic_code"] for item in response.json()["items"]] == [
+            "asset_risk_return",
             "comparison",
             "correlation",
             "drawdown_summary",
@@ -143,7 +144,10 @@ async def test_risk_catalog_requires_auth_and_lists_plugins():
         ]
         historical_kpi = next(item for item in response.json()["items"] if item["analytic_code"] == "historical_kpi")
         assert historical_kpi["supported_scopes"] == ["asset", "portfolio"]
-        assert historical_kpi["supported_modes"] == ["historical"]
+        # Both modes: the same arithmetic over either the portfolio's real history or
+        # today's composition replayed. L3 needs the second so its Sharpe, Sortino and
+        # beta share one perimeter; `method` and `return_basis` keep the two apart.
+        assert historical_kpi["supported_modes"] == ["historical", "current_composition"]
 
 
 @pytest.mark.asyncio
