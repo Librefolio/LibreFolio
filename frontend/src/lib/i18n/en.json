@@ -2923,6 +2923,10 @@
         "name": "Risk contribution",
         "description": "Current-composition volatility contributions by asset."
       },
+      "assetRiskReturn": {
+        "name": "Risk and return by asset",
+        "description": "Volatility and expected annualised return of each asset and of the portfolio, on the current composition."
+      },
       "stress": {
         "name": "Stress test",
         "description": "Apply hypothetical shocks or replay a historical period."
@@ -3281,7 +3285,20 @@
         "sortinoHelp": "Return per unit of downside risk. Unlike Sharpe, it does not penalise violent rises.",
         "sharpeHelp": "Return per unit of total volatility, so it penalises rises as well as falls.",
         "betaHelp": "How much this moves when the benchmark moves.",
-        "benchmark": "Compared with"
+        "benchmark": "Compared with",
+        "perimeter": {
+          "current_composition": "on the current composition",
+          "historical": "on the real history"
+        },
+        "scatter": {
+          "title": "Risk against return, asset by asset",
+          "portfolio": "Portfolio",
+          "axisVolatility": "Annualised volatility",
+          "axisReturn": "Expected annualised return",
+          "line": "Risk-return line",
+          "note": "Above the line means better paid for the risk taken. The dots show the mean-variance expected return, the quantity in which the line's slope is the Sharpe ratio: on a very volatile asset the return actually lived through is lower, because volatility erodes compounding.",
+          "cash": "Cash ({share} of net worth) is not a dot: under the model it returns exactly zero, and drawing it would turn that into a measurement."
+        }
       },
       "l4": {
         "title": "What if…?",

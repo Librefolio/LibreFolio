@@ -64,6 +64,7 @@ class RiskOutputKind(StrEnum):
     SIMULATION = "simulation"
     OPTIMIZATION = "optimization"
     DRAWDOWN = "drawdown"
+    RISK_RETURN = "risk_return"
 
 
 class RiskDrawdownRecoveryStatus(StrEnum):
@@ -787,6 +788,35 @@ class RiskContributionOutput(StrictModel):
     diversification_ratio: Optional[FiniteFloat] = Field(None, gt=0)
 
 
+class RiskReturnItem(StrictModel):
+    """One point of a risk/return plot: what it risks, what it is expected to pay."""
+
+    asset_id: PositiveInt
+    # Share of net worth, exactly as risk_contribution states it — not renormalized to
+    # the invested part. A plot whose bubbles sum to less than the whole is telling the
+    # truth about cash; one renormalized behind the reader's back is not.
+    weight: FiniteFloat
+    volatility: FiniteFloat = Field(..., ge=0)
+    # Arithmetic. See services/risk/metrics.annualized_expected_return: this is the
+    # mean-variance expected return, the quantity in which a line through the risk-free
+    # intercept has the Sharpe ratio as its slope. It is NOT what the holder earned —
+    # on a highly volatile asset the two differ by tens of percentage points.
+    expected_annual_return: FiniteFloat
+
+
+class RiskReturnOutput(StrictModel):
+    """Per-asset risk and reward for the composition held today, plus the whole."""
+
+    kind: Literal[RiskOutputKind.RISK_RETURN] = Field(default=RiskOutputKind.RISK_RETURN, json_schema_extra={"enum": ["risk_return"]})
+    portfolio_volatility: FiniteFloat = Field(..., ge=0)
+    portfolio_expected_annual_return: FiniteFloat
+    # Published beside the points because it is the difference between them: the asset
+    # weights sum to 1 - cash_weight, so a reader who adds up the bubbles and finds
+    # they miss the whole deserves the reason rather than the puzzle.
+    cash_weight: FiniteFloat = Field(0, ge=0)
+    items: List[RiskReturnItem] = Field(default_factory=list)
+
+
 class RiskStressBucketAudit(StrictModel):
     """Auditable resolution of one asset exposure bucket."""
 
@@ -920,6 +950,16 @@ class RiskComparisonOutput(StrictModel):
     correlation: Optional[FiniteFloat] = Field(None, ge=-1, le=1)
     beta: Optional[FiniteFloat] = None
     observations: int = Field(..., ge=0)
+    # The reference's own risk and reward, so a risk/return plot can place the
+    # benchmark without a second analytic and without re-deriving the arithmetic in
+    # the client. Both are measured on the *common* observations the beta above used,
+    # never on the comparison asset's full history: a diamond drawn from a different
+    # window than the dots would sit somewhere no measurement puts it.
+    comparison_volatility: Optional[FiniteFloat] = Field(None, ge=0)
+    # Arithmetic, matching RiskReturnItem.expected_annual_return. See
+    # services/risk/metrics.annualized_expected_return for why the convention is not
+    # interchangeable with a compounded one.
+    comparison_expected_annual_return: Optional[FiniteFloat] = None
     series: List[RiskComparisonPoint] = Field(default_factory=list)
 
 
@@ -1188,6 +1228,7 @@ RiskAnalyticOutput = Annotated[
         RiskKpiOutput,
         RiskCorrelationOutput,
         RiskContributionOutput,
+        RiskReturnOutput,
         RiskStressOutput,
         RiskComparisonOutput,
         RiskVarCvarOutput,
@@ -1288,6 +1329,8 @@ __all__ = [
     "RiskResultMetadata",
     "RiskResultStatus",
     "RiskReturnBasis",
+    "RiskReturnItem",
+    "RiskReturnOutput",
     "RiskSamplingStrategy",
     "RiskScope",
     "RiskScopeBase",

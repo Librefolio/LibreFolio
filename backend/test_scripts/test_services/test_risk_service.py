@@ -1079,7 +1079,12 @@ async def test_portfolio_slice_changes_the_historical_result_and_leaves_twrr(mon
     assert whole.metadata.return_basis == RiskReturnBasis.TWRR
     assert whole.metadata.method == "historical_twrr"
     assert sliced.metadata.return_basis == RiskReturnBasis.CURRENT_COMPOSITION_BACKTEST
-    assert sliced.metadata.method == "historical_close_returns"
+    # `method` names the series, not the requested mode. A slice asked for in
+    # `historical` cannot be filtered out of the report's TWRR, so the backend rebuilds
+    # it from today's weights — the basis above has always said so, and the method now
+    # agrees instead of calling a backtest "close returns". Two identical series may not
+    # carry different method names just because they were reached through different modes.
+    assert sliced.metadata.method == "current_composition_backtest"
     assert sliced.output.volatility != pytest.approx(whole.output.volatility)
     assert sliced.metadata.sliced_asset_ids == [1]
     assert whole.metadata.sliced_asset_ids is None
