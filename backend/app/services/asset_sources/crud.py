@@ -87,6 +87,7 @@ class AssetCRUDService:
                     icon_url=item.icon_url,
                     quote_base_quantity=item.quote_base_quantity,
                     active=item.active,
+                    is_benchmark=item.is_benchmark,
                     user_url=item.user_url,
                     # Identifier fields
                     identifier_isin=item.identifier_isin,
@@ -184,6 +185,10 @@ class AssetCRUDService:
         if filters.active is not None:
             conditions.append(Asset.active == filters.active)
 
+        # Tri-state benchmark filter: None = no filter, True/False = exact match
+        if filters.is_benchmark is not None:
+            conditions.append(Asset.is_benchmark == filters.is_benchmark)
+
         if filters.search:
             search_pattern = f"%{filters.search}%"
             conditions.append(Asset.display_name.ilike(search_pattern))
@@ -277,6 +282,7 @@ class AssetCRUDService:
                     asset_type=asset.asset_type,
                     quote_base_quantity=asset.quote_base_quantity,
                     active=asset.active,
+                    is_benchmark=asset.is_benchmark,
                     user_url=asset.user_url,
                     provider_code=provider_code,
                     has_metadata=asset.classification_params is not None,
