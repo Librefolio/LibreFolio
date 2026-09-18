@@ -556,13 +556,26 @@ class RiskResultMetadata(StrictModel):
         if self.composition_as_of is not None and self.scope != RiskScopeKind.PORTFOLIO:
             raise ValueError("composition_as_of metadata requires portfolio scope")
         if self.sampling_method is None:
-            if self.path_count is not None or self.random_seed is not None or self.sobol_start_index is not None:
+            if self.path_count is not None or self.random_seed is not None or self.sobol_start_index is not None or self.bootstrap_seed is not None:
                 raise ValueError("simulation metadata fields require sampling_method")
         elif self.path_count is None:
             raise ValueError("simulation metadata requires path_count")
         elif self.sampling_method == RiskSamplingStrategy.MC:
-            if self.random_seed is None or self.sobol_start_index is not None:
-                raise ValueError("MC metadata requires random_seed and forbids sobol_start_index")
+            # Pseudo-random sampling covers two engines, not one. The parametric
+            # engine draws its normals from `random_seed`; the block bootstrap
+            # resamples real history under `bootstrap_seed` and is forbidden a
+            # `random_seed` by `SimulationParams` itself. Metadata carries no
+            # `process` field, but it does not need one: the params validator
+            # makes the seeds mutually exclusive, so *which* seed is present is
+            # the process, encoded. Asking for `random_seed` unconditionally made
+            # this model unable to describe the default engine at all.
+            if self.sobol_start_index is not None:
+                raise ValueError("MC metadata forbids sobol_start_index")
+            if self.bootstrap_seed is not None:
+                if self.random_seed is not None:
+                    raise ValueError("block bootstrap metadata forbids random_seed")
+            elif self.random_seed is None:
+                raise ValueError("parametric MC metadata requires random_seed")
         elif self.sobol_start_index is None or self.random_seed is not None:
             raise ValueError("QMC metadata requires sobol_start_index and forbids random_seed")
         return self

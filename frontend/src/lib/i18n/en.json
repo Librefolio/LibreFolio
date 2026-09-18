@@ -3306,12 +3306,18 @@
             "seed": "Seed"
           },
           "values": {
+            "block_bootstrap": "Moving-block bootstrap",
             "gbm": "Geometric Brownian motion",
             "mc": "Monte Carlo",
             "qmc": "Quasi-Monte Carlo",
             "historical_log_mle": "Historical log-return MLE",
+            "empirical_resampled": "Empirical, from resampled returns",
             "sample_log_returns": "Sample log-return covariance",
-            "current_buy_and_hold": "Current buy and hold"
+            "not_estimated_joint_resampling": "Not estimated: joint resampling",
+            "current_buy_and_hold": "Current buy and hold",
+            "calm": "Calm market",
+            "prolonged_crisis": "Prolonged crisis",
+            "shock_recovery": "Shock and recovery"
           },
           "days": "{count} days",
           "regimeValue": "{regime}, declared over {days} days",

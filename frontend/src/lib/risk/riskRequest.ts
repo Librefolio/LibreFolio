@@ -28,6 +28,8 @@ export interface HypotheticalShockEditorState {
 }
 
 export interface SimulationEditorState {
+    process: z.infer<typeof schemas.RiskSimulationProcess>;
+    regime: z.infer<typeof schemas.RiskSimulationRegime>;
     samplingMethod: RiskSamplingStrategy;
     horizonDays: number;
     pathCount: number;
@@ -163,12 +165,47 @@ export function buildHypotheticalShockParameters(state: HypotheticalShockEditorS
     };
 }
 
+/**
+ * Turn an editor state into simulation parameters the server can accept.
+ *
+ * The two engines take **disjoint** parameter sets, and the server enforces the
+ * difference rather than tolerating it (`simulation.py:149-169`): the block
+ * bootstrap requires `bootstrap_seed`, forbids `random_seed` and
+ * `sobol_start_index`, and only resamples under pseudo-random sampling; the
+ * parametric engine requires exactly one of the two parametric seeds, forbids
+ * `bootstrap_seed`, and admits no prescribed regime.
+ *
+ * So this is a branch, not a spread with a couple of optional keys. And the
+ * parametric branch states `regime: 'none'` literally instead of forwarding
+ * `state.regime`: the pairing is guaranteed at the point of emission, so an
+ * editor state that somehow carried a regime alongside GBM still cannot put
+ * that combination on the wire.
+ */
 export function buildSimulationParameters(state: SimulationEditorState): RiskAnalyticParameters {
-    return {
-        process: 'gbm',
-        sampling_method: state.samplingMethod,
+    const shared = {
         horizon_days: state.horizonDays,
         path_count: state.pathCount,
+    };
+
+    if (state.process === 'block_bootstrap') {
+        return {
+            ...shared,
+            process: 'block_bootstrap',
+            regime: state.regime,
+            // Resampling draws blocks with a pseudo-random generator, so there is
+            // no low-discrepancy sequence to walk: `qmc` is refused rather than
+            // ignored, and sending the reader's parametric choice here would turn
+            // a meaningless option into an unavailable result.
+            sampling_method: 'mc',
+            bootstrap_seed: state.randomSeed,
+        };
+    }
+
+    return {
+        ...shared,
+        process: 'gbm',
+        regime: 'none',
+        sampling_method: state.samplingMethod,
         ...(state.samplingMethod === 'mc' ? {random_seed: state.randomSeed} : {sobol_start_index: state.sobolStartIndex}),
     };
 }

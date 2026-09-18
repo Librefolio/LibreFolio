@@ -5,6 +5,7 @@
     import {_ as t} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/app/language';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
+    import SingleDatePicker from '$lib/components/ui/date/SingleDatePicker.svelte';
     import {riskMetadata, riskOutput, singleValue} from '$lib/risk/riskTypes';
     import {buildHistoricalReplayParameters} from '$lib/risk/riskRequest';
     import type {RiskPanelController} from '$lib/stores/risk/riskPanelController.svelte';
@@ -28,9 +29,29 @@
         currency: string;
         dateStart: string;
         dateEnd: string;
+        /**
+         * Whether this surface may state amounts in money — `undefined` means
+         * "decide from the answer".
+         *
+         * Two separate questions hide here, and conflating them produced two
+         * wrong designs in a row. **How it is known**: reading the scope off
+         * `metadata` is fail-closed, because a caller cannot forget it; a prop
+         * alone is fail-open, so a future mount on `asset_set` that omits it
+         * brings the euros back. **What is returned**: `''` makes the amount
+         * absent, which is right everywhere, whereas the `—` of
+         * `formatScopedCurrencyAmount` is right inside a card and wrong inside a
+         * sentence — "would have ended the period at −12.30% —" reads as a
+         * number that failed to load, not as one that does not apply.
+         *
+         * So the default is derived from the payload and the prop is an explicit
+         * override. The condition is the one `formatScopedCurrencyAmount:163`
+         * already uses, reused rather than restated, so the guards across the
+         * subsystem converge on the same predicate even where the string differs.
+         */
+        showMoney?: boolean;
     }
 
-    let {controller, assetNames, currency, dateStart, dateEnd}: Props = $props();
+    let {controller, assetNames, currency, dateStart, dateEnd, showMoney: showMoneyOverride}: Props = $props();
 
     let presetId = $state('');
     /**
@@ -60,6 +81,8 @@
     let result = $derived(controller.replayResult);
     let output = $derived(riskOutput(result, schemas.RiskStressOutput));
     let audit = $derived(singleValue(riskMetadata(result)?.historical_replay_audit));
+    let scopeKind = $derived(singleValue(riskMetadata(result)?.scope) ?? '');
+    let showMoney = $derived(showMoneyOverride ?? scopeKind === 'portfolio');
     let blocker = $derived(replayBlocker(result));
     let rows = $derived(tornadoRows(output));
 
@@ -121,7 +144,7 @@
     }
 
     function rowAmount(row: TornadoRow): string {
-        return row.amount === null ? '' : formatCurrencyAmount(String(row.amount), currency);
+        return !showMoney || row.amount === null ? '' : formatCurrencyAmount(String(row.amount), currency);
     }
 </script>
 
@@ -131,15 +154,15 @@
             <span>{$t('risk.stress.preset')}</span>
             <SimpleSelect value={presetId} options={options.map((option) => ({value: option.value, label: option.label}))} compact ariaLabel={$t('risk.stress.preset')} onchange={applyPreset} testId="risk-replay-preset" />
         </div>
-        <label class="flex flex-col gap-1 text-xs text-gray-500 dark:text-gray-400">
-            {$t('common.from')}
-            <input type="date" value={start} class="rounded border border-gray-200 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-700" data-testid="risk-replay-start" onchange={(event) => overrideStart(event.currentTarget.value)} />
-        </label>
-        <label class="flex flex-col gap-1 text-xs text-gray-500 dark:text-gray-400">
-            {$t('common.to')}
-            <input type="date" value={end} class="rounded border border-gray-200 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-700" data-testid="risk-replay-end" onchange={(event) => overrideEnd(event.currentTarget.value)} />
-        </label>
-        <button type="button" class="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm text-white disabled:opacity-50" onclick={run} disabled={controller.replayLoading} data-testid="risk-replay-run">
+        <div class="flex flex-col gap-1 text-xs text-gray-500 dark:text-gray-400">
+            <span>{$t('common.from')}</span>
+            <SingleDatePicker value={start} label="" compact testid="risk-replay-start" onchange={overrideStart} />
+        </div>
+        <div class="flex flex-col gap-1 text-xs text-gray-500 dark:text-gray-400">
+            <span>{$t('common.to')}</span>
+            <SingleDatePicker value={end} label="" compact testid="risk-replay-end" onchange={overrideEnd} />
+        </div>
+        <button type="button" class="flex items-center gap-1.5 rounded-lg bg-libre-green px-3 py-1.5 text-sm text-white hover:bg-primary-600 disabled:opacity-50" onclick={run} disabled={controller.replayLoading} data-testid="risk-replay-run">
             <Play size={14} />
             {$t('risk.actions.runReplay')}
         </button>
@@ -176,7 +199,7 @@
             {$t('risk.levels.l4.replayTotal', {
                 values: {
                     percent: output.portfolio_return == null ? '—' : `${output.portfolio_return < 0 ? '−' : '+'}${(Math.abs(output.portfolio_return) * 100).toFixed(2)}%`,
-                    amount: output.impact_amount == null ? '' : formatCurrencyAmount(output.impact_amount, currency),
+                    amount: !showMoney || output.impact_amount == null ? '' : formatCurrencyAmount(output.impact_amount, currency),
                 },
             })}
         </p>
