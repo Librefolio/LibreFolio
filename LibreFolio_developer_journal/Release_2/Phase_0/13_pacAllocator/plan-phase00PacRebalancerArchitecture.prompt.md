@@ -804,8 +804,14 @@ proof_source, presente solo per proof esatta =
   exhaustive_oracle | score_lattice_closure | deterministic_conflict
 
 stop_reason =
-  completed | time_limit | node_limit | cancelled | resource_limit
+  completed | time_limit | node_limit
 ```
+
+`cancelled` o `resource_limit` non sono stati prodotto finanziari. Disconnect
+HTTP, hard timeout piattaforma, terminazione OS, crash, output invalido e
+cleanup fallito restano errori Tool senza `PlannerResult`. Un risultato può
+riportare soltanto uno stop pulito del solver (`completed`, `time_limit`,
+`node_limit`) seguito da replay Decimal valido.
 
 Le union discriminated restringono le combinazioni:
 

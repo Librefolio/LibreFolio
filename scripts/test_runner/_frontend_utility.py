@@ -145,6 +145,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/ui/date/SingleDatePicker.test.ts",
             "src/lib/components/ui/date/DateRangePicker.test.ts",
             "src/lib/components/ui/input/ExactDecimalInput.test.ts",
+            "src/lib/components/ui/input/ExactQuantityInput.test.ts",
             "src/lib/components/ui/input/TagInput.test.ts",
             "src/lib/components/ui/select/SimpleSelect.test.ts",
             "src/lib/components/ui/select/SearchSelect.test.ts",
