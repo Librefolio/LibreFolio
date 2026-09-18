@@ -1,17 +1,41 @@
 <script lang="ts">
+    /**
+     * AssetSetRiskPanel — the laboratory.
+     *
+     * This panel used to open on `assets.slice(0, 100)`: a hundred instruments,
+     * a ten-thousand-cell matrix with its numbers already suppressed, and no
+     * way back except ninety-odd clicks on an X. The system made a bad choice
+     * on the user's behalf and then hid the undo.
+     *
+     * What changed:
+     *
+     * - the opening set is **remembered**, then **owned**, then **small** — see
+     *   `resolveInitialSelection`; the hundred survives only as the API's
+     *   ceiling;
+     * - four mass actions and two filters make a large set reachable *and*
+     *   escapable;
+     * - the broker control stopped pretending to be a filter. It was never one:
+     *   it replaced the selection wholesale. It is now labelled as what it
+     *   does — a preset that loads a broker's assets — and choosing its empty
+     *   option no longer wipes the selection.
+     *
+     * **No amount of money appears anywhere on this page.** Not in this panel,
+     * not in the analysis mounted below it. An asset set has no weights, so any
+     * euro figure would be an arithmetic claim about a portfolio the user never
+     * described. Percentages and coefficients only.
+     */
     import {untrack} from 'svelte';
-    import {Plus, RefreshCw, X} from 'lucide-svelte';
+    import {CheckCheck, FlipHorizontal, RefreshCw, Square, Undo2, X} from 'lucide-svelte';
 
     import {_ as t} from '$lib/i18n';
-    import SearchSelect from '$lib/components/ui/select/SearchSelect.svelte';
+    import AssetSelect from '$lib/components/ui/select/AssetSelect.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
-    import type {SelectOption} from '$lib/components/ui/select/types';
     import {singleValue} from '$lib/risk/riskTypes';
     import {fetchReport} from '$lib/stores/portfolio/portfolioStore.svelte';
     import {brokerStoreVersion, ensureBrokersLoaded, getAccessibleBrokers} from '$lib/stores/reference/brokerStore';
-    import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import RiskAnalysisPanel from './RiskAnalysisPanel.svelte';
     import RiskBetaBanner from './RiskBetaBanner.svelte';
+    import {applyBulkAction, applyFilters, MAX_SELECTED_ASSETS, readPersistedSelection, resolveInitialSelectionWithSource, writePersistedSelection, type BulkAction, type SelectionFilters, type SelectionSource} from './assetSetSelection';
 
     interface AssetOption {
         id: number;
@@ -21,6 +45,8 @@
         asset_type?: string | null;
         provider_code?: string | null;
         active?: boolean;
+        /** Transactions in brokers the user owns — what "my assets" means here. */
+        tx_count_own?: number;
     }
 
     interface Props {
@@ -34,11 +60,12 @@
     let {assets, dateStart, dateEnd, targetCurrency, onsynced}: Props = $props();
 
     let selectedAssetIds = $state<number[]>([]);
-    let selectedBrokerId = $state('');
-    let addAssetId = $state('');
+    let brokerPreset = $state('');
+    let filters = $state<SelectionFilters>({types: [], currencies: []});
     let brokerAssetsLoading = $state(false);
     let brokerLoadFailed = $state(false);
     let seedInitialized = false;
+    let selectionSource = $state<SelectionSource | null>(null);
     let brokerRequestGeneration = 0;
     let lastBrokerSignature = '';
 
@@ -46,20 +73,29 @@
         void $brokerStoreVersion;
         return getAccessibleBrokers();
     });
-    let brokerOptions = $derived([{value: '', label: $t('dashboard.allBrokers')}, ...brokers.map((broker) => ({value: String(broker.id), label: broker.name}))]);
+    let brokerOptions = $derived([{value: '', label: $t('risk.assetSet.presetNone')}, ...brokers.map((broker) => ({value: String(broker.id), label: broker.name}))]);
     let selectedAssets = $derived(selectedAssetIds.map((assetId) => assets.find((asset) => asset.id === assetId)).filter((asset): asset is AssetOption => Boolean(asset)));
-    let addOptions = $derived.by<SelectOption[]>(() =>
-        assets
-            .filter((asset) => !selectedAssetIds.includes(asset.id))
-            .map((asset) => ({
-                value: String(asset.id),
-                label: asset.display_name,
-                searchText: `${asset.display_name} ${asset.currency} ${asset.asset_type ?? ''}`,
-                icon: asset.icon_url ?? getAssetTypeIconUrl(asset.asset_type),
-                badge: asset.currency,
-            }))
-            .sort((left, right) => left.label.localeCompare(right.label)),
-    );
+
+    /**
+     * Filter options come from the **whole** catalogue, never from the filtered
+     * result. Deriving them from what survives the filter is how a selected
+     * option disappears the moment it is applied, leaving a filter the user
+     * cannot switch off (`problems/datatable-filter-options-disappear`).
+     */
+    let typeOptions = $derived([...new Set(assets.map((asset) => asset.asset_type || 'OTHER'))].sort());
+    let currencyOptions = $derived([...new Set(assets.map((asset) => asset.currency))].sort());
+    let candidates = $derived(applyFilters(assets, filters));
+    let filtersActive = $derived(filters.types.length > 0 || filters.currencies.length > 0);
+    let atCapacity = $derived(selectedAssetIds.length >= MAX_SELECTED_ASSETS);
+
+    /**
+     * `AssetSelect` is backed by the global asset cache, while this panel is
+     * driven by the page's own list. Restricting the picker to ids the page
+     * knows keeps the two in step: an asset chosen from the wider cache would
+     * enter `selectedAssetIds`, reach the API, and then fail to resolve into a
+     * chip here — present in the analysis, invisible in the controls.
+     */
+    let pageAssetIds = $derived(new Set(assets.map((asset) => asset.id)));
 
     $effect(() => {
         untrack(() => void ensureBrokersLoaded());
@@ -68,36 +104,47 @@
     $effect(() => {
         if (seedInitialized || assets.length === 0) return;
         seedInitialized = true;
-        selectedAssetIds = assets
-            .filter((asset) => asset.active !== false)
-            .slice(0, 100)
-            .map((asset) => asset.id);
+        const seed = resolveInitialSelectionWithSource(assets, readPersistedSelection());
+        selectedAssetIds = seed.ids;
+        selectionSource = seed.source;
+    });
+
+    /** Remember the set, so the next visit starts where this one ended. */
+    $effect(() => {
+        const ids = selectedAssetIds;
+        if (!seedInitialized) return;
+        untrack(() => writePersistedSelection(ids));
     });
 
     $effect(() => {
-        const signature = `${selectedBrokerId}|${dateStart}|${dateEnd}|${targetCurrency}`;
+        const signature = `${brokerPreset}|${dateStart}|${dateEnd}|${targetCurrency}`;
         if (signature === lastBrokerSignature) return;
         lastBrokerSignature = signature;
-        untrack(() => void applyBrokerFilter());
+        untrack(() => void applyBrokerPreset());
     });
 
-    async function applyBrokerFilter(): Promise<void> {
+    /**
+     * Load a broker's holdings into the selection.
+     *
+     * The empty option is the control's *null state*, not an instruction: it
+     * used to reset the selection to the first hundred assets, which meant the
+     * only way to clear a broker preset was to trigger the very behaviour this
+     * panel was rewritten to remove.
+     *
+     * `fetchReport` is a portfolio route, but only the holdings' `asset_id`s are
+     * read from it — no amount, no weight, no valuation crosses into this page.
+     */
+    async function applyBrokerPreset(): Promise<void> {
         const generation = ++brokerRequestGeneration;
         brokerLoadFailed = false;
-        if (!selectedBrokerId) {
-            selectedAssetIds = assets
-                .filter((asset) => asset.active !== false)
-                .slice(0, 100)
-                .map((asset) => asset.id);
-            return;
-        }
+        if (!brokerPreset) return;
 
         brokerAssetsLoading = true;
         try {
-            const report = await fetchReport([Number(selectedBrokerId)], dateStart, dateEnd, targetCurrency);
+            const report = await fetchReport([Number(brokerPreset)], dateStart, dateEnd, targetCurrency);
             if (generation !== brokerRequestGeneration) return;
             const summary = singleValue(report?.summary);
-            selectedAssetIds = [...new Set((summary?.holdings ?? []).map((holding) => holding.asset_id))].sort((left, right) => left - right).slice(0, 100);
+            selectedAssetIds = [...new Set((summary?.holdings ?? []).map((holding) => holding.asset_id))].sort((left, right) => left - right).slice(0, MAX_SELECTED_ASSETS);
         } catch (error) {
             console.error('[Risk] Failed to resolve broker asset set:', error);
             if (generation === brokerRequestGeneration) brokerLoadFailed = true;
@@ -106,39 +153,54 @@
         }
     }
 
-    function addAsset(): void {
-        const assetId = Number(addAssetId);
-        if (!Number.isInteger(assetId) || selectedAssetIds.includes(assetId) || selectedAssetIds.length >= 100) return;
+    function runBulkAction(action: BulkAction): void {
+        selectedAssetIds = applyBulkAction(action, selectedAssetIds, candidates, assets).sort((left, right) => left - right);
+    }
+
+    function toggleFilter(kind: 'types' | 'currencies', value: string): void {
+        const current = filters[kind];
+        const next = current.includes(value) ? current.filter((entry) => entry !== value) : [...current, value];
+        filters = {...filters, [kind]: next};
+    }
+
+    function clearFilters(): void {
+        filters = {types: [], currencies: []};
+    }
+
+    function addAsset(assetId: number | null): void {
+        if (assetId === null || selectedAssetIds.includes(assetId) || atCapacity) return;
         selectedAssetIds = [...selectedAssetIds, assetId].sort((left, right) => left - right);
-        addAssetId = '';
     }
 
     function removeAsset(assetId: number): void {
         selectedAssetIds = selectedAssetIds.filter((id) => id !== assetId);
     }
+
+    const BULK_ACTIONS: {action: BulkAction; icon: typeof CheckCheck; key: string}[] = [
+        {action: 'all', icon: CheckCheck, key: 'selectAll'},
+        {action: 'none', icon: Square, key: 'selectNone'},
+        {action: 'invert', icon: FlipHorizontal, key: 'invert'},
+        {action: 'mine', icon: Undo2, key: 'mine'},
+    ];
 </script>
 
 <div class="space-y-4" data-testid="asset-global-risk-panel">
     <RiskBetaBanner />
 
-    <section class="rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 p-4" data-testid="risk-asset-set-controls">
+    <section class="rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 p-4" data-testid="risk-asset-set-controls" data-selection-source={selectionSource}>
         <div class="flex flex-wrap items-end gap-3">
             <label class="text-xs text-gray-500 dark:text-gray-400">
-                {$t('common.broker')}
+                {$t('risk.assetSet.presetBroker')}
                 <div class="mt-1 w-56">
-                    <SimpleSelect value={selectedBrokerId} options={brokerOptions} compact testId="risk-broker-filter" optionTestId={(option) => `risk-broker-option-${option.value || 'all'}`} onchange={(value) => (selectedBrokerId = value)} />
+                    <SimpleSelect value={brokerPreset} options={brokerOptions} compact testId="risk-broker-filter" optionTestId={(option) => `risk-broker-option-${option.value || 'all'}`} onchange={(value) => (brokerPreset = value)} />
                 </div>
             </label>
             <label class="text-xs text-gray-500 dark:text-gray-400">
                 {$t('risk.assetSet.addAsset')}
                 <div class="mt-1 w-72 max-w-full">
-                    <SearchSelect value={addAssetId} options={addOptions} compact inlineSearch dropdownPosition="auto" testId="risk-asset-add-select" onchange={(value) => (addAssetId = value)} />
+                    <AssetSelect value={null} compact testid="risk-asset-add-select" disabled={atCapacity} filter={(asset) => pageAssetIds.has(asset.id) && !selectedAssetIds.includes(asset.id)} placeholder={$t('risk.assetSet.addAsset')} onchange={addAsset} />
                 </div>
             </label>
-            <button class="flex items-center gap-1.5 rounded-lg bg-libre-green px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50" onclick={addAsset} disabled={!addAssetId || selectedAssetIds.length >= 100} data-testid="risk-asset-add-button">
-                <Plus size={13} />
-                {$t('common.add')}
-            </button>
             {#if brokerAssetsLoading}
                 <RefreshCw size={16} class="animate-spin text-libre-green" data-testid="risk-broker-filter-loading" />
             {/if}
@@ -148,8 +210,64 @@
             <p class="mt-2 text-xs text-red-600 dark:text-red-400" data-testid="risk-broker-filter-error">{$t('risk.states.loadFailed')}</p>
         {/if}
 
+        <div class="mt-4 flex flex-wrap items-center gap-2" data-testid="risk-asset-set-bulk-actions">
+            {#each BULK_ACTIONS as { action, icon: Icon, key } (action)}
+                <button
+                    type="button"
+                    class="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 dark:border-slate-600 dark:text-gray-300 dark:hover:bg-slate-700"
+                    onclick={() => runBulkAction(action)}
+                    disabled={assets.length === 0 || (action === 'all' && atCapacity)}
+                    data-testid="risk-bulk-{action}"
+                >
+                    <Icon size={13} />
+                    {$t(`risk.assetSet.bulk.${key}`)}
+                </button>
+            {/each}
+            <span class="ml-auto text-xs text-gray-500 dark:text-gray-400" data-testid="risk-selected-count" data-selected={selectedAssetIds.length} data-total={candidates.length}>
+                {$t('risk.assetSet.selectedCount', {values: {selected: selectedAssetIds.length, total: candidates.length}})}
+            </span>
+        </div>
+
+        <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2" data-testid="risk-asset-set-filters">
+            <div class="flex flex-wrap items-center gap-1.5">
+                <span class="text-xs text-gray-500 dark:text-gray-400">{$t('risk.assetSet.filters.type')}</span>
+                {#each typeOptions as type (type)}
+                    <button
+                        type="button"
+                        class="rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors {filters.types.includes(type)
+                            ? 'border-libre-green bg-libre-green/10 text-libre-green'
+                            : 'border-gray-200 text-gray-500 hover:bg-gray-50 dark:border-slate-600 dark:text-gray-400 dark:hover:bg-slate-700'}"
+                        aria-pressed={filters.types.includes(type)}
+                        onclick={() => toggleFilter('types', type)}
+                        data-testid="risk-filter-type-{type}"
+                    >
+                        {$t(`assets.types.${type}`) || type}
+                    </button>
+                {/each}
+            </div>
+            <div class="flex flex-wrap items-center gap-1.5">
+                <span class="text-xs text-gray-500 dark:text-gray-400">{$t('risk.assetSet.filters.currency')}</span>
+                {#each currencyOptions as currency (currency)}
+                    <button
+                        type="button"
+                        class="rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors {filters.currencies.includes(currency)
+                            ? 'border-libre-green bg-libre-green/10 text-libre-green'
+                            : 'border-gray-200 text-gray-500 hover:bg-gray-50 dark:border-slate-600 dark:text-gray-400 dark:hover:bg-slate-700'}"
+                        aria-pressed={filters.currencies.includes(currency)}
+                        onclick={() => toggleFilter('currencies', currency)}
+                        data-testid="risk-filter-currency-{currency}"
+                    >
+                        {currency}
+                    </button>
+                {/each}
+            </div>
+            {#if filtersActive}
+                <button type="button" class="text-xs text-libre-green hover:underline" onclick={clearFilters} data-testid="risk-filters-clear">{$t('risk.assetSet.filters.clear')}</button>
+            {/if}
+        </div>
+
         <div class="mt-3 flex flex-wrap gap-2" data-testid="risk-selected-assets">
-            {#each selectedAssets as asset}
+            {#each selectedAssets as asset (asset.id)}
                 <span class="inline-flex items-center gap-1 rounded-full bg-gray-100 dark:bg-slate-700 px-2 py-1 text-xs text-gray-600 dark:text-gray-300" data-testid="risk-selected-asset-{asset.id}">
                     {asset.display_name}
                     <button class="rounded-full p-0.5 hover:bg-gray-200 dark:hover:bg-slate-600" onclick={() => removeAsset(asset.id)} title={$t('common.remove')} data-testid="risk-remove-asset-{asset.id}">
@@ -158,13 +276,13 @@
                 </span>
             {/each}
         </div>
-        {#if selectedAssetIds.length >= 100}
+        {#if atCapacity}
             <p class="mt-2 text-xs text-amber-600 dark:text-amber-400">{$t('risk.assetSet.maxAssets')}</p>
         {/if}
     </section>
 
     {#if selectedAssetIds.length > 0}
-        <RiskAnalysisPanel scope={{kind: 'asset_set', asset_ids: selectedAssetIds}} {dateStart} {dateEnd} {targetCurrency} assetIds={selectedAssetIds} title={$t('risk.analytics.correlation.name')} showBetaBanner={false} {onsynced} />
+        <RiskAnalysisPanel scope={{kind: 'asset_set', asset_ids: selectedAssetIds}} {dateStart} {dateEnd} {targetCurrency} assetIds={selectedAssetIds} title={$t('risk.assetSet.panelTitle')} showBetaBanner={false} {onsynced} />
     {:else}
         <div class="rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 p-8 text-center text-sm text-gray-400 dark:text-gray-500" data-testid="risk-asset-set-empty">
             {$t('risk.states.noAssets')}

@@ -3006,7 +3006,42 @@
       "assetsTab": "Assets",
       "correlationTab": "Correlation",
       "addAsset": "Add asset to matrix",
-      "maxAssets": "The API limit of 100 assets has been reached."
+      "maxAssets": "The API limit of 100 assets has been reached.",
+      "presetBroker": "Preload the assets of…",
+      "presetNone": "Choose a broker…",
+      "panelTitle": "Relationships and scenarios",
+      "selectedCount": "{selected} selected of {total}",
+      "nearIdentical": "near-identical",
+      "bulk": {
+        "selectAll": "Select all",
+        "selectNone": "Deselect all",
+        "invert": "Invert",
+        "mine": "My assets"
+      },
+      "filters": {
+        "type": "Type",
+        "currency": "Currency",
+        "clear": "Clear filters"
+      },
+      "band": {
+        "high": "they move together",
+        "moderate": "they move together in part",
+        "low": "they move independently",
+        "inverse": "they move in opposite directions"
+      },
+      "ordering": {
+        "label": "Matrix order",
+        "similarity": "By similarity",
+        "original": "By name"
+      },
+      "pairs": {
+        "correlatedTitle": "The most alike",
+        "correlatedHint": "Pairs that move together: holding both adds little.",
+        "offsettingTitle": "The ones that offset",
+        "offsettingHint": "Pairs that move in opposite directions: one cushions the other.",
+        "noneCorrelated": "No pair moves clearly together.",
+        "noneOffsetting": "No pair offsets another: nothing here cushions anything else."
+      }
     },
     "metrics": {
       "volatility": "Volatility",

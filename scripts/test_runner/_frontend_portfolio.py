@@ -101,8 +101,8 @@ def front_portfolio_risk(verbose: bool = False, ui: bool = False, headed: bool =
 
 
 def front_portfolio_risk_lab(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
-    """Run Asset Global correlation-laboratory E2E tests."""
-    print_section("Frontend Risk Laboratory Tests")
+    """Run Asset Global risk laboratory E2E tests."""
+    print_section("Frontend Asset Global Risk Lab Tests")
     if not _ensure_frontend_build(): return False
     if not _ensure_db_populated(): return False
     if not _ensure_test_users(): return False
@@ -153,7 +153,7 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "store-unit", front_portfolio_store_unit, test_names=False, name="Portfolio Store Unit Tests", desc="portfolioStore + portfolioMutation vitest units", tests="src/lib/stores/portfolio/portfolioStore.test.ts")
     add_test(cat, "allocation-unit", front_portfolio_allocation_unit, test_names=False, name="Allocation Colour Hierarchy Unit Tests", desc="hexToHsl round-trip on the real palettes, subtype grouping/ordering, measured shade contrast, legacy ordering pin", tests="src/lib/components/charts/__tests__/allocationHierarchy.test.ts")
     add_test(cat, "risk", front_portfolio_risk, name="Risk Analysis Tests", desc="Portfolio-level risk on Dashboard and Broker Detail", tests="portfolio/risk-analysis.spec.ts")
-    add_test(cat, "risk-lab", front_portfolio_risk_lab, name="Risk Laboratory Tests", desc="Asset Global correlation laboratory: holdings mapping, chip remove/add, broker filter", tests="portfolio/risk-lab.spec.ts")
+    add_test(cat, "risk-lab", front_portfolio_risk_lab, name="Asset Global Risk Lab Tests", desc="Asset-set laboratory: the no-money rule asserted by stubbing money in, D19 opening selection by branch rather than by size, bulk actions against filtered candidates, filters that keep their own option clickable, correlation pairs keyed by asset id and matrix ordering", tests="portfolio/risk-lab.spec.ts")
     add_test(cat, "risk-asset-detail", front_portfolio_risk_asset_detail, name="Risk Asset Detail Net", desc="Asset Detail is parked and must stay identical — these two tests are the proof, not a maintenance chore", tests="portfolio/risk-asset-detail.spec.ts")
     add_test(cat, "all", front_portfolio_all, test_names=False, name="All Portfolio Tests", desc="Run all Portfolio frontend tests")
     registry["front-portfolio"] = cat
