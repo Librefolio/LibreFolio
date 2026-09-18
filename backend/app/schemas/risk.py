@@ -144,9 +144,18 @@ class RiskSimulationProcess(StrEnum):
 class RiskSimulationRegime(StrEnum):
     """Prescribed market regime overlaid on a resampled simulation.
 
-    A regime is *declared*, never estimated from the data: every non-``NONE``
+    A regime is *declared*, never estimated from the data: every non-NONE
     value applies a stated transformation whose hypothesis must be shown to the
     user next to the choice that selects it.
+
+    No backticks here, and that is load-bearing rather than a style choice.
+    This docstring is the OpenAPI description of a NAMED enum, so the client
+    generator emits it inside a JavaScript template literal, as an argument to
+    the describe() call on the generated Zod enum. A backtick inside such a
+    literal terminates the string, and the file then stops compiling at a point
+    far from this line. Object schemas escape this because their descriptions
+    become JSDoc comments instead; an enum is the one shape where the text lands
+    in executable position.
     """
 
     NONE = "none"
