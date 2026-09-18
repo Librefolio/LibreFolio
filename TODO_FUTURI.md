@@ -995,3 +995,76 @@ un portafoglio che perde lo 0,5 % ogni giorno vale **esattamente zero**. **Quell
 resta vietata indipendentemente dall'esito di questa rivalutazione.**
 
 **Priorità**: media. **Non blocca il rilascio** — è un lavoro di miglioramento.
+
+## 🔢 Separatore decimale — l'helper esiste, ma è legato alla lingua sbagliata
+
+**Verificato il 18 Set 2026**, su richiesta dello sviluppatore (*«credo ci sia già un helper in
+tal senso, se non esiste mettilo in TODO_FUTURI altrimenti usiamolo»*).
+
+**Il sintomo**: con l'app in italiano, la stessa riga mostra due separatori.
+
+```
+−1.3%        ← punto     (formatPercent → toFixed)
+−175,91 €    ← virgola   (currencyFormat → toLocaleString)
+```
+
+Non è un difetto del sottosistema rischio: la **panoramica** della dashboard fa lo stesso
+(`-9.47%` accanto a `-392,75 €`). È un difetto di progetto, preesistente.
+
+### 🔴 Perché «usiamo l'helper esistente» non basta
+
+`utils/currency/currencyFormat.ts:36,57` chiama:
+
+```ts
+Math.abs(amount).toLocaleString(undefined, {…})
+                 ^^^^^^^^^
+```
+
+**`undefined` significa «la lingua del BROWSER»**, non quella scelta nell'app.
+
+### Quando divergono — non è un caso limite, **è l'uso normale del selettore di lingua**
+
+`frontend/src/lib/i18n/index.ts:65-84` risolve la lingua in quest'ordine:
+
+```
+1.  localStorage 'librefolio-locale'   ← la scelta esplicita dell'utente   (vince)
+2.  getLocaleFromNavigator()           ← il browser, solo come RIPIEGO
+3.  DEFAULT_LOCALE
+```
+
+> 🔑 **Il browser è il ripiego, non la fonte.** Appena l'utente tocca il selettore di lingua,
+> `librefolio-locale` viene scritto e **la lingua dell'app si stacca da quella del browser**.
+> `toLocaleString(undefined)` continua però a leggere **solo** il browser: le due si separano
+> **per costruzione**, non per incidente.
+
+### 🔴 Divergenza RIPRODOTTA dal vivo, 18 Set 2026
+
+Selettore di lingua → *English*, su un browser `it-IT`:
+
+```
+app_lang      "en"            ← scelta dell'utente, onorata
+browser       "it-IT"
+interfaccia   "How much can it hurt?"      ✅ inglese, corretto
+denaro        "−175,91 €"                  🔴 formato ITALIANO sotto interfaccia inglese
+```
+
+**Non è un'ipotesi: è uno screenshot.** E funziona in entrambi i versi — un utente italiano con
+il sistema operativo in inglese (caso comunissimo) che sceglie 🇮🇹 ottiene **interfaccia italiana
+e numeri inglesi**.
+
+**Adottare questo helper in `formatPercent` propagherebbe un secondo difetto invece di
+chiuderne uno.**
+
+### Il lavoro vero, in tre passi
+
+1. **Decidere la fonte della lingua**: il locale dell'app (`librefolio-locale`), non quello
+   del browser. Serve un accessor unico che entrambi i formattatori consumano.
+2. Legare **`currencyFormat`** e **`formatPercent`** a quell'accessor.
+3. Aggiornare le asserzioni che oggi fissano il punto: **2** negli unitari di `formatPercent`,
+   **~23 negli E2E** (di cui 20 in `risk-analysis.spec.ts`).
+
+📌 **Raggio piccolo sul lato chiamanti** — `formatPercent` ha **5** consumatori — **ma il
+cambio è osservabile ovunque**, perché il formattatore del denaro è usato in tutta l'app.
+
+**Priorità**: media. **Non blocca il rischio**, e va fatto come lavoro di progetto con la sua
+verifica, non infilato dentro un pacchetto di superficie.
