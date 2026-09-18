@@ -133,6 +133,7 @@ class RiskComputation:
     path_count: Optional[int] = None
     random_seed: Optional[int] = None
     sobol_start_index: Optional[int] = None
+    bootstrap_seed: Optional[int] = None
     historical_replay_audit: Optional[RiskHistoricalReplayAudit] = None
 
 
