@@ -266,8 +266,11 @@ Ordinati per dipendenza, non per gravità. **W1 abilita tutto il resto.**
 
 | | pacchetto | contenuto | specialista |
 |---|---|---|---|
+| **W0** | **Decisione di prodotto** | le 4 misure di N senza verdetto (§7.3): assegnare a un livello o togliere dal contratto | **developer** |
 | **W1** | **Dati di prova** | `db populate` con storia sufficiente e un benchmark marcato | backend |
 | **W2** | **Innesto dei costruiti** | `RiskMetricCard` in L1/L2/L3 · i tre campi grafico di A · i sei link a I | frontend, **un solo proprietario** |
+| **W2b** | **Le quattro rappresentazioni mancanti** | underwater (7.1) · istogramma VaR (7.2) · heatmap in L2 (7.4) · scatter rischio-rendimento (7.5, **unico con costo backend**) | frontend + backend |
+| **W3b** | **Asset Global ai livelli ridotti** | `L2 + L1° + L3° + L4°` al posto del pannello legacy (`03` §2) | frontend |
 | **W3** | **Allineamento al design system** | `SingleDatePicker` e i controlli di progetto in L4 · riposizionamento del selettore di L3 | frontend |
 | **W4** | **Avvisi come segnali** | ⚠️ sul numero + `Tooltip` · codici al posto della prosa inglese (**backend + frontend insieme**) | misto |
 | **W5** | **Ricombinazione degli spec** | 18 test unici nella struttura di D sui contenuti di E · filtro broker nel laboratorio · destino di `risk-mocks.ts` | `test-author` |
@@ -297,3 +300,183 @@ Sono diventate visibili **solo guardando l'app in esecuzione**, dopo la fusione.
 📌 **Quindi il prossimo giro va organizzato all'inverso**: non «un mandato per componente, poi si
 fonde», ma **«un proprietario per superficie visibile, che innesta tutto ciò che la superficie
 mostra»** — e una revisione sull'app **prima** di dichiarare finito un pacchetto, non dopo.
+
+---
+
+# 7. Delta fra i piani di **design** e ciò che è stato costruito
+
+> Aggiunto il 18 settembre su richiesta del developer: *«se già lato UI la resa è stata così
+> diversa dal progettato, forse anche nei livelli sottostanti le differenze non sono trascurabili»*.
+>
+> **Metodo**: confronto fra i documenti **`00`–`03`, `05`** (design) e il codice fuso. **Non** i
+> piani implementativi, **non** i rapporti dei mandati. Il sospetto era fondato: i delta ci sono,
+> e uno va **nella direzione opposta** a quella che il developer si aspettava.
+
+---
+
+## 7.1 🔴 Le sette rappresentazioni: **tre rese su sette**
+
+`05` §7 prescriveva sette grafici. Stato reale nel pannello a quattro livelli:
+
+| | rappresentazione | livello | stato |
+|---|---|---|---|
+| 7.1 | **Underwater chart** | L1 | 🔴 **assente** — `underwater_series` nel contratto, 0 lettori |
+| 7.2 | **Istogramma della distribuzione** | L1 | 🔴 **assente** — `return_bins` + `var_bin_edge`, 0 lettori |
+| 7.3 | Peso contro contributo al rischio | L2 | ✅ reso |
+| 7.4 | **Heatmap delle correlazioni** | L2 | 🔴 **non in L2** — vive solo nel pannello legacy e nel laboratorio |
+| 7.5 | **Scatter rischio-rendimento** | L3 | 🔴 **assente** — nessun componente |
+| 7.6 | Tornado degli scenari | L4 | ✅ reso (`TornadoChart`) |
+| 7.7 | Cono della simulazione | L4 | ✅ reso (`percentile_bands`, `seriesType: 'band'`) |
+
+> ## 🔑 E c'è uno schema che nessuno aveva notato
+>
+> **L4 — l'unico livello che parte chiuso — è l'unico completo.** L1, L2 e L3, che l'utente
+> incontra aperti appena apre la pagina, sono quelli cui mancano i grafici.
+>
+> 📌 **Il che ribalta la percezione**: *«il "cosa succede se" è l'unico pannello che parte
+> foltado»* — ma è anche **l'unico che ha ciò che il design gli aveva assegnato**. I tre livelli
+> che formano la prima impressione sono quelli incompleti.
+
+⚠️ **Correzione a una mia misura precedente**: avevo dato 7.7 per assente cercando `band_points`.
+**Il campo si chiama `percentile_bands`.** Il cono c'è, ed è fatto bene. *Un grep sul nome
+sbagliato prova l'assenza del nome, non quella della cosa.*
+
+---
+
+## 7.2 🔴 Otto campi calcolati e spediti che nessuno mostra
+
+Misurato sul contratto contro `components/risk/levels/`:
+
+| campo | chi lo ha costruito | letto nei livelli |
+|---|---|---:|
+| `underwater_series` | **A** (K1) | 🔴 0 |
+| `return_bins` | **A** (K1) | 🔴 0 |
+| `var_bin_edge` | **A** (K1) | 🔴 0 |
+| `ulcer_index` | **N** | 🔴 0 |
+| `drawdown_at_risk` | **N** | 🔴 0 |
+| `conditional_drawdown_at_risk` | **N** | 🔴 0 |
+| `worst_realization` | **N** | 🔴 0 |
+| `primary_drawdown` | preesistente | 🔴 0 |
+
+✅ **Due sono legittimi**: `tracking_error` e `information_ratio` non sono resi **perché il
+developer li ha tagliati** (`02` § *«Tracking error e Information ratio → tagliati»*). Restano nel
+contratto e fuori dalla pagina: **è esattamente la decisione presa.**
+
+🔴 **`primary_drawdown` è il caso più imbarazzante**: `05` §6 lo aveva **già** elencato fra i tre
+dati «calcolati, spediti e scartati» — *prima* che l'implementazione cominciasse. Degli altri due
+che nominava, `RiskDrawdownOutput` e `RiskContributionItem.weight`, **entrambi sono stati recuperati**.
+Questo no. **Il design aveva scritto l'avvertimento, e l'avvertimento è sopravvissuto al giro.**
+
+---
+
+## 7.3 🔴 Il delta nella direzione opposta: **quattro misure che nessun design ha mai chiesto**
+
+Qui non manca qualcosa di previsto. **C'è qualcosa che non era previsto.**
+
+```
+ulcer_index                   → mai citato in 00, 01, 02, 03, 05
+worst_realization             → mai citato in 00, 01, 02, 03, 05
+drawdown_at_risk (DaR)        → mai citato in 00, 01, 02, 03, 05
+conditional_drawdown_at_risk  → mai citato in 00, 01, 02, 03, 05
+```
+
+*(verificato per `grep -i`; i match apparenti su «drawdown» erano il termine generico)*
+
+**La tabella dei verdetti di `02` elenca 15 strumenti. Nessuno dei quattro c'è.** Sono arrivati dal
+**catalogo di riskfolio**, non dal disegno di prodotto: N li ha *acquisiti* perché la libreria li
+offriva, e li ha implementati bene — con le due convenzioni piegate correttamente (segno e baseline).
+
+> 🔑 **Ma una misura senza verdetto non ha un livello dove stare**, e infatti non ne ha uno: sono
+> tutte e quattro a zero lettori. **Non sono spente per dimenticanza: sono spente perché nessuno
+> ha mai deciso a quale domanda rispondessero.**
+>
+> 📌 **E questa è la forma di spreco opposta a quella di §2**: là qualcuno costruisce e nessuno
+> innesta; qui **qualcuno costruisce ciò che nessuno aveva chiesto**. La prima si ripara con un
+> innesto; la seconda richiede **una decisione di prodotto** — tenere e assegnare, oppure togliere.
+
+**Domanda aperta per il developer**, e non me la prendo in carico: *Ulcer index* e *worst
+realization* meritano un posto in L1 accanto al drawdown, o vanno rimossi dal contratto?
+Sono buone misure — l'Ulcer index misura **quanto a lungo e quanto sotto**, non solo l'ampiezza —
+ma «buona misura» non è ancora «risponde a una delle quattro domande».
+
+---
+
+## 7.4 🔴 Asset Global non ha ricevuto i livelli ridotti
+
+`03` §2 prescriveva una composizione per pagina:
+
+```
+Dashboard      = L1 + L2 + L3 + L4          (€)
+Broker Detail  = L1 + L2 + L3 + L4          (€)   stesso codice, scope diverso
+Asset Global   = L2 + L1° + L3° + L4°       (%)   L2 primario, gli altri ridotti
+```
+
+**Realtà misurata:**
+
+| pagina | monta |
+|---|---|
+| Dashboard | ✅ `RiskLevelsPanel` (225 righe) |
+| Broker Detail | ✅ `RiskLevelsPanel` — **stesso componente**, come prescritto |
+| Asset Global | ⚠️ `AssetSetRiskPanel` di F → heatmap ✅ **+ `RiskAnalysisPanel` legacy** per il resto |
+| Asset Detail | ✅ `RiskAnalysisPanel` legacy — **corretto: era fuori scopo** |
+
+✅ **Correzione a un mio sospetto**: avevo scritto che il muro di metriche «è ancora quello che
+vedono due superfici su quattro», insinuando un fallimento. **Per Asset Detail è falso**: `03`
+dice testualmente *«Fuori scopo in questo giro: Asset Detail, parcheggiato in beta»*. **Il legacy
+lì è la decisione, non il residuo.**
+
+🔴 **Per Asset Global invece il delta è reale**: F ha consegnato la **casa primaria della
+correlazione** — che era la parte più importante della mappa — ma L1°, L3° e L4° arrivano dal
+pannello vecchio, in percentuali mescolate alla grammatica che il ridisegno voleva sostituire.
+
+---
+
+## 7.5 ✅ Il Monte Carlo è il pezzo **più fedele al design** di tutta la consegna
+
+Vale la pena dirlo, perché è l'eccezione che mostra cosa succede quando un mandato ha il disegno
+completo davanti. `02` §*Monte Carlo* prescriveva un selettore di **modalità, non parametri**, con
+l'ipotesi scritta inline. Consegnato, in quattro lingue:
+
+| chiave | etichetta italiana | ipotesi inline |
+|---|---|:---:|
+| `block_bootstrap` | **Storia rimescolata** *(consigliata)* | ✅ |
+| `calm` | **Mercato calmo** | ✅ |
+| `prolonged_crisis` | **Crisi prolungata** | ✅ |
+| `shock_recovery` | **Shock e recupero** | ✅ |
+| `gbm` | **Curva normale (GBM)** *(avanzata)* | ✅ |
+
+**Le cinque etichette coincidono parola per parola con il testo del design.** E il divieto è
+rispettato: *«`sobol_start_index` esce dalla UI in ogni caso»* → in `L4Simulation` compare **solo**
+nel costruttore della richiesta, mai come controllo.
+
+⚠️ **Ma è ancora un controllo visibile nel pannello legacy** (`RiskAnalysisPanel:1013-1021`, con
+etichetta e `data-testid`) — che è quello servito ad Asset Detail e al laboratorio. **Il divieto
+vale sulla superficie nuova e non su quella vecchia**, e finché convivono vale a metà.
+
+---
+
+## 7.6 Il quadro complessivo del delta
+
+| area | previsto | consegnato |
+|---|---:|---:|
+| Rappresentazioni grafiche | 7 | **3** |
+| Campi del contratto resi | — | **8 spenti** |
+| Misure senza verdetto di design | 0 | **4** |
+| Pagine con la composizione prescritta | 3 | **2** |
+| Fedeltà del selettore Monte Carlo | — | ✅ **piena** |
+
+> ## 🔑 La lettura che tiene insieme i tre delta
+>
+> **Non è un problema di esecuzione: ogni singolo pezzo è fatto bene.** L'underwater chart manca
+> ma la serie è calcolata correttamente; l'Ulcer index non ha un posto ma è implementato con le
+> convenzioni giuste; Asset Global usa il pannello vecchio ma la heatmap nuova è la migliore parte
+> della consegna.
+>
+> **È un problema di chiusura.** Un mandato finisce quando *il suo* lavoro è finito — e nessun
+> mandato aveva come definizione di finito *«l'utente lo vede»*. Il Monte Carlo è fedele **perché
+> H possedeva contemporaneamente il motore, le chiavi i18n e il pannello**: l'unico caso in cui
+> una cosa e la sua resa stavano nello stesso albero.
+>
+> 📌 **La regola che ne esce, e che vale per `implementation_2`**: *un pacchetto non è finito
+> quando il dato esiste. È finito quando il dato è sullo schermo, in quattro lingue, con un link
+> che porta a una pagina che esiste.*
