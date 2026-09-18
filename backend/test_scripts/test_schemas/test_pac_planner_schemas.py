@@ -284,10 +284,8 @@ def _pac_incumbent_result() -> JsonObject:
             "gross_sell_credit": "0",
             "buy_fees": "0",
             "sell_fees": "0",
-            "fx_fees": "0",
             "broker_withheld_tax": "0",
             "self_reserved_tax": "0",
-            "fx_buffer": "0",
             "rounding_delta": "0",
             "final_spendable": "0",
             "final_physical": "0",
@@ -365,10 +363,8 @@ def _rebalancer_no_op_result() -> JsonObject:
             "gross_sell_credit",
             "buy_fees",
             "sell_fees",
-            "fx_fees",
             "broker_withheld_tax",
             "self_reserved_tax",
-            "fx_buffer",
             "rounding_delta",
         ):
             ledger[field] = "0"
@@ -1096,28 +1092,21 @@ EXPECTED_PLANNER_ISSUE_CODES = (
     "allocation.fee_schedule_missing",
     "allocation.fiscal_currency_missing",
     "allocation.funding_cap_negative",
-    "allocation.fx_buffer_rate_out_of_range",
-    "allocation.fx_cycle_invalid",
-    "allocation.fx_multi_hop_unsupported",
-    "allocation.fx_quote_missing",
+    "allocation.fx_rate_missing",
     "allocation.fx_spread_rate_out_of_range",
-    "allocation.identity_fx_quote_not_allowed",
-    "allocation.identity_valuation_rate_not_allowed",
+    "allocation.identity_fx_rate_not_allowed",
     "allocation.invalid_quote_basis",
     "allocation.negative_cash_unsupported",
     "allocation.negative_contribution",
     "allocation.negative_fee_amount",
-    "allocation.negative_fx_fee",
     "allocation.negative_inventory_unsupported",
     "allocation.no_additional_buy_feasible",
     "allocation.no_positive_order_fundable",
     "allocation.no_selected_funding",
     "allocation.nonpositive_fx_rate",
-    "allocation.nonpositive_fx_source_step",
     "allocation.nonpositive_order_amount_step",
     "allocation.nonpositive_price",
     "allocation.nonpositive_quantity_step",
-    "allocation.nonpositive_valuation_rate",
     "allocation.order_amount_step_missing",
     "allocation.order_cap_nonpositive",
     "allocation.order_minimum_exceeds_cap",
@@ -1134,7 +1123,6 @@ EXPECTED_PLANNER_ISSUE_CODES = (
     "allocation.required_min_notional_unfunded",
     "allocation.route_priority_negative",
     "allocation.saved_fx_invalid",
-    "allocation.saved_fx_missing",
     "allocation.solver_limit_no_incumbent",
     "allocation.stale_age_negative",
     "allocation.stale_observation_not_accepted",
@@ -1143,7 +1131,6 @@ EXPECTED_PLANNER_ISSUE_CODES = (
     "allocation.target_weight_out_of_range",
     "allocation.tax_netting_unsupported",
     "allocation.valuation_currency_missing",
-    "allocation.wac_fx_missing",
     "allocation.wac_missing",
     "allocation.zero_selected_funding",
     "pac_allocator.initial_holding_forbidden",
@@ -1172,6 +1159,17 @@ SUPERSEDED_PLANNER_ISSUE_CODES = (
     "allocation.fx_quote_stale_unconfirmed",
     "portfolio_rebalancer.pmc_missing",
     "portfolio_rebalancer.fiscal_currency_missing",
+    "allocation.fx_buffer_rate_out_of_range",
+    "allocation.fx_cycle_invalid",
+    "allocation.fx_multi_hop_unsupported",
+    "allocation.fx_quote_missing",
+    "allocation.identity_fx_quote_not_allowed",
+    "allocation.identity_valuation_rate_not_allowed",
+    "allocation.negative_fx_fee",
+    "allocation.nonpositive_fx_source_step",
+    "allocation.nonpositive_valuation_rate",
+    "allocation.saved_fx_missing",
+    "allocation.wac_fx_missing",
 )
 
 
@@ -1187,7 +1185,7 @@ def _catalogue_issue_specimen(code: str) -> JsonObject:
 
 
 def test_planner_issue_code_catalogue_is_exact_closed_and_sorted() -> None:
-    assert len(EXPECTED_PLANNER_ISSUE_CODES) == 89
+    assert len(EXPECTED_PLANNER_ISSUE_CODES) == 80
     assert EXPECTED_PLANNER_ISSUE_CODES == tuple(sorted(EXPECTED_PLANNER_ISSUE_CODES))
     assert get_args(pac_schemas.PlannerIssueCode) == EXPECTED_PLANNER_ISSUE_CODES
     assert PLANNER_ISSUE_CODE_ADAPTER.json_schema()["enum"] == list(EXPECTED_PLANNER_ISSUE_CODES)
@@ -1335,17 +1333,6 @@ BROKER_INACTIVE_EXECUTABLE_CASES = (
         id="funding-route",
     ),
     pytest.param(
-        "fx_route",
-        {
-            "kind": "field",
-            "section": "fx",
-            "entity_kind": "fx_route",
-            "entity_id": "fx-route-inactive",
-            "field": "broker_id",
-        },
-        id="fx-route",
-    ),
-    pytest.param(
         "buy_route",
         INACTIVE_BUY_ROUTE_PATH,
         id="buy-route",
@@ -1462,7 +1449,7 @@ def test_source_copy_optional_asset_and_classification_issues_remain_noncontroll
 def test_downstream_normalizer_spec_rejects_every_inactive_broker_executable_reference(reference_kind: str, path: JsonObject) -> None:
     identity, _identity_wire = _strict_roundtrip(TypeAdapter(PlannerBrokerIdentity), _inactive_domain_broker_identity())
     assert identity.active is False
-    assert reference_kind in {"capability", "funding_route", "fx_route", "buy_route", "sell_route"}
+    assert reference_kind in {"capability", "funding_route", "buy_route", "sell_route"}
 
     issue = _broker_issue("allocation.broker_inactive", "error", path)
     issue_model, _issue_wire = _strict_roundtrip(PLANNER_ISSUE_ADAPTER, issue)
@@ -1508,7 +1495,6 @@ def test_inactive_broker_custody_only_spec_keeps_current_facts_as_noncontrolling
     broker["capabilities"] = []
     broker["fee_schedules"] = []
     request["funding_routes"] = [route for route in request["funding_routes"] if route["broker_id"] != "broker-alpha"]
-    request["fx_routes"] = [route for route in request["fx_routes"] if route["broker_id"] != "broker-alpha"]
     request["order_routes"] = [route for route in request["order_routes"] if route["broker_id"] != "broker-alpha"]
 
     parsed_request, _request_wire = _strict_roundtrip(REBALANCER_PLAN_INPUT_ADAPTER, request)
@@ -1518,7 +1504,6 @@ def test_inactive_broker_custody_only_spec_keeps_current_facts_as_noncontrolling
     assert inactive_broker["capabilities"] == []
     assert any(holding["broker_id"] == "broker-alpha" for holding in wire_request["holdings"])
     assert not any(route["broker_id"] == "broker-alpha" for route in wire_request["funding_routes"])
-    assert not any(route["broker_id"] == "broker-alpha" for route in wire_request["fx_routes"])
     assert not any(route["broker_id"] == "broker-alpha" for route in wire_request["order_routes"])
 
     warning = _broker_inactive_source_warning("broker-alpha")
@@ -1544,7 +1529,6 @@ def test_inactive_broker_cash_spec_preserves_frozen_cash_but_cannot_fund_or_tran
     broker["capabilities"] = []
     broker["fee_schedules"] = []
     request["funding_routes"] = []
-    request["fx_routes"] = []
     request["order_routes"] = []
     cash = _find(request["existing_cash"], "cash_id", "cash-broker-one-eur")
     cash["selected"]["amount"] = "0"
@@ -1555,7 +1539,6 @@ def test_inactive_broker_cash_spec_preserves_frozen_cash_but_cannot_fund_or_tran
     assert frozen_cash["available"]["amount"] == "5.00"
     assert frozen_cash["selected"]["amount"] == "0"
     assert wire["funding_routes"] == []
-    assert wire["fx_routes"] == []
     assert wire["order_routes"] == []
 
 
@@ -1615,7 +1598,6 @@ def _normalizer_issue_case(code: str, availability: str, frozen_path: JsonObject
 
 
 CURRENCY_MINOR_UNIT_ISSUE_PATH = _planner_field_path("input", "currency", "EUR", "minor_unit")
-VALUATION_RATE_ISSUE_PATH = _planner_field_path("fx", "currency", "USD", "rate")
 PRICE_AMOUNT_ISSUE_PATH = _planner_field_path("assets", "asset", "asset-one", "quote.amount")
 QUOTE_BASIS_ISSUE_PATH = _planner_field_path("assets", "asset", "asset-one", "quote.quote_base_quantity")
 EXPOSURE_WEIGHT_ISSUE_PATH = _planner_field_path("assets", "asset", "asset-one", "exposures.weight")
@@ -1623,14 +1605,12 @@ TARGET_WEIGHT_ISSUE_PATH = _planner_field_path("targets", "asset", "asset-one", 
 TARGET_TOTAL_ISSUE_PATH = {"kind": "section", "section": "targets"}
 ECONOMIC_SHARE_ISSUE_PATH = _planner_field_path("holdings", "holding", "holding-one", "economic_share")
 CASH_SELECTION_ISSUE_PATH = _planner_field_path("cash", "cash", "cash-one", "selected")
-FX_RATE_ISSUE_PATH = _planner_field_path("fx", "fx_quote", "fx-eur-usd", "rate")
+FX_RATE_ISSUE_PATH = _planner_field_path("fx", "fx_rate", "EUR/USD", "rate")
 TAX_RATE_ISSUE_PATH = _planner_field_path("policy", "asset", "asset-one", "tax_rate")
 UNFROZEN_ISSUE_PATH_SPECIMEN = {"kind": "section", "section": "input"}
 
 DOWNSTREAM_NORMALIZER_ISSUE_CASES = (
     _normalizer_issue_case("allocation.currency_minor_unit_nonpositive", "invalid", CURRENCY_MINOR_UNIT_ISSUE_PATH),
-    _normalizer_issue_case("allocation.nonpositive_valuation_rate", "invalid", VALUATION_RATE_ISSUE_PATH),
-    _normalizer_issue_case("allocation.identity_valuation_rate_not_allowed", "invalid", VALUATION_RATE_ISSUE_PATH),
     _normalizer_issue_case("allocation.nonpositive_price", "invalid", PRICE_AMOUNT_ISSUE_PATH),
     _normalizer_issue_case("allocation.invalid_quote_basis", "invalid", QUOTE_BASIS_ISSUE_PATH),
     _normalizer_issue_case("allocation.exposure_weight_out_of_range", "invalid", EXPOSURE_WEIGHT_ISSUE_PATH),
@@ -1654,18 +1634,15 @@ DOWNSTREAM_NORMALIZER_ISSUE_CASES = (
     _normalizer_issue_case("allocation.fee_rate_out_of_range", "invalid"),
     _normalizer_issue_case("allocation.fee_floor_exceeds_cap", "invalid"),
     _normalizer_issue_case("allocation.nonpositive_fx_rate", "invalid", FX_RATE_ISSUE_PATH),
-    _normalizer_issue_case("allocation.identity_fx_quote_not_allowed", "invalid", FX_RATE_ISSUE_PATH),
-    _normalizer_issue_case("allocation.nonpositive_fx_source_step", "invalid"),
+    _normalizer_issue_case("allocation.identity_fx_rate_not_allowed", "invalid", FX_RATE_ISSUE_PATH),
     _normalizer_issue_case("allocation.fx_spread_rate_out_of_range", "invalid"),
-    _normalizer_issue_case("allocation.fx_buffer_rate_out_of_range", "invalid"),
-    _normalizer_issue_case("allocation.negative_fx_fee", "invalid"),
     _normalizer_issue_case("allocation.stale_age_negative", "invalid"),
     _normalizer_issue_case("allocation.stale_observation_not_accepted", "invalid"),
     _normalizer_issue_case("portfolio_rebalancer.tax_rate_missing", "needs_input", TAX_RATE_ISSUE_PATH),
     _normalizer_issue_case("portfolio_rebalancer.tax_rate_out_of_range", "invalid", TAX_RATE_ISSUE_PATH),
     _normalizer_issue_case("allocation.fiscal_currency_missing", "needs_input"),
     _normalizer_issue_case("allocation.wac_missing", "needs_input"),
-    _normalizer_issue_case("allocation.wac_fx_missing", "needs_input"),
+    _normalizer_issue_case("allocation.fx_rate_missing", "needs_input", FX_RATE_ISSUE_PATH),
     _normalizer_issue_case("portfolio_rebalancer.cost_basis_negative", "invalid"),
     _normalizer_issue_case("portfolio_rebalancer.withholding_missing", "needs_input"),
     _normalizer_issue_case("portfolio_rebalancer.carried_loss_negative", "invalid"),
@@ -2515,29 +2492,6 @@ def test_zero_final_invested_requires_exact_unavailable_reason(replacement: Json
 
 
 @pytest.mark.parametrize(
-    ("freshness", "accepted"),
-    (
-        pytest.param({"kind": "fresh"}, True, id="fresh"),
-        pytest.param({"kind": "stale", "age_days": 0, "accepted": True}, True, id="stale-zero-age-accepted"),
-        pytest.param({"kind": "stale", "age_days": 30, "accepted": True}, True, id="stale-positive-age-accepted"),
-        pytest.param({"kind": "stale", "age_days": -1, "accepted": True}, False, id="stale-negative-age"),
-        pytest.param({"kind": "stale", "age_days": 0, "accepted": False}, False, id="stale-not-accepted"),
-    ),
-)
-def test_ready_fx_action_requires_nonnegative_age_and_acceptance_only_when_stale(freshness: JsonObject, accepted: bool) -> None:
-    payload = _rebalancer_incumbent_result()
-    fx_action = _find(payload["primary_solution"]["fx_actions"], "action_id", "fx-action-beta-eur-usd")
-    fx_action["freshness"] = deepcopy(freshness)
-    if accepted:
-        model, _emitted = _strict_roundtrip(REBALANCER_PLAN_OUTPUT_ADAPTER, payload)
-        wire = REBALANCER_PLAN_OUTPUT_ADAPTER.dump_python(model, mode="json")
-        emitted_action = _find(wire["primary_solution"]["fx_actions"], "action_id", "fx-action-beta-eur-usd")
-        assert emitted_action["freshness"] == freshness
-    else:
-        _reject(REBALANCER_PLAN_OUTPUT_ADAPTER, payload)
-
-
-@pytest.mark.parametrize(
     ("product", "mutation"),
     (
         ("PAC", "cost"),
@@ -2701,13 +2655,13 @@ PLANNER_FULL_SCHEMA_FINGERPRINT_CASES = (
     pytest.param(
         PAC_PLAN_INPUT_ADAPTER,
         PAC_PLAN_OUTPUT_ADAPTER,
-        "b76cc7114d6344bc54c844c2f85ccc45a39dbc0ddec4ad93d5a58aa4f8bc2ba1",
+        "e2b70735f589d376d5c105416b5b9e30c3a0b927bf7713222af21dcfdb0eaa28",
         id="pac",
     ),
     pytest.param(
         REBALANCER_PLAN_INPUT_ADAPTER,
         REBALANCER_PLAN_OUTPUT_ADAPTER,
-        "df50a98897414b522e2bd498df20bb03387dedfd85e14174bee9d8a229fe2a0c",
+        "61ed6bdeaef112cf0df461468da3f536033d51f34d0abafea9ca22c645a7c12b",
         id="rebalancer",
     ),
 )
@@ -2762,6 +2716,26 @@ def _assert_acyclic_local_references(schema: JsonObject) -> None:
         visit(name)
 
 
+def _open_map_property_schema_node_ids(schema: JsonObject) -> frozenset[int]:
+    """Node identities for the `fx_rates` property's own schema, wherever it is declared.
+
+    `fx_rates` is a product-decided canonical currency-pair map (open string keys); JSON
+    Schema represents it as `additionalProperties: <value-schema>`, which is structurally
+    incompatible with the closed/named-property invariant enforced below. This locates
+    exactly that field's node by declared property key (not by shape), so the invariant is
+    relaxed there and nowhere else.
+    """
+    node_ids: set[int] = set()
+    for node in walk_schema(schema):
+        properties = node.get("properties")
+        if not isinstance(properties, dict):
+            continue
+        value = properties.get("fx_rates")
+        if isinstance(value, dict) and value.get("type") == "object":
+            node_ids.add(id(value))
+    return frozenset(node_ids)
+
+
 @pytest.mark.parametrize("_label,adapter,mode,expected_roots,_root_discriminator", PLANNER_SCHEMA_CASES)
 def test_exported_planner_schema_profile_has_only_closed_required_codegen_safe_shapes(
     _label: str,
@@ -2775,6 +2749,7 @@ def test_exported_planner_schema_profile_has_only_closed_required_codegen_safe_s
     assert declared_operations(schema) == frozenset({"plan"})
     assert len(list(root_models(schema))) == expected_roots
     _assert_acyclic_local_references(schema)
+    open_map_node_ids = _open_map_property_schema_node_ids(schema)
 
     for node in walk_schema(schema):
         assert "default" not in node
@@ -2792,15 +2767,21 @@ def test_exported_planner_schema_profile_has_only_closed_required_codegen_safe_s
             resolve_schema_reference(schema, reference)
 
         if node.get("type") == "object":
-            assert node.get("additionalProperties") is False
-            properties = node.get("properties")
-            required = node.get("required")
-            assert isinstance(properties, dict)
-            assert isinstance(required, list)
-            assert set(required) == set(properties)
-            for property_schema in properties.values():
-                assert isinstance(property_schema, dict)
-                assert "default" not in property_schema
+            if id(node) in open_map_node_ids:
+                additional = node.get("additionalProperties")
+                assert isinstance(additional, dict)
+                assert "properties" not in node
+                assert "required" not in node
+            else:
+                assert node.get("additionalProperties") is False
+                properties = node.get("properties")
+                required = node.get("required")
+                assert isinstance(properties, dict)
+                assert isinstance(required, list)
+                assert set(required) == set(properties)
+                for property_schema in properties.values():
+                    assert isinstance(property_schema, dict)
+                    assert "default" not in property_schema
 
         pattern = node.get("pattern")
         if isinstance(pattern, str):
