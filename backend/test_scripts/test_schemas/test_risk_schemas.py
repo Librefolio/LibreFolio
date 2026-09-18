@@ -669,3 +669,96 @@ def test_risk_drawdown_output_open_episode_forbids_recovery_date():
 def test_risk_drawdown_output_recovered_requires_recovery_date():
     with pytest.raises(ValidationError, match="recovered episodes require a recovery date"):
         RiskDrawdownOutput(**_drawdown_output(maximum_drawdown_recovery_date=None))
+
+
+def test_portfolio_scope_asset_slice_is_unique_sorted_and_bounded():
+    scope = PortfolioRiskScope(
+        kind="portfolio",
+        broker_ids=[9, 3],
+        asset_ids=[7, 2],
+    )
+    assert scope.kind == RiskScopeKind.PORTFOLIO
+    assert scope.asset_ids == [2, 7]
+    assert scope.model_dump(mode="json") == {
+        "kind": "portfolio",
+        "broker_ids": [3, 9],
+        "asset_ids": [2, 7],
+    }
+    assert PortfolioRiskScope(kind="portfolio").asset_ids is None
+    assert PortfolioRiskScope(kind="portfolio", asset_ids=list(range(1, 101))).asset_ids[-1] == 100
+
+    sliced_request = RiskQueryRequest.model_validate(
+        {
+            "scope": {"kind": "portfolio", "asset_ids": [4, 1]},
+            "date_range": {"start": "2026-01-01", "end": "2026-01-31"},
+            "target_currency": "EUR",
+            "mode": "historical",
+            "analytics": [
+                {
+                    "instance_id": "kpi",
+                    "analytic_code": "historical_kpi",
+                }
+            ],
+        }
+    )
+    assert isinstance(sliced_request.scope, PortfolioRiskScope)
+    assert sliced_request.scope.kind == RiskScopeKind.PORTFOLIO
+    assert sliced_request.scope.asset_ids == [1, 4]
+
+    with pytest.raises(ValidationError, match="asset_ids must be unique"):
+        PortfolioRiskScope(kind="portfolio", asset_ids=[3, 3])
+    with pytest.raises(ValidationError):
+        PortfolioRiskScope(kind="portfolio", asset_ids=[])
+    with pytest.raises(ValidationError):
+        PortfolioRiskScope(kind="portfolio", asset_ids=list(range(1, 102)))
+    with pytest.raises(ValidationError):
+        PortfolioRiskScope(kind="portfolio", asset_ids=[0])
+    with pytest.raises(ValidationError):
+        PortfolioRiskScope.model_validate({"kind": "portfolio", "asset_id": [1]})
+
+
+def test_risk_result_metadata_asset_slice_requires_portfolio_scope():
+    base = {
+        "analyzed_range": DateRangeModel(start=date(2026, 1, 2), end=date(2026, 1, 4)),
+        "n_observations": 2,
+        "calendar_days": 2,
+        "annualization_factor": 365.0,
+        "coverage": 1.0,
+        "currency": "EUR",
+        "return_basis": RiskReturnBasis.PRICE_ONLY,
+        "algorithm_version": "risk-test@1.0.0",
+        "computed_at": datetime(2026, 1, 5, tzinfo=UTC),
+    }
+    metadata = RiskResultMetadata(
+        **base,
+        scope=RiskScopeKind.PORTFOLIO,
+        scope_reference="portfolio:3,5/assets:2,7",
+        broker_ids=[3, 5],
+        sliced_asset_ids=[7, 2],
+        mode=RiskMode.HISTORICAL,
+    )
+    assert metadata.sliced_asset_ids == [2, 7]
+    assert metadata.model_dump(mode="json")["sliced_asset_ids"] == [2, 7]
+    assert RiskResultMetadata(**base, scope=RiskScopeKind.PORTFOLIO, scope_reference="portfolio:3,5").sliced_asset_ids is None
+
+    with pytest.raises(ValidationError, match="sliced_asset_ids must be unique"):
+        RiskResultMetadata(
+            **base,
+            scope=RiskScopeKind.PORTFOLIO,
+            scope_reference="portfolio:3,5/assets:7",
+            sliced_asset_ids=[7, 7],
+        )
+    with pytest.raises(ValidationError, match="sliced_asset_ids cannot be empty"):
+        RiskResultMetadata(
+            **base,
+            scope=RiskScopeKind.PORTFOLIO,
+            scope_reference="portfolio:3,5",
+            sliced_asset_ids=[],
+        )
+    with pytest.raises(ValidationError, match="sliced_asset_ids metadata requires portfolio scope"):
+        RiskResultMetadata(
+            **base,
+            scope=RiskScopeKind.ASSET,
+            scope_reference="asset:7",
+            sliced_asset_ids=[7],
+        )
