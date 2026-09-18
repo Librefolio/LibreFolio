@@ -81,6 +81,15 @@ def front_portfolio_risk(verbose: bool = False, ui: bool = False, headed: bool =
     return _run_playwright("portfolio/risk-analysis.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_portfolio_risk_lab(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run Asset Global risk laboratory E2E tests."""
+    print_section("Frontend Asset Global Risk Lab Tests")
+    if not _ensure_frontend_build(): return False
+    if not _ensure_db_populated(): return False
+    if not _ensure_test_users(): return False
+    return _run_playwright("portfolio/risk-lab.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_portfolio_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run all Portfolio frontend tests."""
     if _common.nothing_left_to_run("front-portfolio"):
@@ -109,5 +118,6 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "risk-unit", front_portfolio_risk_unit, test_names=False, name="Risk Store Unit Tests", desc="Request-key cache, account isolation, invalidation and capability checks", tests="src/lib/stores/risk/riskStore.test.ts")
     add_test(cat, "store-unit", front_portfolio_store_unit, test_names=False, name="Portfolio Store Unit Tests", desc="portfolioStore + portfolioMutation vitest units", tests="src/lib/stores/portfolio/portfolioStore.test.ts")
     add_test(cat, "risk", front_portfolio_risk, name="Risk Analysis Tests", desc="Asset, asset-set and portfolio Risk UI integration", tests="portfolio/risk-analysis.spec.ts")
+    add_test(cat, "risk-lab", front_portfolio_risk_lab, name="Asset Global Risk Lab Tests", desc="Asset-set laboratory: the no-money rule asserted by stubbing money in, D19 opening selection by branch rather than by size, bulk actions against filtered candidates, filters that keep their own option clickable, correlation pairs keyed by asset id and matrix ordering", tests="portfolio/risk-lab.spec.ts")
     add_test(cat, "all", front_portfolio_all, test_names=False, name="All Portfolio Tests", desc="Run all Portfolio frontend tests")
     registry["front-portfolio"] = cat

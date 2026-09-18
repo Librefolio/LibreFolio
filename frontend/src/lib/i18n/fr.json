@@ -2991,7 +2991,42 @@
       "assetsTab": "Actifs",
       "correlationTab": "Corrélation",
       "addAsset": "Ajouter un actif à la matrice",
-      "maxAssets": "La limite API de 100 actifs est atteinte."
+      "maxAssets": "La limite API de 100 actifs est atteinte.",
+      "presetBroker": "Précharger les actifs de…",
+      "presetNone": "Choisir un courtier…",
+      "panelTitle": "Relations et scénarios",
+      "selectedCount": "{selected} sélectionnés sur {total}",
+      "nearIdentical": "quasi identiques",
+      "bulk": {
+        "selectAll": "Tout sélectionner",
+        "selectNone": "Tout désélectionner",
+        "invert": "Inverser",
+        "mine": "Mes actifs"
+      },
+      "filters": {
+        "type": "Type",
+        "currency": "Devise",
+        "clear": "Effacer les filtres"
+      },
+      "band": {
+        "high": "ils évoluent ensemble",
+        "moderate": "ils évoluent en partie ensemble",
+        "low": "ils évoluent indépendamment",
+        "inverse": "ils évoluent en sens opposé"
+      },
+      "ordering": {
+        "label": "Ordre de la matrice",
+        "similarity": "Par similarité",
+        "original": "Par nom"
+      },
+      "pairs": {
+        "correlatedTitle": "Les plus semblables",
+        "correlatedHint": "Paires qui évoluent ensemble : les détenir toutes deux ajoute peu.",
+        "offsettingTitle": "Ceux qui se compensent",
+        "offsettingHint": "Paires qui évoluent en sens opposé : l’une amortit l’autre.",
+        "noneCorrelated": "Aucune paire n’évolue clairement ensemble.",
+        "noneOffsetting": "Aucune paire n’en compense une autre : ici rien n’amortit rien."
+      }
     },
     "metrics": {
       "volatility": "Volatilité",
