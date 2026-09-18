@@ -241,3 +241,119 @@ def test_build_keeps_trade_in_its_native_currency():
     mark = series.resolve(date(2025, 1, 10))
     assert mark.unit_price == _d("100")
     assert mark.currency == "USD"
+
+
+# --------------------------------------------------------------------------- #
+# G1b — synthetic P&L candles: OHLC observation/resolution semantics
+# --------------------------------------------------------------------------- #
+#
+# The full engine-level candle *composition* (DailyStateBuilder / PnlCandleContribution)
+# lives in test_portfolio_engine/test_pnl_candles.py. These tests cover only the resolver's
+# own contract: when a resolved mark carries open/high/low, and when it must not.
+
+
+def test_market_full_ohlc_triple_resolves_on_exact_day():
+    obs = PriceObservation(date=date(2025, 1, 10), unit_price=_d("108"), currency="EUR", kind=ObservationKind.MARKET, open=_d("105"), high=_d("110"), low=_d("102"))
+    mark = AssetPriceSeries([obs]).resolve(date(2025, 1, 10))
+    assert mark.source is MarkSource.MARKET
+    assert mark.unit_price == _d("108")
+    assert (mark.open, mark.high, mark.low) == (_d("105"), _d("110"), _d("102"))
+
+
+def test_build_day_missing_from_ohlc_by_date_has_no_ohlc():
+    # 01-10 has an ohlc_by_date entry; 01-11 is a real MARKET day too but omitted from
+    # ohlc_by_date on purpose -> it must resolve with no OHLC, never a guess.
+    series = build_asset_price_series(
+        price_rows=[(date(2025, 1, 10), _d("108"), "EUR"), (date(2025, 1, 11), _d("109"), "EUR")],
+        transactions=[],
+        split_linked_tx_ids=set(),
+        asset_currency="EUR",
+        quote_base_quantity=1,
+        ohlc_by_date={date(2025, 1, 10): (_d("105"), _d("110"), _d("102"))},
+    )
+    day10 = series.resolve(date(2025, 1, 10))
+    assert (day10.open, day10.high, day10.low) == (_d("105"), _d("110"), _d("102"))
+    day11 = series.resolve(date(2025, 1, 11))
+    assert day11.source is MarkSource.MARKET
+    assert (day11.open, day11.high, day11.low) == (None, None, None)
+
+
+def test_build_ohlc_by_date_omitted_entirely_has_no_ohlc():
+    # ohlc_by_date not passed at all (default None) -> every MARKET day still resolves,
+    # just with no intraday range (additive parameter, must never be required).
+    series = build_asset_price_series(
+        price_rows=[(date(2025, 1, 10), _d("108"), "EUR")],
+        transactions=[],
+        split_linked_tx_ids=set(),
+        asset_currency="EUR",
+        quote_base_quantity=1,
+    )
+    mark = series.resolve(date(2025, 1, 10))
+    assert mark.source is MarkSource.MARKET
+    assert mark.unit_price == _d("108")
+    assert (mark.open, mark.high, mark.low) == (None, None, None)
+
+
+def test_carried_day_never_reports_ohlc_even_if_origin_day_had_it():
+    # The origin day (01-10) has a full OHLC triple; carrying it forward to 01-15 must
+    # drop the range entirely (no intraday variance is known for a day nothing traded on)
+    # — the flat fallback belongs to the consuming engine, never a frozen prior range here.
+    series = build_asset_price_series(
+        price_rows=[(date(2025, 1, 10), _d("108"), "EUR")],
+        transactions=[],
+        split_linked_tx_ids=set(),
+        asset_currency="EUR",
+        quote_base_quantity=1,
+        ohlc_by_date={date(2025, 1, 10): (_d("105"), _d("110"), _d("102"))},
+    )
+    exact = series.resolve(date(2025, 1, 10))
+    assert (exact.open, exact.high, exact.low) == (_d("105"), _d("110"), _d("102"))
+
+    carried = series.resolve(date(2025, 1, 15))
+    assert carried.source is MarkSource.CARRIED
+    assert carried.unit_price == _d("108")  # the price itself is still carried
+    assert (carried.open, carried.high, carried.low) == (None, None, None)
+
+
+def test_trade_avg_observation_never_has_ohlc_even_with_matching_ohlc_by_date_entry():
+    # No price_history row on 01-10 (only a trade) -> ohlc_by_date is keyed by MARKET days
+    # from price_rows only, so an entry for the trade's own date must never leak into its
+    # TRADE_AVG mark, regardless of it being present in the dict.
+    buy = _tx(1, "BUY", day="2025-01-10", quantity="10", amount="1000")
+    series = build_asset_price_series(
+        price_rows=[],
+        transactions=[buy],
+        split_linked_tx_ids=set(),
+        asset_currency="EUR",
+        quote_base_quantity=1,
+        ohlc_by_date={date(2025, 1, 10): (_d("95"), _d("105"), _d("90"))},
+    )
+    mark = series.resolve(date(2025, 1, 10))
+    assert mark.source is MarkSource.TRADE_AVG
+    assert (mark.open, mark.high, mark.low) == (None, None, None)
+
+
+def test_partial_ohlc_observation_is_treated_as_no_ohlc():
+    # open+high present, low missing -> AssetPriceSeries must drop the WHOLE triple, never
+    # guess the missing extremum or emit a partially-filled ResolvedMark. Exercised directly
+    # at the PriceObservation/AssetPriceSeries layer (below the build_asset_price_series
+    # normalization), matching the docstring contract verbatim.
+    obs = PriceObservation(date=date(2025, 1, 10), unit_price=_d("108"), currency="EUR", kind=ObservationKind.MARKET, open=_d("105"), high=_d("110"), low=None)
+    mark = AssetPriceSeries([obs]).resolve(date(2025, 1, 10))
+    assert mark.source is MarkSource.MARKET
+    assert mark.unit_price == _d("108")  # the close itself is unaffected by the dropped range
+    assert (mark.open, mark.high, mark.low) == (None, None, None)
+
+
+def test_build_partial_ohlc_by_date_entry_is_treated_as_no_ohlc():
+    # Same guarantee through the full build_asset_price_series pipeline.
+    series = build_asset_price_series(
+        price_rows=[(date(2025, 1, 10), _d("108"), "EUR")],
+        transactions=[],
+        split_linked_tx_ids=set(),
+        asset_currency="EUR",
+        quote_base_quantity=1,
+        ohlc_by_date={date(2025, 1, 10): (_d("105"), _d("110"), None)},
+    )
+    mark = series.resolve(date(2025, 1, 10))
+    assert (mark.open, mark.high, mark.low) == (None, None, None)

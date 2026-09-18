@@ -30,10 +30,12 @@
     import {aggregateLineSeries, mapDateToBucket, cascadeResolution, chooseInitialResolution} from '$lib/components/charts/timeSeriesAggregation';
     import type {ChartResolution} from '$lib/components/charts/timeSeriesAggregation';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
-    import type {PortfolioHistoryPoint} from '$lib/stores/portfolio/portfolioStore.svelte';
+    import type {PortfolioHistoryPoint, PortfolioBrokerPnlHistory, PortfolioPnlCandleSeries, PortfolioIncomeHistorySeries} from '$lib/stores/portfolio/portfolioStore.svelte';
+    import {aggregateOHLCV, aggregateSumSeries} from '$lib/components/charts/timeSeriesAggregation';
     import {buildTooltipTheme, buildTooltipHeader, buildTooltipRow, buildTooltipDivider, tooltipPositionSide, setupTooltipAutoHide, scheduleFirstRenderStabilityFix} from '$lib/components/charts/echartsTooltipHelpers';
     import {INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG} from '$lib/components/charts/chartCoreHelpers';
     import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from '$lib/components/charts/echartsDataZoomTouchPan';
+    import {buildOhlcQuad} from '$lib/components/charts/candlestickChartHelpers';
 
     // =========================================================================
     // Props
@@ -41,39 +43,67 @@
 
     interface Props {
         history: PortfolioHistoryPoint[];
+        /** G1a — per-broker additive P&L overlay. Empty/omitted: total-only P&L mode
+         *  (single-broker scope or broker-detail mount, per plan §3.2). */
+        brokerPnlHistory?: PortfolioBrokerPnlHistory[];
+        /** G1b — synthetic total-P&L candle series. null/undefined while not yet
+         *  fetched (candles are lazy per plan §4.1) or on the candles submode's first
+         *  activation, in which case `onRequestPnlCandles` fires once. */
+        pnlCandles?: PortfolioPnlCandleSeries | null;
+        /** G1b — called at most once per activation when the user switches to the
+         *  candles submode and `pnlCandles` is not yet loaded. The caller (Dashboard)
+         *  owns the actual fetch/cache; GrowthChart only signals "now I need it". */
+        onRequestPnlCandles?: () => void;
+        /** G1c — signed DIVIDEND/INTEREST history. Eager (not lazy like pnlCandles):
+         *  the caller fetches it on every ordinary load, per plan §4.1's sparse-payload
+         *  policy — no onRequest callback needed here. */
+        incomeHistory?: PortfolioIncomeHistorySeries;
         height?: string;
         loading?: boolean;
         baseCurrency?: string;
     }
 
-    let {history = [], height = '360px', loading = false, baseCurrency = 'EUR'}: Props = $props();
+    let {history = [], brokerPnlHistory = [], pnlCandles = null, onRequestPnlCandles, incomeHistory = undefined, height = '360px', loading = false, baseCurrency = 'EUR'}: Props = $props();
 
     // =========================================================================
     // State
     // =========================================================================
 
-    let viewMode: 'eur' | 'pct' = $state('eur');
+    // coreMode = value|return|pnl (plan §5.1); kept as the existing 'eur'/'pct'/'pnl'
+    // literal union for minimal churn on the 14 existing branches, not a rename.
+    let viewMode: 'eur' | 'pct' | 'pnl' = $state('eur');
+    // pnlSubmode = line|candles|income (plan §5.1); only 'line' has a real branch until
+    // G1b/G1c land — no submode picker UI is shown while the other two are inert.
+    let pnlSubmode: 'line' | 'candles' | 'income' = $state('line');
     let currentResolution: ChartResolution = $state('daily');
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | undefined = undefined;
     let dataZoomTouchPanHandle: {dispose: () => void} | null = null;
-    /** Tracks last viewMode used for full init — dark mode or viewMode switch requires full re-init */
-    let lastRenderedMode: 'eur' | 'pct' | null = null;
+    /** Tracks last (viewMode, pnlSubmode) combination used for full init. A pnlSubmode
+     *  change (line -> candles) needs a full rebuild too even though viewMode stays 'pnl':
+     *  the series TYPE changes (line -> candlestick), which the partial-update path
+     *  (`{name, data}` only, see CHART_SERIES_UPDATE_OPTS) cannot express. */
+    let lastRenderedMode: string | null = null;
     let lastRenderedDark: boolean | null = null;
     let lastHistoryRef: PortfolioHistoryPoint[] | null = null;
     let responsiveXAxisCompact = false;
     const resizeWatcher = createResizeWatcher(() => {
         chartInstance?.resize();
         if (chartInstance && chartContainer && activeChartData) {
+            const isCandlesSubmode = viewMode === 'pnl' && pnlSubmode === 'candles';
             const policy = buildResponsiveXAxisPolicy({
                 width: chartContainer.clientWidth,
                 values: activeChartData.dates,
                 locale: $locale ?? undefined,
-                axisType: 'time',
+                axisType: isCandlesSubmode ? 'category' : 'time',
             });
             const wasCompact = responsiveXAxisCompact;
             responsiveXAxisCompact = policy.compact;
             if (policy.axisLabel) {
+                // splitNumber is a time/value/log-axis concept — ECharts ignores it on a
+                // category axis, so this stays unconditional (no need to fork on
+                // isCandlesSubmode): policy.splitNumber is simply undefined there already
+                // (see buildResponsiveXAxisPolicy).
                 chartInstance.setOption({xAxis: {splitNumber: policy.splitNumber, axisLabel: policy.axisLabel}}, {lazyUpdate: true});
             } else if (wasCompact) {
                 renderChart(true);
@@ -100,7 +130,26 @@
         capitalBaseline: {light: '#6b7280', dark: '#9ca3af'}, // Capital baseline — grey dashed
         invested: {light: '#2563eb', dark: '#60a5fa'}, // TWRR (% mode)
         pctCash: {light: '#9caf9c', dark: '#94a3b8'}, // ROI (% mode)
+        totalPnl: {light: '#1a4031', dark: '#4ade80'}, // P&L mode — Total line (same prominence as NAV)
+        dividend: {light: '#0891b2', dark: '#22d3ee'}, // P&L income submode — Dividend stacked bar
+        interest: {light: '#7c3aed', dark: '#a78bfa'}, // P&L income submode — Interest stacked bar
     };
+
+    // Rotating palette for the P&L broker overlay (G1a) — distinct hues, cycled by index
+    // so any broker count renders with a stable, distinguishable color per line.
+    const BROKER_PALETTE: Array<{light: string; dark: string}> = [
+        {light: '#2563eb', dark: '#60a5fa'}, // blue
+        {light: '#d97706', dark: '#fbbf24'}, // amber
+        {light: '#7c3aed', dark: '#a78bfa'}, // violet
+        {light: '#db2777', dark: '#f472b6'}, // pink
+        {light: '#0891b2', dark: '#22d3ee'}, // cyan
+        {light: '#65a30d', dark: '#a3e635'}, // lime
+    ];
+
+    function brokerColor(index: number, isDark: boolean): string {
+        const entry = BROKER_PALETTE[index % BROKER_PALETTE.length];
+        return isDark ? entry.dark : entry.light;
+    }
 
     type SeriesPoint = ReturnType<typeof namedPoint> & {
         bucketStart: string;
@@ -129,12 +178,37 @@
         bucketEnd: string;
     }
 
+    /** One broker's P&L overlay line, aggregated at a given resolution (G1a). */
+    interface AggregatedBrokerPnl {
+        brokerId: number;
+        brokerName: string;
+        metric: AggregatedMetric;
+    }
+
+    /** One synthetic P&L candle point, aggregated at a given resolution (G1b). */
+    type CandleSeriesPoint = SeriesPoint & {
+        open: number | null;
+        high: number | null;
+        low: number | null;
+        close: number | null;
+    };
+
+    interface AggregatedCandleMetric {
+        points: CandleSeriesPoint[];
+    }
+
     interface AggregatedResolutionData {
         resolution: ChartResolution;
         dates: string[];
         buckets: BucketInfo[];
         eur: Record<EurSeriesKey, AggregatedMetric>;
         pct: Record<PctSeriesKey, AggregatedMetric>;
+        pnl: {
+            total: AggregatedMetric;
+            brokers: AggregatedBrokerPnl[];
+            candle: AggregatedCandleMetric;
+            income: {dividend: AggregatedMetric; interest: AggregatedMetric};
+        };
     }
 
     const resolutionCache = new Map<ChartResolution, AggregatedResolutionData>();
@@ -202,6 +276,53 @@
         nav: $_('dashboard.navValue'),
         capitalBaseline: $_('dashboard.capitalBaseline'),
         capitalBaselineTooltip: $_('dashboard.capitalBaselineTooltip'),
+    });
+
+    // Translated labels for P&L mode (G1a)
+    const pnlLabels = $derived({
+        total: $_('dashboard.totalPnl'),
+        // G1c: reuse the existing transaction-type labels (dynamic-prefix protected,
+        // but a plain static reference to an existing key is safe) — no new i18n key.
+        dividend: $_('transactions.types.DIVIDEND'),
+        interest: $_('transactions.types.INTEREST'),
+    });
+
+    /**
+     * P&L mode broker overlay (G1a): one aligned-to-`dates` values array per broker in
+     * `brokerPnlHistory`, built via a date lookup (a broker's points may not cover every
+     * date 1:1 with `history` — e.g. it joined the scope later). `total_pnl` here is the
+     * SAME already-computed `eurStackedData.totalPnl` used by EUR mode — canonical,
+     * inception-based, never rebased (plan §3.2). Only rendered when ≥2 brokers are
+     * present, matching "one selected broker: total line only".
+     */
+    const pnlBrokerSeriesRaw = $derived(
+        brokerPnlHistory.length >= 2
+            ? brokerPnlHistory.map((broker) => {
+                  const byDate = new Map(broker.points.map((p) => [p.date, amt(p.total_pnl)]));
+                  return {
+                      brokerId: broker.broker_id,
+                      brokerName: broker.broker_name,
+                      values: dates.map((d) => byDate.get(d) ?? null),
+                  };
+              })
+            : [],
+    );
+
+    /** P&L candles submode (G1b): per-date OHLC lookup from the fetched series. A date
+     *  absent from the map means that day's candle was unavailable (a resolved held-asset
+     *  valuation was MISSING) — a genuine gap, never guessed. */
+    const pnlCandleByDate = $derived(new Map((pnlCandles?.points ?? []).map((p) => [p.date, {open: Number(p.open.amount), high: Number(p.high.amount), low: Number(p.low.amount), close: Number(p.close.amount)}])));
+
+    /** P&L income submode (G1c): signed dividend/interest values aligned to `dates`.
+     *  A date absent from incomeHistory.points means no DIVIDEND/INTEREST that day —
+     *  rendered as 0 (a sparse-flow series, distinct from candle "gap" semantics). */
+    const dividendValues = $derived.by(() => {
+        const byDate = new Map((incomeHistory?.points ?? []).map((p) => [p.date, Number(p.dividend.amount)]));
+        return dates.map((d) => byDate.get(d) ?? 0);
+    });
+    const interestValues = $derived.by(() => {
+        const byDate = new Map((incomeHistory?.points ?? []).map((p) => [p.date, Number(p.interest.amount)]));
+        return dates.map((d) => byDate.get(d) ?? 0);
     });
 
     const pctSeriesRaw = $derived([
@@ -328,6 +449,96 @@
         return {values: aggregatedValues, points};
     }
 
+    /** Aggregate a sparse economic-flow metric (signed DIVIDEND/INTEREST, G1c) using
+     *  aggregateSumSeries — mirrors aggregateMetric()'s structure exactly but sums
+     *  every day in a bucket instead of taking the last value (plan §3.4/§5.2: "Weekly/
+     *  monthly buckets sum them; they never use end-of-period/last-value semantics"). */
+    function aggregateFlowMetric(values: number[], resolution: ChartResolution, buckets: BucketInfo[]): AggregatedMetric {
+        if (resolution === 'daily') {
+            return {
+                values: [...values],
+                points: buckets.map((bucket, index) => toSeriesPoint(bucket, values[index] ?? 0)),
+            };
+        }
+
+        const sourcePoints: LineDataPoint[] = dates.map((date, index) => ({date, value: values[index] ?? 0}));
+        const aggregated = aggregateSumSeries(sourcePoints, resolution);
+        const lookup = new Map<string, AggregatedLookupEntry>(
+            aggregated.map((point) => [
+                point.date,
+                {
+                    value: point.value,
+                    bucketStart: 'bucketStart' in point && typeof point.bucketStart === 'string' ? point.bucketStart : point.date,
+                    bucketEnd: 'bucketEnd' in point && typeof point.bucketEnd === 'string' ? point.bucketEnd : point.date,
+                },
+            ]),
+        );
+
+        const aggregatedValues = buckets.map((bucket) => lookup.get(bucket.date)?.value ?? 0);
+        const points = buckets.map((bucket, index) => {
+            const meta = lookup.get(bucket.date);
+            return toSeriesPoint(
+                {
+                    ...bucket,
+                    bucketStart: meta?.bucketStart ?? bucket.bucketStart,
+                    bucketEnd: meta?.bucketEnd ?? bucket.bucketEnd,
+                },
+                aggregatedValues[index],
+            );
+        });
+
+        return {values: aggregatedValues, points};
+    }
+
+    /** Aggregate the daily synthetic P&L candle series to a coarser resolution, reusing
+     *  the shared aggregateOHLCV reducer (first open / max high / min low / last close) —
+     *  the exact "compose daily first, then roll up" contract (plan §4.3), never re-derived
+     *  here. Days with no candle (map miss) are excluded before aggregating, matching
+     *  aggregateMetric()'s null-filtering convention for the same reason: a bucket with no
+     *  contributing day must not synthesize a false zero-range candle. */
+    function aggregateCandleMetric(byDate: Map<string, {open: number; high: number; low: number; close: number}>, resolution: ChartResolution, buckets: BucketInfo[]): AggregatedCandleMetric {
+        if (resolution === 'daily') {
+            return {
+                points: buckets.map((bucket) => {
+                    const c = byDate.get(bucket.date);
+                    return {...toSeriesPoint(bucket, c?.close ?? null), open: c?.open ?? null, high: c?.high ?? null, low: c?.low ?? null, close: c?.close ?? null};
+                }),
+            };
+        }
+
+        const sourcePoints: LineDataPoint[] = dates.flatMap((date) => {
+            const c = byDate.get(date);
+            return c ? [{date, value: c.close, open: c.open, high: c.high, low: c.low, close: c.close}] : [];
+        });
+        const aggregated = aggregateOHLCV(sourcePoints, resolution);
+        const lookup = new Map(
+            aggregated.map((point) => [
+                point.date,
+                {
+                    open: point.open ?? null,
+                    high: point.high ?? null,
+                    low: point.low ?? null,
+                    close: point.close ?? null,
+                    bucketStart: 'bucketStart' in point && typeof point.bucketStart === 'string' ? point.bucketStart : point.date,
+                    bucketEnd: 'bucketEnd' in point && typeof point.bucketEnd === 'string' ? point.bucketEnd : point.date,
+                },
+            ]),
+        );
+
+        const points = buckets.map((bucket) => {
+            const meta = lookup.get(bucket.date);
+            return {
+                ...toSeriesPoint({...bucket, bucketStart: meta?.bucketStart ?? bucket.bucketStart, bucketEnd: meta?.bucketEnd ?? bucket.bucketEnd}, meta?.close ?? null),
+                open: meta?.open ?? null,
+                high: meta?.high ?? null,
+                low: meta?.low ?? null,
+                close: meta?.close ?? null,
+            };
+        });
+
+        return {points};
+    }
+
     function getResolutionData(resolution: ChartResolution): AggregatedResolutionData {
         const cached = resolutionCache.get(resolution);
         if (cached) return cached;
@@ -349,6 +560,21 @@
                 mwrrCum: aggregateMetric(pctSeriesRaw[0].values, resolution, buckets),
                 twrr: aggregateMetric(pctSeriesRaw[1].values, resolution, buckets),
                 roi: aggregateMetric(pctSeriesRaw[2].values, resolution, buckets),
+            },
+            pnl: {
+                // Reuses the exact same Decimal-sourced totalPnl values as EUR mode's
+                // tooltip line — one canonical, non-rebased total_pnl series (plan §3.2).
+                total: aggregateMetric(eurStackedData.totalPnl, resolution, buckets),
+                brokers: pnlBrokerSeriesRaw.map((broker) => ({
+                    brokerId: broker.brokerId,
+                    brokerName: broker.brokerName,
+                    metric: aggregateMetric(broker.values, resolution, buckets),
+                })),
+                candle: aggregateCandleMetric(pnlCandleByDate, resolution, buckets),
+                income: {
+                    dividend: aggregateFlowMetric(dividendValues, resolution, buckets),
+                    interest: aggregateFlowMetric(interestValues, resolution, buckets),
+                },
             },
         };
 
@@ -451,7 +677,57 @@
         return `${buildTooltipHeader($_('chart.tooltip.monthLabel', {values: {month: formatTooltipMonth(bucket.bucketEnd)}}), theme.textColor)}${contextLine}`;
     }
 
-    function buildChartUpdateSeries(_isDark: boolean, entry: AggregatedResolutionData): {name: string; data: SeriesPoint[]}[] {
+    /** ECharts candlestick data point for a `category` xAxis: a flat `[open, close,
+     *  low, high]` quad (note the element order — NOT open/high/low/close),
+     *  reusing the exact same shared convention as CandlestickChart.svelte via
+     *  `buildOhlcQuad` (see PR discussion: candlestick series silently fails to
+     *  paint any body/wick on a `time` xAxis — a known upstream ECharts limitation
+     *  — so this submode uses a `category` axis instead, matching the codebase's
+     *  own already-proven Asset Detail price-chart pattern). `null` when the
+     *  day/bucket has no candle (a genuine gap, never rendered as a flat
+     *  zero-range bar). Position in the array (not the date itself) is what
+     *  aligns it to the shared `xAxis.data` category list. */
+    function toCandlestickPoint(point: CandleSeriesPoint): number[] | null {
+        if (point.open == null || point.close == null || point.low == null || point.high == null) return null;
+        return buildOhlcQuad(point.open, point.close, point.low, point.high, false, 1);
+    }
+
+    /** A category xAxis aligns series data by position, not by `[date, value]`
+     *  pairs — extract the plain value so the broker-line overlay lines up with
+     *  the candlestick's category positions in `pnlSubmode==='candles'`. */
+    function toPositionalValue(point: SeriesPoint): number | null {
+        return point.value[1];
+    }
+
+    /** Clip a point's value to null when it doesn't match `keepPositive` — used to
+     *  split the Total P&L line into two fixed, same-length series (positive-part /
+     *  negative-part), each with its own solid green/red color. A FIXED two-series
+     *  split (rather than a variable number of contiguous same-sign segments) keeps
+     *  `updateChartData`'s partial by-index series merge valid across zoom/pan,
+     *  where the count of sign-crossings in the visible window can change on every
+     *  frame. ECharts' visualMap does not reliably recolor a line series'
+     *  lineStyle/areaStyle per value — a documented upstream limitation (see
+     *  apache/echarts#8034) — so per-point coloring needs this series-split
+     *  approach instead, same spirit as LineChart.svelte's segment-based coloring. */
+    function clipToSign(point: SeriesPoint, keepPositive: boolean): SeriesPoint {
+        const v = point.value[1];
+        if (v == null || v >= 0 === keepPositive) return point;
+        return {...point, value: [point.value[0], null]};
+    }
+
+    /** The Total P&L value at (or just after) `referenceDate` — the reference for
+     *  the #3 dashed baseline (plan follow-up: "was P&L up or down over the
+     *  examined period"). Mirrors buildZoomWindow's own bucket-lookup convention
+     *  (first bucket whose end reaches the date). Falls back to the first point
+     *  when nothing qualifies (empty range or a reference before all data). */
+    function findReferenceTotalPnl(entry: AggregatedResolutionData, referenceDate: string | null): number | null {
+        const points = entry.pnl.total.points;
+        if (points.length === 0) return null;
+        const point = (referenceDate != null && points.find((p) => p.bucketEnd >= referenceDate)) || points[0];
+        return point.value[1];
+    }
+
+    function buildChartUpdateSeries(_isDark: boolean, entry: AggregatedResolutionData, referenceDate: string | null = null): {name: string; data: SeriesPoint[]}[] {
         if (viewMode === 'eur') {
             return [
                 {name: eurLabels.bookAssetLike, data: entry.eur.bookAssetLike.points},
@@ -461,6 +737,44 @@
                 {name: eurLabels.capitalBaseline, data: entry.eur.capitalBaseline.points},
             ];
         }
+
+        if (viewMode === 'pnl' && pnlSubmode === 'line') {
+            // Split into a fixed positive/negative pair (clip-to-null, see clipToSign)
+            // instead of a variable number of sign-crossing segments, plus a third
+            // fixed slot for the #3 dashed reference line (flat at the first-visible-
+            // day P&L) — all three keep updateChartData's partial by-index series
+            // merge valid across zoom/pan.
+            const referenceValue = findReferenceTotalPnl(entry, referenceDate);
+            const referencePoints: SeriesPoint[] = entry.pnl.total.points.map((p) => ({...p, value: [p.value[0], referenceValue]}));
+            return [
+                {name: pnlLabels.total, data: entry.pnl.total.points.map((p) => clipToSign(p, true))},
+                {name: pnlLabels.total, data: entry.pnl.total.points.map((p) => clipToSign(p, false))},
+                {name: '__pnlReference__', data: referencePoints},
+                ...entry.pnl.brokers.map((broker) => ({name: broker.brokerName, data: broker.metric.points})),
+            ];
+        }
+
+        if (viewMode === 'pnl' && pnlSubmode === 'candles') {
+            // Hybrid rendering (plan §3.3): total as candlestick, broker close-P&L lines
+            // (reusing the exact same per-broker data as the Line submode, just
+            // repositioned for the category axis) overlaid when the scope has ≥2
+            // brokers. Candlestick data is structurally a flat quad, not a SeriesPoint
+            // — cast through unknown; ECharts itself doesn't care, only the shared
+            // return-type annotation does (see buildFullSeries's matching cast).
+            return [{name: pnlLabels.total, data: entry.pnl.candle.points.map(toCandlestickPoint) as unknown as SeriesPoint[]}, ...entry.pnl.brokers.map((broker) => ({name: broker.brokerName, data: broker.metric.points.map(toPositionalValue) as unknown as SeriesPoint[]}))];
+        }
+
+        if (viewMode === 'pnl' && pnlSubmode === 'income') {
+            // DIVIDEND/INTEREST stacked bars (plan §3.4) — no broker overlay for this
+            // submode (the plan's hybrid-overlay rule is specific to Line/Candles).
+            return [
+                {name: pnlLabels.dividend, data: entry.pnl.income.dividend.points},
+                {name: pnlLabels.interest, data: entry.pnl.income.interest.points},
+            ];
+        }
+
+        // See buildChartUpdateSeries's matching guard.
+        if (viewMode === 'pnl') return [];
 
         return pctSeries.map((series) => ({
             name: series.name,
@@ -513,6 +827,114 @@
             ];
         }
 
+        if (viewMode === 'pnl' && pnlSubmode === 'line') {
+            const greenColor = isDark ? '#4ade80' : '#16a34a';
+            const redColor = isDark ? '#f87171' : '#dc2626';
+            // Positive/negative split (see clipToSign) instead of a single fixed-color
+            // line — ECharts visualMap doesn't reliably recolor a line's
+            // lineStyle/areaStyle per value (apache/echarts#8034), so this uses the
+            // same "split into multiple series" idiom as LineChart.svelte's own
+            // segment coloring, just as a fixed 2-slot pair (not a variable segment
+            // count) so it stays compatible with updateChartData's partial merge.
+            const positiveSeries: echarts.SeriesOption = {
+                name: pnlLabels.total,
+                type: 'line',
+                data: seriesData[0].data,
+                smooth: false,
+                connectNulls: false,
+                symbol: 'none',
+                lineStyle: {color: greenColor, width: 2, type: 'solid'},
+                itemStyle: {color: greenColor},
+                areaStyle: {color: greenColor, opacity: 0.15},
+                emphasis: {focus: 'series'},
+            };
+            const negativeSeries: echarts.SeriesOption = {
+                name: pnlLabels.total,
+                type: 'line',
+                data: seriesData[1].data,
+                smooth: false,
+                connectNulls: false,
+                symbol: 'none',
+                lineStyle: {color: redColor, width: 2, type: 'solid'},
+                itemStyle: {color: redColor},
+                areaStyle: {color: redColor, opacity: 0.15},
+                emphasis: {focus: 'series'},
+            };
+            // Dashed reference line at the first-visible-day P&L (plan follow-up #3) —
+            // drawn as a dedicated flat-line series, not markLine, to avoid an ECharts
+            // bug where markLine + visualMap (piecewise, dimension:1, tuple data)
+            // crashes with "Cannot read properties of undefined (reading 'coord')"
+            // (same precedent as LineChart.svelte's own baseline reference line).
+            const referenceSeries: echarts.SeriesOption = {
+                type: 'line',
+                name: '__pnlReference__',
+                data: seriesData[2].data,
+                symbol: 'none',
+                showSymbol: false,
+                lineStyle: {color: isDark ? '#64748b' : '#9ca3af', type: 'dashed', width: 1},
+                itemStyle: {color: 'transparent'},
+                emphasis: {disabled: true},
+                tooltip: {show: false},
+                silent: true,
+                z: 0,
+            };
+            const brokerSeries: echarts.SeriesOption[] = seriesData.slice(3).map((s, index) => ({
+                name: s.name,
+                type: 'line' as const,
+                data: s.data,
+                smooth: false,
+                connectNulls: false,
+                symbol: 'none',
+                lineStyle: {color: brokerColor(index, isDark), width: 1.5, type: 'dashed'},
+                itemStyle: {color: brokerColor(index, isDark)},
+                emphasis: {focus: 'series'},
+            }));
+            return [positiveSeries, negativeSeries, referenceSeries, ...brokerSeries];
+        }
+
+        if (viewMode === 'pnl' && pnlSubmode === 'candles') {
+            // Same up/down colors as the P&L tooltip's sign coloring, for consistency.
+            const greenColor = isDark ? '#4ade80' : '#16a34a';
+            const redColor = isDark ? '#f87171' : '#dc2626';
+            // seriesData[0].data is really (number[]|null)[] here (see the matching cast
+            // in buildChartUpdateSeries) — a flat [open,close,low,high] quad per category
+            // position, matching CandlestickChart.svelte's own category-axis convention
+            // (a `time` xAxis silently fails to paint any candlestick body/wick — a known
+            // upstream ECharts limitation). `any` here matches the existing
+            // CandlestickChart.svelte convention (`const series: any[] = []`) rather than
+            // fighting the generated types file-wide.
+            const candleSeries: any = {
+                name: pnlLabels.total,
+                type: 'candlestick',
+                data: seriesData[0].data,
+                barWidth: '80%',
+                itemStyle: {color: greenColor, color0: redColor, borderColor: greenColor, borderColor0: redColor},
+            };
+            const brokerSeries: echarts.SeriesOption[] = seriesData.slice(1).map((s, index) => ({
+                name: s.name,
+                type: 'line' as const,
+                data: s.data,
+                smooth: false,
+                connectNulls: false,
+                symbol: 'none',
+                lineStyle: {color: brokerColor(index, isDark), width: 1.5, type: 'dashed'},
+                itemStyle: {color: brokerColor(index, isDark)},
+                emphasis: {focus: 'series'},
+            }));
+            return [candleSeries, ...brokerSeries];
+        }
+
+        if (viewMode === 'pnl' && pnlSubmode === 'income') {
+            const cc = (key: keyof typeof COLORS) => COLORS[key][isDark ? 'dark' : 'light'];
+            return [
+                {name: pnlLabels.dividend, type: 'bar' as const, stack: 'income', data: seriesData[0].data, itemStyle: {color: cc('dividend')}},
+                {name: pnlLabels.interest, type: 'bar' as const, stack: 'income', data: seriesData[1].data, itemStyle: {color: cc('interest')}},
+            ];
+        }
+
+        // See buildChartUpdateSeries's matching guard.
+        if (viewMode === 'pnl') return [];
+
         return pctSeries.map((series, index) => ({
             name: series.name,
             type: 'line' as const,
@@ -525,15 +947,16 @@
         }));
     }
 
-    function updateChartData(entry: AggregatedResolutionData, isDark: boolean, zoomWindow: {start: number; end: number}, skipAnimation: boolean) {
+    function updateChartData(entry: AggregatedResolutionData, isDark: boolean, zoomWindow: {start: number; end: number}, skipAnimation: boolean, referenceDate: string | null = null) {
         if (!chartInstance) return;
 
-        const seriesData = buildChartUpdateSeries(isDark, entry);
+        const seriesData = buildChartUpdateSeries(isDark, entry, referenceDate);
+        const isCandlesSubmode = viewMode === 'pnl' && pnlSubmode === 'candles';
         const xAxisPolicy = buildResponsiveXAxisPolicy({
             width: chartContainer?.clientWidth ?? 0,
             values: entry.dates,
             locale: $locale ?? undefined,
-            axisType: 'time',
+            axisType: isCandlesSubmode ? 'category' : 'time',
         });
         const wasCompact = responsiveXAxisCompact;
 
@@ -567,7 +990,13 @@
                       }
                     : CHART_ANIMATION_CONFIG),
                 dataZoom: [{type: 'inside', ...INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG, start: zoomWindow.start, end: zoomWindow.end}],
-                xAxis: xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber, axisLabel: xAxisPolicy.axisLabel} : {},
+                // Candles submode's category axis must keep `data` (the bucket dates) in
+                // lockstep with `entry.dates` on every update — unlike the time axis, whose
+                // positions are computed from the timestamps embedded in each data point, a
+                // category axis's positions come ONLY from this array. A resolution switch
+                // (daily <-> weekly/monthly) changes both, so it can't be gated behind the
+                // `compact` check the time-axis branch uses for its label-only refresh.
+                xAxis: isCandlesSubmode ? {data: entry.dates, ...(xAxisPolicy.compact ? {axisLabel: xAxisPolicy.axisLabel} : {})} : xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber, axisLabel: xAxisPolicy.axisLabel} : {},
                 series,
             },
             CHART_SERIES_UPDATE_OPTS,
@@ -595,7 +1024,7 @@
         const zoomWindow = buildZoomWindow(targetResolution, logicalRange.startDate, logicalRange.endDate);
 
         activeChartData = entry;
-        updateChartData(entry, isDark, zoomWindow, true);
+        updateChartData(entry, isDark, zoomWindow, true, logicalRange.startDate);
     }
 
     function scheduleResolutionSync() {
@@ -628,12 +1057,27 @@
         };
     });
 
+    // G1b — lazy candle fetch: fire the request-callback once when the user activates the
+    // candles submode and no data has arrived yet. Re-fires harmlessly if pnlCandles is
+    // still null next time this effect runs (e.g. after a broker/date-range refetch reset
+    // it) — the caller's own report cache makes a repeat request cheap.
+    $effect(() => {
+        if (viewMode === 'pnl' && pnlSubmode === 'candles' && pnlCandles == null) {
+            onRequestPnlCandles?.();
+        }
+    });
+
     $effect(() => {
         // Re-render when data, viewMode, or locale changes
         void history;
         void viewMode;
+        void pnlSubmode;
         void pctSeries;
         void eurLabels;
+        void pnlLabels;
+        void brokerPnlHistory;
+        void pnlCandles;
+        void incomeHistory;
         void $locale;
 
         if (history !== lastHistoryRef) {
@@ -705,17 +1149,18 @@
         const zoomWindow = buildZoomWindow(currentResolution, logicalRange.startDate, logicalRange.endDate);
         activeChartData = activeData;
 
-        // Determine if this is a data-only update (same mode, same dark) or full re-init
-        const needsFullInit = forceFullXAxisRebuild || lastRenderedMode !== viewMode || lastRenderedDark !== isDark;
-        const seriesData = buildChartUpdateSeries(isDark, activeData);
+        // Determine if this is a data-only update (same mode+submode, same dark) or full re-init
+        const renderedModeKey = viewMode === 'pnl' ? `pnl:${pnlSubmode}` : viewMode;
+        const needsFullInit = forceFullXAxisRebuild || lastRenderedMode !== renderedModeKey || lastRenderedDark !== isDark;
+        const seriesData = buildChartUpdateSeries(isDark, activeData, logicalRange.startDate);
 
         if (needsFullInit) {
             applyFullOption(isDark, buildFullSeries(isDark, seriesData), zoomWindow);
         } else {
-            updateChartData(activeData, isDark, zoomWindow, false);
+            updateChartData(activeData, isDark, zoomWindow, false, logicalRange.startDate);
         }
 
-        lastRenderedMode = viewMode;
+        lastRenderedMode = renderedModeKey;
         lastRenderedDark = isDark;
     }
 
@@ -723,22 +1168,28 @@
         if (!chartInstance) return;
         const {bg: tooltipBg, border: tooltipBorder, textColor, mutedColor} = buildTooltipTheme(isDark);
         const gridColor = isDark ? '#1e293b' : '#f1f5f9';
+        // Candles submode uses a category axis (see buildFullSeries's matching comment
+        // for why: candlestick silently fails to paint on a time axis, a known ECharts
+        // limitation) — every other mode/submode keeps the shared time axis. The zoom
+        // pipeline (buildZoomWindow/getLogicalRangeFromChart) is already index/percentage-
+        // based, never timestamp-based, so this fork needs no changes there.
+        const isCandlesSubmode = viewMode === 'pnl' && pnlSubmode === 'candles';
         const xAxisPolicy = buildResponsiveXAxisPolicy({
             width: chartContainer?.clientWidth ?? 0,
             values: activeChartData?.dates ?? dates,
             locale: $locale ?? undefined,
-            axisType: 'time',
+            axisType: isCandlesSubmode ? 'category' : 'time',
         });
         responsiveXAxisCompact = xAxisPolicy.compact;
 
         const yAxisFormatter =
-            viewMode === 'eur'
-                ? (v: number) => {
+            viewMode === 'pct'
+                ? (v: number) => `${v.toFixed(1)}%`
+                : (v: number) => {
                       if (Math.abs(v) >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
                       if (Math.abs(v) >= 1_000) return `${(v / 1_000).toFixed(0)}k`;
                       return String(v);
-                  }
-                : (v: number) => `${v.toFixed(1)}%`;
+                  };
 
         /** Format a number as currency — same pattern as the dashboard formatMoney helper. */
         const fmtCurrency = (v: number | null | undefined) => (v != null ? `${baseCurrency} ${v.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '—');
@@ -800,6 +1251,63 @@
                         return html;
                     }
 
+                    if (viewMode === 'pnl' && pnlSubmode === 'line') {
+                        const totalVal = activeChartData?.pnl.total.values[idx];
+                        const cc = (key: keyof typeof COLORS) => COLORS[key][isDark ? 'dark' : 'light'];
+                        const pnlRow = (label: string, v: number | null | undefined, color: string) => {
+                            if (v == null) return buildTooltipRow(label, '—', color);
+                            const signColor = v >= 0 ? (isDark ? '#4ade80' : '#16a34a') : isDark ? '#f87171' : '#dc2626';
+                            return `<div style="display:flex;justify-content:space-between;gap:16px;color:${color}"><span>${label}</span><b style="color:${signColor}">${v >= 0 ? '+' : '−'}${fmtCurrency(Math.abs(v))}</b></div>`;
+                        };
+                        html += pnlRow(`<b>${pnlLabels.total}</b>`, totalVal, cc('totalPnl'));
+                        activeChartData?.pnl.brokers.forEach((broker, index) => {
+                            html += pnlRow(broker.brokerName, broker.metric.values[idx], brokerColor(index, isDark));
+                        });
+                        return html;
+                    }
+
+                    if (viewMode === 'pnl' && pnlSubmode === 'candles') {
+                        const cc = (key: keyof typeof COLORS) => COLORS[key][isDark ? 'dark' : 'light'];
+                        const candle = activeChartData?.pnl.candle.points[idx];
+                        const ohlcRow = (label: string, v: number | null | undefined) => `<div style="display:flex;justify-content:space-between;gap:16px;color:${textColor}"><span>${label}</span><b>${v != null ? fmtCurrency(v) : '—'}</b></div>`;
+                        if (candle && candle.close != null) {
+                            html += ohlcRow($_('dataEditor.col.open'), candle.open);
+                            html += ohlcRow($_('dataEditor.col.close'), candle.close);
+                            html += ohlcRow($_('dataEditor.col.high'), candle.high);
+                            html += ohlcRow($_('dataEditor.col.low'), candle.low);
+                        } else {
+                            html += `<div style="color:${mutedColor}">${$_('common.noData')}</div>`;
+                        }
+                        // TODO(coordinator i18n batch): replace with $_('dashboard.pnlCandlesHypothetical')
+                        // once the key is added — see G1b checkpoint report for the exact EN string.
+                        html += `<div style="font-size:10px;color:${textColor};opacity:0.7;margin-top:4px">Synthetic — cross-asset high/low are hypothetical and non-simultaneous</div>`;
+                        activeChartData?.pnl.brokers.forEach((broker, index) => {
+                            const v = broker.metric.values[idx];
+                            if (v == null) return;
+                            const signColor = v >= 0 ? (isDark ? '#4ade80' : '#16a34a') : isDark ? '#f87171' : '#dc2626';
+                            html += `<div style="display:flex;justify-content:space-between;gap:16px;color:${brokerColor(index, isDark)}"><span>${broker.brokerName}</span><b style="color:${signColor}">${v >= 0 ? '+' : '−'}${fmtCurrency(Math.abs(v))}</b></div>`;
+                        });
+                        return html;
+                    }
+
+                    if (viewMode === 'pnl' && pnlSubmode === 'income') {
+                        const cc = (key: keyof typeof COLORS) => COLORS[key][isDark ? 'dark' : 'light'];
+                        const divVal = activeChartData?.pnl.income.dividend.values[idx] ?? 0;
+                        const intVal = activeChartData?.pnl.income.interest.values[idx] ?? 0;
+                        const signedRow = (label: string, v: number, color: string) => {
+                            const signColor = v >= 0 ? (isDark ? '#4ade80' : '#16a34a') : isDark ? '#f87171' : '#dc2626';
+                            return `<div style="display:flex;justify-content:space-between;gap:16px;color:${color}"><span>${label}</span><b style="color:${signColor}">${v >= 0 ? '+' : '−'}${fmtCurrency(Math.abs(v))}</b></div>`;
+                        };
+                        html += signedRow(pnlLabels.dividend, divVal, cc('dividend'));
+                        html += signedRow(pnlLabels.interest, intVal, cc('interest'));
+                        html += buildTooltipDivider(tooltipBorder);
+                        html += signedRow(`<b>${$_('assets.distribution.total')}</b>`, divVal + intVal, textColor);
+                        return html;
+                    }
+
+                    // See buildChartUpdateSeries's matching guard.
+                    if (viewMode === 'pnl') return html;
+
                     html += items
                         .filter((p: any) => p.value != null)
                         .map((p: any) => {
@@ -820,18 +1328,32 @@
                 itemHeight: 8,
             },
             dataZoom: [{type: 'inside', ...INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG, start: zoomWindow.start, end: zoomWindow.end}],
-            xAxis: {
-                type: 'time',
-                ...(xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber} : {}),
-                axisLabel: {
-                    color: textColor,
-                    fontSize: 14,
-                    rotate: 0,
-                    ...(xAxisPolicy.axisLabel ?? {}),
-                },
-                axisLine: {lineStyle: {color: gridColor}},
-                splitLine: {show: false},
-            },
+            xAxis: isCandlesSubmode
+                ? {
+                      type: 'category',
+                      data: activeChartData?.dates ?? dates,
+                      boundaryGap: true,
+                      axisLabel: {
+                          color: textColor,
+                          fontSize: 14,
+                          rotate: 0,
+                          ...(xAxisPolicy.axisLabel ?? {}),
+                      },
+                      axisLine: {lineStyle: {color: gridColor}},
+                      splitLine: {show: false},
+                  }
+                : {
+                      type: 'time',
+                      ...(xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber} : {}),
+                      axisLabel: {
+                          color: textColor,
+                          fontSize: 14,
+                          rotate: 0,
+                          ...(xAxisPolicy.axisLabel ?? {}),
+                      },
+                      axisLine: {lineStyle: {color: gridColor}},
+                      splitLine: {show: false},
+                  },
             yAxis: {
                 type: 'value',
                 // Use a min function so the y-axis auto-scales rather than forcing 0.
@@ -886,7 +1408,7 @@
     <div class="flex items-center justify-between">
         <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-200">{$_('dashboard.growth')}</h2>
 
-        <!-- Abs / % segmented toggle -->
+        <!-- Abs / % / P&L segmented toggle -->
         <div class="flex rounded-lg overflow-hidden border border-gray-200 dark:border-slate-600 text-xs font-medium">
             <button class="px-3 py-1 transition-colors {viewMode === 'eur' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}" onclick={() => (viewMode = 'eur')} data-testid="growth-toggle-eur">
                 {$_('dashboard.abs')}
@@ -902,6 +1424,13 @@
             >
                 {$_('dashboard.pct')}
             </button>
+            <button
+                class="px-3 py-1 transition-colors border-l border-gray-200 dark:border-slate-600 {viewMode === 'pnl' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                onclick={() => (viewMode = 'pnl')}
+                data-testid="growth-toggle-pnl"
+            >
+                {$_('dashboard.pnl')}
+            </button>
         </div>
     </div>
 
@@ -910,6 +1439,38 @@
         <div class="absolute top-2 left-2 z-10 pointer-events-none">
             <ResolutionBadge resolution={currentResolution} />
         </div>
+        {#if viewMode === 'pnl'}
+            <!-- P&L submode toggle: Line | Synthetic candles | Income. Floats as an
+                 overlay above the chart (matching PriceChartFull's edit/settings
+                 controls) instead of taking its own row and shrinking the chart area.
+                 TODO(coordinator i18n batch): all three labels are temporary hardcoded EN —
+                 see G1c checkpoint report for the exact keys/values to add. -->
+            <div class="absolute top-2 right-2 z-10 flex items-center gap-1.5">
+                <div class="flex rounded-lg border border-gray-200/70 dark:border-slate-600/70 overflow-hidden shadow-sm opacity-75 hover:opacity-100 transition-opacity text-xs font-medium">
+                    <button
+                        class="px-3 py-1 transition-colors {pnlSubmode === 'line' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        onclick={() => (pnlSubmode = 'line')}
+                        data-testid="growth-pnl-submode-line"
+                    >
+                        Line
+                    </button>
+                    <button
+                        class="px-3 py-1 transition-colors border-l border-gray-200/70 dark:border-slate-600/70 {pnlSubmode === 'candles' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        onclick={() => (pnlSubmode = 'candles')}
+                        data-testid="growth-pnl-submode-candles"
+                    >
+                        Candles
+                    </button>
+                    <button
+                        class="px-3 py-1 transition-colors border-l border-gray-200/70 dark:border-slate-600/70 {pnlSubmode === 'income' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        onclick={() => (pnlSubmode = 'income')}
+                        data-testid="growth-pnl-submode-income"
+                    >
+                        Income
+                    </button>
+                </div>
+            </div>
+        {/if}
         <!-- Skeleton / empty overlay -->
         {#if loading}
             <div class="absolute inset-0 z-10 bg-gray-100 dark:bg-slate-700 rounded animate-pulse"></div>
@@ -925,5 +1486,10 @@
         <p class="text-center text-xs text-gray-400 dark:text-gray-500 italic mt-1">
             {$_('dashboard.roiAllZero')}
         </p>
+    {/if}
+    {#if !loading && viewMode === 'pnl' && pnlSubmode === 'candles'}
+        <!-- Mandatory always-visible synthetic-candle disclosure (plan §3.3). -->
+        <!-- TODO(coordinator i18n batch): temporary hardcoded EN, see G1b checkpoint report. -->
+        <p class="text-center text-xs text-gray-400 dark:text-gray-500 italic mt-1" data-testid="growth-pnl-candles-hypothetical-label">Synthetic — cross-asset high/low are hypothetical and non-simultaneous, not a real intraday series.</p>
     {/if}
 </div>

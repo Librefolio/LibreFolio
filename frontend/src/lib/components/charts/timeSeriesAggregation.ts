@@ -143,6 +143,34 @@ export function aggregateLineSeries(points: LineDataPoint[], resolution: ChartRe
 }
 
 /**
+ * Aggregate sparse economic-flow series (e.g. signed DIVIDEND/INTEREST buckets, G1c)
+ * by SUMMING every point that falls in a bucket — never end-of-period/last-value
+ * semantics (that would silently drop every day but the last one's flow). Distinct
+ * from aggregateLineSeries (cumulative running totals: NAV, P&L) and aggregateOHLCV
+ * (already-composed daily candles: first/max/min/last) — a flow value has no
+ * "current balance" to read at the end of a bucket, only a sum of what occurred in it.
+ * Daily path returns original array by reference.
+ */
+export function aggregateSumSeries(points: LineDataPoint[], resolution: ChartResolution): LineDataPoint[] {
+    if (resolution === 'daily') return points;
+    if (points.length === 0) return [];
+
+    return groupPointsByBucket(points, resolution).map((group) => {
+        const sum = group.points.reduce((total, point) => total + point.value, 0);
+        const lastPoint = group.points[group.points.length - 1];
+        return withBucketMeta(
+            {...lastPoint, value: sum},
+            {
+                bucketStart: group.bucketStart,
+                bucketEnd: group.bucketEnd,
+                resolution,
+                sourcePointCount: group.points.length,
+            },
+        );
+    });
+}
+
+/**
  * Aggregate OHLCV series with standard candlestick semantics.
  * Daily path returns original array by reference.
  */

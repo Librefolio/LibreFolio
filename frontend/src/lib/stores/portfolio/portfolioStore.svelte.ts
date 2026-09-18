@@ -56,6 +56,48 @@ export type PortfolioHistoryPoint = {
     roi?: string | null;
 };
 
+// Broker P&L history point/series types — define inline (generated type is not exported),
+// mirroring PortfolioHistoryPoint above. G1a: additive per-broker P&L overlay for GrowthChart.
+export type PortfolioBrokerPnlHistoryPoint = {
+    date: string;
+    total_pnl: {code: string; amount: string};
+};
+
+export type PortfolioBrokerPnlHistory = {
+    broker_id: number;
+    broker_name: string;
+    points: PortfolioBrokerPnlHistoryPoint[];
+};
+
+// Synthetic P&L candle types — define inline (generated type is not exported), mirroring
+// the pattern above. G1b: total-only candle series for GrowthChart's P&L candles submode.
+export type PortfolioPnlCandlePoint = {
+    date: string;
+    open: {code: string; amount: string};
+    high: {code: string; amount: string};
+    low: {code: string; amount: string};
+    close: {code: string; amount: string};
+};
+
+export type PortfolioPnlCandleSeries = {
+    hypothetical: boolean;
+    points: PortfolioPnlCandlePoint[];
+};
+
+// Signed personal income history types — define inline (generated type is not exported),
+// mirroring the pattern above. G1c: DIVIDEND/INTEREST stacked bars for GrowthChart's P&L
+// income submode.
+export type PortfolioIncomeHistoryPoint = {
+    date: string;
+    dividend: {code: string; amount: string};
+    interest: {code: string; amount: string};
+};
+
+export type PortfolioIncomeHistorySeries = {
+    points: PortfolioIncomeHistoryPoint[];
+    missing_fx_pairs: string[];
+};
+
 // For allocation history dimensions we use the report type (no separate direct endpoint)
 type RawAlloc = PortfolioReport['allocation_history'];
 export type AllocationHistoryDimensions = Extract<NonNullable<RawAlloc>, {type?: unknown}>;
@@ -126,9 +168,41 @@ export function portfolioError(): string | null {
  *   synchronously JSON-parsing it blocks the main thread for no benefit if it's never read.
  * @param includeAllocationHistory — Request allocation_history (type/sector/geography series).
  *   Same rationale as includeHistory — defaults to true, pass false when not consumed.
+ * @param options.includeBrokerPnlHistory — Request broker_pnl_history (G1a additive per-broker
+ *   P&L overlay for GrowthChart). Trailing options object per plan §4.1: feature selection
+ *   must not add more order-sensitive positional booleans. Caller sets true only when the
+ *   effective broker scope has ≥2 brokers.
+ * @param options.includePnlCandles — Request pnl_candles (G1b synthetic total-P&L candle
+ *   series). Lazy — caller sets true only on first candle-submode activation, per plan §4.1
+ *   ("expensive OHLC work stays off ordinary reports").
+ * @param options.includeIncomeHistory — Request income_history (G1c signed DIVIDEND/
+ *   INTEREST history). Eager — a sparse, cheap payload; Dashboard/Broker overview set
+ *   this true on every ordinary load, unlike includePnlCandles.
  */
-export async function fetchReport(brokerIds?: number[], dateFrom?: string, dateTo?: string, targetCurrency?: string, force = false, includeContribution = false, includeBreakdown = false, includeHistory = true, includeAllocationHistory = true): Promise<PortfolioReport | null> {
-    const key = makeCacheKey(brokerIds, dateFrom, dateTo, targetCurrency) + (includeContribution ? '|contrib' : '') + (includeBreakdown ? '|breakdown' : '') + (includeHistory ? '' : '|nohist') + (includeAllocationHistory ? '' : '|noalloc');
+export async function fetchReport(
+    brokerIds?: number[],
+    dateFrom?: string,
+    dateTo?: string,
+    targetCurrency?: string,
+    force = false,
+    includeContribution = false,
+    includeBreakdown = false,
+    includeHistory = true,
+    includeAllocationHistory = true,
+    options?: {includeBrokerPnlHistory?: boolean; includePnlCandles?: boolean; includeIncomeHistory?: boolean},
+): Promise<PortfolioReport | null> {
+    const includeBrokerPnlHistory = options?.includeBrokerPnlHistory ?? false;
+    const includePnlCandles = options?.includePnlCandles ?? false;
+    const includeIncomeHistory = options?.includeIncomeHistory ?? false;
+    const key =
+        makeCacheKey(brokerIds, dateFrom, dateTo, targetCurrency) +
+        (includeContribution ? '|contrib' : '') +
+        (includeBreakdown ? '|breakdown' : '') +
+        (includeHistory ? '' : '|nohist') +
+        (includeAllocationHistory ? '' : '|noalloc') +
+        (includeBrokerPnlHistory ? '|brokerpnl' : '') +
+        (includePnlCandles ? '|pnlcandles' : '') +
+        (includeIncomeHistory ? '|incomehist' : '');
     const requestSessionGeneration = getClientSessionGeneration();
     const requestCacheGeneration = cacheGeneration;
 
@@ -152,6 +226,9 @@ export async function fetchReport(brokerIds?: number[], dateFrom?: string, dateT
                 include_allocation_history: includeAllocationHistory,
                 include_positions_contribution: includeContribution,
                 include_breakdown: includeBreakdown,
+                include_broker_pnl_history: includeBrokerPnlHistory,
+                include_pnl_candles: includePnlCandles,
+                include_income_history: includeIncomeHistory,
             };
             if (brokerIds && brokerIds.length > 0) body.broker_ids = brokerIds;
             if (dateFrom || dateTo) {

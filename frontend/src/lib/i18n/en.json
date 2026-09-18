@@ -1461,7 +1461,13 @@
     "yieldOnCostValue": "Yield on Cost",
     "yieldOnCostPeriod": "Period",
     "yieldOnCostFxRateDate": "rate from",
-    "yieldOnCostNoIncomeTitle": "No income recorded"
+    "yieldOnCostNoIncomeTitle": "No income recorded",
+    "pnl": "P&L",
+    "pnlSubmodeLine": "Line",
+    "pnlSubmodeCandles": "Candles",
+    "pnlSubmodeIncome": "Income",
+    "pnlCandlesHypothetical": "Synthetic — cross-asset high/low are hypothetical and non-simultaneous, not a real intraday series.",
+    "pnlCandlesHypotheticalShort": "Synthetic — cross-asset high/low are hypothetical and non-simultaneous"
   },
   "dataQuality": {
     "headerInfoOnly": "Data quality note",
