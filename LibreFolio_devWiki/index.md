@@ -76,6 +76,7 @@
 
 | Page | Summary | Date | Tags |
 |------|---------|------|------|
+| [[decisions/asset-global-page-shows-no-money]] | With weights → euros → "me"; without weights → percentages → "these". The rule has **no frontend guard at all** — it holds only because the backend sends nulls, so the test must stub money *in* and is red today | 2026-09-05 | frontend, risk, asset-set, ux, testing, invariant |
 | [[decisions/drawdown-full-history-warmup]] | Drawdown has unlimited memory: `full_history` param (UI toggle) loads from `date.min`, AI Export always full; a SQL max-seed is FX-unsafe | 2026-09-02 | backend, signals, risk, drawdown, ai-export, warmup |
 | [[decisions/settings-write-path-contract]] | Confirm before applying, report per field, never stop at the first refusal — C1-C9 answered as one contract | 2026-08-30 | settings, frontend, ux, api-contract |
 | [[decisions/broker-last-owner-guard]] | Removal of the last owner is blocked while demotion to VIEWER is not; the obvious repair was rejected in favour of a dialogue | 2026-08-30 | brokers, sharing, permissions, ux |
@@ -213,6 +214,11 @@
 
 | Page | Summary | Status | Tags |
 |------|---------|--------|------|
+| [[problems/front-check-does-not-check-what-you-think]] | `tsconfig.json` excludes `e2e/**` (false green) and the git-ignored generated client makes a fresh worktree born red — 278 errors that `api sync` reduces to 2 | resolved | frontend, tooling, svelte-check, e2e, api-client, gates |
+| [[problems/generated-client-widens-nullable-scalar]] | `RiskMatrixCell.value`: the Zod validator says nullable number, the emitted TS type says number-or-array; narrow locally at the boundary | open | frontend, api-client, openapi, zodios, risk, generated-code |
+| [[problems/risk-request-sorts-asset-ids]] | `buildRiskRequest` sorts `asset_ids` ascending for a stable cache key, so correlation payload position is id order, never chip/render order — positional stubs read the wrong asset | resolved | frontend, risk, testing, e2e, caching |
+| [[problems/testid-grep-false-negative]] | `SimpleSelect`/`SearchSelect` compose `${testId}-button`/`-trigger` at runtime, so grepping the assembled string returns 0 for a test id that exists; `AssetSelect` hides the inverse gap | resolved | frontend, testing, e2e, selectors, ui-primitives |
+| [[problems/asset-set-scope-has-no-primary-series]] | `historical_kpi`/`drawdown_summary`/`historical_var`/`comparison` reduce one series; an asset set is *n* unweighted series, so per-set KPIs have no input | open | backend, risk, asset-set, scope, plugins, architecture |
 | [[problems/sqlite-savepoint-without-write-begins-as-transaction]] | SQLite can release the first savepoint as the effective outer transaction after read-only setup; start a no-op write before per-item savepoints so final rollback remains real | resolved | backend, sqlite, sqlalchemy, transactions, savepoint, rollback |
 | [[problems/ghcr-browser-cors-auth-flow]] | Anonymous GHCR manifests require a Bearer exchange that browser CORS cannot reliably complete; a fixed-target same-origin probe now gates update prompts and fails closed | resolved | backend, frontend, ghcr, auth, cors, update-check |
 | [[problems/compactcashcell-decimal-separator-feedback-loop]] | Sync-down `$effect` compared display strings, so the field's own echo erased `,` mid-typing; fix = numeric compare; plus the `isVisible({timeout})` probe trap with delayed tooltips | resolved | frontend, transactions, decimal, svelte5, ux, testing |
