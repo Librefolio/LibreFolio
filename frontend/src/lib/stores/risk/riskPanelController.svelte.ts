@@ -111,6 +111,12 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
     let initialLoading = $state(true);
     let refreshing = $state(false);
     let loadError = $state(false);
+    /** A load whose answer *arrived and was discarded* — the client session or the
+     *  cache generation moved while the request was in flight. Kept apart from
+     *  `loadError` (nothing failed) and from an empty result (nothing is missing),
+     *  for the same reason `catalogState` keeps "slow" apart from "failed": one flag
+     *  cannot carry two meanings without lying about one of them. */
+    let loadDiscarded = $state(false);
 
     let requestGeneration = 0;
     const generations: Record<OnDemandAnalysis, number> = {comparison: 0, stress: 0, replay: 0, simulation: 0};
@@ -177,13 +183,14 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
         return inFlight;
     }
 
-    async function loadBase(force: boolean): Promise<void> {
+    async function loadBase(force: boolean, reAskedAfterDiscard = false): Promise<void> {
         const generation = ++requestGeneration;
         const {scope, dateStart, dateEnd, targetCurrency, appliedRiskFreePercent} = inputs();
         const hadResults = historicalResults.length > 0 || currentResults.length > 0;
         initialLoading = !hadResults;
         refreshing = hadResults;
         loadError = false;
+        loadDiscarded = false;
 
         try {
             catalog = await fetchRiskCatalog();
@@ -224,6 +231,32 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
             ]);
 
             if (generation !== requestGeneration) return;
+
+            // `queryRisk` answers in three ways — a response, a throw, and a *discard*:
+            // a null returned when the client session or the cache generation moved
+            // while the request was in flight. `?? []` folded that third answer into
+            // "no data", which asserts something about the world when the fact is about
+            // this client, and `applyBaseSignature` then never re-asked — so a complete,
+            // healthy matrix could render as "no result" until the user happened to
+            // change the inputs. The first identity resolution alone is enough to arm it
+            // (`clientSession.transition` bumps the generation before any resetter runs),
+            // which is why it shows up on a reload and never on an in-app navigation.
+            //
+            // The analytics lengths are not decoration: the ternaries above *also* yield
+            // null for "not asked", so without them the two nulls are indistinguishable.
+            if ((historicalAnalytics.length > 0 && historical === null) || (currentAnalytics.length > 0 && current === null)) {
+                // Re-ask once, under the generation that did the discarding. The guard
+                // itself stays: discarding another account's answer is correct. What was
+                // missing is that a guard which protects by discarding must be able to
+                // say so, or the protection is indistinguishable from an absence of data.
+                if (!reAskedAfterDiscard) {
+                    await loadBase(force, true);
+                    return;
+                }
+                loadDiscarded = true;
+                return;
+            }
+
             historicalResults = historical?.items ?? [];
             currentResults = current?.items ?? [];
         } catch (error) {
@@ -423,6 +456,12 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
         },
         get loadError() {
             return loadError;
+        },
+        /** True when the base load's answer was discarded twice running. Distinct from
+         *  `loadError` and from an empty result: the cure is to ask again, not to
+         *  explain, so a surface reading this should offer the action, not a diagnosis. */
+        get loadDiscarded() {
+            return loadDiscarded;
         },
         /** `ready` | `error` | `pending` — the attribute that separates "slow" from
          *  "failed", which a single `pending` could not say. */
