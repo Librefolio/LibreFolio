@@ -1,4 +1,4 @@
-import {expect, test, type Page} from '../fixtures/playwright';
+import {expect, test, type Locator, type Page} from '../fixtures/playwright';
 
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {expectChartCanvas} from '../fixtures/charts';
@@ -24,6 +24,72 @@ interface RiskRequest {
 
 interface RiskMockOptions {
     unavailableVar?: boolean;
+    /**
+     * Makes the historical replay refuse to run until this holding is left out.
+     *
+     * `stress.py:451` stops at the **first** holding without usable history and
+     * refuses the whole replay, naming it in `details`. That is not a dead end
+     * but a question, and the only answer the reader can give is an exclusion —
+     * which has to travel on the *next* request for anything to change.
+     *
+     * A stub that answered every replay with `ok` left that round trip
+     * unexercised, so the accumulating-exclusion loop was reachable only in
+     * production. Refusing until the id appears in `excluded_assets`, and
+     * succeeding once it does, is the smallest model of the server that makes
+     * the loop observable — and it is opt-in, so every other test is unmoved.
+     */
+    replayBlockedAssetId?: number;
+    /**
+     * Answers the simulation with `unavailable`, the way a busy worker, a
+     * timeout or a series too short does.
+     *
+     * `schemas/risk.py:1056` forbids an `unavailable` result from carrying an
+     * output, so this is not an unlikely corner: it is the **only** shape that
+     * branch can take. Every step of L4 renders on `{#if output}`, so before
+     * the level disclosed its health the reader got a blank panel with no cause
+     * — and no fixture in this suite had ever produced the state that reveals
+     * it. Opt-in, so every other test is unmoved.
+     */
+    unavailableSimulation?: boolean;
+    /**
+     * Warnings to hang on every result carrying one of these analytic codes.
+     *
+     * The wave already ships exactly one warning — `correlation` answers
+     * `partial` with `E2E partial fixture` — and **no level renders
+     * correlation**, so until this option existed nothing in the four-level
+     * panel ever had a reason to display. The suite was green over a surface it
+     * never reached.
+     *
+     * Keyed by code rather than by instance on purpose: `historical_var` is
+     * asked twice in one wave, so one entry here puts the *same sentence* on two
+     * results — which is the only way to exercise the deduplication, and the
+     * reason `ResultReason` carries `occurrences` at all.
+     *
+     * Opt-in, like `replayBlockedAssetId` above: with it absent
+     * `withInjectedWarnings` hands the result straight back, so every other
+     * test's payload is unchanged down to the byte.
+     */
+    analyticWarnings?: Record<string, Array<{code: string; message: string}>>;
+}
+
+/**
+ * The horizon the four-level panel asks its "bad month" VaR for.
+ *
+ * Mirrors `MONTHLY_VAR_HORIZON_DAYS` in `riskAnalysisHelpers`, on purpose rather
+ * than imported: the dashboard test asserts that the panel really puts this
+ * number on the wire, so a drift in the product shows up as a red here instead
+ * of a constant that silently agrees with whatever was sent.
+ */
+const MONTHLY_VAR_HORIZON_DAYS = 21;
+
+/**
+ * A loss as the panel writes it: a real minus sign (U+2212), not a hyphen.
+ *
+ * Spelled with an escape because the two are indistinguishable in a diff, and a
+ * test that fails on an invisible character costs an hour to read.
+ */
+function loss(percent: string): string {
+    return `\u2212${percent}`;
 }
 
 const CATALOG = {
@@ -34,6 +100,7 @@ const CATALOG = {
         definition('stress', 'stress', ['asset', 'asset_set', 'portfolio'], ['current_composition'], 'stress', 1),
         definition('comparison', 'comparison', ['asset', 'portfolio'], ['historical', 'current_composition'], 'comparison', 20),
         definition('historical_var', 'var_cvar', ['asset', 'portfolio'], ['historical', 'current_composition'], 'historicalVar', 20),
+        definition('drawdown_summary', 'drawdown', ['asset', 'portfolio'], ['historical'], 'drawdownSummary', 20),
         definition('simulation', 'simulation', ['asset', 'portfolio'], ['current_composition'], 'simulation', 30),
     ],
 };
@@ -228,6 +295,18 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
         };
     }
 
+    if (analytic.analytic_code === 'simulation' && options.unavailableSimulation) {
+        return {
+            ...base,
+            status: 'unavailable',
+            output: null,
+            error: {
+                code: 'insufficient_history',
+                message: 'E2E unavailable simulation fixture',
+            },
+        };
+    }
+
     switch (analytic.analytic_code) {
         case 'historical_kpi':
             return {
@@ -278,17 +357,59 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
                     ],
                 },
             };
-        case 'historical_var':
+        case 'historical_var': {
+            // Two VaRs travel in one historical wave — a 1-day and a ~1-month —
+            // and only `instance_id` tells them apart. A fixture answering both
+            // with the same figures would let `resultByInstance` be swapped for
+            // `resultByCode` and still pass, which is exactly the mix-up that
+            // helper was written to prevent. The horizon-1 branch keeps its
+            // original numbers byte for byte, and no other scope in this file
+            // ever asks for a longer horizon, so nothing existing moves.
+            //
+            // The month is deliberately *not* the day scaled by √21 (which would
+            // be 14,2%): the backend compounds real overlapping windows, so the
+            // two are independent observations, and a fixture that scaled one
+            // from the other would teach the panel a model the server never ran.
+            const longHorizon = Number(analytic.parameters?.horizon_days ?? 1) > 1;
             return {
                 ...base,
                 status: 'ok',
                 output: {
                     kind: 'var_cvar',
                     confidence_level: 0.95,
-                    horizon_days: 1,
+                    horizon_days: longHorizon ? MONTHLY_VAR_HORIZON_DAYS : 1,
                     observations: 60,
-                    value_at_risk: 0.021,
-                    conditional_value_at_risk: 0.031,
+                    value_at_risk: longHorizon ? 0.068 : 0.021,
+                    conditional_value_at_risk: longHorizon ? 0.094 : 0.031,
+                },
+            };
+        }
+        case 'drawdown_summary':
+            // Kept numerically consistent with the `historical_kpi` fixture above:
+            // a mock that contradicts itself would teach the panel a shape the
+            // backend never emits, and still pass.
+            return {
+                ...base,
+                status: 'ok',
+                output: {
+                    kind: 'drawdown',
+                    current_drawdown: -0.032,
+                    current_peak_date: '2024-02-05',
+                    current_drawdown_duration_days: 41,
+                    maximum_drawdown: -0.087,
+                    maximum_drawdown_peak_date: '2023-11-14',
+                    maximum_drawdown_trough_date: '2023-12-03',
+                    maximum_drawdown_recovery_status: 'open',
+                    maximum_drawdown_recovery_date: null,
+                    maximum_drawdown_duration_days: 19,
+                    maximum_drawdown_recovered_ratio: 0.63,
+                    remaining_to_peak_ratio: 0.033,
+                    available_start: '2023-09-01',
+                    available_end: '2024-03-17',
+                    n_observations: 60,
+                    coverage: 0.98,
+                    calculation_basis: 'daily_close',
+                    return_basis: 'twrr',
                 },
             };
         case 'comparison': {
@@ -319,6 +440,31 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
             if (method === 'historical_replay') {
                 const proxyAssets = (analytic.parameters?.proxy_assets ?? []) as Array<{asset_id: number; proxy_asset_id: number}>;
                 const excludedAssetIds = (analytic.parameters?.excluded_assets ?? []) as number[];
+                if (options.replayBlockedAssetId !== undefined && !excludedAssetIds.includes(options.replayBlockedAssetId)) {
+                    // The server's own shape, down to the branch: `stress.py:458`
+                    // sends `insufficient_history` with `return_source_asset_id`
+                    // **equal to** `asset_id` when the holding itself has no
+                    // history, and `invalid_parameters` with a different one when
+                    // a stand-in is the thing at fault. Only the first has an
+                    // answer the reader can give, and `replayBlocker` reads those
+                    // two fields to decide whether to offer it — so a stub that
+                    // set them carelessly would exercise the wrong branch while
+                    // still producing a red-looking-green blocker panel.
+                    return {
+                        ...base,
+                        status: 'unavailable',
+                        output: null,
+                        error: {
+                            code: 'insufficient_history',
+                            message: `Asset ${options.replayBlockedAssetId} requires a manual proxy or explicit exclusion`,
+                            details: {
+                                asset_id: options.replayBlockedAssetId,
+                                return_source_asset_id: options.replayBlockedAssetId,
+                                reason: 'insufficient_history',
+                            },
+                        },
+                    };
+                }
                 const proxy = proxyAssets.find((mapping) => mapping.asset_id === assetId);
                 const excluded = excludedAssetIds.includes(assetId);
                 const replayRange = (analytic.parameters?.replay_range ?? request.date_range) as {start: string; end: string};
@@ -461,6 +607,26 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
     }
 }
 
+/**
+ * Append the configured warnings to one result, leaving every other alone.
+ *
+ * Applied at the boundary rather than folded into `resultFor`, which builds
+ * `warnings` in **two** places — once in `base`, and again in the `correlation`
+ * branch which *replaces* the array wholesale. An injection written into `base`
+ * would therefore be silently dropped for exactly one analytic, and a stub that
+ * quietly discards what the test asked it to send is worse than one that never
+ * offered the option: the test would fail describing the panel.
+ *
+ * Returns the very same object when nothing is configured for the code. That is
+ * not an optimisation, it is the guarantee: the fixtures the pinned tests are
+ * written against cannot move if no new object is ever built for them.
+ */
+function withInjectedWarnings(result: Record<string, unknown>, options: RiskMockOptions): Record<string, unknown> {
+    const injected = options.analyticWarnings?.[String(result.analytic_code)];
+    if (!injected || injected.length === 0) return result;
+    return {...result, warnings: [...((result.warnings as unknown[] | undefined) ?? []), ...injected]};
+}
+
 async function installRiskMocks(page: Page, options: RiskMockOptions = {}): Promise<RiskRequest[]> {
     const requests: RiskRequest[] = [];
 
@@ -487,7 +653,7 @@ async function installRiskMocks(page: Page, options: RiskMockOptions = {}): Prom
             status: 200,
             contentType: 'application/json',
             body: JSON.stringify({
-                items: request.analytics.map((analytic) => resultFor(request, analytic, options)),
+                items: request.analytics.map((analytic) => withInjectedWarnings(resultFor(request, analytic, options), options)),
             }),
         });
     });
@@ -505,15 +671,56 @@ async function waitForRiskCatalog(page: Page): Promise<void> {
     await expect(page.getByTestId('risk-analysis-panel').first()).toHaveAttribute('data-catalog', 'ready', {timeout: 20_000});
 }
 
-async function openDashboardRisk(page: Page): Promise<void> {
+/**
+ * The same gate, for the four-level panel that Dashboard and Broker Detail mount.
+ *
+ * A second helper rather than a widened first one, and deliberately so: Asset
+ * Detail still mounts the legacy `risk-analysis-panel`, and a locator matching
+ * either testid would report "ready" for whichever panel the page happened to
+ * have — including the wrong one. One helper per component keeps the question
+ * unambiguous, and leaves `waitForRiskCatalog` untouched for the asset specs.
+ *
+ * Waits for the capability catalogue, then for the base wave to land. The second
+ * half is what makes every section assertion below a statement about the answer
+ * instead of a bet on fetch latency.
+ */
+async function waitForRiskLevels(page: Page): Promise<Locator> {
+    const panel = page.getByTestId('risk-levels-panel');
+    await expect(panel).toHaveAttribute('data-catalog', 'ready', {timeout: 20_000});
+    await expect(panel).toHaveAttribute('data-busy', 'false', {timeout: 20_000});
+    return panel;
+}
+
+async function openDashboardRisk(page: Page): Promise<Locator> {
     await navigateTo(page, '/dashboard');
     await expect(page.getByTestId('dashboard-page')).toBeVisible({timeout: 15_000});
     await page.getByTestId('dashboard-tab-risk').click();
     await expect(page.getByTestId('dashboard-risk-tab')).toBeVisible({timeout: 8_000});
-    await waitForRiskCatalog(page);
+    return waitForRiskLevels(page);
 }
 
-async function openFirstBrokerRisk(page: Page): Promise<number> {
+/**
+ * Open L4 and leave it demonstrably open, whichever state it was in.
+ *
+ * Asks before clicking rather than toggling blind: L4 starts closed today, but a
+ * helper that assumes so would *close* it the day the panel remembers the
+ * reader's last drawer, and the caller would then be asserting on an absence it
+ * caused itself.
+ *
+ * Ends on the rungs being on screen, not merely on the section's attribute:
+ * `data-open` flips synchronously with the click, so it says the drawer was
+ * asked to open, not that anything inside it mounted.
+ */
+async function openLevel4(panel: Locator): Promise<Locator> {
+    const level4 = panel.getByTestId('risk-level-4');
+    await expect(level4).toBeVisible({timeout: 10_000});
+    if ((await level4.getAttribute('data-open')) !== 'true') await panel.getByTestId('risk-level-4-toggle').click();
+    await expect(level4).toHaveAttribute('data-open', 'true');
+    await expect(panel.getByTestId('risk-l4')).toBeVisible({timeout: 8_000});
+    return level4;
+}
+
+async function openFirstBrokerRisk(page: Page): Promise<{brokerId: number; panel: Locator}> {
     await navigateTo(page, '/brokers');
     const firstBroker = page.getByTestId(/^broker-card-\d+$/).first();
     await expect(firstBroker).toBeVisible({timeout: 8_000});
@@ -523,8 +730,33 @@ async function openFirstBrokerRisk(page: Page): Promise<number> {
     if (!match) throw new Error('Broker detail URL must contain a numeric broker ID.');
     await page.getByTestId('broker-tab-risk').click();
     await expect(page.getByTestId('broker-risk-tab')).toBeVisible({timeout: 8_000});
-    await waitForRiskCatalog(page);
-    return Number(match[1]);
+    return {brokerId: Number(match[1]), panel: await waitForRiskLevels(page)};
+}
+
+/**
+ * Come back to the Broker Detail page the caller is already on, cold.
+ *
+ * A *document* load, not a route change, and the distinction is the whole reason
+ * this helper exists. The capability catalogue is cached in a module
+ * (`catalogCache` in `riskStore`), so a client-side navigation hands the next
+ * panel a catalogue that is already present when it mounts, and every launcher
+ * gated on that catalogue works by accident. Only a cold load puts a network
+ * round trip between the panel mounting and the catalogue arriving, which is the
+ * window a launcher can fall into.
+ *
+ * `reload` rather than a constructed URL: the tab lives in the query string
+ * (`handleTabChange` → `buildTabUrl`), so coming back lands on Risk with the
+ * panel mounted by the first render instead of by a later click — what a reader
+ * who bookmarked or refreshed the Risk tab actually gets. The tab is then
+ * checked rather than assumed: if it ever stopped being addressable the reload
+ * would land on Overview, and a test waiting on a panel that never mounts would
+ * be blaming the wrong thing.
+ */
+async function reloadBrokerRiskCold(page: Page): Promise<Locator> {
+    await page.reload();
+    await page.waitForSelector('html[data-i18n-ready="true"]', {timeout: 15_000});
+    await expect(page.getByTestId('broker-risk-tab')).toBeVisible({timeout: 10_000});
+    return waitForRiskLevels(page);
 }
 
 async function openFirstAssetDetail(page: Page): Promise<number> {
@@ -574,6 +806,88 @@ async function selectedAssetIds(page: Page): Promise<number[]> {
         .slice(0, 100);
 }
 
+/** The analytic codes the mocked catalogue advertises for `portfolio` in one mode. */
+function advertisedForPortfolio(mode: RiskRequest['mode']): Set<string> {
+    return new Set(CATALOG.items.filter((item) => item.supported_scopes.includes('portfolio') && item.supported_modes.includes(mode)).map((item) => item.analytic_code));
+}
+
+/** Every analytic the panel asked for in one mode, across all portfolio requests. */
+function portfolioAnalytics(requests: RiskRequest[], mode: RiskRequest['mode']): RiskAnalyticRequest[] {
+    return requests.filter((request) => request.scope.kind === 'portfolio' && request.mode === mode).flatMap((request) => request.analytics);
+}
+
+/**
+ * Pick the L3 benchmark from the picker on `panel`, and say which one was picked.
+ *
+ * The dropdown is driven through `role=combobox` rather than a `-trigger` testid
+ * because `AssetSelect` does **not** forward its `testid` to the `SearchSelect`
+ * it wraps: `risk-l3-benchmark-select` names the wrapper div only, so
+ * `risk-l3-benchmark-select-trigger` does not exist in the DOM. (The neighbouring
+ * `risk-comparison-asset-select-trigger` works because that one is a bare
+ * `SearchSelect` given a `testId` directly.)
+ *
+ * The id is read off the option rather than hardcoded: which assets are offered
+ * depends on the scope's own holdings, since `excludeAssetIds` drops everything
+ * already in the portfolio so nothing is compared against itself.
+ *
+ * Ends on the choice being in force on the page that made it — the click having
+ * landed is what the caller is owed, and it is a stronger statement than the
+ * dropdown merely having closed.
+ */
+async function chooseBenchmark(page: Page, panel: Locator): Promise<number> {
+    const select = panel.getByTestId('risk-l3-benchmark-select');
+    await expect(select).toBeVisible({timeout: 10_000});
+    await select.getByRole('combobox').click();
+
+    // Retried, not slept on: `AssetSelect` fetches the asset cache on mount, so
+    // an open dropdown legitimately shows "loading" before it shows options.
+    const option = page.getByTestId(/^search-select-option-\d+$/).first();
+    await expect(option).toBeVisible({timeout: 10_000});
+    const optionTestId = await option.getAttribute('data-testid');
+    const assetId = Number(optionTestId?.replace('search-select-option-', ''));
+    if (!Number.isInteger(assetId) || assetId <= 0) throw new Error(`Benchmark option must expose a numeric asset id, got ${optionTestId}.`);
+
+    await option.click();
+    await expect(panel.getByTestId('risk-l3-benchmark')).toHaveAttribute('data-benchmark-id', String(assetId), {timeout: 8_000});
+    return assetId;
+}
+
+/**
+ * Put the shared benchmark back to "never chosen".
+ *
+ * Required rather than tidy: the choice is persisted, and `L3Benchmark` launches
+ * a `comparison` run by itself whenever it finds one stored. A test that walked
+ * away from its pick would hand every later mount an extra analytic nobody asked
+ * for — an intermittent that shows up in full runs and evaporates on re-run alone.
+ *
+ * Matched by suffix because the key is user-scoped (`lf_<userId>_...`) and a test
+ * has no business knowing the numeric id of the account it logged in as. The
+ * blast radius is still exactly the key this spec writes, not "whatever is in
+ * storage".
+ *
+ * Never throws: it runs in a `finally`, where the only thing worse than a failed
+ * cleanup is a failed cleanup that hides the failure it was cleaning up after.
+ */
+async function clearRiskBenchmark(page: Page): Promise<void> {
+    await page
+        .evaluate(() => {
+            for (const key of Object.keys(localStorage)) {
+                if (key.endsWith('_risk_benchmark_asset')) localStorage.removeItem(key);
+            }
+        })
+        .catch(() => undefined);
+}
+
+/** Every `comparison_asset_id` put on the wire by portfolio requests for one broker scope. */
+function comparisonAssetIds(requests: RiskRequest[], brokerIds: number[]): number[] {
+    const wanted = brokerIds.join(',');
+    return requests
+        .filter((request) => request.scope.kind === 'portfolio' && (request.scope.broker_ids ?? []).join(',') === wanted)
+        .flatMap((request) => request.analytics)
+        .filter((analytic) => analytic.analytic_code === 'comparison')
+        .map((analytic) => Number(analytic.parameters?.comparison_asset_id));
+}
+
 // Earned parallel: this file's blocks own the data they touch and wait on published
 // state, so they share the backend with their neighbours instead of queueing behind
 // them. Verified by a green run of the whole category at 4 workers.
@@ -586,43 +900,172 @@ test.describe('Risk analysis functional integration', () => {
 
     test('dashboard renders base analytics, quality, warnings, sync and capability gate', async ({page}) => {
         const requests = await installRiskMocks(page);
-        await openDashboardRisk(page);
+
+        // Armed before the first navigation: a request is an *edge*, and a
+        // listener attached after the click would be unable to say whether the
+        // closed level had already paid for its catalogue.
+        const scenarioCatalogCalls: string[] = [];
+        page.on('request', (request) => {
+            if (request.url().includes('/api/v1/risk/scenario-catalog')) scenarioCatalogCalls.push(request.url());
+        });
+
+        const panel = await openDashboardRisk(page);
 
         await expect(page.getByTestId('risk-beta-banner')).toBeVisible();
         await expect(page.getByTestId('risk-beta-banner')).toHaveCount(1);
-        await expect(page.getByTestId('risk-kpi-section')).toBeVisible({timeout: 8_000});
-        await expectChartCanvas(page, 'risk-correlation-heatmap', 8_000);
-        await expect(page.getByTestId('risk-contribution-bars')).toBeVisible({timeout: 8_000});
-        await expect(page.getByTestId('risk-var-section')).toBeVisible({timeout: 8_000});
-        await expect(page.getByTestId('risk-correlation-section-partial')).toBeVisible();
-        await expect(page.getByTestId('risk-correlation-section-warnings')).toBeVisible();
-        await expect(page.getByTestId('risk-quality-summary')).toBeVisible();
-        await expect(page.getByTestId('risk-analysis-panel').getByTestId('data-quality-banner')).toBeVisible();
-        await expect(page.getByTestId('risk-frontier-capability')).toHaveAttribute('data-available', 'false');
 
-        await expect
-            .poll(
-                () =>
-                    requests
-                        .filter((request) => request.scope.kind === 'portfolio')
-                        .map((request) => request.mode)
-                        .sort(),
-                {timeout: 15_000},
-            )
-            .toEqual(['current_composition', 'historical']);
+        // Dashboard's scope is the whole portfolio, so it must carry no subset
+        // label. Broker Detail asserts the mirror image; the pair is what makes
+        // the label mean something, since its text is translated and unassertable.
+        await expect(panel.getByTestId('risk-scope-label')).toHaveCount(0);
 
-        await expect(page.getByTestId('risk-sync-button')).toBeEnabled();
-        await page.getByTestId('risk-sync-button').click();
+        // --- L1: the scale of harm, every figure straight from the stub -------
+        await expect(panel.getByTestId('risk-level-1')).toBeVisible();
+        // A bad day and a bad month are separate observations carried by two
+        // instances of one analytic: equal numbers here would pass even if the
+        // panel read both rows off whichever result happened to arrive first.
+        await expect(panel.getByTestId('risk-l1-loss-day')).toHaveText(loss('3.1%'));
+        await expect(panel.getByTestId('risk-l1-loss-month')).toHaveText(loss('9.4%'));
+        // The worst fall arrives as `-0.087` under the `le=0` convention and must
+        // read as a positive magnitude of 8,7%, not as a dropped contradiction.
+        await expect(panel.getByTestId('risk-l1-loss-worst')).toHaveText(loss('8.7%'));
+        await expect(panel.getByTestId('risk-l1-duration-worst')).toBeVisible();
+        await expect(panel.getByTestId('risk-l1-recovery-worst')).toBeVisible();
+        // Where the portfolio stands now is a different question from its worst
+        // moment, and the drawdown summary is what answers it.
+        await expect(panel.getByTestId('risk-l1-current-loss')).toHaveText(loss('3.2%'));
+
+        // Nothing came back degraded, so nothing is disclosed. The mirror of the
+        // two-entry assertion in the unavailable test: without this half, a
+        // disclosure row that rendered unconditionally — or one wired to a
+        // constant — would satisfy that half and never be noticed here.
+        await expect(panel.getByTestId('risk-level-1-health')).toHaveCount(0);
+        await expect(panel.getByTestId('risk-level-3-health')).toHaveCount(0);
+
+        // --- L2: weight against risk contribution -----------------------------
+        await expect(panel.getByTestId('risk-level-2')).toBeVisible();
+        await expect(panel.getByTestId('risk-l2-weight-1')).toHaveText('60.0%');
+        await expect(panel.getByTestId('risk-l2-contribution-1')).toHaveText('65.0%');
+        await expect(panel.getByTestId('risk-l2-divergence-1')).toHaveText('+5.0pp');
+        // The holding that produces more risk than it weighs leads: the ordering
+        // is the argument, and an unordered list would answer a different question.
+        // `.first()` is safe on a collection this test's own stub populated.
+        await expect(panel.getByTestId('risk-l2-rows').locator('[data-testid^="risk-l2-row-"]').first()).toHaveAttribute('data-testid', 'risk-l2-row-1');
+        // The rows are fractions of NAV, so they describe less than the whole
+        // portfolio whenever something cannot be priced. The residual is read off
+        // the attribute rather than the rendered line, because the label beside it
+        // is translated and a text assertion would pass or fail by locale.
+        await expect(panel.getByTestId('risk-l2-uncovered')).toHaveAttribute('data-uncovered', '0.05');
+
+        // --- L3: is the risk being paid for -----------------------------------
+        await expect(panel.getByTestId('risk-level-3')).toBeVisible();
+        await expect(panel.getByTestId('risk-l3-sortino-value')).toHaveText('1.68');
+        await expect(panel.getByTestId('risk-l3-sharpe-value')).toHaveText('1.21');
+        await expect(panel.getByTestId('risk-l3-volatility-value')).toHaveText('14.2%');
+
+        // --- Data quality -----------------------------------------------------
+        // Scoped to the panel: the dashboard renders a banner of its own, and an
+        // unscoped locator would be satisfied by the wrong one.
+        const banner = panel.getByTestId('data-quality-banner');
+        await expect(banner).toBeVisible();
+        const bannerToggle = banner.getByTestId('data-quality-toggle');
+        await expect(bannerToggle).toBeVisible();
+        // Grouped mode starts folded, but asking beats assuming: a banner that
+        // opened itself would otherwise be closed by an unconditional click.
+        if ((await bannerToggle.getAttribute('aria-expanded')) !== 'true') await bannerToggle.click();
+        await expect(bannerToggle).toHaveAttribute('aria-expanded', 'true');
+        // The issue the risk payload carried, not merely "a banner exists".
+        await expect(banner.getByTestId('data-quality-issue-STALE_PRICE')).toBeVisible();
+        await expect(banner.getByTestId('data-quality-issue-STALE_PRICE')).toHaveAttribute('data-severity', 'warning');
+
+        // --- The capability gate ----------------------------------------------
+        // The old hidden `risk-frontier-capability` probe is gone with the legacy
+        // panel. What it stood for is not: the catalogue decides what may be
+        // asked, and the wire is where that decision is now observable.
+        await expect.poll(() => portfolioAnalytics(requests, 'historical').map((analytic) => analytic.analytic_code), {timeout: 15_000}).toEqual(expect.arrayContaining(['historical_kpi', 'historical_var', 'drawdown_summary']));
+        await expect.poll(() => portfolioAnalytics(requests, 'current_composition').length, {timeout: 15_000}).toBeGreaterThan(0);
+
+        // Nothing the catalogue does not advertise for this scope *and* this
+        // mode. Derived from CATALOG rather than restated, so the gate cannot go
+        // vacuous when the fixture changes.
+        const outsideCatalog = (mode: RiskRequest['mode']) => [...new Set(portfolioAnalytics(requests, mode).map((analytic) => analytic.analytic_code))].filter((code) => !advertisedForPortfolio(mode).has(code));
+        expect(outsideCatalog('historical')).toEqual([]);
+        expect(outsideCatalog('current_composition')).toEqual([]);
+
+        // The two VaRs are one analytic asked twice, told apart by horizon. One
+        // instance would collapse L1's day and month into the same rung.
+        const varHorizons = portfolioAnalytics(requests, 'historical')
+            .filter((analytic) => analytic.analytic_code === 'historical_var')
+            .map((analytic) => Number(analytic.parameters?.horizon_days));
+        expect([...new Set(varHorizons)].sort((left, right) => left - right)).toEqual([1, MONTHLY_VAR_HORIZON_DAYS]);
+
+        // L4 is closed, and a closed level costs nothing: neither its analytics
+        // (both advertised for this scope, so only the drawer can be keeping them
+        // off the wire) nor its scenario catalogue.
+        const onDemandCodes = ['stress', 'simulation'];
+        expect(portfolioAnalytics(requests, 'current_composition').filter((analytic) => onDemandCodes.includes(analytic.analytic_code))).toEqual([]);
+        expect(scenarioCatalogCalls).toEqual([]);
+        await expect(panel.getByTestId('risk-level-4')).toHaveAttribute('data-open', 'false');
+
+        await panel.getByTestId('risk-level-4-toggle').click();
+        await expect(panel.getByTestId('risk-level-4')).toHaveAttribute('data-open', 'true');
+        // …and opening it is what pays for the catalogue, once.
+        await expect.poll(() => scenarioCatalogCalls.length, {timeout: 10_000}).toBe(1);
+
+        // --- Sync -------------------------------------------------------------
+        const syncButton = panel.getByTestId('risk-sync-button');
+        await expect(syncButton).toBeEnabled();
+        await syncButton.click();
         await expect(page.getByTestId('page-sync-modal')).toBeVisible({timeout: 5_000});
     });
 
     test('per-analytic unavailable state remains isolated', async ({page}) => {
         await installRiskMocks(page, {unavailableVar: true});
-        await openDashboardRisk(page);
+        const panel = await openDashboardRisk(page);
 
-        await expect(page.getByTestId('risk-kpi-section')).toBeVisible({timeout: 8_000});
-        await expect(page.getByTestId('risk-var-section-unavailable')).toBeVisible({timeout: 8_000});
-        await expectChartCanvas(page, 'risk-correlation-heatmap', 8_000);
+        // The barrier first. "No VaR row" is also true of a panel that never
+        // rendered, so L1 has to be demonstrably present and fed by the same wave
+        // that carried the unavailable result before its absence means anything.
+        await expect(panel.getByTestId('risk-l1-scale')).toBeVisible({timeout: 8_000});
+        await expect(panel.getByTestId('risk-l1-loss-worst')).toHaveText(loss('8.7%'));
+
+        // Both VaR instances came back `unavailable`. Their rungs are omitted,
+        // never zero-filled: an absent measurement and a measurement of zero are
+        // different claims, and a 0,0% row would read as "it cannot hurt you".
+        await expect(panel.getByTestId('risk-l1-row-day')).toHaveCount(0);
+        await expect(panel.getByTestId('risk-l1-row-month')).toHaveCount(0);
+        await expect(panel.getByTestId('risk-l1-empty')).toHaveCount(0);
+
+        // …and the omission is *disclosed*, which is the other half of the same
+        // claim: a level that quietly drops the rungs it could not compute shows
+        // a shorter list, and a shorter list is indistinguishable from a
+        // portfolio with less to say. Only one of the two is worth retrying.
+        //
+        // Two entries, not one, and the count is the whole assertion. L1 asks
+        // `historical_var` **twice** — a day and a month — told apart solely by
+        // `instance_id`, so a disclosure keyed or deduped by `analytic_code`
+        // collapses to a single "Historical VaR: Unavailable". That reads as
+        // perfectly plausible prose while hiding one of the two horizons, and it
+        // is a bug this subsystem has already had once. Presence alone would
+        // have passed straight through it.
+        const health = panel.getByTestId('risk-level-1-health');
+        await expect(health).toBeVisible();
+        await expect(health).toHaveAttribute('data-count', '2');
+
+        // The disclosure is scoped to what the level renders, never to the whole
+        // wave: `correlation` travels in the same historical answer and comes
+        // back `partial` from this very stub, but no level shows it, so blaming
+        // L1 or L3 for it would be an accusation the reader cannot check.
+        await expect(panel.getByTestId('risk-level-3-health')).toHaveCount(0);
+
+        // The isolation itself: every level fed by a different analytic is intact,
+        // and the failure did not escalate into a whole-panel error.
+        await expect(panel.getByTestId('risk-l2-weight-1')).toHaveText('60.0%');
+        await expect(panel.getByTestId('risk-l2-divergence-1')).toHaveText('+5.0pp');
+        await expect(panel.getByTestId('risk-l3-sortino-value')).toHaveText('1.68');
+        await expect(panel.getByTestId('risk-l1-current-loss')).toHaveText(loss('3.2%'));
+        await expect(panel.getByTestId('risk-load-error')).toHaveCount(0);
+        await expect(panel).toHaveAttribute('data-catalog', 'ready');
     });
 
     test('asset global maps broker holdings and supports remove/add', async ({page}) => {
@@ -686,13 +1129,37 @@ test.describe('Risk analysis functional integration', () => {
 
     test('broker tab sends a single-broker portfolio subset and labels it', async ({page}) => {
         const requests = await installRiskMocks(page);
-        const brokerId = await openFirstBrokerRisk(page);
+        const {brokerId, panel} = await openFirstBrokerRisk(page);
 
         await expect(page.getByTestId('risk-beta-banner')).toBeVisible();
         await expect(page.getByTestId('risk-beta-banner')).toHaveCount(1);
-        await expect(page.getByTestId('risk-scope-label')).toBeVisible();
-        await expect(page.getByTestId('risk-kpi-section')).toBeVisible({timeout: 8_000});
+
+        // The label is the user-visible half of the subset: this page runs the
+        // whole portfolio's machinery over one broker's holdings, and a reader
+        // who misses that reads these numbers as their portfolio's. Its text is
+        // translated and therefore unassertable — what is assertable is that the
+        // label is here and absent on the unfiltered dashboard, which the
+        // dashboard test pins as the other half of the pair.
+        await expect(panel.getByTestId('risk-scope-label')).toBeVisible();
+
+        // One component, two scopes: Broker Detail is asserted with the very
+        // testids the dashboard uses, because "the two pages cannot drift" is the
+        // property the redesign exists to build. Two vocabularies here would let
+        // them drift while both suites stayed green.
+        await expect(panel.getByTestId('risk-level-1')).toBeVisible();
+        await expect(panel.getByTestId('risk-l1-loss-day')).toHaveText(loss('3.1%'));
+        await expect(panel.getByTestId('risk-l1-loss-month')).toHaveText(loss('9.4%'));
+        await expect(panel.getByTestId('risk-l1-loss-worst')).toHaveText(loss('8.7%'));
+        await expect(panel.getByTestId('risk-l2-weight-1')).toHaveText('60.0%');
+        await expect(panel.getByTestId('risk-l3-sortino-value')).toHaveText('1.68');
+
         await expect.poll(() => requests.some((request) => request.scope.kind === 'portfolio' && request.scope.broker_ids?.length === 1 && request.scope.broker_ids[0] === brokerId), {timeout: 15_000}).toBe(true);
+
+        // And *only* that broker. A subset page that also asked the unfiltered
+        // question would compute one portfolio and label another — which is
+        // exactly the confusion the label above exists to prevent.
+        const askedScopes = requests.filter((request) => request.scope.kind === 'portfolio').map((request) => (request.scope.kind === 'portfolio' ? (request.scope.broker_ids ?? []).join(',') : ''));
+        expect([...new Set(askedScopes)]).toEqual([String(brokerId)]);
     });
 
     test('asset detail preserves Overview and exposes Risk through its dedicated tab', async ({page}) => {
@@ -813,5 +1280,474 @@ test.describe('Risk analysis functional integration', () => {
             random_seed: 123456,
         });
         expect(simulationRequest?.parameters).not.toHaveProperty('seed');
+    });
+
+    test('level 4 pays for its catalogue once, orders its three rungs and answers both scenarios', async ({page}) => {
+        const requests = await installRiskMocks(page);
+
+        // Armed before the first navigation, for the same reason test 1 arms it
+        // there: a request is an *edge*, and a listener attached after the click
+        // cannot say whether the closed drawer had already paid for its fetch.
+        const scenarioCatalogCalls: string[] = [];
+        page.on('request', (request) => {
+            if (request.url().includes('/api/v1/risk/scenario-catalog')) scenarioCatalogCalls.push(request.url());
+        });
+
+        const panel = await openDashboardRisk(page);
+        const level4 = await openLevel4(panel);
+        await expect.poll(() => scenarioCatalogCalls.length, {timeout: 10_000}).toBe(1);
+
+        // Closing and reopening is not a change of question, so it must not start
+        // the work over. The barrier is the preset pill: it can only render from
+        // a catalogue the controller still holds, so "the pill is back" and "the
+        // counter is still one" together say the drawer *remembered* rather than
+        // that the second fetch merely had not landed yet.
+        await panel.getByTestId('risk-level-4-toggle').click();
+        await expect(level4).toHaveAttribute('data-open', 'false');
+        await expect(panel.getByTestId('risk-l4')).toHaveCount(0);
+        await panel.getByTestId('risk-level-4-toggle').click();
+        await expect(level4).toHaveAttribute('data-open', 'true');
+        const shockPreset = panel.locator('[data-testid="risk-shock-preset"][data-preset-id="global_risk_off"]');
+        await expect(shockPreset).toBeVisible({timeout: 8_000});
+        expect(scenarioCatalogCalls).toHaveLength(1);
+
+        // --- The three rungs, in order ----------------------------------------
+        // L4 is the only level that is not homogeneous: it holds three answers at
+        // increasing distance from observed data, and the order is the argument.
+        // A replay is what happened; a shock is an assumption; a simulation is a
+        // model. Shuffled, the reader has no way to tell which is which — so the
+        // sequence is asserted, not merely the membership.
+        const rungs = panel.getByTestId('risk-l4').locator('[data-distance]');
+        await expect(rungs).toHaveCount(3);
+        await expect.poll(() => rungs.evaluateAll((nodes) => nodes.map((node) => `${node.getAttribute('data-testid')}:${node.getAttribute('data-distance')}`)), {timeout: 5_000}).toEqual(['risk-l4-replay:observed', 'risk-l4-shock:assumed', 'risk-l4-simulation:modelled']);
+
+        // Only the modelled rung carries the beta warning. On the section it
+        // would tar the replay, which is simply what happened, and a warning that
+        // is everywhere is read nowhere.
+        await expect(panel.getByTestId('risk-l4-simulation').getByTestId('risk-l4-model-warning')).toBeVisible();
+        await expect(panel.getByTestId('risk-l4-replay').getByTestId('risk-l4-model-warning')).toHaveCount(0);
+
+        // Every editor really mounted, with the defaults the request will carry.
+        await expect(panel.getByTestId('risk-replay')).toBeVisible();
+        await expect(panel.getByTestId('risk-replay-preset')).toBeVisible();
+        // Bound to the panel's own window rather than frozen at mount: the exact
+        // dates belong to the dashboard, so the shape is what is assertable here.
+        await expect(panel.getByTestId('risk-replay-start')).toHaveValue(/^\d{4}-\d{2}-\d{2}$/);
+        await expect(panel.getByTestId('risk-replay-end')).toHaveValue(/^\d{4}-\d{2}-\d{2}$/);
+        await expect(panel.getByTestId('risk-simulation-horizon')).toHaveValue('365');
+        await expect(panel.getByTestId('risk-simulation-paths')).toHaveValue('8192');
+        await expect(panel.getByTestId('risk-simulation-sampling')).toHaveValue('mc');
+
+        // --- Rung 2: one click adopts the assumption *and* asks the question ---
+        // The old panel made the reader fill in a shock per bucket before
+        // anything would run, and a form nobody fills in produces no answers —
+        // which reads exactly like a portfolio with nothing to worry about.
+        await expect(panel.getByTestId('risk-shock-total')).toHaveCount(0);
+        await shockPreset.click();
+        await expect(shockPreset).toHaveAttribute('data-selected', 'true');
+        const shockTotal = panel.getByTestId('risk-shock-total');
+        await expect(shockTotal).toBeVisible({timeout: 10_000});
+        // −5,00% is the stub's answer to *this* preset: BOND is the alphabetically
+        // first non-zero bucket of `global_risk_off`, so the figure can only
+        // appear if the scenario's own defaults reached the server. A pill that
+        // ran an empty shock would render +0,00% and still look like a result.
+        await expect(shockTotal).toContainText(loss('5.00%'));
+        await expect(panel.getByTestId('risk-shock-tornado')).toBeVisible();
+
+        // The detail is disclosure, not the price of admission: the buckets the
+        // preset implied become visible only when someone asks to see them.
+        await expect(panel.getByTestId('risk-shock-buckets')).toHaveCount(0);
+        await panel.getByTestId('risk-shock-detail-toggle').click();
+        await expect(panel.getByTestId('risk-shock-detail-toggle')).toHaveAttribute('aria-expanded', 'true');
+        await expect(panel.locator('[data-testid="risk-shock-bucket"][data-bucket-id="STOCK"]')).toHaveValue('-20');
+
+        // The barrier above (a rendered total) means the answer arrived, so the
+        // request it answered is already in the array: a one-shot read, not a bet.
+        const shockParameters = requests.flatMap((request) => request.analytics).find((analytic) => analytic.analytic_code === 'stress' && analytic.parameters?.method === 'hypothetical')?.parameters;
+        expect(shockParameters).toMatchObject({
+            method: 'hypothetical',
+            dimension: 'asset_class',
+            bucket_shocks: {STOCK: -0.2, CRYPTO: -0.3, BOND: -0.05, OTHER: 0},
+        });
+
+        // --- Rung 1: the replay, its total and the audit beside it -------------
+        await expect(panel.getByTestId('risk-replay-total')).toHaveCount(0);
+        await panel.getByTestId('risk-replay-run').click();
+        const replayTotal = panel.getByTestId('risk-replay-total');
+        await expect(replayTotal).toBeVisible({timeout: 10_000});
+        await expect(replayTotal).toContainText(loss('12.00%'));
+        await expect(panel.getByTestId('risk-replay-tornado')).toBeVisible();
+
+        // The audit is not an appendix. A replay takes *today's* composition
+        // through a past period, so a stand-in is an opinion and an exclusion
+        // changes what the number means: both are stated where the number is
+        // read. Here neither was used, and the row says so rather than vanishing.
+        const replayAudit = panel.getByTestId('risk-replay-audit');
+        await expect(replayAudit).toBeVisible();
+        await expect(replayAudit).toHaveAttribute('data-proxy-count', '0');
+        await expect(replayAudit).toHaveAttribute('data-excluded-count', '0');
+    });
+
+    test('a blocked replay names the holding and the exclusion travels on retry', async ({page}) => {
+        // Not the holding the stub reports an impact for (`matrixAssetIds`[0] = 1):
+        // excluding *that* one would empty the tornado and leave a 0,00% total,
+        // which is indistinguishable from a replay that quietly did nothing. With
+        // a second holding at fault, the retry has a real answer to produce.
+        const blockedAssetId = 2;
+        const requests = await installRiskMocks(page, {replayBlockedAssetId: blockedAssetId});
+        const panel = await openDashboardRisk(page);
+        await openLevel4(panel);
+
+        /** `excluded_assets` of every replay the panel has put on the wire, in order. */
+        const replayExclusions = () =>
+            requests
+                .flatMap((request) => request.analytics)
+                .filter((analytic) => analytic.analytic_code === 'stress' && analytic.parameters?.method === 'historical_replay')
+                .map((analytic) => analytic.parameters?.excluded_assets);
+
+        await expect(panel.getByTestId('risk-replay-run')).toBeEnabled();
+        await panel.getByTestId('risk-replay-run').click();
+
+        // The refusal is turned into a question, addressed to the reader, about
+        // the named holding. `data-asset-id` rather than the sentence: the
+        // sentence ships in four languages, the id is the claim.
+        const blocker = panel.getByTestId('risk-replay-blocker');
+        await expect(blocker).toBeVisible({timeout: 10_000});
+        await expect(blocker).toHaveAttribute('data-asset-id', String(blockedAssetId));
+        // The holding itself has no history, not a stand-in chosen for it — so
+        // there *is* an answer, and the button offering it is present. The other
+        // branch would be a "fix it" button that fixes nothing.
+        await expect(blocker).toHaveAttribute('data-proxy-at-fault', 'false');
+        const excludeButton = panel.getByTestId('risk-replay-exclude');
+        await expect(excludeButton).toBeVisible();
+
+        // Barrier established (the blocker is on screen and fed by this very
+        // answer), so the absences below are statements about the answer rather
+        // than about how far the page had got.
+        await expect(panel.getByTestId('risk-replay-total')).toHaveCount(0);
+        await expect(panel.getByTestId('risk-replay-exclusions')).toHaveCount(0);
+
+        await excludeButton.click();
+
+        // The round trip itself, and the only place it is observable: the reader's
+        // answer has to reach the server, or the loop never ends. Two requests —
+        // the first asking with nothing excluded, the second carrying the choice.
+        // A UI that remembered the exclusion locally and re-sent the old question
+        // would show the chip, look entirely convincing, and fail exactly here.
+        await expect.poll(replayExclusions, {timeout: 10_000}).toEqual([[], [blockedAssetId]]);
+
+        // …and only then does the answer change.
+        const replayTotal = panel.getByTestId('risk-replay-total');
+        await expect(replayTotal).toBeVisible({timeout: 10_000});
+        await expect(replayTotal).toContainText(loss('12.00%'));
+        await expect(panel.getByTestId('risk-replay-audit')).toHaveAttribute('data-excluded-count', '1');
+        await expect(blocker).toHaveCount(0);
+
+        // An exclusion silently remembered is an assumption smuggled into the
+        // number, so the choice stays visible — and reversible.
+        const exclusionChip = panel.getByTestId('risk-replay-exclusion');
+        await expect(exclusionChip).toBeVisible();
+        await expect(exclusionChip).toHaveAttribute('data-asset-id', String(blockedAssetId));
+        await exclusionChip.click();
+        await expect(panel.getByTestId('risk-replay-exclusions')).toHaveCount(0);
+        // Taking the choice back retires the answer it produced: leaving the
+        // total on screen under an emptied form would make it a reply to a
+        // question nobody is asking any more.
+        await expect(replayTotal).toHaveCount(0);
+        await expect(panel.getByTestId('risk-replay-audit')).toHaveCount(0);
+    });
+
+    test('an unavailable simulation names the step and its state instead of rendering nothing', async ({page}) => {
+        await installRiskMocks(page, {unavailableSimulation: true});
+
+        const panel = await openDashboardRisk(page);
+        await openLevel4(panel);
+
+        await expect(panel.getByTestId('risk-simulation-run')).toBeEnabled({timeout: 8_000});
+        await panel.getByTestId('risk-simulation-run').click();
+
+        // `schemas/risk.py:1056` forbids an `unavailable` result from carrying an
+        // output, and every rung renders on `{#if output}`. So the absence below
+        // is guaranteed by the contract, not by this fixture's choices — which is
+        // exactly why the *presence* of the disclosure is the whole assertion.
+        const health = panel.getByTestId('risk-level-4-health');
+        await expect(health).toBeVisible({timeout: 8_000});
+        await expect(health).toHaveAttribute('data-count', '1');
+
+        // The state is read as text because that is what the reader is given, but
+        // the step is identified by the rendered analytic name rather than by
+        // position: L4 holds three rungs and any of them can degrade.
+        await expect(health).toContainText('Simulation');
+        await expect(health).toContainText('Unavailable for the selected data');
+
+        // And the blank the disclosure replaces is still blank: naming the fault
+        // must not conjure a figure. A rung that printed a number here would be
+        // worse than the silence it fixed.
+        await expect(panel.getByTestId('risk-simulation-terminal')).toHaveCount(0);
+
+        // The other two rungs are untouched: an isolated failure, not a dead level.
+        await expect(panel.getByTestId('risk-l4-replay')).toBeVisible();
+        await expect(panel.getByTestId('risk-l4-shock')).toBeVisible();
+    });
+
+    test('a benchmark chosen on the Dashboard is the benchmark in force on Broker Detail', async ({page}) => {
+        const requests = await installRiskMocks(page);
+
+        try {
+            const dashboard = await openDashboardRisk(page);
+            const dashboardBenchmark = dashboard.getByTestId('risk-l3-benchmark');
+
+            // The precondition, checked rather than assumed: without it, a page
+            // that arrived already carrying the id would make the assertion at
+            // the bottom true before this test had done anything at all.
+            await expect(dashboardBenchmark).toBeVisible({timeout: 10_000});
+            await expect(dashboardBenchmark).toHaveAttribute('data-benchmark-id', '');
+
+            const benchmarkId = await chooseBenchmark(page, dashboard);
+
+            // The choice is a real question put to the server, not a value parked
+            // in a widget: the scope that made it asks its comparison against
+            // exactly this id. Asserted here because this is where the pick
+            // happens; the receiving page is asked the same question at the
+            // bottom, where it is a harder one.
+            await expect.poll(() => comparisonAssetIds(requests, []), {timeout: 15_000}).toContain(benchmarkId);
+
+            // `openFirstBrokerRisk` navigates with `page.goto`, so this is a full
+            // document load: the module that holds the choice is torn down and
+            // re-evaluated, and the broker page can only know the benchmark by
+            // reading it back out of storage. A per-component choice — or a
+            // per-page one — cannot survive this line, which is precisely why
+            // the assertion is worth making here and not after a client-side
+            // route change.
+            const {brokerId, panel} = await openFirstBrokerRisk(page);
+            const brokerBenchmark = panel.getByTestId('risk-l3-benchmark');
+            await expect(brokerBenchmark).toBeVisible({timeout: 10_000});
+            await expect(brokerBenchmark).toHaveAttribute('data-benchmark-id', String(benchmarkId), {timeout: 10_000});
+
+            // The attribute above is not the claim, and on its own it is not even
+            // evidence: it was already correct while the feature was broken. The
+            // picker showed the right benchmark over a comparison that was never
+            // computed, because `L3Benchmark`'s hydration effect launched in the
+            // same tick it read the store — `controller.catalog` still null — and
+            // `runSingle`'s capability gate declines silently while `launched` has
+            // already latched. So the display is pinned by the sample below, which
+            // is the question actually put to the server.
+            //
+            // Sampled *before* the cold load rather than counted from zero: the
+            // first visit legitimately sends its own comparison, so "has one ever
+            // been sent" would go green on that one and never look at the reload
+            // at all. Only the delta is about the load under test.
+            //
+            // The sample is an ordering barrier, and it is worth being precise
+            // about its one weakness: a first-visit request handed to the recorder
+            // after this line would land in the delta and be credited to the
+            // reload. That degrades this assertion to the un-sliced one — which is
+            // still a true statement about a cold catalogue, since the first visit
+            // arrives through a `goto` that wipes the module cache too. It cannot
+            // degrade to green over a scope that sent nothing, which is the failure
+            // this exists to catch.
+            const askedBeforeReload = comparisonAssetIds(requests, [brokerId]).length;
+
+            // The cold load, and it is a *document* load of Broker Detail itself:
+            // a fresh module cache by construction, so the panel is mounted by the
+            // first render with the catalogue still a request away. That is the
+            // order a reader gets when they open or refresh the Risk tab directly
+            // with a benchmark already saved, and the order under which a launcher
+            // that fires once, early and silently, leaves a page showing a
+            // benchmark it never measured against.
+            //
+            // Structural rather than incidental, which is the reason for the extra
+            // load: the walk-in above is cold only because `openFirstBrokerRisk`
+            // happens to cross a `goto`, and it would quietly go warm the day the
+            // brokers list prefetched the risk catalogue. A reload cannot.
+            const coldPanel = await reloadBrokerRiskCold(page);
+            await expect(coldPanel.getByTestId('risk-l3-benchmark')).toHaveAttribute('data-benchmark-id', String(benchmarkId), {timeout: 10_000});
+
+            // Nothing was clicked after the reload. If the persisted choice is
+            // worth persisting, that alone has to reach the backend as this
+            // scope's comparison, carrying this id.
+            await expect.poll(() => comparisonAssetIds(requests, [brokerId]).slice(askedBeforeReload), {timeout: 15_000}).toContain(benchmarkId);
+        } finally {
+            await clearRiskBenchmark(page);
+        }
+    });
+
+    /**
+     * Its own test rather than a tail on the one above, and the reason is what a
+     * red would have to mean. That one is about *place*: the same benchmark on
+     * two pages, which a per-page choice fails. This one is about *time*: the
+     * same benchmark still measured after the question underneath it changed,
+     * which a choice that asks itself once fails. Folding them together would
+     * put a period change in the middle of a journey whose own assertion is a
+     * sampled delta across a cold reload, so a failure could no longer name
+     * which of the two properties broke — and the test's title would be a
+     * statement about place over a body that also tested time.
+     */
+    test('a benchmark in force is re-measured when the period moves', async ({page}) => {
+        const requests = await installRiskMocks(page);
+        /** Portfolio-wide requests — the Dashboard's scope — that carry a comparison. */
+        const dashboardComparisons = () => requests.filter((request) => request.scope.kind === 'portfolio' && (request.scope.broker_ids ?? []).length === 0 && request.analytics.some((analytic) => analytic.analytic_code === 'comparison'));
+
+        try {
+            // The Dashboard rather than Broker Detail, though both mount a period
+            // control: its scope is `{kind: 'portfolio'}` with no broker ids, so
+            // `comparisonAssetIds(requests, [])` names it exactly without the test
+            // first having to resolve which broker it landed on, and one levels
+            // panel is mounted on the page, so every locator below is unambiguous.
+            const dashboard = await openDashboardRisk(page);
+
+            // The precondition, checked rather than assumed: a page that arrived
+            // already carrying a benchmark would make the rest of this true before
+            // the test had chosen anything.
+            const picker = dashboard.getByTestId('risk-l3-benchmark');
+            await expect(picker).toBeVisible({timeout: 10_000});
+            await expect(picker).toHaveAttribute('data-benchmark-id', '');
+
+            const benchmarkId = await chooseBenchmark(page, dashboard);
+
+            // The barrier the whole test turns on, and the reason it is this
+            // locator and not the picker's attribute. `risk-l3-beta-benchmark` is
+            // rendered from `comparedAssetId(controller.comparisonResult)` — the
+            // *answer* — so it is on screen only once the comparison has come
+            // back. The property below only exists for an analysis that has
+            // already finished: `discardOnDemand` re-issues whatever was still in
+            // flight, so a comparison still on the wire when the period moves is
+            // relaunched by the controller itself and nothing is lost. Moving the
+            // period before this line would exercise that other branch and go
+            // green over a benchmark that never re-asks.
+            const betaBenchmark = dashboard.getByTestId('risk-l3-beta-benchmark');
+            await expect(betaBenchmark).toBeVisible({timeout: 15_000});
+
+            // Sampled before the click, for the reason the test above samples
+            // before its reload: choosing a benchmark legitimately sends its own
+            // comparison, so "one was sent at some point" is already green before
+            // the period has moved at all. Only the delta is about the change.
+            const askedBeforePeriodChange = comparisonAssetIds(requests, []).length;
+            const windowBefore = dashboardComparisons()[0]?.date_range.start;
+            expect(windowBefore).toBeTruthy();
+
+            // The period control the Dashboard actually gives the reader, driven
+            // through the preset badges `DateRangePicker` publishes — the same
+            // handle `gallery.spec.ts` uses. `1Y` because the ambient window is
+            // the 3-month default, so this is one click that demonstrably moves
+            // `dateStart`; `data-active` is asserted on both sides of it so the
+            // test states which window it started in instead of assuming, and a
+            // click that moved nothing fails here rather than three lines down.
+            const oneYear = page.getByTestId('date-preset-1y');
+            await expect(oneYear).toHaveAttribute('data-active', 'false');
+            await oneYear.click();
+            await expect(oneYear).toHaveAttribute('data-active', 'true');
+
+            // The claim. Nothing was re-chosen and nothing was clicked in the
+            // panel: a standing benchmark has to re-ask itself, because the answer
+            // it had was discarded along with the question that produced it.
+            await expect.poll(() => comparisonAssetIds(requests, []).slice(askedBeforePeriodChange), {timeout: 20_000}).toContain(benchmarkId);
+
+            // …and it has to ask the *new* question. A re-ask that replayed the
+            // old window would put the same id back on the wire and satisfy the
+            // line above while showing the reader a beta measured over a period
+            // they have left. Read once rather than polled because the poll is the
+            // barrier: the request is already in the log by the time this runs,
+            // and the index is into a collection filtered to comparisons only.
+            const fresh = dashboardComparisons();
+            expect(fresh[fresh.length - 1]?.date_range.start).not.toBe(windowBefore);
+
+            // The reader's half of the same fact, and the state the defect leaves
+            // behind: a benchmark named in the picker standing over an em dash,
+            // because the label under beta is drawn from an answer nobody re-asked.
+            await expect(betaBenchmark).toBeVisible({timeout: 15_000});
+        } finally {
+            await clearRiskBenchmark(page);
+        }
+    });
+
+    /**
+     * The third member of the disclosure trio, and the one that was missing.
+     *
+     * Test 1 proves nothing is disclosed when nothing fell short; test 2 proves
+     * the *status* is disclosed when two horizons did. Neither ever put a
+     * `warning` in front of a level that renders, because the only one this
+     * stub ever sent rides on `correlation` — which no level shows. So the
+     * reasons list had shipped, had unit tests, and had never once been
+     * rendered by the suite.
+     */
+    test('a warning reaches the level that rendered the measurement, once per sentence', async ({page}) => {
+        // Two sentences, three warnings. Written as full prose rather than as
+        // codes because that is what the panel puts on screen: `resultReasons`
+        // renders the backend's string verbatim, so the fixture sentence *is*
+        // the contract under test. It is not translated, so asserting on it is
+        // not the mistake the no-translated-text rule is about.
+        const varReason = 'Only 41 of the 60 sessions had a usable close at this horizon';
+        const drawdownReason = 'Peak-to-trough window truncated at the start of available history';
+
+        await installRiskMocks(page, {
+            analyticWarnings: {
+                // Asked twice per wave — one day, one month — so this single
+                // entry arrives on two results carrying identical text.
+                historical_var: [{code: 'sparse_history', message: varReason}],
+                // Asked once, and rendered by L1 only. Deliberately not
+                // `historical_kpi`, which L1 and L3 both read: a sentence landing
+                // under two levels could not say which slice put it there.
+                drawdown_summary: [{code: 'truncated_window', message: drawdownReason}],
+            },
+        });
+
+        const panel = await openDashboardRisk(page);
+
+        // The barrier, and the precondition in one. Reasons live inside L1's
+        // body, so "no reasons" is also true of a level that has not rendered —
+        // and `data-occurrences="2"` only means something if two VaR results
+        // really came back. Both rungs on screen with different figures is that
+        // proof, taken from the product rather than from the request log.
+        await expect(panel.getByTestId('risk-level-1')).toBeVisible();
+        await expect(panel.getByTestId('risk-l1-loss-day')).toHaveText(loss('3.1%'));
+        await expect(panel.getByTestId('risk-l1-loss-month')).toHaveText(loss('9.4%'));
+
+        // Every result in this wave is `ok`: nothing is degraded, so the status
+        // line is absent — and the reasons are still shown. That pair is the
+        // claim. `degrades_result` decides the status and the status decides the
+        // health row, but neither decides whether a sentence is worth reading; a
+        // reasons list gated on `health` would render nothing here while looking
+        // perfectly correct in the unavailable test above.
+        await expect(panel.getByTestId('risk-level-1-health')).toHaveCount(0);
+
+        const reasons = panel.getByTestId('risk-level-1-reasons');
+        await expect(reasons).toBeVisible();
+        // Three warnings in, two entries out. The count is the deduplication
+        // stated as a number instead of inferred from the shape of the prose.
+        await expect(reasons).toHaveAttribute('data-count', '2');
+        await expect(panel.getByTestId('risk-level-1-reason')).toHaveCount(2);
+
+        // The sentence both horizons carried: rendered once, counted twice. Two
+        // `<li>` would read to the reader as a rendering fault rather than as two
+        // affected measurements; one saying "1" would drop a horizon on the floor
+        // and look entirely plausible doing it.
+        const varEntry = panel.getByTestId('risk-level-1-reason').filter({hasText: varReason});
+        await expect(varEntry).toHaveCount(1);
+        await expect(varEntry).toHaveAttribute('data-occurrences', '2');
+        await expect(varEntry).toHaveText(varReason);
+
+        // …and the one that arrived alone still says "1", so the counter is read
+        // off the data and not printed from a constant that happens to be right.
+        const drawdownEntry = panel.getByTestId('risk-level-1-reason').filter({hasText: drawdownReason});
+        await expect(drawdownEntry).toHaveCount(1);
+        await expect(drawdownEntry).toHaveAttribute('data-occurrences', '1');
+        await expect(drawdownEntry).toHaveText(drawdownReason);
+
+        // Barriers before the absences: both other levels are demonstrably fed
+        // by this same wave, so their empty reason lists are a statement about
+        // scoping rather than about a panel that had not finished rendering.
+        await expect(panel.getByTestId('risk-l2-weight-1')).toHaveText('60.0%');
+        await expect(panel.getByTestId('risk-l3-sortino-value')).toHaveText('1.68');
+
+        // The scoping itself. `correlation` rides in the very same historical
+        // answer and this stub returns it `partial` with a warning of its own,
+        // but no level renders correlation — so its sentence belongs under none
+        // of them. A panel that fed every level the whole wave would show three
+        // entries here, all of them plausible, one of them an accusation the
+        // reader has no way to check.
+        await expect(panel.getByTestId('risk-level-1-reason').filter({hasText: 'E2E partial fixture'})).toHaveCount(0);
+        await expect(panel.getByTestId('risk-level-2-reasons')).toHaveCount(0);
+        await expect(panel.getByTestId('risk-level-3-reasons')).toHaveCount(0);
     });
 });

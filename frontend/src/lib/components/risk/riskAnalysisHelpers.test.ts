@@ -15,7 +15,7 @@ import {describe, expect, it} from 'vitest';
 
 import type {RiskDataQualityReport} from '$lib/risk/riskTypes';
 import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
-import {addDays, buildBaseAnalytics, formatCurrencyAmount, formatRatio, localizedScenarioText, normalizeQualityIssue, numberRecord, presentStressBuckets, resultByCode, scalarString, stressImpactDimension, type BaseAnalyticsContext} from './riskAnalysisHelpers';
+import {addDays, buildBaseAnalytics, formatCurrencyAmount, formatRatio, formatScopedCurrencyAmount, localizedScenarioText, normalizeQualityIssue, numberRecord, presentStressBuckets, resultByCode, scalarString, stressImpactDimension, type BaseAnalyticsContext} from './riskAnalysisHelpers';
 
 type Issue = NonNullable<RiskDataQualityReport['issues']>[number];
 
@@ -306,6 +306,30 @@ describe('formatCurrencyAmount', () => {
     });
 });
 
+describe('formatScopedCurrencyAmount', () => {
+    it('formats normally on a portfolio scope', () => {
+        expect(formatScopedCurrencyAmount('1234.5', 'USD', 'portfolio', 'en-US')).toBe('$1,234.50');
+    });
+
+    // The mutation-sensitive pair. The backend sends null on these scopes today,
+    // so both would read '—' with or without the guard; passing a real amount is
+    // the only way to make the assertion capable of failing.
+    it('suppresses a real amount on an asset scope', () => {
+        expect(formatScopedCurrencyAmount('1234.5', 'USD', 'asset', 'en-US')).toBe('—');
+    });
+
+    it('suppresses a real amount on an asset_set scope', () => {
+        expect(formatScopedCurrencyAmount('1234.5', 'USD', 'asset_set', 'en-US')).toBe('—');
+    });
+
+    // Guards the other direction: a guard that blanked every scope would also
+    // pass the two above, and would silently empty the dashboard's amounts on
+    // the day the backend starts computing them.
+    it('still em-dashes a missing amount on a portfolio scope', () => {
+        expect(formatScopedCurrencyAmount(null, 'USD', 'portfolio', 'en-US')).toBe('—');
+    });
+});
+
 describe('addDays', () => {
     it('shifts a valid ISO date forward', () => {
         expect(addDays('2024-01-01', 5)).toBe('2024-01-06');
@@ -343,6 +367,27 @@ describe('buildBaseAnalytics', () => {
         const analytics = buildBaseAnalytics('historical', ctx(['historical_kpi', 'correlation', 'historical_var']));
         expect(analytics.map((a) => a.analytic_code)).toEqual(['historical_kpi', 'correlation', 'historical_var']);
         expect(analytics.map((a) => a.instance_id)).toEqual(['base-historical-historical_kpi', 'base-historical-correlation', 'base-historical-historical_var']);
+    });
+
+    it('historical: omits the drawdown summary unless the call site opts in, even when advertised', () => {
+        // The guard that keeps the parked Asset Detail surface off the wire.
+        // If this ever defaults to on, Asset Detail starts requesting an analytic
+        // nobody added to Asset Detail.
+        const advertised = ['historical_kpi', 'correlation', 'historical_var', 'drawdown_summary'];
+        expect(buildBaseAnalytics('historical', ctx(advertised)).map((a) => a.analytic_code)).not.toContain('drawdown_summary');
+    });
+
+    it('historical: appends the drawdown summary when the call site opts in', () => {
+        const advertised = ['historical_kpi', 'correlation', 'historical_var', 'drawdown_summary'];
+        const analytics = buildBaseAnalytics('historical', {...ctx(advertised), includeDrawdownSummary: true});
+        expect(analytics.map((a) => a.analytic_code)).toEqual(['historical_kpi', 'correlation', 'historical_var', 'drawdown_summary']);
+    });
+
+    it('historical: opting in cannot conjure a capability the catalog withholds', () => {
+        // `drawdown_summary` does not accept an asset set; an opt-in must not
+        // turn that into a request the backend will reject.
+        const analytics = buildBaseAnalytics('historical', {...ctx(['historical_kpi']), includeDrawdownSummary: true});
+        expect(analytics.map((a) => a.analytic_code)).toEqual(['historical_kpi']);
     });
 
     it('historical: seeds KPI with the applied risk-free rate as a fraction', () => {

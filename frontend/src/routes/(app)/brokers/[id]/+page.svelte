@@ -21,7 +21,7 @@
     import AllocationPanel from '$lib/components/dashboard/AllocationPanel.svelte';
     import GrowthChart from '$lib/components/dashboard/GrowthChart.svelte';
     import PositionsPanel from '$lib/components/dashboard/PositionsPanel.svelte';
-    import RiskAnalysisPanel from '$lib/components/risk/RiskAnalysisPanel.svelte';
+    import RiskLevelsPanel from '$lib/components/risk/levels/RiskLevelsPanel.svelte';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
     import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
@@ -589,12 +589,17 @@
             </div>
         {:else if activeTab === 'rischio'}
             <div data-testid="broker-risk-tab">
-                <RiskAnalysisPanel
+                <!-- Same component as Dashboard, same props, one different scope:
+                     that is the whole difference, and it is what makes the two
+                     pages comparable. `portfolioSummary` here is fetched for this
+                     broker alone, so its net worth answers this exact scope. -->
+                <RiskLevelsPanel
                     scope={{kind: 'portfolio', broker_ids: [broker.id]}}
                     dateStart={dateFrom}
                     dateEnd={dateTo}
                     targetCurrency={targetCurrency || baseCurrency}
                     assetIds={[...new Set((portfolioSummary?.holdings ?? []).map((holding) => holding.asset_id))]}
+                    scopeValue={portfolioSummary ? parseFloat(portfolioSummary.net_worth.amount) : null}
                     title={$_('risk.brokerTitle')}
                     internalSubset={true}
                     onsynced={async () => {
