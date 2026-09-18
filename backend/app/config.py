@@ -181,11 +181,7 @@ def _same_filesystem_location(left: Path, right: Path) -> bool:
         same_filesystem = left_parent.stat().st_dev == right_parent.stat().st_dev
     except OSError:
         same_filesystem = False
-    return (
-        same_filesystem
-        and (is_case_insensitive(left_parent) or is_case_insensitive(right_parent))
-        and str(left).casefold() == str(right).casefold()
-    )
+    return same_filesystem and (is_case_insensitive(left_parent) or is_case_insensitive(right_parent)) and str(left).casefold() == str(right).casefold()
 
 
 def _paths_overlap(left: Path, right: Path) -> bool:
@@ -200,17 +196,14 @@ def _paths_overlap(left: Path, right: Path) -> bool:
     while not right_parent.exists() and right_parent != right_parent.parent:
         right_parent = right_parent.parent
     try:
-        case_insensitive = (
-            left_parent.stat().st_dev == right_parent.stat().st_dev
-            and (
-                _same_filesystem_location(
-                    left_parent,
-                    left_parent.with_name(left_parent.name.swapcase()),
-                )
-                or _same_filesystem_location(
-                    right_parent,
-                    right_parent.with_name(right_parent.name.swapcase()),
-                )
+        case_insensitive = left_parent.stat().st_dev == right_parent.stat().st_dev and (
+            _same_filesystem_location(
+                left_parent,
+                left_parent.with_name(left_parent.name.swapcase()),
+            )
+            or _same_filesystem_location(
+                right_parent,
+                right_parent.with_name(right_parent.name.swapcase()),
             )
         )
     except (OSError, ValueError):
@@ -257,13 +250,9 @@ def validate_test_data_dir(  # noqa: C901 — ordered safety boundary: identity,
         try:
             marker = next(managed_root.rglob(PRODUCTION_DATA_MARKER), None)
         except OSError as exc:
-            raise ValueError(
-                f"Cannot verify test data subtree: {relative}"
-            ) from exc
+            raise ValueError(f"Cannot verify test data subtree: {relative}") from exc
         if marker is not None:
-            raise ValueError(
-                f"Test data subtree contains a marked production root: {relative}"
-            )
+            raise ValueError(f"Test data subtree contains a marked production root: {relative}")
 
     managed_paths = (
         Path("sqlite"),
@@ -280,24 +269,15 @@ def validate_test_data_dir(  # noqa: C901 — ordered safety boundary: identity,
     for relative in managed_paths:
         test_target = (candidate / relative).resolve()
         if not test_target.is_relative_to(candidate):
-            raise ValueError(
-                f"Test data path escapes its configured root: {relative}"
-            )
-        if any(
-            _same_filesystem_location(test_target, (prod / relative).resolve())
-            for prod in production_dirs
-        ):
-            raise ValueError(
-                f"Test data path aliases production data: {relative}"
-            )
+            raise ValueError(f"Test data path escapes its configured root: {relative}")
+        if any(_same_filesystem_location(test_target, (prod / relative).resolve()) for prod in production_dirs):
+            raise ValueError(f"Test data path aliases production data: {relative}")
     return candidate
 
 
 def get_test_data_dir() -> Path:
     """Get the test data directory, including an explicit lane override."""
-    return validate_test_data_dir(
-        os.environ.get("LIBREFOLIO_TEST_DATA_DIR") or DEFAULT_TEST_DATA_DIR
-    )
+    return validate_test_data_dir(os.environ.get("LIBREFOLIO_TEST_DATA_DIR") or DEFAULT_TEST_DATA_DIR)
 
 
 def get_data_dir() -> Path:

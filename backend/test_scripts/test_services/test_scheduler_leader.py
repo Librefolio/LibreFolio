@@ -136,7 +136,6 @@ class TestZombieSiblingsExcluded:
         """SL-004: siblings=[zombie(100), running(200)], me=200 → True (zombie excluded)."""
         print_section("SL-004: am_i_leader — zombie siblings excluded")
 
-
         me_pid = 200
         zombie = _mock_process(100, status="zombie")
         me = _mock_process(200, status="sleeping")
@@ -210,7 +209,6 @@ class TestPsutilException:
         """SL-007: psutil.Process() raises NoSuchProcess → True (fail-safe)."""
         print_section("SL-007: am_i_leader — psutil.NoSuchProcess → fail-safe True")
 
-
         with (
             patch(
                 "backend.app.services.scheduler.leader.psutil.Process",
@@ -226,7 +224,6 @@ class TestPsutilException:
     def test_access_denied_returns_true(self):
         """SL-007b: psutil.AccessDenied → True (fail-safe)."""
         print_section("SL-007b: am_i_leader — psutil.AccessDenied → fail-safe True")
-
 
         with (
             patch(
