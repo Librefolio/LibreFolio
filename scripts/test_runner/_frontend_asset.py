@@ -29,6 +29,7 @@ def front_asset_unit(verbose: bool = False, ui: bool = False, headed: bool = Fal
         "src/lib/utils/__tests__/assetSimilarity.test.ts",
         "src/lib/utils/__tests__/assetGrouping.test.ts",
         "src/lib/utils/__tests__/assetIdentifiers.test.ts",
+        "src/lib/utils/__tests__/assetTypeTables.test.ts",
     ]
     print(f"\n{Colors.BLUE}Running: Asset Vitest unit tests{Colors.NC}")
     result = subprocess.run(cmd, cwd="frontend", capture_output=not verbose)

@@ -47,6 +47,8 @@ export interface AssetInfo {
     icon_url?: string | null;
     provider_code?: string | null;
     active: boolean;
+    /** Eligible as a comparison benchmark. Backed by `assets.is_benchmark`. */
+    is_benchmark?: boolean;
     user_url?: string | null;
     has_metadata?: boolean;
     /** F15 usage counters — drive the "your/others/under analysis" panels. */
@@ -89,6 +91,7 @@ function normalize(raw: Record<string, unknown>): AssetInfo {
     copyFlat('icon_url');
     copyFlat('provider_code');
     copyDirect('active');
+    copyDirect('is_benchmark', false);
     copyFlat('user_url');
     copyDirect('has_metadata');
     copyDirect('tx_count');
