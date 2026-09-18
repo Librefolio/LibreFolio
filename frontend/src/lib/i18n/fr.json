@@ -3249,7 +3249,28 @@
         "contribution": "contribution au risque",
         "lead": "{name} pèse {weight} mais produit {contribution} du risque",
         "showAll": "Tout afficher",
-        "showLess": "Afficher moins"
+        "showLess": "Afficher moins",
+        "effectiveAssets": {
+          "label": "Combien de paris indépendants ai-je réellement ?",
+          "aboveCount": "Au-dessus des {positions} positions mesurées : l'excédent est de la liquidité, et ne dit rien des poids",
+          "belowCount": "En dessous des {positions} positions mesurées : les poids sont déséquilibrés, et quelques-unes portent le portefeuille",
+          "evenCount": "Égal aux {positions} positions mesurées : poids uniformes et aucune liquidité"
+        },
+        "diversificationRatio": {
+          "label": "Répartir l'argent a-t-il servi à quelque chose ?",
+          "caption": "1,00 signifie que les positions bougent à l'unisson ; plus haut, plus elles se compensent"
+        },
+        "uncovered": {
+          "label": "Quelle part de moi n'est pas mesurée ici ?",
+          "caption": "Liquidités, plus chaque position sans série de prix exploitable",
+          "residual": "Les lignes ci-dessous décrivent le reste du portefeuille ; {share} n'en fait pas partie"
+        },
+        "rowsCaption": "La barre montre l'écart entre poids et risque : à droite plus de risque que de poids, à gauche moins. Les poids sont des parts du portefeuille entier.",
+        "correlation": {
+          "title": "Lesquelles de celles-ci sont le même pari ?",
+          "basis": "Mesurée sur la fenêtre historique ; les poids ci-dessus sont ceux d'aujourd'hui.",
+          "noRedundancy": "Aucune paire de cet ensemble n'atteint le seuil de redondance."
+        }
       },
       "l3": {
         "title": "Suis-je payé pour ce risque ?",
