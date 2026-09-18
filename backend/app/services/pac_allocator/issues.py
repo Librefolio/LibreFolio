@@ -46,8 +46,8 @@ def _normalizer_definition(code: PlannerIssueCode, kind: NormalizerIssueKind) ->
 # Canonical public universe.  It intentionally carries no inferred
 # kind/severity policy for codes that this normalizer does not produce.
 CANONICAL_ISSUE_CODES: tuple[PlannerIssueCode, ...] = get_args(PlannerIssueCode)
-if len(CANONICAL_ISSUE_CODES) != 89 or len(set(CANONICAL_ISSUE_CODES)) != 89:
-    raise RuntimeError("PlannerIssueCode must remain the frozen 89-value G3 universe")
+if len(CANONICAL_ISSUE_CODES) != 80 or len(set(CANONICAL_ISSUE_CODES)) != 80:
+    raise RuntimeError("PlannerIssueCode must remain the frozen 80-value G3 universe")
 
 
 # Explicit W1 producer map.  Adding `self.issue(code, ...)` without first
@@ -70,26 +70,19 @@ W1_NORMALIZER_ISSUE_DEFINITIONS: dict[PlannerIssueCode, IssueDefinition] = {
     "allocation.fee_schedule_missing": _normalizer_definition("allocation.fee_schedule_missing", "missing"),
     "allocation.fiscal_currency_missing": _normalizer_definition("allocation.fiscal_currency_missing", "missing"),
     "allocation.funding_cap_negative": _normalizer_definition("allocation.funding_cap_negative", "invalid"),
-    "allocation.fx_buffer_rate_out_of_range": _normalizer_definition("allocation.fx_buffer_rate_out_of_range", "invalid"),
-    "allocation.fx_cycle_invalid": _normalizer_definition("allocation.fx_cycle_invalid", "invalid"),
-    "allocation.fx_multi_hop_unsupported": _normalizer_definition("allocation.fx_multi_hop_unsupported", "unsupported"),
-    "allocation.fx_quote_missing": _normalizer_definition("allocation.fx_quote_missing", "missing"),
+    "allocation.fx_rate_missing": _normalizer_definition("allocation.fx_rate_missing", "missing"),
     "allocation.fx_spread_rate_out_of_range": _normalizer_definition("allocation.fx_spread_rate_out_of_range", "invalid"),
-    "allocation.identity_fx_quote_not_allowed": _normalizer_definition("allocation.identity_fx_quote_not_allowed", "invalid"),
-    "allocation.identity_valuation_rate_not_allowed": _normalizer_definition("allocation.identity_valuation_rate_not_allowed", "invalid"),
+    "allocation.identity_fx_rate_not_allowed": _normalizer_definition("allocation.identity_fx_rate_not_allowed", "invalid"),
     "allocation.invalid_quote_basis": _normalizer_definition("allocation.invalid_quote_basis", "invalid"),
     "allocation.negative_cash_unsupported": _normalizer_definition("allocation.negative_cash_unsupported", "unsupported"),
     "allocation.negative_contribution": _normalizer_definition("allocation.negative_contribution", "invalid"),
     "allocation.negative_fee_amount": _normalizer_definition("allocation.negative_fee_amount", "invalid"),
-    "allocation.negative_fx_fee": _normalizer_definition("allocation.negative_fx_fee", "invalid"),
     "allocation.negative_inventory_unsupported": _normalizer_definition("allocation.negative_inventory_unsupported", "unsupported"),
     "allocation.no_selected_funding": _normalizer_definition("allocation.no_selected_funding", "missing"),
     "allocation.nonpositive_fx_rate": _normalizer_definition("allocation.nonpositive_fx_rate", "invalid"),
-    "allocation.nonpositive_fx_source_step": _normalizer_definition("allocation.nonpositive_fx_source_step", "invalid"),
     "allocation.nonpositive_order_amount_step": _normalizer_definition("allocation.nonpositive_order_amount_step", "invalid"),
     "allocation.nonpositive_price": _normalizer_definition("allocation.nonpositive_price", "invalid"),
     "allocation.nonpositive_quantity_step": _normalizer_definition("allocation.nonpositive_quantity_step", "invalid"),
-    "allocation.nonpositive_valuation_rate": _normalizer_definition("allocation.nonpositive_valuation_rate", "invalid"),
     "allocation.order_amount_step_missing": _normalizer_definition("allocation.order_amount_step_missing", "missing"),
     "allocation.order_cap_nonpositive": _normalizer_definition("allocation.order_cap_nonpositive", "invalid"),
     "allocation.order_minimum_exceeds_cap": _normalizer_definition("allocation.order_minimum_exceeds_cap", "invalid"),
@@ -101,14 +94,12 @@ W1_NORMALIZER_ISSUE_DEFINITIONS: dict[PlannerIssueCode, IssueDefinition] = {
     "allocation.quote_base_quantity_missing": _normalizer_definition("allocation.quote_base_quantity_missing", "missing"),
     "allocation.reference_not_found": _normalizer_definition("allocation.reference_not_found", "invalid"),
     "allocation.route_priority_negative": _normalizer_definition("allocation.route_priority_negative", "invalid"),
-    "allocation.saved_fx_missing": _normalizer_definition("allocation.saved_fx_missing", "missing"),
     "allocation.stale_age_negative": _normalizer_definition("allocation.stale_age_negative", "invalid"),
     "allocation.stale_observation_not_accepted": _normalizer_definition("allocation.stale_observation_not_accepted", "invalid"),
     "allocation.target_total_not_one": _normalizer_definition("allocation.target_total_not_one", "invalid"),
     "allocation.target_weight_missing": _normalizer_definition("allocation.target_weight_missing", "missing"),
     "allocation.target_weight_out_of_range": _normalizer_definition("allocation.target_weight_out_of_range", "invalid"),
     "allocation.tax_netting_unsupported": _normalizer_definition("allocation.tax_netting_unsupported", "unsupported"),
-    "allocation.wac_fx_missing": _normalizer_definition("allocation.wac_fx_missing", "missing"),
     "allocation.wac_missing": _normalizer_definition("allocation.wac_missing", "missing"),
     "portfolio_rebalancer.carried_loss_negative": _normalizer_definition("portfolio_rebalancer.carried_loss_negative", "invalid"),
     "portfolio_rebalancer.cost_basis_negative": _normalizer_definition("portfolio_rebalancer.cost_basis_negative", "invalid"),

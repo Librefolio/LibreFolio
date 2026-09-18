@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime
 from decimal import Decimal
 from fractions import Fraction
@@ -527,6 +528,7 @@ _PLANNER_CODE = r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*$"
 _PLANNER_MESSAGE_KEY = r"^[A-Za-z0-9][A-Za-z0-9_.-]*$"
 _UTC_TIMESTAMP = r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,6})?Z$"
 _JS_SAFE_INTEGER = 9_007_199_254_740_991
+_PLANNER_FX_PAIR = r"^[A-Z]{3}/[A-Z]{3}$"
 
 
 def _planner_fixed_decimal(value: str) -> str:
@@ -567,6 +569,13 @@ def _planner_utc_timestamp(value: str) -> str:
     parsed = datetime.fromisoformat(value[:-1] + "+00:00")
     if parsed.utcoffset() is None or parsed.utcoffset().total_seconds() != 0:
         raise ValueError("Timestamp must be UTC")
+    return value
+
+
+def _planner_canonical_fx_pair(value: str) -> str:
+    first, _, second = value.partition("/")
+    if first >= second:
+        raise ValueError("Canonical FX pair must name two distinct currencies in ascending alphabetical order")
     return value
 
 
@@ -621,28 +630,21 @@ PlannerIssueCode = Literal[
     "allocation.fee_schedule_missing",
     "allocation.fiscal_currency_missing",
     "allocation.funding_cap_negative",
-    "allocation.fx_buffer_rate_out_of_range",
-    "allocation.fx_cycle_invalid",
-    "allocation.fx_multi_hop_unsupported",
-    "allocation.fx_quote_missing",
+    "allocation.fx_rate_missing",
     "allocation.fx_spread_rate_out_of_range",
-    "allocation.identity_fx_quote_not_allowed",
-    "allocation.identity_valuation_rate_not_allowed",
+    "allocation.identity_fx_rate_not_allowed",
     "allocation.invalid_quote_basis",
     "allocation.negative_cash_unsupported",
     "allocation.negative_contribution",
     "allocation.negative_fee_amount",
-    "allocation.negative_fx_fee",
     "allocation.negative_inventory_unsupported",
     "allocation.no_additional_buy_feasible",
     "allocation.no_positive_order_fundable",
     "allocation.no_selected_funding",
     "allocation.nonpositive_fx_rate",
-    "allocation.nonpositive_fx_source_step",
     "allocation.nonpositive_order_amount_step",
     "allocation.nonpositive_price",
     "allocation.nonpositive_quantity_step",
-    "allocation.nonpositive_valuation_rate",
     "allocation.order_amount_step_missing",
     "allocation.order_cap_nonpositive",
     "allocation.order_minimum_exceeds_cap",
@@ -659,7 +661,6 @@ PlannerIssueCode = Literal[
     "allocation.required_min_notional_unfunded",
     "allocation.route_priority_negative",
     "allocation.saved_fx_invalid",
-    "allocation.saved_fx_missing",
     "allocation.solver_limit_no_incumbent",
     "allocation.stale_age_negative",
     "allocation.stale_observation_not_accepted",
@@ -668,7 +669,6 @@ PlannerIssueCode = Literal[
     "allocation.target_weight_out_of_range",
     "allocation.tax_netting_unsupported",
     "allocation.valuation_currency_missing",
-    "allocation.wac_fx_missing",
     "allocation.wac_missing",
     "allocation.zero_selected_funding",
     "pac_allocator.initial_holding_forbidden",
@@ -812,18 +812,6 @@ class PlannerPositiveMoneyInput(AllocationStrictModel):
     currency: CurrencyCode
 
 
-class PlannerValuationRateInput(AllocationStrictModel):
-    """Operational nonidentity valuation fact; assembly filters source identity rows."""
-
-    valuation_rate_id: PlannerId
-    source_currency: CurrencyCode
-    destination_currency: CurrencyCode = Field(description="Currency units received per one source-currency unit.")
-    rate: PlannerFixedDecimal
-    reference_date: ReferenceDate
-    freshness: ObservationFreshness
-    provenance_id: PlannerId
-
-
 class ManualAssetIdentity(AllocationStrictModel):
     kind: Literal["manual_asset"]
     name: PlannerLabel
@@ -892,8 +880,6 @@ type PlannerBrokerIdentity = Annotated[
 class WholeQuantityCapability(AllocationStrictModel):
     kind: Literal["whole_quantity"]
     capability_id: PlannerId
-    currency: CurrencyCode
-    fx_mode: Literal["native_currency_required", "conversion_allowed"]
     quantity_unit: QuantityUnit
     quantity_step: PlannerWholeQuantityStep
 
@@ -901,8 +887,6 @@ class WholeQuantityCapability(AllocationStrictModel):
 class MonetaryAmountCapability(AllocationStrictModel):
     kind: Literal["monetary_amount"]
     capability_id: PlannerId
-    currency: CurrencyCode
-    fx_mode: Literal["native_currency_required", "conversion_allowed"]
     order_amount_step: PlannerMoneyInput
 
 
@@ -1066,32 +1050,6 @@ class PacOrderRouteInput(PlannerBuyOrderRouteInput):
     pass
 
 
-class PlannerFxQuoteInput(AllocationStrictModel):
-    """Operational nonidentity FX fact; assembly filters source identity rows."""
-
-    fx_quote_id: PlannerId
-    source_currency: CurrencyCode
-    destination_currency: CurrencyCode = Field(description="Currency units received per one source-currency unit.")
-    rate: PlannerFixedDecimal
-    reference_date: ReferenceDate
-    freshness: ObservationFreshness
-    provenance_id: PlannerId
-
-
-class PlannerFxRouteInput(AllocationStrictModel):
-    fx_route_id: PlannerId
-    broker_id: PlannerId
-    fx_quote_id: PlannerId
-    source_currency: CurrencyCode
-    destination_currency: CurrencyCode = Field(description="Currency units received per one source-currency unit.")
-    source_amount_step: PlannerMoneyInput
-    spread_rate: PlannerFixedDecimal
-    safety_buffer_rate: PlannerFixedDecimal
-    fixed_fee: PlannerMoneyInput
-    priority: PlannerWireInteger
-    provenance_id: PlannerId
-
-
 class PlannerTargetWeightInput(AllocationStrictModel):
     asset_id: PlannerId
     weight: PlannerFixedDecimal
@@ -1134,15 +1092,26 @@ class _PlannerRequestBase(AllocationStrictModel):
     valuation_currency: CurrencyCode
     currency_specs: list[CurrencySpec]
     provenance: list[PlannerProvenance] = Field(description="Root provenance records referenced by every copied or manually supplied fact.")
-    valuation_rates: list[PlannerValuationRateInput]
+    fx_rates: dict[str, PlannerFixedDecimal] = Field(description="Canonical global FX facts; key is an alphabetically sorted uppercase currency pair naming one unit of the first currency, value is units of the second currency per one unit of the first. May be empty.")
+    fx_spread_rate: PlannerFixedDecimal = Field(description="Single global adverse spread applied exactly once to every actual currency conversion; valuation always uses the official rate.")
     assets: list[PlannerAssetInput]
     brokers: list[PlannerBrokerInput]
     existing_cash: list[PlannerExistingCashInput]
     contributions: list[PlannerContributionInput]
     funding_routes: list[PlannerFundingRouteInput]
-    fx_quotes: list[PlannerFxQuoteInput]
-    fx_routes: list[PlannerFxRouteInput]
     target_weights: list[PlannerTargetWeightInput]
+
+    @model_validator(mode="after")
+    def _validate_fx_rate_pair_keys(self) -> _PlannerRequestBase:
+        # `fx_rates` is a plain `dict[str, ...]` (unconstrained key) rather than a
+        # pattern-keyed dict, so the tool-schema codegen allow-list never sees a
+        # `patternProperties` keyword; this validator reapplies the same pair
+        # format/ordering constraint (regex + `_planner_canonical_fx_pair`) at runtime.
+        for pair in self.fx_rates:
+            if not re.fullmatch(_PLANNER_FX_PAIR, pair):
+                raise ValueError(f"FX rate key {pair!r} must be an uppercase 'AAA/BBB' currency pair")
+            _planner_canonical_fx_pair(pair)
+        return self
 
 
 class PacPlannerRequest(_PlannerRequestBase):
@@ -1323,8 +1292,7 @@ PlannerIssueEntityKind = Literal[
     "cash",
     "contribution",
     "funding_route",
-    "fx_quote",
-    "fx_route",
+    "fx_rate",
     "order_route",
     "order",
     "solution",
@@ -1724,9 +1692,7 @@ class PlannerScenarioCounts(AllocationStrictModel):
     contributions: PlannerSafeInteger
     funding_routes: PlannerSafeInteger
     capabilities: PlannerSafeInteger
-    valuation_rates: PlannerSafeInteger
-    fx_quotes: PlannerSafeInteger
-    fx_routes: PlannerSafeInteger
+    fx_rates: PlannerSafeInteger
     order_routes: PlannerSafeInteger
     provenance: PlannerSafeInteger
 
@@ -1780,17 +1746,13 @@ class PlannerFundingAction(AllocationStrictModel):
 class PlannerFxAction(AllocationStrictModel):
     action_id: PlannerId
     sequence: PlannerPositiveInteger
-    fx_route_id: PlannerId
+    order_route_id: PlannerId
     broker_id: PlannerId
     source_debit: PlannerPositiveMoneyInput
     destination_credit: PlannerPositiveMoneyInput
     spot_rate: ExactFxRate
     effective_rate: ExactFxRate
     spread_loss: ExactMoney
-    fee: PlannerNonNegativeMoneyInput
-    buffer: PlannerNonNegativeMoneyInput
-    reference_date: ReferenceDate
-    freshness: ObservationFreshness
     provenance_ids: Annotated[list[PlannerId], Field(min_length=1)]
 
     @model_validator(mode="after")
@@ -1807,15 +1769,8 @@ class PlannerFxAction(AllocationStrictModel):
             raise ValueError("Effective FX rate must follow the posted source-to-destination direction")
         if _exact_fraction(self.effective_rate.value) > _exact_fraction(self.spot_rate.value):
             raise ValueError("Effective FX rate cannot exceed the approved spot rate")
-        if self.fee.currency != self.source_debit.currency or self.buffer.currency != self.source_debit.currency:
-            raise ValueError("FX action fee and buffer must use the source currency")
         if _exact_fraction(self.spread_loss.value) < 0:
             raise ValueError("FX spread loss cannot be negative")
-        if isinstance(self.freshness, AcceptedStaleObservation):
-            if self.freshness.age_days < 0:
-                raise ValueError("Published stale FX actions require a nonnegative observation age")
-            if not self.freshness.accepted:
-                raise ValueError("Published stale FX actions require explicit acceptance")
         return self
 
 
@@ -1998,10 +1953,8 @@ class PlannerLedgerRow(AllocationStrictModel):
     gross_sell_credit: PlannerFixedDecimal
     buy_fees: PlannerFixedDecimal
     sell_fees: PlannerFixedDecimal
-    fx_fees: PlannerFixedDecimal
     broker_withheld_tax: PlannerFixedDecimal
     self_reserved_tax: PlannerFixedDecimal
-    fx_buffer: PlannerFixedDecimal
     rounding_delta: PlannerFixedDecimal = Field(description="Raw posted-exact rounding delta; credits are negated in the accounting identity.")
     final_spendable: PlannerFixedDecimal
     final_physical: PlannerFixedDecimal
@@ -2018,10 +1971,8 @@ class PlannerLedgerRow(AllocationStrictModel):
             "gross_sell_credit",
             "buy_fees",
             "sell_fees",
-            "fx_fees",
             "broker_withheld_tax",
             "self_reserved_tax",
-            "fx_buffer",
             "final_spendable",
             "final_physical",
         )
@@ -2039,12 +1990,10 @@ class PlannerLedgerRow(AllocationStrictModel):
             - _fixed_fraction(self.sell_fees)
             - _fixed_fraction(self.broker_withheld_tax)
             - _fixed_fraction(self.self_reserved_tax)
-            - _fixed_fraction(self.fx_fees)
-            - _fixed_fraction(self.fx_buffer)
         )
         if expected_spendable != _fixed_fraction(self.final_spendable):
             raise ValueError("Ledger spendable balance does not reconcile its posted debits and credits")
-        if _fixed_fraction(self.final_spendable) + _fixed_fraction(self.self_reserved_tax) + _fixed_fraction(self.fx_buffer) != _fixed_fraction(self.final_physical):
+        if _fixed_fraction(self.final_spendable) + _fixed_fraction(self.self_reserved_tax) != _fixed_fraction(self.final_physical):
             raise ValueError("Ledger spendable balance does not reconcile")
         return self
 
@@ -2106,12 +2055,10 @@ class PlannerAccountingSummary(AllocationStrictModel):
 class PlannerCostTotals(AllocationStrictModel):
     buy_fees: ExactMoney
     sell_fees: ExactMoney
-    fx_fees: ExactMoney
     fx_spread_loss: ExactMoney
     execution_margin_cost: ExactMoney
     broker_withheld_tax: ExactMoney
     self_reserved_tax: ExactMoney
-    fx_buffer: ExactMoney
 
 
 class ObjectiveStageResult(AllocationStrictModel):
@@ -2244,10 +2191,8 @@ def _validate_no_op_common(solution: PacPlanSolution | RebalancerPlanSolution) -
         "gross_sell_credit",
         "buy_fees",
         "sell_fees",
-        "fx_fees",
         "broker_withheld_tax",
         "self_reserved_tax",
-        "fx_buffer",
         "rounding_delta",
     )
     for row in solution.ledger_rows:

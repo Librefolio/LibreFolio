@@ -60,9 +60,7 @@
       "contributions": 0,
       "funding_routes": 0,
       "capabilities": 4,
-      "valuation_rates": 3,
-      "fx_quotes": 3,
-      "fx_routes": 3,
+      "fx_rates": 3,
       "order_routes": 32,
       "provenance": 1
     },
@@ -120,10 +118,10 @@
     "fx_actions": [],
     "order_rows": [],
     "ledger_rows": [
-      {"broker_id": "broker-eur", "currency": "EUR", "initial_selected": "0", "funding_in": "0", "funding_out": "0", "fx_debit": "0", "fx_credit": "0", "buy_debit": "0", "gross_sell_credit": "0", "buy_fees": "0", "sell_fees": "0", "fx_fees": "0", "broker_withheld_tax": "0", "self_reserved_tax": "0", "fx_buffer": "0", "rounding_delta": "0", "final_spendable": "0", "final_physical": "0"},
-      {"broker_id": "broker-usd", "currency": "USD", "initial_selected": "0", "funding_in": "0", "funding_out": "0", "fx_debit": "0", "fx_credit": "0", "buy_debit": "0", "gross_sell_credit": "0", "buy_fees": "0", "sell_fees": "0", "fx_fees": "0", "broker_withheld_tax": "0", "self_reserved_tax": "0", "fx_buffer": "0", "rounding_delta": "0", "final_spendable": "0", "final_physical": "0"},
-      {"broker_id": "broker-gbp", "currency": "GBP", "initial_selected": "0", "funding_in": "0", "funding_out": "0", "fx_debit": "0", "fx_credit": "0", "buy_debit": "0", "gross_sell_credit": "0", "buy_fees": "0", "sell_fees": "0", "fx_fees": "0", "broker_withheld_tax": "0", "self_reserved_tax": "0", "fx_buffer": "0", "rounding_delta": "0", "final_spendable": "0", "final_physical": "0"},
-      {"broker_id": "broker-jpy", "currency": "JPY", "initial_selected": "0", "funding_in": "0", "funding_out": "0", "fx_debit": "0", "fx_credit": "0", "buy_debit": "0", "gross_sell_credit": "0", "buy_fees": "0", "sell_fees": "0", "fx_fees": "0", "broker_withheld_tax": "0", "self_reserved_tax": "0", "fx_buffer": "0", "rounding_delta": "0", "final_spendable": "0", "final_physical": "0"}
+      {"broker_id": "broker-eur", "currency": "EUR", "initial_selected": "0", "funding_in": "0", "funding_out": "0", "fx_debit": "0", "fx_credit": "0", "buy_debit": "0", "gross_sell_credit": "0", "buy_fees": "0", "sell_fees": "0", "broker_withheld_tax": "0", "self_reserved_tax": "0", "rounding_delta": "0", "final_spendable": "0", "final_physical": "0"},
+      {"broker_id": "broker-usd", "currency": "USD", "initial_selected": "0", "funding_in": "0", "funding_out": "0", "fx_debit": "0", "fx_credit": "0", "buy_debit": "0", "gross_sell_credit": "0", "buy_fees": "0", "sell_fees": "0", "broker_withheld_tax": "0", "self_reserved_tax": "0", "rounding_delta": "0", "final_spendable": "0", "final_physical": "0"},
+      {"broker_id": "broker-gbp", "currency": "GBP", "initial_selected": "0", "funding_in": "0", "funding_out": "0", "fx_debit": "0", "fx_credit": "0", "buy_debit": "0", "gross_sell_credit": "0", "buy_fees": "0", "sell_fees": "0", "broker_withheld_tax": "0", "self_reserved_tax": "0", "rounding_delta": "0", "final_spendable": "0", "final_physical": "0"},
+      {"broker_id": "broker-jpy", "currency": "JPY", "initial_selected": "0", "funding_in": "0", "funding_out": "0", "fx_debit": "0", "fx_credit": "0", "buy_debit": "0", "gross_sell_credit": "0", "buy_fees": "0", "sell_fees": "0", "broker_withheld_tax": "0", "self_reserved_tax": "0", "rounding_delta": "0", "final_spendable": "0", "final_physical": "0"}
     ],
     "exposure_rows": [
       {"dimension": "asset_type", "category_id": "equity", "label": "Equity", "target_weight": {"kind": "finite_decimal", "value": "1"}, "final_weight": {"kind": "unavailable", "reason": "zero_final_invested"}, "provenance_ids": ["prov-candidate-max"]},
@@ -148,12 +146,10 @@
     "costs": {
       "buy_fees": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
       "sell_fees": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
-      "fx_fees": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
       "fx_spread_loss": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
       "execution_margin_cost": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
       "broker_withheld_tax": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
-      "self_reserved_tax": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
-      "fx_buffer": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}
+      "self_reserved_tax": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}
     },
     "objectives": {
       "stages": [

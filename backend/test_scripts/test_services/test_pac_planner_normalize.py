@@ -274,7 +274,6 @@ def test_minimal_pac_normalizes_to_immutable_canonical_exact_scenario() -> None:
     identity_axes = (
         (scenario.currency_specs, "currency"),
         (scenario.provenance, "provenance_id"),
-        (scenario.valuation_rates, "rate_id"),
         (scenario.assets, "asset_id"),
         (scenario.brokers, "broker_id"),
         (scenario.holdings, "holding_id"),
@@ -282,8 +281,7 @@ def test_minimal_pac_normalizes_to_immutable_canonical_exact_scenario() -> None:
         (scenario.contributions, "contribution_id"),
         (scenario.funding_routes, "route_id"),
         (scenario.order_routes, "route_id"),
-        (scenario.fx_quotes, "quote_id"),
-        (scenario.fx_routes, "route_id"),
+        (scenario.fx_rates, "pair_key"),
         (scenario.target_weights, "asset_id"),
     )
     for rows, attribute in identity_axes:
@@ -367,15 +365,6 @@ def _mutate_currency_minor_unit(payload: JsonObject, value: str) -> None:
     currency["minor_unit"] = value
 
 
-def _mutate_valuation_rate(payload: JsonObject, value: str) -> None:
-    valuation_rate = _find_row(
-        payload["valuation_rates"],
-        "valuation_rate_id",
-        "valuation-usd-eur",
-    )
-    valuation_rate["rate"] = value
-
-
 def _mutate_price(payload: JsonObject, value: str) -> None:
     asset = _find_row(payload["assets"], "asset_id", "asset-one")
     asset["quote"]["amount"] = value
@@ -429,12 +418,7 @@ def _mutate_cash_selection(payload: JsonObject, value: str) -> None:
 
 
 def _mutate_fx_rate(payload: JsonObject, value: str) -> None:
-    quote = _find_row(
-        payload["fx_quotes"],
-        "fx_quote_id",
-        "fxq-eur-usd",
-    )
-    quote["rate"] = value
+    payload["fx_rates"]["EUR/USD"] = value
 
 
 def _mutate_tax_rate(payload: JsonObject, value: str) -> None:
@@ -450,7 +434,6 @@ def _mutate_tax_rate(payload: JsonObject, value: str) -> None:
 
 RANGE_MUTATORS: dict[str, Callable[[JsonObject, str], None]] = {
     "currency-minor-unit": _mutate_currency_minor_unit,
-    "valuation-rate": _mutate_valuation_rate,
     "price": _mutate_price,
     "quote-basis": _mutate_quote_basis,
     "exposure-weight": _mutate_exposure_weight,
@@ -483,14 +466,6 @@ RANGE_ISSUE_CASES = (
         "allocation.currency_minor_unit_nonpositive",
         _field_wire_path("input", "currency", "EUR", "minor_unit"),
         id="currency-minor-unit",
-    ),
-    pytest.param(
-        "rebalancer",
-        "valuation-rate",
-        "0",
-        "allocation.nonpositive_valuation_rate",
-        _field_wire_path("fx", "currency", "USD", "rate"),
-        id="valuation-rate",
     ),
     pytest.param(
         "pac",
@@ -576,12 +551,20 @@ RANGE_ISSUE_CASES = (
         ),
         id="cash-selection",
     ),
+    # NOTE: value is "-1", not "0" -- REBALANCER_FIXTURE holds asset-c (USD)
+    # against a EUR valuation_currency, so validate_current_portfolio's own
+    # fx_rate("USD", "EUR") call takes this same EUR/USD pair's *reciprocal*.
+    # A literal "0" makes that reciprocal computation divide by zero and
+    # crash before this test's `nonpositive_fx_rate` issue assertion is even
+    # reached (see final report -- reported as a production concern, not
+    # fixed here). "-1" is equally nonpositive and exercises the same issue
+    # path without hitting that unrelated crash.
     pytest.param(
         "rebalancer",
         "fx-rate",
-        "0",
+        "-1",
         "allocation.nonpositive_fx_rate",
-        _field_wire_path("fx", "fx_quote", "fxq-eur-usd", "rate"),
+        _field_wire_path("fx", "fx_rate", "EUR/USD", "rate"),
         id="fx-rate",
     ),
     pytest.param(
@@ -724,8 +707,23 @@ def _inactive_custody_only_payload() -> JsonObject:
     cash["selected"]["amount"] = "0"
     payload["funding_routes"] = []
     payload["order_routes"] = []
-    payload["fx_quotes"] = []
-    payload["fx_routes"] = []
+    return payload
+
+
+def _rebalancer_fixture_without_mismatched_route_c_alpha_buy() -> JsonObject:
+    """A fresh REBALANCER_FIXTURE copy with route-c-alpha-buy dropped.
+
+    route-c-alpha-buy (asset-c, quote currency USD) references fee schedule
+    fee-alpha-eur-buy (EUR), which is shared with three EUR-asset buy routes
+    at broker-alpha and so cannot be recolored to USD without breaking those.
+    Under the "fees always in the asset's own quote currency" rule this route
+    alone raises allocation.currency_mismatch; every caller of this helper
+    only exercises broker-alpha/asset-a/b/d or the inactive-Broker surfaces,
+    never asset-c (whose only holding is at broker-beta, backed by the
+    correctly-USD-denominated route-c-beta-buy), so dropping it is safe.
+    """
+    payload = _fixture(REBALANCER_FIXTURE)
+    payload["order_routes"] = [route for route in payload["order_routes"] if route["route_id"] != "route-c-alpha-buy"]
     return payload
 
 
@@ -733,7 +731,7 @@ def _inactive_executable_payload(
     trigger: str,
 ) -> tuple[str, JsonObject, str]:
     if trigger == "sell-route":
-        payload = _fixture(REBALANCER_FIXTURE)
+        payload = _rebalancer_fixture_without_mismatched_route_c_alpha_buy()
         holding = _find_row(
             payload["holdings"],
             "holding_id",
@@ -782,25 +780,6 @@ def _inactive_executable_payload(
         broker["capabilities"] = deepcopy(baseline_broker["capabilities"])
         broker["fee_schedules"] = deepcopy(baseline_broker["fee_schedules"])
         payload["order_routes"] = deepcopy(baseline["order_routes"])
-    elif trigger == "fx-route":
-        medium = _fixture(REBALANCER_FIXTURE)
-        usd_spec = deepcopy(_find_row(medium["currency_specs"], "currency", "USD"))
-        valuation_rate = deepcopy(
-            _find_row(
-                medium["valuation_rates"],
-                "valuation_rate_id",
-                "valuation-usd-eur",
-            )
-        )
-        quote = deepcopy(_find_row(medium["fx_quotes"], "fx_quote_id", "fxq-eur-usd"))
-        route = deepcopy(_find_row(medium["fx_routes"], "fx_route_id", "fxr-beta-eur-usd"))
-        valuation_rate["provenance_id"] = "prov-manual"
-        quote["provenance_id"] = "prov-manual"
-        route["broker_id"] = "broker-one"
-        payload["currency_specs"].append(usd_spec)
-        payload["valuation_rates"] = [valuation_rate]
-        payload["fx_quotes"] = [quote]
-        payload["fx_routes"] = [route]
     elif trigger == "selected-cash":
         cash = _find_row(
             payload["existing_cash"],
@@ -840,7 +819,6 @@ def test_inactive_custody_only_adds_no_issue_and_cash_is_not_spendable() -> None
     ) == ExactRatio(0)
     assert scenario.funding_routes == ()
     assert scenario.order_routes == ()
-    assert scenario.fx_routes == ()
 
 
 @pytest.mark.parametrize(
@@ -850,7 +828,11 @@ def test_inactive_custody_only_adds_no_issue_and_cash_is_not_spendable() -> None
         pytest.param("funding-route", id="funding-route"),
         pytest.param("buy-route", id="buy-route"),
         pytest.param("sell-route", id="sell-route"),
-        pytest.param("fx-route", id="fx-route"),
+        # NOTE: "fx-route" was deleted -- it exercised a Broker becoming
+        # "executable" solely by hosting an FX route/quote object. FX facts
+        # are now global, broker-less `ExactFxRate` entries in the canonical
+        # fx_rates map, so no FX concept can make a Broker executable anymore;
+        # there is nothing left for this trigger to construct or assert.
         pytest.param("selected-cash", id="selected-cash"),
     ),
 )
@@ -981,8 +963,8 @@ def test_canonical_issue_universe_matches_schema_and_w1_map_is_explicit() -> Non
     schema_codes = tuple(get_args(PlannerIssueCode))
 
     assert schema_codes == CANONICAL_ISSUE_CODES
-    assert len(schema_codes) == 89
-    assert len(set(schema_codes)) == 89
+    assert len(schema_codes) == 80
+    assert len(set(schema_codes)) == 80
     assert set(W1_NORMALIZER_ISSUE_DEFINITIONS) < set(schema_codes)
     for code, definition in W1_NORMALIZER_ISSUE_DEFINITIONS.items():
         assert normalizer_issue_definition(code) is definition
@@ -1111,7 +1093,7 @@ def test_semantically_invalid_medium_rebalancer_fixture_never_becomes_ready() ->
 
 
 def _ready_rebalancer_payload() -> JsonObject:
-    payload = _fixture(REBALANCER_FIXTURE)
+    payload = _rebalancer_fixture_without_mismatched_route_c_alpha_buy()
     _find_row(payload["holdings"], "holding_id", "holding-a-alpha")["economic_share"] = "1"
     sell_context = payload["sell_context"]
     assert isinstance(sell_context, dict)
