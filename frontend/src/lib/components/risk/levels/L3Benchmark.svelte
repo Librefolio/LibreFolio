@@ -67,7 +67,24 @@
     });
 
     async function run(): Promise<void> {
-        await controller.runGuarded('comparison', () => (selected === null ? null : {code: 'comparison', mode: 'historical', parameters: {comparison_asset_id: selected}}));
+        // `current_composition`, not `historical`, and the reason is measured rather
+        // than stylistic. In `historical` the primary series is the portfolio's real
+        // TWRR, which on a portfolio built recently is dominated by deposits and by a
+        // cash share rather than by markets — against a stock benchmark its
+        // correlation collapses towards zero. That is not a weak relationship but the
+        // absence of one, so a beta computed there is not an imprecise estimate:
+        // there is nothing present to estimate. The same portfolio, the same
+        // benchmark and the same days correlate strongly under today's composition.
+        //
+        // L3 asks "am I being paid for this risk" in the present tense, about the risk
+        // held now — so the series has to be the composition held now. The answer is a
+        // backtest and says so: the result carries `current_composition_backtest`, and
+        // the card declares the perimeter it read rather than assuming one.
+        //
+        // The measurement that settled it, with its fixture and date, is in the
+        // journal under `implementation_2/progress/S3-esecuzione.md`; the figures are
+        // not repeated here because the mock dataset moves under them.
+        await controller.runGuarded('comparison', () => (selected === null ? null : {code: 'comparison', mode: 'current_composition', parameters: {comparison_asset_id: selected}}));
     }
 
     function choose(next: number | null): void {
@@ -90,6 +107,15 @@
         <!-- `sections` and `restLabel` (K3, mandate B) are not in this tree yet.
              They are additive and default to today's behaviour, so the day they
              land this call gains them without changing anything it does now. -->
-        <AssetSelect value={selected} compact testid="risk-l3-benchmark-select" placeholder={$t('risk.comparison.comparisonAsset')} filter={(asset) => !excludeAssetIds.includes(asset.id)} onchange={choose} />
+        <!-- `auto`, because the default `bottom` does not clip the list — it
+             *shortens* it. `SearchSelect` already renders the dropdown at a
+             computed `position: fixed`, so no ancestor's overflow is involved;
+             what it does with `bottom` is set the height to the space below the
+             trigger (`dynamicMaxHeight = maxBelow * ITEM_HEIGHT`). Near the foot
+             of the page that leaves the two-item floor, and the picker reads as
+             truncated. `auto` takes the side with more room instead, which is
+             the behaviour asked for: go down while the page allows, else open
+             upwards. -->
+        <AssetSelect value={selected} compact testid="risk-l3-benchmark-select" dropdownPosition="auto" placeholder={$t('risk.comparison.comparisonAsset')} filter={(asset) => !excludeAssetIds.includes(asset.id)} onchange={choose} />
     </div>
 </div>

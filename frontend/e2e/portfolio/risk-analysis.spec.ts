@@ -55,10 +55,11 @@ interface RiskMockOptions {
      * Warnings to hang on every result carrying one of these analytic codes.
      *
      * The wave already ships exactly one warning — `correlation` answers
-     * `partial` with `E2E partial fixture` — and **no level renders
-     * correlation**, so until this option existed nothing in the four-level
-     * panel ever had a reason to display. The suite was green over a surface it
-     * never reached.
+     * `partial` with `E2E partial fixture` — and for as long as no level
+     * rendered correlation, nothing in the four-level panel ever had a reason
+     * to display. The suite was green over a surface it never reached. L2 has
+     * rendered the heatmap since, so that one warning is now routed rather than
+     * dropped; this option exists to put sentences on the *other* levels.
      *
      * Keyed by code rather than by instance on purpose: `historical_var` is
      * asked twice in one wave, so one entry here puts the *same sentence* on two
@@ -70,6 +71,26 @@ interface RiskMockOptions {
      * test's payload is unchanged down to the byte.
      */
     analyticWarnings?: Record<string, Array<{code: string; message: string}>>;
+    /**
+     * Turns every result carrying one of these analytic codes into an outright
+     * failure, with the given code.
+     *
+     * The twin of `analyticWarnings`, and it exists for the same reason: the
+     * fixture answers **every** code the panel asks for, so no level in this
+     * suite has ever rendered a failure. A level that computed nothing looked
+     * identical to one whose analytic does not support the scope, and said so
+     * in a sentence that blamed the reader's data.
+     *
+     * The code travels rather than a sentence, because that is the real
+     * asymmetry: a warning arrives as backend prose shown verbatim, an error
+     * arrives as an identifier the UI has to word itself. Asserting on the
+     * wording is therefore asserting on the i18n catalogue — which is the point
+     * of the unknown-code case, where the only correct behaviour is to *not*
+     * render `risk.errors.<code>`.
+     *
+     * Opt-in: absent, `withInjectedError` hands the result straight back.
+     */
+    analyticErrors?: Record<string, string>;
 }
 
 /**
@@ -319,6 +340,24 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
                     max_drawdown_duration_days: 19,
                     sharpe: 1.21,
                     sortino: 1.68,
+                    // The four acquired measures. Signs follow the schema's own
+                    // declared convention — drawdowns and returns negative,
+                    // dispersions non-negative — so a fixture with a positive
+                    // `worst_realization` would teach the panel a shape the
+                    // backend forbids, and the validator enforces
+                    // `max_drawdown <= CDaR <= DaR <= 0`: −0,087 ≤ −0,079 ≤ −0,071 ≤ 0.
+                    //
+                    // ⚠️ The confidence is deliberately 90% and NOT 95%. It is a
+                    // parameter the backend publishes, not a constant, and the
+                    // panel must read the field rather than assume the usual
+                    // value. A fixture at 95% would let a hard-coded "95%" pass
+                    // forever; at 90% that shortcut fails the moment it is taken.
+                    worst_realization: -0.038,
+                    worst_realization_date: '2023-11-21',
+                    drawdown_at_risk: -0.071,
+                    conditional_drawdown_at_risk: -0.079,
+                    drawdown_confidence_level: 0.9,
+                    ulcer_index: 0.041,
                 },
             };
         case 'correlation': {
@@ -381,6 +420,38 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
                     observations: 60,
                     value_at_risk: longHorizon ? 0.068 : 0.021,
                     conditional_value_at_risk: longHorizon ? 0.094 : 0.031,
+                    // The distribution behind the number, and the cut located in it.
+                    //
+                    // ⚠️ The grid is deliberately NON-uniform — three bins are
+                    // twice as wide as the others. `validate_return_bins` polices
+                    // only that lower bounds ascend, not that widths match, so a
+                    // uniform fixture would let the renderer divide the width by
+                    // the bin count and still look right. Here that shortcut
+                    // draws the wrong picture.
+                    //
+                    // The counts sum to 60, the declared `observations`: a
+                    // histogram whose bars contradict its own total would be
+                    // teaching a shape the backend never emits.
+                    //
+                    // Only the day carries bins. The month having none is what
+                    // proves the histogram reads the *daily instance* and not
+                    // merely the first `historical_var` result it finds.
+                    return_bins: longHorizon
+                        ? []
+                        : [
+                              {lower_bound: -0.06, upper_bound: -0.04, count: 1},
+                              {lower_bound: -0.04, upper_bound: -0.03, count: 2},
+                              {lower_bound: -0.03, upper_bound: -0.02, count: 5},
+                              {lower_bound: -0.02, upper_bound: -0.01, count: 12},
+                              {lower_bound: -0.01, upper_bound: 0.01, count: 28},
+                              {lower_bound: 0.01, upper_bound: 0.02, count: 9},
+                              {lower_bound: 0.02, upper_bound: 0.04, count: 3},
+                          ],
+                    // Falls inside bin 2 by the half-open rule −0,03 ≤ −0,021 < −0,02,
+                    // and strictly beyond bins 0 and 1. Never on a boundary: a
+                    // fixture sitting exactly on an edge would pass under both the
+                    // half-open rule and the closed one it exists to distinguish.
+                    var_bin_edge: longHorizon ? null : -0.021,
                 },
             };
         }
@@ -396,6 +467,24 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
                     current_drawdown: -0.032,
                     current_peak_date: '2024-02-05',
                     current_drawdown_duration_days: 41,
+                    // Dated at the source, and deliberately at IRREGULAR intervals.
+                    // Only trading days appear, so the series is shorter than the
+                    // window it spans; a renderer that spread the points evenly
+                    // would misplace every interior one, and an evenly-spaced
+                    // fixture would never catch it doing so.
+                    //
+                    // Numerically consistent with the rest of this output: the
+                    // deepest point is −0,087 on the max-drawdown trough date, the
+                    // curve returns to 0 at the current peak date, and the last
+                    // point is the −0,032 current drawdown.
+                    underwater_series: [
+                        {date: '2023-11-14', drawdown: 0},
+                        {date: '2023-11-21', drawdown: -0.052},
+                        {date: '2023-12-03', drawdown: -0.087},
+                        {date: '2024-01-10', drawdown: -0.031},
+                        {date: '2024-02-05', drawdown: 0},
+                        {date: '2024-03-18', drawdown: -0.032},
+                    ],
                     maximum_drawdown: -0.087,
                     maximum_drawdown_peak_date: '2023-11-14',
                     maximum_drawdown_trough_date: '2023-12-03',
@@ -627,8 +716,21 @@ function withInjectedWarnings(result: Record<string, unknown>, options: RiskMock
     return {...result, warnings: [...((result.warnings as unknown[] | undefined) ?? []), ...injected]};
 }
 
-async function installRiskMocks(page: Page, options: RiskMockOptions = {}): Promise<RiskRequest[]> {
-    const requests: RiskRequest[] = [];
+/**
+ * Replaces a result with the failure its analytic would have returned.
+ *
+ * `output: null` and `status: 'failed'` together, never one without the other:
+ * `schemas/risk.py` forbids a failed result from carrying an output, so a stub
+ * that kept the output while flipping the status would model a payload the
+ * backend cannot emit — and the level would render its rows *and* its error.
+ */
+function withInjectedError(result: Record<string, unknown>, options: RiskMockOptions): Record<string, unknown> {
+    const code = options.analyticErrors?.[String(result.analytic_code)];
+    if (!code) return result;
+    return {...result, status: 'failed', output: null, error: {code, message: `E2E injected ${code}`}};
+}
+
+async function installRiskMocks(page: Page, options: RiskMockOptions = {}): Promise<RiskRequest[]> {    const requests: RiskRequest[] = [];
 
     await page.route('**/api/v1/risk/catalog', async (route) => {
         await route.fulfill({
@@ -653,7 +755,7 @@ async function installRiskMocks(page: Page, options: RiskMockOptions = {}): Prom
             status: 200,
             contentType: 'application/json',
             body: JSON.stringify({
-                items: request.analytics.map((analytic) => withInjectedWarnings(resultFor(request, analytic, options), options)),
+                items: request.analytics.map((analytic) => withInjectedWarnings(withInjectedError(resultFor(request, analytic, options), options), options)),
             }),
         });
     });
@@ -924,16 +1026,61 @@ test.describe('Risk analysis functional integration', () => {
         // A bad day and a bad month are separate observations carried by two
         // instances of one analytic: equal numbers here would pass even if the
         // panel read both rows off whichever result happened to arrive first.
-        await expect(panel.getByTestId('risk-l1-loss-day')).toHaveText(loss('3.1%'));
-        await expect(panel.getByTestId('risk-l1-loss-month')).toHaveText(loss('9.4%'));
+        await expect(panel.getByTestId('risk-l1-card-day-value')).toHaveText(loss('3.1%'));
+        await expect(panel.getByTestId('risk-l1-card-month-value')).toHaveText(loss('9.4%'));
         // The worst fall arrives as `-0.087` under the `le=0` convention and must
         // read as a positive magnitude of 8,7%, not as a dropped contradiction.
-        await expect(panel.getByTestId('risk-l1-loss-worst')).toHaveText(loss('8.7%'));
+        await expect(panel.getByTestId('risk-l1-card-worst-value')).toHaveText(loss('8.7%'));
         await expect(panel.getByTestId('risk-l1-duration-worst')).toBeVisible();
         await expect(panel.getByTestId('risk-l1-recovery-worst')).toBeVisible();
         // Where the portfolio stands now is a different question from its worst
         // moment, and the drawdown summary is what answers it.
-        await expect(panel.getByTestId('risk-l1-current-loss')).toHaveText(loss('3.2%'));
+        await expect(panel.getByTestId('risk-l1-card-current-value')).toHaveText(loss('3.2%'));
+
+        // --- L1: the acquired measures, as second rows and never as cards -----
+        //
+        // The count is the assertion. These four measures refine two figures that
+        // are already on screen, so promoting any of them to a card of its own
+        // would restate the change of scale this level exists to remove. Four
+        // cards is the contract: three rungs plus the current drawdown.
+        //
+        // ⚠️ Scoped to the grid's DIRECT children on purpose. A plain
+        // `[data-testid^="risk-l1-card-"]` counts 28, not 4: `RiskMetricCard`
+        // derives its label, value, caption, technical name, docs link and accent
+        // testids from the card's own, so the prefix that reads like "the cards"
+        // matches every part of every card. Anchoring to the grid counts objects
+        // instead of fragments, and still fails if a fifth card appears.
+        await expect(panel.getByTestId('risk-l1-cards').locator('> div > [data-testid^="risk-l1-card-"]')).toHaveCount(4);
+        await expect(panel.getByTestId('risk-l1-worst-realization')).toContainText(loss('3.8%'));
+        await expect(panel.getByTestId('risk-l1-worst-realization-date')).toContainText('2023-11-21');
+        // ⚠️ 90%, from the fixture's `drawdown_confidence_level`. The usual 95% is
+        // a default the backend publishes, not a constant: this assertion turns red
+        // the moment anyone writes the familiar number into the label.
+        await expect(panel.getByTestId('risk-l1-drawdown-at-risk')).toContainText('90');
+        await expect(panel.getByTestId('risk-l1-drawdown-at-risk')).toContainText(loss('7.1%'));
+        await expect(panel.getByTestId('risk-l1-conditional-drawdown-at-risk')).toContainText(loss('7.9%'));
+
+        // --- L1: the two representations that had no reader until now ---------
+        //
+        // Six points, and the count matters: the series is shorter than the
+        // window it spans because only trading days appear. A chart fed by an
+        // interpolation would have some other number here.
+        await expect(panel.getByTestId('risk-l1-underwater-chart')).toHaveAttribute('data-point-count', '6');
+        // The ulcer index is the caption of that curve, never a figure on its own:
+        // alone it is a dimensionless number with no reading.
+        await expect(panel.getByTestId('risk-l1-ulcer')).toBeVisible();
+
+        await expect(panel.getByTestId('risk-l1-histogram-bars')).toHaveAttribute('data-bin-count', '7');
+        await expect(panel.getByTestId('risk-l1-histogram-observations')).toContainText('60');
+        // The cut lands in bin 2 by the half-open rule −0,03 ≤ −0,021 < −0,02, and
+        // in exactly one bin. Asserting the neighbours is what separates "the
+        // right bar" from "a bar": an off-by-one would still highlight something.
+        await expect(panel.getByTestId('risk-l1-histogram-bin-2')).toHaveAttribute('data-holds-cut', 'true');
+        await expect(panel.getByTestId('risk-l1-histogram-bars').locator('[data-holds-cut="true"]')).toHaveCount(1);
+        // Two bars lie entirely beyond the cut. This is the shading that gives the
+        // threshold a meaning: without it the marker points at nothing.
+        await expect(panel.getByTestId('risk-l1-histogram-bars').locator('[data-below-cut="true"]')).toHaveCount(2);
+        await expect(panel.getByTestId('risk-l1-histogram-bin-2')).toHaveAttribute('data-below-cut', 'false');
 
         // Nothing came back degraded, so nothing is disclosed. The mirror of the
         // two-entry assertion in the unavailable test: without this half, a
@@ -962,6 +1109,44 @@ test.describe('Risk analysis functional integration', () => {
         await expect(panel.getByTestId('risk-l3-sortino-value')).toHaveText('1.68');
         await expect(panel.getByTestId('risk-l3-sharpe-value')).toHaveText('1.21');
         await expect(panel.getByTestId('risk-l3-volatility-value')).toHaveText('14.2%');
+
+        // --- Provenance: what the figures were computed over -------------------
+        // `RiskResultFrame` publishes this and only the legacy panel uses it, so
+        // the four levels rendered measurements with no window attached. The same
+        // asset pair correlates 0.96 over one month and 0.67 over one year: a
+        // number without its window is an assertion, not a measurement.
+        const l1Metadata = panel.getByTestId('risk-level-1-metadata');
+        await expect(l1Metadata).toBeVisible();
+
+        // **Two rows, and the fixture did not have to be bent to produce them.**
+        // `historical_kpi` reports `twrr` while `historical_var` and
+        // `drawdown_summary` report `price_only`, so L1 aggregates figures
+        // computed on two different bases — something no surface has ever said.
+        // A design that picked one result as representative would print a single
+        // basis over all three, which is the failure this split exists to avoid.
+        await expect(l1Metadata).toHaveAttribute('data-rows', '2');
+
+        // Open it the way a reader would. Asserting through a closed `<details>`
+        // would pass on `textContent` alone and prove nothing about the
+        // disclosure working.
+        await l1Metadata.locator('summary').click();
+        await expect(panel.getByTestId('risk-level-1-metadata-observations').first()).toBeVisible();
+        await expect(panel.getByTestId('risk-level-1-metadata-observations').first()).toHaveText('60');
+
+        const bases = panel.getByTestId('risk-level-1-metadata-basis');
+        await expect(bases).toHaveCount(2);
+        // Read off the attribute, which carries the backend token, rather than
+        // off the rendered sentence, which is translated.
+        await expect(panel.locator('[data-testid="risk-level-1-metadata-row"][data-codes="historical_var drawdown_summary"]')).toHaveCount(1);
+        await expect(panel.locator('[data-testid="risk-level-1-metadata-row"][data-codes="historical_kpi"]')).toHaveCount(1);
+
+        // The guard of `translateOrRaw` on the real catalogue: `RiskResultFrame:108`
+        // builds this same key unguarded, and a basis it has not seen prints
+        // `risk.returnBasis.<value>` on screen. Neither row may do that.
+        for (const text of await bases.allTextContents()) {
+            expect(text).not.toContain('risk.returnBasis.');
+            expect(text.trim().length).toBeGreaterThan(0);
+        }
 
         // --- Data quality -----------------------------------------------------
         // Scoped to the panel: the dashboard renders a banner of its own, and an
@@ -1026,14 +1211,21 @@ test.describe('Risk analysis functional integration', () => {
         // The barrier first. "No VaR row" is also true of a panel that never
         // rendered, so L1 has to be demonstrably present and fed by the same wave
         // that carried the unavailable result before its absence means anything.
-        await expect(panel.getByTestId('risk-l1-scale')).toBeVisible({timeout: 8_000});
-        await expect(panel.getByTestId('risk-l1-loss-worst')).toHaveText(loss('8.7%'));
+        await expect(panel.getByTestId('risk-l1-cards')).toBeVisible({timeout: 8_000});
+        await expect(panel.getByTestId('risk-l1-card-worst-value')).toHaveText(loss('8.7%'));
 
-        // Both VaR instances came back `unavailable`. Their rungs are omitted,
+        // Both VaR instances came back `unavailable`. Their cards are omitted,
         // never zero-filled: an absent measurement and a measurement of zero are
-        // different claims, and a 0,0% row would read as "it cannot hurt you".
-        await expect(panel.getByTestId('risk-l1-row-day')).toHaveCount(0);
-        await expect(panel.getByTestId('risk-l1-row-month')).toHaveCount(0);
+        // different claims, and a 0,0% card would read as "it cannot hurt you".
+        //
+        // ⚠️ The count of 1 on the worst card is not decoration. Two absences
+        // prove nothing on their own: a typo in the selector family would also
+        // return zero, and would do it for every scenario, silently. Proving that
+        // *this exact shape* resolves to 1 where the measurement exists is what
+        // makes the two zeros beside it a measurement rather than a spelling.
+        await expect(panel.getByTestId('risk-l1-card-worst')).toHaveCount(1);
+        await expect(panel.getByTestId('risk-l1-card-day')).toHaveCount(0);
+        await expect(panel.getByTestId('risk-l1-card-month')).toHaveCount(0);
         await expect(panel.getByTestId('risk-l1-empty')).toHaveCount(0);
 
         // …and the omission is *disclosed*, which is the other half of the same
@@ -1063,7 +1255,7 @@ test.describe('Risk analysis functional integration', () => {
         await expect(panel.getByTestId('risk-l2-weight-1')).toHaveText('60.0%');
         await expect(panel.getByTestId('risk-l2-divergence-1')).toHaveText('+5.0pp');
         await expect(panel.getByTestId('risk-l3-sortino-value')).toHaveText('1.68');
-        await expect(panel.getByTestId('risk-l1-current-loss')).toHaveText(loss('3.2%'));
+        await expect(panel.getByTestId('risk-l1-card-current-value')).toHaveText(loss('3.2%'));
         await expect(panel.getByTestId('risk-load-error')).toHaveCount(0);
         await expect(panel).toHaveAttribute('data-catalog', 'ready');
     });
@@ -1146,9 +1338,9 @@ test.describe('Risk analysis functional integration', () => {
         // property the redesign exists to build. Two vocabularies here would let
         // them drift while both suites stayed green.
         await expect(panel.getByTestId('risk-level-1')).toBeVisible();
-        await expect(panel.getByTestId('risk-l1-loss-day')).toHaveText(loss('3.1%'));
-        await expect(panel.getByTestId('risk-l1-loss-month')).toHaveText(loss('9.4%'));
-        await expect(panel.getByTestId('risk-l1-loss-worst')).toHaveText(loss('8.7%'));
+        await expect(panel.getByTestId('risk-l1-card-day-value')).toHaveText(loss('3.1%'));
+        await expect(panel.getByTestId('risk-l1-card-month-value')).toHaveText(loss('9.4%'));
+        await expect(panel.getByTestId('risk-l1-card-worst-value')).toHaveText(loss('8.7%'));
         await expect(panel.getByTestId('risk-l2-weight-1')).toHaveText('60.0%');
         await expect(panel.getByTestId('risk-l3-sortino-value')).toHaveText('1.68');
 
@@ -1335,7 +1527,20 @@ test.describe('Risk analysis functional integration', () => {
         await expect(panel.getByTestId('risk-replay-end')).toHaveValue(/^\d{4}-\d{2}-\d{2}$/);
         await expect(panel.getByTestId('risk-simulation-horizon')).toHaveValue('365');
         await expect(panel.getByTestId('risk-simulation-paths')).toHaveValue('8192');
-        await expect(panel.getByTestId('risk-simulation-sampling')).toHaveValue('mc');
+
+        // Sampling is deliberately *not* asserted here, and its absence is the
+        // assertion. The control belongs to the geometric process alone, so in
+        // the default block-bootstrap mode it is not rendered at all — a reader
+        // is never offered a knob that the regime they chose does not turn.
+        // Asserting `toHaveValue('mc')` on it would fail twice over: the node is
+        // absent, and `SimpleSelect` publishes its testId on a `<div>`, which has
+        // no value to have. Which mode reveals it is S4's own subject; what this
+        // test owns is that the defaults on screen are the defaults the request
+        // will carry.
+        await expect(panel.getByTestId('risk-simulation-sampling')).toHaveCount(0);
+        const defaultMode = panel.locator('[data-testid="risk-simulation-mode"][data-mode-id="block_bootstrap"]');
+        await expect(defaultMode).toHaveAttribute('data-selected', 'true');
+        await expect(panel.getByTestId('risk-simulation-modes')).toBeVisible();
 
         // --- Rung 2: one click adopts the assumption *and* asks the question ---
         // The old panel made the reader fill in a shock per bucket before
@@ -1699,8 +1904,8 @@ test.describe('Risk analysis functional integration', () => {
         // really came back. Both rungs on screen with different figures is that
         // proof, taken from the product rather than from the request log.
         await expect(panel.getByTestId('risk-level-1')).toBeVisible();
-        await expect(panel.getByTestId('risk-l1-loss-day')).toHaveText(loss('3.1%'));
-        await expect(panel.getByTestId('risk-l1-loss-month')).toHaveText(loss('9.4%'));
+        await expect(panel.getByTestId('risk-l1-card-day-value')).toHaveText(loss('3.1%'));
+        await expect(panel.getByTestId('risk-l1-card-month-value')).toHaveText(loss('9.4%'));
 
         // Every result in this wave is `ok`: nothing is degraded, so the status
         // line is absent — and the reasons are still shown. That pair is the
@@ -1739,14 +1944,138 @@ test.describe('Risk analysis functional integration', () => {
         await expect(panel.getByTestId('risk-l2-weight-1')).toHaveText('60.0%');
         await expect(panel.getByTestId('risk-l3-sortino-value')).toHaveText('1.68');
 
-        // The scoping itself. `correlation` rides in the very same historical
-        // answer and this stub returns it `partial` with a warning of its own,
-        // but no level renders correlation — so its sentence belongs under none
-        // of them. A panel that fed every level the whole wave would show three
-        // entries here, all of them plausible, one of them an accusation the
-        // reader has no way to check.
+        // The scoping itself, and the only place in the suite where the title's
+        // claim is actually exercised. `correlation` rides in the very same
+        // historical answer and this stub returns it `partial` with a warning of
+        // its own. L2 renders correlation, so L2 — and only L2 — carries its
+        // sentence. Until the heatmap existed no level rendered it and this
+        // assertion was a row of zeroes: true, and true for the reason that
+        // nothing could have received the warning. A vacuous green.
+        //
+        // What it now proves is the routing rule in both directions: the
+        // sentence lands under the level that rendered the measurement, and
+        // stays off the two that did not. A panel feeding every level the whole
+        // wave would put it under all three, all of them plausible, two of them
+        // an accusation the reader has no way to check.
         await expect(panel.getByTestId('risk-level-1-reason').filter({hasText: 'E2E partial fixture'})).toHaveCount(0);
-        await expect(panel.getByTestId('risk-level-2-reasons')).toHaveCount(0);
         await expect(panel.getByTestId('risk-level-3-reasons')).toHaveCount(0);
+
+        const l2Reasons = panel.getByTestId('risk-level-2-reasons');
+        await expect(l2Reasons).toHaveAttribute('data-count', '1');
+        const correlationEntry = panel.getByTestId('risk-level-2-reason').filter({hasText: 'E2E partial fixture'});
+        await expect(correlationEntry).toHaveCount(1);
+        await expect(correlationEntry).toHaveAttribute('data-occurrences', '1');
+
+        // And the amber with it. `partial` degrades the result, so the status
+        // line that was absent from L1 — every result there being `ok` — is
+        // present here. Asserted by arity rather than by its sentence, which is
+        // translated; the point is that the level declaring a degraded heatmap
+        // says so, instead of rendering an empty grid in silence.
+        await expect(panel.getByTestId('risk-level-2-health')).toHaveAttribute('data-count', '1');
+
+        // Both L2 results are disclosed, but they arrive on different waves:
+        // contribution on the current one, correlation on the historical one.
+        // They collapse to a single provenance row because this fixture gives
+        // them the same window — which is what the tuple deduplication is for,
+        // and is the property under test here. It is not a promise that the two
+        // waves always agree in production: if they ever diverged the reader
+        // would get two rows, and that is the correct answer rather than a
+        // fault, because a heatmap and a contribution measured over different
+        // windows are two measurements and should not be shown as one.
+        await expect(panel.getByTestId('risk-level-2-metadata')).toHaveAttribute('data-rows', '1');
+    });
+
+    /**
+     * The twin of the test above, for the measurements that never ran.
+     *
+     * A level with no rows renders the same shape whether its analytic is out of
+     * scope, short of history, or still in flight — and the one sentence it
+     * showed, "unavailable for the selected data", blames the reader's portfolio
+     * for a limit of the analytic. The legacy frame said which of the two it was;
+     * the redesign lost that and nothing turned red, because the fixture answers
+     * every code the panel asks for and so no level here had ever failed.
+     *
+     * ⚠️ **The codes are real enum members, not invented ones.** `RiskErrorCode`
+     * is closed — thirteen values — and Zodios validates the response, so a stub
+     * carrying a made-up code does not produce a failed *analytic*: it throws on
+     * the whole wave, sets `loadError`, and renders **no levels at all**. The
+     * first draft of this test did exactly that and failed on `risk-level-1` not
+     * existing, an error whose obvious reading ("the level is broken") is the
+     * wrong one.
+     *
+     * 📌 **The boundary that follows**: because the enum is closed at the client,
+     * a code the UI has never seen cannot arrive through a validated response.
+     * The fallback in `translateErrorCode` is therefore **unreachable from here
+     * by construction**, and is covered by unit test instead. What this test can
+     * prove — and what actually regressed — is that codes the catalogue *did* not
+     * cover now speak: `worker_busy` and `execution_timeout` were two of five
+     * enum values with no translation at all.
+     *
+     * ⚠️ **Not one assertion on the rendered wording.** The sentences are
+     * translated, so pinning the English would fail the day the suite runs in
+     * another locale. What is pinned is the *relation*: three codes, three
+     * different sentences, none of them a key. Break the catalogue lookup so
+     * everything falls back and the three collapse to one — red. Break the guard
+     * so a key leaks — red on the `risk.errors.` check.
+     */
+    test('a measurement that never ran says which limit stopped it, and never says it in keys', async ({page}) => {
+        // L1's three codes, so all three failures land in one list and the
+        // comparison is between siblings rather than across levels. The last two
+        // are the regression: until the catalogue gained them, both rendered the
+        // same generic sentence as each other.
+        await installRiskMocks(page, {
+            analyticErrors: {
+                historical_var: 'incompatible_scope',
+                drawdown_summary: 'worker_busy',
+                historical_kpi: 'execution_timeout',
+            },
+        });
+
+        const panel = await openDashboardRisk(page);
+
+        await expect(panel.getByTestId('risk-level-1')).toBeVisible();
+        const errors = panel.getByTestId('risk-level-1-errors');
+        await expect(errors).toBeVisible();
+        await expect(errors).toHaveAttribute('data-count', '3');
+
+        // Targeted by `data-code`, which carries the backend's identifier: the
+        // one part of this row the UI does not word, and so the only safe handle
+        // for saying *which* sentence is being read.
+        const texts: string[] = [];
+        for (const code of ['incompatible_scope', 'worker_busy', 'execution_timeout']) {
+            const row = panel.locator(`[data-testid="risk-level-1-error"][data-code="${code}"]`);
+            await expect(row).toHaveCount(1);
+            texts.push(((await row.textContent()) ?? '').trim());
+        }
+
+        // The guard, against the real `svelte-i18n` rather than the double the
+        // unit test hands `translateErrorCode`.
+        for (const text of texts) {
+            expect(text).not.toContain('risk.errors.');
+            expect(text.length).toBeGreaterThan(0);
+        }
+
+        // Three causes, three sentences. Collapse the lookup and this is the
+        // assertion that notices, because every code would fall back to one.
+        expect(new Set(texts).size).toBe(3);
+
+        // The failure is disclosed *and* the level is honest about having
+        // nothing: with every L1 analytic failed there are no cards to draw, and
+        // an error list next to a stale grid would be worse than either alone.
+        // Same locator shape as the count assertion above, direct children only,
+        // because `risk-l1-card-` also prefixes each card's own inner parts.
+        await expect(panel.getByTestId('risk-l1-cards').locator('> div > [data-testid^="risk-l1-card-"]')).toHaveCount(0);
+
+        // The generic sentence is still there, underneath. Not a contradiction
+        // but the division the panel already uses for health and reasons: the
+        // empty state says there is nothing to read, the error says what stopped
+        // it. Pinned so a later attempt to suppress one of the two comes through
+        // this test.
+        await expect(panel.getByTestId('risk-l1-empty')).toBeVisible();
+
+        // Confined to the level that asked. `risk_contribution` answered
+        // normally, so L2 shows no error at all — a failure broadcast to every
+        // level would read as a whole-panel outage.
+        await expect(panel.getByTestId('risk-level-2-errors')).toHaveCount(0);
     });
 });

@@ -2923,6 +2923,10 @@
         "name": "Contribución al riesgo",
         "description": "Contribuciones de cada activo a la volatilidad de la composición actual."
       },
+      "assetRiskReturn": {
+        "name": "Riesgo y rentabilidad por activo",
+        "description": "Volatilidad y rentabilidad anualizada esperada de cada activo y de la cartera, sobre la composición actual."
+      },
       "stress": {
         "name": "Prueba de estrés",
         "description": "Aplica shocks hipotéticos o reproduce un período histórico."
@@ -3147,7 +3151,13 @@
       "insufficient_history": "Historial insuficiente para este cálculo.",
       "undefined_metric": "La métrica no está definida para estos datos.",
       "data_unavailable": "Los datos de origen necesarios no están disponibles.",
-      "execution_failed": "El cálculo del backend falló."
+      "execution_failed": "El cálculo del backend falló.",
+      "invalid_covariance": "No se pudieron calcular las relaciones entre estos activos.",
+      "resource_limit": "Este cálculo es demasiado grande para ejecutarse.",
+      "worker_busy": "El servicio de cálculo está ocupado. Vuelve a intentarlo en breve.",
+      "execution_timeout": "El cálculo tardó demasiado y se detuvo.",
+      "optimization_infeasible": "Ninguna asignación cumple las restricciones solicitadas.",
+      "unknown": "Esta medición no devolvió ningún resultado."
     },
     "warnings": {
       "sharpe_undefined": "Sharpe no está definido porque la volatilidad es cero.",
@@ -3207,10 +3217,35 @@
           "month": "Un mal mes (peor 5%)",
           "worst": "La peor caída (vivida de verdad)"
         },
+        "technical": {
+          "day": "CVaR · 1 día",
+          "month": "CVaR · 1 mes",
+          "worst": "Caída máxima",
+          "current": "Caída actual"
+        },
         "durationDays": "duró {days} días",
         "requiredRecovery": "recuperación necesaria {percent}",
         "currentDrawdown": "Actualmente por debajo del máximo",
-        "sincePeak": "desde el {date}"
+        "sincePeak": "desde el {date}",
+        "tails": {
+          "worstRealization": "El peor día realmente visto",
+          "worstRealizationOn": "el {date}",
+          "drawdownAtRisk": "Caída en riesgo ({confidence})",
+          "conditionalDrawdownAtRisk": "Media más allá de ese umbral",
+          "ulcerIndex": "Índice de Ulcer {value}",
+          "ulcerIndexHint": "profundidad cuadrática media bajo el pico: cuanto más bajo, más tranquilo"
+        },
+        "underwater": {
+          "title": "Tiempo bajo el pico",
+          "empty": "No hay curva bajo el pico para este periodo."
+        },
+        "histogram": {
+          "title": "Distribución de los rendimientos diarios",
+          "observations": "{count} días observados",
+          "cut": "Umbral VaR en {value}",
+          "noCut": "No se ha publicado ningún umbral para esta ventana.",
+          "empty": "No hay distribución de rendimientos para este periodo."
+        }
       },
       "l2": {
         "title": "¿Estoy tan diversificado como creo?",
@@ -3218,7 +3253,28 @@
         "contribution": "contribución al riesgo",
         "lead": "{name} pesa {weight} pero produce {contribution} del riesgo",
         "showAll": "Mostrar todos",
-        "showLess": "Mostrar menos"
+        "showLess": "Mostrar menos",
+        "effectiveAssets": {
+          "label": "¿Cuántas apuestas independientes tengo realmente?",
+          "aboveCount": "Por encima de las {positions} posiciones medidas: el exceso es liquidez, y no dice nada de los pesos",
+          "belowCount": "Por debajo de las {positions} posiciones medidas: los pesos están desequilibrados, y unas pocas sostienen la cartera",
+          "evenCount": "Igual a las {positions} posiciones medidas: pesos uniformes y ninguna liquidez"
+        },
+        "diversificationRatio": {
+          "label": "¿Repartir el dinero ha servido de algo?",
+          "caption": "1,00 significa que las posiciones se mueven al unísono; más alto, más se compensan"
+        },
+        "uncovered": {
+          "label": "¿Cuánto de mí no se mide aquí?",
+          "caption": "Liquidez, más toda posición sin una serie de precios utilizable",
+          "residual": "Las filas de abajo describen el resto de la cartera; {share} no está entre ellas"
+        },
+        "rowsCaption": "La barra muestra la diferencia entre peso y riesgo: a la derecha más riesgo que peso, a la izquierda menos. Los pesos son cuotas de la cartera entera.",
+        "correlation": {
+          "title": "¿Cuáles de estas son la misma apuesta?",
+          "basis": "Medida sobre la ventana histórica; los pesos de arriba son los de hoy.",
+          "noRedundancy": "Ninguna pareja de este conjunto alcanza el umbral de redundancia."
+        }
       },
       "l3": {
         "title": "¿Me están pagando por este riesgo?",
@@ -3229,7 +3285,20 @@
         "sortinoHelp": "Rendimiento por unidad de riesgo a la baja. A diferencia del Sharpe, no penaliza las subidas violentas.",
         "sharpeHelp": "Rendimiento por unidad de volatilidad total: penaliza las subidas igual que las bajadas.",
         "betaHelp": "Cuánto se mueve respecto al índice de referencia.",
-        "benchmark": "Comparado con"
+        "benchmark": "Comparado con",
+        "perimeter": {
+          "current_composition": "sobre la composición actual",
+          "historical": "sobre el histórico real"
+        },
+        "scatter": {
+          "title": "Riesgo frente a rentabilidad, activo por activo",
+          "portfolio": "Cartera",
+          "axisVolatility": "Volatilidad anualizada",
+          "axisReturn": "Rentabilidad anualizada esperada",
+          "line": "Recta riesgo-rentabilidad",
+          "note": "Por encima de la recta significa mejor pagado por el riesgo asumido. Los puntos muestran la rentabilidad esperada en media-varianza, la magnitud en la que la pendiente de la recta es el ratio de Sharpe: en un activo muy volátil la rentabilidad realmente vivida es menor, porque la volatilidad erosiona la capitalización.",
+          "cash": "La liquidez ({share} del patrimonio) no es un punto: en el modelo rinde exactamente cero, y dibujarla la convertiría en una medición."
+        }
       },
       "l4": {
         "title": "¿Qué pasa si…?",
@@ -3254,12 +3323,18 @@
             "seed": "Semilla"
           },
           "values": {
+            "block_bootstrap": "Bootstrap por bloques móviles",
             "gbm": "Movimiento browniano geométrico",
             "mc": "Monte Carlo",
             "qmc": "Cuasi-Monte Carlo",
             "historical_log_mle": "MLE sobre log-rendimientos históricos",
+            "empirical_resampled": "Empírica, a partir de rendimientos remuestreados",
             "sample_log_returns": "Covarianza muestral de log-rendimientos",
-            "current_buy_and_hold": "Composición actual, mantenida"
+            "not_estimated_joint_resampling": "No estimada: remuestreo conjunto",
+            "current_buy_and_hold": "Composición actual, mantenida",
+            "calm": "Mercado tranquilo",
+            "prolonged_crisis": "Crisis prolongada",
+            "shock_recovery": "Shock y recuperación"
           },
           "days": "{count} días",
           "regimeValue": "{regime}, declarado sobre {days} días",

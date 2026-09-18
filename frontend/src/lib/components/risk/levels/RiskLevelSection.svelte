@@ -5,6 +5,8 @@
     import {_ as t} from '$lib/i18n';
 
     import type {ResultHealth, ResultReason} from './levelHelpers';
+    import type {LevelMetadataRow} from './levelHelpers';
+    import {translateErrorCode, translateOrRaw} from './levelHelpers';
 
     /**
      * The frame around one of the four levels.
@@ -47,6 +49,32 @@
          * key on screen.
          */
         reasons?: ResultReason[];
+        /**
+         * The codes of measurements that did not come back **at all**.
+         *
+         * Distinct from `reasons` in both content and provenance: `reasons` are
+         * the backend's own sentences, shown verbatim; these are identifiers,
+         * worded here. Keeping them apart is what lets `reasons` stay verbatim —
+         * one list the caller may never translate, one it always must.
+         *
+         * An empty level renders the same shape whether the analytic is out of
+         * scope, short of history, or still in flight, and its single sentence
+         * blames the user's data for a limit of the analytic. This is where the
+         * difference gets back on screen.
+         */
+        errorCodes?: string[];
+        /**
+         * What the level's figures were computed over.
+         *
+         * `RiskResultFrame` publishes this and is used only by the legacy panel,
+         * so on the day the four levels replace it the observation count would
+         * leave the product. A window is half the meaning of a number: the same
+         * asset pair correlates 0.96 over one month and 0.67 over one year.
+         *
+         * Optional, and absent renders nothing, so a level that passes no
+         * provenance is unchanged rather than broken.
+         */
+        metadata?: LevelMetadataRow[];
         children?: Snippet;
         /**
          * Fired the first time the level is opened, and only then.
@@ -57,7 +85,17 @@
         onfirstopen?: () => void;
     }
 
-    let {title, lead = '', level, collapsible = false, testId, health = [], reasons = [], children, onfirstopen}: Props = $props();
+    let {title, lead = '', level, collapsible = false, testId, health = [], reasons = [], errorCodes = [], metadata = [], children, onfirstopen}: Props = $props();
+
+    /**
+     * The failure sentences, recomputed on every locale change.
+     *
+     * `$t` is read *inside* the `$derived`, which is what makes switching
+     * language re-word these. Translating in the helper module instead would
+     * freeze the text at derivation time: correct on load, stale after a switch,
+     * and stale in a way nothing turns red.
+     */
+    let errorSentences = $derived(errorCodes.map((code) => ({code, text: translateErrorCode(code, $t, 'risk.errors.unknown')})));
 
     /** `historical_var` is `historicalVar` in the catalogue; unknown codes stay raw. */
     function analyticName(code: string): string {
@@ -109,6 +147,17 @@
                     {#each health as entry, index (entry.instanceId)}{index > 0 ? ' · ' : ''}{entry.label ? $t(entry.label) : analyticName(entry.code)}: {$t(`risk.states.${entry.status}`)}{/each}
                 </p>
             {/if}
+            {#if errorSentences.length > 0}
+                <!-- Above `reasons` on purpose: a measurement that never ran
+                     explains the gap, while a warning only qualifies a number
+                     that is present. `data-code` carries the backend identifier
+                     for support without putting jargon in front of the reader. -->
+                <ul class="mb-3 space-y-1 text-xs text-amber-700 dark:text-amber-300" data-testid="{testId}-errors" data-count={errorSentences.length}>
+                    {#each errorSentences as entry (entry.code)}
+                        <li data-testid="{testId}-error" data-code={entry.code}>{entry.text}</li>
+                    {/each}
+                </ul>
+            {/if}
             {#if reasons.length > 0}
                 <!-- `data-count` is the number of *distinct* sentences, while each
                      entry publishes how many results carried it: identical text
@@ -121,6 +170,57 @@
                 </ul>
             {/if}
             {@render children?.()}
+            {#if metadata.length > 0}
+                <!-- Last, and closed: provenance qualifies the numbers above it,
+                     so it follows them, and it is the answer to a question the
+                     reader only sometimes asks. `data-rows` publishes how many
+                     distinct sets of figures the level's analytics reported —
+                     one is the ordinary case, two means they disagree about the
+                     window, which is the case worth seeing. -->
+                <details class="mt-3 border-t border-gray-100 pt-2 text-xs text-gray-500 dark:border-slate-700 dark:text-gray-400" data-testid="{testId}-metadata" data-rows={metadata.length}>
+                    <summary class="flex cursor-pointer list-none items-center gap-1 font-medium">
+                        <ChevronDown size={13} />
+                        {$t('risk.metadata.title')}
+                    </summary>
+                    {#each metadata as row (row.key)}
+                        <div class="mt-2" data-testid="{testId}-metadata-row" data-codes={row.codes.join(' ')}>
+                            {#if metadata.length > 1}
+                                <p class="mb-1 font-medium text-gray-600 dark:text-gray-300">{row.codes.map((code) => analyticName(code)).join(' · ')}</p>
+                            {/if}
+                            <dl class="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-4">
+                                {#if row.observations !== null}
+                                    <div>
+                                        <dt>{$t('risk.metadata.observations')}</dt>
+                                        <dd class="font-mono text-gray-700 dark:text-gray-200" data-testid="{testId}-metadata-observations">{row.observations}</dd>
+                                    </div>
+                                {/if}
+                                {#if row.coverage !== null}
+                                    <div>
+                                        <dt>{$t('risk.metadata.coverage')}</dt>
+                                        <dd class="font-mono text-gray-700 dark:text-gray-200">{(row.coverage * 100).toFixed(1)}%</dd>
+                                    </div>
+                                {/if}
+                                {#if row.annualizationFactor !== null}
+                                    <div>
+                                        <dt>{$t('risk.metadata.annualization')}</dt>
+                                        <dd class="font-mono text-gray-700 dark:text-gray-200">{row.annualizationFactor.toFixed(2)}</dd>
+                                    </div>
+                                {/if}
+                                {#if row.returnBasis !== null}
+                                    <div>
+                                        <dt>{$t('risk.metadata.returnBasis')}</dt>
+                                        <!-- Guarded, unlike `RiskResultFrame:108`, which builds this
+                                             same key with no fallback: a basis the catalogue has not
+                                             seen prints `risk.returnBasis.<value>` there. Here it
+                                             degrades to the backend token, which is information. -->
+                                        <dd class="font-mono text-gray-700 dark:text-gray-200" data-testid="{testId}-metadata-basis" data-basis={row.returnBasis}>{translateOrRaw('risk.returnBasis', row.returnBasis, $t)}</dd>
+                                    </div>
+                                {/if}
+                            </dl>
+                        </div>
+                    {/each}
+                </details>
+            {/if}
         </div>
     {/if}
 </section>

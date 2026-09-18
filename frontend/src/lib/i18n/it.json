@@ -2923,6 +2923,10 @@
         "name": "Contributo al rischio",
         "description": "Contributi alla volatilità per asset sulla composizione corrente."
       },
+      "assetRiskReturn": {
+        "name": "Rischio e rendimento per asset",
+        "description": "Volatilità e rendimento annualizzato atteso di ogni asset e del portafoglio, sulla composizione corrente."
+      },
       "stress": {
         "name": "Stress test",
         "description": "Applica shock ipotetici o replica un periodo storico."
@@ -3147,7 +3151,13 @@
       "insufficient_history": "Storico insufficiente per questo calcolo.",
       "undefined_metric": "La metrica non è definita per questi dati.",
       "data_unavailable": "I dati sorgente richiesti non sono disponibili.",
-      "execution_failed": "Il calcolo backend non è riuscito."
+      "execution_failed": "Il calcolo backend non è riuscito.",
+      "invalid_covariance": "Non è stato possibile calcolare le relazioni tra questi asset.",
+      "resource_limit": "Questo calcolo è troppo grande per essere eseguito.",
+      "worker_busy": "Il servizio di calcolo è occupato. Riprova tra poco.",
+      "execution_timeout": "Il calcolo ha richiesto troppo tempo ed è stato interrotto.",
+      "optimization_infeasible": "Nessuna allocazione soddisfa i vincoli richiesti.",
+      "unknown": "Questa misurazione non ha restituito un risultato."
     },
     "warnings": {
       "sharpe_undefined": "Sharpe non definito perché la volatilità è zero.",
@@ -3207,10 +3217,35 @@
           "month": "Un mese storto (peggiori 5%)",
           "worst": "La peggior discesa (vissuta davvero)"
         },
+        "technical": {
+          "day": "CVaR · 1 giorno",
+          "month": "CVaR · 1 mese",
+          "worst": "Massimo drawdown",
+          "current": "Drawdown attuale"
+        },
         "durationDays": "durata {days} giorni",
         "requiredRecovery": "recupero richiesto {percent}",
         "currentDrawdown": "Attualmente sotto il massimo",
-        "sincePeak": "dal {date}"
+        "sincePeak": "dal {date}",
+        "tails": {
+          "worstRealization": "Il giorno peggiore davvero visto",
+          "worstRealizationOn": "il {date}",
+          "drawdownAtRisk": "Discesa a rischio ({confidence})",
+          "conditionalDrawdownAtRisk": "Media oltre quella soglia",
+          "ulcerIndex": "Indice di Ulcer {value}",
+          "ulcerIndexHint": "profondità quadratica media sotto il picco: più basso, più tranquillo"
+        },
+        "underwater": {
+          "title": "Tempo passato sotto il picco",
+          "empty": "Nessuna curva sotto il picco per questo periodo."
+        },
+        "histogram": {
+          "title": "Distribuzione dei rendimenti giornalieri",
+          "observations": "{count} giorni osservati",
+          "cut": "Soglia VaR a {value}",
+          "noCut": "Nessuna soglia pubblicata per questa finestra.",
+          "empty": "Nessuna distribuzione dei rendimenti per questo periodo."
+        }
       },
       "l2": {
         "title": "Sono diversificato come credo?",
@@ -3218,7 +3253,28 @@
         "contribution": "contributo al rischio",
         "lead": "{name} pesa {weight} ma produce {contribution} del rischio",
         "showAll": "Mostra tutti",
-        "showLess": "Mostra meno"
+        "showLess": "Mostra meno",
+        "effectiveAssets": {
+          "label": "Quante scommesse indipendenti ho davvero?",
+          "aboveCount": "Sopra le {positions} posizioni misurate: l'eccesso è liquidità, e non dice nulla sui pesi",
+          "belowCount": "Sotto le {positions} posizioni misurate: i pesi sono sbilanciati, e poche portano il portafoglio",
+          "evenCount": "Pari alle {positions} posizioni misurate: pesi uniformi e nessuna liquidità"
+        },
+        "diversificationRatio": {
+          "label": "Distribuire il denaro è servito a qualcosa?",
+          "caption": "1,00 significa che le posizioni si muovono all'unisono; più alto, più si compensano"
+        },
+        "uncovered": {
+          "label": "Quanto di me non è misurato qui?",
+          "caption": "Liquidità, più ogni posizione senza una serie di prezzi utilizzabile",
+          "residual": "Le righe qui sotto descrivono il resto del portafoglio; {share} non è fra loro"
+        },
+        "rowsCaption": "La barra mostra lo scarto fra peso e rischio: a destra più rischio che peso, a sinistra meno. I pesi sono quote del portafoglio intero.",
+        "correlation": {
+          "title": "Quali di queste sono la stessa scommessa?",
+          "basis": "Misurata sulla finestra storica; i pesi qui sopra sono quelli di oggi.",
+          "noRedundancy": "Nessuna coppia di questo insieme raggiunge la soglia di ridondanza."
+        }
       },
       "l3": {
         "title": "Sto venendo pagato per questo rischio?",
@@ -3229,7 +3285,20 @@
         "sortinoHelp": "Rendimento per unità di rischio al ribasso. A differenza dello Sharpe non penalizza le salite violente.",
         "sharpeHelp": "Rendimento per unità di volatilità totale: penalizza le salite quanto le discese.",
         "betaHelp": "Quanto si muove rispetto al benchmark.",
-        "benchmark": "Confrontato con"
+        "benchmark": "Confrontato con",
+        "perimeter": {
+          "current_composition": "sulla composizione attuale",
+          "historical": "sullo storico reale"
+        },
+        "scatter": {
+          "title": "Rischio contro rendimento, asset per asset",
+          "portfolio": "Portafoglio",
+          "axisVolatility": "Volatilità annualizzata",
+          "axisReturn": "Rendimento annualizzato atteso",
+          "line": "Retta rischio-rendimento",
+          "note": "Sopra la retta significa pagato meglio per il rischio preso. I punti mostrano il rendimento atteso in media-varianza, la grandezza in cui la pendenza della retta è lo Sharpe: su un asset molto volatile il rendimento realmente vissuto è più basso, perché la volatilità erode il composto.",
+          "cash": "La liquidità ({share} del patrimonio) non è un punto: nel modello rende esattamente zero, e disegnarla la trasformerebbe in una misura."
+        }
       },
       "l4": {
         "title": "Cosa succede se…?",
@@ -3254,12 +3323,18 @@
             "seed": "Seme"
           },
           "values": {
+            "block_bootstrap": "Bootstrap a blocchi mobili",
             "gbm": "Moto browniano geometrico",
             "mc": "Monte Carlo",
             "qmc": "Quasi-Monte Carlo",
             "historical_log_mle": "MLE sui log-rendimenti storici",
+            "empirical_resampled": "Empirica, da rendimenti ricampionati",
             "sample_log_returns": "Covarianza campionaria dei log-rendimenti",
-            "current_buy_and_hold": "Composizione attuale, mantenuta"
+            "not_estimated_joint_resampling": "Non stimata: ricampionamento congiunto",
+            "current_buy_and_hold": "Composizione attuale, mantenuta",
+            "calm": "Mercato calmo",
+            "prolonged_crisis": "Crisi prolungata",
+            "shock_recovery": "Shock e recupero"
           },
           "days": "{count} giorni",
           "regimeValue": "{regime}, dichiarato su {days} giorni",
