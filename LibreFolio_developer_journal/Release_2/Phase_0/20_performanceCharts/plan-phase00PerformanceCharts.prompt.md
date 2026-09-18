@@ -1620,6 +1620,145 @@ A separate owner integrates G3 after F and the backend calendar signal:
 > expected itself only 11%* (partly this spike). Either a mock-data artefact or a P&L
 > computation defect; not chased.
 
+### 6.0.6 The invisible candles — a stale memo, not a renderer (2026-09-18)
+
+> **⚠️ Fuori pista (ZERO candles ever drawn; cause was my own cache, 2026-09-18):**
+> after the crash fix and the data enrichment, the developer still saw no candles. The
+> hunt that followed cost about an hour and produced four dead hypotheses — three of them
+> about ECharts — before one integer closed it.
+>
+> **The measurement that collapsed the search.** Splitting the canvas by region and
+> counting the series' own exact hexes (`#16a34a`/`#dc2626`) gave: **plot area 0 pixels**,
+> legend band **133 pixels in a 15×9 box**. The legend config is `itemWidth: 14,
+> itemHeight: 8`. So *every* "candle" pixel measured across the whole evening — back to the
+> original "181 green + 1331 red" — was **the legend swatch plus the dashed broker
+> overlay**. Not thin candles. No candles.
+>
+> Reading the live instance then gave the decisive integer:
+> `xAxisType: 'category'` (correct), `xAxisDataLen: 93`, `candleDataLen: 93`,
+> **`candleNonGap: 0`**, sample `['-','-','-']`. Correctly typed, correctly sized,
+> correctly axed — and 93 gap sentinels.
+>
+> **Cause.** Probing the component's own state at the same activation: `propPoints 93`,
+> `mapSize 93`, map keys and bucket dates **identical**, and
+> `pnlCandleByDate.get('2026-06-18')` holding real numbers (open −601.25 … close −584.52)
+> while the aggregated point *for that same date* was all-null. The lookup had not failed —
+> **it had never re-run.** `getResolutionData()` memoises into `resolutionCache`, which is
+> cleared only by `resetResolutionState()`, which fires only on
+> `if (history !== lastHistoryRef)`. `pnlCandles` arrives *later* by design — it is the lazy
+> fetch added in G1b. First candles render populates the cache while the map is still empty;
+> the fetch lands; the `$effect` re-runs `renderChart()` because it voids `pnlCandles`; and
+> `getResolutionData()` returns the entry computed **before the data existed**. Null forever
+> after, surviving every timing (500/1500/3000/6000 ms) and surviving leaving and re-entering
+> the submode, because nothing on that path invalidates the memo.
+>
+> **Stated structurally, which is the form worth keeping:** seven inputs wake the effect,
+> **one** clears the cache, and the two lists sit adjacent in the same function. The cache
+> key spans **one** dimension (`resolution`) while the value depends on **seven**. The memo
+> is asked a question it already believes it has answered, because resolution is the only
+> thing it uses to recognise a new question. That is why "the re-render genuinely happens
+> and genuinely recomputes nothing".
+>
+> **This is a defect I introduced in G1b**: I added a lazily-arriving prop, wired the
+> re-render, and never invalidated the memo the re-render reads. The `$effect` voiding
+> `pnlCandles` *looks* like it closes the loop, which is precisely why it survived review.
+
+> **⚠️ Fuori pista (R13 — four hypotheses inside the wrong layer, 2026-09-18):** both the
+> coordinator and I generated hypotheses **inside ECharts**, because the symptom was pixels:
+> candlestick-on-time-axis, a `filterMode` divergence, a merge path that never re-sets
+> `type`, an `entry.dates` index mismatch. All four dead. **ECharts behaved perfectly
+> throughout** — handed `'-'` ninety-three times, it faithfully drew ninety-three nothings
+> and a legend swatch for the series that existed. The one component in the stack with
+> nothing to answer for was the one we spent an hour theorising about.
+>
+> Rule: *a symptom surfaces in the layer that displays it, which is rarely the layer that
+> caused it. Before hypothesising about how a layer behaves, measure what was handed to it.
+> "It rendered nothing" and "it was given nothing to render" are indistinguishable from
+> outside and have disjoint causes.* `candleNonGap: 0` converted an open question about
+> rendering into a closed question about inputs, in one integer. It should have been the
+> first thing asked for.
+>
+> Companion note on instruments: the run-length column profile was **retired**, not tuned —
+> it could not separate a dashed overlay from a candle (125px of extent carrying 9 pixels).
+> A threshold problem is fixable; a discrimination problem means the instrument was never
+> answering the question. Its replacement keys on the series' own exact hexes. And an
+> earlier lead of mine — "visible at 3M, absent at 1W" — was **retracted**: it came from
+> reading a screenshot impressionistically rather than measuring it, and four identical
+> zoom readings killed it. Opening the artefact is necessary and not sufficient.
+
+> **Note implementazione (fix + regressione, 2026-09-18):** invalidazione resa corretta
+> **per costruzione**, non per lista mantenuta a mano. Introdotto `aggregationInputs`, un
+> `$derived` che contiene l'insieme COMPLETO dei valori che il memo legge;
+> `getResolutionData()` ora legge i propri input **solo** da lì e la cache confronta
+> `cached.inputs === aggregationInputs`. Poiché Svelte ricostruisce il `$derived` quando un
+> membro cambia, un input modificato non può colpire una entry stale; e una prop futura non
+> può essere *consumata* senza prima diventare membro, il che la iscrive automaticamente
+> all'invalidazione. `buildBucketInfos` prende ora `dates` come parametro, così il contratto
+> "legge solo dal bundle" è letterale e non solo rispettato di fatto.
+>
+> Estratto `pctValuesRaw` (solo valori) da `pctSeriesRaw` (che porta `name: $_(...)`):
+> senza questa separazione il bundle sarebbe cambiato identità a ogni cambio lingua,
+> svuotando la cache per un motivo che l'aggregazione non legge — cioè scambiando un bug
+> silent-wrong con uno silent-slow. `eurLabels`, `pnlLabels`, `$locale` e `baseCurrency`
+> restano deliberatamente fuori.
+>
+> **Verifica con ground truth, non a occhio.** Hook diagnostico temporaneo → `candleNonGap`
+> passa da **0/93 a 93/93**, con quad reali già al primo render (t=1.5 s), stabile al cambio
+> finestra e al rientro nella submode. Geometria misurata via `convertToPixel` sugli assi
+> (non per colore): a 1W **body 1.82 px / wick 18.17 px, rapporto 9.98:1**, contro il 10.3:1
+> derivato dall'API *prima* di misurare qualunque pixel. Le candele corrette restano quindi
+> sottili come previsto: è la composizione sintetica che somma high/low per asset, non un
+> difetto residuo — il problema di larghezza è DBT-7 (ladder), separato.
+>
+> Regressione via `test-author`: `frontend/src/lib/components/dashboard/GrowthChart.test.ts`,
+> 6 casi che montano il componente reale e codificano l'**ordine di arrivo** (prop assente →
+> memo popolato in quello stato → prop consegnata → quad reali). Dimostrata **rossa** contro
+> il sorgente pre-fix committato (`0` invece di `40`/`80`, sempre sull'asserzione dati e mai
+> su un barrier timeout), e una variante che monta con la prop già presente **passa** sul
+> codice rotto — l'ordine di arrivo è portante, non decorativo.
+
+> **⚠️ Fuori pista (il mio strumento exact-hex non discriminava, 2026-09-18):** la prima
+> misura post-fix contava `#16a34a`/`#dc2626` nell'area del plot e dava 463 px contro 0.
+> Numero vero, domanda sbagliata: **quegli stessi esadecimali sono usati anche dalla linea e
+> dall'area P&L** (`:1440`, `:1456`, `:1485`, `:1500`), e il diagnostico conferma che in
+> submode candele il grafico porta pure `line:Interactive Brokers` e `line:Coinbase`. I
+> gruppi larghi 54/33/53 px erano estensioni orizzontali continue: linee, non corpi. È R11
+> di nuovo, stavolta sullo strumento costruito *per* soddisfare R11 — dopo aver già ritirato
+> il profilo run-length per lo stesso motivo. La misura valida non è arrivata dai pixel ma
+> dagli assi, che sono keyed sulla cosa affermata.
+
+> **⚠️ Fuori pista (void list incompleta — corretto per adiacenza, 2026-09-18):**
+> `costHistory`, `depositHistory` e `acquisitionFunding` non erano nella dependency list
+> dell'`$effect`. Oggi innocuo solo perché dashboard e broker detail assegnano le quattro
+> prop della famiglia income in un blocco contiguo, quindi `incomeHistory` svegliava
+> l'effect anche per le altre tre. Verificato leggendo le due pagine, non dedotto. Aggiunte
+> le tre voci: la classe è ora uniforme e non dipende più dall'adiacenza di quattro
+> assegnazioni in un file che non è questo.
+
+> **⚠️ Fuori pista (2 mirror assertion in `chartCoreHelpers.test.ts`, 2026-09-18):** il
+> refactor ha rotto due asserzioni che pinnano il sorgente **per stringa**. Verificato che
+> le proprietà pinnate reggono ancora — un solo array `buckets` threadato ovunque e
+> costruito una volta sola; tutti e sei i flussi via `aggregateFlowMetric` e mai
+> `aggregateMetric` — ed è cambiata solo la grafia (`inputs.`). Ri-pinnate le 10 stringhe
+> sulla nuova grafia: manutenzione del test, non indebolimento. Nota di metodo: un'asserzione
+> che rispecchia il testo sorgente verifica una proprietà reale ma si rompe a ogni rinomina,
+> e il costo ricade su chi rifattorizza.
+
+> **Note implementazione (precedente locale della forma scelta, 2026-09-18):** la lista file
+> di `front_asset_unit` (`scripts/test_runner/_frontend_asset.py:8-33`) ha **la stessa forma
+> strutturale del bug appena corretto**: un elenco di membri mantenuto a mano, dove un nuovo
+> membro va iscritto manualmente e dimenticarlo non produce alcun errore. La differenza è che
+> il runner possiede un **controllo meccanico di iscrizione** (`_cli.py:275`, *"Checking that
+> every test is reachable from an 'all' action"*, con warning esplicito *"Registered but never
+> executed!"*) e il memo di `GrowthChart` non ne aveva alcuno. Quindi "derivare l'insieme di
+> invalidazione da ciò che viene letto" non è una preferenza importata: è la convenzione che
+> questo codebase applica già al proprio catalogo di test, con un precedente funzionante.
+>
+> Reachability verificata **per nome e non per aggregato**: `reachable_paths()` elenca
+> esplicitamente `src/lib/components/dashboard/GrowthChart.test.ts` (e
+> `timeSeriesAggregationGolden.test.ts`) nell'insieme vitest raggiungibile da `all`. Un
+> "199/199" è un totale, non l'affermazione da dimostrare.
+
 ## 6. Dependency-safe phases and owners
 
 | Phase | Size | Owner | Dependency | Deliverable | Status |
