@@ -20,6 +20,7 @@
     import type {LivePriceDirection} from '$lib/services/livePriceService';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
+    import {assetTypeBadgeClass, getAssetTypeIconUrl} from '$lib/utils/assetTypes';
 
     // =========================================================================
     // Props
@@ -155,37 +156,8 @@
     }
 
     function typeBadgeClass(type: string | null | undefined): string {
-        switch (type) {
-            case 'STOCK':
-                return 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400';
-            case 'ETF':
-                return 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400';
-            case 'BOND':
-                return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400';
-            case 'CRYPTO':
-                return 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400';
-            case 'FUND':
-                return 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-400';
-            case 'HOLD':
-                return 'bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-400';
-            case 'CROWDFUND':
-                return 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400';
-            default:
-                return 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400';
-        }
+        return assetTypeBadgeClass(type);
     }
-
-    const ASSET_TYPE_ICON_MAP: Record<string, string> = {
-        STOCK: 'stock',
-        ETF: 'etf',
-        BOND: 'bond',
-        CRYPTO: 'crypto',
-        FUND: 'fund',
-        HOLD: 'hold',
-        CROWDFUND: 'crowdfunding',
-        INDEX: 'index',
-        OTHER: 'other',
-    };
 </script>
 
 <div
@@ -209,7 +181,7 @@
             <div class="flex items-center gap-1.5 shrink-0">
                 {#if asset.asset_type}
                     <span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded {typeBadgeClass(asset.asset_type)}">
-                        <img src="/icons/asset-types/{ASSET_TYPE_ICON_MAP[asset.asset_type] ?? 'other'}.png" alt="" class="w-3.5 h-3.5 object-contain" />
+                        <img src={getAssetTypeIconUrl(asset.asset_type)} alt="" class="w-3.5 h-3.5 object-contain" />
                         {$t(`assets.types.${asset.asset_type}`) || asset.asset_type}
                     </span>
                 {/if}

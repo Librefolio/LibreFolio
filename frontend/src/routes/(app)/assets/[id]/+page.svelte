@@ -1763,6 +1763,7 @@
             icon_url: assetInfo.icon_url,
             quote_base_quantity: assetInfo.quote_base_quantity ?? 1,
             active: assetInfo.active,
+            is_benchmark: assetInfo.is_benchmark,
             classification_params,
             identifier_isin: assetInfo.identifier_isin,
             identifier_ticker: assetInfo.identifier_ticker,
