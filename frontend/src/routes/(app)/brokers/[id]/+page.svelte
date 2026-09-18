@@ -30,7 +30,18 @@
     import type {TXReadItem, AssetEvent} from '$lib/components/transactions/types';
     import type {FilterValue} from '$lib/components/table/types';
     import {buildTransactionsFiltersUrl, applyTransactionColumnFilters} from '../../transactions/filterState';
-    import {fetchReport, invalidate, type AllocationHistoryDimensions, type PortfolioHistoryPoint, type PortfolioSummary, type PositionsContribution, type PortfolioIncomeHistorySeries} from '$lib/stores/portfolio/portfolioStore.svelte';
+    import {
+        fetchReport,
+        invalidate,
+        type AllocationHistoryDimensions,
+        type PortfolioHistoryPoint,
+        type PortfolioSummary,
+        type PositionsContribution,
+        type PortfolioIncomeHistorySeries,
+        type PortfolioCostHistorySeries,
+        type PortfolioDepositHistorySeries,
+        type PortfolioAcquisitionFundingSeries,
+    } from '$lib/stores/portfolio/portfolioStore.svelte';
     import {ensureBrokersLoaded, getAllBrokers, getBrokerRole, brokerStoreVersion} from '$lib/stores/reference/brokerStore';
     import {ensureAssetsLoaded, getAssetInfo, assetStoreVersion} from '$lib/stores/reference/assetStore';
     import {getAssetPanelAssetId, buildAssetPanelUrl} from '$lib/utils/broker/assetPanelUrl';
@@ -59,6 +70,9 @@
     let portfolioSummary: PortfolioSummary | null = null;
     let portfolioHistory: PortfolioHistoryPoint[] = [];
     let incomeHistory: PortfolioIncomeHistorySeries | undefined = undefined;
+    let costHistory: PortfolioCostHistorySeries | undefined = undefined;
+    let depositHistory: PortfolioDepositHistorySeries | undefined = undefined;
+    let acquisitionFunding: PortfolioAcquisitionFundingSeries | undefined = undefined;
     let allocationHistoryFromReport: AllocationHistoryDimensions | null = null;
     let positionsContribution: PositionsContribution | null = null;
     let contributionLoading = false;
@@ -260,11 +274,14 @@
     async function loadOverview(force = false) {
         reportLoading = true;
         try {
-            const report = await fetchReport([data.brokerId], dateFrom || undefined, dateTo || undefined, targetCurrency, force, undefined, undefined, undefined, undefined, {includeIncomeHistory: true});
+            const report = await fetchReport([data.brokerId], dateFrom || undefined, dateTo || undefined, targetCurrency, force, undefined, undefined, undefined, undefined, {includeIncomeHistory: true, includeCostHistory: true, includeDepositHistory: true, includeAcquisitionFunding: true});
             portfolioSummary = (report?.summary as PortfolioSummary | null | undefined) ?? null;
             portfolioHistory = (report?.history as PortfolioHistoryPoint[] | null | undefined) ?? [];
             // Eager per plan §4.1's sparse-payload caller policy ("Dashboard/Broker overview true").
             incomeHistory = (report?.income_history as PortfolioIncomeHistorySeries | null | undefined) ?? undefined;
+            costHistory = (report?.cost_history as PortfolioCostHistorySeries | null | undefined) ?? undefined;
+            depositHistory = (report?.deposit_history as PortfolioDepositHistorySeries | null | undefined) ?? undefined;
+            acquisitionFunding = (report?.acquisition_funding as PortfolioAcquisitionFundingSeries | null | undefined) ?? undefined;
             allocationHistoryFromReport = (report?.allocation_history as AllocationHistoryDimensions | null | undefined) ?? null;
             positionsContribution = (report?.positions_contribution as PositionsContribution | null | undefined) ?? null;
             resolveMaxStartFromHistory();
@@ -562,7 +579,7 @@
 
                 <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
                     <div class="lg:col-span-3">
-                        <GrowthChart history={portfolioHistory} {incomeHistory} loading={reportLoading && portfolioHistory.length === 0} baseCurrency={targetCurrency || baseCurrency} />
+                        <GrowthChart history={portfolioHistory} {incomeHistory} {costHistory} {depositHistory} {acquisitionFunding} loading={reportLoading && portfolioHistory.length === 0} baseCurrency={targetCurrency || baseCurrency} />
                     </div>
                     <AllocationPanel
                         summary={portfolioSummary}

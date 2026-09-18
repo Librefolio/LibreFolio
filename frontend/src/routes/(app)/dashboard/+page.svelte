@@ -35,6 +35,9 @@
         type PortfolioBrokerPnlHistory,
         type PortfolioPnlCandleSeries,
         type PortfolioIncomeHistorySeries,
+        type PortfolioCostHistorySeries,
+        type PortfolioDepositHistorySeries,
+        type PortfolioAcquisitionFundingSeries,
     } from '$lib/stores/portfolio/portfolioStore.svelte';
     import {ensureBrokersLoaded, getOwnedBrokers} from '$lib/stores/reference/brokerStore';
     import {ensureAssetsLoaded, getAssetInfo, assetStoreVersion} from '$lib/stores/reference/assetStore';
@@ -82,6 +85,9 @@
     let pnlCandles = $state<PortfolioPnlCandleSeries | null>(null);
     let pnlCandlesLoading = $state(false);
     let incomeHistory = $state<PortfolioIncomeHistorySeries | undefined>(undefined);
+    let costHistory = $state<PortfolioCostHistorySeries | undefined>(undefined);
+    let depositHistory = $state<PortfolioDepositHistorySeries | undefined>(undefined);
+    let acquisitionFunding = $state<PortfolioAcquisitionFundingSeries | undefined>(undefined);
     let allocationHistoryFromReport = $state<AllocationHistoryDimensions | null>(null);
     let positionsContribution = $state<PositionsContribution | null>(null);
     let contributionLoading = $state(false);
@@ -396,7 +402,13 @@
         reportLoading = true;
         const requested = targetCurrency;
         try {
-            const report = await fetchReport(activeBrokerIds, dateRangeCtl.start || undefined, dateRangeCtl.end || undefined, requested, force, undefined, undefined, undefined, undefined, {includeBrokerPnlHistory: wantsBrokerPnlHistory, includeIncomeHistory: true});
+            const report = await fetchReport(activeBrokerIds, dateRangeCtl.start || undefined, dateRangeCtl.end || undefined, requested, force, undefined, undefined, undefined, undefined, {
+                includeBrokerPnlHistory: wantsBrokerPnlHistory,
+                includeIncomeHistory: true,
+                includeCostHistory: true,
+                includeDepositHistory: true,
+                includeAcquisitionFunding: true,
+            });
             if (!current()) return;
             if (!report && propagateError) throw new Error($_('common.error'));
             // Cast from the Zodios union types to the concrete types the dashboard expects
@@ -411,6 +423,9 @@
             // Eager (unlike pnlCandles): requested on every ordinary load per plan §4.1's
             // sparse-payload policy, so this is always fresh — no separate lazy loader needed.
             incomeHistory = (report?.income_history as PortfolioIncomeHistorySeries | null | undefined) ?? undefined;
+            costHistory = (report?.cost_history as PortfolioCostHistorySeries | null | undefined) ?? undefined;
+            depositHistory = (report?.deposit_history as PortfolioDepositHistorySeries | null | undefined) ?? undefined;
+            acquisitionFunding = (report?.acquisition_funding as PortfolioAcquisitionFundingSeries | null | undefined) ?? undefined;
             allocationHistoryFromReport = (report?.allocation_history as AllocationHistoryDimensions | null | undefined) ?? null;
             // Contribution data comes from the same report when requested
             positionsContribution = (report?.positions_contribution as PositionsContribution | null | undefined) ?? null;
@@ -782,7 +797,7 @@
             <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
                 <!-- Growth Chart — 3/5 -->
                 <div class="lg:col-span-3">
-                    <GrowthChart {history} {brokerPnlHistory} {pnlCandles} onRequestPnlCandles={loadPnlCandles} {incomeHistory} loading={historyLoading} baseCurrency={appliedCurrency} />
+                    <GrowthChart {history} {brokerPnlHistory} {pnlCandles} onRequestPnlCandles={loadPnlCandles} {incomeHistory} {costHistory} {depositHistory} {acquisitionFunding} loading={historyLoading} baseCurrency={appliedCurrency} />
                 </div>
 
                 <!-- Allocation Panel — 2/5 -->

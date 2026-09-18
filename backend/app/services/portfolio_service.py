@@ -40,6 +40,8 @@ from backend.app.db.models import (
 )
 from backend.app.schemas.common import Currency, FxBackwardFillInfo
 from backend.app.schemas.portfolio import (
+    AcquisitionFundingPoint,
+    AcquisitionFundingSeries,
     AllocationHistoryDimensions,
     AllocationHistoryPoint,
     AllocationItem,
@@ -47,7 +49,11 @@ from backend.app.schemas.portfolio import (
     BrokerBreakdown,
     BrokerPnlHistory,
     BrokerPnlHistoryPoint,
+    CostHistoryPoint,
+    CostHistorySeries,
     DataQualityIssue,
+    DepositHistoryPoint,
+    DepositHistorySeries,
     IncomeHistoryPoint,
     IncomeHistorySeries,
     IssueCode,
@@ -1535,31 +1541,23 @@ class PortfolioService:
         sliced_points = [PnlCandlePoint(date=p["date"], open=p["open"], high=p["high"], low=p["low"], close=p["close"]) for p in raw_points if (date_from is None or p["date"] >= date_from) and (date_to is None or p["date"] <= date_to)]
         return PnlCandleSeries(points=sliced_points)
 
-    async def get_income_history(
+    async def _signed_transaction_sums_by_date(
         self,
-        user_id: int,
-        broker_ids: list[int] | None = None,
-        date_from: date_type | None = None,
-        date_to: date_type | None = None,
-        target_currency_override: str | None = None,
-    ) -> IncomeHistorySeries:
-        """Signed daily DIVIDEND/INTEREST income history for the GrowthChart P&L income
-        submode (G1c, plan §3.4/§4.4).
-
-        Pure transaction scan — no PortfolioCalculationEngine run needed (income is a
-        direct sum of committed Transaction rows, not a resolved valuation). Mirrors
-        get_summary()'s _income_accum signed-conversion pattern exactly (same
-        (date_from, date_to] boundary, same F2 role-aware share applied once) so
-        sum(dividend)+sum(interest) reproduces PortfolioSummary.period_income exactly
-        for the same scope/window, by construction.
+        accesses: list,
+        tx_types: set[TransactionType],
+        base_currency: str,
+        date_from: date_type | None,
+        date_to: date_type | None,
+    ) -> tuple[dict[date_type, dict[TransactionType, Decimal]], set[str]]:
+        """Shared signed transaction-sum-by-date scan, extracted from the original
+        get_income_history (G1c). Pure transaction scan, no engine run — same
+        (date_from, date_to] boundary + F2 OWNER-share scaling + FX-missing tracking
+        used by get_income_history/get_cost_history/get_deposit_history (batch 2),
+        differing only in which tx_types they scan and how the caller combines the
+        per-type sums afterward (income keeps DIVIDEND/INTEREST separate; costs sums
+        FEE+TAX together; deposit reads DEPOSIT alone).
         """
-        base_currency = target_currency_override or await self._get_base_currency(user_id)
-        accesses = await self._get_user_broker_access(user_id, broker_ids)
-        if not accesses:
-            return IncomeHistorySeries(points=[])
-
-        dividend_by_date: dict[date_type, Decimal] = defaultdict(Decimal)
-        interest_by_date: dict[date_type, Decimal] = defaultdict(Decimal)
+        sums_by_date: dict[date_type, dict[TransactionType, Decimal]] = defaultdict(lambda: defaultdict(Decimal))
         missing_fx_pairs: set[str] = set()
 
         for access in accesses:
@@ -1567,7 +1565,7 @@ class PortfolioService:
             # F2 — ownership scaling: an OWNER's share scales the broker's contribution
             # (0% is valid and contributes nothing); EDITOR/VIEWER always see full data.
             share = (access.share_percentage if access.share_percentage is not None else Decimal("1")) if access.role == UserRole.OWNER else Decimal("1")
-            broker_txns = await self._get_transactions(broker_id, tx_types={TransactionType.DIVIDEND, TransactionType.INTEREST}, date_to=date_to)
+            broker_txns = await self._get_transactions(broker_id, tx_types=tx_types, date_to=date_to)
             for tx in broker_txns:
                 if tx.amount is None or tx.amount == 0 or tx.currency is None:
                     continue
@@ -1592,24 +1590,150 @@ class PortfolioService:
                     missing_fx_pairs.add(f"{tx.currency}/{base_currency}")
                     continue
 
-                signed_val = amount_signed * share
-                if tx.type == TransactionType.DIVIDEND:
-                    dividend_by_date[tx.date] += signed_val
-                else:
-                    interest_by_date[tx.date] += signed_val
+                sums_by_date[tx.date][tx.type] += amount_signed * share
+
+        return sums_by_date, missing_fx_pairs
+
+    async def get_income_history(
+        self,
+        user_id: int,
+        broker_ids: list[int] | None = None,
+        date_from: date_type | None = None,
+        date_to: date_type | None = None,
+        target_currency_override: str | None = None,
+    ) -> IncomeHistorySeries:
+        """Signed daily DIVIDEND/INTEREST income history for the GrowthChart P&L income
+        submode (G1c, plan §3.4/§4.4).
+
+        Pure transaction scan — no PortfolioCalculationEngine run needed (income is a
+        direct sum of committed Transaction rows, not a resolved valuation). Mirrors
+        get_summary()'s _income_accum signed-conversion pattern exactly (same
+        (date_from, date_to] boundary, same F2 role-aware share applied once) so
+        sum(dividend)+sum(interest) reproduces PortfolioSummary.period_income exactly
+        for the same scope/window, by construction.
+        """
+        base_currency = target_currency_override or await self._get_base_currency(user_id)
+        accesses = await self._get_user_broker_access(user_id, broker_ids)
+        if not accesses:
+            return IncomeHistorySeries(points=[])
+
+        sums_by_date, missing_fx_pairs = await self._signed_transaction_sums_by_date(accesses, {TransactionType.DIVIDEND, TransactionType.INTEREST}, base_currency, date_from, date_to)
 
         # Sparse series: only dates with actual DIVIDEND/INTEREST activity, never a
         # dense day-by-day zero-filled series (plan §3.4 — "sparse economic flows").
-        all_dates = sorted(set(dividend_by_date) | set(interest_by_date))
         points = [
             IncomeHistoryPoint(
                 date=d,
-                dividend=Currency(code=base_currency, amount=dividend_by_date.get(d, Decimal("0"))),
-                interest=Currency(code=base_currency, amount=interest_by_date.get(d, Decimal("0"))),
+                dividend=Currency(code=base_currency, amount=type_sums.get(TransactionType.DIVIDEND, Decimal("0"))),
+                interest=Currency(code=base_currency, amount=type_sums.get(TransactionType.INTEREST, Decimal("0"))),
             )
-            for d in all_dates
+            for d, type_sums in sorted(sums_by_date.items())
         ]
         return IncomeHistorySeries(points=points, missing_fx_pairs=sorted(missing_fx_pairs))
+
+    async def get_cost_history(
+        self,
+        user_id: int,
+        broker_ids: list[int] | None = None,
+        date_from: date_type | None = None,
+        date_to: date_type | None = None,
+        target_currency_override: str | None = None,
+    ) -> CostHistorySeries:
+        """Signed daily FEE+TAX cost history for the GrowthChart P&L income submode's
+        costs dimension (batch 2). Same pure-transaction-scan pattern as
+        get_income_history (see _signed_transaction_sums_by_date). FEE and TAX are
+        summed together into one "cost" figure — matching the dashboard's existing
+        "Fees & taxes" KPI grouping — preserving the raw (negative) Transaction.amount
+        sign rather than flipping to a positive magnitude, same signed-fidelity policy
+        as income.
+        """
+        base_currency = target_currency_override or await self._get_base_currency(user_id)
+        accesses = await self._get_user_broker_access(user_id, broker_ids)
+        if not accesses:
+            return CostHistorySeries(points=[])
+
+        sums_by_date, missing_fx_pairs = await self._signed_transaction_sums_by_date(accesses, {TransactionType.FEE, TransactionType.TAX}, base_currency, date_from, date_to)
+
+        points = [CostHistoryPoint(date=d, cost=Currency(code=base_currency, amount=sum(type_sums.values(), Decimal("0")))) for d, type_sums in sorted(sums_by_date.items())]
+        return CostHistorySeries(points=points, missing_fx_pairs=sorted(missing_fx_pairs))
+
+    async def get_deposit_history(
+        self,
+        user_id: int,
+        broker_ids: list[int] | None = None,
+        date_from: date_type | None = None,
+        date_to: date_type | None = None,
+        target_currency_override: str | None = None,
+    ) -> DepositHistorySeries:
+        """Daily DEPOSIT history for the GrowthChart P&L income submode's deposit-size
+        dimension (batch 2). Same pure-transaction-scan pattern as get_income_history
+        (see _signed_transaction_sums_by_date).
+        """
+        base_currency = target_currency_override or await self._get_base_currency(user_id)
+        accesses = await self._get_user_broker_access(user_id, broker_ids)
+        if not accesses:
+            return DepositHistorySeries(points=[])
+
+        sums_by_date, missing_fx_pairs = await self._signed_transaction_sums_by_date(accesses, {TransactionType.DEPOSIT}, base_currency, date_from, date_to)
+
+        points = [DepositHistoryPoint(date=d, deposit=Currency(code=base_currency, amount=type_sums.get(TransactionType.DEPOSIT, Decimal("0")))) for d, type_sums in sorted(sums_by_date.items())]
+        return DepositHistorySeries(points=points, missing_fx_pairs=sorted(missing_fx_pairs))
+
+    async def get_acquisition_funding_history(
+        self,
+        user_id: int,
+        broker_ids: list[int] | None = None,
+        date_from: date_type | None = None,
+        date_to: date_type | None = None,
+        target_currency_override: str | None = None,
+        _precomputed_engine_result=None,
+    ) -> AcquisitionFundingSeries:
+        """New-vs-reinvested BUY funding split for the GrowthChart P&L income submode's
+        acquisition-size dimension (batch 2, plan §5.2).
+
+        Unlike cost/deposit/income (pure transaction scans), this REQUIRES an engine
+        run: the new-vs-reinvested split depends on the running capital/returns pool
+        state built up over the ENTIRE prior transaction history, not just the day's
+        own transactions in isolation — mirrors get_pnl_candles()'s
+        include_candles=True requirement exactly (same
+        _precomputed_engine_result/standalone dual-mode, same "flag must be set on
+        the shared engine run or every day comes back empty" caveat).
+        """
+        from backend.app.services.portfolio_engine import (  # noqa: PLC0415
+            DerivedViewsBuilder,
+            PortfolioCalculationEngine,
+        )
+
+        base_currency = target_currency_override or await self._get_base_currency(user_id)
+        if _precomputed_engine_result is not None:
+            result = _precomputed_engine_result
+        else:
+            engine = PortfolioCalculationEngine(self.db)
+            result = await engine.calculate(
+                user_id=user_id,
+                broker_ids=broker_ids,
+                date_from=None,  # Always compute from t=0 for correct cumulative pool state
+                date_to=date_to,
+                target_currency=base_currency,
+                include_acquisition_funding=True,
+            )
+
+        if not result.daily_states:
+            return AcquisitionFundingSeries(points=[])
+
+        views = DerivedViewsBuilder(result.daily_states, base_currency)
+        raw_points = views.build_acquisition_funding()
+        # Canonical (date_from, date_to] boundary — exclusive start, inclusive end.
+        # NOTE the deliberate difference from get_pnl_candles/get_broker_pnl_history,
+        # whose engine-backed slicing this method otherwise mirrors: those two are
+        # LEVEL series (a cumulative P&L value per day), so the period's opening day
+        # must be shown as the baseline. This one is a FLOW series (that day's own BUY
+        # split), so a BUY dated exactly on date_from belongs to the PREVIOUS period —
+        # the same rule already applied to its five co-rendered Income-submode
+        # siblings (income/cost/deposit). Using >= here would make a BUY on date_from
+        # draw a bar while a DIVIDEND on that very same date draws none.
+        sliced_points = [AcquisitionFundingPoint(date=p["date"], from_new_capital=p["from_new_capital"], from_reinvested=p["from_reinvested"]) for p in raw_points if (date_from is None or p["date"] > date_from) and (date_to is None or p["date"] <= date_to)]
+        return AcquisitionFundingSeries(points=sliced_points)
 
     async def get_positions_contribution(  # noqa: C901 — TODO(P2-refactor): nested broker/asset/tx accumulation with FX conversion branches
         self,
@@ -2140,6 +2264,9 @@ class PortfolioService:
                 query.include_broker_pnl_history,
                 query.include_pnl_candles,
                 query.include_income_history,
+                query.include_cost_history,
+                query.include_deposit_history,
+                query.include_acquisition_funding,
                 tx_fp,
                 price_fp,
                 fx_fp,
@@ -2160,6 +2287,7 @@ class PortfolioService:
             date_to=effective_date_to,
             target_currency=base_currency,
             include_candles=query.include_pnl_candles,
+            include_acquisition_funding=query.include_acquisition_funding,
         )
 
         views = DerivedViewsBuilder(engine_result.daily_states, base_currency)
@@ -2302,6 +2430,46 @@ class PortfolioService:
                 target_currency_override=base_currency,
             )
 
+        # ── 4f. Signed FEE+TAX cost history (batch 2 — Income submode's costs dimension) ──
+        cost_history: CostHistorySeries | None = None
+        if query.include_cost_history:
+            included.append("cost_history")
+            cost_history = await self.get_cost_history(
+                user_id=user_id,
+                broker_ids=query.broker_ids,
+                date_from=date_from,
+                date_to=effective_date_to,
+                target_currency_override=base_currency,
+            )
+
+        # ── 4g. DEPOSIT history (batch 2 — Income submode's deposit-size dimension) ──
+        deposit_history: DepositHistorySeries | None = None
+        if query.include_deposit_history:
+            included.append("deposit_history")
+            deposit_history = await self.get_deposit_history(
+                user_id=user_id,
+                broker_ids=query.broker_ids,
+                date_from=date_from,
+                date_to=effective_date_to,
+                target_currency_override=base_currency,
+            )
+
+        # ── 4h. New-vs-reinvested BUY funding split (batch 2 — Income submode's
+        # acquisition-size dimension). Requires the shared engine run to have been
+        # computed with include_acquisition_funding=True (see above), mirroring
+        # pnl_candles's own shared-engine-result requirement.
+        acquisition_funding: AcquisitionFundingSeries | None = None
+        if query.include_acquisition_funding:
+            included.append("acquisition_funding")
+            acquisition_funding = await self.get_acquisition_funding_history(
+                user_id=user_id,
+                broker_ids=query.broker_ids,
+                date_from=date_from,
+                date_to=effective_date_to,
+                target_currency_override=base_currency,
+                _precomputed_engine_result=engine_result,
+            )
+
         # ── 5. Data quality from engine (already computed if summary was built) ──
         if summary:
             data_quality = summary.data_quality
@@ -2351,6 +2519,9 @@ class PortfolioService:
             broker_pnl_history=broker_pnl_history,
             pnl_candles=pnl_candles,
             income_history=income_history,
+            cost_history=cost_history,
+            deposit_history=deposit_history,
+            acquisition_funding=acquisition_funding,
         )
 
         # Store in Layer 2 cache

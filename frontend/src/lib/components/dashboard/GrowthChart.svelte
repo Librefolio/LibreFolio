@@ -30,7 +30,7 @@
     import {aggregateLineSeries, mapDateToBucket, cascadeResolution, chooseInitialResolution} from '$lib/components/charts/timeSeriesAggregation';
     import type {ChartResolution} from '$lib/components/charts/timeSeriesAggregation';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
-    import type {PortfolioHistoryPoint, PortfolioBrokerPnlHistory, PortfolioPnlCandleSeries, PortfolioIncomeHistorySeries} from '$lib/stores/portfolio/portfolioStore.svelte';
+    import type {PortfolioHistoryPoint, PortfolioBrokerPnlHistory, PortfolioPnlCandleSeries, PortfolioIncomeHistorySeries, PortfolioCostHistorySeries, PortfolioDepositHistorySeries, PortfolioAcquisitionFundingSeries} from '$lib/stores/portfolio/portfolioStore.svelte';
     import {aggregateOHLCV, aggregateSumSeries} from '$lib/components/charts/timeSeriesAggregation';
     import {buildTooltipTheme, buildTooltipHeader, buildTooltipRow, buildTooltipDivider, tooltipPositionSide, setupTooltipAutoHide, scheduleFirstRenderStabilityFix} from '$lib/components/charts/echartsTooltipHelpers';
     import {INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG} from '$lib/components/charts/chartCoreHelpers';
@@ -58,12 +58,18 @@
          *  the caller fetches it on every ordinary load, per plan §4.1's sparse-payload
          *  policy — no onRequest callback needed here. */
         incomeHistory?: PortfolioIncomeHistorySeries;
+        /** Batch 2 — signed FEE+TAX cost history. Same eager caller policy as incomeHistory. */
+        costHistory?: PortfolioCostHistorySeries;
+        /** Batch 2 — DEPOSIT history. Same eager caller policy as incomeHistory. */
+        depositHistory?: PortfolioDepositHistorySeries;
+        /** Batch 2 — new-vs-reinvested BUY funding split. Same eager caller policy as incomeHistory. */
+        acquisitionFunding?: PortfolioAcquisitionFundingSeries;
         height?: string;
         loading?: boolean;
         baseCurrency?: string;
     }
 
-    let {history = [], brokerPnlHistory = [], pnlCandles = null, onRequestPnlCandles, incomeHistory = undefined, height = '360px', loading = false, baseCurrency = 'EUR'}: Props = $props();
+    let {history = [], brokerPnlHistory = [], pnlCandles = null, onRequestPnlCandles, incomeHistory = undefined, costHistory = undefined, depositHistory = undefined, acquisitionFunding = undefined, height = '360px', loading = false, baseCurrency = 'EUR'}: Props = $props();
 
     // =========================================================================
     // State
@@ -75,6 +81,9 @@
     // pnlSubmode = line|candles|income (plan §5.1); only 'line' has a real branch until
     // G1b/G1c land — no submode picker UI is shown while the other two are inert.
     let pnlSubmode: 'line' | 'candles' | 'income' = $state('line');
+    // Batch 2 — Income submode's own window-selector preset (see selectIncomeWindow).
+    type IncomeWindowPreset = '1W' | '1M' | '1Y' | 'all';
+    let incomeWindowPreset: IncomeWindowPreset = $state('1M');
     let currentResolution: ChartResolution = $state('daily');
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | undefined = undefined;
@@ -133,6 +142,8 @@
         totalPnl: {light: '#1a4031', dark: '#4ade80'}, // P&L mode — Total line (same prominence as NAV)
         dividend: {light: '#0891b2', dark: '#22d3ee'}, // P&L income submode — Dividend stacked bar
         interest: {light: '#7c3aed', dark: '#a78bfa'}, // P&L income submode — Interest stacked bar
+        costs: {light: '#ea580c', dark: '#fb923c'}, // P&L income submode — Costs (FEE+TAX) bar (batch 2)
+        deposit: {light: '#0d9488', dark: '#2dd4bf'}, // P&L income submode — Deposit-size bar (batch 2)
     };
 
     // Rotating palette for the P&L broker overlay (G1a) — distinct hues, cycled by index
@@ -208,6 +219,9 @@
             brokers: AggregatedBrokerPnl[];
             candle: AggregatedCandleMetric;
             income: {dividend: AggregatedMetric; interest: AggregatedMetric};
+            costs: AggregatedMetric;
+            deposits: AggregatedMetric;
+            acquisition: {fromNewCapital: AggregatedMetric; fromReinvested: AggregatedMetric};
         };
     }
 
@@ -285,6 +299,12 @@
         // but a plain static reference to an existing key is safe) — no new i18n key.
         dividend: $_('transactions.types.DIVIDEND'),
         interest: $_('transactions.types.INTEREST'),
+        // Batch 2: reuse existing keys — the dashboard KPI's own "Fees & taxes" grouping
+        // and the DEPOSIT transaction-type label — no new i18n key for either.
+        costs: $_('dashboard.feesAndTaxes'),
+        deposit: $_('transactions.types.DEPOSIT'),
+        acqNewCapital: $_('dashboard.pnlAcqNewCapital'),
+        acqReinvested: $_('dashboard.pnlAcqReinvested'),
     });
 
     /**
@@ -322,6 +342,26 @@
     });
     const interestValues = $derived.by(() => {
         const byDate = new Map((incomeHistory?.points ?? []).map((p) => [p.date, Number(p.interest.amount)]));
+        return dates.map((d) => byDate.get(d) ?? 0);
+    });
+
+    /** Batch 2 income-submode dimensions: costs (FEE+TAX, signed/negative), deposits
+     *  (fresh external cash), and the new-vs-reinvested BUY funding split. Same sparse
+     *  "absent date -> 0" semantics as dividend/interest above. */
+    const costValues = $derived.by(() => {
+        const byDate = new Map((costHistory?.points ?? []).map((p) => [p.date, Number(p.cost.amount)]));
+        return dates.map((d) => byDate.get(d) ?? 0);
+    });
+    const depositValues = $derived.by(() => {
+        const byDate = new Map((depositHistory?.points ?? []).map((p) => [p.date, Number(p.deposit.amount)]));
+        return dates.map((d) => byDate.get(d) ?? 0);
+    });
+    const acqFromNewCapitalValues = $derived.by(() => {
+        const byDate = new Map((acquisitionFunding?.points ?? []).map((p) => [p.date, Number(p.from_new_capital.amount)]));
+        return dates.map((d) => byDate.get(d) ?? 0);
+    });
+    const acqFromReinvestedValues = $derived.by(() => {
+        const byDate = new Map((acquisitionFunding?.points ?? []).map((p) => [p.date, Number(p.from_reinvested.amount)]));
         return dates.map((d) => byDate.get(d) ?? 0);
     });
 
@@ -575,6 +615,12 @@
                     dividend: aggregateFlowMetric(dividendValues, resolution, buckets),
                     interest: aggregateFlowMetric(interestValues, resolution, buckets),
                 },
+                costs: aggregateFlowMetric(costValues, resolution, buckets),
+                deposits: aggregateFlowMetric(depositValues, resolution, buckets),
+                acquisition: {
+                    fromNewCapital: aggregateFlowMetric(acqFromNewCapitalValues, resolution, buckets),
+                    fromReinvested: aggregateFlowMetric(acqFromReinvestedValues, resolution, buckets),
+                },
             },
         };
 
@@ -651,6 +697,32 @@
             start: (startIndex / denominator) * 100,
             end: (endIndex / denominator) * 100,
         };
+    }
+
+    /** Batch 2 — Income submode window selector (1W/1M/1Y/All), independent UI on top
+     *  of the SAME shared zoom/dataZoom mechanism the chart already uses for drag/scroll
+     *  zoom (not a parallel windowing system) — a preset button is just a convenient way
+     *  to set visibleStartDate/visibleEndDate + the resulting dataZoom percentages,
+     *  exactly as a manual zoom gesture would. Shared with Line/Candles since they use
+     *  the same underlying state: switching submodes after picking a window keeps it. */
+    function computeIncomeWindowRange(preset: IncomeWindowPreset): {startDate: string; endDate: string} | null {
+        if (dates.length === 0) return null;
+        const endDate = dates[dates.length - 1];
+        if (preset === 'all') return {startDate: dates[0], endDate};
+        const daysBack = preset === '1W' ? 7 : preset === '1M' ? 30 : 365;
+        const startMs = new Date(endDate).getTime() - daysBack * 24 * 60 * 60 * 1000;
+        const computedStart = new Date(startMs).toISOString().slice(0, 10);
+        return {startDate: computedStart < dates[0] ? dates[0] : computedStart, endDate};
+    }
+
+    function selectIncomeWindow(preset: IncomeWindowPreset) {
+        incomeWindowPreset = preset;
+        const range = computeIncomeWindowRange(preset);
+        if (!range || !chartInstance) return;
+        visibleStartDate = range.startDate;
+        visibleEndDate = range.endDate;
+        const zoomWindow = buildZoomWindow(currentResolution, range.startDate, range.endDate);
+        chartInstance.setOption({dataZoom: [{type: 'inside', ...INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG, start: zoomWindow.start, end: zoomWindow.end}]}, {replaceMerge: ['dataZoom']});
     }
 
     function formatTooltipMonth(date: string): string {
@@ -765,11 +837,17 @@
         }
 
         if (viewMode === 'pnl' && pnlSubmode === 'income') {
-            // DIVIDEND/INTEREST stacked bars (plan §3.4) — no broker overlay for this
-            // submode (the plan's hybrid-overlay rule is specific to Line/Candles).
+            // DIVIDEND/INTEREST stacked bars (plan §3.4) + batch 2's costs/deposit/
+            // acquisition dimensions — no broker overlay for this submode (the plan's
+            // hybrid-overlay rule is specific to Line/Candles). Fixed 6-slot order
+            // matches buildFullSeries's matching index reads exactly.
             return [
                 {name: pnlLabels.dividend, data: entry.pnl.income.dividend.points},
                 {name: pnlLabels.interest, data: entry.pnl.income.interest.points},
+                {name: pnlLabels.costs, data: entry.pnl.costs.points},
+                {name: pnlLabels.deposit, data: entry.pnl.deposits.points},
+                {name: pnlLabels.acqNewCapital, data: entry.pnl.acquisition.fromNewCapital.points},
+                {name: pnlLabels.acqReinvested, data: entry.pnl.acquisition.fromReinvested.points},
             ];
         }
 
@@ -929,6 +1007,14 @@
             return [
                 {name: pnlLabels.dividend, type: 'bar' as const, stack: 'income', data: seriesData[0].data, itemStyle: {color: cc('dividend')}},
                 {name: pnlLabels.interest, type: 'bar' as const, stack: 'income', data: seriesData[1].data, itemStyle: {color: cc('interest')}},
+                {name: pnlLabels.costs, type: 'bar' as const, data: seriesData[2].data, itemStyle: {color: cc('costs')}},
+                {name: pnlLabels.deposit, type: 'bar' as const, data: seriesData[3].data, itemStyle: {color: cc('deposit')}},
+                // Acquisition 2-zone stacked bar (batch 2, plan §5.2): reuses the exact
+                // same capital/returns-pool colors as EUR mode's own cashContributed/
+                // cashGenerated areas — same underlying financial concept (K/R pool),
+                // so the same color means the same thing everywhere in the app.
+                {name: pnlLabels.acqNewCapital, type: 'bar' as const, stack: 'acquisition', data: seriesData[4].data, itemStyle: {color: cc('cashContributed')}},
+                {name: pnlLabels.acqReinvested, type: 'bar' as const, stack: 'acquisition', data: seriesData[5].data, itemStyle: {color: cc('cashGenerated')}},
             ];
         }
 
@@ -1278,9 +1364,10 @@
                         } else {
                             html += `<div style="color:${mutedColor}">${$_('common.noData')}</div>`;
                         }
-                        // TODO(coordinator i18n batch): replace with $_('dashboard.pnlCandlesHypothetical')
-                        // once the key is added — see G1b checkpoint report for the exact EN string.
-                        html += `<div style="font-size:10px;color:${textColor};opacity:0.7;margin-top:4px">Synthetic — cross-asset high/low are hypothetical and non-simultaneous</div>`;
+                        // Compact form for the tooltip; the always-visible caption below
+                        // the chart carries the full sentence (…HypotheticalShort vs
+                        // …Hypothetical — two distinct keys, not a truncation).
+                        html += `<div style="font-size:10px;color:${textColor};opacity:0.7;margin-top:4px">${$_('dashboard.pnlCandlesHypotheticalShort')}</div>`;
                         activeChartData?.pnl.brokers.forEach((broker, index) => {
                             const v = broker.metric.values[idx];
                             if (v == null) return;
@@ -1294,6 +1381,10 @@
                         const cc = (key: keyof typeof COLORS) => COLORS[key][isDark ? 'dark' : 'light'];
                         const divVal = activeChartData?.pnl.income.dividend.values[idx] ?? 0;
                         const intVal = activeChartData?.pnl.income.interest.values[idx] ?? 0;
+                        const costVal = activeChartData?.pnl.costs.values[idx] ?? 0;
+                        const depositVal = activeChartData?.pnl.deposits.values[idx] ?? 0;
+                        const acqNewVal = activeChartData?.pnl.acquisition.fromNewCapital.values[idx] ?? 0;
+                        const acqReinvestedVal = activeChartData?.pnl.acquisition.fromReinvested.values[idx] ?? 0;
                         const signedRow = (label: string, v: number, color: string) => {
                             const signColor = v >= 0 ? (isDark ? '#4ade80' : '#16a34a') : isDark ? '#f87171' : '#dc2626';
                             return `<div style="display:flex;justify-content:space-between;gap:16px;color:${color}"><span>${label}</span><b style="color:${signColor}">${v >= 0 ? '+' : '−'}${fmtCurrency(Math.abs(v))}</b></div>`;
@@ -1302,6 +1393,18 @@
                         html += signedRow(pnlLabels.interest, intVal, cc('interest'));
                         html += buildTooltipDivider(tooltipBorder);
                         html += signedRow(`<b>${$_('assets.distribution.total')}</b>`, divVal + intVal, textColor);
+                        // Batch 2 dimensions: costs/deposit/acquisition are distinct economic
+                        // concepts from personal income, so each gets its own row rather than
+                        // folding into the income total above.
+                        if (costVal !== 0 || depositVal !== 0 || acqNewVal !== 0 || acqReinvestedVal !== 0) {
+                            html += buildTooltipDivider(tooltipBorder);
+                            if (costVal !== 0) html += signedRow(pnlLabels.costs, costVal, cc('costs'));
+                            if (depositVal !== 0) html += signedRow(pnlLabels.deposit, depositVal, cc('deposit'));
+                            if (acqNewVal !== 0 || acqReinvestedVal !== 0) {
+                                html += signedRow(pnlLabels.acqNewCapital, acqNewVal, cc('cashContributed'));
+                                html += signedRow(pnlLabels.acqReinvested, acqReinvestedVal, cc('cashGenerated'));
+                            }
+                        }
                         return html;
                     }
 
@@ -1442,9 +1545,7 @@
         {#if viewMode === 'pnl'}
             <!-- P&L submode toggle: Line | Synthetic candles | Income. Floats as an
                  overlay above the chart (matching PriceChartFull's edit/settings
-                 controls) instead of taking its own row and shrinking the chart area.
-                 TODO(coordinator i18n batch): all three labels are temporary hardcoded EN —
-                 see G1c checkpoint report for the exact keys/values to add. -->
+                 controls) instead of taking its own row and shrinking the chart area. -->
             <div class="absolute top-2 right-2 z-10 flex items-center gap-1.5">
                 <div class="flex rounded-lg border border-gray-200/70 dark:border-slate-600/70 overflow-hidden shadow-sm opacity-75 hover:opacity-100 transition-opacity text-xs font-medium">
                     <button
@@ -1452,22 +1553,52 @@
                         onclick={() => (pnlSubmode = 'line')}
                         data-testid="growth-pnl-submode-line"
                     >
-                        Line
+                        {$_('dashboard.pnlSubmodeLine')}
                     </button>
                     <button
                         class="px-3 py-1 transition-colors border-l border-gray-200/70 dark:border-slate-600/70 {pnlSubmode === 'candles' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
                         onclick={() => (pnlSubmode = 'candles')}
                         data-testid="growth-pnl-submode-candles"
                     >
-                        Candles
+                        {$_('dashboard.pnlSubmodeCandles')}
                     </button>
                     <button
                         class="px-3 py-1 transition-colors border-l border-gray-200/70 dark:border-slate-600/70 {pnlSubmode === 'income' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
                         onclick={() => (pnlSubmode = 'income')}
                         data-testid="growth-pnl-submode-income"
                     >
-                        Income
+                        {$_('dashboard.pnlSubmodeIncome')}
                     </button>
+                </div>
+            </div>
+        {/if}
+        {#if viewMode === 'pnl' && pnlSubmode === 'income'}
+            <!-- Batch 2 — Income submode window selector (1W/1M/1Y/All), floating below
+                 the submode toggle. Not a parallel windowing system: sets the SAME
+                 shared visibleStartDate/EndDate + dataZoom the chart already uses for
+                 drag/scroll zoom (see selectIncomeWindow) — just a convenient preset. -->
+            <div class="absolute top-11 right-2 z-10 flex items-center gap-1.5">
+                <div class="flex rounded-lg border border-gray-200/70 dark:border-slate-600/70 overflow-hidden shadow-sm opacity-75 hover:opacity-100 transition-opacity text-xs font-medium">
+                    <button
+                        class="px-2.5 py-1 transition-colors {incomeWindowPreset === '1W' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        onclick={() => selectIncomeWindow('1W')}
+                        data-testid="growth-income-window-1w">1W</button
+                    >
+                    <button
+                        class="px-2.5 py-1 transition-colors border-l border-gray-200/70 dark:border-slate-600/70 {incomeWindowPreset === '1M' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        onclick={() => selectIncomeWindow('1M')}
+                        data-testid="growth-income-window-1m">1M</button
+                    >
+                    <button
+                        class="px-2.5 py-1 transition-colors border-l border-gray-200/70 dark:border-slate-600/70 {incomeWindowPreset === '1Y' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        onclick={() => selectIncomeWindow('1Y')}
+                        data-testid="growth-income-window-1y">1Y</button
+                    >
+                    <button
+                        class="px-2.5 py-1 transition-colors border-l border-gray-200/70 dark:border-slate-600/70 {incomeWindowPreset === 'all' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        onclick={() => selectIncomeWindow('all')}
+                        data-testid="growth-income-window-all">All</button
+                    >
                 </div>
             </div>
         {/if}
@@ -1489,7 +1620,6 @@
     {/if}
     {#if !loading && viewMode === 'pnl' && pnlSubmode === 'candles'}
         <!-- Mandatory always-visible synthetic-candle disclosure (plan §3.3). -->
-        <!-- TODO(coordinator i18n batch): temporary hardcoded EN, see G1b checkpoint report. -->
-        <p class="text-center text-xs text-gray-400 dark:text-gray-500 italic mt-1" data-testid="growth-pnl-candles-hypothetical-label">Synthetic — cross-asset high/low are hypothetical and non-simultaneous, not a real intraday series.</p>
+        <p class="text-center text-xs text-gray-400 dark:text-gray-500 italic mt-1" data-testid="growth-pnl-candles-hypothetical-label">{$_('dashboard.pnlCandlesHypothetical')}</p>
     {/if}
 </div>

@@ -122,7 +122,12 @@
                 STOCK: '📈',
                 ETF: '📊',
                 BOND: '🏛️',
-                CRYPTO: '₿',
+                // Bitcoin sign (₿, U+20BF) is a currency symbol, not an emoji — it
+                // renders as a thin system-font glyph (no color-emoji font coverage),
+                // making it nearly invisible against the chart's pale area fill,
+                // unlike every other category here. 🪙 is a genuine color emoji with
+                // the same bold visual weight as the rest.
+                CRYPTO: '🪙',
                 FUND: '💼',
                 HOLD: '⏸️',
                 CROWDFUND: '🤝',

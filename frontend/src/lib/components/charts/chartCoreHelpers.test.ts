@@ -10,9 +10,10 @@ import {CHART_SET_OPTION_OPTS} from './echartsAnimationConfig';
 import {buildSignalReferencePrimitives} from './lineChartHelpers';
 import {buildResponsiveXAxisPolicy, formatCompactXAxisDate} from './responsiveXAxis';
 import {buildOhlcQuad} from './candlestickChartHelpers';
+import {buildTooltipDivider} from './echartsTooltipHelpers';
 import {buildBucketInfos, buildZoomWindowForRange, computeBucketCounts, logicalRangeFromBuckets} from '../brokers/lots/lotComparisonChartHelpers';
 import {clampGrowthLogicalRange, type GrowthLogicalRange} from '../dashboard/growthChartRange';
-import {chooseInitialResolution, type ChartResolution} from './timeSeriesAggregation';
+import {chooseInitialResolution, aggregateSumSeries, type ChartResolution} from './timeSeriesAggregation';
 
 function signal(overrides: Partial<RenderedSignal>): RenderedSignal {
     return {
@@ -2062,6 +2063,699 @@ describe('canonical overlay axis and reference helpers', () => {
                 const distinctReferenceValues = new Set(referencePoints.map((p) => p.value[1]));
                 expect(distinctReferenceValues.size).toBe(1);
                 expect(referencePoints[0].value[1]).toBe(referenceValue);
+            });
+        });
+
+        // ===================================================================
+        // Income submode (G1c dividend/interest + batch 2 costs/deposit/acquisition)
+        // ===================================================================
+        //
+        // Same established pattern as the line/candles blocks above: the parts that are
+        // pure source *shape* (which slot holds what, which stack it joins) are pinned by
+        // reading GrowthChart.svelte, and the parts that are component-local *logic*
+        // (the window-preset date maths, the tooltip's conditional section) are
+        // reimplemented faithfully here for real execution and tied back to the real
+        // source text by a contract test.
+
+        describe('income-submode fixed 6-slot order (dividend / interest / costs / deposit / acqNewCapital / acqReinvested)', () => {
+            /** The income branch of one of the two builders, sliced out of the real source. */
+            function incomeBranchOf(source: string, functionName: string): string {
+                const fnStart = source.indexOf(`function ${functionName}(`);
+                expect(fnStart).toBeGreaterThan(-1);
+                const branchStart = source.indexOf("if (viewMode === 'pnl' && pnlSubmode === 'income') {", fnStart);
+                expect(branchStart).toBeGreaterThan(fnStart);
+                const branchEnd = source.indexOf('\n        }', branchStart);
+                expect(branchEnd).toBeGreaterThan(branchStart);
+                if (fnStart < 0 || branchStart <= fnStart || branchEnd <= branchStart) {
+                    throw new Error(`GrowthChart ${functionName} income-branch contract not found`);
+                }
+                return source.slice(branchStart, branchEnd);
+            }
+
+            // The single source of truth this whole describe block defends: slot index ->
+            // (label, the AggregatedResolutionData path its data comes from, its stack group).
+            const EXPECTED_SLOTS = [
+                {label: 'dividend', dataPath: 'entry.pnl.income.dividend.points', stack: 'income'},
+                {label: 'interest', dataPath: 'entry.pnl.income.interest.points', stack: 'income'},
+                {label: 'costs', dataPath: 'entry.pnl.costs.points', stack: null},
+                {label: 'deposit', dataPath: 'entry.pnl.deposits.points', stack: null},
+                {label: 'acqNewCapital', dataPath: 'entry.pnl.acquisition.fromNewCapital.points', stack: 'acquisition'},
+                {label: 'acqReinvested', dataPath: 'entry.pnl.acquisition.fromReinvested.points', stack: 'acquisition'},
+            ] as const;
+
+            it('emits exactly the 6 expected slots, in order, each reading its own AggregatedResolutionData path', () => {
+                const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
+                const block = incomeBranchOf(source, 'buildChartUpdateSeries');
+
+                const emitted = [...block.matchAll(/\{name: pnlLabels\.(\w+), data: ([^}]+)\}/g)].map((match) => ({label: match[1], dataPath: match[2].trim()}));
+
+                expect(emitted).toEqual(EXPECTED_SLOTS.map(({label, dataPath}) => ({label, dataPath})));
+            });
+
+            it('buildFullSeries consumes seriesData[0..5] in exactly the same label order — a swap here would silently draw two bars with each other data', () => {
+                const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
+                const block = incomeBranchOf(source, 'buildFullSeries');
+
+                // Pair each rendered series with the seriesData index it actually reads.
+                const consumed = [...block.matchAll(/\{name: pnlLabels\.(\w+), type: 'bar' as const,(?:\s*stack: '(\w+)',)?\s*data: seriesData\[(\d)\]\.data/g)].map((match) => ({
+                    label: match[1],
+                    stack: match[2] ?? null,
+                    index: Number(match[3]),
+                }));
+
+                expect(consumed).toHaveLength(6);
+                // (a) same labels, same order as buildChartUpdateSeries emits them, and
+                // (b) slot N is read from index N — not off-by-one, not transposed.
+                expect(consumed.map(({label}) => label)).toEqual(EXPECTED_SLOTS.map(({label}) => label));
+                expect(consumed.map(({index}) => index)).toEqual([0, 1, 2, 3, 4, 5]);
+                expect(consumed.map(({stack}) => stack)).toEqual(EXPECTED_SLOTS.map(({stack}) => stack));
+            });
+
+            it('never spreads broker overlays into the income submode — the slot count is fixed at 6, unlike line/candles', () => {
+                const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
+
+                for (const fn of ['buildChartUpdateSeries', 'buildFullSeries'] as const) {
+                    const block = incomeBranchOf(source, fn);
+                    expect(block).not.toContain('entry.pnl.brokers');
+                    expect(block).not.toContain('seriesData.slice(');
+                }
+            });
+
+            it('reuses the EUR-mode capital/returns pool colors for the two acquisition zones rather than inventing new ones', () => {
+                const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
+                const block = incomeBranchOf(source, 'buildFullSeries');
+
+                expect(block).toContain("{name: pnlLabels.acqNewCapital, type: 'bar' as const, stack: 'acquisition', data: seriesData[4].data, itemStyle: {color: cc('cashContributed')}}");
+                expect(block).toContain("{name: pnlLabels.acqReinvested, type: 'bar' as const, stack: 'acquisition', data: seriesData[5].data, itemStyle: {color: cc('cashGenerated')}}");
+            });
+
+            it('builds all six aggregated dimensions through the SAME aggregateFlowMetric — flows are summed per bucket, never end-of-period', () => {
+                // If one of these went through aggregateMetric (end-of-period) instead, a
+                // weekly/monthly bar would silently show only the last day of the bucket.
+                const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
+                const start = source.indexOf('dividend: aggregateFlowMetric(dividendValues, resolution, buckets),');
+                const end = source.indexOf('},\n        };', start);
+                expect(start).toBeGreaterThan(-1);
+                expect(end).toBeGreaterThan(start);
+                if (start < 0 || end <= start) throw new Error('GrowthChart income aggregation contract not found');
+
+                const block = source.slice(start, end);
+                for (const call of [
+                    'dividend: aggregateFlowMetric(dividendValues, resolution, buckets),',
+                    'interest: aggregateFlowMetric(interestValues, resolution, buckets),',
+                    'costs: aggregateFlowMetric(costValues, resolution, buckets),',
+                    'deposits: aggregateFlowMetric(depositValues, resolution, buckets),',
+                    'fromNewCapital: aggregateFlowMetric(acqFromNewCapitalValues, resolution, buckets),',
+                    'fromReinvested: aggregateFlowMetric(acqFromReinvestedValues, resolution, buckets),',
+                ]) {
+                    expect(block).toContain(call);
+                }
+                expect(block).not.toContain('aggregateMetric(');
+            });
+        });
+
+        // -------------------------------------------------------------------
+        // The Income submode's own data pipeline: sparse API series -> `dates`-aligned
+        // values -> aggregateFlowMetric -> aggregateSumSeries. Predates batch 2 (it is
+        // how dividend/interest have always reached the chart) and had no coverage
+        // anywhere; batch 2's four new dimensions reuse it unchanged, so it is now
+        // load-bearing for six series instead of two.
+        // -------------------------------------------------------------------
+        describe('income-submode data pipeline: sparse series alignment and flow aggregation', () => {
+            interface FixtureBucketInfo {
+                date: string;
+                bucketStart: string;
+                bucketEnd: string;
+                resolution: ChartResolution;
+            }
+
+            /** Faithful reimplementation of the `dividendValues`-family $derived bodies. */
+            function alignToDatesImpl(dates: string[], points: Array<{date: string; amount: number}>): number[] {
+                const byDate = new Map(points.map((p) => [p.date, Number(p.amount)]));
+                return dates.map((d) => byDate.get(d) ?? 0);
+            }
+
+            /** Faithful reimplementation of aggregateFlowMetric, executing the REAL
+             *  aggregateSumSeries (the helper it delegates to). */
+            function aggregateFlowMetricImpl(dates: string[], values: number[], resolution: ChartResolution, buckets: FixtureBucketInfo[]): {values: number[]; points: Array<{name: string; value: [string, number | null]; bucketStart: string; bucketEnd: string; resolution: ChartResolution}>} {
+                const toPoint = (bucket: FixtureBucketInfo, value: number | null) => ({name: bucket.date, value: [bucket.date, value] as [string, number | null], bucketStart: bucket.bucketStart, bucketEnd: bucket.bucketEnd, resolution: bucket.resolution});
+                if (resolution === 'daily') {
+                    return {values: [...values], points: buckets.map((bucket, index) => toPoint(bucket, values[index] ?? 0))};
+                }
+                const sourcePoints = dates.map((date, index) => ({date, value: values[index] ?? 0}));
+                const aggregated = aggregateSumSeries(sourcePoints, resolution);
+                const lookup = new Map(
+                    aggregated.map((point) => [point.date, {value: point.value, bucketStart: 'bucketStart' in point && typeof point.bucketStart === 'string' ? point.bucketStart : point.date, bucketEnd: 'bucketEnd' in point && typeof point.bucketEnd === 'string' ? point.bucketEnd : point.date}]),
+                );
+                const aggregatedValues = buckets.map((bucket) => lookup.get(bucket.date)?.value ?? 0);
+                const points = buckets.map((bucket, index) => {
+                    const meta = lookup.get(bucket.date);
+                    return toPoint({...bucket, bucketStart: meta?.bucketStart ?? bucket.bucketStart, bucketEnd: meta?.bucketEnd ?? bucket.bucketEnd}, aggregatedValues[index]);
+                });
+                return {values: aggregatedValues, points};
+            }
+
+            const week = ['2026-01-05', '2026-01-06', '2026-01-07', '2026-01-08', '2026-01-09'];
+            const dailyBuckets: FixtureBucketInfo[] = week.map((d) => ({date: d, bucketStart: d, bucketEnd: d, resolution: 'daily'}));
+
+            it('a date absent from the sparse series becomes 0, never a gap — flows are zero, not unknown', () => {
+                // The opposite of the candles submode, where an absent date is a genuine
+                // null gap. "No dividend was paid on the 7th" is a known zero.
+                expect(
+                    alignToDatesImpl(week, [
+                        {date: '2026-01-06', amount: 40},
+                        {date: '2026-01-09', amount: 5},
+                    ]),
+                ).toEqual([0, 40, 0, 0, 5]);
+            });
+
+            it('an entirely absent series (prop undefined) aligns to all zeros of the right length', () => {
+                expect(alignToDatesImpl(week, [])).toEqual([0, 0, 0, 0, 0]);
+            });
+
+            it('a point whose date is not in `dates` is dropped rather than shifting the alignment', () => {
+                // A sparse API series can legitimately carry a date outside the chart's
+                // current window; positional alignment must survive it.
+                expect(
+                    alignToDatesImpl(week, [
+                        {date: '2025-12-31', amount: 999},
+                        {date: '2026-01-07', amount: 3},
+                    ]),
+                ).toEqual([0, 0, 3, 0, 0]);
+            });
+
+            it('negative amounts survive alignment unchanged — costs are signed', () => {
+                expect(alignToDatesImpl(week, [{date: '2026-01-05', amount: -12}])).toEqual([-12, 0, 0, 0, 0]);
+            });
+
+            it('aggregateFlowMetric at daily resolution is a pass-through, one point per bucket', () => {
+                const values = [0, 40, 0, 0, 5];
+                const result = aggregateFlowMetricImpl(week, values, 'daily', dailyBuckets);
+
+                expect(result.values).toEqual(values);
+                expect(result.values).not.toBe(values); // copied, not aliased
+                expect(result.points.map((p) => p.value)).toEqual(week.map((d, i) => [d, values[i]]));
+            });
+
+            it('aggregateFlowMetric SUMS a weekly bucket instead of taking its last day', () => {
+                // 2026-01-05..09 is one ISO week; aggregateSumSeries renders it at its last
+                // source date, so the bucket list for weekly resolution is that single date.
+                const weeklyBuckets: FixtureBucketInfo[] = [{date: '2026-01-09', bucketStart: '2026-01-05', bucketEnd: '2026-01-11', resolution: 'weekly'}];
+                const result = aggregateFlowMetricImpl(week, [0, 40, 0, 0, 5], 'weekly', weeklyBuckets);
+
+                expect(result.values).toEqual([45]); // 40 + 5, NOT 5
+                expect(result.points[0].bucketStart).toBe('2026-01-05');
+                expect(result.points[0].bucketEnd).toBe('2026-01-11');
+            });
+
+            it('aggregateFlowMetric fills a bucket with no aggregated match with 0, not null', () => {
+                // aggregateMetric (the cumulative sibling) uses `?? null` here; the flow
+                // variant uses `?? 0`. Mixing them up would put a null into a bar series.
+                const weeklyBuckets: FixtureBucketInfo[] = [
+                    {date: '2026-01-09', bucketStart: '2026-01-05', bucketEnd: '2026-01-11', resolution: 'weekly'},
+                    {date: '2026-01-16', bucketStart: '2026-01-12', bucketEnd: '2026-01-18', resolution: 'weekly'},
+                ];
+                const result = aggregateFlowMetricImpl(week, [1, 1, 1, 1, 1], 'weekly', weeklyBuckets);
+
+                expect(result.values).toEqual([5, 0]);
+                expect(result.points[1].value[1]).toBe(0);
+                expect(result.points[1].value[1]).not.toBeNull();
+            });
+
+            it('mirrors the exact literal bodies of the six sparse $derived alignments and of aggregateFlowMetric (ties both reimplementations to the real source)', () => {
+                const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
+
+                // All six dimensions use the identical "absent date -> 0" body, differing
+                // only in the source series and the Currency field they read.
+                const alignments: Array<[string, string, string]> = [
+                    ['dividendValues', 'incomeHistory', 'p.dividend.amount'],
+                    ['interestValues', 'incomeHistory', 'p.interest.amount'],
+                    ['costValues', 'costHistory', 'p.cost.amount'],
+                    ['depositValues', 'depositHistory', 'p.deposit.amount'],
+                    ['acqFromNewCapitalValues', 'acquisitionFunding', 'p.from_new_capital.amount'],
+                    ['acqFromReinvestedValues', 'acquisitionFunding', 'p.from_reinvested.amount'],
+                ];
+                for (const [name, prop, field] of alignments) {
+                    const start = source.indexOf(`const ${name} = $derived.by(() => {`);
+                    expect(start).toBeGreaterThan(-1);
+                    const end = source.indexOf('});', start);
+                    expect(end).toBeGreaterThan(start);
+                    if (start < 0 || end <= start) throw new Error(`GrowthChart ${name} contract not found`);
+                    const block = source.slice(start, end);
+                    expect(block).toContain(`const byDate = new Map((${prop}?.points ?? []).map((p) => [p.date, Number(${field})]));`);
+                    expect(block).toContain('return dates.map((d) => byDate.get(d) ?? 0);');
+                }
+
+                const flowStart = source.indexOf('function aggregateFlowMetric(values: number[], resolution: ChartResolution, buckets: BucketInfo[]): AggregatedMetric {');
+                const flowEnd = source.indexOf('\n    function getResolutionData(', flowStart);
+                expect(flowStart).toBeGreaterThan(-1);
+                expect(flowEnd).toBeGreaterThan(flowStart);
+                if (flowStart < 0 || flowEnd <= flowStart) throw new Error('GrowthChart aggregateFlowMetric contract not found');
+
+                const flowBlock = source.slice(flowStart, flowEnd);
+                expect(flowBlock).toContain("if (resolution === 'daily') {");
+                expect(flowBlock).toContain('points: buckets.map((bucket, index) => toSeriesPoint(bucket, values[index] ?? 0)),');
+                expect(flowBlock).toContain('const sourcePoints: LineDataPoint[] = dates.map((date, index) => ({date, value: values[index] ?? 0}));');
+                expect(flowBlock).toContain('const aggregated = aggregateSumSeries(sourcePoints, resolution);');
+                expect(flowBlock).toContain('const aggregatedValues = buckets.map((bucket) => lookup.get(bucket.date)?.value ?? 0);');
+                // The distinguishing line vs aggregateMetric, which uses aggregateLineSeries.
+                expect(flowBlock).not.toContain('aggregateLineSeries(');
+            });
+        });
+
+        describe('income-submode tooltip: the batch-2 section is conditional, the income block never is', () => {
+            // Faithful reimplementation of the tooltip's income branch, pinned to the real
+            // source by the contract test at the end of this block. Only the pieces that
+            // decide *which rows exist* are reproduced; the colour plumbing is stubbed to a
+            // recognisable token so the assertions read as "which rows", not "which hex".
+            const DIVIDER = buildTooltipDivider('#eee');
+
+            interface IncomeTooltipValues {
+                divVal: number;
+                intVal: number;
+                costVal: number;
+                depositVal: number;
+                acqNewVal: number;
+                acqReinvestedVal: number;
+            }
+
+            function buildIncomeTooltipImpl({divVal, intVal, costVal, depositVal, acqNewVal, acqReinvestedVal}: IncomeTooltipValues): string {
+                const signedRow = (label: string, v: number) => `<row label="${label}" value="${v}"></row>`;
+                let html = '';
+                html += signedRow('dividend', divVal);
+                html += signedRow('interest', intVal);
+                html += DIVIDER;
+                html += signedRow('<b>total</b>', divVal + intVal);
+                if (costVal !== 0 || depositVal !== 0 || acqNewVal !== 0 || acqReinvestedVal !== 0) {
+                    html += DIVIDER;
+                    if (costVal !== 0) html += signedRow('costs', costVal);
+                    if (depositVal !== 0) html += signedRow('deposit', depositVal);
+                    if (acqNewVal !== 0 || acqReinvestedVal !== 0) {
+                        html += signedRow('acqNewCapital', acqNewVal);
+                        html += signedRow('acqReinvested', acqReinvestedVal);
+                    }
+                }
+                return html;
+            }
+
+            const zeroDay: IncomeTooltipValues = {divVal: 0, intVal: 0, costVal: 0, depositVal: 0, acqNewVal: 0, acqReinvestedVal: 0};
+            const rowLabels = (html: string) => [...html.matchAll(/<row label="([^"]+)"/g)].map((m) => m[1]);
+            const dividerCount = (html: string) => html.split(DIVIDER).length - 1;
+
+            it('an all-zero day renders ONLY dividend/interest/total — no divider, no empty trailing rows', () => {
+                const html = buildIncomeTooltipImpl(zeroDay);
+
+                expect(rowLabels(html)).toEqual(['dividend', 'interest', '<b>total</b>']);
+                expect(dividerCount(html)).toBe(1);
+            });
+
+            it('a day with income but no batch-2 activity still renders only the original block', () => {
+                const html = buildIncomeTooltipImpl({...zeroDay, divVal: 42, intVal: 8});
+
+                expect(rowLabels(html)).toEqual(['dividend', 'interest', '<b>total</b>']);
+                expect(dividerCount(html)).toBe(1);
+                expect(html).toContain('<row label="<b>total</b>" value="50">');
+            });
+
+            const singleDimensionScenarios: Array<[string, Partial<IncomeTooltipValues>, string[]]> = [
+                ['only costs', {costVal: -12}, ['costs']],
+                ['only deposit', {depositVal: 500}, ['deposit']],
+                ['only fresh-capital acquisition', {acqNewVal: 400}, ['acqNewCapital', 'acqReinvested']],
+                ['only reinvested acquisition', {acqReinvestedVal: 200}, ['acqNewCapital', 'acqReinvested']],
+            ];
+
+            it.each(singleDimensionScenarios)('opens the second section for %s, and only for the dimensions that are actually non-zero', (_label, overrides, expectedExtraRows) => {
+                const html = buildIncomeTooltipImpl({...zeroDay, ...overrides});
+
+                expect(rowLabels(html)).toEqual(['dividend', 'interest', '<b>total</b>', ...expectedExtraRows]);
+                expect(dividerCount(html)).toBe(2);
+            });
+
+            it('renders BOTH acquisition legs whenever either is non-zero — the split is a pair, and a 0 leg is information', () => {
+                // A BUY funded entirely from reinvested returns means the acqNewCapital
+                // row's value is exactly 0.
+                // Hiding that row would make the day look like it had no fresh-capital
+                // question at all, rather than answering it with a zero.
+                const html = buildIncomeTooltipImpl({...zeroDay, acqNewVal: 0, acqReinvestedVal: 200});
+
+                expect(rowLabels(html)).toContain('acqNewCapital');
+                expect(html).toContain('<row label="acqNewCapital" value="0">');
+            });
+
+            it('renders every batch-2 row when all four dimensions are active, in a fixed order', () => {
+                const html = buildIncomeTooltipImpl({divVal: 10, intVal: 2, costVal: -5, depositVal: 1000, acqNewVal: 300, acqReinvestedVal: 100});
+
+                expect(rowLabels(html)).toEqual(['dividend', 'interest', '<b>total</b>', 'costs', 'deposit', 'acqNewCapital', 'acqReinvested']);
+                expect(dividerCount(html)).toBe(2);
+            });
+
+            it('folds NOTHING from the batch-2 dimensions into the income total — they are different economic concepts', () => {
+                const html = buildIncomeTooltipImpl({divVal: 10, intVal: 2, costVal: -5, depositVal: 1000, acqNewVal: 300, acqReinvestedVal: 100});
+
+                expect(html).toContain('<row label="<b>total</b>" value="12">');
+            });
+
+            it('mirrors the exact literal body of the tooltip income branch in GrowthChart.svelte (ties the reimplementation above to the real source)', () => {
+                const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
+                const formatterStart = source.indexOf('function buildFullSeries(');
+                const start = source.indexOf("if (viewMode === 'pnl' && pnlSubmode === 'income') {", formatterStart);
+                const branchStart = source.indexOf("if (viewMode === 'pnl' && pnlSubmode === 'income') {", start + 1);
+                const end = source.indexOf('return html;', branchStart);
+                expect(branchStart).toBeGreaterThan(start);
+                expect(end).toBeGreaterThan(branchStart);
+                if (branchStart <= start || end <= branchStart) throw new Error('GrowthChart income tooltip contract not found');
+
+                const block = source.slice(branchStart, end);
+                // The unconditional original block.
+                expect(block).toContain("html += signedRow(pnlLabels.dividend, divVal, cc('dividend'));");
+                expect(block).toContain("html += signedRow(pnlLabels.interest, intVal, cc('interest'));");
+                expect(block).toContain('html += buildTooltipDivider(tooltipBorder);');
+                expect(block).toContain("html += signedRow(`<b>${$_('assets.distribution.total')}</b>`, divVal + intVal, textColor);");
+                // The conditional batch-2 section, with its exact gate and its inner gates.
+                expect(block).toContain('if (costVal !== 0 || depositVal !== 0 || acqNewVal !== 0 || acqReinvestedVal !== 0) {');
+                expect(block).toContain("if (costVal !== 0) html += signedRow(pnlLabels.costs, costVal, cc('costs'));");
+                expect(block).toContain("if (depositVal !== 0) html += signedRow(pnlLabels.deposit, depositVal, cc('deposit'));");
+                expect(block).toContain('if (acqNewVal !== 0 || acqReinvestedVal !== 0) {');
+                expect(block).toContain("html += signedRow(pnlLabels.acqNewCapital, acqNewVal, cc('cashContributed'));");
+                expect(block).toContain("html += signedRow(pnlLabels.acqReinvested, acqReinvestedVal, cc('cashGenerated'));");
+                // Each of the six values defaults to 0 when the aggregated entry is absent —
+                // which is what makes "all zero" the honest reading of an empty day.
+                for (const path of ['pnl.income.dividend', 'pnl.income.interest', 'pnl.costs', 'pnl.deposits', 'pnl.acquisition.fromNewCapital', 'pnl.acquisition.fromReinvested']) {
+                    expect(block).toContain(`activeChartData?.${path}.values[idx] ?? 0;`);
+                }
+            });
+
+            it('reuses existing i18n keys for costs and deposit — batch 2 adds ZERO new keys for those two', () => {
+                const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
+                const storeReference = importedTranslationStoreReference(source);
+
+                expect(source).toMatch(translationCallPattern(storeReference, 'dashboard.feesAndTaxes'));
+                expect(source).toMatch(translationCallPattern(storeReference, 'transactions.types.DEPOSIT'));
+            });
+        });
+
+        // ===================================================================
+        // GrowthChart i18n contract
+        // ===================================================================
+        //
+        // Why this block exists. Five keys were added to all four locale files, committed,
+        // and then never consumed: the component kept rendering hardcoded English, so
+        // IT/FR/ES users saw English while svelte-check, Vitest and the production build
+        // all stayed green. Nothing in the suite could have caught it, because nothing
+        // asserted the relationship between a key and its call site.
+        //
+        // The failure mode this guards is NOT "a test goes red" — it is the opposite: a
+        // typo'd key makes $_() render the raw key string as visible UI text, and an
+        // un-wired key makes one locale silently fall back to English. Both ship green.
+
+        describe('GrowthChart i18n contract', () => {
+            const LOCALES = ['en', 'it', 'fr', 'es'] as const;
+
+            function growthChartSource(): string {
+                return readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
+            }
+
+            function localeBundle(locale: (typeof LOCALES)[number]): Record<string, unknown> {
+                return JSON.parse(readFileSync(new URL(`../../i18n/${locale}.json`, import.meta.url), 'utf8'));
+            }
+
+            function resolveKey(bundle: Record<string, unknown>, key: string): unknown {
+                return key.split('.').reduce<unknown>((node, part) => (node && typeof node === 'object' && part in (node as object) ? (node as Record<string, unknown>)[part] : undefined), bundle);
+            }
+
+            /** Every key GrowthChart passes to $_(), including interpolated
+             *  `$_('key', {values: …})` calls — the narrow `$_('key')` form misses those
+             *  three and would let a future interpolated key slip through unchecked. */
+            function referencedKeys(source: string): string[] {
+                return [...new Set([...source.matchAll(/\$_\(\s*'([^']+)'/g)].map((match) => match[1]))].sort();
+            }
+
+            it('passes a static string literal to every single $_() call — the sweep below is only exhaustive if none is dynamic', () => {
+                const source = growthChartSource();
+                const totalCalls = source.match(/\$_\(/g) ?? [];
+                const literalCalls = source.match(/\$_\(\s*'[^']+'/g) ?? [];
+
+                expect(literalCalls).toHaveLength(totalCalls.length);
+            });
+
+            it('resolves EVERY key it references in all four locales — the guard against a typo rendering a raw key as UI text', () => {
+                const keys = referencedKeys(growthChartSource());
+                expect(keys.length).toBeGreaterThan(0);
+
+                const bundles = Object.fromEntries(LOCALES.map((locale) => [locale, localeBundle(locale)]));
+                const missing = keys.flatMap((key) => LOCALES.filter((locale) => resolveKey(bundles[locale], key) == null).map((locale) => `${key} @ ${locale}`));
+
+                expect(missing).toEqual([]);
+            });
+
+            // The seven keys batch 2's i18n pass wired, each asserted by NAME rather than
+            // by its English text, so a retranslation never turns this red.
+            const WIRED_KEYS = ['dashboard.pnlSubmodeLine', 'dashboard.pnlSubmodeCandles', 'dashboard.pnlSubmodeIncome', 'dashboard.pnlCandlesHypothetical', 'dashboard.pnlCandlesHypotheticalShort', 'dashboard.pnlAcqNewCapital', 'dashboard.pnlAcqReinvested'] as const;
+
+            it.each(WIRED_KEYS)('consumes %s through $_() — a key that exists but is never wired is exactly the bug that shipped', (key) => {
+                const source = growthChartSource();
+                const storeReference = importedTranslationStoreReference(source);
+
+                expect(source).toMatch(translationCallPattern(storeReference, key));
+            });
+
+            it.each(WIRED_KEYS)('%s is a real translation in every locale, not an English copy left as a placeholder', (key) => {
+                const values = LOCALES.map((locale) => resolveKey(localeBundle(locale), key));
+
+                for (const value of values) {
+                    expect(typeof value).toBe('string');
+                    expect(value).not.toBe('');
+                }
+                const [en, ...translated] = values;
+                expect(translated.some((value) => value !== en)).toBe(true);
+            });
+
+            it('never reintroduces hardcoded English for any of the seven — the next person adding a submode cannot quietly repeat this', () => {
+                const source = growthChartSource();
+                const bannedLiterals = ['Line', 'Candles', 'Income', 'Synthetic — cross-asset high/low are hypothetical and non-simultaneous', 'Synthetic — cross-asset high/low are hypothetical and non-simultaneous, not a real intraday series.', 'New capital', 'Reinvested'];
+
+                for (const literal of bannedLiterals) {
+                    // Quoted-literal form, e.g. acqNewCapital: 'New capital'. Bare
+                    // substrings are NOT checked: `Line`/`Candles`/`Income`/`Reinvested`
+                    // occur dozens of times inside legitimate identifiers
+                    // (aggregateLineSeries, pnlSubmodeCandles, incomeHistory,
+                    // acqFromReinvestedValues), so a substring ban would be unmaintainable
+                    // noise rather than a signal.
+                    expect(source).not.toContain(`'${literal}'`);
+                    // Svelte text-node form, e.g. >Line< between button tags.
+                    expect(source).not.toMatch(new RegExp(`>\\s*${literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*<`));
+                }
+                expect(source).not.toContain('TODO(coordinator i18n batch)');
+            });
+
+            it('binds each submode button to its OWN key — testid and label cannot drift apart', () => {
+                const source = growthChartSource();
+                const pairs = [
+                    ['growth-pnl-submode-line', 'dashboard.pnlSubmodeLine'],
+                    ['growth-pnl-submode-candles', 'dashboard.pnlSubmodeCandles'],
+                    ['growth-pnl-submode-income', 'dashboard.pnlSubmodeIncome'],
+                ] as const;
+
+                for (const [testid, key] of pairs) {
+                    // Sliced by index, not by a `<button[^>]*…>` regex: these buttons carry
+                    // `onclick={() => (pnlSubmode = 'line')}`, and the `=>` arrow ends a
+                    // `[^>]*` run early, so the regex form silently matches nothing.
+                    const anchor = source.indexOf(`data-testid="${testid}"`);
+                    expect(anchor, `testid ${testid} not found`).toBeGreaterThan(-1);
+                    const open = source.lastIndexOf('<button', anchor);
+                    const close = source.indexOf('</button>', anchor);
+                    expect(open).toBeGreaterThan(-1);
+                    expect(close).toBeGreaterThan(anchor);
+                    if (open < 0 || close <= anchor) throw new Error(`GrowthChart ${testid} button not found`);
+
+                    const button = source.slice(open, close);
+                    expect(button).toContain(`$_('${key}')`);
+                    // ...and only its own key: no other submode's label may appear inside it.
+                    for (const [, otherKey] of pairs.filter(([otherTestid]) => otherTestid !== testid)) {
+                        expect(button).not.toContain(`$_('${otherKey}')`);
+                    }
+                }
+            });
+
+            it('does NOT transpose the SHORT and LONG hypothetical strings — a demonstrated risk, not a hypothetical one', () => {
+                // These two keys differ only by a suffix and a trailing clause, and the
+                // TODO comment that preceded the wiring actively pointed at the wrong one
+                // of the pair. `pnlCandlesHypothetical` is also a strict prefix of
+                // `pnlCandlesHypotheticalShort`, so every assertion here matches the FULL
+                // call including its closing quote — a bare `toContain('…Hypothetical')`
+                // would be satisfied by the Short key and prove nothing.
+                const source = growthChartSource();
+                const LONG_CALL = "$_('dashboard.pnlCandlesHypothetical')";
+                const SHORT_CALL = "$_('dashboard.pnlCandlesHypotheticalShort')";
+
+                // The always-visible caption under the chart takes the LONG form.
+                const caption = source.match(/<p[^>]*data-testid="growth-pnl-candles-hypothetical-label"[^>]*>[\s\S]*?<\/p>/)?.[0];
+                expect(caption).toBeDefined();
+                if (!caption) throw new Error('GrowthChart hypothetical caption not found');
+                expect(caption).toContain(LONG_CALL);
+                expect(caption).not.toContain(SHORT_CALL);
+
+                // The compact candle-tooltip footnote takes the SHORT form.
+                const tooltipFootnote = source.split('\n').find((line) => line.includes('font-size:10px') && line.includes('pnlCandlesHypothetical'));
+                expect(tooltipFootnote).toBeDefined();
+                if (!tooltipFootnote) throw new Error('GrowthChart hypothetical tooltip footnote not found');
+                expect(tooltipFootnote).toContain(SHORT_CALL);
+
+                // Each form is used exactly once, so neither can be doing both jobs.
+                expect(source.split(SHORT_CALL)).toHaveLength(2);
+                expect(source.split(LONG_CALL).length - 1).toBe(1);
+            });
+
+            it('keeps the LONG value a strict extension of the SHORT one in every locale — the pair must stay two registers of one sentence', () => {
+                for (const locale of LOCALES) {
+                    const bundle = localeBundle(locale);
+                    const short = resolveKey(bundle, 'dashboard.pnlCandlesHypotheticalShort') as string;
+                    const long = resolveKey(bundle, 'dashboard.pnlCandlesHypothetical') as string;
+
+                    expect(typeof short).toBe('string');
+                    expect(typeof long).toBe('string');
+                    expect(long.length, `${locale}: the long form must be the longer of the two`).toBeGreaterThan(short.length);
+                    expect(short.endsWith('.'), `${locale}: the compact footnote must not end in a period`).toBe(false);
+                    expect(long.endsWith('.'), `${locale}: the full caption must end in a period`).toBe(true);
+                }
+            });
+        });
+
+        describe('income-submode window selector: selectIncomeWindow date maths', () => {
+            // Faithful reimplementation of computeIncomeWindowRange, pinned to the real
+            // source by the contract test at the end of this block. `dates` is the
+            // component's ascending list of available ISO dates.
+            type IncomeWindowPreset = '1W' | '1M' | '1Y' | 'all';
+
+            function computeIncomeWindowRangeImpl(dates: string[], preset: IncomeWindowPreset): {startDate: string; endDate: string} | null {
+                if (dates.length === 0) return null;
+                const endDate = dates[dates.length - 1];
+                if (preset === 'all') return {startDate: dates[0], endDate};
+                const daysBack = preset === '1W' ? 7 : preset === '1M' ? 30 : 365;
+                const startMs = new Date(endDate).getTime() - daysBack * 24 * 60 * 60 * 1000;
+                const computedStart = new Date(startMs).toISOString().slice(0, 10);
+                return {startDate: computedStart < dates[0] ? dates[0] : computedStart, endDate};
+            }
+
+            /** A dense ascending ISO-date range, inclusive of both ends. */
+            function isoRange(from: string, to: string): string[] {
+                const out: string[] = [];
+                for (let ms = new Date(from).getTime(); ms <= new Date(to).getTime(); ms += 24 * 60 * 60 * 1000) {
+                    out.push(new Date(ms).toISOString().slice(0, 10));
+                }
+                return out;
+            }
+
+            // Three full years of daily dates: long enough that even 1Y clamps to nothing.
+            const threeYears = isoRange('2023-01-01', '2026-01-01');
+
+            const presetScenarios: Array<[IncomeWindowPreset, number]> = [
+                ['1W', 7],
+                ['1M', 30],
+                ['1Y', 365],
+            ];
+
+            it.each(presetScenarios)('%s counts back exactly %i days from the LAST available date, not from today', (preset, daysBack) => {
+                const range = computeIncomeWindowRangeImpl(threeYears, preset);
+
+                expect(range).not.toBeNull();
+                if (!range) throw new Error('unreachable');
+                // Anchored on the data, never on the wall clock: the last available date is
+                // the end, and the start is exactly `daysBack` calendar days before it.
+                expect(range.endDate).toBe('2026-01-01');
+                expect(range.startDate).toBe(new Date(new Date('2026-01-01').getTime() - daysBack * 86_400_000).toISOString().slice(0, 10));
+                expect(isoRange(range.startDate, range.endDate)).toHaveLength(daysBack + 1);
+            });
+
+            it("'all' spans the entire available range, first date to last", () => {
+                expect(computeIncomeWindowRangeImpl(threeYears, 'all')).toEqual({startDate: '2023-01-01', endDate: '2026-01-01'});
+            });
+
+            const clampScenarios: Array<[IncomeWindowPreset, string[]]> = [
+                ['1W', isoRange('2026-01-01', '2026-01-04')],
+                ['1M', isoRange('2025-12-20', '2026-01-04')],
+                ['1Y', isoRange('2025-06-01', '2026-01-04')],
+            ];
+
+            it.each(clampScenarios)('%s clamps to the earliest available date when the computed start precedes it', (preset, dates) => {
+                const range = computeIncomeWindowRangeImpl(dates, preset);
+
+                expect(range).toEqual({startDate: dates[0], endDate: dates[dates.length - 1]});
+            });
+
+            it('clamping is exactly at the boundary: a start landing ON the earliest date is kept, not nudged', () => {
+                // Exactly 8 dates -> 1W's computed start (endDate - 7 days) IS dates[0].
+                const dates = isoRange('2026-01-01', '2026-01-08');
+
+                expect(computeIncomeWindowRangeImpl(dates, '1W')).toEqual({startDate: '2026-01-01', endDate: '2026-01-08'});
+                // One extra day of history and the computed start is strictly inside.
+                expect(computeIncomeWindowRangeImpl(isoRange('2025-12-31', '2026-01-08'), '1W')).toEqual({startDate: '2026-01-01', endDate: '2026-01-08'});
+            });
+
+            it('returns null for an empty dates array, so the caller leaves the zoom untouched', () => {
+                for (const preset of ['1W', '1M', '1Y', 'all'] as const) {
+                    expect(computeIncomeWindowRangeImpl([], preset)).toBeNull();
+                }
+            });
+
+            it('does not require the computed start to be a date that exists in the series (a sparse/gapped series still gets a window)', () => {
+                // Trading-day style series: only weekdays present. The computed start may
+                // land on a weekend that is absent from `dates` — that is fine, because
+                // buildZoomWindow resolves it by bucketEnd/bucketStart comparison, not by
+                // an exact lookup.
+                const sparse = ['2025-12-01', '2025-12-08', '2025-12-15', '2025-12-22', '2025-12-29'];
+                const range = computeIncomeWindowRangeImpl(sparse, '1W');
+
+                expect(range).toEqual({startDate: '2025-12-22', endDate: '2025-12-29'});
+                expect(sparse).not.toContain('2025-12-23');
+            });
+
+            it('mirrors the exact literal body of computeIncomeWindowRange in GrowthChart.svelte (ties the reimplementation above to the real source)', () => {
+                const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
+                const start = source.indexOf('function computeIncomeWindowRange(preset: IncomeWindowPreset): {startDate: string; endDate: string} | null {');
+                const end = source.indexOf('\n    function formatTooltipMonth(', start);
+                expect(start).toBeGreaterThan(-1);
+                expect(end).toBeGreaterThan(start);
+                if (start < 0 || end <= start) throw new Error('GrowthChart income window contract not found');
+
+                const block = source.slice(start, end);
+                expect(block).toContain('if (dates.length === 0) return null;');
+                expect(block).toContain('const endDate = dates[dates.length - 1];');
+                expect(block).toContain("if (preset === 'all') return {startDate: dates[0], endDate};");
+                expect(block).toContain("const daysBack = preset === '1W' ? 7 : preset === '1M' ? 30 : 365;");
+                expect(block).toContain('const startMs = new Date(endDate).getTime() - daysBack * 24 * 60 * 60 * 1000;');
+                expect(block).toContain('const computedStart = new Date(startMs).toISOString().slice(0, 10);');
+                expect(block).toContain('return {startDate: computedStart < dates[0] ? dates[0] : computedStart, endDate};');
+            });
+
+            it('selectIncomeWindow drives the EXISTING shared zoom rather than a parallel windowing system', () => {
+                // The preset must land in the same visibleStartDate/visibleEndDate +
+                // buildZoomWindow + dataZoom path a manual drag-zoom uses, or the two would
+                // fight and a submode switch would lose the window.
+                const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
+                const start = source.indexOf('function selectIncomeWindow(preset: IncomeWindowPreset) {');
+                const end = source.indexOf('\n    function formatTooltipMonth(', start);
+                expect(start).toBeGreaterThan(-1);
+                expect(end).toBeGreaterThan(start);
+                if (start < 0 || end <= start) throw new Error('GrowthChart selectIncomeWindow contract not found');
+
+                const block = source.slice(start, end);
+                expect(block).toContain('const range = computeIncomeWindowRange(preset);');
+                expect(block).toContain('if (!range || !chartInstance) return;');
+                expect(block).toContain('visibleStartDate = range.startDate;');
+                expect(block).toContain('visibleEndDate = range.endDate;');
+                expect(block).toContain('const zoomWindow = buildZoomWindow(currentResolution, range.startDate, range.endDate);');
+                expect(block).toContain("chartInstance.setOption({dataZoom: [{type: 'inside', ...INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG, start: zoomWindow.start, end: zoomWindow.end}]}, {replaceMerge: ['dataZoom']});");
+            });
+
+            it('exposes one button per implemented preset — 1W/1M/1Y/All, with no Custom entry (a disclosed scope limitation, not a missing testid)', () => {
+                const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
+                const testids = [...source.matchAll(/data-testid="growth-income-window-([\w]+)"/g)].map((m) => m[1]);
+
+                expect(testids).toEqual(['1w', '1m', '1y', 'all']);
+                for (const preset of ['1W', '1M', '1Y', 'all'] as const) {
+                    expect(source).toContain(`onclick={() => selectIncomeWindow('${preset}')}`);
+                }
             });
         });
     });

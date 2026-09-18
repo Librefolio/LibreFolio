@@ -625,6 +625,88 @@ class IncomeHistorySeries(StrictModel):
     missing_fx_pairs: List[str] = Field(default_factory=list, description="'FROM/TO' pairs that could not be converted — affected days are excluded from the sums, not zeroed")
 
 
+class CostHistoryPoint(BaseModel):
+    """One day's signed cost total (batch 2 — FEE + TAX combined, matching the
+    dashboard's existing "Fees & taxes" KPI grouping).
+
+    Source is every scoped, committed FEE/TAX Transaction — asset-linked and
+    broker-level (``asset_id=None``) rows alike. Signed: preserves the raw
+    Transaction.amount sign (negative, per the FEE/TAX convention) rather than
+    flipping to a positive "magnitude" — same signed-fidelity policy as
+    IncomeHistoryPoint. Days with no FEE/TAX activity are omitted entirely
+    (sparse, not a dense zero-filled series).
+    """
+
+    date: date_type
+    cost: Currency = Field(..., description="Signed sum of FEE+TAX transactions for this date (negative, per the DB convention)")
+
+
+class CostHistorySeries(StrictModel):
+    """The full signed cost history (batch 2 — GrowthChart Income submode's costs dimension)."""
+
+    points: List[CostHistoryPoint] = Field(default_factory=list)
+    missing_fx_pairs: List[str] = Field(default_factory=list, description="'FROM/TO' pairs that could not be converted — affected days are excluded from the sums, not zeroed")
+
+
+class DepositHistoryPoint(BaseModel):
+    """One day's deposit total (batch 2 — fresh external cash contributed).
+
+    Source is every scoped, committed DEPOSIT Transaction. Always non-negative
+    per the DEPOSIT type's own sign convention (Transaction.amount > 0). Days
+    with no DEPOSIT activity are omitted entirely (sparse, not a dense
+    zero-filled series).
+    """
+
+    date: date_type
+    deposit: Currency = Field(..., description="Sum of DEPOSIT transactions for this date")
+
+
+class DepositHistorySeries(StrictModel):
+    """The full deposit history (batch 2 — GrowthChart Income submode's deposit-size dimension)."""
+
+    points: List[DepositHistoryPoint] = Field(default_factory=list)
+    missing_fx_pairs: List[str] = Field(default_factory=list, description="'FROM/TO' pairs that could not be converted — affected days are excluded from the sums, not zeroed")
+
+
+class AcquisitionFundingPoint(BaseModel):
+    """One day's BUY funding split between fresh capital and reinvested returns
+    (batch 2 — "new vs reinvested liquidity", plan §5.2).
+
+    Not independently computed: surfaces the engine's own existing per-BUY K/R
+    pool draw (see AcquisitionFundingContribution) — the same value already
+    used internally to update the running capital/returns pool balances, now
+    also exposed as an output. ``from_new_capital + from_reinvested`` equals
+    that day's total BUY cash outflow exactly, by construction (not a
+    residual). Days with no BUY activity are omitted entirely (a genuine gap,
+    not a zeroed row).
+    """
+
+    date: date_type
+    from_new_capital: Currency = Field(..., description="Portion of that day's BUY(s) funded from fresh external capital (K pool)")
+    from_reinvested: Currency = Field(..., description="Portion of that day's BUY(s) funded from reinvested prior returns (R pool)")
+
+
+class AcquisitionFundingSeries(StrictModel):
+    """The full new-vs-reinvested BUY funding history (batch 2 — GrowthChart Income
+    submode's acquisition-size dimension, rendered as a 2-zone stacked bar).
+
+    KNOWN LIMITATION — no ``missing_fx_pairs`` channel, unlike its co-rendered
+    Income-submode siblings (income/cost/deposit). A BUY whose currency has no FX
+    route on its date is skipped by the engine's own pre-existing
+    ``amount_target is None -> continue`` guard before it ever reaches the funding
+    split, so it silently contributes nothing and no data-quality signal surfaces
+    in THIS dimension. That guard is pre-existing engine behaviour (it equally
+    affects the 3-pool/cash-decomposition accounting, not just this series) and the
+    engine's ``missing_fx_pairs`` set is populated only from valuation paths, never
+    from transaction-amount conversion failures — so closing this properly means
+    giving the engine a transaction-level FX-failure output channel, not patching
+    this schema. Documented rather than silently implied complete; same omission as
+    PnlCandleSeries, which shipped with it.
+    """
+
+    points: List[AcquisitionFundingPoint] = Field(default_factory=list)
+
+
 # =============================================================================
 # LOTS ANALYSIS — Bulk FifoLotEngine contract
 # =============================================================================
@@ -1040,6 +1122,9 @@ class PortfolioReportQuery(StrictModel):
     include_broker_pnl_history: bool = Field(False, description="Include per-broker additive P&L history (G1a). Caller sets true only when effective scope has ≥2 brokers.")
     include_pnl_candles: bool = Field(False, description="Include the synthetic total-P&L candle series (G1b). Lazy: caller sets true only on first candle-submode activation — expensive OHLC work stays off ordinary reports.")
     include_income_history: bool = Field(False, description="Include the signed personal DIVIDEND/INTEREST income history (G1c). Caller policy: Dashboard/Broker overview set true eagerly — a sparse, cheap payload, unlike include_pnl_candles.")
+    include_cost_history: bool = Field(False, description="Include the signed FEE+TAX cost history (batch 2). Same sparse/eager caller policy as include_income_history.")
+    include_deposit_history: bool = Field(False, description="Include the DEPOSIT history (batch 2). Same sparse/eager caller policy as include_income_history.")
+    include_acquisition_funding: bool = Field(False, description="Include the new-vs-reinvested BUY funding split (batch 2). Same sparse/eager caller policy as include_income_history.")
 
 
 class PortfolioReportResponse(StrictModel):
@@ -1058,3 +1143,6 @@ class PortfolioReportResponse(StrictModel):
     broker_pnl_history: Optional[List[BrokerPnlHistory]] = Field(None, description="Per-broker additive P&L history (G1a). Only when include_broker_pnl_history=True.")
     pnl_candles: Optional[PnlCandleSeries] = Field(None, description="Synthetic total-P&L candle series (G1b). Only when include_pnl_candles=True.")
     income_history: Optional[IncomeHistorySeries] = Field(None, description="Signed personal DIVIDEND/INTEREST income history (G1c). Only when include_income_history=True.")
+    cost_history: Optional[CostHistorySeries] = Field(None, description="Signed FEE+TAX cost history (batch 2). Only when include_cost_history=True.")
+    deposit_history: Optional[DepositHistorySeries] = Field(None, description="DEPOSIT history (batch 2). Only when include_deposit_history=True.")
+    acquisition_funding: Optional[AcquisitionFundingSeries] = Field(None, description="New-vs-reinvested BUY funding split (batch 2). Only when include_acquisition_funding=True.")

@@ -8,7 +8,21 @@ import {describe, expect, it} from 'vitest';
 import type {RenderedSignal} from '$lib/charts/signals';
 
 import type {LineDataPoint} from '../LineChart.svelte';
-import {aggregateEnvelope, aggregateLineSeries, aggregateOHLCV, bucketEventMarkers, cascadeResolution, chooseInitialResolution, chooseResolution, computeDensity, downsampleRenderedSignal, mapDateToBucket, selectSignalRepresentative, type BucketMeta} from '../timeSeriesAggregation';
+import {
+    aggregateEnvelope,
+    aggregateLineSeries,
+    aggregateOHLCV,
+    aggregateSumSeries,
+    bucketEventMarkers,
+    cascadeResolution,
+    chooseInitialResolution,
+    chooseResolution,
+    computeDensity,
+    downsampleRenderedSignal,
+    mapDateToBucket,
+    selectSignalRepresentative,
+    type BucketMeta,
+} from '../timeSeriesAggregation';
 
 type BucketedPoint = LineDataPoint & BucketMeta;
 const sharedAggregationFixture = JSON.parse(readFileSync(new URL('../../../../../../backend/test_scripts/fixtures/signals/aggregation_profiles.v1.json', import.meta.url), 'utf8')) as {
@@ -111,6 +125,116 @@ describe('timeSeriesAggregation', () => {
 
     it('aggregateLineSeries returns empty array for empty input', () => {
         expect(aggregateLineSeries([], 'monthly')).toEqual([]);
+    });
+
+    // =========================================================================
+    // aggregateSumSeries
+    // =========================================================================
+    //
+    // The flow-series counterpart of aggregateLineSeries. It exists because a sparse
+    // economic flow (a dividend, a fee, a deposit, a day's BUY funding) has no "current
+    // balance" to read at the end of a bucket — only a sum of what occurred inside it.
+    // Aggregating a flow with end-of-period semantics silently reports the LAST day's
+    // value as the whole week's, which is both wrong and invisible: the chart still
+    // renders, the bars are just too small. These tests pin the difference explicitly.
+
+    it('aggregateSumSeries returns the ORIGINAL array by reference at daily resolution', () => {
+        const points = [pt('2026-01-05', 10), pt('2026-01-06', 20)];
+
+        expect(aggregateSumSeries(points, 'daily')).toBe(points);
+    });
+
+    it('aggregateSumSeries returns empty array for empty input', () => {
+        expect(aggregateSumSeries([], 'weekly')).toEqual([]);
+        expect(aggregateSumSeries([], 'monthly')).toEqual([]);
+    });
+
+    it('aggregateSumSeries sums every point in a weekly bucket and carries canonical bucket metadata', () => {
+        // ISO weeks: 01-05..01-11 (Mon–Sun) then 01-12..01-18.
+        const points = [pt('2026-01-05', 10), pt('2026-01-06', 20), pt('2026-01-09', 5), pt('2026-01-12', 7)];
+
+        const result = aggregateSumSeries(points, 'weekly');
+
+        expect(result).toHaveLength(2);
+        expect(result[0] as BucketedPoint).toMatchObject({
+            date: '2026-01-09',
+            value: 35, // 10 + 20 + 5 — NOT 5, which end-of-period semantics would give
+            bucketStart: '2026-01-05',
+            bucketEnd: '2026-01-11',
+            resolution: 'weekly',
+            sourcePointCount: 3,
+            representativeDate: '2026-01-09',
+        });
+        expect(result[1] as BucketedPoint).toMatchObject({date: '2026-01-12', value: 7, sourcePointCount: 1});
+    });
+
+    it('aggregateSumSeries differs from aggregateLineSeries on the same input — the whole reason it exists', () => {
+        const points = [pt('2026-01-05', 10), pt('2026-01-06', 20), pt('2026-01-09', 5)];
+
+        expect(aggregateSumSeries(points, 'weekly')[0].value).toBe(35);
+        expect(aggregateLineSeries(points, 'weekly')[0].value).toBe(5);
+    });
+
+    it('aggregateSumSeries sums across a monthly bucket and starts each bucket from zero', () => {
+        const points = [pt('2026-01-05', 100), pt('2026-01-20', 50), pt('2026-02-02', 8), pt('2026-02-27', 2)];
+
+        const result = aggregateSumSeries(points, 'monthly');
+
+        expect(result).toHaveLength(2);
+        expect(result[0] as BucketedPoint).toMatchObject({value: 150, bucketStart: '2026-01-01', bucketEnd: '2026-01-31', sourcePointCount: 2});
+        // February must be 10, not 160 — the accumulator resets per bucket, it does not run cumulatively.
+        expect(result[1] as BucketedPoint).toMatchObject({value: 10, bucketStart: '2026-02-01', bucketEnd: '2026-02-28', sourcePointCount: 2});
+    });
+
+    it('aggregateSumSeries keeps signed values signed and can net a bucket to zero', () => {
+        // Costs are negative, a legacy correction can be positive: the sum is signed
+        // arithmetic, never a magnitude. A bucket that genuinely nets to 0 must report 0
+        // (an event happened and cancelled out), not be dropped.
+        const points = [pt('2026-01-05', -30), pt('2026-01-06', -12), pt('2026-01-07', 42)];
+
+        const result = aggregateSumSeries(points, 'weekly');
+
+        expect(result).toHaveLength(1);
+        expect(result[0].value).toBe(0);
+    });
+
+    it('aggregateSumSeries sums a purely negative bucket without flipping its sign', () => {
+        const points = [pt('2026-03-02', -3), pt('2026-03-03', -9)];
+
+        expect(aggregateSumSeries(points, 'weekly')[0].value).toBe(-12);
+    });
+
+    it('aggregateSumSeries inherits every non-value field from the LAST point of the bucket', () => {
+        // Only `value` is recomputed; the rest of the shape comes from the bucket's last
+        // point (spread first, then overwritten) — the same convention aggregateLineSeries
+        // uses, which is what keeps the two interchangeable at the call site.
+        const points = [pt('2026-01-05', 10, {staleDays: 7, close: 111}), pt('2026-01-06', 20, {staleDays: 1, close: 222})];
+
+        const result = aggregateSumSeries(points, 'weekly');
+
+        expect(result[0]).toMatchObject({value: 30, staleDays: 1, close: 222});
+    });
+
+    it('aggregateSumSeries puts a cross-year ISO week in a single bucket', () => {
+        // 2025-12-29 (Mon) .. 2026-01-04 (Sun) is one ISO week spanning two years.
+        const points = [pt('2025-12-31', 4), pt('2026-01-02', 6), pt('2026-01-05', 1)];
+
+        const result = aggregateSumSeries(points, 'weekly');
+
+        expect(result).toHaveLength(2);
+        expect(result[0] as BucketedPoint).toMatchObject({value: 10, bucketStart: '2025-12-29', bucketEnd: '2026-01-04'});
+        expect(result[1].value).toBe(1);
+    });
+
+    it('aggregateSumSeries preserves total mass: the sum of the buckets equals the sum of the inputs', () => {
+        const values = [3, -7, 11, 0, 25, -1, 4, 9, -12, 6];
+        const points = values.map((v, i) => pt(`2026-01-${String(i + 1).padStart(2, '0')}`, v));
+        const total = values.reduce((a, b) => a + b, 0);
+
+        for (const resolution of ['weekly', 'monthly'] as const) {
+            const bucketed = aggregateSumSeries(points, resolution);
+            expect(bucketed.reduce((a, p) => a + p.value, 0)).toBe(total);
+        }
     });
 
     // =========================================================================
