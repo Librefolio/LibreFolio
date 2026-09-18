@@ -325,6 +325,8 @@ describe('riskStore', () => {
     it('builds mutually exclusive MC and QMC simulation controls', () => {
         expect(
             buildSimulationParameters({
+                process: 'gbm',
+                regime: 'none',
                 samplingMethod: 'mc',
                 horizonDays: 365,
                 pathCount: 8192,
@@ -333,6 +335,7 @@ describe('riskStore', () => {
             }),
         ).toEqual({
             process: 'gbm',
+            regime: 'none',
             sampling_method: 'mc',
             horizon_days: 365,
             path_count: 8192,
@@ -340,6 +343,8 @@ describe('riskStore', () => {
         });
         expect(
             buildSimulationParameters({
+                process: 'gbm',
+                regime: 'none',
                 samplingMethod: 'qmc',
                 horizonDays: 365,
                 pathCount: 8192,
@@ -348,6 +353,7 @@ describe('riskStore', () => {
             }),
         ).toEqual({
             process: 'gbm',
+            regime: 'none',
             sampling_method: 'qmc',
             horizon_days: 365,
             path_count: 8192,
