@@ -1456,6 +1456,170 @@ A separate owner integrates G3 after F and the backend calendar signal:
 > pixels, **zero** console errors, canvas signature **changes** on range change
 > (repaint live), legend reads `Total P&L · Interactive Brokers · Coinbase`.
 
+### 6.0.5 Post-review UI pass + the invisible-candle finding (2026-09-18)
+
+> **⚠️ Fuori pista (candles were painting all along; the defect was data shape, 2026-09-18):**
+> after the crash fix shipped, the developer re-reviewed and still saw no candles. I had
+> reported "181 green + 1331 red body pixels". Both were true, and reconciling them
+> produced the most useful finding of the round.
+>
+> **My measurement was unsound.** It counted coloured pixels anywhere on the canvas and
+> inferred "candles are visible" from the count being non-zero. Those pixels were real,
+> but the metric could not distinguish *candle bodies painted* from *something coloured
+> exists*. Worse: the same run captured a candles-mode screenshot that I never opened —
+> I opened the Line-mode one, saw it healthy, and deleted both. The decisive artefact was
+> on disk the whole time.
+>
+> Re-measured by column profile: **102 colour-bearing columns for 93 points, tallest
+> vertical run 11px on a 360px plot**. The candles were drawn from the start and were too
+> small to see. Console silent in candles submode throughout, so the series initialised
+> cleanly — the crash fix was genuinely complete.
+>
+> Root cause, correlation exact: **310 of 354 candles were flat because the portfolio held
+> no assets before 2026-07-30**, the date of the first BUY. A synthetic candle composes
+> from held assets' OHLC; with nothing held, `{o,h,l} = offset = close` and a flat candle
+> is the *correct* output. The 44 non-flat ones ran 2026-07-30 → 2026-09-18 exactly.
+> `price_history` was sound (1547/1549 rows with `high > low`) — and my earlier "1549/1549
+> with full OHLC" check had verified the columns were *present*, never that they *varied*.
+>
+> Not the caller, not the null, not the renderer. Lane data was enriched with a plain
+> monthly accumulation (Oct-2025 → Jun-2026, quantities fixed, amounts computed from real
+> closing prices, funded by deposits that had sat idle): holdings **51 → 338 days**, flat
+> candles **310/354 → 15/354**, 3M window **0 flat**. Deliberately *not* tuned until the
+> chart looked good — the full-range median candle is still **1.75%** of the true rendered
+> y-span, and that thinness is the evidence that motivates the width ladder.
+>
+> **`yAxis: {scale: true}` was considered and rejected on verified grounds**: `scale:`
+> appears nowhere in this component, so the axis includes zero by default, and zero is
+> load-bearing — the P&L series fills green above it and red below, plus a dashed
+> reference line. Removing zero from frame would make the chart misstate the sign of the
+> user's P&L: a semantic change wearing a display tweak's costume. The thin-candle problem
+> belongs to the ladder instead, because OHLC aggregation takes `max(high)`/`min(low)`
+> across merged buckets, so candle range is monotonically non-decreasing in bucket width —
+> the body grows while the axis span stays put. That is arithmetic, not hope.
+
+> **⚠️ Fuori pista (the replacement metric was also unsound, 2026-09-18):** the column
+> profile that corrected the pixel sum then under-reported in turn — median run 3px against
+> an API-derived expectation of ~13px — because it mis-measures thin, bordered, ~5px-wide
+> strokes broken by wick geometry. Relaxing the saturation threshold moved coloured columns
+> 322 → 445 and left the runs unchanged, so anti-aliasing alone did not explain it.
+>
+> The durable guard is therefore **not** "use column profile instead of pixel sum". It is:
+> **any proxy must be calibrated against ground truth before it can carry a verdict.** The
+> criterion adopted for the ladder is the *ratio of median candle range to the true
+> rendered y-span, computed from the API*, with the screenshot as confirming artefact —
+> no canvas-derived number is allowed to carry a verdict.
+>
+> Related correction on the same numbers: the first ratio cited used the **close-span**
+> (5889) as denominator rather than the true rendered span (6686), which also includes the
+> broker-overlay extremes and the 8% `yAxis.min` pad. Right instrument, wrong baseline.
+> And the *largest* candle was the flattering statistic all along — one outlier day says
+> nothing about a year; the **median** is what characterises the defect.
+
+> **Note implementazione (three UI items, 2026-09-18):**
+>
+> 1. **Overlay/axis overlap.** The submode toggle was drawn over the y-axis "600" label.
+>    Fixed by reserving a band in `grid.top` (44px in P&L mode, 10px elsewhere) rather than
+>    nudging the overlay: the plot then gives away exactly the space it yields instead of
+>    silently drawing content underneath a control, which keeps it honest at small heights.
+>    Measured: toggle bottom 33px from chart top at desktop, 31px at mobile — both inside
+>    the band.
+> 2. **Icons.** `ChartLine` / `ChartCandlestick` / `Coins` from `lucide-svelte`; the first
+>    two deliberately match `PriceChartFull`'s existing choices so the same concept reads
+>    the same across the app.
+> 3. **Mobile fold.** Below `sm` the labels hide and only icons remain. Verified at **both**
+>    breakpoints rather than assumed from the class name: 1400px icon + label, 420px icon
+>    only. `data-testid` is **identical** in both states — a testid that changed with
+>    viewport would make every E2E selector viewport-dependent — and the label survives as
+>    `title` + `aria-label` in both, so the control stays usable with a screen reader
+>    exactly where it is hardest to use. Added `aria-pressed` unprompted: a segmented
+>    toggle without it announces three buttons and no state, which is worst on mobile where
+>    the icon is the only remaining affordance.
+>
+> **Evidence that the testid-stability rule earns its keep:** this was a full markup
+> rewrite of all three buttons — element structure, classes, children, added attributes —
+> and test-author's contract tests passed **162/162 untouched**, because they assert
+> `data-testid` and `onclick` handlers rather than markup. A constraint people usually find
+> annoying paid for itself in a single pass.
+>
+> Gates: svelte-check 0 errors, `chartCoreHelpers` 162/162, Prettier clean, front build
+> clean, zero console errors at both viewports.
+
+> **⚠️ Fuori pista (the `grid.top` fix was rejected — the brief, not the patch, was wrong,
+> 2026-09-18):** reserving a 44px band pushed the plot down, and the developer had asked
+> for the control to stop sitting on the y-axis *numbers* while still floating over the
+> plot — horizontal room, not vertical. The request reached me as "padding" plus the
+> symptom, with the axis never named, so the patch solved the brief it was given. Reverted
+> to `top: '10px'` unconditionally.
+>
+> The replacement is the part worth keeping. `grid.left` and the overlay cluster's `left`
+> are now **one shared constant** (`CHART_PLOT_LEFT_PX`), because with `containLabel: true`
+> the gutter width is **computed by ECharts from the widest tick label** — so any
+> independently-chosen CSS offset would clear today's labels and silently desynchronise the
+> first time one grew (another base currency, a larger portfolio, a negative thousands
+> value). Two magic numbers whose agreement is a coincidence is the defect; one number with
+> two uses is the fix. Measured after the change: toggle left edge 53px against
+> `grid.left` 52 — the 1px is the button border.
+>
+> Also verified a collision that **did not exist before this change set**: widening the
+> zoom-selector guard (all three submodes) and moving the cluster rightward make the two
+> clusters approach from opposite sides. Worst case is 420px in candles submode — a state
+> created only by the two changes together. Measured 145px cluster right edge against
+> 199px selector left edge: **54px clear**, no overlap, zero console errors.
+
+> **Note implementazione (zoom selector in all P&L submodes + rename, 2026-09-18):** the
+> `1W/1M/1Y/All` selector was rendered only in the income submode, but `selectZoomWindow`
+> had always written the **shared** `visibleStartDate`/`visibleEndDate` + dataZoom — so the
+> mechanism already worked everywhere and only the `{#if}` guard was income-specific.
+> Widening it to `viewMode === 'pnl'` exposed a capability that existed rather than adding
+> one.
+>
+> That falsified the naming, so it was renamed in the same commit rather than left for the
+> ladder work: `selectIncomeWindow` → `selectZoomWindow`, `computeIncomeWindowRange` →
+> `computeZoomWindowRange`, `IncomeWindowPreset` → `ZoomWindowPreset`, `incomeWindowPreset`
+> → `zoomWindowPreset`, testids `growth-income-window-*` → `growth-zoom-window-*`. Blast
+> radius measured before deciding, not weighed: **two files, one regex** outside the
+> component, **zero E2E specs**. The names also now align with the **existing**
+> `buildZoomWindow` in the same file, so this is consistency with established vocabulary
+> rather than a new coinage — and "zoom" keeps it distinct from the candle-**width** ladder
+> (DBT-7), which is a different control answering a different question. A commit that
+> falsifies a name and leaves it is committing a known falsehood on purpose.
+
+> **⚠️ Fuori pista (candles still render as lines at high zoom — OPEN, 2026-09-18):** the
+> developer reported candles rendering as lines at a **seven-day** x-axis. Reproduced via
+> their exact path (income → 1W → candles). At that zoom the data says candles should be
+> **large**: 8 points, median range 301 against a 4747 span including the broker overlay →
+> **11.4% of height, ~34px**. Measured tallest coloured run: **11px**. Expected and
+> observed disagree by 3×, and at eight visible points a candle *cannot* be thin — so this
+> is **not** DBT-7 (thin-at-wide-range) wearing a different hat.
+>
+> Two hypotheses killed by measurement rather than reading: the y-axis **does** rescale on
+> zoom (axis labels change between full and 1W), and the missing `filterMode` is **not** the
+> cause because ECharts' default for `type:'inside'` is already `'filter'`.
+>
+> **Latent inconsistency recorded on the way past:** `GrowthChart` hand-rolls its dataZoom
+> and spreads only `INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG` (scroll-safety flags), so it never
+> sets `filterMode: 'filter'` the way the shared `buildDataZoom()` helper does. Harmless
+> today because it matches the default — written down so the next person finds it instead
+> of rediscovering it.
+>
+> **No conclusion recorded on purpose.** The remaining instrument is the column profile,
+> which R11 has already caught under-reporting twice on exactly this shape (thin, bordered,
+> ~5px strokes broken by wick geometry). Reporting "candles are 11px" as fact would be the
+> third instance. Next step is to **calibrate the profile against a case whose true height
+> is independently computable from the API**, then either it earns a verdict or it is
+> retired — uncalibrated disqualifies a proxy, it does not disqualify it forever.
+
+> **Open question (not a defect — 2026-09-13 P&L spike, 2026-09-18):** total P&L runs
+> ≈1641 → ≈373 → ≈1984 across three consecutive days: a ~1300 single-day round trip.
+> Surprising, not demonstrably wrong, so recorded as a question rather than a finding.
+> It is **not** orthogonal to the developer's symptom, though it is orthogonal to the 3×
+> discrepancy above: the spike sits inside the 1W window and inflates the axis the candles
+> are measured against — remove it and the window's P&L span falls from ≈1611 to ≈343. Two
+> separate questions therefore: *why is observed 3× below expected* (open), and *why is
+> expected itself only 11%* (partly this spike). Either a mock-data artefact or a P&L
+> computation defect; not chased.
+
 ## 6. Dependency-safe phases and owners
 
 | Phase | Size | Owner | Dependency | Deliverable | Status |
