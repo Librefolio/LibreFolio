@@ -279,6 +279,79 @@ della scaletta seguente, e di rinviare i livelli 4 e 5:
 | 4 | Markov-switching / HMM **calibrato** | 📋 rinviato — questo TODO |
 | 5 | Heston / Bates / Merton (volatilità stocastica, salti) | 📋 rinviato — questo TODO |
 
+### Livello 2 — GJR-GARCH: perché è uscito dalla v1
+
+**Data**: 17 Settembre 2026 · misurato su QuantLib 1.43, non dedotto.
+
+Il piano dava per scontato che il GJR-GARCH fosse «nativo QuantLib, calibrabile
+dalla sola serie prezzi». **È falso.** Misura eseguita sul runtime reale:
+
+```text
+hasattr(ql, 'Garch11')                              -> False
+GJRGARCHModel.calibrate(self, CalibrationHelperVector, OptimizationMethod, ...)
+issubclass(GJRGARCHProcess, ql.StochasticProcess1D) -> False    factors() -> 2
+```
+
+Due fatti, entrambi bloccanti:
+
+1. `ql.GJRGARCHModel` è un modello di **pricing di opzioni**: il suo
+   `calibrate()` accetta `CalibrationHelperVector`, cioè quotazioni di opzioni —
+   la stessa identica API di `HestonModel`. `GJRGARCHProcess` **pretende**
+   `v0, omega, alpha, beta, gamma, lambda` già stimati. L'obiezione con cui
+   questo stesso documento rinvia il livello 5 («richiede una superficie di
+   volatilità implicita da opzioni») si applica **identica** al livello 2.
+2. `ql.Garch11` — l'unica classe QuantLib che calibra per massima verosimiglianza
+   da una serie di **rendimenti** — non è esposta nei binding Python SWIG.
+   Esiste in C++, non nel nostro runtime.
+3. Anche avendo i parametri, `GJRGARCHProcess` non entra nell'architettura
+   attuale: non è un `StochasticProcess1D` e ha due fattori, mentre il motore
+   costruisce `StochasticProcessArray`, che accetta **solo** componenti 1-D.
+
+### La strada, quando si riaprirà
+
+La libreria `arch` fa esattamente ciò che serve: un GJR-GARCH(1,1,1) su 1 250
+osservazioni si stima in **22 ms**. È già presente nell'ambiente come
+**dipendenza transitiva** di `riskfolio-lib` (`arch>=7.0`), ma **non è dichiarata
+nel `Pipfile`**.
+
+Nessuna delle due scorciatoie è accettabile:
+
+- **appoggiarsi alla transitiva** significa che il giorno in cui `riskfolio-lib`
+  smette di dipendere da `arch`, il nostro GARCH sparisce **senza che nulla
+  fallisca** in modo visibile;
+- **promuoverla al volo** tocca l'ambiente Python condiviso da tutte le lane di
+  sviluppo attive, e va fatto dal developer a lane congelate.
+
+Precondizione per riprendere il livello 2: `arch` promossa a dipendenza diretta
+in `Pipfile` con lock rigenerato. Da lì il lavoro è contenuto — univariato
+sull'aggregato di portafoglio, innestato sul campionatore esistente.
+
+
+### Preset di crisi — la forma preferita per il seguito
+
+Il preset «crisi prolungata» consegnato in v1 usa un **pavimento scalare**:
+oscillazioni ×2,5 e deriva −20% annuo applicate ai blocchi ricampionati. È
+onesto — l'ipotesi è dichiarata a schermo con i suoi numeri — ma i numeri sono
+**prescritti**, non osservati.
+
+La forma preferita, quando si riaprirà, è il **ricampionamento condizionato**:
+estrarre i blocchi **solo** dalle finestre del decile peggiore della storia
+reale del portafoglio. Il vantaggio non è di precisione, è di natura:
+
+- l'ipotesi a schermo non conterrebbe **nessun numero dichiarato** — direbbe
+  «ricampionati i tuoi periodi peggiori», e sarebbe verificabile dall'utente;
+- la correlazione salirebbe **perché è salita davvero** nelle crisi vissute da
+  quel portafoglio, invece di restare invariata come impone una trasformazione
+  scalare (vedi la nota su `resampling.py`: su un ricampionamento congiunto
+  scalare e traslare lasciano la correlazione di Pearson matematicamente
+  invariata).
+
+Condizione vincolante, da rispettare il giorno in cui si implementa: se la
+storia disponibile **non contiene** un periodo abbastanza severo, il risultato
+**si dichiara**, non si fabbrica. Un decile peggiore calcolato su tre anni di
+mercato toro non è una crisi, ed è esattamente il tipo di numero che questa
+campagna esiste per non produrre.
+
 ### Livello 4 — Markov-switching calibrato
 
 Concettualmente è la risposta esatta a «simula i cambi di fase di mercato»: due o tre
