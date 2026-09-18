@@ -43,6 +43,8 @@ from backend.app.schemas.risk import (
     RiskResultMetadata,
     RiskResultStatus,
     RiskReturnBasis,
+    RiskReturnItem,
+    RiskReturnOutput,
     RiskSamplingStrategy,
     RiskScopeKind,
     RiskStressApplicationRule,
@@ -672,6 +674,100 @@ def test_risk_drawdown_output_open_episode_forbids_recovery_date():
 def test_risk_drawdown_output_recovered_requires_recovery_date():
     with pytest.raises(ValidationError, match="recovered episodes require a recovery date"):
         RiskDrawdownOutput(**_drawdown_output(maximum_drawdown_recovery_date=None))
+
+
+def _risk_return_output(**overrides):
+    base = {
+        "portfolio_volatility": 0.06,
+        "portfolio_expected_annual_return": 0.09,
+        "cash_weight": 0.25,
+        "items": [
+            {
+                "asset_id": 1,
+                "weight": 0.5,
+                "volatility": 0.29,
+                "expected_annual_return": 0.46,
+            },
+            {
+                "asset_id": 6,
+                "weight": 0.25,
+                "volatility": 0.88,
+                "expected_annual_return": -0.11,
+            },
+        ],
+    }
+    base.update(overrides)
+    return base
+
+
+def test_risk_return_output_round_trips_through_the_discriminated_result_union():
+    output = RiskReturnOutput(**_risk_return_output())
+    payload = output.model_dump(mode="json")
+    assert payload["kind"] == "risk_return"
+    assert [item["asset_id"] for item in payload["items"]] == [1, 6]
+
+    result = RiskAnalyticResult(
+        instance_id="rr",
+        analytic_code="asset_risk_return",
+        status=RiskResultStatus.OK,
+        output=payload,
+        metadata=RiskResultMetadata(
+            analyzed_range=DateRangeModel(start=date(2026, 1, 2), end=date(2026, 1, 8)),
+            n_observations=6,
+            calendar_days=6,
+            annualization_factor=6 * 365 / 6,
+            coverage=1.0,
+            currency="EUR",
+            scope=RiskScopeKind.PORTFOLIO,
+            scope_reference="portfolio",
+            mode=RiskMode.CURRENT_COMPOSITION,
+            composition_policy=RiskCompositionPolicy.CURRENT_BUY_AND_HOLD,
+            return_basis=RiskReturnBasis.PRICE_ONLY,
+            algorithm_version="1.0.0",
+            computed_at=datetime.now(UTC),
+        ),
+        data_quality=DataQualityReport(),
+    )
+    assert isinstance(result.output, RiskReturnOutput)
+    assert result.output.kind == RiskOutputKind.RISK_RETURN
+
+    # The plugin drops any holding it cannot measure a dispersion for, so a plot with
+    # no points at all is a reachable state rather than a malformed one: the whole is
+    # still measured on the primary series, and cash still accounts for the rest.
+    empty = RiskReturnOutput(portfolio_volatility=0.06, portfolio_expected_annual_return=0.09)
+    assert empty.items == []
+    assert empty.cash_weight == 0
+    assert RiskReturnOutput.model_validate(empty.model_dump(mode="json")) == empty
+
+
+def test_risk_return_output_bounds_the_risk_axis_but_not_the_reward_axis():
+    """The asymmetry the two constraints encode, one case per axis.
+
+    A holding that lost money over the window has a negative expected return and has
+    to stay plottable — clamping it at zero would move the point onto a coordinate
+    nobody measured. A negative volatility is not a measurement but a sign error, and
+    ``ge=0`` is what stops one reaching an axis.
+    """
+    losing = RiskReturnItem(asset_id=6, weight=0.25, volatility=0.88, expected_annual_return=-0.11)
+    assert losing.expected_annual_return < 0
+    assert RiskReturnOutput(**_risk_return_output(portfolio_expected_annual_return=-0.4)).portfolio_expected_annual_return < 0
+
+    with pytest.raises(ValidationError):
+        RiskReturnItem(asset_id=6, weight=0.25, volatility=-0.88, expected_annual_return=-0.11)
+    with pytest.raises(ValidationError):
+        RiskReturnOutput(**_risk_return_output(portfolio_volatility=-0.01))
+    with pytest.raises(ValidationError):
+        RiskReturnOutput(**_risk_return_output(cash_weight=-0.01))
+    with pytest.raises(ValidationError):
+        RiskReturnItem(asset_id=0, weight=0.25, volatility=0.88, expected_annual_return=-0.11)
+    with pytest.raises(ValidationError):
+        RiskReturnOutput(**_risk_return_output(portfolio_volatility=float("nan")))
+
+    # The pair is published *because* the slope through a zero intercept already is
+    # the Sharpe ratio. Adding it as a field would state it twice and let the two
+    # disagree, so the strict model refuses the key rather than accepting a duplicate.
+    with pytest.raises(ValidationError):
+        RiskReturnOutput(**_risk_return_output(portfolio_sharpe=1.45))
 
 
 def test_portfolio_scope_asset_slice_is_unique_sorted_and_bounded():
