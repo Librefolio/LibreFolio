@@ -98,6 +98,43 @@ export type PortfolioIncomeHistorySeries = {
     missing_fx_pairs: string[];
 };
 
+// Signed FEE+TAX cost history types — define inline, mirroring the pattern above.
+// Batch 2: costs dimension for GrowthChart's P&L income submode.
+export type PortfolioCostHistoryPoint = {
+    date: string;
+    cost: {code: string; amount: string};
+};
+
+export type PortfolioCostHistorySeries = {
+    points: PortfolioCostHistoryPoint[];
+    missing_fx_pairs: string[];
+};
+
+// DEPOSIT history types — define inline, mirroring the pattern above. Batch 2:
+// deposit-size dimension for GrowthChart's P&L income submode.
+export type PortfolioDepositHistoryPoint = {
+    date: string;
+    deposit: {code: string; amount: string};
+};
+
+export type PortfolioDepositHistorySeries = {
+    points: PortfolioDepositHistoryPoint[];
+    missing_fx_pairs: string[];
+};
+
+// New-vs-reinvested BUY funding split types — define inline, mirroring the pattern
+// above. Batch 2: acquisition-size dimension (2-zone stacked bar) for GrowthChart's
+// P&L income submode.
+export type PortfolioAcquisitionFundingPoint = {
+    date: string;
+    from_new_capital: {code: string; amount: string};
+    from_reinvested: {code: string; amount: string};
+};
+
+export type PortfolioAcquisitionFundingSeries = {
+    points: PortfolioAcquisitionFundingPoint[];
+};
+
 // For allocation history dimensions we use the report type (no separate direct endpoint)
 type RawAlloc = PortfolioReport['allocation_history'];
 export type AllocationHistoryDimensions = Extract<NonNullable<RawAlloc>, {type?: unknown}>;
@@ -178,6 +215,13 @@ export function portfolioError(): string | null {
  * @param options.includeIncomeHistory — Request income_history (G1c signed DIVIDEND/
  *   INTEREST history). Eager — a sparse, cheap payload; Dashboard/Broker overview set
  *   this true on every ordinary load, unlike includePnlCandles.
+ * @param options.includeCostHistory — Request cost_history (batch 2 signed FEE+TAX
+ *   history). Same eager/sparse caller policy as includeIncomeHistory.
+ * @param options.includeDepositHistory — Request deposit_history (batch 2 DEPOSIT
+ *   history). Same eager/sparse caller policy as includeIncomeHistory.
+ * @param options.includeAcquisitionFunding — Request acquisition_funding (batch 2
+ *   new-vs-reinvested BUY funding split). Same eager/sparse caller policy as
+ *   includeIncomeHistory.
  */
 export async function fetchReport(
     brokerIds?: number[],
@@ -189,11 +233,14 @@ export async function fetchReport(
     includeBreakdown = false,
     includeHistory = true,
     includeAllocationHistory = true,
-    options?: {includeBrokerPnlHistory?: boolean; includePnlCandles?: boolean; includeIncomeHistory?: boolean},
+    options?: {includeBrokerPnlHistory?: boolean; includePnlCandles?: boolean; includeIncomeHistory?: boolean; includeCostHistory?: boolean; includeDepositHistory?: boolean; includeAcquisitionFunding?: boolean},
 ): Promise<PortfolioReport | null> {
     const includeBrokerPnlHistory = options?.includeBrokerPnlHistory ?? false;
     const includePnlCandles = options?.includePnlCandles ?? false;
     const includeIncomeHistory = options?.includeIncomeHistory ?? false;
+    const includeCostHistory = options?.includeCostHistory ?? false;
+    const includeDepositHistory = options?.includeDepositHistory ?? false;
+    const includeAcquisitionFunding = options?.includeAcquisitionFunding ?? false;
     const key =
         makeCacheKey(brokerIds, dateFrom, dateTo, targetCurrency) +
         (includeContribution ? '|contrib' : '') +
@@ -202,7 +249,10 @@ export async function fetchReport(
         (includeAllocationHistory ? '' : '|noalloc') +
         (includeBrokerPnlHistory ? '|brokerpnl' : '') +
         (includePnlCandles ? '|pnlcandles' : '') +
-        (includeIncomeHistory ? '|incomehist' : '');
+        (includeIncomeHistory ? '|incomehist' : '') +
+        (includeCostHistory ? '|costhist' : '') +
+        (includeDepositHistory ? '|deposithist' : '') +
+        (includeAcquisitionFunding ? '|acqfunding' : '');
     const requestSessionGeneration = getClientSessionGeneration();
     const requestCacheGeneration = cacheGeneration;
 
@@ -229,6 +279,9 @@ export async function fetchReport(
                 include_broker_pnl_history: includeBrokerPnlHistory,
                 include_pnl_candles: includePnlCandles,
                 include_income_history: includeIncomeHistory,
+                include_cost_history: includeCostHistory,
+                include_deposit_history: includeDepositHistory,
+                include_acquisition_funding: includeAcquisitionFunding,
             };
             if (brokerIds && brokerIds.length > 0) body.broker_ids = brokerIds;
             if (dateFrom || dateTo) {

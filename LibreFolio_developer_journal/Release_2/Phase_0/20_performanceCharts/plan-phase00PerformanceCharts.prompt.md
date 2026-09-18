@@ -1113,6 +1113,253 @@ A separate owner integrates G3 after F and the backend calendar signal:
 > selectors + costs/deposit/acquisition-size aggregates + new-vs-reinvested
 > liquidity split) as its own phase per developer/coordinator sequencing.
 
+### 6.0.2 Crypto icon fix — Asset Allocation history chart (2026-09-18)
+
+> **Note implementazione (crypto icon, 2026-09-18):** developer reported the
+> Crypto category's icon invisible in the Asset Allocation history chart, unlike
+> Liquidity/Stock. Root-caused via a throwaway Playwright zoomed screenshot
+> (deviceScaleFactor 3, hover-triggered to reproduce the exact reported state):
+> `AllocationHistoryChart.svelte`'s `getCategoryEmoji()` used `'₿'` (Bitcoin
+> currency sign, U+20BF) — **not a real emoji**, unlike every other category.
+> It has no color-emoji font coverage, so it renders as a thin pale gray
+> system-font glyph, nearly invisible against the chart's light area fill.
+> Both of the developer's hypotheses were partially right: primarily a
+> "not an emoji" font-rendering issue, secondarily compounded by sitting in
+> the thinnest topmost band. Fixed by swapping to `'🪙'` (coin, a genuine color
+> emoji) — the only `₿` occurrence anywhere in the frontend (grepped). Re-verified
+> visually with the same zoom+hover technique: now bold, gold, clearly visible,
+> matching the other categories' visual weight. Gates: svelte-check 0 errors,
+> Vitest 4759/4759 unchanged (no test referenced the old glyph), Prettier clean.
+
+> **⚠️ Fuori pista (lane DB wipe discovered, 2026-09-18):** running the backend
+> pytest categories for the checkpoint's fresh evidence **wiped this lane's
+> manually-populated review DB back to empty** (0 users/brokers/prices) — those
+> suites reset the shared test DB as part of their own fixture setup, not
+> expecting a hand-populated "for manual review" state to persist alongside them.
+> Had to re-run `db populate --force` before the investigation could even start.
+> Durable lesson recorded for every future manual-review session on any lane:
+> **backend pytest on a lane's data-dir always resets it**, so manual review data
+> must be treated as ephemeral across test runs, not just across server restarts.
+
+### 6.0.3 Batch 2 — income package (2026-09-18)
+
+> **Note implementazione (batch 2 backend, 2026-09-18):** developer authorized the
+> full package verbatim ("autorizzo a procedere con i prossimi task, la mia review
+> parte quando la ui sarà pronta e sarà sia estetica che funzionale"), no per-item
+> sign-off. Implemented four new backend aggregates for the Income submode:
+>
+> - `get_cost_history()` (FEE+TAX summed into one signed figure per date,
+>   preserving the raw negative sign rather than flipping to a positive
+>   magnitude — same signed-fidelity policy as G1c's income), `get_deposit_history()`
+>   (DEPOSIT), both pure transaction scans like `get_income_history`.
+> - Extracted `_signed_transaction_sums_by_date()` out of the original
+>   `get_income_history` as a shared, behavior-preserving helper for all three —
+>   same (date_from, date_to] boundary, same F2 OWNER-share scaling, same
+>   FX-missing exclusion/reporting contract. This is the one method that was
+>   *refactored* rather than merely extended, so its unchanged behavior is an
+>   explicit test-author verification target.
+> - `get_acquisition_funding_history()` — unlike the three scans above, this
+>   **requires an engine run**: the new-vs-reinvested split depends on K/R pool
+>   state accumulated over the entire prior history, not the day's transactions in
+>   isolation. Mirrors `get_pnl_candles()`'s dual-mode
+>   (`_precomputed_engine_result` vs standalone) exactly.
+> - `portfolio_engine.py`: new `AcquisitionFundingContribution` dataclass +
+>   `DailyPortfolioState.acquisition_funding` + `compute_acquisition_funding`
+>   opt-in + `build_acquisition_funding()` derived view. The actual capture is
+>   **two additive lines at the existing frame-loop BUY mutation site**: the engine
+>   ALREADY computes `from_r`/`from_k` for every BUY to update the 3-pool
+>   balances — batch 2 only stops discarding them. Per the coordinator's explicit
+>   instruction this surfaces an existing validated computation and does **not**
+>   invent a new reinvestment model. `from_new_capital + from_reinvested`
+>   reproduces that day's total BUY outflow by construction, never a residual.
+> - Deliberate asymmetry vs `pnl_candle` on stationary days: a candle carries
+>   forward (`pnl_candle=prev.pnl_candle`), acquisition funding does **not**
+>   (`acquisition_funding=None`) — a stationary day has zero transactions so can
+>   never have a BUY, whereas a candle legitimately stays flat.
+> - Both cache layers updated proactively: `include_acquisition_funding` in the L1
+>   blob key, all three new flags in the L2 report key. (This exact
+>   cache-key-omission bug class was caught twice before in this file's history
+>   during G1b — fixed pre-emptively this time rather than found later.)
+> - Pre-frame BUY branch deliberately untouched: pre-frame days emit no
+>   `DailyPortfolioState`, so there is nothing to attach output to; those BUYs
+>   still correctly feed the pool state that seeds the frame.
+>
+> All hunks kept narrow and additive at existing mutation sites, with zero
+> restructuring or reformatting of surrounding code, per the standing
+> shared-file rule (`portfolio_engine.py`/`portfolio_service.py` are shared with
+> the concurrent Risk-management effort; developer accepted resolving at merge).
+>
+> Gates: `services portfolio-engine` 42/42, `services roi-fifo-utils` 437/437,
+> `api portfolio` 25/25, ruff clean, black clean.
+
+> **Note implementazione (batch 2 frontend, 2026-09-18):** `GrowthChart.svelte`
+> Income submode grew from a fixed 2-slot series array (dividend/interest) to a
+> fixed 6-slot one — `[dividend, interest, costs, deposit, acqNewCapital,
+> acqReinvested]` — with both `buildChartUpdateSeries` and `buildFullSeries`
+> agreeing on that exact index order (a mismatch would silently swap two bars'
+> data, so it is an explicit test target). dividend+interest keep their existing
+> `stack:'income'`; costs and deposit are standalone bars; acquisition is a 2-zone
+> `stack:'acquisition'` bar **reusing EUR mode's own `cashContributed`/
+> `cashGenerated` colors** — the same underlying K/R-pool concept, so the same
+> color means the same thing across the app rather than introducing a fifth
+> palette entry for an idea already represented.
+>
+> New dimensions reuse the existing, unmodified `aggregateFlowMetric()` (sum
+> semantics — correct for sparse economic flows, unlike the line-mode
+> last-value-in-bucket reducer).
+>
+> Window selector (1W/1M/1Y/All) implemented as a floating overlay below the
+> submode toggle, Income-only. **Not a parallel windowing system**: a preset just
+> sets the same `visibleStartDate`/`visibleEndDate` + `buildZoomWindow()`-derived
+> `dataZoom` percentages that a manual drag/scroll zoom already sets — so a window
+> picked in Income survives a submode switch, and manual zoom still works
+> normally on top of it.
+>
+> Tooltip gained a conditional second section for the three new dimensions, shown
+> only when at least one of those values is non-zero for that date, so a
+> pure-income day still shows exactly the original dividend/interest/total block
+> with no empty trailing rows.
+>
+> i18n: **zero new keys added by me.** Costs reuses the existing
+> `dashboard.feesAndTaxes` (the dashboard KPI's own "Fees & taxes" grouping),
+> deposit reuses existing `transactions.types.DEPOSIT`. Only two genuinely-new
+> strings are needed — proposed `dashboard.pnlAcqNewCapital` = "New capital" and
+> `dashboard.pnlAcqReinvested` = "Reinvested" — left as hardcoded EN with
+> `TODO(coordinator i18n batch)` markers and reported to the coordinator, per the
+> standing "locale files are coordinator-owned this sprint" rule.
+>
+> Gates: svelte-check 0 errors, Vitest 4759/4759, Prettier clean, front build
+> clean. Live visual verification via a throwaway Playwright script (not
+> committed, cleaned up): window selectors render/switch, all six legend entries
+> present, bars draw, tooltip shows the new rows.
+>
+> **Disclosed scope limitation:** "Custom" window preset NOT implemented —
+> 1W/1M/1Y/All only. The dashboard's own global Custom range picker remains a
+> partial substitute. Flagged rather than silently dropped.
+
+> **⚠️ Fuori pista (i18n keys added but never wired, 2026-09-18):** while handing
+> the two new batch-2 keys to the coordinator, the coordinator discovered that the
+> **five batch-1 keys were already committed in all four locales but never
+> consumed** — `GrowthChart.svelte` still hardcoded all five in English behind
+> `TODO(coordinator i18n batch)` markers. Net effect shipped in `8ed7a0f0d`:
+> IT/FR/ES users saw English submode buttons and English candle-disclosure text.
+> Root cause is a process gap, not a coding mistake: the sprint's i18n split
+> (coordinator owns locale files, workstream owns the components) leaves a seam
+> where "keys added" and "keys used" are two different actions, and **nothing
+> automated closes it** — `svelte-check`, Vitest and the production build are all
+> green with a hardcoded literal sitting where a `$_()` call belongs.
+>
+> Second, sharper trap found while fixing it: the TODO comment itself pointed at
+> the **wrong key**. The comment said `replace with $_('dashboard.pnlCandlesHypothetical')`
+> while the string on the next line was the *short* variant belonging to
+> `pnlCandlesHypotheticalShort`. Following one's own past TODO literally would
+> have swapped the long and short disclosure forms — the compact tooltip footnote
+> getting the full sentence and the always-visible caption getting the truncated
+> one. Substitution was therefore done by **comparing each literal against the JSON
+> value**, not by trusting the marker.
+>
+> Durable lesson: `grep -n "TODO(coordinator i18n batch)"` (or the equivalent
+> marker) belongs in the definition of done for any i18n batch, on both sides of
+> the seam — the person adding keys and the person consuming them can each be
+> green in isolation while the user-visible result is still wrong.
+
+> **⚠️ Fuori pista (acquisition-funding date boundary was a latent bug, 2026-09-18):**
+> test-author flagged that `get_acquisition_funding_history` sliced `>= date_from`
+> (inclusive) while its five co-rendered Income-submode siblings
+> (income/cost/deposit) use the canonical exclusive `(date_from, date_to]`, and
+> asked whether the divergence was deliberate. **It was not.** Analysis: the two
+> engine-backed methods it was modelled on — `get_pnl_candles` and
+> `get_broker_pnl_history` — are **LEVEL** series (a cumulative value per day), so
+> the period's opening day legitimately must appear as the baseline. Acquisition
+> funding is a **FLOW** series (that day's own BUY split), so under the canonical
+> convention a BUY dated exactly on `date_from` belongs to the *previous* period.
+> It had inherited a level-series slicing rule purely because it shares the
+> engine-backed *mechanism* — which is not the same thing as sharing the
+> *semantics*. User-visible symptom: in the Income submode all six series render
+> as bars on one x-axis, so a BUY on `date_from` drew a bar while a DIVIDEND on
+> that same date drew none. Fixed to `> date_from`, with a comment recording why
+> it deliberately diverges from the precedent it otherwise mirrors. Three
+> test-author tests that had pinned the old behaviour were handed back for update,
+> plus a request for a stronger *cross-series* invariant test (a flow dated on
+> `date_from` must be absent from all four flow series alike) — that property is
+> what actually protects the chart, stronger than each series' own boundary test.
+>
+> Lesson: "engine-backed" and "level series" travelled together in every prior
+> example, so copying the nearest precedent silently copied a semantic that did
+> not apply. When reusing a mechanism, the question to ask is which of the
+> source's properties are incidental to the mechanism and which are load-bearing.
+
+> **⚠️ Fuori pista (AcquisitionFundingSeries has no missing_fx_pairs — pre-existing
+> engine gap, documented not patched, 2026-09-18):** test-author also flagged that
+> this series, unlike income/cost/deposit, carries no `missing_fx_pairs` channel,
+> so a BUY in a currency with no FX route that day vanishes with no data-quality
+> signal. Investigated: the engine's pre-existing `amount_target is None ->
+> continue` guard skips such a transaction *before* it reaches the funding split,
+> and the engine's own `missing_fx_pairs` set is populated only from **valuation**
+> paths (`_market_value_for`, `_compute_in_transit`,
+> `_compute_open_cost_basis_inline`) — never from transaction-amount conversion
+> failures. So the gap is pre-existing engine behaviour that equally affects the
+> 3-pool/cash-decomposition accounting, not something batch 2 introduced, and
+> `PnlCandleSeries` shipped with the identical omission.
+>
+> Deliberately **not** patched here: closing it properly means giving the engine a
+> transaction-level FX-failure output channel — a genuine contract change to a
+> file shared with the concurrent Risk-management effort, which the standing rule
+> says to keep narrow and additive. Instead the schema docstring was made honest
+> so the contract stops implying a completeness it does not have, the behaviour is
+> locked by test-author's `test_buy_with_an_unconvertible_currency_is_skipped_not_zeroed`,
+> and the finding is reported upward as a candidate for its own scoped work.
+
+> **Note implementazione (batch 2 test coverage + i18n wiring, 2026-09-18):**
+> test-author delivered **+58 backend** (`services roi-fifo-utils` 437 → 495, every
+> pre-existing test passing verbatim — the `get_income_history` refactor gate) and
+> **+67 frontend** (124 → 191 across the two files it touched; full suite 4759 →
+> 4826). New file `test_acquisition_funding.py` (40 tests) plus extensions to
+> `test_portfolio_service.py`, `chartCoreHelpers.test.ts` and
+> `__tests__/timeSeriesAggregation.test.ts`. Four test files, zero non-test files.
+>
+> The `aggregateSumSeries`/Income coverage gap flagged at the batch-1 close is now
+> genuinely closed: 10 dedicated direct tests for the reducer (including an
+> explicit contrast against `aggregateLineSeries`, mass preservation and a
+> cross-year ISO-week bucket), and the Income submode went from *one* incidental
+> string match to full-pipeline coverage — sparse alignment → `aggregateFlowMetric`
+> → 6-slot series → tooltip → window selector.
+>
+> All 7 i18n keys wired in `GrowthChart.svelte` and all 4 `TODO(coordinator i18n
+> batch)` markers deleted (verified `grep -c` = 0; each key referenced exactly
+> once). Edits were made at the 7 exact sites rather than by find-and-replace:
+> test-author measured that the bare substrings `Line`/`Candles`/`Income`/
+> `Reinvested` occur 27/33/20/15 times in the file, almost all inside legitimate
+> identifiers (`aggregateLineSeries`, `LineDataPoint`, `incomeHistory`,
+> `acqFromReinvestedValues`, `from_reinvested`…), so a blanket replace would have
+> corrupted the file.
+>
+> Two test-authoring details worth keeping, both self-reported near-misses rather
+> than successes: (1) the i18n sweep's first regex `$_('key')` silently skipped
+> the three *interpolated* call sites (37 of 40), so a future interpolated key
+> would have slipped through — widened and backed by a guard test asserting every
+> `$_(` call uses a static literal, so the sweep cannot quietly stop being
+> exhaustive; (2) the SHORT/LONG disclosure assertions match on the **full call
+> including the closing quote**, because `pnlCandlesHypothetical` is a strict
+> prefix of `pnlCandlesHypotheticalShort` — a bare `toContain` would be satisfied
+> by the wrong key and prove nothing. Both guards were verified non-decorative by
+> replaying them against in-memory mutated copies (typo'd key, transposed
+> SHORT/LONG, re-hardcoded literal, un-wired key — all four caught).
+>
+> The LEVEL-vs-FLOW divergence is now executable rather than a comment:
+> `test_diverges_from_get_pnl_candles_on_the_same_engine_result_and_window` feeds
+> one engine result and one window to both methods and asserts the level series
+> keeps its `date_from` day while the flow series drops it — so any future
+> "harmonisation" in either direction turns exactly one assertion red and names
+> which contract broke. The requested cross-series invariant landed as
+> `TestIncomeSubmodeFlowSeriesShareOneBoundary`, opening with a positive control
+> (widen `date_from` by one day, all four series must show both days) so that
+> "absent" cannot silently mean "this series never had anything there".
+>
+> Final combined gates: `services roi-fifo-utils` 495/495, `services
+> portfolio-engine` 42/42, `api portfolio` 25/25, ruff clean, black clean,
+> svelte-check 0 errors, Vitest 4826/4826, Prettier clean, front build clean.
+
 ## 6. Dependency-safe phases and owners
 
 | Phase | Size | Owner | Dependency | Deliverable | Status |

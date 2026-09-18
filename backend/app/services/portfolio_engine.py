@@ -494,6 +494,20 @@ class PnlCandleContribution:
     close: Decimal
 
 
+@dataclass(frozen=True, slots=True)
+class AcquisitionFundingContribution:
+    """One day's aggregate BUY funding split (batch 2 follow-up — "new vs reinvested
+    liquidity", plan §5.2). Surfaces the engine's own already-existing per-BUY K/R-pool
+    draw (from_k/from_r — computed to update the running 3-pool balances, see the BUY
+    branch in build()) as a new daily output, summed across every BUY that day. Not
+    new business logic: from_new_capital + from_reinvested reproduces that day's total
+    BUY cash outflow exactly, by construction (the same amount_target already consumed
+    by the pool update, just also captured here instead of discarded)."""
+
+    from_new_capital: Decimal  # sum of from_k across the day's BUYs
+    from_reinvested: Decimal  # sum of from_r across the day's BUYs
+
+
 @dataclass
 class DailyPortfolioState:
     """Complete daily portfolio state — the heart of the calculation engine."""
@@ -538,6 +552,11 @@ class DailyPortfolioState:
     # the engine was run with compute_candles=True AND the day's candle is composable
     # (no MISSING held-asset valuation that day).
     pnl_candle: PnlCandleContribution | None = None
+    # Batch 2 — new-vs-reinvested BUY funding split for this day (see
+    # AcquisitionFundingContribution). None unless the engine was run with
+    # compute_acquisition_funding=True AND at least one BUY happened this day (a
+    # genuine "no acquisition today" gap, never a zero-valued contribution).
+    acquisition_funding: AcquisitionFundingContribution | None = None
 
 
 # =============================================================================
@@ -575,6 +594,7 @@ class DailyStateBuilder:
         split_history: dict[int, SplitHistory] | None = None,
         mark_series: dict[int, AssetPriceSeries] | None = None,
         compute_candles: bool = False,
+        compute_acquisition_funding: bool = False,
     ) -> None:
         self.classified_txs = classified_txs
         self.in_transit_intervals = in_transit_intervals
@@ -615,6 +635,12 @@ class DailyStateBuilder:
         # below is opt-in extra Decimal/FX work per plan §4.1 ("expensive OHLC work stays off
         # ordinary reports"), never run unless a caller explicitly requests candles.
         self.compute_candles = compute_candles
+        # Batch 2 — new-vs-reinvested BUY funding split (plan §5.2). False by default:
+        # this is a pure bookkeeping side-capture of values the BUY branch already
+        # computes for the 3-pool update, so the extra cost is negligible either way,
+        # but stays opt-in for consistency with compute_candles's "extra output stays
+        # off ordinary reports unless requested" convention.
+        self.compute_acquisition_funding = compute_acquisition_funding
 
     def build(self) -> PortfolioCalculationResult:  # noqa: C901 — TODO(P2-refactor): monolithic daily-replay engine; extract pre-frame/frame stages
         """Build daily states for [frame_start, date_to] + position snapshots + period accumulators.
@@ -878,6 +904,7 @@ class DailyStateBuilder:
                         nav_complete=prev.nav_complete,
                         broker_contributions=dict(prev.broker_contributions),
                         pnl_candle=prev.pnl_candle,
+                        acquisition_funding=None,
                     )
                 )
                 current += timedelta(days=1)
@@ -887,6 +914,11 @@ class DailyStateBuilder:
             cumulative_cash += cash_deltas.get(current, zero)
             for bid in all_broker_ids:
                 cumulative_cash_by_broker[bid] += cash_deltas_by_broker.get((current, bid), zero)
+
+            # Batch 2 — per-day BUY funding split accumulator (see
+            # AcquisitionFundingContribution), reset every day like external_cash_flow.
+            day_acq_from_k = zero
+            day_acq_from_r = zero
 
             # 4b. Unified per-transaction loop: WAC + 3-pool + period accumulators
             # Single pass: for each tx, in additions-first order:
@@ -1045,6 +1077,9 @@ class DailyStateBuilder:
                     from_r = min(amount_target, max(R[bid], zero))
                     R[bid] -= from_r
                     K[bid] -= amount_target - from_r
+                    if self.compute_acquisition_funding:
+                        day_acq_from_r += from_r
+                        day_acq_from_k += amount_target - from_r
 
                 elif tx.type in (TransactionType.CASH_TRANSFER, TransactionType.FX_CONVERSION):
                     # Linked-internal: pool transfer between brokers
@@ -1178,6 +1213,16 @@ class DailyStateBuilder:
                     close=total_pnl,
                 )
 
+            # Batch 2 — new-vs-reinvested BUY funding split (see
+            # AcquisitionFundingContribution). None when not requested or no BUY
+            # happened today (a genuine gap, not a zero-valued contribution).
+            acquisition_funding: AcquisitionFundingContribution | None = None
+            if self.compute_acquisition_funding and (day_acq_from_k != zero or day_acq_from_r != zero):
+                acquisition_funding = AcquisitionFundingContribution(
+                    from_new_capital=day_acq_from_k,
+                    from_reinvested=day_acq_from_r,
+                )
+
             # 4b2. Position state snapshots (start of frame + every day end)
             if is_first_frame_day:
                 for (aid, bid), qty in cumulative_qty.items():
@@ -1222,6 +1267,7 @@ class DailyStateBuilder:
                     nav_complete=len(missing) == 0,
                     broker_contributions=broker_contributions,
                     pnl_candle=pnl_candle,
+                    acquisition_funding=acquisition_funding,
                 )
             )
             current += timedelta(days=1)
@@ -1807,6 +1853,30 @@ class DerivedViewsBuilder:
             )
         return points
 
+    def build_acquisition_funding(self) -> list[dict]:
+        """New-vs-reinvested BUY funding split (batch 2): [{date, from_new_capital,
+        from_reinvested}, ...].
+
+        Days with no BUY activity (DailyPortfolioState.acquisition_funding is None) are
+        omitted entirely — a genuine "nothing acquired that day" gap, not a zeroed row
+        (mirrors build_pnl_candles's own omission convention). from_new_capital +
+        from_reinvested reproduces that day's total BUY cash outflow exactly, by
+        construction (see AcquisitionFundingContribution). Returns raw dicts, mirroring
+        build_history()'s adapter-conversion pattern.
+        """
+        points: list[dict] = []
+        for s in self.daily_states:
+            if s.acquisition_funding is None:
+                continue
+            points.append(
+                {
+                    "date": s.date,
+                    "from_new_capital": CurrencySchema(code=self.target_currency, amount=s.acquisition_funding.from_new_capital),
+                    "from_reinvested": CurrencySchema(code=self.target_currency, amount=s.acquisition_funding.from_reinvested),
+                }
+            )
+        return points
+
     def build_performance_inputs(
         self,
     ) -> tuple[list, list]:
@@ -2219,6 +2289,7 @@ class PortfolioCalculationEngine:
         date_to: date_type | None = None,
         target_currency: str | None = None,
         include_candles: bool = False,
+        include_acquisition_funding: bool = False,
     ) -> PortfolioCalculationResult:
         """Run the full portfolio calculation pipeline.
 
@@ -2228,6 +2299,11 @@ class PortfolioCalculationEngine:
         ``include_candles`` (G1b, default False) additionally resolves each held asset's
         daily OHLC and composes the synthetic total-P&L candle (plan §4.3) — kept opt-in
         per plan §4.1 so ordinary report generation never pays for it.
+
+        ``include_acquisition_funding`` (batch 2, default False) additionally surfaces
+        the engine's existing per-BUY K/R-pool draw as a daily new-vs-reinvested output
+        (see AcquisitionFundingContribution) — kept opt-in for consistency, though the
+        extra cost is negligible (pure bookkeeping capture, no new data resolution).
         """
         # ── 1. Resolve target currency ──
         if target_currency is None:
@@ -2342,6 +2418,7 @@ class PortfolioCalculationEngine:
             fx_fingerprint,
             split_fingerprint,
             include_candles,
+            include_acquisition_funding,
         )
 
         cached_blob, blob_hit = _portfolio_blob_cache.get(blob_key)
@@ -2460,6 +2537,7 @@ class PortfolioCalculationEngine:
             split_history=split_history,
             mark_series=mark_series,
             compute_candles=include_candles,
+            compute_acquisition_funding=include_acquisition_funding,
         )
         result = builder.build()
 
