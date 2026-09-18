@@ -55,10 +55,11 @@ interface RiskMockOptions {
      * Warnings to hang on every result carrying one of these analytic codes.
      *
      * The wave already ships exactly one warning — `correlation` answers
-     * `partial` with `E2E partial fixture` — and **no level renders
-     * correlation**, so until this option existed nothing in the four-level
-     * panel ever had a reason to display. The suite was green over a surface it
-     * never reached.
+     * `partial` with `E2E partial fixture` — and for as long as no level
+     * rendered correlation, nothing in the four-level panel ever had a reason
+     * to display. The suite was green over a surface it never reached. L2 has
+     * rendered the heatmap since, so that one warning is now routed rather than
+     * dropped; this option exists to put sentences on the *other* levels.
      *
      * Keyed by code rather than by instance on purpose: `historical_var` is
      * asked twice in one wave, so one entry here puts the *same sentence* on two
@@ -1526,7 +1527,20 @@ test.describe('Risk analysis functional integration', () => {
         await expect(panel.getByTestId('risk-replay-end')).toHaveValue(/^\d{4}-\d{2}-\d{2}$/);
         await expect(panel.getByTestId('risk-simulation-horizon')).toHaveValue('365');
         await expect(panel.getByTestId('risk-simulation-paths')).toHaveValue('8192');
-        await expect(panel.getByTestId('risk-simulation-sampling')).toHaveValue('mc');
+
+        // Sampling is deliberately *not* asserted here, and its absence is the
+        // assertion. The control belongs to the geometric process alone, so in
+        // the default block-bootstrap mode it is not rendered at all — a reader
+        // is never offered a knob that the regime they chose does not turn.
+        // Asserting `toHaveValue('mc')` on it would fail twice over: the node is
+        // absent, and `SimpleSelect` publishes its testId on a `<div>`, which has
+        // no value to have. Which mode reveals it is S4's own subject; what this
+        // test owns is that the defaults on screen are the defaults the request
+        // will carry.
+        await expect(panel.getByTestId('risk-simulation-sampling')).toHaveCount(0);
+        const defaultMode = panel.locator('[data-testid="risk-simulation-mode"][data-mode-id="block_bootstrap"]');
+        await expect(defaultMode).toHaveAttribute('data-selected', 'true');
+        await expect(panel.getByTestId('risk-simulation-modes')).toBeVisible();
 
         // --- Rung 2: one click adopts the assumption *and* asks the question ---
         // The old panel made the reader fill in a shock per bucket before
@@ -1930,15 +1944,45 @@ test.describe('Risk analysis functional integration', () => {
         await expect(panel.getByTestId('risk-l2-weight-1')).toHaveText('60.0%');
         await expect(panel.getByTestId('risk-l3-sortino-value')).toHaveText('1.68');
 
-        // The scoping itself. `correlation` rides in the very same historical
-        // answer and this stub returns it `partial` with a warning of its own,
-        // but no level renders correlation — so its sentence belongs under none
-        // of them. A panel that fed every level the whole wave would show three
-        // entries here, all of them plausible, one of them an accusation the
-        // reader has no way to check.
+        // The scoping itself, and the only place in the suite where the title's
+        // claim is actually exercised. `correlation` rides in the very same
+        // historical answer and this stub returns it `partial` with a warning of
+        // its own. L2 renders correlation, so L2 — and only L2 — carries its
+        // sentence. Until the heatmap existed no level rendered it and this
+        // assertion was a row of zeroes: true, and true for the reason that
+        // nothing could have received the warning. A vacuous green.
+        //
+        // What it now proves is the routing rule in both directions: the
+        // sentence lands under the level that rendered the measurement, and
+        // stays off the two that did not. A panel feeding every level the whole
+        // wave would put it under all three, all of them plausible, two of them
+        // an accusation the reader has no way to check.
         await expect(panel.getByTestId('risk-level-1-reason').filter({hasText: 'E2E partial fixture'})).toHaveCount(0);
-        await expect(panel.getByTestId('risk-level-2-reasons')).toHaveCount(0);
         await expect(panel.getByTestId('risk-level-3-reasons')).toHaveCount(0);
+
+        const l2Reasons = panel.getByTestId('risk-level-2-reasons');
+        await expect(l2Reasons).toHaveAttribute('data-count', '1');
+        const correlationEntry = panel.getByTestId('risk-level-2-reason').filter({hasText: 'E2E partial fixture'});
+        await expect(correlationEntry).toHaveCount(1);
+        await expect(correlationEntry).toHaveAttribute('data-occurrences', '1');
+
+        // And the amber with it. `partial` degrades the result, so the status
+        // line that was absent from L1 — every result there being `ok` — is
+        // present here. Asserted by arity rather than by its sentence, which is
+        // translated; the point is that the level declaring a degraded heatmap
+        // says so, instead of rendering an empty grid in silence.
+        await expect(panel.getByTestId('risk-level-2-health')).toHaveAttribute('data-count', '1');
+
+        // Both L2 results are disclosed, but they arrive on different waves:
+        // contribution on the current one, correlation on the historical one.
+        // They collapse to a single provenance row because this fixture gives
+        // them the same window — which is what the tuple deduplication is for,
+        // and is the property under test here. It is not a promise that the two
+        // waves always agree in production: if they ever diverged the reader
+        // would get two rows, and that is the correct answer rather than a
+        // fault, because a heatmap and a contribution measured over different
+        // windows are two measurements and should not be shown as one.
+        await expect(panel.getByTestId('risk-level-2-metadata')).toHaveAttribute('data-rows', '1');
     });
 
     /**

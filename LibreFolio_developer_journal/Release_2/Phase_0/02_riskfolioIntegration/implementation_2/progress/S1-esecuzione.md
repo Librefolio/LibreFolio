@@ -531,3 +531,173 @@ levelHelpers.ts                  → 570 → 579 righe, sotto il soffitto di 600
 **Tre gate identici alla misura precedente: è la prova che il cambiamento è davvero di
 soli commenti.** Un'affermazione («ho toccato solo commenti») non è verificabile; tre
 numeri invariati lo sono.
+
+---
+
+## Passo 11 — Il risveglio sulla revisione fusa ✅ 2026-09-18
+
+Baseline `eac926f6b84a4a2b99a876e82af71ec6c8616ec6`, verificata prima di scrivere.
+Cinque mandati dentro (N, S2, S3, S4, coordinamento). Tre voci dal coordinatore più
+un cancello su revisione nuova.
+
+### 11.1 `api sync` — misurato sull'artefatto, non sul codice d'uscita ✅
+
+```
+frontend/src/lib/api/generated.ts   19107 → 19163 righe
+RiskReturnOutput                        0 → 6
+RiskReturnItem                          0 → 5
+portfolio_expected_annual_return        0 → 2
+comparison_volatility                   0 → 2
+comparison_expected_annual_return       0 → 2
+```
+
+> **Fuori pista (sfiorato, non preso).** Ho misurato `RiskSimulationMode`,
+> `return_series` e `comparison_basis` a **0** e stavo per segnalare una sync
+> fallita. **Erano tre nomi che avevo inventato io**: non comparivano nel diff di
+> `schemas/risk.py`. Ho letto il diff invece di fidarmi del grep, e i nomi veri
+> c'erano tutti. **Cercare un nome che si suppone trova sempre zero, e lo zero
+> sembra una prova.**
+
+📌 **`generated.ts` è ignorato** (`frontend/.gitignore:13`): l'output di `api sync`
+non viaggia mai in un commit. Ogni consumatore deve rieseguirlo — non è un artefatto
+che si eredita.
+
+### 11.2 Le sei righe di `correlationResult` ✅
+
+`RiskLevelsPanel.svelte` 246 → 252 righe. Una derivazione, quattro divulgazioni
+(`degradedResults`, `resultReasons`, `resultErrorCodes`, `levelMetadata`), un montaggio.
+
+> **Note implementazione.** La richiesta del coordinatore era **una** riga — la prop.
+> Ne servivano sei, e la ragione è la stessa che avevo scritto nel commento del
+> pannello: `correlation` risponde `partial`, e `partial` **degrada** (`degradedResults`
+> `levelHelpers.ts`). Con la sola prop, L2 avrebbe reso una heatmap degradata **senza
+> ambra, senza frase, senza codice e senza finestra** — esattamente il difetto che
+> quel commento definisce come quello da evitare.
+
+⚠️ **Il commento `:83-87` era diventato falso** nel momento stesso in cui il
+cablaggio è entrato: diceva che `correlation` non è reso da nessun livello, ed era la
+premessa del filtro per codice esplicito. Riscritto: il filtro resta giusto, ma ora la
+sua giustificazione è generale invece che particolare a `correlation`.
+
+### 11.3 Il delta S4 — due cause, come avvertito ✅
+
+Rosso: `risk-simulation-sampling` → `toHaveValue('mc')`, *element(s) not found*.
+
+| causa | fatto misurato |
+|---|---|
+| ① il nodo non c'è | `showSampling = spec.process === 'gbm'` (`L4Simulation.svelte:59`) e il modo predefinito è `block_bootstrap` (`simulationModes.ts:58`) |
+| ② `toHaveValue` non si applica | `SimpleSelect` pubblica il testId su un **`<div>`** (`SimpleSelect.svelte:258`) |
+
+> **Il testId non era stato rinominato**: esiste ancora a `L4Simulation.svelte:183`.
+> Era diventato **condizionale**. Riparare solo ① avrebbe lasciato il rosso, come
+> annunciato.
+
+✅ **Riparazione**: l'assenza diventa l'asserzione — `toHaveCount(0)` sul campionamento,
+più `data-selected="true"` sul modo predefinito. *Al lettore non viene mai offerta una
+manopola che il regime scelto non gira.*
+
+**Prova per mutazione** (`0` → `1`): `Expected: 1 / Received: 0`, `1 failed, 12 passed`.
+Il locatore è valutato e l'elemento è assente davvero; la stringa è quella che il
+prodotto pubblica. **Un `toHaveCount(0)` su un testId scritto male passa lo stesso.**
+
+### 11.4 Il rosso che ho causato io, ed è il cablaggio che funziona ✅
+
+`risk-level-2-reasons` atteso `0`, ricevuto `1`.
+
+> La chiusa del mio stesso test diceva: *«`correlation` … **ma nessun livello rende
+> correlation**, quindi la sua frase non appartiene a nessuno di loro»*. **Ho
+> falsificato quella premessa di proposito.**
+
+✅ Non l'ho rilassato a `1`: l'ho **rafforzato**. Il titolo del test — *«un avviso
+raggiunge il livello che ha reso la misura»* — era fino a ieri **vacuo**: nessun livello
+rendeva `correlation`, quindi la riga di zeri era vera *perché niente poteva riceverla*.
+Ora prova la regola **nei due versi**: la frase cade sotto L2 e resta fuori da L1 e L3.
+
+Aggiunta anche l'ambra (`risk-level-2-health` `data-count="1"`), asserita per **arietà**
+e non per la sua frase, che è tradotta.
+
+### 11.5 La domanda che avevo promesso di misurare, non di prevedere ✅
+
+**Una riga, non due.** Sonda con valore deliberatamente sbagliato → `Received: "1"`.
+
+I due risultati arrivano su **onde diverse** (contribution sulla corrente, correlation
+sulla storica) e **collassano** perché questa fixture dà loro la stessa finestra: è la
+deduplicazione per tupla che fa il suo lavoro. Scritto in pagina che **non è una
+promessa sul prodotto**: se le due onde divergessero, due righe sarebbero la risposta
+**giusta**, non un guasto.
+
+### 11.6 Cancelli sulla revisione fusa — nessuno riusato ✅
+
+```
+front check                 0 errors / 41 warnings in 2 files
+front-portfolio risk        13 passed
+risk-levels-unit           171 passed (7 files)
+risk-asset-detail            2 passed      ← la rete che prova il non-tocco
+risk-lab                     6 passed      ← la rete di F
+```
+
+⚠️ **171, non 135**, e non è deriva: i miei tre file di unit sono **fermi al mio
+commit `6aba9e48d`**, e i +36 vengono da `l3Helpers` (S3), `simulationProvenance` e
+`l4/simulationModes` (S4), `l4/scenarioHelpers` (S3). **Attribuito per commit, non
+supposto.**
+
+📌 **`front check` non vede `e2e/`** (`tsconfig.json` esclude `e2e/**`): per le
+modifiche allo spec **l'unico cancello è l'esecuzione E2E**. Un «zero errori» qui non
+dice niente sulle 68 righe di spec.
+
+### 11.7 Disciplina dimensionale ✅
+
+```
+RiskLevelsPanel.svelte   252 / 600
+levelHelpers.ts          579 / 600   (invariato: non toccato in questo giro)
+l1/l1Helpers.ts          252 / 600
+```
+
+### 11.8 I cancelli di backend sulla revisione fusa ✅
+
+Girati su decisione del coordinatore. **La mia obiezione — «i miei file non toccano il
+backend» — era giusta sul mio lavoro e irrilevante sul soggetto del cancello**, che è
+la revisione: S3, S4 e N non erano mai stati eseguiti insieme.
+
+```
+api risk           11 passed   (0 FAILED, 0 ERROR)
+services risk-all  413 passed  (0 FAILED, 0 ERROR)
+```
+
+📌 Il traceback `RuntimeError: isolated failure` dentro il log di `services` è
+**deliberato**: appartiene a `test_runtime_failure_does_not_abort_other_analytics`, che
+solleva l'eccezione apposta per provare che il guasto di un'analitica non aborta le
+altre. **Un'eccezione registrata dentro un test verde non è un rosso**, ed è il tipo di
+riga che fa concludere il contrario a chi legge il log di corsa.
+
+#### La caveat di S4, verificata invece che creduta 🔑
+
+Un verde non diceva ancora **su quali dati** fosse stato ottenuto. Misurato a tre punti,
+muovendo i dati invece del codice:
+
+| stato del DB di corsia | esito |
+|---|---|
+| popolato | **11 passed** |
+| svuotato da `services risk-all` | 🔴 **3 failed, 8 passed** |
+| ripopolato (`db populate --force`) | **11 passed** |
+
+```
+assets 0 · transactions 0 · price_history 0        ← dopo services
+assets 17 · transactions 75 · price_history 2615   ← dopo populate
+```
+
+✅ **La caveat si riproduce alla cifra**: tre, non «alcuni». E i tre hanno un nome —
+`test_risk_query_runs_all_analytics_against_populated_test_database`,
+`…_simulates_with_canonical_names_and_no_seed`,
+`test_portfolio_optimization_supports_all_scopes_and_strategies`. Gli altri otto sono
+su fixture e non toccano il DB di corsia.
+
+> **E questa è la risposta alla domanda che il verde da solo non poteva dare.** I tre
+> test che dipendono dai dati **erano fra gli undici passati**, quindi il primo cancello
+> era davvero su un DB popolato — costruito dal `populate_mock_data.py` **fuso**, cioè
+> quello di N con le due coppie seminate. **Un verde su un DB vuoto sarebbe stato
+> indistinguibile da un verde su dati veri, se non avessi svuotato apposta.**
+
+⚠️ **Fuori pista deliberato**: ho eseguito `api risk` **nell'ordine sbagliato di
+proposito** per misurare la caveat. Non è un cancello fallito: è una mutazione dei dati
+usata come prova, e lo stato di corsia è stato ripristinato subito dopo.

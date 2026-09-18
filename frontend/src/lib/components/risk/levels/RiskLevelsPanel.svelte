@@ -77,14 +77,20 @@
     let historicalResults = $derived(controller.historicalResults);
     let currentResults = $derived(controller.currentResults);
     let contributionResult = $derived(resultByCode(currentResults, 'risk_contribution'));
+    // `correlation` is requested in the historical wave (`riskAnalysisHelpers:240`)
+    // and was resolved and handed to nobody. It is not a datum to ask for: it is
+    // one already paid for and thrown away.
+    let correlationResult = $derived(resultByCode(historicalResults, 'correlation'));
     let initialLoading = $derived(controller.initialLoading);
     let loadError = $derived(controller.loadError);
 
     // Each level discloses only the measurements it actually renders. The filter
     // is by explicit code, not "everything in the wave minus what I know about":
-    // `correlation` travels in the same historical wave and is rendered by no
-    // level at all, so a blanket filter would report it as an L1 fault — a
-    // failure the reader cannot see, cannot check, and cannot act on.
+    // a blanket filter would report an analytic no level renders as a fault of
+    // whichever level happened to catch it — a failure the reader cannot see,
+    // cannot check, and cannot act on. `correlation` was that analytic until L2
+    // started rendering it, which is why it now travels in L2's disclosures
+    // below: **a section that renders two results must declare two.**
     const L1_CODES = ['historical_var', 'drawdown_summary', 'historical_kpi'];
     const L3_CODES = ['historical_kpi'];
     // The two VaR horizons share an analytic code, so the disclosure names the
@@ -98,7 +104,7 @@
         ),
     );
     // Already resolved by code, so it needs no filter.
-    let l2Health = $derived(degradedResults([contributionResult]));
+    let l2Health = $derived(degradedResults([contributionResult, correlationResult]));
     let l3Health = $derived(degradedResults([controller.comparisonResult, ...historicalResults.filter((result) => L3_CODES.includes(result.analytic_code))]));
 
     // The *reasons*, from the same results each level renders. Derived from the
@@ -106,7 +112,7 @@
     // that never consulted the measurement is not transparency, it is an
     // accusation the reader has no way to check.
     let l1Reasons = $derived(resultReasons(historicalResults.filter((result) => L1_CODES.includes(result.analytic_code))));
-    let l2Reasons = $derived(resultReasons([contributionResult]));
+    let l2Reasons = $derived(resultReasons([contributionResult, correlationResult]));
     let l3Reasons = $derived(resultReasons([controller.comparisonResult, ...historicalResults.filter((result) => L3_CODES.includes(result.analytic_code))]));
 
     // The *codes* of what did not come back at all, from those same slices.
@@ -117,7 +123,7 @@
     // history, or still in flight — and says "unavailable for the selected
     // data", blaming the reader's portfolio for a limit of the analytic.
     let l1Errors = $derived(resultErrorCodes(historicalResults.filter((result) => L1_CODES.includes(result.analytic_code))));
-    let l2Errors = $derived(resultErrorCodes([contributionResult]));
+    let l2Errors = $derived(resultErrorCodes([contributionResult, correlationResult]));
     let l3Errors = $derived(resultErrorCodes([controller.comparisonResult, ...historicalResults.filter((result) => L3_CODES.includes(result.analytic_code))]));
 
     // What each level's figures were computed over. Same slices again: a window
@@ -125,7 +131,7 @@
     // the wrong number, and describing the wrong number is worse than describing
     // none, because it reads as an answer.
     let l1Metadata = $derived(levelMetadata(historicalResults.filter((result) => L1_CODES.includes(result.analytic_code))));
-    let l2Metadata = $derived(levelMetadata([contributionResult]));
+    let l2Metadata = $derived(levelMetadata([contributionResult, correlationResult]));
     let l3Metadata = $derived(levelMetadata([controller.comparisonResult, ...historicalResults.filter((result) => L3_CODES.includes(result.analytic_code))]));
 
     /**
@@ -218,7 +224,7 @@
         </RiskLevelSection>
 
         <RiskLevelSection level={2} title={$t('risk.levels.l2.title')} lead={l2Lead} testId="risk-level-2" health={l2Health} reasons={l2Reasons} errorCodes={l2Errors} metadata={l2Metadata}>
-            <L2Diversification {contributionResult} {assetNames} loading={initialLoading} />
+            <L2Diversification {contributionResult} {correlationResult} {assetNames} loading={initialLoading} />
         </RiskLevelSection>
 
         <RiskLevelSection level={3} title={$t('risk.levels.l3.title')} testId="risk-level-3" health={l3Health} reasons={l3Reasons} errorCodes={l3Errors} metadata={l3Metadata}>
