@@ -20,6 +20,7 @@ from backend.app.utils.cache_utils import get_ttl_cache
 
 MAX_PORTFOLIO_CELLS = 20_000_000
 MAX_STOCHASTIC_CELLS = 200_000_000
+MAX_HISTORY_CELLS = 250_000
 
 _simulation_cache = get_ttl_cache(
     "risk_simulation",
@@ -137,9 +138,20 @@ def validate_resource_budget(
             actual=stochastic_cells,
             limit=MAX_STOCHASTIC_CELLS,
         )
+    if request.historical_returns is None:
+        return
+    history_cells = len(request.historical_returns) * len(request.asset_ids)
+    if history_cells > MAX_HISTORY_CELLS:
+        raise SimulationResourceLimitError(
+            "Simulation history exceeds the process-boundary budget",
+            metric="history_cells",
+            actual=history_cells,
+            limit=MAX_HISTORY_CELLS,
+        )
 
 
 __all__ = [
+    "MAX_HISTORY_CELLS",
     "MAX_PORTFOLIO_CELLS",
     "MAX_STOCHASTIC_CELLS",
     "SimulationResourceLimitError",

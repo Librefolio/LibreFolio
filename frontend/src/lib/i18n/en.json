@@ -3060,7 +3060,33 @@
       "terminalDistribution": "Terminal distribution",
       "p05": "Terminal P5",
       "p50": "Terminal P50",
-      "p95": "Terminal P95"
+      "p95": "Terminal P95",
+      "mode": {
+        "label": "Simulation mode",
+        "recommended": "Recommended",
+        "advanced": "Advanced",
+        "block_bootstrap": {
+          "label": "Reshuffled history",
+          "hypothesis": "Your own returns, reordered in blocks. No assumption is added."
+        },
+        "calm": {
+          "label": "Calm market",
+          "hypothesis": "Assumption: your real swings, reduced by 30%. Correlations and direction stay those of your history."
+        },
+        "prolonged_crisis": {
+          "label": "Prolonged crisis",
+          "hypothesis": "Assumption: swings ×2.5 and a −20% annual return for 14 months. Correlations stay those of your history."
+        },
+        "shock_recovery": {
+          "label": "Shock and recovery",
+          "hypothesis": "Assumption: a 35% drop applied on top of your history over 2 months, then your real history resumes."
+        },
+        "gbm": {
+          "label": "Normal curve (GBM)",
+          "hypothesis": "Classic model: it assumes regular swings and underestimates the tails."
+        }
+      },
+      "regimeTruncated": "This assumption lasts {declared} days; your horizon covers only {applied}."
     },
     "errors": {
       "analytic_not_found": "Analytic not available.",

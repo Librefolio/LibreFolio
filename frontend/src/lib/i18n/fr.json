@@ -3060,7 +3060,33 @@
       "terminalDistribution": "Distribution finale",
       "p05": "P5 terminal",
       "p50": "P50 terminal",
-      "p95": "P95 terminal"
+      "p95": "P95 terminal",
+      "mode": {
+        "label": "Mode de simulation",
+        "recommended": "Recommandé",
+        "advanced": "Avancé",
+        "block_bootstrap": {
+          "label": "Historique remélangé",
+          "hypothesis": "Vos rendements réels, réordonnés par blocs. Aucune hypothèse ajoutée."
+        },
+        "calm": {
+          "label": "Marché calme",
+          "hypothesis": "Hypothèse : vos variations réelles, réduites de 30 %. Les corrélations et la direction restent celles de votre historique."
+        },
+        "prolonged_crisis": {
+          "label": "Crise prolongée",
+          "hypothesis": "Hypothèse : variations ×2,5 et rendement −20 % par an pendant 14 mois. Les corrélations restent celles de votre historique."
+        },
+        "shock_recovery": {
+          "label": "Choc et reprise",
+          "hypothesis": "Hypothèse : une baisse de 35 % appliquée à votre historique en 2 mois, puis votre historique réel reprend."
+        },
+        "gbm": {
+          "label": "Courbe normale (MBG)",
+          "hypothesis": "Modèle classique : il suppose des variations régulières et sous-estime les extrêmes."
+        }
+      },
+      "regimeTruncated": "Cette hypothèse dure {declared} jours ; votre horizon n’en couvre que {applied}."
     },
     "errors": {
       "analytic_not_found": "Analyse indisponible.",
