@@ -237,6 +237,16 @@
     // percentage/absolute-value merge conflict here — unlike AllocationHistoryChart — but
     // replacing it wholesale on a resolution switch is still the clearest way to reposition it).
     const CHART_SERIES_UPDATE_OPTS = {notMerge: false, replaceMerge: ['dataZoom']};
+    /** ECharts' empty-value sentinel. MUST be used instead of `null` for a gap in a
+     *  candlestick series on a category axis — a `null` item crashes
+     *  `whiskerBoxCommon.getInitialData` during SeriesModel.init (see
+     *  `toCandlestickPoint`). */
+    const ECHARTS_EMPTY_VALUE = '-';
+    /** Name of the non-data decoration series behind the P&L Line submode's dashed
+     *  reference line. Declared once and referenced everywhere (series construction
+     *  AND the legend exclusion in applyFullOption) so the sentinel never becomes a
+     *  magic string that a second site has to remember independently. */
+    const PNL_REFERENCE_SERIES_NAME = '__pnlReference__';
     const CHART_FULL_UPDATE_OPTS = {...CHART_SET_OPTION_OPTS, replaceMerge: [...CHART_SET_OPTION_OPTS.replaceMerge, 'xAxis']};
 
     // =========================================================================
@@ -755,12 +765,23 @@
      *  `buildOhlcQuad` (see PR discussion: candlestick series silently fails to
      *  paint any body/wick on a `time` xAxis — a known upstream ECharts limitation
      *  — so this submode uses a `category` axis instead, matching the codebase's
-     *  own already-proven Asset Detail price-chart pattern). `null` when the
-     *  day/bucket has no candle (a genuine gap, never rendered as a flat
-     *  zero-range bar). Position in the array (not the date itself) is what
-     *  aligns it to the shared `xAxis.data` category list. */
-    function toCandlestickPoint(point: CandleSeriesPoint): number[] | null {
-        if (point.open == null || point.close == null || point.low == null || point.high == null) return null;
+     *  own already-proven Asset Detail price-chart pattern).
+     *
+     *  A gap day/bucket (no candle) MUST be ECharts' empty-value sentinel `'-'`,
+     *  never `null`. On a category base axis the candlestick series clones its data
+     *  through `whiskerBoxCommon.getInitialData`, which branches
+     *  `isArray(item) -> … else if (isArray(item.value))` — so a `null` item
+     *  dereferences `null.value` and throws *inside SeriesModel.init*, before the
+     *  GlobalModel finishes building. The chart then has no `_seriesIndices`, so
+     *  every later `setOption` silently no-ops and the canvas freezes on the
+     *  previous submode's paint. `'-'` falls through that same branch chain
+     *  harmlessly (verified empirically against this exact echarts build, not
+     *  inferred: `null` throws "Cannot read properties of null (reading 'value')",
+     *  `'-'` renders). Position in the array (not the date itself) is what aligns
+     *  a point to the shared `xAxis.data` category list, so the gap must still
+     *  occupy its slot — which is exactly why it can't just be omitted. */
+    function toCandlestickPoint(point: CandleSeriesPoint): number[] | string {
+        if (point.open == null || point.close == null || point.low == null || point.high == null) return ECHARTS_EMPTY_VALUE;
         return buildOhlcQuad(point.open, point.close, point.low, point.high, false, 1);
     }
 
@@ -821,7 +842,7 @@
             return [
                 {name: pnlLabels.total, data: entry.pnl.total.points.map((p) => clipToSign(p, true))},
                 {name: pnlLabels.total, data: entry.pnl.total.points.map((p) => clipToSign(p, false))},
-                {name: '__pnlReference__', data: referencePoints},
+                {name: PNL_REFERENCE_SERIES_NAME, data: referencePoints},
                 ...entry.pnl.brokers.map((broker) => ({name: broker.brokerName, data: broker.metric.points})),
             ];
         }
@@ -945,7 +966,7 @@
             // (same precedent as LineChart.svelte's own baseline reference line).
             const referenceSeries: echarts.SeriesOption = {
                 type: 'line',
-                name: '__pnlReference__',
+                name: PNL_REFERENCE_SERIES_NAME,
                 data: seriesData[2].data,
                 symbol: 'none',
                 showSymbol: false,
@@ -1429,6 +1450,15 @@
                 textStyle: {color: textColor, fontSize: 14},
                 itemWidth: 14,
                 itemHeight: 8,
+                // Without an explicit `data`, ECharts derives the legend from EVERY
+                // series name — which leaked the internal PNL_REFERENCE_SERIES_NAME
+                // decoration into the UI. Derived from the real series here rather
+                // than hand-listed, so a future series is included automatically and
+                // only genuine non-data decorations need to opt out.
+                // Duplicates are collapsed on purpose: the P&L Line submode's
+                // positive/negative halves deliberately share `pnlLabels.total`, so
+                // they must show as ONE "Total P&L" entry that toggles both halves.
+                data: [...new Set(series.map((s) => s.name).filter((n): n is string => typeof n === 'string' && n !== PNL_REFERENCE_SERIES_NAME))],
             },
             dataZoom: [{type: 'inside', ...INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG, start: zoomWindow.start, end: zoomWindow.end}],
             xAxis: isCandlesSubmode
@@ -1539,14 +1569,15 @@
 
     <!-- Chart area — container always in DOM for animation persistence -->
     <div class="relative" style="height: {height}">
-        <div class="absolute top-2 left-2 z-10 pointer-events-none">
-            <ResolutionBadge resolution={currentResolution} />
-        </div>
-        {#if viewMode === 'pnl'}
-            <!-- P&L submode toggle: Line | Synthetic candles | Income. Floats as an
-                 overlay above the chart (matching PriceChartFull's edit/settings
-                 controls) instead of taking its own row and shrinking the chart area. -->
-            <div class="absolute top-2 right-2 z-10 flex items-center gap-1.5">
+        <!-- Top-left cluster: P&L submode toggle + resolution badge on ONE row.
+             The submode toggle moved here (developer review: "il selettore su linea,
+             candela e income doveva essere a sinistra"), which collided with the
+             badge's former solo top-left slot. Reconciled using PriceChartFull's own
+             established pattern — its controls and ResolutionBadge already share a
+             single left-aligned flex row with the badge last — rather than inventing
+             a new placement or silently displacing the badge. -->
+        <div class="absolute top-2 left-2 z-10 flex flex-wrap items-center gap-1.5">
+            {#if viewMode === 'pnl'}
                 <div class="flex rounded-lg border border-gray-200/70 dark:border-slate-600/70 overflow-hidden shadow-sm opacity-75 hover:opacity-100 transition-opacity text-xs font-medium">
                     <button
                         class="px-3 py-1 transition-colors {pnlSubmode === 'line' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
@@ -1570,14 +1601,19 @@
                         {$_('dashboard.pnlSubmodeIncome')}
                     </button>
                 </div>
+            {/if}
+            <div class="pointer-events-none">
+                <ResolutionBadge resolution={currentResolution} />
             </div>
-        {/if}
+        </div>
         {#if viewMode === 'pnl' && pnlSubmode === 'income'}
-            <!-- Batch 2 — Income submode window selector (1W/1M/1Y/All), floating below
-                 the submode toggle. Not a parallel windowing system: sets the SAME
+            <!-- Batch 2 — Income submode window selector (1W/1M/1Y/All). Occupies the
+                 top-RIGHT slot per the developer's review ("dove sta ora il selettore,
+                 andava la finestra"), swapping places with the submode toggle that
+                 moved to top-left. Not a parallel windowing system: sets the SAME
                  shared visibleStartDate/EndDate + dataZoom the chart already uses for
                  drag/scroll zoom (see selectIncomeWindow) — just a convenient preset. -->
-            <div class="absolute top-11 right-2 z-10 flex items-center gap-1.5">
+            <div class="absolute top-2 right-2 z-10 flex items-center gap-1.5">
                 <div class="flex rounded-lg border border-gray-200/70 dark:border-slate-600/70 overflow-hidden shadow-sm opacity-75 hover:opacity-100 transition-opacity text-xs font-medium">
                     <button
                         class="px-2.5 py-1 transition-colors {incomeWindowPreset === '1W' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"

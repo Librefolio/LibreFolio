@@ -1675,8 +1675,17 @@ describe('canonical overlay axis and reference helpers', () => {
         // text by the source-contract test immediately below, so an edit to the
         // real function forces this reimplementation to be revisited too.
         // -------------------------------------------------------------------
-        function toCandlestickPointImpl(point: FixtureCandlePoint): number[] | null {
-            if (point.open == null || point.close == null || point.low == null || point.high == null) return null;
+        // ECharts' documented empty-value sentinel. A candlestick gap MUST be this
+        // string and never `null`: on a category base axis, whiskerBoxCommon's
+        // getInitialData clones items with `isArray(item) ? … : isArray(item.value)`,
+        // so a null item dereferences `null.value` and throws inside SeriesModel.init —
+        // before GlobalModel finishes building, leaving no _seriesIndices and silently
+        // no-oping every later setOption. Verified against this exact echarts build by
+        // the SSR smoke test at the end of this block, not inferred.
+        const ECHARTS_EMPTY_VALUE = '-';
+
+        function toCandlestickPointImpl(point: FixtureCandlePoint): number[] | string {
+            if (point.open == null || point.close == null || point.low == null || point.high == null) return ECHARTS_EMPTY_VALUE;
             return buildOhlcQuad(point.open, point.close, point.low, point.high, false, 1);
         }
 
@@ -1698,16 +1707,29 @@ describe('canonical overlay axis and reference helpers', () => {
 
         it('mirrors the exact literal bodies of toCandlestickPoint / toPositionalValue / clipToSign / findReferenceTotalPnl in GrowthChart.svelte (ties every reimplementation above to the real source)', () => {
             const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
-            const start = source.indexOf('function toCandlestickPoint(point: CandleSeriesPoint): number[] | null {');
+            const start = source.indexOf('function toCandlestickPoint(point: CandleSeriesPoint): number[] | string {');
             const end = source.indexOf('\n    function buildChartUpdateSeries(', start);
             expect(start).toBeGreaterThan(-1);
             expect(end).toBeGreaterThan(start);
             if (start < 0 || end <= start) throw new Error('GrowthChart P&L local-helper contract not found');
 
             const block = source.slice(start, end);
-            // toCandlestickPoint
-            expect(block).toContain('if (point.open == null || point.close == null || point.low == null || point.high == null) return null;');
+            // toCandlestickPoint — the gap value is the sentinel, NOT null. This exact
+            // literal is what the crash fix turned on, so it is pinned as a literal.
+            expect(block).toContain('if (point.open == null || point.close == null || point.low == null || point.high == null) return ECHARTS_EMPTY_VALUE;');
             expect(block).toContain('return buildOhlcQuad(point.open, point.close, point.low, point.high, false, 1);');
+            // No `return null` anywhere in toCandlestickPoint SPECIFICALLY — scoped to
+            // its own body, because findReferenceTotalPnl further down this same block
+            // legitimately returns null for an empty series, and a block-wide ban would
+            // be a false positive on it.
+            const candlestickBody = block.slice(0, block.indexOf('function toPositionalValue('));
+            expect(candlestickBody).not.toContain('return null');
+            // ...and the sentinel it returns really is ECharts' documented empty value,
+            // declared once at module scope rather than inlined at the return site.
+            expect(source).toMatch(/const ECHARTS_EMPTY_VALUE = '-';/);
+            // The widened return type is part of the contract: `number[] | null` would
+            // let a null flow back in without a type error.
+            expect(source).toContain('function toCandlestickPoint(point: CandleSeriesPoint): number[] | string {');
             // toPositionalValue
             expect(block).toContain('function toPositionalValue(point: SeriesPoint): number | null {');
             expect(block).toContain('return point.value[1];');
@@ -1737,8 +1759,12 @@ describe('canonical overlay axis and reference helpers', () => {
                 ['high', 1, 1, 1, null],
             ];
 
-            it.each(missingLegScenarios)('returns null (a genuine gap, never a synthesized flat bar) when only %s is missing', (_field, open, close, low, high) => {
-                expect(toCandlestickPointImpl(candlePointRaw('2026-01-05', open, close, low, high))).toBeNull();
+            it.each(missingLegScenarios)("returns ECharts' empty-value sentinel '-' (a gap that still OCCUPIES its category slot, never null and never a synthesized flat bar) when only %s is missing", (_field, open, close, low, high) => {
+                // Not null: that crashes SeriesModel.init on a category axis (see
+                // ECHARTS_EMPTY_VALUE above). Not omitted either: a category axis aligns
+                // by POSITION, so dropping the item would shift every later candle by one
+                // slot and silently desync the whole series from its dates.
+                expect(toCandlestickPointImpl(candlePointRaw('2026-01-05', open, close, low, high))).toBe('-');
             });
 
             it('returns a quad when all four legs are present, even when one leg is exactly zero (zero is not "missing")', () => {
@@ -1950,7 +1976,7 @@ describe('canonical overlay axis and reference helpers', () => {
                 dates.forEach((_date, i) => {
                     const ohlc = candles[i];
                     if (ohlc == null) {
-                        expect(candleSeries[i]).toBeNull();
+                        expect(candleSeries[i]).toBe(ECHARTS_EMPTY_VALUE);
                     } else {
                         expect(candleSeries[i]).toEqual(buildOhlcQuad(ohlc.open, ohlc.close, ohlc.low, ohlc.high, false, 1));
                     }
@@ -1960,12 +1986,160 @@ describe('canonical overlay axis and reference helpers', () => {
                 // The two gaps are genuinely independent, at different positions — if
                 // either mapping ever filtered instead of preserving position (the exact
                 // off-by-one risk this fix calls out), the two arrays would desync both
-                // from `dates` and from each other.
-                expect(candleSeries[2]).toBeNull();
-                expect(candleSeries[1]).not.toBeNull();
+                // from `dates` and from each other. Note the two series express a gap
+                // DIFFERENTLY on purpose: the candlestick needs ECharts' '-' sentinel
+                // (null crashes its init), while the broker overlay is an ordinary line
+                // series where null is the correct, documented way to break the line.
+                expect(candleSeries[2]).toBe(ECHARTS_EMPTY_VALUE);
+                expect(candleSeries[1]).not.toBe(ECHARTS_EMPTY_VALUE);
                 expect(brokerSeries[1]).toBeNull();
                 expect(brokerSeries[2]).not.toBeNull();
                 expect(candleSeries).toHaveLength(brokerSeries.length);
+            });
+
+            // ---------------------------------------------------------------
+            // Real-ECharts regression guard for the shipped crash.
+            //
+            // Every assertion above this point inspects VALUES and SOURCE TEXT, and all
+            // of them stayed green while the chart was crashing in the browser — because
+            // the defect only manifests when real ECharts initialises a candlestick
+            // series on a category base axis. That is the gap that let this reach a
+            // developer, so these tests drive the real library instead.
+            //
+            // Headless via SSR mode (`init(null, null, {renderer: 'svg', ssr: true})`):
+            // no DOM, no browser, ~10ms. The canvas renderer cannot be used here — its
+            // painter dereferences the (null) root — which is why `renderer: 'svg'` is
+            // load-bearing and not incidental.
+            // ---------------------------------------------------------------
+            describe('real ECharts: a candlestick gap on a category axis must not kill the chart instance', () => {
+                /** The candles submode's real shape: [candlestick, ...broker overlay lines]
+                 *  over a category base axis, exactly as buildFullSeries emits it. */
+                function candlesSubmodeOption(candleData: Array<number[] | string | null>, brokerData: Array<number | null>) {
+                    return {
+                        xAxis: {type: 'category' as const, data: ['2026-01-01', '2026-01-02', '2026-01-03', '2026-01-04', '2026-01-05']},
+                        yAxis: {type: 'value' as const},
+                        series: [
+                            {name: 'Total P&L', type: 'candlestick' as const, data: candleData},
+                            {name: 'Broker A', type: 'line' as const, data: brokerData},
+                        ],
+                    };
+                }
+
+                function withSsrChart<T>(run: (chart: ReturnType<typeof echarts.init>) => T): T {
+                    const chart = echarts.init(null, null, {renderer: 'svg', ssr: true, width: 400, height: 300});
+                    try {
+                        return run(chart);
+                    } finally {
+                        chart.dispose();
+                    }
+                }
+
+                // The gap values actually produced by the component's own helper, so this
+                // guard is wired to the real mapping rather than to a hand-written '-'.
+                const dates = ['2026-01-01', '2026-01-02', '2026-01-03', '2026-01-04', '2026-01-05'];
+                const ohlcByPosition: Array<{open: number; high: number; low: number; close: number} | null> = [{open: 10, close: 11, low: 9, high: 12}, null, {open: 30, close: 28, low: 27, high: 31}, null, {open: 50, close: 55, low: 49, high: 56}];
+                const realCandleData = dates.map((d, i) => toCandlestickPointImpl(candlePoint(d, ohlcByPosition[i])));
+                const brokerData = [100, null, 300, 400, null];
+
+                it("uses the SAME sentinel value the real component does — closes the loop between this guard's fixture and the source", () => {
+                    // This guard feeds toCandlestickPointImpl (the reimplementation), so on
+                    // its own it would still pass if the REAL toCandlestickPoint regressed
+                    // to `return null`. The source-contract test above is what catches that
+                    // — and this assertion is the link between the two: the value this
+                    // block drives ECharts with must be literally the one the component
+                    // declares, not a local guess that happens to agree today.
+                    const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
+                    const declared = source.match(/const ECHARTS_EMPTY_VALUE = '([^']*)';/)?.[1];
+
+                    expect(declared).toBeDefined();
+                    expect(declared).toBe(ECHARTS_EMPTY_VALUE);
+                });
+
+                it('CONTROL: a null gap genuinely throws inside SeriesModel.init AND leaves the instance dead — without this, the guard below could pass for the wrong reason', () => {
+                    // This is the shipped defect, reproduced end to end. If a future
+                    // ECharts upgrade makes null tolerable, THIS test goes red first and
+                    // tells us the guard below has stopped guarding anything.
+                    const withNullGap = realCandleData.map((value) => (value === ECHARTS_EMPTY_VALUE ? null : value));
+
+                    withSsrChart((chart) => {
+                        expect(() => chart.setOption(candlesSubmodeOption(withNullGap, brokerData))).toThrow(/Cannot read properties of null/);
+
+                        // The throw is only the first symptom. The real damage is that it
+                        // happened before GlobalModel finished building, so the instance is
+                        // left with NO registered series — which is why every later
+                        // setOption silently no-oped while the previous submode's canvas
+                        // stayed on screen and looked like a freeze.
+                        expect(chart.getOption().series).toEqual([]);
+                    });
+                });
+
+                it("initialises cleanly with the helper's '-' sentinel, and the instance is left fully alive", () => {
+                    withSsrChart((chart) => {
+                        expect(() => chart.setOption(candlesSubmodeOption(realCandleData, brokerData))).not.toThrow();
+
+                        // The exact inverse of the control's `series === []`: both series
+                        // registered and addressable BY INDEX, which is the lookup
+                        // (getSeriesByIndex) that produced ~22 console errors on mouse-move.
+                        const registered = chart.getOption().series as Array<{name?: string}>;
+                        expect(registered).toHaveLength(2);
+                        expect(registered.map((s) => s.name)).toEqual(['Total P&L', 'Broker A']);
+                        expect(chart.convertToPixel({seriesIndex: 0}, [0, 2])).toBeDefined();
+                        expect(chart.renderToSVGString().length).toBeGreaterThan(0);
+                    });
+                });
+
+                it('stays alive across a SECOND setOption — the symptom the developer saw was a dead model repainting nothing', () => {
+                    withSsrChart((chart) => {
+                        chart.setOption(candlesSubmodeOption(realCandleData, brokerData));
+                        // A zoom/pan or submode switch issues further setOption calls; on a
+                        // half-built model these are the ones that silently do nothing.
+                        expect(() => chart.setOption({series: [{name: 'Total P&L', type: 'candlestick', data: realCandleData}]})).not.toThrow();
+                        expect(chart.getOption().series).not.toEqual([]);
+                        expect(chart.renderToSVGString().length).toBeGreaterThan(0);
+                    });
+                });
+
+                it('keeps the gap OCCUPYING its slot: a category axis aligns by position, so 5 dates must still yield 5 items', () => {
+                    // Omitting the gap instead of sentinelling it would render without
+                    // throwing — and silently shift every later candle one day earlier.
+                    expect(realCandleData).toHaveLength(dates.length);
+                    expect(realCandleData.filter((v) => v === ECHARTS_EMPTY_VALUE)).toHaveLength(2);
+
+                    withSsrChart((chart) => {
+                        chart.setOption(candlesSubmodeOption(realCandleData, brokerData));
+                        const registered = chart.getOption().series as Array<{data?: unknown[]}>;
+                        expect(registered[0].data).toHaveLength(dates.length);
+                    });
+                });
+
+                it('excludes the reference-series sentinel from the legend while keeping the two Total P&L halves as ONE entry', () => {
+                    // The other half of this fix: with no explicit legend.data, ECharts
+                    // derives entries from every series name and leaked '__pnlReference__'
+                    // into the UI. Dedupe is equally load-bearing — the positive/negative
+                    // halves deliberately share one name and must toggle together.
+                    const PNL_REFERENCE_SERIES_NAME = '__pnlReference__';
+                    const series = [
+                        {name: 'Total P&L', type: 'line' as const, data: [1, 2, 3]},
+                        {name: 'Total P&L', type: 'line' as const, data: [null, null, null]},
+                        {name: PNL_REFERENCE_SERIES_NAME, type: 'line' as const, data: [2, 2, 2]},
+                        {name: 'Broker A', type: 'line' as const, data: [5, 6, 7]},
+                    ];
+                    const legendData = [...new Set(series.map((s) => s.name).filter((n): n is string => typeof n === 'string' && n !== PNL_REFERENCE_SERIES_NAME))];
+
+                    expect(legendData).toEqual(['Total P&L', 'Broker A']);
+
+                    withSsrChart((chart) => {
+                        chart.setOption({
+                            xAxis: {type: 'category' as const, data: ['a', 'b', 'c']},
+                            yAxis: {type: 'value' as const},
+                            legend: {data: legendData},
+                            series,
+                        });
+                        const renderedLegend = chart.getOption().legend as Array<{data?: unknown[]}>;
+                        expect(renderedLegend[0].data).toEqual(['Total P&L', 'Broker A']);
+                        expect(chart.renderToSVGString()).not.toContain(PNL_REFERENCE_SERIES_NAME);
+                    });
+                });
             });
         });
 
@@ -1993,7 +2167,13 @@ describe('canonical overlay axis and reference helpers', () => {
                 expect(updateSeries).toContain('const referencePoints: SeriesPoint[] = entry.pnl.total.points.map((p) => ({...p, value: [p.value[0], referenceValue]}));');
                 expect(updateSeries).toContain('{name: pnlLabels.total, data: entry.pnl.total.points.map((p) => clipToSign(p, true))},');
                 expect(updateSeries).toContain('{name: pnlLabels.total, data: entry.pnl.total.points.map((p) => clipToSign(p, false))},');
-                expect(updateSeries).toContain("{name: '__pnlReference__', data: referencePoints},");
+                // The reference series' name is a shared module-level constant, not an
+                // inline literal: three sites must agree on it (both construction sites
+                // AND applyFullOption's legend exclusion), and a magic string repeated
+                // three times is how the sentinel leaked into the legend in the first place.
+                expect(updateSeries).toContain('{name: PNL_REFERENCE_SERIES_NAME, data: referencePoints},');
+                expect(source).toMatch(/const PNL_REFERENCE_SERIES_NAME = '__pnlReference__';/);
+                expect(updateSeries).not.toContain("'__pnlReference__'");
                 expect(updateSeries).toContain('...entry.pnl.brokers.map((broker) => ({name: broker.brokerName, data: broker.metric.points})),');
 
                 // buildChartUpdateSeries: candles submode is exactly [candle, ...brokers] —
