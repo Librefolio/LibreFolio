@@ -26,9 +26,11 @@ from backend.app.schemas.risk import (
     RiskAnalyticOutput,
     RiskCompositionPolicy,
     RiskDrawdownRecoveryStatus,
+    RiskErrorCode,
     RiskKpiOutput,
     RiskMode,
     RiskReturnBasis,
+    RiskReturnOutput,
     RiskScopeKind,
     RiskStressApplicationRule,
     RiskStressMethod,
@@ -43,12 +45,22 @@ from backend.app.services.risk.base import (
     RiskHistoricalReplayContext,
     RiskUnavailableError,
 )
-from backend.app.services.risk.metrics import summarize_drawdown
+from backend.app.services.risk.metrics import (
+    annualized_expected_return,
+    annualized_sharpe,
+    annualized_volatility,
+    current_buy_and_hold_returns,
+    summarize_drawdown,
+)
 from backend.app.services.risk.quant.optimization_engine import (
     clear_optimization_cache,
 )
 from backend.app.services.risk.quant.workers import (
     shutdown_quant_worker_pools,
+)
+from backend.app.services.risk_plugins.asset_risk_return import (
+    AssetRiskReturnAnalytic,
+    AssetRiskReturnParams,
 )
 from backend.app.services.risk_plugins.comparison import (
     ComparisonAnalytic,
@@ -219,6 +231,7 @@ def make_context(
 def test_registry_discovers_all_deterministic_analytics():
     definitions = RiskAnalyticRegistry.list_definitions()
     assert [definition.analytic_code for definition in definitions] == [
+        "asset_risk_return",
         "comparison",
         "correlation",
         "drawdown_summary",
@@ -396,6 +409,241 @@ def test_risk_contribution_preserves_negative_pctr_and_additivity():
     assert sum(item.percentage_contribution for item in output.items) == pytest.approx(1)
     assert output.items[1].percentage_contribution < 0
     assert output.cash_weight == pytest.approx(0.25)
+
+
+def _risk_return_returns() -> dict[int, list[float]]:
+    """Two divergent series: one trending up, one falling hard.
+
+    Divergence is the only condition under which "the whole" and "the weighted
+    parts" can differ at all — buy-and-hold lets the winner grow into a larger
+    share of the portfolio as the window runs. Two parallel series would make the
+    distinction this fixture exists to expose invisible.
+    """
+    return {
+        1: [round(0.012 + 0.010 * math.sin(index * 0.7), 10) for index in range(24)],
+        2: [round(-0.011 + 0.018 * math.cos(index * 0.4), 10) for index in range(24)],
+    }
+
+
+def _risk_return_context() -> RiskExecutionContext:
+    """A current-composition context whose primary series is the blend, not an asset.
+
+    ``make_context`` points the primary at one prepared asset, which is what the
+    historical modes do. ``current_composition`` does not: the service builds the
+    scope series with ``current_buy_and_hold_returns`` and hands *that* over as the
+    primary. Reproducing it here is what makes "the portfolio is not one of the
+    items" true of the fixture as well as of production.
+    """
+    returns_by_asset = _risk_return_returns()
+    context = make_context(returns_by_asset, mode=RiskMode.CURRENT_COMPOSITION)
+    blend = current_buy_and_hold_returns(
+        returns_by_asset,
+        dict(context.weights),
+        cash_weight=context.cash_weight,
+    )
+    return replace(context, primary_returns=tuple(blend))
+
+
+def test_asset_risk_return_registers_canonical_capabilities():
+    assert AssetRiskReturnAnalytic.analytic_code == "asset_risk_return"
+    assert AssetRiskReturnAnalytic.output_kind.value == "risk_return"
+    assert AssetRiskReturnAnalytic.supported_scopes == (RiskScopeKind.PORTFOLIO,)
+    # A per-asset point is a statement about the mix held now. `historical` has one
+    # TWRR curve and no composition to decompose, so offering it there would have to
+    # invent weights — and the invented ones would be today's, which is this mode.
+    assert AssetRiskReturnAnalytic.supported_modes == (RiskMode.CURRENT_COMPOSITION,)
+    assert AssetRiskReturnAnalytic.min_observations == 20
+    assert AssetRiskReturnAnalytic.algorithm_version == "1.0.0"
+    assert AssetRiskReturnAnalytic.catalog_definition().name_i18n_key == "risk.analytics.assetRiskReturn.name"
+
+
+def test_asset_risk_return_weights_close_with_cash_and_are_not_renormalized():
+    context = _risk_return_context()
+    output = AssetRiskReturnAnalytic().compute(AssetRiskReturnParams(), context).output
+
+    assert output.kind.value == "risk_return"
+    assert [item.asset_id for item in output.items] == list(context.scope_asset_ids)
+    assert all(item.weight == pytest.approx(context.weights[item.asset_id], abs=1e-15) for item in output.items)
+    # Shares of net worth, the same denominator risk_contribution uses. A plot whose
+    # bubbles sum to less than the whole is telling the truth about cash; one
+    # renormalized to the invested part would close at 1 and say nothing about it.
+    assert math.fsum(item.weight for item in output.items) + output.cash_weight == pytest.approx(1.0, abs=1e-12)
+    assert math.fsum(item.weight for item in output.items) == pytest.approx(0.75, abs=1e-12)
+    assert output.cash_weight == pytest.approx(0.25, abs=1e-12)
+
+
+def test_asset_risk_return_measures_the_whole_on_the_primary_series_not_on_the_parts():
+    context = _risk_return_context()
+    annualization = context.annualization_factor
+    output = AssetRiskReturnAnalytic().compute(AssetRiskReturnParams(), context).output
+
+    assert output.portfolio_volatility == pytest.approx(annualized_volatility(context.primary_returns, annualization), rel=1e-12)
+    assert output.portfolio_expected_annual_return == pytest.approx(annualized_expected_return(context.primary_returns, annualization), rel=1e-12)
+
+    # Summing the parts is the plausible shortcut and it answers a different
+    # question: the weights drift inside the window, so the weighted average of the
+    # points is not the point of the whole. Both are right; only one is the portfolio.
+    weighted_volatility = math.fsum(item.weight * item.volatility for item in output.items)
+    weighted_expected = math.fsum(item.weight * item.expected_annual_return for item in output.items)
+    assert output.portfolio_volatility != pytest.approx(weighted_volatility, rel=1e-6)
+    assert output.portfolio_expected_annual_return != pytest.approx(weighted_expected, rel=1e-6)
+
+
+def test_asset_risk_return_portfolio_pair_moves_with_the_primary_and_the_items_do_not():
+    """The pin no weighted average of the items can satisfy.
+
+    Scaling every primary return by two doubles both coordinates of the whole —
+    mean and standard deviation are both homogeneous of degree one — while the
+    prepared series behind the items is untouched, so every point stays put.
+    """
+    context = _risk_return_context()
+    louder = replace(context, primary_returns=tuple(value * 2 for value in context.primary_returns))
+
+    base = AssetRiskReturnAnalytic().compute(AssetRiskReturnParams(), context).output
+    doubled = AssetRiskReturnAnalytic().compute(AssetRiskReturnParams(), louder).output
+
+    assert [(item.asset_id, item.weight, item.volatility, item.expected_annual_return) for item in doubled.items] == [(item.asset_id, item.weight, item.volatility, item.expected_annual_return) for item in base.items]
+    assert doubled.portfolio_volatility == pytest.approx(2 * base.portfolio_volatility, rel=1e-12)
+    assert doubled.portfolio_expected_annual_return == pytest.approx(2 * base.portfolio_expected_annual_return, rel=1e-12)
+
+
+def test_asset_risk_return_slope_through_a_zero_intercept_is_the_sharpe_ratio():
+    """The geometry the arithmetic convention buys, asserted where it is published.
+
+    ``metrics`` pins the identity on a bare series; this pins that the plugin
+    publishes the pair that carries it, so a reader of the chart who measures the
+    slope from the risk-free intercept reads the portfolio's own Sharpe ratio.
+    """
+    context = _risk_return_context()
+    output = AssetRiskReturnAnalytic().compute(AssetRiskReturnParams(), context).output
+    sharpe = annualized_sharpe(context.primary_returns, context.annualization_factor, annual_risk_free_rate=0.0)
+
+    assert sharpe is not None
+    assert output.portfolio_volatility > 0
+    assert output.portfolio_expected_annual_return / output.portfolio_volatility == pytest.approx(sharpe, rel=1e-12)
+
+
+def test_asset_risk_return_requires_a_current_weight_for_every_scope_asset():
+    context = replace(_risk_return_context(), weights={1: 0.5})
+
+    with pytest.raises(RiskUnavailableError) as exc_info:
+        AssetRiskReturnAnalytic().compute(AssetRiskReturnParams(), context)
+
+    assert exc_info.value.code == RiskErrorCode.DATA_UNAVAILABLE
+
+
+def test_asset_risk_return_skips_a_point_it_cannot_measure_instead_of_calling_it_riskless():
+    """One observation is a return without a dispersion, so it yields no point.
+
+    ``PreparedAssetSeriesSet`` refuses a ragged calendar, so the only prepared set
+    in which an asset owns a single observation is one where every asset does. The
+    primary series is supplied separately — it is the blend, not a prepared asset —
+    which is why it is replaced here rather than shortened with the rest.
+
+    What the guard promises is the *absence* of a point: emitting a zero volatility
+    would draw the holding on the vertical axis as if it carried no risk, which is a
+    measurement nobody made.
+    """
+    single_observation = make_context({1: [0.03], 2: [-0.02]}, mode=RiskMode.CURRENT_COMPOSITION)
+    context = replace(
+        single_observation,
+        primary_return_dates=tuple(date(2026, 1, 2) + timedelta(days=index) for index in range(3)),
+        primary_returns=(0.01, -0.004, 0.006),
+    )
+
+    output = AssetRiskReturnAnalytic().compute(AssetRiskReturnParams(), context).output
+
+    assert output.items == []
+    assert output.cash_weight == pytest.approx(0.25, abs=1e-12)
+    assert output.portfolio_volatility == pytest.approx(annualized_volatility(context.primary_returns, context.annualization_factor), rel=1e-12)
+
+
+def test_asset_risk_return_output_survives_the_discriminated_union_round_trip():
+    context = _risk_return_context()
+    output = AssetRiskReturnAnalytic().compute(AssetRiskReturnParams(), context).output
+    payload = output.model_dump(mode="json")
+
+    assert payload["kind"] == "risk_return"
+    assert [item["asset_id"] for item in payload["items"]] == list(context.scope_asset_ids)
+
+    restored = TypeAdapter(RiskAnalyticOutput).validate_python(payload)
+
+    assert isinstance(restored, RiskReturnOutput)
+    assert restored.portfolio_volatility == pytest.approx(output.portfolio_volatility, rel=1e-12)
+    assert restored.portfolio_expected_annual_return == pytest.approx(output.portfolio_expected_annual_return, rel=1e-12)
+    assert restored.cash_weight == pytest.approx(output.cash_weight, rel=1e-12)
+    assert [item.asset_id for item in restored.items] == [item.asset_id for item in output.items]
+
+
+def test_comparison_measures_the_reference_on_the_common_days_it_reports():
+    """The benchmark's own pair must come from the window beta came from.
+
+    A reference routinely has more history than the series it is compared against —
+    an index exists before the portfolio does. Beta and correlation already use the
+    intersection; taking the reference's volatility from its full history would place
+    the benchmark at a coordinate no observation in the reported window supports.
+
+    The primary here starts late and ends early, so the days the reference owns alone
+    sit on both sides of the window — and they are the loud ones.
+    """
+    quiet = [round(0.004 * math.sin(index * 0.5), 10) for index in range(30)]
+    violent = [round(0.05 * math.cos(index * 0.9), 10) for index in range(30)]
+    common = slice(4, 28)
+    full_context = make_context(
+        {1: quiet, 2: violent},
+        scope_kind=RiskScopeKind.ASSET,
+        scope_asset_ids=(1,),
+    )
+    context = replace(
+        full_context,
+        primary_return_dates=full_context.primary_return_dates[common],
+        primary_returns=full_context.primary_returns[common],
+    )
+
+    computation = ComparisonAnalytic().compute(ComparisonParams(comparison_asset_id=2), context)
+    output = computation.output
+    common_returns = violent[common]
+    annualization = computation.annualization_factor
+
+    assert output.observations == len(common_returns)
+    assert len(common_returns) < len(violent)
+    assert output.comparison_volatility == pytest.approx(annualized_volatility(common_returns, annualization), rel=1e-12)
+    assert output.comparison_expected_annual_return == pytest.approx(annualized_expected_return(common_returns, annualization), rel=1e-12)
+
+    # The full history is the wrong window, and on this series it is a visibly
+    # different number — which is what the assertion above would otherwise allow.
+    assert output.comparison_volatility != pytest.approx(annualized_volatility(violent, annualization), rel=1e-6)
+    assert output.comparison_expected_annual_return != pytest.approx(annualized_expected_return(violent, annualization), rel=1e-6)
+
+
+def test_comparison_publishes_the_reference_pair_only_beside_a_beta_it_could_measure():
+    """Same window, same factor, one contract: the diamond and the line agree.
+
+    The reference's expected return is arithmetic, matching ``RiskReturnItem``, so
+    the benchmark's slope through a zero intercept is its own Sharpe ratio on the
+    common days. A compounded figure here would put the diamond off the line while
+    every holding stayed on it.
+    """
+    returns = [round(0.003 * math.sin(index * 0.6) + 0.001, 10) for index in range(24)]
+    reference = [round(0.006 * math.cos(index * 0.45) + 0.002, 10) for index in range(24)]
+    context = make_context(
+        {1: returns, 2: reference},
+        scope_kind=RiskScopeKind.ASSET,
+        scope_asset_ids=(1,),
+    )
+
+    computation = ComparisonAnalytic().compute(ComparisonParams(comparison_asset_id=2), context)
+    output = computation.output
+    annualization = computation.annualization_factor
+    sharpe = annualized_sharpe(reference, annualization, annual_risk_free_rate=0.0)
+
+    assert output.observations == len(reference)
+    assert output.beta is not None
+    assert sharpe is not None
+    assert output.comparison_volatility is not None
+    assert output.comparison_volatility > 0
+    assert output.comparison_expected_annual_return is not None
+    assert output.comparison_expected_annual_return / output.comparison_volatility == pytest.approx(sharpe, rel=1e-12)
 
 
 def test_stress_projects_hypothetical_percentages_and_amounts():
