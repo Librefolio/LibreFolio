@@ -165,7 +165,32 @@ del prodotto: è una misura della sonda**. E `historical_kpi` (asset / `historic
 osservazioni) contro `comparison` (portfolio / `current_composition`, **360**) sono **due
 preparazioni**: l'identità di manuale `beta = ρ·σₚ/σ_b` sbaglia del **19,49 %** fra due
 numeri **entrambi corretti**, e **le due analitiche dichiarano la stessa `analyzed_range`**.
-L'unico campo che le distingue è `n_observations`, **che nessuna card mostra**.
+L'unico campo che le distingue è `n_observations`, ~~**che nessuna card mostra**~~.
+
+> 🔴 **La premessa è scaduta — corretta il 21 Set da A, verificata dal coordinatore.**
+>
+> ```
+> RiskLevelSection:191-194   {#if row.observations !== null} … data-testid="{testId}-metadata-observations"
+> levelMetadata.ts:66        const key = `${observations}|${coverage}|${annualizationFactor}|${returnBasis}`;
+> ```
+>
+> Le osservazioni **sono a schermo su ogni livello**, e — la riga che conta — **stanno nella
+> chiave di raggruppamento**: due analitiche che dissentono sulle osservazioni **si spaccano
+> in due righe** invece di fondersi in una. **È esattamente la difesa che questo vincolo
+> chiedeva.**
+>
+> Ⓔ era vero quando le card erano `RiskMetricCard` e `RiskLevelSection` non aveva ancora lo
+> slot metadata. **Lo slot è arrivato.**
+>
+> ⚠️ **Perché la correzione conta più del fatto**: un debito registrato dopo che è stato
+> pagato manda qualcuno a implementare **due volte la stessa difesa** — e la seconda copia
+> è quella che poi diverge dalla prima senza che nessun cancello se ne accorga.
+
+📌 **E la preparazione è per RICHIESTA, non per analitica** — misurato da A, verificato:
+`service.py:170` chiama `_prepare_asset_series` **una volta, prima del ciclo dei piani**;
+`:230` valuta le osservazioni per piano **sul contesto già preparato**. Quindi più analitiche
+nella stessa richiesta condividono **un solo calendario congiunto**, e la commensurabilità non
+dipende dalla disciplina di chi scrive i plugin: **la garantisce il servizio**.
 
 **Ⓕ Nessun numero che integri sulla finestra entra in un commento, una didascalia o
 un'asserzione.** L'RNG è seminato per *(asset, data)* (`populate_mock_data.py:2162`): **un
@@ -327,9 +352,19 @@ okOutput(): Record<string, unknown>
 finite(value: unknown)
 ```
 
-> 🔴 **I tipi del payload di rischio sono cancellati alla frontiera.** Nessun `null`, nessun
-> tipo generato allargato può produrre un errore di compilazione. **Un verde di `front check`
-> non è una prova che il contratto del payload regga.**
+> ⚠️ **RISTRETTO il 21 Set da P, che si è corretto da sé dopo che il cancello aveva funzionato.**
+>
+> **`front check` non vede come il payload viene *usato*; vede se il client si *costruisce*.**
+>
+> - ✅ **cieco sui consumatori**: `okOutput(): Record<string, unknown>` cancella i tipi, quindi
+>   nessun uso sbagliato del payload può diventare un errore di compilazione;
+> - 🔴 **NON cieco su `generated.ts`**: lo compila, quindi **vede un client che non si costruisce**
+>   — ed è esattamente ciò che ha trovato quando i cinque `asset_set_*` sono usciti `.partial()`.
+>
+> 🔑 **Perché la versione larga era pericolosa, nelle parole di P**: *«detto largo com'era,
+> avrebbe insegnato a ignorare il cancello proprio nel caso in cui ha funzionato»*. È la forma
+> peggiore di un vincolo sbagliato: **non uno che non protegge, ma uno che insegna a scartare
+> l'unica protezione che c'era.**
 
 🔑 **È la forma Ⓘ un piano più sotto**: là il cancello non guardava gli spec per esclusione di
 `tsconfig`; qui guarda il file giusto e **non può vedere la classe di difetto che conta**,
@@ -356,3 +391,24 @@ asset_risk_return  available=0 required=20 -> insufficient_history
 ⚠️ **Aggiungere uno scope alla tupla di un plugin non basta**: senza passare questo cancello si
 ottiene un'analitica **`unavailable` al 100 %** — *lo stesso fallimento con un nome nuovo*.
 Chi allarga uno scope **lo prova end-to-end**, non leggendo `supported_scopes`.
+
+
+### Ⓟ — ripristinare un file fuori perimetro: `git show`, mai `git checkout --`
+
+**`dev.py format` non ha perimetro.** Riformatta anche file che il mandato non possiede — su una
+baseline con debito di formattazione, questo mette chi lo esegue davanti a modifiche che non
+sono sue.
+
+🔴 **Il recupero ovvio è vietato**: `git checkout -- <path>` è sulla lista dei comandi che
+nessun agente esegue. ✅ **La via corretta ottiene lo stesso esito senza toccare Git:**
+
+```bash
+git show HEAD:<path> > <path>
+```
+
+> 🔑 **Uno strumento senza perimetro rende impossibile usarlo senza toccare il lavoro di altri,
+> e poi costringe a un recupero proibito.** La regola sul recupero è giusta; lo strumento che
+> ne crea la necessità no.
+
+⚠️ Se `git show` non basta, **ci si ferma e si chiede**: un ramo sporco costa meno di un ramo
+con una storia che nessuno può ricostruire.
