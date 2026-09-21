@@ -3254,7 +3254,11 @@
     },
     "betaBanner": {
       "title": "Risk Analysis is in beta.",
-      "description": "Calculations, results, and the interface may change before the stable release."
+      "description": "Calculations, results, and the interface may change before the stable release.",
+      "simulation": {
+        "title": "Simulation is still in beta.",
+        "description": "Its outcome depends heavily on how much history is requested relative to the horizon: a short window with a long horizon can produce implausible figures. Every other level of Risk Analysis has left beta."
+      }
     },
     "levels": {
       "l1": {
