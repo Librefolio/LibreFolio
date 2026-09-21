@@ -3700,12 +3700,14 @@
       "next": "Siguiente",
       "exitTour": "Salir del recorrido",
       "skipCurrentTour": "Omitir este recorrido",
-      "gotIt": "Entendido"
+      "gotIt": "Entendido",
+      "continueAnyway": "Continuar de todos modos"
     },
     "guide": {
       "waiting": "Esperando a que esta zona esté disponible…",
       "useWizardAction": "Continúa con el botón indicado.",
-      "exploreThenContinue": "Explora el control indicado y luego continúa."
+      "exploreThenContinue": "Explora el control indicado y luego continúa.",
+      "loadProblem": "Esta parte de la página no se ha cargado a tiempo. Puedes continuar con la guía."
     },
     "tour": {
       "progress": "Paso {current} de {total}",
@@ -3830,10 +3832,10 @@
         "fx": "FX",
         "asset": "Activos"
       },
-      "armedToast": "{flow} está listo. Abre la función para empezar.",
+      "armedToast": "{flow} está listo en esta pestaña. Abre la función para empezar.",
       "cancelArmed": "Cancelar activación",
       "groupProgress": "{completed}/{total} guías completadas",
-      "armedAtNextTrigger": "Listo para la próxima activación: {flow}.",
+      "armedAtNextTrigger": "Listo en esta pestaña: {flow} se iniciará en la próxima activación. Cerrar la pestaña lo cancela.",
       "replayNextTrigger": "Repetir en la próxima activación"
     },
     "importGuide": {
