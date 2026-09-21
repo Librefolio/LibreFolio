@@ -4,10 +4,15 @@ Revision ID: 003_user_onboarding_progress
 Revises: 5b1333fa6b07
 Create Date: 2026-09-10
 
-Existing users keep their established settings, so Welcome is grandfathered as
-completed. Every guide starts pending and appears only at its own trigger.
-Users created after this migration receive pending rows lazily through the
+Existing users are not taught an application they already use. Welcome is
+grandfathered as completed because their settings are demonstrably configured;
+every tour and guide is seeded as skipped, which suppresses the trigger exactly
+like completed while staying truthful that they were never offered it. Only
+users created after this migration receive pending rows, lazily, through the
 onboarding service.
+
+Skipped is deliberate over completed: it keeps "was never shown this" distinct
+from "went through it", so the flows can still be offered retroactively.
 """
 
 from typing import Sequence, Union
@@ -63,27 +68,28 @@ def upgrade() -> None:
     conn.execute(
         sa.text("""
             INSERT OR IGNORE INTO user_onboarding_progress
-                (user_id, flow, status, version, created_at, updated_at, completed_at)
+                (user_id, flow, status, version, created_at, updated_at, completed_at, skipped_at)
             SELECT users.id, flows.flow, flows.status, :version,
                    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
-                   CASE WHEN flows.status = 'completed' THEN CURRENT_TIMESTAMP ELSE NULL END
+                   CASE WHEN flows.status = 'completed' THEN CURRENT_TIMESTAMP ELSE NULL END,
+                   CASE WHEN flows.status = 'skipped' THEN CURRENT_TIMESTAMP ELSE NULL END
             FROM users
             CROSS JOIN (
                 SELECT 'welcome' AS flow, 'completed' AS status
-                UNION ALL SELECT 'intro_tour', 'pending'
-                UNION ALL SELECT 'transactions_page_guide', 'pending'
-                UNION ALL SELECT 'transaction_create_guide', 'pending'
-                UNION ALL SELECT 'transaction_bulk_guide', 'pending'
-                UNION ALL SELECT 'import_guide', 'pending'
-                UNION ALL SELECT 'broker_page_guide', 'pending'
-                UNION ALL SELECT 'broker_guide', 'pending'
-                UNION ALL SELECT 'broker_detail_guide', 'pending'
-                UNION ALL SELECT 'fx_page_guide', 'pending'
-                UNION ALL SELECT 'fx_guide', 'pending'
-                UNION ALL SELECT 'fx_detail_guide', 'pending'
-                UNION ALL SELECT 'asset_page_guide', 'pending'
-                UNION ALL SELECT 'asset_guide', 'pending'
-                UNION ALL SELECT 'asset_detail_guide', 'pending'
+                UNION ALL SELECT 'intro_tour', 'skipped'
+                UNION ALL SELECT 'transactions_page_guide', 'skipped'
+                UNION ALL SELECT 'transaction_create_guide', 'skipped'
+                UNION ALL SELECT 'transaction_bulk_guide', 'skipped'
+                UNION ALL SELECT 'import_guide', 'skipped'
+                UNION ALL SELECT 'broker_page_guide', 'skipped'
+                UNION ALL SELECT 'broker_guide', 'skipped'
+                UNION ALL SELECT 'broker_detail_guide', 'skipped'
+                UNION ALL SELECT 'fx_page_guide', 'skipped'
+                UNION ALL SELECT 'fx_guide', 'skipped'
+                UNION ALL SELECT 'fx_detail_guide', 'skipped'
+                UNION ALL SELECT 'asset_page_guide', 'skipped'
+                UNION ALL SELECT 'asset_guide', 'skipped'
+                UNION ALL SELECT 'asset_detail_guide', 'skipped'
             ) AS flows
             """),
         {"version": _CURRENT_VERSION},
@@ -91,9 +97,9 @@ def upgrade() -> None:
     conn.execute(
         sa.text("""
             INSERT OR IGNORE INTO user_onboarding_step_progress
-                (user_id, flow, step_id, status, version, created_at, updated_at)
-            SELECT users.id, steps.flow, steps.step_id, 'pending', :version,
-                   CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                (user_id, flow, step_id, status, version, created_at, updated_at, skipped_at)
+            SELECT users.id, steps.flow, steps.step_id, 'skipped', :version,
+                   CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
             FROM users
             CROSS JOIN (
                 SELECT 'transaction_bulk_guide' AS flow, 'transaction.bulk.workspace' AS step_id
