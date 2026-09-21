@@ -3700,12 +3700,14 @@
       "next": "Suivant",
       "exitTour": "Quitter le parcours",
       "skipCurrentTour": "Ignorer ce parcours",
-      "gotIt": "Compris"
+      "gotIt": "Compris",
+      "continueAnyway": "Continuer quand même"
     },
     "guide": {
       "waiting": "En attente de la disponibilité de cette zone…",
       "useWizardAction": "Continuez avec le bouton indiqué.",
-      "exploreThenContinue": "Explorez le contrôle indiqué, puis continuez."
+      "exploreThenContinue": "Explorez le contrôle indiqué, puis continuez.",
+      "loadProblem": "Cette partie de la page n'a pas pu être chargée à temps. Vous pouvez poursuivre le guide."
     },
     "tour": {
       "progress": "Étape {current} sur {total}",
@@ -3830,10 +3832,10 @@
         "fx": "FX",
         "asset": "Actifs"
       },
-      "armedToast": "{flow} est prêt. Ouvrez la fonctionnalité pour commencer.",
+      "armedToast": "{flow} est prêt dans cet onglet. Ouvrez la fonctionnalité pour commencer.",
       "cancelArmed": "Annuler l’activation",
       "groupProgress": "{completed}/{total} guides terminés",
-      "armedAtNextTrigger": "Prêt pour la prochaine activation : {flow}.",
+      "armedAtNextTrigger": "Prêt dans cet onglet : {flow} démarrera à la prochaine activation. Fermer l'onglet l'annule.",
       "replayNextTrigger": "Relancer à la prochaine activation"
     },
     "importGuide": {

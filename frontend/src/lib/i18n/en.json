@@ -3700,12 +3700,14 @@
       "next": "Next",
       "exitTour": "Exit tour",
       "skipCurrentTour": "Skip this tour",
-      "gotIt": "Got it"
+      "gotIt": "Got it",
+      "continueAnyway": "Continue anyway"
     },
     "guide": {
       "waiting": "Waiting for this area to become available…",
       "useWizardAction": "Continue with the indicated button.",
-      "exploreThenContinue": "Explore the indicated control, then continue."
+      "exploreThenContinue": "Explore the indicated control, then continue.",
+      "loadProblem": "This part of the page didn't load in time. You can continue with the guide."
     },
     "tour": {
       "progress": "Step {current} of {total}",
@@ -3830,10 +3832,10 @@
         "fx": "FX",
         "asset": "Assets"
       },
-      "armedToast": "{flow} is ready. Open its feature to start.",
+      "armedToast": "{flow} is ready in this tab. Open its feature to start.",
       "cancelArmed": "Cancel activation",
       "groupProgress": "{completed}/{total} guides completed",
-      "armedAtNextTrigger": "Ready for the next trigger: {flow}.",
+      "armedAtNextTrigger": "Ready in this tab: {flow} starts at its next trigger. Closing the tab cancels it.",
       "replayNextTrigger": "Replay at next trigger"
     },
     "importGuide": {
