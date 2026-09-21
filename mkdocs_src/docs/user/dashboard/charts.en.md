@@ -6,7 +6,7 @@ The chart section sits below the KPI cards and gives you a **historical and stru
 
 ## 📈 Portfolio Growth Chart {: #portfolio-growth-chart }
 
-The growth chart shows how your portfolio evolved in value over the selected period. Use the **Abs / %** toggle in the top-right corner to switch between two views.
+The growth chart shows how your portfolio evolved over the selected period. Use the **Abs / % / P&L** toggle in the top-right corner to switch between the three views: absolute values, rates of return, and the money actually earned.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-growth" data-carousel-interval="5000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
   <div class="lf-screenshot-carousel-item is-active chart-crop-container" data-title="📈 Absolute Mode" alt="Growth Chart — Absolute Mode">
@@ -63,6 +63,109 @@ The gap between MWRR and TWRR is the [Timing Effect](../../financial-theory/tech
 !!! note "MWRR unavailable"
 
     If a **Data Quality banner** appears saying MWRR is unreliable, the MWRR series is hidden from the % chart. The issue typically occurs when the period has very large cash flows relative to the starting portfolio size, causing the mathematical solver to be unstable. ROI and TWRR are always shown.
+
+### P&L mode — the money you made {: #pnl-mode }
+
+The third position of the toggle drops the valuation narrative and answers a single question: **how much money has this portfolio actually made?** The value plotted is your **Total P&L** — NAV minus deposited capital — counted **since inception** and never re-based.
+
+That last point matters when you zoom: narrowing the view to March does not restart the count at zero in March, it shows the accumulated result as it stood on each day of March. To read "how much did I gain since the left edge of the view", use the dashed reference line described below.
+
+Selecting **P&L** reveals a second picker at the top-left of the plot, with three mutually exclusive submodes:
+
+| Submode | What it draws | The question it answers |
+|---------|---------------|------------------------|
+| **Line** | Accumulated P&L as a single line | How has my result moved over time? |
+| **Candles** | One synthetic candle per day, week, or month | How wide was the swing inside each period? |
+| **Income** | Signed bars of the cash that actually moved | Where did the money come from, and what did it cost me? |
+
+On narrow screens the three buttons fold down to their icons only; the labels stay available to screen readers and as hover tooltips.
+
+#### Line — accumulated P&L {: #pnl-line }
+
+A single line of your Total P&L, drawn **green while it is above zero and red while it is below** — so a portfolio that has spent time under water shows it directly.
+
+A **dashed grey horizontal line** marks the P&L you had already accumulated on the first day visible in the view. The gap between the curve and that line is what you gained (or lost) *since the left edge*, while the scale itself stays anchored to the since-inception figure.
+
+When the effective broker scope contains **two or more brokers**, one dashed coloured line per broker is added, each named after its broker in the legend below the chart. On every single day, those broker lines **add up exactly to the total** — they are the additive contributions that compose the total, computed inside the one combined scope.
+
+!!! warning "Broker lines are contributions, not standalone performance"
+
+    A broker line is that broker's share of the combined result — it is **not** the same thing as opening that broker on its own and reading its performance there.
+
+    The difference shows up around internal transfers: value in transit stays attributed to the **departure** broker until it arrives, then moves to the destination. An individual broker line can therefore jump on the transfer dates while the total stays perfectly smooth. That is expected, not a glitch.
+
+With a single broker in scope — and on a broker's own detail page — only the total line is drawn.
+
+Hovering shows the Total P&L for that date, plus one signed row per broker when the broker lines are present.
+
+#### Candles — the swing inside the period {: #pnl-candles }
+
+Instead of one point per period, each period becomes a **candle** whose open, high, low, and close are all expressed in P&L, not in price. The **close is exactly the same Total P&L** the Line submode draws for that date — the two submodes never tell different stories about where you ended up.
+
+The high and the low are a different matter, and this is the one thing to understand before reading them:
+
+!!! warning "The extremes are hypothetical"
+
+    Each asset's own daily high and low are summed across the portfolio, independently of one another. Nothing guarantees that every asset hit its high at the same moment, so the top of a candle is a portfolio state that **may never have existed**. The same applies to the bottom.
+
+    The chart says so permanently, in the caption under the plot:
+
+    > *Synthetic — cross-asset high/low are hypothetical and non-simultaneous, not a real intraday series.*
+
+    A shorter form of the same warning is repeated inside the tooltip. Treat the extremes as an indication of how much the portfolio *could* have swung, never as a measured intraday series.
+
+Three further things to expect:
+
+- **There is no volume.** The panel you may be used to under a price candlestick chart is deliberately absent: a portfolio's P&L has no traded volume of its own, so none is invented.
+- **Thin candles are normal here.** Open and close are usually close to each other, while the summed high/low spread is wide — so the bodies look small between long wicks. That is the shape of the data, not a defect.
+- **Gaps are honest.** If a held asset could not be valued on a given day, that day has no candle at all rather than a guessed or zeroed one. Assets with no known intraday range contribute a flat open = high = low = close instead of a made-up spread, which is another reason bodies can be thin.
+
+When the chart groups days into weeks or months, the candle opens at the **first day's open**, closes at the **last day's close**, and takes the **highest high** and **lowest low** of the days in between.
+
+Broker lines behave as in the Line submode: with two or more brokers in scope, each broker's closing P&L is overlaid as a dashed line on top of the candles.
+
+The tooltip lists **Open, Close, High, Low** for the period, followed by the broker rows when present.
+
+#### Income — the cash that actually moved {: #pnl-income }
+
+This submode leaves valuations behind entirely and plots your **real, personal cash flows** as bars: only days where something actually happened get a bar, so the chart is deliberately sparse.
+
+Six series are drawn, in three groups:
+
+| Group | Bars | What it represents |
+|-------|------|--------------------|
+| **Income** (stacked) | Dividend · Interest | Money the portfolio paid you |
+| **Costs** | Fees & taxes | What the activity cost you — negative, so it hangs below the axis |
+| **Capital** | Deposit | Fresh external money you put in |
+| **Purchases** (stacked) | New capital · Reinvested | What you spent on buys that day, split by where the money came from |
+
+The purchases pair is the interesting one: it separates buying with **fresh capital** you deposited from buying with **returns you had already earned** and put back to work. Both halves together equal that day's total purchase outflow.
+
+!!! info "Signed, not absolute"
+
+    Values keep their sign. A negative correction on a past dividend **reduces** the dividend bar rather than being counted as more income, and fees and taxes stay negative instead of being flipped into a positive "cost" magnitude.
+
+    Both asset-linked entries and broker-level ones (a custody fee charged to the account with no asset attached) are counted — each exactly once.
+
+Because of that, the totals reconcile with the KPI cards: over the same window and the same broker scope, the dividend and interest bars add up exactly to the **Dividends & interest** row of the [Period P&L card](kpi-cards.md#card-1-period-pl).
+
+The tooltip shows Dividend and Interest with their **Total** — which covers income only. Fees & taxes, deposits, and purchases are listed below it as separate rows when they are non-zero, precisely because they are not earnings: a deposit does not make you richer, and money spent on a purchase has only changed shape.
+
+No broker lines are drawn in this submode.
+
+When the chart groups days into weeks or months, these bars **add up the days in the group** — unlike the line and the candles, which carry a running level forward, a flow is only meaningful as a sum.
+
+!!! note "When a currency cannot be converted"
+
+    If a transaction cannot be converted into your display currency on its date, it is left out of the sums instead of being silently shown as zero, and the missing currency pair is reported through the usual data-quality channel.
+
+#### The zoom window — 1W / 1M / 1Y / All {: #pnl-zoom }
+
+The buttons in the top-right corner of the plot set how much history is visible: the **last week, month, or year**, or **All** for the full range. They are available in all three P&L submodes.
+
+- It is the **same zoom** you get by dragging or scrolling on the chart, so you can click a preset and then fine-tune it by hand.
+- Your choice **survives switching submodes** — pick 1M on the line, switch to candles, and you are still looking at the last month.
+- It changes **what you look at, not what is computed**. The values stay counted since inception, and the date range selected at the top of the dashboard still decides which data exists in the first place.
 
 ---
 

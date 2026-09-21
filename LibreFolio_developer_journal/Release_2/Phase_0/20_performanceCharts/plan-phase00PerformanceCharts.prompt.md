@@ -2114,6 +2114,229 @@ difetto residuo.
 > invece che taciuto: una violazione che non produce danno resta una violazione, e il valore
 > della regola sta nel non doverne verificare il danno caso per caso.
 
+### 6.0.11 Debiti aperti e riallineamento completo degli indicatori (2026-09-21)
+
+> **⚠️ Fuori pista (un rinvio con prerequisito indefinito è un abbandono non deciso,
+> 2026-09-21):** il fix del flag `missing` in `aggregateSumSeries` era stato rinviato *«dopo
+> che i goldens provano l'identità del refactor»*. Ma «il refactor» era ② — la ladder a 8
+> rung — che è stata **rinviata sine die**. Quindi il debito era appeso a un evento che
+> nessuno ha in calendario: **rinviato sulla carta, cancellato di fatto, senza che nessuno
+> abbia deciso di cancellarlo.**
+>
+> Il prerequisito reale, riscritto per esteso: **corpus golden esistente** — soddisfatto oggi,
+> `frontend/src/lib/components/charts/__tests__/timeSeriesAggregationGolden.test.ts` esiste e
+> gira. **Non ②.** La catena verso la ladder era una formulazione, non una dipendenza: il fix
+> ha bisogno che la rete esista, non che il refactor avvenga.
+>
+> Regola generale: **un rinvio con prerequisito indefinito è indistinguibile da un abbandono**,
+> e chi lo legge dopo non può sapere quale dei due fosse inteso. Un rinvio onesto nomina la
+> condizione che lo scioglie, e quella condizione deve essere **qualcosa che qualcuno può
+> osservare**. «Dopo il refactor» non lo è; «quando questo file esiste» lo è.
+
+#### Debiti aperti
+
+| # | Debito | Prerequisito (osservabile) | Note |
+|---|---|---|---|
+| DBT-A | `aggregateSumSeries` propaga `missing` da `{...lastPoint}` su bucket con somma reale non nulla | **soddisfatto**: corpus golden esistente | Commit separato, in cui il delta golden è l'*evidenza*. Le barre Income sono immuni due volte (`aggregateFlowMetric` costruisce `{date, value}` senza campo `missing` e legge solo `value`) |
+| DBT-B | `aggregateEnvelope` esportata con **zero chiamanti di produzione** | decisione di chi sa perché fu scritta | Non è una decisione da prendere in silenzio dentro un refactor meccanico |
+| DBT-C | ② ladder di risoluzione a 8 rung | il developer, viste le candele a 44 px, dichiara che i **salti** gli danno fastidio | Costo misurato: `mapDateToBucket` in 9 file, tripletta conteggi in 8, deroga su `ChartResolution`, goldens da rigenerare |
+| DBT-D | `chartCoreHelpers.test.ts`: asserzioni che specchiano **il testo sorgente** | nessuno — valutabile subito | Tre ri-pinnature in una settimana, tutte di sola grafia. La stessa proprietà è esprimibile **eseguendo** la funzione invece di leggerne il sorgente |
+
+#### Backlog adiacente — non debito di questo piano
+
+Criterio di proprietà, non di vicinanza di file: **il piano possiede il *primary mode* di
+Asset detail** (`Price | N-day return`, §3.1). La risoluzione delle candele in modo **Price**
+è comportamento preesistente che il piano non ha mai promesso — anzi §3.1 esclude proprio il
+candlestick dal modo N-day. Quindi le due voci seguenti sono *adiacenti*, non da chiudere qui.
+
+| # | Voce | Stato |
+|---|---|---|
+| ADJ-1 | `PriceChartFull`: il recompute di risoluzione non riparte al cambio tipo grafico (parte solo da dataZoom e resize) | misurato |
+| ADJ-2 | `PriceChartFull`: la risoluzione delle candele è decisa in un ramo **non renderizzato**. Il container è bindato solo dentro `{#if chartType === 'line'}`, quindi in modo candela `renderChart()` esce subito e `CandlestickChart` riceve una risoluzione calcolata sotto grammatica **linea**, mai ricalcolata mentre le candele sono a schermo | misurato |
+|  | **Ipotesi — non misurata da nessuno:** ADJ-1 potrebbe chiudersi *per conseguenza* di ADJ-2. Se la decisione si sposta dentro `CandlestickChart`, quel componente ha `chartInstance` e dataZoom propri, quindi il recompute ripartirebbe per costruzione invece che per aggiunta. **Indizio con una ragione, non un piano**: chi la prende in mano deve sapere che non è stata verificata | ipotesi |
+
+> **⚠️ Fuori pista (la regola applicata come lista di compiti, 2026-09-21):** §6.0.8 aveva
+> corretto la deriva degli indicatori su **due** punti — tabella fasi §6 e footer §12 — perché
+> erano i due che il coordinatore aveva indicato. La clausola aggiunta alla regola trasversale
+> diceva già *«vale per **ogni** punto di lettura rapida, non solo per l'ultimo che hai
+> toccato»*, ed è stata scritta da chi poi non l'ha applicata al proprio documento.
+>
+> Un passaggio sistematico su tutte le tabelle ha trovato **altri sette** indicatori stantii,
+> e tre erano stati scritti o lasciati nella correzione precedente, lo stesso giorno:
+>
+> - quattro righe `REOPENED` nel sotto-ledger I60F, sopra **203 note datate fino al 09-16** la
+>   cui ultima dice *«Manual desktop/mobile acceptance remains the only open I60F gate»*;
+> - la riga I60 della tabella principale, ferma a `MANUAL REVIEW ROUND 2 IN PROGRESS`;
+> - la riga I50 **scritta quella mattina**, con `LEGGIBILITÀ CANDELE APERTA` — superata poche
+>   ore dopo da `70e87ac3a`;
+> - il footer **riscritto quella mattina**: «14 commit» (erano 17), «ferma sulla leggibilità
+>   delle candele» (risolta), «passa a ~38 commit indietro» (il merge era già avvenuto: 2).
+>
+> Il dato che conta più della correzione: **un indicatore può diventare stantio nello stesso
+> giorno in cui lo scrivi.** Non è una questione di manutenzione trascurata nel tempo — è che
+> un indicatore descrive uno stato e lo stato si muove, quindi va riletto ad ogni consegna, non
+> ad ogni sospetto. Il metodo che funziona è il passaggio unico e meccanico su *tutti* i punti
+> di lettura rapida (`grep` sui valori di stato delle tabelle, sulle checkbox, sul footer), non
+> la correzione dei punti che qualcuno ha segnalato.
+
+### 6.0.12 Il buco del dettaglio broker — una nota corretta applicata alla prop sbagliata (2026-09-21)
+
+> **⚠️ Fuori pista (contratto §3.3 dichiarato e non consegnato, 2026-09-21):** sulla pagina di
+> dettaglio broker il submode **candele non funzionava affatto**. `brokers/[id]/+page.svelte`
+> montava `GrowthChart` passando `incomeHistory`, `costHistory`, `depositHistory` e
+> `acquisitionFunding` — ma **né `pnlCandles` né `onRequestPnlCandles`**. Il bottone Candles è
+> renderizzato senza guardia (`GrowthChart.svelte:1722`), quindi l'utente poteva selezionarlo:
+> il fetch lazy chiamava un callback `undefined`, i dati non arrivavano mai, e ogni bucket
+> restava la sentinella `'-'`. **Plot vuoto con la spia in legenda** — lo stesso identico
+> sintomo di §6.0.6, in un punto mai cablato.
+>
+> Il piano lo prometteva esplicitamente, §3.3: *«one broker or Broker detail: total candle
+> only»*. Non è backlog adiacente come `PriceChartFull` (comportamento preesistente mai
+> promesso): è **contratto dichiarato e non consegnato**.
+>
+> Perimetro chiuso per misura, non per presunzione — dei tre submode esposti su quella pagina:
+>
+> | submode | legge | sul broker |
+> |---|---|---|
+> | line | `history` | passato → funzionava |
+> | income | `incomeHistory` | passato → funzionava |
+> | candles | `pnlCandles` + `onRequestPnlCandles` | **assenti → rotto** |
+>
+> Un solo buco, una sola pagina, nessun terzo caso.
+
+> **⚠️ Fuori pista (perché l'ho mancato: una nota che ha perso la sua condizione,
+> 2026-09-21):** riga 770 di questo stesso piano, scritta da me:
+>
+> > *«(broker detail) needed NO change — it never passes the prop, so it naturally renders
+> > Total-only»*
+>
+> **Quel ragionamento è corretto — per `brokerPnlHistory`.** Non passare la prop dell'overlay
+> per-broker produce esattamente il "total only" promesso. Ma la conclusione — *«non passare
+> la prop va bene»* — è stata riusata su una prop **diversa**, dove non passarla non significa
+> «solo il totale» ma **«nessun dato affatto»**. Stessa frase, polarità opposta.
+>
+> La regola che ne esce, e che generalizza oltre le prop: **una nota che conserva la
+> conclusione e lascia cadere la condizione non invecchia — si *allarga*.** E si allarga in
+> silenzio, perché chi la rilegge trova un'affermazione ben formata e non ha modo di sapere
+> che le mancava un pezzo: il pezzo mancante non è scritto da nessuna parte.
+>
+> Distinzione utile rispetto a §6.0.10: il commento stantio in `GrowthChart` era falso **per
+> il tempo**; questa nota era falsa **per il dominio**. La seconda è peggio, perché contro il
+> tempo esiste almeno la data.
+
+> **⚠️ Fuori pista (invisibile all'intera suite per costruzione, 2026-09-21):** nessun test
+> poteva vederlo. Gli unit test montano `GrowthChart` **fornendo** le prop, quindi non possono
+> osservare una pagina che non le passa; e l'E2E sulla superficie P&L **non esiste** (buco
+> I70). Il difetto viveva esattamente nel punto cieco fra le due classi.
+>
+> L'ha trovato **`docs-writer`**, leggendo il codice per descriverlo. È il secondo caso in
+> giornata di uno specialista che trova più del proprio mandato, e non è fortuna: **chi deve
+> descrivere una cosa per iscritto è obbligato a guardarla tutta, mentre chi la verifica
+> guarda dove ha deciso di guardare.**
+
+> **Note implementazione (fix, 2026-09-21):** cablate le due prop mancanti e aggiunto un
+> `loadPnlCandles()` **scopato al broker** (`fetchReport([data.brokerId], …,
+> {includePnlCandles: true})`), non il loader della dashboard: quello richiede lo scope
+> selezionato nel portafoglio, quindi riusarlo avrebbe dipinto OHLC dell'intero portafoglio
+> sotto l'intestazione di un singolo broker — **un numero sbagliato, peggio del plot vuoto,
+> perché il plot vuoto si vede e un numero sbagliato no**. `brokerPnlHistory` resta
+> deliberatamente fuori: §3.3 dice *total candle only*. `pnlCandles` viene azzerata in
+> `loadOverview` così che un cambio di valuta o intervallo forzi un nuovo fetch invece di
+> mostrare l'OHLC della finestra precedente. La pagina è in modalità legacy (12 `$:`, zero
+> rune): usate `let` semplici, coerenti con le sorelle.
+>
+> **Verifica al confine di rete, non a occhio.** Lo strumento intercetta `/portfolio/report` e
+> misura la cosa che era rotta — il fetch che non partiva:
+>
+> | | richieste dopo il click su Candles |
+> |---|---|
+> | pre-fix | **`[]`** — zero |
+> | post-fix | **1**, `broker_ids: [1]`, `include_pnl_candles: true`, `candlePoints: 93`, `candleNonNull: 93` |
+>
+> Verde → rosso → verde, con `shasum` del file identico prima e dopo la reintroduzione
+> temporanea del difetto (`21c766054accf785`). Il `broker_ids: [1]` è la prova empirica che lo
+> scope è del broker e non del portafoglio.
+>
+> **Osservazione che vincola l'E2E di I70:** in tutti e tre i submode, *anche da rotto*, il
+> canvas esiste ed è 641×360. Un test che asserisse «il grafico è presente» sarebbe passato
+> contro il codice guasto. **L'asserzione deve essere sui dati, non sulla presenza.**
+
+### 6.0.13 I70 — copertura E2E della superficie P&L (2026-09-21)
+
+> **Note implementazione (I70, 2026-09-21):** 9 casi E2E su due spec **già registrati**
+> (`portfolio/dashboard.spec.ts`, `brokers/brokers-detail.spec.ts`), più una helper additiva
+> in `e2e/fixtures/charts.ts`. Zero modifiche a `scripts/test_runner/`, zero superficie di
+> prodotto aggiunta. Gate: dashboard **14/14**, broker detail **28/28**, entrambe verificate
+> in proprio e non accettate sul report; `--workers 4` verde su tre esecuzioni.
+>
+> **Il vincolo che ha determinato la forma dello spec**, misurato prima di scriverlo: con la
+> funzionalità completamente guasta, in tutti e tre i submode, **il canvas esiste ed è
+> 641×360**. Un `expect(canvas).toBeVisible()` sarebbe passato contro il codice rotto, con
+> l'aria di aver verificato il grafico. Peggio della spia in legenda di §6.0.6: lì i pixel
+> erano zero, qui **guasto e salute producono lo stesso identico DOM**.
+>
+> Regola che ne deriva: **un'asserzione che non distingue i due mondi non è un'asserzione, è
+> una descrizione.** L'unico modo di saperlo è provare a farla fallire. I rossi dei casi 3 e 7
+> sono infatti arrivati sul **conteggio delle richieste di rete** (`candle requests 0`), non su
+> un attributo del DOM.
+>
+> Ripartizione degli strumenti, che vale oltre questo spec:
+>
+> | strumento | risponde a |
+> |---|---|
+> | `data-chart-ready` / `data-chart-renders` (infrastruttura esistente, 14 componenti) | **quando** guardare — il ridisegno è avvenuto |
+> | richiesta/risposta di rete | **cosa** c'è — `include_pnl_candles`, `broker_ids`, punti non nulli |
+>
+> `data-chart-ready` da solo **non** basta: il grafico guasto disegnava 93 sentinelle ed
+> ECharts emetteva `finished` regolarmente, quindi l'attributo valeva `'true'` in entrambi i
+> mondi. Risolve il timing, non il green-on-empty.
+
+> **⚠️ Fuori pista (un'asserzione richiesta e non scrivibile, 2026-09-21):** il caso 4 doveva
+> asserire `series.length === 6` per le sei barre della submode Income. **Non è raggiungibile**:
+> `echarts` non è globale nel bundle, `getInstanceByDom` non è disponibile da `page.evaluate`,
+> il DOM porta solo `_echarts_instance_`, e il tooltip non sostituisce perché il formatter
+> emette le righe batch-2 solo nei giorni che hanno avuto quell'attività — il conteggio
+> dipenderebbe da dove cade il puntatore.
+>
+> Sostituito con i **sei canali di dati**: le quattro flag richieste e i sei campi
+> (`dividend`, `interest`, `cost`, `deposit`, `from_new_capital`, `from_reinvested`) con almeno
+> un punto non nullo, più il tooltip che rilegge il blocco income dal grafico.
+>
+> **Il sostituto è più debole in un punto preciso, e va scritto perché nessuno lo riprovi:**
+> non dimostra che il componente mappi i sei canali su sei *serie distinte*. Se GrowthChart
+> smettesse di disegnare `from_reinvested`, richiesta e risposta resterebbero identiche e il
+> test resterebbe verde.
+>
+> **Quella metà è però coperta altrove**, a un altro livello:
+> `chartCoreHelpers.test.ts:2262` — *«income-submode fixed 6-slot order»* — pinna i sei slot
+> per indice (`seriesData[5]`) e gruppo di stack. Quindi la copertura è completa **fra due
+> livelli**: l'unit test pinna la costruzione delle serie, l'E2E pinna la pipeline dei dati.
+> Nessuno dei due chiude da solo. Non aggiungere un hook per unificarli: un hook introdotto per
+> far passare un test diventa superficie di prodotto che nessuno ha deciso di spedire.
+
+> **⚠️ Triage (fallimento 1 su 9, NON etichettato flaky, 2026-09-21):**
+> `brokers-detail.spec.ts` → *«closing the panel clears the ?asset= query param»* è fallito
+> **una volta su sei** in parallelo durante lo sviluppo di I70 (osservazione di `test-author`),
+> su `expect(lots-analysis-panel).not.toBeVisible({timeout: 5000})`. Tre mie riesecuzioni a
+> `--workers 4` (42/28/28): **non riprodotto**. Totale 1 su 9.
+>
+> Ipotesi percorse nell'ordine del protocollo:
+>
+> - **§1 posizione** — non è la causa (il rosso è sulla chiusura, non sulla selezione). Ma
+>   l'helper `firstHoldingRow()` usa `rows.first()` **non filtrato**, che è un'istanza latente
+>   della stessa classe nello stesso file: da sistemare, non oggi.
+> - **§2 orologio** — il budget fisso di 5 s è il **sintomo**, non la causa.
+> - **§3 stato condiviso** — parzialmente **escluso per misura**: `closeAssetPanel()` fa
+>   `goto(..., {replaceState: true})` e la visibilità del pannello è legata allo stato derivato
+>   dall'URL, quindi la chiusura attende la navigazione; ma `+page.ts` fa **solo**
+>   `parseInt(params.id)`, nessun fetch. **La chiusura non è legata al backend**, quindi il
+>   carico dei report candele non può ritardarla per quella via.
+>
+> Resta come candidato la contesa **CPU a livello macchina** con quattro browser concorrenti,
+> **non dimostrata**. Verdetto §8 provvisorio: *slowness*, voce di lavoro propria.
+> **Preesistente e non di questo workstream** — riportato attribuito, non assorbito e non
+> chiamato flaky: «flaky» è il nome che si dà a una causa quando si smette di cercarla.
+
 ## 6. Dependency-safe phases and owners
 
 | Phase | Size | Owner | Dependency | Deliverable | Status |
@@ -2125,11 +2348,11 @@ difetto residuo.
 | I20 | L | Portfolio backend integrator | G0 + H0 + F engine released | Additive daily broker P&L + signed canonical income | COMPLETE 2026-09-18 (`8ed7a0f0d`, esteso `d5e834de4`) |
 | I30 | L | Portfolio backend integrator | I20 + same-resolver OHLC envelope | Daily total candles + flat fallback + strict close identity | COMPLETE 2026-09-18 (`8ed7a0f0d`; fix crash asse category `eba37ba41`) |
 | I40 | M | Portfolio backend integrator + coordinator | I20 + I30 + post-H report contract | DTO/report/cache wiring, then coordinator API sync | COMPLETE 2026-09-18 (`8ed7a0f0d`, `d5e834de4`; API sync e i18n eseguiti dal coordinatore) |
-| I50 | L | GrowthChart owner | I40 | Value/Return/P&L core modes; Line/Candles/Income P&L submodes; broker lines and sum aggregation | COMPLETE 2026-09-18 (`8ed7a0f0d` → `69d0d27c6`); LEGGIBILITÀ CANDELE APERTA — vedi §6.0.8 |
-| I60 | XL follow-up | G3 Asset UI + shared chart owner | Initial I60 integrated; explicit developer authorization | Compact duration, contextual Asset/FX axes, separate Return measures, same-N Asset comparisons | MANUAL REVIEW ROUND 2 IN PROGRESS 2026-09-12 |
-| I70 | L | Test author + owners | Relevant implementation phases; H test ownership released | Targeted backend/frontend regressions and integration gates | PARZIALE 2026-09-18 — unit backend (4 nuovi file engine) e frontend (corpus golden 276 voci `d87d45e07`, regressione memo `69d0d27c6`) consegnati; **E2E della superficie P&L assente** |
-| I80 | S | Docs writer + coordinator | Stable integrated UI | English docs, coordinator i18n/runner/changelog records | BLOCKED |
-| I90 | M | Developer + coordinator | I50 + I60 + I70 + I80 | Desktop/mobile operational review, corrections, integration handoff | BLOCKED |
+| I50 | L | GrowthChart owner | I40 | Value/Return/P&L core modes; Line/Candles/Income P&L submodes; broker lines and sum aggregation | COMPLETE 2026-09-18 (`8ed7a0f0d` → `69d0d27c6`); leggibilità candele risolta 2026-09-21 (`70e87ac3a`, soglia per grammatica — §6.0.10), resta la conferma visiva del developer |
+| I60 | XL follow-up | G3 Asset UI + shared chart owner | Initial I60 integrated; explicit developer authorization | Compact duration, contextual Asset/FX axes, separate Return measures, same-N Asset comparisons | IMPLEMENTAZIONE COMPLETA 2026-09-16 (vedi §6.6, ultime note); resta aperta **solo** l'accettazione manuale desktop/mobile del developer |
+| I70 | L | Test author + owners | Relevant implementation phases; H test ownership released | Targeted backend/frontend regressions and integration gates | COMPLETE 2026-09-21 — §6.0.13: 9 casi E2E sulla superficie P&L (dashboard 14/14, broker detail 28/28), oltre agli unit backend |
+| I80 | S | Docs writer + coordinator | Stable integrated UI | English docs, coordinator i18n/runner/changelog records | AUTORIZZATA 2026-09-21 — PARZIALE: le docs G3 sono consegnate (`assets/detail/chart\|measures\|signals`, `fx/chart-settings`, in `2d22130bd`); mancano **solo** quelle G1a/G1b/G1c in `dashboard/*.en.md` |
+| I90 | M | Developer + coordinator | I50 + I60 + I70 + I80 | Desktop/mobile operational review, corrections, integration handoff | IN ATTESA DI I70 + I80 — gate del developer, non implementabile da questo workstream |
 
 > **Note implementazione (I00, 2026-09-10):** only the durable plan, final
 > product decisions, updated ASCII v2 storyboards and minimal feedback-job
@@ -2567,13 +2790,13 @@ strictly out of scope.
 | Step | Scope | Status |
 |---|---|---|
 | I60F.0 | Preserve validation checkpoint, merge target, verify clean authorized baseline | COMPLETE 2026-09-11 |
-| I60F.1 | Generalize hidden calendar-return window to positive integer with safe date arithmetic | REOPENED - SELECTED-RANGE BOUNDARY |
+| I60F.1 | Generalize hidden calendar-return window to positive integer with safe date arithmetic | COMPLETE 2026-09-16 — finestra custom presente (`CALENDAR_RETURN_PRESETS` + `customAmount`/`customUnit`), boundary del range selezionato chiuso in `2d22130bd` |
 | I60F.2 | Extract reusable compact duration editor without DateRangePicker regression | COMPLETE 2026-09-12 |
-| I60F.3 | Upgrade shared Asset/FX contextual axis settings and localStorage migration | REOPENED - AUTO/INCLUDE0 |
-| I60F.4 | Persist duration badges, icons and state in Asset detail | REOPENED - RANGE AVAILABILITY |
+| I60F.3 | Upgrade shared Asset/FX contextual axis settings and localStorage migration | COMPLETE 2026-09-16 — `AxisScaleMode = 'auto' \| 'include0' \| 'custom'` in `chartSettingsStore.svelte.ts:23` |
+| I60F.4 | Persist duration badges, icons and state in Asset detail | COMPLETE 2026-09-16 — `CompactDurationBadge.svelte` presente e montato da `DateRangePicker` |
 | I60F.5 | Mount separate Price/Return measurement tables and pp presentation | COMPLETE 2026-09-12 |
 | I60F.6 | Add same-N Asset comparison overlays to Return | COMPLETE 2026-09-12 |
-| I60F.7 | Backend/frontend/E2E/manual combined validation and frozen handoff | REOPENED - MANUAL ROUND 2 |
+| I60F.7 | Backend/frontend/E2E/manual combined validation and frozen handoff | GATE AUTOMATICI COMPLETI 2026-09-16; resta **solo** l'accettazione manuale desktop/mobile del developer |
 
 > **Note implementazione (I60F.0, 2026-09-11):** coordinator completed hard
 > Gate 0 at clean merge HEAD
@@ -4774,7 +4997,15 @@ Only after stable implementation:
 
 ### 11.2 G1a
 
-- Top-level GrowthChart controls are exactly `Value | Return % | P&L`.
+- Top-level GrowthChart controls are exactly **three, mutually exclusive**: absolute value,
+  percentage return, and P&L. *(Riformulato 2026-09-21: il criterio citava le stringhe
+  letterali `Value | Return % | P&L`, che non sono mai state il testo dei bottoni — l'UI
+  mostra `Abs | % | P&L` da ben prima di questo piano, e `GrowthChart.svelte:80` documenta la
+  scelta deliberata di **non** rinominare per evitare churn su 14 rami esistenti. Una DoD che
+  cita stringhe di interfaccia è un test di traduzione travestito da criterio di completezza:
+  in un prodotto in quattro lingue non può che fallire. Il criterio ora vincola **quanti modi
+  esistono e che siano mutuamente esclusivi**, che è ciò che il contratto intendeva. Non
+  riportare questo criterio ai nomi del piano: erano descrizioni di significato, non etichette.)*
 - Total is canonical cumulative P&L.
 - Effective broker count drives total-only vs total-plus-broker lines.
 - Dashboard and Broker detail follow the closed surface rules.
@@ -4828,9 +5059,14 @@ No pending row may be marked complete from a plan, fixture or test name alone.
 The current durable state remains:
 
 ```text
-IMPLEMENTATA E COMMITTATA (14 commit, non integrata nel target)
-FERMA SU DECISIONE DEL DEVELOPER: leggibilità delle candele
+IMPLEMENTAZIONE COMPLETA (17 commit, non integrata nel target)
+RESIDUO: I70 (E2E superficie P&L) + I80 (docs G1a/G1b/G1c) + accettazione manuale developer
 ```
+
+Aggiornato **2026-09-21** (secondo giro, stesso giorno). Il contratto di prodotto §3 —
+G3, G1a, G1b, G1c — è **interamente consegnato e verificato**; la leggibilità delle candele,
+che era il fermo del developer, è risolta da `70e87ac3a` (§6.0.10). Il piano non ha più
+superficie di implementazione propria: restano due voci da specialista e un gate umano.
 
 Aggiornato **2026-09-21**. Lo stato precedente
 (`PLANNED / IMPLEMENTATION FROZEN / HARD GATE 0 WAITING FOR F`) era **falso**: descriveva la
@@ -4839,14 +5075,18 @@ mentre la narrativa §6.0 avanzava. Le cause e la portata sono in §6.0.8.
 
 Precisazioni necessarie, perché ognuna delle tre è stata fraintesa almeno una volta:
 
-- **Non è un gate su F.** F è integrato da tempo; il fermo attuale è una scelta di sequenza
-  del developer — questo workstream non entra nel target finché la leggibilità delle candele
-  non è risolta. Diverge perché è *attivo*, non perché è bloccato.
-- **Non è un fermo di qualità.** I20/I30/I40/I50 sono consegnate; I70 è parziale (manca l'E2E
-  della superficie P&L); I80 è un buco reale e verificato — nelle pagine mkdocs EN le
+- **Non è un gate su F.** F è integrato da tempo. Il fermo che motivava questa nota — la
+  leggibilità delle candele — **è stato risolto** il 2026-09-21 (`70e87ac3a`, §6.0.10). Il
+  ramo resta fuori dal target per sequenza, non per blocco: diverge perché è *attivo*.
+- **Non è un fermo di qualità.** I20/I30/I40/I50/I60 sono consegnate. Restano: **I70** (E2E
+  della superficie P&L: zero spec contengono `growth-pnl-submode` o `growth-toggle-pnl`) e
+  **I80 parziale** — le docs G3 esistono (`assets/detail/chart|measures|signals`,
+  `fx/chart-settings`, in `2d22130bd`), mancano quelle G1a/G1b/G1c: in `dashboard/*.en.md` le
   occorrenze di `candlestick`, `Synthetic`, `submode` e `hypothetical` sono **zero**, mentre
   §11.5 richiede che documentazione e contratto dicano la stessa cosa.
-- **La baseline si muove.** Con l'integrazione di D questo ramo passa a ~38 commit indietro su
-  275 file mai visti: prima di qualunque modifica al sorgente vale §6.0.7 — aggiornamento
-  baseline e rivalidazione della **revisione combinata**. Il verde ottenuto su `69d0d27c6` non
-  si trasferisce a uno stato diverso.
+- **La baseline si muove.** L'allineamento post-D **è stato eseguito** (merge `b7a0b1e1a`,
+  §6.0.9): 5 file in conflitto risolti additivamente, revisione combinata rivalidata. Distanza
+  attuale: **17 avanti / 2 indietro**. La regola di §6.0.7 resta valida per ogni allineamento
+  futuro — un verde su una revisione non si trasferisce a una revisione diversa — e vale anche
+  per gli artefatti generati e ignorati, che non partecipano al merge e sono stantii per
+  costruzione dopo ogni aggiornamento.
