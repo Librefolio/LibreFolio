@@ -489,3 +489,140 @@ un altro componente stampasse euro qui, le due dimensionali resterebbero verdi.
 | `front-portfolio risk-asset-detail` | ✅ **2/2** — Asset Detail non si è mosso |
 | porta `6170` | **libera** (`lsof` vuoto) |
 | `git diff --check` | pulito |
+
+---
+
+# FASE 2 — `L1°` e `L3°` sui cinque codici di P
+
+> **Baseline**: `09117b434` ✅ verificata · **autorizzazione sviluppatore**: *«si ok, serializza
+> questi lavori e al termine notificami»* · corsia invariata `6170` · `/tmp/librefolio-r3-a`
+
+### Passo 2.0 — `api sync` · ✅ 21 Set 2026
+
+Obbligatorio dopo un cambio di baseline: P ha aggiunto cinque contratti. `generated.ts`,
+`openapi.json` e i contratti tool rigenerati.
+
+### Passo 2.1 — il filo: una richiesta sola per tutta la pagina · ✅ 21 Set 2026
+
+> **Note implementazione**: nuovo flag opt-in `includeAssetSetLevels` in `buildBaseAnalytics`
+> (`riskAnalysisHelpers.ts`) che aggiunge i cinque codici, ciascuno dietro la guardia di capability
+> già esistente — quindi **inerte su ogni scope diverso da `asset_set`**. Inoltrato dal controller.
+> Due istanze distinte per il VaR (`ASSET_SET_DAILY_VAR_INSTANCE` / `…_MONTHLY_…`), come la coppia
+> singolare, perché lo stesso codice a due orizzonti non va confuso.
+
+**Perché un flag solo e non uno per sezione** — misurato, non supposto:
+
+```
+riskStore.queryRisk:131   const key = makeRiskRequestKey(canonicalizeRiskRequest(request));
+                          cache + in-flight promise su QUELLA chiave
+service.py:170            prepared = await self._prepare_asset_series(...)   ← UNA volta per RICHIESTA
+```
+
+> **Se tutte le sezioni del laboratorio chiedono lo stesso insieme di codici, le loro richieste
+> sono canonicamente uguali → un volo, una risposta in cache, una preparazione.** È la metà
+> frontend della clausola ⓪; la metà backend è `service.py:170`, che prepara per *richiesta* e non
+> per analitica.
+
+> **🔴 Fuori pista 13 — il benchmark doveva stare negli *input*, non nelle *opzioni*, e per poco
+> non l'ho sbagliato.** `asset_set_comparison` vuole un `comparison_asset_id`. L'avevo messo fra le
+> opzioni del controller — che sono lette **una volta sola alla creazione**. Ma `baseSignature`
+> (riga 119) non include le opzioni: **un cambio di benchmark non avrebbe invalidato nulla**, e il
+> lettore avrebbe scelto un riferimento che la richiesta ignorava in silenzio. Spostato in
+> `RiskControllerInputs` e aggiunto alla firma. **Additivo e invisibile agli altri pannelli**:
+> `JSON.stringify` omette `undefined`, quindi per chi non lo passa la firma è byte-identica.
+
+> **🔴 Fuori pista 14 — e il riferimento deve viaggiare nella STESSA richiesta.** La mia prima
+> stesura lasciava `asset_set_comparison` fuori dall'onda condivisa, da chiedere a parte. È
+> sbagliato, e il docstring di P lo dice: *«the reference is prepared inside the same request as
+> the scope»*. Una richiesta separata avrebbe preparato il benchmark su un calendario congiunto
+> **che non contiene la selezione** → il suo punto sullo scatter sarebbe nato su date diverse dai
+> punti accanto. **È esattamente Ⓔ**, e la formulazione di S3 è già nell'albero: *«the dot would
+> land in a place no measurement puts it, on a chart that still looks right»*.
+
+### Passo 2.2 — `assetSetLevels.ts`, l'aritmetica pura · ✅ 21 Set 2026
+
+> **Note implementazione**: `buildAssetSetHurtRows` (L1°), `buildAssetSetPaidRows` (L3°),
+> `buildAssetSetScatterPoints`, `buildAssetSetBenchmarkPoint`. Nessun parametro `currency`
+> **esiste** in questo file: non c'è un importo da dimenticare di sopprimere.
+> **Le righe si costruiscono dalla selezione, le celle sono nullable** — mai il contrario: un
+> asset che il backend non ha potuto misurare **mantiene la sua riga**, perché una riga mancante si
+> legge come «non selezionato», non come «non misurabile».
+
+> **⚠️ Fuori pista 15 — il compilatore ha trovato una trappola che avevo scritto.**
+> `npx tsc` ha rifiutato quattro righe: il client generato **allarga ogni campo numerico opzionale**
+> a `((number | null) | Array<number | null>)`, perché è così che l'`anyOf` di OpenAPI fa
+> andata-e-ritorno. `stats.sharpe` è quindi *un valore **o una lista***. Leggerlo diretto compila
+> solo con un cast — **e un cast è esattamente il modo in cui un array arriva a `toFixed` e stampa
+> `NaN`**. Esiste già la primitiva di casa, `singleValue`: ora `num()` ci passa attraverso.
+> **Ed è il motivo per cui ho tipizzato `byAsset` come generico invece di `Record<string,
+> unknown>`**: quest'ultimo avrebbe accettato `conditional_value_at_risk` su una riga di drawdown
+> e sarebbe morto a runtime. *Il client zod serve a questo; disattivarlo con un cast lo spreca.*
+
+### Passo 2.3 — i due livelli, l'i18n, la copertura · ✅ 21 Set 2026
+
+**Componenti nuovi**: `AssetSetComparisonLevels.svelte` (un controller, due `RiskLevelSection`),
+`AssetSetLossComparisonSection.svelte` (L1°), `AssetSetRiskReturnSection.svelte` (L3°),
+`assetSetLevels.ts` + `assetSetLevels.test.ts`.
+
+**i18n**: `+43/−0` in tutte e quattro le lingue — **nessuna chiave esistente toccata**.
+`i18n audit` → 3388 chiavi, **0 incomplete, 0 backend mancanti**.
+
+> **🔴 Fuori pista 16 — un bug mio, trovato eseguendo, che nessun `front check` poteva vedere.**
+> La pagina renderizzava *«Select at least one asset»* **con quattro asset selezionati**: uno stato
+> che il codice non può produrre. `svelte-check` verde, build pulito, tipi a posto — **vincolo Ⓝ
+> in azione: il cancello vede se il client si costruisce, non come si comporta.**
+>
+> Causa: `riskBenchmark.assetId` è **un getter che scrive**. Il suo `hydrate()` assegna a
+> `$state`, e io lo leggevo dentro un `$derived`. In runes mode **scrivere stato durante una
+> derivazione è fatale**: la derivazione muore, e con lei l'intero blocco `{#if}` che la legge —
+> i controlli restano a schermo e ogni sezione sotto sparisce, **il che assomiglia esattamente a
+> "nessun asset selezionato"**. `L3Benchmark` se la cava perché legge dentro un handler.
+> ✅ Riparato con un mirror in `$state` alimentato da `$effect` (un effetto *può* scrivere).
+>
+> 🔑 **La forma**: *un getter che muta su lettura è innocuo in una funzione e letale in una
+> derivazione* — e il sintomo non assomiglia alla causa.
+
+> **⚠️ Fuori pista 17 — il guardiano del catalogo ha trovato una deriva al primo colpo.**
+> L'impegno che avevo preso («il finto è una copia a mano del vero senza legame fra i due») è
+> ora un test: per ogni codice dichiarato dal `CATALOG` dello spec, confronta `supported_scopes` e
+> `supported_modes` **con il registro reale**, interrogato senza installare i mock.
+> **Primo esito: rosso.** `portfolio_optimization` è annunciato dal backend per `asset_set` e il
+> finto non lo dichiarava. Dichiarato per fedeltà — la pagina non lo richiede.
+> ➕ Lo specialista ha **indurito** il guardiano oltre il mandato: lo stub marchia
+> `algorithm_version = 'e2e-mock-v1'` e la prima asserzione è che **nessuna definizione ricevuta
+> porti quel marchio** — così spostare `installRiskMocks` in un `beforeEach` rende il test rosso
+> invece che vacuo. *Una convenzione che un edit futuro può rompere in silenzio non è un cancello.*
+> ⚠️ E ha trovato che `historical_kpi` era drifted **anche in questo file** (`['historical']`):
+> **quarta occorrenza**, viva, non storica.
+
+> **⚠️ Fuori pista 18 — tre miei export senza consumatore, e un docstring che prometteva troppo.**
+> `assetSetResult`, `ASSET_SET_HURT_CODES`, `ASSET_SET_PAID_CODES` non erano letti da nessuno:
+> *«un campo senza consumatore è un rosso di fine fase»* vale anche per il mio codice. Rimossi.
+> E il docstring di `num()` diceva che senza `singleValue` un array arriverebbe a `toFixed`
+> stampando `NaN`: **falso a runtime.** Lo zod generato rifiuta la lista e scarta l'intero payload;
+> l'allargamento è solo di TypeScript. Corretto — *descrivere male una difesa è il modo in cui il
+> prossimo la rimuove credendola inutile.*
+
+> **🔑 Fuori pista 19 — il tipo ha dimostrato l'invariante meglio del test.**
+> Il Vitest asseriva `points.some((p) => p.role === 'portfolio') === false`. `svelte-check` l'ha
+> **rifiutata**: `role` è il literal `'asset'`, quindi il confronto «non ha sovrapposizione».
+> **La garanzia anti-giudizio è così forte che verificarla a runtime è un errore di compilazione.**
+> Sostituita da un commento che lo dice: il compilatore tiene l'invariante, il test tiene il
+> lettore. *Ed è la stessa tesi della clausola ①, un livello più in basso: una difesa che vive in
+> una forma non si può disfare per distrazione.*
+
+### Cancelli di fine fase 2
+
+| cancello | esito |
+|---|---|
+| `front check` | **3 errori, gli stessi 3, `0` in un file risk** |
+| `tsc -p tsconfig.e2e.json` *(Ⓘ)* | **0 in `e2e/portfolio/`**, 76 preesistenti altrove |
+| `prettier --check` sui file toccati | ✅ |
+| `services risk-all` | ✅ **437 passed** |
+| `front-portfolio risk-lab` | ✅ **11/11** (erano 6) |
+| `front-portfolio risk` | ✅ **14/14** — Dashboard e Broker invariati |
+| `front-portfolio risk-asset-detail` | ✅ **2/2** — Asset Detail non si è mosso |
+| `vitest assetSetLevels.test.ts` | ✅ **30/30** |
+| `i18n audit` | ✅ 3388 complete, 0 incomplete |
+| `check-orphans` | ⚠️ **1 orfano atteso**: `assetSetLevels.test.ts` — **registrazione del coordinatore** |
+| porta `6170` | libera · `git diff --check` pulito |

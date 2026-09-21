@@ -2944,6 +2944,26 @@
       "drawdownSummary": {
         "name": "Resumen de caídas",
         "description": "Episodios de caída actual y máxima respecto al pico, fechados y con estado de recuperación, a partir de los rendimientos canónicos del ámbito seleccionado."
+      },
+      "assetSetKpi": {
+        "name": "Indicadores de riesgo por activo",
+        "description": "Volatilidad, peor caída y ratios ajustados al riesgo, medidos para cada activo seleccionado sobre una misma ventana."
+      },
+      "assetSetVar": {
+        "name": "Riesgo de cola por activo",
+        "description": "La pérdida que alcanzó cada activo seleccionado en sus peores resultados, estimada sobre su propio historial."
+      },
+      "assetSetDrawdown": {
+        "name": "Caídas por activo",
+        "description": "Cuánto cayó cada activo seleccionado desde su máximo, cuánto duró y si se ha recuperado."
+      },
+      "assetSetRiskReturn": {
+        "name": "Riesgo y rentabilidad por activo",
+        "description": "Volatilidad anualizada frente a rentabilidad esperada, un punto por activo seleccionado."
+      },
+      "assetSetComparison": {
+        "name": "Comparación por activo",
+        "description": "Cómo se movió cada activo seleccionado respecto al índice de referencia elegido."
       }
     },
     "params": {
@@ -3048,6 +3068,29 @@
         "offsettingHint": "Pares que se mueven en direcciones opuestas: uno amortigua al otro.",
         "noneCorrelated": "Ningún par se mueve claramente junto.",
         "noneOffsetting": "Ningún par compensa a otro: aquí nada amortigua nada."
+      },
+      "levels": {
+        "asset": "Activo",
+        "blankNote": "Un guion significa que la medición no fue posible para ese activo en esta ventana — no significa cero.",
+        "l1": {
+          "title": "¿Cuánto dolió cada uno?",
+          "description": "La misma escala de daño, preguntada a cada activo seleccionado. Solo porcentajes: un conjunto de activos no tiene pesos, así que no hay importe que mostrar.",
+          "lastedDays": "duró {{days}} d",
+          "columns": {
+            "badDay": "Mal día",
+            "badMonth": "Mal mes",
+            "worstFall": "Peor caída",
+            "currentFall": "Bajo el máximo",
+            "toPeak": "Subida al máximo"
+          }
+        },
+        "l3": {
+          "title": "¿Cuánto pagó cada uno por su riesgo?",
+          "description": "Riesgo frente a rentabilidad, un punto por activo. No se traza ninguna recta: una selección no tiene un todo, así que no hay nada por encima o por debajo.",
+          "expectedReturn": "Rentabilidad esperada",
+          "correlation": "Correlación",
+          "noBenchmark": "Elige un índice de referencia en el Panel para añadir beta y correlación. Un índice que ya está en la selección no puede servirse de medida a sí mismo."
+        }
       }
     },
     "metrics": {

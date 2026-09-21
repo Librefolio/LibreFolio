@@ -217,6 +217,29 @@ export interface BaseAnalyticsContext {
      * Detail and the asset-set panel keep the wire they have.
      */
     includeCurrentCompositionRiskReturn?: boolean;
+    /**
+     * Adds the five per-asset analytics an asset set can answer.
+     *
+     * **Opt-in like the three above**, and for a sharper reason than tidiness:
+     * the five codes are `ASSET_SET`-only, so on any other scope the capability
+     * gate would drop them anyway and the flag would be decoration. It exists so
+     * that the two comparison levels ask for the identical set and share one
+     * flight — `queryRisk` caches and de-duplicates on the canonical request.
+     *
+     * 🔑 Clause ⓪ of the asset-set contract asks for *one preparation per
+     * request*, and the backend's half of it is measured: `service.py:170`
+     * prepares the joint series once per request, from the scope, window and
+     * currency — never from the analytics list. So sections that ask different
+     * questions over the same scope and window still get the same joint calendar,
+     * and their figures stay commensurable even when they travel separately.
+     */
+    includeAssetSetLevels?: boolean;
+    /**
+     * The shared L3 benchmark, when one is chosen and it is not itself in the
+     * selection. Drives `asset_set_comparison` inside the same request — see the
+     * note where it is added.
+     */
+    assetSetBenchmarkId?: number | null;
 }
 
 /** Horizon, in observations, used for L1's "bad month" row. */
@@ -227,6 +250,10 @@ export const DAILY_VAR_INSTANCE = 'base-historical-historical_var';
 
 /** Instance id of the ~1-month base VaR, distinct so the two never get mixed up. */
 export const MONTHLY_VAR_INSTANCE = 'base-historical-historical_var-monthly';
+
+/** The two horizons of the per-asset VaR, kept apart for the same reason as the singular pair. */
+export const ASSET_SET_DAILY_VAR_INSTANCE = 'base-historical-asset_set_var';
+export const ASSET_SET_MONTHLY_VAR_INSTANCE = 'base-historical-asset_set_var-monthly';
 
 /**
  * The base analytics the panel requests for a mode, keeping only those the
@@ -258,6 +285,40 @@ export function buildBaseAnalytics(mode: RiskMode, ctx: BaseAnalyticsContext): R
             add('historical_var', {confidence_level: 0.95, horizon_days: MONTHLY_VAR_HORIZON_DAYS}, MONTHLY_VAR_INSTANCE);
         }
         if (ctx.includeDrawdownSummary) add('drawdown_summary');
+        if (ctx.includeAssetSetLevels) {
+            // The per-asset wave. Every code is `ASSET_SET`-only, so `add`'s
+            // capability guard makes this block inert on every other scope.
+            //
+            // The risk-free rate is threaded into the KPI exactly as the singular
+            // wave threads it: Sharpe and Sortino are charged against the reader's
+            // setting, not against a constant this file chose.
+            add('asset_set_kpi', {risk_free_annual_rate: ctx.appliedRiskFreePercent / 100, target_annual_return: 0});
+            add('asset_set_var', {confidence_level: 0.95, horizon_days: 1}, ASSET_SET_DAILY_VAR_INSTANCE);
+            // The bad month is compounded by the backend over real overlapping
+            // windows, never scaled from the bad day — the same second observation
+            // the singular L1 pays for, for the same reason.
+            add('asset_set_var', {confidence_level: 0.95, horizon_days: MONTHLY_VAR_HORIZON_DAYS}, ASSET_SET_MONTHLY_VAR_INSTANCE);
+            add('asset_set_drawdown');
+            add('asset_set_risk_return');
+            // 🔴 The benchmark rides in **this** request, not in one of its own.
+            //
+            // `RiskAssetSetComparisonOutput` publishes the reference's own
+            // volatility and expected return so a scatter can place it beside the
+            // holdings, and its docstring says why that is sound: "the reference
+            // is prepared inside the same request as the scope". Asking for it
+            // separately would prepare it against a joint calendar that does not
+            // include the selection — the benchmark dot would then land on a
+            // chart whose other dots were measured over different dates, which is
+            // the failure `l3Helpers.buildRiskReturnPoints` already documents at
+            // length for the singular case: "the dot would land in a place no
+            // measurement puts it, on a chart that still looks right".
+            //
+            // The reference may not also be one of the measured — the payload
+            // validator rejects that outright — so a benchmark that is itself in
+            // the selection is not requested at all, and the section says so
+            // rather than showing an error the reader cannot act on.
+            if (ctx.assetSetBenchmarkId != null) add('asset_set_comparison', {comparison_asset_id: ctx.assetSetBenchmarkId});
+        }
     } else {
         add('risk_contribution');
         if (ctx.includeCurrentCompositionRiskReturn) {

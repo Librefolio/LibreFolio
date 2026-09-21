@@ -28,7 +28,9 @@ import {expect, test, type Page} from '../fixtures/playwright';
 
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {expectChartCanvas} from '../fixtures/charts';
+import {optionsClosed} from '../fixtures/probe';
 import {TEST_USER} from '../fixtures/test-users';
+import {schemas} from '../../src/lib/api/generated';
 
 type RiskScope = {kind: 'asset'; asset_id: number} | {kind: 'asset_set'; asset_ids: number[]} | {kind: 'portfolio'; broker_ids?: number[] | null};
 
@@ -118,17 +120,170 @@ const API_ASSET_CEILING = 100;
 /** Written by `assetSetSelection.ts`; cleared where a test needs "first visit" to be a fact. */
 const SELECTION_STORAGE_KEY = 'assetGlobal.riskSelection.v1';
 
+/** The one scope this page ever asks about, spelled once. */
+const ASSET_SET_SCOPE = 'asset_set';
+
+/**
+ * The version string every stubbed answer wears, and no real one does.
+ *
+ * A sentinel rather than a plausible value: the catalogue-fidelity guard asserts
+ * the live response does **not** carry it, which is how "this test talks to the
+ * backend" stops being a convention about where `installRiskMocks` is called and
+ * becomes something the test can fail on.
+ */
+const MOCK_ALGORITHM_VERSION = 'e2e-mock-v1';
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 🧪 EVERY FIGURE BELOW IS **INVENTED, NOT MEASURED**.
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * None of these numbers was read off a running backend, a populated lane, or a
+ * probe. They were chosen by hand so that:
+ *
+ *  - every one of them satisfies the payload contract in `schemas/risk.py` —
+ *    the sign constraints (`ge=0` on the VaR pair, `le=0` on the drawdown pair),
+ *    the tail orderings (`CVaR ≥ VaR`, `CDaR ≤ DaR`, `CDaR ≥ max_drawdown`) and
+ *    the drawdown episode contract (`recovered` carries a recovery date, `open`
+ *    must not) — because a stub that violates the contract is testing a state
+ *    the backend cannot produce;
+ *  - they differ per asset, so a transposition bug that repeated one row would
+ *    be visible rather than plausible;
+ *  - none of them can be mistaken for {@link MONEY_AMOUNT}: everything here is
+ *    rendered as `X.Y%` or as a small ratio.
+ *
+ * ⚠️ DO NOT LABEL THEM AS MEASURED, and do not "restore them from the backend"
+ * without saying so. This project has a recorded incident where a reconstructed
+ * fixture was signed *"measured on the running backend"* and the arithmetic
+ * check passed anyway — a check interrogates the number, never its provenance.
+ * The provenance is this comment.
+ */
+const INVENTED = {
+    /** VaR 95% over one day, as a positive loss fraction, per asset index. */
+    badDayVar: (index: number) => 0.021 + index * 0.004,
+    /** CVaR is the mean *beyond* the quantile, so it is wider — here by a flat 40%. */
+    tailWidening: 1.4,
+    /** A month is drawn wider than a day, but never as `day × √21`: that would be a model. */
+    monthFactor: 4,
+    /** Deepest peak-to-trough fall, negative as the contract requires. */
+    maximumDrawdown: (index: number) => -(0.18 + index * 0.03),
+    /** Annualised volatility. */
+    volatility: (index: number) => 0.12 + index * 0.02,
+    /** Mean-variance expected annual return; crosses zero so both signs get drawn. */
+    expectedReturn: (index: number) => 0.045 - index * 0.015,
+    sharpe: (index: number) => 0.35 + index * 0.1,
+    beta: (index: number) => 0.8 + index * 0.15,
+    /** Bounded to [-1, 1] by the contract; this ramp stays well inside it. */
+    correlation: (index: number) => 0.55 + index * 0.04,
+    trackingError: (index: number) => 0.04 + index * 0.01,
+    /** Episode dates. Ordered peak ≤ trough ≤ recovery, which the validator checks. */
+    peakDate: '2025-03-11',
+    troughDate: '2025-07-08',
+    recoveryDate: '2025-11-19',
+    currentPeakDate: '2026-01-05',
+    /** The benchmark's own coordinates, published by `asset_set_comparison`. */
+    benchmarkVolatility: 0.104,
+    benchmarkExpectedReturn: 0.058,
+};
+
+/**
+ * How many distinct rows the ramps above produce before they repeat.
+ *
+ * 🔴 NOT a tidiness knob — a correctness one. Every function in {@link INVENTED}
+ * is a straight line in the asset index, and an asset set may legitimately hold
+ * up to {@link API_ASSET_CEILING} assets. Left unbounded, row 100 would claim a
+ * −318% maximum drawdown, and `remaining_to_peak_ratio = −d / (1 + d)` would go
+ * *negative* past d = −1 and be rejected by its own `ge=0` constraint. Wrapping
+ * keeps every figure inside the band a real instrument could occupy, whatever
+ * the page's selection happens to be, while neighbouring rows still differ —
+ * which is all the transposition assertions need.
+ */
+const INVENTED_VARIANTS = 8;
+
+/** Which of the {@link INVENTED_VARIANTS} ramps this row sits on. */
+function variant(index: number): number {
+    return index % INVENTED_VARIANTS;
+}
+
+/** Observations the stub reports on an ordinary window: above every `min_observations`. */
+const AMPLE_OBSERVATIONS = 60;
+
+/**
+ * Observations the stub reports on a window too short for four of the five.
+ *
+ * Between `asset_set_drawdown`'s 2 and the other four's 20, so the split is the
+ * backend's own rule rather than a number this file picked to force an outcome.
+ */
+const SHORT_OBSERVATIONS = 5;
+
+/** What `service.py:234` answers with when a window is below `min_observations`. */
+const INSUFFICIENT_HISTORY = 'insufficient_history';
+
+/**
+ * The warning `_build_context` appends when a requested asset could not be prepared.
+ *
+ * Copied from `service.py:604-610` verbatim, code and sentence both, because
+ * `resultReasons` renders the backend's own string and deduplicates *by that
+ * string*: a paraphrase here would still produce one entry and would still look
+ * right, while testing a sentence the product never emits.
+ */
+const EXCLUDED_WARNING_CODE = 'assets_excluded';
+const EXCLUDED_WARNING_MESSAGE = 'One or more scope assets were excluded from risk calculations.';
+
+/**
+ * The capability catalogue this file pretends the backend publishes.
+ *
+ * ⚠️ IT IS A HAND-MAINTAINED COPY, AND THAT IS ITS ONE DANGEROUS PROPERTY.
+ * `hasRiskCapability` reads `supported_scopes` and `supported_modes` to decide
+ * what the page may ask for, so a code missing here — or a mode narrower here
+ * than in the real registry — does not fail: it makes the panel *request less*,
+ * and every assertion about the section that would have rendered it goes green
+ * against an empty frame. Three drifts of exactly that shape have already been
+ * paid for, which is why `the mocked catalogue matches the backend's` below
+ * compares this table against the live `/api/v1/risk/catalog` instead of trusting
+ * whoever edited it last.
+ *
+ * `historical_kpi` carried one of those drifts until that test was written: it
+ * was declared `['historical']` while `historical_kpi.py:119` advertises
+ * `(HISTORICAL, CURRENT_COMPOSITION)`. Corrected here rather than tolerated in
+ * the guard — a guard with an exemption list is a guard that stops guarding. The
+ * correction is inert on this page (the code is `ASSET`/`PORTFOLIO`-scoped, so an
+ * asset set never asks for it), which is precisely why it survived unnoticed.
+ */
 const CATALOG = {
     items: [
-        definition('historical_kpi', 'kpi', ['asset', 'portfolio'], ['historical'], 'historicalKpi', 20),
+        definition('historical_kpi', 'kpi', ['asset', 'portfolio'], ['historical', 'current_composition'], 'historicalKpi', 20),
         definition('correlation', 'matrix', ['asset_set', 'portfolio'], ['historical', 'current_composition'], 'correlation', 2),
         definition('risk_contribution', 'contribution', ['portfolio'], ['current_composition'], 'riskContribution', 20),
         definition('stress', 'stress', ['asset', 'asset_set', 'portfolio'], ['current_composition'], 'stress', 1),
         definition('comparison', 'comparison', ['asset', 'portfolio'], ['historical', 'current_composition'], 'comparison', 20),
         definition('historical_var', 'var_cvar', ['asset', 'portfolio'], ['historical', 'current_composition'], 'historicalVar', 20),
         definition('simulation', 'simulation', ['asset', 'portfolio'], ['current_composition'], 'simulation', 30),
+        // The weightless per-asset family: `ASSET_SET` × `HISTORICAL` only, which
+        // is what makes `buildBaseAnalytics`'s block inert on every other scope.
+        // `asset_set_drawdown` needs 2 observations where the other four need 20 —
+        // not a typo, and the reason a short window returns one `ok` beside four
+        // `unavailable` rather than five of anything.
+        definition('asset_set_kpi', 'kpi_set', [ASSET_SET_SCOPE], ['historical'], 'assetSetKpi', 20),
+        definition('asset_set_var', 'var_cvar_set', [ASSET_SET_SCOPE], ['historical'], 'assetSetVar', 20),
+        definition('asset_set_drawdown', 'drawdown_set', [ASSET_SET_SCOPE], ['historical'], 'assetSetDrawdown', 2),
+        definition('asset_set_risk_return', 'risk_return_set', [ASSET_SET_SCOPE], ['historical'], 'assetSetRiskReturn', 20),
+        definition('asset_set_comparison', 'comparison_set', [ASSET_SET_SCOPE], ['historical'], 'assetSetComparison', 20),
+        // Declared for fidelity, not because this page uses it. The backend
+        // advertises `portfolio_optimization` for the asset-set scope, and the
+        // catalogue-fidelity guard compares what the stub declares against what
+        // the registry declares — omitting a real capability because no test
+        // needs it is precisely the drift that guard exists to catch. Nothing
+        // requests it: `buildBaseAnalytics` never adds the code.
+        definition('portfolio_optimization', 'optimization', [ASSET_SET_SCOPE, 'portfolio'], ['historical'], 'portfolioOptimization', 30),
     ],
 };
+
+/** The five codes the laboratory's comparison levels put on the wire together. */
+const ASSET_SET_LEVEL_CODES = ['asset_set_kpi', 'asset_set_var', 'asset_set_drawdown', 'asset_set_risk_return', 'asset_set_comparison'] as const;
+
+/** The four that ride on every load; `asset_set_comparison` joins only with a benchmark. */
+const ASSET_SET_UNCONDITIONAL_CODES = ASSET_SET_LEVEL_CODES.filter((code) => code !== 'asset_set_comparison');
 
 /**
  * An empty but valid scenario catalog.
@@ -166,7 +321,7 @@ function definition(analyticCode: string, outputKind: string, supportedScopes: s
         supported_modes: supportedModes,
         parameters_schema: {},
         min_observations: minObservations,
-        algorithm_version: 'e2e-mock-v1',
+        algorithm_version: MOCK_ALGORITHM_VERSION,
     };
 }
 
@@ -182,9 +337,107 @@ function isHistoricalReplay(analytic: RiskAnalyticRequest): boolean {
     return analytic.analytic_code === 'stress' && analytic.parameters?.method === 'historical_replay';
 }
 
-function metadata(request: RiskRequest, analytic: RiskAnalyticRequest) {
-    const observations = 60;
-    const calendarDays = 87;
+/**
+ * How this test wants the backend to behave, where "ordinary" is not the subject.
+ *
+ * Both knobs reproduce a state the **real** backend reaches on its own; neither
+ * invents one. That distinction is the whole reason they are options rather than
+ * separate hand-written payloads: a stub that can only produce the happy path
+ * makes the unhappy paths unreachable, and a stub that produces an impossible
+ * one tests a page against a world that does not exist.
+ */
+interface RiskStubOptions {
+    /**
+     * Answer for one fewer asset than the scope asked about.
+     *
+     * The backend does this whenever a requested asset has no usable series: it
+     * is dropped from the prepared set (`service.py:590-598`), every analytic in
+     * the request then answers about the survivors, the result's status becomes
+     * `partial` rather than `ok` (`service.py:783`) and one `assets_excluded`
+     * warning rides on all of them (`:604-610`). Reproduced in full here —
+     * including on `correlation`, because the exclusion is a property of the
+     * *prepared series set* and not of any one analytic, so hiding it from the
+     * matrix would be a state the backend cannot produce.
+     */
+    dropLastAsset?: boolean;
+    /**
+     * A window shorter than four of the five analytics can measure.
+     *
+     * `asset_set_drawdown` declares `min_observations = 2` where the other four
+     * declare 20, so the gate at `service.py:230-243` genuinely returns one `ok`
+     * beside four `unavailable` — same request, same calendar, same window.
+     */
+    shortWindow?: boolean;
+}
+
+/** True when this analytic is one of the five the comparison levels read. */
+function isAssetSetLevel(analytic: RiskAnalyticRequest): boolean {
+    return (ASSET_SET_LEVEL_CODES as readonly string[]).includes(analytic.analytic_code);
+}
+
+/**
+ * True when this analytic is gated out by a window of {@link SHORT_OBSERVATIONS}.
+ *
+ * Expressed as the backend expresses it — a comparison against the analytic's own
+ * `min_observations`, read from the same {@link CATALOG} the page was gated on —
+ * rather than as a hard-coded list of four codes. A list would still be "right"
+ * today and would stop describing anything the moment a threshold moved.
+ */
+function belowMinimumObservations(analytic: RiskAnalyticRequest, observations: number): boolean {
+    const definition = CATALOG.items.find((item) => item.analytic_code === analytic.analytic_code);
+    return definition !== undefined && observations < definition.min_observations;
+}
+
+/** How many observations the stub claims this request was measured over. */
+function observationCount(options: RiskStubOptions): number {
+    return options.shortWindow ? SHORT_OBSERVATIONS : AMPLE_OBSERVATIONS;
+}
+
+/**
+ * The scope ids the stub could prepare, and the ones it had to drop.
+ *
+ * The dropped id is taken from the **end** of the request's own array, which the
+ * client canonicalises ascending (`riskRequest.ts:83`, `asset_ids:
+ * sortedNumbers(...)`). A caller therefore recovers the omitted id by reading
+ * the captured request rather than by assuming which asset the page happened to
+ * seed — and the assertion stays true whatever the seed contains.
+ */
+function preparedAssetIds(request: RiskRequest, options: RiskStubOptions): {covered: number[]; excluded: number[]} {
+    const all = request.scope.kind === ASSET_SET_SCOPE ? request.scope.asset_ids : [];
+    if (!options.dropLastAsset || all.length < 2) return {covered: all, excluded: []};
+    return {covered: all.slice(0, -1), excluded: all.slice(-1)};
+}
+
+/** The `assets_excluded` warning, verbatim, or nothing at all. */
+function exclusionWarnings(excluded: readonly number[]) {
+    if (excluded.length === 0) return [];
+    return [
+        {
+            code: EXCLUDED_WARNING_CODE,
+            message: EXCLUDED_WARNING_MESSAGE,
+            details: {asset_ids: [...excluded]},
+            degrades_result: true,
+        },
+    ];
+}
+
+/**
+ * The provenance block every result carries, degraded together with the request.
+ *
+ * `n_observations` and `excluded_assets` are parameters rather than constants
+ * because `RiskLevelSection` *renders* both — the first as the window under
+ * `{testId}-metadata`, the second as the reason a row is blank — so a stub that
+ * pinned them would make the two disclosures untestable while still filling the
+ * frame. `levelMetadata` collapses identical rows, so every analytic of one
+ * request agreeing here is what makes `data-rows="1"` mean "they agree" rather
+ * than "there is one of them".
+ */
+function metadata(request: RiskRequest, analytic: RiskAnalyticRequest, options: RiskStubOptions = {}) {
+    const observations = observationCount(options);
+    // Scaled with the window, so the annualization factor stays a plausible
+    // consequence of the two numbers beside it instead of contradicting them.
+    const calendarDays = options.shortWindow ? 7 : 87;
+    const {excluded} = preparedAssetIds(request, options);
     return {
         analyzed_range: {
             start: request.date_range.start,
@@ -203,8 +456,11 @@ function metadata(request: RiskRequest, analytic: RiskAnalyticRequest) {
         mode: request.mode,
         ...(request.composition_policy ? {composition_policy: request.composition_policy} : {}),
         return_basis: 'price_only',
-        excluded_assets: [],
-        algorithm_version: 'e2e-mock-v1',
+        // `_build_context` names every requested asset it could not prepare, with
+        // the reason the prepared set gave — `insufficient_history` is the default
+        // that `service.py:594` falls back to.
+        excluded_assets: isHistoricalReplay(analytic) ? [] : excluded.map((assetId) => ({asset_id: assetId, reason: INSUFFICIENT_HISTORY})),
+        algorithm_version: MOCK_ALGORITHM_VERSION,
         computed_at: '2026-01-31T12:00:00Z',
         // `service.py:860` copies the plugin's audit into the metadata of every
         // replay, and `L4Replay` gates `risk-replay-audit` on it. Omitting it here
@@ -246,10 +502,15 @@ function dataQuality() {
  * order, so a test can read this array off the DOM instead of guessing it — which
  * is what makes the id-keyed pair testids predictable without a single index into
  * the rendered list.
+ *
+ * An excluded asset never reaches the matrix: the exclusion happens while the
+ * joint series are being prepared, one step before any analytic runs, so a matrix
+ * that still carried the dropped id would describe a preparation that failed and
+ * succeeded at the same time.
  */
-function matrixAssetIds(request: RiskRequest): number[] {
-    if (request.scope.kind === 'asset_set') return request.scope.asset_ids.slice(0, MATRIX_LIMIT);
-    return [];
+function matrixAssetIds(request: RiskRequest, options: RiskStubOptions = {}): number[] {
+    if (request.scope.kind !== ASSET_SET_SCOPE) return [];
+    return preparedAssetIds(request, options).covered.slice(0, MATRIX_LIMIT);
 }
 
 /**
@@ -284,8 +545,8 @@ function correlationValue(rowIndex: number, columnIndex: number): number {
     return BACKGROUND_RHO;
 }
 
-function correlationOutput(request: RiskRequest) {
-    const assetIds = matrixAssetIds(request);
+function correlationOutput(request: RiskRequest, options: RiskStubOptions = {}) {
+    const assetIds = matrixAssetIds(request, options);
     return {
         kind: 'matrix',
         asset_ids: assetIds,
@@ -297,12 +558,201 @@ function correlationOutput(request: RiskRequest) {
                 row_asset_id: rowAssetId,
                 column_asset_id: columnAssetId,
                 value: correlationValue(rowIndex, columnIndex),
-                observations: 60,
+                observations: observationCount(options),
                 coverage: rowIndex === columnIndex ? 1 : 0.88,
                 status: 'ok',
             })),
         ),
     };
+}
+
+/**
+ * ─── The weightless per-asset family ───────────────────────────────────────
+ *
+ * Five outputs, one row per prepared asset, and **not one amount between them**.
+ * That is not restraint on this stub's part: `assetSetLevels.ts` has no
+ * `currency` parameter and no field to put a sum in, and the payload models it
+ * reads are `extra="forbid"`, so there is nowhere for money to enter. The five
+ * builders below could not smuggle a euro onto this page if they tried — which
+ * is what makes the money assertions in the first test still meaningful now that
+ * two more sections render underneath them.
+ *
+ * Every figure comes from {@link INVENTED}. Read its banner before copying any
+ * number out of here.
+ */
+
+/** Per-asset VaR/CVaR at one horizon. Positive magnitudes, CVaR ≥ VaR. */
+function assetSetVarOutput(request: RiskRequest, analytic: RiskAnalyticRequest, options: RiskStubOptions) {
+    const {covered} = preparedAssetIds(request, options);
+    const horizonDays = Number(analytic.parameters?.horizon_days ?? 1);
+    const horizonFactor = horizonDays > 1 ? INVENTED.monthFactor : 1;
+    return {
+        kind: 'var_cvar_set',
+        confidence_level: Number(analytic.parameters?.confidence_level ?? 0.95),
+        horizon_days: horizonDays,
+        // Compounding to a multi-day horizon consumes observations, so the count
+        // the tail was estimated from is `horizon_days - 1` fewer than the
+        // window's — the backend says so in `RiskAssetSetVarCvarOutput`'s
+        // docstring, and a flat copy of `n_observations` here would contradict it.
+        observations: Math.max(1, observationCount(options) - (horizonDays - 1)),
+        items: covered.map((assetId, index) => {
+            const row = variant(index);
+            const valueAtRisk = INVENTED.badDayVar(row) * horizonFactor;
+            return {
+                asset_id: assetId,
+                value_at_risk: valueAtRisk,
+                conditional_value_at_risk: valueAtRisk * INVENTED.tailWidening,
+            };
+        }),
+    };
+}
+
+/** Per-asset dated drawdown episodes. Negative magnitudes; episode contract honoured. */
+function assetSetDrawdownOutput(request: RiskRequest, options: RiskStubOptions) {
+    const {covered} = preparedAssetIds(request, options);
+    return {
+        kind: 'drawdown_set',
+        available_start: request.date_range.start,
+        available_end: request.date_range.end ?? request.date_range.start,
+        calculation_basis: 'daily_close',
+        return_basis: 'price_only',
+        items: covered.map((assetId, index) => {
+            const row = variant(index);
+            const maximumDrawdown = INVENTED.maximumDrawdown(row);
+            const currentDrawdown = maximumDrawdown / 3;
+            // Alternated so both halves of the episode contract get exercised: a
+            // `recovered` episode must carry a recovery date, an `open` one must
+            // not. A stub that only ever emitted one of them would satisfy the
+            // validator by never reaching its other branch.
+            const recovered = index % 2 === 0;
+            return {
+                asset_id: assetId,
+                current_drawdown: currentDrawdown,
+                current_peak_date: INVENTED.currentPeakDate,
+                current_drawdown_duration_days: 30 + row * 5,
+                maximum_drawdown: maximumDrawdown,
+                maximum_drawdown_peak_date: INVENTED.peakDate,
+                maximum_drawdown_trough_date: INVENTED.troughDate,
+                maximum_drawdown_recovery_status: recovered ? 'recovered' : 'open',
+                maximum_drawdown_recovery_date: recovered ? INVENTED.recoveryDate : null,
+                maximum_drawdown_duration_days: 120 + row * 15,
+                maximum_drawdown_recovered_ratio: recovered ? 1 : 0.45,
+                // The asymmetry this column exists to teach: recovering a −6% fall
+                // takes +6.4%, not +6%. Computed rather than tabulated so the
+                // relationship stays true whatever the fall above becomes.
+                remaining_to_peak_ratio: -currentDrawdown / (1 + currentDrawdown),
+            };
+        }),
+    };
+}
+
+/** Per-asset historical KPIs. Tail ordering satisfied: CDaR ≤ DaR and CDaR ≥ max drawdown. */
+function assetSetKpiOutput(request: RiskRequest, analytic: RiskAnalyticRequest, options: RiskStubOptions) {
+    const {covered} = preparedAssetIds(request, options);
+    return {
+        kind: 'kpi_set',
+        // An echo of the request parameter, which the page never overrides, so
+        // the plugin's own default (`asset_set_kpi.py:59-60`) is what comes back.
+        drawdown_confidence_level: Number(analytic.parameters?.drawdown_confidence_level ?? 0.95),
+        items: covered.map((assetId, index) => {
+            // The same figure `asset_set_drawdown` reports, because both are
+            // measured on the one joint calendar this request prepared. Two
+            // different maxima for one asset would be a seam the contract says
+            // cannot exist.
+            const row = variant(index);
+            const maximumDrawdown = INVENTED.maximumDrawdown(row);
+            const sharpe = INVENTED.sharpe(row);
+            return {
+                asset_id: assetId,
+                volatility: INVENTED.volatility(row),
+                max_drawdown: maximumDrawdown,
+                max_drawdown_duration_days: 120 + row * 15,
+                // Charged against the risk-free rate the request carries, which
+                // this page always sets to 0: `AssetSetComparisonLevels` has no
+                // control to set one and says so rather than inventing a rate.
+                sharpe,
+                sortino: sharpe * 1.3,
+                worst_realization: -(0.03 + row * 0.005),
+                worst_realization_date: INVENTED.troughDate,
+                drawdown_at_risk: maximumDrawdown * 0.6,
+                conditional_drawdown_at_risk: maximumDrawdown * 0.8,
+                ulcer_index: 0.05 + row * 0.01,
+            };
+        }),
+    };
+}
+
+/**
+ * Per-asset risk and reward — and **no aggregate**, which is the point.
+ *
+ * There is deliberately no portfolio pair here and there is no field to put one
+ * in: `RiskAssetSetReturnOutput` declares `kind` and `items` and nothing else.
+ * That absence is what keeps `capitalMarketLine()` returning null, because the
+ * line is drawn only when a point whose role is `portfolio` exists. So the
+ * verdict "paid well for the risk" is not switched off on this page — it is
+ * unexpressible, and making it expressible again would take an edit to
+ * `schemas/risk.py`, visible in a diff.
+ */
+function assetSetRiskReturnOutput(request: RiskRequest, options: RiskStubOptions) {
+    const {covered} = preparedAssetIds(request, options);
+    return {
+        kind: 'risk_return_set',
+        items: covered.map((assetId, index) => ({
+            asset_id: assetId,
+            volatility: INVENTED.volatility(variant(index)),
+            expected_annual_return: INVENTED.expectedReturn(variant(index)),
+        })),
+    };
+}
+
+/**
+ * Per-asset comparison against one reference, plus the reference's own coordinates.
+ *
+ * 🔴 The reference is filtered out of `items` rather than merely assumed absent.
+ * `RiskAssetSetComparisonOutput.validate_reference_is_not_a_subject` rejects a
+ * payload where the yardstick is also one of the measured, so a stub that echoed
+ * the whole scope back would be publishing a response the backend cannot emit —
+ * and the page would then be tested against a payload no user can ever receive.
+ * The panel already withholds a benchmark that is in the selection
+ * (`AssetSetRiskPanel`'s `benchmarkId`), so this filter should never fire; it is
+ * here so that the stub is *incapable* of breaking the invariant, not merely
+ * unlikely to.
+ */
+function assetSetComparisonOutput(request: RiskRequest, analytic: RiskAnalyticRequest, options: RiskStubOptions) {
+    const {covered} = preparedAssetIds(request, options);
+    const comparisonAssetId = Number(analytic.parameters?.comparison_asset_id);
+    return {
+        kind: 'comparison_set',
+        comparison_asset_id: comparisonAssetId,
+        observations: observationCount(options),
+        comparison_volatility: INVENTED.benchmarkVolatility,
+        comparison_expected_annual_return: INVENTED.benchmarkExpectedReturn,
+        items: covered
+            .filter((assetId) => assetId !== comparisonAssetId)
+            .map((assetId, index) => {
+                const row = variant(index);
+                const activeReturn = INVENTED.expectedReturn(row) - INVENTED.benchmarkExpectedReturn;
+                const trackingError = INVENTED.trackingError(row);
+                return {
+                    asset_id: assetId,
+                    active_return: activeReturn,
+                    tracking_error: trackingError,
+                    information_ratio: activeReturn / trackingError,
+                    correlation: INVENTED.correlation(row),
+                    beta: INVENTED.beta(row),
+                };
+            }),
+    };
+}
+
+/** The per-asset output for whichever of the five this is, or null for the rest. */
+function assetSetLevelOutput(request: RiskRequest, analytic: RiskAnalyticRequest, options: RiskStubOptions): Record<string, unknown> | null {
+    if (analytic.analytic_code === 'asset_set_var') return assetSetVarOutput(request, analytic, options);
+    if (analytic.analytic_code === 'asset_set_drawdown') return assetSetDrawdownOutput(request, options);
+    if (analytic.analytic_code === 'asset_set_kpi') return assetSetKpiOutput(request, analytic, options);
+    if (analytic.analytic_code === 'asset_set_risk_return') return assetSetRiskReturnOutput(request, options);
+    if (analytic.analytic_code === 'asset_set_comparison') return assetSetComparisonOutput(request, analytic, options);
+    return null;
 }
 
 /**
@@ -352,16 +802,54 @@ function replayOutput(request: RiskRequest) {
     };
 }
 
-function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest): Record<string, unknown> {
+function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options: RiskStubOptions = {}): Record<string, unknown> {
+    const {excluded} = preparedAssetIds(request, options);
     const base = {
         instance_id: analytic.instance_id,
         analytic_code: analytic.analytic_code,
-        metadata: metadata(request, analytic),
+        metadata: metadata(request, analytic, options),
         data_quality: dataQuality(),
         warnings: [],
     };
 
-    if (analytic.analytic_code === 'correlation') return {...base, status: 'ok', output: correlationOutput(request)};
+    // A window below this analytic's own `min_observations` never reaches the
+    // plugin: `service.py:230-243` answers `unavailable` with the count it had
+    // and the count it needed, carrying metadata and data quality but **no
+    // warnings** — `_unavailable` does not take any. That asymmetry is what makes
+    // `{testId}-errors` and `{testId}-reasons` two different disclosures rather
+    // than two views of one, and reproducing it is what lets a test tell them
+    // apart.
+    if (isAssetSetLevel(analytic) && belowMinimumObservations(analytic, observationCount(options))) {
+        const required = CATALOG.items.find((item) => item.analytic_code === analytic.analytic_code)?.min_observations;
+        return {
+            ...base,
+            status: 'unavailable',
+            output: null,
+            error: {
+                code: INSUFFICIENT_HISTORY,
+                message: `Analytic '${analytic.analytic_code}' requires at least ${required} observations`,
+                details: {observations: observationCount(options), required},
+            },
+        };
+    }
+
+    // An excluded asset degrades the whole request, not one analytic: the status
+    // becomes `partial` and one `assets_excluded` warning rides on every result
+    // (`service.py:766-783`). Both halves matter — `degradedResults` reads the
+    // status, `resultReasons` reads the sentence — and a stub that sent one
+    // without the other would leave whichever half it omitted untested.
+    const degraded = excluded.length > 0;
+    const answered = {
+        ...base,
+        status: degraded ? 'partial' : 'ok',
+        warnings: exclusionWarnings(excluded),
+    };
+
+    if (analytic.analytic_code === 'correlation') return {...answered, output: correlationOutput(request, options)};
+    if (isAssetSetLevel(analytic)) return {...answered, output: assetSetLevelOutput(request, analytic, options)};
+    // The replay is prepared by itself (`_prepare_historical_replay` sets
+    // `excluded_assets=()`), so it is answered from `base` and never degrades
+    // with the historical wave.
     if (isHistoricalReplay(analytic)) return {...base, status: 'ok', output: replayOutput(request)};
 
     // Anything else reaching this page is a change in what the panel requests, and
@@ -379,7 +867,7 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest): Record<
 }
 
 /** Stub the three risk endpoints and hand back the requests the page actually made. */
-async function installRiskMocks(page: Page): Promise<RiskRequest[]> {
+async function installRiskMocks(page: Page, options: RiskStubOptions = {}): Promise<RiskRequest[]> {
     const requests: RiskRequest[] = [];
 
     await page.route('**/api/v1/risk/catalog', async (route) => {
@@ -396,11 +884,57 @@ async function installRiskMocks(page: Page): Promise<RiskRequest[]> {
         await route.fulfill({
             status: 200,
             contentType: 'application/json',
-            body: JSON.stringify({items: request.analytics.map((analytic) => resultFor(request, analytic))}),
+            body: JSON.stringify({items: request.analytics.map((analytic) => resultFor(request, analytic, options))}),
         });
     });
 
     return requests;
+}
+
+/** Every captured request that asked the joint-calendar question of an asset set. */
+function assetSetHistoricalRequests(requests: readonly RiskRequest[]): RiskRequest[] {
+    return requests.filter((request) => request.scope.kind === ASSET_SET_SCOPE && request.mode === 'historical');
+}
+
+/**
+ * The requests carrying any of the five per-asset codes.
+ *
+ * Deliberately *not* "every asset-set historical request": the laboratory puts
+ * more than one of those on the wire and always has. `AssetSetCorrelationSection`
+ * and `AssetSetReplaySection` each build their own controller without
+ * `includeAssetSetLevels`, so their wave is `[correlation]` — canonically equal
+ * to each other, hence one network call between them — while
+ * `AssetSetComparisonLevels` asks for `correlation` plus the five and is
+ * therefore a second, differently-shaped request. Counting all asset-set
+ * historical requests and expecting one would assert something false about the
+ * page; what has to be true is that the **five travel together**.
+ */
+function assetSetLevelRequests(requests: readonly RiskRequest[]): RiskRequest[] {
+    return assetSetHistoricalRequests(requests).filter((request) => request.analytics.some((analytic) => isAssetSetLevel(analytic)));
+}
+
+/** The analytic codes of one request, deduplicated — the two VaR horizons share one. */
+function codesOf(request: RiskRequest): Set<string> {
+    return new Set(request.analytics.map((analytic) => analytic.analytic_code));
+}
+
+/** An asset-set scope as a comparable string, in the ascending order the client sends. */
+function scopeKey(assetIds: readonly number[]): string {
+    return [...assetIds].sort((left, right) => left - right).join(',');
+}
+
+/**
+ * The per-asset waves asked about exactly this selection.
+ *
+ * Filtered by scope and not merely counted, because a test that grows the
+ * selection — `ensureSelectionAtLeast` does, when the seed is small — legitimately
+ * produces a second wave for the second scope. Counting all of them and expecting
+ * one would then be a test of the fixture's size rather than of the page, green on
+ * a large seed and red on a small one with nothing wrong either time.
+ */
+function levelRequestsFor(requests: readonly RiskRequest[], selection: readonly number[]): RiskRequest[] {
+    const wanted = scopeKey(selection);
+    return assetSetLevelRequests(requests).filter((request) => request.scope.kind === ASSET_SET_SCOPE && scopeKey(request.scope.asset_ids) === wanted);
 }
 
 /**
@@ -553,6 +1087,116 @@ async function chooseTypeFilter(page: Page): Promise<{testId: string; candidates
     return {...best, partitionSum, options: testIds.length};
 }
 
+/** The L1° section frame, and the table it wraps. Scoped: the page has two levels. */
+const lossSection = (page: Page) => page.getByTestId('asset-global-risk-panel').getByTestId('risk-asset-set-loss');
+const lossTable = (page: Page) => page.getByTestId('risk-asset-set-l1-table');
+const paidSection = (page: Page) => page.getByTestId('asset-global-risk-panel').getByTestId('risk-asset-set-paid');
+
+/** The five per-asset cells of the L1° transposition, in the order they are drawn. */
+const L1_CELLS = ['badDay', 'badMonth', 'worstFall', 'currentFall', 'toPeak'] as const;
+
+/**
+ * The asset ids the L1° table drew a row for, read from the rows themselves.
+ *
+ * `data-asset-id` is on the row because the table is a *transposition*: the
+ * reader compares instruments down the page, so the row is the identity and the
+ * column is the measure. Reading it back is what lets an assertion be phrased
+ * over the selection rather than over positions.
+ */
+async function lossRowAssetIds(page: Page): Promise<number[]> {
+    return (
+        await lossTable(page)
+            .getByTestId('risk-asset-set-l1-row')
+            .evaluateAll((nodes) => nodes.map((node) => Number(node.getAttribute('data-asset-id'))))
+    ).filter((id) => Number.isInteger(id));
+}
+
+/** A single L1° cell, addressed by the asset it belongs to — never by position. */
+function lossCell(page: Page, assetId: number, cell: (typeof L1_CELLS)[number]) {
+    return lossTable(page).locator(`tr[data-asset-id="${assetId}"] [data-testid="risk-asset-set-l1-${cell}"]`);
+}
+
+/**
+ * Wait until L1° has stopped being a skeleton and is showing its table.
+ *
+ * `AssetSetLossComparisonSection` draws the skeleton while `loading` and no
+ * figure has arrived, so the table's presence *is* the "the wave landed" signal
+ * for this level: it cannot appear before the controller has resolved. Which is
+ * why this is a barrier and not a sleep — there is a state to wait for, and the
+ * product already publishes it.
+ */
+async function waitForLossTable(page: Page): Promise<void> {
+    await expect(lossTable(page)).toBeVisible({timeout: 20_000});
+    await expect(page.getByTestId('risk-asset-set-l1-loading')).toHaveCount(0);
+}
+
+/** The user id the benchmark store will scope its storage key with. */
+async function currentUserId(page: Page): Promise<number> {
+    const response = await page.request.get('/api/v1/auth/me');
+    expect(response.ok(), 'the shared benchmark is stored under a user-scoped key, so the test needs the id the app resolves').toBe(true);
+    const body = (await response.json()) as {user?: {id?: number}};
+    const id = body.user?.id;
+    expect(Number.isInteger(id), `auth/me must publish an integer user id, read ${JSON.stringify(body.user)}`).toBe(true);
+    return id as number;
+}
+
+/**
+ * The key `riskBenchmarkStore` reads its choice from.
+ *
+ * Reproduced from `storageKey()` in that module rather than guessed: the prefix,
+ * the user id and the base key are three separate decisions there, and the
+ * user-scoped half exists precisely so one reader's benchmark is not handed to
+ * the next account on the same browser. A test that wrote the un-scoped key
+ * would be seeding a value the app never reads once someone is logged in.
+ */
+function benchmarkStorageKey(userId: number | 'anon'): string {
+    return `lf_${userId}_risk_benchmark_asset`;
+}
+
+/**
+ * An asset the picker offers but the selection does not hold.
+ *
+ * Both halves are required of an L3° benchmark: it has to be a real asset, and
+ * it must not be one of the measured, because
+ * `RiskAssetSetComparisonOutput.validate_reference_is_not_a_subject` rejects a
+ * yardstick that is also a subject — and `AssetSetRiskPanel` withholds the
+ * benchmark entirely rather than send a request the backend would refuse. The
+ * picker's own filter (`pageAssetIds.has(id) && !selectedAssetIds.includes(id)`)
+ * already guarantees both, so reading a candidate off it is the same decision the
+ * product makes rather than an independent one that could disagree.
+ *
+ * Leaves the dropdown closed, which is not politeness: `search-select-option-*`
+ * is a shared namespace, so an option list left open is indistinguishable from
+ * the next one's.
+ */
+async function pickUnselectedAssetId(page: Page): Promise<number> {
+    const picker = page.getByTestId('risk-asset-add-select');
+    const combobox = picker.locator('[role="combobox"]');
+    const options = picker.locator('[data-testid^="search-select-option-"]');
+    await combobox.click();
+    const option = options.first();
+    await expect(option).toBeVisible({timeout: 10_000});
+    const testId = await option.getAttribute('data-testid');
+    const assetId = Number(testId?.replace('search-select-option-', ''));
+    expect(Number.isInteger(assetId), `the asset picker must key its options by asset id, read "${testId}"`).toBe(true);
+
+    // Pressed on the combobox rather than on the page: `AssetSelect` mounts
+    // `SearchSelect` with `inlineSearch`, so there is no search field to receive
+    // focus and the trigger keeps it — `handleTriggerKeydown` then forwards
+    // Escape to `handleSearchKeydown`, which closes. Addressing the element makes
+    // that a fact instead of an assumption about where focus drifted.
+    await combobox.press('Escape');
+    await optionsClosed(page);
+    return assetId;
+}
+
+/** Two sets compared as sets, so declaration order can never be the subject. */
+function sameMembers(left: readonly string[], right: readonly string[]): boolean {
+    if (left.length !== right.length) return false;
+    const rightSet = new Set(right);
+    return left.every((entry) => rightSet.has(entry));
+}
+
 // Earned parallel: every block below stubs its own API, owns its selection (which
 // lives in its own browser context) and writes nothing to the shared database, so
 // it can run beside a stranger instead of queueing behind one.
@@ -564,8 +1208,20 @@ test.describe('Asset Global risk laboratory', () => {
     });
 
     test('prints no money, even when the API hands it some', async ({page}) => {
+        // Two more sections now render inside the panel this test scans, and both
+        // are asserted to be *populated* before the scan — a table of figures and
+        // an ECharts canvas. That is real work added to an already long test, and
+        // the budget is raised to pay for it rather than left to be discovered as
+        // a timeout under four workers. It is not a hedge against slowness: every
+        // wait below is a barrier on a published state, so a genuinely slow page
+        // still fails here, just with the assertion's own message.
+        test.setTimeout(45_000);
         const requests = await installRiskMocks(page);
         await openAssetGlobalRisk(page);
+        // L3° draws its scatter only from two dots up: one point is a fact without
+        // a comparison. Made a precondition rather than inherited from the seed, so
+        // the chart assertion below cannot be quietly skipped by a small fixture.
+        await ensureSelectionAtLeast(page, 2);
         await waitForRiskCatalog(page);
 
         const panel = page.getByTestId('asset-global-risk-panel');
@@ -591,6 +1247,44 @@ test.describe('Asset Global risk laboratory', () => {
         // page, not of a subtree, and the two ordering tests below reach for
         // `risk-correlation-heatmap` unscoped.
         await expect(page.getByTestId('risk-correlation-heatmap'), 'the heatmap must be mounted exactly once').toHaveCount(1);
+
+        // ③ — the two comparison levels, mounted and POPULATED.
+        //
+        // This block exists so that the money assertions at the end of this test
+        // keep *reaching* what they are supposed to reach. They scan
+        // `asset-global-risk-panel`, which now contains L1° and L3° as well; an
+        // unpopulated section contributes no text, so without these barriers the
+        // scan would pass over two empty frames and the coverage of the rule would
+        // silently have shrunk to the replay again. Extending the reach of the
+        // existing net is the point — a second, parallel money test would prove the
+        // same thing about a different page state and leave this one unguarded.
+        //
+        // The new sections cannot *introduce* an amount, and not because they
+        // suppress one: `assetSetLevels.ts` takes no `currency` parameter, returns
+        // no amount, and the five payload models it reads have no monetary field
+        // at all (`RiskAssetSetReturnOutput` is `kind` plus `items`, and every model
+        // in the family is `extra="forbid"`). So what follows is not a suspicion
+        // about these components — it is the guarantee that the day someone adds a
+        // currency-aware figure to this page, the scan below is already looking.
+        const selectedForLevels = await chipIds(page);
+        await waitForLossTable(page);
+        await expect(lossTable(page)).toHaveAttribute('data-row-count', String(selectedForLevels.length));
+        await expect(lossTable(page).locator('[data-testid="risk-asset-set-l1-badDay"][data-measured="true"]'), 'L1° must be showing figures, or the money scan below crosses an empty table').toHaveCount(selectedForLevels.length);
+
+        const scatter = panel.getByTestId('risk-asset-set-l3-risk-return');
+        await expect(scatter).toBeVisible({timeout: 20_000});
+        await expectChartCanvas(page, 'risk-asset-set-l3-scatter', 20_000);
+        // 🔴 One dot per measured asset, and NOT ONE MORE. There is no Capital
+        // Market Line here and there cannot be: `capitalMarketLine()` draws only
+        // when a point whose role is `portfolio` exists, and that point exists only
+        // when the payload carries a portfolio volatility *and* expected return —
+        // fields `RiskAssetSetReturnOutput` does not have. The line has no DOM
+        // handle to assert on, so the count is the observable: a fabricated
+        // aggregate would arrive as an extra dot before it could ever become a
+        // line, and this number would move. With no benchmark chosen, there is no
+        // reference dot either, so the expected count is exactly the selection.
+        await expect(page.getByTestId('risk-asset-set-l3-scatter')).toHaveAttribute('data-point-count', String(selectedForLevels.length));
+        await expect(page.getByTestId('risk-asset-set-l3-scatter')).toHaveAttribute('data-dropped-count', '0');
 
         // The replay is where the money now arrives. `AssetSetReplaySection` mounts
         // `RiskLevelSection` with `collapsible`, so the rung starts closed and loads
@@ -926,5 +1620,438 @@ test.describe('Asset Global risk laboratory', () => {
         expect(await drawnOrder(), 'going back must restore the clustered order, not a third one').toEqual(clustered);
         for (const testId of findings) await expect(page.getByTestId(testId)).toBeVisible();
         await expectChartCanvas(page, 'risk-correlation-heatmap', 20_000);
+    });
+
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * THE GUARD. Everything above this line is stubbed; this is the one test
+     * that talks to the real backend, and it exists because of the stubbing.
+     * ═══════════════════════════════════════════════════════════════════════
+     *
+     * {@link CATALOG} is a hand-written copy of a table that lives in Python, with
+     * no link between the two. Every drift is therefore invisible **by
+     * construction**, and the drift is never loud: `hasRiskCapability` simply
+     * returns false, `buildBaseAnalytics` silently omits the code, the section
+     * renders its empty frame, and whatever test was watching that section goes
+     * green having measured nothing. Three of those have been paid for already —
+     * `asset_risk_return` missing from a mock catalogue, `historical_kpi` mocked
+     * as one mode where the registry advertises two, and five `asset_set_*` codes
+     * that no mock knew about at all.
+     *
+     * So this test closes the loop the only way it can be closed: it fetches the
+     * live catalogue and compares it, code by code, against the copy.
+     *
+     * 🔴 IT DELIBERATELY DOES NOT CALL `installRiskMocks`. Routing
+     * `/api/v1/risk/catalog` here would hand the stub back to itself and the
+     * comparison would be `CATALOG === CATALOG` — green forever, which is the
+     * exact failure mode the test was written to end. That is not left to a
+     * convention either: {@link MOCK_ALGORITHM_VERSION} is a sentinel no real
+     * definition carries, and the first assertion below is that none came back
+     * wearing it. A future edit that adds the mocks to this test — or moves them
+     * into the `beforeEach` — turns red here instead of turning vacuous.
+     */
+    test('the mocked risk catalogue declares what the backend declares', async ({page}) => {
+        const response = await page.request.get('/api/v1/risk/catalog');
+        expect(response.status(), 'the live risk catalogue must answer 200 to the logged-in session — the comparison below is worthless without it').toBe(200);
+
+        // Parsed through the generated schema rather than cast: a 200 carrying
+        // something that is not a catalogue would otherwise produce an empty map
+        // and a vacuously passing comparison.
+        const live = schemas.RiskCatalogResponse.parse(await response.json());
+        const backend = new Map((live.items ?? []).map((definition) => [definition.analytic_code, definition]));
+        expect(backend.size, 'the backend catalogue came back empty, so every comparison below would pass against nothing').toBeGreaterThan(0);
+        expect(
+            [...backend.values()].filter((definition) => definition.algorithm_version === MOCK_ALGORITHM_VERSION).map((definition) => definition.analytic_code),
+            `this answer carries ${MOCK_ALGORITHM_VERSION}, so it came from this file's own stub and the comparison below would be the mock checked against itself`,
+        ).toEqual([]);
+
+        const drift: string[] = [];
+
+        // Direction 1 — what the mock claims, the backend must confirm.
+        // This is the direction that matters to every other test in this file:
+        // a mock that advertises *more* than the backend makes the page request
+        // an analytic the backend will refuse, and a mock that advertises *less*
+        // makes the page not ask at all.
+        for (const mocked of CATALOG.items) {
+            const real = backend.get(mocked.analytic_code);
+            if (!real) {
+                drift.push(`${mocked.analytic_code}: mocked here but ABSENT from the backend catalogue (mock declares scopes=[${mocked.supported_scopes.join(', ')}] modes=[${mocked.supported_modes.join(', ')}])`);
+                continue;
+            }
+            if (!sameMembers(mocked.supported_scopes, real.supported_scopes)) {
+                drift.push(`${mocked.analytic_code}.supported_scopes: mock=[${mocked.supported_scopes.join(', ')}] backend=[${real.supported_scopes.join(', ')}]`);
+            }
+            if (!sameMembers(mocked.supported_modes, real.supported_modes)) {
+                drift.push(`${mocked.analytic_code}.supported_modes: mock=[${mocked.supported_modes.join(', ')}] backend=[${real.supported_modes.join(', ')}]`);
+            }
+        }
+
+        // Direction 2 — and narrowly, because a blanket reverse check is noise.
+        // This spec drives the asset-set page, so every `asset_set`-capable code
+        // the backend grows is a section this file may now be failing to
+        // exercise; a portfolio-only code it grows is none of this file's
+        // business. That is the shape the five new codes arrived in.
+        const assetSetCodes = [...backend.values()].filter((definition) => definition.supported_scopes.includes(ASSET_SET_SCOPE)).map((definition) => definition.analytic_code);
+        const mockedCodes = new Set(CATALOG.items.map((item) => item.analytic_code));
+        for (const code of assetSetCodes) {
+            if (!mockedCodes.has(code)) {
+                drift.push(`${code}: the backend advertises it for the asset_set scope and this spec's CATALOG does not declare it, so the laboratory never requests it here`);
+            }
+        }
+
+        // Compared as sets and reported as text, so a red names the code and both
+        // tuples: the point of this test is that its failure message tells you
+        // what drifted without opening either file.
+        expect(drift, `The mocked risk catalogue has drifted from the backend registry:\n  - ${drift.join('\n  - ')}\nFix ${'`CATALOG`'} in this spec (or the registry, if the backend is the side that is wrong).`).toEqual([]);
+    });
+
+    /**
+     * (a) + (b) — one request, and one row per selected asset.
+     *
+     * The two belong together because the second is only meaningful given the
+     * first: L1° is a *transposition* of a joint measurement, so every row has to
+     * come from the same prepared calendar. Split across requests the rows would
+     * still line up on screen and would no longer be comparable.
+     */
+    test('the five per-asset analytics travel in one request, and L1° gives every selected asset a row', async ({page}) => {
+        const requests = await installRiskMocks(page);
+        await openAssetGlobalRisk(page);
+        await ensureSelectionAtLeast(page, MINIMUM_SELECTION);
+        await waitForRiskCatalog(page);
+        await waitForLossTable(page);
+
+        // ① ONE REQUEST. `service.py:170` prepares the joint series once per
+        // request, before the analytic loop, so five separate requests would pay
+        // for five preparations and — the part that reaches the reader — would put
+        // dots from five calendars on one chart. `queryRisk` caches on the
+        // canonical request, so "they were asked together" is observable exactly
+        // here, on the wire, and nowhere else.
+        //
+        // Scoped to the selection the page is showing: the laboratory legitimately
+        // puts more than one asset-set historical request on the wire — the
+        // correlation and replay sections build their own controllers without
+        // `includeAssetSetLevels`, so their wave is `[correlation]` — and growing
+        // the selection above adds a second scope. What must be true is that the
+        // five are never split, not that the page makes one call.
+        const selected = await chipIds(page);
+        expect(selected.length, 'the transposition needs more than one instrument to be a comparison').toBeGreaterThanOrEqual(MINIMUM_SELECTION);
+        await expect.poll(() => levelRequestsFor(requests, selected).length, {timeout: 20_000, message: 'the per-asset wave must be asked for exactly once for the selection on screen'}).toBe(1);
+
+        // …and no request anywhere carried a *part* of it. The assertion above
+        // would still pass if a stray second request had smuggled one code out on
+        // its own; this one is what forbids the split outright.
+        for (const request of assetSetHistoricalRequests(requests)) {
+            const carried = ASSET_SET_LEVEL_CODES.filter((code) => codesOf(request).has(code));
+            if (carried.length === 0) continue;
+            expect([...carried].sort(), 'a request may carry the whole per-asset wave or none of it, never a slice').toEqual([...ASSET_SET_UNCONDITIONAL_CODES].sort());
+        }
+
+        const levels = levelRequestsFor(requests, selected)[0];
+        const codes = codesOf(levels);
+        // Only four of the five ride unconditionally: `asset_set_comparison` needs
+        // a benchmark, and this context has none. Asserting all five here would
+        // fail for the right reason on the wrong page — the benchmark branch has
+        // its own test below.
+        for (const code of ASSET_SET_UNCONDITIONAL_CODES) {
+            expect([...codes], `${code} must travel with the rest of the per-asset wave`).toContain(code);
+        }
+        expect([...codes], 'no benchmark is chosen in this context, so the comparison must not have been asked for').not.toContain('asset_set_comparison');
+
+        // ② THE TWO HORIZONS ARE TWO INSTANCES, NOT TWO REQUESTS. They share an
+        // analytic code, so only the instance id keeps the bad day and the bad
+        // month apart; a stub that resolved by code would answer both with
+        // whichever arrived first and the two columns would silently become one.
+        const varInstances = levels.analytics.filter((analytic) => analytic.analytic_code === 'asset_set_var');
+        expect(varInstances.map((analytic) => analytic.instance_id).sort()).toEqual(['base-historical-asset_set_var', 'base-historical-asset_set_var-monthly']);
+        expect(
+            varInstances.map((analytic) => Number(analytic.parameters?.horizon_days)).sort((left, right) => left - right),
+            'the bad month is a second measurement over a compounded horizon, never the bad day scaled',
+        ).toEqual([1, 21]);
+
+        // ③ THE TRANSPOSITION. One row per *selected* asset — asserted against the
+        // chips the page is actually showing, because the opening selection is
+        // seed data this test does not own. A literal here would be a count of
+        // somebody else's fixture.
+        await expect(lossTable(page)).toHaveAttribute('data-row-count', String(selected.length));
+        const rows = lossTable(page).getByTestId('risk-asset-set-l1-row');
+        await expect(rows).toHaveCount(selected.length);
+        expect(
+            [...(await lossRowAssetIds(page))].sort((left, right) => left - right),
+            'the rows must be the selection, not a slice of it and not a superset',
+        ).toEqual([...selected].sort((left, right) => left - right));
+
+        // ④ EVERY CELL OF EVERY ROW IS MEASURED, and says so. `data-measured` is
+        // the contract that distinguishes "—" meaning *not measurable* from "—"
+        // meaning *not loaded*; with a complete payload every cell must be on the
+        // measured side of it, and a count is what makes that statement cover all
+        // the rows instead of a sampled one.
+        for (const cell of L1_CELLS) {
+            await expect(lossTable(page).locator(`[data-testid="risk-asset-set-l1-${cell}"][data-measured="true"]`), `every ${cell} cell must be measured when the wave came back whole`).toHaveCount(selected.length);
+        }
+
+        // ⑤ The level came back whole, so it discloses nothing. Read after the
+        // barriers above, which is what makes the absence mean "nothing to
+        // disclose" rather than "not rendered yet".
+        await expect(lossSection(page).getByTestId('risk-asset-set-loss-health')).toHaveCount(0);
+        await expect(lossSection(page).getByTestId('risk-asset-set-loss-errors')).toHaveCount(0);
+        await expect(lossSection(page).getByTestId('risk-asset-set-loss-reasons')).toHaveCount(0);
+        // Provenance is always published, and one row means every analytic of the
+        // level agrees about the window it measured. Two would mean they disagree,
+        // which is the case the row count exists to make visible.
+        await expect(lossSection(page).getByTestId('risk-asset-set-loss-metadata')).toHaveAttribute('data-rows', '1');
+        await expect(lossSection(page).getByTestId('risk-asset-set-loss-metadata-observations')).toHaveText(String(AMPLE_OBSERVATIONS));
+    });
+
+    /**
+     * (c) — the rule the component exists to enforce.
+     *
+     * A selected asset the backend could not measure keeps its row. Dropping it
+     * would be a different claim: the reader *chose* that asset, and a missing row
+     * reads as "not selected" rather than "not measurable". `assetSetLevels.ts`
+     * says so in its own header — rows are built from the selection and the cells
+     * are nullable, never the other way round — and this is where that survives
+     * contact with a payload that is genuinely short of one asset.
+     */
+    test('a selected asset the backend could not measure keeps its row, with the reason on the section', async ({page}) => {
+        const requests = await installRiskMocks(page, {dropLastAsset: true});
+        await openAssetGlobalRisk(page);
+        await ensureSelectionAtLeast(page, MINIMUM_SELECTION);
+        await waitForRiskCatalog(page);
+        await waitForLossTable(page);
+
+        // Which asset went missing is read from the request the stub answered, not
+        // assumed from the chips: the client canonicalises `asset_ids` ascending
+        // before sending, and the chips render in name order, so guessing here
+        // would be guessing at two orderings at once.
+        const selected = await chipIds(page);
+        await expect.poll(() => levelRequestsFor(requests, selected).length, {timeout: 20_000, message: 'the per-asset wave must have been requested for the selection on screen'}).toBe(1);
+        const levels = levelRequestsFor(requests, selected)[0];
+        const scope = levels.scope.kind === ASSET_SET_SCOPE ? levels.scope.asset_ids : [];
+        expect(scope.length, 'dropping one asset needs at least two to have been asked about').toBeGreaterThanOrEqual(2);
+        const unmeasured = scope[scope.length - 1];
+        const measured = scope.slice(0, -1);
+
+        // THE RULE. The row count follows the *selection*, which still holds every
+        // asset — including the one no analytic answered for.
+        expect(selected, 'the unmeasured asset is still selected; that is the whole premise').toContain(unmeasured);
+        await expect(lossTable(page)).toHaveAttribute('data-row-count', String(selected.length));
+        await expect(lossTable(page).getByTestId('risk-asset-set-l1-row')).toHaveCount(selected.length);
+        await expect(lossTable(page).locator(`tr[data-asset-id="${unmeasured}"]`), 'the asset nobody could measure must still have a row of its own').toHaveCount(1);
+
+        // …and every one of its cells declares itself unmeasured, rather than
+        // printing a zero. `data-measured="false"` is the difference between "this
+        // asset did not move" and "nobody could tell".
+        for (const cell of L1_CELLS) {
+            await expect(lossCell(page, unmeasured, cell), `${cell} of an unprepared asset must report data-measured="false", never a figure`).toHaveAttribute('data-measured', 'false');
+        }
+
+        // The control half: the assets that *were* prepared are measured, which is
+        // what stops "every cell is blank" from satisfying the assertion above.
+        for (const cell of L1_CELLS) {
+            await expect(lossTable(page).locator(`[data-testid="risk-asset-set-l1-${cell}"][data-measured="true"]`)).toHaveCount(measured.length);
+        }
+
+        // AND THE PAGE SAYS WHY. An exclusion degrades every analytic of the
+        // request (`service.py:783`), so all three of L1°'s results come back
+        // `partial` and all three carry the one `assets_excluded` sentence —
+        // deduplicated for the reader, counted in the attribute.
+        const health = lossSection(page).getByTestId('risk-asset-set-loss-health');
+        await expect(health).toBeVisible();
+        await expect(health, 'L1° reads three results — the two VaR horizons and the drawdown — and an exclusion degrades all of them').toHaveAttribute('data-count', '3');
+
+        const reasons = lossSection(page).getByTestId('risk-asset-set-loss-reasons');
+        await expect(reasons).toBeVisible();
+        await expect(reasons, 'one distinct sentence, however many results carried it').toHaveAttribute('data-count', '1');
+        await expect(reasons.getByTestId('risk-asset-set-loss-reason'), 'its arity is published rather than drawn three times').toHaveAttribute('data-occurrences', '3');
+
+        // Nothing *failed* — a degraded measurement is not an absent one, and the
+        // two disclosures are deliberately separate lists. The barriers above make
+        // this absence a statement instead of a race.
+        await expect(lossSection(page).getByTestId('risk-asset-set-loss-errors')).toHaveCount(0);
+    });
+
+    /**
+     * (d) — the mixed-status case, and it is real rather than contrived.
+     *
+     * `asset_set_drawdown` declares `min_observations = 2`; the other four declare
+     * 20. So a window of five observations is not a construction — it is a window,
+     * and the backend's own gate turns it into one `ok` beside four `unavailable`.
+     * Without disclosure the reader sees four blanks and one table and cannot tell
+     * a short window from a broken page, which is the whole reason
+     * `RiskLevelSection` publishes health, errors, reasons and provenance
+     * separately.
+     */
+    test('a window too short for four of the five analytics is disclosed, not blanked', async ({page}) => {
+        await installRiskMocks(page, {shortWindow: true});
+        await openAssetGlobalRisk(page);
+        await ensureSelectionAtLeast(page, MINIMUM_SELECTION);
+        await waitForRiskCatalog(page);
+        // The table still renders: rows come from the selection, so a level with
+        // nothing to say still says it about every asset the reader chose.
+        await waitForLossTable(page);
+
+        const selected = await chipIds(page);
+
+        // THE SPLIT, on screen. The drawdown survived the window and its three
+        // columns are measured; the two VaR horizons did not and theirs are not.
+        // Asserted per column rather than per row, because the split is a property
+        // of the analytic and every row is on the same side of it.
+        for (const cell of ['worstFall', 'currentFall', 'toPeak'] as const) {
+            await expect(lossTable(page).locator(`[data-testid="risk-asset-set-l1-${cell}"][data-measured="true"]`), `${cell} comes from asset_set_drawdown, which needs 2 observations and had ${SHORT_OBSERVATIONS}`).toHaveCount(selected.length);
+        }
+        for (const cell of ['badDay', 'badMonth'] as const) {
+            await expect(lossTable(page).locator(`[data-testid="risk-asset-set-l1-${cell}"][data-measured="false"]`), `${cell} comes from asset_set_var, which needs 20 observations and had ${SHORT_OBSERVATIONS}`).toHaveCount(selected.length);
+        }
+
+        // THE DISCLOSURE. Two of L1°'s three results did not come back…
+        const health = lossSection(page).getByTestId('risk-asset-set-loss-health');
+        await expect(health).toBeVisible();
+        await expect(health, 'the two VaR horizons are two entries: they share an analytic code, and a disclosure that deduped by code would show one and look plausible').toHaveAttribute('data-count', '2');
+
+        // …and the page says what stopped them, by code rather than by sentence.
+        const errors = lossSection(page).getByTestId('risk-asset-set-loss-errors');
+        await expect(errors).toBeVisible();
+        await expect(errors, 'both horizons failed the same gate, and the codes are deduplicated').toHaveAttribute('data-count', '1');
+        await expect(errors.getByTestId('risk-asset-set-loss-error')).toHaveAttribute('data-code', INSUFFICIENT_HISTORY);
+
+        // No *reasons*, and that is a fact about the backend rather than an
+        // oversight: `service.py:_unavailable` builds a result with an error and no
+        // warnings at all, so the verbatim-sentence list is legitimately empty here
+        // where it was full in the exclusion case above. The two assertions that
+        // precede this one are its presence barrier — without them "no reasons"
+        // would also be true of a section that had not rendered.
+        await expect(lossSection(page).getByTestId('risk-asset-set-loss-reasons')).toHaveCount(0);
+
+        // AND THE WINDOW ITSELF, which is what makes the disclosure actionable: a
+        // reader who can see "5 observations" can tell a short window from a broken
+        // page without being told which it is.
+        await expect(lossSection(page).getByTestId('risk-asset-set-loss-metadata')).toHaveAttribute('data-rows', '1');
+        await expect(lossSection(page).getByTestId('risk-asset-set-loss-metadata-observations')).toHaveText(String(SHORT_OBSERVATIONS));
+
+        // L3° is the other half of the same window: all three of its analytics need
+        // 20, so it discloses two absences (the third, the comparison, was never
+        // asked for without a benchmark) and draws no scatter — two dots being the
+        // least that can show a relationship, and there are none.
+        const paidHealth = paidSection(page).getByTestId('risk-asset-set-paid-health');
+        await expect(paidHealth).toBeVisible();
+        await expect(paidHealth).toHaveAttribute('data-count', '2');
+        await expect(page.getByTestId('risk-asset-set-l3-risk-return'), 'a scatter with no measurable coordinate is not an empty chart, it is no chart').toHaveCount(0);
+    });
+
+    /**
+     * (f) — the benchmark columns appear only when a benchmark applies.
+     *
+     * Both branches, because the absence is the ordinary state of this page and a
+     * test that only proved the presence would leave the default unguarded.
+     */
+    test('L3° shows beta and correlation only when a benchmark applies', async ({page}) => {
+        // The two navigations below (read the selection, then seed the shared
+        // benchmark and come back) are the price of a module-scope store that
+        // hydrates from a user-scoped key at mount.
+        test.setTimeout(45_000);
+        const requests = await installRiskMocks(page);
+        await openAssetGlobalRisk(page);
+        await ensureSelectionAtLeast(page, 2);
+        await waitForRiskCatalog(page);
+        await waitForLossTable(page);
+
+        // ── The false branch, which is what this page shows by default ──────
+        const paid = page.getByTestId('risk-asset-set-l3');
+        await expect(paid).toHaveAttribute('data-benchmark', 'false');
+        await expect(page.getByTestId('risk-asset-set-l3-no-benchmark'), 'two columns are missing and the reason is a choice made elsewhere; leaving that to be noticed reads as a limitation of the page').toBeVisible();
+        await expect(paid.getByTestId('risk-asset-set-l3-beta')).toHaveCount(0);
+        await expect(paid.getByTestId('risk-asset-set-l3-correlation')).toHaveCount(0);
+        // The columns that do not depend on a benchmark are present throughout, so
+        // "the beta cells are absent" cannot be satisfied by an unrendered table.
+        const selected = await chipIds(page);
+        await expect(paid.getByTestId('risk-asset-set-l3-volatility')).toHaveCount(selected.length);
+
+        // ── The true branch ─────────────────────────────────────────────────
+        // A benchmark that is not one of the measured, because
+        // `validate_reference_is_not_a_subject` rejects a yardstick that is also a
+        // subject and `AssetSetRiskPanel` withholds such a choice entirely. The
+        // picker's filter already answers both halves, so the candidate is chosen
+        // the way the product would choose it.
+        const benchmarkId = await pickUnselectedAssetId(page);
+        expect(selected, 'the reference may not also be one of the compared').not.toContain(benchmarkId);
+
+        const userId = await currentUserId(page);
+        // Seeded through `localStorage` under the store's own key rather than
+        // through a picker, because this page deliberately has no benchmark picker:
+        // the choice is shared with Dashboard and Broker Detail, and a second
+        // control here would be a second way for the pages to disagree.
+        // `addInitScript` runs before the app boots on the next navigation, so the
+        // store hydrates with the value already in place and the first request
+        // carries the comparison — no reload race to lose.
+        //
+        // ⚠️ BOTH SPELLINGS OF THE KEY, and this is not a shotgun. `hydrate()`
+        // memoises on the key it last read, and the key it asks for is
+        // `lf_${getClientSessionUserId() ?? 'anon'}_...` — so it depends on whether
+        // `/auth/me` has resolved at the instant the panel first reads the store.
+        // If it has not, the store reads the anon key, caches `null`, and nothing
+        // re-reads it: `benchmarkId` is a `$derived` whose dependencies do not move
+        // again, so the page would sit at `data-benchmark="false"` for the rest of
+        // its life and this test would fail on a race rather than on a defect. Both
+        // keys are spellings the app genuinely uses, and they are seeded with the
+        // same value, so the reader's choice is the same whichever one it asks for.
+        await page.addInitScript(
+            ([scoped, anonymous, value]) => {
+                try {
+                    window.localStorage.setItem(scoped as string, value as string);
+                    window.localStorage.setItem(anonymous as string, value as string);
+                } catch {
+                    /* storage disabled — the benchmark branch is then untestable and the assertions below will say so */
+                }
+            },
+            [benchmarkStorageKey(userId), benchmarkStorageKey('anon'), String(benchmarkId)],
+        );
+        await openAssetGlobalRisk(page);
+        await waitForRiskCatalog(page);
+        await waitForLossTable(page);
+
+        // The selection is restored from `localStorage` on this second visit, so it
+        // is re-read rather than reused: the assertion has to be about the page in
+        // front of it.
+        const reselected = await chipIds(page);
+        expect(reselected, 'the persisted selection must not have swallowed the benchmark, or the comparison is withheld by design').not.toContain(benchmarkId);
+
+        // The comparison rides in the SAME request as the other four — not in one
+        // of its own. `RiskAssetSetComparisonOutput` publishes the reference's own
+        // volatility and expected return so a scatter can place it beside the
+        // holdings, and that is only sound because the reference is prepared inside
+        // the same request as the scope. Asked separately, the benchmark dot would
+        // land on a chart whose other dots were measured over different dates.
+        await expect.poll(() => levelRequestsFor(requests, reselected).some((request) => codesOf(request).has('asset_set_comparison')), {timeout: 20_000, message: 'the benchmark must have reached the wire'}).toBe(true);
+        // Filtered by the comparison's *presence*, not merely by scope: the first
+        // visit asked about this same selection without a benchmark, so its request
+        // is in the capture too and a scope-only filter would count two.
+        const withBenchmark = levelRequestsFor(requests, reselected).filter((request) => codesOf(request).has('asset_set_comparison'));
+        expect(withBenchmark, 'the comparison must be asked for once, not once per section').toHaveLength(1);
+        const codes = codesOf(withBenchmark[0]);
+        for (const code of ASSET_SET_LEVEL_CODES) {
+            expect([...codes], `${code} must share the request with the comparison — one preparation, one calendar`).toContain(code);
+        }
+        expect(withBenchmark[0].analytics.find((analytic) => analytic.analytic_code === 'asset_set_comparison')?.parameters?.comparison_asset_id, 'the request must carry the benchmark the shared store holds').toBe(benchmarkId);
+
+        // …and the columns appear. `benchmarkApplies` is read from the *answer*,
+        // not from the stored choice, so this also proves the comparison came back
+        // `ok`: a requested benchmark that failed would leave two columns of
+        // em-dashes looking like missing data rather than an inapplicable question.
+        const paidAgain = page.getByTestId('risk-asset-set-l3');
+        await expect(paidAgain).toHaveAttribute('data-benchmark', 'true', {timeout: 20_000});
+        await expect(paidAgain.getByTestId('risk-asset-set-l3-beta')).toHaveCount(reselected.length);
+        await expect(paidAgain.getByTestId('risk-asset-set-l3-correlation')).toHaveCount(reselected.length);
+        await expect(page.getByTestId('risk-asset-set-l3-no-benchmark')).toHaveCount(0);
+
+        // The reference gets its own dot and still no Capital Market Line: its role
+        // is `benchmark`, which `capitalMarketLine()` does not search for. One dot
+        // per asset plus one for the reference — any more would be an aggregate
+        // nobody measured.
+        await expectChartCanvas(page, 'risk-asset-set-l3-scatter', 20_000);
+        await expect(page.getByTestId('risk-asset-set-l3-scatter')).toHaveAttribute('data-point-count', String(reselected.length + 1));
+
+        // Nothing to restore: the benchmark and the selection both live in this
+        // context's `localStorage`, which dies with the context, and no database
+        // row was touched by any of the above.
     });
 });

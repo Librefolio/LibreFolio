@@ -47,6 +47,18 @@ export interface RiskControllerInputs {
     /** Already divided by 100 by the caller? No — percent, as the user typed it. */
     appliedRiskFreePercent: number;
     refreshVersion: number;
+    /**
+     * The shared L3 benchmark folded into the asset-set wave, when one applies.
+     *
+     * An **input** and not an option, because it changes *what the numbers mean*:
+     * a different reference is a different beta. Options are read once at
+     * creation and never re-read, so a benchmark parked there would be chosen by
+     * the reader and quietly ignored by the request.
+     *
+     * Absent on every other surface, and `JSON.stringify` drops `undefined`, so
+     * `baseSignature` is byte-identical for callers that never set it.
+     */
+    assetSetBenchmarkId?: number | null;
 }
 
 export interface RiskControllerOptions {
@@ -79,6 +91,14 @@ export interface RiskControllerOptions {
      * Sharpe have to come from the same series or the chart contradicts the cards.
      */
     includeCurrentCompositionRiskReturn?: boolean;
+    /**
+     * Adds the five per-asset analytics of the asset-set laboratory.
+     *
+     * Every section of that page turns it on, so their requests are canonically
+     * equal and `queryRisk` serves all of them from one flight — the frontend's
+     * half of clause ⓪, *one preparation per request*.
+     */
+    includeAssetSetLevels?: boolean;
 }
 
 /**
@@ -95,6 +115,10 @@ export function baseSignature(inputs: RiskControllerInputs): string {
         dateEnd: inputs.dateEnd,
         targetCurrency: inputs.targetCurrency,
         appliedRiskFreePercent: inputs.appliedRiskFreePercent,
+        // Omitted from the JSON entirely when undefined, so every surface that
+        // does not use a benchmark keeps the signature it had before this field
+        // existed.
+        assetSetBenchmarkId: inputs.assetSetBenchmarkId ?? undefined,
     });
 }
 
@@ -193,7 +217,7 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
 
     async function loadBase(force: boolean, reAskedAfterDiscard = false): Promise<void> {
         const generation = ++requestGeneration;
-        const {scope, dateStart, dateEnd, targetCurrency, appliedRiskFreePercent} = inputs();
+        const {scope, dateStart, dateEnd, targetCurrency, appliedRiskFreePercent, assetSetBenchmarkId} = inputs();
         const hadResults = historicalResults.length > 0 || currentResults.length > 0;
         initialLoading = !hadResults;
         refreshing = hadResults;
@@ -217,6 +241,8 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
                 includeDrawdownSummary: options.includeDrawdownSummary === true,
                 includeMonthlyVar: options.includeMonthlyVar === true,
                 includeCurrentCompositionRiskReturn: options.includeCurrentCompositionRiskReturn === true,
+                includeAssetSetLevels: options.includeAssetSetLevels === true,
+                assetSetBenchmarkId: assetSetBenchmarkId ?? null,
             };
             const historicalAnalytics = buildBaseAnalytics('historical', context);
             const currentAnalytics = buildBaseAnalytics('current_composition', context);
