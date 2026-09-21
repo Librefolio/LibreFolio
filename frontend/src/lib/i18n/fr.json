@@ -3254,7 +3254,11 @@
     },
     "betaBanner": {
       "title": "L'analyse des risques est en version bêta.",
-      "description": "Les calculs, les résultats et l'interface peuvent évoluer avant la version stable."
+      "description": "Les calculs, les résultats et l'interface peuvent évoluer avant la version stable.",
+      "simulation": {
+        "title": "La simulation est encore en version bêta.",
+        "description": "Son résultat dépend fortement de la quantité d'historique demandée par rapport à l'horizon : une fenêtre courte avec un horizon long peut produire des chiffres invraisemblables. Tous les autres niveaux de l'analyse des risques sont sortis de la version bêta."
+      }
     },
     "levels": {
       "l1": {
