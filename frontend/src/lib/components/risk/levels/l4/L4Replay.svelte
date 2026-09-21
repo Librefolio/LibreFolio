@@ -195,20 +195,48 @@
     {/if}
 
     {#if output}
-        <p class="text-sm text-gray-700 dark:text-gray-200" data-testid="risk-replay-total">
-            {$t('risk.levels.l4.replayTotal', {
-                values: {
-                    percent: output.portfolio_return == null ? '—' : `${output.portfolio_return < 0 ? '−' : '+'}${(Math.abs(output.portfolio_return) * 100).toFixed(2)}%`,
-                    amount: !showMoney || output.impact_amount == null ? '' : formatCurrencyAmount(output.impact_amount, currency),
-                },
-            })}
-        </p>
+        <!-- The sentence is withheld, not degraded, when the scope has no aggregate.
+             `stress.py:483-491` sets `portfolio_return` on every weighted scope — 0.0
+             at worst — and leaves it null on the unweighted ones, so this guard can
+             never fire on a portfolio. The reason is the one the `showMoney`
+             docstring above already gives for the amount: a `—` is right inside a
+             card and wrong inside a sentence, because it reads as a number that
+             failed to load rather than one that does not apply. A set of assets has
+             no composition return, so there is nothing to state and nothing to
+             excuse: the per-asset bars below are the whole answer. -->
+        {#if output.portfolio_return != null}
+            {@const total = output.portfolio_return}
+            <p class="text-sm text-gray-700 dark:text-gray-200" data-testid="risk-replay-total">
+                {$t('risk.levels.l4.replayTotal', {
+                    values: {
+                        percent: `${total < 0 ? '−' : '+'}${(Math.abs(total) * 100).toFixed(2)}%`,
+                        amount: !showMoney || output.impact_amount == null ? '' : formatCurrencyAmount(output.impact_amount, currency),
+                    },
+                })}
+            </p>
+        {/if}
         <TornadoChart {rows} label={rowLabel} amount={rowAmount} testId="risk-replay-tornado" />
         {#if audit}
             <!-- A proxy is a choice, not a fact, and an exclusion changes what the
                  number means. Both are stated where the number is read. -->
+            <!-- Which treatment applied is a fact the payload carries, so it is read
+                 rather than re-derived from the scope. `stress.py:496` picks
+                 ZERO_RETURN_RESIDUAL on a weighted scope and OMITTED_FROM_REPLAY
+                 everywhere else, and the default sentence states the first as though
+                 it were the only one — "{weight} of the scope, carried at zero
+                 return" — while an unweighted scope pins `excluded_weight_total` to
+                 0.0 and never carries anything. That is not an imprecise sentence: it
+                 names a treatment the backend did not apply.
+
+                 The predicate asks whether the sentence has a subject it would
+                 misdescribe, which is why it is `.some(...)` over the excluded
+                 assets rather than a scope comparison. With no exclusions there is no
+                 such subject, so the default stands, and on a portfolio every
+                 treatment is ZERO_RETURN_RESIDUAL — the branch below is unreachable
+                 there, which is what keeps weighted rendering untouched. -->
+            {@const omitted = (audit.excluded_assets ?? []).some((item) => item.treatment === 'omitted_from_replay')}
             <p class="text-xs text-gray-500 dark:text-gray-400" data-testid="risk-replay-audit" data-proxy-count={audit.proxy_count} data-excluded-count={audit.excluded_count}>
-                {$t('risk.levels.l4.replayAudit', {
+                {$t(omitted ? 'risk.levels.l4.replayAuditOmitted' : 'risk.levels.l4.replayAudit', {
                     values: {
                         proxies: audit.proxy_count,
                         excluded: audit.excluded_count,

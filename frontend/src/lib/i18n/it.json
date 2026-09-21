@@ -3354,6 +3354,7 @@
         "replayExcludeAndRetry": "Escludi e riprova",
         "replayTotal": "Questa composizione avrebbe chiuso il periodo a {percent} {amount}",
         "replayAudit": "Sostituti: {proxies} · Esclusi: {excluded} ({weight} della fetta, con rendimento zero)",
+        "replayAuditOmitted": "Sostituti: {proxies} · Esclusi: {excluded} (omessi dal replay: le cifre parlano per i restanti)",
         "shockShowDetail": "Mostra lo shock per bucket",
         "shockHideDetail": "Nascondi lo shock per bucket",
         "shockTotal": "Questo scenario muoverebbe la fetta di {percent} {amount}",
