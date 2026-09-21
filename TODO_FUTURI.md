@@ -493,6 +493,24 @@ nel descrittore di un Tool. Il modello ne valida **la forma** — relativo, nien
 `ToolDiagnosticsPanel`, `presentation.ts`) e ci porta l'utente con un pulsante.
 Quindi un path verso una pagina cancellata **supera ogni gate**.
 
+> **Aggiornamento del 21/09, sera — la conseguenza è ora misurata, e c'è un gate
+> che avrebbe dovuto coprirlo.** `dev.py mkdocs check-links` esiste e verifica i
+> link fra codice e documentazione, ma per costruzione non vede questo:
+> `dev.py:1073-1195` cerca stringhe letterali `/mkdocs/` nei `.ts`/`.svelte` del
+> frontend (Scope 1) e `docs_url` nei soli `fx_providers` /
+> `asset_source_providers` (Scope 2). Il path dei Tool non sta in nessuno dei
+> due — vive in `ToolDocumentation(path=…)` sotto `tool_plugins/` ed è letto a
+> runtime. Misurato: `grep -rl 'user/tools' frontend/src` → **0**,
+> `grep -c 'tool_plugins' dev.py` → **0**.
+>
+> Quindi cancellando o rinominando la pagina PAC, `check-links` sarebbe rimasto
+> **verde** mentre il pulsante *Documentation* del prodotto dava 404. Non è
+> l'assenza di un gate: è **un gate che esiste e il cui perimetro esclude
+> precisamente il riferimento che nessuno verifica** — la forma più difficile da
+> vedere, perché la sua esistenza è essa stessa una rassicurazione. Verificato a
+> mano che il path risolva in tutte e quattro le lingue del sito buildato: a
+> mano, perché non c'è altro modo.
+
 > Vale la pena tenerli accoppiati, perché insieme dicono una cosa che nessuno
 > dei due dice da solo: `monetary_step` era **dichiarato e mai consumato**,
 > `ToolDocumentation.path` è **consumato e mai verificato**. Il difetto non sta
@@ -518,6 +536,24 @@ ristretto del solver*, cioè un concetto diverso da un valore di policy.
 > bisogno di un tipo ristretto, nascerà con il disegno in mano — un tipo
 > ereditato da un'epoca precedente arriva con le sue assunzioni e nessuno che le
 > ricordi.
+
+**Quarto precedente, nel runner** (21/09/2026): `pac-analyze` registrato **due
+volte** — `_backend_services.py` e `_backend_schemas.py` — contro file di test
+cancellati nello stesso commit che li rimuoveva. Chiunque avesse eseguito quelle
+due azioni avrebbe avuto un rosso da un pytest su un percorso inesistente.
+
+`dev.py test check-orphans` era **verde**, e correttamente: verifica
+*registrazione → raggiungibilità da un `all`*. Nessuno verifica *azione → il file
+esiste*. Sweep manuale dei 211 percorsi citati da `scripts/test_runner/`: zero
+mancanti dopo la rimozione, due falsi positivi (un commento d'esempio e un glob).
+
+> I quattro insieme coprono le quattro caselle, ed è il motivo per cui vale la
+> pena tenerli tutti: `monetary_step` dichiarato-e-mai-consumato,
+> `ToolDocumentation.path` consumato-e-mai-verificato con un gate che lo esclude,
+> `RebalancerPolicy` dichiarato-e-superato, `pac-analyze` registrato-e-morto con
+> un gate che guarda la direzione opposta. **Due dei quattro hanno un gate che
+> passa**: non basta chiedersi se un controllo esiste, bisogna chiedersi da che
+> parte guarda.
 
 **Perché è differito e non dimenticato**: decisione developer del 21/09 —
 *«buona idea, ma da fare solo alla fine, quando il sistema è funzionante e si
