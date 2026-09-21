@@ -35,6 +35,7 @@
     import {assetStoreVersion, getAssetInfo} from '$lib/stores/reference/assetStore';
     import {brokerStoreVersion, ensureBrokersLoaded, getAccessibleBrokers} from '$lib/stores/reference/brokerStore';
     import AssetSetCorrelationSection from './AssetSetCorrelationSection.svelte';
+    import AssetSetReplaySection from './AssetSetReplaySection.svelte';
     import RiskAnalysisPanel from './RiskAnalysisPanel.svelte';
     import RiskBetaBanner from './RiskBetaBanner.svelte';
     import {applyBulkAction, applyFilters, MAX_SELECTED_ASSETS, readPersistedSelection, resolveInitialSelectionWithSource, writePersistedSelection, type BulkAction, type SelectionFilters, type SelectionSource} from './assetSetSelection';
@@ -309,6 +310,7 @@
 
     {#if selectedAssetIds.length > 0}
         <AssetSetCorrelationSection assetIds={selectedAssetIds} assetLabels={selectionLabels} {dateStart} {dateEnd} {targetCurrency} />
+        <AssetSetReplaySection assetIds={selectedAssetIds} assetLabels={selectionLabels} {dateStart} {dateEnd} {targetCurrency} />
         <RiskAnalysisPanel scope={{kind: 'asset_set', asset_ids: selectedAssetIds}} {dateStart} {dateEnd} {targetCurrency} assetIds={selectedAssetIds} title={$t('risk.assetSet.panelTitle')} showBetaBanner={false} {onsynced} />
     {:else}
         <div class="rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 p-8 text-center text-sm text-gray-400 dark:text-gray-500" data-testid="risk-asset-set-empty">
