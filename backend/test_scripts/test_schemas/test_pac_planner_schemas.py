@@ -20,18 +20,12 @@ from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from backend.app.schemas import pac_allocator as pac_schemas
 from backend.app.schemas.pac_allocator import (
-    PAC_ANALYZE_INPUT_ADAPTER,
-    PAC_ANALYZE_OUTPUT_ADAPTER,
     PAC_PLAN_INPUT_ADAPTER,
     PAC_PLAN_OUTPUT_ADAPTER,
-    REBALANCE_ANALYZE_INPUT_ADAPTER,
-    REBALANCE_ANALYZE_OUTPUT_ADAPTER,
     REBALANCER_PLAN_INPUT_ADAPTER,
     REBALANCER_PLAN_OUTPUT_ADAPTER,
     ExactNumber,
     ObjectiveStageResult,
-    PacAnalyzeInput,
-    PacAnalyzeOutput,
     PacPlannerInvalidResult,
     PacPlannerNeedsInputResult,
     PacPlannerReadyIncumbentResult,
@@ -43,8 +37,6 @@ from backend.app.schemas.pac_allocator import (
     PlannerBrokerIdentity,
     PlannerFixedDecimal,
     PlannerIssue,
-    RebalanceAnalyzeInput,
-    RebalanceAnalyzeOutput,
     RebalancerInvestAndSellRequest,
     RebalancerInvestOnlyRequest,
     RebalancerPlannerInvalidResult,
@@ -57,8 +49,6 @@ from backend.app.schemas.pac_allocator import (
     SolverStageEvidence,
     ValuationMoneyUnit,
 )
-from backend.app.services.tool_plugins.pac_allocator import PacAllocatorTool
-from backend.app.services.tools.registry import build_tool_definition
 from backend.app.services.tools.schema import (
     declared_operations,
     generate_tool_schema,
@@ -67,7 +57,6 @@ from backend.app.services.tools.schema import (
     schema_fingerprint,
     walk_schema,
 )
-from backend.app.services.tools.schema_export import TOOL_MANIFEST_KEY
 
 ROOT = Path(__file__).resolve().parents[3]
 FIXTURE_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "pac_allocator"
@@ -2605,50 +2594,6 @@ def test_distinct_deployment_rejects_identity_count_coverage_and_arithmetic_erro
     else:
         _find(comparison["objective_deltas"], "objective_code", "fixed_l2")["delta"] = _finite("1")
     _reject(PAC_PLAN_OUTPUT_ADAPTER, payload)
-
-
-P1_CASES = (
-    pytest.param("pac_allocator", PAC_ANALYZE_INPUT_ADAPTER, PAC_ANALYZE_OUTPUT_ADAPTER, PacAnalyzeInput, PacAnalyzeOutput, id="pac"),
-    pytest.param("portfolio_rebalancer", REBALANCE_ANALYZE_INPUT_ADAPTER, REBALANCE_ANALYZE_OUTPUT_ADAPTER, RebalanceAnalyzeInput, RebalanceAnalyzeOutput, id="rebalancer"),
-)
-
-
-@pytest.mark.parametrize("tool_code,input_adapter,output_adapter,input_type,output_type", P1_CASES)
-def test_p1_operation_contract_and_checked_in_schema_fingerprint_are_preserved_byte_semantically(
-    tool_code: str,
-    input_adapter: TypeAdapter[Any],
-    output_adapter: TypeAdapter[Any],
-    input_type: type[BaseModel],
-    output_type: type[BaseModel],
-) -> None:
-    service_matches = [service for service in PacAllocatorTool.services if service.tool_code == tool_code]
-    assert len(service_matches) == 1
-    service = service_matches.pop()
-    definition = build_tool_definition(PacAllocatorTool, service)
-    descriptor = definition.descriptor
-
-    assert PacAllocatorTool.contract_version == "1.0.0"
-    assert PacAllocatorTool.implementation_version == "1.0.0"
-    assert descriptor.contract_version == "1.0.0"
-    assert descriptor.implementation_version == "1.0.0"
-    assert service.input_type is input_type
-    assert service.output_type is output_type
-    assert [policy.operation for policy in service.operations] == ["analyze"]
-    assert declared_operations(descriptor.input_schema) == frozenset({"analyze"})
-    assert _wire(descriptor.input_schema) == _wire(generate_tool_schema(input_adapter, "validation"))
-    assert _wire(descriptor.output_schema) == _wire(generate_tool_schema(output_adapter, "serialization"))
-
-    recomputed = schema_fingerprint(descriptor.input_schema, descriptor.output_schema, frozenset({"analyze"}))
-    assert descriptor.schema_fingerprint == recomputed
-    assert re.fullmatch(r"[a-f0-9]{64}", recomputed)
-
-    checked_in = json.loads(GENERATED_CONTRACT.read_bytes())
-    manifest = checked_in[TOOL_MANIFEST_KEY]
-    assert manifest["manifestVersion"] == 2
-    entry = _find(manifest["tools"], "toolCode", tool_code)
-    assert entry["contractVersion"] == "1.0.0"
-    assert entry["operations"] == ["analyze"]
-    assert entry["schemaFingerprint"] == recomputed
 
 
 PLANNER_FULL_SCHEMA_FINGERPRINT_CASES = (

@@ -238,16 +238,16 @@ export function createToolRendererRegistry(registrations: readonly CompiledToolR
 }
 
 const compiledRendererRegistrations: readonly CompiledToolRendererRegistration[] = [
-    defineToolRenderer('pac_allocator', '1.0.0', {
-        componentKey: 'pac-allocator',
-        uiVersion: '1.0.0',
-        load: () => import('./pac-allocator/PacAllocatorTool.svelte'),
-    }),
-    defineToolRenderer('portfolio_rebalancer', '1.0.0', {
-        componentKey: 'portfolio-rebalancer',
-        uiVersion: '1.0.0',
-        load: () => import('./pac-allocator/PortfolioRebalancerTool.svelte'),
-    }),
+    // No compiled renderers. The P1 UIs for `pac_allocator` and
+    // `portfolio_rebalancer` were removed on 2026-09-21 together with their
+    // backend services. The backend now exposes `pac_allocator` with
+    // `operation="plan"` (planner v2), which has no UI yet.
+    //
+    // This is a modelled state, not a gap: `resolveToolRenderer` returns the
+    // `renderer_missing` unavailable code, which `presentation.ts` maps to
+    // `tools.availability.rendererMissing` — translated in all four locales
+    // and explicit that no calculation was started. The tool stays listed in
+    // the catalog and explains itself until the v2 UI exists.
 ];
 const compiledRegistry = createToolRendererRegistry(compiledRendererRegistrations);
 

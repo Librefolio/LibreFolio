@@ -1,59 +1,20 @@
-"""Pure P1 allocation analyses. No solver, order, lookup, or persistence."""
+"""PAC/Rebalancer planner package.
 
-from backend.app.schemas.pac_allocator import (
-    PAC_ANALYZE_INPUT_ADAPTER,
-    REBALANCE_ANALYZE_INPUT_ADAPTER,
-    PacAnalyzeInput,
-    PacAnalyzeOutput,
-    RebalanceAnalyzeInput,
-    RebalanceAnalyzeOutput,
-)
-from backend.app.services.pac_allocator.evaluator import (
-    evaluate_pac_budget,
-    evaluate_rebalancing,
-)
-from backend.app.services.pac_allocator.models import Checkpoint, check_budget
-from backend.app.services.pac_allocator.normalize import (
-    normalize_pac,
-    normalize_rebalance,
-)
-from backend.app.services.pac_allocator.report import (
-    build_pac_report,
-    build_rebalance_report,
-)
+The P1 `analyze` entry points (`analyze_pac_budget`, `analyze_rebalancing`)
+were removed on 2026-09-21 by developer decision: never released, never fully
+tested, and declared a non-goal by the master plan §1.2. The planner v2 entry
+point is `planner.plan_pac_allocation`.
 
-__all__ = ["analyze_pac_budget", "analyze_rebalancing"]
+It is deliberately **not** re-exported here. The import chain
+`planner -> compiler -> pyscipopt` means re-exporting would pull SCIP into
+every consumer of this package at import time. Import it by module path:
 
+    from backend.app.services.pac_allocator.planner import plan_pac_allocation
 
-def analyze_pac_budget(
-    request: PacAnalyzeInput,
-    *,
-    checkpoint: Checkpoint | None = None,
-) -> PacAnalyzeOutput:
-    """Return ideal reporting-budget shares, never proposed orders."""
-    check_budget(checkpoint)
-    validated = PAC_ANALYZE_INPUT_ADAPTER.validate_python(request)
-    normalized = normalize_pac(validated, checkpoint=checkpoint)
-    evaluated = evaluate_pac_budget(normalized, checkpoint=checkpoint)
-    result = build_pac_report(normalized, evaluated, checkpoint=checkpoint)
-    check_budget(checkpoint)
-    return result
+A subprocess test pins that property
+(`test_pac_planner_planner.py::test_scip_import_isolation_in_subprocess`):
+importing this package must leave `pyscipopt` absent from `sys.modules`.
+Do not "fix" the missing package-level export.
+"""
 
-
-def analyze_rebalancing(
-    request: RebalanceAnalyzeInput,
-    *,
-    checkpoint: Checkpoint | None = None,
-) -> RebalanceAnalyzeOutput:
-    """Return canonical current/target gaps, never buy or sell instructions."""
-    check_budget(checkpoint)
-    validated = REBALANCE_ANALYZE_INPUT_ADAPTER.validate_python(request)
-    normalized = normalize_rebalance(validated, checkpoint=checkpoint)
-    evaluated = evaluate_rebalancing(normalized, checkpoint=checkpoint)
-    result = build_rebalance_report(
-        normalized,
-        evaluated,
-        checkpoint=checkpoint,
-    )
-    check_budget(checkpoint)
-    return result
+__all__: list[str] = []

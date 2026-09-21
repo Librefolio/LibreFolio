@@ -21,12 +21,6 @@ import pytest
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, computed_field
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 
-from backend.app.schemas.pac_allocator import (
-    PacAnalyzeInput,
-    PacAnalyzeOutput,
-    RebalanceAnalyzeInput,
-    RebalanceAnalyzeOutput,
-)
 from backend.app.schemas.tools import ToolDocumentation, ToolOperationPolicy, ToolPlatformPolicy, ToolUIDescriptor
 from backend.app.services.provider_registry import AbstractPluginRegistry, register_plugin
 from backend.app.services.tools.base import ToolDefinitionError, ToolPlugin, ToolService
@@ -1114,90 +1108,6 @@ def test_catalog_order_and_fingerprint_are_stable_without_changing_registration_
     for descriptor in catalog.items:
         assert descriptor.schema_fingerprint == snapshot.definitions[descriptor.tool_code].descriptor.schema_fingerprint
     assert snapshot.definitions[_only_code(first)].descriptor.schema_fingerprint == snapshot.definitions[_only_code(second)].descriptor.schema_fingerprint
-
-
-# Frozen before generic operation policy and platform resource fields were added.
-@pytest.mark.parametrize(
-    ("code", "input_type", "output_type", "expected_fingerprint"),
-    [
-        pytest.param(
-            "pac_allocator",
-            PacAnalyzeInput,
-            PacAnalyzeOutput,
-            "507e106cf2a2a2e3b78cc9f96053346cb785551231d8bbce86cd563e028ed495",
-            id="pac-allocator",
-        ),
-        pytest.param(
-            "portfolio_rebalancer",
-            RebalanceAnalyzeInput,
-            RebalanceAnalyzeOutput,
-            "cba2b73e9930c7f42ad92f2d43eb1cba91236ca0d2111d2cb454172243bf40b8",
-            id="portfolio-rebalancer",
-        ),
-    ],
-)
-def test_policy_and_resource_additions_do_not_change_financial_tool_fingerprints(
-    code,
-    input_type,
-    output_type,
-    expected_fingerprint,
-    discovery_factory,
-    plugin_factory,
-):
-    ordinary_plugin = plugin_factory(
-        code,
-        input_type=input_type,
-        output_type=output_type,
-        operations=(ToolOperationPolicy(operation="analyze"),),
-    )
-    long_plugin = plugin_factory(
-        code,
-        input_type=input_type,
-        output_type=output_type,
-        operations=(_long_operation_policy("analyze"),),
-    )
-
-    assert _build(ordinary_plugin).descriptor.schema_fingerprint == expected_fingerprint
-    assert _build(long_plugin).descriptor.schema_fingerprint == expected_fingerprint
-
-    discovery = discovery_factory()
-    _publish(discovery, long_plugin)
-    platforms = (
-        ToolPlatformPolicy(),
-        ToolPlatformPolicy(
-            engine_timeout_ms=4_000,
-            job_timeout_ms=5_000,
-            soft_timeout_ms=4_000,
-            cleanup_timeout_ms=2_000,
-            request_timeout_ms=20_000,
-            client_timeout_ms=25_000,
-            memory_limit_bytes=536_870_912,
-        ),
-    )
-    effective_policies = []
-    for platform in platforms:
-        catalog = get_tool_catalog(platform, discovery.registry)
-        assert catalog.catalog_version == "2"
-        descriptor = {item.tool_code: item for item in catalog.items}[code]
-        assert descriptor.schema_fingerprint == expected_fingerprint
-        (effective_policy,) = descriptor.operations
-        effective_policies.append(effective_policy)
-
-    assert {
-        (
-            policy.engine_timeout_ms,
-            policy.job_timeout_ms,
-            policy.soft_timeout_ms,
-            policy.cleanup_timeout_ms,
-            policy.request_timeout_ms,
-            policy.client_timeout_ms,
-            policy.memory_limit_bytes,
-        )
-        for policy in effective_policies
-    } == {
-        (30_000, 45_000, 44_000, 5_000, 59_000, 65_000, 1_073_741_824),
-        (4_000, 5_000, 4_000, 2_000, 20_000, 25_000, 536_870_912),
-    }
 
 
 def test_effective_policy_only_lowers_limits_and_reserves_output_time():
