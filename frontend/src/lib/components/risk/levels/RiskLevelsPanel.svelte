@@ -72,6 +72,23 @@
         // turning them on here cannot change what any other surface requests.
         includeDrawdownSummary: true,
         includeMonthlyVar: true,
+        // L3's own perimeter, and the scatter it draws.
+        //
+        // This was the outage. `L3RiskAdjusted` is built to read the *current
+        // composition* wave — its docstring argues the case at length — but
+        // nothing ever asked for that wave, so `selectKpiWave` fell through to
+        // the historical one on every visit and `asset_risk_return` was never
+        // requested at all. Two failures in series, both silent: the request did
+        // not ask, and the answer was not passed on.
+        //
+        // ⚠️ Turning this on is not cosmetic. It adds `historical_kpi` on the
+        // current-composition wave, which `selectKpiWave` then *prefers*, so
+        // Sortino, Sharpe, volatility and beta are computed over today's weights
+        // replayed on past returns rather than over the portfolio's own history.
+        // The two perimeters can disagree by more than half their own value —
+        // which is exactly why the card reads the perimeter from the payload and
+        // prints it, instead of anyone assuming which one is on screen.
+        includeCurrentCompositionRiskReturn: true,
     });
 
     let historicalResults = $derived(controller.historicalResults);
@@ -229,7 +246,7 @@
 
         <RiskLevelSection level={3} title={$t('risk.levels.l3.title')} testId="risk-level-3" health={l3Health} reasons={l3Reasons} errorCodes={l3Errors} metadata={l3Metadata}>
             <L3Benchmark {controller} excludeAssetIds={assetIds} />
-            <L3RiskAdjusted {historicalResults} comparisonResult={controller.comparisonResult} {benchmarkName} loading={initialLoading} />
+            <L3RiskAdjusted {historicalResults} {currentResults} {assetNames} {appliedRiskFreePercent} comparisonResult={controller.comparisonResult} {benchmarkName} loading={initialLoading} />
         </RiskLevelSection>
 
         <!-- Closed until asked for, and the scenario catalogue is fetched on that
