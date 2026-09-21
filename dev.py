@@ -44,6 +44,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
 # Change to project root for consistent paths
 os.chdir(PROJECT_ROOT)
 
+import scripts.docs_links as docs_links
 from scripts.cli_base import (
     Colors,
     check_server_running,
@@ -554,7 +555,10 @@ def cmd_fe_dev(args):
 def cmd_fe_build(args):
     """Build frontend for production."""
     # Ensure fonts/JS libs exist before SvelteKit prerender (validates app.html refs)
-    cache_result = update_js_cache(strict=True)
+    # Only resources the frontend ships can stop this build: MathJax lives in
+    # mkdocs_src/ and is never referenced from frontend/, so letting it abort
+    # here blocked every fresh worktree over an asset the bundle does not carry.
+    cache_result = update_js_cache(strict=True, required_for="frontend")
     if cache_result != 0:
         print_error("Resource cache incomplete - aborting frontend build")
         return cache_result
@@ -1166,8 +1170,13 @@ def _mkdocs_check_anchor(en_file, anchor: str, path: str, origin: str, docs_root
 def cmd_mkdocs_check_links(args):
     """Validate cross-boundary links: frontend/backend → MkDocs docs.
 
-    Scope 1: Frontend docsPath / /mkdocs/ URLs → docs file existence + anchor check.
-    Scope 2: Backend provider docs_url → docs file existence.
+    Scope 1: frontend docsPath / /mkdocs/ URLs / <DocsLink> props, including the
+    ones whose value comes from a local constant or map — those used to be
+    skipped, although their values are perfectly static.
+    Scope 2: every backend ``*_providers`` / ``*_plugins`` package, by glob.
+
+    Discovery lives in ``scripts/docs_links.py`` so it can be imported and
+    interrogated by a test; this function owns presentation and the exit code.
     """
 
     docs_root = PROJECT_ROOT / "mkdocs_src" / "docs"
@@ -1175,172 +1184,87 @@ def cmd_mkdocs_check_links(args):
     errors = []
     ok_count = 0
     known_count = 0
+    speculative_misses = []
+
+    def _rel(origin: str) -> str:
+        """Render an origin relative to the project root, keeping any ``:line`` suffix."""
+        return str(origin).replace(f"{PROJECT_ROOT}/", "")
 
     print(Colors.success("🔗 Checking cross-boundary links (frontend/backend → docs)...\n"))
 
     # ── Scope 1: Frontend → docs ──────────────────────────────────────────
     print(f"{Colors.CYAN}── Scope 1: Frontend → MkDocs ──{Colors.NC}")
 
-    # 1a. Collect docsPath values from .ts and .svelte files
-    # Test files are fixtures/mocks, not real links — exclude them (audit 03/09:
-    # AboutTab.test.ts mocks produced 6 of the 7 false positives).
-    def _is_test_file(path) -> bool:
-        name = path.name
-        return name.endswith((".test.ts", ".spec.ts"))
+    discovery = docs_links.collect_frontend(frontend_src)
 
-    def _resolvable(raw: str) -> str | None:
-        """Return a statically checkable docs path, or None when it isn't one.
-
-        Template literals lose their ``${…}`` segments: what survives is checkable
-        only when it is still a real path. An *unbalanced* ``${`` — as produced by a
-        nested ternary like ``/mkdocs/${lang === 'en' ? '' : `${lang}/`}…`` — leaves a
-        fragment such as ``${lang``, which must be dropped rather than reported as a
-        missing file.
-        """
-        cleaned = re.sub(r"\$\{[^}]*\}", "", raw)
-        if any(ch in cleaned for ch in "${}"):
-            return None
-        # Normalise the trailing slash: `…/compound` and `…/compound/` are the same
-        # page, and without this they survive deduplication as two entries.
-        cleaned = cleaned.lstrip("/").rstrip("/")
-        if not cleaned or ":path" in cleaned:
-            return None
-        return cleaned
-
-    docs_paths: list[tuple[str, str, int]] = []  # (path, file, line)
-    for ext in ("*.ts", "*.svelte"):
-        for f in frontend_src.rglob(ext):
-            if _is_test_file(f):
-                continue
-            for i, line in enumerate(f.read_text().splitlines(), 1):
-                # static docsPath = '...'  or  docsPath: '...'
-                m = re.search(r"""docsPath\s*[:=]\s*['"]([^'"]+)['"]""", line)
-                if m:
-                    candidate = _resolvable(m.group(1))
-                    if candidate:
-                        docs_paths.append((candidate, str(f.relative_to(PROJECT_ROOT)), i))
-
-    # 1b. Collect /mkdocs/ URLs from window.open and href=
-    for ext in ("*.ts", "*.svelte"):
-        for f in frontend_src.rglob(ext):
-            if _is_test_file(f):
-                continue
-            for i, line in enumerate(f.read_text().splitlines(), 1):
-                for m in re.finditer(r"""/mkdocs/([^'"`,\s)]+)""", line):
-                    candidate = _resolvable(m.group(1).rstrip("/"))
-                    if candidate:
-                        docs_paths.append((candidate, str(f.relative_to(PROJECT_ROOT)), i))
-
-    # 1c. Collect <DocsLink> props. The component prefixes /mkdocs/ at runtime
-    # (DocsLink.svelte → getDocsUrl), so the literal carries neither that prefix nor
-    # the `docsPath` name: without this scope every <DocsLink> in the app goes
-    # unchecked — which is precisely the link shape user-facing pages rely on.
-    # A dynamic `path={expr}` has no quotes and is skipped by construction.
-    for f in frontend_src.rglob("*.svelte"):
-        if _is_test_file(f):
-            continue
-        for i, line in enumerate(f.read_text().splitlines(), 1):
-            if "<DocsLink" not in line:
-                continue
-            for m in re.finditer(r"""\b(?:localizedFallbackPath|path)\s*=\s*['"]([^'"]+)['"]""", line):
-                candidate = _resolvable(m.group(1))
-                if candidate:
-                    docs_paths.append((candidate, str(f.relative_to(PROJECT_ROOT)), i))
-
-    # Deduplicate
-    seen = set()
-    unique_paths = []
-    for path, src_file, line_no in docs_paths:
-        key = path
-        if key not in seen:
-            seen.add(key)
-            unique_paths.append((path, src_file, line_no))
-
-    for path, src_file, line_no in sorted(unique_paths, key=lambda x: x[0]):
-        # Split anchor
-        if "#" in path:
-            file_path_str, anchor = path.rsplit("#", 1)
-        else:
-            file_path_str, anchor = path, None
-
-        # Normalize: path may end with / (directory) → look for index.en.md or file.en.md
-        file_path_str = file_path_str.rstrip("/")
-        candidates = [
-            docs_root / f"{file_path_str}.en.md",
-            docs_root / file_path_str / "index.en.md",
-            docs_root / f"{file_path_str}.md",
-            docs_root / file_path_str / "index.md",
-            ]
-
-        found_file = None
-        for c in candidates:
-            if c.exists():
-                found_file = c
-                break
+    for link in docs_links.deduplicate(discovery.links):
+        origin = _rel(link.origin)
+        file_path_str, _, anchor = link.path.partition("#")
+        found_file = docs_links.find_page(docs_root, link.path)
 
         if not found_file:
-            errors.append(f"  ❌ {path}\n     → File not found (from {src_file}:{line_no})")
+            # A speculative path came from dropping an unknown interpolation, so
+            # its absence proves nothing about the link — only about the guess.
+            if not link.confident:
+                speculative_misses.append(link)
+                continue
+            errors.append(f"  ❌ {link.path}\n     → File not found (from {origin})")
         elif anchor:
-            failure = _mkdocs_check_anchor(
-                found_file, anchor, path, f"{src_file}:{line_no}", docs_root
-            )
+            failure = _mkdocs_check_anchor(found_file, anchor, link.path, origin, docs_root)
             if failure == "KNOWN":
                 known_count += 1
             elif failure:
                 errors.append(failure)
             else:
                 ok_count += 1
-                print(f"  ✅ {path}")
+                print(f"  ✅ {link.path}")
         else:
             ok_count += 1
-            print(f"  ✅ {path}")
+            print(f"  ✅ {link.path}")
 
-    # ── Scope 2: Backend provider docs_url ────────────────────────────────
-    print(f"\n{Colors.CYAN}── Scope 2: Backend provider docs_url ──{Colors.NC}")
+    # ── Scope 2: Backend-declared docs paths ──────────────────────────────
+    # Every *_providers / *_plugins package, by glob. The two directories this
+    # scope used to name by hand left signal_plugins and tool_plugins — nineteen
+    # pages — unchecked, because a hand-written list only covers what someone
+    # remembered to add.
+    print(f"\n{Colors.CYAN}── Scope 2: Backend service plugins ──{Colors.NC}")
 
-    providers_dir = PROJECT_ROOT / "backend" / "app" / "services"
-    for provider_subdir in ("fx_providers", "asset_source_providers"):
-        pdir = providers_dir / provider_subdir
-        if not pdir.exists():
-            continue
-        for f in sorted(pdir.glob("*.py")):
-            content = f.read_text()
-            for m in re.finditer(r"""['"](/mkdocs/[^'"]+)['"]""", content):
-                url = m.group(1)
-                raw = url.replace("/mkdocs/", "").rstrip("/")
-                if "#" in raw:
-                    file_part, anchor = raw.rsplit("#", 1)
-                    file_part = file_part.rstrip("/")
-                else:
-                    file_part, anchor = raw, None
+    backend_found = docs_links.collect_backend(PROJECT_ROOT / "backend" / "app" / "services")
+    for link in docs_links.deduplicate(backend_found.links):
+        origin = _rel(link.origin)
+        _, _, anchor = link.path.partition("#")
+        found_file = docs_links.find_page(docs_root, link.path)
+        if not found_file:
+            # A speculative path came from dropping an unknown interpolation, so
+            # its absence proves nothing about the link — only about the guess.
+            if not link.confident:
+                speculative_misses.append(link)
+                continue
+            errors.append(f"  ❌ {link.path}\n     → File not found (from {origin})")
+        elif anchor:
+            failure = _mkdocs_check_anchor(found_file, anchor, link.path, origin, docs_root)
+            if failure == "KNOWN":
+                known_count += 1
+            elif failure:
+                errors.append(failure)
+            else:
+                ok_count += 1
+                print(f"  ✅ {link.path}")
+        else:
+            ok_count += 1
+            print(f"  ✅ {link.path}")
 
-                candidates = [
-                    docs_root / f"{file_part}.en.md",
-                    docs_root / file_part / "index.en.md",
-                    docs_root / f"{file_part}.md",
-                    docs_root / file_part / "index.md",
-                    ]
-                found_file = None
-                for c in candidates:
-                    if c.exists():
-                        found_file = c
-                        break
-
-                rel_src = str(f.relative_to(PROJECT_ROOT))
-                if not found_file:
-                    errors.append(f"  ❌ {url}\n     → File not found (from {rel_src})")
-                elif anchor:
-                    failure = _mkdocs_check_anchor(found_file, anchor, raw, rel_src, docs_root)
-                    if failure == "KNOWN":
-                        known_count += 1
-                    elif failure:
-                        errors.append(failure)
-                    else:
-                        ok_count += 1
-                        print(f"  ✅ {url}")
-                else:
-                    ok_count += 1
-                    print(f"  ✅ {url}")
+    # ── Declared unverifiable ─────────────────────────────────────────────
+    # A value that genuinely depends on runtime state is not an error, but it is
+    # not a pass either. It used to disappear from the output entirely, and an
+    # empty error list read as "everything is fine".
+    unverified = docs_links.deduplicate(
+        discovery.unverified + backend_found.unverified + speculative_misses
+    )
+    if unverified:
+        print(f"\n{Colors.CYAN}── Not verifiable ({len(unverified)}) ──{Colors.NC}")
+        for link in unverified:
+            print(f"  🔵 {link.path}  (from {_rel(link.origin)}) — resolved at runtime")
 
     # ── Summary ───────────────────────────────────────────────────────────
     print(f"\n{Colors.CYAN}── Summary ──{Colors.NC}")
@@ -1547,6 +1471,9 @@ def _docker_ensure_assets_built():
     from scripts.cli_base import check_frontend_needs_build
 
     # --- 1. JS library cache (fonts must exist before SvelteKit prerender) ----
+    # No narrowing here on purpose: the image copies mkdocs_src/site/ next to
+    # the frontend bundle, so it ships *both* consumers and every missing
+    # resource is still fatal.
     cache_result = update_js_cache(strict=True)
     if cache_result != 0:
         print_error("Resource cache incomplete. Cannot build Docker image.")
@@ -2233,7 +2160,7 @@ def copy_docs_assets():
     #         print_success(f"Copied promo video to mkdocs assets: {video_file.name}")
 
 
-def update_js_cache(strict: bool = False):
+def update_js_cache(strict: bool = False, required_for: str | None = None):
     """Update JS library cache.
 
     I1 (02/09): the script exits non-zero when a resource is missing AND has no
@@ -2241,11 +2168,16 @@ def update_js_cache(strict: bool = False):
     returned to the caller so a broken build stops instead of shipping; the
     dev-server path stays non-blocking (offline development with a warm cache
     must keep working).
+
+    ``required_for`` narrows the failure to the resources the calling build
+    actually ships. A frontend build has no reason to abort over MathJax, which
+    only the documentation serves — and on a fresh worktree that abort happens
+    before any test can start.
     """
-    result = run_command_live(
-        [*pipenv_prefix(), "python", "scripts/update_js_cache.py"],
-        cwd=PROJECT_ROOT
-        )
+    command = [*pipenv_prefix(), "python", "scripts/update_js_cache.py"]
+    if required_for:
+        command += ["--required-for", required_for]
+    result = run_command_live(command, cwd=PROJECT_ROOT)
     if result == 0:
         print_success("JS libraries cached")
         return 0
