@@ -32,22 +32,21 @@
      * the derivation is genuinely fail-closed — because an explicit `false`
      * cannot drift if that payload field ever moves.
      *
-     * ⚠️ Two sentences inside `L4Replay` still read as though a portfolio were
-     * on screen, and they are not fixable from here:
-     *   - `:198` renders `replayTotal` — "This composition would have ended the
-     *     period at {percent}" — but `stress.py:480-494` leaves
-     *     `portfolio_return` null on an unweighted scope, so `{percent}`
-     *     degrades to `—`. That is the very failure `L4Replay:42` argues about
-     *     for the *amount*: a dash inside a sentence reads as a number that
-     *     failed to load, not as one that does not apply.
-     *   - `:212` renders `replayAudit` — "({weight} of the scope, carried at
-     *     zero return)" — but `stress.py:482` pins `excluded_weight_total` to
-     *     0.0 without weights and `:497` marks those assets
-     *     `OMITTED_FROM_REPLAY`, so the sentence states a treatment the backend
-     *     did not apply.
-     * Both are invisible on `portfolio`, where `portfolio_return` is always a
-     * number and weights exist. They surface only on the scope that had no
-     * mount until this one.
+     * 📌 Two sentences inside `L4Replay` used to read as though a portfolio were
+     * on screen, and this docstring carried the warning until they were fixed.
+     * Both are repaired, and the repairs are what this page now relies on:
+     *   - the composition total is **withheld**, not degraded. `L4Replay:207` is
+     *     `{#if output.portfolio_return != null}`, and `stress.py` leaves that
+     *     null on an unweighted scope — so the sentence does not render at all,
+     *     rather than printing a dash that reads like a number which failed to
+     *     load. The per-asset bars are the whole answer here.
+     *   - the audit sentence **names the treatment the payload actually
+     *     carries**: `L4Replay:238` selects `replayAuditOmitted` or
+     *     `replayAudit` from the excluded list, instead of always claiming the
+     *     carried-at-zero-return handling that an unweighted scope never gets.
+     * Both were invisible on `portfolio` and surfaced only on this scope, which
+     * had no mount until this one — which is why they are recorded here rather
+     * than left to be rediscovered.
      */
     import {_ as t} from '$lib/i18n';
     import {createRiskPanelController} from '$lib/stores/risk/riskPanelController.svelte';

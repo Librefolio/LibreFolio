@@ -52,10 +52,11 @@ interface RiskRequest {
  *
  * Today the euro on this page is *latent*, not present: for an `AssetSetRiskScope`
  * the backend builds `asset_values={}` and `scope_value=None`
- * (`risk/service.py`), the stress plugin therefore returns `impact_amount=None`,
- * and the frontend prints an em-dash. So loading the page and finding no `€`
- * would prove nothing — it would stay green with the rule deleted, because the
- * data simply is not there.
+ * (`risk/service.py`), so the replay plugin returns `impact_amount=None` on every
+ * row (`stress.py:542`) and leaves `portfolio_return` null (`:480-494`), which
+ * makes the top-level amount unreachable too (`:564`). So loading the page and
+ * finding no `€` would prove nothing — it would stay green with the rule
+ * deleted, because the data simply is not there.
  *
  * This magnitude is what the API is *not* allowed to talk the page into printing.
  * It cannot be produced by anything legitimate on this page: correlations live in
@@ -72,6 +73,15 @@ const MONEY_AMOUNT = '12345.67';
  * `$12,345.67` alike, because the offence is the amount, not the symbol.
  */
 const MONEY_PATTERN = /12[.,\u00a0\u202f\u2009 ]?345[.,]67/;
+
+/**
+ * The composition return the stubbed replay claims.
+ *
+ * Chosen so no rendered percentage can collide with {@link MONEY_PATTERN}: the
+ * tornado and the total print `(|value| * 100).toFixed(2)`, so this one reads
+ * `−12.34%` and the per-asset spread below stays in the same two-digit range.
+ */
+const REPLAY_RETURN = -0.1234;
 
 /** ρ of the pair the stub makes deliberately redundant (≥ `NEAR_IDENTICAL`). */
 const REDUNDANT_RHO = 0.97;
@@ -123,10 +133,15 @@ const CATALOG = {
 /**
  * An empty but valid scenario catalog.
  *
- * The scenario UI is gated on `scope.kind === 'asset'`, so this page never reads
- * it — but the panel still fetches it on mount, and a spec that leaves one call
- * going to the real backend is a spec that depends on which YAML files happen to
- * be on disk.
+ * Empty, not absent. The replay reads it — `replayOptions` turns it into the
+ * preset list — and an empty list simply means "no presets", which leaves the
+ * explicit date range the section was born with. What is not acceptable is a
+ * call going to the real backend: a spec that lets one through depends on which
+ * YAML files happen to be on disk.
+ *
+ * It is fetched on the rung's **first open** (`RiskLevelSection`'s `onfirstopen`
+ * → `controller.loadScenarioCatalog()`), not on mount, so the route must be in
+ * place before the toggle is clicked rather than before the page is opened.
  */
 const SCENARIO_CATALOG = {
     items: [],
@@ -155,6 +170,18 @@ function definition(analyticCode: string, outputKind: string, supportedScopes: s
     };
 }
 
+/**
+ * True when this request is the *historical replay*, not the hypothetical shock.
+ *
+ * Both ride the same analytic code. `L4Replay:95` asks for `stress` in
+ * `current_composition` mode and distinguishes itself in the parameters
+ * (`buildHistoricalReplayParameters` → `method: 'historical_replay'`), so the
+ * code alone cannot tell the two apart and neither may this stub.
+ */
+function isHistoricalReplay(analytic: RiskAnalyticRequest): boolean {
+    return analytic.analytic_code === 'stress' && analytic.parameters?.method === 'historical_replay';
+}
+
 function metadata(request: RiskRequest, analytic: RiskAnalyticRequest) {
     const observations = 60;
     const calendarDays = 87;
@@ -179,6 +206,24 @@ function metadata(request: RiskRequest, analytic: RiskAnalyticRequest) {
         excluded_assets: [],
         algorithm_version: 'e2e-mock-v1',
         computed_at: '2026-01-31T12:00:00Z',
+        // `service.py:860` copies the plugin's audit into the metadata of every
+        // replay, and `L4Replay` gates `risk-replay-audit` on it. Omitting it here
+        // would leave one of the presence barriers below unsatisfiable — a barrier
+        // that can never turn green is not stricter, it is broken.
+        ...(isHistoricalReplay(analytic)
+            ? {
+                  historical_replay_audit: {
+                      proxy_count: 0,
+                      proxy_assets: [],
+                      excluded_count: 0,
+                      excluded_assets: [],
+                      excluded_weight_total: 0,
+                      missing_history_policy: 'manual_proxy_or_exclude',
+                      composition_policy: 'current_buy_and_hold',
+                      proxy_series_usage: 'returns_only',
+                  },
+              }
+            : {}),
     };
 }
 
@@ -205,6 +250,18 @@ function dataQuality() {
 function matrixAssetIds(request: RiskRequest): number[] {
     if (request.scope.kind === 'asset_set') return request.scope.asset_ids.slice(0, MATRIX_LIMIT);
     return [];
+}
+
+/**
+ * The ids the stubbed replay reports on: the whole scope, not the matrix slice.
+ *
+ * {@link MATRIX_LIMIT} exists to keep a *drawn* matrix cheap and to pin
+ * `data-pairs-lead`; neither is a property of the replay, which returns one bar
+ * per holding it could price. Reusing the matrix cap here would have been a
+ * limit borrowed from another question.
+ */
+function replayAssetIds(request: RiskRequest): number[] {
+    return request.scope.kind === 'asset_set' ? request.scope.asset_ids : [];
 }
 
 /**
@@ -249,52 +306,49 @@ function correlationOutput(request: RiskRequest) {
 }
 
 /**
- * A stress result carrying money the real backend never sends for this scope.
+ * A historical replay carrying money the real backend never sends for this scope.
  *
  * `impact_amount` is populated at the top level *and* on every row, because those
- * are exactly the two places `RiskAnalysisPanel` would print it. That is the
- * point: hand the page the data that does not exist today and see whether it
- * still refuses to show it.
+ * are exactly the two places `L4Replay` would print it — `:213` inside the
+ * composition sentence and `:147` in `rowAmount`, for every bar of the tornado.
+ * That is the point: hand the page the data that does not exist today and see
+ * whether it still refuses to show it.
+ *
+ * `portfolio_return` is the other half of the same bait, and it is deliberately
+ * NOT what the backend does here: `stress.py:480-494` leaves it null on an
+ * unweighted scope, and `L4Replay:207` therefore *withholds* the whole sentence
+ * rather than degrading it. Reproduce that faithfully and `output.impact_amount`
+ * becomes unreachable by construction — its absence would then prove nothing
+ * about the guard, which is the precise failure {@link MONEY_AMOUNT} warns
+ * about. Sending a return makes the sentence render, so `showMoney={false}` is
+ * the only thing left between the payload and a euro on screen.
+ *
+ * Shape-faithful in every other respect: a replay carries no `dimension` and no
+ * `configured_buckets` (`stress.py:561-567`), which is what makes `tornadoRows`
+ * take its per-asset branch — the branch that reads `impact_amount`. A bucket
+ * row carries `amount: null` and would have quietly disarmed the row half of
+ * this test.
  */
-function stressOutput(request: RiskRequest) {
-    const assetIds = matrixAssetIds(request);
-    const shock = -0.1;
+function replayOutput(request: RiskRequest) {
+    const assetIds = replayAssetIds(request);
     return {
         kind: 'stress',
-        method: 'hypothetical',
-        dimension: 'asset_class',
-        portfolio_return: shock,
+        method: 'historical_replay',
+        portfolio_return: REPLAY_RETURN,
         impact_amount: MONEY_AMOUNT,
-        classification_coverage: 1,
-        impacts: assetIds.map((assetId) => ({
+        replay_range: {
+            start: request.date_range.start,
+            end: request.date_range.end ?? request.date_range.start,
+        },
+        impacts: assetIds.map((assetId, index) => ({
             asset_id: assetId,
-            weight: 1 / assetIds.length,
-            shock_return: shock,
-            contribution_return: shock / assetIds.length,
+            // Spread so the bars differ from each other; `contribution_return` is
+            // omitted because an unweighted scope has no weights to contribute
+            // with (`stress.py:541`), which sends `tornadoRows` to `shock_return`.
+            shock_return: REPLAY_RETURN + index / 1000,
             impact_amount: MONEY_AMOUNT,
-            dimension: 'asset_class',
             metadata_fallback: false,
-            bucket_audit: [
-                {
-                    exposure_bucket_id: 'ETF',
-                    exposure: 1,
-                    candidate_bucket_ids: ['ETF'],
-                    applied_bucket_id: 'ETF',
-                    bucket_shock: shock,
-                    shock_contribution: shock,
-                    rule: 'direct',
-                },
-            ],
         })),
-        configured_buckets: [
-            {
-                bucket_id: 'ETF',
-                shock,
-                applied_asset_count: assetIds.length,
-                asset_exposure_total: assetIds.length,
-                contribution_return: shock,
-            },
-        ],
     };
 }
 
@@ -308,10 +362,14 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest): Record<
     };
 
     if (analytic.analytic_code === 'correlation') return {...base, status: 'ok', output: correlationOutput(request)};
-    if (analytic.analytic_code === 'stress') return {...base, status: 'ok', output: stressOutput(request)};
+    if (isHistoricalReplay(analytic)) return {...base, status: 'ok', output: replayOutput(request)};
 
     // Anything else reaching this page is a change in what the panel requests, and
-    // should say so loudly rather than render an empty frame.
+    // should say so loudly rather than render an empty frame. The *hypothetical
+    // shock* is deliberately in that set now: `03-mappa-livelli-pagine` §3.3
+    // forbids it on a page with no weights, and `AssetSetReplaySection` supplies
+    // `L4WhatIf` with the replay snippet only — so a `stress` request that is not
+    // a replay means the forbidden rung came back.
     return {
         ...base,
         status: 'failed',
@@ -408,11 +466,24 @@ async function openAssetGlobalRisk(page: Page): Promise<void> {
 
 /**
  * Every section of the analysis is gated on the capability catalog, so an absent
- * section means "unsupported" *or* "not loaded yet". The panel publishes which
+ * section means "unsupported" *or* "not loaded yet". The page publishes which
  * one; wait for the gate rather than for the gated.
+ *
+ * The attribute used to come from the legacy `RiskAnalysisPanel`, which no longer
+ * mounts here — a gate on a component that left is a gate that waits forever.
+ * `AssetSetCorrelationSection` publishes the same three-value vocabulary
+ * (`ready` | `error` | `pending`) from its own controller, on the div that
+ * already carried `data-busy`.
+ *
+ * It speaks for the replay below as well, and not by luck: `fetchRiskCatalog`
+ * holds a module-level cache plus an in-flight promise (`riskStore:74-77`), so
+ * the two sibling controllers await the *same* promise and both assign their
+ * catalog in the same microtask drain — before any DOM flush could publish
+ * `ready` here. Should that ever stop being true, the `expect.poll` on the
+ * captured requests is what turns it into a named failure instead of a mystery.
  */
 async function waitForRiskCatalog(page: Page): Promise<void> {
-    await expect(page.getByTestId('asset-global-risk-panel').getByTestId('risk-analysis-panel')).toHaveAttribute('data-catalog', 'ready', {timeout: 20_000});
+    await expect(page.getByTestId('asset-global-risk-panel').getByTestId('risk-correlation-content')).toHaveAttribute('data-catalog', 'ready', {timeout: 20_000});
 }
 
 /**
@@ -499,30 +570,77 @@ test.describe('Asset Global risk laboratory', () => {
 
         const panel = page.getByTestId('asset-global-risk-panel');
 
-        // The scenario section is gated on the catalog, which is already `ready`.
-        await expect(page.getByTestId('risk-stress-controls')).toBeVisible({timeout: 15_000});
-        const runScenario = page.getByTestId('risk-stress-run');
-        await expect(runScenario).toBeEnabled();
-        await runScenario.click();
+        // ① and ② — the CAUSE, of which the money assertions at the end of this
+        // test are the EFFECT. The legacy monolith contributed exactly two things
+        // to this page: a *second* correlation matrix, which made every selector
+        // inside it ambiguous under Playwright strict mode, and the hypothetical
+        // shock, which `03-mappa-livelli-pagine` §3.3 forbids where there are no
+        // weights. Both are structural facts, and a count is the right shape for
+        // them: it is dimensional, so unlike a text scan it cannot fall silent.
+        //
+        // Neither pair can stand in for the other. If some other component started
+        // printing euros here tomorrow, ① and ② would still be green; and a matrix
+        // mounted twice prints no euros at all, so the money block would stay green
+        // through the very regression ② exists for.
+        //
+        // The absence in ① is readable because `waitForRiskCatalog` above already
+        // proved the analysis mounted and loaded: "not there" and "not yet" are
+        // otherwise the same observation.
+        await expect(panel.getByTestId('risk-analysis-panel'), 'the legacy monolith must not be mounted on the asset-set page').toHaveCount(0);
+        // Document-level on purpose: strict-mode ambiguity is a property of the
+        // page, not of a subtree, and the two ordering tests below reach for
+        // `risk-correlation-heatmap` unscoped.
+        await expect(page.getByTestId('risk-correlation-heatmap'), 'the heatmap must be mounted exactly once').toHaveCount(1);
+
+        // The replay is where the money now arrives. `AssetSetReplaySection` mounts
+        // `RiskLevelSection` with `collapsible`, so the rung starts closed and loads
+        // its scenario catalogue on first open only. The click below is a *toggle* —
+        // the assertion above it is what makes "it is closed" a fact rather than an
+        // assumption, which is the whole difference between opening a section and
+        // shutting one.
+        const replaySection = page.getByTestId('risk-replay-section');
+        await expect(replaySection).toBeVisible({timeout: 15_000});
+        await expect(replaySection, 'L4 opens closed: reopening a drawer is not a change of question').toHaveAttribute('data-open', 'false');
+        await page.getByTestId('risk-replay-section-toggle').click();
+        await expect(replaySection).toHaveAttribute('data-open', 'true');
+        await expect(page.getByTestId('risk-replay-section-body')).toBeVisible();
+
+        // Only the first rung is supplied, so this is the whole of L4 here.
+        await expect(page.getByTestId('risk-l4-replay')).toBeVisible();
+        const runReplay = page.getByTestId('risk-replay-run');
+        await expect(runReplay).toBeEnabled();
+        await runReplay.click();
 
         // Presence barriers first. "No € on the page" is also true of a page that
         // rendered nothing at all, so the money-bearing payload has to be proved to
-        // have *reached the renderer* before its absence means anything.
-        await expect(page.getByTestId('risk-stress-section')).toBeVisible({timeout: 20_000});
-        await expect(page.getByTestId('risk-stress-impacts')).toBeVisible({timeout: 20_000});
-        await expect(page.getByTestId('risk-stress-impacts').locator('tbody tr').first()).toBeVisible();
+        // have *reached the renderer* before its absence means anything. These three
+        // are not decoration: each one is a place the stubbed amount would surface.
+        // `risk-replay-total` interpolates the top-level `impact_amount`
+        // (`L4Replay:213`), every tornado row runs `rowAmount` (`:147`), and
+        // `risk-replay-audit` proves the answer is a *replay* — no other analytic
+        // carries `historical_replay_audit`.
+        await expect(page.getByTestId('risk-replay-total')).toBeVisible({timeout: 20_000});
+        await expect(page.getByTestId('risk-l4-replay').getByTestId('risk-replay-tornado-row').first()).toBeVisible({timeout: 20_000});
+        await expect(page.getByTestId('risk-replay-audit')).toBeVisible({timeout: 20_000});
         await expect
-            .poll(() => requests.some((request) => request.scope.kind === 'asset_set' && request.analytics.some((analytic) => analytic.analytic_code === 'stress')), {
+            .poll(() => requests.some((request) => request.scope.kind === 'asset_set' && request.mode === 'current_composition' && request.analytics.some((analytic) => isHistoricalReplay(analytic))), {
                 timeout: 15_000,
-                message: 'the scenario must have run against an asset_set scope — that is the scope the no-money rule is about',
+                message: 'the replay must have run against an asset_set scope — that is the scope the no-money rule is about',
             })
             .toBe(true);
 
         const rendered = await panel.innerText();
 
-        // The section is populated with the half it is allowed to show: a shock is
-        // a percentage, and percentages are what an unweighted set can honestly say.
-        expect(rendered, 'the scenario section rendered without a single percentage — the barriers above are lying').toContain('%');
+        // The section is populated with the half it is allowed to show: a realised
+        // return is a percentage, and percentages are what an unweighted set can
+        // honestly say.
+        //
+        // Scoped to the rung, where the old assertion scanned the whole panel. It
+        // had to change anyway — the shock it spoke for is gone — and a `%` printed
+        // by the matrix above would have satisfied a panel-wide version while the
+        // replay rendered nothing at all.
+        const replayText = await page.getByTestId('risk-l4-replay').innerText();
+        expect(replayText, 'the replay rendered without a single percentage — the barriers above are lying').toContain('%');
 
         // THE RULE. With weights → euros → "me". Without weights → percentages →
         // "these". An asset set carries no weights, so any euro figure here would be
