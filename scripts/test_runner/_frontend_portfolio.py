@@ -148,6 +148,25 @@ def front_portfolio_risk_levels_unit(verbose: bool = False, ui: bool = False, he
     return False
 
 
+def front_portfolio_risk_levels_component(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the four-level risk UI component tests (Vitest + jsdom mount)."""
+    print(f"\n{Colors.BLUE}Running: Risk levels component Vitest tests{Colors.NC}")
+    result = subprocess.run(
+        ["npx", "vitest", "run", "src/lib/components/risk/levels/l4/L4Replay.test.ts"],
+        cwd="frontend",
+        capture_output=not verbose,
+    )
+    if result.returncode == 0:
+        print_success("Risk levels component Vitest tests - PASSED")
+        return True
+
+    print_error(f"Risk levels component Vitest tests - FAILED (exit code: {result.returncode})")
+    if not verbose:
+        print(result.stdout.decode() if result.stdout else "")
+        print(result.stderr.decode() if result.stderr else "")
+    return False
+
+
 def front_portfolio_risk_controller_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run Risk panel controller unit tests."""
     print(f"\n{Colors.BLUE}Running: Risk panel controller Vitest unit tests{Colors.NC}")
@@ -229,6 +248,7 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "risk-request-unit", front_portfolio_risk_request_unit, test_names=False, name="Risk Request Builder Unit Tests", desc="What the request actually carries: the simulation process is chosen by the caller rather than hard-coded, each mode carries its own seed field and forbids the other one, and the legacy aliases keep their documented geometric-Brownian default", tests="src/lib/risk/simulationParameters.test.ts")
     add_test(cat, "risk-benchmark-unit", front_portfolio_risk_benchmark_unit, test_names=False, name="Risk Benchmark Store Unit Tests", desc="One benchmark shared by every scope: user scoping, reload survival, corrupt-value rejection", tests="src/lib/stores/risk/riskBenchmarkStore.test.ts")
     add_test(cat, "risk-controller-unit", front_portfolio_risk_controller_unit, test_names=False, name="Risk Panel Controller Unit Tests", desc="Signature invalidation with in-flight preservation, generation guards, catalog error vs pending", tests="src/lib/stores/risk/riskPanelController.test.ts")
+    add_test(cat, "risk-levels-component", front_portfolio_risk_levels_component, test_names=False, name="Risk Levels Component Tests", desc="L4 historical replay mounted in jsdom over a real panel controller: the composition total is withheld rather than degraded to a dash when the scope carries no aggregate return (and is still stated when a weighted replay came out flat at 0.0), and the audit sentence names the treatment the payload actually carries — the omitted-from-replay wording as soon as one exclusion was omitted, the carried-at-zero-return wording when every exclusion was a zero-return residual, when nothing was excluded, and when the payload carries no excluded list at all. Which of the two keys was selected is proved by resolving both from the shipped catalogue instead of pinning a translated sentence", tests="src/lib/components/risk/levels/l4/L4Replay.test.ts")
     add_test(cat, "risk-levels-unit", front_portfolio_risk_levels_unit, test_names=False, name="Risk Levels Unit Tests", desc="Four-level pure logic: L1 scale of harm (CVaR leads, omission never zero-fill, required-recovery asymmetry), L1 tail readings (underwater curve pre-scaled to percent because the chart converts nothing, VaR cut located by half-open inequality and kept when it is exactly zero, worst-realization null honoured as a refusal rather than zero-filled), L2 weight-vs-contribution divergence ordering with negative contributions, L3 figure collection plus the perimeter choice (current composition preferred, historical fallback, perimeter read from the payload even when it contradicts the wave) and the risk/return points (portfolio sized as the whole, assets by un-renormalized weight, cash never plotted), L4 simulation modes with the seed each one carries, L4 simulation provenance read from the payload instead of asserted in a translation string, L4 scenario presets and tornado ordering by signed damage, level provenance collapsed by agreement so a disagreement about the window splits instead of being represented by one analytic, and catalogue values degraded to the backend token rather than to a printed i18n key", tests="src/lib/components/risk/levels/levelHelpers.test.ts, src/lib/components/risk/levels/levelMetadata.test.ts, src/lib/components/risk/levels/l1/l1Helpers.test.ts, src/lib/components/risk/levels/l3Helpers.test.ts, src/lib/components/risk/levels/simulationProvenance.test.ts, src/lib/components/risk/levels/l4/simulationModes.test.ts, src/lib/components/risk/levels/l4/scenarioHelpers.test.ts")
     add_test(cat, "store-unit", front_portfolio_store_unit, test_names=False, name="Portfolio Store Unit Tests", desc="portfolioStore + portfolioMutation vitest units", tests="src/lib/stores/portfolio/portfolioStore.test.ts")
     add_test(cat, "allocation-unit", front_portfolio_allocation_unit, test_names=False, name="Allocation Colour Hierarchy Unit Tests", desc="hexToHsl round-trip on the real palettes, subtype grouping/ordering, measured shade contrast, legacy ordering pin", tests="src/lib/components/charts/__tests__/allocationHierarchy.test.ts")

@@ -766,3 +766,591 @@ ripopolamento** e non è più garantita.
 
 📌 **Se la matrice esce pallida non è il montaggio, è il dato**: oggi **0 coppie su 21** superano `0.3`.
 N è stato riaperto per seminare un fattore comune.
+
+---
+
+# Risveglio — passi ①②③④ sulla revisione fusa `8dc9be198`
+
+> Baseline verificata prima di scrivere: `git rev-parse HEAD` = `8dc9be1989e34341e3fa6c17e6d2dc5105a89475` ✅,
+> albero pulito, porta `6167` libera. Sei mandati su sei dentro.
+
+## ① `api sync` — fatto, e il codice d'uscita non è la prova
+
+```
+pipenv run python dev.py api sync      → exit 0, porcelain INVARIATO
+```
+
+🔑 **E il porcelain invariato non prova niente, per una ragione strutturale.** I tre artefatti
+che `api sync` produce — `frontend/src/lib/api/generated.ts`, `openapi.json`,
+`tool-contracts.openapi.json` — sono **tutti e tre ignorati e non tracciati**. Quindi:
+
+- il merge **non poteva** aver portato il client rigenerato di S3 e S4 → il sync era **necessario**, non cerimoniale;
+- `git status` vuoto dopo il sync è **cieco per costruzione**, non rassicurante;
+- l'`mtime` non serve: il generatore riscrive incondizionatamente;
+- **solo un hash prima/dopo potrebbe testimoniarlo** → candidato **settima coordinata di provenienza**.
+
+La prova vera è stata `front check` (§④), come il coordinatore aveva avvertito. Inoltre
+`front build` **riesegue `api sync` da sé** («Syncing API types before build…»), quindi il
+passo è doppiamente soddisfatto.
+
+## ② Cancellato il blocco metadata locale — la prop di S1 è arrivata
+
+`AssetSetCorrelationSection.svelte`:
+
+| | prima | dopo |
+|---|---|---|
+| import | `{riskMetadata, riskOutput, singleValue}` | `{riskOutput}` |
+| import | `{degradedResults, resultReasons}` | `+ levelMetadata` da `levelHelpers` |
+| derived | `riskMetadata(result)` | `levelMetadata([result])` |
+| markup | `{#if metadata}…<details>…{/if}` (~29 righe) | — cancellato, `{metadata}` passato al telaio |
+| helper | `percent()`, `fixed()`, `returnBasisLabel()` | — cancellati |
+
+La porta usata è **`levelHelpers`** (`:17` il tipo, `:18` la funzione), che è la porta unica
+che la docstring di S1 chiede ai consumatori.
+
+🔑 **Il sollevamento mi costa zero, per una ragione più netta di quella di S1.** `levelMetadata()`
+lascia cadere `method`. Misurato: `correlation.py:128` `method="pearson_post_fx"` è **l'unica
+assegnazione** nel plugin. **Un valore che non può variare non è provenienza** — quindi non ho
+perso informazione, ho perso una costante.
+
+📌 Misurato anche: **nessuno spec asserisce** `risk-correlation-observations` né
+`risk-correlation-section-metadata` → il blocco non era sotto cancello. E la prop di S1 **riusa
+il mio `testId`**, quindi `risk-correlation-section-metadata` è **conservato dal telaio**.
+
+> ⚠️ **Fuori pista**: la docstring nuova era finita **dopo** la dichiarazione che documenta, in
+> coda allo `<script>`. Trovata **rileggendo il file subito dopo averlo scritto** — la stessa
+> difesa che al passo 1e aveva trovato il `{:else}` vuoto. Due edit di riparazione.
+
+## ③ L4 montato su `asset_set` — **solo `L4Replay`**
+
+Nuovo: **`AssetSetCorrelationSection`**'s sister, `AssetSetReplaySection.svelte` (~100 righe),
+montato in `AssetSetRiskPanel:313` **dentro il `{#if selectedAssetIds.length > 0}` esistente**,
+fra L2 e il legacy.
+
+🔑 **La risposta architetturale l'aveva già costruita S4, e non l'avevo prevista.** `L4WhatIf`
+dichiara i tre pioli come **snippet opzionali**, ognuno dietro il proprio `{#if}`, **e l'avviso
+beta vive dentro il solo ramo della simulazione**. Quindi *la riduzione si esprime consegnando
+meno snippet*: niente prop `variant` su quattro componenti, niente quinto componente, e
+**omettere lo shock è strutturalmente impossibile da sbagliare**. È la **quarta volta** in questa
+campagna che la riparazione giusta era già scritta a poche righe di distanza.
+
+### La regola dell'euro, provata con una ricerca
+
+| superficie | siti di denaro |
+|---|---|
+| `L4WhatIf.svelte` | **nessuno** |
+| `RiskLevelSection.svelte` | **nessuno** |
+| `L4Replay.svelte` | `:147` `rowAmount`, `:202` `amount` — **entrambi dietro `!showMoney \|\| …`** |
+
+Con `showMoney={false}` entrambi restituiscono `''`, e `TornadoChart:48` rende l'importo solo
+`{#if amount && amount(row)}`. **Nessun euro può comparire.** Passato esplicito benché S4 lo
+derivi già da `metadata.scope`, che `service.py:840` popola su **ogni** risultato — la
+derivazione è davvero fail-closed, ma un `false` esplicito non va alla deriva se quel campo si sposta.
+
+### 🔴 Due frasi di `L4Replay` parlano ancora come se ci fossero i pesi
+
+Misurato in `stress.py::_historical`:
+
+```
+:480  weighted_scope = scope_kind == PORTFOLIO
+:483  if weighted_scope … :488 elif scope_kind == ASSET …   →  asset_set CADE FUORI
+      ⇒ portfolio_return = None ; excluded_weight_total = 0.0 ; treatment = OMITTED_FROM_REPLAY
+```
+
+✅ Il replay **gira** su `asset_set` e rende i rendimenti composti per asset, senza aggregato —
+esattamente giusto per una pagina senza pesi.
+
+| | riga | cosa rende | su `asset_set` |
+|---|---|---|---|
+| 🔴 1 | `L4Replay:198` | `replayTotal`: «…would have ended the period at {percent} {amount}» | `percent='—'` → **«…ended the period at —»** |
+| 🔴 2 | `L4Replay:212` | `replayAudit`: «({weight} of the scope, carried at zero return)» | peso **sempre 0.0 %**, e il backend li marca `OMITTED_FROM_REPLAY`, **non** portati a zero |
+
+🔑 **La prima è il difetto contro cui la docstring di S4 stessa argomenta**, sull'altro slot:
+*«il `—` … è giusto dentro una card e sbagliato dentro una frase — "…at −12.30% —" si legge come
+un numero che non si è caricato, non come uno che non si applica.»* S4 l'ha risolto per
+l'**importo** e l'ha lasciato identico sulla **percentuale**, perché su `portfolio`
+`portfolio_return` è **sempre** un numero.
+
+⚠️ **E la seconda è la via probabile, non quella rara**: 8 asset su 17 non hanno storia, quindi il
+flusso «escluso» è il flusso normale.
+
+**Entrambe sono nel file di S4, che è `FROZEN` e non è mio.** Montaggio consegnato, perdite
+**riportate al coordinatore**, non spedite in silenzio.
+
+## ④ I cancelli, sulla revisione fusa — nessuno riusato
+
+| comando | esito |
+|---|---|
+| `front check` | **0 errori, 41 warning in 2 file** — identico alla baseline presa *prima* di editare; i miei 3 file compaiono **0 volte** |
+| `front format` | **3 file riscritti, nessuno mio** (v. sotto) |
+| `front format --check` | **exit 0** — «All matched files use Prettier code style!» |
+| `front build` | **exit 0** — «Frontend build complete!» |
+| `front-portfolio risk-controller-unit` | **PASSED** |
+| `front-portfolio risk-levels-unit` | **171 passed** |
+| `front-portfolio risk-unit` | **17 passed** (`riskStore.test.ts`, il file auto-fuso) |
+| `api risk` | **11 passed** |
+| `services risk-all` | **413 passed** |
+
+> ⚠️ L'`exit 1` della prima riga del cancello di tipo era del `grep -c` finale che non trovava
+> nulla, **non del cancello**: verificato invece che assunto.
+
+### 🔑 Reperto — `front format` ha una metà rossa, dietro un flag, e il default non ce l'ha
+
+`package.json:14-15` espone **due** comandi:
+
+```
+format        prettier --write   ← MUTA, non può mai essere rosso
+format:check  prettier --check   ← RIPORTA, può essere rosso
+```
+
+`dev.py:604-610`: `--check` è **opt-in**; il default è quello che muta. Ogni mandato (io compreso,
+fino a oggi) ha eseguito `front format` nudo → **ripara in silenzio**.
+
+**Conseguenza misurata**: `front format` ha riscritto **tre file che non sono miei** —
+`L1HowMuchItHurts.svelte` e `levelHelpers.test.ts` (di S1), `e2e/portfolio/risk-analysis.spec.ts`.
+Due sono cosmetici. Il terzo **non è una preferenza di stile**:
+
+```
+async function installRiskMocks(…): Promise<RiskRequest[]> {    const requests: RiskRequest[] = [];
+```
+
+Un **a-capo mangiato**, con 4 spazi spuri. Tracciato:
+
+| commit | stato |
+|---|---|
+| `bf34f3a0a` | **pulito** |
+| `6aba9e48d` (S1) | **già mangiato** |
+| `ff8769520` (S2) | ancora mangiato |
+| merge `8dc9be198` | ancora mangiato |
+
+**Ha attraversato due commit e un merge a sei, invisibile**, perché:
+- è **TypeScript valido** → nessun compilatore protesta;
+- `tsconfig.json:17-19` **esclude `e2e/**/*`** → `front check` è **cieco per costruzione** su quel file;
+- e il solo strumento che l'avrebbe visto, `format:check`, **non è il default**.
+
+> 🔑 **È il gemello di R2-100 sull'altro asse.** R2-100: *un cancello esercitato solo sulla metà
+> in cui scatta.* Questo: **un cancello il cui default non ha una metà in cui scatta.**
+>
+> 🔑 **Regola proposta**: *un cancello che ripara non può accumulare prove.* Riparare e riportare
+> sono atti diversi: chi ripara in silenzio converte un difetto in un diff che vedrai **solo** se
+> il tuo albero era pulito e **solo** se ti capita di leggerlo.
+
+📌 `frontend/tsconfig.e2e.json` **esiste** e — verificato con una ricerca — **nessun cancello lo
+usa**. Il reperto del round 1 regge.
+
+### 🔑 Reperto — il cancello distrugge lo stato che il cancello dopo legge
+
+La domanda che S1 mi lascia in eredità («su quali dati?») costa un `count(*)`. Misurata **prima**:
+
+| | prima di `services risk-all` | dopo |
+|---|---:|---:|
+| assets | 17 | **0** |
+| price_history | 2 615 | **0** |
+| transactions | 75 | **0** |
+| arco v2 | **0,1 s** (pulita ✅) | — |
+
+`services risk-all` fa **`db create-clean`**: rimuove il DB della corsia. È il motivo per cui
+l'ordine del coordinatore («`api risk` **prima**, o `db populate --force` in mezzo») esiste — e
+ora è **misurato**, non solo obbedito.
+
+> **Terzo membro della famiglia di oggi**: R2-98 *la scheda scrive dopo lo sguardo*;
+> qui *il cancello svuota la corsia*. **L'atto di verificare muta ciò che la verifica dopo leggerà.**
+
+⚠️ **Quindi la corsia `6167` è ora VUOTA**: il cancello visivo dovrà ripopolare prima, che è
+già la regola del coordinatore.
+
+---
+
+# ⓶ Le due frasi di `L4Replay` — assegnate e riparate
+
+> Assegnazione: *«il file vive in casa tua adesso, il difetto si manifesta solo sulla tua
+> superficie, e tu hai la misura»*. Vincoli: riparazione **additiva**, `portfolio` **byte per byte
+> invariato e provato**, chiavi nuove **solo se non esistono**.
+
+## Prima le chiavi, perché le prime due volte esistevano già
+
+| cercato | esito |
+|---|---|
+| `replayExcluded` «Left out:» | **esiste** (`en.json:3351`), già usata a `L4Replay:175` |
+| una frase per «omesso / lasciato fuori / non incluso» | **nessuna** — cercata con regex su tutto `en.json` |
+
+⇒ **una** chiave nuova, `replayAuditOmitted`, in **quattro** lingue, col vocabolario già in casa
+(`Sostituti/Substituts/Sustitutos`, `Esclusi/Exclus/Excluidos`).
+
+## 🔑 Il difetto vero: la stringa ricodificava come costante un valore che il payload porta
+
+`stress.py:530` mette `"treatment": exclusion_treatment.value` nell'audit, e
+`schemas/risk.py:238` lo tipizza per ogni asset escluso. **Il backend dice già quale trattamento
+ha applicato.** La frase lo ignorava e ne cablava uno solo.
+
+> **È l'inverso esatto del reperto di ②**: là una costante (`method`) era trattata come
+> provenienza; qui **una variabile è trattata come costante**. Stessa confusione, segno opposto.
+
+### Sito 1 — `replayTotal`: la frase si **trattiene**, non si degrada
+
+```svelte
+{#if output.portfolio_return != null}
+    {@const total = output.portfolio_return}
+```
+
+La ragione è quella che la docstring di `showMoney` **già dà per l'importo**: *«un `—` è giusto
+dentro una card e sbagliato dentro una frase»*. Una fetta di asset non ha un rendimento di
+composizione: non c'è nulla da dire e nulla da scusare, e le barre per-asset **sono** la risposta.
+
+### Sito 2 — `replayAudit`: il predicato chiede se la frase ha un soggetto che mentirebbe
+
+```svelte
+{@const omitted = (audit.excluded_assets ?? []).some((item) => item.treatment === 'omitted_from_replay')}
+```
+
+**Non** un confronto sullo scope — che sarebbe ri-derivare nel frontend un fatto che il payload
+porta, cioè lo stesso errore in un posto nuovo. Con zero esclusioni **non c'è soggetto**, quindi
+resta la frase di prima: è ciò che rende il ramo **irraggiungibile su `portfolio`**.
+
+## 🔑 La prova era già in casa, e l'aveva scritta S4
+
+| test | scope | asserzione |
+|---|---|---|
+| `test_historical_replay_exclusion_preserves_zero_return_residual_weight` `:868` | pesato | `portfolio_return == approx(0.05)` · `treatment == "zero_return_residual"` |
+| **`test_historical_replay_asset_set_exclusion_is_omitted_not_zero_weighted`** `:980` | `ASSET_SET` | **`portfolio_return is None`** · **`treatment == "omitted_from_replay"`** |
+
+Entrambi **PASSED** sull'albero riparato (`services risk-all`, 413).
+
+> 🔑 **Il nome del test È la specifica della riparazione.** S4 ha scritto
+> `..._is_omitted_not_zero_weighted` — il test asserisce che il backend **non** pesa a zero
+> l'esclusione — **e ha lasciato la frase dire «carried at zero return».** Il backend era già
+> corretto e già asserito: **solo la frase lo contraddiceva.**
+>
+> **Quinta volta** che la riparazione giusta era già scritta a poche righe. È la più netta: qui non
+> era codice vicino, era **un test il cui nome enuncia il fatto che l'interfaccia negava.**
+
+📌 **E questo è il motivo per cui l'autore non se n'era accorto**: `portfolio` è l'unico scope in
+cui `portfolio_return` **non può** mancare (`:488` `else: portfolio_return = 0.0`). *Chi formula la
+regola e non l'applica al campo accanto non è distratto: sta guardando l'unico caso in cui il
+campo non può mancare.*
+
+## ⚠️ Allargamento di perimetro, dichiarato e non silenzioso
+
+`stress.py:492`: anche lo scope **`ASSET`** non è pesato → `treatment = OMITTED_FROM_REPLAY` e
+`excluded_weight_total = 0.0`. **Oggi la pagina dettaglio asset dice la stessa falsità.** Guidare
+dal `treatment` invece che da `scope === 'asset_set'` la ripara **anche là**. Mi era stata
+assegnata la superficie `asset_set`; il predicato onesto ne copre due. **Dichiarato, non spedito
+di nascosto** — e `front-portfolio risk-asset-detail` è «di nessuno», quindi nessuno spec cambia.
+
+## I cancelli
+
+| comando | esito |
+|---|---|
+| `front check` | **0 errori, 41 warning in 2 file** — identico alla baseline; `L4Replay` **0 volte** |
+| `front format --check` | **exit 0** |
+| `i18n audit` | **2934 chiavi, Complete 2934, Incomplete 0** |
+| `front build` | **exit 0** |
+| `front-portfolio risk-levels-unit` | **171 passed** |
+| `api risk` (su corsia popolata) | **11 passed** |
+| `services risk-all` | **413 passed**, i due test-prova **PASSED** per nome |
+
+✅ **Lo scanner i18n vede le chiavi dentro un ternario**: nessuna delle due compare fra le 122
+«unused». Verificato con **controprova** (due chiavi certamente usate si comportano identicamente),
+perché «assente dall'elenco» poteva voler dire «non cercata».
+
+## 🔴 Il rosso, e la sua causa: l'eredità di S1 consegnata da un cancello
+
+```
+api risk  →  3 failed, 8 passed
+  test_risk_query_runs_all_analytics_against_populated_test_database
+  test_risk_query_simulates_with_canonical_names_and_no_seed
+  test_portfolio_optimization_supports_all_scopes_and_strategies
+
+E  Failed: Test database is not populated: user 'e2e_test_user' is missing.
+E  Seed them with: ./dev.py test db populate --force
+```
+
+**Nessun file di backend toccato.** Causa: `services risk-all` aveva fatto `db create-clean`.
+
+> 🔑 **Sono gli stessi tre su undici che S1 aveva trovato svuotando il DB apposta.** Lui ha dovuto
+> **costruire** lo stato malato per scoprire la dipendenza; a me **l'ha consegnata un cancello**.
+> **`services risk-all` lascia la corsia esattamente nello stato che fa diventare rosso `api risk`**:
+> l'ordine del coordinatore non è igiene, **è obbligatorio** — sbagliarlo fallisce sempre, non spesso.
+
+✅ **E il messaggio di quei test è la forma giusta**: si rifiutano invece di passare a vuoto, e
+**dicono la cura** (`Seed them with: …`), non solo la mancanza.
+
+Dopo `db populate --force`: **11 passed**.
+
+## ⏸ Quello che manca, e perché non l'ho fatto
+
+**Un test di componente su `L4Replay`** che asserisca i due rami (pesato → frase presente + stringa
+`replayAudit`; non pesato → frase assente + stringa `replayAuditOmitted`). L'infrastruttura
+**esiste** (`$test/component`, `@testing-library/svelte@5.4.2`, `// @vitest-environment jsdom`,
+già usata da `DataEditor.test.ts`).
+
+🔴 **Bloccato da una superficie condivisa**: `_frontend_portfolio.py:136` passa a vitest una
+**lista esplicita di file**, non un glob. Un file nuovo **non verrebbe mai eseguito** senza una riga
+in un file del coordinatore. `dev.py front` non ha un esecutore generico.
+
+> 🔑 **E quella lista esplicita è la quarta cecità della serata**: un test non registrato non è un
+> cancello debole, **è un cancello che non esiste** — verde in locale, invisibile a chiunque.
+
+**Chiesto al coordinatore.** Non ho spedito un test che nessun cancello esegue.
+
+## Stato della corsia
+
+```
+db populate --force  →  17 asset · 2615 righe · 9 con storia · arco v2 = 0,1 s (PULITA)
+porta 6167           →  LIBERA  (il runner spegne il backend condiviso da sé)
+```
+
+⚠️ **Ordine provato, non dedotto**: `api risk` → `services risk-all` **svuota** → `db populate
+--force` → pronta. Il cancello visivo trova la corsia popolata.
+
+---
+
+# Passo ⓷ — il test di componente di `L4Replay`, e l'azione nuova che lo esegue
+
+✅ **Completato 2026-09-19.**
+
+> **Note implementazione**: scritto con `test-author`, registrato come azione **nuova**
+> `risk-levels-component`. Nove test in tre `describe`, entrambi i rami asseriti.
+
+## ⓪ ⚠️ Fuori pista — **la mia affermazione del turno precedente era falsa**
+
+Avevo scritto, e il coordinatore l'aveva adottata:
+
+> ~~«un test non registrato non è un cancello debole, è un cancello che non esiste»~~
+
+**È falsa, e l'ho scoperta andando a misurare la baseline prima di agire.**
+`check-orphans` esiste, e fa **due** controlli indipendenti:
+
+```
+🔍  ogni file di test è REGISTRATO       →  218 front-unit · 207 backend · 80 e2e
+🔍  ogni test registrato è RAGGIUNGIBILE da un'azione 'all'
+```
+
+Un file di test che nessuno registra **viene preso**, ed è verde da entrambe le parti.
+
+🔑 **L'affermazione vera è più stretta e più affilata:**
+
+> **La registrazione è imposta da un cancello. La registrazione *veritiera* no.**
+> `check-orphans` **conta i file**; non può leggere se il `name` e la `desc` dell'azione
+> descrivono ancora ciò che l'azione esegue.
+
+Il coordinatore ha rifiutato `risk-levels-unit` perché la sua `desc` comincia con *«Four-level
+pure logic»* e un montaggio in jsdom non è logica pura. **Quel disallineamento non è guardato
+da nulla**: l'ha preso **leggendo**. È esattamente la famiglia di difetti che questa campagna
+insegue — un nome che smette di descrivere il contenuto — e il cancello che sembrava coprirla
+copre l'altra metà.
+
+📌 **E il modo in cui è emersa è lo stesso del reperto su v1**: non l'ho cercata, me l'ha
+consegnata la procedura di misurare la baseline **prima** di agire. Due volte in due turni.
+
+## ① L'azione nuova — additiva per costruzione, non per lettura
+
+```
+git diff --numstat  scripts/test_runner/_frontend_portfolio.py  →  20    0
+                                                                   ^^   ^^
+                                                             inserite  cancellate
+git diff -U0 … | grep -c '^-[^-]'      →  0
+git diff -U0 … | grep 'risk-levels-unit' →  (nessuna riga +/-)
+```
+
+**Zero cancellazioni** prova l'additività meglio di qualunque rilettura: la lista a sette file
+e la sua `desc` fusa da quattro mandati non possono essere state toccate.
+
+La raggiungibilità da `all` non è dichiarata ma **derivata**: `_common.py:347`
+`_get_category_tests_for_all` la ricava dal registro, saltando solo `all` e `in_all=False`.
+
+## ② I tre rami, e il quarto che non avevo chiesto
+
+| caso | `portfolio_return` | `treatment` | atteso |
+|---|---|---|---|
+| ponderato | `-0.0612` | `zero_return_residual` | totale **presente** · chiave originale |
+| **ponderato e piatto** | **`0`** | — | totale **presente** |
+| non ponderato | `null` | `omitted_from_replay` | totale **assente** · chiave nuova |
+| nessuna esclusione | `-0.0612` | — | chiave originale |
+| campo `excluded_assets` assente | `-0.0612` | — | chiave originale (`?? []`) |
+| **misto** | `null` | uno e uno | chiave **nuova** (`.some`, non `.every`) |
+
+🔑 **Il caso «ponderato e piatto» non era nel mio brief e lo aggiungo al merito di
+`test-author`**: `portfolio_return: 0` passa con `!= null` e **fallirebbe con un controllo di
+verità**. Fissa la scelta dell'operatore, non solo il comportamento.
+
+## ③ Il problema i18n, e perché non è risolto asserendo testo
+
+I due rami differiscono **solo per quale chiave rendono**. La regola del progetto vieta di
+asserire testo tradotto. La soluzione adottata: **risolvere entrambe le candidate dal catalogo
+spedito**, con gli stessi valori, e asserire che il reso **è** l'una e **non è** l'altra.
+
+⚠️ **Il buco che quella coppia da sola avrebbe**: se una chiave sparisse, `svelte-i18n`
+ne rieccheggia l'id — e **il componente eccheggerebbe lo stesso id**, quindi i due lati
+andrebbero d'accordo. Chiuso da un test d'imbragatura che prova che (a) ogni chiave risolve
+a qualcosa di **diverso dal proprio id** e (b) le due **non risolvono uguale**. Quella seconda
+asserzione chiude anche il caso della stringa vuota.
+
+## ④ La barriera anti-vacuità
+
+`riskOutput`/`riskMetadata` tornano `null` su un payload che non passa Zod, e un output nullo
+**non rende nulla** — momento in cui *«il totale è assente»* è vero **per la ragione sbagliata**.
+Ogni caso chiama prima `expectPayloadRendered()`, che asserisce le righe del tornado **in ordine
+ordinato** mentre la fixture le dichiara in ordine **inverso**: un payload rieccheggiato
+fallirebbe.
+
+## ⑤ 🔑 Il rosso provato mutando il componente, non dichiarato
+
+`test-author` ha temporaneamente rimesso i due difetti (`!= null` → `!== undefined`,
+`.some(…)` → `false && .some(…)`) e ha ottenuto **3 falliti su 9**, esattamente i tre
+intenzionali. Poi ha ripristinato, con `shasum` uguale prima e dopo.
+
+**Verificato da me, non sulla sua parola:**
+
+```
+grep "!== undefined\|false &&"  L4Replay.svelte   →  nessuno ✅
+git diff --numstat L4Replay.svelte                →  37  9   (solo la mia riparazione)
+:207 {#if output.portfolio_return != null}   :237 {@const omitted = …some(…)}
+```
+
+## ⑥ Tre presupposti del **mio** brief trovati falsi da `test-author`
+
+1. **La ragione del `jsdom` non è la stessa** del file gemello. Là toglierlo produce un
+   **verde silenzioso** (gli effetti non scattano, i negativi passano a vuoto); qui produce un
+   **rosso rumoroso** (`render()` non ha `document`). Documentate entrambe le metà invece di
+   ripetere la ragione del vicino.
+2. 🔑 **`RiskResultMetadata['historical_replay_audit']` non si può indicizzare.**
+   `generated.ts:4797` lo tipizza `(T | null) | Array<T | null>`, quindi
+   `NonNullable<…>['excluded_assets']` non compila — uno dei due errori di `front check`.
+   **Ed è la ragione per cui il componente chiama `singleValue()` su quel campo.**
+   Vale per ogni mandato che scriva fixture di rischio.
+3. `InterpolationValues` di `svelte-i18n` esige un index signature implicito: TypeScript lo
+   concede a un **type alias** e non a una **interface**. Annotato nel file perché nessuno
+   lo «riordini» indietro.
+
++ derive minori nei numeri di riga che avevo relayato (`stress.py:491` non `~488`; i due test
+backend a `:870`/`:981`; `Props` `:26-52`) — nessuna materiale, tutte verificate.
+
+## ⑦ La proposta che `test-author` ha dichiarato invece di spedire
+
+> `data-treatment={omitted ? 'omitted_from_replay' : 'zero_return_residual'}` sul `<p>`
+> dell'audit — che già porta due `data-*` — trasformerebbe il confronto di stringhe in uno
+> **strutturale**, e servirebbe anche all'E2E.
+
+**Non aggiunto**: esporre un segnale nuovo è una decisione d'interfaccia, non un dettaglio di
+test. **Proposta al coordinatore.**
+
+## ⑧ I cancelli, rieseguiti da me sull'albero finale — nessuno riusato
+
+| comando | esito |
+|---|---|
+| `front-portfolio risk-levels-component` | `Test Files 1 passed (1)` · `Tests 9 passed (9)` · exit **0** |
+| `check-orphans` | registrati **218**/218 · raggiungibili **218**/218 · 207 backend · 80 e2e · exit **0** |
+| `front check` | **0 errori, 41 warning in 2 file** — identico alla baseline · exit **0** |
+| `front format --check` | *All matched files use Prettier code style!* · exit **0** |
+
+✅ **217 → 218**: il numero **sale di esattamente uno**. È la stessa forma di prova che il
+cancello dei `DocsLink` impone, e vale qui per la stessa ragione.
+
+📌 **E `front check` ha dato 2 errori sul file nuovo** prima della correzione: è la prova
+**empirica** che copre `src/**/*.test.ts`. La cecità è solo `e2e/**`, come misurato al round 1.
+
+---
+
+# Referto di chiusura — i cancelli **rigirati il 21/09**, non ereditati
+
+✅ **Tre giorni dopo il congelamento**, al momento dello stage. Autorizzato dal coordinatore.
+
+> **Note implementazione**: il referto del 19 non era riutilizzabile, e la ragione non è
+> prudenziale ma misurabile.
+
+## ① Perché un albero identico non basta
+
+```
+L4Replay.test.ts:112   type ExcludedAsset = z.infer<typeof schemas.RiskHistoricalReplayExcludedAsset>;
+L4Replay.test.ts:113   type Audit         = z.infer<typeof schemas.RiskHistoricalReplayAudit>;
+
+git ls-files --error-unmatch src/lib/api/generated.ts
+  →  error: pathspec … did not match any file(s) known to git
+```
+
+> 🔑 **Il test compila contro un file che git non traccia.** Un albero tracciato byte-identico
+> **non prova** che il cancello sia ancora verde: parte dell'ingresso è invisibile a `git status`.
+
+**La settima coordinata di provenienza smette di essere una formalità e diventa un vincolo:**
+dove un test compila contro `generated.ts`, **un verde non si eredita da un albero pulito —
+si rigira.**
+
+## ② I tre cancelli, sulla revisione di oggi
+
+| comando (corsia `6167` · `/tmp/librefolio-r2-s5`) | esito |
+|---|---|
+| `front-portfolio risk-levels-component` | `Test Files 1 passed (1)` · `Tests 9 passed (9)` · exit **0** |
+| `front check` | `svelte-check found 0 errors and 41 warnings in 2 files` · exit **0** |
+| `front format --check` | `All matched files use Prettier code style!` · exit **0** |
+
+🔑 **La prova non è «0 errori» due volte** — due esecuzioni possono dire lo stesso numero su
+insiemi di warning diversi:
+
+```
+cmp  check_final.log (19/09)  ↔  check_d3.log (21/09)   →  IDENTICI byte per byte
+     tolte le sole due righe   [DEBUG] loaded svelte.config.js …?ts=<epoch>
+```
+
+**Stessi 41 warning, stessi 2 file, stesso ordine. Non «altrettanti»: gli stessi.**
+
+⚠️ **`check-orphans` non rigirato oggi.** L'ha girato il coordinatore in sola lettura:
+`218 · 80 · 207`, coincidente con la misura del 19. **Due misure indipendenti, stesso numero** —
+dichiarato invece di lasciato dedurre.
+
+## ③ ⚠️ Fuori pista — **lo strumento di misura ha scritto**
+
+```
+sqlite3 /tmp/librefolio-r2-s5/librefolio.db "select count(*) …"
+  → "no such table: asset"          ← sembrava un DB vuoto
+  → il DB vive in  sqlite/app.db :  percorso sbagliato
+  → e sqlite3 apre in SCRITTURA  :  ha materializzato un file da 0 byte
+```
+
+**Rimosso**; poi reinterrogato con `file:…?mode=ro`, che scrittura non ammette.
+
+> **Quarto membro della famiglia «l'atto di verificare muta ciò che la verifica dopo leggerà»** —
+> e **il primo in cui la causa è lo strumento di misura invece del comando misurato.**
+> Gli altri tre: `services risk-all` che svuota, la scheda che riscrive dopo lo sguardo,
+> il ripopolamento che cancella l'arco.
+
+## ④ La corsia **non è vuota: è scaduta**
+
+```
+assets  17    price_history  2615    con storia  9    users  11
+v2 (arco di fetched_at)  0,127 s   →  PULITA
+max(date)                2026-09-18
+```
+
+> 🔑 **Ripopolare non serve perché la corsia è contaminata né perché è vuota: serve perché
+> la finestra si è mossa e i dati no.**
+
+Il cancello visivo su questi dati mostrerebbe **tre giorni mancanti in coda che non sono un
+difetto del codice** — il tipo esatto di cosa che fa sbagliare un verbale.
+
+## ⑤ Un reperto perso, e dove non va tenuto
+
+`server.log` — l'unica prova della scheda che scrive dopo lo sguardo — **non esiste più.**
+Era in `/tmp`, **l'unica directory che garantisce di non conservarlo**; il log applicativo
+della corsia ha `0` righe POST e non lo supplisce.
+
+**La conoscenza sopravvive (R2-98 registrata). Il reperto no.** Il coordinatore ha preso il
+vincolo a suo nome: un artefatto irriproducibile non va in `/tmp` né nella data dir.
+
+## ⑥ Consegna
+
+**Quattro commit**, divisione accettata per intero:
+
+| # | messaggio | contenuto |
+|---|---|---|
+| 1 | `S5-prettier-deroga.txt` | i tre file di altri mandati riparati dal cancello — **da solo e per primo** |
+| 2 | `S5-asset-global-l4.txt` | `AssetSetReplaySection` (nuovo) · `AssetSetRiskPanel` +2 · `AssetSetCorrelationSection` +15/−68 |
+| 3 | `S5-l4replay-scope.txt` | `L4Replay.svelte` +37/−9 · `en/it/fr/es.json` +1 |
+| 4 | `S5-l4replay-test.txt` | `L4Replay.test.ts` (nuovo, 376) · `_frontend_portfolio.py` +20/−0 · **questo piano** |
+
+La deroga va **prima** perché i tre successivi nascano su una base già formattata, e **da sola**
+perché `git log --follow` su un file di un altro mandato deve rispondere con un soggetto che
+**spieghi quel file** — che è la forma di difetto inseguita da due giorni, applicata a sé stessa.
+
+**`FROZEN`.** Porta `6167` libera. Il ripopolamento avverrà **subito prima** del cancello visivo,
+che si farà insieme allo sviluppatore, con le sette coordinate e la **scheda chiusa** alla fine.
