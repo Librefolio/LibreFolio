@@ -61,7 +61,6 @@
     import AssetSetCorrelationSection from './AssetSetCorrelationSection.svelte';
     import AssetSetComparisonLevels from './AssetSetComparisonLevels.svelte';
     import AssetSetReplaySection from './AssetSetReplaySection.svelte';
-    import RiskBetaBanner from './RiskBetaBanner.svelte';
     import {riskBenchmark} from '$lib/stores/risk/riskBenchmarkStore.svelte';
     import {applyBulkAction, applyFilters, MAX_SELECTED_ASSETS, readPersistedSelection, resolveInitialSelectionWithSource, writePersistedSelection, type BulkAction, type SelectionFilters, type SelectionSource} from './assetSetSelection';
 
@@ -273,8 +272,6 @@
 </script>
 
 <div class="space-y-4" data-testid="asset-global-risk-panel">
-    <RiskBetaBanner />
-
     <section class="rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 p-4" data-testid="risk-asset-set-controls" data-selection-source={selectionSource}>
         <div class="flex flex-wrap items-end gap-3">
             <label class="text-xs text-gray-500 dark:text-gray-400">
