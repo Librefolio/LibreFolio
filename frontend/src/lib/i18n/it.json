@@ -3137,7 +3137,9 @@
           "hypothesis": "Modello classico: assume oscillazioni regolari e sottostima le code."
         }
       },
-      "regimeTruncated": "Questa ipotesi dura {declared} giorni; il tuo orizzonte ne copre solo {applied}."
+      "regimeTruncated": "Questa ipotesi dura {declared} giorni; il tuo orizzonte ne copre solo {applied}.",
+      "driftUncertainty": "La deriva viene da {count} osservazioni: solo per questo la mediana sta fra {low} e {high}.",
+      "driftUncertaintyWide": "La deriva viene da appena {count} osservazioni: solo per questo la mediana sta fra {low} e {high} — più larga della banda qui sopra."
     },
     "errors": {
       "analytic_not_found": "Analitica non disponibile.",
