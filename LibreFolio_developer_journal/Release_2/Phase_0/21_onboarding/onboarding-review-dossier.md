@@ -236,15 +236,40 @@ Creates two tables, both `ON DELETE CASCADE` on `user_id`, both with status/vers
 
 - `welcome` → **`completed`**, timestamped at migration time. They are **not** asked for language
   and currency again. Their existing settings are untouched.
-- All **14 guides** → **`pending`**. All **12 step rows** → **`pending`**.
+- All **14 guides** → **`skipped`**, with `skipped_at` set. All **12 step rows** → **`skipped`**.
 
-**So an existing user gets the full intro tour and every contextual guide on next use, but not the
-welcome page.** That is my decision and it is the one the coordinator correctly flagged as having a
-real wrong answer. The alternative — silently marking everything complete — would mean the feature
-is invisible to every existing install and only new users ever see it. I judged that grandfathering
-*setup* (which they demonstrably already did) while offering *education* (which they never had) was
-the right split. **A reasonable person could disagree, and the fix is a one-line change to the seed
-in migration 003**, which is safe to edit because onboarding is unreleased.
+**So an existing user is offered nothing: not the welcome page, not the intro tour, not a single
+contextual guide.** Onboarding is for genuinely new signups. `skipped` rather than `completed` is
+deliberate and it is the truthful record: it distinguishes *"never offered"* from *"did it"*, which
+matters the day someone asks why a long-standing user has no tour history.
+
+> ⚠️ **Correction, Round 7 Step 1 (2026-09-21) — read this before treating the approval below as a
+> confirmation, because it is not one.**
+>
+> This section originally stated the opposite: that the 14 guides were seeded **`pending`**, and
+> therefore that *"an existing user gets the full intro tour and every contextual guide on next
+> use"*. **That was accurate for the code this dossier reviewed** (branch head `580bd504f`, where
+> migration 003 line 8 read *"Every guide starts pending and appears only at its own trigger"*).
+> It stopped being accurate when the migration was changed on the way into `dev_release2`
+> (28 insertions / 22 deletions on that file), which is the version described above.
+>
+> **The consequence is the part worth recording.** The developer read the old paragraph and
+> approved the upgrade path with *«va bene che chi era già utente non riceva il tour»* — which is
+> exactly what the **new** code does and the **opposite** of what the paragraph they were reading
+> described. They said yes to the right behaviour on the strength of a description of a different
+> one. The two agree, but by luck, not because the approval was informed.
+>
+> **So this is not a validated decision. It is an unvalidated decision that happens to be correct.**
+> If it is ever revisited, revisit it on its merits — do not cite the 2026-09-21 approval as
+> evidence that the behaviour was reviewed and endorsed, because what was endorsed was a sentence,
+> not this behaviour.
+
+**Why it was `pending` in the first place**, since the reasoning is worth keeping: I judged that
+grandfathering *setup* (which existing users demonstrably already did) while still offering
+*education* (which they never had) was the right split. The counter-argument — which is what
+prevailed — is that pushing a tour at a user who has been running the app for months is an
+interruption they did not ask for, and that the feature's audience is new signups. Both are
+defensible. The one now in the target is the second.
 
 `downgrade()` drops both tables only. There is no data preservation on downgrade.
 
@@ -479,7 +504,7 @@ looking at the visuals; useless for testing the real first-login path.
 | # | Do this | Correct result |
 |---|---|---|
 | E1 | **Already-onboarded path**: log in as a user with all flows terminal | Straight to `/dashboard`, no redirect, no tour, no coachmark — **different code path from H1, test it separately** |
-| E2 | **Existing-user upgrade**: a user created before migration 003 | `welcome` is already complete (no welcome page) **but the intro tour and all guides do appear** (§3.3). Confirm this is the upgrade behaviour you want |
+| E2 | **Existing-user upgrade**: a user created before migration 003 | `welcome` is already complete (no welcome page) **and no tour or guide appears either** — all 14 guides are seeded `skipped` (§3.3). Correct result is that nothing is offered at all. If you see a tour, the migration did not run as expected |
 | E3 | Switch account (log out → log in as another user) mid-tour | The new account's state applies immediately; no coachmark from the previous account survives |
 | E4 | Kill the network, then load the app for a user who has never loaded onboarding | The app **blocks** with an error rather than rendering the dashboard or guessing (§4.1) ⚠️ |
 | E5 | Kill the network for a user whose Welcome is known-complete (cached) | The app renders **degraded** — usable, no guides |

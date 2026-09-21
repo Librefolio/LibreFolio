@@ -604,7 +604,7 @@ al coordinator delta esatti per:
 
 ### Step 13 - Gate integrati e review manuale
 
-**Stato:** gate automatici completati il 2026-09-11; review developer pendente.
+**Stato:** completato il 2026-09-14 — gate automatici chiusi il 2026-09-11, review developer superata con OK verbatim del 2026-09-14: *«ok chat, ho visionato un pò tutto e non ho visto problemi! mi piace!»*. Riga chiusa a posteriori nel Round 7 Step 1: il lavoro era finito e integrato in `dev_release2`, ma nessuno era tornato a chiudere il marcatore.
 
 Eseguire una suite alla volta nella lane J, static checks e review indipendente.
 Preparare runbook desktop/mobile per:

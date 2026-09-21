@@ -194,7 +194,7 @@ gate automatici, server spento e checkpoint FROZEN.
 
 ### Step 7 - Gate e checkpoint
 
-**Stato:** ✅ gate automatici completati (2026-09-11); review manuale aperta.
+**Stato:** ✅ completato il 2026-09-14 — gate automatici chiusi il 2026-09-11, review manuale superata con OK verbatim del developer del 2026-09-14. Riga chiusa a posteriori nel Round 7 Step 1.
 
 > **Note implementazione:** gate verdi già acquisiti nella lane J:
 > `services settings` 24/24, `api settings` 37/37, `db populate --force`,

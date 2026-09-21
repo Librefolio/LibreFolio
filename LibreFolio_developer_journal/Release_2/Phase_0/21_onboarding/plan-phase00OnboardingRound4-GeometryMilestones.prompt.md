@@ -422,7 +422,7 @@ Credenziali disposable lane:
 
 ### Step 10 - Post-OK UX
 
-**Stato:** bloccato fino a OK developer.
+**Stato:** ✅ completato il 2026-09-14 — sbloccato dall'OK verbatim del developer del 2026-09-14 e superato dall'integrazione in `dev_release2`. Riga chiusa a posteriori nel Round 7 Step 1.
 
 - docs-writer;
 - suite completa;

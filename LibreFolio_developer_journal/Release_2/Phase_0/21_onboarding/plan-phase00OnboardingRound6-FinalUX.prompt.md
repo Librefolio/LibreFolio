@@ -3,6 +3,9 @@
 ← Previous:
 [Onboarding Round 5 — progresso per-step e polish contestuale](plan-phase00OnboardingRound5-StepProgressPolish.prompt.md)
 
+→ Follow-up:
+[Onboarding Round 7 — anchor stall](plan-phase00OnboardingRound7-AnchorStall.prompt.md)
+
 ## Confine e autorizzazione
 
 **Base:** `8f7acd610127d1ba24dcddfef5b9acf4552d4f51`.
@@ -183,7 +186,7 @@ UI:
 
 ### Step 9 - Gate e review 6158
 
-**Stato:** in review feedback (2026-09-14).
+**Stato:** ✅ completato il 2026-09-14 — review feedback chiusa dall'OK verbatim del developer dello stesso giorno; il lavoro post-OK è tracciato nello Step 10. Riga chiusa a posteriori nel Round 7 Step 1.
 
 > **Note implementazione:** component recheck verdi (Coachmark/Overlay 142,
 > AssetGroup/Import 16, Form 4, Intro 11), E2E Broker desktop/mobile 2 e Confirm All

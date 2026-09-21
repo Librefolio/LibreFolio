@@ -128,6 +128,27 @@ function makeAnchor(bounds: DOMRect = rect(96, 96, 120, 44)): HTMLElement {
     return anchor;
 }
 
+/**
+ * The same anchor, still out of the document.
+ *
+ * `refreshPosition` treats a disconnected element exactly like a missing one,
+ * so the panel stalls with the prop already in place, and `appendChild` alone
+ * then heals it — no prop change, no re-render. That matters: the host hands
+ * the anchor over through a `$derived`, and the effect that owns
+ * `onstall`/`onstallend` never reads `anchor`, so in production its only trigger
+ * is the geometry settling. Driving recovery through `rerender` instead would
+ * replace the whole props object and re-run that effect a couple of frames
+ * *before* anything settled — a test-harness artifact, not something the host
+ * can produce.
+ */
+function makeUnmountedAnchor(bounds: DOMRect = rect(96, 96, 120, 44)): HTMLElement {
+    const anchor = document.createElement('button');
+    anchor.type = 'button';
+    anchor.textContent = 'anchor target';
+    vi.spyOn(anchor, 'getBoundingClientRect').mockReturnValue(bounds);
+    return anchor;
+}
+
 function rect(left: number, top: number, width: number, height: number): DOMRect {
     return {
         x: left,
@@ -163,7 +184,90 @@ async function advanceCoachmarkFrames(count = 6): Promise<void> {
     }
 }
 
+/**
+ * Brings a mounted coachmark to the *settled, healthy* step — the only state in
+ * which the panel-fade deadline is the single thing on the clock.
+ *
+ * `targetStable` is reachable only through two matching `requestAnimationFrame`
+ * measurements (`measureUntilStable`), so a fake-timer block that wants a healthy
+ * step has to fake `requestAnimationFrame` as well and step it; `vi.useFakeTimers()`
+ * with no `toFake` list does exactly that. Those steps move the very clock the
+ * fade is armed on, which is why callers anchor their deadline assertions to an
+ * absolute instant (`advanceFakeClockTo`) rather than to a delta.
+ *
+ * The three attributes are asserted, not assumed: a step that silently failed to
+ * settle parks in `waiting`, arms the *stall* deadline instead of the fade, and
+ * would quietly turn a fade test into a stall test.
+ */
+async function settleCoachmarkGeometry(): Promise<HTMLElement> {
+    await advanceCoachmarkFrames();
+    const root = screen.getByTestId('onboarding-coachmark');
+    expect(root).toHaveAttribute('data-guide-state', 'anchored');
+    expect(root).toHaveAttribute('data-target-stable', 'true');
+    expect(root).toHaveAttribute('data-geometry-state', 'stable');
+    return root;
+}
+
+/**
+ * Advances one frame at a time until an unanchored panel reports itself anchored
+ * again, and returns the exact instant on the fake clock at which that happened.
+ *
+ * `settleCoachmarkGeometry` advances a fixed number of frames, so the clock it
+ * leaves behind sits *after* the recovery instant by however many frames were
+ * spare. That is harmless when asserting a deadline has already passed and fatal
+ * when asserting one has not: the panel fade is re-armed by the recovery itself,
+ * so its 2,999ms boundary can only be named from the instant the recovery
+ * happened, not from a frame budget that overshot it.
+ *
+ * The condition is `anchored` + `data-target-stable`, and deliberately *not*
+ * `data-geometry-state === 'stable'`. The component clears `stalled` — and
+ * therefore re-arms the fade — on `Boolean(anchorRect) && targetStable`, while
+ * `stable` is a later and re-entrant condition: `scheduleStableMeasurement`
+ * pushes geometry back to `revalidating` and re-counts two matching frames, so
+ * it is reached two frames after the panel is already anchored (measured: the
+ * step anchors at +3,024ms and geometry reports `stable` at +3,056ms). Naming
+ * the geometry instant would put the deadline 32ms late and turn the 2,999ms
+ * assertion into an off-by-two-frames red that says nothing about the fade.
+ *
+ * The opening guard is what makes the returned instant a *transition*: this
+ * helper may only be used on a panel that is currently not anchored.
+ */
+async function advanceToRecoveryInstant(maxFrames = 10): Promise<number> {
+    const root = screen.getByTestId('onboarding-coachmark');
+    expect(root).not.toHaveAttribute('data-guide-state', 'anchored');
+    for (let frame = 0; frame < maxFrames; frame += 1) {
+        vi.advanceTimersToNextFrame();
+        await tick();
+        const anchored = root.getAttribute('data-guide-state') === 'anchored' && root.getAttribute('data-target-stable') === 'true';
+        if (anchored) return Date.now();
+    }
+    throw new Error(`coachmark never re-anchored within ${maxFrames} frames`);
+}
+
+/**
+ * Advances the fake clock *to* an absolute instant on it, never *by* a duration.
+ *
+ * A deadline assertion can then name the instant the component actually promises
+ * ("2,999ms after this panel opened") no matter how much of that same budget the
+ * test already spent settling geometry. The guard turns an overrun into a red
+ * instead of a silently meaningless zero-length advance.
+ */
+async function advanceFakeClockTo(instant: number): Promise<void> {
+    const remaining = instant - Date.now();
+    expect(remaining).toBeGreaterThanOrEqual(0);
+    await vi.advanceTimersByTimeAsync(remaining);
+}
+
 const DESCRIPTION_ID = 'onboarding-coachmark-description';
+
+/** The single message line, addressed by the id the panel publishes through
+ *  `aria-describedby` — never by "some text somewhere on screen". */
+function coachmarkMessage(): HTMLElement {
+    const message = document.getElementById(DESCRIPTION_ID);
+    expect(message).not.toBeNull();
+    return message as HTMLElement;
+}
+
 const originalMatchMedia = window.matchMedia;
 
 beforeEach(async () => {
@@ -731,10 +835,25 @@ describe('OnboardingCoachmark — real target activation', () => {
     });
 });
 
+/**
+ * OnboardingCoachmark — message opacity lifecycle.
+ *
+ * The subject here is `PANEL_FADE_MS`: the *aesthetic* 3-second dimming that runs
+ * on every step. It is deliberately exercised on a **settled, healthy** step,
+ * because that is the only situation in which the fade is what the panel is
+ * waiting for. A step whose anchor never resolves arms `GUIDE_STALL_MS` on the
+ * same deadline and the fade is then suppressed on purpose — a failure message is
+ * never dimmed. That case belongs to the stall block below, not here.
+ *
+ * Settling therefore has to happen before the clock is advanced, and it costs
+ * part of the budget under test (two animation frames minimum), so every deadline
+ * assertion is anchored to an absolute instant on the fake clock.
+ */
 describe('OnboardingCoachmark — message opacity lifecycle', () => {
     it('keeps the base panel fresh through 2,999ms and subdues it at 3,000ms', async () => {
-        vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout']});
+        vi.useFakeTimers();
         try {
+            const openedAt = Date.now();
             render(OnboardingCoachmark, {
                 props: {
                     open: true,
@@ -747,19 +866,24 @@ describe('OnboardingCoachmark — message opacity lifecycle', () => {
             const panel = screen.getByTestId('onboarding-coachmark-panel');
             expect(panel).toHaveAttribute('data-subdued', 'false');
 
-            await vi.advanceTimersByTimeAsync(2_999);
+            await settleCoachmarkGeometry();
             expect(panel).toHaveAttribute('data-subdued', 'false');
 
-            await vi.advanceTimersByTimeAsync(1);
+            await advanceFakeClockTo(openedAt + 2_999);
+            expect(panel).toHaveAttribute('data-subdued', 'false');
+
+            await advanceFakeClockTo(openedAt + 3_000);
             expect(panel).toHaveAttribute('data-subdued', 'true');
         } finally {
+            cleanup();
             vi.useRealTimers();
         }
     });
 
     it('restores opacity for hover/focus, then immediately re-subdues on leave/blur without another timer', async () => {
-        vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout']});
+        vi.useFakeTimers();
         try {
+            const openedAt = Date.now();
             render(OnboardingCoachmark, {
                 props: {
                     open: true,
@@ -770,7 +894,8 @@ describe('OnboardingCoachmark — message opacity lifecycle', () => {
                 },
             });
             const panel = screen.getByTestId('onboarding-coachmark-panel');
-            await vi.advanceTimersByTimeAsync(3_000);
+            await settleCoachmarkGeometry();
+            await advanceFakeClockTo(openedAt + 3_000);
             expect(panel).toHaveAttribute('data-subdued', 'true');
             const timersAtBase = vi.getTimerCount();
 
@@ -789,14 +914,16 @@ describe('OnboardingCoachmark — message opacity lifecycle', () => {
             expect(panel).toHaveAttribute('data-subdued', 'true');
             expect(vi.getTimerCount()).toBe(timersAtBase);
         } finally {
+            cleanup();
             vi.useRealTimers();
         }
     });
 
     it('resets the base state and the full 3-second deadline when the step or error changes', async () => {
-        vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout']});
+        vi.useFakeTimers();
         try {
             const anchor = makeAnchor();
+            const openedAt = Date.now();
             const view = render(OnboardingCoachmark, {
                 props: {
                     open: true,
@@ -806,7 +933,8 @@ describe('OnboardingCoachmark — message opacity lifecycle', () => {
                     description: 'Description',
                 },
             });
-            await vi.advanceTimersByTimeAsync(3_000);
+            await settleCoachmarkGeometry();
+            await advanceFakeClockTo(openedAt + 3_000);
             expect(screen.getByTestId('onboarding-coachmark-panel')).toHaveAttribute('data-subdued', 'true');
 
             await view.rerender({
@@ -816,11 +944,16 @@ describe('OnboardingCoachmark — message opacity lifecycle', () => {
                 title: 'Title',
                 description: 'Description',
             });
+            const steppedAt = Date.now();
             expect(screen.getByTestId('onboarding-coachmark-panel')).toHaveAttribute('data-subdued', 'false');
+            // The new step inherits the geometry that is already settled (the
+            // measurement effect keys on the anchor, not on the step id), so the
+            // only deadline left on the clock is still the fade's.
+            expect(screen.getByTestId('onboarding-coachmark')).toHaveAttribute('data-guide-state', 'anchored');
 
-            await vi.advanceTimersByTimeAsync(2_999);
+            await advanceFakeClockTo(steppedAt + 2_999);
             expect(screen.getByTestId('onboarding-coachmark-panel')).toHaveAttribute('data-subdued', 'false');
-            await vi.advanceTimersByTimeAsync(1);
+            await advanceFakeClockTo(steppedAt + 3_000);
             expect(screen.getByTestId('onboarding-coachmark-panel')).toHaveAttribute('data-subdued', 'true');
 
             await view.rerender({
@@ -831,19 +964,22 @@ describe('OnboardingCoachmark — message opacity lifecycle', () => {
                 description: 'Description',
                 error: 'OWNED_ERROR_TOKEN',
             });
+            const erroredAt = Date.now();
             expect(screen.getByTestId('onboarding-coachmark-panel')).toHaveAttribute('data-subdued', 'false');
 
-            await vi.advanceTimersByTimeAsync(3_000);
+            await advanceFakeClockTo(erroredAt + 3_000);
             expect(screen.getByTestId('onboarding-coachmark-panel')).toHaveAttribute('data-subdued', 'true');
         } finally {
+            cleanup();
             vi.useRealTimers();
         }
     });
 
     it('keeps the same timer and interaction state under reduced motion', async () => {
-        vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout']});
+        vi.useFakeTimers();
         try {
             stubMatchMedia({reducedMotion: true});
+            const openedAt = Date.now();
             render(OnboardingCoachmark, {
                 props: {
                     open: true,
@@ -856,7 +992,11 @@ describe('OnboardingCoachmark — message opacity lifecycle', () => {
             const panel = screen.getByTestId('onboarding-coachmark-panel');
             expect(panel).toHaveAttribute('data-subdued', 'false');
 
-            await vi.advanceTimersByTimeAsync(3_000);
+            await settleCoachmarkGeometry();
+            await advanceFakeClockTo(openedAt + 2_999);
+            expect(panel).toHaveAttribute('data-subdued', 'false');
+
+            await advanceFakeClockTo(openedAt + 3_000);
             expect(panel).toHaveAttribute('data-subdued', 'true');
 
             await fireEvent.mouseEnter(panel);
@@ -864,6 +1004,764 @@ describe('OnboardingCoachmark — message opacity lifecycle', () => {
             await fireEvent.mouseLeave(panel);
             expect(panel).toHaveAttribute('data-subdued', 'true');
         } finally {
+            cleanup();
+            vi.useRealTimers();
+        }
+    });
+});
+
+/**
+ * OnboardingCoachmark — anchor stall (Round 7).
+ *
+ * The failure this block exists for could not be seen before: a step whose anchor
+ * never resolved sat in `waiting` forever, showing the busy label, while the
+ * aesthetic fade dimmed it after 3s and made the dead end look like loading. The
+ * user had nothing to wait for and, on `import_guide`, not even a forward control.
+ *
+ * `GUIDE_STALL_MS` and `PANEL_FADE_MS` are both 3,000ms and deliberately distinct:
+ * the fade is cosmetic and runs on every step, the stall is diagnostic and runs
+ * only while the step is unsettled. They land on the same instant, which is why
+ * every assertion below is on `data-guide-state` / `data-subdued` / the message
+ * element rather than on "what the panel looks like at 3 seconds".
+ *
+ * Every test fakes the full timer set, because reaching *or leaving* the stalled
+ * state means driving `requestAnimationFrame` as well, and anchors its deadline
+ * assertions to an absolute instant on that one clock.
+ */
+describe('OnboardingCoachmark — anchor stall', () => {
+    const STALL_PROPS = {
+        open: true,
+        anchor: null,
+        stepId: 'stall-step-1',
+        title: 'Title',
+        description: 'DESCRIPTION_TOKEN',
+        busyLabel: 'BUSY_LABEL_TOKEN',
+        stalledLabel: 'STALLED_LABEL_TOKEN',
+    } as const;
+
+    it('stays "waiting" through 2,999ms and turns "stalled" at 3,000ms when the anchor never resolves', async () => {
+        vi.useFakeTimers();
+        try {
+            const openedAt = Date.now();
+            render(OnboardingCoachmark, {props: {...STALL_PROPS}});
+            await tick();
+
+            const root = screen.getByTestId('onboarding-coachmark');
+            expect(root).toHaveAttribute('data-guide-state', 'waiting');
+            // The precondition, not an inference: the target really never resolved.
+            expect(root).toHaveAttribute('data-target-stable', 'false');
+
+            await advanceFakeClockTo(openedAt + 2_999);
+            expect(root).toHaveAttribute('data-guide-state', 'waiting');
+
+            await advanceFakeClockTo(openedAt + 3_000);
+            expect(root).toHaveAttribute('data-guide-state', 'stalled');
+            expect(root).toHaveAttribute('data-target-stable', 'false');
+        } finally {
+            cleanup();
+            vi.useRealTimers();
+        }
+    });
+
+    it('never dims the stalled message, at the fade deadline or long after it', async () => {
+        vi.useFakeTimers();
+        try {
+            const openedAt = Date.now();
+            render(OnboardingCoachmark, {props: {...STALL_PROPS, stepId: 'stall-step-subdued'}});
+            await tick();
+            const panel = screen.getByTestId('onboarding-coachmark-panel');
+
+            await advanceFakeClockTo(openedAt + 3_000);
+            expect(screen.getByTestId('onboarding-coachmark')).toHaveAttribute('data-guide-state', 'stalled');
+            expect(panel).toHaveAttribute('data-subdued', 'false');
+
+            // The fade must not reclaim the panel later either: a failure message
+            // that fades out is the illusion Round 7 removed.
+            await advanceFakeClockTo(openedAt + 12_000);
+            expect(screen.getByTestId('onboarding-coachmark')).toHaveAttribute('data-guide-state', 'stalled');
+            expect(panel).toHaveAttribute('data-subdued', 'false');
+        } finally {
+            cleanup();
+            vi.useRealTimers();
+        }
+    });
+
+    it('replaces both the busy label and the description with the stalled label', async () => {
+        vi.useFakeTimers();
+        try {
+            const openedAt = Date.now();
+            render(OnboardingCoachmark, {props: {...STALL_PROPS, stepId: 'stall-step-message'}});
+            await tick();
+            expect(coachmarkMessage()).toHaveTextContent('BUSY_LABEL_TOKEN');
+
+            await advanceFakeClockTo(openedAt + 3_000);
+
+            expect(coachmarkMessage()).toHaveTextContent('STALLED_LABEL_TOKEN');
+            expect(screen.queryByText('BUSY_LABEL_TOKEN')).toBeNull();
+            expect(screen.queryByText('DESCRIPTION_TOKEN')).toBeNull();
+        } finally {
+            cleanup();
+            vi.useRealTimers();
+        }
+    });
+
+    it('calls onstall once for a stalled step and never again while it stays stalled', async () => {
+        vi.useFakeTimers();
+        try {
+            const onstall = vi.fn();
+            const openedAt = Date.now();
+            render(OnboardingCoachmark, {props: {...STALL_PROPS, stepId: 'stall-step-callback', onstall}});
+            await tick();
+            expect(onstall).not.toHaveBeenCalled();
+
+            await advanceFakeClockTo(openedAt + 3_000);
+            expect(onstall).toHaveBeenCalledTimes(1);
+
+            await advanceFakeClockTo(openedAt + 15_000);
+            expect(onstall).toHaveBeenCalledTimes(1);
+            expect(screen.getByTestId('onboarding-coachmark')).toHaveAttribute('data-guide-state', 'stalled');
+        } finally {
+            cleanup();
+            vi.useRealTimers();
+        }
+    });
+
+    it('self-heals when the anchor arrives late, and hands the panel back to the fade', async () => {
+        vi.useFakeTimers();
+        try {
+            const onstall = vi.fn();
+            const openedAt = Date.now();
+            const view = render(OnboardingCoachmark, {props: {...STALL_PROPS, stepId: 'stall-step-heal', onstall}});
+            await tick();
+
+            await advanceFakeClockTo(openedAt + 3_000);
+            const root = screen.getByTestId('onboarding-coachmark');
+            const panel = screen.getByTestId('onboarding-coachmark-panel');
+            expect(root).toHaveAttribute('data-guide-state', 'stalled');
+            expect(onstall).toHaveBeenCalledTimes(1);
+
+            // The anchor finally mounts. `guideState` checks `anchored` before
+            // `stalled`, so a late target wins over the diagnosis it caused.
+            await view.rerender({...STALL_PROPS, stepId: 'stall-step-heal', anchor: makeAnchor(), onstall});
+            await settleCoachmarkGeometry();
+
+            expect(coachmarkMessage()).toHaveTextContent('DESCRIPTION_TOKEN');
+            expect(screen.queryByText('STALLED_LABEL_TOKEN')).toBeNull();
+            expect(onstall).toHaveBeenCalledTimes(1);
+
+            // `stalled` no longer suppresses the fade: the healed step dims like
+            // any other healthy step, on a deadline armed at the moment it healed.
+            expect(panel).toHaveAttribute('data-subdued', 'false');
+            const healedAt = Date.now();
+            await advanceFakeClockTo(healedAt + 3_000);
+            expect(panel).toHaveAttribute('data-subdued', 'true');
+            expect(root).toHaveAttribute('data-guide-state', 'anchored');
+        } finally {
+            cleanup();
+            vi.useRealTimers();
+        }
+    });
+
+    it('never stalls a settled step, which still dims at its own 3,000ms', async () => {
+        vi.useFakeTimers();
+        try {
+            const onstall = vi.fn();
+            const openedAt = Date.now();
+            render(OnboardingCoachmark, {
+                props: {...STALL_PROPS, stepId: 'stall-step-healthy', anchor: makeAnchor(), onstall},
+            });
+            const root = await settleCoachmarkGeometry();
+            const panel = screen.getByTestId('onboarding-coachmark-panel');
+
+            await advanceFakeClockTo(openedAt + 3_000);
+            expect(root).toHaveAttribute('data-guide-state', 'anchored');
+            expect(panel).toHaveAttribute('data-subdued', 'true');
+            expect(coachmarkMessage()).toHaveTextContent('DESCRIPTION_TOKEN');
+            expect(onstall).not.toHaveBeenCalled();
+
+            await advanceFakeClockTo(openedAt + 12_000);
+            expect(root).toHaveAttribute('data-guide-state', 'anchored');
+            expect(onstall).not.toHaveBeenCalled();
+        } finally {
+            cleanup();
+            vi.useRealTimers();
+        }
+    });
+
+    it('holds the stall deadline while suspended and restarts it on resume', async () => {
+        vi.useFakeTimers();
+        try {
+            const onstall = vi.fn();
+            const openedAt = Date.now();
+            const view = render(OnboardingCoachmark, {
+                props: {...STALL_PROPS, stepId: 'stall-step-suspended', suspended: true, onstall},
+            });
+            await tick();
+            const root = screen.getByTestId('onboarding-coachmark');
+
+            // A modal is over the guide: the step is not failing, it is parked.
+            await advanceFakeClockTo(openedAt + 12_000);
+            expect(root).toHaveAttribute('data-guide-state', 'waiting');
+            expect(onstall).not.toHaveBeenCalled();
+
+            await view.rerender({...STALL_PROPS, stepId: 'stall-step-suspended', suspended: false, onstall});
+            const resumedAt = Date.now();
+
+            await advanceFakeClockTo(resumedAt + 2_999);
+            expect(root).toHaveAttribute('data-guide-state', 'waiting');
+            expect(onstall).not.toHaveBeenCalled();
+
+            await advanceFakeClockTo(resumedAt + 3_000);
+            expect(root).toHaveAttribute('data-guide-state', 'stalled');
+            expect(onstall).toHaveBeenCalledTimes(1);
+        } finally {
+            cleanup();
+            vi.useRealTimers();
+        }
+    });
+
+    it('never arms the stall deadline while an error is displayed', async () => {
+        vi.useFakeTimers();
+        try {
+            const onstall = vi.fn();
+            const openedAt = Date.now();
+            render(OnboardingCoachmark, {
+                props: {...STALL_PROPS, stepId: 'stall-step-error-first', error: 'ERROR_TOKEN', onstall},
+            });
+            await tick();
+
+            await advanceFakeClockTo(openedAt + 12_000);
+            expect(screen.getByTestId('onboarding-coachmark')).toHaveAttribute('data-guide-state', 'error');
+            expect(coachmarkMessage()).toHaveTextContent('ERROR_TOKEN');
+            expect(onstall).not.toHaveBeenCalled();
+        } finally {
+            cleanup();
+            vi.useRealTimers();
+        }
+    });
+
+    it('lets an error arriving after a stall take precedence over the stalled message', async () => {
+        vi.useFakeTimers();
+        try {
+            const onstall = vi.fn();
+            const openedAt = Date.now();
+            const view = render(OnboardingCoachmark, {props: {...STALL_PROPS, stepId: 'stall-step-error-later', onstall}});
+            await tick();
+
+            await advanceFakeClockTo(openedAt + 3_000);
+            expect(screen.getByTestId('onboarding-coachmark')).toHaveAttribute('data-guide-state', 'stalled');
+            expect(onstall).toHaveBeenCalledTimes(1);
+
+            await view.rerender({...STALL_PROPS, stepId: 'stall-step-error-later', error: 'ERROR_TOKEN', onstall});
+            const erroredAt = Date.now();
+            expect(screen.getByTestId('onboarding-coachmark')).toHaveAttribute('data-guide-state', 'error');
+            expect(coachmarkMessage()).toHaveTextContent('ERROR_TOKEN');
+            expect(screen.queryByText('STALLED_LABEL_TOKEN')).toBeNull();
+
+            await advanceFakeClockTo(erroredAt + 12_000);
+            expect(screen.getByTestId('onboarding-coachmark')).toHaveAttribute('data-guide-state', 'error');
+            expect(onstall).toHaveBeenCalledTimes(1);
+        } finally {
+            cleanup();
+            vi.useRealTimers();
+        }
+    });
+
+    it('clears a previous stall when the step changes and gives the new step a fresh deadline', async () => {
+        vi.useFakeTimers();
+        try {
+            const onstall = vi.fn();
+            const openedAt = Date.now();
+            const view = render(OnboardingCoachmark, {props: {...STALL_PROPS, stepId: 'stall-step-first', onstall}});
+            await tick();
+
+            await advanceFakeClockTo(openedAt + 3_000);
+            const root = screen.getByTestId('onboarding-coachmark');
+            expect(root).toHaveAttribute('data-guide-state', 'stalled');
+            expect(onstall).toHaveBeenCalledTimes(1);
+
+            await view.rerender({...STALL_PROPS, stepId: 'stall-step-second', onstall});
+            const steppedAt = Date.now();
+            expect(root).toHaveAttribute('data-guide-state', 'waiting');
+            expect(coachmarkMessage()).toHaveTextContent('BUSY_LABEL_TOKEN');
+
+            await advanceFakeClockTo(steppedAt + 2_999);
+            expect(root).toHaveAttribute('data-guide-state', 'waiting');
+            expect(onstall).toHaveBeenCalledTimes(1);
+
+            await advanceFakeClockTo(steppedAt + 3_000);
+            expect(root).toHaveAttribute('data-guide-state', 'stalled');
+            expect(onstall).toHaveBeenCalledTimes(2);
+        } finally {
+            cleanup();
+            vi.useRealTimers();
+        }
+    });
+
+    it('hides the action hint while stalled and restores it once the target resolves', async () => {
+        vi.useFakeTimers();
+        try {
+            const openedAt = Date.now();
+            const view = render(OnboardingCoachmark, {
+                props: {...STALL_PROPS, stepId: 'stall-step-hint', actionHint: 'ACTION_HINT_TOKEN'},
+            });
+            await tick();
+            expect(screen.queryByTestId('onboarding-coachmark-action-hint')).toBeNull();
+
+            await advanceFakeClockTo(openedAt + 3_000);
+            expect(screen.getByTestId('onboarding-coachmark')).toHaveAttribute('data-guide-state', 'stalled');
+            expect(screen.queryByTestId('onboarding-coachmark-action-hint')).toBeNull();
+
+            // The absence above means "not while stalled", not "this panel never
+            // renders a hint" — the same props produce one as soon as it anchors.
+            await view.rerender({...STALL_PROPS, stepId: 'stall-step-hint', actionHint: 'ACTION_HINT_TOKEN', anchor: makeAnchor()});
+            await settleCoachmarkGeometry();
+            expect(screen.getByTestId('onboarding-coachmark-action-hint')).toHaveTextContent('ACTION_HINT_TOKEN');
+        } finally {
+            cleanup();
+            vi.useRealTimers();
+        }
+    });
+});
+
+/**
+ * OnboardingCoachmark — stall end protocol (Round 7 follow-up).
+ *
+ * The coachmark always cleared its own `stalled` once the geometry settled, but
+ * nothing told the host, which kept `stalledStepId` set for the rest of the
+ * step's life. A recovered step therefore read "use the wizard action" in its
+ * message while its own button still said "continue anyway" — and, worse, that
+ * button still routed through `skip()`, persisting as *skipped* a step the user
+ * could by then actually perform. `onstallend` is the missing edge.
+ *
+ * The decision this block encodes is "return fully to normal": label, arrow and
+ * the ordinary forward action all come back, because recovery is already a
+ * visible transition (the description returns, the highlight and pointer
+ * appear) and a control that disagreed with the text would be the contradiction
+ * the fix exists to remove.
+ *
+ * Every test here asserts `onstallend` is *transition*-driven rather than
+ * state-driven, and that the transition it reports is **the end of the stalled
+ * state, whatever ended it** — settled, suspended, step changed, error raised,
+ * component destroyed. It is deliberately not "the anchor became available":
+ * gating the edge on settlement leaves the stall able to end silently (a modal
+ * parks the step, the panel drops its own `stalled`, and the later settle finds
+ * nothing left to report), which is the original defect displaced by one step.
+ * So the positives below include ends that are not good news, and the single
+ * negative is the one case where no stall ever existed — nothing to report.
+ *
+ * The edge is fired from the effect's **teardown**, which is what puts destroy
+ * on the list: the body never runs on unmount, the cleanup always does. The
+ * counts below are the check on that move — the cleanup runs before the body on
+ * every re-run, so each of these ends must still be reported exactly once and
+ * in the same place as when the body announced them.
+ */
+describe('OnboardingCoachmark — stall end protocol', () => {
+    const RECOVERY_PROPS = {
+        open: true,
+        anchor: null,
+        stepId: 'recover-step-1',
+        title: 'Title',
+        description: 'DESCRIPTION_TOKEN',
+        busyLabel: 'BUSY_LABEL_TOKEN',
+        stalledLabel: 'STALLED_LABEL_TOKEN',
+    } as const;
+
+    it('calls onstallend exactly once when a late target settles a stalled step, and never stalls again', async () => {
+        vi.useFakeTimers();
+        try {
+            const onstall = vi.fn();
+            const onstallend = vi.fn();
+            const openedAt = Date.now();
+            const anchor = makeUnmountedAnchor();
+            render(OnboardingCoachmark, {props: {...RECOVERY_PROPS, stepId: 'recover-step-once', anchor, onstall, onstallend}});
+            await tick();
+
+            await advanceFakeClockTo(openedAt + 3_000);
+            const root = screen.getByTestId('onboarding-coachmark');
+            expect(root).toHaveAttribute('data-guide-state', 'stalled');
+            expect(onstall).toHaveBeenCalledTimes(1);
+            expect(onstallend).not.toHaveBeenCalled();
+
+            // The target finally lands in the document. Nothing else changes:
+            // the measurement loop is still running because the geometry never
+            // stabilised, so it picks the element up on its own.
+            document.body.appendChild(anchor);
+            await settleCoachmarkGeometry();
+
+            expect(onstallend).toHaveBeenCalledTimes(1);
+            expect(onstall).toHaveBeenCalledTimes(1);
+
+            // The effect that owns both callbacks keeps re-running on ordinary
+            // geometry churn for the rest of the step's life. A target that
+            // really moves — the published centre is the proof it moved, not an
+            // assumption that the resize did something — must not read as a
+            // second recovery: clearing `stalled` before the callback is what
+            // makes this an edge rather than a repeated "still settled" report.
+            expect(root).toHaveAttribute('data-target-center-x', '156');
+            vi.spyOn(anchor, 'getBoundingClientRect').mockReturnValue(rect(300, 200, 100, 40));
+            window.dispatchEvent(new Event('resize'));
+            await advanceCoachmarkFrames();
+            expect(root).toHaveAttribute('data-target-center-x', '350');
+
+            const settledAt = Date.now();
+            await advanceFakeClockTo(settledAt + 12_000);
+            expect(onstallend).toHaveBeenCalledTimes(1);
+            expect(onstall).toHaveBeenCalledTimes(1);
+            expect(root).toHaveAttribute('data-guide-state', 'anchored');
+        } finally {
+            cleanup();
+            vi.useRealTimers();
+        }
+    });
+
+    it('settles twice but recovers once: the settle no stall preceded is silent', async () => {
+        vi.useFakeTimers();
+        try {
+            const onstall = vi.fn();
+            const onstallend = vi.fn();
+            const openedAt = Date.now();
+            const anchor = makeAnchor();
+            render(OnboardingCoachmark, {props: {...RECOVERY_PROPS, stepId: 'recover-step-transition', anchor, onstall, onstallend}});
+            const root = await settleCoachmarkGeometry();
+            const panel = screen.getByTestId('onboarding-coachmark-panel');
+
+            // First settle: healthy from the first frame. Both deadlines are
+            // allowed to pass and the fade actually fires, which is what proves
+            // the clock ran and the effects executed — without it "onstallend was
+            // not called" would be just as true of a component doing nothing.
+            await advanceFakeClockTo(openedAt + 3_000);
+            expect(panel).toHaveAttribute('data-subdued', 'true');
+            await advanceFakeClockTo(openedAt + 9_000);
+            expect(root).toHaveAttribute('data-guide-state', 'anchored');
+            expect(onstall).not.toHaveBeenCalled();
+            expect(onstallend).not.toHaveBeenCalled();
+
+            // The target leaves the document, the way a wizard CTA unmounts
+            // under a step that is still on screen.
+            anchor.remove();
+            window.dispatchEvent(new Event('resize'));
+            await advanceCoachmarkFrames();
+            expect(root).toHaveAttribute('data-guide-state', 'waiting');
+            expect(root).toHaveAttribute('data-target-stable', 'false');
+            expect(onstallend).not.toHaveBeenCalled();
+
+            const unanchoredAt = Date.now();
+            await advanceFakeClockTo(unanchoredAt + 3_000);
+            expect(root).toHaveAttribute('data-guide-state', 'stalled');
+            expect(onstall).toHaveBeenCalledTimes(1);
+            expect(onstallend).not.toHaveBeenCalled();
+
+            // Second settle, this one *after* a stall: same instance, same
+            // callback, same settled condition — and now it fires. That is the
+            // whole difference between a transition and a state, and the first
+            // half of the test is what stops the negative passing vacuously.
+            document.body.appendChild(anchor);
+            await settleCoachmarkGeometry();
+            expect(onstallend).toHaveBeenCalledTimes(1);
+            expect(onstall).toHaveBeenCalledTimes(1);
+        } finally {
+            cleanup();
+            vi.useRealTimers();
+        }
+    });
+
+    it('hands the recovered step back to the normal panel, fade deadline included', async () => {
+        vi.useFakeTimers();
+        try {
+            const onstallend = vi.fn();
+            const openedAt = Date.now();
+            const anchor = makeUnmountedAnchor();
+            render(OnboardingCoachmark, {
+                props: {...RECOVERY_PROPS, stepId: 'recover-step-panel', actionHint: 'ACTION_HINT_TOKEN', highlight: 'pulse', pointer: 'cursor', anchor, onstallend},
+            });
+            await tick();
+            const root = screen.getByTestId('onboarding-coachmark');
+            const panel = screen.getByTestId('onboarding-coachmark-panel');
+
+            await advanceFakeClockTo(openedAt + 3_000);
+            expect(root).toHaveAttribute('data-guide-state', 'stalled');
+            expect(coachmarkMessage()).toHaveTextContent('STALLED_LABEL_TOKEN');
+            expect(screen.queryByTestId('onboarding-coachmark-action-hint')).toBeNull();
+            expect(screen.queryByTestId('onboarding-coachmark-highlight')).toBeNull();
+            expect(screen.queryByTestId('onboarding-coachmark-pointer')).toBeNull();
+            expect(panel).toHaveAttribute('data-subdued', 'false');
+
+            document.body.appendChild(anchor);
+            const healedAt = await advanceToRecoveryInstant();
+
+            // Everything the stall took away comes back together: the step's own
+            // description instead of the stalled label, the action hint, and the
+            // two things that tell the user *where* to act. The highlight and the
+            // pointer are asserted because "return fully to normal" is a claim
+            // about what the user sees, not about an attribute.
+            expect(onstallend).toHaveBeenCalledTimes(1);
+            expect(root).toHaveAttribute('data-guide-state', 'anchored');
+            expect(coachmarkMessage()).toHaveTextContent('DESCRIPTION_TOKEN');
+            expect(screen.queryByText('STALLED_LABEL_TOKEN')).toBeNull();
+            expect(screen.getByTestId('onboarding-coachmark-action-hint')).toHaveTextContent('ACTION_HINT_TOKEN');
+            expect(screen.getByTestId('onboarding-coachmark-highlight')).toBeVisible();
+            expect(screen.getByTestId('onboarding-coachmark-pointer')).toBeVisible();
+
+            // The fade is armed by the recovery itself, not left over from the
+            // open: 2,999ms after the step re-anchored the panel is still at full
+            // strength, and it dims one millisecond later. Naming the instant is
+            // what separates "the stall stopped suppressing the fade" from "the
+            // fade happened to have fired at some point".
+            expect(panel).toHaveAttribute('data-subdued', 'false');
+            await advanceFakeClockTo(healedAt + 2_999);
+            expect(panel).toHaveAttribute('data-subdued', 'false');
+            await advanceFakeClockTo(healedAt + 3_000);
+            expect(panel).toHaveAttribute('data-subdued', 'true');
+            expect(root).toHaveAttribute('data-guide-state', 'anchored');
+        } finally {
+            cleanup();
+            vi.useRealTimers();
+        }
+    });
+
+    it('reports the end of a stall the step change caused, with nothing settled anywhere', async () => {
+        vi.useFakeTimers();
+        try {
+            const onstall = vi.fn();
+            const onstallend = vi.fn();
+            const openedAt = Date.now();
+            const view = render(OnboardingCoachmark, {props: {...RECOVERY_PROPS, stepId: 'recover-step-before', onstall, onstallend}});
+            await tick();
+            const root = screen.getByTestId('onboarding-coachmark');
+
+            await advanceFakeClockTo(openedAt + 3_000);
+            expect(root).toHaveAttribute('data-guide-state', 'stalled');
+            expect(onstall).toHaveBeenCalledTimes(1);
+            expect(onstallend).not.toHaveBeenCalled();
+
+            // The flow moves on while the target is still nowhere: no anchor, no
+            // settlement, no good news. The callback fires anyway, and it is
+            // right to — the fact the host mirrors is "this step is stalled",
+            // and that fact has just stopped being true. The panel agrees, which
+            // is why the state is asserted next to the count: an edge nobody can
+            // see in the DOM would be an edge nobody can trust.
+            await view.rerender({...RECOVERY_PROPS, stepId: 'recover-step-after', onstall, onstallend});
+            const changedAt = Date.now();
+            expect(root).toHaveAttribute('data-guide-state', 'waiting');
+            expect(onstallend).toHaveBeenCalledTimes(1);
+            expect(onstall).toHaveBeenCalledTimes(1);
+
+            // The new step gets a full fresh deadline, and re-stalling is not a
+            // second recovery: one edge per stall that ends, never one per
+            // effect run. `rerender` replaces the whole props object, so the
+            // effect re-runs whichever prop changed — that is not a distortion
+            // here, because the contract is deliberately reason-agnostic and the
+            // claim under test is the count of ends, not their cause.
+            await advanceFakeClockTo(changedAt + 2_999);
+            expect(root).toHaveAttribute('data-guide-state', 'waiting');
+            expect(onstall).toHaveBeenCalledTimes(1);
+
+            await advanceFakeClockTo(changedAt + 3_000);
+            expect(root).toHaveAttribute('data-guide-state', 'stalled');
+            expect(onstall).toHaveBeenCalledTimes(2);
+            expect(onstallend).toHaveBeenCalledTimes(1);
+        } finally {
+            cleanup();
+            vi.useRealTimers();
+        }
+    });
+
+    it('reports the end of a stall a modal caused, so the step that works on resume cannot inherit the hatch', async () => {
+        vi.useFakeTimers();
+        try {
+            const onstall = vi.fn();
+            const onstallend = vi.fn();
+            const openedAt = Date.now();
+            const anchor = makeUnmountedAnchor();
+            const view = render(OnboardingCoachmark, {props: {...RECOVERY_PROPS, stepId: 'recover-step-parked', anchor, onstall, onstallend}});
+            await tick();
+            const root = screen.getByTestId('onboarding-coachmark');
+
+            await advanceFakeClockTo(openedAt + 3_000);
+            expect(root).toHaveAttribute('data-guide-state', 'stalled');
+            expect(onstall).toHaveBeenCalledTimes(1);
+            expect(onstallend).not.toHaveBeenCalled();
+
+            // A modal parks the guide. The panel drops its own stalled state
+            // here whether anyone is told or not — this is the exact instant at
+            // which two owners of one fact would begin to drift, and the only
+            // instant at which the host can still be told about this stall.
+            await view.rerender({...RECOVERY_PROPS, stepId: 'recover-step-parked', anchor, suspended: true, onstall, onstallend});
+            expect(root).toHaveAttribute('data-guide-state', 'waiting');
+            expect(onstallend).toHaveBeenCalledTimes(1);
+
+            // The modal closes and only *then* does the target appear. Under a
+            // settlement-gated edge this order was unreachable: the stall had
+            // already been cleared by the suspend, so the settle found nothing
+            // to report and the hatch outlived the failure that justified it.
+            await view.rerender({...RECOVERY_PROPS, stepId: 'recover-step-parked', anchor, suspended: false, onstall, onstallend});
+            const resumedAt = Date.now();
+            document.body.appendChild(anchor);
+            await settleCoachmarkGeometry();
+
+            expect(root).toHaveAttribute('data-guide-state', 'anchored');
+            expect(coachmarkMessage()).toHaveTextContent('DESCRIPTION_TOKEN');
+            expect(screen.queryByText('STALLED_LABEL_TOKEN')).toBeNull();
+            expect(onstallend).toHaveBeenCalledTimes(1);
+
+            // The step now works and stays working: no second stall to re-raise
+            // a hatch on it, and no second recovery papering over a missing one.
+            await advanceFakeClockTo(resumedAt + 12_000);
+            expect(root).toHaveAttribute('data-guide-state', 'anchored');
+            expect(onstall).toHaveBeenCalledTimes(1);
+            expect(onstallend).toHaveBeenCalledTimes(1);
+        } finally {
+            cleanup();
+            vi.useRealTimers();
+        }
+    });
+
+    it('reports the end of a stall an error caused, and arms a fresh deadline only once the error clears', async () => {
+        vi.useFakeTimers();
+        try {
+            const onstall = vi.fn();
+            const onstallend = vi.fn();
+            const openedAt = Date.now();
+            const view = render(OnboardingCoachmark, {props: {...RECOVERY_PROPS, stepId: 'recover-step-errored', onstall, onstallend}});
+            await tick();
+            const root = screen.getByTestId('onboarding-coachmark');
+
+            await advanceFakeClockTo(openedAt + 3_000);
+            expect(root).toHaveAttribute('data-guide-state', 'stalled');
+            expect(onstall).toHaveBeenCalledTimes(1);
+            expect(onstallend).not.toHaveBeenCalled();
+
+            // The fourth way a stall can end, and the only one that is worse
+            // news than the stall: an error takes the panel over. The stalled
+            // state really has ended — the message is the error now — so the
+            // edge fires, and the host clears `stalledStepId` on it. What the
+            // host should *do* about that is a product question (the escape
+            // hatch is withdrawn for as long as the error shows, on the one
+            // step whose forward control exists only while stalled); this test
+            // pins the coachmark half so any answer to it stays deliberate.
+            await view.rerender({...RECOVERY_PROPS, stepId: 'recover-step-errored', error: 'ERROR_TOKEN', onstall, onstallend});
+            const erroredAt = Date.now();
+            expect(root).toHaveAttribute('data-guide-state', 'error');
+            expect(coachmarkMessage()).toHaveTextContent('ERROR_TOKEN');
+            expect(onstallend).toHaveBeenCalledTimes(1);
+
+            // No deadline runs under an error, so nothing re-stalls while it is
+            // displayed, however long that is.
+            await advanceFakeClockTo(erroredAt + 12_000);
+            expect(onstall).toHaveBeenCalledTimes(1);
+            expect(onstallend).toHaveBeenCalledTimes(1);
+
+            // Once it clears, the still-anchorless step starts over from a full
+            // deadline rather than snapping back to stalled. The `null` is
+            // explicit because `rerender` merges: a prop left out of the object
+            // keeps its previous value, so an omitted `error` would have cleared
+            // nothing and the rest of this test would have asserted an error
+            // panel sitting still.
+            await view.rerender({...RECOVERY_PROPS, stepId: 'recover-step-errored', error: null, onstall, onstallend});
+            const clearedAt = Date.now();
+            expect(root).toHaveAttribute('data-guide-state', 'waiting');
+
+            await advanceFakeClockTo(clearedAt + 2_999);
+            expect(root).toHaveAttribute('data-guide-state', 'waiting');
+            expect(onstall).toHaveBeenCalledTimes(1);
+
+            await advanceFakeClockTo(clearedAt + 3_000);
+            expect(root).toHaveAttribute('data-guide-state', 'stalled');
+            expect(onstall).toHaveBeenCalledTimes(2);
+            expect(onstallend).toHaveBeenCalledTimes(1);
+        } finally {
+            cleanup();
+            vi.useRealTimers();
+        }
+    });
+
+    it('reports the end of a stall the unmount caused, so replaying the same step presents it normally', async () => {
+        vi.useFakeTimers();
+        try {
+            const onstall = vi.fn();
+            const onstallend = vi.fn();
+            const openedAt = Date.now();
+            const view = render(OnboardingCoachmark, {props: {...RECOVERY_PROPS, stepId: 'recover-step-replayed', onstall, onstallend}});
+            await tick();
+            expect(screen.getByTestId('onboarding-coachmark')).toHaveAttribute('data-guide-state', 'waiting');
+
+            await advanceFakeClockTo(openedAt + 3_000);
+            expect(screen.getByTestId('onboarding-coachmark')).toHaveAttribute('data-guide-state', 'stalled');
+            expect(onstall).toHaveBeenCalledTimes(1);
+            expect(onstallend).not.toHaveBeenCalled();
+
+            // The user exits the guide: the host's `active` goes null and this
+            // component is destroyed with its stall still on. A real unmount,
+            // not a `rerender` — `rerender` merges props into the *same*
+            // instance, so it would keep the very effect whose teardown is the
+            // subject here, and the test would prove nothing about destroy.
+            //
+            // This edge is the whole fix. The host outlives the coachmark (it
+            // is mounted for the entire authenticated session), so a stall that
+            // is never reported as ended leaves `stalledStepId` set across exit
+            // and replay.
+            view.unmount();
+            await tick();
+            expect(screen.queryByTestId('onboarding-coachmark')).toBeNull();
+            expect(onstallend).toHaveBeenCalledTimes(1);
+            expect(onstall).toHaveBeenCalledTimes(1);
+
+            // Replay from Settings, same step id, fresh instance: it must open
+            // as an ordinary step, not wearing the previous run's failure.
+            const replayedAt = Date.now();
+            render(OnboardingCoachmark, {props: {...RECOVERY_PROPS, stepId: 'recover-step-replayed', onstall, onstallend}});
+            await tick();
+            const replayed = screen.getByTestId('onboarding-coachmark');
+            expect(replayed).toHaveAttribute('data-guide-state', 'waiting');
+            // The ordinary first-open message for a step whose target has not
+            // resolved yet is the *waiting* label. The claim here is precisely
+            // that it is that one and not `stalledLabel`: same step, same
+            // missing anchor, but this run has not failed anything yet, so it
+            // must not open wearing the load-problem wording.
+            expect(coachmarkMessage()).toHaveTextContent('BUSY_LABEL_TOKEN');
+            expect(screen.queryByText('STALLED_LABEL_TOKEN')).toBeNull();
+
+            // And it gets a *full* deadline of its own, not the remainder of
+            // anything: the replayed step is still unanchored, so it stalls
+            // again, 3,000ms after the replay started rather than instantly.
+            await advanceFakeClockTo(replayedAt + 2_999);
+            expect(replayed).toHaveAttribute('data-guide-state', 'waiting');
+            expect(onstall).toHaveBeenCalledTimes(1);
+
+            await advanceFakeClockTo(replayedAt + 3_000);
+            expect(replayed).toHaveAttribute('data-guide-state', 'stalled');
+            expect(onstall).toHaveBeenCalledTimes(2);
+            expect(onstallend).toHaveBeenCalledTimes(1);
+        } finally {
+            cleanup();
+            vi.useRealTimers();
+        }
+    });
+
+    it('stays silent on the unmount of a step that never stalled', async () => {
+        vi.useFakeTimers();
+        try {
+            const onstall = vi.fn();
+            const onstallend = vi.fn();
+            const openedAt = Date.now();
+            const view = render(OnboardingCoachmark, {props: {...RECOVERY_PROPS, stepId: 'recover-step-quiet', anchor: makeAnchor(), onstall, onstallend}});
+            await tick();
+            await settleCoachmarkGeometry();
+
+            // The presence barrier for the negative: this instance lived long
+            // enough to pass its own stall deadline twice over, anchored, so a
+            // silent teardown is a decision and not a component that never ran.
+            await advanceFakeClockTo(openedAt + 6_000);
+            expect(screen.getByTestId('onboarding-coachmark')).toHaveAttribute('data-guide-state', 'anchored');
+            expect(onstall).not.toHaveBeenCalled();
+
+            view.unmount();
+            await tick();
+            expect(screen.queryByTestId('onboarding-coachmark')).toBeNull();
+            expect(onstallend).not.toHaveBeenCalled();
+        } finally {
+            cleanup();
             vi.useRealTimers();
         }
     });
@@ -1658,6 +2556,180 @@ describe('OnboardingOverlayHost — terminal action', () => {
         await waitFor(() => expect(onboardingGuide.exit).toHaveBeenCalledTimes(1));
         expect(onboardingGuide.skip).not.toHaveBeenCalled();
         expect(onboardingGuide.dismissHost).not.toHaveBeenCalled();
+    });
+});
+
+describe('OnboardingOverlayHost — stalled step escape hatch', () => {
+    it('gives a stalled Import step its first forward control and persists it as skipped', async () => {
+        vi.useFakeTimers();
+        try {
+            // No anchor is registered for `import.analyze` on purpose: this is the
+            // hang Round 7 is about — the wizard never published its target, and
+            // before this change an `import_guide` step offered no forward control
+            // at all, so the user was left with a busy label and no way out.
+            fakeGuideState.active = {flow: 'import_guide', version: 1, stepId: 'import.analyze', mode: 'automatic'};
+
+            render(OnboardingOverlayHost, {currentPath: '/transactions'});
+            await tick();
+
+            const root = screen.getByTestId('onboarding-coachmark');
+            expect(root).toHaveAttribute('data-guide-state', 'waiting');
+            expect(coachmarkMessage()).toHaveTextContent('i18n:onboarding.guide.waiting');
+            expect(screen.queryByTestId('onboarding-coachmark-navigation')).toBeNull();
+
+            await vi.advanceTimersByTimeAsync(3_000);
+            await tick();
+
+            expect(root).toHaveAttribute('data-guide-state', 'stalled');
+            expect(coachmarkMessage()).toHaveTextContent('i18n:onboarding.guide.loadProblem');
+            const next = screen.getByTestId('onboarding-coachmark-next');
+            expect(next).toHaveTextContent('i18n:onboarding.actions.continueAnyway');
+            expect(next.querySelectorAll('svg')).toHaveLength(0);
+
+            await fireEvent.click(next);
+
+            // `import_guide` is step-managed, so continuing from a step the user
+            // could never perform has to persist as *skipped*, never as completed.
+            expect(onboardingGuide.skip).toHaveBeenCalledTimes(1);
+            expect(onboardingGuide.finish).not.toHaveBeenCalled();
+            expect(onboardingGuide.next).not.toHaveBeenCalled();
+        } finally {
+            cleanup();
+            vi.useRealTimers();
+        }
+    });
+
+    it('keeps a stalled flow-managed guide on its own navigation instead of skipping the step', async () => {
+        vi.useFakeTimers();
+        try {
+            fakeGuideState.active = {flow: 'transactions_page_guide', version: 1, stepId: 'transactions.page.overview', mode: 'automatic'};
+
+            render(OnboardingOverlayHost, {currentPath: '/transactions'});
+            await tick();
+
+            const next = screen.getByTestId('onboarding-coachmark-next');
+            expect(next).toHaveTextContent('i18n:onboarding.actions.next');
+
+            await vi.advanceTimersByTimeAsync(3_000);
+            await tick();
+
+            expect(screen.getByTestId('onboarding-coachmark')).toHaveAttribute('data-guide-state', 'stalled');
+            expect(next).toHaveTextContent('i18n:onboarding.actions.continueAnyway');
+
+            await fireEvent.click(next);
+
+            // Not step-managed: there is no per-step record to skip, so the
+            // stalled label changes the wording and nothing else.
+            expect(onboardingGuide.next).toHaveBeenCalledTimes(1);
+            expect(onboardingGuide.skip).not.toHaveBeenCalled();
+            expect(onboardingGuide.finish).not.toHaveBeenCalled();
+        } finally {
+            cleanup();
+            vi.useRealTimers();
+        }
+    });
+
+    it('leaves an anchored Import step with no forward control and no continue-anyway wording', async () => {
+        vi.useFakeTimers();
+        try {
+            const anchor = makeAnchor();
+            guideAnchors.register('import.action.analyze', anchor);
+            fakeGuideState.active = {flow: 'import_guide', version: 1, stepId: 'import.analyze', mode: 'automatic'};
+
+            render(OnboardingOverlayHost, {currentPath: '/transactions'});
+            const root = await settleCoachmarkGeometry();
+
+            // Same step, same 3 seconds — the only difference is that its target
+            // exists, which is what must decide whether the escape hatch appears.
+            await vi.advanceTimersByTimeAsync(3_000);
+            await tick();
+
+            expect(root).toHaveAttribute('data-guide-state', 'anchored');
+            expect(screen.queryByTestId('onboarding-coachmark-next')).toBeNull();
+            expect(screen.queryByTestId('onboarding-coachmark-navigation')).toBeNull();
+            expect(translateKey.mock.calls.some(([key]) => key === 'onboarding.actions.continueAnyway')).toBe(false);
+        } finally {
+            cleanup();
+            vi.useRealTimers();
+        }
+    });
+
+    it('retracts the escape hatch when a stalled Import step finally gets its target', async () => {
+        vi.useFakeTimers();
+        try {
+            fakeGuideState.active = {flow: 'import_guide', version: 1, stepId: 'import.analyze', mode: 'automatic'};
+
+            render(OnboardingOverlayHost, {currentPath: '/transactions'});
+            await tick();
+            await vi.advanceTimersByTimeAsync(3_000);
+            await tick();
+
+            const root = screen.getByTestId('onboarding-coachmark');
+            expect(root).toHaveAttribute('data-guide-state', 'stalled');
+            expect(screen.getByTestId('onboarding-coachmark-next')).toHaveTextContent('i18n:onboarding.actions.continueAnyway');
+
+            // The wizard publishes its target late. The host clears
+            // `stalledStepId` only because the coachmark reports the recovery:
+            // without that edge the panel below reads "use the wizard action"
+            // while the button above it still says "continue anyway" and still
+            // persists the step as skipped.
+            guideAnchors.register('import.action.analyze', makeAnchor());
+            await settleCoachmarkGeometry();
+
+            expect(root).toHaveAttribute('data-guide-state', 'anchored');
+            expect(coachmarkMessage()).toHaveTextContent('i18n:onboarding.importGuide.steps.analyze.description');
+            expect(screen.getByTestId('onboarding-coachmark-action-hint')).toHaveTextContent('i18n:onboarding.guide.useWizardAction');
+
+            // An anchored `import.analyze` normally has no forward control at
+            // all — the user performs the wizard action — so on this step the
+            // skip path is not relabelled, it becomes unreachable.
+            expect(screen.queryByTestId('onboarding-coachmark-next')).toBeNull();
+            expect(screen.queryByTestId('onboarding-coachmark-navigation')).toBeNull();
+            expect(onboardingGuide.skip).not.toHaveBeenCalled();
+        } finally {
+            cleanup();
+            vi.useRealTimers();
+        }
+    });
+
+    it('records the action a recovered step-managed step actually offers, never a skip', async () => {
+        vi.useFakeTimers();
+        try {
+            // `import.bulk` is the one Import step that keeps a forward control
+            // when anchored, so recovery is visible here as the control changing
+            // back rather than disappearing: label, arrow and recorded outcome.
+            fakeGuideState.active = {flow: 'import_guide', version: 1, stepId: 'import.bulk', mode: 'automatic'};
+
+            render(OnboardingOverlayHost, {currentPath: '/transactions'});
+            await tick();
+            await vi.advanceTimersByTimeAsync(3_000);
+            await tick();
+
+            const root = screen.getByTestId('onboarding-coachmark');
+            const stalledNext = screen.getByTestId('onboarding-coachmark-next');
+            expect(root).toHaveAttribute('data-guide-state', 'stalled');
+            expect(stalledNext).toHaveTextContent('i18n:onboarding.actions.continueAnyway');
+            expect(stalledNext.querySelectorAll('svg')).toHaveLength(0);
+
+            guideAnchors.register('import.bulk.save-all', makeAnchor());
+            await settleCoachmarkGeometry();
+
+            const recoveredNext = screen.getByTestId('onboarding-coachmark-next');
+            expect(root).toHaveAttribute('data-guide-state', 'anchored');
+            expect(recoveredNext).toHaveTextContent('i18n:onboarding.actions.finish');
+            expect(recoveredNext.querySelectorAll('svg')).toHaveLength(1);
+
+            await fireEvent.click(recoveredNext);
+
+            // The persisted outcome has to follow the real action: recording
+            // `skipped` for a step the user can now perform is the same untruth
+            // as recording `completed` for one never offered.
+            expect(onboardingGuide.finish).toHaveBeenCalledTimes(1);
+            expect(onboardingGuide.skip).not.toHaveBeenCalled();
+        } finally {
+            cleanup();
+            vi.useRealTimers();
+        }
     });
 });
 
