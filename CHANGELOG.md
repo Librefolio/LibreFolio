@@ -60,6 +60,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Preferences and broker-sharing forms retain staged Save/Undo/Reset, persisted values and role-based access after their Svelte 5 migration. Successful sharing saves close the list-page modal without another discard prompt; saving from the broker's Info tab keeps the inline editor open.
 - New FX-pair configuration closes immediately while automatic synchronization continues in the background. Creation and sync results use flagged, clickable pair links; linked completion feedback keeps the pair, fetched/changed counters and provider badges on one compact detail row. Asset-library creation success links point to the new asset without changing contextual import or transaction flows.
 
+#### 📉 Risk Analysis leaves beta, except the simulation
+
+- **Risk Analysis is no longer marked beta.** The beta notice used to sit above every risk surface, which said the whole subsystem was provisional. It now appears on the **simulation** step alone, where it names the reason: the outcome depends heavily on how much history is requested relative to the horizon, so a short window with a long horizon can produce implausible figures. The permanent reminder that a model is a model stays where it was, below it. Asset Detail keeps its beta notice: its risk view has not been rebuilt yet.
+- **Asset Global gains two comparison levels.** *How much can it hurt?* transposes the scale — the ruler becomes the columns, the assets become the rows — and *were you paid for the risk?* plots what each instrument risked against what it returned. Percentages only, no verdict, and an asset that could not be measured keeps its row with the reason, because a missing row reads as one that was never selected. The legacy panel is no longer mounted there.
+- **The risk/return scatter now renders** on the Dashboard and on Broker pages. It had never appeared: the panel neither asked the backend for the figures nor passed them on.
+- **A failure inside a risk calculation is now reported as ours.** Every internal error used to be answered with *«the metric is undefined for these data»* — a verdict about the portfolio — and was never logged. Undeclared failures now say the calculation failed and are recorded; an analytic that genuinely has no defined value still says so.
+- **Two simulation settings now explain themselves instead of failing obscurely.** Choosing a block longer than the available history, or a quasi-random simulation too large for the number of assets and the horizon, now says which setting to change. The second is reachable by an ordinary portfolio: at the longest horizon the limit falls between five and six assets.
+
 ---
 
 ## [1.1.0] - 2026-09-07
