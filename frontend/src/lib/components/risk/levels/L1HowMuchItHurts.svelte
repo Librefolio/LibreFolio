@@ -148,15 +148,7 @@
         <div data-testid="risk-l1-cards">
             <RiskCardGrid>
                 {#each rows as row (row.id)}
-                    <RiskMetricCard
-                        label={$t(`risk.levels.l1.rows.${row.id}`)}
-                        technicalName={$t(`risk.levels.l1.technical.${row.id}`)}
-                        value={lossPercent(row.loss)}
-                        caption={caption(lossMoney(row.loss))}
-                        sentiment="negative"
-                        docsPath={DOC_PATHS[row.id]}
-                        testId="risk-l1-card-{row.id}"
-                    >
+                    <RiskMetricCard label={$t(`risk.levels.l1.rows.${row.id}`)} technicalName={$t(`risk.levels.l1.technical.${row.id}`)} value={lossPercent(row.loss)} caption={caption(lossMoney(row.loss))} sentiment="negative" docsPath={DOC_PATHS[row.id]} testId="risk-l1-card-{row.id}">
                         {#snippet submetrics()}
                             {#if row.durationDays != null}
                                 {@render measure($t('risk.levels.l1.durationDays', {values: {days: row.durationDays}}), '', `risk-l1-duration-${row.id}`)}
@@ -186,15 +178,7 @@
                 {/each}
 
                 {#if current}
-                    <RiskMetricCard
-                        label={$t('risk.levels.l1.currentDrawdown')}
-                        technicalName={$t('risk.levels.l1.technical.current')}
-                        value={lossPercent(current.loss)}
-                        caption={caption(lossMoney(current.loss))}
-                        sentiment="negative"
-                        docsPath="{DOCS}/current-drawdown/"
-                        testId="risk-l1-card-current"
-                    >
+                    <RiskMetricCard label={$t('risk.levels.l1.currentDrawdown')} technicalName={$t('risk.levels.l1.technical.current')} value={lossPercent(current.loss)} caption={caption(lossMoney(current.loss))} sentiment="negative" docsPath="{DOCS}/current-drawdown/" testId="risk-l1-card-current">
                         {#snippet submetrics()}
                             {#if current.peakDate}
                                 {@render measure($t('risk.levels.l1.sincePeak', {values: {date: current.peakDate}}), '', 'risk-l1-current-since')}
