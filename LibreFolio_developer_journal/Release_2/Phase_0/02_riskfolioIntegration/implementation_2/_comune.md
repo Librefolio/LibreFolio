@@ -316,3 +316,43 @@ girano **per anzianità, non per salute**.
 penserebbe di fare**: ① `heads` dà una testa · ② un DB fresco si crea · ③ **un DB stampato sulla
 testa preesistente fa `upgrade head`** — *il percorso delle installazioni rilasciate, l'unico che
 prova che un utente che aggiorna non si rompe*.
+
+### Ⓝ — `front check` è strutturalmente cieco sul contratto del payload di rischio
+
+**Trovato da P il 21 Set**, verificando la riga «zero modifiche frontend» del contratto di A.
+Regge — **ma il corollario conta più della riga**:
+
+```ts
+okOutput(): Record<string, unknown>
+finite(value: unknown)
+```
+
+> 🔴 **I tipi del payload di rischio sono cancellati alla frontiera.** Nessun `null`, nessun
+> tipo generato allargato può produrre un errore di compilazione. **Un verde di `front check`
+> non è una prova che il contratto del payload regga.**
+
+🔑 **È la forma Ⓘ un piano più sotto**: là il cancello non guardava gli spec per esclusione di
+`tsconfig`; qui guarda il file giusto e **non può vedere la classe di difetto che conta**,
+perché il tipo è stato cancellato prima.
+
+✅ Il cancello vero lato consumatore è il **validatore Zod** del client generato.
+⚠️ E la devWiki registra già che per `RiskMatrixCell.value` **tipo emesso e validatore emesso
+divergono** — quindi nemmeno quello è un cancello unico.
+
+**Conseguenza operativa**: chi cambia un contratto di rischio prova il cambiamento con un test
+del **payload**, non con `front check`. Il verde di `front check` resta necessario e **non è
+mai sufficiente** su questa superficie.
+
+### Ⓞ — il rifiuto per storia insufficiente arriva PRIMA del plugin
+
+`RiskService._available_observations` rifiuta prima che la guardia del plugin venga raggiunta.
+
+```
+historical_kpi     available=0 required=20 -> insufficient_history
+drawdown_summary   available=0 required= 2 -> insufficient_history
+asset_risk_return  available=0 required=20 -> insufficient_history
+```
+
+⚠️ **Aggiungere uno scope alla tupla di un plugin non basta**: senza passare questo cancello si
+ottiene un'analitica **`unavailable` al 100 %** — *lo stesso fallimento con un nome nuovo*.
+Chi allarga uno scope **lo prova end-to-end**, non leggendo `supported_scopes`.
