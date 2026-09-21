@@ -3,7 +3,24 @@ import {describe, expect, it} from 'vitest';
 import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 
 import {DAILY_VAR_INSTANCE, MONTHLY_VAR_INSTANCE} from '../riskAnalysisHelpers';
-import {BACKTEST_RETURN_BASIS, backtestDeclared, buildConcentration, buildCurrentDrawdown, buildDivergenceRows, buildHurtRows, buildRiskAdjusted, comparedAssetId, degradedResults, resultErrorCodes, resultReasons, translateErrorCode, leadDivergence, lossMagnitude, requiredRecovery, uncoveredWeight} from './levelHelpers';
+import {
+    BACKTEST_RETURN_BASIS,
+    backtestDeclared,
+    buildConcentration,
+    buildCurrentDrawdown,
+    buildDivergenceRows,
+    buildHurtRows,
+    buildRiskAdjusted,
+    comparedAssetId,
+    degradedResults,
+    resultErrorCodes,
+    resultReasons,
+    translateErrorCode,
+    leadDivergence,
+    lossMagnitude,
+    requiredRecovery,
+    uncoveredWeight,
+} from './levelHelpers';
 
 /** A successful result carrying `output`, shaped like the API's. */
 function ok(analyticCode: string, output: Record<string, unknown>, instanceId = `base-historical-${analyticCode}`): RiskAnalyticResult {
