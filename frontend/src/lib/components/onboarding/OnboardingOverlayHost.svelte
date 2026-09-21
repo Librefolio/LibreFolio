@@ -576,10 +576,12 @@
         return step ? guideAnchors.get(step.anchorId) : null;
     });
     let suspended = $derived(step != null && modalDepth > step.allowedModalDepth);
+    let stalledStepId = $state<GuideStepId | null>(null);
+    let stalled = $derived(active != null && stalledStepId === active.stepId);
     let stepIndex = $derived(active ? (activeSteps as readonly GuideStepId[]).indexOf(active.stepId) : -1);
     let lastStep = $derived(active ? isStepManagedFlow(active.flow) || stepIndex === activeSteps.length - 1 : false);
     let checkpoint = $derived(active?.flow === 'transaction_bulk_guide' || (active ? isCheckpointFlow(active.flow) : false));
-    let showNext = $derived(active?.flow !== 'import_guide' || active?.stepId === 'import.bulk');
+    let showNext = $derived(stalled || active?.flow !== 'import_guide' || active?.stepId === 'import.bulk');
     let progressCurrent = $derived(active?.progress?.current ?? Math.max(stepIndex + 1, 1));
     let progressTotal = $derived(active?.progress?.total ?? activeSteps.length);
     let pointer = $derived(step?.pointer ?? 'none');
@@ -649,6 +651,10 @@
 
     async function handleNext() {
         if (!active) return;
+        if (stalled && isStepManagedFlow(active.flow)) {
+            await onboardingGuide.skip();
+            return;
+        }
         if (!lastStep) {
             onboardingGuide.next();
             return;
@@ -672,6 +678,14 @@
                 await onboardingGuide.navigateAfterFinish(exiting.returnTo);
             }
         }
+    }
+
+    function handleStall() {
+        if (active) stalledStepId = active.stepId;
+    }
+
+    function handleStallEnd() {
+        stalledStepId = null;
     }
 
     async function handleTargetActivate() {
@@ -707,10 +721,11 @@
         {actionHint}
         progressLabel={checkpoint ? '' : translateValues('onboarding.tour.progress', {current: progressCurrent, total: progressTotal})}
         backLabel={translate('onboarding.actions.back')}
-        nextLabel={checkpoint ? translate('onboarding.actions.gotIt') : lastStep || active.stepId === 'import.bulk' ? translate('onboarding.actions.finish') : translate('onboarding.actions.next')}
-        showNextArrow={!checkpoint}
+        nextLabel={stalled ? translate('onboarding.actions.continueAnyway') : checkpoint ? translate('onboarding.actions.gotIt') : lastStep || active.stepId === 'import.bulk' ? translate('onboarding.actions.finish') : translate('onboarding.actions.next')}
+        showNextArrow={!checkpoint && !stalled}
         {closeLabel}
         busyLabel={translate('onboarding.guide.waiting')}
+        stalledLabel={translate('onboarding.guide.loadProblem')}
         error={onboardingGuide.error ? translate(onboardingGuide.error) : null}
         showBack={!checkpoint && active.flow !== 'import_guide'}
         backDisabled={stepIndex <= 0}
@@ -722,5 +737,7 @@
         onnext={handleNext}
         onclose={handleExit}
         ontargetactivate={handleTargetActivate}
+        onstall={handleStall}
+        onstallend={handleStallEnd}
     />
 {/if}

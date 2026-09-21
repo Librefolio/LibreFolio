@@ -336,18 +336,22 @@ def populate_brokers(session: Session):
 def _grandfather_onboarding_for_test_users(session: Session, users: list[User]) -> None:
     """Ensure every canonical E2E user is terminal (completed) on all onboarding flows.
 
-    Alembic revision 003_user_onboarding_progress grandfathers *existing* users into
-    every current flow as completed, on the assumption that onboarding is only for
-    genuinely new signups. On a fresh test DB the migration runs before this script
+    Alembic revision 003_user_onboarding_progress grandfathers *existing* users out
+    of onboarding entirely: `welcome` is seeded completed, and every guide and step
+    is seeded skipped, on the assumption that onboarding is only for genuinely new
+    signups. On a fresh test DB the migration runs before this script
     creates the canonical E2E users, so it has nobody to grandfather yet: these
     long-lived, reused fixtures would otherwise start with zero onboarding rows and
     get lazily marked pending — indistinguishable from a brand-new signup — the first
     time anything touches onboarding state, redirecting every unrelated E2E spec that
     logs in as one of them to the welcome flow.
 
-    This mirrors that migration for the canonical users only: insert a completed row,
-    at that flow's current version, for any (user_id, flow) pair that is missing, and
-    repair one that was left pending/skipped by a previous partial run. It never
+    This mirrors that migration's *intent* for the canonical users only, but uses
+    completed rather than skipped: these fixtures did go through the flows in earlier
+    E2E runs, so completed is the truthful status for them, whereas skipped is the
+    truthful status for a real user who was never offered anything. Insert a completed
+    row, at that flow's current version, for any (user_id, flow) pair that is missing,
+    and repair one that was left pending/skipped by a previous partial run. It never
     touches rows for a user_id outside `users`, so a genuinely new user created later
     by an onboarding spec is left alone and still starts pending, exactly like a real
     signup.
