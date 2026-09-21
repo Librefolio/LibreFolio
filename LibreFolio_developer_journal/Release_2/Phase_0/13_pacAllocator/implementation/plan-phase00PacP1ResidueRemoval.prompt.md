@@ -98,7 +98,7 @@ fixture belongs to this domain: its guard message says `both Round 4 allocator c
 - **verify** that the two type errors at `:90` and `:166` disappear; if they remain the
   cause is different.
 
-Return threshold: `svelte-check` = **3**, not 0 and not 5.
+Return threshold: `svelte-check` = **3 errors**, not 0 and not 5.
 
 ### Step 2 — `normalize.py`, six constants
 
@@ -154,7 +154,7 @@ measured rather than preferred.
 
 ```
 package reachability    83 orphans → 0, RE-MEASURED not assumed
-svelte-check            3, each identified by file:line
+svelte-check            3 errors, each identified by file:line
 tests                   69 v2 tests green in test_pac_planner_evaluator.py
 catalog                 ['pac_allocator'] ['plan'], 0 failures
 real module import      not just ruff / py_compile
@@ -182,7 +182,7 @@ Checkpoint + check_budget INTACT
 package orphans     83 → 113 → 96 → 0      re-measured at each step, never assumed
 tests               1175 passed, 0 failed  (9 service suites + 2 schema suites)
 vitest              registry.test.ts 7/7
-svelte-check        3 — identical file:line to the certified target baseline
+svelte-check        3 errors — identical file:line to the certified target baseline
 contract            169 schemas, 197 775 bytes — BYTE-IDENTICAL before and after
 catalog             ['pac_allocator'] ['plan'], 0 failures
 check-orphans       green, both directions
@@ -345,3 +345,59 @@ conclusion and nothing asks it to.
 6. **`ruff` and `py_compile` pass on orphan module-level constants**, which is how the six
    in `normalize.py` survived a green gate. They do catch unused *imports* — which is why
    the import cascade after each removal was found by the tool rather than by me.
+
+---
+
+## 9. Re-validation on the combined revision `d569b866d`
+
+> **Written before executing.** A prediction registered before the measurement is a test;
+> the same observation made afterwards is an explanation. What follows was committed to
+> the page while the gates were still unrun.
+
+Merge verified first, with the gate that diagnosed the hazard rather than a new one:
+
+```
+git merge-base --is-ancestor d7c75d953 HEAD     before: false   after: TRUE
+HEAD    d569b866d      HEAD^1 ef321160f (mine)      HEAD^2 d7c75d953 (target)
+files brought by the merge        14      predicted 14       OK
+intersection with my 42        EMPTY      predicted empty    OK
+```
+
+> ⚠️ `git merge origin/dev_release2` would have printed `Already up to date.` at exit 0
+> and done nothing: that ref was nine days old and already an ancestor of HEAD. The
+> difference between the right and the wrong command is not *failure vs success*, it is
+> **success vs success** — and counting parents does not see it, because a no-op leaves
+> one rather than creating two. Check **which**, not how many.
+
+### Expected outcomes, fixed in advance
+
+The merge brought exactly one file under `backend/`, an Alembic migration for onboarding.
+No route, no model, no schema. Therefore:
+
+```
+generated-tools.ts sha1   1855648ef6b0…   MUST BE UNCHANGED
+byte                      224 138          MUST BE UNCHANGED
+tool contract             169 schemas, 197 775 bytes    UNCHANGED
+
+4a  portfolio_rebalancer  hex, as tool_code      0      stays 0
+4b  pac_allocator         hex                 1061      stays > 0
+4c  portfolio_rebalancer  '.', as issue ns      37      stays 37 — v2 domain, correct
+
+package orphans            0
+tests                   1175 passed, 0 failed
+svelte-check               3 errors / 41 warnings / 4 files — and the SAME file:line
+catalog     ['pac_allocator'] ['plan'], 0 failures
+```
+
+**A changed contract would mean the empty intersection was false**, by a path `comm` cannot
+see — a rename or a move, which `--name-only` reports as two distinct paths.
+
+**Fewer than 3 svelte-check errors is a red, not an improvement**: it would mean a file
+carrying one of them disappeared, or that the measurement did not run.
+
+> ⚠️ Measured in **hex**. The tool names in `generated-tools.ts` are hex-encoded, so in
+> plain text `4a` and `4b` both read 0 before *and* after, and would appear to confirm
+> anything.
+>
+> ⚠️ `api sync` **before** reading any red. A merge aligns what is tracked; every ignored
+> generated artifact stays at the age you left it and keeps answering.
