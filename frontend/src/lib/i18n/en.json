@@ -3137,7 +3137,9 @@
           "hypothesis": "Classic model: it assumes regular swings and underestimates the tails."
         }
       },
-      "regimeTruncated": "This assumption lasts {declared} days; your horizon covers only {applied}."
+      "regimeTruncated": "This assumption lasts {declared} days; your horizon covers only {applied}.",
+      "driftUncertainty": "The drift comes from {count} observations: that alone puts this median between {low} and {high}.",
+      "driftUncertaintyWide": "The drift comes from just {count} observations: that alone puts this median between {low} and {high} — wider than the band above."
     },
     "errors": {
       "analytic_not_found": "Analytic not available.",
