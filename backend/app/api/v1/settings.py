@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.v1.auth import get_current_user
-from backend.app.db.models import User
+from backend.app.db.models import OnboardingFlow, OnboardingStatus, User
 from backend.app.db.session import get_async_engine, get_session_generator
 from backend.app.schemas.settings import (
     SETTINGS_REGISTRY,
@@ -23,12 +23,23 @@ from backend.app.schemas.settings import (
     GlobalSettingRead,
     GlobalSettingsInitializeResponse,
     GlobalSettingsListResponse,
+    OnboardingProgressItem,
+    OnboardingProgressResponse,
+    OnboardingStepTransitionRequest,
+    OnboardingTransitionRequest,
     SchedulerLogResponse,
     SchedulerStateResponse,
     UserSettingsRead,
     UserSettingsUpdate,
 )
 from backend.app.services.global_settings_service import get_setting_value
+from backend.app.services.onboarding_service import (
+    OnboardingVersionMismatchError,
+    complete_welcome_onboarding,
+    get_onboarding_progress,
+    transition_onboarding_progress,
+    transition_onboarding_step_progress,
+)
 from backend.app.services.scheduler import read_job_log
 from backend.app.services.scheduler.state import load_state
 from backend.app.services.settings_service import (
@@ -93,6 +104,185 @@ async def update_user_settings_endpoint(
         updates=updates.model_dump(exclude_none=True),
     )
     return await update_user_settings(current_user.id, updates, session)
+
+
+@router.get(
+    "/onboarding",
+    response_model=OnboardingProgressResponse,
+    response_model_exclude_none=True,
+)
+async def get_onboarding_progress_endpoint(
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: AsyncSession = Depends(get_session_generator),
+) -> OnboardingProgressResponse:
+    """Get current user's versioned onboarding progress."""
+    return await get_onboarding_progress(current_user.id, session)
+
+
+async def _transition_onboarding_endpoint(
+    flow: OnboardingFlow,
+    target_status: OnboardingStatus,
+    request: OnboardingTransitionRequest,
+    current_user: User,
+    session: AsyncSession,
+) -> OnboardingProgressItem:
+    try:
+        if request.welcome_settings is not None:
+            if flow != OnboardingFlow.WELCOME or target_status != OnboardingStatus.COMPLETED:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="welcome_settings is valid only when completing the welcome flow",
+                )
+            return await complete_welcome_onboarding(
+                user_id=current_user.id,
+                expected_version=request.expected_version,
+                welcome_settings=request.welcome_settings,
+                session=session,
+            )
+        return await transition_onboarding_progress(
+            user_id=current_user.id,
+            flow=flow,
+            target_status=target_status,
+            expected_version=request.expected_version,
+            session=session,
+        )
+    except OnboardingVersionMismatchError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "onboarding_version_mismatch",
+                "flow": exc.flow.value,
+                "expected_version": exc.expected_version,
+                "current_version": exc.current_version,
+            },
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+
+
+@router.post(
+    "/onboarding/{flow}/complete",
+    response_model=OnboardingProgressItem,
+    response_model_exclude_none=True,
+)
+async def complete_onboarding_flow_endpoint(
+    flow: OnboardingFlow,
+    request: OnboardingTransitionRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: AsyncSession = Depends(get_session_generator),
+) -> OnboardingProgressItem:
+    """Mark one flow completed for the current content version."""
+    return await _transition_onboarding_endpoint(
+        flow,
+        OnboardingStatus.COMPLETED,
+        request,
+        current_user,
+        session,
+    )
+
+
+@router.post(
+    "/onboarding/{flow}/skip",
+    response_model=OnboardingProgressItem,
+    response_model_exclude_none=True,
+)
+async def skip_onboarding_flow_endpoint(
+    flow: OnboardingFlow,
+    request: OnboardingTransitionRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: AsyncSession = Depends(get_session_generator),
+) -> OnboardingProgressItem:
+    """Permanently skip one flow until the user explicitly replays it."""
+    return await _transition_onboarding_endpoint(
+        flow,
+        OnboardingStatus.SKIPPED,
+        request,
+        current_user,
+        session,
+    )
+
+
+async def _transition_onboarding_step_endpoint(
+    flow: OnboardingFlow,
+    step_id: str,
+    target_status: OnboardingStatus,
+    request: OnboardingStepTransitionRequest,
+    current_user: User,
+    session: AsyncSession,
+) -> OnboardingProgressItem:
+    try:
+        return await transition_onboarding_step_progress(
+            user_id=current_user.id,
+            flow=flow,
+            step_id=step_id,
+            target_status=target_status,
+            expected_version=request.expected_version,
+            session=session,
+        )
+    except OnboardingVersionMismatchError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "onboarding_version_mismatch",
+                "flow": exc.flow.value,
+                "expected_version": exc.expected_version,
+                "current_version": exc.current_version,
+            },
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+
+
+@router.post(
+    "/onboarding/{flow}/steps/{step_id}/complete",
+    response_model=OnboardingProgressItem,
+    response_model_exclude_none=True,
+)
+async def complete_onboarding_step_endpoint(
+    flow: OnboardingFlow,
+    step_id: str,
+    request: OnboardingStepTransitionRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: AsyncSession = Depends(get_session_generator),
+) -> OnboardingProgressItem:
+    """Mark one step completed for the current content version."""
+    return await _transition_onboarding_step_endpoint(
+        flow,
+        step_id,
+        OnboardingStatus.COMPLETED,
+        request,
+        current_user,
+        session,
+    )
+
+
+@router.post(
+    "/onboarding/{flow}/steps/{step_id}/skip",
+    response_model=OnboardingProgressItem,
+    response_model_exclude_none=True,
+)
+async def skip_onboarding_step_endpoint(
+    flow: OnboardingFlow,
+    step_id: str,
+    request: OnboardingStepTransitionRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: AsyncSession = Depends(get_session_generator),
+) -> OnboardingProgressItem:
+    """Skip one step for the current content version."""
+    return await _transition_onboarding_step_endpoint(
+        flow,
+        step_id,
+        OnboardingStatus.SKIPPED,
+        request,
+        current_user,
+        session,
+    )
 
 
 # ============================================================================

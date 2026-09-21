@@ -1,5 +1,9 @@
 # Evidenze checkpoint PAC P1
 
+> **ARCHIVIO:** evidenza del prototipo P1, non specifica corrente. L'entrypoint
+> della suite target è
+> [`../plan-phase00PacRebalancerTargetDesign.prompt.md`](../plan-phase00PacRebalancerTargetDesign.prompt.md).
+
 ## 1. Provenienza
 
 - Baseline letta e implementata: `4a73f5f63447e01b51993afb2e3c73e2c22a9a28`.

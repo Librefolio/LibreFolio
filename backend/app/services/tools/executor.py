@@ -29,12 +29,15 @@ from backend.app.schemas.tools import (
     ToolItemMetrics,
     ToolOperationPolicy,
     ToolPlatformPolicy,
+    ToolPoolResourceReservation,
     ToolPoolSnapshot,
+    ToolResourceCapabilities,
 )
 from backend.app.services.tools.base import ToolDefinitionError, ToolExecutionError
 from backend.app.services.tools.catalog import effective_operation
 from backend.app.services.tools.process_tree import OwnedProcessTree
 from backend.app.services.tools.registry import ToolPluginRegistry, ToolRegistrySnapshot
+from backend.app.services.tools.resources import ToolResourceController
 from backend.app.services.tools.wire import decode_json, encode_json, plain_json_object
 from backend.app.services.tools.worker import PipeCancellation, ToolWorkerJob, execute_tool_job
 
@@ -74,6 +77,7 @@ class _OwnedJob:
     lane: int
     admitted_at: float
     granted_at: float
+    cleanup_timeout_ms: int = 2_000
     cancel: threading.Event = field(default_factory=threading.Event)
     tree: OwnedProcessTree | None = None
     io_task: asyncio.Task[_Outcome] | None = None
@@ -93,16 +97,22 @@ def _read_exact(connection: Connection, size: int, job: _OwnedJob) -> bytes:
     while len(chunks) < size:
         if job.cancel.is_set():
             raise ToolExecutionError("execution_limit", retryable=True)
+        if job.tree is not None:
+            job.tree.observe_memory_limit()
         remaining = job.spec.hard_deadline - time.monotonic()
         if remaining <= 0:
             raise ToolExecutionError("execution_timeout", retryable=True)
         readable, _, _ = select.select([descriptor], [], [], min(0.05, remaining))
         if not readable:
-            if job.tree is not None and job.tree.process.exitcode is not None:
-                raise ToolExecutionError("worker_crashed")
+            if job.tree is not None:
+                job.tree.observe_memory_limit()
+                if job.tree.process.exitcode is not None:
+                    raise ToolExecutionError("worker_crashed")
             continue
         chunk = os.read(descriptor, size - len(chunks))
         if not chunk:
+            if job.tree is not None:
+                job.tree.observe_memory_limit()
             raise ToolExecutionError("worker_crashed")
         chunks.extend(chunk)
     return bytes(chunks)
@@ -170,18 +180,25 @@ def _wait_result(response: Connection, cancellation: Connection, job: _OwnedJob)
             raise ToolExecutionError("worker_crashed")
 
 
-def _finish_physical_job(job: _OwnedJob, cancellation: Connection, cleanup_ms: int) -> bool:
-    try:
-        cancellation.send_bytes(b"\x01")
-    except (BrokenPipeError, EOFError, OSError):
-        pass
+def _finish_physical_job(job: _OwnedJob, cancellation: Connection | None, cleanup_ms: int) -> bool:
+    if cancellation is not None:
+        try:
+            cancellation.send_bytes(b"\x01")
+        except (BrokenPipeError, EOFError, OSError):
+            pass
     started = time.monotonic()
     cleaned = job.tree is not None and job.tree.cleanup(started + cleanup_ms / 1000)
-    job.metrics = job.metrics.model_copy(update={"cleanup_ms": _milliseconds(started), "total_ms": _milliseconds(job.admitted_at)})
+    resources = job.tree.resource_metrics() if job.tree is not None else None
+    job.metrics = job.metrics.model_copy(update={"cleanup_ms": _milliseconds(started), "total_ms": _milliseconds(job.admitted_at), "resources": resources})
     return cleaned
 
 
-def _run_owned_job(job: _OwnedJob, registry_class: type[ToolPluginRegistry], cleanup_ms: int) -> _Outcome:
+def _run_owned_job(
+    job: _OwnedJob,
+    registry_class: type[ToolPluginRegistry],
+    cleanup_ms: int | None = None,
+    resource_controller: ToolResourceController | None = None,
+) -> _Outcome:
     """The sole I/O owner starts, reads, signals and closes this physical job."""
     value: object = None
     error: ToolError | None = None
@@ -201,7 +218,12 @@ def _run_owned_job(job: _OwnedJob, registry_class: type[ToolPluginRegistry], cle
                 name=f"tool-{job.spec.execution_id}",
                 daemon=False,
             )
-            job.tree = OwnedProcessTree(process)
+            job.tree = OwnedProcessTree(
+                process,
+                memory_limit_bytes=job.spec.memory_limit_bytes,
+                resource_controller=resource_controller,
+            )
+            job.tree.prepare_resources(job.spec.execution_id)
             process.start()
             child_response.close()
             child_cancel.close()
@@ -215,13 +237,16 @@ def _run_owned_job(job: _OwnedJob, registry_class: type[ToolPluginRegistry], cle
             error = _error("execution_failed")
         finally:
             job.metrics = job.metrics.model_copy(update={"execution_ms": _milliseconds(job.granted_at)})
-            if cancellation is not None and job.tree is not None:
-                cleaned = _finish_physical_job(job, cancellation, cleanup_ms)
+            if job.tree is not None:
+                cleaned = _finish_physical_job(job, cancellation, job.cleanup_timeout_ms if cleanup_ms is None else cleanup_ms)
             else:
                 cleaned = job.tree is None
                 job.metrics = job.metrics.model_copy(update={"total_ms": _milliseconds(job.admitted_at)})
     if not cleaned:
         error = _error("cleanup_failed")
+        value = None
+    elif job.tree is not None and job.tree.memory_limit_exceeded:
+        error = _error("memory_limit")
         value = None
     return _Outcome(value, error, job.metrics, cleaned)
 
@@ -229,9 +254,15 @@ def _run_owned_job(job: _OwnedJob, registry_class: type[ToolPluginRegistry], cle
 class ToolExecutor:
     """Per-API-process quotas; no I/O or workers are started by construction."""
 
-    def __init__(self, policy: ToolPlatformPolicy | None = None, registry_class: type[ToolPluginRegistry] = ToolPluginRegistry):
+    def __init__(
+        self,
+        policy: ToolPlatformPolicy | None = None,
+        registry_class: type[ToolPluginRegistry] = ToolPluginRegistry,
+        resource_controller: ToolResourceController | None = None,
+    ):
         self.policy = policy or ToolPlatformPolicy()
         self.registry_class = registry_class
+        self.resource_controller = resource_controller or ToolResourceController()
         self.runtime_id = uuid.uuid4().hex
         self._lock = threading.RLock()
         self._available: asyncio.Queue[int] = asyncio.Queue()
@@ -250,6 +281,7 @@ class ToolExecutor:
     def snapshot(self) -> ToolPoolSnapshot:
         with self._lock:
             degraded = sum(job.quarantined for job in self._jobs.values())
+            memory_reserved_bytes = sum(job.spec.memory_limit_bytes for job in self._jobs.values())
             return ToolPoolSnapshot(
                 available=not self._closed and os.name == "posix" and degraded < self.policy.workers,
                 active=len(self._jobs),
@@ -258,7 +290,14 @@ class ToolExecutor:
                 degraded_lanes=degraded,
                 completed=self._completed,
                 failed=self._failed,
+                resources=ToolPoolResourceReservation(
+                    memory_capacity_bytes=self.policy.workers * self.policy.memory_limit_bytes,
+                    memory_reserved_bytes=memory_reserved_bytes,
+                ),
             )
+
+    def resource_capabilities(self) -> ToolResourceCapabilities:
+        return ToolResourceCapabilities(memory=self.resource_controller.memory_capability())
 
     def _admit(self, principal_key: str, count: int) -> float:
         with self._lock:
@@ -314,10 +353,21 @@ class ToolExecutor:
         except ToolDefinitionError as exc:
             raise ToolExecutionError("tool_unavailable") from exc
 
+    def batch_request_timeout_ms(self, batch: ToolComputeBatchRequest, snapshot: ToolRegistrySnapshot | None = None) -> int:
+        """Return the largest valid item budget; item execution budgets stay independent."""
+        snapshot = snapshot or self.registry_class.get_snapshot()
+        timeouts: list[int] = []
+        for item in batch.items:
+            try:
+                timeouts.append(self._operation(item, snapshot).request_timeout_ms)
+            except ToolExecutionError:
+                continue
+        return max(timeouts, default=min(20_000, self.policy.request_timeout_ms))
+
     async def _await_job(self, job: _OwnedJob) -> _Outcome:
         if job.io_task is None:
             raise RuntimeError("Tool I/O owner is missing")
-        remaining = job.spec.hard_deadline + self.policy.cleanup_timeout_ms / 1000 - time.monotonic()
+        remaining = job.spec.hard_deadline + job.cleanup_timeout_ms / 1000 - time.monotonic()
         try:
             return await asyncio.wait_for(asyncio.shield(job.io_task), timeout=max(0, remaining))
         except TimeoutError:
@@ -329,7 +379,7 @@ class ToolExecutor:
         except asyncio.CancelledError:
             job.cancel.set()
             try:
-                await asyncio.wait_for(asyncio.shield(job.io_task), timeout=self.policy.cleanup_timeout_ms / 1000)
+                await asyncio.wait_for(asyncio.shield(job.io_task), timeout=job.cleanup_timeout_ms / 1000)
             except TimeoutError:
                 with self._lock:
                     job.quarantined = True
@@ -348,7 +398,7 @@ class ToolExecutor:
             with self._lock:
                 self._queued += 1
                 queued = True
-            queue_deadline = min(admitted_at + operation.queue_timeout_ms / 1000, request_deadline - (self.policy.cleanup_timeout_ms + self.policy.response_reserve_ms) / 1000)
+            queue_deadline = min(admitted_at + operation.queue_timeout_ms / 1000, request_deadline - (operation.cleanup_timeout_ms + self.policy.response_reserve_ms) / 1000)
             lane = await asyncio.wait_for(self._available.get(), timeout=max(0, queue_deadline - time.monotonic()))
             with self._lock:
                 self._queued -= 1
@@ -392,7 +442,7 @@ class ToolExecutor:
             if self._closed:
                 raise ToolExecutionError("service_unavailable", retryable=True)
         granted_at = time.monotonic()
-        hard_deadline = min(granted_at + operation.job_timeout_ms / 1000, request_deadline - (self.policy.cleanup_timeout_ms + self.policy.response_reserve_ms) / 1000)
+        hard_deadline = min(granted_at + operation.job_timeout_ms / 1000, request_deadline - (operation.cleanup_timeout_ms + self.policy.response_reserve_ms) / 1000)
         soft_deadline = min(granted_at + operation.soft_timeout_ms / 1000, hard_deadline - self.policy.output_reserve_ms / 1000)
         if soft_deadline <= granted_at:
             raise ToolExecutionError("queue_timeout", retryable=True)
@@ -408,11 +458,13 @@ class ToolExecutor:
             max_parameter_bytes=operation.max_parameter_bytes,
             max_result_bytes=operation.max_result_bytes,
             max_json_depth=self.policy.max_json_depth,
+            engine_timeout_ms=operation.engine_timeout_ms,
+            memory_limit_bytes=operation.memory_limit_bytes,
         )
-        job = _OwnedJob(spec, principal_key, lane, admitted_at, granted_at, metrics=ToolItemMetrics(queue_wait_ms=_milliseconds(admitted_at)))
+        job = _OwnedJob(spec, principal_key, lane, admitted_at, granted_at, operation.cleanup_timeout_ms, metrics=ToolItemMetrics(queue_wait_ms=_milliseconds(admitted_at)))
         with self._lock:
             self._jobs[spec.execution_id] = job
-        job.io_task = asyncio.create_task(asyncio.to_thread(_run_owned_job, job, self.registry_class, self.policy.cleanup_timeout_ms))
+        job.io_task = asyncio.create_task(asyncio.to_thread(_run_owned_job, job, self.registry_class, None, self.resource_controller))
         job.io_task.add_done_callback(lambda task: self._job_finished(job, task))
         return job
 
@@ -420,7 +472,7 @@ class ToolExecutor:
         started = time.monotonic() if request_started is None else request_started
         snapshot = await asyncio.to_thread(self.registry_class.get_snapshot)
         admitted_at = self._admit(principal_key, len(batch.items))
-        deadline = started + self.policy.request_timeout_ms / 1000
+        deadline = started + self.batch_request_timeout_ms(batch, snapshot) / 1000
         tasks: list[asyncio.Task[ToolComputeResult]] = []
         for item in batch.items:
             ticket = _ItemTicket(principal_key)
@@ -441,11 +493,12 @@ class ToolExecutor:
                 self._batches.discard(principal_key)
 
     async def shutdown(self) -> None:
-        deadline = time.monotonic() + self.policy.cleanup_timeout_ms / 1000
         with self._lock:
             self._closed = True
             jobs = tuple(self._jobs.values())
             items = tuple(self._items)
+        cleanup_timeout_ms = max((job.cleanup_timeout_ms for job in jobs), default=min(2_000, self.policy.cleanup_timeout_ms))
+        deadline = time.monotonic() + cleanup_timeout_ms / 1000
         for task in items:
             task.cancel()
         for job in jobs:
