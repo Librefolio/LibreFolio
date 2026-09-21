@@ -7,27 +7,33 @@ description: Standalone calculations, compatibility, diagnostics, and timing in 
 
 A **Tool** is a standalone calculation: you supply the data for one operation, and it returns a result or a structured error. It is not an instruction to modify your portfolio.
 
-The Tool platform is **experimental**. Its two allocation pilots answer
-different questions:
+The Tool platform is **experimental**. The catalogue currently offers exactly
+**one** tool:
 
-| Tool | What its target means |
+| Tool | What it does |
 |---|---|
-| [PAC Allocator P1](pac-allocator/index.md) | Split existing cash and new contributions across selected Assets. Current holdings are not its denominator. |
-| [Portfolio Rebalancer P1](portfolio-rebalancer/index.md) | Compare the currently invested portfolio with a desired final allocation. Cash and contributions remain separate context. |
+| [PAC allocator](pac-allocator/index.md) | Plans which purchases bring an allocation as close as possible to its target, using the cash and contributions available now. |
 
-Both can start from copied OWNER source facts or fully manual rows, and both
-are intentionally narrower than a solver: they do not propose trades,
-optimize an allocation, or assess trade feasibility.
+It is listed and documented, but **not usable interactively yet**: its
+interface has not been rebuilt, so its card cannot be opened. Its own page
+describes what that looks like and what the calculation engine behind it does.
+
+!!! note "A second tool was withdrawn"
+
+    The catalogue previously offered a Portfolio Rebalancer next to the PAC
+    allocator. Both were prototypes and both were removed. Only the PAC
+    allocator has been rebuilt so far, so a bookmark to the Rebalancer's
+    documentation page no longer resolves.
 
 ## 🖱️ Opening a tool
 
-Open **Tools** from the sidebar to see the catalogue as a grid of cards. For a ready tool, the **entire card** is clickable, not just its title or an icon; an arrow indicator marks it as open-able.
+Open **Tools** from the sidebar to see the catalogue as a grid of cards. For a ready tool, the **entire card** is clickable, not just its title or an icon; an arrow indicator marks it as open-able. A tool whose interface is missing has neither, and states its situation on the card instead.
 
 Both the catalogue and an open tool show:
 
 - a **Documentation** action linking to that tool's page, with a label that appears next to the icon on wider screens and collapses to an icon-only control on narrow screens;
 - a **Refresh** action that reloads the catalogue (from the hub) or the current tool's interface (from an open tool), with the same responsive icon-only behavior; refreshing an open tool always asks for confirmation because it replaces the interface and discards its current draft;
-- a single **Version** label showing the tool's contract version — there is no separate build or implementation number shown alongside it.
+- a single **Version** label showing the tool's compatibility pair — there is no separate build or implementation number shown alongside it.
 
 ## 🧭 Availability and compatibility
 
@@ -40,6 +46,7 @@ A usable Tool needs both a compatible backend operation and its matching **tool-
 | The catalogue contains a tool with a compatible interface | Its declared operations can be presented by that interface; the entry does not promise additional features. |
 | The catalogue is empty | No tools are being offered by that catalogue. |
 | A tool is unavailable | The backend could not offer that plugin under the current contract and policy. Other healthy tools can remain available. |
+| The interface is not included in this frontend build | The backend tool is installed and listed, but no matching interface ships in the frontend you are running. The tool cannot be opened and no calculation is started. This is the PAC allocator's current state. |
 | The frontend does not recognize the interface or its version | The tool must be treated as unavailable in that frontend, not opened through a guessed or generic form. |
 | A request no longer matches the advertised versions | It is a compatibility error, not a result for your scenario. |
 
@@ -74,7 +81,7 @@ A batch can contain several independent operations, including operations from di
 
 A platform **success** means that the operation returned an output accepted by its contract. It does not necessarily mean that the scenario is ready to use, financially feasible, or suitable for trading.
 
-For example, an analysis operation can successfully report that information is missing or that the supplied scenario is invalid. An initial-valuation readiness result is not proof of trade feasibility or a completed optimization.
+For example, a calculation can successfully report that information is missing, that the supplied scenario is invalid, or that it could not establish a result at all. A completed calculation is not proof of trade feasibility.
 
 A platform **error** means that the calculation could not deliver an accepted outcome. Invalid parameters, an unavailable tool, a full queue, a timeout, a crashed worker, invalid output, and failed cleanup are different error conditions.
 
@@ -84,7 +91,7 @@ Do not interpret a timeout, worker crash, or cleanup failure as “the scenario 
 
 The catalogue publishes the effective limits. These are execution budgets, **not measured performance guarantees**. An individual operation can have stricter limits than the platform defaults.
 
-| Initial platform default | Limit |
+| Platform default | Limit |
 |---|---|
 | Items in one batch | 1–4 |
 | Concurrent execution lanes | 2 per API process |
@@ -93,11 +100,14 @@ The catalogue publishes the effective limits. These are execution budgets, **not
 | Parameters for one item | 128 KiB |
 | Result for one item | 256 KiB |
 | Queue budget | 5 seconds |
-| Hard job budget | 5 seconds, including cold startup |
-| Cooperative soft budget | 4 seconds |
-| Cleanup budget | 2 seconds; capacity remains occupied during cleanup |
-| Server request budget | 20 seconds |
-| Tool-specific client timeout | 25 seconds |
+| Calculation engine budget | 30 seconds |
+| Cooperative soft budget | 44 seconds |
+| Hard job budget | 45 seconds, including cold startup |
+| Cleanup budget | 5 seconds; capacity remains occupied during cleanup |
+| Server request budget | 59 seconds |
+| Tool-specific client timeout | 65 seconds |
+
+The catalogue's only operation, the PAC allocator's `plan`, currently runs with exactly these effective budgets.
 
 The capacity limits apply to **one API process**, not to the whole installation. They are not a global instance limit or a guarantee of operating-system memory isolation.
 

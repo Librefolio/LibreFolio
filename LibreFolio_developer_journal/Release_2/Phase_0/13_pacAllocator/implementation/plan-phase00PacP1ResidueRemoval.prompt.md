@@ -345,6 +345,174 @@ conclusion and nothing asks it to.
 6. **`ruff` and `py_compile` pass on orphan module-level constants**, which is how the six
    in `normalize.py` survived a green gate. They do catch unused *imports* — which is why
    the import cascade after each removal was found by the tool rather than by me.
+7. **A gate you have never seen fail on a case built for it is not a gate, it is a habit.**
+   Before trusting a green, manufacture the red. I proposed a command to measure a delivery
+   before staging and verified it *in the worktree after the coordinator had already
+   staged* — where zero untracked files remained, so the condition the command exists to
+   handle was absent. It passed because it could not fail. Re-run in a scratch repository
+   with one modified and one new file, it also falsified a reasonable guess:
+   `git diff --stat HEAD` is **as blind as** `git diff --stat`, because an untracked file
+   is in the diff of no comparison at all.
+
+### 8.1 Two agreeing measurements, and the nine ways their independence fails
+
+The rule underneath every item above was formulated by the coordinator:
+
+> **Two equal numbers are worth as much as the ways of obtaining them differ.** If the
+> method is the same, the agreement is tautological; if the methods are independent, the
+> agreement is proof and a disagreement is a localised defect.
+
+Its practical corollary, for a delivery:
+
+> **`git diff` does not see what is born now, in any of its forms — with or without
+> `HEAD`.** After staging, measure with `--cached --stat`; before staging, sum
+> `diff --stat HEAD` and `ls-files --others --exclude-standard`. Whoever delivers measures
+> the second, whoever stages verifies the first, and the two numbers must agree.
+
+Independence failed nine distinct ways in one day. All nine were caught, none by a gate
+that existed beforehand.
+
+| # | mode | what it looks like |
+|---|---|---|
+| 1 | **instrument** | verifying a claim with the same command that produced it |
+| 2 | **environment** | verifying where the case to be covered does not exist |
+| 3 | **degraded** | the instrument silently became a different instrument |
+| 4 | **homonym** | the argument is ambiguous and is resolved in silence |
+| 5 | **temporal** | a declared state is a photograph, not the present |
+| 6 | **label** | the number is verified, the noun beside it is not |
+| 7 | **reading pruning** | the counterexample was printed and did not survive the summary |
+| 8 | **reconstructed citation** | a text recalled from memory, presented as a re-reading |
+| 9 | **expectation-as-prediction** | the expected outcome was derived, not measured |
+
+Modes 1–3 are about the **instrument**, 4–5 about the **argument**, 6–8 about the
+**passage from measurement to text**, and 9 about the **expectation itself**. Only 1–3
+require something to malfunction.
+
+**3 — degraded.** `declare -A` does not exist in bash 3.2 (macOS). Keys are then evaluated
+as *arithmetic expressions*, an unset name is `0`, so every key writes `M[0]`: each write
+overwrites, **each read succeeds**, and the result is internally consistent and wrong.
+Three file lists came out as three identical counts of 13; the real ones were 42 / 103 / 13.
+The obvious guard gives a **false green** — `P[k]=v; [ "${P[k]}" = v ]` passes, because
+write and read collapse onto the same index. Only the **exit code** of `declare -A` tells
+the truth.
+
+**4 — homonym.** `origin/dev_release2` was nine days old and already an ancestor of `HEAD`,
+so `git merge origin/dev_release2` prints `Already up to date.` at exit 0 and does nothing.
+The difference from the right command is not *failure vs success*, it is **success vs
+success** — and counting parents does not see it, because a no-op leaves one rather than
+creating two. The same family as the four homonyms inside this package: a tool code vs an
+issue namespace, a function vs a `str` parameter, a class vs prose in a `description=`,
+a file vs a substring of another file's name.
+
+**6 — label.** A `svelte-check` floor circulated all day as `3/41/4 hint`. The tool prints
+`3 errors and 41 warnings in 4 files`. **No hints.** The numbers were right, the noun was
+not — and a second agent had already ratified it, having compared the digits. It was broken
+not by a check but by someone **transcribing the output instead of inheriting the formula**.
+
+> **Abbreviating a measurement deletes the part that can be falsified and keeps the part
+> that can only be copied.** A floor is written with the unit the tool prints.
+
+The same defect then appeared four times inside this very plan, where `3` stood without its
+noun — including in the paragraph arguing for units. The one number that lost its label was
+the one whose label was disputed; the other two kept theirs because nobody contested them.
+
+**7 — reading pruning.** `grep -n` returned five lines, one of which contradicted the thesis.
+Four were reported, and the conclusion said "all four". The query was correct; the selection
+happened **in the reading**. No gate on the query can catch this.
+
+> **Count before listing.** `grep -c` before `grep -n` does not fix the search — it puts a
+> number between the measurement and the summary, which is the point where a correct
+> observation becomes a false statement, and the only link in the chain nobody treats as a
+> measurement.
+
+**8 — reconstructed citation.** A block of "evidence" was quoted as *"verifiable in the
+message I sent you"*; the message had contained four lines, the quotation five, with an
+arrow marking the relevant one. Nobody annotates a line **before** knowing it matters: the
+arrow is dated after. The thesis was true and proved by something else entirely — the block
+had been ordered `388, 101, 157, 185`, an order raw `grep -n` output cannot have, which
+demonstrates the pruning without asking anyone to be believed.
+
+> **A citation is opened, always — including your own, and especially when it is recent.**
+> Recency is exactly what makes opening it feel unnecessary, so it is the risk condition,
+> not the guarantee. Reconstructing feels like remembering, and the reconstruction arrives
+> *improved* by what was learned since.
+
+The fabricated evidence was superfluous: **fabrication does not come from need, it comes
+from the hurry to convince.**
+
+**9 — expectation-as-prediction.** "This merge must stop on exactly 4 conflicts" was
+announced as a gate. The merge passed clean, correctly: the two sides' hunks were two
+thousand lines apart. *Same file* had been used as a proxy for *conflict*.
+
+> **"Register the expectation first" is true and insufficient.** An expectation is a test
+> only when it is a **repeated measurement** of a known state. When it is a prediction about
+> a tool's behaviour on an input nobody examined, it is not a weaker test — it is a
+> guaranteed false red, arriving with the authority of the pre-registered.
+
+The contrast inside this plan is exact: §9's expectations — sha1 `1855648ef6b0`, 224 138
+bytes, 169 schemas — are measurements of the previous state, and *"must not change"* cannot
+be satisfied by accident.
+
+### 8.2 What is verifiable, in three categories
+
+```
+verifiable        output reported intact, WITH THE COMMAND BESIDE IT
+not verifiable    output reordered, filtered or paraphrased — even when true
+not verifiable    a quotation of one's own message, absent re-opening
+```
+
+The middle category is the one that was missing. A reordered block is a true measurement
+made unverifiable by its summary: not fabrication, but the same consequence — **nobody can
+get back to the instrument**.
+
+> A summarised output must carry the command that produced it. Without it, a summary is an
+> assertion; with it, it is a pointer to a measurement.
+
+### 8.3 A new countermeasure is the weakest part of the structure it protects
+
+Against mode 5 we both adopted *"the time beside the SHA"*. Twenty minutes later:
+
+```
+adopted   ~19:00     occurrences 6     correct measurements 1
+coordinator   3 timestamps declared, 0 measured; one asserting it had been read
+D             3 timestamps with a constant, never-measured +1; one asserting it had
+              been read — written in the message confessing the defect
+              (`date` had printed 19:18:36; 19:19 was declared)
+```
+
+> **A countermeasure performed in form but not in substance is worse than its absence: it
+> consumes the suspicion it would have raised.** A message with no time invites "when?". A
+> message with a wrong time does not — it certifies that the author thought about it.
+
+Three reasons it lands on the new datum specifically:
+
+- **The part of a measurement that goes unmeasured is the part the countermeasure adds**,
+  because it is the newest and nobody treats it as data yet. `d569b866d` was measured by
+  three parties all day; the clock never, by anyone.
+- **A new countermeasure has no known failure mode**, so there is nothing to recognise. A
+  datum becomes reliable only after someone has seen how it breaks.
+- **An estimate that corrects a measurement does not feel like a substitution, it feels
+  like a refinement.** The `+1` modelled composition time — something the reading does not
+  capture. This is the one case where opening the source is not enough, because the source
+  was open.
+
+And the sharpest of the three, because it disables the other party rather than merely
+being wrong:
+
+> **Claiming to have verified is itself an unverified claim.** "This time actually read"
+> has the grammar of a gate and the substance of zero.
+>
+> **Do not write that you verified — write the command, or the field, the value came from.**
+> `19:19:17 (command: date)` is checkable; "read" is not.
+
+Finally, how a wrong value survives: the coordinator took `19:19` from *their own previous
+message*, where they had invented it.
+
+> **The first writing of an unmeasured value becomes its source**, and every later
+> repetition feels like a confirmation. The value does not degrade with each hop — it
+> **consolidates**, because each repetition adds an occurrence and none adds a check.
+
+`3/41/4 hint` needed two people to survive a day. This needed one, re-reading themselves.
 
 ---
 
@@ -401,3 +569,94 @@ carrying one of them disappeared, or that the measurement did not run.
 >
 > ⚠️ `api sync` **before** reading any red. A merge aligns what is tracked; every ignored
 > generated artifact stays at the age you left it and keeps answering.
+
+---
+
+## 10. The user-facing slice
+
+Executed after the combined revision was green. Order was fixed in advance and the last
+item depends on all the others: **the CHANGELOG is written last, because before that point
+it would describe an intention, and an intention is precisely what a changelog must not
+contain.**
+
+### Three pages, three fates (`docs-writer`)
+
+```
+portfolio-rebalancer/index.en.md   269 lines   DELETED + nav entry removed
+pac-allocator/index.en.md          238 -> 111  REWRITTEN to the real state
+tools/index.en.md                  151 -> 161  REALIGNED to a one-tool catalogue
+```
+
+Measured before delegating: 3 `.en.md`, **0** `.it/.fr/.es`, **0** image references — so no
+translation debt and no screenshot to regenerate. `mkdocs build` (strict) and
+`check-links` both green; 0 `WARNING|ERROR|CRITICAL` in the build log.
+
+Four things came back that the brief had wrong or did not know:
+
+1. **`mkdocs.yml` needed four deletions, not one.** Nav titles are translated inline in
+   `nav_translations`, so the removed page had three more stale entries (it/fr/es). Nav
+   titles are the sanctioned four-language exception — they are never touched by the
+   translation pipeline, so editing them is not a translation run.
+2. **The old PAC page was inverted, not merely stale.** P1 promised the *opposite* of what
+   v2 does: *"does not convert its monetary allocation into quantities"*, *"no solver,
+   optimization, or optimality claim"*. v2 plans whole-unit purchases and carries
+   `OptimalProvenProof` / `InfeasibilityProvenProof`. A stale page can be updated; an
+   inverted one has to be rewritten, and the difference is not one of degree.
+3. **My brief asserted a product behaviour I had not measured.** I wrote that the user
+   "finds the tool in the catalogue, clicks it, and gets that state". `ToolsHub.svelte:258`
+   gates the full-card `<a>` overlay and the arrow on `{#if entry.interfaceState ===
+   'ready'}`, so the card **is not clickable at all**; the message is shown inline. Direct
+   navigation reaches it via `ToolHost.svelte`. I stated it from my model of the product
+   rather than from the code.
+4. **The overview's capacity table was stale for an unrelated reason** — it carried the
+   `ToolOperationPolicy` class defaults rather than the effective platform values, which
+   were raised for the v2 planner. Replaced with measured values from
+   `effective_catalog_entries`.
+
+A fifth was a scope extension I did not request and kept after verifying it:
+`developer/architecture/patterns/tool_plugins.en.md` claimed in four places that the plugin
+ships **two** services and that the compiled registry **binds components for both**. The
+plugin has exactly one `ToolService(`, and `compiledRendererRegistrations` is an empty
+array. Both claims were falsified by this branch, and no link from the deleted page means
+neither `build` nor `check-links` would ever have caught them.
+
+### `ToolDocumentation.version` — nothing to change, and that is the finding
+
+The descriptor declares `path="user/tools/pac-allocator/"`, `version="2.0.0"`. With the page
+rewritten to describe the v2 state, the version is now accurate. The work was not changing
+a number — it was **verifying that the declared reference resolves**, because nothing else
+does:
+
+```
+site/user/tools/pac-allocator/index.html        OK  197 536 bytes
+site/{it,fr,es}/user/tools/pac-allocator/…      OK  all three
+find site -path '*portfolio-rebalancer*'        0   (positive control: removed page gone)
+find site/user/fx -name index.html             15   (positive control: matcher works)
+```
+
+> ⚠️ **`check-links` cannot see this path, and never could.** `dev.py:1073-1195` scans
+> frontend `.ts`/`.svelte` for literal `/mkdocs/` strings (Scope 1) and
+> `fx_providers`/`asset_source_providers` for `docs_url` (Scope 2). The tool path lives in
+> neither: it is `ToolDocumentation(path=…)` in `tool_plugins/`, read at runtime.
+> `grep -rl 'user/tools' frontend/src` → **0**; `grep -c 'tool_plugins' dev.py` → **0**.
+>
+> So a deleted or renamed PAC page would have left `check-links` green while the product's
+> Documentation button 404'd. This is the `ToolDocumentation.path` precedent with its
+> consequence now measured: the gate exists, and the reference is outside it.
+
+### CHANGELOG — last, and one of its two facts was already false
+
+Both entries lived under `[Unreleased]` and had never appeared in a dated chapter, so they
+could be rewritten in place rather than retracted in a new one.
+
+```
+'Portfolio Rebalancer'   1 -> 0    the tool does not exist
+'(P1)'                   2 -> 0    the prototype was never released
+'monetary step'          1 -> 0    FALSE FACT: monetary_step is gone from the backend
+                                   (0 files), only quantity_step survives (4 files)
+```
+
+The rewritten entry names what ships (a planner that computes whole-unit purchase plans and
+says whether its answer is proven optimal, proven infeasible, or merely the best found), and
+names what does not (**the interactive interface is not ready yet**). No date is promised,
+because no date is measurable.
