@@ -1216,6 +1216,45 @@ branch o worktree per nascondere un residuo non integrato. La prova finale e la
 presenza nel target della revisione consegnata e l'assenza di modifiche da perdere,
 non la sola scomparsa dei conflitti.
 
+### 14.7 Merge dell'albero risk: la migrazione `003` va unificata dopo il rientro
+
+**Rilevato il 2026-09-21, prima che il merge avvenga.** L'albero di sessioni risk
+management e il nostro lavoro hanno prodotto **due migrazioni Alembic diverse con lo
+stesso numero e lo stesso genitore**:
+
+| Ramo | File | `revision` | `down_revision` |
+|---|---|---|---|
+| `dev_release2` e discendenti | `003_user_onboarding_progress.py` | `003_user_onboarding_progress` | `5b1333fa6b07` |
+| 11 rami `e-alfy-risk-*`, `e-alfy-s3-*`, `e-alfy-h-*`, `e-alfy-vigilant-*` | `003_asset_benchmark_flag_and_taxonomy.py` | `003_asset_benchmark_flag_and_taxonomy` | `5b1333fa6b07` |
+
+**Git non puo segnalarlo.** I due file hanno nomi diversi, quindi il merge li porta
+entrambi e riesce senza un solo conflitto testuale. Il difetto compare dopo, al primo
+`alembic upgrade head`, come *multiple head revisions are present*: un errore che non
+nomina nessuno dei due autori e che si manifesta lontano dalla modifica che lo ha
+causato. E' una **collisione semantica senza conflitto testuale**: i due lati non
+toccano le stesse righe, quindi il merge non ha nulla da segnalare e riesce pulito.
+Vale la regola gia scritta in 14.3 - un merge senza conflitti non prova la
+compatibilita - applicata qui a un file che nessuno dei due lati ha modificato.
+
+**Lavoro richiesto a merge concluso**, non prima: sostituire le due migrazioni con
+**una sola migrazione nuova, con un nome proprio nuovo**, che contenga le operazioni
+necessarie a entrambi i task - la tabella di avanzamento onboarding e il flag benchmark
+con la tassonomia asset. Le due `003` esistenti vengono rimosse: non si tratta di
+reincatenarle in sequenza, ma di consegnarne una sola che faccia entrambe le cose.
+Servono `upgrade()` e `downgrade()` completi per l'unione, non la somma meccanica dei
+due corpi.
+
+**Conseguenza da mettere in conto.** Un database che ha gia applicato una delle due
+`003` ha quella revisione scritta in `alembic_version`; quando la migrazione sparisce,
+Alembic non la ritrova piu. Sui database di sviluppo e test si risolve con
+`./dev.py db create-clean` (e `--test` per la corsia di test), che e' la via prevista
+per i DB non di produzione. Va verificato prima del rientro che nessuna installazione
+da proteggere abbia gia ricevuto una delle due.
+
+**Gate di chiusura**: `./dev.py db check` deve riportare **un solo head**, l'unione
+deve salire e scendere su un DB popolato, e le suite che toccano onboarding e
+tassonomia devono passare sul risultato combinato, non sui due rami separati.
+
 ## Appendice A - I 25 marker attuali, senza allargare il backlog
 
 | # | Simbolo / file:riga | Relazione con il round |
