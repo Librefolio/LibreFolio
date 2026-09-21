@@ -171,6 +171,28 @@ vivo, che porta corsia, finestra e data.
 > 🔑 Formulazione di S3: **un commento può affermare ciò che è vero per costruzione, e deve
 > rimandare per ciò che è vero per misurazione.**
 
+**Ⓖ Qualunque selettore `services risk-*` svuota la corsia.** Non solo `risk-all`: anche
+`services risk-simulation` fa `db create-clean`. **Il sintomo non assomiglia alla causa** — una
+sonda che muore con `sqlalchemy.exc.NoResultFound` cercando `e2e_test_user`, cioè **una sonda che
+sembra rotta**. Misurato da S4 dopo una corsa di `test-author` nella sua corsia.
+
+> ✅ **Ordine obbligatorio**: `api risk` **prima** di qualunque `services risk-*`, oppure
+> `db populate --force` in mezzo. **Sbagliarlo fallisce sempre, non spesso.**
+
+**Ⓗ Un'etichetta falsa sopravvive a una verifica corretta.** S4 ha consegnato a `test-author` una
+fixture **ricostruita** etichettandola *«real measured»*. Lo specialista **ha trovato
+l'incoerenza aritmetica** (`×3,386` contro `×3,33`) **e ha poi firmato quella riga come
+"measured on the running backend"**, perché la verifica interroga **il numero** e non **la sua
+provenienza**.
+
+> 🔑 **Quando consegni un numero a un altro mandato, l'etichetta è parte del dato.** Se è
+> ricostruito, dillo: chi lo riceve controllerà l'aritmetica, non l'origine.
+
+⚠️ **E i letterali di una fixture non sono costanti.** Fra due popolazioni dello stesso giorno:
+`fattore 29,90 → 27,46`, `n 93 → 96`. **I verdetti invece non si muovono.** Una fixture di
+letterali va commentata come *«istantanea, non costante»*, altrimenti il prossimo che li
+"aggiorna" credendoli stabili **scrive un rosso dal nulla**.
+
 ## Definizione di finito
 
 **Il coordinatore guarda la tua superficie nel browser, in italiano, prima che tu chiuda.**
