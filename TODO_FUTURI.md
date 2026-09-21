@@ -1586,3 +1586,97 @@ I 7 `risk.warnings.*` che emergono sono **tutti emessi dal backend** → vivi. L
 
 **Priorità**: media. **Non blocca nulla**, ma ogni misura i18n fatta finora su quei namespace
 va riletta come «non verificata» invece che come «pulita».
+
+---
+
+## 🔴 I 110 `raise ValueError` del motore di rischio — il metodo per separarli, non il risultato
+
+**Aperto da B, round 3, 21 Set 2026.** Il pacchetto «errori come codici» ha chiuso B1/B2/B4;
+resta l'enumerazione, e **quello che non va rideriso è il metodo**.
+
+### Il perimetro, misurato due volte
+
+`grep -r "raise ValueError(" services/risk services/risk_plugins` e un parser AST indipendente
+danno **entrambi 172**, quindi la taglia non è un artefatto del pattern. ⚠️ **Ma `172` conta una
+forma sintattica, non una categoria**: `RiskUnavailableError` e `RiskScopeNotFoundError` sono
+**sottoclassi di `ValueError`**, e quel grep **non vede i 41 siti già instradati a un codice**.
+
+Ripartiti per **confine di conversione** (verificato per modulo, non stimato):
+
+| confine | come si verifica | n |
+|---|---|---:|
+| registrazione plugin = import time | `provider_registry.py:322,365` → `validate_definition()` | 9 |
+| avvio / YAML dell'operatore | `load_risk_scenario_catalog()` singleton | 8 |
+| costruzione del pool worker | `SpawnWorkerPool.__init__` | 5 |
+| `validate_params()` → `ValidationError` | **eseguendolo** | 28 |
+| richiesta motore dentro il `try` | `portfolio_optimization.py:170→221` | 8 |
+| sottoprocesso worker | `SpawnWorkerRemoteError` → `_remote_error_code` | 4 |
+| **il catch-all di `service.py`** | il resto | **110** |
+
+**9+8+5+28+8+4+110 = 172.** I 110 sono il lavoro che resta.
+
+### 🔑 Il criterio — e la scorciatoia che sembra giusta e non lo è
+
+Il primo tentativo è stato *«confronta il guard interno con i vincoli `Field(...)` del modello
+params: se `Field` non copre il predicato, c'è un buco»*. Applicato a `path_count`
+(`ge=256, le=100_000`, **nessun vincolo di potenza di due**) contro *«QMC paths must be a power
+of two»* dava un buco netto.
+
+🔴 **È falso, e l'ha ucciso un probe:** `SimulationParams.model_validate({sampling_method:'qmc',
+path_count:1000})` solleva già `ValidationError`. **Il contratto esterno non è `Field(...)`: è
+`validate_params()` per intero, `model_validator` compresi** — e quei validatori chiamano metodi
+helper che un classificatore statico marca come «non in un validatore».
+
+> **Leggere `Field(...)` risponde a una domanda diversa da «questo payload viene accettato?».**
+> L'unico modo di saperlo è **chiamare `validate_params`**.
+
+**Il criterio corretto è strutturale.** `validate_params()` è funzione **pura dei parametri**:
+non vede storia, portafoglio, calendario.
+
+| classe | predicato | `validate_params` può decidere? | verdetto |
+|---|---|---|---|
+| **C1** | soli parametri | sì — **ma va eseguito per sapere se lo fa** | se accetta → causabile |
+| **C2** | **parametro × dato di runtime** | 🔴 **no, strutturalmente** | **causabile per costruzione** |
+| **C3** | soli argomenti interni | no, e non deve | invariante → deve esplodere |
+
+⚠️ *«Sta in un plugin»* non distingue niente. *«Il validatore dei parametri non può vederne
+metà»* sì.
+
+### Il banco, per enumerare i 110
+
+1. per ogni analitica, **chiamare `validate_params`** su payload ai bordi dichiarati;
+2. eseguire sotto `sys.settrace` con evento `exception`, filtrato su `app/services/risk`:
+   registra **ogni `raise`, con file e riga, anche se poi viene catturato**;
+3. correlare ogni riga colpita con il `RiskErrorCode` che esce.
+
+**Riga colpita = causabile, provato per costruzione.** Riga mai colpita = **«non provata
+raggiungibile»**, mai «irraggiungibile»: un banco che non colpisce dice che *non ha colpito*.
+
+> 🔑 **E c'è una ragione per farlo DOPO B1(b), non prima**: da B1(b) quei 110 siti **loggano**.
+> Il banco traccia ciò che una sonda riesce a raggiungere; **il log registra ciò che gli utenti
+> colpiscono davvero**. Chi lo farà partirà da occorrenze reali con stack veri.
+
+### ⚠️ Ogni guardia C2 va accompagnata dal suo controllo
+
+Una prova di rifiuto **senza** una prova di accettazione non dimostra che la causa sia quella
+dichiarata. Nel primo giro di B entrambi i rami morivano su `historical_digest` e il probe
+**non discriminava niente**: sembrava una prova, e non lo era.
+
+### 📌 Due conseguenze già prodotte da B1(b), da non «riparare» per sbaglio
+
+**①** `risk.errors.undefined_metric` **non ha più un emettitore di produzione.** Era emesso da
+una sola riga — il catch-all — e quella riga era il difetto. **La chiave va tenuta in tutte e
+quattro le lingue**: `UNDEFINED_METRIC` resta il punto di dichiarazione per un plugin che
+sappia che la metrica è indefinita, la strada è coperta da un test, e un test di parità
+enum↔catalogo la tiene viva.
+
+> ⚠️ **Questo contraddice la riga più in alto in questo file** — *«le 14 `risk.errors.*` sono
+> tutte emesse dal backend → vive»* — che era **vera quando è stata scritta**. Un audit che
+> rileggesse `undefined_metric` come orfana e ne cancellasse la chiave **riaprirebbe esattamente
+> il difetto che B1(b) ha chiuso**: il fallback silenzioso.
+
+**②** `portfolio_optimization.py:221` ha **lo stesso difetto latente** che B2 ha corretto in
+`simulation.py`: un `except ValueError → INVALID_PARAMETERS` che avvolge **l'intera**
+costruzione della richiesta, quindi converte anche le violazioni di invariante del motore in
+«parametri non validi». **Un `try` allargato è un `except` che presume.** Fuori dal perimetro di
+B, non riparato, misurato.

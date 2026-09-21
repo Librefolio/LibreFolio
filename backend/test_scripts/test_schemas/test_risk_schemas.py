@@ -1,7 +1,9 @@
 """Strict schema tests for canonical risk series and metadata."""
 
+import json
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -57,6 +59,7 @@ from backend.app.schemas.risk import (
     RiskVarCvarOutput,
 )
 from backend.app.schemas.risk_scenarios import (
+    RISK_SCENARIO_OFFICIAL_LANGUAGES,
     RiskHistoricalReplayScenario,
     RiskHypotheticalShockScenario,
     RiskScenarioDimension,
@@ -1179,3 +1182,85 @@ def test_var_cvar_chart_fields_are_omissible_because_the_additive_design_rests_o
     assert payload["return_bins"] == []
     assert payload["var_bin_edge"] is None
     assert RiskVarCvarOutput.model_validate(payload) == output
+
+
+def _i18n_catalogue(language: str) -> dict:
+    """One frontend translation catalogue, read from disk.
+
+    Resolved by walking UP from this file rather than from the process CWD,
+    because pytest is invoked from the repository root in the runner and from
+    the file's own directory when a developer runs one test — a CWD-relative
+    path silently reads nothing in the second case, which is the failure mode
+    this whole test exists to prevent.
+    """
+    root = Path(__file__).resolve().parents[3]
+    path = root / "frontend" / "src" / "lib" / "i18n" / f"{language}.json"
+    # A MISSING catalogue must be a RED, never a skip. The defect this test
+    # guards against is "a code that renders as a generic fallback because no
+    # key exists"; a test that quietly passes when it cannot find the
+    # catalogues at all would be the same defect wearing the test's name.
+    assert path.is_file(), f"translation catalogue not found: {path}"
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def test_every_risk_error_code_has_a_sentence_in_every_official_language():
+    """Every ``RiskErrorCode`` must be renderable, in all four languages.
+
+    WHY THIS IS A TEST AND NOT A CONVENTION
+    ---------------------------------------
+    ``translateErrorCode(code, $t, 'risk.errors.unknown')`` asks svelte-i18n for
+    ``risk.errors.<code>``; svelte-i18n returns the KEY ITSELF when no message
+    exists, and the helper turns that into the generic fallback sentence. So a
+    backend that starts emitting a code nobody translated does not crash, does
+    not log, and does not show the key: it shows
+
+        "This measurement did not return a result."
+
+    which is indistinguishable from an empty-but-valid result. The failure is
+    silent, plausible, and permanent — a declared behaviour that is never
+    rendered. Nothing else in the build can see it: the backend does not read
+    the catalogues, and the frontend never enumerates the enum.
+
+    This test is the only place where the two halves are compared, which is why
+    it asserts the FULL enum rather than a list of codes someone remembered.
+    """
+    for language in RISK_SCENARIO_OFFICIAL_LANGUAGES:
+        catalogue = _i18n_catalogue(language)
+        sentences = catalogue.get("risk", {}).get("errors", {})
+
+        missing = sorted(code.value for code in RiskErrorCode if code.value not in sentences)
+        assert not missing, f"{language}.json has no risk.errors entry for: {', '.join(missing)}"
+
+        # The fallback the helper is CALLED with. Without it the degraded path
+        # prints the literal key `risk.errors.unknown` on screen, so the guard
+        # against a missing code would itself be the next leak.
+        assert "unknown" in sentences, f"{language}.json is missing the risk.errors.unknown fallback"
+
+        # A key that exists but is blank renders as nothing at all: the error
+        # row appears with no text, which reads as a layout bug rather than as
+        # a message. Present-but-empty is not the same as present.
+        blank = sorted(key for key, value in sentences.items() if not isinstance(value, str) or not value.strip())
+        assert not blank, f"{language}.json has empty risk.errors sentences: {', '.join(blank)}"
+
+
+def test_risk_error_catalogues_agree_across_languages():
+    """The four catalogues carry the SAME key set.
+
+    Parity is asserted between the catalogues and not only against the enum
+    because the two drift in different directions: the enum-vs-catalogue check
+    above catches a code nobody translated, while this one catches a key added
+    to ``en`` and forgotten in ``fr`` — which renders an English sentence to a
+    French user with no error anywhere, the quietest of the two failures.
+    """
+    per_language = {language: set(_i18n_catalogue(language).get("risk", {}).get("errors", {})) for language in RISK_SCENARIO_OFFICIAL_LANGUAGES}
+
+    reference_language = RISK_SCENARIO_OFFICIAL_LANGUAGES[0]
+    reference = per_language[reference_language]
+    for language, keys in per_language.items():
+        assert keys == reference, f"{language}.json risk.errors differs from {reference_language}.json: only-in-{language}={sorted(keys - reference)}, missing-from-{language}={sorted(reference - keys)}"
+
+    # Pin the relationship, not the number: the catalogues are exactly the enum
+    # plus the single fallback. Asserting a literal count would have to be
+    # edited by anyone adding a legitimate code, and an assertion people edit
+    # to make green is an assertion that stops meaning anything.
+    assert reference == {code.value for code in RiskErrorCode} | {"unknown"}
