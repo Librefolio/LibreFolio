@@ -132,6 +132,13 @@ async def test_risk_catalog_requires_auth_and_lists_plugins():
         assert response.status_code == 200
         assert [item["analytic_code"] for item in response.json()["items"]] == [
             "asset_risk_return",
+            # The weightless multi-asset family: one scope, one mode each, so the
+            # catalogue cross-product offers no pair that has never been run.
+            "asset_set_comparison",
+            "asset_set_drawdown",
+            "asset_set_kpi",
+            "asset_set_risk_return",
+            "asset_set_var",
             "comparison",
             "correlation",
             "drawdown_summary",

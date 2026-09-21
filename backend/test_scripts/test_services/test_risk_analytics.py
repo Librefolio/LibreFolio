@@ -232,6 +232,14 @@ def test_registry_discovers_all_deterministic_analytics():
     definitions = RiskAnalyticRegistry.list_definitions()
     assert [definition.analytic_code for definition in definitions] == [
         "asset_risk_return",
+        # The weightless multi-asset family, for the ASSET_SET scope. Each one
+        # serves a scope that has no aggregate series, so each publishes a list
+        # of per-asset rows and no set-level figure.
+        "asset_set_comparison",
+        "asset_set_drawdown",
+        "asset_set_kpi",
+        "asset_set_risk_return",
+        "asset_set_var",
         "comparison",
         "correlation",
         "drawdown_summary",

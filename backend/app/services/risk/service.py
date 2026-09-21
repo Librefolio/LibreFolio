@@ -708,6 +708,19 @@ class RiskService:
         if plan.request.analytic_code in {
             "risk_contribution",
             "portfolio_optimization",
+            # The weightless multi-asset family. A scope with no weights has no
+            # aggregate series, so `context.n_observations` — which counts the
+            # scope's own primary returns — is zero for it. Left on that branch
+            # these analytics are refused for insufficient history before their
+            # compute() is ever called, whatever their declared minimum: the
+            # gate would be measuring the absence of a series they never asked
+            # for. What they consume is the prepared set, so that is what is
+            # counted, exactly as it already is for the two analytics above.
+            "asset_set_kpi",
+            "asset_set_var",
+            "asset_set_drawdown",
+            "asset_set_risk_return",
+            "asset_set_comparison",
         }:
             return context.prepared_series.n_observations if context.prepared_series is not None else 0
         if plan.request.analytic_code == "stress":
