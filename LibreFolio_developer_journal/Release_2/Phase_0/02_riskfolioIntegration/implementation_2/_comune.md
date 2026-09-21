@@ -484,3 +484,29 @@ Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'typescript'
 📌 `dev.py server --help` offre `--rebuild` per **forzare** la ricostruzione e **nulla per
 saltarla**. → **`api <qualunque>` non è eseguibile in un worktree senza `npm ci`**, e ogni numero
 `api …` ereditato da un briefing è **una previsione**.
+
+### Ⓡ — la corsia che si guarda è spesa: misurare e guardare non si fanno nella stessa cartella
+
+**Trovato da E il 21 Set**, che aveva buttato la propria corsia alle 22:55 e l'ha vista
+**ricomparire alle 23:01** — ricreata dalla corsa dei cancelli del coordinatore sulla
+revisione fusa.
+
+```
+/tmp/librefolio-r3-{a,b,c,e,main,p}   tutte lasciate dietro da una corsa di cancelli
+```
+
+🔴 **E la conseguenza si somma a Ⓓ**: navigare l'app riscrive il `close` di oggi, quindi
+**una corsia guardata smette di essere una corsia di misura** — e *una corsia guardata due
+volte non è uguale nemmeno a sé stessa*.
+
+✅ **Regola**: la review visiva usa **una corsia dedicata**, mai quella dei cancelli.
+
+```bash
+--data-dir /tmp/librefolio-<round>-review     # si popola, si guarda, si butta
+--data-dir /tmp/librefolio-<round>-main       # si misura, non si apre mai nel browser
+```
+
+📌 **E la condotta di E vale quanto la regola**: *«non l'ho cancellata, ed è deliberato — se
+lo facessi, il fatto che una corsa dei cancelli lasci dietro una corsia non lo saprebbe
+nessuno, e il prossimo giro succederebbe su una corsia da cui qualcuno misura»*.
+**Ripulire un effetto collaterale è il modo più efficace di impedire che venga scoperto.**
