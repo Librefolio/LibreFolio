@@ -23,6 +23,7 @@
     import AssetSearchAutocomplete from './AssetSearchAutocomplete.svelte';
     import AssetIcon from './AssetIcon.svelte';
     import ProviderAssignmentSection from './ProviderAssignmentSection.svelte';
+    import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import ProviderComparisonModal from './ProviderComparisonModal.svelte';
     import type {DiffItem} from './ProviderComparisonModal.svelte';
     import IdentifierPrimaryChooser from './IdentifierPrimaryChooser.svelte';
@@ -103,6 +104,8 @@
         prefillData?: Partial<AssetData> | null;
         /** Z-index override for stacked modal contexts. */
         zIndex?: number;
+        /** Tour-only preview: no create/update action can be submitted. */
+        tourPreview?: boolean;
         /**
          * Pre-fill the "Search Online" input with this query when the modal opens in create mode.
          * Useful for the BRIM import wizard: pass the extracted symbol/ISIN/name so the user
@@ -162,6 +165,7 @@
         editData = null,
         prefillData = null,
         zIndex = 50,
+        tourPreview = false,
         initialSearchQuery = '',
         initialSearchBadges = [],
         searchHints = [],
@@ -592,6 +596,10 @@
                 if (!editMode && initialNoProvider) {
                     providerNoProvider = true;
                     providerProbe.configure();
+                }
+                if (!editMode && tourPreview) {
+                    providerNoProvider = false;
+                    providerExpanded = true;
                 }
                 initialSnapshot = buildFormSnapshot();
                 initialClassification = $state.snapshot(buildClassificationParams(shortDescription, sectorDistribution, geographicDistribution));
@@ -1235,7 +1243,7 @@
     // =========================================================================
 
     function handleSave() {
-        if (!isValid) return;
+        if (tourPreview || !isValid) return;
         // I-bis #2 — retest 1.3 follow-up: when the user changes the provider
         // dropdown, ``ProviderAssignmentSection.handleProviderChange`` clears
         // the identifier on purpose (different providers use different ID
@@ -1607,6 +1615,10 @@
 
     function handleClose() {
         if (saving) return;
+        if (tourPreview) {
+            doClose();
+            return;
+        }
         if (isDirty) {
             showDiscardConfirm = true;
             return;
@@ -1663,37 +1675,39 @@
             </div>
         {/if}
         <!-- Search Online -->
-        {#if !editMode && initialSearchBadges.length > 0}
-            <!-- All three (title, badges, input) in one space-y-1.5 wrapper → uniform 6px gaps -->
-            <div class="space-y-1.5">
-                <div class="flex items-center gap-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    <Search size={12} />
-                    <span>{$t('assets.modal.searchOnline')}</span>
+        <div use:guideAnchor={'asset.search'} data-testid="asset-tour-search">
+            {#if !editMode && initialSearchBadges.length > 0}
+                <!-- All three (title, badges, input) in one space-y-1.5 wrapper → uniform 6px gaps -->
+                <div class="space-y-1.5">
+                    <div class="flex items-center gap-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        <Search size={12} />
+                        <span>{$t('assets.modal.searchOnline')}</span>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        <span class="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500 shrink-0">
+                            <Search size={11} class="opacity-60" />
+                            {$t('assets.modal.searchSuggestions')}:
+                        </span>
+                        {#each initialSearchBadges as badge, i}
+                            {@const color = getIndexColor(i, 200)}
+                            <button type="button" style="background-color:{color.bg};color:{color.text}" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-opacity hover:opacity-80" onclick={() => (activeSearchQuery = badge.value)}>
+                                {badge.label}
+                            </button>
+                        {/each}
+                    </div>
+                    {#key activeSearchQuery}
+                        <AssetSearchAutocomplete onselect={handleSearchSelect} initialQuery={activeSearchQuery} hideTitle={true} hints={searchHints} />
+                    {/key}
                 </div>
-                <div class="flex flex-wrap items-center gap-1.5">
-                    <span class="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500 shrink-0">
-                        <Search size={11} class="opacity-60" />
-                        {$t('assets.modal.searchSuggestions')}:
-                    </span>
-                    {#each initialSearchBadges as badge, i}
-                        {@const color = getIndexColor(i, 200)}
-                        <button type="button" style="background-color:{color.bg};color:{color.text}" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-opacity hover:opacity-80" onclick={() => (activeSearchQuery = badge.value)}>
-                            {badge.label}
-                        </button>
-                    {/each}
-                </div>
+            {:else}
                 {#key activeSearchQuery}
-                    <AssetSearchAutocomplete onselect={handleSearchSelect} initialQuery={activeSearchQuery} hideTitle={true} hints={searchHints} />
+                    <AssetSearchAutocomplete onselect={handleSearchSelect} initialQuery={editMode ? '' : activeSearchQuery} hints={searchHints} />
                 {/key}
-            </div>
-        {:else}
-            {#key activeSearchQuery}
-                <AssetSearchAutocomplete onselect={handleSearchSelect} initialQuery={editMode ? '' : activeSearchQuery} hints={searchHints} />
-            {/key}
-        {/if}
+            {/if}
+        </div>
 
         <!-- Asset Details -->
-        <div class="space-y-3">
+        <div class="space-y-3" use:guideAnchor={'asset.identity'} data-testid="asset-tour-identity">
             <div class="flex items-center justify-between">
                 <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     {$t('assets.modal.assetDetails')}
@@ -1903,7 +1917,7 @@
         </div>
 
         <!-- More Info (collapsible — Identifiers + Classification) -->
-        <div class="border border-gray-200 dark:border-slate-700 rounded-lg">
+        <div class="border border-gray-200 dark:border-slate-700 rounded-lg" use:guideAnchor={'asset.provider'} data-testid="asset-tour-provider">
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <div
                 class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-50 dark:bg-slate-800 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors cursor-pointer select-none"
@@ -2154,18 +2168,20 @@
             >
                 {$t('common.cancel')}
             </button>
-            <button
-                type="button"
-                onclick={handleSave}
-                disabled={!isValid || saving}
-                data-testid="asset-modal-save"
-                class="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-libre-green rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-                {#if saving}
-                    <Loader2 size={14} class="animate-spin" />
-                {/if}
-                <span>{editMode ? $t('assets.modal.saveChanges') : $t('assets.modal.createAsset')}</span>
-            </button>
+            {#if !tourPreview}
+                <button
+                    type="button"
+                    onclick={handleSave}
+                    disabled={!isValid || saving}
+                    data-testid="asset-modal-save"
+                    class="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-libre-green rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    {#if saving}
+                        <Loader2 size={14} class="animate-spin" />
+                    {/if}
+                    <span>{editMode ? $t('assets.modal.saveChanges') : $t('assets.modal.createAsset')}</span>
+                </button>
+            {/if}
         </div>
     </div>
 </ModalBase>

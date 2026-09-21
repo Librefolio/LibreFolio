@@ -4,14 +4,12 @@ import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {generateZodClientFromOpenAPI} from 'openapi-zod-client';
 import {adaptGeneratedToolSchemas} from './tools-codec-ast.mjs';
-import {
-    assertLockedToolchain, publishGenerationSet, validateGeneratedTypes, withToolGenerationLock,
-} from './tools-generation-io.mjs';
+import {assertLockedToolchain, publishGenerationSet, validateGeneratedTypes, withToolGenerationLock} from './tools-generation-io.mjs';
 import {componentName, generatorSchemaRefiner, invariant, prepareToolDocument} from './tools-schema-document.mjs';
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const defaultApiDirectory = resolve(scriptDirectory, '../src/lib/api');
-const lexicalOrder = (left, right) => left < right ? -1 : left > right ? 1 : 0;
+const lexicalOrder = (left, right) => (left < right ? -1 : left > right ? 1 : 0);
 
 export function renderToolContractMap(prepared, generation) {
     const entries = new Map();
@@ -33,16 +31,15 @@ export function renderToolContractMap(prepared, generation) {
         lines.push(`${JSON.stringify(code)}: {`);
         for (const entry of versions.sort((left, right) => lexicalOrder(left.contractVersion, right.contractVersion))) {
             lines.push(`${JSON.stringify(entry.contractVersion)}: {`);
-            for (const key of ['toolCode', 'contractVersion', 'schemaFingerprint', 'componentKey', 'uiContractVersion']) {
+            for (const key of ['toolCode', 'contractVersion', 'schemaFingerprint', 'componentKey', 'uiVersion']) {
                 lines.push(`${key}: ${JSON.stringify(entry[key])},`);
             }
-            lines.push(`input: generated.${componentName(entry.input, prepared.schemas)},`,
-                `output: generated.${componentName(entry.output, prepared.schemas)},`,
-                `operations: ${JSON.stringify(entry.operations)},`, '},');
+            lines.push(`input: generated.${componentName(entry.input, prepared.schemas)},`, `output: generated.${componentName(entry.output, prepared.schemas)},`, `operations: ${JSON.stringify(entry.operations)},`, '},');
         }
         lines.push('},');
     }
-    lines.push('} as const;',
+    lines.push(
+        '} as const;',
         'export type ToolContractMap = typeof toolContractMap;',
         'export type ToolCode = keyof ToolContractMap;',
         '// Distribute code/version unions instead of intersecting their version keys.',
@@ -52,7 +49,8 @@ export function renderToolContractMap(prepared, generation) {
         '? ToolContractMap[C][V] extends { [P in K]: infer Codec extends z.ZodType<unknown, z.ZodTypeDef, unknown> } ? Codec : never',
         ': never : never;',
         'export type ToolInput<C extends ToolCode, V extends ToolVersion<C>> = z.input<ToolCodec<C, V, "input">>;',
-        'export type ToolOutput<C extends ToolCode, V extends ToolVersion<C>> = z.output<ToolCodec<C, V, "output">>;');
+        'export type ToolOutput<C extends ToolCode, V extends ToolVersion<C>> = z.output<ToolCodec<C, V, "output">>;',
+    );
     return `${lines.join('\n')}\n`;
 }
 
@@ -88,15 +86,21 @@ export async function generateToolsClient({apiDirectory = defaultApiDirectory} =
         const recordRuntime = await readFile(join(scriptDirectory, 'tools-record-runtime.hbs'), 'utf8');
         const codecs = adaptGeneratedToolSchemas(generated, prepared, generation, recordRuntime);
         const contractMap = renderToolContractMap(prepared, generation);
-        validateGeneratedTypes(new Map([
-            [join(apiDirectory, 'generated-tools.ts'), codecs],
-            [join(apiDirectory, 'tool-contract-map.generated.ts'), contractMap],
-        ]));
-        await publishGenerationSet(apiDirectory, new Map([
-            [inputName, original],
-            ['generated-tools.ts', codecs],
-            ['tool-contract-map.generated.ts', contractMap],
-        ]), new Map([[inputName, original]]));
+        validateGeneratedTypes(
+            new Map([
+                [join(apiDirectory, 'generated-tools.ts'), codecs],
+                [join(apiDirectory, 'tool-contract-map.generated.ts'), contractMap],
+            ]),
+        );
+        await publishGenerationSet(
+            apiDirectory,
+            new Map([
+                [inputName, original],
+                ['generated-tools.ts', codecs],
+                ['tool-contract-map.generated.ts', contractMap],
+            ]),
+            new Map([[inputName, original]]),
+        );
         return {generation, toolCount: prepared.manifest.tools.length};
     });
 }

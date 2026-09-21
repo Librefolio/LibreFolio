@@ -5,14 +5,19 @@ from decimal import Decimal
 
 import httpx
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.config import get_settings
+from backend.app.db.session import get_async_engine
+from backend.app.services import user_service
+from backend.test_scripts.test_db_config import verify_test_database
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success
 
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30
+SOLE_ADMIN_DELETE_DETAIL = "Cannot delete account: you are the only administrator"
 
 
 async def create_test_user(client: httpx.AsyncClient) -> str:
@@ -23,6 +28,33 @@ async def create_test_user(client: httpx.AsyncClient) -> str:
     if s := login_resp.cookies.get("session"):
         client.cookies.set("session", s)
     return username
+
+
+async def get_current_user_id(client: httpx.AsyncClient) -> int:
+    resp = await client.get(f"{API_BASE}/auth/me", timeout=TIMEOUT)
+    assert resp.status_code == 200, resp.text
+    return resp.json()["user"]["id"]
+
+
+async def delete_current_test_user(
+    client: httpx.AsyncClient,
+    user_id: int,
+) -> None:
+    """Delete this test's account, including the isolated sole-admin case."""
+    response = await client.delete(
+        f"{API_BASE}/auth/users/me",
+        timeout=TIMEOUT,
+    )
+    if (
+        response.status_code == 400
+        and response.json().get("detail") == SOLE_ADMIN_DELETE_DETAIL
+    ):
+        is_test_db, _ = verify_test_database()
+        assert is_test_db, "Refusing sole-admin cleanup outside the test database"
+        async with AsyncSession(get_async_engine()) as session:
+            assert await user_service.delete_user(session, user_id)
+        return
+    assert response.status_code == 200, response.text
 
 
 async def create_broker(client: httpx.AsyncClient) -> int:
@@ -188,14 +220,59 @@ class TestPortfolioWAC:
             assert s[1]["effect"] == "reduce"
             print_success("OK SELL pool 10->7")
 
-    async def test_a6_nonexistent_asset(self):
-        """A6: Non-existent asset -> empty series."""
-        print_section("A6: Non-existent asset")
+    async def test_a6_authorized_broker_with_verified_missing_asset(self):
+        """A6: An authorized Broker plus a verified-missing Asset -> empty series."""
+        print_section("A6: Authorized Broker with missing Asset")
         async with httpx.AsyncClient() as client:
             await create_test_user(client)
-            result = await portfolio_wac(client, [{"broker_id": 99999, "asset_id": 99999}])
-            assert result["results"][0]["series"] == []
-            print_success("OK graceful empty")
+            user_id = await get_current_user_id(client)
+            broker_id = None
+            asset_id = None
+            asset_deleted = False
+            try:
+                broker_id = await create_broker(client)
+                asset_id = await create_asset(client)
+                deleted = await client.delete(
+                    f"{API_BASE}/assets",
+                    params={"asset_ids": [asset_id]},
+                    timeout=TIMEOUT,
+                )
+                assert deleted.status_code == 200, deleted.text
+                deleted_row = next(
+                    row
+                    for row in deleted.json()["results"]
+                    if row["asset_id"] == asset_id
+                )
+                assert deleted_row["success"] is True
+                asset_deleted = True
+
+                result = await portfolio_wac(
+                    client,
+                    [{"broker_id": broker_id, "asset_id": asset_id}],
+                )
+                missing_asset_result = next(
+                    row
+                    for row in result["results"]
+                    if row["broker_id"] == broker_id
+                    and row["asset_id"] == asset_id
+                )
+                assert missing_asset_result["series"] == []
+                print_success("OK graceful empty")
+            finally:
+                if asset_id is not None and not asset_deleted:
+                    await client.delete(
+                        f"{API_BASE}/assets",
+                        params={"asset_ids": [asset_id]},
+                        timeout=TIMEOUT,
+                    )
+                if broker_id is not None:
+                    cleanup = await client.delete(
+                        f"{API_BASE}/brokers",
+                        params={"ids": [broker_id], "force": True},
+                        timeout=TIMEOUT,
+                    )
+                    assert cleanup.status_code == 200, cleanup.text
+                await delete_current_test_user(client, user_id)
 
     async def test_a7_open_range_end_only(self):
         """A7: OpenDateRangeModel end only -> history up to end."""

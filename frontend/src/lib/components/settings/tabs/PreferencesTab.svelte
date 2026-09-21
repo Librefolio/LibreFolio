@@ -7,7 +7,7 @@
     import {isAxiosError} from 'axios';
     import {onMount} from 'svelte';
     import {debug} from '$lib/debug';
-    import {Coins, Globe, Palette} from 'lucide-svelte';
+    import {Coins, Compass, Globe, Palette} from 'lucide-svelte';
     import type {SelectOption} from '$lib/components/ui/select';
     import SettingsLayout from '$lib/components/settings/SettingsLayout.svelte';
     import SettingSelect from '$lib/components/settings/SettingSelect.svelte';
@@ -16,6 +16,7 @@
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {notify} from '$lib/stores/app/notify.svelte';
     import LoadingSpinner from '$lib/components/ui/feedback/LoadingSpinner.svelte';
+    import OnboardingReplaySection from '$lib/components/onboarding/OnboardingReplaySection.svelte';
 
     // Category definitions
     interface Category {
@@ -28,6 +29,7 @@
         {id: 'display', icon: Globe, labelKey: 'settings.categoryDisplay'},
         {id: 'currency', icon: Coins, labelKey: 'settings.categoryCurrency'},
         {id: 'appearance', icon: Palette, labelKey: 'settings.categoryAppearance'},
+        {id: 'onboarding', icon: Compass, labelKey: 'onboarding.settings.category'},
     ];
 
     // Hardcoded fallback defaults (used only if global settings fail to load)
@@ -134,6 +136,8 @@
                 return ['default_currency'];
             case 'appearance':
                 return ['theme'];
+            case 'onboarding':
+                return [];
             default:
                 return ['language', 'default_currency', 'theme'];
         }
@@ -141,6 +145,7 @@
 
     // Get visible fields (avatar is always visible, handled separately in template)
     let visibleFields = $derived(selectedCategory === '' ? (['language', 'default_currency', 'theme'] as const) : (getCategoryFields(selectedCategory) as (keyof typeof editedValues)[]));
+    let showOnboarding = $derived(selectedCategory === '' || selectedCategory === 'onboarding');
 
     type PreferenceField = keyof typeof editedValues;
 
@@ -341,6 +346,10 @@
                     onreset={() => resetField('theme')}
                 />
             </div>
+        {/if}
+
+        {#if showOnboarding}
+            <OnboardingReplaySection />
         {/if}
     {/if}
 </SettingsLayout>

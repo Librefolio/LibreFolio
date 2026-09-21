@@ -14,6 +14,7 @@
     import {notify} from '$lib/stores/app/notify.svelte';
     import {mergeBrokers} from '$lib/stores/reference/brokerStore';
     import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
+    import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
 
     interface Props {
@@ -22,6 +23,8 @@
         brokerId?: number | null;
         /** Z-index override for stacked modal contexts (e.g. opened from FormModal). */
         zIndex?: number;
+        /** Tour-only preview: form is non-writing and closes without discard prompts. */
+        tourPreview?: boolean;
         initialData?: {
             name?: string;
             description?: string | null;
@@ -38,7 +41,7 @@
         onupdated?: (detail: {id: number}) => void;
     }
 
-    let {isOpen = false, mode = 'create', brokerId = null, zIndex = 50, initialData = {}, onclose, oncreated, onupdated}: Props = $props();
+    let {isOpen = false, mode = 'create', brokerId = null, zIndex = 50, tourPreview = false, initialData = {}, onclose, oncreated, onupdated}: Props = $props();
 
     let loading = $state(false);
     let error: string | null = $state(null);
@@ -100,6 +103,7 @@
             initial_balances?: Array<{code: string; amount: number}>;
         }>,
     ) {
+        if (tourPreview) return;
         const sessionGeneration = getClientSessionGeneration();
         const epoch = openingEpoch;
         const isCurrent = () => alive && isOpen && epoch === openingEpoch && isClientSessionCurrent(sessionGeneration);
@@ -200,6 +204,11 @@
 
     function handleClose() {
         if (loading) return;
+        if (tourPreview) {
+            formTouched = false;
+            onclose?.();
+            return;
+        }
 
         if (formTouched) {
             showDiscardConfirm = true;
@@ -224,7 +233,7 @@
     <div class="flex flex-col max-h-[85vh]" oninput={handleFormChange}>
         <!-- Header (sticky top) -->
         <div class="flex items-center justify-between p-4 border-b border-gray-100 dark:border-slate-700 shrink-0">
-            <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-100">
+            <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-100" data-testid="broker-modal-title" use:guideAnchor={'broker.modal'}>
                 {mode === 'create' ? $_('brokers.addBroker') : $_('brokers.editBroker')}
             </h2>
             <button type="button" class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50" disabled={loading} onclick={handleClose} aria-label={$_('common.close')} data-testid="broker-modal-close">
@@ -238,7 +247,7 @@
         <!-- Form (scrollable area with sticky footer inside) -->
         <div class="overflow-y-auto flex-1 min-h-0 scrollbar-hidden">
             <div class="p-4 pb-0">
-                <BrokerForm {initialData} {loading} {mode} on:cancel={handleClose} on:submit={handleSubmit} />
+                <BrokerForm {initialData} {loading} {mode} {tourPreview} on:cancel={handleClose} on:submit={handleSubmit} />
             </div>
         </div>
     </div>

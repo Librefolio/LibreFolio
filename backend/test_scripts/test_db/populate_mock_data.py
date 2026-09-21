@@ -61,20 +61,24 @@ from backend.app.db import (
     FxConversionRoute,
     FxRate,
     IdentifierType,
+    OnboardingStatus,
     PriceHistory,
     ProviderInputType,
     Transaction,
     TransactionType,
     User,
+    UserOnboardingProgress,
     UserRole,
     UserSettings,
 )
 from backend.app.services.auth_service import hash_password
 from backend.app.services.brim_provider import save_uploaded_file
 from backend.app.services.fx_providers.manual import MANUAL_PRIORITY
+from backend.app.services.onboarding_service import ONBOARDING_FLOW_VERSIONS
 from backend.app.services.portfolio_service import PortfolioService
 from backend.app.services.static_uploads import get_uploads_dir, save_upload, seed_default_avatars
 from backend.app.services.transaction_service import BalanceValidationError, TransactionService
+from backend.app.utils.datetime_utils import utcnow
 
 # Create engine AFTER setup_test_database() has set DATABASE_URL
 # This ensures we use the test database, not the production one
@@ -329,6 +333,64 @@ def populate_brokers(session: Session):
     session.commit()
 
 
+def _grandfather_onboarding_for_test_users(session: Session, users: list[User]) -> None:
+    """Ensure every canonical E2E user is terminal (completed) on all onboarding flows.
+
+    Alembic revision 003_user_onboarding_progress grandfathers *existing* users into
+    every current flow as completed, on the assumption that onboarding is only for
+    genuinely new signups. On a fresh test DB the migration runs before this script
+    creates the canonical E2E users, so it has nobody to grandfather yet: these
+    long-lived, reused fixtures would otherwise start with zero onboarding rows and
+    get lazily marked pending — indistinguishable from a brand-new signup — the first
+    time anything touches onboarding state, redirecting every unrelated E2E spec that
+    logs in as one of them to the welcome flow.
+
+    This mirrors that migration for the canonical users only: insert a completed row,
+    at that flow's current version, for any (user_id, flow) pair that is missing, and
+    repair one that was left pending/skipped by a previous partial run. It never
+    touches rows for a user_id outside `users`, so a genuinely new user created later
+    by an onboarding spec is left alone and still starts pending, exactly like a real
+    signup.
+    """
+    user_ids = [u.id for u in users if u.id is not None]
+    if not user_ids:
+        return
+
+    existing_rows = {(row.user_id, row.flow): row for row in session.exec(select(UserOnboardingProgress).where(UserOnboardingProgress.user_id.in_(user_ids))).all()}  # type: ignore[union-attr]
+
+    inserted = 0
+    repaired = 0
+    for user_id in user_ids:
+        for flow, current_version in ONBOARDING_FLOW_VERSIONS.items():
+            row = existing_rows.get((user_id, flow))
+            now = utcnow()
+            if row is None:
+                session.add(
+                    UserOnboardingProgress(
+                        user_id=user_id,
+                        flow=flow,
+                        status=OnboardingStatus.COMPLETED,
+                        version=current_version,
+                        created_at=now,
+                        updated_at=now,
+                        completed_at=now,
+                    )
+                )
+                inserted += 1
+            elif row.status != OnboardingStatus.COMPLETED or row.version != current_version:
+                row.status = OnboardingStatus.COMPLETED
+                row.version = current_version
+                row.updated_at = now
+                row.completed_at = now
+                row.skipped_at = None
+                session.add(row)
+                repaired += 1
+
+    if inserted or repaired:
+        session.commit()
+    print(f"  ✅ Onboarding grandfathered for {len(user_ids)} canonical test user(s): " f"{inserted} row(s) inserted, {repaired} row(s) repaired")
+
+
 def populate_broker_user_access(session: Session):  # noqa: C901 — sequential fixture seeding steps
     """
     Associate all brokers with test users.
@@ -371,6 +433,13 @@ def populate_broker_user_access(session: Session):  # noqa: C901 — sequential 
             session.add(u)
             print(f"  ✅ Created user: {uname}{' (admin)' if is_admin else ''}")
     session.commit()
+
+    # Grandfather all canonical test users into onboarding as completed — see
+    # _grandfather_onboarding_for_test_users() for why this can't be left to the
+    # migration or to runtime lazy-ensure on a fresh test DB.
+    canonical_usernames = [uname for uname, _email, _pwd, _is_admin in test_user_defs]
+    canonical_users = session.exec(select(User).where(User.username.in_(canonical_usernames))).all()  # type: ignore[union-attr]
+    _grandfather_onboarding_for_test_users(session, canonical_users)
 
     # Now fetch all users
     admin = session.exec(select(User).where(User.username == "e2e_test_admin")).first()

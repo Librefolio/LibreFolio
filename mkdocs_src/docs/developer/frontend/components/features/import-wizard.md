@@ -275,6 +275,82 @@ one before merging.
 
 ---
 
+## 🧑‍🏫 Onboarding: the contextual import guide {: #import-guide-wiring }
+
+The wizard is also one of the two places (with the intro tour) that drives
+`onboardingGuide.svelte.ts` — the `import_guide` flow, one of the three versioned flows in
+`ONBOARDING_FLOW_VERSIONS` (`backend/app/services/onboarding_service.py`). Its eight step ids
+(`IMPORT_GUIDE_STEP_IDS` in `lib/features/onboarding/onboardingGuide.svelte.ts`) are
+`import.upload` / `select` / `analyze` / `assets` / `fix` / `duplicates` / `review` / `bulk` —
+the first seven mirror `StepId` above 1:1, plus a synthetic `bulk` step that has no counterpart
+in the wizard's own stepper.
+
+**Wiring, not scripting.** The wizard never imports guide *content* — it only reports its own
+state to the guide and renders anchors for it to point at:
+
+- An `$effect` keyed on `open` and `currentStepId` calls `onboardingGuide.startImportAt(...)` the
+  first time the modal opens, then `onboardingGuide.setStep(...)` on every subsequent step change
+  — but only while `onboardingGuide.active?.flow === 'import_guide'` and a local `guideHandedOff`
+  flag is `false`. Closing the modal while the guide is still attached calls
+  `onboardingGuide.suspend({resetImport: true})`, which resets the replay cursor to
+  `import.upload`.
+- Anchors are registered with the `guideAnchor` action against `createGuideAnchorRegistry()`
+  (`lib/features/onboarding/guideAnchors.svelte.ts`), a plain `Map<string, HTMLElement>` keyed by
+  string id and read back by `OnboardingOverlayHost.svelte`, which owns the single
+  `OnboardingCoachmark` instance and the per-step copy/anchor table (`steps: Record<GuideStepId,
+  StepPresentation>`). The wizard only calls `use:guideAnchor={importGuideStep(currentStepId)}`
+  on its stepper root — it has no coachmark-specific markup of its own.
+- **Nested-modal suspension** is generic, not wizard-specific: `OnboardingOverlayHost` tracks
+  `document.body.dataset.modalScrollLockCount` (bumped by every open modal, including
+  `ParseDetailModal`, the N-way compare modal, and the asset editor) and derives `suspended =
+  modalDepth > step.allowedModalDepth`. Every `import.*` step declares `allowedModalDepth: 2`
+  except `import.bulk`, which declares `1`. The Import Wizard itself is depth 1, so the coachmark
+  remains visible with one child dialog at depth 2 and hides if that child opens another dialog
+  at depth 3. `TransactionBulkModal` is depth 1; any child dialog at depth 2 hides its coachmark.
+- **The duplicate-recheck bounce** is the wizard driving its own `currentStepId` back to
+  `'duplicates'` inside `handleImport()` when a final `refreshDuplicateReport(true)` reopens that
+  step (see `if (stepIsActive('duplicates')) { currentStepId = 'duplicates'; return; }`). The
+  guide does not special-case this: it just observes the same `currentStepId` effect firing again
+  with `'duplicates'` and follows.
+- **The `bulk` handoff is one-way and explicit.** Right after `onImportBatch(...)` succeeds inside
+  `handleImport()`, the wizard sets `guideHandedOff = true` and calls
+  `onboardingGuide.setStep('import.bulk')` — from that point the wizard's own step-sync effect is
+  inert (`!guideHandedOff` guards it), and only `TransactionBulkModal`'s **Save All** button
+  (`use:guideAnchor={'import.bulk.save-all'}`) is highlighted. `OnboardingOverlayHost` swaps the
+  coachmark's **Next** button for **Finish guide** only on this step (and on the tour's last
+  step); pressing it calls `onboardingGuide.finish()`. In automatic pending mode, that is the
+  *only* guide path that POSTs `/api/v1/settings/onboarding/import_guide/complete`. In replay
+  mode, the same button only clears the session replay token and never calls the endpoint. The
+  guide never calls `Save All` itself — finishing the guide and saving the batch are two
+  independent user actions.
+
+**The coachmark remains observational.** For `import.upload` through `import.review`,
+`OnboardingOverlayHost` does not render its own **Back** or **Next** controls; the user's actions
+in the real wizard drive `currentStepId`, and the guide follows. It never clicks a wizard
+control, uploads a file, or reconstructs an earlier wizard draft. Only after the user invokes
+**Import N transactions** does the explicit `import.bulk` handoff highlight **Save All**.
+
+In automatic pending mode, the coachmark's top row contains **Skip permanently** and **X**; in
+replay mode it contains **Exit replay** and **X**. Replay **Finish guide** and **Exit replay**
+only clear the session replay token, so neither calls a complete/skip endpoint nor changes the
+backend onboarding status. **X** calls `suspend({resetImport: true})`, exactly like closing the
+wizard before handoff: the next guide entry is `import.upload`, the active in-memory guide is
+cleared, and the session replay remains armed. No complete/skip endpoint is called, and there is
+no automatic wizard-draft restoration.
+
+!!! note "Session-scoped replay vs. server-terminal status"
+
+    `onboarding.startReplay`/`updateReplayStep` (`lib/stores/app/onboarding.svelte.ts`) persist
+    the in-progress step under a `sessionStorage` key scoped to the flow, its content version,
+    and the current user id (`lf_{userId}_onboarding_replay_{flow}_v{version}`). None of this
+    touches the server's `pending` / `completed` / `skipped` status. Only an **automatic pending**
+    guide uses **Finish guide** to complete or **Skip permanently** to skip the server flow;
+    terminal replays are strictly non-destructive. A page refresh or account switch clears the
+    in-memory guide (`registerClientSessionReset('onboardingGuide', ...)`) without touching that
+    server state.
+
+---
+
 ## 🔗 Related
 
 - **[Transaction Form](transaction-form.md)** — the single-item editor the wizard feeds.

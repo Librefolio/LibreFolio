@@ -131,9 +131,11 @@
             case 'down':
                 return 'border-red-300 dark:border-red-600';
             default:
-                return 'border-gray-100 dark:border-slate-700';
+                return asset.active ? 'border-gray-100 dark:border-slate-700' : 'border-amber-200 dark:border-amber-800';
         }
     });
+
+    let cardSurfaceClass = $derived(asset.active ? 'bg-white hover:bg-libre-green/5 dark:bg-slate-800 dark:hover:bg-slate-700' : 'bg-amber-50 hover:bg-amber-100/80 dark:bg-amber-950/30 dark:hover:bg-amber-900/40');
 
     // =========================================================================
     // Helpers
@@ -189,11 +191,13 @@
 </script>
 
 <div
-    class="w-full text-left bg-white dark:bg-slate-800 rounded-xl shadow-sm border overflow-hidden cursor-pointer
-       transition-all duration-300 hover:shadow-lg hover:border-libre-green/30 hover:bg-libre-green/5 dark:hover:bg-slate-700
+    class="w-full text-left rounded-xl shadow-sm border overflow-hidden cursor-pointer
+       transition-all duration-300 hover:shadow-lg hover:border-libre-green/30
        focus:outline-none focus:ring-2 focus:ring-libre-green focus:ring-offset-2
-       {cardBorderClass}"
+       {cardSurfaceClass} {cardBorderClass}"
     data-testid="asset-card-{asset.id}"
+    data-lifecycle={asset.active ? 'active' : 'inactive'}
+    data-view-mode={cardViewMode}
     onclick={handleCardClick}
     onkeydown={(e) => e.key === 'Enter' && handleCardClick()}
     role="button"
@@ -218,6 +222,7 @@
                 {/if}
                 <button
                     class="p-1 rounded-md transition-colors {cardViewMode === 'percentage' ? 'bg-libre-green/10 text-libre-green dark:bg-libre-green/20 dark:text-green-400' : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-600 dark:hover:text-gray-300'}"
+                    data-testid="asset-card-view-toggle"
                     onclick={(e) => {
                         stop(e);
                         localViewModeOverride = cardViewMode === 'absolute' ? 'percentage' : 'absolute';

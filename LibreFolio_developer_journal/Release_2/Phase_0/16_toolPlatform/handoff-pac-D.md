@@ -84,7 +84,7 @@ class PacAllocatorTool(ToolPlugin[PacAnalyzeInput, PacAnalyzeOutput]):
     ui = ToolUIDescriptor(
         kind="custom",
         component_key="pac-allocator",
-        ui_contract_version=1,
+        version="1.0.0",
     )
     documentation = ToolDocumentation(
         path="user/tools/pac-allocator/",

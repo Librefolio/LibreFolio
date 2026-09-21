@@ -17,6 +17,8 @@
     export let icon: 'help' | 'book' = 'help';
     /** Stable E2E selector */
     export let testId: string | undefined = undefined;
+    /** Optional visible label; default preserves the historical icon-only control. */
+    export let labelDisplay: 'hidden' | 'responsive' | 'visible' = 'hidden';
 
     function getDocsUrl(): string {
         const lang = $currentLanguage;
@@ -27,11 +29,20 @@
 </script>
 
 <Tooltip {math} interactiveChild maxWidth="320px" position="top" text={label}>
-    <button class="rounded p-0.5 text-gray-400 transition-colors hover:text-libre-green focus:outline-none focus-visible:ring-2 focus-visible:ring-libre-green/70" onclick={() => window.open(getDocsUrl(), '_blank', 'noopener')} type="button" aria-label={label} data-testid={testId}>
+    <button
+        class="inline-flex items-center gap-2 rounded p-0.5 text-gray-500 transition-colors hover:text-libre-green focus:outline-none focus-visible:ring-2 focus-visible:ring-libre-green/70 dark:text-gray-400"
+        onclick={() => window.open(getDocsUrl(), '_blank', 'noopener')}
+        type="button"
+        aria-label={label}
+        data-testid={testId}
+    >
         {#if icon === 'book'}
             <BookOpen {size} aria-hidden="true" />
         {:else}
             <HelpCircle {size} aria-hidden="true" />
+        {/if}
+        {#if labelDisplay !== 'hidden'}
+            <span class={labelDisplay === 'responsive' ? 'hidden text-sm sm:inline' : 'text-sm'}>{label}</span>
         {/if}
     </button>
 </Tooltip>

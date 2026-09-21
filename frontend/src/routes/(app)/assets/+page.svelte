@@ -43,6 +43,8 @@
     import type {ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
+    import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
+    import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
     import AssetSetRiskPanel from '$lib/components/risk/AssetSetRiskPanel.svelte';
@@ -58,6 +60,7 @@
     import type {ProcessedAssetResult} from '$lib/workers/priceProcessing.worker';
     import {signalCatalogStore} from '$lib/stores/signalCatalogStore.svelte';
     import {globalSettings} from '$lib/stores/app/globalSettings';
+    import {matchesAssetLifecycle, orderAssetsByLifecycle} from '$lib/components/assets/assetLifecycle';
     import {buildTabUrl, getResolvedTabParam} from '$lib/utils/url/tabUrl';
     import {buildTransactionsFiltersUrl} from '../transactions/filterState';
 
@@ -137,6 +140,7 @@
 
     // Asset modal (create/edit)
     let assetModalOpen = $state(false);
+    let assetTourPreview = $state(false);
     let assetModalEditMode = $state(false);
     let assetModalEditData = $state<AssetEditData | null>(null);
     let assetEditLoading = $state(false);
@@ -285,23 +289,18 @@
     let configuredCurrencies = $derived([...new Set(assets.map((a) => a.currency))].sort());
 
     let filteredAssets = $derived(
-        assets.filter((a) => {
-            // Tri-state active filter: if both toggles match (both on or both off),
-            // no filter is applied. Otherwise keep only the state matching the
-            // single selected toggle.
-            const bothSameState = filterShowActive === filterShowInactive;
-            if (!bothSameState) {
-                if (filterShowActive && !a.active) return false;
-                if (filterShowInactive && a.active) return false;
-            }
-            if (filterTypes.size > 0 && !filterTypes.has(a.asset_type ?? '')) return false;
-            if (filterCurrencies.size > 0 && !filterCurrencies.has(a.currency)) return false;
-            if (searchText) {
-                const q = searchText.toLowerCase();
-                if (!a.display_name.toLowerCase().includes(q)) return false;
-            }
-            return true;
-        }),
+        orderAssetsByLifecycle(
+            assets.filter((a) => {
+                if (!matchesAssetLifecycle(a.active, filterShowActive, filterShowInactive)) return false;
+                if (filterTypes.size > 0 && !filterTypes.has(a.asset_type ?? '')) return false;
+                if (filterCurrencies.size > 0 && !filterCurrencies.has(a.currency)) return false;
+                if (searchText) {
+                    const q = searchText.toLowerCase();
+                    if (!a.display_name.toLowerCase().includes(q)) return false;
+                }
+                return true;
+            }),
+        ),
     );
 
     // Which delta periods are visible for the selected date range
@@ -397,6 +396,7 @@
         await loadAssets();
         // Load FX pair slugs for cross-domain signal selection in settings modal
         loadFxPairSlugs();
+        onboardingGuide.maybeStartContextual('asset_page_guide');
     });
 
     // Live price polling — only active when dateEnd includes today
@@ -761,12 +761,21 @@
     // Actions
     // =========================================================================
 
-    function handleAddAsset() {
+    function openAssetCreate() {
         assetEditRequest += 1;
         assetEditLoading = false;
         assetModalEditMode = false;
         assetModalEditData = null;
         assetModalOpen = true;
+    }
+
+    function handleAddAsset() {
+        if (onboardingGuide.active?.flow === 'asset_page_guide') {
+            onboardingGuide.dismissHost();
+        }
+        assetTourPreview = false;
+        openAssetCreate();
+        onboardingGuide.maybeStartContextual('asset_guide');
     }
 
     async function handleEditAsset(asset: {id: number}) {
@@ -1169,7 +1178,7 @@
          whether the actual header row has room. Plain `flex-wrap` reacts to the row's OWN
          available width instead (see fx/+page.svelte's equivalent header for the full note). -->
     <div class="flex flex-wrap items-start justify-between gap-4">
-        <div>
+        <div use:guideAnchor={'asset.page.overview'} data-testid="asset-page-overview-guide-target">
             <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
                 {$t('common.assets')}
                 {#if assets.length > 0}
@@ -1215,7 +1224,7 @@
                 </div>
             {/if}
             <ViewModeToggle bind:mode={viewMode} storageKey="assetsViewMode" />
-            <button class="flex items-center gap-1.5 px-3 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors whitespace-nowrap" data-testid="assets-add-button" onclick={handleAddAsset}>
+            <button class="flex items-center gap-1.5 px-3 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors whitespace-nowrap" data-testid="assets-add-button" use:guideAnchor={'asset.page.add'} onclick={handleAddAsset}>
                 <Plus size={16} />
                 {$t('assets.modal.title')}
             </button>
@@ -1252,7 +1261,12 @@
                  dashboard/brokerDetail/fxList "giustificata" pattern). Round 13: each ROW
                  individually needs its own w-full+justify-around too — the OUTER wrapper's cap
                  alone doesn't distribute space to children that don't ALSO stretch to it. -->
-            <div class="flex gap-2 {layoutMode === 'oneRow' ? 'flex-row items-center flex-wrap' : filtersStacked ? 'flex-col items-start w-full' : 'flex-col'}" style={filtersStacked && pickerMaxWidth ? `max-width: ${pickerMaxWidth}px` : ''}>
+            <div
+                class="flex gap-2 {layoutMode === 'oneRow' ? 'flex-row items-center flex-wrap' : filtersStacked ? 'flex-col items-start w-full' : 'flex-col'}"
+                style={filtersStacked && pickerMaxWidth ? `max-width: ${pickerMaxWidth}px` : ''}
+                use:guideAnchor={'asset.page.filters'}
+                data-testid="asset-page-filters"
+            >
                 <!-- Row 1: Search + Active -->
                 <div class="flex items-center gap-2 {filtersStacked ? 'w-full justify-around' : ''}">
                     <!-- Search — Round 14: min-w bumped (was a flat w-44/176px that felt too
@@ -1432,14 +1446,18 @@
             {:else}
                 <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
                     <button
+                        type="button"
                         class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'absolute' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        data-testid="assets-global-view-absolute"
                         onclick={() => {
                             globalViewMode = 'absolute';
                         }}
                         >Abs
                     </button>
                     <button
+                        type="button"
                         class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'percentage' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        data-testid="assets-global-view-percentage"
                         onclick={() => {
                             globalViewMode = 'percentage';
                         }}
@@ -1460,6 +1478,8 @@
             <button
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                 onclick={handleSyncAllAssets}
+                data-testid="assets-sync-all-button"
+                use:guideAnchor={'asset.page.sync'}
             >
                 <RotateCw size={14} />
                 {#if showActionLabels}<span>{$t('sharedResource.syncAll')}</span>{/if}
@@ -1525,7 +1545,7 @@
             {#if assets.length === 0}
                 <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2">{$t('assets.empty.noAssets')}</h3>
                 <p class="text-gray-500 dark:text-gray-400 mb-4">{$t('assets.empty.noAssetsDesc')}</p>
-                <button class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" onclick={handleAddAsset}>
+                <button class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" use:guideAnchor={'assets.add'} onclick={handleAddAsset}>
                     <Plus size={16} class="inline mr-1" />
                     {$t('assets.modal.title')}
                 </button>
@@ -1565,6 +1585,7 @@
                                     deltaAbs={asset.deltaAbs}
                                     dateStart={urlDateStart}
                                     dateEnd={urlDateEnd}
+                                    {globalViewMode}
                                     chartSettings={getSettingsForPair(`asset-${asset.id}`, 'assets')}
                                     renderSignals={(chartData, vm) => getRenderedSignals(asset.id, chartData, vm)}
                                     chartData={asset.chartData}
@@ -1696,6 +1717,7 @@
 <!-- Asset Create/Edit Modal -->
 <AssetModal
     bind:open={assetModalOpen}
+    tourPreview={assetTourPreview}
     editMode={assetModalEditMode}
     editData={assetModalEditData}
     linkCreatedAsset
@@ -1710,6 +1732,10 @@
     onupdated={() => loadAssets()}
     onclose={() => {
         assetModalOpen = false;
+        assetTourPreview = false;
+        if (onboardingGuide.active?.flow === 'asset_guide') {
+            onboardingGuide.dismissHost({restartAtFirst: true});
+        }
     }}
 />
 
