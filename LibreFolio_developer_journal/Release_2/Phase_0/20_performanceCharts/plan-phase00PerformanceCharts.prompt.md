@@ -1815,6 +1815,107 @@ Nota di verifica per chi guarda le candele: a questa finestra un render **corret
 ~1,8 px sotto stoppini ~18 px. Sottile è l'aspetto atteso della composizione sintetica, non un
 difetto residuo.
 
+### 6.0.8 Riallineamento dei record di stato — 2026-09-21
+
+> **⚠️ Fuori pista (la tabella fasi e il footer dicevano il falso, 2026-09-21):** su
+> richiesta del coordinatore lo stato del piano è stato riletto **dal file e da git**, non a
+> memoria, e il risultato è che questo documento era spaccato in due:
+>
+> - la **narrativa** (§6.0 → §6.0.7) era corretta e completa, con ogni `Note implementazione`
+>   e ogni `Fuori pista` fino al 2026-09-18;
+> - la **tabella fasi §6** dava `BLOCKED` a `I20, I30, I40, I50, I70`, tutte consegnate e
+>   committate;
+> - il **footer §12** — *ultima riga di oltre 4.500* — dichiarava
+>   `PLANNED / IMPLEMENTATION FROZEN / HARD GATE 0 WAITING FOR F`.
+>
+> **Non era un rollback: era deriva di aggiornamento.** Il protocollo §12 impone di aggiornare
+> la riga di fase dopo ogni passo, ma durante l'implementazione gli aggiornamenti sono finiti
+> tutti nella narrativa — che è il posto dove si scrive mentre si lavora — e nessuno è tornato
+> sugli **indicatori sintetici**, che sono il posto dove si legge quando si arriva da fuori.
+> Un documento può quindi essere *contemporaneamente* aggiornato e ingannevole.
+>
+> Perché è il difetto più grave e non un dettaglio di forma: questo piano è il **punto di
+> recupero dichiarato** se il contesto dell'agente si azzera. §6.0.7 esiste apposta. Ma
+> footer e tabella si leggono per primi e dicevano l'opposto della verità, quindi il
+> meccanismo di recupero falliva proprio nel caso per cui era stato costruito. Il
+> coordinatore ha trovato lo stesso difetto in un altro workstream, in forma ancora più netta.
+> Quel piano porta **contemporaneamente**, nello stesso file:
+>
+> - alla **riga 3**: `Stato: ANALISI CONSEGNATA 2026-09-18 (nessun codice)`;
+> - in **§13 «Sequenza»**: una checklist di **14 voci, 0 spuntate**
+>   (`grep -c '^- \[ \]'` → 14, `grep -c '^- \[x\]'` → 0);
+> - in **§16.8–§16.14**: **sei Stage marcati ✅ e datati**, con il codice consegnato.
+>
+> Non è «l'intestazione mente»: sono **due indicatori sintetici diversi** — header e checklist
+> — fermi entrambi al giorno zero sopra una narrativa che documenta sei consegne. *Tutti* i
+> punti di lettura rapida mentono insieme, e l'unico posto che dice il vero è quello che si
+> legge per ultimo.
+>
+> Il registro completo di quella fase chiude il caso: **23 caselle spuntate su 80** attraverso
+> sette piani, con Step 1 a 6/10, Step 2 a 6/13, Step 4 a 5/10. Quell'autore le caselle le
+> spunta — **proprio dove ha consegnato di più, no.** Che è la prova più forte possibile che
+> non si tratta di negligenza individuale: l'aggiornamento degli indicatori regge finché il
+> lavoro è piccolo e cede esattamente dove il lavoro diventa grande, cioè dove servirebbe.
+>
+> **Non è un incidente isolato, è un modo di fallire di questo progetto**, e la
+> generalizzazione corretta è più forte di quella che sembrava: non «quel piano non è stato
+> mantenuto», ma **gli indicatori sintetici non vengono mantenuti nemmeno dai piani che
+> vengono mantenuti**. I due casi differiscono solo per dove siede l'indicatore bugiardo —
+> footer e tabella qui, riga di testa e checklist là — mentre in entrambi la narrativa dice il
+> vero. La narrativa cresce perché è dove si scrive lavorando; gli indicatori restano al
+> giorno in cui il lavoro è iniziato perché sono dove si legge arrivando da fuori, e chi
+> lavora da dentro non ci torna mai.
+>
+> **Rettifica in tre giri (2026-09-21) — la sequenza è il contenuto, non un imbarazzo da
+> comprimere.**
+>
+> 1. **Giro 1.** Il paragrafo citava «piano a 0/14 step spuntati contro novemila righe
+>    consegnate», dato fornito dal coordinatore.
+> 2. **Giro 2.** Il coordinatore lo ha **ritirato**: aveva contato le intestazioni di capitolo
+>    come se fossero una checklist. Il dato è stato sostituito qui con l'esempio dell'header.
+> 3. **Giro 3.** Il dato originale **era vero**. La checklist di 14 voci esiste davvero, in
+>    §13. Il ritiro nasceva da una verifica *peggiore della prima*: erano stati cercati
+>    `### Step` e `✅`, non trovati nella forma attesa, e **l'assenza era stata presa come
+>    prova** — senza mai cercare `- [ ]`, che era la forma in cui la checklist era scritta.
+>
+> Due errori in direzioni opposte sullo stesso fatto, a poche ore di distanza, **mentre si
+> descriveva questo difetto**. E il giro 2 è la variante più insidiosa: la regola applicata
+> era giusta — *diffida di un conteggio grep su marcatori* — ma è stata usata **al posto** del
+> controllo anziché per farlo. *Una regola corretta invocata come scorciatoia produce lo stesso
+> risultato di nessun controllo, con in più la convinzione di averlo fatto.*
+>
+> Conseguenza operativa adottata da entrambe le parti: quando il coordinatore passa a un
+> workstream un dato su un altro checkout, **passa anche il comando che lo ha prodotto**. Qui
+> non c'è strumento proprio — non si leggono altri checkout — quindi la parola del
+> coordinatore è l'unico controllo esistente; e oggi quel controllo ha fallito due volte su
+> tre. Un dato accompagnato dal suo comando è falsificabile da chiunque abbia il file, e smette
+> di dipendere da chi lo riferisce.
+>
+> Corretti in questa data: le cinque righe di fase e il footer. `I80` e `I90` restano
+> `BLOCKED` perché lo sono davvero; §11 non è stata toccata (è prosa senza caselle, non è mai
+> stata progettata per essere spuntata, quindi non partecipa alla deriva).
+
+> **Stato reale delle candele alla stessa data (riferito da §6 riga I50):** il modo P&L, le
+> candele sintetiche e la submode income sono consegnati e funzionanti; l'ultimo difetto noto
+> (serie candele interamente a sentinelle) è chiuso e verificato a `candleNonGap` 93/93. Resta
+> aperta la **leggibilità**: il developer riferisce che «le candele sono ancora a linee».
+>
+> Meccanismo individuato, letto dal codice: `timeSeriesAggregation.ts:34` fissa
+> `HIGH_DENSITY_THRESHOLD = 1.3` bucket/px, cioè il grafico resta `daily` finché uno slot non
+> scende sotto **~0,77 px**. Soglia corretta per una **linea** — la densità sotto il pixel è
+> innocua, la linea è continua — e sbagliata per una **candela**, che per leggersi come tale
+> ha bisogno di un corpo con due bordi più uno stoppino. *Una sola scala di densità serve due
+> grammatiche grafiche con larghezze minime leggibili molto diverse.*
+>
+> **Il sintomo però non è ancora localizzato, e i contributori sono due:** l'altezza del corpo
+> (misurata: 1,82 px sotto stoppino 18,17 px, rapporto 9,98:1 contro 10,3:1 predetto **prima**
+> di misurare — quindi *atteso*, perché la composizione sintetica somma high/low di ogni asset
+> indipendentemente) e la larghezza dello slot (**non misurata**, e dipendente dallo zoom: ~80 px
+> con 7 categorie visibili, ~6 px su "All"). Hanno fix diversi. La ladder di risoluzione non è
+> stata iniziata di proposito: costruirla prima di sapere a quale zoom il sintomo compare
+> sarebbe lavoro a vuoto — lo stesso errore, un piano più in alto, dell'ora spesa a formulare
+> ipotesi dentro ECharts per un difetto che stava nei dati in ingresso (R13).
+
 ## 6. Dependency-safe phases and owners
 
 | Phase | Size | Owner | Dependency | Deliverable | Status |
@@ -1823,12 +1924,12 @@ difetto residuo.
 | G0 | M analysis | Coordinator + assigned integrators | F integrated on `dev_release2` | Post-F technical refresh + phase-specific implementation authorization | I10 RELEASED ONLY 2026-09-10; PORTFOLIO BLOCKED |
 | H0 | external | H + coordinator | H/YOC accepted and integrated | Release portfolio service/schema/tests, provide exact target SHA, I re-read | COMPLETE 2026-09-11 |
 | I10 | M | G3 backend owner | G0 developer authorization; no H/F files | Calendar-return backend series + provenance, no resolver duplication | COMPLETE AND INTEGRATED 2026-09-10 |
-| I20 | L | Portfolio backend integrator | G0 + H0 + F engine released | Additive daily broker P&L + signed canonical income | BLOCKED |
-| I30 | L | Portfolio backend integrator | I20 + same-resolver OHLC envelope | Daily total candles + flat fallback + strict close identity | BLOCKED |
-| I40 | M | Portfolio backend integrator + coordinator | I20 + I30 + post-H report contract | DTO/report/cache wiring, then coordinator API sync | BLOCKED |
-| I50 | L | GrowthChart owner | I40 | Value/Return/P&L core modes; Line/Candles/Income P&L submodes; broker lines and sum aggregation | BLOCKED |
+| I20 | L | Portfolio backend integrator | G0 + H0 + F engine released | Additive daily broker P&L + signed canonical income | COMPLETE 2026-09-18 (`8ed7a0f0d`, esteso `d5e834de4`) |
+| I30 | L | Portfolio backend integrator | I20 + same-resolver OHLC envelope | Daily total candles + flat fallback + strict close identity | COMPLETE 2026-09-18 (`8ed7a0f0d`; fix crash asse category `eba37ba41`) |
+| I40 | M | Portfolio backend integrator + coordinator | I20 + I30 + post-H report contract | DTO/report/cache wiring, then coordinator API sync | COMPLETE 2026-09-18 (`8ed7a0f0d`, `d5e834de4`; API sync e i18n eseguiti dal coordinatore) |
+| I50 | L | GrowthChart owner | I40 | Value/Return/P&L core modes; Line/Candles/Income P&L submodes; broker lines and sum aggregation | COMPLETE 2026-09-18 (`8ed7a0f0d` → `69d0d27c6`); LEGGIBILITÀ CANDELE APERTA — vedi §6.0.8 |
 | I60 | XL follow-up | G3 Asset UI + shared chart owner | Initial I60 integrated; explicit developer authorization | Compact duration, contextual Asset/FX axes, separate Return measures, same-N Asset comparisons | MANUAL REVIEW ROUND 2 IN PROGRESS 2026-09-12 |
-| I70 | L | Test author + owners | Relevant implementation phases; H test ownership released | Targeted backend/frontend regressions and integration gates | BLOCKED |
+| I70 | L | Test author + owners | Relevant implementation phases; H test ownership released | Targeted backend/frontend regressions and integration gates | PARZIALE 2026-09-18 — unit backend (4 nuovi file engine) e frontend (corpus golden 276 voci `d87d45e07`, regressione memo `69d0d27c6`) consegnati; **E2E della superficie P&L assente** |
 | I80 | S | Docs writer + coordinator | Stable integrated UI | English docs, coordinator i18n/runner/changelog records | BLOCKED |
 | I90 | M | Developer + coordinator | I50 + I60 + I70 + I80 | Desktop/mobile operational review, corrections, integration handoff | BLOCKED |
 
@@ -4529,5 +4630,25 @@ No pending row may be marked complete from a plan, fixture or test name alone.
 The current durable state remains:
 
 ```text
-PLANNED / IMPLEMENTATION FROZEN / HARD GATE 0 WAITING FOR F
+IMPLEMENTATA E COMMITTATA (14 commit, non integrata nel target)
+FERMA SU DECISIONE DEL DEVELOPER: leggibilità delle candele
 ```
+
+Aggiornato **2026-09-21**. Lo stato precedente
+(`PLANNED / IMPLEMENTATION FROZEN / HARD GATE 0 WAITING FOR F`) era **falso**: descriveva la
+situazione precedente all'implementazione ed è rimasto invariato per deriva di aggiornamento
+mentre la narrativa §6.0 avanzava. Le cause e la portata sono in §6.0.8.
+
+Precisazioni necessarie, perché ognuna delle tre è stata fraintesa almeno una volta:
+
+- **Non è un gate su F.** F è integrato da tempo; il fermo attuale è una scelta di sequenza
+  del developer — questo workstream non entra nel target finché la leggibilità delle candele
+  non è risolta. Diverge perché è *attivo*, non perché è bloccato.
+- **Non è un fermo di qualità.** I20/I30/I40/I50 sono consegnate; I70 è parziale (manca l'E2E
+  della superficie P&L); I80 è un buco reale e verificato — nelle pagine mkdocs EN le
+  occorrenze di `candlestick`, `Synthetic`, `submode` e `hypothetical` sono **zero**, mentre
+  §11.5 richiede che documentazione e contratto dicano la stessa cosa.
+- **La baseline si muove.** Con l'integrazione di D questo ramo passa a ~38 commit indietro su
+  275 file mai visti: prima di qualunque modifica al sorgente vale §6.0.7 — aggiornamento
+  baseline e rivalidazione della **revisione combinata**. Il verde ottenuto su `69d0d27c6` non
+  si trasferisce a uno stato diverso.
