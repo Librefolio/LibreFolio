@@ -41,6 +41,7 @@
         type PortfolioCostHistorySeries,
         type PortfolioDepositHistorySeries,
         type PortfolioAcquisitionFundingSeries,
+        type PortfolioPnlCandleSeries,
     } from '$lib/stores/portfolio/portfolioStore.svelte';
     import {ensureBrokersLoaded, getAllBrokers, getBrokerRole, brokerStoreVersion} from '$lib/stores/reference/brokerStore';
     import {ensureAssetsLoaded, getAssetInfo, assetStoreVersion} from '$lib/stores/reference/assetStore';
@@ -75,6 +76,10 @@
     let costHistory: PortfolioCostHistorySeries | undefined = undefined;
     let depositHistory: PortfolioDepositHistorySeries | undefined = undefined;
     let acquisitionFunding: PortfolioAcquisitionFundingSeries | undefined = undefined;
+    // G1b — lazy, unlike the income family above: the OHLC composition is expensive, so it
+    // is fetched only when the user first opens the candles submode (plan §4.1 caller policy).
+    let pnlCandles: PortfolioPnlCandleSeries | null = null;
+    let pnlCandlesLoading = false;
     let allocationHistoryFromReport: AllocationHistoryDimensions | null = null;
     let positionsContribution: PositionsContribution | null = null;
     let contributionLoading = false;
@@ -287,9 +292,36 @@
             acquisitionFunding = (report?.acquisition_funding as PortfolioAcquisitionFundingSeries | null | undefined) ?? undefined;
             allocationHistoryFromReport = (report?.allocation_history as AllocationHistoryDimensions | null | undefined) ?? null;
             positionsContribution = (report?.positions_contribution as PositionsContribution | null | undefined) ?? null;
+            // Scope, currency or date range may have changed, so any previously fetched
+            // candle series is stale. Nulling it lets GrowthChart ask again on its next
+            // candles activation instead of rendering the old window's OHLC.
+            pnlCandles = null;
             resolveMaxStartFromHistory();
         } finally {
             reportLoading = false;
+        }
+    }
+
+    /**
+     * G1b lazy candle fetch, scoped to THIS broker.
+     *
+     * Deliberately not the Dashboard's loader: that one requests the currently selected
+     * portfolio scope, so reusing it here would paint whole-portfolio OHLC under a single
+     * broker's heading — a wrong number, which is worse than the empty plot this replaces
+     * because an empty plot is visible and a wrong number is not.
+     *
+     * `brokerPnlHistory` stays unpassed on purpose: plan §3.3 says "one broker or Broker
+     * detail: total candle only", and the per-broker overlay is exactly what must not appear.
+     */
+    async function loadPnlCandles() {
+        if (pnlCandles || pnlCandlesLoading) return;
+        pnlCandlesLoading = true;
+        try {
+            // Only pnl_candles is read, so every other section is switched off.
+            const report = await fetchReport([data.brokerId], dateFrom || undefined, dateTo || undefined, targetCurrency, false, false, false, false, false, {includePnlCandles: true});
+            pnlCandles = (report?.pnl_candles as PortfolioPnlCandleSeries | null | undefined) ?? null;
+        } finally {
+            pnlCandlesLoading = false;
         }
     }
 
@@ -582,7 +614,7 @@
 
                 <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
                     <div class="lg:col-span-3">
-                        <GrowthChart history={portfolioHistory} {incomeHistory} {costHistory} {depositHistory} {acquisitionFunding} loading={reportLoading && portfolioHistory.length === 0} baseCurrency={targetCurrency || baseCurrency} />
+                        <GrowthChart history={portfolioHistory} {pnlCandles} onRequestPnlCandles={loadPnlCandles} {incomeHistory} {costHistory} {depositHistory} {acquisitionFunding} loading={reportLoading && portfolioHistory.length === 0} baseCurrency={targetCurrency || baseCurrency} />
                     </div>
                     <AllocationPanel
                         summary={portfolioSummary}
