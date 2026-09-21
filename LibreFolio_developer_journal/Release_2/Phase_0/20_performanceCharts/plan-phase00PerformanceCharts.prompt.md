@@ -2242,7 +2242,18 @@ candlestick dal modo N-day. Quindi le due voci seguenti sono *adiacenti*, non da
 > perché il plot vuoto si vede e un numero sbagliato no**. `brokerPnlHistory` resta
 > deliberatamente fuori: §3.3 dice *total candle only*. `pnlCandles` viene azzerata in
 > `loadOverview` così che un cambio di valuta o intervallo forzi un nuovo fetch invece di
-> mostrare l'OHLC della finestra precedente. La pagina è in modalità legacy (12 `$:`, zero
+> mostrare l'OHLC della finestra precedente.
+>
+> **Trappola nei cinque booleani posizionali di `fetchReport`**, da conoscere prima di
+> riaprire quel file: `includeHistory` e `includeAllocationHistory` hanno default **`true`**,
+> gli altri tre `false`. Quindi **tre dei cinque `false` sono no-op e due sono portanti** — e
+> un refactor che accorcia la chiamata «perché quei false sono impliciti» riattiva due sezioni
+> in silenzio. Il commento *«only pnl_candles is read, so every other section is switched
+> off»* non è impreciso: **è vero e incompleto**, descrive l'effetto e tace su quali argomenti
+> lo producono. Chi lo verifica lo trova esatto, **e quella verifica riuscita è ciò che
+> autorizza il refactor sbagliato**. Stessa forma del catalogo i18n plausibile, un livello più
+> in basso. L'errore sarebbe inoltre invisibile ai test: cambierebbe il report *chiesto* senza
+> cambiare il valore *letto*. La pagina è in modalità legacy (12 `$:`, zero
 > rune): usate `let` semplici, coerenti con le sorelle.
 >
 > **Verifica al confine di rete, non a occhio.** Lo strumento intercetta `/portfolio/report` e
@@ -2311,6 +2322,10 @@ candlestick dal modo N-day. Quindi le due voci seguenti sono *adiacenti*, non da
 > `chartCoreHelpers.test.ts:2262` — *«income-submode fixed 6-slot order»* — pinna i sei slot
 > per indice (`seriesData[5]`) e gruppo di stack. Quindi la copertura è completa **fra due
 > livelli**: l'unit test pinna la costruzione delle serie, l'E2E pinna la pipeline dei dati.
+>
+> **Chi toccherà l'ordine dei sei slot deve aggiornare tre luoghi, non due:**
+> `chartCoreHelpers.test.ts:2262` (il pin per indice), `GrowthChart.test.ts:42` (lo cita per
+> nome in un commento) e `GrowthChart.test.ts:312` (usa gli slot 0 e 1).
 > Nessuno dei due chiude da solo. Non aggiungere un hook per unificarli: un hook introdotto per
 > far passare un test diventa superficie di prodotto che nessuno ha deciso di spedire.
 
@@ -2337,6 +2352,57 @@ candlestick dal modo N-day. Quindi le due voci seguenti sono *adiacenti*, non da
 > **Preesistente e non di questo workstream** — riportato attribuito, non assorbito e non
 > chiamato flaky: «flaky» è il nome che si dà a una causa quando si smette di cercarla.
 
+### 6.0.14 I80 completa, e un record dichiarato mancante mentre era consegnato (2026-09-21)
+
+> **⚠️ Fuori pista (fatto e dichiarato mancante — il rovescio del difetto consueto,
+> 2026-09-21):** `d44065d70` ha consegnato la sezione `P&L mode` in
+> `mkdocs_src/docs/user/dashboard/charts.en.md` — **+104 righe, cinque heading con anchor
+> espliciti** — **e** ha toccato questo piano, **senza aggiornare le tre righe che
+> dichiaravano quelle docs mancanti**. Per due ore il record ha detto il falso su una consegna
+> contenuta nello stesso commit che lo modificava.
+>
+> La conseguenza non è cosmetica: **I90 era dichiarata «in attesa di I80»**, quindi un record
+> stantio stava dicendo al developer che non poteva ancora fare la cosa che poteva fare.
+> È il rovescio di §6.0.8: non «dichiarato fatto e non fatto» — che produce lavoro sbagliato —
+> ma **fatto e dichiarato mancante**, che produce lavoro **non iniziato**, e non ha vittima
+> visibile perché nessuno si lamenta di un compito che non gli è stato chiesto.
+>
+> **La regola che mancava, e che i passaggi sistematici di §6.0.11 non coprivano:** quei
+> passaggi cercavano indicatori *non terminali* (`BLOCKED`, `REOPENED`, `PARZIALE`). Ma
+> `PARZIALE` **era** terminale nella forma e falso nel contenuto: la riga non era scaduta, era
+> smentita da un file che stava nello stesso commit.
+>
+> > **Un record che descrive uno stato va riletto nel commit che cambia lo stato, non nel
+> > commit che lo dichiara.** L'atto di toccare il file non è l'atto di rileggerlo — e un
+> > passaggio che cerca marcatori sospetti non trova una riga che è sbagliata solo rispetto a
+> > un fatto esterno.
+
+> **Note implementazione (I80, verifica di completezza 2026-09-21):** §10 elenca quattro voci
+> di documentazione. Stato verificato file per file:
+>
+> | voce §10 | stato |
+> |---|---|
+> | `dashboard/charts.en.md` | **consegnata** `d44065d70` — sezione P&L 131 righe |
+> | `assets/detail/chart.en.md` | **consegnata** `2d22130bd` |
+> | `assets/detail/signals.en.md` | **consegnata** `2d22130bd` |
+> | pagina di teoria P&L *«se le semantiche hanno bisogno di chiarimento»* | **valutata e non eseguita** — vedi sotto |
+>
+> Copertura delle tre fette nella sezione consegnata, contata: `broker` 14 occorrenze (G1a,
+> linee di contributo), `hypothetical` 2 e `volume` 1 — *«no volume»* — (G1b),
+> `Dividend`/`Interest`/`Fees`/`Deposit`/`reinvested` (G1c), più la finestra di zoom.
+>
+> **La quarta voce è condizionale e la decisione è dichiarata, non taciuta.** Non eseguita
+> perché: le semantiche del motore **non sono cambiate** — `total_pnl` resta canonico e la
+> chiusura della candela gli è uguale per costruzione (`portfolio_engine.py:1208-1213`),
+> quindi il soggetto di `period-pnl.en.md` è intatto; e l'unica semantica davvero nuova — gli
+> estremi **non simultanei** della composizione sintetica — è dichiarata sulla pagina utente,
+> dove la legge chi può esserne ingannato, invece che in una pagina di teoria del *calcolo*
+> dove finirebbe una decisione di *rappresentazione*.
+>
+> **Resta una lacuna difendibile**: la composizione sintetica (somma indipendente di high e
+> low per asset) è teoria finanziaria che oggi non ha una casa propria. Se developer o
+> coordinatore la vogliono in `financial-theory/`, è una voce a sé — **non** un residuo di I80.
+
 ## 6. Dependency-safe phases and owners
 
 | Phase | Size | Owner | Dependency | Deliverable | Status |
@@ -2351,8 +2417,8 @@ candlestick dal modo N-day. Quindi le due voci seguenti sono *adiacenti*, non da
 | I50 | L | GrowthChart owner | I40 | Value/Return/P&L core modes; Line/Candles/Income P&L submodes; broker lines and sum aggregation | COMPLETE 2026-09-18 (`8ed7a0f0d` → `69d0d27c6`); leggibilità candele risolta 2026-09-21 (`70e87ac3a`, soglia per grammatica — §6.0.10), resta la conferma visiva del developer |
 | I60 | XL follow-up | G3 Asset UI + shared chart owner | Initial I60 integrated; explicit developer authorization | Compact duration, contextual Asset/FX axes, separate Return measures, same-N Asset comparisons | IMPLEMENTAZIONE COMPLETA 2026-09-16 (vedi §6.6, ultime note); resta aperta **solo** l'accettazione manuale desktop/mobile del developer |
 | I70 | L | Test author + owners | Relevant implementation phases; H test ownership released | Targeted backend/frontend regressions and integration gates | COMPLETE 2026-09-21 — §6.0.13: 9 casi E2E sulla superficie P&L (dashboard 14/14, broker detail 28/28), oltre agli unit backend |
-| I80 | S | Docs writer + coordinator | Stable integrated UI | English docs, coordinator i18n/runner/changelog records | AUTORIZZATA 2026-09-21 — PARZIALE: le docs G3 sono consegnate (`assets/detail/chart\|measures\|signals`, `fx/chart-settings`, in `2d22130bd`); mancano **solo** quelle G1a/G1b/G1c in `dashboard/*.en.md` |
-| I90 | M | Developer + coordinator | I50 + I60 + I70 + I80 | Desktop/mobile operational review, corrections, integration handoff | IN ATTESA DI I70 + I80 — gate del developer, non implementabile da questo workstream |
+| I80 | S | Docs writer + coordinator | Stable integrated UI | English docs, coordinator i18n/runner/changelog records | COMPLETE 2026-09-21 — docs G3 in `2d22130bd` (`assets/detail/chart\|measures\|signals`, `fx/chart-settings`); docs G1a/G1b/G1c in `d44065d70` (`dashboard/charts.en.md`, sezione `P&L mode` +104 righe, cinque heading con anchor espliciti). Voce condizionale di §10 (pagina di teoria P&L) valutata e **non** eseguita — motivazione in §6.0.14 |
+| I90 | M | Developer + coordinator | I50 + I60 + I70 + I80 | Desktop/mobile operational review, corrections, integration handoff | **SBLOCCATA 2026-09-21**: I50/I60/I70/I80 tutte consegnate. Gate del developer, non implementabile da questo workstream |
 
 > **Note implementazione (I00, 2026-09-10):** only the durable plan, final
 > product decisions, updated ASCII v2 storyboards and minimal feedback-job
@@ -5059,8 +5125,8 @@ No pending row may be marked complete from a plan, fixture or test name alone.
 The current durable state remains:
 
 ```text
-IMPLEMENTAZIONE COMPLETA (17 commit, non integrata nel target)
-RESIDUO: I70 (E2E superficie P&L) + I80 (docs G1a/G1b/G1c) + accettazione manuale developer
+IMPLEMENTAZIONE COMPLETA (19 commit, rivalidata sulla revisione combinata 4473d7f89)
+RESIDUO: solo accettazione visiva del developer (I90 / I60F.7) + debiti §6.0.11
 ```
 
 Aggiornato **2026-09-21** (secondo giro, stesso giorno). Il contratto di prodotto §3 —
@@ -5078,12 +5144,10 @@ Precisazioni necessarie, perché ognuna delle tre è stata fraintesa almeno una 
 - **Non è un gate su F.** F è integrato da tempo. Il fermo che motivava questa nota — la
   leggibilità delle candele — **è stato risolto** il 2026-09-21 (`70e87ac3a`, §6.0.10). Il
   ramo resta fuori dal target per sequenza, non per blocco: diverge perché è *attivo*.
-- **Non è un fermo di qualità.** I20/I30/I40/I50/I60 sono consegnate. Restano: **I70** (E2E
-  della superficie P&L: zero spec contengono `growth-pnl-submode` o `growth-toggle-pnl`) e
-  **I80 parziale** — le docs G3 esistono (`assets/detail/chart|measures|signals`,
-  `fx/chart-settings`, in `2d22130bd`), mancano quelle G1a/G1b/G1c: in `dashboard/*.en.md` le
-  occorrenze di `candlestick`, `Synthetic`, `submode` e `hypothetical` sono **zero**, mentre
-  §11.5 richiede che documentazione e contratto dicano la stessa cosa.
+- **Non è un fermo di qualità.** I20 → I80 sono tutte consegnate. **I70** ha 9 casi E2E sulla
+  superficie P&L (dashboard 14/14, broker detail 28/28) e **I80** è completa: docs G3 in
+  `2d22130bd`, docs G1a/G1b/G1c in `d44065d70`. §11.5 — documentazione e contratto dicono la
+  stessa cosa — è soddisfatta. L'unico residuo è umano: l'accettazione visiva del developer.
 - **La baseline si muove.** L'allineamento post-D **è stato eseguito** (merge `b7a0b1e1a`,
   §6.0.9): 5 file in conflitto risolti additivamente, revisione combinata rivalidata. Distanza
   attuale: **17 avanti / 2 indietro**. La regola di §6.0.7 resta valida per ogni allineamento
