@@ -1222,3 +1222,146 @@ HTTP.** È architetturale.
 
 **Priorità**: media-bassa. **Prerequisito**: leggere i quattro tempi di fase da un payload reale
 prima di scegliere la forma della barra.
+
+---
+
+## 🔴 La simulazione risponde alla finestra, non al portafoglio — e non si annuncia
+
+**Misurato il 21 Set da S4, su corsia pulita** (rilevatore v2: arco `0,1 s`), intercettando la
+`SimulationEngineRequest` vera invece di ricostruirla.
+
+### Il fatto
+
+**Stesso asset, stesso orizzonte, stesso giorno, stesso motore. Cambia solo la finestra:**
+
+| finestra | mediana a 365 giorni | probabilità di perdita |
+|---|---:|---:|
+| **95 giorni** | **+1 400,4 %** | **0,01 %** |
+| **365 giorni** | **−39,1 %** | **70,74 %** |
+
+> **Da +1 400 % a −39 %, e da «non puoi perdere» a «perdi sette volte su dieci», per una
+> tendina che l'utente legge come «quanta storia guardo».**
+>
+> **E nessuno dei due numeri, preso da solo, si annuncia come sbagliato.**
+
+### ✅ Non è matematica rotta, e non sono i dati finti
+
+**Il motore estrapola fedelmente.** Confronto fra la mediana simulata e l'estrapolazione
+ingenua `(1 + r_finestra)^(365/n)` su **sei** finestre:
+
+| finestra | ripetizioni | ingenua | mediana | rapporto |
+|---|---:|---:|---:|---:|
+| 95 g | **3,92×** | +31,57 % | +33,22 % | **1,013** |
+| 140 g | 2,64× | +8,54 % | +10,28 % | 1,016 |
+| 190 g | 1,94× | +1,97 % | +2,92 % | 1,009 |
+| 250 g | 1,47× | +8,21 % | +9,49 % | 1,012 |
+| 365 g | 1,01× | +8,76 % | +9,93 % | 1,011 |
+
+**Le ripetizioni variano di quattro volte, il rapporto resta fra 1,009 e 1,016.** Il motore
+aggiunge l'1 %, sempre lo stesso.
+
+🔑 **La causa è il rapporto, non la lunghezza**: il bootstrap **ripesca ogni osservazione
+`orizzonte / n_osservazioni` volte per cammino**. Con 93 osservazioni su 365 giorni sono
+**3,92 ripetizioni** — cioè si assume che quel trimestre duri quattro volte tanto.
+
+⚠️ **E morde un utente vero**: il portafoglio di prova lo nasconde perché è **per metà
+liquido**, ma sullo scope asset no. **Chi tiene crypto e clicca «3M» riceve questo.**
+
+### ⚠️ Il denominatore è gonfiato e saturabile — da sapere PRIMA di scrivere la soglia
+
+```
+finestra 540 giorni  →  n_osservazioni 360   ← identico alla finestra da 365
+series_preparation.py riporta i prezzi in avanti  →  93 dove la borsa ha 66 giorni
+```
+
+**Chiedere più storia restituisce in silenzio la stessa storia**, e il riporto in avanti
+inserisce rendimenti nulli che **abbassano la σ per giorno e gonfiano il conteggio**.
+`n_observations` conta **giorni di calendario, non osservazioni indipendenti**, ed è il
+denominatore di qualunque guardia a rapporto.
+
+### Il lavoro, e cosa NON è
+
+**Non è** «aggiusta il calcolo»: l'aritmetica è corretta.
+**Non è** «rifai i dati»: si riproduce su dati puliti con volatilità realistiche
+(BTC `4,58 %`/giorno, che è il valore vero).
+
+**È** decidere cosa fare quando `orizzonte ≫ finestra`: **rifiutare**, **avvisare**, o
+**lasciar fare e dichiarare l'incertezza**. ⚠️ **Nessuna soglia ovvia esiste**: a ripetizione
+`1,00×` Bitcoin dà comunque **+100 %**. **La monotonia è il dato, la soglia è una scelta.**
+
+📌 **Parzialmente mitigato nel round 2**: l'incertezza di stima della deriva viene resa accanto
+alla banda — su un asset volatile a finestra corta vale **×/÷ 29,9** contro una banda di
+**×11,4**, quindi **si dichiara inutile da sola**. **Resta da decidere se serve anche la
+guardia.**
+
+**Priorità**: media-alta. **Non blocca il rilascio** — la funzione è dietro banner beta — ma è
+il difetto di prodotto più grande trovato nella review della fase 2.
+
+---
+
+## 🔴 L'audit i18n non può dire «inutilizzata» su un terzo del catalogo
+
+**Misurato da S4 il 21 Set**, interrogando **la funzione dell'audit** invece di leggerne la regex.
+
+### La causa, in una riga
+
+```js
+RiskResultFrame.svelte:27     const key = `risk.${prefix}.${code}`
+                                           ↑ l'interpolazione è al PRIMO segmento
+```
+
+L'audit estrae come prefisso tutto ciò che precede la prima `${`, cioè `risk.`, toglie il punto
+→ **`risk`**. E `is_key_potentially_used` fa `key.startswith(prefix)`.
+
+> **Nessuna chiave `risk.*` può comparire nell'elenco degli inutilizzati. Mai. Per costruzione.**
+
+### La taglia
+
+```
+prefissi radice NUDI: 12     →     954 chiavi su 2 886     =     33,1 % del catalogo
+```
+
+| namespace | chiavi rese non verificabili |
+|---|---:|
+| `risk` | **282** |
+| `importWizard` | 273 |
+| `signals` | 148 |
+| `common` | 120 |
+| `chartSettings` | 102 |
+| `providerErrors` · `sectors` · `fileStatus` | 29 |
+
+⚠️ **Il `2 886 / 2 886 complete · 0 incomplete` riportato più volte in questa campagna era vero
+come uscita del comando, e su un terzo del catalogo non misurava niente.**
+
+### 🔑 Perché è peggio del cancello dei link
+
+`dev.py:1238` salta i `path={espressione}` e **tace**. Questo **risponde «usata»**.
+
+> **Non un silenzio letto come assoluzione: un'assoluzione esplicita.**
+
+### La riparazione è nella stessa riga che causa il difetto
+
+```ts
+function translatedCode(prefix: 'errors' | 'warnings', …)
+```
+
+**L'insieme esatto dei prefissi è già scritto nel codice, come unione tipizzata.** L'audit lo
+butta via e ripiega sul troncamento alla prima interpolazione.
+
+> **La cecità non è fondamentale: è una rinuncia.**
+
+Il lavoro è insegnare all'audit a leggere le unioni tipizzate dove ci sono, e a **dichiarare
+"non verificabile"** dove non ci sono — invece di dire «usata».
+
+### ⚠️ E una trappola per chi lo raccoglie
+
+La regola ancorata al punto (`risk.` invece di `risk`) dà **63 chiavi `risk.*` orfane**.
+**Almeno 14 sono vive**: `risk.errors.*` (8) e `risk.warnings.*` (6) sono legittimamente
+dinamiche. **«Non verificate» e «morte» sono due parole diverse.**
+
+L'unica orfana **provata per grep** è `risk.simulation.regimeTruncated` — presente in quattro
+lingue, con i campi che la alimenterebbero (`regime_declared_days`/`applied`) **già letti dieci
+volte dal frontend**, e resa da nessuno.
+
+**Priorità**: media. **Non blocca nulla**, ma ogni misura i18n fatta finora su quei dodici
+namespace va riletta come «non verificata» invece che come «pulita».
