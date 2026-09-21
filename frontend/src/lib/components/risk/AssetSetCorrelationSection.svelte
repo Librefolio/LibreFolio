@@ -33,10 +33,10 @@
      */
     import {schemas} from '$lib/api';
     import {_ as t} from '$lib/i18n';
-    import {riskMetadata, riskOutput, singleValue} from '$lib/risk/riskTypes';
+    import {riskOutput} from '$lib/risk/riskTypes';
     import {createRiskPanelController} from '$lib/stores/risk/riskPanelController.svelte';
     import CorrelationHeatmap from './CorrelationHeatmap.svelte';
-    import {degradedResults, resultReasons} from './levels/levelHelpers';
+    import {degradedResults, levelMetadata, resultReasons} from './levels/levelHelpers';
     import RiskLevelSection from './levels/RiskLevelSection.svelte';
     import {resultByCode} from './riskAnalysisHelpers';
 
@@ -69,48 +69,25 @@
 
     let health = $derived(degradedResults([result]));
     let reasons = $derived(resultReasons([result]));
-    let metadata = $derived(riskMetadata(result));
-
     /**
-     * The window the number was measured in, which is half of what the number means.
+     * The window the figures were measured over — now rendered by the frame.
      *
-     * The same pair of assets reads one correlation here and another on the
-     * dashboard, because the two pages ask over different spans. Neither is
-     * wrong and nothing on screen says so, so the observation count is not
-     * decoration: it is the date of the figure above it.
+     * This lived here as a local block only while `RiskLevelSection` had no
+     * metadata slot, and its own docstring said to delete it the day the slot
+     * arrived, "or the reader will see it twice". The slot arrived, so it is
+     * gone, and the local copy of the runtime-key guard went with it:
+     * `translateOrRaw` is the same comparison, lifted where every level gets it.
      *
-     * ⚠️ Rendered here rather than in `RiskLevelSection` only because that frame
-     * has no metadata slot yet. It is written as one liftable block so it can be
-     * moved up verbatim the day it gains one — at which point this must be
-     * deleted, or the reader will see it twice.
+     * ⚠️ One field does not survive the lift: `levelMetadata` drops `method` on
+     * purpose. That costs this section nothing, and for a sharper reason than
+     * the one it gives — `correlation.py:128` is the *only* assignment of
+     * `method` in the plugin, `"pearson_post_fx"`. The field can print exactly
+     * one string forever, and a value that cannot vary is not provenance.
      */
-    function percent(value: number | null | undefined): string {
-        return value == null ? '—' : `${(value * 100).toFixed(1)}%`;
-    }
-
-    function fixed(value: number | readonly (number | null)[] | null | undefined): string {
-        const scalar = singleValue(value);
-        return scalar == null ? '—' : scalar.toFixed(2);
-    }
-
-    /**
-     * A key built at runtime is a key that can reach the screen.
-     *
-     * `return_basis` is a backend enum: a value this frontend has not seen yet
-     * produces a missing key, and an unguarded lookup prints `risk.returnBasis.…`
-     * to the user. That has already happened once in this codebase, which is why
-     * `levelHelpers` refuses runtime keys outright. Here the raw value is a
-     * better answer than the key, so it is the fallback.
-     */
-    function returnBasisLabel(basis: string | null | undefined): string {
-        if (!basis) return '—';
-        const key = `risk.returnBasis.${basis}`;
-        const translated = $t(key);
-        return translated === key ? basis : translated;
-    }
+    let metadata = $derived(levelMetadata([result]));
 </script>
 
-<RiskLevelSection title={$t('risk.analytics.correlation.name')} level={2} testId="risk-correlation-section" {health} {reasons}>
+<RiskLevelSection title={$t('risk.analytics.correlation.name')} level={2} testId="risk-correlation-section" {health} {reasons} {metadata}>
     <div data-testid="risk-correlation-content" data-busy={controller.initialLoading ? 'true' : 'false'}>
         <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">{$t('risk.analytics.correlation.description')}</p>
 
@@ -132,36 +109,6 @@
             </div>
         {:else}
             <p class="py-6 text-center text-sm text-gray-400 dark:text-gray-500" data-testid="risk-correlation-empty">{$t('risk.states.empty')}</p>
-        {/if}
-
-        {#if metadata}
-            <details class="mt-3 border-t border-gray-100 pt-2 text-xs text-gray-500 dark:border-slate-700 dark:text-gray-400" data-testid="risk-correlation-section-metadata">
-                <summary class="cursor-pointer list-none font-medium">{$t('risk.metadata.title')}</summary>
-                <dl class="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-4">
-                    <div>
-                        <dt>{$t('risk.metadata.observations')}</dt>
-                        <dd class="font-mono text-gray-700 dark:text-gray-200" data-testid="risk-correlation-observations">{metadata.n_observations}</dd>
-                    </div>
-                    <div>
-                        <dt>{$t('risk.metadata.coverage')}</dt>
-                        <dd class="font-mono text-gray-700 dark:text-gray-200">{percent(metadata.coverage)}</dd>
-                    </div>
-                    <div>
-                        <dt>{$t('risk.metadata.annualization')}</dt>
-                        <dd class="font-mono text-gray-700 dark:text-gray-200">{fixed(metadata.annualization_factor)}</dd>
-                    </div>
-                    <div>
-                        <dt>{$t('risk.metadata.returnBasis')}</dt>
-                        <dd class="font-mono text-gray-700 dark:text-gray-200">{returnBasisLabel(metadata.return_basis)}</dd>
-                    </div>
-                    {#if singleValue(metadata.method)}
-                        <div class="col-span-2 sm:col-span-4">
-                            <dt>{$t('risk.metadata.method')}</dt>
-                            <dd class="break-all font-mono text-gray-700 dark:text-gray-200">{singleValue(metadata.method)}</dd>
-                        </div>
-                    {/if}
-                </dl>
-            </details>
         {/if}
     </div>
 </RiskLevelSection>
