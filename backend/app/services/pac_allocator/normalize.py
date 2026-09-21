@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -21,7 +20,6 @@ from backend.app.schemas.pac_allocator import (
     MonetaryAmountMinimum,
     NotionalOrderCap,
     PacPlannerRequest,
-    PathField,
     PlannerIssue,
     PlannerIssueCode,
     PlannerIssueParam,
@@ -81,14 +79,6 @@ from backend.app.services.pac_allocator.models import (
 from backend.app.services.pac_allocator.numeric import (
     ExactRatio,
 )
-
-_FIXED_DECIMAL = re.compile(r"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)")
-_DATE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
-_CURRENCY = re.compile(r"[A-Z]{3}")
-_MAX_DECIMAL_DIGITS = 12
-_MAX_QUOTE_BASE = 10**_MAX_DECIMAL_DIGITS - 1
-_Path = tuple[PathField | int, ...]
-
 
 # Shared by v2: these were defined inside the P1 block removed on 2026-09-21.
 type _PlannerV2Request = PacPlannerRequest | RebalancerInvestOnlyRequest | RebalancerInvestAndSellRequest
