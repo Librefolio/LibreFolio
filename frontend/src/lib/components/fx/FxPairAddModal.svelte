@@ -34,6 +34,7 @@
     import {getRegisteredPairs} from '$lib/stores/fxStoreRegistry';
     import {ensureFxRoutesLoaded, getConfiguredPairSlugs, fxRoutesVersion} from '$lib/stores/reference/fxRoutesStore';
     import {currentLanguage} from '$lib/stores/app/language';
+    import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
 
     // =========================================================================
     // Props (Svelte 5)
@@ -58,6 +59,8 @@
         initialQuote?: string;
         /** Lock the base currency field (e.g. when creating FX from asset detail) */
         readonlyBase?: boolean;
+        /** Tour-only preview: saving is unavailable. */
+        tourPreview?: boolean;
         /** Configuration committed; does not wait for automatic rate sync. */
         oncreated?: (detail: FxPairCreatedDetail) => void | Promise<void>;
         /** Automatic sync settled, including partial, failed and skipped outcomes. */
@@ -65,7 +68,7 @@
         onclose?: () => void;
     }
 
-    let {open = $bindable(false), dateStart = '', dateEnd = '', editMode = false, editBase = '', editQuote = '', editRoutes = [], initialBase = '', initialQuote = '', readonlyBase = false, oncreated, onsynced, onclose}: Props = $props();
+    let {open = $bindable(false), dateStart = '', dateEnd = '', editMode = false, editBase = '', editQuote = '', editRoutes = [], initialBase = '', initialQuote = '', readonlyBase = false, tourPreview = false, oncreated, onsynced, onclose}: Props = $props();
 
     // =========================================================================
     // State
@@ -223,7 +226,7 @@
     }
 
     async function handleSave() {
-        if (!isValid || saving) return;
+        if (tourPreview || !isValid || saving) return;
 
         const base = baseCurrency.toUpperCase() < quoteCurrency.toUpperCase() ? baseCurrency.toUpperCase() : quoteCurrency.toUpperCase();
         const quote = baseCurrency.toUpperCase() < quoteCurrency.toUpperCase() ? quoteCurrency.toUpperCase() : baseCurrency.toUpperCase();
@@ -415,7 +418,7 @@
             <!-- Currency selection — in editMode: disabled (readonly with flags) -->
             <!-- ========================================================= -->
             <div class="space-y-1.5">
-                <div class="flex flex-col sm:flex-row items-stretch gap-2">
+                <div class="flex flex-col sm:flex-row items-stretch gap-2" use:guideAnchor={'fx.currencies'} data-testid="fx-tour-pair-selectors">
                     <div class="flex-1 min-w-0" data-testid="fx-add-pair-base">
                         <div class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                             {$_('fx.addPair.baseCurrency')}
@@ -470,7 +473,7 @@
             <!-- ========================================================= -->
             <!-- Route Selection (DFS pathfinding) -->
             <!-- ========================================================= -->
-            <div class="space-y-2 {!hasCurrencies ? 'opacity-50 pointer-events-none' : ''}">
+            <div class="space-y-2 {!hasCurrencies ? 'opacity-50 pointer-events-none' : ''}" use:guideAnchor={'fx.providers'} data-testid="fx-tour-providers">
                 <h3 class="text-xs font-semibold text-gray-700 dark:text-gray-200 uppercase tracking-wide">
                     {$_('fx.route.title')}
                 </h3>
@@ -517,19 +520,21 @@
             <button class="px-3 py-1.5 text-sm bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors" disabled={saving} onclick={handleClose} type="button">
                 {$_('common.cancel')}
             </button>
-            <button
-                class="px-3 py-1.5 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
-                data-testid="fx-add-pair-save"
-                disabled={!isValid || pairAlreadyExists || saving}
-                onclick={handleSave}
-                type="button"
-            >
-                {#if saving}
-                    {$_('common.saving')}
-                {:else}
-                    {$_('common.saveConfiguration')}
-                {/if}
-            </button>
+            {#if !tourPreview}
+                <button
+                    class="px-3 py-1.5 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                    data-testid="fx-add-pair-save"
+                    disabled={!isValid || pairAlreadyExists || saving}
+                    onclick={handleSave}
+                    type="button"
+                >
+                    {#if saving}
+                        {$_('common.saving')}
+                    {:else}
+                        {$_('common.saveConfiguration')}
+                    {/if}
+                </button>
+            {/if}
         </div>
     </div>
 </ModalBase>

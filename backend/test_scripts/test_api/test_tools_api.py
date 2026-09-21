@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import re
 from collections.abc import Iterator
 from uuid import uuid4
@@ -9,9 +10,11 @@ from uuid import uuid4
 import httpx
 import pytest
 
+from backend.app.api.v1 import tools as tools_api
 from backend.app.config import get_settings
 from backend.app.schemas.tools import (
     ToolCatalogResponse,
+    ToolComputeBatchRequest,
     ToolComputeBatchResponse,
     ToolComputeFailure,
     ToolDescriptor,
@@ -32,6 +35,24 @@ TOKEN_RE = re.compile(r"^[!-~]{1,64}$")
 TOOL_CODE_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 
 CATALOG_KEYS = {"catalog_version", "policy", "items", "unavailable"}
+DESCRIPTOR_KEYS = {
+    "tool_code",
+    "contract_version",
+    "implementation_version",
+    "schema_fingerprint",
+    "name",
+    "description",
+    "name_i18n_key",
+    "description_i18n_key",
+    "category",
+    "icon_key",
+    "ui",
+    "documentation",
+    "input_schema",
+    "output_schema",
+    "operations",
+}
+UI_KEYS = {"kind", "component_key", "version"}
 POLICY_KEYS = {
     "workers",
     "max_batch_items",
@@ -45,6 +66,7 @@ POLICY_KEYS = {
     "envelope_reserve_bytes",
     "max_json_depth",
     "queue_timeout_ms",
+    "engine_timeout_ms",
     "job_timeout_ms",
     "soft_timeout_ms",
     "output_reserve_ms",
@@ -53,6 +75,7 @@ POLICY_KEYS = {
     "response_reserve_ms",
     "request_timeout_ms",
     "client_timeout_ms",
+    "memory_limit_bytes",
 }
 COMPUTE_KEYS = {
     "request_id",
@@ -83,6 +106,7 @@ ITEM_METRICS_KEYS = {
     "execution_ms",
     "cleanup_ms",
     "total_ms",
+    "resources",
 }
 DIAGNOSTICS_KEYS = {
     "scope",
@@ -90,6 +114,7 @@ DIAGNOSTICS_KEYS = {
     "policy",
     "loaded",
     "failures",
+    "capabilities",
     "pool",
 }
 POOL_KEYS = {
@@ -100,6 +125,11 @@ POOL_KEYS = {
     "degraded_lanes",
     "completed",
     "failed",
+    "resources",
+}
+RESOURCE_RESERVATION_KEYS = {
+    "memory_capacity_bytes",
+    "memory_reserved_bytes",
 }
 
 
@@ -125,6 +155,7 @@ async def _login_normal_user(client: httpx.AsyncClient) -> str:
             timeout=TIMEOUT,
         )
         assert response.status_code == 201, response.text
+        assert response.json()["user"]["is_active"] is True
         return username, bool(response.json()["user"]["is_superuser"])
 
     username, is_admin = await register_unique_user()
@@ -137,6 +168,7 @@ async def _login_normal_user(client: httpx.AsyncClient) -> str:
         timeout=TIMEOUT,
     )
     assert response.status_code == 200, response.text
+    assert response.json()["user"]["is_active"] is True
     assert response.json()["user"]["is_superuser"] is False
     session = response.cookies.get("session")
     assert session is not None
@@ -224,6 +256,124 @@ def _assert_pool_is_structural(
     assert pool["active"] + pool["queued"] <= pool["pending"]
     assert pool["pending"] <= policy["max_pending_items"]
     assert pool["failed"] <= pool["completed"]
+    resources = pool["resources"]
+    assert set(resources) == RESOURCE_RESERVATION_KEYS
+    assert resources["memory_capacity_bytes"] == policy["workers"] * policy["memory_limit_bytes"]
+    assert 0 <= resources["memory_reserved_bytes"] <= resources["memory_capacity_bytes"]
+    assert resources["memory_reserved_bytes"] <= pool["active"] * policy["memory_limit_bytes"]
+
+
+def _assert_capabilities_are_structural(capabilities: dict[str, object]) -> None:
+    assert set(capabilities) == {"memory"}
+    memory = capabilities["memory"]
+    assert set(memory) == {"mode", "observation_interval_ms"}
+    assert memory["mode"] in {
+        "cgroup_v2_hard",
+        "process_tree_observed",
+        "unavailable",
+    }
+    if memory["mode"] == "process_tree_observed":
+        assert type(memory["observation_interval_ms"]) is int
+        assert memory["observation_interval_ms"] > 0
+    else:
+        assert memory["observation_interval_ms"] is None
+
+
+@pytest.mark.asyncio
+async def test_compute_route_uses_the_batch_effective_request_budget(
+    monkeypatch,
+):
+    envelope, _items = _unknown_envelope()
+    batch = ToolComputeBatchRequest.model_validate(envelope)
+    captured = {}
+    response_sentinel = object()
+
+    class _Executor:
+        @staticmethod
+        def batch_request_timeout_ms(actual_batch):
+            assert actual_batch is batch
+            return 59_000
+
+    def execution_request(request, *, timeout_ms):
+        captured["request"] = request
+        captured["timeout_ms"] = timeout_ms
+        return request
+
+    async def compute_until_disconnect(actual_batch, request, principal_key):
+        captured["batch"] = actual_batch
+        captured["bounded_request"] = request
+        captured["principal_key"] = principal_key
+        return response_sentinel
+
+    request = object()
+    monkeypatch.setattr(tools_api, "get_tool_executor", lambda: _Executor())
+    monkeypatch.setattr(tools_api, "_execution_request", execution_request)
+    monkeypatch.setattr(
+        tools_api,
+        "_compute_until_disconnect",
+        compute_until_disconnect,
+    )
+
+    response = await tools_api.compute_tools(
+        batch,
+        request,
+        type("_ActiveUser", (), {"id": 17})(),
+    )
+
+    assert response is response_sentinel
+    assert captured == {
+        "request": request,
+        "timeout_ms": 59_000,
+        "batch": batch,
+        "bounded_request": request,
+        "principal_key": "17",
+    }
+
+
+@pytest.mark.asyncio
+async def test_disconnect_cancels_compute_before_any_engine_start(
+    monkeypatch,
+):
+    envelope, _items = _unknown_envelope()
+    batch = ToolComputeBatchRequest.model_validate(envelope)
+    entered = asyncio.Event()
+    cancelled = asyncio.Event()
+    blocker = asyncio.Event()
+    engine_starts = []
+
+    class _Executor:
+        async def compute(self, actual_batch, *, principal_key, request_started):
+            assert actual_batch is batch
+            assert principal_key == "owned-principal"
+            assert request_started == 123.0
+            entered.set()
+            try:
+                await blocker.wait()
+                engine_starts.append(True)
+            except asyncio.CancelledError:
+                cancelled.set()
+                raise
+
+    class _DisconnectRequest:
+        started = 123.0
+
+        @staticmethod
+        async def receive():
+            await entered.wait()
+            return {"type": "http.disconnect"}
+
+    monkeypatch.setattr(tools_api, "get_tool_executor", lambda: _Executor())
+
+    response = await tools_api._compute_until_disconnect(
+        batch,
+        _DisconnectRequest(),
+        "owned-principal",
+    )
+
+    assert response.status_code == 499
+    assert entered.is_set()
+    assert cancelled.is_set()
+    assert engine_starts == []
 
 
 @pytest.mark.asyncio
@@ -270,9 +420,15 @@ async def test_tools_catalog_is_strict_and_read_only(test_server):
     payload = response.json()
     catalog = ToolCatalogResponse.model_validate(payload)
     assert set(payload) == CATALOG_KEYS
-    assert catalog.catalog_version == "1"
+    assert catalog.catalog_version == "2"
     assert set(payload["policy"]) == POLICY_KEYS
     descriptors = [ToolDescriptor.model_validate(item) for item in payload["items"]]
+    for raw_descriptor, descriptor in zip(payload["items"], descriptors, strict=True):
+        assert set(raw_descriptor) == DESCRIPTOR_KEYS
+        assert set(raw_descriptor["ui"]) == UI_KEYS
+        assert descriptor.ui.kind == "custom"
+        assert SEMVER_RE.fullmatch(descriptor.ui.version)
+        assert "ui_contract_version" not in raw_descriptor["ui"]
     descriptor_codes = {descriptor.tool_code for descriptor in descriptors}
     assert len(descriptor_codes) == len(descriptors)
     assert descriptor_codes.isdisjoint(item["tool_code"] for item in payload["unavailable"] if item["tool_code"] is not None)
@@ -284,6 +440,7 @@ async def test_tools_catalog_is_strict_and_read_only(test_server):
         assert set(diagnostics_payload) == DIAGNOSTICS_KEYS
         assert {item.tool_code for item in diagnostics.loaded} == descriptor_codes
         assert all(set(failure) == {"tool_code", "filename", "reason"} for failure in diagnostics_payload["failures"])
+        _assert_capabilities_are_structural(diagnostics_payload["capabilities"])
 
     assert before_payload["runtime_id"] == after_payload["runtime_id"]
     assert before_payload["policy"] == payload["policy"] == after_payload["policy"]
@@ -399,6 +556,7 @@ async def test_tools_diagnostics_is_strict_safe_for_normal_user(test_server):
     assert set(payload["policy"]) == POLICY_KEYS
     assert {item.tool_code for item in diagnostics.loaded} == {item.tool_code for item in catalog.items}
     assert all(set(failure) == {"tool_code", "filename", "reason"} for failure in payload["failures"])
+    _assert_capabilities_are_structural(payload["capabilities"])
     _assert_pool_is_structural(payload["pool"], payload["policy"])
 
     serialized_strings = "\n".join(_recursive_strings(payload)).lower()

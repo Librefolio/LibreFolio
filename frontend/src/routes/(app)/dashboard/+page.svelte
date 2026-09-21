@@ -23,6 +23,7 @@
     import {aiExportCatalogLoader, emptyAiExportCompatibility, type AiExportCatalogCompatibilityResult} from '$lib/features/ai-export/catalog/compatibility';
     import {buildAiExportMenuLabels, getAiExportErrorMessage, getAiExportSuccessMessages} from '$lib/features/ai-export/ui';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
 
     import {
         fetchReport,
@@ -609,7 +610,7 @@
     });
 </script>
 
-<div class="space-y-4" data-testid="dashboard-page" aria-busy={reportLoading || contributionLoading || syncLoading} data-busy={reportLoading || contributionLoading || syncLoading ? 'true' : 'false'}>
+<div class="space-y-4" data-testid="dashboard-page" use:guideAnchor={'page.dashboard'} aria-busy={reportLoading || contributionLoading || syncLoading} data-busy={reportLoading || contributionLoading || syncLoading ? 'true' : 'false'}>
     <h1 class="sr-only">{$_('nav.dashboard')}</h1>
 
     <PageToolbar

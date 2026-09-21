@@ -21,15 +21,21 @@ preflight — the monkeypatch turns any fallthrough into ``subprocess.run``
 into an immediate, loud test failure — and it now proves the preflight is in
 place and working. Keep the assertion exactly this strict so a regression
 that removes the preflight is caught immediately.
+
+The frontend-listing regressions also pin sequence-valued registry metadata:
+only existing ``.spec.ts`` entries are parsed, while frontend unit-test paths
+are ignored without crashing the listing command.
 """
 
 from __future__ import annotations
+
+from types import SimpleNamespace
 
 import pytest
 
 from scripts.test_runner import _backend_utils as backend_utils
 from scripts.test_runner import _cli as runner_cli
-from scripts.test_runner import _common
+from scripts.test_runner import _common, _frontend_common
 from scripts.test_runner._registry import TEST_REGISTRY
 
 PROJECT_ROOT = _common.PROJECT_ROOT
@@ -122,6 +128,30 @@ class TestRunTestFromRegistryForwardsSelectors:
         assert capture_run_command == []
 
 
+class TestRunPassesListTests:
+    def test_list_tests_dispatches_without_touching_execution_helpers(self, monkeypatch):
+        dispatch_result = object()
+        dispatch_calls = []
+        args = SimpleNamespace(category="utils", list_tests=True)
+        test_names = ["selected-test"]
+
+        def fail_if_touched(*_args, **_kwargs):
+            pytest.fail("list-tests dispatch touched an execution-only helper")
+
+        def fake_dispatch(category, names, verbose, dispatch_args):
+            dispatch_calls.append((category, names, verbose, dispatch_args))
+            return dispatch_result
+
+        for helper_name in ("_run_exclusive_setups", "shared_backend_for", "_apply_parallel"):
+            monkeypatch.setattr(runner_cli, helper_name, fail_if_touched)
+        monkeypatch.setattr(runner_cli, "dispatch_to_category", fake_dispatch)
+
+        result = runner_cli._run_passes(args, test_names, verbose=False)
+
+        assert dispatch_calls == [("utils", test_names, False, args)]
+        assert result == (dispatch_result, True, True)
+
+
 class TestCoverageJsCompilesWithoutImportOrSubprocess:
     """Proves the source is sound and still shaped as the adapter expects it —
     via ``compile()`` on the source text only. No ``import scripts.coverage_js``
@@ -182,6 +212,58 @@ class TestSelfRegistrationInTheCatalogue:
 
     def test_test_runner_cli_action_is_included_in_utils_all(self):
         assert TEST_REGISTRY["utils"]["test-runner-cli"].get("in_all", True) is True
+
+
+class TestListFrontTestsWithSequenceMetadata:
+    """Sequence-valued ``tests`` metadata may mix E2E specs and unit files."""
+
+    def test_mixed_tests_tuple_lists_spec_and_ignores_unit_path(self, tmp_path, monkeypatch, capsys):
+        category = "front-list-tuple-regression"
+        unit_path = "src/lib/registry-tuple.test.ts"
+        spec_path = "utility/registry-tuple.spec.ts"
+        full_spec_path = tmp_path / "frontend" / "e2e" / spec_path
+        full_spec_path.parent.mkdir(parents=True)
+        full_spec_path.write_text(
+            """
+test.describe("Tuple metadata", () => {
+  test("lists the spec from tuple metadata", async () => {});
+});
+""",
+            encoding="utf-8",
+        )
+        monkeypatch.setitem(
+            TEST_REGISTRY,
+            category,
+            {"mixed-tests": {"tests": (unit_path, spec_path)}},
+        )
+        monkeypatch.setattr(_frontend_common, "PROJECT_ROOT", tmp_path)
+
+        result = _frontend_common._list_front_tests(category)
+        captured = capsys.readouterr()
+        output = captured.out + captured.err
+
+        assert result is True
+        assert spec_path in output
+        assert "lists the spec from tuple metadata" in output
+        assert unit_path not in output
+
+    def test_unit_only_tests_tuple_reports_no_specs_without_crashing(self, tmp_path, monkeypatch, capsys):
+        category = "front-list-unit-only-tuple-regression"
+        unit_path = "src/lib/registry-unit-only.test.ts"
+        monkeypatch.setitem(
+            TEST_REGISTRY,
+            category,
+            {"unit-tests": {"tests": (unit_path,)}},
+        )
+        monkeypatch.setattr(_frontend_common, "PROJECT_ROOT", tmp_path)
+
+        result = _frontend_common._list_front_tests(category)
+        captured = capsys.readouterr()
+        output = captured.out + captured.err
+
+        assert result is True
+        assert f"No spec files found for category '{category}'" in output
+        assert unit_path not in output
 
 
 class TestMissingPathRegression:

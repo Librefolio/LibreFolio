@@ -33,6 +33,8 @@
         placeholder?: string;
         /** Disable the select */
         disabled?: boolean;
+        /** Stable selector forwarded to SearchSelect. */
+        testId?: string;
         /** Loading state override (combined with internal loading) */
         loading?: boolean;
         /** Max items visible in dropdown */
@@ -65,6 +67,7 @@
         includeAll = false,
         placeholder = '',
         disabled = false,
+        testId,
         loading: externalLoading = false,
         maxVisibleItems = 6,
         dropdownPosition = 'auto',
@@ -210,6 +213,7 @@
     inlineSearch={true}
     loading={isLoading}
     {maxVisibleItems}
+    {testId}
     onchange={handleChange}
     onCreateNew={onCreateForex}
     options={currencyOptions}
