@@ -20,9 +20,33 @@
      *   option no longer wipes the selection.
      *
      * **No amount of money appears anywhere on this page.** Not in this panel,
-     * not in the analysis mounted below it. An asset set has no weights, so any
+     * not in the levels mounted below it. An asset set has no weights, so any
      * euro figure would be an arithmetic claim about a portfolio the user never
      * described. Percentages and coefficients only.
+     *
+     * WHY THE LEGACY PANEL IS NO LONGER MOUNTED HERE, and why removing it took
+     * nothing away. `RiskAnalysisPanel` gates each of its eight sections on a
+     * capability the backend advertises for the scope (`:124-130`), and on
+     * `asset_set` the backend advertises **two** analytics: `correlation` and
+     * `stress`. So on this page the legacy contributed exactly two things, and
+     * both were defects:
+     *
+     *   - a **second** correlation matrix, identical to the one above it, which
+     *     put two `risk-correlation-heatmap` nodes in one document and made
+     *     every selector inside it ambiguous under Playwright strict mode;
+     *   - the **hypothetical shock**, which `03-mappa-livelli-pagine` §3.3
+     *     forbids here: without weights it rewrites its own input in a different
+     *     shape and calls the result a scenario.
+     *
+     * Its historical replay — the one rung this page *is* allowed to show — was
+     * unreachable from here anyway: `:874` is `{#if scope.kind === 'asset'}`,
+     * nested inside `{#if supportsStress}`. The page showed the forbidden rung
+     * and hid the permitted one, which is what `AssetSetReplaySection` now
+     * corrects.
+     *
+     * 🔴 The component itself is **not** deleted: `AssetRiskScenariosView:89`
+     * still mounts it for Asset Detail, which `03` parks in beta and keeps out
+     * of this redesign. What left is one mount, not the code.
      */
     import {untrack} from 'svelte';
     import {CheckCheck, FlipHorizontal, RefreshCw, Square, Undo2, X} from 'lucide-svelte';
@@ -36,7 +60,6 @@
     import {brokerStoreVersion, ensureBrokersLoaded, getAccessibleBrokers} from '$lib/stores/reference/brokerStore';
     import AssetSetCorrelationSection from './AssetSetCorrelationSection.svelte';
     import AssetSetReplaySection from './AssetSetReplaySection.svelte';
-    import RiskAnalysisPanel from './RiskAnalysisPanel.svelte';
     import RiskBetaBanner from './RiskBetaBanner.svelte';
     import {applyBulkAction, applyFilters, MAX_SELECTED_ASSETS, readPersistedSelection, resolveInitialSelectionWithSource, writePersistedSelection, type BulkAction, type SelectionFilters, type SelectionSource} from './assetSetSelection';
 
@@ -57,10 +80,9 @@
         dateStart: string;
         dateEnd: string;
         targetCurrency: string;
-        onsynced?: () => void | Promise<void>;
     }
 
-    let {assets, dateStart, dateEnd, targetCurrency, onsynced}: Props = $props();
+    let {assets, dateStart, dateEnd, targetCurrency}: Props = $props();
 
     let selectedAssetIds = $state<number[]>([]);
     let brokerPreset = $state('');
@@ -311,7 +333,6 @@
     {#if selectedAssetIds.length > 0}
         <AssetSetCorrelationSection assetIds={selectedAssetIds} assetLabels={selectionLabels} {dateStart} {dateEnd} {targetCurrency} />
         <AssetSetReplaySection assetIds={selectedAssetIds} assetLabels={selectionLabels} {dateStart} {dateEnd} {targetCurrency} />
-        <RiskAnalysisPanel scope={{kind: 'asset_set', asset_ids: selectedAssetIds}} {dateStart} {dateEnd} {targetCurrency} assetIds={selectedAssetIds} title={$t('risk.assetSet.panelTitle')} showBetaBanner={false} {onsynced} />
     {:else}
         <div class="rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 p-8 text-center text-sm text-gray-400 dark:text-gray-500" data-testid="risk-asset-set-empty">
             {$t('risk.states.noAssets')}

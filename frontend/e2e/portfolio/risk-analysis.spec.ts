@@ -115,7 +115,7 @@ function loss(percent: string): string {
 
 const CATALOG = {
     items: [
-        definition('historical_kpi', 'kpi', ['asset', 'portfolio'], ['historical'], 'historicalKpi', 20),
+        definition('historical_kpi', 'kpi', ['asset', 'portfolio'], ['historical', 'current_composition'], 'historicalKpi', 20),
         definition('correlation', 'matrix', ['asset_set', 'portfolio'], ['historical', 'current_composition'], 'correlation', 2),
         definition('risk_contribution', 'contribution', ['portfolio'], ['current_composition'], 'riskContribution', 20),
         definition('stress', 'stress', ['asset', 'asset_set', 'portfolio'], ['current_composition'], 'stress', 1),
@@ -123,6 +123,17 @@ const CATALOG = {
         definition('historical_var', 'var_cvar', ['asset', 'portfolio'], ['historical', 'current_composition'], 'historicalVar', 20),
         definition('drawdown_summary', 'drawdown', ['asset', 'portfolio'], ['historical'], 'drawdownSummary', 20),
         definition('simulation', 'simulation', ['asset', 'portfolio'], ['current_composition'], 'simulation', 30),
+        // Portfolio only, current composition only — copied from the plugin's own
+        // declaration (`risk_plugins/asset_risk_return.py:61`), not guessed. The
+        // narrowness is the point: `buildBaseAnalytics` drops any code the
+        // catalogue does not advertise *for this scope and this mode*, so a
+        // fixture that advertised it for `historical` too would let the panel ask
+        // in a mode the backend refuses and this suite would never notice.
+        //
+        // ⚠️ Until this line existed the analytic was unrequestable **in the
+        // fixture**: the stub answered every code it was asked for, so a missing
+        // entry here looked exactly like a panel that chose not to ask.
+        definition('asset_risk_return', 'risk_return', ['portfolio'], ['current_composition'], 'assetRiskReturn', 20),
     ],
 };
 
@@ -393,6 +404,60 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
                     items: [
                         {asset_id: 1, weight: 0.6, marginal_contribution: 0.11, component_contribution: 0.08, percentage_contribution: 0.65},
                         {asset_id: 2, weight: 0.35, marginal_contribution: 0.13, component_contribution: 0.05, percentage_contribution: 0.35},
+                    ],
+                },
+            };
+        case 'asset_risk_return':
+            // ⚠️ INVENTED NUMBERS, NOT MEASURED ONES. Nothing here was read off a
+            // running backend: these are values chosen so the renderer has
+            // something to draw, and so that each of them is *load-bearing* for a
+            // branch the scatter would otherwise never take. They are a snapshot
+            // of a shape, and they may be replaced by any other set that keeps the
+            // four properties below — which is exactly why the properties are
+            // written down and the provenance is not dressed up as a measurement.
+            //
+            //  1. `portfolio_volatility` is strictly positive. At zero
+            //     `capitalMarketLine` (`scatterChartHelpers.ts:111`) returns null
+            //     and the line vanishes *silently*, leaving a chart that still
+            //     looks finished.
+            //  2. Two items with **different** volatilities. `hasScatter` is
+            //     `points.length >= 2`, and the portfolio's own dot would satisfy
+            //     a count of one all by itself; two identical dots would satisfy
+            //     the count while drawing a chart with nothing to compare.
+            //  3. `cash_weight` is strictly positive, so the `{#if cash !== null
+            //     && cash > 0}` clause of `risk-l3-scatter-note` is reachable. A
+            //     zero there is not a neutral default: it deletes a sentence.
+            //  4. Ids 1 and 2, the pair every other portfolio-scope answer in this
+            //     stub uses (`matrixAssetIds`, the contribution items, the
+            //     `dataQuality` issue), so the dots resolve to real names instead
+            //     of the `#id` fallback.
+            //
+            // The weights and the cash share are deliberately **identical** to the
+            // `risk_contribution` branch above: in one `current_composition` wave
+            // both plugins read the same `context.weights` and the same
+            // `context.cash_weight`, so a fixture where they disagreed would model
+            // a payload the backend cannot emit — and would teach L2 and L3 to
+            // report two different portfolios under one date.
+            //
+            // The *volatility* of the whole is another matter and is intentionally
+            // not 0.13: `risk_contribution` publishes the covariance decomposition's
+            // figure, while this analytic measures the buy-and-hold primary series
+            // (see its docstring — the weighted average of the parts lands about a
+            // point away from the whole). Forcing the two equal would pin an
+            // agreement the backend does not promise. 0.118 also sits *below* the
+            // weighted average of the two items (0.122), which is the one relation
+            // that must hold for a pair that is not perfectly correlated.
+            return {
+                ...base,
+                status: 'ok',
+                output: {
+                    kind: 'risk_return',
+                    portfolio_volatility: 0.118,
+                    portfolio_expected_annual_return: 0.071,
+                    cash_weight: 0.05,
+                    items: [
+                        {asset_id: 1, weight: 0.6, volatility: 0.152, expected_annual_return: 0.094},
+                        {asset_id: 2, weight: 0.35, volatility: 0.087, expected_annual_return: 0.041},
                     ],
                 },
             };
@@ -2078,5 +2143,127 @@ test.describe('Risk analysis functional integration', () => {
         // normally, so L2 shows no error at all — a failure broadcast to every
         // level would read as a whole-panel outage.
         await expect(panel.getByTestId('risk-level-2-errors')).toHaveCount(0);
+    });
+
+    /**
+     * L3's scatter: asked for, and then drawn.
+     *
+     * ⚠️ TWO FAILURES IN SERIES, SO TWO ASSERTIONS. The chart has never appeared
+     * on any surface, and not for one reason: the panel does not *ask* for
+     * `asset_risk_return` (its controller never opts into
+     * `includeCurrentCompositionRiskReturn`, so `buildBaseAnalytics` never adds
+     * the code), and it does not *hand over* the wave that would carry the answer
+     * (`L3RiskAdjusted` is mounted without `currentResults`, which therefore
+     * defaults to `[]`, so `riskReturnResult` is null and `hasScatter` is false).
+     *
+     * Either one alone is enough to leave the section absent. That is why one
+     * assertion is not enough either: "the chart is on screen" goes red for both
+     * causes and names neither, since an absent chart is the symptom they share.
+     * A reader who fixes the wiring and sees the same red learns nothing about
+     * which half is still broken. The wire assertion names the first cause on its
+     * own, in the only place a request can be observed.
+     *
+     * The order below is the causal order. A panel that asks and does not render
+     * is a wiring mistake in one component; a panel that renders without asking
+     * is impossible. So the wire is checked first: when both are broken it is the
+     * upstream red, and fixing the render alone cannot turn it green.
+     *
+     * Not one assertion on rendered wording. The scatter's title, axis labels and
+     * note are translated; what is pinned here is the testid, the plotted-point
+     * count published by the component, and the canvas actually having been
+     * drawn — `expectChartCanvas` exists because a visible container proves
+     * nothing about ECharts having painted inside it.
+     */
+    test('L3 asks for the risk/return pair in the current composition wave and draws the scatter', async ({page}) => {
+        const requests = await installRiskMocks(page);
+        const panel = await openDashboardRisk(page);
+
+        // --- The fixture offers it --------------------------------------------
+        // Checked first, and synchronously, because it separates the two ways the
+        // next assertion can go red. `buildBaseAnalytics` drops any code the
+        // catalogue does not advertise, so a stub that stopped offering
+        // `asset_risk_return` would produce the identical "the panel never asked"
+        // failure as the product bug this test is aimed at — and the reader would
+        // spend the afternoon in the wrong file.
+        expect([...advertisedForPortfolio('current_composition')]).toContain('asset_risk_return');
+
+        // --- Half one: the question reaches the server -------------------------
+        // Polled rather than read once: `waitForRiskLevels` already waits for both
+        // base waves to land, but the array is filled by a route handler and the
+        // poll is what turns a race into a deadline. The failure prints the codes
+        // that *were* asked for, which is the diagnosis and not merely the verdict.
+        await expect.poll(() => portfolioAnalytics(requests, 'current_composition').map((analytic) => analytic.analytic_code), {timeout: 15_000}).toContain('asset_risk_return');
+
+        // The mode gate, both ways round. The analytic supports
+        // `current_composition` only — today's weights replayed over past returns
+        // — so the historical wave must not carry it. The positive half of the
+        // pair is the barrier that gives the negative its meaning: without it,
+        // "the historical wave does not ask for the scatter" would also be
+        // satisfied by a historical wave that never happened at all.
+        const historicalCodes = portfolioAnalytics(requests, 'historical').map((analytic) => analytic.analytic_code);
+        expect(historicalCodes).toContain('historical_kpi');
+        expect(historicalCodes).not.toContain('asset_risk_return');
+
+        // --- Half two: the answer reaches the chart ----------------------------
+        const level3 = panel.getByTestId('risk-level-3');
+        await expect(level3).toBeVisible();
+
+        // --- The perimeter actually moved, and that is not a side effect -------
+        // Asking for the current-composition wave does more than feed the scatter:
+        // it adds `historical_kpi` on that wave, and `selectKpiWave` *prefers* it.
+        // So Sortino, Sharpe, volatility and beta stop being measured over the
+        // portfolio's own history and start being measured over today's weights
+        // replayed on past returns. The two can disagree by more than half their
+        // own value.
+        //
+        // That is the designed behaviour — `L3RiskAdjusted`'s docstring argues for
+        // it — but it is a change in what the numbers *mean*, and the reason both
+        // halves of this outage survived is that nothing ever looked. A test that
+        // asserted only "the chart appears" would let the perimeter drift back to
+        // historical without a word. This is the assertion that watches it.
+        //
+        // Read from `data-perimeter`, which the component publishes from the
+        // payload's own `metadata.mode` rather than from the wave it was handed —
+        // so a fixture that mislabelled its answer could not make this pass.
+        await expect(level3.getByTestId('risk-l3')).toHaveAttribute('data-perimeter', 'current_composition', {timeout: 10_000});
+
+        // Scoped to L3 rather than to the page: the section is what must contain
+        // the chart, and an unscoped locator would be satisfied by a scatter
+        // rendered anywhere else on the dashboard.
+        const riskReturn = level3.getByTestId('risk-l3-risk-return');
+        await expect(riskReturn).toBeVisible({timeout: 10_000});
+
+        // The container is necessary and not sufficient: `ScatterChart` mounts its
+        // host div before ECharts paints, and an instance bound to a detached node
+        // leaves a canvas of 0×0 that is still "visible".
+        await expectChartCanvas(page, 'risk-l3-scatter', 8_000);
+
+        const scatter = riskReturn.getByTestId('risk-l3-scatter');
+
+        // Three dots: the portfolio itself, plus the two items this test's own
+        // stub sent. A count of the test's own fixture, not of the database — and
+        // there is deliberately no fourth, because the benchmark dot rides on a
+        // `comparison` answer and no benchmark is stored in a fresh context.
+        //
+        // The count is what separates "a chart" from "this chart". A single
+        // portfolio dot would still draw a canvas, and `hasScatter` is the only
+        // thing standing between that and the reader.
+        await expect(scatter).toHaveAttribute('data-point-count', '3');
+        // Nothing was silently discarded on the way in: a dot lost to a
+        // non-finite coordinate is invisible inside a canvas, so the component
+        // publishes the loss rather than leaving the test unable to see it.
+        await expect(scatter).toHaveAttribute('data-dropped-count', '0');
+
+        // The sentence that carries what the chart refuses to draw. Cash would sit
+        // at (0, 0) with a weight of its own and read as a measurement, when a
+        // zero return for cash is a modelling assumption — so it is stated in
+        // words instead, and the stub's `cash_weight` is strictly positive
+        // precisely so that clause is reachable.
+        //
+        // ⚠️ Presence only, and knowingly so: the cash clause has no testid of its
+        // own — it is inline in this same `<p>` — and its text is translated, so
+        // there is nothing here that can be pinned without either asserting
+        // English or editing a component this test does not own.
+        await expect(riskReturn.getByTestId('risk-l3-scatter-note')).toBeVisible();
     });
 });

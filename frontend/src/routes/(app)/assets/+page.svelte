@@ -1507,17 +1507,7 @@
                 <p class="text-red-600 dark:text-red-400">{error}</p>
             </div>
         {:else}
-            <AssetSetRiskPanel
-                {assets}
-                {dateStart}
-                {dateEnd}
-                targetCurrency={$globalSettings.default_currency || 'EUR'}
-                onsynced={async () => {
-                    for (const asset of assets) invalidateAssetPriceStore(asset.id);
-                    rearmMaxPendingBeforeReload();
-                    await fetchAllPriceData();
-                }}
-            />
+            <AssetSetRiskPanel {assets} {dateStart} {dateEnd} targetCurrency={$globalSettings.default_currency || 'EUR'} />
         {/if}
     {:else if loading}
         <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-12 text-center border border-gray-100 dark:border-slate-700">
