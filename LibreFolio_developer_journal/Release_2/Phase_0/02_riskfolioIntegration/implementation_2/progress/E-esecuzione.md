@@ -41,9 +41,49 @@ Tutto **misurato eseguendo**, corsia `6174` / `/tmp/librefolio-r3-e`.
 
 🔴 **Divergenza segnalata (vitest)**: **41 rossi in 3 file**, non 46 in 5. I tre sono
 `features/tools/pac-allocator/PacAllocatorTool`, `…/PortfolioRebalancerTool` e
-`features/tools/registry`, tutti su `invalid_catalog` del codec dei contratti Tool —
-coerente con `api sync`, che ha rigenerato quei contratti. **Zero in un file risk**, prima
-e dopo. Il numero dopo è **identico** a quello prima: non ho mosso nulla.
+`features/tools/registry`, tutti su `invalid_catalog` del codec dei contratti Tool.
+**Zero in un file risk**, prima e dopo. Il numero dopo è **identico** a quello prima: non ho
+mosso nulla.
+
+> 🔴 **Il numero era giusto, la mia spiegazione era sbagliata — corretta il 21 Set a valle
+> della fusione, dal coordinatore, che ha falsificato la mia ipotesi.**
+>
+> Avevo proposto che il delta `46 → 41` fosse **la firma di `api sync`**, perché `api sync`
+> rigenera i contratti Tool e i tre file rossi falliscono proprio sul codec di quei contratti.
+> **Non è così.** Il coordinatore aveva già rigenerato, e un `npm ci` fresco non muoveva il
+> numero. La causa vera:
+>
+> ```
+> ENOENT: no such file or directory, open '<worktree>/src/app.css'
+> DateRangePicker.test.ts:511   legge src/app.css RELATIVO ALLA CWD
+> ```
+>
+> Invocava `npx --prefix frontend vitest run --root frontend` **dalla radice del worktree**:
+> `--prefix` cambia il prefisso di npm, **non la cwd**. Invocato da `frontend/`, come fa
+> `dev.py`: **3 file, il mio numero esatto.**
+>
+> 🔑 **Non uno strumento interrogato male, ma uno strumento interrogato dal posto sbagliato:
+> la risposta era corretta e descriveva un mondo in cui chi chiedeva non era.** `ENOENT` non
+> mentiva — quel file davvero non esisteva, **da lì**.
+>
+> ⚠️ **E la lezione per me non è «ho sbagliato la causa», è più stretta**: la mia storia
+> causale era credibile **perché puntava a una cosa che avevo davvero fatto**. Avevo eseguito
+> `api sync`, avevo visto l'hash dei contratti stampato, e i file rossi erano *quelli dei
+> contratti*. Tre fatti veri allineati per coincidenza di tempo.
+>
+> 🔑 **Una spiegazione che indica una tua azione è più pericolosa di una che non lo fa: sei tu
+> a fornirle la plausibilità.** È R2-19 in forma riflessiva — non «un artefatto esiste, quindi
+> è usato», ma «*io* ho fatto una cosa, quindi è la causa».
+>
+> ✅ **Ciò che ha retto è il processo, non l'intuizione**: il numero era etichettato
+> **misurato**, la causa etichettata **«sospetto»**, e avevo consegnato il falsificatore
+> insieme all'ipotesi (*«se sul tuo albero lo rilanci e scendi a 41/3, è confermato»*).
+> **Il coordinatore l'ha eseguito ed è tornato negativo.** Un'ipotesi che viaggia col proprio
+> test si lascia uccidere; una che viaggia da sola diventa una riga di documentazione.
+
+📌 **E il `46` non è mai stato il numero di nessuno**: stava nei briefing di A, di B e del
+coordinatore come *«baseline ereditata»*, cioè **come un fatto da non riverificare**.
+È sopravvissuto perché era scritto, non perché fosse vero.
 
 ---
 
@@ -300,18 +340,18 @@ aggiunte annidate** — quindi non spostano le righe su cui lavora lui.
 
 ---
 
-## Decisioni che restano aperte per il coordinatore
+## Decisioni — chiuse
 
-1. 🟡 **Testo del banner — eseguita l'opzione A, vetabile.** A nomina il difetto registrato
+1. ✅ **Testo del banner: opzione A, eseguita e fusa.** A nomina il difetto registrato
    (`TODO_FUTURI:1401`); B diceva solo «può cambiare». Motivo di A: quel TODO si dichiara
    *«non blocca il rilascio — la funzione è dietro banner beta»*, quindi **D46 e quel TODO
    si reggono a vicenda**, e un banner che tace il difetto non regge il TODO. Rispetta **Ⓕ**:
-   nessun numero che integri sulla finestra entra nel testo — si descrive la *forma*
-   (orizzonte ≫ finestra), mai `+1 400 %` o `−39 %`.
-   ⚠️ Tornare a B costa **8 stringhe**, non una riga: il testo vive in 4 lingue.
-2. 🟡 **CHANGELOG — non toccato.** D46 lo nomina, il briefing **non** me lo assegna.
-   ⚠️ `## [1.1.0]` è **rilasciato**: la sua `### 🧪 Beta` è storia e non si riscrive; una
-   eventuale riga va in `[Unreleased]`. Dimmi se la scrivo io.
+   si descrive la *forma* (orizzonte ≫ finestra), mai `+1 400 %` o `−39 %`.
+2. ✅ **CHANGELOG — scritto dal coordinatore**, come da sua riserva: un capoverso sotto
+   `[Unreleased] → 🔄 Changed` che **nomina il difetto della simulazione con le stesse parole
+   del banner** — così chi incontra l'uno non è sorpreso dall'altro — e dichiara
+   esplicitamente che Asset Detail tiene il proprio avviso, invece di lasciarlo dedurre
+   dall'assenza altrove. ⚠️ `## [1.1.0]` è rilasciato: la sua `### 🧪 Beta` resta storia.
 3. ⚪ **`RiskPanelHeader.showActions`** è anch'essa senza chiamanti espliciti. **Non toccata**
    — fuori mandato. Segnalata perché trovata rimuovendo la sua gemella.
 4. ⚪ **Il default `subsystem` non è asserito da nessun test.** Proteggerlo richiederebbe di
@@ -346,6 +386,23 @@ aggiunte annidate** — quindi non spostano le righe su cui lavora lui.
 ## FROZEN
 
 **21 Settembre 2026.** Baseline `032b86959`. Nessun commit, merge, rebase, push, reset o
-`checkout --` eseguito. Lavoro in stage a cura del coordinatore.
+`checkout --` eseguito dal mandato. Lavoro messo in stage e commesso dal coordinatore.
 Corsia `6174` / `/tmp/librefolio-r3-e`: **server spento, cartella dati buttata.**
+
+### Atterraggio
+
+```
+c57fc7ef2   feat(risk): take the beta banner off the levels that have left beta   (10 file, +476 / −23)
+7d50fe4fe   linea di integrazione, tutto il round 3 dentro
+```
+
+Cancelli rimisurati dal coordinatore **sulla revisione fusa**: `front check` 3 ereditati, zero
+in un file risk · `tsc e2e` 0 in `e2e/portfolio/` · **14 · 11 · 2** (Asset Detail ferma) ·
+`check-orphans` zero orfani · `api risk` 11 · `services risk-all` 441.
+
+⚠️ **Una modifica non commessa resta sopra `c57fc7ef2`**: la correzione qui sopra all'ipotesi
+`api sync`, falsificata dopo la fusione. **Riguarda solo questo file**, nessun file di
+prodotto. Da mettere in stage al prossimo giro — **o da lasciare, ma non da dimenticare**: una
+causa falsificata lasciata in un documento permanente è esattamente il debito che Ⓗ descrive,
+e questa volta sarei io a fabbricarlo.
 
