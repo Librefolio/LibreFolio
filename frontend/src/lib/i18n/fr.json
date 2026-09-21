@@ -2944,6 +2944,26 @@
       "drawdownSummary": {
         "name": "Synthèse des replis",
         "description": "Épisodes de repli courant et maximal par rapport au pic, datés et avec statut de récupération, à partir des rendements canoniques du périmètre sélectionné."
+      },
+      "assetSetKpi": {
+        "name": "Indicateurs de risque par actif",
+        "description": "Volatilité, pire baisse et ratios ajustés du risque, mesurés pour chaque actif sélectionné sur une même fenêtre."
+      },
+      "assetSetVar": {
+        "name": "Risque de queue par actif",
+        "description": "La perte atteinte par chaque actif sélectionné dans ses pires cas, estimée sur son propre historique."
+      },
+      "assetSetDrawdown": {
+        "name": "Baisses par actif",
+        "description": "De combien chaque actif sélectionné a chuté depuis son sommet, pendant combien de temps, et s'il s'en est remis."
+      },
+      "assetSetRiskReturn": {
+        "name": "Risque et rendement par actif",
+        "description": "Volatilité annualisée contre rendement attendu, un point par actif sélectionné."
+      },
+      "assetSetComparison": {
+        "name": "Comparaison par actif",
+        "description": "Comment chaque actif sélectionné a évolué par rapport à la référence choisie."
       }
     },
     "params": {
@@ -3048,6 +3068,29 @@
         "offsettingHint": "Paires qui évoluent en sens opposé : l’une amortit l’autre.",
         "noneCorrelated": "Aucune paire n’évolue clairement ensemble.",
         "noneOffsetting": "Aucune paire n’en compense une autre : ici rien n’amortit rien."
+      },
+      "levels": {
+        "asset": "Actif",
+        "blankNote": "Un tiret signifie que la mesure n'a pas pu être faite pour cet actif sur cette fenêtre — cela ne signifie pas zéro.",
+        "l1": {
+          "title": "Combien chacun a-t-il fait mal ?",
+          "description": "La même échelle de perte, posée à chaque actif sélectionné. Uniquement des pourcentages : un ensemble d'actifs n'a pas de pondérations, donc aucun montant à afficher.",
+          "lastedDays": "durée {{days}} j",
+          "columns": {
+            "badDay": "Mauvaise journée",
+            "badMonth": "Mauvais mois",
+            "worstFall": "Pire baisse",
+            "currentFall": "Sous le sommet",
+            "toPeak": "Hausse jusqu'au sommet"
+          }
+        },
+        "l3": {
+          "title": "Combien chacun a-t-il payé pour son risque ?",
+          "description": "Risque contre rendement, un point par actif. Aucune droite ne les traverse : une sélection n'a pas de tout, donc rien au-dessus ou en dessous de quoi se situer.",
+          "expectedReturn": "Rendement attendu",
+          "correlation": "Corrélation",
+          "noBenchmark": "Choisissez une référence dans le tableau de bord pour ajouter le bêta et la corrélation. Une référence déjà présente dans la sélection ne peut pas servir de mesure à elle-même."
+        }
       }
     },
     "metrics": {
