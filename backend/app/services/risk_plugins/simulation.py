@@ -31,6 +31,7 @@ from backend.app.services.risk.quant import (
     SimulationEngineRequest,
     SimulationResourceLimitError,
     align_simple_returns,
+    estimate_drift_uncertainty,
     estimate_gbm_parameters,
     historical_returns_digest,
     run_simulation,
@@ -270,6 +271,12 @@ class SimulationAnalytic(RiskAnalytic):
             for day in range(params.horizon_days + 1)
         ]
         bootstrapped = params.process == RiskSimulationProcess.BLOCK_BOOTSTRAP
+        drift_uncertainty = self._drift_uncertainty(
+            returns_by_asset,
+            asset_ids,
+            weights,
+            params.horizon_days,
+        )
         return RiskComputation(
             output=RiskSimulationOutput(
                 process=params.process,
@@ -287,6 +294,8 @@ class SimulationAnalytic(RiskAnalytic):
                 terminal_mean_return=(engine_result.terminal_mean_return),
                 terminal_volatility=(engine_result.terminal_volatility),
                 probability_of_loss=(engine_result.probability_of_loss),
+                drift_uncertainty_factor=(drift_uncertainty[0] if drift_uncertainty else None),
+                drift_uncertainty_observations=(drift_uncertainty[1] if drift_uncertainty else None),
             ),
             method=self._method_label(params),
             n_observations=observations,
@@ -319,6 +328,30 @@ class SimulationAnalytic(RiskAnalytic):
         if params.regime == RiskSimulationRegime.NONE:
             return "numpy_joint_block_bootstrap_empirical_resampling"
         return f"numpy_joint_block_bootstrap_prescribed_{params.regime.value}"
+
+    @staticmethod
+    def _drift_uncertainty(
+        returns_by_asset,
+        asset_ids,
+        weights,
+        horizon_days: int,
+    ) -> tuple[float, int] | None:
+        """Qualify the band with the drift's own standard error, or disclose nothing.
+
+        Narrow on purpose: only the estimator's documented ValueError degrades to an
+        absent disclosure, because by this point the engine has already run on these
+        same returns. A broader catch would turn a coding fault into a missing field,
+        which reads exactly like a simulation that had nothing to disclose.
+        """
+        try:
+            return estimate_drift_uncertainty(
+                returns_by_asset,
+                asset_ids,
+                weights,
+                horizon_days=horizon_days,
+            )
+        except ValueError:
+            return None
 
     @staticmethod
     def _build_bootstrap_request(
