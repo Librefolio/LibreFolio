@@ -38,6 +38,52 @@ The `SettingsLayout` component provides the structural shell for all settings ta
 
 Manages user-specific settings (Language, Currency, Theme).
 
+### 🧭 OnboardingReplaySection
+
+`OnboardingReplaySection.svelte` renders the **Onboarding** category inside `PreferencesTab`
+(`{id: 'onboarding', icon: Compass, labelKey: 'onboarding.settings.category'}`). It reads
+`onboarding.progress?.flows` — the three `OnboardingProgressItem`s (`welcome`, `intro_tour`,
+`import_guide`) fetched from `GET /api/v1/settings/onboarding` — and renders, per flow: its
+`status`, a `Seen v{version} · current v{current_version}` label, an **update available** badge
+when `update_available` is true, and a **Replay** button.
+
+Replaying branches on the flow, because only `welcome` and `intro_tour` can start immediately:
+
+- `welcome` → `onboarding.startReplay('welcome', ..., 'welcome')` then `goto('/welcome')`.
+- `intro_tour` → `onboardingGuide.startIntroReplay()`, which starts at `intro.scene`. That scene
+  presents three phrases and advances from manual **Start** or one automatic start after 10
+  seconds; the remaining semantic steps drive their own `goto` calls from
+  `OnboardingOverlayHost`.
+- `import_guide` → `onboardingGuide.startImportReplay()` only **arms** the replay
+  at `import.upload` (`onboarding.startReplay('import_guide', ...)`); nothing observes it until
+  the user opens the Import Wizard, whose own `$effect` sees `progress.status !== 'pending'` but
+  `controller.hasReplay(...)` true and starts in `'replay'` mode. The button label and the
+  `replayIsArmed(item)` badge (`nextImport` vs. `replayReady`) reflect this: `import_guide` uses
+  *"Replay on next import"* for its button and, once armed, *"Ready for next import"* for its
+  badge, rather than the other flows' *"Replay"* / *"Replay ready"* labels.
+- **Replay all** uses the flow-specific entry points:
+  `onboarding.startReplay(...)` for Welcome, `onboardingGuide.prepareIntroReplay()` for the intro,
+  and `onboardingGuide.startImportReplay()` for import; it then navigates to `/welcome` once.
+  Completing Welcome applies the selected locale before `maybeStartIntro()` renders the narrative
+  scene. In a Welcome replay, that completion uses the existing user-settings PUT for the
+  explicitly selected language/currency/avatar while preserving the Welcome progress status;
+  **Exit replay** saves nothing. If any replay arm fails (e.g. `sessionStorage` unavailable), the
+  section unwinds the flows it already armed via `onboarding.clearReplay` before surfacing the
+  error.
+
+An automatic pending intro/import coachmark shows **Skip permanently** plus **X**; replay mode
+shows **Exit replay** plus **X**. The intro footer uses **Back**, **Next**, and **Finish** on the
+final Settings stop. Automatic **Finish**/**Skip permanently** perform the corresponding backend
+transition, while replay **Finish**/**Exit replay** only clear session replay state and never
+call complete/skip. **X** suspends without ending the replay: it retains the intro cursor, while
+the import guide resets the next entry to `import.upload`. There is no Pause action. Replaying
+does not restore wizard draft state or automate wizard clicks, uploads, or **Save All**.
+
+Replay state lives in `sessionStorage`, not on the server — see
+**[Onboarding: the contextual import guide](import-wizard.md#import-guide-wiring)**
+for the storage key format. A replay of a terminal (`completed`/`skipped`) flow is strictly
+non-destructive to that status from start through exit.
+
 ### 👤 ProfileTab
 
 Manages user profile information:

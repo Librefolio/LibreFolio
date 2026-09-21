@@ -7,7 +7,7 @@
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import {notify} from '$lib/stores/app/notify.svelte';
-    import {fetchToolCatalog} from './client';
+    import {fetchToolCatalog, peekToolCatalog} from './client';
     import {ToolClientError, getToolAccountState, observeToolAccount, type ToolAccountState, type ToolDescriptor, type VerifiedToolCatalog} from './contracts';
     import {resolveToolRenderer, type ToolRendererBinding, type ToolRendererMount} from './registry';
     import {toolDescription, toolDocumentationPath, toolErrorMessage, toolName, toolViewError, unavailableMessage, type ToolUnavailableReason} from './presentation';
@@ -24,6 +24,7 @@
     let error = $state.raw<ToolClientError | null>(null);
     let cleanupError = $state.raw<ToolClientError | null>(null);
     let phase = $state<HostPhase>('catalog_loading');
+    let warmMount = $state(false);
     let errorStage = $state<'catalog' | 'component'>('catalog');
     let confirmReload = $state(false);
     let mounted = $state(false);
@@ -85,11 +86,13 @@
         error = null;
         cleanupError = null;
         confirmReload = false;
+        warmMount = false;
     }
 
-    async function loadTool(code: string, generation: number, reuse?: ToolRendererBinding): Promise<void> {
+    async function loadTool(code: string, generation: number, reuse?: ToolRendererBinding, reload = false): Promise<void> {
         const session = getToolAccountState();
         if (!alive || !session.authenticated || session.generation !== generation) return;
+        const cachedCatalog = reuse ? catalog : reload ? null : peekToolCatalog();
         const requestSequence = ++sequence;
         controller?.abort();
         const request = new AbortController();
@@ -98,15 +101,16 @@
         confirmReload = false;
         error = null;
         unavailable = null;
-        errorStage = reuse ? 'component' : 'catalog';
-        phase = reuse ? 'component_loading' : 'catalog_loading';
+        warmMount = false;
+        errorStage = reuse || cachedCatalog ? 'component' : 'catalog';
+        phase = reuse || cachedCatalog ? 'component_loading' : 'catalog_loading';
         if (!reuse) {
             catalog = null;
             descriptor = null;
             binding = null;
         }
         try {
-            const loadedCatalog = reuse ? catalog : await fetchToolCatalog({signal: request.signal});
+            const loadedCatalog = reuse ? catalog : (cachedCatalog ?? (await fetchToolCatalog({signal: request.signal, reload})));
             if (!current(requestSequence, code, generation, request)) return;
             if (!loadedCatalog) throw new ToolClientError('compatibility', 'catalog_unverified');
             catalog = loadedCatalog;
@@ -133,7 +137,9 @@
             binding = selected;
             phase = 'component_loading';
             errorStage = 'component';
-            const renderer = await selected.load({signal: request.signal});
+            const preloaded = selected.peek();
+            warmMount = preloaded !== null;
+            const renderer = preloaded ?? (await selected.load({signal: request.signal}));
             if (!current(requestSequence, code, generation, request)) return;
             await tick();
             if (!current(requestSequence, code, generation, request)) return;
@@ -151,6 +157,7 @@
             }
             activeMount = {handle, generation, sequence: requestSequence};
             phase = 'ready';
+            warmMount = false;
             const degraded = loadedCatalog.unavailable.length > 0;
             notify({
                 name: degraded ? 'tool.host.degraded' : 'tool.host.loaded',
@@ -167,6 +174,7 @@
         } catch (caught) {
             if (!current(requestSequence, code, generation, request)) return;
             releaseRenderer();
+            warmMount = false;
             error = toolViewError(caught);
             if (error.kind === 'authentication') {
                 catalog = null;
@@ -183,13 +191,13 @@
     function requestReload(): void {
         if (busy || !account.authenticated) return;
         if (activeMount) confirmReload = true;
-        else void loadTool(toolCode, account.generation);
+        else void loadTool(toolCode, account.generation, undefined, true);
     }
 
     function acceptReload(): void {
         if (busy) return;
         confirmReload = false;
-        void loadTool(toolCode, account.generation);
+        void loadTool(toolCode, account.generation, undefined, true);
     }
 
     function retry(): void {
@@ -226,54 +234,52 @@
 </script>
 
 <section class="min-w-0 space-y-5" data-testid="tool-host" data-state={phase} data-busy={busy ? 'true' : 'false'} aria-busy={busy}>
-    <header class="space-y-4">
-        <div class="flex flex-wrap items-center justify-between gap-3">
-            <a
-                href="/tools"
-                aria-label={`${$t('common.back')} · ${$t('tools.title', {default: 'Tools'})}`}
-                class="inline-flex items-center gap-2 rounded text-sm font-medium text-libre-green focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green dark:text-green-400 dark:focus-visible:outline-green-400"
-                data-testid="tool-back"
-            >
-                <ArrowLeft size={18} aria-hidden="true" />
-                {$t('tools.title', {default: 'Tools'})}
-            </a>
-            <button
-                type="button"
-                onclick={requestReload}
-                disabled={busy || !account.authenticated}
-                class="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 dark:focus-visible:outline-green-400"
-                data-testid="tool-host-refresh"
-            >
-                <RefreshCw size={16} aria-hidden="true" />
-                {$t('common.refresh')}
-            </button>
-        </div>
-        <div class="flex flex-wrap items-start justify-between gap-4">
-            <div class="min-w-0">
-                <h1 bind:this={heading} tabindex="-1" class="break-words text-2xl font-bold text-gray-900 outline-none dark:text-gray-100">
-                    {descriptor ? toolName(descriptor, $t) : $t('tools.title', {default: 'Tools'})}
-                </h1>
-                {#if descriptor}
-                    <p class="mt-2 break-words text-sm text-gray-600 dark:text-gray-400">{toolDescription(descriptor, $t)}</p>
-                    <p class="mt-2 break-words text-xs text-gray-500 dark:text-gray-400">
-                        {$t('tools.contractVersion', {default: 'Contract'})}: {descriptor.contract_version}
-                        · {$t('tools.implementationVersion', {default: 'Implementation'})}: {descriptor.implementation_version}
-                    </p>
-                {:else}
-                    <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">{$t('tools.subtitle', {default: 'Independent calculations. No portfolio changes are written.'})}</p>
+    <header class="space-y-3">
+        <a
+            href="/tools"
+            aria-label={`${$t('common.back')} · ${$t('tools.title', {default: 'Tools'})}`}
+            class="inline-flex items-center gap-2 rounded text-sm font-medium text-libre-green focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green dark:text-green-400 dark:focus-visible:outline-green-400"
+            data-testid="tool-back"
+        >
+            <ArrowLeft size={18} aria-hidden="true" />
+            {$t('tools.title', {default: 'Tools'})}
+        </a>
+        <div class="flex min-w-0 items-center justify-between gap-3">
+            <h1 bind:this={heading} tabindex="-1" class="min-w-0 break-words text-2xl font-bold text-gray-900 outline-none dark:text-gray-100">
+                {descriptor ? toolName(descriptor, $t) : $t('tools.title', {default: 'Tools'})}
+            </h1>
+            <div class="flex shrink-0 items-center gap-2">
+                {#if documentation}
+                    <DocsLink path={documentation} label={$t('common.documentation')} labelDisplay="responsive" icon="book" size={20} testId="tool-host-docs" />
+                {:else if descriptor}
+                    <span class="text-xs text-gray-500 dark:text-gray-400" data-testid="tool-docs-unavailable">
+                        {$t('tools.documentationUnavailable', {default: 'Documentation link unavailable'})}
+                    </span>
                 {/if}
+                <button
+                    type="button"
+                    onclick={requestReload}
+                    disabled={busy || !account.authenticated}
+                    class="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 dark:focus-visible:outline-green-400"
+                    aria-label={$t('common.refresh')}
+                    data-testid="tool-host-refresh"
+                >
+                    <RefreshCw size={16} aria-hidden="true" />
+                    <span class="hidden sm:inline">{$t('common.refresh')}</span>
+                </button>
             </div>
-            {#if documentation}
-                <span class="inline-flex items-center gap-1 text-sm text-gray-600 dark:text-gray-400">
-                    {$t('common.documentation')}
-                    <DocsLink path={documentation} label={$t('common.documentation')} icon="book" size={20} testId="tool-host-docs" />
-                </span>
-            {:else if descriptor}
-                <span class="text-xs text-gray-500 dark:text-gray-400" data-testid="tool-docs-unavailable">
-                    {$t('tools.documentationUnavailable', {default: 'Documentation link unavailable'})}
-                </span>
-            {/if}
         </div>
+        {#if descriptor}
+            <p class="break-words text-sm text-gray-600 dark:text-gray-400">{toolDescription(descriptor, $t)}</p>
+            <p class="break-words text-xs text-gray-500 dark:text-gray-400" data-testid="tool-host-compatibility-versions">
+                {$t('tools.backendVersion', {default: 'Backend/API'})}
+                {descriptor.contract_version}
+                · {$t('tools.uiVersion', {default: 'UI'})}
+                {descriptor.ui.version}
+            </p>
+        {:else}
+            <p class="text-sm text-gray-600 dark:text-gray-400">{$t('tools.subtitle', {default: 'Independent calculations. No portfolio changes are written.'})}</p>
+        {/if}
     </header>
 
     {#if cleanupError && cleanupCopy}
@@ -308,7 +314,7 @@
             </h2>
             <p class="text-sm">{$t(unavailableCopy.key, {default: unavailableCopy.fallback})}</p>
         </div>
-    {:else if busy}
+    {:else if busy && !warmMount}
         <div class="flex items-center gap-2 rounded-xl border border-gray-200 bg-white p-5 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300" role="status" data-testid={phase === 'catalog_loading' ? 'tool-host-catalog-loading' : 'tool-host-component-loading'}>
             <LoaderCircle size={20} class="animate-spin motion-reduce:animate-none" aria-hidden="true" />
             {phase === 'component_loading' ? $t('tools.host.loadingInterface', {default: 'Loading tool interface…'}) : $t('common.loading')}

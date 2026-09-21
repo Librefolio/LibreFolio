@@ -32,6 +32,22 @@ const test = base.extend<{reviewHeader: Page}>({
             ],
             ['/api/v1/settings/user', {language: 'en', base_currency: 'EUR', theme: 'light', avatar_url: null}],
             ['/api/v1/settings/global', {items: []}],
+            [
+                '/api/v1/settings/onboarding',
+                {
+                    flows: (['welcome', 'intro_tour', 'import_guide'] as const).map((flow) => ({
+                        flow,
+                        status: 'completed',
+                        version: 1,
+                        current_version: 1,
+                        update_available: false,
+                        created_at: '2024-03-15T12:00:00Z',
+                        updated_at: '2024-03-15T12:00:00Z',
+                        completed_at: '2024-03-15T12:00:00Z',
+                        skipped_at: null,
+                    })),
+                },
+            ],
         ]);
         const unexpectedRequests: string[] = [];
         const handler: Parameters<Page['route']>[1] = async (route) => {

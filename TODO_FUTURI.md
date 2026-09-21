@@ -490,6 +490,150 @@ Diverse giurisdizioni usano metodi diversi per determinare quale lotto vendere i
 
 ---
 
+## 💸 PAC/Rebalancer — Profili Commissionali Avanzati per Broker e Mercato
+
+**Data aggiunta**: 15 Settembre 2026
+**Status**: 📋 FUTURO — estensione successiva al primo planner operativo
+**Priorità**: Media
+
+**Target v1 correlato:** [suite PAC/Rebalancer — piano maestro](LibreFolio_developer_journal/Release_2/Phase_0/13_pacAllocator/plan-phase00PacRebalancerTargetDesign.prompt.md).
+
+### Confine della Prima Versione
+
+Il primo planner PAC/Rebalancer deve mantenere due profili indipendenti,
+`fee_buy` e `fee_sell`. Ciascuno supporta:
+
+- componente fissa;
+- componente percentuale sul controvalore;
+- minimo e massimo opzionali per la componente percentuale;
+- valore `0` valido.
+
+Questa separazione copre i PAC con acquisti gratuiti e vendite soggette alle normali
+commissioni. Non implica ancora regole diverse per mercato o formule dipendenti dalla
+sequenza giornaliera degli ordini.
+
+### Estensioni Future
+
+- Override dei profili per mercato, sede di negoziazione o classe di strumento.
+- Profili dinamici/degressivi nei quali la fee dipende dal numero progressivo degli
+  eseguiti nella giornata.
+- Calendario, timezone, valuta, data di validità e provenance del tariffario.
+- Regole esplicite per eseguiti parziali, ordini annullati e conteggi condivisi fra
+  mercati/strumenti.
+- Integrazione nel solver: una tariffa dipendente dal numero d'ordine rende il costo
+  non separabile e richiede di ottimizzare anche sequenza e numero degli ordini.
+
+Directa documenta, per alcuni mercati, un profilo dinamico giornaliero che parte da
+8 EUR sul primo eseguito, scende progressivamente fino a 3 EUR dal 6° al 25°, passa a
+2 EUR dal 26° al 50° e a 1,50 EUR dal 51°; disponibilità e valori dipendono dal mercato.
+Questa famiglia di policy non rientra nella prima versione.
+
+### Gate Futuri
+
+- Nessuna tariffa implicita o scelta automaticamente senza conferma utente.
+- Distinguere ordine pianificato da eseguito reale: il planner non deve fingere di
+  conoscere il contatore giornaliero.
+- Mostrare profilo, mercato, data e assunzioni usate nel costo stimato.
+- Testare discontinuità delle soglie, min/max, BUY/SELL e pareggi fra Broker.
+
+### Riferimenti
+
+- [Directa — Commissioni](https://www.directa.it/commissioni), consultato il
+  15 settembre 2026.
+
+---
+
+## 🧭 PAC/Rebalancer — Profili Persistenti e Strategie Estese
+
+**Data aggiunta**: 15 Settembre 2026
+**Status**: 📋 FUTURO — fuori dal primo planner operativo
+**Priorità**: Media
+
+**Target v1 correlato:** [suite PAC/Rebalancer — piano maestro](LibreFolio_developer_journal/Release_2/Phase_0/13_pacAllocator/plan-phase00PacRebalancerTargetDesign.prompt.md).
+
+### Confine della Prima Versione
+
+La prima versione mantiene nello snapshot del singolo calcolo:
+
+- parametri operativi dei Broker;
+- fee BUY/SELL;
+- supporto agli ordini frazionati e relativo step monetario;
+- regime fiscale e minusvalenze pregresse;
+- aliquota sulle plusvalenze per Asset, pre-popolata al `26%` e modificabile;
+- route Asset×Broker e priorità;
+- trasferimenti dichiarati, gratuiti e immediati;
+- FX single-hop e `fx_buffer_rate` esplicito (label UI “Margine di sicurezza FX”).
+
+Questi dati non diventano automaticamente impostazioni persistenti. Il Tool resta
+atomico e riceve sempre uno snapshot completo.
+
+### Persistenza da Valutare
+
+1. **Profilo operativo personale del Broker**
+   - salvare per utente×Broker valute operative, FX mode, supporto frazioni,
+     step monetario, min/max, fee BUY/SELL, regime e minus pregresse;
+   - usare il profilo solo come prefill modificabile del singolo scenario;
+   - non trasformarlo in un lookup del worker Tool;
+   - mantenere i Broker manuali scenario-only salvo futura azione di salvataggio
+     esplicita.
+2. **Aliquota plusvalenze sull'Asset**
+   - aggiungere un campo Asset configurabile e versionabile;
+   - pre-popolare il planner dal dato persistito, con origine/data visibili;
+   - mantenere override per-run;
+   - definire default, permessi, provenienza e migrazione prima di aggiungere la
+     colonna.
+
+### Strategie Future
+
+- Distribuzione proporzionale esplicita degli acquisti fra più Broker.
+- Vendita proporzionale dello stesso Asset fra più custodie.
+- Chiusura Broker: svuotamento controllato di una custodia.
+- Consolidamento: trasferire il portafoglio verso uno o più Broker scelti.
+- Minimizzazione delle plusvalenze realizzate.
+- Compensazione di minusvalenze pregresse con plus compatibili.
+- Tax-loss harvesting e minimizzazione del realizzo fiscale.
+- Bucket di minusvalenze per categoria, compensabilità e scadenza.
+
+### Modello Operativo Futuro
+
+- Fee, limiti e tempi di settlement dei trasferimenti.
+- Route FX multi-hop, solo con protezioni anti-ciclo e anti-arbitraggio.
+- Buffer FX dinamico per Asset/volatilità invece del solo `fx_buffer_rate`
+  esplicito.
+- Persistenza opzionale delle fonti manuali.
+
+Profili commissionali per mercato e formule intraday/degressive sono già descritti
+nella sezione precedente e non vengono duplicati qui.
+
+### Gate Futuri
+
+- Nuova review matematica se cambiano input, vincoli, fiscalità, fee, FX o
+  obiettivi.
+- Nessuna compensazione fiscale senza categoria dello strumento, regole di
+  compensabilità, scadenza, regime e perimetro Broker espliciti.
+- Nessun profilo persistito può diventare un default silenzioso: provenance,
+  data e override per-run restano visibili.
+- Le strategie di chiusura/consolidamento non possono introdurre short, leverage,
+  BUY+SELL dello stesso Asset o vendite oltre inventario.
+
+### Riuso futuro del solver discreto — senza migrazione Riskfolio
+
+PySCIPOpt/SCIP è il candidato additivo approvato per il planner fixed-L2
+(primo tier MIQP, tier lessicografici successivi convex-MIQCP); la dipendenza non
+è ancora installata e resta subordinata al freeze coordinato, all'update
+developer-owned/autorizzato e ai gate packaging/capacità. Dopo l'adozione
+effettiva, valutarne il riuso solo
+per nuovi problemi realmente misto-interi: cardinalità, lotti minimi, turnover,
+costi fissi, distribuzione proporzionale BUY/SELL fra Broker, chiusura o
+consolidamento di custodie, strategie fiscali discrete, fee dipendenti dalla
+sequenza e routing operativo di trasferimenti, settlement e FX.
+
+Riskfolio-Lib resta il motore di dominio per covariance, risk parity, frontiera
+efficiente e analisi rischio; SciPy resta disponibile per XIRR e calcolo numerico.
+Non reimplementare queste funzioni per eliminare una dipendenza. Un eventuale
+secondo backend richiede spike separato, parità completa degli output esistenti e
+benchmark che dimostri un vantaggio misurabile di capacità, latenza o memoria.
+
 ---
 
 ## 🤖 QuarkAI — Assistente AI (MCP Server)
@@ -811,7 +955,10 @@ Tra i provider di prezzo, oltre ai siti da aumentare, ha senso fare olgre al css
 aggiungere i provider AI, olre a ollama e openrouter, anche tutti gli altri per l'installazione locale.
 pensare un sistema di addon che permetta al forontend di aggiungere tab. Capendo come creare un market place.
 aggiungere nella dashboard e nei broker dei tab che fanno anche altri tipi di analisi oltre quelli pensati. Altri tipi di analisi restano da definire (allocazione % con quadrettoni/treemap già fatta, vedi TODO_Completati.md).
-Aggiungere la feature di analisi che permette di impostare una target allocation sia per broker che generale.
+La vecchia idea di target allocation per Broker è ora precisata nella sezione
+“PAC/Rebalancer — Profili Persistenti e Strategie Estese”: la v1 usa target
+globali per Asset e route/priorità; una distribuzione proporzionale esplicita per
+Broker resta futura.
 Aggiungere la possibilità di creare "Portafogli" che dovrebbero essere gruppi di broker o asset o entrambi, da approfondire.
 Fare delle pagine di dettaglio per analizzare i trade, le fee 
 Aggiungere un calcolatore FIRE non solo da oggi al futuro, ma anche fissando una data di inizio per aver modo di vedere la differenza tra andamento teorico e reale.

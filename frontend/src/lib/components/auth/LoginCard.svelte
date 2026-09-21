@@ -13,6 +13,7 @@
 
     export let redirectTo = '/dashboard';
     export let successMessage = '';
+    export let onAuthenticated: ((requestedPath: string) => Promise<void>) | undefined = undefined;
 
     let username = '';
     let password = '';
@@ -21,7 +22,11 @@
         username = username.trim();
         const success = await auth.login(username, password);
         if (success) {
-            goto(redirectTo);
+            if (onAuthenticated) {
+                await onAuthenticated(redirectTo);
+            } else {
+                await goto(redirectTo);
+            }
         }
     }
 </script>

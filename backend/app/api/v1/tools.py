@@ -66,8 +66,9 @@ class _ToolRequest(Request):
             self._has_decoded = True
         return self._decoded
 
-    def begin_execution(self) -> None:
-        remaining = self.started + self.policy.request_timeout_ms / 1000 - time.monotonic()
+    def begin_execution(self, timeout_ms: int = 20_000) -> None:
+        bounded_timeout_ms = min(timeout_ms, self.policy.request_timeout_ms)
+        remaining = self.started + bounded_timeout_ms / 1000 - time.monotonic()
         if remaining <= 0:
             raise HTTPException(status_code=503, detail="Tool request deadline exceeded")
         self._timeout.reschedule(asyncio.get_running_loop().time() + remaining)
@@ -106,10 +107,10 @@ class ToolRoute(APIRoute):
 router = APIRouter(prefix="/tools", tags=["Tools"], route_class=ToolRoute)
 
 
-def _execution_request(request: Request) -> _ToolRequest:
+def _execution_request(request: Request, *, timeout_ms: int = 20_000) -> _ToolRequest:
     if not isinstance(request, _ToolRequest):
         raise RuntimeError("Tool endpoints require their bounded transport route")
-    request.begin_execution()
+    request.begin_execution(timeout_ms)
     return request
 
 
@@ -147,7 +148,9 @@ async def get_tool_catalog(request: Request, current_user: User = Depends(get_cu
 
 @router.post("/compute", response_model=ToolComputeBatchResponse)
 async def compute_tools(batch: ToolComputeBatchRequest, request: Request, current_user: User = Depends(get_current_user)) -> ToolComputeBatchResponse | Response:
-    bounded_request = _execution_request(request)
+    executor = get_tool_executor()
+    request_timeout_ms = await asyncio.to_thread(executor.batch_request_timeout_ms, batch)
+    bounded_request = _execution_request(request, timeout_ms=request_timeout_ms)
     if current_user.id is None:
         raise HTTPException(status_code=401, detail="Not authenticated")
     try:
@@ -162,11 +165,13 @@ async def get_tool_diagnostics(request: Request, current_user: User = Depends(ge
     _execution_request(request)
     executor = get_tool_executor()
     descriptors, failures = await asyncio.to_thread(effective_catalog_entries, executor.policy)
+    capabilities = await asyncio.to_thread(executor.resource_capabilities)
     return ToolDiagnosticsResponse(
         scope="api_process",
         runtime_id=executor.runtime_id,
         policy=executor.policy,
         loaded=descriptors,
         failures=list(failures),
+        capabilities=capabilities,
         pool=executor.snapshot(),
     )

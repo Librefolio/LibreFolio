@@ -93,10 +93,11 @@
             onclick={onRefresh}
             disabled={loading}
             class="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700 dark:focus-visible:outline-green-400"
+            aria-label={$t('common.refresh')}
             data-testid="tool-diagnostics-refresh"
         >
             <RefreshCw size={15} aria-hidden="true" />
-            {$t('common.refresh')}
+            <span class="hidden sm:inline">{$t('common.refresh')}</span>
         </button>
     </header>
 
@@ -159,8 +160,7 @@
                             <div class="min-w-0">
                                 <p class="break-words font-medium text-gray-800 dark:text-gray-200">{toolName(item, $t)} · <code>{item.tool_code}</code></p>
                                 <p class="mt-1 break-words text-gray-500 dark:text-gray-400">
-                                    {$t('tools.contractVersion', {default: 'Contract'})}: {item.contract_version}
-                                    · {$t('tools.implementationVersion', {default: 'Implementation'})}: {item.implementation_version}
+                                    {$t('tools.version', {default: 'Version'})}: {item.contract_version}
                                 </p>
                             </div>
                             {#if documentation}

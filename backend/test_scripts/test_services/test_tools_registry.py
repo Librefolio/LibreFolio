@@ -21,11 +21,18 @@ import pytest
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, computed_field
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 
+from backend.app.schemas.pac_allocator import (
+    PacAnalyzeInput,
+    PacAnalyzeOutput,
+    RebalanceAnalyzeInput,
+    RebalanceAnalyzeOutput,
+)
 from backend.app.schemas.tools import ToolDocumentation, ToolOperationPolicy, ToolPlatformPolicy, ToolUIDescriptor
 from backend.app.services.provider_registry import AbstractPluginRegistry, register_plugin
-from backend.app.services.tools.base import ToolDefinitionError, ToolPlugin
+from backend.app.services.tools.base import ToolDefinitionError, ToolPlugin, ToolService
 from backend.app.services.tools.catalog import effective_catalog_entries, effective_operation, get_tool_catalog
 from backend.app.services.tools.registry import ToolPluginRegistry, build_tool_definition
+from backend.app.services.tools.schema_export import TOOL_MANIFEST_KEY, build_tool_contracts_document
 from backend.app.services.tools.wire import MAX_SAFE_JSON_INTEGER, encode_json
 
 
@@ -167,26 +174,83 @@ class _RecursiveInput(_StrictModel):
     child: Self | None = None
 
 
-class _PrivatePlugin(ToolPlugin[_InspectInput, _ReadyOutput]):
+def _private_service(code: object = "private_probe", **attributes) -> ToolService:
+    values = {
+        "tool_code": code,
+        "name": "Private registry probe",
+        "description": "A private typed fixture for Tool publication tests.",
+        "category": "testing",
+        "icon_key": "code",
+        "ui": ToolUIDescriptor(
+            kind="custom",
+            component_key="private-registry-probe",
+            version="1.0.0",
+        ),
+        "documentation": ToolDocumentation(
+            path="user/tools/private-registry-probe/",
+            version="1.0.0",
+        ),
+        "operations": (ToolOperationPolicy(operation="inspect"),),
+        "input_type": _InspectInput,
+        "output_type": _ReadyOutput,
+    }
+    values.update(attributes)
+    return ToolService(**values)
+
+
+def _long_operation_policy(operation: str = "inspect", *, deterministic: bool = True) -> ToolOperationPolicy:
+    return ToolOperationPolicy(
+        operation=operation,
+        deterministic=deterministic,
+        max_parameter_bytes=262_144,
+        max_result_bytes=524_288,
+        queue_timeout_ms=10_000,
+        engine_timeout_ms=35_000,
+        job_timeout_ms=50_000,
+        soft_timeout_ms=45_000,
+        cleanup_timeout_ms=7_000,
+        request_timeout_ms=70_000,
+        client_timeout_ms=75_000,
+        memory_limit_bytes=2_147_483_648,
+    )
+
+
+def _bundled_services() -> tuple[ToolService, ToolService]:
+    return (
+        _private_service(
+            "private_bundle_inspect",
+            name="Private inspect service",
+            ui=ToolUIDescriptor(
+                kind="custom",
+                component_key="private-bundle-inspect",
+                version="1.2.3",
+            ),
+        ),
+        _private_service(
+            "private_bundle_repeat",
+            name="Private repeat service",
+            ui=ToolUIDescriptor(
+                kind="custom",
+                component_key="private-bundle-repeat",
+                version="2.4.0",
+            ),
+            operations=(ToolOperationPolicy(operation="repeat"),),
+            input_type=_RepeatInput,
+        ),
+    )
+
+
+class _PrivatePlugin(ToolPlugin):
     """A primitive fixture, never a registered production plugin or PAC oracle."""
 
-    tool_code = "private_probe"
     contract_version = "1.0.0"
     implementation_version = "1.0.0"
-    name = "Private registry probe"
-    description = "A private typed fixture for Tool publication tests."
-    category = "testing"
-    icon_key = "code"
-    ui = ToolUIDescriptor(kind="custom", component_key="private-registry-probe", ui_contract_version=1)
-    documentation = ToolDocumentation(path="user/tools/private-registry-probe/", version="1.0.0")
-    operations = (ToolOperationPolicy(operation="inspect"),)
-    input_type = _InspectInput
-    output_type = _ReadyOutput
+    services = (_private_service(),)
 
     def __init__(self):
         raise AssertionError("Catalog and discovery must not construct the private plugin")
 
-    def compute(self, parameters, context):
+    def compute(self, tool_code, parameters, context):
         raise AssertionError("Registry tests must not execute a Tool")
 
     def probe(self):
@@ -208,7 +272,7 @@ class _DiscoveryFixture:
     registry_symbol: str
 
     def write_module(self, stem: str, body: str) -> str:
-        imports = f"from {__name__} import {self.registry_symbol} as Registry\n" f"from {__name__} import _PrivatePlugin, _register_through_helper\n" "from backend.app.services.provider_registry import register_plugin\n"
+        imports = f"from {__name__} import {self.registry_symbol} as Registry\n" f"from {__name__} import _PrivatePlugin, _private_service, " "_register_through_helper\n" "from backend.app.services.provider_registry import register_plugin\n"
         (self.directory / f"{stem}.py").write_text(imports + dedent(body), encoding="utf-8")
         return f"{self.namespace}.{stem}"
 
@@ -248,10 +312,41 @@ def discovery_factory(tmp_path, monkeypatch):
 
 @pytest.fixture
 def plugin_factory():
-    def make(code: str = "private_probe", **attributes) -> type[_PrivatePlugin]:
-        return type("PrivateClaimant", (_PrivatePlugin,), {"__module__": __name__, "tool_code": code, **attributes})
+    service_fields = set(ToolService.__dataclass_fields__)
+
+    def make(
+        code: object = "private_probe",
+        *,
+        services: object | None = None,
+        **attributes,
+    ) -> type[_PrivatePlugin]:
+        service_attributes = {name: value for name, value in attributes.items() if name in service_fields}
+        plugin_attributes = {name: value for name, value in attributes.items() if name not in service_fields}
+        plugin_attributes["services"] = services if services is not None else (_private_service(code, **service_attributes),)
+        return type(
+            "PrivateClaimant",
+            (_PrivatePlugin,),
+            {"__module__": __name__, **plugin_attributes},
+        )
 
     return make
+
+
+def _only_service(plugin: type[ToolPlugin]) -> ToolService:
+    assert len(plugin.services) == 1
+    (service,) = plugin.services
+    assert isinstance(service, ToolService)
+    return service
+
+
+def _only_code(plugin: type[ToolPlugin]) -> str:
+    code = _only_service(plugin).tool_code
+    assert isinstance(code, str)
+    return code
+
+
+def _build(plugin: type[ToolPlugin]):
+    return build_tool_definition(plugin, _only_service(plugin))
 
 
 def _publish(discovery, *plugins):
@@ -263,17 +358,19 @@ def _publish(discovery, *plugins):
 def test_real_registry_subclass_and_decorator_publish_typed_models(discovery_factory, plugin_factory):
     discovery = discovery_factory()
     plugin = plugin_factory()
+    service = _only_service(plugin)
     assert issubclass(discovery.registry, AbstractPluginRegistry)
     assert register_plugin(discovery.registry)(plugin) is plugin
 
     snapshot = discovery.registry.get_snapshot()
-    definition = snapshot.definitions[plugin.tool_code]
-    assert discovery.registry.get_plugin(plugin.tool_code) is plugin
-    assert discovery.registry.get_definition(plugin.tool_code) is definition
+    definition = snapshot.definitions[service.tool_code]
+    assert discovery.registry.get_plugin(service.tool_code) is plugin
+    assert discovery.registry.get_definition(service.tool_code) is definition
     assert definition.plugin_class is plugin
+    assert definition.service is service
     assert not snapshot.failures
-    assert definition.descriptor.ui == plugin.ui
-    assert definition.descriptor.documentation == plugin.documentation
+    assert definition.descriptor.ui == service.ui
+    assert definition.descriptor.documentation == service.documentation
     assert {policy.operation for policy in definition.descriptor.operations} == {"inspect"}
 
     parameters = definition.input_adapter.validate_python({"operation": "inspect", "payload": {"text": " e\u0301 🚀 "}})
@@ -283,6 +380,83 @@ def test_real_registry_subclass_and_decorator_publish_typed_models(discovery_fac
     assert parameters.payload.text == result.payload.text == " e\u0301 🚀 "
 
 
+def test_one_plugin_publishes_two_complete_services_with_shared_backend_versions(
+    discovery_factory,
+    plugin_factory,
+):
+    inspect_service, repeat_service = _bundled_services()
+    plugin = plugin_factory(
+        services=(inspect_service, repeat_service),
+        contract_version="3.1.4",
+        implementation_version="9.2.6",
+    )
+
+    discovery = discovery_factory()
+    snapshot = _publish(discovery, plugin)
+
+    assert tuple(snapshot.definitions) == (
+        "private_bundle_inspect",
+        "private_bundle_repeat",
+    )
+    assert not snapshot.failures
+    inspect_definition = snapshot.definitions[inspect_service.tool_code]
+    repeat_definition = snapshot.definitions[repeat_service.tool_code]
+    assert inspect_definition.plugin_class is repeat_definition.plugin_class is plugin
+    assert inspect_definition.service is inspect_service
+    assert repeat_definition.service is repeat_service
+    assert {definition.descriptor.contract_version for definition in snapshot.definitions.values()} == {"3.1.4"}
+    assert {definition.descriptor.implementation_version for definition in snapshot.definitions.values()} == {"9.2.6"}
+    assert inspect_definition.descriptor.ui.model_dump(mode="json") == {
+        "kind": "custom",
+        "component_key": "private-bundle-inspect",
+        "version": "1.2.3",
+    }
+    assert repeat_definition.descriptor.ui.model_dump(mode="json") == {
+        "kind": "custom",
+        "component_key": "private-bundle-repeat",
+        "version": "2.4.0",
+    }
+    assert {policy.operation for policy in inspect_definition.descriptor.operations} == {"inspect"}
+    assert {policy.operation for policy in repeat_definition.descriptor.operations} == {"repeat"}
+    assert inspect_definition.descriptor.schema_fingerprint != repeat_definition.descriptor.schema_fingerprint
+
+
+def test_schema_export_uses_manifest_v2_and_service_ui_semver(
+    discovery_factory,
+    plugin_factory,
+):
+    services = _bundled_services()
+    plugin = plugin_factory(
+        services=services,
+        contract_version="3.1.4",
+        implementation_version="9.2.6",
+    )
+    document = build_tool_contracts_document(_publish(discovery_factory(), plugin))
+
+    assert document["info"]["version"] == "2"
+    manifest = document[TOOL_MANIFEST_KEY]
+    assert manifest["manifestVersion"] == 2
+    exported = {item["toolCode"]: item for item in manifest["tools"]}
+    assert set(exported) == {service.tool_code for service in services}
+    assert exported["private_bundle_inspect"]["uiVersion"] == "1.2.3"
+    assert exported["private_bundle_repeat"]["uiVersion"] == "2.4.0"
+    for item in exported.values():
+        assert set(item) == {
+            "toolCode",
+            "contractVersion",
+            "schemaFingerprint",
+            "componentKey",
+            "uiVersion",
+            "input",
+            "output",
+            "operations",
+        }
+        assert "uiContractVersion" not in item
+    serialized = json.dumps(document)
+    assert "ui_contract_version" not in serialized
+    assert "uiContractVersion" not in serialized
+
+
 @pytest.mark.parametrize("direction", ["input", "output"])
 @pytest.mark.parametrize(
     ("payload", "error_type"),
@@ -290,7 +464,7 @@ def test_real_registry_subclass_and_decorator_publish_typed_models(discovery_fac
 )
 def test_published_adapters_enforce_real_nested_models(direction, payload, error_type, discovery_factory, plugin_factory):
     plugin = plugin_factory()
-    definition = _publish(discovery_factory(), plugin).definitions[plugin.tool_code]
+    definition = _publish(discovery_factory(), plugin).definitions[_only_code(plugin)]
     adapter = definition.input_adapter if direction == "input" else definition.output_adapter
     envelope = {"operation": "inspect"} if direction == "input" else {"status": "ready"}
 
@@ -319,6 +493,7 @@ def test_subclasses_do_not_share_claims_or_published_definitions(discovery_facto
 def test_same_class_object_registration_is_idempotent_before_and_after_publication(discovery_factory, plugin_factory):
     discovery = discovery_factory()
     plugin = plugin_factory()
+    code = _only_code(plugin)
     register_plugin(discovery.registry)(plugin)
     register_plugin(discovery.registry)(plugin)
     snapshot = discovery.registry.get_snapshot()
@@ -326,8 +501,8 @@ def test_same_class_object_registration_is_idempotent_before_and_after_publicati
     register_plugin(discovery.registry)(plugin)
 
     assert discovery.registry.get_snapshot() is snapshot
-    assert set(snapshot.definitions) == {plugin.tool_code}
-    assert snapshot.definitions[plugin.tool_code].plugin_class is plugin
+    assert set(snapshot.definitions) == {code}
+    assert snapshot.definitions[code].plugin_class is plugin
     assert not snapshot.failures
 
 
@@ -345,6 +520,55 @@ def test_distinct_classes_with_identical_names_are_still_duplicate_claimants(dis
     assert {failure.reason for failure in failures} == {"duplicate_code"}
 
 
+def test_duplicate_sibling_service_codes_quarantine_every_claim_deterministically(
+    discovery_factory,
+    plugin_factory,
+):
+    duplicate_code = "private_sibling_duplicate"
+    plugin = plugin_factory(
+        services=(
+            _private_service(
+                duplicate_code,
+                ui=ToolUIDescriptor(
+                    kind="custom",
+                    component_key="private-sibling-first",
+                    version="1.0.0",
+                ),
+            ),
+            _private_service(
+                duplicate_code,
+                ui=ToolUIDescriptor(
+                    kind="custom",
+                    component_key="private-sibling-second",
+                    version="2.0.0",
+                ),
+            ),
+            _private_service("private_sibling_healthy"),
+        )
+    )
+
+    discovery = discovery_factory()
+    snapshot = _publish(discovery, plugin)
+
+    assert set(snapshot.definitions) == {"private_sibling_healthy"}
+    assert [(failure.tool_code, failure.reason, failure.filename) for failure in snapshot.failures] == [
+        (
+            duplicate_code,
+            "duplicate_code",
+            "test_tools_registry.py",
+        ),
+        (
+            duplicate_code,
+            "duplicate_code",
+            "test_tools_registry.py",
+        ),
+    ]
+    catalog = get_tool_catalog(ToolPlatformPolicy(), discovery.registry)
+    assert catalog.catalog_version == "2"
+    assert {item.tool_code for item in catalog.items} == {"private_sibling_healthy"}
+    assert [(item.tool_code, item.reason) for item in catalog.unavailable] == [(duplicate_code, "unavailable")]
+
+
 @pytest.mark.parametrize("reverse", [False, True], ids=["valid-first", "rival-first"])
 @pytest.mark.parametrize("rival_kind", ["valid", "invalid-descriptor", "invalid-model", "not-a-plugin"])
 def test_all_duplicate_claimants_are_quarantined_regardless_of_import_order(reverse, rival_kind, discovery_factory):
@@ -352,26 +576,25 @@ def test_all_duplicate_claimants_are_quarantined_regardless_of_import_order(reve
     valid = """
         @register_plugin(Registry)
         class Claimant(_PrivatePlugin):
-            tool_code = "private_duplicate"
+            services = (_private_service("private_duplicate"),)
     """
     rivals = {
         "valid": valid,
         "invalid-descriptor": """
             @register_plugin(Registry)
             class Claimant(_PrivatePlugin):
-                tool_code = "private_duplicate"
+                services = (_private_service("private_duplicate"),)
                 contract_version = "not-a-semver"
         """,
         "invalid-model": """
             @register_plugin(Registry)
             class Claimant(_PrivatePlugin):
-                tool_code = "private_duplicate"
-                input_type = str
+                services = (_private_service("private_duplicate", input_type=str),)
         """,
         "not-a-plugin": """
             @register_plugin(Registry)
             class Claimant:
-                tool_code = "private_duplicate"
+                services = (_private_service("private_duplicate"),)
         """,
     }
     first, second = (rivals[rival_kind], valid) if reverse else (valid, rivals[rival_kind])
@@ -382,7 +605,7 @@ def test_all_duplicate_claimants_are_quarantined_regardless_of_import_order(reve
         """
         @register_plugin(Registry)
         class Healthy(_PrivatePlugin):
-            tool_code = "private_healthy"
+            services = (_private_service("private_healthy"),)
         """,
     )
 
@@ -415,9 +638,41 @@ def test_invalid_or_open_models_quarantine_only_their_tool(attribute, bad_type, 
     healthy = plugin_factory("private_healthy")
     snapshot = _publish(discovery_factory(), broken, healthy)
 
-    assert set(snapshot.definitions) == {healthy.tool_code}
-    failures = [failure for failure in snapshot.failures if failure.tool_code == broken.tool_code]
+    assert set(snapshot.definitions) == {_only_code(healthy)}
+    failures = [failure for failure in snapshot.failures if failure.tool_code == _only_code(broken)]
     assert {failure.reason for failure in failures} == {reason}
+
+
+@pytest.mark.parametrize(
+    ("broken_attributes", "reason"),
+    [
+        pytest.param({"ui": None}, "invalid_descriptor", id="descriptor"),
+        pytest.param(
+            {"input_type": _LooseInput},
+            "invalid_input_model",
+            id="schema",
+        ),
+    ],
+)
+def test_malformed_service_quarantines_only_that_sibling(
+    broken_attributes,
+    reason,
+    discovery_factory,
+    plugin_factory,
+):
+    healthy = _private_service("private_bundled_healthy")
+    broken = _private_service(
+        "private_bundled_broken",
+        **broken_attributes,
+    )
+    plugin = plugin_factory(services=(healthy, broken))
+
+    snapshot = _publish(discovery_factory(), plugin)
+
+    assert set(snapshot.definitions) == {healthy.tool_code}
+    assert snapshot.definitions[healthy.tool_code].plugin_class is plugin
+    assert snapshot.definitions[healthy.tool_code].service is healthy
+    assert [(failure.tool_code, failure.reason) for failure in snapshot.failures] == [(broken.tool_code, reason)]
 
 
 @pytest.mark.parametrize(
@@ -433,8 +688,8 @@ def test_nested_non_model_shapes_quarantine_only_their_claim(attribute, bad_type
 
     snapshot = _publish(discovery_factory(), broken, healthy)
 
-    assert set(snapshot.definitions) == {healthy.tool_code}
-    assert [(failure.tool_code, failure.reason) for failure in snapshot.failures] == [(broken.tool_code, reason)]
+    assert set(snapshot.definitions) == {_only_code(healthy)}
+    assert [(failure.tool_code, failure.reason) for failure in snapshot.failures] == [(_only_code(broken), reason)]
 
 
 @pytest.mark.parametrize(
@@ -451,12 +706,12 @@ def test_non_roundtrippable_outputs_are_quarantined_without_hiding_healthy_tools
 
     snapshot = _publish(discovery_factory(), broken, healthy)
 
-    assert set(snapshot.definitions) == {healthy.tool_code}
-    assert [(failure.tool_code, failure.reason) for failure in snapshot.failures] == [(broken.tool_code, "invalid_output_model")]
+    assert set(snapshot.definitions) == {_only_code(healthy)}
+    assert [(failure.tool_code, failure.reason) for failure in snapshot.failures] == [(_only_code(broken), "invalid_output_model")]
 
 
 def test_matching_validation_and_serialization_alias_is_published_only_when_wire_roundtrip_succeeds(plugin_factory):
-    definition = build_tool_definition(plugin_factory("private_roundtrip_alias", output_type=_RoundTripAliasOutput))
+    definition = _build(plugin_factory("private_roundtrip_alias", output_type=_RoundTripAliasOutput))
     value = _RoundTripAliasOutput.model_validate({"status": "ready", "wire_payload": {"text": "private"}})
 
     wire_value = definition.output_adapter.dump_python(value, mode="json", by_alias=True, warnings="error")
@@ -479,16 +734,16 @@ def test_frontend_unsupported_tuple_and_set_schemas_are_quarantined_individually
 
     snapshot = _publish(discovery_factory(), tuple_claim, set_claim, healthy)
 
-    assert set(snapshot.definitions) == {healthy.tool_code}
+    assert set(snapshot.definitions) == {_only_code(healthy)}
     assert len(snapshot.failures) == 2
     assert {(failure.tool_code, failure.reason) for failure in snapshot.failures} == {
-        (tuple_claim.tool_code, "invalid_schema"),
-        (set_claim.tool_code, "invalid_schema"),
+        (_only_code(tuple_claim), "invalid_schema"),
+        (_only_code(set_claim), "invalid_schema"),
     }
 
 
 def test_published_integer_schema_injects_safe_bounds_without_widening_stricter_fields(plugin_factory):
-    definition = build_tool_definition(plugin_factory("private_integer_bounds", input_type=_IntegerBoundsInput))
+    definition = _build(plugin_factory("private_integer_bounds", input_type=_IntegerBoundsInput))
     properties = definition.descriptor.input_schema["properties"]
 
     assert {name: (properties[name]["minimum"], properties[name]["maximum"]) for name in ("unbounded", "minimum_only", "maximum_only", "narrower")} == {
@@ -503,7 +758,7 @@ def test_published_integer_schema_injects_safe_bounds_without_widening_stricter_
 def test_input_operations_are_required_literal_strings_without_defaults(input_type, plugin_factory):
     plugin = plugin_factory(input_type=input_type)
     with pytest.raises(ToolDefinitionError) as caught:
-        build_tool_definition(plugin)
+        _build(plugin)
     assert caught.value.reason == "invalid_operation_policy"
 
 
@@ -513,8 +768,8 @@ def test_policy_operations_must_match_input_without_duplicates(declared, discove
     healthy = plugin_factory("private_healthy")
     snapshot = _publish(discovery_factory(), plugin, healthy)
 
-    assert set(snapshot.definitions) == {healthy.tool_code}
-    failures = [failure for failure in snapshot.failures if failure.tool_code == plugin.tool_code]
+    assert set(snapshot.definitions) == {_only_code(healthy)}
+    failures = [failure for failure in snapshot.failures if failure.tool_code == _only_code(plugin)]
     assert failures
     assert all(failure.reason in {"invalid_operation_policy", "invalid_descriptor"} for failure in failures)
 
@@ -528,7 +783,7 @@ def test_input_and_output_discriminated_unions_publish_real_branch_adapters(disc
         output_type=output_type,
         operations=(ToolOperationPolicy(operation="inspect"), ToolOperationPolicy(operation="repeat")),
     )
-    definition = _publish(discovery_factory(), plugin).definitions[plugin.tool_code]
+    definition = _publish(discovery_factory(), plugin).definitions[_only_code(plugin)]
 
     assert {policy.operation for policy in definition.descriptor.operations} == {"inspect", "repeat"}
     inspect_input = definition.input_adapter.validate_python({"operation": "inspect", "payload": {"text": "private"}})
@@ -559,15 +814,15 @@ def test_model_unions_require_an_explicit_discriminator(direction, discovery_fac
     healthy = plugin_factory("private_healthy")
     snapshot = _publish(discovery_factory(), plugin, healthy)
 
-    assert plugin.tool_code not in snapshot.definitions
-    assert snapshot.definitions[healthy.tool_code].plugin_class is healthy
-    failures = [failure for failure in snapshot.failures if failure.tool_code == plugin.tool_code]
+    assert _only_code(plugin) not in snapshot.definitions
+    assert snapshot.definitions[_only_code(healthy)].plugin_class is healthy
+    failures = [failure for failure in snapshot.failures if failure.tool_code == _only_code(plugin)]
     assert failures
     assert all(failure.reason in {"invalid_input_model", "invalid_output_model", "invalid_schema"} for failure in failures)
 
 
 def test_local_recursive_model_references_are_supported(plugin_factory):
-    definition = build_tool_definition(plugin_factory(input_type=_RecursiveInput))
+    definition = _build(plugin_factory(input_type=_RecursiveInput))
     parameters = definition.input_adapter.validate_python({"operation": "inspect", "child": {"operation": "inspect", "child": None}})
     assert isinstance(parameters, _RecursiveInput)
     assert isinstance(parameters.child, _RecursiveInput)
@@ -596,8 +851,8 @@ def test_unresolved_or_remote_schema_references_quarantine_real_models(schema_ex
     healthy = plugin_factory("private_healthy")
     snapshot = _publish(discovery_factory(), broken, healthy)
 
-    assert set(snapshot.definitions) == {healthy.tool_code}
-    failures = [failure for failure in snapshot.failures if failure.tool_code == broken.tool_code]
+    assert set(snapshot.definitions) == {_only_code(healthy)}
+    failures = [failure for failure in snapshot.failures if failure.tool_code == _only_code(broken)]
     assert {failure.reason for failure in failures} == {"invalid_schema"}
 
 
@@ -610,9 +865,9 @@ def test_unresolved_python_annotations_cannot_publish_a_tool(discovery_factory, 
     healthy = plugin_factory("private_healthy")
     snapshot = _publish(discovery_factory(), broken, healthy)
 
-    assert broken.tool_code not in snapshot.definitions
-    assert snapshot.definitions[healthy.tool_code].plugin_class is healthy
-    failures = [failure for failure in snapshot.failures if failure.tool_code == broken.tool_code]
+    assert _only_code(broken) not in snapshot.definitions
+    assert snapshot.definitions[_only_code(healthy)].plugin_class is healthy
+    failures = [failure for failure in snapshot.failures if failure.tool_code == _only_code(broken)]
     assert failures
     assert all(failure.reason in {"invalid_input_model", "invalid_schema"} for failure in failures)
 
@@ -623,25 +878,56 @@ def test_invalid_code_claimants_cannot_become_canonical_aliases(code, discovery_
     broken = plugin_factory(code)
     snapshot = _publish(discovery_factory(), broken, healthy)
 
-    assert set(snapshot.definitions) == {healthy.tool_code}
+    assert set(snapshot.definitions) == {_only_code(healthy)}
     assert {(failure.tool_code, failure.reason) for failure in snapshot.failures} == {(None, "invalid_code")}
 
 
-@pytest.mark.parametrize("kind", ["not-a-class", "not-a-plugin", "abstract", "required-constructor", "async-compute", "invalid-metadata"])
+@pytest.mark.parametrize(
+    "kind",
+    [
+        "not-a-class",
+        "not-a-plugin",
+        "abstract",
+        "missing-services",
+        "empty-services",
+        "oversized-services",
+        "non-tuple-services",
+        "required-constructor",
+        "async-compute",
+        "invalid-metadata",
+    ],
+)
 def test_invalid_plugins_and_constructor_signatures_are_quarantined(kind, discovery_factory, plugin_factory):
-    class AbstractClaim(ToolPlugin[_InspectInput, _ReadyOutput]):
-        tool_code = "private_invalid"
+    class AbstractClaim(ToolPlugin):
+        contract_version = "1.0.0"
+        implementation_version = "1.0.0"
+        services = (_private_service("private_invalid"),)
+
+    class MissingServices(ToolPlugin):
+        contract_version = "1.0.0"
+        implementation_version = "1.0.0"
+
+        def compute(self, tool_code, parameters, context):
+            raise AssertionError("A structurally invalid plugin must not execute")
 
     def required_constructor(self, required_argument):
         raise AssertionError("A required constructor must be inspected, not invoked")
 
-    async def async_compute(self, parameters, context):
+    async def async_compute(self, tool_code, parameters, context):
         raise AssertionError("Async Tool definitions must not be invoked")
 
     claims = {
         "not-a-class": object(),
-        "not-a-plugin": type("PrivateUnrelatedClass", (), {"tool_code": "private_invalid"}),
+        "not-a-plugin": type(
+            "PrivateUnrelatedClass",
+            (),
+            {"services": (_private_service("private_invalid"),)},
+        ),
         "abstract": AbstractClaim,
+        "missing-services": MissingServices,
+        "empty-services": plugin_factory(services=()),
+        "oversized-services": plugin_factory(services=tuple(_private_service(f"private_invalid_{index}") for index in range(17))),
+        "non-tuple-services": plugin_factory(services=[_private_service("private_invalid")]),
         "required-constructor": plugin_factory("private_invalid", __init__=required_constructor),
         "async-compute": plugin_factory("private_invalid", compute=async_compute),
         "invalid-metadata": plugin_factory("private_invalid", ui=None),
@@ -650,7 +936,7 @@ def test_invalid_plugins_and_constructor_signatures_are_quarantined(kind, discov
     healthy = plugin_factory("private_healthy")
     snapshot = _publish(discovery, claims[kind], healthy)
 
-    assert set(snapshot.definitions) == {healthy.tool_code}
+    assert set(snapshot.definitions) == {_only_code(healthy)}
     expected_reason = "invalid_descriptor" if kind == "invalid-metadata" else "invalid_plugin"
     assert {failure.reason for failure in snapshot.failures} == {expected_reason}
 
@@ -659,10 +945,11 @@ def test_invalid_plugins_and_constructor_signatures_are_quarantined(kind, discov
 def test_lookups_match_codes_exactly(lookup, discovery_factory, plugin_factory):
     discovery = discovery_factory()
     plugin = plugin_factory("private_probe")
+    code = _only_code(plugin)
     _publish(discovery, plugin)
 
-    assert discovery.registry.get_definition(plugin.tool_code).plugin_class is plugin
-    assert discovery.registry.get_plugin(plugin.tool_code) is plugin
+    assert discovery.registry.get_definition(code).plugin_class is plugin
+    assert discovery.registry.get_plugin(code) is plugin
     assert discovery.registry.get_definition(lookup) is None
     assert discovery.registry.get_plugin(lookup) is None
 
@@ -672,14 +959,14 @@ def test_lookups_match_codes_exactly(lookup, discovery_factory, plugin_factory):
 def test_registration_is_rolled_back_when_its_import_caller_fails(through_helper, spoof_module, discovery_factory):
     discovery = discovery_factory()
     registration = "_register_through_helper(Registry, Broken)" if through_helper else "register_plugin(Registry)(Broken)"
-    body = "class Broken(_PrivatePlugin):\n" '    tool_code = "private_broken"\n' + ('    __module__ = "backend.app.services.tools.base"\n' if spoof_module else "") + registration + '\nraise RuntimeError("PRIVATE_IMPORT_INPUT_SENTINEL")\n'
+    body = "class Broken(_PrivatePlugin):\n" '    services = (_private_service("private_broken"),)\n' + ('    __module__ = "backend.app.services.tools.base"\n' if spoof_module else "") + registration + '\nraise RuntimeError("PRIVATE_IMPORT_INPUT_SENTINEL")\n'
     failed_module = discovery.write_module("a_broken", body)
     discovery.write_module(
         "z_healthy",
         """
         @register_plugin(Registry)
         class Healthy(_PrivatePlugin):
-            tool_code = "private_healthy"
+            services = (_private_service("private_healthy"),)
         """,
     )
 
@@ -722,7 +1009,7 @@ def test_snapshot_cannot_publish_during_an_import(discovery_factory):
         """
         @register_plugin(Registry)
         class Pending(_PrivatePlugin):
-            tool_code = "private_pending"
+            services = (_private_service("private_pending"),)
 
         try:
             Registry.get_snapshot()
@@ -742,6 +1029,7 @@ def test_snapshot_cannot_publish_during_an_import(discovery_factory):
 def test_catalog_and_snapshot_do_not_construct_compute_probe_or_rediscover(discovery_factory, plugin_factory, monkeypatch):
     discovery = discovery_factory()
     plugin = plugin_factory()
+    code = _only_code(plugin)
     snapshot = _publish(discovery, plugin)
 
     def forbidden_directory(cls):
@@ -752,8 +1040,8 @@ def test_catalog_and_snapshot_do_not_construct_compute_probe_or_rediscover(disco
     second_catalog = get_tool_catalog(ToolPlatformPolicy(), discovery.registry)
 
     assert discovery.registry.get_snapshot() is snapshot
-    assert discovery.registry.get_definition(plugin.tool_code).plugin_class is plugin
-    assert {descriptor.tool_code for descriptor in first_catalog.items} == {plugin.tool_code}
+    assert discovery.registry.get_definition(code).plugin_class is plugin
+    assert {descriptor.tool_code for descriptor in first_catalog.items} == {code}
     assert first_catalog == second_catalog
     assert not first_catalog.unavailable
 
@@ -767,10 +1055,11 @@ def test_constructor_typeerror_is_not_retried_with_different_arguments(discovery
 
     discovery = discovery_factory()
     plugin = plugin_factory(__init__=constructor)
+    code = _only_code(plugin)
     _publish(discovery, plugin)
 
     with pytest.raises(TypeError, match="PRIVATE_CONSTRUCTOR_SENTINEL"):
-        discovery.registry.get_plugin_instance(plugin.tool_code, private_argument="owned")
+        discovery.registry.get_plugin_instance(code, private_argument="owned")
 
     assert calls == [{"private_argument": "owned"}]
 
@@ -778,24 +1067,27 @@ def test_constructor_typeerror_is_not_retried_with_different_arguments(discovery
 def test_publication_closes_registration_without_replacing_healthy_definitions(discovery_factory, plugin_factory):
     discovery = discovery_factory()
     healthy = plugin_factory()
+    healthy_code = _only_code(healthy)
     snapshot = _publish(discovery, healthy)
 
     with pytest.raises(RuntimeError):
         register_plugin(discovery.registry)(plugin_factory("private_late"))
     with pytest.raises(TypeError):
-        snapshot.definitions["private_late"] = snapshot.definitions[healthy.tool_code]
+        snapshot.definitions["private_late"] = snapshot.definitions[healthy_code]
 
     assert discovery.registry.get_snapshot() is snapshot
-    assert set(snapshot.definitions) == {healthy.tool_code}
+    assert set(snapshot.definitions) == {healthy_code}
 
 
 def test_catalog_descriptors_are_independent_deep_copies(discovery_factory, plugin_factory):
     discovery = discovery_factory()
     plugin = plugin_factory()
+    service = _only_service(plugin)
+    code = service.tool_code
     snapshot = _publish(discovery, plugin)
-    original = deepcopy(snapshot.definitions[plugin.tool_code].descriptor.model_dump())
+    original = deepcopy(snapshot.definitions[code].descriptor.model_dump())
     first_catalog = get_tool_catalog(ToolPlatformPolicy(), discovery.registry)
-    first_descriptor = next(item for item in first_catalog.items if item.tool_code == plugin.tool_code)
+    first_descriptor = next(item for item in first_catalog.items if item.tool_code == code)
 
     first_descriptor.input_schema["properties"]["payload"]["description"] = "private mutation"
     first_descriptor.output_schema["properties"]["status"]["const"] = "mutated"
@@ -803,10 +1095,10 @@ def test_catalog_descriptors_are_independent_deep_copies(discovery_factory, plug
     first_catalog.items.clear()
 
     next_catalog = get_tool_catalog(ToolPlatformPolicy(), discovery.registry)
-    next_descriptor = next(item for item in next_catalog.items if item.tool_code == plugin.tool_code)
-    assert snapshot.definitions[plugin.tool_code].descriptor.model_dump() == original
+    next_descriptor = next(item for item in next_catalog.items if item.tool_code == code)
+    assert snapshot.definitions[code].descriptor.model_dump() == original
     assert next_descriptor.model_dump() == original
-    assert {policy.operation for policy in plugin.operations} == {"inspect"}
+    assert {policy.operation for policy in service.operations} == {"inspect"}
 
 
 @pytest.mark.parametrize("reverse", [False, True])
@@ -821,55 +1113,158 @@ def test_catalog_order_and_fingerprint_are_stable_without_changing_registration_
     assert [descriptor.tool_code for descriptor in catalog.items] == ["private_a", "private_z"]
     for descriptor in catalog.items:
         assert descriptor.schema_fingerprint == snapshot.definitions[descriptor.tool_code].descriptor.schema_fingerprint
-    assert snapshot.definitions[first.tool_code].descriptor.schema_fingerprint == snapshot.definitions[second.tool_code].descriptor.schema_fingerprint
+    assert snapshot.definitions[_only_code(first)].descriptor.schema_fingerprint == snapshot.definitions[_only_code(second)].descriptor.schema_fingerprint
+
+
+# Frozen before generic operation policy and platform resource fields were added.
+@pytest.mark.parametrize(
+    ("code", "input_type", "output_type", "expected_fingerprint"),
+    [
+        pytest.param(
+            "pac_allocator",
+            PacAnalyzeInput,
+            PacAnalyzeOutput,
+            "507e106cf2a2a2e3b78cc9f96053346cb785551231d8bbce86cd563e028ed495",
+            id="pac-allocator",
+        ),
+        pytest.param(
+            "portfolio_rebalancer",
+            RebalanceAnalyzeInput,
+            RebalanceAnalyzeOutput,
+            "cba2b73e9930c7f42ad92f2d43eb1cba91236ca0d2111d2cb454172243bf40b8",
+            id="portfolio-rebalancer",
+        ),
+    ],
+)
+def test_policy_and_resource_additions_do_not_change_financial_tool_fingerprints(
+    code,
+    input_type,
+    output_type,
+    expected_fingerprint,
+    discovery_factory,
+    plugin_factory,
+):
+    ordinary_plugin = plugin_factory(
+        code,
+        input_type=input_type,
+        output_type=output_type,
+        operations=(ToolOperationPolicy(operation="analyze"),),
+    )
+    long_plugin = plugin_factory(
+        code,
+        input_type=input_type,
+        output_type=output_type,
+        operations=(_long_operation_policy("analyze"),),
+    )
+
+    assert _build(ordinary_plugin).descriptor.schema_fingerprint == expected_fingerprint
+    assert _build(long_plugin).descriptor.schema_fingerprint == expected_fingerprint
+
+    discovery = discovery_factory()
+    _publish(discovery, long_plugin)
+    platforms = (
+        ToolPlatformPolicy(),
+        ToolPlatformPolicy(
+            engine_timeout_ms=4_000,
+            job_timeout_ms=5_000,
+            soft_timeout_ms=4_000,
+            cleanup_timeout_ms=2_000,
+            request_timeout_ms=20_000,
+            client_timeout_ms=25_000,
+            memory_limit_bytes=536_870_912,
+        ),
+    )
+    effective_policies = []
+    for platform in platforms:
+        catalog = get_tool_catalog(platform, discovery.registry)
+        assert catalog.catalog_version == "2"
+        descriptor = {item.tool_code: item for item in catalog.items}[code]
+        assert descriptor.schema_fingerprint == expected_fingerprint
+        (effective_policy,) = descriptor.operations
+        effective_policies.append(effective_policy)
+
+    assert {
+        (
+            policy.engine_timeout_ms,
+            policy.job_timeout_ms,
+            policy.soft_timeout_ms,
+            policy.cleanup_timeout_ms,
+            policy.request_timeout_ms,
+            policy.client_timeout_ms,
+            policy.memory_limit_bytes,
+        )
+        for policy in effective_policies
+    } == {
+        (30_000, 45_000, 44_000, 5_000, 59_000, 65_000, 1_073_741_824),
+        (4_000, 5_000, 4_000, 2_000, 20_000, 25_000, 536_870_912),
+    }
 
 
 def test_effective_policy_only_lowers_limits_and_reserves_output_time():
-    declared = ToolOperationPolicy(
-        operation="inspect",
-        deterministic=False,
-        max_parameter_bytes=262_144,
-        max_result_bytes=131_072,
-        queue_timeout_ms=9_000,
-        job_timeout_ms=3_000,
-        soft_timeout_ms=2_900,
-    )
+    declared = _long_operation_policy(deterministic=False)
     original = declared.model_dump()
 
     effective = effective_operation(declared, ToolPlatformPolicy())
 
-    assert effective.max_parameter_bytes == 131_072
-    assert effective.max_result_bytes == 131_072
-    assert effective.queue_timeout_ms == 5_000
-    assert effective.job_timeout_ms == 3_000
-    assert effective.soft_timeout_ms == 2_000
-    assert effective.pure is True
-    assert effective.deterministic is False
-    assert effective.deduplication == "none"
+    assert effective.model_dump(mode="json") == {
+        "operation": "inspect",
+        "pure": True,
+        "deterministic": False,
+        "deduplication": "none",
+        "max_parameter_bytes": 131_072,
+        "max_result_bytes": 262_144,
+        "queue_timeout_ms": 5_000,
+        "engine_timeout_ms": 30_000,
+        "job_timeout_ms": 45_000,
+        "soft_timeout_ms": 44_000,
+        "cleanup_timeout_ms": 5_000,
+        "request_timeout_ms": 59_000,
+        "client_timeout_ms": 65_000,
+        "memory_limit_bytes": 1_073_741_824,
+    }
     assert declared.model_dump() == original
+
+
+def test_effective_policy_rejects_request_without_platform_envelope_time():
+    declared = ToolOperationPolicy(
+        operation="inspect",
+        request_timeout_ms=13_000,
+    )
+
+    with pytest.raises(ToolDefinitionError) as caught:
+        effective_operation(declared, ToolPlatformPolicy())
+
+    assert caught.value.reason == "invalid_operation_policy"
 
 
 def test_one_invalid_effective_policy_does_not_hide_healthy_tools_or_poison_snapshot(discovery_factory, plugin_factory):
     discovery = discovery_factory()
     tight = plugin_factory(
         "private_tight_deadline",
-        operations=(ToolOperationPolicy(operation="inspect", job_timeout_ms=1_000, soft_timeout_ms=900),),
+        operations=(
+            ToolOperationPolicy(
+                operation="inspect",
+                engine_timeout_ms=800,
+                job_timeout_ms=1_000,
+                soft_timeout_ms=900,
+            ),
+        ),
     )
     healthy = plugin_factory("private_healthy")
     snapshot = _publish(discovery, tight, healthy)
     assert not snapshot.failures
-    assert set(snapshot.definitions) == {tight.tool_code, healthy.tool_code}
+    assert set(snapshot.definitions) == {_only_code(tight), _only_code(healthy)}
 
     descriptors, failures = effective_catalog_entries(ToolPlatformPolicy(), discovery.registry)
-    assert {descriptor.tool_code for descriptor in descriptors} == {healthy.tool_code}
-    assert {(failure.tool_code, failure.reason) for failure in failures} == {(tight.tool_code, "invalid_operation_policy")}
+    assert {descriptor.tool_code for descriptor in descriptors} == {_only_code(healthy)}
+    assert {(failure.tool_code, failure.reason) for failure in failures} == {(_only_code(tight), "invalid_operation_policy")}
     catalog = get_tool_catalog(ToolPlatformPolicy(), discovery.registry)
-    assert {descriptor.tool_code for descriptor in catalog.items} == {healthy.tool_code}
-    assert [(item.tool_code, item.reason) for item in catalog.unavailable] == [(tight.tool_code, "unavailable")]
+    assert {descriptor.tool_code for descriptor in catalog.items} == {_only_code(healthy)}
+    assert [(item.tool_code, item.reason) for item in catalog.unavailable] == [(_only_code(tight), "unavailable")]
 
     relaxed_reserve = ToolPlatformPolicy(output_reserve_ms=100)
     next_catalog = get_tool_catalog(relaxed_reserve, discovery.registry)
-    assert {descriptor.tool_code for descriptor in next_catalog.items} == {tight.tool_code, healthy.tool_code}
+    assert {descriptor.tool_code for descriptor in next_catalog.items} == {_only_code(tight), _only_code(healthy)}
     assert not next_catalog.unavailable
     assert discovery.registry.get_snapshot() is snapshot
     assert not snapshot.failures

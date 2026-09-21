@@ -10,6 +10,7 @@ import type {ComponentProps} from 'svelte';
 import {tick} from 'svelte';
 import {cleanup, fireEvent, render, screen, setupI18n, within} from '$test/component';
 import Header from './Header.svelte';
+import {guideAnchors} from '$lib/features/onboarding/guideAnchors.svelte';
 
 let scrollY: number;
 let measuredHeight: number;
@@ -118,6 +119,7 @@ beforeAll(async () => {
     await setupI18n();
 });
 beforeEach(() => {
+    guideAnchors.clear();
     scrollY = 100;
     measuredHeight = 64;
     nextFrame = 0;
@@ -151,6 +153,7 @@ beforeEach(() => {
 });
 afterEach(() => {
     cleanup();
+    guideAnchors.clear();
     outside.remove();
     if (previousModalCount === null) document.body.removeAttribute('data-modal-scroll-lock-count');
     else document.body.setAttribute('data-modal-scroll-lock-count', previousModalCount);
@@ -258,16 +261,42 @@ describe('Header document scroll thresholds', () => {
 });
 
 describe('Header visibility pins', () => {
-    it.each(['sidebarOpen', 'keepVisible'] as const)('pins on %s and establishes a fresh baseline on release', async (prop) => {
+    it.each(['sidebarOpen', 'keepVisible', 'guideActive'] as const)('pins on %s and establishes a fresh baseline on release', async (prop) => {
         const mounted = await mount();
         await scrollTo(108);
         expectState('hidden');
         await mounted.rerender({[prop]: true});
         expectState('pinned');
         if (prop === 'sidebarOpen') expect(header()).toHaveAttribute('data-sidebar-open', 'true');
+        if (prop === 'guideActive') expect(header()).toHaveAttribute('data-guide-active', 'true');
         await scrollTo(200);
         expectState('pinned');
         await mounted.rerender({[prop]: false});
+        expectState('visible');
+        if (prop === 'guideActive') expect(header()).toHaveAttribute('data-guide-active', 'false');
+        await scrollTo(207);
+        expectState('visible');
+        await scrollTo(208);
+        expectState('hidden');
+    });
+
+    it('guideActive publishes data-guide-active even while unpinned, and pins through a downward scroll that would otherwise hide the header', async () => {
+        const mounted = await mount({guideActive: false});
+        expect(header()).toHaveAttribute('data-guide-active', 'false');
+
+        await mounted.rerender({guideActive: true});
+        expect(header()).toHaveAttribute('data-guide-active', 'true');
+        expectState('pinned');
+
+        // A downward scroll that would normally cross both hide thresholds must
+        // still leave the header pinned, not hidden, while the guide is active.
+        await scrollTo(108);
+        expectState('pinned');
+        await scrollTo(200);
+        expectState('pinned');
+
+        await mounted.rerender({guideActive: false});
+        expect(header()).toHaveAttribute('data-guide-active', 'false');
         expectState('visible');
         await scrollTo(207);
         expectState('visible');
@@ -284,6 +313,18 @@ describe('Header visibility pins', () => {
         await mounted.rerender({sidebarOpen: true});
         expect(header()).toHaveAttribute('data-sidebar-open', 'true');
         expectState('pinned');
+    });
+
+    it('registers the mobile menu toggle as the responsive onboarding anchor and removes it on unmount', async () => {
+        const mounted = await mount();
+        const toggle = within(header()).getByTestId('mobile-menu-toggle');
+
+        expect(guideAnchors.get('nav.toggle.mobile')).toBe(toggle);
+        expect(guideAnchors.get('nav.toggle.desktop')).toBeNull();
+
+        mounted.unmount();
+
+        expect(guideAnchors.get('nav.toggle.mobile')).toBeNull();
     });
 
     it.each([

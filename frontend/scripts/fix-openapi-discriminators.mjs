@@ -44,6 +44,15 @@ const discriminatedSchemas = [
     'RiskHypotheticalShockScenario',
     'SchedulerLogCurrentPriceEntry',
     'SchedulerLogHistorySyncEntry',
+    'PortfolioPlannerSourceRootPath',
+    'PortfolioPlannerSourceSectionPath',
+    'PortfolioPlannerSourceEntityPath',
+    'PortfolioPlannerSourceFieldPath',
+    'PortfolioPlannerSourceTextParam',
+    'PortfolioPlannerSourceIntegerParam',
+    'PortfolioPlannerSourceMoneyParam',
+    'PortfolioPlannerSourceDateParam',
+    'PortfolioPlannerSourceEntityRefParam',
 ];
 
 let source = await readFile(generatedClient, 'utf8');
