@@ -730,7 +730,8 @@ function withInjectedError(result: Record<string, unknown>, options: RiskMockOpt
     return {...result, status: 'failed', output: null, error: {code, message: `E2E injected ${code}`}};
 }
 
-async function installRiskMocks(page: Page, options: RiskMockOptions = {}): Promise<RiskRequest[]> {    const requests: RiskRequest[] = [];
+async function installRiskMocks(page: Page, options: RiskMockOptions = {}): Promise<RiskRequest[]> {
+    const requests: RiskRequest[] = [];
 
     await page.route('**/api/v1/risk/catalog', async (route) => {
         await route.fulfill({
