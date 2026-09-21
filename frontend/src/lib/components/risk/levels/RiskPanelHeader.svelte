@@ -8,7 +8,6 @@
     import {fxRoutesVersion, getConfiguredPairSlugs} from '$lib/stores/reference/fxRoutesStore';
     import type {RiskPanelController} from '$lib/stores/risk/riskPanelController.svelte';
 
-    import RiskBetaBanner from '../RiskBetaBanner.svelte';
     import {RefreshCw, RotateCw} from 'lucide-svelte';
 
     /**
@@ -29,11 +28,10 @@
         dateStart: string;
         dateEnd: string;
         targetCurrency: string;
-        showBetaBanner?: boolean;
         showActions?: boolean;
     }
 
-    let {controller, title = '', subtitle = '', internalSubset = false, assetIds = [], dateStart, dateEnd, targetCurrency, showBetaBanner = true, showActions = true}: Props = $props();
+    let {controller, title = '', subtitle = '', internalSubset = false, assetIds = [], dateStart, dateEnd, targetCurrency, showActions = true}: Props = $props();
 
     let syncOpen = $state(false);
 
@@ -72,10 +70,6 @@
         else if (action === 'add_fx_pair') void goto('/fx');
     }
 </script>
-
-{#if showBetaBanner}
-    <RiskBetaBanner />
-{/if}
 
 <div class="flex flex-wrap items-start justify-between gap-3">
     <div>

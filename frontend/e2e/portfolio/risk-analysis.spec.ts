@@ -1079,8 +1079,14 @@ test.describe('Risk analysis functional integration', () => {
 
         const panel = await openDashboardRisk(page);
 
-        await expect(page.getByTestId('risk-beta-banner')).toBeVisible();
-        await expect(page.getByTestId('risk-beta-banner')).toHaveCount(1);
+        // The Dashboard now opens with no beta notice at all, and that absence is
+        // the claim: L1, L2 and L3 rest on observed facts and have left beta. The
+        // banner survives on one rung only — the simulation, inside the closed L4
+        // drawer — so zero here is what "the rest is finished" looks like from the
+        // reader's side. `toHaveCount(0)` rather than `not.toBeVisible()`: a closed
+        // drawer does not render its body, so the node is absent rather than
+        // hidden, and only a count can tell those two apart.
+        await expect(page.getByTestId('risk-beta-banner')).toHaveCount(0);
 
         // Dashboard's scope is the whole portfolio, so it must carry no subset
         // label. Broker Detail asserts the mirror image; the pair is what makes
@@ -1332,8 +1338,12 @@ test.describe('Risk analysis functional integration', () => {
 
         await navigateTo(page, '/assets?tab=correlation');
         await expect(page.getByTestId('asset-global-risk-panel')).toBeVisible({timeout: 15_000});
-        await expect(page.getByTestId('risk-beta-banner')).toBeVisible();
-        await expect(page.getByTestId('risk-beta-banner')).toHaveCount(1);
+        // Asset Global carries no beta notice at all, and unlike the Dashboard it
+        // has no rung for one to move to: `AssetSetReplaySection` supplies
+        // `L4WhatIf` with the replay snippet alone, and the banner lives inside
+        // the `{#if simulation}` branch. The zero is the whole statement here, not
+        // half of a pair — and it is structural, not a convention anyone upholds.
+        await expect(page.getByTestId('risk-beta-banner')).toHaveCount(0);
         await expectChartCanvas(page, 'risk-correlation-heatmap', 8_000);
 
         const selectedAssets = page.getByTestId(/^risk-selected-asset-\d+$/);
@@ -1388,8 +1398,12 @@ test.describe('Risk analysis functional integration', () => {
         const requests = await installRiskMocks(page);
         const {brokerId, panel} = await openFirstBrokerRisk(page);
 
-        await expect(page.getByTestId('risk-beta-banner')).toBeVisible();
-        await expect(page.getByTestId('risk-beta-banner')).toHaveCount(1);
+        // The Dashboard's claim, on the page that mounts the same
+        // `RiskLevelsPanel` through a narrower scope. Asserted here too rather
+        // than inferred from that shared mount: these are the two pages the whole
+        // redesign exists to keep comparable, and a maturity notice on one and not
+        // the other is exactly the kind of drift that would break the comparison.
+        await expect(page.getByTestId('risk-beta-banner')).toHaveCount(0);
 
         // The label is the user-visible half of the subset: this page runs the
         // whole portfolio's machinery over one broker's holdings, and a reader
@@ -1583,6 +1597,33 @@ test.describe('Risk analysis functional integration', () => {
         // is everywhere is read nowhere.
         await expect(panel.getByTestId('risk-l4-simulation').getByTestId('risk-l4-model-warning')).toBeVisible();
         await expect(panel.getByTestId('risk-l4-replay').getByTestId('risk-l4-model-warning')).toHaveCount(0);
+
+        // And the beta banner is *here*, on this rung and nowhere else.
+        //
+        // This is the assertion the three surfaces above cannot make. They each
+        // say the banner is absent, and three zeroes agree just as happily with a
+        // banner that was deleted outright as with one that moved: an absence does
+        // not name what caused it. Without this line the component could be
+        // removed from the codebase entirely and the whole suite would stay green.
+        //
+        // The page-wide count is the double-mount gate the three surfaces used to
+        // hold, following the banner to the one rung that still earns it. It is
+        // not decoration: `RiskAnalysisPanel` still carries its own mount behind a
+        // `showBetaBanner` prop, so "exactly one" is a live constraint rather than
+        // an observation about today's tree.
+        await expect(panel.getByTestId('risk-l4-simulation').getByTestId('risk-beta-banner')).toBeVisible();
+        await expect(panel.getByTestId('risk-l4-replay').getByTestId('risk-beta-banner')).toHaveCount(0);
+        await expect(page.getByTestId('risk-beta-banner')).toHaveCount(1);
+
+        // *Which* claim it makes, not merely that it is here. The component serves
+        // two surfaces that are beta for unrelated reasons — Asset Detail is parked
+        // whole, this rung is held back by one recorded defect — and their texts are
+        // translated, so no assertion in this suite can read them. `data-scope` is
+        // what makes the distinction assertable at all: without it, swapping the
+        // component's default would silently tell the reader of a finished
+        // Dashboard that the whole subsystem is still provisional, and every count
+        // above would still be right.
+        await expect(panel.getByTestId('risk-l4-simulation').getByTestId('risk-beta-banner')).toHaveAttribute('data-scope', 'simulation');
 
         // Every editor really mounted, with the defaults the request will carry.
         await expect(panel.getByTestId('risk-replay')).toBeVisible();
