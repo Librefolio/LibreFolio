@@ -88,7 +88,12 @@
 </script>
 
 <RiskLevelSection title={$t('risk.analytics.correlation.name')} level={2} testId="risk-correlation-section" {health} {reasons} {metadata}>
-    <div data-testid="risk-correlation-content" data-busy={controller.initialLoading ? 'true' : 'false'}>
+    <!-- `data-catalog` is published here because every section on this page is
+         gated on the capability catalogue, so an absent section means
+         "unsupported" *or* "not loaded yet" and a test cannot tell which. The
+         legacy panel used to publish it for the whole page; it no longer mounts
+         here, and a gate on a component that left is a gate that waits forever. -->
+    <div data-testid="risk-correlation-content" data-busy={controller.initialLoading ? 'true' : 'false'} data-catalog={controller.catalogState}>
         <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">{$t('risk.analytics.correlation.description')}</p>
 
         {#if controller.loadError}
